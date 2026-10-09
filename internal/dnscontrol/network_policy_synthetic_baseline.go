@@ -13,6 +13,7 @@ import (
 )
 
 var ErrSyntheticDNSMappingRequired = errors.New("positive synthetic DNS requires original retained mapping and ready baseline transition")
+var ErrSyntheticDNSUnsupportedFamily = errors.New("managed synthetic DNS supports positive IPv4 A only")
 
 // This original resolver's real-answer slice precedes synthetic publication.
 // A managed positive A cannot be released by this slice. An actual excluded
@@ -75,6 +76,10 @@ func (r *NetworkPolicyDNSResolver) resolveSyntheticAnswer(ctx context.Context, c
 	} else {
 		answer.wire, err = r.resolveDefault(ctx, query, q)
 	}
+	// The returned selected wire has already consumed upstream/cache Age.
+	// Freeze its receipt BEFORE all closing admission/exclusion/catalog reads;
+	// their residence must reduce the mapping and final reply lifetime too.
+	answer.resolvedAt = r.now()
 	if err != nil && (!errors.Is(err, ErrNetworkPolicyDNSExcluded) || selected == nil) {
 		return nil, err
 	}
@@ -93,6 +98,7 @@ func (r *NetworkPolicyDNSResolver) resolveSyntheticAnswer(ctx context.Context, c
 		if excluded {
 			answer.negativeWire = selected
 			answer.wire, err = r.syntheticBaseline(ctx, query)
+			answer.resolvedAt = r.now() // the replacement baseline is a NEW wire
 			if err != nil {
 				return nil, err
 			}
@@ -111,23 +117,24 @@ func (r *NetworkPolicyDNSResolver) resolveSyntheticAnswer(ctx context.Context, c
 		if err := r.checkAnswer(ctx, before, name, answer.wire); err != nil {
 			return nil, err
 		}
-		var actual dnsmessage.Message
-		if actual.Unpack(answer.wire) != nil {
-			return nil, errDNSAnswer
+		details, err := dnsAnswerDetails(query, answer.wire)
+		if err != nil && !scopedNegative(err) {
+			return nil, err
+		}
+		if q.Questions[0].Type != dnsmessage.TypeA && len(details.Addresses) != 0 {
+			// A selected positive AAAA cannot silently publish an unowned
+			// IPv6 path as this IPv4 executor. Unmatched/QNAME-negative and
+			// actual answer-negative baseline paths above remain unchanged.
+			return nil, ErrSyntheticDNSUnsupportedFamily
 		}
 		// There is no synthetic mapping/transition owner in this real-answer
 		// slice. Never publish a managed positive A as pretend D07 authority.
 		if q.Questions[0].Type == dnsmessage.TypeA {
-			details, err := dnsAnswerDetails(query, answer.wire)
 			if err == nil && len(details.Addresses) != 0 && details.TTLSeconds != nil && *details.TTLSeconds != 0 && !reservePositive {
 				return nil, ErrSyntheticDNSMappingRequired
 			}
-			if err != nil && !scopedNegative(err) {
-				return nil, err
-			}
 		}
 	}
-	answer.resolvedAt = r.now()
 	return answer, nil
 }
 

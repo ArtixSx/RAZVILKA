@@ -87,7 +87,13 @@ func syntheticDNSModelFixture(t *testing.T, negatives []config.ResourceMatch) sy
 	})
 	if err := r.UseReviewedBaseline(func(_ context.Context, q []byte) ([]byte, error) {
 		answer := scopedResponse(t, q)
-		answer.Answers[0].Body = &dnsmessage.AResource{A: [4]byte{1, 1, 1, 1}}
+		if answer.Questions[0].Type == dnsmessage.TypeAAAA {
+			answer.Answers[0].Body = &dnsmessage.AAAAResource{AAAA: netip.MustParseAddr("2606:4700::1001").As16()}
+		} else if answer.Questions[0].Type == dnsmessage.TypeA {
+			answer.Answers[0].Body = &dnsmessage.AResource{A: [4]byte{1, 1, 1, 1}}
+		} else {
+			answer.Answers = nil
+		}
 		return scopedPack(t, answer), nil
 	}); err != nil {
 		t.Fatal(err)
@@ -706,5 +712,148 @@ func TestSyntheticDNSPublicationModelAsynchronousReturnRevokesAndJoins(t *testin
 	}
 	if len(s.ledger.Reservations) != 1 || s.ledger.Reservations[0].PossiblyIssued {
 		t.Fatal("unready asynchronous lease marked publication")
+	}
+}
+
+func TestSyntheticDNSManagedFamilyRefusesButActualBaselineRemains(t *testing.T) {
+	for _, mode := range []string{"managed", "unmatched", "qname-negative", "actual-ip-negative"} {
+		t.Run(mode, func(t *testing.T) {
+			var negatives []config.ResourceMatch
+			if mode == "qname-negative" {
+				negatives = []config.ResourceMatch{{Kind: "exact", Value: "service.example.com"}}
+			}
+			if mode == "actual-ip-negative" {
+				negatives = []config.ResourceMatch{{Kind: "ip", Value: "2606:4700::1111"}}
+			}
+			f := syntheticDNSModelFixture(t, negatives)
+			s := f.source(t, nil)
+			name := "service.example.com"
+			if mode == "unmatched" {
+				name = "unmatched.example.com"
+			}
+			var wire []byte
+			err := s.Publish(context.Background(), f.client, scopedQuery(t, name, dnsmessage.TypeAAAA), func(w []byte) error { wire = slices.Clone(w); return nil })
+			if mode == "managed" {
+				if !errors.Is(err, ErrSyntheticDNSUnsupportedFamily) || len(wire) != 0 {
+					t.Fatal("managed AAAA silently published real IPv6", err)
+				}
+				return
+			}
+			var reply dnsmessage.Message
+			if err != nil || reply.Unpack(wire) != nil || len(reply.Answers) != 1 || reply.Answers[0].Body.(*dnsmessage.AAAAResource).AAAA != netip.MustParseAddr("2606:4700::1001").As16() || len(s.ledger.Reservations) != 0 {
+				t.Fatal("baseline IPv6 changed globally", err, reply)
+			}
+		})
+	}
+	for _, typ := range []dnsmessage.Type{64, 65} {
+		f := syntheticDNSModelFixture(t, nil)
+		s := f.source(t, nil)
+		f.r.baseline = func(context.Context, []byte) ([]byte, error) {
+			t.Fatal("managed SVCB/HTTPS became fallback")
+			return nil, nil
+		}
+		if err := s.Publish(context.Background(), f.client, scopedQuery(t, "service.example.com", typ), func([]byte) error { t.Fatal("managed SVCB/HTTPS published"); return nil }); !errors.Is(err, ErrScopedDNS) {
+			t.Fatal("unsupported selected type accepted", typ, err)
+		}
+	}
+}
+
+func TestSyntheticDNSClosingResidenceCannotRenewReceivedTTL(t *testing.T) {
+	for _, path := range []string{"service", "default", "baseline", "answer-negative"} {
+		for _, timing := range []struct {
+			ttl   uint32
+			delay time.Duration
+		}{{2, 5 * time.Second}, {5, 2 * time.Second}} {
+			t.Run(fmt.Sprintf("%s-%d", path, timing.ttl), func(t *testing.T) {
+				var negatives []config.ResourceMatch
+				if path == "answer-negative" {
+					negatives = []config.ResourceMatch{{Kind: "ip", Value: "93.184.215.14"}}
+				}
+				f := syntheticDNSModelFixture(t, negatives)
+				now := time.Now()
+				f.r.now = func() time.Time { return now }
+				f.r.service.cache.now = f.r.now
+				wireReceived := false
+				selected := func(_ context.Context, q []byte) (dohResponse, error) {
+					answer := scopedResponse(t, q)
+					answer.Answers[0].Header.TTL = timing.ttl
+					wireReceived = true
+					return dohResponse{wire: scopedPack(t, answer)}, nil
+				}
+				scopedExchange(f.r.service, scopedDNSKey{f.client, "service.example.com"}, selected)
+				if path == "default" {
+					f.r.service = nil
+					networkDefaultExchange(f.r, selected)
+				}
+				f.r.baseline = func(_ context.Context, q []byte) ([]byte, error) {
+					answer := scopedResponse(t, q)
+					answer.Answers[0].Header.TTL = timing.ttl
+					answer.Answers[0].Body = &dnsmessage.AResource{A: [4]byte{1, 1, 1, 1}}
+					wireReceived = true
+					return scopedPack(t, answer), nil
+				}
+				admit := f.r.admit
+				f.r.admit = func(ctx context.Context, c netip.Addr, name string) (NetworkPolicyDNSAdmission, error) {
+					if name != "" && wireReceived {
+						now = now.Add(timing.delay)
+						wireReceived = false
+					}
+					return admit(ctx, c, name)
+				}
+				owner := &syntheticDNSPublicationModel{use: func(ctx context.Context, _ *SyntheticDNSMapping, use func(context.Context) error) error {
+					return use(ctx)
+				}}
+				s := f.source(t, owner)
+				name := "service.example.com"
+				if path == "baseline" {
+					name = "unmatched.example.com"
+				}
+				var wire []byte
+				err := s.Publish(context.Background(), f.client, scopedQuery(t, name, dnsmessage.TypeA), func(w []byte) error { wire = slices.Clone(w); return nil })
+				if timing.delay >= time.Duration(timing.ttl)*time.Second {
+					if path == "baseline" || path == "answer-negative" {
+						var reply dnsmessage.Message
+						if err != nil || reply.Unpack(wire) != nil || len(reply.Answers) != 1 || reply.Answers[0].Header.TTL != 0 || len(s.ledger.Reservations) != 0 {
+							t.Fatal("expired real baseline renewed TTL or reserved", err, reply)
+						}
+						return
+					}
+					if err == nil || len(wire) != 0 || len(s.ledger.Reservations) != 0 {
+						t.Fatal("closing read renewed expired wire", err, len(s.ledger.Reservations))
+					}
+					return
+				}
+				var reply dnsmessage.Message
+				if err != nil || reply.Unpack(wire) != nil || len(reply.Answers) != 1 || reply.Answers[0].Header.TTL > timing.ttl-uint32(timing.delay/time.Second) {
+					t.Fatal("closing residence omitted", err, reply)
+				}
+			})
+		}
+	}
+}
+
+func TestSyntheticDNSDeletedReservationCannotRestoreOriginal(t *testing.T) {
+	f := syntheticDNSModelFixture(t, nil)
+	s := f.source(t, nil)
+	m, err := s.Reserve(context.Background(), f.client, scopedQuery(t, "service.example.com", dnsmessage.TypeA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(f.root, syntheticDNSLedgerName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Current(context.Background()); err == nil {
+		t.Fatal("deleted protected ledger remained current")
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Current(context.Background()); err == nil {
+		t.Fatal("restored ledger revived deleted reservation")
 	}
 }

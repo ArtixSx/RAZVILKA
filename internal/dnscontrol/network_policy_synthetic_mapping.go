@@ -120,6 +120,15 @@ func validSyntheticDNSDefinition(d SyntheticDNSDefinition) bool {
 	return true
 }
 
+// ValidateSyntheticDNSDefinition checks detached transport intent only.
+// It supplies no client/physical binding, reservation or publication grant.
+func ValidateSyntheticDNSDefinition(d SyntheticDNSDefinition) error {
+	if !validSyntheticDNSDefinition(d) {
+		return ErrSyntheticDNSMapping
+	}
+	return nil
+}
+
 // Trusted SAME-adapter factory only: root is its existing protected StateRoot,
 // lifetime is its actual listener owner, resolver/control are original objects.
 // No Ready flag or mapping snapshot is accepted. Missing coordinator permits
@@ -150,7 +159,7 @@ func NewNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolve
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
 	before, err := os.Lstat(root)
-	if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+	if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 || syntheticDNSProtectedRoot(root) != nil {
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
 	owned, err := ownedfs.Open(root)
@@ -158,7 +167,7 @@ func NewNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolve
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
 	after, err := os.Lstat(root)
-	if err != nil || !os.SameFile(before, after) {
+	if err != nil || !os.SameFile(before, after) || syntheticDNSProtectedRoot(root) != nil {
 		_ = owned.Close()
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
@@ -240,7 +249,7 @@ func (s *NetworkPolicyDNSSyntheticResolver) current(ctx context.Context) error {
 		return ErrSyntheticDNSMapping
 	}
 	info, err := os.Lstat(s.root)
-	if err != nil || !os.SameFile(s.anchor, info) {
+	if err != nil || !os.SameFile(s.anchor, info) || syntheticDNSProtectedRoot(s.root) != nil {
 		s.invalid.Store(true)
 		s.cancel()
 		return errors.Join(ErrSyntheticDNSMapping, err)
@@ -264,6 +273,12 @@ func (s *NetworkPolicyDNSSyntheticResolver) current(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	file, statErr := s.owned.Stat(syntheticDNSLedgerName)
+	if statErr == nil && !syntheticDNSProtectedFile(file) || statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		s.invalid.Store(true)
+		s.cancel()
+		return ErrSyntheticDNSMapping
+	}
 	wire, err := s.owned.ReadLimited(syntheticDNSLedgerName, 1<<20)
 	if errors.Is(err, os.ErrNotExist) && len(s.ledger.Reservations) == 0 && !s.closed.Load() && s.ctx.Err() == nil {
 		return nil
@@ -339,10 +354,14 @@ func (s *NetworkPolicyDNSSyntheticResolver) reserveAnswer(ctx context.Context, c
 	if err != nil || len(details.Addresses) != 1 || !details.Addresses[0].Is4() || !publicDNSAddress(details.Addresses[0]) || details.TTLSeconds == nil || *details.TTLSeconds == 0 {
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
+	expiresAt := answer.resolvedAt.Add(time.Duration(*details.TTLSeconds) * time.Second).UTC()
 	var mapping *SyntheticDNSMapping
 	err = networkPolicyDNSOperation(ctx, s.resolver.operations, func(held context.Context) error {
 		if err := s.current(held); err != nil {
 			return err
+		}
+		if !s.resolver.now().Before(expiresAt) {
+			return ErrSyntheticDNSMapping
 		}
 		// DNS repeats retain the SAME original mapping and expiry. Only a
 		// still-live handle with identical source/client/name/authority and
@@ -370,7 +389,7 @@ func (s *NetworkPolicyDNSSyntheticResolver) reserveAnswer(ctx context.Context, c
 			return ErrSyntheticDNSMapping
 		}
 		index := len(s.ledger.Reservations)
-		record := SyntheticDNSMappingObservation{Authority: answer.admission.Authority, PublicationID: hex.EncodeToString(nonce[:]), Client: client, DeviceID: s.definition.DeviceID, MAC: s.definition.MAC, Ingress: s.definition.Ingress, QName: answer.name, CNAMEChain: slices.Clone(details.CNAMEChain), Synthetic: syntheticDNSAddress(index), RealIPv4: details.Addresses[0], ExpiresAt: answer.resolvedAt.Add(time.Duration(*details.TTLSeconds) * time.Second).UTC()}
+		record := SyntheticDNSMappingObservation{Authority: answer.admission.Authority, PublicationID: hex.EncodeToString(nonce[:]), Client: client, DeviceID: s.definition.DeviceID, MAC: s.definition.MAC, Ingress: s.definition.Ingress, QName: answer.name, CNAMEChain: slices.Clone(details.CNAMEChain), Synthetic: syntheticDNSAddress(index), RealIPv4: details.Addresses[0], ExpiresAt: expiresAt}
 		s.ledger.Reservations = append(s.ledger.Reservations, record)
 		if err := s.writeLedger(held); err != nil {
 			return err
