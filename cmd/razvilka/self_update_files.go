@@ -307,7 +307,9 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 		return 2
 	}
 	if !allowSelfUpdateJournalCommand(journalRoots) {
-		return refuseSelfUpdateRuntimeQuiesce("entry")
+		// The retained-journal gate owns the sole early diagnostic. Nothing
+		// from the runtime quiesce path has been admitted or observed yet.
+		return 3
 	}
 	adapter, ok := nativeSelfUpdateFileAdapter().(interface {
 		RuntimeQuiesceAuthority(context.Context, string, uint64, int) error
