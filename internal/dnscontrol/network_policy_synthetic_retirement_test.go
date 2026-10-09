@@ -28,7 +28,7 @@ func syntheticDNSRetirementModel(t *testing.T) (syntheticDNSFixture, *NetworkPol
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := m.ReviewRetirement(held, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition)
+	r, err := m.ReviewRetirement(held, s, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,16 +132,22 @@ func TestSyntheticDNSRetirementCopiesRootsLedgerAndLifetimeRefuse(t *testing.T) 
 
 func TestSyntheticDNSRetirementCannotIssueFromDTOOrAfterClose(t *testing.T) {
 	f, s, m, _, held, _ := syntheticDNSRetirementModel(t)
-	if _, err := new(SyntheticDNSMapping).ReviewRetirement(held, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
+	if _, err := m.ReviewRetirement(context.WithoutCancel(held), s, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
+		t.Fatal("unbounded context issued retirement")
+	}
+	if _, err := new(SyntheticDNSMapping).ReviewRetirement(held, s, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
 		t.Fatal("DTO issued retirement")
 	}
-	if _, err := m.ReviewRetirement(held, new(Manager), f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
+	if _, err := m.ReviewRetirement(held, s, new(Manager), f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
 		t.Fatal("different manager issued retirement")
+	}
+	if _, err := m.ReviewRetirement(held, new(NetworkPolicyDNSSyntheticResolver), f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
+		t.Fatal("different source issued retirement")
 	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.ReviewRetirement(held, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
+	if _, err := m.ReviewRetirement(held, s, f.r.defaultDNS.manager, f.r.frozenPlan, f.control, f.root, f.definition); err == nil {
 		t.Fatal("closed source issued retirement")
 	}
 }

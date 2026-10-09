@@ -34,8 +34,11 @@ func (*SyntheticDNSRetirementReview) GoString() string {
 
 // ReviewRetirement must run while the original mapping is live, inside the
 // SAME still-held exclusive operation. It does not detach that operation.
-func (m *SyntheticDNSMapping) ReviewRetirement(ctx context.Context, manager *Manager, plan *NetworkPolicyDNSPlan, control *operationgate.ControlEpochReview, root string, definition SyntheticDNSDefinition) (*SyntheticDNSRetirementReview, error) {
-	if m == nil || m.self != m || m.source == nil || plan == nil {
+func (m *SyntheticDNSMapping) ReviewRetirement(ctx context.Context, originalSource *NetworkPolicyDNSSyntheticResolver, manager *Manager, plan *NetworkPolicyDNSPlan, control *operationgate.ControlEpochReview, root string, definition SyntheticDNSDefinition) (*SyntheticDNSRetirementReview, error) {
+	if m == nil || m.self != m || m.source == nil || m.source != originalSource || plan == nil || ctx == nil || ctx.Err() != nil {
+		return nil, ErrSyntheticDNSMapping
+	}
+	if _, finite := ctx.Deadline(); !finite {
 		return nil, ErrSyntheticDNSMapping
 	}
 	s := m.source
