@@ -235,12 +235,18 @@ func (o *wgOperationOwner) sameAdapter() bool {
 	if o == nil || o.adapter == nil {
 		return false
 	}
-	a, frozen := o.adapter, &o.shape
+	return sameWGCommandShape(o.adapter, &o.shape, o.tools)
+}
+
+func sameWGCommandShape(a *WARPWireGuardAdapter, frozen *WARPWireGuardAdapter, original WGCommandTools) bool {
+	if a == nil || frozen == nil {
+		return false
+	}
 	if a.ID() != frozen.ID() || a.StateRoot != frozen.StateRoot || a.RuntimeConfigPath != frozen.RuntimeConfigPath || a.Interface != frozen.Interface || a.Table != frozen.Table || a.PriorityBase != frozen.PriorityBase || a.WG != frozen.WG || a.IP != frozen.IP || a.WGQuick != frozen.WGQuick || a.IPTables != frozen.IPTables || a.IP6Tables != frozen.IP6Tables || a.NativeOnly != frozen.NativeOnly || !a.NativeOnly || a.Configs != frozen.Configs || !sameNetworkPolicyDependency(a.Profiles, frozen.Profiles) || !sameNetworkPolicyDependency(a.Runner, frozen.Runner) || a.wgCommandTools == nil || a.wgCommandTools != frozen.wgCommandTools {
 		return false
 	}
 	tools := *a.wgCommandTools
-	return tools.EngineID == o.tools.EngineID && tools.WG == o.tools.WG && tools.AWG == o.tools.AWG && tools.IP == o.tools.IP && tools.IPTables == o.tools.IPTables && tools.IP6Tables == o.tools.IP6Tables && tools.ReviewSHA256 == o.tools.ReviewSHA256 && tools.Identity == o.tools.Identity && tools.Provider == o.tools.Provider && sameNetworkPolicyDependency(tools.Runner, o.tools.Runner)
+	return tools.EngineID == original.EngineID && tools.WG == original.WG && tools.AWG == original.AWG && tools.IP == original.IP && tools.IPTables == original.IPTables && tools.IP6Tables == original.IP6Tables && tools.ReviewSHA256 == original.ReviewSHA256 && tools.Identity == original.Identity && tools.Provider == original.Provider && sameNetworkPolicyDependency(tools.Runner, original.Runner)
 }
 
 func wgOperationCleanupContext(ctx context.Context) context.Context {

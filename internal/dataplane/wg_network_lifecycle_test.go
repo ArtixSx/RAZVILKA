@@ -35,6 +35,14 @@ func init() {
 	if err != nil || closeErr != nil {
 		os.Exit(3)
 	}
+	// Explicit source-inspection model output only; this is still the SAME
+	// real child Start/Wait and never native WAN/WG evidence.
+	if output := os.Getenv("RAZVILKA_WG_COMMAND_TEST_OUTPUT"); output != "" {
+		_, _ = os.Stdout.WriteString(output)
+	}
+	if os.Getenv("RAZVILKA_WG_COMMAND_TEST_WAIT") == "1" {
+		time.Sleep(time.Minute)
+	}
 	os.Exit(0)
 }
 
