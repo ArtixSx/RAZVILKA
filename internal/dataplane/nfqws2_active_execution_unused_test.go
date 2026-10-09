@@ -105,10 +105,16 @@ func nfqwsUnlaunchedAcquireFixture(t *testing.T, outcome string) (*nfqws2ActiveE
 	if acquireErr == nil {
 		acquireErr = ErrNFQWSScopedOwner // A later known pre-producer preparation refusal.
 	}
-	material := &NFQWSActiveMaterial{manager: m, managerRoot: m.StateRoot, adapter: a, control: control, command: command}
+	material := &NFQWSActiveMaterial{manager: m, managerRoot: m.StateRoot, adapter: a, control: control, command: command, intent: nfqws2ActiveIntentFromCommand(command)}
 	material.self = material
 	e := &nfqws2ActiveExecution{material: material, plan: plan, spec: spec, resource: r, cleanup: cleanup, started: true, preparationErr: acquireErr}
 	e.self = e
+	// Explicit already-issued seal model; this fixture has no App/source owner.
+	selection := &NFQWSScopedSelection{spec: spec}
+	selection.self = selection
+	e.selection = selection
+	seal := &nfqws2ActiveActivationSeal{execution: e, scope: scope, selection: selection, command: command.clone(), spec: spec.Clone(), consumed: true}
+	seal.self, e.activationSeal = seal, seal
 	a.activeExecution = e
 	return e, ctx, scope
 }

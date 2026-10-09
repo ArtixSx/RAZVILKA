@@ -191,32 +191,31 @@ func nfqwsScopedPublic(p netip.Prefix) bool {
 // CompileNFQWSScopedPlan consumes trusted immutable Manager intent. Current
 // review/WAN/Stop and the registrar lease are checked by the binding at every
 // actual effect boundary. Passing typed input alone grants no authority.
-func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPlan, error) {
+// validateNFQWSScopedIntent checks only immutable source/plan tuples. It never
+// constructs a chain, effects payload, execution resource or native command.
+func validateNFQWSScopedIntent(expected Plan, spec NFQWSScopedSpec) (NFQWSScopedSpec, error) {
 	candidate := spec.Candidate
 	if len(spec.Matches) > 1024 {
-		return nil, ErrNFQWSScopedOwner
+		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
 	}
-	if expected.SchemaVersion != SchemaVersion || expected.PlanID == "" || len(expected.PlanID) > 128 || !lanPolicyHash(expected.Digest) || expected.Revision == 0 || expected.NetworkProfileID == "" || len(expected.NetworkProfileID) > 128 || !expected.Ready || expected.SafeMode || expected.Noop || len(expected.Blockers) != 0 || len(expected.ResourceConflicts) != 0 || spec.Queue == 0 || !nfqwsScopedSpecNetworkValid(spec) || !nfqws2ManagedHex(spec.SessionID, 32) || !lanPolicyHash(spec.CommandSHA256) || ValidateLANPolicyRuntime(expected.LAN) != nil || candidate.ID == "" || len(candidate.ID) > 128 || strings.ContainsAny(candidate.ID, "\x00\r\n") || len(candidate.Incarnation) != 32 || strings.Trim(candidate.Incarnation, "0123456789abcdef") != "" || !lanPolicyHash(candidate.ArgumentsSHA256) || len(candidate.Traffic) == 0 || len(candidate.Traffic) > 16 || len(expected.Routes) == 0 || len(expected.Routes) > 1024 {
-		return nil, ErrNFQWSScopedOwner
+	if expected.SchemaVersion != SchemaVersion || expected.PlanID == "" || len(expected.PlanID) > 128 || !lanPolicyHash(expected.Digest) || expected.Revision == 0 || expected.NetworkProfileID == "" || len(expected.NetworkProfileID) > 128 || !expected.Ready || expected.SafeMode || expected.Noop || len(expected.Blockers) != 0 || len(expected.ResourceConflicts) != 0 || spec.Queue == 0 || !nfqwsScopedSpecNetworkValid(spec) || ValidateLANPolicyRuntime(expected.LAN) != nil || candidate.ID == "" || len(candidate.ID) > 128 || strings.ContainsAny(candidate.ID, "\x00\r\n") || len(candidate.Incarnation) != 32 || strings.Trim(candidate.Incarnation, "0123456789abcdef") != "" || !lanPolicyHash(candidate.ArgumentsSHA256) || len(candidate.Traffic) == 0 || len(candidate.Traffic) > 16 || len(expected.Routes) == 0 || len(expected.Routes) > 1024 {
+		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
 	}
 	// Bound nested input before copying or marshaling any caller slices.
 	total := 0
 	for _, r := range expected.Routes {
 		if len(r.Sources) > 1024 || len(r.CIDRs) > 2048 || len(r.Ingress) > 16 || len(r.Domains) > 1024 || len(r.SourceRefs) > 1024 || len(r.ServiceID) > 128 || len(r.ServiceName) > 512 || len(r.Selected) > 256 || len(r.Resolved) > 256 || len(r.NetworkPolicyGeneration) > 64 || len(r.NetworkPolicyRole) > 32 || len(r.ProbeURL) > 4096 || len(r.AppliedRoute) > 256 {
-			return nil, ErrNFQWSScopedOwner
+			return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
 		}
 		for _, values := range [][]string{r.Sources, r.CIDRs, r.Ingress, r.Domains, r.SourceRefs} {
 			for _, v := range values {
 				total += len(v) + 8
 				if len(v) > 512 || total > 128<<10 {
-					return nil, ErrNFQWSScopedOwner
+					return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
 				}
 			}
 		}
 	}
-	p := &NFQWSScopedPlan{lan: CloneLANPolicyRuntime(expected.LAN)}
-	p.resources = NFQWSScopedResources{Queue: spec.Queue, NetNamespace: spec.NetNamespace, Generation: p.lan.Generation, LANDigest: p.lan.Digest, PlanID: expected.PlanID, PlanDigest: expected.Digest, NetworkProfileID: expected.NetworkProfileID, Revision: expected.Revision, CandidateID: candidate.ID, Incarnation: candidate.Incarnation, ArgumentsHash: candidate.ArgumentsSHA256, BootID: spec.BootID, SessionID: spec.SessionID, CommandSHA256: spec.CommandSHA256}
-	p.resources.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(spec.NetworkIdentity)
 	traffic := slices.Clone(candidate.Traffic)
 	sort.Slice(traffic, func(i, j int) bool {
 		if traffic[i].Protocol != traffic[j].Protocol {
@@ -226,14 +225,70 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 	})
 	for i, t := range traffic {
 		if t.Protocol != "tcp" && t.Protocol != "udp" || t.First == 0 || t.Last < t.First || i > 0 && traffic[i-1].Protocol == t.Protocol && traffic[i-1].Last >= t.First {
-			return nil, ErrNFQWSScopedOwner
+			return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
 		}
 	}
-	p.spec = spec.Clone()
-	p.spec.Candidate.Traffic = slices.Clone(traffic)
-	if err := nfqwsScopedValidateMatches(expected, &p.spec); err != nil {
+	spec = spec.Clone()
+	spec.Candidate.Traffic = traffic
+	if err := nfqwsScopedValidateMatches(expected, &spec); err != nil {
+		return NFQWSScopedSpec{}, err
+	}
+	for _, route := range expected.Routes {
+		if AdapterID(route.Resolved) != "nfqws2" {
+			continue
+		}
+		if route.NetworkPolicyGeneration != expected.LAN.Generation || len(route.Domains) != 0 || len(route.Ingress) == 0 || len(route.Sources) == 0 || len(route.CIDRs) == 0 {
+			return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
+		}
+		for _, iface := range route.Ingress {
+			var ingress *LANPolicyIngress
+			for i := range expected.LAN.Ingress {
+				if expected.LAN.Ingress[i].Interface == iface {
+					ingress = &expected.LAN.Ingress[i]
+				}
+			}
+			if ingress == nil {
+				return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
+			}
+			for _, value := range route.Sources {
+				source, err := nfqwsScopedPrefix(value)
+				if err != nil {
+					return NFQWSScopedSpec{}, err
+				}
+				contained := false
+				for _, allowed := range ingress.Sources {
+					a := netip.MustParsePrefix(allowed)
+					contained = contained || a.Contains(source.Addr()) && a.Bits() <= source.Bits() && a.Addr().BitLen() == source.Addr().BitLen()
+				}
+				if !contained {
+					return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
+				}
+				for _, value := range route.CIDRs {
+					destination, err := nfqwsScopedPrefix(value)
+					if err != nil || !nfqwsScopedPublic(destination) {
+						return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
+					}
+				}
+			}
+		}
+	}
+	return spec, nil
+}
+func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPlan, error) {
+	if !nfqws2ManagedHex(spec.SessionID, 32) || !lanPolicyHash(spec.CommandSHA256) {
+		return nil, ErrNFQWSScopedOwner
+	}
+	checked, err := validateNFQWSScopedIntent(expected, spec)
+	if err != nil {
 		return nil, err
 	}
+	spec = checked
+	candidate := spec.Candidate
+	p := &NFQWSScopedPlan{lan: CloneLANPolicyRuntime(expected.LAN)}
+	p.resources = NFQWSScopedResources{Queue: spec.Queue, NetNamespace: spec.NetNamespace, Generation: p.lan.Generation, LANDigest: p.lan.Digest, PlanID: expected.PlanID, PlanDigest: expected.Digest, NetworkProfileID: expected.NetworkProfileID, Revision: expected.Revision, CandidateID: candidate.ID, Incarnation: candidate.Incarnation, ArgumentsHash: candidate.ArgumentsSHA256, BootID: spec.BootID, SessionID: spec.SessionID, CommandSHA256: spec.CommandSHA256}
+	p.resources.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(spec.NetworkIdentity)
+	traffic := slices.Clone(candidate.Traffic)
+	p.spec = spec.Clone()
 	matches := nfqwsScopedMatchSet(p.spec.Matches)
 	// Hash the complete frozen input, including incarnation and WAN, for names.
 	data, err := json.Marshal(struct {

@@ -74,7 +74,8 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	if !ok {
 		return nil, dataplane.ErrNFQWSScopedOwner
 	}
-	// Mint the bounded native material after the slow original physical review.
+	// Retain untimed original intent. SAME NFQ Activate issues the bounded
+	// native command after SAME LAN installation and fresh absence checks.
 	phase = "active-material"
 	e.material, err = dataplane.ReviewManagedNFQWSActiveMaterial(c, r.manager, adapter, e.source, e.component, r.control, r.app.SelfUpdateFiles.ControlRoot, r.provider, managedNFQWSListQueue)
 	if err != nil {

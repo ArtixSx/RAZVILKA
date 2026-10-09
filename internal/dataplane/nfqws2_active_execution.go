@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -17,30 +16,32 @@ import (
 // The existing Manager supplies its sole resource and both execution records.
 // It owns no separate ledger and accepts no process factory or caller argv.
 type nfqws2ActiveExecution struct {
-	self           *nfqws2ActiveExecution
-	mu             sync.Mutex
-	material       *NFQWSActiveMaterial
-	selection      *NFQWSScopedSelection
-	plan           Plan
-	spec           NFQWSScopedSpec
-	panel          context.Context
-	cleanup        *operationgate.ExclusiveCleanupReview
-	committedGuard NFQWSActiveGuard
-	cleanupGuard   NFQWSActiveGuard
-	inventory      BackendInventory
-	gate           *NetworkPolicyAdapter
-	lan            *LANPolicyReceiptBinding
-	runtime        *LANPolicyRuntime
-	runtimeFrozen  LANPolicyRuntime
-	lanFrozen      LANPolicyReceiptBinding
-	identity       *networkPolicyIdentity
-	resource       *NFQWSExecutionResource
-	binding        *NFQWSScopedBinding
-	prepared       *NFQWSPreparedHandle
-	started        bool
-	launchInvoked  bool
-	preparationErr error
-	retired        bool
+	self                *nfqws2ActiveExecution
+	mu                  sync.Mutex
+	material            *NFQWSActiveMaterial
+	selection           *NFQWSScopedSelection
+	plan                Plan
+	spec                NFQWSScopedSpec
+	panel               context.Context
+	cleanup             *operationgate.ExclusiveCleanupReview
+	committedGuard      NFQWSActiveGuard
+	cleanupGuard        NFQWSActiveGuard
+	inventory           BackendInventory
+	gate                *NetworkPolicyAdapter
+	lan                 *LANPolicyReceiptBinding
+	runtime             *LANPolicyRuntime
+	runtimeFrozen       LANPolicyRuntime
+	lanFrozen           LANPolicyReceiptBinding
+	identity            *networkPolicyIdentity
+	resource            *NFQWSExecutionResource
+	binding             *NFQWSScopedBinding
+	prepared            *NFQWSPreparedHandle
+	started             bool
+	launchInvoked       bool
+	preparationErr      error
+	retired             bool
+	activationAttempted bool
+	activationSeal      *nfqws2ActiveActivationSeal
 }
 
 type nfqws2ActiveExecutionKey struct{}
@@ -64,11 +65,11 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 		return nil, err
 	}
 	selection.mu.Lock()
-	originalSelection := !selection.closed && selection.source == r.source && reflect.DeepEqual(selection.reference, r.reference)
+	originalSelection := !selection.closed && selection.source == r.source && selection.prepared == r && reflect.DeepEqual(selection.reference, r.reference) && nfqws2ActiveSamePlan(selection.plan, expected)
 	spec := selection.spec.Clone()
 	selection.mu.Unlock()
-	if !originalSelection || len(spec.Matches) == 0 || nfqws2ActiveCommandMatchesSpec(r.command, spec) != nil || inventory.reader.Provider != r.provider ||
-		inventory.reader.Runner == nil || inventory.reader.CheckTools == nil || gate.identity == nil || gate.identity.provider != r.provider || gate.identity.value != r.command.NetworkIdentity ||
+	if !originalSelection || len(spec.Matches) == 0 || spec.SessionID != "" || spec.CommandSHA256 != "" || inventory.reader.Provider != r.provider ||
+		inventory.reader.Runner == nil || inventory.reader.CheckTools == nil || gate.identity == nil || gate.identity.provider != r.provider || gate.identity.value != r.intent.NetworkIdentity ||
 		gate.Binding == nil || gate.Binding.Runtime == nil || gate.Binding.Runtime.Runner == nil || gate.Binding.Runtime.ScopeCheck == nil ||
 		inventory.reader.IPTables != gate.Binding.Runtime.IPTables || inventory.reader.IP6Tables != gate.Binding.Runtime.IP6Tables {
 		return nil, ErrNFQWSScopedOwner
@@ -82,7 +83,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 	if !registered || gate.StateRoot != filepath.Join(r.managerRoot, NetworkPolicyAdapterID) {
 		return nil, ErrNFQWSScopedOwner
 	}
-	if _, err := CompileNFQWSScopedPlan(expected, spec); err != nil {
+	if _, err := validateNFQWSScopedIntent(expected, spec); err != nil {
 		return nil, err
 	}
 	cleanup, err := r.control.ReviewExclusiveCleanup(ctx)
@@ -91,7 +92,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.executionBound || !time.Now().Before(r.command.ActivationDeadline) {
+	if r.executionBound || r.command.ID != "" {
 		return nil, ErrNFQWSScopedOwner
 	}
 	if err := r.currentLocked(ctx); err != nil {
@@ -162,8 +163,8 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 		e.material.manager == nil || e.material.manager.StateRoot != e.material.managerRoot || e.gate == nil || e.gate.Binding != e.lan ||
 		e.lan == nil || e.runtime == nil || e.lan.Runtime != e.runtime || e.material.adapter == nil || e.material.provider == nil || e.inventory.reader.CheckTools == nil ||
 		e.gate.identity != e.identity || e.identity == nil || e.identity.provider != e.material.provider ||
-		e.gate.StateRoot != filepath.Join(e.material.managerRoot, NetworkPolicyAdapterID) || e.identity.value != e.material.command.NetworkIdentity ||
-		e.runtime.IPTables != e.inventory.reader.IPTables || e.runtime.IP6Tables != e.inventory.reader.IP6Tables || e.material.adapter.StateRoot != e.material.command.StateRoot {
+		e.gate.StateRoot != filepath.Join(e.material.managerRoot, NetworkPolicyAdapterID) || e.identity.value != e.material.intent.NetworkIdentity ||
+		e.runtime.IPTables != e.inventory.reader.IPTables || e.runtime.IP6Tables != e.inventory.reader.IP6Tables || e.material.adapter.StateRoot != e.material.intent.StateRoot {
 		return ErrNFQWSScopedOwner
 	}
 	m := e.material.manager
@@ -175,7 +176,11 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 	}
 	e.mu.Lock()
 	retired, started := e.retired, e.started
+	seal := e.activationSeal
 	e.mu.Unlock()
+	if started && (seal == nil || seal.current(e) != nil) {
+		return ErrNFQWSScopedOwner
+	}
 	nfqws2ActiveAdapterMu.Lock()
 	associated := e.material.adapter.activeExecution == e || (!started || retired) && e.material.adapter.activeExecution == nil && e.material.adapter.activeProcess == nil
 	nfqws2ActiveAdapterMu.Unlock()
@@ -183,7 +188,7 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 		return ErrNFQWSScopedOwner
 	}
 	return e.material.provider.WithCurrent(ctx, func(c context.Context, identity netidentity.Identity) error {
-		if identity != e.material.command.NetworkIdentity {
+		if identity != e.material.intent.NetworkIdentity {
 			return ErrNFQWSScopedOwner
 		}
 		return e.inventory.reader.CheckTools(c, backendInventoryScope{Network: identity, ToolReviewID: e.inventory.review})
@@ -345,8 +350,8 @@ func (e *nfqws2ActiveExecution) additional(ctx context.Context, p *NFQWSScopedPl
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
-	snapshot, err := e.inventory.Read(ctx, e.material.command.NetworkIdentity)
-	if err != nil || snapshot.RequireComplete() != nil || snapshot.Scope.Network != e.material.command.NetworkIdentity {
+	snapshot, err := e.inventory.Read(ctx, e.material.intent.NetworkIdentity)
+	if err != nil || snapshot.RequireComplete() != nil || snapshot.Scope.Network != e.material.intent.NetworkIdentity {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	return e.owners(ctx)
@@ -358,18 +363,20 @@ func (e *nfqws2ActiveExecution) prepare(ctx context.Context) error {
 	}
 	e.mu.Lock()
 	used := e.started || e.retired
+	issued := e.activationSeal != nil
 	e.mu.Unlock()
-	if used || !time.Now().Before(e.material.command.ActivationDeadline) {
+	if used || issued {
 		return preflightRefusalError{ErrNFQWSScopedOwner}
 	}
-	if _, err := os.Lstat(filepath.Join(e.material.command.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(filepath.Join(e.material.intent.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
 		return preflightRefusalError{errors.Join(ErrNFQWSScopedOwner, err)}
 	}
 	return nil
 }
 
 func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
-	if err := e.prepare(ctx); err != nil {
+	seal, err := e.issueOriginalActivation(ctx)
+	if err != nil {
 		return err
 	}
 	if e.committedGuard == nil || e.cleanupGuard == nil || e.cleanup == nil {
@@ -377,6 +384,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	}
 	guards := nfqwsExecutionTransferGuards{committed: e.committedGuard, cleanup: e.cleanupGuard, originalCleanup: e.cleanup, control: e.material.control}
 	ctx = context.WithValue(ctx, nfqwsExecutionTransferGuardsKey{}, guards)
+	if err := seal.consume(ctx, e); err != nil {
+		return preflightRefusalError{err}
+	}
 	e.mu.Lock()
 	if e.started {
 		e.mu.Unlock()
@@ -640,17 +650,26 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 			return false, errors.Join(ErrNFQWSScopedOwner, err)
 		}
 	}
-	if _, err := os.Lstat(filepath.Join(e.material.command.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(filepath.Join(e.material.intent.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
 		return false, errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.command.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil); err != nil {
 		return false, err
+	}
+	if e.activationSeal == nil {
+		if _, err := validateNFQWSScopedIntent(e.plan, e.spec); err != nil {
+			return false, err
+		}
+		if err := e.preparedAbsence(ctx); err != nil {
+			return false, err
+		}
+		return true, e.cleanupCurrent(ctx)
 	}
 	plan, err := CompileNFQWSScopedPlan(e.plan, e.spec.Clone())
 	if err != nil {
 		return false, err
 	}
-	snapshot, err := e.inventory.Read(ctx, e.material.command.NetworkIdentity)
+	snapshot, err := e.inventory.Read(ctx, e.material.intent.NetworkIdentity)
 	if err != nil {
 		return false, err
 	}
@@ -661,7 +680,7 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 	if _, err := plan.ruleCounts(rules, nfqwsScopedAbsent); err != nil {
 		return false, err
 	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.command.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil); err != nil {
 		return false, err
 	}
 	return true, e.cleanupCurrent(ctx)

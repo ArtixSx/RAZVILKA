@@ -103,6 +103,7 @@ func (s *executionResourceScope) context() context.Context {
 // Preserve the actual phase's cancellation and values, including a finite
 // original-owner cleanup context. The issuer still checks its own lifetime.
 func (s *executionResourceScope) contextWith(ctx context.Context) context.Context {
+	ctx = context.WithValue(ctx, nfqws2ActiveActivationRegistrarKey{}, s)
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	return context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
 }

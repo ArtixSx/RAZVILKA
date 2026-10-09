@@ -35,6 +35,35 @@ type NFQWSScopedSelection struct {
 	source    *strategylab.SelectedCandidateReview
 	reference strategylab.SelectedCandidateReference
 	spec      NFQWSScopedSpec
+	prepared  *NFQWSActiveMaterial
+	plan      Plan
+}
+
+// Private untimed reader: exact immutable tuples are checked without compiling
+// chains or supplying placeholder session IDs, deadlines or command hashes.
+func reviewNFQWSScopedPreparedSelection(ctx context.Context, material *NFQWSActiveMaterial, reference strategylab.SelectedCandidateReference, expected Plan, matches []NFQWSScopedMatch) (*NFQWSScopedSelection, error) {
+	if material == nil || material.self != material || len(matches) == 0 || len(matches) > 1024 {
+		return nil, ErrNFQWSScopedOwner
+	}
+	spec := material.intentSpec()
+	spec.Candidate.ServiceID, spec.Candidate.IPFamily = reference.ServiceID, reference.IPFamily
+	for _, traffic := range reference.Traffic {
+		if traffic.IPFamily != reference.IPFamily {
+			return nil, ErrNFQWSScopedOwner
+		}
+		spec.Candidate.Traffic = append(spec.Candidate.Traffic, NFQWSScopedTraffic{Protocol: traffic.Protocol, First: traffic.First, Last: traffic.Last})
+	}
+	spec.Matches = slices.Clone(matches)
+	checked, err := validateNFQWSScopedIntent(expected, spec)
+	if err != nil {
+		return nil, err
+	}
+	r := &NFQWSScopedSelection{source: material.source, reference: reference, spec: checked, prepared: material, plan: cloneExecutionResourcePlan(expected)}
+	r.self = r
+	if err := r.Current(ctx); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // ReviewNFQWSScopedSelection reads the original source and compares the full
@@ -98,6 +127,14 @@ func (r *NFQWSScopedSelection) Current(ctx context.Context) error {
 	defer r.mu.Unlock()
 	if r.closed || r.source == nil {
 		return ErrNFQWSScopedOwner
+	}
+	if r.prepared != nil {
+		if r.prepared.self != r.prepared || r.prepared.source != r.source || !reflect.DeepEqual(r.prepared.reference, r.reference) || r.spec.SessionID != "" || r.spec.CommandSHA256 != "" {
+			return ErrNFQWSScopedOwner
+		}
+		if _, err := validateNFQWSScopedIntent(r.plan, r.spec); err != nil {
+			return err
+		}
 	}
 	reference, err := r.source.Reference(ctx)
 	if err != nil || !reflect.DeepEqual(reference, r.reference) {

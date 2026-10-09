@@ -2,15 +2,12 @@ package dataplane
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
@@ -36,9 +33,11 @@ type NFQWSActiveMaterial struct {
 	provider           *netidentity.Provider
 	descriptor         components.NFQWSRuntimeDescriptor
 	reference          strategylab.SelectedCandidateReference
+	intent             nfqws2ActiveProcessIntent
 	command            nfqws2ActiveProcessCommand
 	queue              uint16
 	executionBound     bool
+	issuedSelection    *NFQWSScopedSelection
 }
 
 // ReviewManagedNFQWSActiveMaterial observes configured original owners only.
@@ -82,41 +81,30 @@ func ReviewManagedNFQWSActiveMaterial(ctx context.Context, manager *Manager, ada
 	if err != nil || identity.BootID != parent.BootID {
 		return nil, errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	deadline, _ := ctx.Deadline()
-	if ceiling := time.Now().Add(15 * time.Second); deadline.After(ceiling) {
-		deadline = ceiling
-	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return nil, ErrNFQWSScopedOwner
-	}
 	epoch := control.Reference()
-	command := nfqws2ActiveProcessCommand{Version: 1, Mode: nfqws2ActiveProcessMode, ID: hex.EncodeToString(nonce[:]), StateRoot: adapter.StateRoot,
+	intent := nfqws2ActiveProcessIntent{StateRoot: adapter.StateRoot,
 		Owner: owner, ControlRoot: controlRoot, InstallationID: epoch.InstallationID, Sequence: epoch.Sequence,
 		Program: nfqws2ManagedFile{Path: descriptor.Executable.Path, SHA256: descriptor.Executable.SHA256}, Parent: parent,
-		NetworkIdentity: identity, ActivationDeadline: deadline.UTC(), Args: []string{"--intercept=1", "--qnum=" + strconv.Itoa(int(queue))}}
+		NetworkIdentity: identity, Args: []string{"--intercept=1", "--qnum=" + strconv.Itoa(int(queue))}}
 	for _, asset := range descriptor.Lua {
-		command.Assets = append(command.Assets, nfqws2ManagedFile{Path: asset.Path, SHA256: asset.SHA256})
-		command.Args = append(command.Args, "--lua-init=@"+asset.Path)
+		intent.Assets = append(intent.Assets, nfqws2ManagedFile{Path: asset.Path, SHA256: asset.SHA256})
+		intent.Args = append(intent.Args, "--lua-init=@"+asset.Path)
 	}
 	for _, blob := range descriptor.Blobs {
-		command.Assets = append(command.Assets, nfqws2ManagedFile{Path: blob.Path, SHA256: blob.SHA256})
-		command.Args = append(command.Args, "--blob="+blob.Alias+":@"+blob.Path)
+		intent.Assets = append(intent.Assets, nfqws2ManagedFile{Path: blob.Path, SHA256: blob.SHA256})
+		intent.Args = append(intent.Args, "--blob="+blob.Alias+":@"+blob.Path)
 	}
-	command.Args = append(command.Args, slices.Clone(reference.Arguments)...)
+	intent.Args = append(intent.Args, slices.Clone(reference.Arguments)...)
 	r := &NFQWSActiveMaterial{manager: manager, managerRoot: manager.StateRoot, registryGeneration: generation, adapter: adapter, source: source, runtime: runtime,
-		control: control, provider: provider, descriptor: descriptor, reference: reference, command: command, queue: queue}
+		control: control, provider: provider, descriptor: descriptor, reference: reference, intent: intent, queue: queue}
 	r.self = r
-	if nfqws2ActiveCommandMatchesSpec(command, r.spec()) != nil {
-		return nil, ErrNFQWSScopedOwner
-	}
 	if err := r.Current(ctx); err != nil {
 		return nil, err
 	}
 	if err := control.Current(ctx); err != nil {
 		return nil, errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if ctx.Err() != nil || !time.Now().Before(command.ActivationDeadline) {
+	if ctx.Err() != nil {
 		return nil, ErrNFQWSScopedOwner
 	}
 	return r, nil
@@ -125,6 +113,9 @@ func ReviewManagedNFQWSActiveMaterial(ctx context.Context, manager *Manager, ada
 // spec contains no argv; real executable+all ordered arguments determine its
 // comparison hash. SAME actual private command is retained by this producer.
 func (r *NFQWSActiveMaterial) spec() NFQWSScopedSpec {
+	if r.command.ID == "" {
+		return NFQWSScopedSpec{}
+	}
 	identity := r.command.NetworkIdentity
 	result := NFQWSScopedSpec{Queue: r.queue, BootID: identity.BootID, SessionID: r.command.ID, CommandSHA256: nfqws2ActiveCommandDigest(r.command),
 		NetworkIdentity: &identity, Candidate: NFQWSScopedCandidate{ID: r.reference.CandidateID, Incarnation: r.reference.Incarnation,
@@ -137,20 +128,21 @@ func (r *NFQWSActiveMaterial) spec() NFQWSScopedSpec {
 
 // ReviewScope consumes the full DEFAULT reference/rules beside their projected
 // Plan. Both opening and closing material reads precede any native effect.
-// Expired material cannot prepare another activation, even with fresh ctx.
+// Prepared intent has no activation ID/deadline. SAME Activate issues the
+// one-use native command after the original LAN participant is installed.
 func (r *NFQWSActiveMaterial) ReviewScope(ctx context.Context, expectedReference strategylab.SelectedCandidateReference, expected Plan, matches []NFQWSScopedMatch) (*NFQWSScopedSelection, error) {
 	if r == nil || r.self != r {
 		return nil, ErrNFQWSScopedOwner
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.closed || !time.Now().Before(r.command.ActivationDeadline) || !reflect.DeepEqual(expectedReference, r.reference) {
+	if r.closed || r.executionBound || r.command.ID != "" || !reflect.DeepEqual(expectedReference, r.reference) {
 		return nil, ErrNFQWSScopedOwner
 	}
 	if err := r.currentLocked(ctx); err != nil {
 		return nil, err
 	}
-	selection, err := ReviewNFQWSScopedSelection(ctx, r.source, expectedReference, expected, r.spec(), matches)
+	selection, err := reviewNFQWSScopedPreparedSelection(ctx, r, expectedReference, expected, matches)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +168,8 @@ func (r *NFQWSActiveMaterial) Current(ctx context.Context) error {
 // into active-lifetime permission by this fresh finite observer.
 func (r *NFQWSActiveMaterial) currentLocked(ctx context.Context) error {
 	if r.closed || nfqws2ActiveOperation(ctx) != nil || r.manager == nil || r.adapter == nil || r.manager.StateRoot != r.managerRoot ||
-		r.adapter.StateRoot != r.command.StateRoot || r.control == nil || !r.control.MatchesControlRoot(r.command.ControlRoot) {
+		r.adapter.StateRoot != r.intent.StateRoot || r.control == nil || !r.control.MatchesControlRoot(r.intent.ControlRoot) ||
+		r.command.ID != "" && !reflect.DeepEqual(nfqws2ActiveIntentFromCommand(r.command), r.intent) {
 		return ErrNFQWSScopedOwner
 	}
 	r.manager.registryMu.RLock()
@@ -193,15 +186,15 @@ func (r *NFQWSActiveMaterial) currentLocked(ctx context.Context) error {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	if err := r.provider.WithCurrent(ctx, func(_ context.Context, identity netidentity.Identity) error {
-		if identity != r.command.NetworkIdentity {
+		if identity != r.intent.NetworkIdentity {
 			return ErrNFQWSScopedOwner
 		}
 		return nil
 	}); err != nil {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	state, present, err := operationgate.ReadSelfUpdateStop(ctx, r.command.ControlRoot)
-	if err != nil || !present || state.Stopped || state.InstallationID != r.command.InstallationID || state.Sequence != r.command.Sequence {
+	state, present, err := operationgate.ReadSelfUpdateStop(ctx, r.intent.ControlRoot)
+	if err != nil || !present || state.Stopped || state.InstallationID != r.intent.InstallationID || state.Sequence != r.intent.Sequence {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	if err := r.source.ManagedOwnersCurrent(ctx, r.runtime, r.control); err != nil {
@@ -210,7 +203,7 @@ func (r *NFQWSActiveMaterial) currentLocked(ctx context.Context) error {
 	r.manager.registryMu.RLock()
 	registered, generation = r.manager.Adapters["nfqws2"], r.manager.registryGeneration
 	r.manager.registryMu.RUnlock()
-	if registered != r.adapter || generation != r.registryGeneration || r.manager.StateRoot != r.managerRoot || r.adapter.StateRoot != r.command.StateRoot || !r.control.MatchesControlRoot(r.command.ControlRoot) || !reflect.DeepEqual(r.runtime.Descriptor(), r.descriptor) {
+	if registered != r.adapter || generation != r.registryGeneration || r.manager.StateRoot != r.managerRoot || r.adapter.StateRoot != r.intent.StateRoot || !r.control.MatchesControlRoot(r.intent.ControlRoot) || !reflect.DeepEqual(r.runtime.Descriptor(), r.descriptor) {
 		return ErrNFQWSScopedOwner
 	}
 	return ctx.Err()
@@ -225,5 +218,8 @@ func (r *NFQWSActiveMaterial) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closed = true
+	if r.issuedSelection != nil {
+		return r.issuedSelection.Close()
+	}
 	return nil
 }
