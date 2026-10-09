@@ -56,7 +56,7 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 	// All methods own their actual admission. In particular an unknown Stop
 	// joins its still-held original cleanup owner, without entering a new gate.
-	ctx, cancel := context.WithTimeout(operationgate.WithLabel(r.Context(), "управление удерживаемым маршрутом NFQWS"), 15*time.Second)
+	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), input.Action)
 	defer cancel()
 	var err error
 	response := map[string]any{"ok": true, "service_health": "unverified"}
@@ -90,6 +90,17 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+// Launch/review use the existing finite ordinary job budget. Physical leaves
+// and the original material's separately minted activation expiry are not
+// renewed by this caller context. An earlier parent deadline always wins.
+func managedNFQRuntimeCallContext(parent context.Context, action string) (context.Context, context.CancelFunc) {
+	budget := 15 * time.Second
+	if action == "start" || action == "plan" || action == "apply" {
+		budget = defaultDataplaneApplyTimeout
+	}
+	return context.WithTimeout(operationgate.WithLabel(parent, "управление удерживаемым маршрутом NFQWS"), budget)
 }
 
 func logManagedNFQRuntimeFailure(action string, err error) {

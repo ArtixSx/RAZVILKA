@@ -8,7 +8,39 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 )
+
+func TestManagedNFQRuntimeCallBudgetKeepsOriginalParentAndCleanupBounds(t *testing.T) {
+	type callerValueKey struct{}
+	caller := context.WithValue(context.Background(), callerValueKey{}, "original caller")
+	for _, action := range []string{"start", "plan", "apply", "check", "stop"} {
+		t.Run(action, func(t *testing.T) {
+			budget := 15 * time.Second
+			if action == "start" || action == "plan" || action == "apply" {
+				budget = defaultDataplaneApplyTimeout
+			}
+			before := time.Now()
+			ctx, cancel := managedNFQRuntimeCallContext(caller, action)
+			defer cancel()
+			after := time.Now()
+			deadline, bounded := ctx.Deadline()
+			if !bounded || deadline.Before(before.Add(budget)) || deadline.After(after.Add(budget)) || ctx.Value(callerValueKey{}) != "original caller" {
+				t.Fatal("caller deadline/value replaced or short cleanup budget widened", deadline)
+			}
+			parent, parentCancel := context.WithTimeout(caller, 2*time.Second)
+			defer parentCancel()
+			parentDeadline, _ := parent.Deadline()
+			child, childCancel := managedNFQRuntimeCallContext(parent, action)
+			defer childCancel()
+			childDeadline, _ := child.Deadline()
+			parentCancel()
+			if childDeadline != parentDeadline || child.Err() != context.Canceled {
+				t.Fatal("earlier original parent deadline/cancellation was renewed", childDeadline, child.Err())
+			}
+		})
+	}
+}
 
 // The real HTTP security/admission and original Stores are exercised here.
 // A positive native activation requires the real installed source and stock

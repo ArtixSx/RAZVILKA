@@ -224,7 +224,7 @@ func (a *App) managedNFQPlanHTTP(w http.ResponseWriter, r *http.Request, cfg con
 		writeManagedNFQRuntimeError(w, http.StatusConflict, "NETWORK_POLICY_EXECUTOR_REQUIRED")
 		return true
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), "plan")
 	defer cancel()
 	plan, review, err := runtime.review(ctx, serviceID, protocol, family, scope)
 	if err != nil {
@@ -249,7 +249,7 @@ func (a *App) managedNFQApplyHTTP(w http.ResponseWriter, r *http.Request, cfg co
 		writeManagedNFQRuntimeError(w, http.StatusConflict, "MANAGED_NFQWS_REVIEW_REQUIRED")
 		return true
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), "apply")
 	defer cancel()
 	review := applyReview{Revision: *request.Revision, Digest: request.Digest}
 	execution, err := runtime.startReviewed(ctx, serviceID, protocol, family, scope, &review)
