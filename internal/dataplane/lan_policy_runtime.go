@@ -19,12 +19,15 @@ import (
 const (
 	// This mode delegates the packet boundary to exact NFQ consumer selectors.
 	// It never installs admission marks, RPDB rules or a standalone kernel gate.
-	LANPolicyNFQWSDirectMode        = "nfqws-direct"
-	LANPolicyManagedMark     uint32 = 0x20000000
-	LANPolicyBypassMark      uint32 = 0x08000000
-	LANPolicyGateMask        uint32 = LANPolicyManagedMark | LANPolicyBypassMark
-	LANPolicySkipPriority           = 53
-	LANPolicyAnchorPriority         = 73
+	LANPolicyNFQWSDirectMode     = "nfqws-direct"
+	LANPolicyXraySelectedTCPMode = "xray-selected-tcp"
+	// A startup profile for one original shared owner, never a plan mode.
+	LANPolicyManagedListDirectMode        = "managed-list-direct"
+	LANPolicyManagedMark           uint32 = 0x20000000
+	LANPolicyBypassMark            uint32 = 0x08000000
+	LANPolicyGateMask              uint32 = LANPolicyManagedMark | LANPolicyBypassMark
+	LANPolicySkipPriority                 = 53
+	LANPolicyAnchorPriority               = 73
 )
 
 var ErrLANPolicyRuntime = errors.New("LAN policy gate unavailable or mismatched")
@@ -60,6 +63,16 @@ func CompileLANPolicyRuntime(generation string, ingress []LANPolicyIngress) (*LA
 // Actual original NFQ selectors and their shared receipt must enforce it.
 func CompileNFQWSDirectLANPolicyRuntime(generation string, ingress []LANPolicyIngress) (*LANPolicyRuntimePlan, error) {
 	return compileLANPolicyRuntime(generation, ingress, LANPolicyNFQWSDirectMode)
+}
+
+// Only the original Xray NAT consumer and COMMON receipt can enforce this
+// physical intent. The shared gate installs no mark, RPDB rule or selector.
+func CompileXraySelectedTCPLANPolicyRuntime(generation string, ingress []LANPolicyIngress) (*LANPolicyRuntimePlan, error) {
+	return compileLANPolicyRuntime(generation, ingress, LANPolicyXraySelectedTCPMode)
+}
+
+func lanPolicyDirectMode(mode string) bool {
+	return mode == LANPolicyNFQWSDirectMode || mode == LANPolicyXraySelectedTCPMode
 }
 
 func compileLANPolicyRuntime(generation string, ingress []LANPolicyIngress, mode string) (*LANPolicyRuntimePlan, error) {
@@ -124,7 +137,7 @@ func ValidateLANPolicyRuntime(p *LANPolicyRuntimePlan) error {
 }
 
 func validateLANPolicyRuntime(p *LANPolicyRuntimePlan, sealed bool) error {
-	if p == nil || p.Schema != 1 || p.Mode != "" && p.Mode != LANPolicyNFQWSDirectMode || !lanPolicyHash(p.Generation) || len(p.Ingress) == 0 || len(p.Ingress) > 16 || sealed && p.Digest != lanPolicyDigest(p) {
+	if p == nil || p.Schema != 1 || p.Mode != "" && !lanPolicyDirectMode(p.Mode) || !lanPolicyHash(p.Generation) || len(p.Ingress) == 0 || len(p.Ingress) > 16 || sealed && p.Digest != lanPolicyDigest(p) {
 		return ErrLANPolicyRuntime
 	}
 	interfaces, segments := map[string]bool{}, map[string]bool{}
@@ -191,7 +204,7 @@ type lanPolicyChain struct {
 }
 
 func lanPolicyChains(p *LANPolicyRuntimePlan) []lanPolicyChain {
-	if p.Mode == LANPolicyNFQWSDirectMode {
+	if lanPolicyDirectMode(p.Mode) {
 		return nil
 	}
 	var result []lanPolicyChain
@@ -234,7 +247,7 @@ func lanPolicyChains(p *LANPolicyRuntimePlan) []lanPolicyChain {
 }
 
 func lanPolicyRules(p *LANPolicyRuntimePlan) []lanClassifierRule {
-	if p.Mode == LANPolicyNFQWSDirectMode {
+	if lanPolicyDirectMode(p.Mode) {
 		return nil
 	}
 	var out []lanClassifierRule
@@ -251,7 +264,7 @@ func (p *LANPolicyRuntimePlan) Effects() ([]LANPolicyEffect, error) {
 	if err := ValidateLANPolicyRuntime(p); err != nil {
 		return nil, err
 	}
-	if p.Mode == LANPolicyNFQWSDirectMode {
+	if lanPolicyDirectMode(p.Mode) {
 		return nil, nil
 	}
 	var effects []LANPolicyEffect

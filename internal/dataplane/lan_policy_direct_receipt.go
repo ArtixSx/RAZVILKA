@@ -15,7 +15,7 @@ import (
 const lanDirectPreparationSchema = 3
 
 func (b *LANPolicyReceiptBinding) directGuard(ctx context.Context, p *LANPolicyRuntimePlan, cleanup bool) error {
-	if b == nil || b.Runtime == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.RetireCheck == nil || ValidateLANPolicyRuntime(p) != nil || p.Mode != LANPolicyNFQWSDirectMode {
+	if b == nil || b.Runtime == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.RetireCheck == nil || ValidateLANPolicyRuntime(p) != nil || !lanPolicyDirectMode(p.Mode) {
 		return ErrLANPolicyRuntime
 	}
 	if err := b.Runtime.checkTools(ctx, p); err != nil {
@@ -29,7 +29,7 @@ func (b *LANPolicyReceiptBinding) directGuard(ctx context.Context, p *LANPolicyR
 }
 
 func loadLANDirectPreparation(ctx context.Context, s *policyAdditionSession, p *LANPolicyRuntimePlan) error {
-	if ValidateLANPolicyRuntime(p) != nil || p.Mode != LANPolicyNFQWSDirectMode {
+	if ValidateLANPolicyRuntime(p) != nil || !lanPolicyDirectMode(p.Mode) {
 		return ErrPolicyAdditionReceipt
 	}
 	if err := s.loadDocument(ctx); err != nil {

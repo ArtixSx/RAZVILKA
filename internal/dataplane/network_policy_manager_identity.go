@@ -30,6 +30,23 @@ type networkPolicyIdentity struct {
 	withCurrent func(context.Context, func(context.Context, netidentity.Identity) error) error
 }
 
+func (n *networkPolicyIdentity) acceptsMode(mode string) bool {
+	if n == nil {
+		return false
+	}
+	if n.mode == LANPolicyManagedListDirectMode {
+		return lanPolicyDirectMode(mode)
+	}
+	return mode == n.mode
+}
+
+func (n *networkPolicyIdentity) inventoryMode(lan *LANPolicyRuntimePlan) string {
+	if n.mode == LANPolicyManagedListDirectMode && lan != nil {
+		return lan.Mode
+	}
+	return n.mode
+}
+
 func (n *networkPolicyIdentity) use(ctx context.Context, use func(context.Context) error) error {
 	if n == nil || n.value.Validate() != nil || n.withCurrent == nil || ctx == nil || use == nil {
 		return ErrNetworkPolicyIdentity
@@ -63,7 +80,7 @@ func NewNetworkPolicyAdapter(ctx context.Context, options NetworkPolicyAssemblyO
 
 func networkPolicyAssemblyOptionsValid(options NetworkPolicyAssemblyOptions) bool {
 	b := options.Binding
-	return (options.Mode == "" || options.Mode == LANPolicyNFQWSDirectMode) && b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
+	return (options.Mode == "" || lanPolicyDirectMode(options.Mode) || options.Mode == LANPolicyManagedListDirectMode) && b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
 		b.Runtime.ScopeCheck != nil && b.ApplyGuard != nil && b.CleanupGuard != nil && b.RetireCheck != nil && options.InventoryCheck != nil
 }
 
@@ -79,7 +96,7 @@ func newNetworkPolicyIdentityAdapter(options NetworkPolicyAssemblyOptions, ident
 	inventory := options.InventoryCheck
 	boundary := func(ctx context.Context, p *LANPolicyRuntimePlan, stage string, check func(context.Context) error) error {
 		return lanPolicyPreflightAt("boundary-identity", identity.use(ctx, func(c context.Context) error {
-			if p != nil && (ValidateLANPolicyRuntime(p) != nil || p.Mode != identity.mode) {
+			if p != nil && (ValidateLANPolicyRuntime(p) != nil || !identity.acceptsMode(p.Mode)) {
 				return lanPolicyPreflightAt("boundary-plan", ErrLANPolicyRuntime)
 			}
 			if err := check(c); err != nil {
@@ -154,7 +171,7 @@ func (a *NetworkPolicyAdapter) gateFor(p Plan) (*networkPolicyGateState, error) 
 		return state, err
 	}
 	identity := a.identity.value
-	if identity.Validate() != nil || state.LAN.Mode != a.identity.mode {
+	if identity.Validate() != nil || !a.identity.acceptsMode(state.LAN.Mode) {
 		return nil, ErrNetworkPolicyIdentity
 	}
 	state.Schema, state.NetworkIdentity = 2, &identity
@@ -168,7 +185,7 @@ func (a *NetworkPolicyAdapter) gateIdentityMatches(state *networkPolicyGateState
 	if a.identity == nil {
 		return state.Schema == 1 && state.NetworkIdentity == nil
 	}
-	return state.Schema == 2 && state.LAN != nil && state.LAN.Mode == a.identity.mode && state.NetworkIdentity != nil && state.NetworkIdentity.Validate() == nil && *state.NetworkIdentity == a.identity.value
+	return state.Schema == 2 && state.LAN != nil && a.identity.acceptsMode(state.LAN.Mode) && state.NetworkIdentity != nil && state.NetworkIdentity.Validate() == nil && *state.NetworkIdentity == a.identity.value
 }
 
 func (m *Manager) executionNetworkIdentity() *networkPolicyIdentity {

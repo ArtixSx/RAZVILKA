@@ -23,7 +23,7 @@ func (c *NetworkPolicyChecks) stockQueueExecution(ctx context.Context) (*network
 	}
 	e, ok := value.(*nfqws2ActiveExecution)
 	if !ok || e == nil || e.self != e || e.material == nil || e.material.self != e.material || c.gate == nil || c.gate.identity == nil || c.identity == nil ||
-		c.gate.identity.mode != LANPolicyNFQWSDirectMode || e.plan.LAN == nil || e.plan.LAN.Mode != LANPolicyNFQWSDirectMode ||
+		!c.gate.identity.acceptsMode(LANPolicyNFQWSDirectMode) || e.plan.LAN == nil || e.plan.LAN.Mode != LANPolicyNFQWSDirectMode ||
 		e.material.manager != c.manager || e.material.managerRoot != c.root || e.material.adapter != c.adapters["nfqws2"] ||
 		e.gate != c.gate || e.lan != c.binding || e.runtime != c.runtime || e.identity != c.identity ||
 		e.material.provider != c.identity.provider || e.material.registryGeneration != c.generation || c.inventory == nil ||

@@ -277,7 +277,7 @@ func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicy
 	if err := a.check(); err != nil {
 		return err
 	}
-	if lan != nil && lan.Mode == LANPolicyNFQWSDirectMode {
+	if lan != nil && lanPolicyDirectMode(lan.Mode) {
 		// Direct preparation has no COMMON effects to iterate. Missing files
 		// still require original retained cleanup, settled consumers and fresh
 		// complete namespace/RPDB absence before the exact owner can be cleared.
