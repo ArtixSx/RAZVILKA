@@ -623,3 +623,43 @@ func TestNFQWSDirectStockQueueMatcherRejectsUnknownAndNoncanonicalSyntax(t *test
 		})
 	}
 }
+
+func TestNFQWSDirectStockQueueKernelChainLabelBoundaries(t *testing.T) {
+	for _, size := range []int{28, 29, 30} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			snapshot := nfqwsDirectStockQueueFixture()
+			bridge, delay := strings.Repeat("b", size), strings.Repeat("d", size)
+			for i := range snapshot.Rows {
+				if snapshot.Rows[i].Table != "mangle" {
+					continue
+				}
+				for j, token := range snapshot.Rows[i].Tokens {
+					switch token {
+					case "local_bridge":
+						snapshot.Rows[i].Tokens[j] = bridge
+					case "local_delay":
+						snapshot.Rows[i].Tokens[j] = delay
+					}
+				}
+			}
+			before := nfqwsDirectStockTestClone(snapshot)
+			rows, err := inspectNFQWSDirectStockQueues(snapshot, 40321)
+			if size == 30 {
+				if rows != nil || !errors.Is(err, errNFQWSDirectStockQueue) {
+					t.Fatal("oversized kernel label accepted", err)
+				}
+				return
+			}
+			if err != nil || len(rows) != 2 || rows[0].Tokens[1] != delay || rows[1].Tokens[1] != delay || !reflect.DeepEqual(snapshot, before) {
+				t.Fatal("valid kernel label declaration/body/jump/goto refused", err)
+			}
+			if xrayRows, err := inspectXrayStockOutputQueues(snapshot); err != nil || !reflect.DeepEqual(rows, xrayRows) {
+				t.Fatal("no-owned-queue readback has another label bound", err)
+			}
+			// The same valid long labels still make every predicate-ignored
+			// non-OUTPUT route unsafe, including an additional goto.
+			snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(6, "mangle", "-A", "FORWARD", "-g", delay))
+			nfqwsDirectStockTestRefused(t, snapshot, 40321)
+		})
+	}
+}

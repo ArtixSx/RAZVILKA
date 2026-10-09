@@ -443,7 +443,11 @@ func nfqwsDirectStockHex32(value string) bool {
 }
 
 func nfqwsDirectStockChain(value string) bool {
-	if len(value) == 0 || len(value) > 28 {
+	// -S reads kernel chain labels from xt_error_target.errorname[30]
+	// (XT_FUNCTION_MAXNAMELEN), hence 29 bytes plus NUL. Extension names
+	// and the userland CLI's new-chain limit use a different 29-byte field.
+	// Existing firmware-created labels must not inherit that CLI limit.
+	if len(value) == 0 || len(value) > 29 {
 		return false
 	}
 	for _, r := range value {
