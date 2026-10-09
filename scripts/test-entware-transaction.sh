@@ -229,7 +229,7 @@ assert_native_metadata() (
   METADATA_BASE="$1"
   for METADATA_FLAG in -self-update-read-version -self-update-schema -check-self-update-state; do
     case "$METADATA_FLAG" in
-      -self-update-read-version) METADATA_EXPECTED=3 ;;
+      -self-update-read-version) METADATA_EXPECTED=4 ;;
       -self-update-schema) METADATA_EXPECTED=0 ;;
       -check-self-update-state) METADATA_EXPECTED='{"ok":true}' ;;
     esac
