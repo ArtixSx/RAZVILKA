@@ -1762,6 +1762,22 @@ function strategyCompatibilityView(validation = {}) {
     note: 'Сохранённый результат проверки параметров и Lua NFQWS2. Повторите проверку перед применением. Проверка соединения и применение выполняются отдельно.' };
 }
 
+function strategyManualSelectionInput(candidateID) {
+  const candidate = state.strategyLab?.candidates?.find(item => item.id === candidateID);
+  const pool = state.strategyLab?.pools?.find(item => item.id === candidate?.pool_id);
+  const serviceID = $('#strategyTarget').value, family = $('#strategyFamily').value;
+  if (pool && !['tcp','quic'].includes(pool.protocol)) {
+    return { body: null, reason: 'Ручной выбор для этого протокола пока недоступен.' };
+  }
+  if (!candidate || !pool || !state.services?.some(item => item.id === serviceID) || !['ipv4','ipv6'].includes(family)) {
+    return { body: null, reason: 'Выберите сервис и IP-семейство из списка; обновите кандидата.' };
+  }
+  // Form completeness permits an explicit request; the server admits the
+  // current compatibility/control/runtime. Saved validation is not permission.
+  return { body: { mode: 'manual', service_id: serviceID, protocol: pool.protocol, ip_family: family, candidate_id: candidate.id },
+    reason: 'Сохранить ручной выбор. Проверка здоровья и применение выполняются отдельно.' };
+}
+
 function renderStrategyLab() {
   const lab = state.strategyLab || {};
   const pools = lab.pools || [];
@@ -1778,12 +1794,12 @@ function renderStrategyLab() {
 		const load = budget.cpu_count ? `load ${Number(budget.load_1 || 0).toFixed(2)} / ${budget.cpu_count} CPU` : 'нагрузка не определена';
 		budgetNode.innerHTML = probeUnavailable ? '<b>ИЗОЛИРОВАННЫЙ ТЕСТ НЕДОСТУПЕН</b><span>Исполнитель изолированного теста недоступен. Совместимость кандидата с установленным NFQWS2 и Lua проверяется отдельно.</span>' : `<b>${budget.allowed === false ? 'ТЕСТ ОТЛОЖЕН' : 'РЕСУРСЫ ТЕСТА'}</b><span>${esc(budget.reason || 'Проверяем RAM и нагрузку роутера…')} ${esc(memory)} · ${esc(load)} · лимит ${Math.round((budget.timeout_ms || 15000) / 1000)} с.</span>`;
 	}
-	$('#strategyTarget').disabled = probeUnavailable;
-	$('#strategyFamily').disabled = probeUnavailable;
 	const target = $('#strategyTarget').value;
-	const probeServices = (state.services || []).filter((service) => service.probe_url);
-  $('#strategyTarget').innerHTML = probeServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов с адресом проверки</option>';
-	if (probeServices.some((service) => service.id === target)) $('#strategyTarget').value = target;
+	const targetServices = (state.services || []).filter((service) => service.id);
+  $('#strategyTarget').innerHTML = targetServices.map((service) => `<option value="${esc(service.id)}">${esc(service.name)}</option>`).join('') || '<option value="">Нет сервисов в каталоге</option>';
+	if (targetServices.some((service) => service.id === target)) $('#strategyTarget').value = target;
+	$('#strategyTarget').disabled = targetServices.length === 0 || !!state.strategySelectionAction;
+	$('#strategyFamily').disabled = targetServices.length === 0 || !!state.strategySelectionAction;
   $('#z2kMigration').innerHTML = migration.found
     ? `<div><span class="external-owner-tag">ТОЛЬКО ИМПОРТ</span><b>Найдена внешняя конфигурация NFQWS2 ${esc(migration.version || '')}</b><small>${migration.files?.length || 0} файлов · ${migration.strategies?.length || 0} стратегий · ${(migration.extra_domains?.length || 0) + (migration.auto_domains?.length || 0)} доменов. Сам z2k не устанавливается и не становится обходом RAZVILKA.</small></div><div class="z2k-migration-actions"><button class="secondary" id="showZ2KPreview" type="button">Показать источник</button><button class="primary" id="importZ2KStrategies" type="button">Импортировать в черновик NFQWS2</button></div>`
     : '<div><b>Внешняя конфигурация NFQWS2 не обнаружена</b><small>Подбор стратегий работает с обычным NFQWS2. Отдельный сервис z2k не требуется и не устанавливается.</small></div>';
@@ -1801,10 +1817,12 @@ function renderStrategyLab() {
     const validation = candidate.validation || {};
 		const pool = pools.find((item) => item.id === candidate.pool_id);
     const compatibility = strategyCompatibilityView(validation);
+		const manual = strategyManualSelectionInput(candidate.id);
+		const choose = `<button class="secondary" type="button" data-strategy-manual="${esc(candidate.id)}" ${!manual.body || state.strategySelectionAction ? 'disabled' : ''} title="${esc(manual.reason)}">Выбрать вручную</button>`;
 		const probe = compatibility.compatible && !probeUnavailable
 			? ['tcp', 'quic'].includes(pool?.protocol) ? `<button class="primary" data-strategy-probe="${esc(candidate.id)}">${pool?.protocol === 'quic' ? 'Тест HTTP/3' : 'Тест маршрута'}</button>` : '<button class="secondary" disabled title="Для голосового UDP нужен сервисный handshake">UDP сервиса</button>'
 			: '';
-    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small><small>${esc(compatibility.checkedAt)}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(compatibility.title)}. ${esc(compatibility.note)} ${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
+    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small><small>${esc(compatibility.checkedAt)}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(compatibility.title)}. ${esc(compatibility.note)} ${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${choose}${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
   }).join('') || '<div class="strategy-empty">Добавьте кандидата вручную или позже импортируйте совместимые данные. Ничего не применяется автоматически.</div>';
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
@@ -1814,29 +1832,67 @@ function renderStrategyLab() {
 	}).join('') || '<div class="strategy-empty">Результаты появятся после изолированных проверок DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
 	const selectionKey = (item) => `${item.service_id}|${item.protocol}|${item.ip_family}`;
 	const currentByKey = new Map(selections.map((selection) => [selectionKey(selection), selection.candidate_id]));
-	const statusLabels = { healthy: 'РАБОТАЕТ', 'frozen-healthy': 'ЗАКРЕПЛЕНО', degraded: 'НУЖНА ПРОВЕРКА', 'frozen-degraded': 'ЗАКРЕПЛЕНО · ЕСТЬ ОШИБКИ' };
+	const statusLabels = { healthy: 'РАБОТАЕТ', 'frozen-healthy': 'ЗАКРЕПЛЕНО', degraded: 'НУЖНА ПРОВЕРКА', 'frozen-degraded': 'ЗАКРЕПЛЕНО · НУЖНА ПРОВЕРКА', 'manual-unchecked': 'ВЫБРАНО ВРУЧНУЮ · ОЖИДАЕТ ПРОВЕРКИ' };
 	const remembered = selections.map((selection) => {
 		const candidate = candidates.find((item) => item.id === selection.candidate_id);
-		return `<article class="strategy-memory-card ${selection.healthy ? 'healthy' : 'degraded'}"><div><span>${esc(statusLabels[selection.status] || selection.status || 'СОСТОЯНИЕ НЕИЗВЕСТНО')}</span><b>${esc(serviceName(selection.service_id))} · ${esc(selection.protocol.toUpperCase())} · ${esc(selection.ip_family)}</b><small>${esc(candidate?.name || selection.candidate_id)} · ${Math.round((selection.confidence || 0) * 100)}% доверия</small></div><p>${esc(selection.rollback_reason || selection.reason || 'Ожидаются новые проверки')}</p><button class="secondary" data-strategy-reset="1" data-service="${esc(selection.service_id)}" data-protocol="${esc(selection.protocol)}" data-family="${esc(selection.ip_family)}">Не запоминать</button></article>`;
+		const unchecked = selection.status === 'manual-unchecked';
+		return `<article class="strategy-memory-card ${unchecked ? 'pending' : selection.healthy ? 'healthy' : 'degraded'}"><div><span>${esc(statusLabels[selection.status] || selection.status || 'СОСТОЯНИЕ НЕИЗВЕСТНО')}</span><b>${esc(serviceName(selection.service_id))} · ${esc(selection.protocol.toUpperCase())} · ${esc(selection.ip_family)}</b><small>${esc(candidate?.name || selection.candidate_id)}${unchecked ? '' : ` · ${Math.round((selection.confidence || 0) * 100)}% доверия`}</small></div><p>${esc(selection.rollback_reason || selection.reason || 'Ожидаются новые проверки')}</p><button class="secondary" data-strategy-reset="1" data-service="${esc(selection.service_id)}" data-protocol="${esc(selection.protocol)}" data-family="${esc(selection.ip_family)}">Не запоминать</button></article>`;
 	});
 	const available = summaries.filter((summary) => summary.eligible && currentByKey.get(selectionKey(summary)) !== summary.candidate_id).map((summary) => {
 		const candidate = candidates.find((item) => item.id === summary.candidate_id);
 		return `<article class="strategy-memory-card available"><div><span>ГОТОВ К ПАМЯТИ</span><b>${esc(serviceName(summary.service_id))} · ${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</b><small>${esc(candidate?.name || summary.candidate_id)} · ${Math.round((summary.confidence || 0) * 100)}% доверия</small></div><p>Автовозврат сработает только после ${lab.safety?.automatic_rollback_failures || 3} последовательных изолированных отказов.</p><button class="primary" data-strategy-select="${esc(summary.candidate_id)}" data-service="${esc(summary.service_id)}" data-protocol="${esc(summary.protocol)}" data-family="${esc(summary.ip_family)}">Запомнить</button></article>`;
 	});
-	$('#strategyMemory').innerHTML = [...remembered, ...available].join('') || '<div class="strategy-empty">Сначала получите три свежих подтверждённых результата для одного кандидата.</div>';
+	$('#strategyMemory').innerHTML = [...remembered, ...available].join('') || '<div class="strategy-empty">Выберите кандидата вручную или запомните вариант с тремя свежими подтверждёнными результатами.</div>';
 }
 
-async function updateStrategyMemory(button, reset = false) {
+async function updateStrategyMemory(button, reset = false, manual = false) {
+	if (state.strategySelectionAction) return;
+	let body;
+	if (manual) {
+		const input = strategyManualSelectionInput(button.dataset.strategyManual);
+		if (!input.body) return showDetails({ error: input.reason }, 'Ручной выбор не подтверждён');
+		body = input.body;
+	} else {
+		body = { action: reset ? 'reset' : 'select', service_id: button.dataset.service, protocol: button.dataset.protocol, ip_family: button.dataset.family, candidate_id: button.dataset.strategySelect || '', frozen: false };
+	}
+	const action = state.strategySelectionAction = { auth: state.authGeneration || 0 };
+	const current = () => action.auth === (state.authGeneration || 0);
+	const present = () => current() && state.currentView === 'strategylab';
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), 20000);
+	let readbackStarted = false;
 	button.disabled = true;
 	try {
-		const body = { action: reset ? 'reset' : 'select', service_id: button.dataset.service, protocol: button.dataset.protocol, ip_family: button.dataset.family, candidate_id: button.dataset.strategySelect || '', frozen: false };
-		await api('/api/v1/strategy-lab/selections', { method: 'POST', body: JSON.stringify(body) });
-		state.strategyLab = await api('/api/v1/strategy-lab');
+		renderStrategyLab();
+		await api('/api/v1/strategy-lab/selections', { method: 'POST', signal: controller.signal, body: JSON.stringify(body) });
+		clearTimeout(timer);
+		if (!current()) return;
+		readbackStarted = true;
+		const saved = await api('/api/v1/strategy-lab', { cache: 'no-store' });
+		if (!current()) return;
+		state.strategyLab = saved;
+		if (manual) {
+			const selection = saved.selections?.find(item => item.service_id === body.service_id && item.protocol === body.protocol && item.ip_family === body.ip_family && item.candidate_id === body.candidate_id && item.mode === 'manual' && item.frozen === true);
+			if (!selection) throw new Error('Сохранённый ручной выбор не найден. Обновите список; повторная отправка автоматически не выполняется.');
+			if (present()) {
+				showDetails(selection, 'Ручной выбор сохранён');
+				$('#detailsSubtitle').textContent = 'Кандидат выбран для сервиса. Проверка здоровья и применение выполняются отдельно.';
+			}
+		}
 		renderStrategyLab();
 	} catch (error) {
-		showDetails({ error: error.message, response: error.payload }, reset ? 'Память стратегии не сброшена' : 'Стратегия не запомнена');
+		clearTimeout(timer);
+		if (manual && !readbackStarted && current() && ![401,403].includes(error.status)) {
+			try {
+				const saved = await api('/api/v1/strategy-lab', { cache: 'no-store' });
+				if (current()) state.strategyLab = saved;
+			} catch (_) { /* retain the last snapshot and the original refusal */ }
+		}
+		if (present()) showDetails({ error: controller.signal.aborted ? 'Ответ на сохранение задержался. Выбор не подтверждён; обновите список перед повторным действием.' : error.message, response: error.payload }, manual ? 'Ручной выбор не подтверждён' : reset ? 'Память стратегии не сброшена' : 'Стратегия не запомнена');
 	} finally {
-		button.disabled = false;
+		clearTimeout(timer);
+		if (state.strategySelectionAction === action) state.strategySelectionAction = null;
+		if (current()) { button.disabled = false; renderStrategyLab(); }
 	}
 }
 
@@ -1885,7 +1941,7 @@ async function validateStrategyCandidate(id) {
 async function probeStrategyCandidate(id) {
 	if (state.strategyLab?.safety?.temporary_scoped_firewall_probe === false) return showDetails({ error: 'Исполнитель изолированного теста недоступен. Совместимость кандидата проверяется отдельно.' }, 'Изолированный тест недоступен');
 	const serviceID = $('#strategyTarget').value;
-	if (!serviceID) return showDetails({ error: 'В каталоге нет сервиса с адресом проверки' }, 'Тест не запущен');
+	if (!state.services?.some(service => service.id === serviceID && service.probe_url)) return showDetails({ error: 'У выбранного сервиса нет адреса проверки' }, 'Тест не запущен');
 	if (!await askConfirmation('Запустить изолированный тест NFQWS2?', `RAZVILKA временно направит только одно соединение к ${serviceName(serviceID)} в отдельную NFQUEUE. Основной маршрут и рабочий конфиг не меняются; временное правило удалится даже при тайм-ауте.`, 'Запустить тест')) return;
 	try {
 		const evidence = await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/probe`, { method: 'POST', body: JSON.stringify({ service_id: serviceID, ip_family: $('#strategyFamily').value }) });
@@ -5192,11 +5248,15 @@ function bindEvents() {
 	$('#domainInspectorInput').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); inspectDomain(); } });
 	$('#refreshEngineLab').addEventListener('click', refreshEngineLab);
   $('#strategyCandidateForm').addEventListener('submit', addStrategyCandidate);
+	$('#strategyTarget').addEventListener('change', renderStrategyLab);
+	$('#strategyFamily').addEventListener('change', renderStrategyLab);
 	$('#strategyCandidates').addEventListener('click', (event) => {
 		const validate = event.target.closest('[data-strategy-validate]');
+		const manual = event.target.closest('[data-strategy-manual]');
 		const probe = event.target.closest('[data-strategy-probe]');
 		const remove = event.target.closest('[data-strategy-delete]');
 		if (validate) validateStrategyCandidate(validate.dataset.strategyValidate);
+		if (manual) updateStrategyMemory(manual, false, true);
 		if (probe) probeStrategyCandidate(probe.dataset.strategyProbe);
 		if (remove) deleteStrategyCandidate(remove.dataset.strategyDelete);
 	});

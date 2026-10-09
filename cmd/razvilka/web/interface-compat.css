@@ -843,3 +843,4 @@ html{scroll-behavior:smooth}body.console-ui{background:var(--bg);color:var(--tex
  .console-ui .topbar .page-title{flex:1 1 auto;width:auto;min-width:0}
  .console-ui .topbar .page-title h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
+.strategy-memory-card.pending span{color:var(--muted)}
