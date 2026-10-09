@@ -12,6 +12,65 @@ import (
 
 var errNFQWSDirectStockQueue = errors.New("direct NFQ stock queue graph refused")
 
+type nfqwsDirectStockFailureKind uint8
+
+const (
+	nfqwsDirectStockParse nfqwsDirectStockFailureKind = iota + 1
+	nfqwsDirectStockShape
+	nfqwsDirectStockReachabilityFailure
+	nfqwsDirectStockCollision
+	nfqwsDirectStockUnknownOption
+	nfqwsDirectStockCoverage
+	nfqwsDirectStockBudgetFailure
+	nfqwsDirectStockOwned
+)
+
+func (kind nfqwsDirectStockFailureKind) label() string {
+	switch kind {
+	case nfqwsDirectStockParse:
+		return "parse"
+	case nfqwsDirectStockShape:
+		return "shape"
+	case nfqwsDirectStockReachabilityFailure:
+		return "reachability"
+	case nfqwsDirectStockCollision:
+		return "collision"
+	case nfqwsDirectStockUnknownOption:
+		return "unknown-option"
+	case nfqwsDirectStockCoverage:
+		return "coverage"
+	case nfqwsDirectStockBudgetFailure:
+		return "budget"
+	case nfqwsDirectStockOwned:
+		return "owned"
+	default:
+		return ""
+	}
+}
+
+// Fixed enum only: no row, option, path, index, address or queue is retained.
+type nfqwsDirectStockGraphFailure struct{ kind nfqwsDirectStockFailureKind }
+
+func (f *nfqwsDirectStockGraphFailure) Error() string {
+	if f == nil || f.kind.label() == "" {
+		return errNFQWSDirectStockQueue.Error()
+	}
+	return errNFQWSDirectStockQueue.Error() + ": " + f.kind.label()
+}
+func (f *nfqwsDirectStockGraphFailure) Unwrap() error { return errNFQWSDirectStockQueue }
+
+func nfqwsDirectStockFailure(kind nfqwsDirectStockFailureKind) error {
+	return &nfqwsDirectStockGraphFailure{kind: kind}
+}
+
+func nfqwsDirectStockQueueFailureStage(err error) string {
+	var failure *nfqwsDirectStockGraphFailure
+	if !errors.As(err, &failure) || failure == nil {
+		return ""
+	}
+	return failure.kind.label()
+}
+
 var nfqwsDirectStockHooks = []string{"PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING"}
 
 type nfqwsDirectStockGraph struct {
@@ -58,22 +117,30 @@ func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnaps
 // exempt any owned NFQ row or borrow a guessed reservation. NFQ callers pass
 // their original actual nonzero reservation through the unchanged wrappers.
 func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, managedQueue *uint16, exactOwned []BackendInventoryRow) ([]BackendInventoryRow, error) {
-	refuse := func() ([]BackendInventoryRow, error) { return nil, errNFQWSDirectStockQueue }
-	if err := actualComplete.RequireComplete(); err != nil {
-		return nil, errors.Join(errNFQWSDirectStockQueue, err)
+	refuse := func(kind nfqwsDirectStockFailureKind) ([]BackendInventoryRow, error) {
+		return nil, nfqwsDirectStockFailure(kind)
 	}
-	if managedQueue != nil && *managedQueue == 0 || managedQueue == nil && len(exactOwned) != 0 || len(actualComplete.Rows) > backendClassicRows || len(exactOwned) > len(actualComplete.Rows) {
-		return refuse()
+	if err := actualComplete.RequireComplete(); err != nil {
+		return nil, errors.Join(nfqwsDirectStockFailure(nfqwsDirectStockCoverage), err)
+	}
+	if managedQueue != nil && *managedQueue == 0 || managedQueue == nil && len(exactOwned) != 0 || len(exactOwned) > len(actualComplete.Rows) {
+		return refuse(nfqwsDirectStockOwned)
+	}
+	if len(actualComplete.Rows) > backendClassicRows {
+		return refuse(nfqwsDirectStockBudgetFailure)
 	}
 	owned := map[nfqwsDirectStockRowKey]int{}
 	var ownedBudget nfqwsDirectStockBudget
 	for _, row := range exactOwned {
-		if !ownedBudget.add(row) || row.Table != "mangle" || row.Tokens[0] != "-N" && row.Tokens[0] != "-A" || !networkPolicyNFQRow(row) {
-			return refuse()
+		if kind := ownedBudget.addFailureKind(row); kind != 0 {
+			return refuse(kind)
+		}
+		if row.Table != "mangle" || row.Tokens[0] != "-N" && row.Tokens[0] != "-A" || !networkPolicyNFQRow(row) {
+			return refuse(nfqwsDirectStockOwned)
 		}
 		key := nfqwsDirectStockKey(row)
 		if _, duplicate := owned[key]; duplicate {
-			return refuse()
+			return refuse(nfqwsDirectStockOwned)
 		}
 		owned[key] = 0
 	}
@@ -81,14 +148,14 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 	graphs := map[int]*nfqwsDirectStockGraph{}
 	var actualBudget nfqwsDirectStockBudget
 	for i, row := range actualComplete.Rows {
-		if !actualBudget.add(row) {
-			return refuse()
+		if kind := actualBudget.addFailureKind(row); kind != 0 {
+			return refuse(kind)
 		}
 		if len(owned) != 0 {
 			key := nfqwsDirectStockKey(row)
 			if count, match := owned[key]; match {
 				if count != 0 {
-					return refuse()
+					return refuse(nfqwsDirectStockOwned)
 				}
 				owned[key], actualOwned[i] = 1, true
 			}
@@ -102,40 +169,43 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 			graphs[row.Family] = g
 		}
 		chain := row.Tokens[1]
-		if !nfqwsDirectStockChain(chain) || networkPolicyReservedChain(chain) && (!actualOwned[i] || !strings.HasPrefix(chain, "RZQ_")) {
-			return refuse()
+		if !nfqwsDirectStockChain(chain) {
+			return refuse(nfqwsDirectStockShape)
+		}
+		if networkPolicyReservedChain(chain) && (!actualOwned[i] || !strings.HasPrefix(chain, "RZQ_")) {
+			return refuse(nfqwsDirectStockOwned)
 		}
 		switch row.Tokens[0] {
 		case "-N", "-P":
 			if slices.Contains([]string{"ACCEPT", "DROP", "RETURN", "MARK", "CONNMARK", "NDMMARK", "CONNNDMMARK", "TCPMSS", "TTL", "NFQUEUE", "QUEUE"}, chain) {
-				return refuse() // Never resolve ambiguous target/chain spellings.
+				return refuse(nfqwsDirectStockShape) // Never resolve ambiguous target/chain spellings.
 			}
 			if _, duplicate := g.chains[chain]; duplicate {
-				return refuse()
+				return refuse(nfqwsDirectStockShape)
 			}
 			builtin := row.Tokens[0] == "-P"
 			if builtin && (len(row.Tokens) != 3 || !slices.Contains(nfqwsDirectStockHooks, chain) || row.Tokens[2] != "ACCEPT" && row.Tokens[2] != "DROP") || !builtin && (len(row.Tokens) != 2 || slices.Contains(nfqwsDirectStockHooks, chain)) {
-				return refuse()
+				return refuse(nfqwsDirectStockShape)
 			}
 			g.chains[chain] = builtin
 		case "-A":
 		default:
-			return refuse()
+			return refuse(nfqwsDirectStockShape)
 		}
 	}
 	for _, count := range owned {
 		if count != 1 {
-			return refuse()
+			return refuse(nfqwsDirectStockOwned)
 		}
 	}
 	for _, family := range []int{4, 6} {
 		g := graphs[family]
 		if g == nil {
-			return refuse()
+			return refuse(nfqwsDirectStockShape)
 		}
 		for _, hook := range nfqwsDirectStockHooks {
 			if !g.chains[hook] {
-				return refuse()
+				return refuse(nfqwsDirectStockShape)
 			}
 		}
 	}
@@ -146,30 +216,36 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 		}
 		if row.Table != "mangle" {
 			if nfqwsDirectStockOtherTableQueue(row.Tokens) {
-				return refuse()
+				return refuse(nfqwsDirectStockReachabilityFailure)
 			}
 			continue // Other-table rules still receive the caller's full predicates.
 		}
 		action, err := nfqwsDirectStockRuleAction(row.Tokens)
 		if err != nil {
-			return refuse()
+			if nfqwsDirectStockQueueFailureStage(err) == "" {
+				return refuse(nfqwsDirectStockParse)
+			}
+			return nil, err
 		}
 		if action.vendorMatch && (actualComplete.Scope.Network.Kind != netidentity.ReviewedSingleInitNet || actualComplete.Scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256) {
-			return refuse()
+			return refuse(nfqwsDirectStockCoverage)
 		}
 		g := graphs[row.Family]
-		if _, exists := g.chains[row.Tokens[1]]; !exists || networkPolicyReservedChain(action.target) && (!actualOwned[i] || !strings.HasPrefix(action.target, "RZQ_")) {
-			return refuse()
+		if _, exists := g.chains[row.Tokens[1]]; !exists {
+			return refuse(nfqwsDirectStockShape)
+		}
+		if networkPolicyReservedChain(action.target) && (!actualOwned[i] || !strings.HasPrefix(action.target, "RZQ_")) {
+			return refuse(nfqwsDirectStockOwned)
 		}
 		if builtin, chain := g.chains[action.target]; chain {
 			if builtin { // Xtables jumps/gotos cannot call a built-in hook.
-				return refuse()
+				return refuse(nfqwsDirectStockShape)
 			}
 			g.edges[row.Tokens[1]] = append(g.edges[row.Tokens[1]], action.target)
 			continue
 		}
 		if action.gotoChain {
-			return refuse()
+			return refuse(nfqwsDirectStockShape)
 		}
 		switch action.target {
 		case "", "ACCEPT", "DROP", "RETURN", "MARK", "CONNMARK":
@@ -181,7 +257,7 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 			// FOE_ALG_MARK and event_cache only update metadata. The caller
 			// still authenticates the original current platform/tool scope.
 			if actualComplete.Scope.Network.Kind != netidentity.ReviewedSingleInitNet || actualComplete.Scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256 {
-				return refuse()
+				return refuse(nfqwsDirectStockCoverage)
 			}
 		case "TCPMSS":
 			// Linux v4.9 xt_TCPMSS.c returns XT_CONTINUE or NF_DROP,
@@ -189,30 +265,30 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 		case "TTL":
 			// Linux v4.9 xt_HL.c ttl_tg has the same closed verdicts.
 			if row.Family != 4 {
-				return refuse()
+				return refuse(nfqwsDirectStockParse)
 			}
 		case "NFQUEUE":
 			if action.queue == nil || managedQueue != nil && (actualOwned[i] && *action.queue != *managedQueue || !actualOwned[i] && *action.queue == *managedQueue) {
-				return refuse()
+				return refuse(nfqwsDirectStockCollision)
 			}
 			if !actualOwned[i] {
 				queues = append(queues, row)
 			}
 		default:
-			return refuse() // Unknown vendor target semantics never become safe.
+			return refuse(nfqwsDirectStockParse) // Unknown vendor target semantics never become safe.
 		}
 	}
 	reachable := map[int]map[string]uint8{}
 	for _, family := range []int{4, 6} {
 		if !nfqwsDirectStockAcyclic(graphs[family]) {
-			return refuse()
+			return refuse(nfqwsDirectStockReachabilityFailure)
 		}
 		reachable[family] = nfqwsDirectStockReachability(graphs[family])
 	}
 	var preserved []BackendInventoryRow
 	for _, row := range queues {
 		if reachable[row.Family][row.Tokens[1]] != 1<<3 {
-			return refuse() // Includes orphan queues and every other hook.
+			return refuse(nfqwsDirectStockReachabilityFailure) // Includes orphan queues and every other hook.
 		}
 		preserved = append(preserved, BackendInventoryRow{Family: row.Family, Table: row.Table, Tokens: slices.Clone(row.Tokens)})
 	}
@@ -220,20 +296,31 @@ func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, manag
 }
 
 func (b *nfqwsDirectStockBudget) add(row BackendInventoryRow) bool {
-	if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
-		return false
+	return b.addFailureKind(row) == 0
+
+}
+
+func (b *nfqwsDirectStockBudget) addFailureKind(row BackendInventoryRow) nfqwsDirectStockFailureKind {
+	if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 {
+		return nfqwsDirectStockShape
+	}
+	if len(row.Tokens) > 128 {
+		return nfqwsDirectStockBudgetFailure
 	}
 	b.tokens += len(row.Tokens)
 	if b.tokens > backendClassicTokens {
-		return false
+		return nfqwsDirectStockBudgetFailure
 	}
 	for _, token := range row.Tokens {
 		b.bytes += len(token) + 1
-		if token == "" || len(token) > 4096 || b.bytes > backendClassicBytes || !utf8.ValidString(token) || strings.ContainsAny(token, "\x00\r\n") {
-			return false
+		if token == "" || !utf8.ValidString(token) || strings.ContainsAny(token, "\x00\r\n") {
+			return nfqwsDirectStockShape
+		}
+		if len(token) > 4096 || b.bytes > backendClassicBytes {
+			return nfqwsDirectStockBudgetFailure
 		}
 	}
-	return true
+	return 0
 }
 
 // NUL cannot occur in validated tokens; this key retains exact token boundaries.
@@ -362,7 +449,7 @@ func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error)
 		case "--save-mark", "--restore-mark":
 			arity, connmarkOptions = 0, true
 		default:
-			return a, errNFQWSDirectStockQueue
+			return a, nfqwsDirectStockFailure(nfqwsDirectStockUnknownOption)
 		}
 		if i+arity >= len(fields) {
 			return a, errNFQWSDirectStockQueue

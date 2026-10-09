@@ -663,3 +663,75 @@ func TestNFQWSDirectStockQueueKernelChainLabelBoundaries(t *testing.T) {
 		})
 	}
 }
+
+func TestNFQWSDirectStockQueueFixedFailureStagesDoNotRetainCaptureData(t *testing.T) {
+	for _, stage := range []string{"coverage", "budget", "shape", "parse", "owned", "collision", "reachability", "unknown-option"} {
+		t.Run(stage, func(t *testing.T) {
+			snapshot := nfqwsDirectStockQueueFixture()
+			switch stage {
+			case "coverage":
+				snapshot.Coverage.RegisteredTablesComplete = false
+			case "budget":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "--comment", strings.Repeat("private-address", 400)))
+			case "shape":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-N", strings.Repeat("s", 30)))
+			case "parse":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "--queue-num", "-j", "NFQUEUE"))
+			case "owned":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-N", "RZQ_private_coordinate"))
+			case "collision":
+				row := nfqwsDirectStockTestQueueIndex(snapshot, 4)
+				snapshot.Rows[row].Tokens[len(snapshot.Rows[row].Tokens)-1] = "40321"
+			case "reachability":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(6, "mangle", "-A", "FORWARD", "-j", "local_bridge"))
+			case "unknown-option":
+				snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "--private-option", "192.0.2.7", "-j", "RETURN"))
+			}
+			before := nfqwsDirectStockTestClone(snapshot)
+			rows, err := inspectNFQWSDirectStockQueues(snapshot, 40321)
+			wrapped := errors.Join(ErrNFQWSScopedOwner, err)
+			if rows != nil || !errors.Is(err, errNFQWSDirectStockQueue) || nfqwsDirectStockQueueFailureStage(wrapped) != stage || !reflect.DeepEqual(snapshot, before) {
+				t.Fatal("fixed failure classification or refusal changed", stage, err)
+			}
+			for _, secret := range []string{"private", "192.0.2.7", "40321", strings.Repeat("s", 30), "local_bridge"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatal("graph error retained capture data")
+				}
+			}
+		})
+	}
+	for _, err := range []error{nil, errNFQWSDirectStockQueue, ErrNFQWSScopedOwner, nfqwsDirectStockFailure(255), (*nfqwsDirectStockGraphFailure)(nil)} {
+		if nfqwsDirectStockQueueFailureStage(err) != "" {
+			t.Fatal("unrecognized error acquired a stage")
+		}
+	}
+	if nfqwsDirectStockFailure(255).Error() != errNFQWSDirectStockQueue.Error() {
+		t.Fatal("unknown enum printed dynamic information")
+	}
+	if rows, err := inspectNFQWSDirectStockQueues(nfqwsDirectStockQueueFixture(), 40321); err != nil || len(rows) != 2 || nfqwsDirectStockQueueFailureStage(err) != "" {
+		t.Fatal("successful comparison acquired diagnostics", err)
+	}
+}
+
+func TestNFQWSDirectStockQueueDiagnosticsPreserveOwnedAndBudgetBoundaries(t *testing.T) {
+	snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+	owned = append(owned, nfqwsDirectStockTestRow(4, "mangle", "-A", owned[0].Tokens[1], "-j", "RETURN"))
+	if _, err := inspectNFQWSDirectStockQueuesWithOwned(snapshot, managed, owned); !errors.Is(err, errNFQWSDirectStockQueue) || nfqwsDirectStockQueueFailureStage(err) != "owned" {
+		t.Fatal("missing exact owned row lost its stage", err)
+	}
+	for _, malformed := range [][]string{{"-A", ""}, {"-A", "OUTPUT", "\x00"}} {
+		row := nfqwsDirectStockTestRow(4, "mangle", malformed...)
+		var original, diagnostic nfqwsDirectStockBudget
+		if original.add(row) || diagnostic.addFailureKind(row) != nfqwsDirectStockShape {
+			t.Fatal("malformed row changed acceptance or size diagnosis")
+		}
+	}
+	row := nfqwsDirectStockTestRow(4, "mangle", make([]string, 129)...)
+	for i := range row.Tokens {
+		row.Tokens[i] = "x"
+	}
+	var budget nfqwsDirectStockBudget
+	if budget.addFailureKind(row) != nfqwsDirectStockBudgetFailure {
+		t.Fatal("token boundary lost its fixed size diagnosis")
+	}
+}
