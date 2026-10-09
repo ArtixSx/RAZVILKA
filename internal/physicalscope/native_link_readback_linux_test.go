@@ -20,7 +20,14 @@ import (
 // the first facts, and every notification is compared with that first dump.
 // A PASS closes the diagnostic only: no Observe, physical Review or effect.
 func TestPhysicalScopeNativeLinkRefreshReadback(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	window, err := nativeLinkReadbackWindow(os.Getenv("RAZVILKA_PHYSICAL_LINK_READBACK_SECONDS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// TEST-ONLY additional passive window, at most 30 seconds. The original
+	// baseline/fence, Provider leaves, capture limits and runtime classifier
+	// remain unchanged; no production operation deadline is widened.
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second+window)
 	defer cancel()
 	provider, stock := nativeProvider(t, ctx)
 	home := os.Getenv("RAZVILKA_PHYSICAL_SCOPE_HOME")
@@ -35,7 +42,7 @@ func TestPhysicalScopeNativeLinkRefreshReadback(t *testing.T) {
 		selection.SegmentIDs = append([]string{home}, selection.GuestSegmentIDs...)
 		selection.HomeSegmentID, selection.GuestSegmentIDs = "", nil
 	}
-	selection, err := canonicalSelection(selection)
+	selection, err = canonicalSelection(selection)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +147,29 @@ func TestPhysicalScopeNativeLinkRefreshReadback(t *testing.T) {
 		if err != nil {
 			t.Fatal(boundary("native.link-readback."+phase, err))
 		}
+		if pass == 0 && window != 0 {
+			until := time.Now().Add(window)
+			tick := time.NewTicker(100 * time.Millisecond)
+			for time.Now().Before(until) {
+				err := source.current(ctx, func(c context.Context, id netidentity.Identity) error {
+					if id != identity {
+						return at("native.link-readback.window.identity", nil)
+					}
+					return drain(c, "window")
+				})
+				if err != nil {
+					tick.Stop()
+					t.Fatal(boundary("native.link-readback.window", err))
+				}
+				select {
+				case <-ctx.Done():
+					tick.Stop()
+					t.Fatal(ctx.Err())
+				case <-tick.C:
+				}
+			}
+			tick.Stop()
+		}
 	}
 	err = source.current(ctx, func(c context.Context, id netidentity.Identity) error {
 		if id != identity {
@@ -162,11 +192,37 @@ func TestPhysicalScopeNativeLinkRefreshReadback(t *testing.T) {
 		TotalFrames            int                 `json:"total_frames"`
 		KindCounts             map[string]int      `json:"kind_counts"`
 		Classes                []linkReadbackCount `json:"classes"`
-	}{true, "ungranted", false, len(original.Segments), comparison, totalFrames, kindCounts, summarizeLinkReadback(counts)})
+		PassiveWindowSeconds   int                 `json:"passive_window_seconds"`
+	}{true, "ungranted", false, len(original.Segments), comparison, totalFrames, kindCounts, summarizeLinkReadback(counts), int(window / time.Second)})
 	if err != nil || len(raw) > 64<<10 {
 		t.Fatal(at("native.link-readback.output", err))
 	}
 	t.Log(string(raw))
+}
+
+func nativeLinkReadbackWindow(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 1 || seconds > 30 || strconv.Itoa(seconds) != raw {
+		return 0, at("native.link-readback.window.option", nil)
+	}
+	return time.Duration(seconds) * time.Second, nil
+}
+
+func TestPhysicalNativeLinkReadbackWindowOptionIsBounded(t *testing.T) {
+	for raw, seconds := range map[string]int{"": 0, "1": 1, "30": 30} {
+		got, err := nativeLinkReadbackWindow(raw)
+		if err != nil || got != time.Duration(seconds)*time.Second {
+			t.Fatal("valid passive window refused", err)
+		}
+	}
+	for _, raw := range []string{"0", "31", "-1", "+1", "01", "1s", "private-input", "2147483648"} {
+		if _, err := nativeLinkReadbackWindow(raw); err == nil {
+			t.Fatal("unbounded/noncanonical passive window accepted")
+		}
+	}
 }
 
 // The same actual NDM/link/address/route/neighbor assembly as captureKernel,
