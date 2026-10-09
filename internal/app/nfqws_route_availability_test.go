@@ -44,3 +44,18 @@ func TestManagedNFQRouteChoiceDoesNotReplaceOtherEngineOrCanceledSource(t *testi
 		}
 	}
 }
+
+func TestManagedNFQRouteChoiceCannotBorrowFakeOrCopiedActiveLease(t *testing.T) {
+	a := managedNFQInitialControlFixture(t)
+	original := &ManagedNFQWSListRuntime{}
+	original.self = original
+	for _, runtime := range []*ManagedNFQWSListRuntime{nil, {}, {self: original, active: &managedNFQWSListExecution{}}, {app: a, pending: &managedNFQWSListExecution{}}} {
+		a.managedNFQList = runtime
+		option := routecatalog.Option{ID: "nfqws2"}
+		a.prepareManagedNFQRouteOption(context.Background(), &option)
+		if option.Installed || option.Configured || option.Selectable || option.Ready {
+			t.Fatal("cached/copied owner replaced actual installed lease", option)
+		}
+	}
+	a.managedNFQList = nil
+}
