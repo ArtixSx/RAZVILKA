@@ -1,10 +1,34 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strings"
 
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 )
+
+// Classify failures that happen before a result exists without serializing the
+// error text: runtime errors can contain private endpoints or profile values.
+func safeCheckerError(err error) string {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "node-check-canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "node-check-deadline"
+	case errors.Is(err, dataplane.ErrExactNodeNetworkChanged):
+		return "node-network-changed"
+	case errors.Is(err, dataplane.ErrExactNodeBusy):
+		return "node-checker-busy"
+	case errors.Is(err, dataplane.ErrExactNodeRuntime):
+		return "node-runtime-unavailable"
+	case errors.Is(err, dataplane.ErrExactNodeUnavailable):
+		return "node-checker-unavailable"
+	default:
+		return "node-check-failed"
+	}
+}
 
 func safeNodeID(id string) string {
 	if len(id) == 69 && strings.HasPrefix(id, "node-") && strings.Trim(id[5:], "0123456789abcdef") == "" {

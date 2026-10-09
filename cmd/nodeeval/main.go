@@ -171,6 +171,8 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
 			Code: safeCheckCode(result.ErrorCode), HTTPSPass: ok, Fresh: fresh, DirectLeak: result.DirectLeak, HTTPStatus: min(max(result.HTTPStatus, 0), 599)}
 		if errors.Is(err, dataplane.ErrExactNodeUnsupported) {
 			entry.Stage, entry.Code, entry.Verdict = "unsupported", "node-profile-unsupported", "INCONCLUSIVE"
+		} else if err != nil && result.ErrorCode == "" {
+			entry.Code = safeCheckerError(err)
 		}
 		if out.Encode(entry) != nil {
 			_ = recoverOnce(cleanupCtx, checker)
