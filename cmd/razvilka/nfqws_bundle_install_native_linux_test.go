@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -87,17 +88,39 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 	// This is the actual catalog of this new test App, not an HTTP response
 	// replacement. Saving a choice must not enable this service or probe it.
 	catalogue := catalog.Catalog{Services: []catalog.Service{{ID: "native-manual", Name: "Native manual selection", Category: "test", Domains: []string{"example.com"}, Strategy: []string{"nfqws2"}}}}
+	activate := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_ACTIVATE") == "one-owned-ip"
+	var source, destination netip.Addr
+	if activate {
+		source, err = netip.ParseAddr(os.Getenv("RAZVILKA_NATIVE_MANAGED_CLIENT"))
+		if err != nil || !source.Is4() || !source.IsPrivate() {
+			t.Fatal("explicit single private IPv4 test client required")
+		}
+		destination, err = netip.ParseAddr(os.Getenv("RAZVILKA_NATIVE_MANAGED_DESTINATION"))
+		if err != nil || !destination.Is4() || !destination.IsGlobalUnicast() || destination.IsPrivate() {
+			t.Fatal("explicit single public IPv4 test destination required")
+		}
+		catalogue.Services[0].Domains = nil
+		catalogue.Services[0].CIDRs = []string{netip.PrefixFrom(destination, 32).String()}
+		catalogue.Services[0].ProbeURL = "https://" + destination.String() + "/"
+	}
 	if err := catalog.Validate(catalogue); err != nil {
 		t.Fatal(err)
 	}
 	a := &app.App{Store: store, Catalog: catalogue, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
 	actualTools := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_TOOLS") == "1"
+	if activate && !actualTools {
+		t.Fatal("activation requires the original stock tools")
+	}
 	if actualTools {
 		configs := engineconfig.New(filepath.Join(root, "staged"), filepath.Join(root, "backups"))
 		a.Dataplane, err = newDataplaneManager(filepath.Join(root, "dataplane"), configs)
 		if err != nil {
 			t.Fatal("ordinary adapter construction", err)
 		}
+		if err := a.ConfigureDefaultConsent(filepath.Join(root, "config.json"), ""); err != nil {
+			t.Fatal("original private Store/control binding", err)
+		}
+		defer a.CloseDefaultConsent()
 	}
 	defer a.CloseManagedNFQControl()
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
@@ -235,6 +258,59 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		list, err := configureManagedNFQList(ctx, a)
 		if err != nil || list == nil {
 			t.Fatal("ordinary stock factory with actual tools", err)
+		}
+		if activate {
+			// Explicit coordinator-only native test. The ordinary HTTP writers
+			// retain the actual Store/control; no evidence or runner is injected.
+			defer func() {
+				cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := list.Close(cleanup); err != nil {
+					t.Error("native retirement remains unconfirmed; preserve the original owner", err)
+				}
+			}()
+			var reply map[string]any
+			if status := request("PUT", "/api/v1/settings/safe-mode", `{"enabled":false}`, &reply); status != http.StatusOK {
+				t.Fatal("explicit private working mode refused", status, reply)
+			}
+			body, _ := json.Marshal(config.ServiceState{Enabled: true, Route: "nfqws2", Sources: []string{netip.PrefixFrom(source, 32).String()}})
+			if status := request("PUT", "/api/v1/services/native-manual", string(body), &reply); status != http.StatusOK {
+				t.Fatal("ordinary service selection refused", status, reply)
+			}
+			home := os.Getenv("RAZVILKA_NATIVE_MANAGED_HOME")
+			if home == "" {
+				t.Fatal("explicit actual Home segment required")
+			}
+			policy := config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{home}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}}
+			body, _ = json.Marshal(map[string]any{"expected_revision": store.Get().Revision, "expected_policy_revision": 0, "policy": policy, "grants": []config.DefaultRouteGrant{}, "confirm": "APPROVE_NETWORK_POLICY"})
+			if status := request("POST", "/api/v1/networkpolicy/review", string(body), &reply); status != http.StatusOK || reply["live_applied"] != false {
+				t.Fatal("original list scope approval refused", status, reply)
+			}
+			for cycle := 1; cycle <= 2; cycle++ {
+				for _, action := range []string{"start", "check", "stop", "stop"} {
+					body := map[string]string{"action": action}
+					if action == "start" {
+						body["service_id"], body["protocol"], body["ip_family"] = "native-manual", "tcp", "ipv4"
+					}
+					encoded, _ := json.Marshal(body)
+					reply = nil
+					if status := request("POST", "/api/v1/strategy-lab/runtime", string(encoded), &reply); status != http.StatusOK || reply["ok"] != true || reply["service_health"] != "unverified" {
+						t.Fatal("actual retained runtime refused", cycle, action, status, reply)
+					}
+					want := "native-active"
+					if action == "stop" {
+						want = "stopped"
+					}
+					if reply["runtime_state"] != want {
+						t.Fatal("actual runtime readback differs", cycle, action, reply)
+					}
+					t.Log("actual same-App native HTTP cycle", cycle, action, want, "service_health=unverified")
+				}
+			}
+			if err := list.Close(ctx); err != nil || a.Operations.Snapshot().Active != 0 {
+				t.Fatal("native cycles did not join original cleanup", err)
+			}
+			return
 		}
 		if err := list.Close(ctx); err != nil {
 			t.Fatal("idle stock factory closure", err)
