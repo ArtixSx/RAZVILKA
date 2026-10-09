@@ -98,7 +98,13 @@ func syntheticDNSModelFixture(t *testing.T, negatives []config.ResourceMatch) sy
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return syntheticDNSFixture{r: r, client: client, gate: gate, control: control, controlRoot: controlRoot, root: t.TempDir(), definition: SyntheticDNSDefinition{Client: client, DeviceID: "selected", MAC: "02:00:00:00:00:40", Ingress: "br0", ExactNames: []string{"service.example.com"}}}
+	// Go's TempDir leaf is subject to the caller's umask. Create the SAME
+	// explicit private adapter child as production; don't weaken its guard.
+	root := filepath.Join(t.TempDir(), "dns-scoped")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return syntheticDNSFixture{r: r, client: client, gate: gate, control: control, controlRoot: controlRoot, root: root, definition: SyntheticDNSDefinition{Client: client, DeviceID: "selected", MAC: "02:00:00:00:00:40", Ingress: "br0", ExactNames: []string{"service.example.com"}}}
 }
 
 func (f syntheticDNSFixture) source(t *testing.T, owner NetworkPolicyDNSSyntheticPublicationOwner) *NetworkPolicyDNSSyntheticResolver {
