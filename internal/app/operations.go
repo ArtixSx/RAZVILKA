@@ -143,6 +143,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && (r.URL.Path == networkPolicyReviewPath || r.URL.Path == resourceExclusionsPath) {
 			exclusive = true
 		}
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/plan" {
+			// Managed list review reads its original control/source under the
+			// same exclusive admission; it cannot upgrade a shared request.
+			exclusive = true
+		}
 		if r.Method == http.MethodGet && r.URL.Path == managedNFQBundlePlanPath {
 			// This bounded read compares the actual retained control owner.
 			exclusive = true

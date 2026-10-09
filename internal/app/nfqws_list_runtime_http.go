@@ -75,14 +75,7 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 		response["runtime_state"] = "stopped"
 	}
 	if err != nil {
-		stage, reason := managedNFQFailureDiagnostic(err)
-		log.Printf("Managed NFQ runtime %s refused at %s (%s)", input.Action, stage, reason)
-		if physical := physicalscope.DiagnosticStages(err); len(physical) > 0 {
-			log.Printf("Managed NFQ original physical refusal: %s", strings.Join(physical, " > "))
-		}
-		if shape := physicalscope.DiagnosticLinkRefusal(err); shape != "" {
-			log.Printf("Managed NFQ refused physical LINK shape: %s", shape)
-		}
+		logManagedNFQRuntimeFailure(input.Action, err)
 		status, code := http.StatusConflict, "MANAGED_NFQWS_RUNTIME_REFUSED"
 		if errors.Is(err, operationgate.ErrBusy) {
 			code = "MANAGED_NFQWS_RUNTIME_BUSY"
@@ -97,6 +90,17 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func logManagedNFQRuntimeFailure(action string, err error) {
+	stage, reason := managedNFQFailureDiagnostic(err)
+	log.Printf("Managed NFQ runtime %s refused at %s (%s)", action, stage, reason)
+	if physical := physicalscope.DiagnosticStages(err); len(physical) > 0 {
+		log.Printf("Managed NFQ original physical refusal: %s", strings.Join(physical, " > "))
+	}
+	if shape := physicalscope.DiagnosticLinkRefusal(err); shape != "" {
+		log.Printf("Managed NFQ refused physical LINK shape: %s", shape)
+	}
 }
 
 func writeManagedNFQRuntimeError(w http.ResponseWriter, status int, code string) {

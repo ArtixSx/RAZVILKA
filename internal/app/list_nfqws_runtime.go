@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"os"
 	"reflect"
@@ -55,6 +53,7 @@ type managedNFQWSListExecution struct {
 	selection                             *dataplane.NFQWSScopedSelection
 	lanAdmission                          *dataplane.LANPolicyCommandAdmission
 	plan                                  dataplane.Plan
+	compilation                           *DefaultRouteCompilation // original immutable comparison; never an execution grant
 	terminal                              *dataplane.NFQWSActiveHandle
 	terminalObservation                   dataplane.NFQWSActiveObservation
 	pendingContext                        context.Context
@@ -322,7 +321,11 @@ func (e *managedNFQWSListExecution) close() error {
 
 // Start consumes one actually saved StrategyLab selection. The service and
 // its literals/probe come from this SAME App catalog/config, never request argv.
-func (r *ManagedNFQWSListRuntime) Start(ctx context.Context, serviceID, protocol, family string) (result dataplane.Execution, resultErr error) {
+func (r *ManagedNFQWSListRuntime) Start(ctx context.Context, serviceID, protocol, family string) (dataplane.Execution, error) {
+	return r.startReviewed(ctx, serviceID, protocol, family, changeScopeAll, nil)
+}
+
+func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, protocol, family string, scope changeScope, review *applyReview) (result dataplane.Execution, resultErr error) {
 	phase := "original-owner"
 	ctx, finishTimings := beginManagedNFQTimings(ctx)
 	defer func() { finishTimings(phase, resultErr) }()
@@ -332,6 +335,25 @@ func (r *ManagedNFQWSListRuntime) Start(ctx context.Context, serviceID, protocol
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if review != nil && r.active != nil && !r.closed && r.pending == nil && r.panel.Err() == nil {
+		_, currentReview, err := r.reviewActiveLocked(ctx, scope)
+		if err != nil {
+			return result, err
+		}
+		if *review != currentReview {
+			return result, dataplane.ErrReviewChanged
+		}
+		committed, exists, err := r.manager.Committed()
+		if err != nil || !exists || committed.State != "committed" || committed.PlanID != r.active.plan.PlanID || committed.Digest != r.active.plan.Digest || committed.Revision != r.active.plan.Revision {
+			return result, errors.Join(dataplane.ErrNFQWSScopedOwner, err)
+		}
+		if err := r.currentLocked(ctx); err != nil {
+			return result, err
+		}
+		// This describes the current original committed owner after both
+		// checks; it is not a new execution or a reconstructed capability.
+		return dataplane.Execution{PlanID: committed.PlanID, Digest: committed.Digest, State: committed.State}, nil
+	}
 	if r.closed || r.active != nil || r.pending != nil || r.panel.Err() != nil {
 		return result, dataplane.ErrNFQWSScopedOwner
 	}
@@ -353,96 +375,22 @@ func (r *ManagedNFQWSListRuntime) Start(ctx context.Context, serviceID, protocol
 	cfg := r.app.Store.Get()
 	e := &managedNFQWSListExecution{runtime: r, expected: cfg, catalog: applyReviewHash(r.app.catalogSnapshot())}
 	e.self = e
+	if review != nil && review.Revision != cfg.Revision {
+		return result, dataplane.ErrReviewChanged
+	}
 	keep := false
 	defer func() {
 		if !keep {
 			resultErr = errors.Join(resultErr, e.close())
 		}
 	}()
-	phase = "physical-scope"
-	e.scope, err = NewReviewedStockNC1812ListScopeBinding(c, r.app, r.provider)
+	phase = "prepare"
+	compilation, err := e.prepare(c, serviceID, protocol, family)
 	if err != nil {
 		return result, err
 	}
-	phase = "component"
-	e.component, err = r.app.Components.AcquireCurrentManagedNFQWSRuntime(c)
-	if err != nil {
-		return result, err
-	}
-	phase = "selected-source"
-	e.source, err = r.app.StrategyLab.RetainSelectedCandidateReview(c, serviceID, protocol, family, e.component)
-	if err != nil {
-		return result, err
-	}
-	phase = "source-compare"
-	reference, err := defaultRouteNFQWSReference(c, e.source)
-	if err != nil {
-		return result, err
-	}
-	phase = "physical-observe"
-	snapshot, err := e.scope.Observe(c)
-	if err != nil {
-		return result, err
-	}
-	phase = "catalog-services"
-	var services []dataplane.Route
-	for _, service := range r.app.catalogSnapshot().Services {
-		state := cfg.Services[service.ID]
-		if !state.Enabled {
-			continue
-		}
-		if service.ID != serviceID || state.Route != "nfqws2" || len(service.Domains) != 0 || len(service.SourceRefs) != 0 || len(service.CIDRs) == 0 || service.ProbeURL == "" {
-			return result, ErrDefaultRouteCapability
-		}
-		services = append(services, dataplane.Route{ServiceID: service.ID, ServiceName: service.Name, Selected: "nfqws2", Resolved: "nfqws2", CIDRs: append([]string(nil), service.CIDRs...), Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL})
-		snapshot.Paths = map[string]DefaultRoutePath{service.ID: {Selected: "nfqws2", Resolved: "nfqws2", ProbeURL: service.ProbeURL, NFQWS: &reference}}
-	}
-	if len(services) != 1 {
-		return result, ErrDefaultRouteCapability
-	}
-	phase = "compile"
-	compilation, err := CompileDefaultRoutePolicy(cfg, snapshot, services, time.Now())
-	if err != nil {
-		return result, err
-	}
-	phase = "bind-compilation"
-	if err := e.scope.BindCompilation(c, compilation); err != nil {
-		return result, err
-	}
-	adapter, ok := r.manager.Adapters["nfqws2"].(*dataplane.NFQWS2Adapter)
-	if !ok {
-		return result, dataplane.ErrNFQWSScopedOwner
-	}
-	// Mint the bounded native material after the slow original physical review.
-	phase = "active-material"
-	e.material, err = dataplane.ReviewManagedNFQWSActiveMaterial(c, r.manager, adapter, e.source, e.component, r.control, r.app.SelfUpdateFiles.ControlRoot, r.provider, managedNFQWSListQueue)
-	if err != nil {
-		return result, err
-	}
-	input := (&DefaultRouteExecutor{app: r.app}).input(compilation, cfg)
-	phase = "native-plan"
-	plan, err := dataplane.BuildManagedNFQWSList(c, input, e.material, time.Now())
-	if err != nil || !plan.Ready {
-		return result, errors.Join(ErrDefaultRouteCapability, err)
-	}
-	plan.Digest = defaultRouteDigest(struct{ Plan, Policy string }{plan.Digest, compilation.Digest()})
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return result, err
-	}
-	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
-	e.plan = defaultRouteClonePlan(plan)
-	var matches []dataplane.NFQWSScopedMatch
-	for _, rule := range compilation.Rules() {
-		if rule.ServiceID != serviceID || rule.Route != "nfqws2" {
-			return result, ErrDefaultRouteCapability
-		}
-		matches = append(matches, dataplane.NFQWSScopedMatch{ServiceID: rule.ServiceID, Origin: rule.Origin, Route: rule.Route, Ingress: rule.Ingress, Source: rule.Source, Destination: rule.Destination, Protocol: rule.Protocol, FirstPort: rule.FirstPort, LastPort: rule.LastPort})
-	}
-	phase = "selection-scope"
-	e.selection, err = e.material.ReviewScope(c, reference, e.plan, matches)
-	if err != nil {
-		return result, err
+	if review != nil && *review != e.applyReview(compilation, scope) {
+		return result, dataplane.ErrReviewChanged
 	}
 	phase = "lan-admission"
 	e.lanAdmission, err = r.manager.ReviewLANPolicyCommandAdmission(c, r.gate, r.inventory, r.control)
@@ -522,6 +470,10 @@ func (r *ManagedNFQWSListRuntime) Current(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.currentLocked(ctx)
+}
+
+func (r *ManagedNFQWSListRuntime) currentLocked(ctx context.Context) error {
 	if r.active == nil || r.closed {
 		return dataplane.ErrNFQWSScopedOwner
 	}

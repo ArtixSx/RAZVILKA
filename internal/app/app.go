@@ -3432,6 +3432,9 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := a.Store.Get()
 	options := a.routeOptionsSnapshot()
+	if a.managedNFQPlanHTTP(w, r, cfg, scope) {
+		return
+	}
 	var rows []map[string]any
 	for _, s := range a.catalogSnapshot().Services {
 		st := cfg.Services[s.ID]
@@ -3535,6 +3538,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := a.Store.Get()
+	if a.managedNFQApplyHTTP(w, r, cfg, scope, reviewRequest) {
+		return
+	}
 	transaction, err := a.buildDataplanePlanForRequest(cfg, a.routeOptionsSnapshot(), scope, engineID, r)
 	if err != nil {
 		if reviewRequest.Revision != nil {
