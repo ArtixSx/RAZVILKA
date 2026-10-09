@@ -23,33 +23,64 @@ type nfqwsDirectStockAction struct {
 	queue     *uint16
 }
 
+type nfqwsDirectStockRowKey struct {
+	family int
+	table  string
+	tokens string
+}
+
+type nfqwsDirectStockBudget struct {
+	tokens, bytes int
+}
+
 // inspectNFQWSDirectStockQueues returns detached comparison rows, never an
 // owner/effect grant. The caller must authenticate SAME direct-mode execution,
 // identity and managed queue before supplying its original complete capture.
 // Genuine receipt-owned rows are handled outside this helper; no RZ prefix is
 // skipped here. First support is deliberately limited to mangle OUTPUT.
 func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, managedQueue uint16) ([]BackendInventoryRow, error) {
+	return inspectNFQWSDirectStockQueuesWithOwned(actualComplete, managedQueue, nil)
+}
+
+// WithOwned is also only a pure comparison. exactOwned must come from the
+// caller's original typed receipt/compiled scope/process/context observation,
+// matched against this SAME raw capture. It is not an authority constructor.
+// Missing planned effects are not passed; each supplied row must occur once.
+// The untouched complete graph includes every owned declaration/body/reference.
+func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnapshot, managedQueue uint16, exactOwned []BackendInventoryRow) ([]BackendInventoryRow, error) {
 	refuse := func() ([]BackendInventoryRow, error) { return nil, errNFQWSDirectStockQueue }
 	if err := actualComplete.RequireComplete(); err != nil {
 		return nil, errors.Join(errNFQWSDirectStockQueue, err)
 	}
-	if managedQueue == 0 || len(actualComplete.Rows) > backendClassicRows {
+	if managedQueue == 0 || len(actualComplete.Rows) > backendClassicRows || len(exactOwned) > len(actualComplete.Rows) {
 		return refuse()
 	}
+	owned := map[nfqwsDirectStockRowKey]int{}
+	var ownedBudget nfqwsDirectStockBudget
+	for _, row := range exactOwned {
+		if !ownedBudget.add(row) || row.Table != "mangle" || row.Tokens[0] != "-N" && row.Tokens[0] != "-A" || !networkPolicyNFQRow(row) {
+			return refuse()
+		}
+		key := nfqwsDirectStockKey(row)
+		if _, duplicate := owned[key]; duplicate {
+			return refuse()
+		}
+		owned[key] = 0
+	}
+	actualOwned := make([]bool, len(actualComplete.Rows))
 	graphs := map[int]*nfqwsDirectStockGraph{}
-	tokens, bytes := 0, 0
-	for _, row := range actualComplete.Rows {
-		if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
+	var actualBudget nfqwsDirectStockBudget
+	for i, row := range actualComplete.Rows {
+		if !actualBudget.add(row) {
 			return refuse()
 		}
-		tokens += len(row.Tokens)
-		if tokens > backendClassicTokens {
-			return refuse()
-		}
-		for _, token := range row.Tokens {
-			bytes += len(token) + 1
-			if token == "" || len(token) > 4096 || bytes > backendClassicBytes || !utf8.ValidString(token) || strings.ContainsAny(token, "\x00\r\n") {
-				return refuse()
+		if len(owned) != 0 {
+			key := nfqwsDirectStockKey(row)
+			if count, match := owned[key]; match {
+				if count != 0 {
+					return refuse()
+				}
+				owned[key], actualOwned[i] = 1, true
 			}
 		}
 		if row.Table != "mangle" {
@@ -61,7 +92,7 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 			graphs[row.Family] = g
 		}
 		chain := row.Tokens[1]
-		if !nfqwsDirectStockChain(chain) || networkPolicyReservedChain(chain) {
+		if !nfqwsDirectStockChain(chain) || networkPolicyReservedChain(chain) && (!actualOwned[i] || !strings.HasPrefix(chain, "RZQ_")) {
 			return refuse()
 		}
 		switch row.Tokens[0] {
@@ -82,6 +113,11 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 			return refuse()
 		}
 	}
+	for _, count := range owned {
+		if count != 1 {
+			return refuse()
+		}
+	}
 	for _, family := range []int{4, 6} {
 		g := graphs[family]
 		if g == nil {
@@ -94,7 +130,7 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 		}
 	}
 	var queues []BackendInventoryRow
-	for _, row := range actualComplete.Rows {
+	for i, row := range actualComplete.Rows {
 		if row.Tokens[0] != "-A" {
 			continue
 		}
@@ -109,7 +145,7 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 			return refuse()
 		}
 		g := graphs[row.Family]
-		if _, exists := g.chains[row.Tokens[1]]; !exists || networkPolicyReservedChain(action.target) {
+		if _, exists := g.chains[row.Tokens[1]]; !exists || networkPolicyReservedChain(action.target) && (!actualOwned[i] || !strings.HasPrefix(action.target, "RZQ_")) {
 			return refuse()
 		}
 		if builtin, chain := g.chains[action.target]; chain {
@@ -135,10 +171,12 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 				return refuse()
 			}
 		case "NFQUEUE":
-			if action.queue == nil || *action.queue == managedQueue {
+			if action.queue == nil || actualOwned[i] && *action.queue != managedQueue || !actualOwned[i] && *action.queue == managedQueue {
 				return refuse()
 			}
-			queues = append(queues, row)
+			if !actualOwned[i] {
+				queues = append(queues, row)
+			}
 		default:
 			return refuse() // Unknown vendor target semantics never become safe.
 		}
@@ -158,6 +196,28 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 		preserved = append(preserved, BackendInventoryRow{Family: row.Family, Table: row.Table, Tokens: slices.Clone(row.Tokens)})
 	}
 	return preserved, nil
+}
+
+func (b *nfqwsDirectStockBudget) add(row BackendInventoryRow) bool {
+	if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
+		return false
+	}
+	b.tokens += len(row.Tokens)
+	if b.tokens > backendClassicTokens {
+		return false
+	}
+	for _, token := range row.Tokens {
+		b.bytes += len(token) + 1
+		if token == "" || len(token) > 4096 || b.bytes > backendClassicBytes || !utf8.ValidString(token) || strings.ContainsAny(token, "\x00\r\n") {
+			return false
+		}
+	}
+	return true
+}
+
+// NUL cannot occur in validated tokens; this key retains exact token boundaries.
+func nfqwsDirectStockKey(row BackendInventoryRow) nfqwsDirectStockRowKey {
+	return nfqwsDirectStockRowKey{family: row.Family, table: row.Table, tokens: strings.Join(row.Tokens, "\x00")}
 }
 
 func nfqwsDirectStockOtherTableQueue(fields []string) bool {

@@ -330,3 +330,167 @@ func TestNFQWSDirectStockQueueBoundedSharedDAG(t *testing.T) {
 	snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "FORWARD", "-j", "dag_0"))
 	nfqwsDirectStockTestRefused(t, snapshot, 40321)
 }
+
+func nfqwsDirectStockOwnedFixture(t *testing.T, family string) (BackendInventorySnapshot, uint16, []BackendInventoryRow) {
+	t.Helper()
+	// Use the original compiler and receipt-row producer, without pretending
+	// that this pure model authenticates a live owner/receipt/process.
+	_, spec, plan := nfqwsScopedDirectFixture(t, family)
+	states := make([]string, len(plan.mixed.Effects))
+	for i := range states {
+		states[i] = "added"
+	}
+	owned, _, err := networkPolicyNFQReceiptRows(plan, states, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := nfqwsDirectStockQueueFixture()
+	snapshot.Rows = append(snapshot.Rows, cloneNetworkPolicyInventoryTestRows(owned)...)
+	return snapshot, spec.Queue, owned
+}
+
+func nfqwsDirectStockOwnedRefused(t *testing.T, snapshot BackendInventorySnapshot, managed uint16, owned []BackendInventoryRow) {
+	t.Helper()
+	before, beforeOwned := nfqwsDirectStockTestClone(snapshot), cloneNetworkPolicyInventoryTestRows(owned)
+	rows, err := inspectNFQWSDirectStockQueuesWithOwned(snapshot, managed, owned)
+	if !errors.Is(err, errNFQWSDirectStockQueue) || rows != nil {
+		t.Fatalf("expected owned comparison refusal, got %d rows and %v", len(rows), err)
+	}
+	if !reflect.DeepEqual(before, snapshot) || !reflect.DeepEqual(beforeOwned, owned) {
+		t.Fatal("refusal modified complete capture or exact owned comparison input")
+	}
+}
+
+func TestNFQWSDirectStockQueueWithOwnedOriginalCompiledRows(t *testing.T) {
+	for _, family := range []string{"ipv4", "ipv6"} {
+		t.Run(family, func(t *testing.T) {
+			snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, family)
+			before, beforeOwned := nfqwsDirectStockTestClone(snapshot), cloneNetworkPolicyInventoryTestRows(owned)
+			expected, err := inspectNFQWSDirectStockQueues(nfqwsDirectStockQueueFixture(), managed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := inspectNFQWSDirectStockQueuesWithOwned(snapshot, managed, owned)
+			if err != nil || !reflect.DeepEqual(got, expected) || !reflect.DeepEqual(snapshot, before) || !reflect.DeepEqual(owned, beforeOwned) {
+				t.Fatal("original exact compiled FORWARD capture did not preserve only foreign OUTPUT rows", err)
+			}
+			got[0].Tokens[1] = "changed"
+			if !reflect.DeepEqual(snapshot, before) || !reflect.DeepEqual(owned, beforeOwned) {
+				t.Fatal("returned comparison rows alias either original input")
+			}
+			// The strict first API has no owned exemption, including with nil.
+			nfqwsDirectStockTestRefused(t, snapshot, managed)
+			nfqwsDirectStockOwnedRefused(t, snapshot, managed, nil)
+		})
+	}
+	// Optional missing planned rows are omitted by the authenticated caller.
+	snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+	snapshot.Rows = snapshot.Rows[:len(snapshot.Rows)-len(owned)]
+	for _, count := range []int{1, len(owned) / 2} {
+		partial := nfqwsDirectStockTestClone(snapshot)
+		partial.Rows = append(partial.Rows, cloneNetworkPolicyInventoryTestRows(owned[:count])...)
+		if rows, err := inspectNFQWSDirectStockQueuesWithOwned(partial, managed, owned[:count]); err != nil || len(rows) != 2 {
+			t.Fatal("exact observed receipt prefix rejected", count, err)
+		}
+	}
+}
+
+func TestNFQWSDirectStockQueueWithOwnedRejectsCountScopeAndQueueDefects(t *testing.T) {
+	cases := map[string]func(*BackendInventorySnapshot, *[]BackendInventoryRow, uint16){
+		"missing-owned-row": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			s.Rows = s.Rows[:len(s.Rows)-1]
+		},
+		"duplicate-owned-input": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			*owned = append(*owned, (*owned)[0])
+		},
+		"duplicate-actual-row": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			s.Rows = append(s.Rows, (*owned)[len(*owned)-1])
+		},
+		"omitted-comparison-row": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			*owned = (*owned)[:len(*owned)-1]
+		},
+		"different-token-boundary": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			fields := (*owned)[len(*owned)-1].Tokens
+			(*owned)[len(*owned)-1].Tokens = []string{fields[0], fields[1], strings.Join(fields[2:], " ")}
+		},
+		"wrong-family": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			(*owned)[0].Family = 6
+		},
+		"wrong-table": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			(*owned)[0].Table = "filter"
+		},
+		"unrelated-owned-row": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			row := nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "-j", "NFQUEUE", "--queue-num", "1300")
+			s.Rows, *owned = append(s.Rows, row), append(*owned, row)
+		},
+		"owned-other-table-queue": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			row := nfqwsDirectStockTestRow(4, "raw", "-A", (*owned)[0].Tokens[1], "-j", "NFQUEUE", "--queue-num", "1300")
+			s.Rows, *owned = append(s.Rows, row), append(*owned, row)
+		},
+		"unowned-extra-body": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			s.Rows = append(s.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", (*owned)[0].Tokens[1], "-j", "RETURN"))
+		},
+		"unowned-incoming-jump": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			s.Rows = append(s.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "INPUT", "-j", (*owned)[0].Tokens[1]))
+		},
+		"unowned-incoming-goto": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			s.Rows = append(s.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "-g", (*owned)[0].Tokens[1]))
+		},
+		"foreign-managed-collision": func(s *BackendInventorySnapshot, _ *[]BackendInventoryRow, managed uint16) {
+			fields := s.Rows[nfqwsDirectStockTestQueueIndex(*s, 4)].Tokens
+			fields[len(fields)-1] = strconv.Itoa(int(managed))
+		},
+		"wrong-owned-queue": func(s *BackendInventorySnapshot, owned *[]BackendInventoryRow, managed uint16) {
+			for i := range *owned {
+				if !slices.Contains((*owned)[i].Tokens, "NFQUEUE") {
+					continue
+				}
+				fields := (*owned)[i].Tokens
+				fields[len(fields)-1] = strconv.Itoa(int(managed) + 1)
+				for j := len(s.Rows) - len(*owned); j < len(s.Rows); j++ {
+					if slices.Contains(s.Rows[j].Tokens, "NFQUEUE") {
+						s.Rows[j].Tokens[len(s.Rows[j].Tokens)-1] = strconv.Itoa(int(managed) + 1)
+						break
+					}
+				}
+				break
+			}
+		},
+		"incomplete-original": func(s *BackendInventorySnapshot, _ *[]BackendInventoryRow, _ uint16) {
+			s.Coverage.RegisteredTablesComplete = false
+		},
+		"malformed-owned-token": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			(*owned)[0].Tokens[1] += "\x00"
+		},
+		"oversized-owned-row": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			(*owned)[0].Tokens = make([]string, 129)
+		},
+		"oversized-owned-list": func(_ *BackendInventorySnapshot, owned *[]BackendInventoryRow, _ uint16) {
+			*owned = make([]BackendInventoryRow, backendClassicRows+1)
+		},
+	}
+	for name, alter := range cases {
+		t.Run(name, func(t *testing.T) {
+			snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+			alter(&snapshot, &owned, managed)
+			nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
+		})
+	}
+}
+
+func TestNFQWSDirectStockQueueWithOwnedStillValidatesUntouchedGraph(t *testing.T) {
+	for _, body := range [][]string{{"-j", "local_delay"}, {"-j", "missing"}, {"-j", "NDMMARK"}} {
+		t.Run(strings.Join(body, " "), func(t *testing.T) {
+			snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+			row := nfqwsDirectStockTestRow(4, "mangle", append([]string{"-A", owned[0].Tokens[1]}, body...)...)
+			snapshot.Rows, owned = append(snapshot.Rows, row), append(owned, row)
+			// Even exactly compared owned bodies stay in the graph: the
+			// first case makes the foreign queue reachable from FORWARD.
+			nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
+		})
+	}
+	snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+	row := nfqwsDirectStockTestRow(4, "mangle", "-A", owned[0].Tokens[1], "-g", owned[0].Tokens[1])
+	snapshot.Rows, owned = append(snapshot.Rows, row), append(owned, row)
+	nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
+}
