@@ -190,3 +190,110 @@ func TestListXrayAssemblySourceRollbackCannotRenewEvidence(t *testing.T) {
 		}
 	})
 }
+
+func TestListXrayAssemblyPreparationUsesActualNodeProofAndFiniteScope(t *testing.T) {
+	f := newListXraySourceFixture(t, "xray")
+	listScopeOperation(t, f.a, func(ctx context.Context) {
+		r := f.review(t, ctx)
+		before := f.a.Store.Get()
+		p, err := r.prepare(ctx)
+		if err != nil {
+			t.Fatal("original finite preparation", err)
+		}
+		defer p.close()
+		proof, err := p.proof.Observation(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot := p.compilation.snapshot
+		path := snapshot.Paths["listed"]
+		if snapshot.NodeGeneration != 2 || snapshot.ProfileGeneration != proof.NodeGeneration ||
+			path.ProfileDigest != proof.CompiledMaterialSHA256 || path.ProfileDigest != r.materialHash || path.ProofDigest != proof.ProofSHA256 ||
+			path.Selected != "xray:"+f.nodeID || path.Resolved != path.Selected || path.ProbeURL != r.frozen.ProbeURL {
+			t.Fatal("compiler replaced actual private-profile/check references")
+		}
+		if len(p.compilation.rules) != 2 || dataplane.ValidateLANPolicyRuntime(p.compilation.LAN()) != nil {
+			t.Fatal("finite LAN missing")
+		}
+		for _, rule := range p.compilation.rules {
+			// Selected-device membership follows the immutable MAC gate while
+			// its current address may change within this reviewed LAN subnet.
+			if rule.ServiceID != "listed" || rule.Route != path.Resolved || rule.Ingress != "br0" || rule.Source.String() != "192.168.1.0/24" ||
+				(rule.Destination.String() != "1.1.1.0/24" && rule.Destination.String() != "8.8.8.0/24") {
+				t.Fatal("prepared positive escaped original selected client/list", rule)
+			}
+		}
+		lan := p.compilation.LAN()
+		if len(lan.Ingress) != 1 || lan.Ingress[0].Membership != "mac" || !reflect.DeepEqual(lan.Ingress[0].IncludedMACs, []string{"02:00:00:00:00:01"}) {
+			t.Fatal("original MAC scope lost")
+		}
+		if err := p.current(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(before, f.a.Store.Get()) {
+			t.Fatal("pure preparation wrote config")
+		}
+		if _, err := os.Stat(filepath.Join(f.a.Dataplane.StateRoot, "transactions")); !os.IsNotExist(err) {
+			t.Fatal("preparation created Manager execution", err)
+		}
+		_, started, finished := xrayAssemblySourceCAS(t, r)
+		if err := r.acceptCommitted(ctx, started, finished); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.current(ctx); err != nil {
+			t.Fatal("sanctioned commit revoked original preparation", err)
+		}
+		copy := &listXrayRuntimePreparation{self: p, source: r, proof: p.proof, compilation: p.compilation}
+		if copy.current(ctx) == nil || copy.close() == nil {
+			t.Fatal("copy became original preparation")
+		}
+		if err := p.current(ctx); err != nil {
+			t.Fatal("copy revoked original preparation", err)
+		}
+	})
+}
+
+func TestListXrayAssemblyPreparationCannotBindAnotherScopeOrNewRevision(t *testing.T) {
+	for _, change := range []string{"double-bind", "node-generation", "successful-refresh", "failed-refresh"} {
+		t.Run(change, func(t *testing.T) {
+			f := newListXraySourceFixture(t, "xray")
+			listScopeOperation(t, f.a, func(ctx context.Context) {
+				r := f.review(t, ctx)
+				p, err := r.prepare(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer p.close()
+				switch change {
+				case "double-bind":
+					other, err := r.prepare(ctx)
+					if other != nil {
+						_ = other.close()
+					}
+					if err == nil {
+						t.Fatal("second preparation replaced scope binding")
+					}
+				case "node-generation":
+					f.record(t, "xray", "replacement-proof", time.Now().UTC())
+				case "successful-refresh":
+					if err := f.a.Sources.Refresh(ctx, "reviewed-networks"); err != nil {
+						t.Fatal(err)
+					}
+				case "failed-refresh":
+					f.a.Sources.SetHTTPClient(&http.Client{Transport: listXraySourceRejectedTransport{unavailable: true}})
+					if err := f.a.Sources.Refresh(ctx, "reviewed-networks"); err == nil {
+						t.Fatal("fixture refresh did not fail")
+					}
+				}
+				err = p.current(ctx)
+				if change == "double-bind" || change == "failed-refresh" {
+					if err != nil {
+						t.Fatal("unchanged original preparation was revoked", err)
+					}
+				} else if err == nil {
+					t.Fatal("new revision retained old preparation")
+				}
+			})
+		})
+	}
+}
