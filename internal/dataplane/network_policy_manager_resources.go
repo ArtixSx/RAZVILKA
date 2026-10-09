@@ -15,14 +15,15 @@ const maxExecutionResources = 256
 // path. Neither serialized metadata nor "removed"/"unused" grants effects or
 // cleanup: actual owner readback and the common receipt remain mandatory.
 type ExecutionResource struct {
-	ID            string                    `json:"id"`
-	Kind          string                    `json:"kind"`
-	State         string                    `json:"state"` // prepared, removed, unused
-	Generation    string                    `json:"generation"`
-	EffectsDigest string                    `json:"effects_sha256"`
-	NodeTransit   *NodeTransitSpec          `json:"node_transit,omitempty"`
-	NFQWS         *ExecutionNFQWSDefinition `json:"nfqws,omitempty"`
-	Phase         string                    `json:"phase,omitempty"`
+	ID                string                                `json:"id"`
+	Kind              string                                `json:"kind"`
+	State             string                                `json:"state"` // prepared, removed, unused
+	Generation        string                                `json:"generation"`
+	EffectsDigest     string                                `json:"effects_sha256"`
+	NodeTransit       *NodeTransitSpec                      `json:"node_transit,omitempty"`
+	NFQWS             *ExecutionNFQWSDefinition             `json:"nfqws,omitempty"`
+	SyntheticBaseline *ExecutionSyntheticBaselineDefinition `json:"synthetic_baseline,omitempty"`
+	Phase             string                                `json:"phase,omitempty"`
 }
 
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
@@ -38,6 +39,7 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		result[i].SyntheticBaseline = cloneExecutionSyntheticBaselineDefinition(result[i].SyntheticBaseline)
 		if result[i].NodeTransit != nil {
 			spec := *result[i].NodeTransit
 			result[i].NodeTransit = &spec
@@ -79,6 +81,8 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 		prefix := "nt-"
 		if resource.Kind == "nfqws-scoped" {
 			prefix = "nq-"
+		} else if resource.Kind == "synthetic-baseline" {
+			prefix = "sb-"
 		}
 		if (len(resource.ID) != len(prefix)+16 && len(resource.ID) != len(prefix)+32) || !strings.HasPrefix(resource.ID, prefix) || strings.Trim(strings.TrimPrefix(resource.ID, prefix), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
@@ -86,7 +90,7 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 		seen[resource.ID] = true
 		switch resource.Kind {
 		case "node-transit":
-			if resource.NodeTransit == nil || resource.NFQWS != nil || resource.Phase != "" || resource.NodeTransit.PlanID != planID || resource.NodeTransit.PlanDigest != execution.Digest {
+			if resource.NodeTransit == nil || resource.NFQWS != nil || resource.SyntheticBaseline != nil || resource.Phase != "" || resource.NodeTransit.PlanID != planID || resource.NodeTransit.PlanDigest != execution.Digest {
 				return ErrExecutionJournal
 			}
 			plan, err := CompileNodeTransit(*resource.NodeTransit)
@@ -98,7 +102,7 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 				return errors.Join(ErrExecutionJournal, err)
 			}
 		case "nfqws-scoped":
-			if resource.NFQWS == nil || resource.NodeTransit != nil || resource.NFQWS.Plan.PlanID != planID || resource.NFQWS.Plan.Digest != execution.Digest {
+			if resource.NFQWS == nil || resource.NodeTransit != nil || resource.SyntheticBaseline != nil || resource.NFQWS.Plan.PlanID != planID || resource.NFQWS.Plan.Digest != execution.Digest {
 				return ErrExecutionJournal
 			}
 			if resource.NFQWS.NetworkIdentity != nil {
@@ -130,6 +134,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 				}
 			default:
 				return ErrExecutionJournal
+			}
+		case "synthetic-baseline":
+			if err := validateExecutionSyntheticBaselineResource(execution, resource, resource.SyntheticBaseline); err != nil {
+				return err
 			}
 		default:
 			return ErrExecutionJournal
