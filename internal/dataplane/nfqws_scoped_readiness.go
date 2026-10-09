@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 )
@@ -79,21 +80,33 @@ func nfqwsScopedAfterStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p 
 }
 
 type nfqwsScopedQueueReadinessObserver struct {
-	identity func() error
-	read     func(context.Context) ([]nfqwsScopedQueue, error)
-	owner    func(context.Context, nfqwsScopedQueue) (string, error)
+	identity      func() error
+	read          func(context.Context) ([]nfqwsScopedQueue, error)
+	owner         func(context.Context, nfqwsScopedQueue) (string, error)
+	stock         *nfqwsScopedStockQueueProof
+	foreignSocket func(context.Context, nfqwsScopedQueue) (string, error)
+}
+
+type nfqwsScopedForeignQueueState struct {
+	queue nfqwsScopedQueue
+	inode string
 }
 
 type nfqwsScopedQueueReadinessState struct {
-	ready bool
-	queue nfqwsScopedQueue
-	inode string
+	ready   bool
+	queue   nfqwsScopedQueue
+	inode   string
+	foreign []nfqwsScopedForeignQueueState
+}
+
+func (s nfqwsScopedQueueReadinessState) sameOwn(other nfqwsScopedQueueReadinessState) bool {
+	return s.ready == other.ready && s.queue == other.queue && s.inode == other.inode
 }
 
 // Validate every observed inventory before sampling again: a foreign queue
 // that subsequently disappears must never be mistaken for initial absence.
 func nfqwsScopedQueueReadinessObserve(ctx context.Context, queue uint16, o nfqwsScopedQueueReadinessObserver) (bool, error) {
-	if ctx == nil || queue == 0 || o.identity == nil || o.read == nil || o.owner == nil {
+	if ctx == nil || queue == 0 || o.identity == nil || o.read == nil || o.owner == nil || o.stock != nil && (!o.stock.used.Load() || o.stock.queue != queue || o.foreignSocket == nil) {
 		return false, ErrNFQWSScopedOwner
 	}
 	if err := ctx.Err(); err != nil {
@@ -110,17 +123,35 @@ func nfqwsScopedQueueReadinessObserve(ctx context.Context, queue uint16, o nfqws
 		if err != nil {
 			return nfqwsScopedQueueReadinessState{}, err
 		}
-		if len(queues) == 0 {
-			return nfqwsScopedQueueReadinessState{}, nil
+		state := nfqwsScopedQueueReadinessState{}
+		seen := map[uint16]bool{}
+		for _, q := range queues {
+			if seen[q.number] {
+				return state, ErrNFQWSScopedOwner
+			}
+			seen[q.number] = true
+			if q.number != queue {
+				if !o.stock.contains(q.number) {
+					return state, ErrNFQWSScopedOwner
+				}
+				inode, err := o.foreignSocket(ctx, q)
+				if err != nil || inode == "" {
+					return state, errors.Join(ErrNFQWSScopedOwner, err)
+				}
+				state.foreign = append(state.foreign, nfqwsScopedForeignQueueState{queue: q, inode: inode})
+				continue
+			}
+			if q.copyMode != 2 || q.copyRange < 65531 {
+				return state, ErrNFQWSScopedOwner
+			}
+			inode, err := o.owner(ctx, q)
+			if err != nil || inode == "" {
+				return state, errors.Join(ErrNFQWSScopedOwner, err)
+			}
+			state.ready, state.queue, state.inode = true, q, inode
 		}
-		if len(queues) != 1 || queues[0].number != queue || queues[0].copyMode != 2 || queues[0].copyRange < 65531 {
-			return nfqwsScopedQueueReadinessState{}, ErrNFQWSScopedOwner
-		}
-		inode, err := o.owner(ctx, queues[0])
-		if err != nil || inode == "" {
-			return nfqwsScopedQueueReadinessState{}, errors.Join(ErrNFQWSScopedOwner, err)
-		}
-		return nfqwsScopedQueueReadinessState{ready: true, queue: queues[0], inode: inode}, nil
+		slices.SortFunc(state.foreign, func(a, b nfqwsScopedForeignQueueState) int { return int(a.queue.number) - int(b.queue.number) })
+		return state, nil
 	}
 	before, err := read()
 	if err != nil {
@@ -130,14 +161,14 @@ func nfqwsScopedQueueReadinessObserve(ctx context.Context, queue uint16, o nfqws
 	if err != nil {
 		return false, err
 	}
-	if before.ready && before != after {
+	if !slices.Equal(before.foreign, after.foreign) || before.ready && !before.sameOwn(after) {
 		return false, ErrNFQWSScopedOwner
 	}
 	if !before.ready && after.ready {
 		// The newly observed occupant needs its own stable inventory/socket
 		// bracket. This is a positive transition proof, not retry on error.
 		closing, err := read()
-		if err != nil || closing != after {
+		if err != nil || !closing.sameOwn(after) || !slices.Equal(closing.foreign, after.foreign) {
 			return false, errors.Join(ErrNFQWSScopedOwner, err)
 		}
 	}

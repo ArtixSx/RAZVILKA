@@ -15,3 +15,10 @@ func CheckTypedNFQWSScopedQueue(context.Context, *netidentity.Provider, netident
 func nfqwsScopedTypedQueueReadiness(context.Context, *netidentity.Provider, netidentity.Identity, uint16, *components.NFQWSRuntimeProcessIdentity) (bool, error) {
 	return false, ErrNFQWSScopedOwner
 }
+
+func nfqwsScopedTypedStockQueueObserve(ctx context.Context, proof *nfqwsScopedStockQueueProof, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+	if err := proof.consume(ctx); err != nil {
+		return false, err
+	}
+	return false, ErrNFQWSScopedOwner
+}

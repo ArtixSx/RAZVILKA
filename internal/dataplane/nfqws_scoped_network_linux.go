@@ -33,6 +33,17 @@ func nfqwsScopedTypedQueueReadiness(ctx context.Context, provider *netidentity.P
 }
 
 func nfqwsScopedTypedQueueObserve(ctx context.Context, provider *netidentity.Provider, expected netidentity.Identity, queue uint16, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+	return nfqwsScopedTypedQueueObserveCompared(ctx, provider, expected, queue, child, nil)
+}
+
+func nfqwsScopedTypedStockQueueObserve(ctx context.Context, proof *nfqwsScopedStockQueueProof, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+	if err := proof.consume(ctx); err != nil {
+		return false, err
+	}
+	return nfqwsScopedTypedQueueObserveCompared(ctx, proof.provider, proof.expected, proof.queue, child, proof)
+}
+
+func nfqwsScopedTypedQueueObserveCompared(ctx context.Context, provider *netidentity.Provider, expected netidentity.Identity, queue uint16, child *components.NFQWSRuntimeProcessIdentity, proof *nfqwsScopedStockQueueProof) (bool, error) {
 	if ctx == nil || provider == nil || expected.Validate() != nil || queue == 0 || child != nil && (child.PID <= 1 || child.BootID != expected.BootID) {
 		return false, ErrNFQWSScopedOwner
 	}
@@ -45,7 +56,18 @@ func nfqwsScopedTypedQueueObserve(ctx context.Context, provider *netidentity.Pro
 		if current != expected {
 			return ErrNFQWSScopedOwner
 		}
+		queueReads := 0
 		o := nfqwsScopedQueueReadinessObserver{
+			stock: proof,
+			foreignSocket: func(c context.Context, queue nfqwsScopedQueue) (string, error) {
+				data, err := backendInventoryThreadProc(c, backendThreadNetlink)
+				if err != nil {
+					return "", err
+				}
+				// Observation of a foreign registration's socket identity does
+				// not grant ownership, signal it or inspect another child fd.
+				return nfqwsScopedSocketInode(string(data), queue.portID)
+			},
 			identity: func() error {
 				if child == nil {
 					return c.Err()
@@ -65,6 +87,15 @@ func nfqwsScopedTypedQueueObserve(ctx context.Context, provider *netidentity.Pro
 				return c.Err()
 			},
 			read: func(c context.Context) ([]nfqwsScopedQueue, error) {
+				queueReads++
+				if proof != nil && queueReads == 2 {
+					// Bracket the fresh whole graph with queue/socket frames.
+					// The second (and transition third) frame follows the final
+					// capture, avoiding a long unobserved registration interval.
+					if err := proof.close(c); err != nil {
+						return nil, err
+					}
+				}
 				data, err := backendInventoryThreadProc(c, backendThreadQueues)
 				if err != nil {
 					return nil, errors.Join(ErrNFQWSScopedQueueInventory, err)

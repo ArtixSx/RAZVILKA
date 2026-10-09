@@ -58,6 +58,17 @@ func (b *NFQWSScopedBinding) checkQueue(ctx context.Context, p *NFQWSScopedPlan,
 	if err != nil {
 		return err
 	}
+	if p.lan != nil && p.lan.Mode == LANPolicyNFQWSDirectMode {
+		proof, err := b.stockQueueProof(ctx, p)
+		if err != nil {
+			return err
+		}
+		ready, err := nfqwsScopedTypedStockQueueObserve(ctx, proof, child)
+		if err != nil || ready != (child != nil) {
+			return errors.Join(ErrNFQWSScopedOwner, err)
+		}
+		return nil
+	}
 	return CheckTypedNFQWSScopedQueue(ctx, b.network.provider, identity, p.resources.Queue, child)
 }
 
@@ -74,6 +85,16 @@ func (b *NFQWSScopedBinding) checkQueueReadiness(ctx context.Context, p *NFQWSSc
 	identity, err := nfqwsScopedTypedNetwork(p)
 	if err != nil {
 		return false, err
+	}
+	if p.lan != nil && p.lan.Mode == LANPolicyNFQWSDirectMode {
+		if child == nil {
+			return false, ErrNFQWSScopedOwner
+		}
+		proof, err := b.stockQueueProof(ctx, p)
+		if err != nil {
+			return false, err
+		}
+		return nfqwsScopedTypedStockQueueObserve(ctx, proof, child)
 	}
 	return nfqwsScopedTypedQueueReadiness(ctx, b.network.provider, identity, p.resources.Queue, child)
 }
