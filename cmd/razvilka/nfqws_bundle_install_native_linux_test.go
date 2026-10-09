@@ -274,6 +274,7 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 				t.Fatal("explicit private working mode refused", status, reply)
 			}
 			body, _ := json.Marshal(config.ServiceState{Enabled: true, Route: "nfqws2", Sources: []string{netip.PrefixFrom(source, 32).String()}})
+			reply = nil
 			if status := request("PUT", "/api/v1/services/native-manual", string(body), &reply); status != http.StatusOK {
 				t.Fatal("ordinary service selection refused", status, reply)
 			}
@@ -283,6 +284,7 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 			}
 			policy := config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{home}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}}
 			body, _ = json.Marshal(map[string]any{"expected_revision": store.Get().Revision, "expected_policy_revision": 0, "policy": policy, "grants": []config.DefaultRouteGrant{}, "confirm": "APPROVE_NETWORK_POLICY"})
+			reply = nil
 			if status := request("POST", "/api/v1/networkpolicy/review", string(body), &reply); status != http.StatusOK || reply["live_applied"] != false {
 				t.Fatal("original list scope approval refused", status, reply)
 			}
