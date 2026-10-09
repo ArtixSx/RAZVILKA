@@ -316,7 +316,7 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 				return boundary("notifications.link.decode", err)
 			}
 			if tracked[link.IfIndex] {
-				return at("notifications.link.tracked-index", nil)
+				return at("notifications.link.tracked-index", refusedLinkShape(m, link, segments))
 			}
 			if roots[link.master] {
 				return at("notifications.link.selected-master", nil)
