@@ -20,6 +20,12 @@ func TestRetainedNFQWSBothOriginalJournalBookendsAndColdACTIVERefusal(t *testing
 			}
 			f := nfqwsApplyTransferBoundFixture(t)
 			s := f.r.scope
+			// testing.TempDir's numbered child is created with 0777 (umask),
+			// unlike the production private retained Manager root. Scope's
+			// transaction child was already private; this test opens BOTH roots.
+			if err := os.Chmod(s.managerRoot, 0700); err != nil {
+				t.Fatal(err)
+			}
 			if err := s.beginNFQWSTransfer(f.ctx); err != nil {
 				t.Fatal(err)
 			}
