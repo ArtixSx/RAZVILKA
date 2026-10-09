@@ -324,6 +324,8 @@ func (e *managedNFQWSListExecution) close() error {
 // its literals/probe come from this SAME App catalog/config, never request argv.
 func (r *ManagedNFQWSListRuntime) Start(ctx context.Context, serviceID, protocol, family string) (result dataplane.Execution, resultErr error) {
 	phase := "original-owner"
+	ctx, finishTimings := beginManagedNFQTimings(ctx)
+	defer func() { finishTimings(phase, resultErr) }()
 	defer func() { resultErr = managedNFQFailureAt(phase, resultErr) }()
 	if !r.original() {
 		return result, dataplane.ErrNFQWSScopedOwner

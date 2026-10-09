@@ -110,11 +110,15 @@ func newListScopeBinding(ctx context.Context, a *App, acquire func(context.Conte
 		if err != nil {
 			return err
 		}
+		wanStarted := time.Now()
 		b.networkID, err = b.network(c)
+		recordManagedNFQTiming(c, managedNFQWANProfile, wanStarted)
 		if err != nil || b.networkID == "" {
 			return errors.Join(ErrListScopeChanged, err)
 		}
+		physicalStarted := time.Now()
 		b.verifyPhysical, b.physicalSnapshot, b.closePhysical, err = acquire(c, b.selection)
+		recordManagedNFQTiming(c, managedNFQPhysicalAcquire, physicalStarted)
 		if err != nil || b.verifyPhysical == nil || b.physicalSnapshot == nil || b.closePhysical == nil {
 			return errors.Join(ErrListScopeChanged, err)
 		}
@@ -188,15 +192,20 @@ func (b *ListScopeBinding) currentLocked(ctx context.Context) (resultErr error) 
 		return b.changed(err)
 	}
 	phase = "scope-physical-verify"
-	if err := b.verifyPhysical(ctx); err != nil {
-		return b.changed(err)
+	physicalStarted := time.Now()
+	physicalErr := b.verifyPhysical(ctx)
+	recordManagedNFQTiming(ctx, managedNFQPhysicalVerify, physicalStarted)
+	if physicalErr != nil {
+		return b.changed(physicalErr)
 	}
 	phase = "scope-physical-snapshot"
 	if !reflect.DeepEqual(b.physicalSnapshot(), b.facts) {
 		return b.changed(nil)
 	}
 	phase = "scope-wan-identity"
+	wanStarted := time.Now()
 	network, err := b.network(ctx)
+	recordManagedNFQTiming(ctx, managedNFQWANProfile, wanStarted)
 	if err != nil || network != b.networkID {
 		return b.changed(err)
 	}
