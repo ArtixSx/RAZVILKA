@@ -16,25 +16,29 @@ import (
 // module; NONBLOCK cannot preempt that synchronous kernel handler.
 func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resultErr error) {
 	if ctx == nil || ctx.Err() != nil {
-		return result, errSyntheticConntrack
+		return result, syntheticCTFailure(syntheticCTContext, nil)
 	}
 	deadline, bounded := ctx.Deadline()
 	if !bounded || time.Until(deadline) > 2*time.Second {
-		return result, errSyntheticConntrack
+		return result, syntheticCTFailure(syntheticCTContext, nil)
 	}
 	session, err := openBackendNFTSocket(ctx)
 	if err != nil {
-		return result, errors.Join(errSyntheticConntrack, err)
+		return result, syntheticCTFailure(syntheticCTOpen, err)
 	}
 	defer func() {
 		if err := session.Close(); err != nil {
 			result = syntheticCTImage{}
-			resultErr = errors.Join(errSyntheticConntrack, resultErr, err)
+			reason := syntheticCTClose
+			if resultErr != nil {
+				reason = syntheticCTReason(syntheticCTDiagnostic(resultErr))
+			}
+			resultErr = syntheticCTFailure(reason, errors.Join(resultErr, err))
 		}
 	}()
 	s, ok := session.(*backendNFTSocket)
 	if !ok {
-		return result, errSyntheticConntrack
+		return result, syntheticCTFailure(syntheticCTTransport, nil)
 	}
 	request, err := syntheticCTRequest(s.sequence, s.port)
 	if err != nil {
@@ -46,18 +50,18 @@ func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resul
 	}
 	buffer := make([]byte, 65536)
 	if _, queued, err := s.receive(buffer); err != nil || queued {
-		return result, errors.Join(errSyntheticConntrack, err)
+		return result, syntheticCTFailure(syntheticCTPrequeued, err)
 	}
 	if err := unix.Sendto(s.fd, request, unix.MSG_DONTWAIT, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}); err != nil {
-		return result, errors.Join(errSyntheticConntrack, err)
+		return result, syntheticCTFailure(syntheticCTSend, err)
 	}
 	for !d.done {
 		if err := ctx.Err(); err != nil {
-			return result, err
+			return result, syntheticCTFailure(syntheticCTContext, err)
 		}
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return result, context.DeadlineExceeded
+			return result, syntheticCTFailure(syntheticCTContext, context.DeadlineExceeded)
 		}
 		poll := []unix.PollFd{{Fd: int32(s.fd), Events: unix.POLLIN}}
 		n, err := unix.Poll(poll, min(20, int((remaining+time.Millisecond-1)/time.Millisecond)))
@@ -65,17 +69,17 @@ func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resul
 			continue
 		}
 		if err != nil {
-			return result, errors.Join(errSyntheticConntrack, err)
+			return result, syntheticCTFailure(syntheticCTPoll, err)
 		}
 		if n == 0 {
 			continue
 		}
 		if poll[0].Revents != unix.POLLIN {
-			return result, errSyntheticConntrack
+			return result, syntheticCTFailure(syntheticCTPollEvents, nil)
 		}
 		packet, received, err := s.receive(buffer)
 		if err != nil {
-			return result, errors.Join(errSyntheticConntrack, err)
+			return result, syntheticCTFailure(syntheticCTReceive, err)
 		}
 		if received {
 			if err := d.consume(packet); err != nil {
@@ -84,8 +88,11 @@ func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resul
 		}
 	}
 	result, err = d.finishReceive(func() (backendNFTDatagram, bool, error) { return s.receive(buffer) })
-	if err != nil || ctx.Err() != nil {
-		return syntheticCTImage{}, errors.Join(errSyntheticConntrack, err, ctx.Err())
+	if err != nil {
+		return syntheticCTImage{}, syntheticCTFailure(syntheticCTReason(syntheticCTDiagnostic(err)), errors.Join(err, ctx.Err()))
+	}
+	if err := ctx.Err(); err != nil {
+		return syntheticCTImage{}, syntheticCTFailure(syntheticCTContext, err)
 	}
 	return result, nil
 }

@@ -20,7 +20,7 @@ import (
 // observation, not a synchronous kernel handler. NET only cross-compiles this.
 func TestSyntheticConntrackNativeObservation(t *testing.T) {
 	if os.Getenv("RAZVILKA_SYNTHETIC_CONNTRACK_NATIVE") != "1" {
-		t.Skip("complete=false count=0 error_stage=opt-in-disabled")
+		t.Skip("complete=false count=0 error_stage=opt-in-disabled error_reason=none")
 	}
 	var provider *netidentity.Provider
 	var expected netidentity.Kind
@@ -33,11 +33,11 @@ func TestSyntheticConntrackNativeObservation(t *testing.T) {
 		provider, err = netidentity.NewReviewedStockNC1812Provider(setup)
 		cancel()
 		if err != nil {
-			t.Fatal("complete=false count=0 error_stage=provider-factory")
+			t.Fatal("complete=false count=0 error_stage=provider-factory error_reason=unclassified")
 		}
 		expected = netidentity.ReviewedSingleInitNet
 	default:
-		t.Fatal("complete=false count=0 error_stage=provider-selection")
+		t.Fatal("complete=false count=0 error_stage=provider-selection error_reason=unclassified")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -69,7 +69,11 @@ func TestSyntheticConntrackNativeObservation(t *testing.T) {
 	if err != nil || ctx.Err() != nil {
 		// Every label comes from the fixed code allowlist above. Never print
 		// native errors, identity, sequence/port, IDs, tuples, names or IPs.
-		t.Fatalf("complete=false count=0 error_stage=%s", stage)
+		reason := syntheticCTDiagnostic(err)
+		if err == nil {
+			reason = syntheticCTContext.label()
+		}
+		t.Fatalf("complete=false count=0 error_stage=%s error_reason=%s", stage, reason)
 	}
-	t.Logf("complete=true count=%d error_stage=none", len(image.rows))
+	t.Logf("complete=true count=%d error_stage=none error_reason=none", len(image.rows))
 }

@@ -53,7 +53,7 @@ type syntheticCTDecoder struct {
 
 func syntheticCTRequest(sequence, port uint32) ([]byte, error) {
 	if sequence == 0 || port == 0 {
-		return nil, errSyntheticConntrack
+		return nil, syntheticCTFailure(syntheticCTRequestIdentity, nil)
 	}
 	b := make([]byte, 20)
 	binary.NativeEndian.PutUint32(b, 20)
@@ -78,43 +78,70 @@ func (d *syntheticCTDecoder) consume(packet backendNFTDatagram) (err error) {
 			d.failed = true
 		}
 	}()
-	if d == nil || d.failed || d.done || packet.SenderPID != 0 || packet.Groups != 0 || packet.Truncated || packet.ControlTruncated || len(packet.Data) == 0 {
-		return errSyntheticConntrack
+	if d == nil || d.failed || d.done {
+		return syntheticCTFailure(syntheticCTState, nil)
+	}
+	if packet.SenderPID != 0 || packet.Groups != 0 {
+		return syntheticCTFailure(syntheticCTSender, nil)
+	}
+	if packet.Truncated || packet.ControlTruncated {
+		return syntheticCTFailure(syntheticCTTruncated, nil)
+	}
+	if len(packet.Data) == 0 {
+		return syntheticCTFailure(syntheticCTEmpty, nil)
 	}
 	d.bytes += len(packet.Data)
 	d.datagrams++
 	if d.bytes > syntheticCTMaxBytes || d.datagrams > syntheticCTMaxDatagrams {
-		return errSyntheticConntrack
+		return syntheticCTFailure(syntheticCTBudget, nil)
 	}
 	b := packet.Data
 	for len(b) != 0 {
-		if d.done || len(b) < 16 {
-			return errSyntheticConntrack
+		if d.done {
+			return syntheticCTFailure(syntheticCTState, nil)
+		}
+		if len(b) < 16 {
+			return syntheticCTFailure(syntheticCTMessageLength, nil)
 		}
 		n := int(binary.NativeEndian.Uint32(b))
 		if n < 16 || n > len(b) || (n+3)&^3 > len(b) {
-			return errSyntheticConntrack
+			return syntheticCTFailure(syntheticCTMessageLength, nil)
 		}
 		kind, flags := binary.NativeEndian.Uint16(b[4:]), binary.NativeEndian.Uint16(b[6:])
-		if flags != 2 || binary.NativeEndian.Uint32(b[8:]) != d.sequence || binary.NativeEndian.Uint32(b[12:]) != d.port || !backendAllZero(b[n:(n+3)&^3]) {
-			return errSyntheticConntrack // interrupted/filtered/unknown flags refuse
+		if flags != 2 {
+			return syntheticCTFailure(syntheticCTMessageFlags, nil) // interrupted/filtered/unknown flags refuse
+		}
+		if binary.NativeEndian.Uint32(b[8:]) != d.sequence {
+			return syntheticCTFailure(syntheticCTSequence, nil)
+		}
+		if binary.NativeEndian.Uint32(b[12:]) != d.port {
+			return syntheticCTFailure(syntheticCTPort, nil)
+		}
+		if !backendAllZero(b[n : (n+3)&^3]) {
+			return syntheticCTFailure(syntheticCTPadding, nil)
 		}
 		body := b[16:n]
 		switch kind {
 		case 3: // DONE carries one successful native-endian int, old/current ABI
 			if len(body) != 4 || binary.NativeEndian.Uint32(body) != 0 {
-				return errSyntheticConntrack
+				return syntheticCTFailure(syntheticCTDone, nil)
 			}
 			d.done = true
 		case syntheticCTNew:
 			row, err := decodeSyntheticCTRow(body)
-			if err != nil || d.ids[row.ID] || len(d.rows) >= syntheticCTMaxRows {
-				return errSyntheticConntrack
+			if err != nil {
+				return err
+			}
+			if d.ids[row.ID] {
+				return syntheticCTFailure(syntheticCTDuplicateID, nil)
+			}
+			if len(d.rows) >= syntheticCTMaxRows {
+				return syntheticCTFailure(syntheticCTRowBudget, nil)
 			}
 			d.ids[row.ID] = true
 			d.rows = append(d.rows, row)
 		default:
-			return errSyntheticConntrack // ERROR/OVERRUN/ACK are never empty evidence
+			return syntheticCTFailure(syntheticCTMessageKind, nil) // ERROR/OVERRUN/ACK are never empty evidence
 		}
 		b = b[(n+3)&^3:]
 	}
@@ -125,11 +152,11 @@ func (d *syntheticCTDecoder) consume(packet backendNFTDatagram) (err error) {
 // unexpected frame refuses; no multipart prefix can become a complete image.
 func (d *syntheticCTDecoder) finishReceive(receive func() (backendNFTDatagram, bool, error)) (syntheticCTImage, error) {
 	if d == nil || d.failed || !d.done || receive == nil {
-		return syntheticCTImage{}, errSyntheticConntrack
+		return syntheticCTImage{}, syntheticCTFailure(syntheticCTFinish, nil)
 	}
 	if _, queued, err := receive(); queued || err != nil {
 		d.failed = true
-		return syntheticCTImage{}, errors.Join(errSyntheticConntrack, err)
+		return syntheticCTImage{}, syntheticCTFailure(syntheticCTDrain, err)
 	}
 	return syntheticCTImage{rows: append([]syntheticCTRow(nil), d.rows...), complete: true}, nil
 }
@@ -143,15 +170,15 @@ func syntheticCTAttrs(b []byte) (map[uint16]syntheticCTAttr, error) {
 	out := map[uint16]syntheticCTAttr{}
 	for len(b) != 0 {
 		if len(b) < 4 {
-			return nil, errSyntheticConntrack
+			return nil, syntheticCTFailure(syntheticCTAttribute, nil)
 		}
 		n, raw := int(binary.NativeEndian.Uint16(b)), binary.NativeEndian.Uint16(b[2:])
 		kind, flags := raw&0x3fff, raw&0xc000
 		if n < 4 || n > len(b) || (n+3)&^3 > len(b) || kind == 0 || !backendAllZero(b[n:(n+3)&^3]) {
-			return nil, errSyntheticConntrack
+			return nil, syntheticCTFailure(syntheticCTAttribute, nil)
 		}
 		if _, duplicate := out[kind]; duplicate {
-			return nil, errSyntheticConntrack
+			return nil, syntheticCTFailure(syntheticCTDuplicateAttr, nil)
 		}
 		out[kind] = syntheticCTAttr{flags: flags, data: b[4:n]}
 		b = b[(n+3)&^3:]
@@ -164,7 +191,7 @@ func (a syntheticCTAttr) scalar(size int, network bool) bool {
 }
 func (a syntheticCTAttr) nested() (map[uint16]syntheticCTAttr, error) {
 	if a.flags != 0 && a.flags != 0x8000 {
-		return nil, errSyntheticConntrack
+		return nil, syntheticCTFailure(syntheticCTNestedFlags, nil)
 	}
 	return syntheticCTAttrs(a.data)
 }
@@ -172,7 +199,7 @@ func (a syntheticCTAttr) nested() (map[uint16]syntheticCTAttr, error) {
 func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 	var r syntheticCTRow
 	if len(body) < 4 || body[0] != 2 || !backendAllZero(body[1:4]) {
-		return r, errSyntheticConntrack
+		return r, syntheticCTFailure(syntheticCTFamily, nil)
 	}
 	a, err := syntheticCTAttrs(body[4:])
 	if err != nil {
@@ -181,22 +208,31 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 	if r.Original, err = decodeSyntheticCTTuple(a[1]); err != nil {
 		return r, err
 	}
-	if r.Reply, err = decodeSyntheticCTTuple(a[2]); err != nil || r.Reply.Protocol != r.Original.Protocol {
-		return r, errSyntheticConntrack
+	if r.Reply, err = decodeSyntheticCTTuple(a[2]); err != nil {
+		return r, err
 	}
-	if !a[3].scalar(4, true) || !a[12].scalar(4, true) {
-		return r, errSyntheticConntrack
+	if r.Reply.Protocol != r.Original.Protocol {
+		return r, syntheticCTFailure(syntheticCTReplyProtocol, nil)
+	}
+	if !a[3].scalar(4, true) {
+		return r, syntheticCTFailure(syntheticCTStatusShape, nil)
+	}
+	if !a[12].scalar(4, true) {
+		return r, syntheticCTFailure(syntheticCTIDShape, nil)
 	}
 	r.Status, r.ID = binary.BigEndian.Uint32(a[3].data), binary.BigEndian.Uint32(a[12].data)
-	if r.ID == 0 || r.Status&^uint32(0xffff) != 0 {
-		return r, errSyntheticConntrack
+	if r.ID == 0 {
+		return r, syntheticCTFailure(syntheticCTZeroID, nil)
+	}
+	if r.Status&^uint32(0xffff) != 0 {
+		return r, syntheticCTFailure(syntheticCTStatusMask, nil)
 	}
 	for kind, v := range a {
 		switch kind {
 		case 1, 2, 3, 12:
 		case 7, 8, 11, 17:
 			if !v.scalar(4, true) {
-				return r, errSyntheticConntrack
+				return r, syntheticCTFailure(syntheticCTRowShape, nil)
 			}
 			if kind == 8 {
 				r.Mark, r.MarkPresent = binary.BigEndian.Uint32(v.data), true
@@ -206,7 +242,7 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 			}
 		case 18:
 			if !v.scalar(2, true) {
-				return r, errSyntheticConntrack
+				return r, syntheticCTFailure(syntheticCTRowShape, nil)
 			}
 			r.Zone = binary.BigEndian.Uint16(v.data)
 		case 9, 10:
@@ -216,28 +252,28 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 		case 4:
 			p, err := v.nested()
 			if err != nil || len(p) != 1 {
-				return r, errSyntheticConntrack
+				return r, syntheticCTFailure(syntheticCTRowShape, nil)
 			}
 			for proto, info := range p {
 				var sizes map[uint16]int
 				switch proto {
 				case 1:
 					if r.Original.Protocol != 6 {
-						return r, errSyntheticConntrack
+						return r, syntheticCTFailure(syntheticCTRowShape, nil)
 					}
 					sizes = map[uint16]int{1: 1, 2: 1, 3: 1, 4: 2, 5: 2}
 				case 2:
 					if r.Original.Protocol != 33 {
-						return r, errSyntheticConntrack
+						return r, syntheticCTFailure(syntheticCTRowShape, nil)
 					}
 					sizes = map[uint16]int{1: 1, 2: 1, 3: 8, 4: 0}
 				case 3:
 					if r.Original.Protocol != 132 {
-						return r, errSyntheticConntrack
+						return r, syntheticCTFailure(syntheticCTRowShape, nil)
 					}
 					sizes = map[uint16]int{1: 1, 2: 4, 3: 4}
 				default:
-					return r, errSyntheticConntrack
+					return r, syntheticCTFailure(syntheticCTRowShape, nil)
 				}
 				if err := syntheticCTFixedNest(info, sizes, true); err != nil {
 					return r, err
@@ -253,7 +289,7 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 					continue
 				}
 				if (k != 1 && k != 2) || !val.scalar(8, true) {
-					return r, errSyntheticConntrack
+					return r, syntheticCTFailure(syntheticCTRowShape, nil)
 				}
 				if k == 1 {
 					r.Birth, r.BirthPresent = binary.BigEndian.Uint64(val.data), true
@@ -273,17 +309,23 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 		case 5:
 			h, err := v.nested()
 			if err != nil || len(h) != 1 {
-				return r, errSyntheticConntrack
+				return r, syntheticCTFailure(syntheticCTRowShape, nil)
 			}
 			name := h[1]
 			if name.flags != 0 || len(name.data) < 2 || len(name.data) > 64 || name.data[len(name.data)-1] != 0 {
-				return r, errSyntheticConntrack
+				return r, syntheticCTFailure(syntheticCTRowShape, nil)
 			}
 			r.Unsafe = true
+		case 24:
+			return r, syntheticCTFailure(syntheticCTAttr24, nil)
+		case 25:
+			return r, syntheticCTFailure(syntheticCTAttr25, nil)
+		case 26:
+			return r, syntheticCTFailure(syntheticCTAttr26, nil)
 		default:
 			// The supported subset is explicit. An extension, absent ID or
 			// malformed foreign row makes FULL coverage unknown, never zero.
-			return r, errSyntheticConntrack
+			return r, syntheticCTFailure(syntheticCTUnknownAttr, nil)
 		}
 	}
 	return r, nil
@@ -297,7 +339,7 @@ func syntheticCTFixedNest(v syntheticCTAttr, sizes map[uint16]int, network bool)
 	for k, value := range a {
 		size, known := sizes[k]
 		if !known || !value.scalar(size, network) {
-			return errSyntheticConntrack
+			return syntheticCTFailure(syntheticCTRowShape, nil)
 		}
 	}
 	return nil
@@ -307,22 +349,22 @@ func decodeSyntheticCTTuple(v syntheticCTAttr) (syntheticCTTuple, error) {
 	var tuple syntheticCTTuple
 	a, err := v.nested()
 	if err != nil || len(a) < 2 || len(a) > 3 {
-		return tuple, errSyntheticConntrack
+		return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 	}
 	for k := range a {
 		if k != 1 && k != 2 && k != 3 {
-			return tuple, errSyntheticConntrack
+			return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 		}
 	}
 	ip, err := a[1].nested()
 	if err != nil || len(ip) != 2 || !ip[1].scalar(4, true) || !ip[2].scalar(4, true) {
-		return tuple, errSyntheticConntrack
+		return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 	}
 	tuple.Source = netip.AddrFrom4([4]byte(ip[1].data))
 	tuple.Destination = netip.AddrFrom4([4]byte(ip[2].data))
 	proto, err := a[2].nested()
 	if err != nil || !proto[1].scalar(1, false) {
-		return tuple, errSyntheticConntrack
+		return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 	}
 	tuple.Protocol = proto[1].data[0]
 	for k, value := range proto {
@@ -332,10 +374,10 @@ func decodeSyntheticCTTuple(v syntheticCTAttr) (syntheticCTTuple, error) {
 		case 2, 3, 4, 7:
 			size = 2
 		default:
-			return tuple, errSyntheticConntrack
+			return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 		}
 		if !value.scalar(size, size == 2) {
-			return tuple, errSyntheticConntrack
+			return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 		}
 		if k == 2 {
 			tuple.SourcePort = binary.BigEndian.Uint16(value.data)
@@ -353,12 +395,12 @@ func decodeSyntheticCTTuple(v syntheticCTAttr) (syntheticCTTuple, error) {
 	}
 	if tuple.Protocol == 6 || tuple.Protocol == 17 {
 		if len(proto) != 3 || !proto[2].scalar(2, true) || !proto[3].scalar(2, true) {
-			return tuple, errSyntheticConntrack
+			return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 		}
 	}
 	if zone, ok := a[3]; ok {
 		if !zone.scalar(2, true) {
-			return tuple, errSyntheticConntrack
+			return tuple, syntheticCTFailure(syntheticCTTupleShape, err)
 		}
 		tuple.Zone = binary.BigEndian.Uint16(zone.data)
 	}
