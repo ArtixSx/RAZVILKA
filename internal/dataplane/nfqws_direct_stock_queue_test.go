@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 // Explicit complete-inventory models only: these tests neither capture a
@@ -225,8 +227,8 @@ func TestNFQWSDirectStockQueueRequiresClosedDeclaredGraph(t *testing.T) {
 		"dangling-goto":             {nfqwsDirectStockTestRow(6, "mangle", "-A", "OUTPUT", "-g", "missing")},
 		"builtin-jump":              {nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "-j", "FORWARD")},
 		"goto-target":               {nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "-g", "ACCEPT")},
-		"unknown-vendor":            {nfqwsDirectStockTestRow(4, "mangle", "-A", "PREROUTING", "-j", "NDMMARK")},
-		"unknown-conn-vendor":       {nfqwsDirectStockTestRow(6, "mangle", "-A", "OUTPUT", "-j", "CONNNDMMARK")},
+		"unknown-vendor":            {nfqwsDirectStockTestRow(4, "mangle", "-A", "PREROUTING", "-j", "UNREVIEWED_NDM")},
+		"unknown-conn-vendor":       {nfqwsDirectStockTestRow(6, "mangle", "-A", "OUTPUT", "-j", "UNREVIEWED_CONN_NDM")},
 		"unknown-option":            {nfqwsDirectStockTestRow(4, "mangle", "-A", "OUTPUT", "--unreviewed-match", "value", "-j", "RETURN")},
 		"undeclared-source":         {nfqwsDirectStockTestRow(4, "mangle", "-A", "missing", "-j", "RETURN")},
 		"duplicate-chain":           {nfqwsDirectStockTestRow(6, "mangle", "-N", "local_delay")},
@@ -479,7 +481,7 @@ func TestNFQWSDirectStockQueueWithOwnedRejectsCountScopeAndQueueDefects(t *testi
 }
 
 func TestNFQWSDirectStockQueueWithOwnedStillValidatesUntouchedGraph(t *testing.T) {
-	for _, body := range [][]string{{"-j", "local_delay"}, {"-j", "missing"}, {"-j", "NDMMARK"}} {
+	for _, body := range [][]string{{"-j", "local_delay"}, {"-j", "missing"}, {"-j", "UNREVIEWED_NDM"}} {
 		t.Run(strings.Join(body, " "), func(t *testing.T) {
 			snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
 			row := nfqwsDirectStockTestRow(4, "mangle", append([]string{"-A", owned[0].Tokens[1]}, body...)...)
@@ -491,6 +493,98 @@ func TestNFQWSDirectStockQueueWithOwnedStillValidatesUntouchedGraph(t *testing.T
 	}
 	snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
 	row := nfqwsDirectStockTestRow(4, "mangle", "-A", owned[0].Tokens[1], "-g", owned[0].Tokens[1])
+	snapshot.Rows, owned = append(snapshot.Rows, row), append(owned, row)
+	nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
+}
+
+func nfqwsDirectStockReviewedVendorFixture() BackendInventorySnapshot {
+	snapshot := nfqwsDirectStockQueueFixture()
+	snapshot.Scope.Network.Kind = netidentity.ReviewedSingleInitNet
+	snapshot.Scope.Network.Inode = 0
+	snapshot.Scope.Network.PlatformReviewSHA256 = backendNFTStockScopeSHA256
+	snapshot.NFTState, snapshot.NFTGeneration = BackendNFTNoRegisteredSubsystemAtCapture, 0
+	return snapshot
+}
+
+func TestNFQWSDirectStockQueueVendorExactReviewedProfileAndSaveVocabulary(t *testing.T) {
+	snapshot := nfqwsDirectStockReviewedVendorFixture()
+	for _, family := range []int{4, 6} {
+		for _, value := range []string{"0x0/0x0", "0x20/0x20", "0xffffffff/0xffffffff"} {
+			snapshot.Rows = append(snapshot.Rows,
+				nfqwsDirectStockTestRow(family, "mangle", "-A", "PREROUTING", "-j", "NDMMARK", "--set-xndmmark", value),
+				nfqwsDirectStockTestRow(family, "mangle", "-A", "OUTPUT", "-m", "connndmmark", "--mark", "0x20/0x20", "-j", "CONNNDMMARK", "--set-xmark", value, "-m", "comment", "--comment", "inert --save-mark --queue-balance 1:65535"),
+			)
+		}
+		snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(family, "mangle", "-A", "FORWARD", "-j", "CONNNDMMARK", "--restore-mark", "--nfmask", "0xffffffff", "--ctmask", "0x0"))
+	}
+	before := nfqwsDirectStockTestClone(snapshot)
+	expected, err := inspectNFQWSDirectStockQueues(nfqwsDirectStockQueueFixture(), 40321)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := inspectNFQWSDirectStockQueues(snapshot, 40321)
+	if err != nil || !reflect.DeepEqual(got, expected) || !reflect.DeepEqual(snapshot, before) {
+		t.Fatal("exact reviewed revision-1 vendor save vocabulary changed comparison rows", err)
+	}
+	// A valid generic inode identity still cannot borrow the vendor profile.
+	generic := nfqwsDirectStockTestClone(snapshot)
+	generic.Scope.Network = nfqwsDirectStockQueueFixture().Scope.Network
+	generic.NFTState, generic.NFTGeneration = BackendNFTEmpty, 7
+	nfqwsDirectStockTestRefused(t, generic, 40321)
+	wrong := nfqwsDirectStockTestClone(snapshot)
+	wrong.Scope.Network.PlatformReviewSHA256 = strings.Repeat("b", 64)
+	nfqwsDirectStockTestRefused(t, wrong, 40321)
+	// Mark updates and match values do not establish absent reachability.
+	snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "FORWARD", "-m", "ndmmark", "!", "--ndmmark", "0x4/0x4", "-j", "local_bridge"))
+	nfqwsDirectStockTestRefused(t, snapshot, 40321)
+}
+
+func TestNFQWSDirectStockQueueVendorRejectsNoncanonicalOrUnknownABI(t *testing.T) {
+	cases := map[string][]string{
+		"ndm-standard-flag":      {"-j", "NDMMARK", "--set-xmark", "0x1/0x1"},
+		"conn-vendor-flag":       {"-j", "CONNNDMMARK", "--set-xndmmark", "0x1/0x1"},
+		"ndm-cli-alias":          {"-j", "NDMMARK", "--set-ndmmark", "0x1/0x1"},
+		"conn-cli-alias":         {"-j", "CONNNDMMARK", "--set-mark", "0x1/0x1"},
+		"unknown-save-mode":      {"-j", "CONNNDMMARK", "--save-mark"},
+		"restore-missing-masks":  {"-j", "CONNNDMMARK", "--restore-mark"},
+		"restore-missing-ctmask": {"-j", "CONNNDMMARK", "--restore-mark", "--nfmask", "0xff"},
+		"restore-duplicate-mask": {"-j", "CONNNDMMARK", "--restore-mark", "--nfmask", "0xff", "--ctmask", "0xff", "--ctmask", "0xff"},
+		"set-plus-restore":       {"-j", "CONNNDMMARK", "--set-xmark", "0x1/0x1", "--restore-mark", "--nfmask", "0xff", "--ctmask", "0xff"},
+		"duplicate-set":          {"-j", "NDMMARK", "--set-xndmmark", "0x1/0x1", "--set-xndmmark", "0x2/0x2"},
+		"missing-option":         {"-j", "NDMMARK"},
+		"missing-mask":           {"-j", "NDMMARK", "--set-xndmmark", "0x1"},
+		"overflow-mark":          {"-j", "NDMMARK", "--set-xndmmark", "0x100000000/0xffffffff"},
+		"overflow-mask":          {"-j", "CONNNDMMARK", "--set-xmark", "0x1/0x100000000"},
+		"decimal-spelling":       {"-j", "NDMMARK", "--set-xndmmark", "1/1"},
+		"leading-zero":           {"-j", "NDMMARK", "--set-xndmmark", "0x01/0x1"},
+		"uppercase":              {"-j", "CONNNDMMARK", "--set-xmark", "0xA/0xff"},
+		"extra-mask":             {"-j", "NDMMARK", "--set-xndmmark", "0x1/0x1/0x1"},
+		"queue-option":           {"-j", "NDMMARK", "--set-xndmmark", "0x1/0x1", "--queue-num", "1200"},
+		"unknown-target-flag":    {"-j", "CONNNDMMARK", "--set-xmark", "0x1/0x1", "--ndm-unreviewed"},
+		"unknown-vendor-target":  {"-j", "UNREVIEWED_NDM"},
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			snapshot := nfqwsDirectStockReviewedVendorFixture()
+			snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", append([]string{"-A", "OUTPUT"}, body...)...))
+			nfqwsDirectStockTestRefused(t, snapshot, 40321)
+		})
+	}
+	for _, target := range []string{"NDMMARK", "CONNNDMMARK"} {
+		snapshot := nfqwsDirectStockReviewedVendorFixture()
+		snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-N", target))
+		nfqwsDirectStockTestRefused(t, snapshot, 40321)
+	}
+}
+
+func TestNFQWSDirectStockQueueVendorWithOwnedKeepsFullGraph(t *testing.T) {
+	snapshot, managed, owned := nfqwsDirectStockOwnedFixture(t, "ipv4")
+	snapshot.Scope, snapshot.NFTState, snapshot.NFTGeneration = nfqwsDirectStockReviewedVendorFixture().Scope, BackendNFTNoRegisteredSubsystemAtCapture, 0
+	snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", "-A", "FORWARD", "-j", "NDMMARK", "--set-xndmmark", "0x4/0x4"))
+	if rows, err := inspectNFQWSDirectStockQueuesWithOwned(snapshot, managed, owned); err != nil || len(rows) != 2 {
+		t.Fatal("reviewed vendor predicates incorrectly revoke exact owned comparison", err)
+	}
+	row := nfqwsDirectStockTestRow(4, "mangle", "-A", owned[0].Tokens[1], "-m", "connndmmark", "--mark", "0x80/0x80", "-j", "local_delay")
 	snapshot.Rows, owned = append(snapshot.Rows, row), append(owned, row)
 	nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
 }

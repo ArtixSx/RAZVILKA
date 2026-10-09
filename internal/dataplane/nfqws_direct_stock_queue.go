@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 var errNFQWSDirectStockQueue = errors.New("direct NFQ stock queue graph refused")
@@ -97,7 +99,7 @@ func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnaps
 		}
 		switch row.Tokens[0] {
 		case "-N", "-P":
-			if slices.Contains([]string{"ACCEPT", "DROP", "RETURN", "MARK", "CONNMARK", "TCPMSS", "TTL", "NFQUEUE", "QUEUE"}, chain) {
+			if slices.Contains([]string{"ACCEPT", "DROP", "RETURN", "MARK", "CONNMARK", "NDMMARK", "CONNNDMMARK", "TCPMSS", "TTL", "NFQUEUE", "QUEUE"}, chain) {
 				return refuse() // Never resolve ambiguous target/chain spellings.
 			}
 			if _, duplicate := g.chains[chain]; duplicate {
@@ -162,6 +164,14 @@ func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnaps
 		case "", "ACCEPT", "DROP", "RETURN", "MARK", "CONNMARK":
 			// No hidden chain/queue transfer. MARK and CONNMARK return
 			// XT_CONTINUE in upstream Linux v4.9 xt_mark.c/xt_connmark.c.
+		case "NDMMARK", "CONNNDMMARK":
+			// Accepted NC-1812 kernel 7b6c9477d429217042117fbfa3d2e9894a087607:
+			// xt_ndmmark.c / xt_connndmmark.c revision 1 return XT_CONTINUE;
+			// FOE_ALG_MARK and event_cache only update metadata. The caller
+			// still authenticates the original current platform/tool scope.
+			if actualComplete.Scope.Network.Kind != netidentity.ReviewedSingleInitNet || actualComplete.Scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256 {
+				return refuse()
+			}
 		case "TCPMSS":
 			// Linux v4.9 xt_TCPMSS.c returns XT_CONTINUE or NF_DROP,
 			// never a queue verdict or a hidden chain transfer.
@@ -257,6 +267,7 @@ func nfqwsDirectStockOtherTableQueue(fields []string) bool {
 func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error) {
 	var a nfqwsDirectStockAction
 	markOptions, connmarkOptions := false, false
+	ndmOptions := false
 	ttlOptions, mssOptions := 0, 0
 	for i := 2; i < len(fields); i++ {
 		option := fields[i]
@@ -296,6 +307,8 @@ func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error)
 		case "-p", "-s", "-d", "-i", "-o", "-m", "--mark", "--ndmmark", "--ctstate", "--state", "--dport", "--sport", "--dports", "--sports", "--icmp-type", "--icmpv6-type", "--mac-source", "--limit", "--limit-burst":
 		case "--set-mark", "--set-xmark", "--or-mark", "--xor-mark", "--and-mark":
 			markOptions = true
+		case "--set-xndmmark":
+			ndmOptions = true
 		case "--nfmask", "--ctmask":
 			connmarkOptions = true
 		case "--ttl-set", "--ttl-inc", "--ttl-dec":
@@ -324,13 +337,72 @@ func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error)
 		}
 		i += arity
 	}
-	if a.queue != nil && a.target != "NFQUEUE" || a.target == "NFQUEUE" && a.queue == nil || markOptions && a.target != "MARK" && a.target != "CONNMARK" || connmarkOptions && a.target != "CONNMARK" {
+	if a.queue != nil && a.target != "NFQUEUE" || a.target == "NFQUEUE" && a.queue == nil || markOptions && a.target != "MARK" && a.target != "CONNMARK" && a.target != "CONNNDMMARK" || connmarkOptions && a.target != "CONNMARK" && a.target != "CONNNDMMARK" || ndmOptions && a.target != "NDMMARK" {
 		return a, errNFQWSDirectStockQueue
 	}
 	if ttlOptions > 1 || ttlOptions != 0 && a.target != "TTL" || a.target == "TTL" && ttlOptions != 1 || mssOptions > 1 || mssOptions != 0 && a.target != "TCPMSS" || a.target == "TCPMSS" && mssOptions != 1 {
 		return a, errNFQWSDirectStockQueue
 	}
+	if (a.target == "NDMMARK" || a.target == "CONNNDMMARK") && !nfqwsDirectStockVendorOptions(fields, a.target) {
+		return a, errNFQWSDirectStockQueue
+	}
 	return a, nil
+}
+
+// Exact canonical -S target vocabulary from accepted SDK
+// 1d58c10c46e270d6876836e5455fa4e9b786ad1e package/system/iptables/patches/
+// 920-xt_ndmmark.patch and 930-xt_conndmmark.patch, both revision 1/u32 ABI.
+// Values are shape-checked only; mark effects never prune a graph edge.
+func nfqwsDirectStockVendorOptions(fields []string, target string) bool {
+	options := map[string]string{}
+	for i := 2; i < len(fields); i++ {
+		if fields[i] == "--comment" {
+			i++
+			continue
+		}
+		option := fields[i]
+		switch option {
+		case "--set-xndmmark", "--set-mark", "--set-xmark", "--or-mark", "--xor-mark", "--and-mark", "--save-mark", "--restore-mark", "--nfmask", "--ctmask":
+		default:
+			continue
+		}
+		if _, duplicate := options[option]; duplicate {
+			return false
+		}
+		if target == "NDMMARK" && option != "--set-xndmmark" || target == "CONNNDMMARK" && option != "--set-xmark" && option != "--restore-mark" && option != "--nfmask" && option != "--ctmask" {
+			return false
+		}
+		if option == "--restore-mark" {
+			options[option] = ""
+		} else {
+			if i+1 >= len(fields) {
+				return false
+			}
+			i++
+			options[option] = fields[i]
+		}
+	}
+	if target == "NDMMARK" {
+		return len(options) == 1 && nfqwsDirectStockMarkMask32(options["--set-xndmmark"])
+	}
+	if value, set := options["--set-xmark"]; set {
+		return len(options) == 1 && nfqwsDirectStockMarkMask32(value)
+	}
+	_, restore := options["--restore-mark"]
+	return len(options) == 3 && restore && nfqwsDirectStockHex32(options["--nfmask"]) && nfqwsDirectStockHex32(options["--ctmask"])
+}
+
+func nfqwsDirectStockMarkMask32(value string) bool {
+	mark, mask, pair := strings.Cut(value, "/")
+	return pair && nfqwsDirectStockHex32(mark) && nfqwsDirectStockHex32(mask)
+}
+
+func nfqwsDirectStockHex32(value string) bool {
+	if !strings.HasPrefix(value, "0x") {
+		return false
+	}
+	n, err := strconv.ParseUint(value[2:], 16, 32)
+	return err == nil && value == "0x"+strconv.FormatUint(n, 16)
 }
 
 func nfqwsDirectStockChain(value string) bool {
