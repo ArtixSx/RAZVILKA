@@ -29,6 +29,15 @@ func (listXraySourceTransport) RoundTrip(req *http.Request) (*http.Response, err
 	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/plain"}}, Body: io.NopCloser(strings.NewReader("# local wire fixture\n8.8.8.0/24\n1.1.1.0/24\n")), Request: req}, nil
 }
 
+type listXraySourceRejectedTransport struct{ unavailable bool }
+
+func (tr listXraySourceRejectedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if tr.unavailable {
+		return nil, errors.New("local fixture source unavailable")
+	}
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html"}}, Body: io.NopCloser(strings.NewReader("<html>rejected replacement 9.9.9.0/24</html>")), Request: req}, nil
+}
+
 type listXraySourceFixture struct {
 	a                   *App
 	scope               *ListScopeBinding
@@ -350,6 +359,49 @@ func TestListXraySourceObservedChangesRevokePermanently(t *testing.T) {
 				restore()
 				if _, err := r.Observation(ctx); err == nil {
 					t.Fatal("restored tuple revived invalid source")
+				}
+			})
+		})
+	}
+}
+
+func TestListXraySourceFailedRefreshKeepsSameCanonicalNodeAndScope(t *testing.T) {
+	for _, unavailable := range []bool{true, false} {
+		t.Run(map[bool]string{true: "unavailable", false: "rejected-bytes"}[unavailable], func(t *testing.T) {
+			f := newListXraySourceFixture(t, "xray")
+			listScopeOperation(t, f.a, func(ctx context.Context) {
+				r := f.review(t, ctx)
+				original, err := r.Observation(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				path := filepath.Join(f.cache, "reviewed-networks.cache.json")
+				before, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.a.Sources.SetHTTPClient(&http.Client{Transport: listXraySourceRejectedTransport{unavailable: unavailable}})
+				if err := f.a.Sources.Refresh(ctx, "reviewed-networks"); err == nil {
+					t.Fatal("bad refresh accepted")
+				}
+				if err := r.Current(ctx); err != nil {
+					t.Fatal("refresh failure revoked original App source", err)
+				}
+				o, err := r.Observation(ctx)
+				if err != nil || !reflect.DeepEqual(o, original) {
+					t.Fatal("failure changed source/node/scope or renewed expiry", err)
+				}
+				fresh := f.review(t, ctx)
+				o, err = fresh.Observation(ctx)
+				if err != nil || !reflect.DeepEqual(o, original) {
+					t.Fatal("new App capture refused or renewed unchanged LKG", err)
+				}
+				after, err := os.ReadFile(path)
+				if err != nil || string(after) != string(before) {
+					t.Fatal("rejected bytes replaced accepted list", err)
+				}
+				if f.physical.closes != 0 {
+					t.Fatal("candidate failure retired shared scope")
 				}
 			})
 		})

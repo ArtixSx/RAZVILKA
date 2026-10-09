@@ -141,7 +141,9 @@ func (m *Manager) ReviewServiceCIDRs(ctx context.Context, serviceID string, sour
 }
 
 // Called with the original Manager read lock. Draft-only edits do not change
-// the applied set. Each selected entry must be actual fresh schema-2 state.
+// the applied set. A failed candidate refresh may retain verified schema-2 LKG
+// state. readFile still validates its SAME cache and original expiry; a failure
+// timestamp/error is never a new content revision or a freshness extension.
 func (r *ServiceCIDRReview) appliedSourcesLocked() ([]Source, error) {
 	if r.manager.cacheDir != r.root {
 		return nil, ErrServiceCIDRReview
@@ -155,7 +157,9 @@ func (r *ServiceCIDRReview) appliedSourcesLocked() ([]Source, error) {
 			return nil, ErrServiceCIDRReview
 		}
 		state := currentState(r.manager.states[src.ID], time.Now())
-		if !state.Ready || state.LegacyCache || state.LastKnownGood || state.CacheStatus != "fresh" || state.LastError != "" {
+		fresh := state.CacheStatus == "fresh" && !state.LastKnownGood && state.LastError == ""
+		retained := state.CacheStatus == "last-known-good" && state.LastKnownGood && state.LastError != ""
+		if !state.Ready || state.LegacyCache || !fresh && !retained {
 			return nil, ErrServiceCIDRReview
 		}
 		src.Services, src.RedirectHosts = slices.Clone(src.Services), slices.Clone(src.RedirectHosts)
@@ -243,7 +247,7 @@ func (r *ServiceCIDRReview) readFile(ctx context.Context, src Source) (serviceRe
 	if state.SHA256 != c.SHA256 || !state.UpdatedAt.Equal(c.FetchedAt) || !state.ExpiresAt.Equal(c.ExpiresAt) || state.Provenance == nil || !reflect.DeepEqual(*state.Provenance, c.Provenance) {
 		return serviceReviewFile{}, ErrServiceCIDRReview
 	}
-	if err := r.quarantine(src, c.FetchedAt); err != nil {
+	if err := r.quarantine(src); err != nil {
 		return serviceReviewFile{}, err
 	}
 	actual, err := r.owned.Stat(name)
@@ -256,13 +260,17 @@ func (r *ServiceCIDRReview) readFile(ctx context.Context, src Source) (serviceRe
 	return serviceReviewFile{src, c, info, contentHash(data)}, nil
 }
 
-func (r *ServiceCIDRReview) quarantine(src Source, fetched time.Time) error {
+// Quarantine describes a rejected candidate, not the retained cache. A newer
+// well-formed failure record cannot revoke unchanged verified LKG content.
+// Keep strict source/schema/metadata validation and the existing five-minute
+// metadata clock bound; cache freshness is independently checked above.
+func (r *ServiceCIDRReview) quarantine(src Source) error {
 	data, err := r.owned.ReadLimited(src.ID+".quarantine.json", 8192)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	var q quarantineDocument
-	if err != nil || serviceReviewDecode(data, &q) != nil || q.Schema != 2 || q.SourceHash != sourceHash(src) || q.CheckedAt.IsZero() || q.CheckedAt.After(fetched) {
+	if err != nil || serviceReviewDecode(data, &q) != nil || q.Schema != 2 || q.SourceHash != sourceHash(src) || q.CheckedAt.IsZero() || q.CheckedAt.After(time.Now().Add(5*time.Minute)) {
 		return ErrServiceCIDRReview
 	}
 	return nil
@@ -335,6 +343,10 @@ func serviceReviewContext(ctx context.Context) error {
 	return nil
 }
 
+// Current permits the unchanged validated cache through its ORIGINAL expiry,
+// including candidate refresh failure. Expired/changed caches cannot authorize
+// forward work. This reader performs no runtime retirement or traffic mutation;
+// already-installed policy retention belongs to its actual runtime owner.
 func (r *ServiceCIDRReview) Current(ctx context.Context) error {
 	if r == nil || r.self != r {
 		return ErrServiceCIDRReview

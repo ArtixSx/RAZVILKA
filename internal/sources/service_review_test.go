@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,9 +17,12 @@ import (
 
 // Actual Source Manager/Refresh/cache/registry objects. The HTTP response is a
 // local wire fixture, not online provenance or a router/transport acceptance.
-func serviceCIDRFixture(t *testing.T) (*Manager, Source, context.Context) {
+func serviceCIDRFixture(t *testing.T, pinned ...bool) (*Manager, Source, context.Context) {
 	t.Helper()
 	s := Source{ID: "reviewed-networks", Name: "Reviewed networks", Kind: "cidrs", URL: "https://source.example/networks", Enabled: true, Services: []string{"listed"}, MinEntries: 2, TTLHours: 1, TrustTier: "official"}
+	if len(pinned) > 0 && pinned[0] {
+		s.ExpectedSHA256 = contentHash([]byte("# received wire\n8.8.8.0/24\n1.1.1.0/24\n"))
+	}
 	m := NewManager(Registry{Schema: 2, Sources: []Source{s}}, t.TempDir())
 	m.SetHTTPClient(listClient("# received wire\n8.8.8.0/24\n1.1.1.0/24\n", "text/plain"))
 	if err := m.Refresh(context.Background(), s.ID); err != nil {
@@ -75,7 +80,7 @@ func TestServiceCIDRReviewOriginalAppliedRevisionAndDetachedObservation(t *testi
 }
 
 func TestServiceCIDRReviewChangedRevisionIsSticky(t *testing.T) {
-	for _, kind := range []string{"same-content-refresh", "disable", "registry", "raw-sha", "quarantine", "root", "ancestor"} {
+	for _, kind := range []string{"same-content-refresh", "disable", "registry", "raw-sha", "unsafe-quarantine", "root", "ancestor"} {
 		t.Run(kind, func(t *testing.T) {
 			m, s, ctx := serviceCIDRFixture(t)
 			// Nest a cache so ancestor incarnation can change independently.
@@ -124,8 +129,8 @@ func TestServiceCIDRReviewChangedRevisionIsSticky(t *testing.T) {
 				if err := os.WriteFile(path, data, 0600); err != nil {
 					t.Fatal(err)
 				}
-			case "quarantine":
-				q := quarantineDocument{Schema: 2, SourceHash: sourceHash(s), CheckedAt: time.Now(), Reason: "invalid-response"}
+			case "unsafe-quarantine":
+				q := quarantineDocument{Schema: 2, SourceHash: strings.Repeat("b", 64), CheckedAt: time.Now(), Reason: "invalid-response"}
 				data, _ := json.Marshal(q)
 				if err := os.WriteFile(filepath.Join(m.cacheDir, s.ID+".quarantine.json"), data, 0600); err != nil {
 					t.Fatal(err)
@@ -168,6 +173,104 @@ func TestServiceCIDRReviewChangedRevisionIsSticky(t *testing.T) {
 			}
 			if err := r.Current(ctx); !errors.Is(err, ErrServiceCIDRReview) {
 				t.Fatal("restored tuple revived poisoned review", kind, err)
+			}
+		})
+	}
+}
+
+func TestServiceCIDRReviewFailedRefreshRetainsOriginalVerifiedLKG(t *testing.T) {
+	for _, failure := range []string{"transport", "http", "html", "pin", "insufficient", "unapproved-final-origin"} {
+		t.Run(failure, func(t *testing.T) {
+			m, src, ctx := serviceCIDRFixture(t, failure == "pin")
+			r, err := m.ReviewServiceCIDRs(ctx, "listed", []string{src.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			original, err := r.Observation(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(m.cacheDir, src.ID+".cache.json")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate := "9.9.9.0/24\n4.4.4.0/24\n"
+			client := listClient(candidate, "text/plain")
+			switch failure {
+			case "transport":
+				client = &http.Client{Transport: fixtureTransport(func(*http.Request) (*http.Response, error) {
+					return nil, errors.New("local fixture transport unavailable")
+				})}
+			case "http":
+				client = &http.Client{Transport: fixtureTransport(func(req *http.Request) (*http.Response, error) {
+					return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(candidate)), Request: req}, nil
+				})}
+			case "html":
+				client = listClient("<html>9.9.9.0/24</html>", "text/html")
+			case "insufficient":
+				client = listClient("9.9.9.0/24\ninvalid\n", "text/plain")
+			case "unapproved-final-origin":
+				client = &http.Client{Transport: fixtureTransport(func(req *http.Request) (*http.Response, error) {
+					foreign, _ := http.NewRequest(http.MethodGet, "https://foreign.example/networks", nil)
+					return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/plain"}}, Body: io.NopCloser(strings.NewReader(candidate)), Request: foreign}, nil
+				})}
+			}
+			m.SetHTTPClient(client)
+			if err := m.Refresh(ctx, src.ID); err == nil {
+				t.Fatal("rejected candidate accepted")
+			}
+			state := m.List()[0]
+			if !state.Ready || !state.LastKnownGood || state.CacheStatus != "last-known-good" || state.LastError == "" {
+				t.Fatal("fixture did not retain verified LKG", state)
+			}
+			after, err := os.ReadFile(path)
+			actualInfo, statErr := os.Stat(path)
+			if err != nil || statErr != nil || string(after) != string(before) || !os.SameFile(info, actualInfo) {
+				t.Fatal("failure adopted rejected cache bytes", err, statErr)
+			}
+			if err := r.Current(ctx); err != nil {
+				t.Fatal("failure revoked original unexpired cache", err)
+			}
+			observation, err := r.Observation(ctx)
+			if err != nil || !reflect.DeepEqual(observation, original) {
+				t.Fatal("failure renewed or changed canonical revision", observation, err)
+			}
+			if !m.AutomaticUseReady([]string{"listed"}) {
+				t.Fatal("verified LKG blocked existing cache reuse")
+			}
+			_, entries := m.EntriesForService("listed")
+			if !reflect.DeepEqual(entries, original.CIDRs) {
+				t.Fatal("rejected response entered lists", entries)
+			}
+			for _, actual := range []*Manager{m, NewManager(m.reg, m.cacheDir)} {
+				fresh, err := actual.ReviewServiceCIDRs(ctx, "listed", []string{src.ID})
+				if err != nil {
+					t.Fatal("new review refused unchanged verified LKG", err)
+				}
+				o, err := fresh.Observation(ctx)
+				_ = fresh.Close()
+				if err != nil || !reflect.DeepEqual(o, original) {
+					t.Fatal("restart/new capture renewed LKG", err)
+				}
+			}
+			// LKG status never permits changed cache provenance or bytes.
+			var changed cacheDocument
+			if json.Unmarshal(before, &changed) != nil {
+				t.Fatal("fixture cache")
+			}
+			changed.Provenance.RawSHA256 = strings.Repeat("b", 64)
+			data, _ := json.Marshal(changed)
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Current(ctx); !errors.Is(err, ErrServiceCIDRReview) {
+				t.Fatal("LKG admitted changed provenance", err)
 			}
 		})
 	}
@@ -271,11 +374,24 @@ func TestServiceCIDRReviewExpiresWithoutFileOrSettingsChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
+	m.SetHTTPClient(listClient("<html>rejected new bytes</html>", "text/html"))
+	if err := m.Refresh(ctx, s.ID); err == nil {
+		t.Fatal("bad candidate accepted")
+	}
+	if err := r.Current(ctx); err != nil {
+		t.Fatal("failure revoked cache before its original expiry", err)
+	}
 	deadline, cancel := context.WithDeadline(ctx, cache.ExpiresAt)
 	defer cancel()
 	<-deadline.Done()
 	if err := r.Current(ctx); !errors.Is(err, ErrServiceCIDRReview) {
 		t.Fatal("expired immutable source survived", err)
+	}
+	if fresh, err := m.ReviewServiceCIDRs(ctx, "listed", []string{s.ID}); fresh != nil || !errors.Is(err, ErrServiceCIDRReview) {
+		if fresh != nil {
+			_ = fresh.Close()
+		}
+		t.Fatal("failed refresh extended expiry for a new review", err)
 	}
 	after, _ := os.ReadFile(path)
 	if string(after) != string(data) {
