@@ -588,3 +588,38 @@ func TestNFQWSDirectStockQueueVendorWithOwnedKeepsFullGraph(t *testing.T) {
 	snapshot.Rows, owned = append(snapshot.Rows, row), append(owned, row)
 	nfqwsDirectStockOwnedRefused(t, snapshot, managed, owned)
 }
+
+func TestNFQWSDirectStockQueueReviewedMatcherVocabularyNeverPrunesEdges(t *testing.T) {
+	for _, family := range []int{4, 6} {
+		snapshot := nfqwsDirectStockReviewedVendorFixture()
+		body := []string{"-m", "connskip", "--connskip", "4294967295", "-m", "set", "!", "--match-set", "stock_set", "src,dst", "--return-nomatch", "!", "--update-counters", "!", "--update-subcounters", "-p", "tcp", "-m", "tls", "!", "--tls-sni", "*.example.invalid", "-j", "local_bridge"}
+		snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(family, "mangle", append([]string{"-A", "OUTPUT"}, body...)...))
+		before := nfqwsDirectStockTestClone(snapshot)
+		if rows, err := inspectNFQWSDirectStockQueues(snapshot, 40321); err != nil || len(rows) != 2 || !reflect.DeepEqual(snapshot, before) {
+			t.Fatal("reviewed matcher save grammar refused or changed untouched capture", err)
+		}
+		generic := nfqwsDirectStockTestClone(snapshot)
+		generic.Scope.Network = nfqwsDirectStockQueueFixture().Scope.Network
+		generic.NFTState, generic.NFTGeneration = BackendNFTEmpty, 7
+		nfqwsDirectStockTestRefused(t, generic, 40321)
+		snapshot.Rows[len(snapshot.Rows)-1].Tokens[1] = "FORWARD"
+		nfqwsDirectStockTestRefused(t, snapshot, 40321)
+	}
+}
+
+func TestNFQWSDirectStockQueueMatcherRejectsUnknownAndNoncanonicalSyntax(t *testing.T) {
+	for _, body := range [][]string{
+		{"--connskip"}, {"--connskip", "4294967296"}, {"--connskip", "01"}, {"!", "--connskip", "1"},
+		{"--tls-sni"}, {"--tls-sni", "*.invalid", "--tls-esni"},
+		{"--match-set", "stock_set"}, {"--match-set", "stock_set", "-j", "RETURN"},
+		{"!", "--return-nomatch"}, {"--update-counters"}, {"--update-subcounters"},
+		{"!", "--update-counters", "1"}, {"!", "!", "--update-subcounters"},
+		{"--unknown-matcher", "1"}, {"--match-set", "stock_set", "src", "--unknown-set-mode"},
+	} {
+		t.Run(strings.Join(body, " "), func(t *testing.T) {
+			snapshot := nfqwsDirectStockReviewedVendorFixture()
+			snapshot.Rows = append(snapshot.Rows, nfqwsDirectStockTestRow(4, "mangle", append([]string{"-A", "OUTPUT"}, body...)...))
+			nfqwsDirectStockTestRefused(t, snapshot, 40321)
+		})
+	}
+}

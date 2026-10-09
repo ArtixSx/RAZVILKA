@@ -20,9 +20,10 @@ type nfqwsDirectStockGraph struct {
 }
 
 type nfqwsDirectStockAction struct {
-	target    string
-	gotoChain bool
-	queue     *uint16
+	target      string
+	gotoChain   bool
+	queue       *uint16
+	vendorMatch bool
 }
 
 type nfqwsDirectStockRowKey struct {
@@ -144,6 +145,9 @@ func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnaps
 		}
 		action, err := nfqwsDirectStockRuleAction(row.Tokens)
 		if err != nil {
+			return refuse()
+		}
+		if action.vendorMatch && (actualComplete.Scope.Network.Kind != netidentity.ReviewedSingleInitNet || actualComplete.Scope.Network.PlatformReviewSHA256 != backendNFTStockScopeSHA256) {
 			return refuse()
 		}
 		g := graphs[row.Family]
@@ -282,7 +286,7 @@ func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error)
 			return a, errNFQWSDirectStockQueue
 		}
 		if option == "!" {
-			if i+1 >= len(fields) || !slices.Contains([]string{"-p", "-s", "-d", "-i", "-o", "--mark", "--ndmmark", "--ctstate", "--state", "--dport", "--sport", "--dports", "--sports", "--icmp-type", "--icmpv6-type", "--mac-source", "--tcp-flags", "--syn"}, fields[i+1]) {
+			if i+1 >= len(fields) || !slices.Contains([]string{"-p", "-s", "-d", "-i", "-o", "--mark", "--ndmmark", "--ctstate", "--state", "--dport", "--sport", "--dports", "--sports", "--icmp-type", "--icmpv6-type", "--mac-source", "--tcp-flags", "--syn", "--match-set", "--tls-sni", "--update-counters", "--update-subcounters"}, fields[i+1]) {
 				return a, errNFQWSDirectStockQueue
 			}
 			continue
@@ -305,6 +309,32 @@ func nfqwsDirectStockRuleAction(fields []string) (nfqwsDirectStockAction, error)
 			queue := uint16(n)
 			a.queue = &queue
 		case "-p", "-s", "-d", "-i", "-o", "-m", "--mark", "--ndmmark", "--ctstate", "--state", "--dport", "--sport", "--dports", "--sports", "--icmp-type", "--icmpv6-type", "--mac-source", "--limit", "--limit-burst":
+		case "--connskip", "--tls-sni":
+			// Accepted SDK 940-xt_connskip.patch / 960-xt_tls.patch.
+			// The pinned kernel's matches return bool (TLS may hotdrop),
+			// never a hidden queue/chain verdict. Values prune no edge.
+			a.vendorMatch = true
+			if option == "--connskip" {
+				if i+1 >= len(fields) {
+					return a, errNFQWSDirectStockQueue
+				}
+				n, err := strconv.ParseUint(fields[i+1], 10, 32)
+				if err != nil || strconv.FormatUint(n, 10) != fields[i+1] {
+					return a, errNFQWSDirectStockQueue
+				}
+			}
+		case "--match-set":
+			// iptables 1.8.2 libxt_set.c save grammar; xt_set.c's
+			// corresponding matches are bool, including counter updates.
+			arity = 2
+		case "--return-nomatch":
+			arity = 0
+		case "--update-counters", "--update-subcounters":
+			// -S only prints these when the update is disabled, with !.
+			if i == 2 || fields[i-1] != "!" {
+				return a, errNFQWSDirectStockQueue
+			}
+			arity = 0
 		case "--set-mark", "--set-xmark", "--or-mark", "--xor-mark", "--and-mark":
 			markOptions = true
 		case "--set-xndmmark":
