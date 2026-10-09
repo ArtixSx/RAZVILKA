@@ -11,6 +11,7 @@ import (
 )
 
 const externalOld193InstallerRole = "external-old193-installer"
+const bootstrapOfflineAction = "bootstrap-offline"
 
 var ErrInstallerControllerRole = errors.New("self update controller has no current verified installer role")
 
@@ -20,6 +21,7 @@ func bootstrapDecimal(value uint64) string { return strconv.FormatUint(value, 10
 // remains the source/rollback image; its bytes never acquire a reader ABI.
 type fileBootstrapBinding struct {
 	Role          string `json:"role"`
+	Mode          string `json:"mode"`
 	HelperSHA256  string `json:"helper_sha256"`
 	ArchivePath   string `json:"archive_path"`
 	ArchiveSHA256 string `json:"archive_sha256"`
@@ -30,12 +32,37 @@ func validFileReviewOwner(review fileReview, record updateRecord) bool {
 		return review.Bootstrap == nil
 	}
 	b := review.Bootstrap
-	return review.Schema == selfupdatejournal.PairedSchema && b != nil && b.Role == externalOld193InstallerRole &&
+	return review.Schema == selfupdatejournal.PairedSchema && b != nil && b.Role == externalOld193InstallerRole && (b.Mode == "live" || b.Mode == "offline") &&
 		review.OldVersion == "0.19.3" && b.HelperSHA256 != review.OldExecutableSHA256 && record.Job.Release != nil &&
 		validDigest("sha256:"+b.HelperSHA256) && b.HelperSHA256 == strings.TrimPrefix(record.Job.Release.Binary.Digest, "sha256:") &&
 		b.HelperSHA256 == record.Files["dist/"+record.Job.Release.Binary.Name] &&
 		filepath.IsAbs(b.ArchivePath) && filepath.Clean(b.ArchivePath) == b.ArchivePath &&
 		validDigest("sha256:"+b.ArchiveSHA256) && "sha256:"+b.ArchiveSHA256 == record.Job.Release.Archive.Digest && review.JournalReaders == nil
+}
+
+func fileInstallAuthority(review fileReview) string {
+	if review.Bootstrap != nil && review.Bootstrap.Mode == "offline" {
+		return bootstrapOfflineAction
+	}
+	return "start/live"
+}
+
+func fileCommandAuthorityForReview(review fileReview, command string) string {
+	if review.Bootstrap != nil && review.Bootstrap.Mode == "offline" {
+		switch command {
+		case "stop-old-panel", "prepare-private-state", "quiesce-old-runtime":
+			return bootstrapOfflineAction
+		}
+	}
+	return fileCommandAuthority(command)
+}
+
+func (a *SelfUpdateFileAdapter) checkFileCommandStop(ctx context.Context, id, command string) error {
+	_, review, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return err
+	}
+	return a.checkStop(ctx, id, fileCommandAuthorityForReview(review, command))
 }
 
 // VerifyInstallerControllerRole is a read-only classification for the native

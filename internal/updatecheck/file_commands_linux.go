@@ -273,7 +273,7 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if _, err := a.helperIdentity(id, review); err != nil {
 		return err
 	}
-	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthority(command)); err != nil {
+	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
 	root, err := a.commandRoot(id)
@@ -324,10 +324,10 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthority(command)); err != nil {
+	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
-	admissionErr := a.EffectAdmission(ctx, id, fileCommandAuthority(command), "command-worker-"+command, worker.Start)
+	admissionErr := a.EffectAdmission(ctx, id, fileCommandAuthorityForReview(review, command), "command-worker-"+command, worker.Start)
 	if worker.Process == nil {
 		if admissionErr != nil {
 			return admissionErr
@@ -341,7 +341,44 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 		identityErr = ErrFileProtocol
 	}
 	done := make(chan error, 1)
-	go func() { done <- worker.Wait() }()
+	joined := make(chan struct{})
+	var supervisorWaitErr error
+	go func() {
+		supervisorWaitErr = worker.Wait()
+		done <- supervisorWaitErr
+		close(joined)
+	}()
+	if a.bootstrapCommandWait != nil {
+		a.bootstrapCommandWait(command, func(c context.Context) error {
+			select {
+			case <-joined:
+			case <-c.Done():
+				return errors.Join(ErrFileCommandUnsettled, c.Err())
+			}
+			if supervisorWaitErr != nil {
+				return errors.Join(ErrFileCommandUnsettled, supervisorWaitErr)
+			}
+			if identityErr != nil || !validFileProcess(supervisor) {
+				return errors.Join(ErrFileCommandUnsettled, identityErr)
+			}
+			currentRoot, err := a.commandRoot(id)
+			if err != nil {
+				return errors.Join(ErrFileCommandUnsettled, err)
+			}
+			defer currentRoot.Close()
+			r, err := readFileCommand(currentRoot, id, command)
+			if err != nil || r.Parent != parent || r.Supervisor != supervisor {
+				return errors.Join(ErrFileCommandUnsettled, err)
+			}
+			if r.State == "runtime-handed-off" && command == "start-candidate-panel" {
+				return c.Err() // Actual supervisor Wait; live runtime deliberately handed off.
+			}
+			if (r.State != "reaped" && r.State != "not-started") || !r.WaitECHILD {
+				return ErrFileCommandUnsettled
+			}
+			return c.Err()
+		})
+	}
 	cleanup := func(cause error) error {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -452,7 +489,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 				cancel()
 				return
 			case <-tick.C:
-				if a.checkStop(ctx, id, fileCommandAuthority(command)) != nil {
+				if a.checkFileCommandStop(ctx, id, command) != nil {
 					cancel()
 					return
 				}
@@ -463,7 +500,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	if err != nil {
 		return err
 	}
-	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthority(command)); err != nil {
+	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
 	root, err := a.commandRoot(id)
@@ -594,10 +631,10 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	if start {
 		cmd.Env = append(cmd.Env, "RAZVILKA_SELF_UPDATE_JOB="+id, "RAZVILKA_SELF_UPDATE_HELPER_PID="+strconv.Itoa(os.Getpid()))
 	}
-	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthority(command)); err != nil {
+	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
-	if err := a.EffectAdmission(ctx, id, fileCommandAuthority(command), "command-child-"+command, cmd.Start); err != nil {
+	if err := a.EffectAdmission(ctx, id, fileCommandAuthorityForReview(review, command), "command-child-"+command, cmd.Start); err != nil {
 		if cmd.Process == nil {
 			return err
 		}
@@ -621,7 +658,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		}
 		if !cleanup && time.Now().After(nextStopCheck) {
 			nextStopCheck = time.Now().Add(250 * time.Millisecond)
-			if err := a.checkStop(ctx, id, fileCommandAuthority(command)); err != nil {
+			if err := a.checkFileCommandStop(ctx, id, command); err != nil {
 				cleanup = true
 				cancel()
 			}
@@ -1012,7 +1049,7 @@ func (a *SelfUpdateFileAdapter) RuntimeQuiesceAuthority(ctx context.Context, id 
 		}
 	}
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		if err := a.AuthorityAction(ctx, id, revision, "stop-owned"); err != nil {
+		if err := a.AuthorityAction(ctx, id, revision, fileCommandAuthorityForReview(review, "quiesce-old-runtime")); err != nil {
 			return err
 		}
 		store, err := a.OpenFileJournal()
@@ -1034,7 +1071,7 @@ func (a *SelfUpdateFileAdapter) RuntimeQuiesceAuthority(ctx context.Context, id 
 			if err != nil || birthErr != nil || r.DirectPID != self.PID || parent != workerPID || self.Boot != r.Supervisor.Boot || self.ExecutableSHA256 != reviewedHelperSHA(review) {
 				return ErrFileProtocol
 			}
-			return a.AuthorityAction(ctx, id, revision, "stop-owned")
+			return a.AuthorityAction(ctx, id, revision, fileCommandAuthorityForReview(review, "quiesce-old-runtime"))
 		}
 		select {
 		case <-ctx.Done():

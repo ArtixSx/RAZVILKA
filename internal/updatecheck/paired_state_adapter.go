@@ -211,11 +211,11 @@ func (a *SelfUpdateFileAdapter) SealPairedPriorState(ctx context.Context, id str
 		data, _ := json.Marshal(receipt)
 		binding := pairedPriorBinding{ID: id, ReviewSHA256: record.FileReviewSHA256, ReceiptSHA256: digestBytes(data), InstallationID: review.AuthorityInstallationID, Sequence: review.AuthoritySequence, Revision: review.Revision}
 		digest, err := capturePairedPriorState(ctx, a.installation, binding, receipt, a.owned, check, func(rename func() error) error {
-			return a.EffectAdmission(ctx, id, "start/live", pairedPriorManifestEffect, rename)
+			return a.EffectAdmission(ctx, id, fileInstallAuthority(review), pairedPriorManifestEffect, rename)
 		}, nil)
 		return selfupdatejournal.PairedBinding{ManifestSHA256: digest, PreparedSHA256: binding.ReceiptSHA256, ReviewSHA256: binding.ReviewSHA256, InstallationID: binding.InstallationID, Sequence: binding.Sequence, Revision: binding.Revision}, err
 	}, func(ctx context.Context, effect string, rename func() error) error {
-		return a.EffectAdmission(ctx, id, "start/live", "paired-seal-"+effect, rename)
+		return a.EffectAdmission(ctx, id, fileInstallAuthority(review), "paired-seal-"+effect, rename)
 	})
 }
 

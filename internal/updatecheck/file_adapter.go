@@ -77,6 +77,9 @@ type SelfUpdateFileAdapter struct {
 	runtimeInactive SelfUpdateRuntimeObservation
 	// Private process observer override is used only by isolated model tests.
 	processInactive func(context.Context, fileProcess) error
+	// Only the synchronous external bootstrap retains actual exec-created
+	// Wait completions here. It never reconstructs a join from a receipt PID.
+	bootstrapCommandWait func(string, func(context.Context) error)
 }
 
 func NewSelfUpdateFileAdapterWithAuthority(stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) *SelfUpdateFileAdapter {
@@ -315,11 +318,18 @@ func stageFileReview(ctx context.Context, directory string, record updateRecord,
 // Production and isolated native fixtures use this same producer sequence.
 // Only the fixed adapter roots differ; commands and capability readers do not.
 func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error)) (string, error) {
+	return a.stageFileReviewWithBootstrap(ctx, record, authorityReview, nil)
+}
+
+func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding) (string, error) {
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "var/lib/razvilka")
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
+	}
+	if bootstrap != nil && !validFileReviewOwner(fileReview{Schema: selfupdatejournal.PairedSchema, OldVersion: record.CurrentVersion, OldExecutableSHA256: record.ExecutableHash, Bootstrap: bootstrap}, record) {
+		return "", ErrFileProtocol
 	}
 	if authorityReview == nil {
 		return "", ErrFileProtocol
@@ -349,8 +359,10 @@ func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record upda
 	if err := checkFileCapabilitiesForHistories(ctx, binary, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
 		return "", err
 	}
-	if err := checkFileCapabilitiesForHistories(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
-		return "", errors.New("current-file-controller-capability-refused")
+	if bootstrap == nil {
+		if err := checkFileCapabilitiesForHistories(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
+			return "", errors.New("current-file-controller-capability-refused")
+		}
 	}
 	if err := root.MkdirAll("staged", 0700); err != nil {
 		return "", err
@@ -387,26 +399,45 @@ func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record upda
 	if err != nil {
 		return "", err
 	}
-	if _, err := inspectFileMigration(old, staged, record.Job.ConfigRevision); err != nil {
+	if _, err := inspectFileMigrationMode(old, staged, record.Job.ConfigRevision, bootstrap != nil && bootstrap.Mode == "offline"); err != nil {
 		return "", err
 	}
 	review := fileReview{Schema: selfUpdateProtocolSchema, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
+	if bootstrap != nil {
+		binding := *bootstrap
+		review.Schema, review.Bootstrap = selfupdatejournal.PairedSchema, &binding
+	}
 	review.AuthoritySequence = authority.Sequence
 	review.AuthorityInstallationID = authority.InstallationID
 	review.OldInitSHA256, err = hashRegularFile(filepath.Join(a.installation, "etc/init.d/S99razvilka"), 256<<10)
 	if err != nil {
 		return "", err
 	}
-	if err := copyFileController(root, record.Deployment.Executable, record.ExecutableHash); err != nil {
+	controller, controllerSHA := record.Deployment.Executable, record.ExecutableHash
+	if bootstrap != nil {
+		controller, controllerSHA = binary, bootstrap.HelperSHA256
+	}
+	if err := copyFileController(root, controller, controllerSHA); err != nil {
 		return "", err
 	}
 	review.Files = reviewedFileList(jobPath, *record.Job.Release, record.Files, review.MigratedConfigSHA256)
 	// Nil proof is an explicit ineligible outcome for stopped settlement.
 	// Keeping the schema2 encoding unchanged lets the existing reader2 helper
 	// perform an ordinary live upgrade; it cannot write the new terminal3.
-	review.JournalReaders, err = a.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, a.probeJournalReader)
-	if err != nil {
-		return "", err
+	if bootstrap == nil {
+		review.JournalReaders, err = a.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, a.probeJournalReader)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// The verified external candidate is the only modern controller of
+		// this first handoff. Old0.19.3 is source evidence, never a reader2
+		// helper or stopped settlement reader. Unknown retained owners are
+		// fenced by the external producer before reaching this sequence.
+		version, err := a.probeJournalReader(ctx, review, selfupdatejournal.BinaryImage{Path: binary, SHA256: bootstrap.HelperSHA256})
+		if err != nil || version != selfupdatejournal.PairedSchema {
+			return "", errors.Join(ErrFileProtocol, err)
+		}
 	}
 	data, err := json.Marshal(review)
 	if err != nil {
@@ -582,6 +613,20 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
+	if action == bootstrapOfflineAction {
+		if effect == pairedPriorManifestEffect || effect == "paired-seal-paired-receipt" || effect == "paired-seal-paired-current" || strings.HasPrefix(effect, "install-file-") {
+			return true
+		}
+		for _, prefix := range []string{"command-worker-", "command-child-"} {
+			if strings.HasPrefix(effect, prefix) {
+				switch strings.TrimPrefix(effect, prefix) {
+				case "stop-old-panel", "prepare-private-state", "quiesce-old-runtime":
+					return true
+				}
+			}
+		}
+		return false
+	}
 	if effect == installerHelperEffect || effect == journalReaderProbeEffect || pairedFileEffect(effect) || fileLiveProbeEffect(effect) {
 		return action == "start/live"
 	}
@@ -636,7 +681,11 @@ func (a *SelfUpdateFileAdapter) Review(ctx context.Context, id string) (uint64, 
 }
 
 func (a *SelfUpdateFileAdapter) Authority(ctx context.Context, id string, revision uint64) error {
-	return a.AuthorityAction(ctx, id, revision, "start/live")
+	_, review, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return err
+	}
+	return a.AuthorityAction(ctx, id, revision, fileInstallAuthority(review))
 }
 
 // Action-sensitive authority does not clear Stop. CORE retains independent
@@ -666,7 +715,14 @@ func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, 
 		return ErrReviewChanged
 	}
 	cfg, _, err := config.InspectBytes(data)
-	if err != nil || cfg.Revision != revision || cfg.SafeMode || cfg.ServiceControl.Stopped {
+	if err != nil || cfg.Revision != revision {
+		return ErrReviewChanged
+	}
+	if action == bootstrapOfflineAction {
+		if review.Bootstrap == nil || review.Bootstrap.Mode != "offline" || !cfg.SafeMode && !cfg.ServiceControl.Stopped {
+			return ErrReviewChanged
+		}
+	} else if cfg.SafeMode || cfg.ServiceControl.Stopped {
 		return ErrReviewChanged
 	}
 	if err := a.configExclusionsCurrent(ctx, review, data); err != nil {
@@ -686,7 +742,7 @@ func (a *SelfUpdateFileAdapter) checkStop(ctx context.Context, id, action string
 		return ErrFileProtocol
 	}
 	switch action {
-	case "read/observe", "replace-to-rollback", "stop-owned", "start/live":
+	case "read/observe", "replace-to-rollback", "stop-owned", "start/live", bootstrapOfflineAction:
 	default:
 		return ErrFileProtocol
 	}
@@ -694,7 +750,7 @@ func (a *SelfUpdateFileAdapter) checkStop(ctx context.Context, id, action string
 	if err != nil {
 		return err
 	}
-	if stopped && action == "start/live" {
+	if stopped && (action == "start/live" || action == bootstrapOfflineAction) {
 		return ErrFileAuthorityStopped
 	}
 	return ctx.Err()

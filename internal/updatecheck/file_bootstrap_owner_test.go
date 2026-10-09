@@ -18,7 +18,7 @@ func bootstrapOwnerFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, file
 	review.JournalReaders = nil
 	review.OldVersion, u.record.CurrentVersion = "0.19.3", "0.19.3"
 	u.record.Job.Release.Archive.Digest = "sha256:" + strings.Repeat("a", 64)
-	review.Bootstrap = &fileBootstrapBinding{Role: externalOld193InstallerRole, HelperSHA256: strings.TrimPrefix(u.record.Job.Release.Binary.Digest, "sha256:"), ArchivePath: filepath.Join(t.TempDir(), "release.tar.gz"), ArchiveSHA256: strings.Repeat("a", 64)}
+	review.Bootstrap = &fileBootstrapBinding{Role: externalOld193InstallerRole, Mode: "live", HelperSHA256: strings.TrimPrefix(u.record.Job.Release.Binary.Digest, "sha256:"), ArchivePath: filepath.Join(t.TempDir(), "release.tar.gz"), ArchiveSHA256: strings.Repeat("a", 64)}
 	newProgram, err := os.ReadFile(filepath.Join(a.directory, review.ID, "bundle/dist", u.record.Job.Release.Binary.Name))
 	if err != nil {
 		t.Fatal(err)

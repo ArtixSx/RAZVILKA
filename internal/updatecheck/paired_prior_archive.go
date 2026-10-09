@@ -204,7 +204,7 @@ func (a *SelfUpdateFileAdapter) CapturePairedPriorState(ctx context.Context, id 
 		data, _ := json.Marshal(receipt)
 		binding := pairedPriorBinding{ID: id, ReviewSHA256: record.FileReviewSHA256, ReceiptSHA256: digestBytes(data), InstallationID: review.AuthorityInstallationID, Sequence: review.AuthoritySequence, Revision: review.Revision}
 		digest, err = capturePairedPriorState(c, a.installation, binding, receipt, a.owned, check, func(begin func() error) error {
-			return a.EffectAdmission(c, id, "start/live", pairedPriorManifestEffect, begin)
+			return a.EffectAdmission(c, id, fileInstallAuthority(review), pairedPriorManifestEffect, begin)
 		}, nil)
 		return err
 	})

@@ -41,12 +41,24 @@ func fileConfigExclusionsPreserved(before, after config.Config) bool {
 }
 
 func inspectFileMigration(old, staged []byte, revision uint64) (config.Config, error) {
+	return inspectFileMigrationMode(old, staged, revision, false)
+}
+
+func inspectFileMigrationMode(old, staged []byte, revision uint64, offline bool) (config.Config, error) {
 	before, _, err := config.InspectBytes(old)
 	if err != nil || before.Revision != revision {
 		return config.Config{}, ErrReviewChanged
 	}
 	after, _, err := config.InspectBytes(staged)
-	if err != nil || after.Revision != revision || after.SafeMode || after.ServiceControl.Stopped || !fileConfigExclusionsPreserved(before, after) {
+	if err != nil || after.Revision != revision || !fileConfigExclusionsPreserved(before, after) {
+		return config.Config{}, ErrReviewChanged
+	}
+	if offline {
+		if !before.SafeMode && !before.ServiceControl.Stopped || before.SafeMode != after.SafeMode || !reflect.DeepEqual(before.ServiceControl, after.ServiceControl) ||
+			!reflect.DeepEqual(before.NetworkPolicy, after.NetworkPolicy) || !reflect.DeepEqual(before.AppliedNetworkPolicy, after.AppliedNetworkPolicy) || !reflect.DeepEqual(before.DefaultRouteConsent, after.DefaultRouteConsent) {
+			return config.Config{}, ErrReviewChanged
+		}
+	} else if after.SafeMode || after.ServiceControl.Stopped {
 		return config.Config{}, ErrReviewChanged
 	}
 	return after, nil
@@ -77,7 +89,7 @@ func (a *SelfUpdateFileAdapter) configExclusionsCurrent(ctx context.Context, rev
 			return err
 		}
 	}
-	if _, err := inspectFileMigration(old, staged, review.Revision); err != nil {
+	if _, err := inspectFileMigrationMode(old, staged, review.Revision, review.Bootstrap != nil && review.Bootstrap.Mode == "offline"); err != nil {
 		return err
 	}
 	return ctx.Err()
