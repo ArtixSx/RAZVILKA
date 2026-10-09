@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 var ErrDomainPolicyTCPConsumer = errors.New("original synthetic TCP capture/transition consumer is unavailable")
@@ -18,8 +19,7 @@ var ErrDomainPolicyTCPConsumer = errors.New("original synthetic TCP capture/tran
 var domainPolicyTCPSyntheticPool = netip.MustParsePrefix("198.18.0.0/15")
 
 func domainPolicyTCPPublicIPv4(ip netip.Addr) bool {
-	return ip.Is4() && ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() &&
-		!netip.MustParsePrefix("100.64.0.0/10").Contains(ip) && !domainPolicyTCPSyntheticPool.Contains(ip)
+	return ip.Is4() && publicfetch.PublicAddress(ip)
 }
 
 // Intent and observations below grant no kernel/process permission. The

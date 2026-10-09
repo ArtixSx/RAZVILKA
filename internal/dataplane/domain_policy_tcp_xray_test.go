@@ -315,6 +315,53 @@ func TestDomainPolicySyntheticTCPModelRefusesRetainedProcessBeforeWriting(t *tes
 	}
 }
 
+func TestDomainPolicySyntheticTCPModelSpecialTargetsRefuseBeforeMaterialAndWrite(t *testing.T) {
+	f, _, spec, owner := syntheticTCPModelFixture(t)
+	if !spec.Client.Address.IsPrivate() || !spec.Listen.Addr().IsPrivate() || !spec.valid() {
+		t.Fatal("public target filter affected LAN intent")
+	}
+	process := f.a.engineProcess()
+	if err := os.MkdirAll(process.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	previous := []byte("untouched original config")
+	if err := os.WriteFile(process.MatchArg, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f.a.NodeRoutes = func(context.Context, []NodeRouteRequest, string, time.Time) (NodeRouteMaterial, error) {
+		t.Fatal("non-public target reached materializer")
+		return NodeRouteMaterial{}, nil
+	}
+	p, flow, runtime := domainPolicyTCPFixture(t, nil)
+	runtime.Dial = func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error) {
+		t.Fatal("non-public real target reached dial")
+		return nil, nil
+	}
+	for _, value := range []string{"0.1.2.3", "192.0.0.8", "192.0.2.1", "198.51.100.1", "203.0.113.1", "240.0.0.1", "100.64.0.1", "198.18.0.1", "224.1.1.1", "127.0.0.1", "169.254.1.1", "10.1.1.1", "172.16.0.1", "192.168.1.1", "::ffff:93.184.215.14", "2001:db8::1"} {
+		t.Run(value, func(t *testing.T) {
+			ip := netip.MustParseAddr(value)
+			bad := spec.Xray
+			bad.RealIP = ip
+			if err := f.a.WithDomainPolicyTCPXray(context.Background(), bad, owner, func(context.Context, *DomainPolicyTCPXray) error {
+				t.Fatal("special target started runtime")
+				return nil
+			}); !errors.Is(err, ErrDomainPolicyTCPConsumer) {
+				t.Fatal(err)
+			}
+			original := flow
+			original.Destination = netip.AddrPortFrom(ip, 443)
+			_, captured := domainPolicyTCPPair(t)
+			if _, err := p.HandleTCP(context.Background(), captured, original, runtime); !errors.Is(err, ErrDomainPolicy) {
+				t.Fatal("legacy public TCP admitted special target", err)
+			}
+		})
+	}
+	data, err := os.ReadFile(process.MatchArg)
+	if err != nil || !bytes.Equal(data, previous) || len(f.processes.startSpecs) != 0 {
+		t.Fatal("special target changed original runtime", err)
+	}
+}
+
 func TestDomainPolicySyntheticTCPModelLeaseRevocationClosesAndJoins(t *testing.T) {
 	f, p, spec, owner := syntheticTCPModelFixture(t)
 	socket := syntheticTCPModelSocket(spec, owner.lease.mapping, 80)
