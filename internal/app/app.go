@@ -5185,6 +5185,7 @@ func (a *App) routeOptionsSnapshotContext(ctx context.Context) []routecatalog.Op
 			continue
 		}
 		a.prepareRouteOption(&options[i])
+		a.prepareManagedNFQRouteOption(ctx, &options[i])
 	}
 	return a.appendNodeRouteOptions(ctx, a.appendWireGuardRouteOptions(ctx, options))
 }
