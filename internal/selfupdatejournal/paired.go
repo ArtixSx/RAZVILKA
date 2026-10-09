@@ -133,6 +133,59 @@ func (s *Store) pairedCurrentReady(id string) error {
 	return nil
 }
 
+// WithPairedOfflineRestore retains the existing writer while a trusted current
+// owner restores the complete offline pair. It does not replay the six-file
+// rollback, change receipts, clear Stop, or issue a retirement grant. The
+// callback must keep all control/helper evidence in its current location.
+func (s *Store) WithPairedOfflineRestore(ctx context.Context, id string, authority, quiescence Check, restore func(context.Context, Receipt, Check) error) error {
+	if s == nil || ctx == nil || authority == nil || quiescence == nil || restore == nil || s.pairedEvidence == nil || !idPattern.MatchString(id) {
+		return ErrMismatch
+	}
+	if _, finite := ctx.Deadline(); !finite {
+		return ErrMismatch
+	}
+	if err := checks(ctx, authority, quiescence); err != nil {
+		return err
+	}
+	var writer os.FileInfo
+	unlock, err := lockExistingWriter(s.journal, func(info os.FileInfo) { writer = info })
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	r, err := s.matching(id)
+	if err != nil || r.Schema != PairedSchema || r.Phase == "command-started" || s.pairedCurrentReady(id) != nil {
+		return ErrMismatch
+	}
+	before := receiptSHA(r)
+	check := func(c context.Context) error {
+		if c != ctx {
+			return ErrMismatch
+		}
+		current, err := s.journal.Stat(".writer.lock")
+		if err != nil || !os.SameFile(writer, current) {
+			return ErrMismatch
+		}
+		fresh, err := s.matching(id)
+		if err != nil || receiptSHA(fresh) != before || s.pairedCurrentReady(id) != nil || s.verifyImages(fresh) != nil {
+			return ErrMismatch
+		}
+		return checks(c, authority, quiescence)
+	}
+	if err := check(ctx); err != nil {
+		return err
+	}
+	if err := s.verifyPairedEvidence(ctx, r); err != nil {
+		return err
+	}
+	copy := r
+	copy.Files, copy.Commands = slices.Clone(r.Files), slices.Clone(r.Commands)
+	if err := restore(ctx, copy, check); err != nil {
+		return err
+	}
+	return check(ctx)
+}
+
 // SealPairedPriorState binds capture to the current prepared source before
 // replacement. capture is the trusted whole-source copier, not a supplied DTO.
 // A cut after publication remains pending; it cannot supply retirement.
