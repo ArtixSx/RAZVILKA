@@ -31,6 +31,9 @@ type XraySelectedTCPPortRange struct {
 // The first vertical has one service/node and one original IPv4 ingress.
 // Listener is the actual ingress-reachable address to be independently proven
 // by the native listener/PID/config owner before any PREROUTING attachment.
+// LAN.Sources describes selected packet senders; it does not identify the
+// router's primary ingress address. A one-client /32 must remain a /32 even
+// when the listener binds a different address on that original interface.
 // LAN is used only for physical match data; its legacy global effects MUST NOT
 // be applied by this consumer. CORE binds the distinct runtime mode.
 type XraySelectedTCPRedirectSpec struct {
@@ -65,7 +68,6 @@ func canonicalXraySelectedTCPRedirect(s XraySelectedTCPRedirectSpec) (XraySelect
 		return XraySelectedTCPRedirectSpec{}, ErrXraySelectedTCPRedirect
 	}
 	g := s.LAN.Ingress[0]
-	inside := false
 	for _, list := range [][]string{g.Sources, g.ExcludedSources} {
 		for _, value := range list {
 			p, err := netip.ParsePrefix(value)
@@ -73,12 +75,6 @@ func canonicalXraySelectedTCPRedirect(s XraySelectedTCPRedirectSpec) (XraySelect
 				return XraySelectedTCPRedirectSpec{}, ErrXraySelectedTCPRedirect
 			}
 		}
-	}
-	for _, value := range g.Sources {
-		inside = inside || netip.MustParsePrefix(value).Contains(address)
-	}
-	if !inside {
-		return XraySelectedTCPRedirectSpec{}, ErrXraySelectedTCPRedirect
 	}
 	for _, list := range [][]string{s.Destinations, s.ExcludedDestinations} {
 		seen := map[string]bool{}

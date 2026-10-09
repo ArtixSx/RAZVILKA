@@ -176,7 +176,7 @@ func TestXraySelectedTCPRedirectEmittedRulesPositiveAndNegativePacketModel(t *te
 }
 
 func TestXraySelectedTCPRedirectRefusesBroadenedOrUnboundedInput(t *testing.T) {
-	for _, bad := range []string{"empty-CIDRs", "empty-ports", "zero-port", "port-overlap", "noncanonical", "duplicate", "private-range", "IPv6", "mixed-LAN-family", "LAN-hash", "generation", "foreign-listener", "loopback-listener", "low-listener-port", "effect-bound"} {
+	for _, bad := range []string{"empty-CIDRs", "empty-ports", "zero-port", "port-overlap", "noncanonical", "duplicate", "private-range", "IPv6", "mixed-LAN-family", "LAN-hash", "generation", "IPv6-listener", "unspecified-listener", "loopback-listener", "low-listener-port", "effect-bound"} {
 		t.Run(bad, func(t *testing.T) {
 			s := xraySelectedTCPFixtureSpec(t, "node-"+strings.Repeat("1", 64))
 			switch bad {
@@ -203,8 +203,10 @@ func TestXraySelectedTCPRedirectRefusesBroadenedOrUnboundedInput(t *testing.T) {
 				s.LAN.Digest = strings.Repeat("b", 64)
 			case "generation":
 				s.Generation = strings.Repeat("b", 64)
-			case "foreign-listener":
-				s.Listener = netip.MustParseAddrPort("192.168.2.1:16443")
+			case "IPv6-listener":
+				s.Listener = netip.MustParseAddrPort("[fd00::1]:16443")
+			case "unspecified-listener":
+				s.Listener = netip.MustParseAddrPort("0.0.0.0:16443")
 			case "loopback-listener":
 				s.Listener = netip.MustParseAddrPort("127.0.0.1:16443")
 			case "low-listener-port":
@@ -217,6 +219,63 @@ func TestXraySelectedTCPRedirectRefusesBroadenedOrUnboundedInput(t *testing.T) {
 			}
 			if _, err := CompileXraySelectedTCPRedirect(s); !errors.Is(err, ErrXraySelectedTCPRedirect) {
 				t.Fatal("broadened input accepted", err)
+			}
+		})
+	}
+}
+
+// Use the genuine shared LAN compiler with an unchanged one-PC source match.
+// The literal router listener remains only intent; this model cannot witness
+// that it is the original interface's actual primary address or live socket.
+func xraySelectedTCPFixtureOneClient(t *testing.T, s XraySelectedTCPRedirectSpec, membership string) XraySelectedTCPRedirectSpec {
+	t.Helper()
+	g := s.LAN.Ingress[0]
+	g.Sources = []string{"192.168.1.40/32"}
+	g.Membership = membership
+	if membership == "all" {
+		g.IncludedMACs = nil
+	}
+	var err error
+	s.LAN, err = CompileLANPolicyRuntime(s.Generation, []LANPolicyIngress{g})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestXraySelectedTCPRedirectListenerIsSeparateFromOneClientSource(t *testing.T) {
+	for _, membership := range []string{"all", "mac"} {
+		t.Run(membership, func(t *testing.T) {
+			f, proof, a, spec := xraySelectedTCPMaterialFixture(t)
+			spec = xraySelectedTCPFixtureOneClient(t, spec, membership)
+			original := spec.Clone()
+			if netip.MustParsePrefix(spec.LAN.Ingress[0].Sources[0]).Contains(spec.Listener.Addr()) {
+				t.Fatal("fixture did not separate client and router address")
+			}
+			p, err := CompileXraySelectedTCPRedirect(spec)
+			if err != nil || !reflect.DeepEqual(spec, original) {
+				t.Fatal("one-client compiler refused router listener or rewrote source scope", err)
+			}
+			for _, effect := range p.Effects {
+				if effect.Add[2] == "-I" && (!slices.Contains(effect.Add, "192.168.1.40/32") || slices.Contains(effect.Add, "192.168.1.0/24")) {
+					t.Fatal("attachment broadened original one-PC source")
+				}
+			}
+			for _, source := range []string{"192.168.1.40", "192.168.1.41", "192.168.1.1"} {
+				want := source == "192.168.1.40"
+				if got := xraySelectedTCPModelRedirect(t, p, "br-lan", source, "02:00:00:00:00:01", "1.1.1.1", "tcp", 443); got != want {
+					t.Fatal("one-PC scope selected wrong source", source, got)
+				}
+			}
+			m, err := buildXraySelectedTCPRedirectMaterial(f.ctx, a, proof, spec)
+			if err != nil {
+				t.Fatal("actual original Store config refused independent router listener", err)
+			}
+			defer clear(m.config)
+			var doc map[string]any
+			if json.Unmarshal(m.config, &doc) != nil || doc["inbounds"].([]any)[0].(map[string]any)["listen"] != "192.168.1.1" ||
+				!slices.Equal(m.spec.LAN.Ingress[0].Sources, []string{"192.168.1.40/32"}) {
+				t.Fatal("private config confused router listener and selected source")
 			}
 		})
 	}

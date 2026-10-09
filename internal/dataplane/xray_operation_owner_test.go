@@ -34,9 +34,12 @@ type xrayOperationFixture struct {
 	scope    *executionResourceScope
 }
 
-func newXrayOperationFixture(t *testing.T) *xrayOperationFixture {
+func newXrayOperationFixture(t *testing.T, prepare ...func(*XraySelectedTCPRedirectSpec)) *xrayOperationFixture {
 	t.Helper()
 	f, proof, a, spec := xraySelectedTCPMaterialFixture(t)
+	for _, change := range prepare {
+		change(&spec)
+	}
 	x := &xrayOperationFixture{f: f, adapter: a, spec: spec, model: &xrayOperationProcessModel{}, manager: New(privateScopedXrayFixtureDir(t))}
 	a.Processes = x.model
 	if err := x.manager.Register(a); err != nil {
@@ -68,12 +71,35 @@ func newXrayOperationFixture(t *testing.T) *xrayOperationFixture {
 	return x
 }
 
+func TestXrayOperationOneClientSourceBindsIndependentRouterListener(t *testing.T) {
+	x := newXrayOperationFixture(t, func(s *XraySelectedTCPRedirectSpec) {
+		*s = xraySelectedTCPFixtureOneClient(t, *s, "mac")
+	})
+	ctx := x.originalScope(t)
+	o, err := newXrayOperationOwner(ctx, x.scope)
+	if err != nil {
+		t.Fatal("original one-PC operation refused router listener", err)
+	}
+	if _, err := o.context(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if x.scope.adapterOwner != x.adapter || x.material.material.spec.Listener.Addr().String() != "192.168.1.1" ||
+		len(x.scope.plan.LAN.Ingress[0].Sources) != 1 || x.scope.plan.LAN.Ingress[0].Sources[0] != "192.168.1.40/32" ||
+		len(x.scope.execution.Resources) != 0 || x.model.starts != 0 || x.model.stops != 0 {
+		t.Fatal("operation source broadened or preparation issued launch/resource authority")
+	}
+}
+
 func (x *xrayOperationFixture) originalScope(t *testing.T) context.Context {
 	t.Helper()
 	service := x.material.material.proof.service
 	p := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-0123456789abcdef", Digest: strings.Repeat("b", 64), NetworkProfileID: x.material.material.ref.WANProfile, Adapters: []string{"xray"}, LAN: CloneLANPolicyRuntime(x.spec.LAN),
 		Routes: []Route{{ServiceID: service.ID, LogicalServiceID: service.ID, ProbeService: &service, ProbeURL: service.ProbeURL, Selected: "xray:" + x.spec.NodeID, Resolved: "xray:" + x.spec.NodeID,
-			CIDRs: append([]string(nil), service.CIDRs...), NetworkPolicyGeneration: x.spec.Generation}}}
+			CIDRs: append([]string(nil), service.CIDRs...), Sources: append([]string(nil), x.spec.LAN.Ingress[0].Sources...), Ingress: []string{x.spec.LAN.Ingress[0].Interface},
+			NetworkPolicyGeneration: x.spec.Generation, NetworkPolicyRole: "override"}}}
+	if _, err := p.FrozenLAN(); err != nil {
+		t.Fatal("actual shared compiler source shape refused", err)
+	}
 	execution := &Execution{PlanID: p.PlanID, Digest: p.Digest}
 	root := filepath.Join(x.manager.StateRoot, "transactions", execution.PlanID)
 	if err := os.MkdirAll(root, 0700); err != nil {
