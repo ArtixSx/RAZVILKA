@@ -54,6 +54,7 @@ type DefaultRoutePath struct {
 type DefaultRouteSnapshot struct {
 	Scope                             autonomy.ScopeObservation
 	Devices                           []DefaultRouteDevice
+	Infrastructure                    []DefaultRouteInfrastructureNeighbor // observed negative facts only
 	GuestSegmentIDs                   []string
 	Paths                             map[string]DefaultRoutePath // "default" or service ID
 	NodeGeneration, ProfileGeneration uint64
@@ -111,7 +112,7 @@ func (c *DefaultRouteCompilation) Ingress() []DefaultRouteIngress {
 // does not resolve domains: shared CDN observations are never flow identity.
 // Domain exclusions/overrides require the separately admitted flow bridge.
 func CompileDefaultRoutePolicy(cfg config.Config, snapshot DefaultRouteSnapshot, services []dataplane.Route, now time.Time) (*DefaultRouteCompilation, error) {
-	if len(services) > 128 || len(snapshot.Devices) > 512 || len(snapshot.Paths) > 129 || len(snapshot.GuestSegmentIDs) > 16 || len(snapshot.AllowedDefaultRoutes) > 128 {
+	if len(services) > 128 || len(snapshot.Devices) > 512 || len(snapshot.Infrastructure) > 512 || len(snapshot.Paths) > 129 || len(snapshot.GuestSegmentIDs) > 16 || len(snapshot.AllowedDefaultRoutes) > 128 {
 		return nil, defaultRouteBound()
 	}
 	p := config.CloneNetworkPolicy(cfg.NetworkPolicy)
@@ -318,6 +319,10 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 		}
 		segments[s.ID] = s
 	}
+	infrastructure, err := defaultRouteInfrastructureNegatives(c.snapshot, segments)
+	if err != nil {
+		return err
+	}
 	bindings := map[string]autonomy.DeviceBinding{}
 	macs := map[string]bool{}
 	for _, d := range o.Devices {
@@ -359,6 +364,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 			return dataplane.ErrReviewChanged
 		}
 		gate := DefaultRouteIngress{SegmentID: id, Interface: s.Interface}
+		gate.ExcludedMACs = slices.Clone(infrastructure[id])
 		for _, prefix := range s.Prefixes {
 			if !defaultRoutePrefix(prefix, false) {
 				return dataplane.ErrReviewChanged
@@ -410,6 +416,7 @@ func (c *DefaultRouteCompilation) compileIngress(now time.Time) error {
 		gate.ExcludedSources = defaultRouteIntersections(gate.Sources, negative)
 		slices.Sort(gate.IncludedMACs)
 		slices.Sort(gate.ExcludedMACs)
+		gate.ExcludedMACs = slices.Compact(gate.ExcludedMACs)
 		if len(gate.Sources) != 0 {
 			c.ingress = append(c.ingress, gate)
 		}
@@ -679,6 +686,7 @@ func defaultRouteClone(s DefaultRouteSnapshot) DefaultRouteSnapshot {
 	}
 	s.Scope.Devices = slices.Clone(s.Scope.Devices)
 	s.Devices = slices.Clone(s.Devices)
+	s.Infrastructure = slices.Clone(s.Infrastructure)
 	for i := range s.Devices {
 		s.Devices[i].Addresses = slices.Clone(s.Devices[i].Addresses)
 	}
@@ -695,6 +703,7 @@ func defaultRouteClone(s DefaultRouteSnapshot) DefaultRouteSnapshot {
 func defaultRouteIdentity(s DefaultRouteSnapshot) DefaultRouteSnapshot {
 	s = defaultRouteClone(s)
 	s.Scope.ObservedAt, s.Scope.FreshUntil = time.Time{}, time.Time{}
+	s.Infrastructure = defaultRouteInfrastructureIdentity(s.Infrastructure)
 	slices.Sort(s.GuestSegmentIDs)
 	slices.Sort(s.AllowedDefaultRoutes)
 	sort.Slice(s.Scope.Segments, func(i, j int) bool { return s.Scope.Segments[i].ID < s.Scope.Segments[j].ID })

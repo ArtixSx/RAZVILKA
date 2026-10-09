@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -271,6 +272,9 @@ func (b *ListScopeBinding) compilerScope(now time.Time) (DefaultRouteSnapshot, e
 			observed.Prefixes = append(observed.Prefixes, prefix)
 		}
 		s.Scope.Segments = append(s.Scope.Segments, observed)
+		for _, router := range segment.RouterNeighbors {
+			s.Infrastructure = append(s.Infrastructure, DefaultRouteInfrastructureNeighbor{SegmentID: id, Interface: segment.Interface, Address: router.Address, MAC: router.MAC, Flags: router.Flags, Type: router.Type})
+		}
 		if segment.Guest {
 			s.GuestSegmentIDs = append(s.GuestSegmentIDs, id)
 		}
@@ -314,7 +318,7 @@ func (b *ListScopeBinding) BindCompilation(ctx context.Context, compilation *Def
 		}
 		phase = "bind-snapshot"
 		want, have := defaultRouteIdentity(actual), defaultRouteIdentity(compilation.snapshot)
-		if have.Authority != want.Authority || have.DNSMode != "baseline" || have.Stopped || !reflect.DeepEqual(have.Scope, want.Scope) || !reflect.DeepEqual(have.Devices, want.Devices) || !slices.Equal(have.GuestSegmentIDs, want.GuestSegmentIDs) {
+		if have.Authority != want.Authority || have.DNSMode != "baseline" || have.Stopped || !reflect.DeepEqual(have.Scope, want.Scope) || !reflect.DeepEqual(have.Devices, want.Devices) || !slices.Equal(have.Infrastructure, want.Infrastructure) || !slices.Equal(have.GuestSegmentIDs, want.GuestSegmentIDs) {
 			return ErrListScopeChanged
 		}
 		plan := compilation.LAN()
@@ -330,8 +334,11 @@ func (b *ListScopeBinding) BindCompilation(ctx context.Context, compilation *Def
 			phase = "bind-router-membership"
 			for _, segment := range b.facts.Segments {
 				for _, router := range segment.RouterNeighbors {
+					// The frozen LAN plan uses canonical uppercase MACs while
+					// native physical facts use net.HardwareAddr's lowercase form.
+					routerMAC := strings.ToUpper(router.MAC)
 					for _, ingress := range plan.Ingress {
-						if ingress.Interface == segment.Interface && !slices.Contains(ingress.ExcludedMACs, router.MAC) && (ingress.Membership != "mac" || slices.Contains(ingress.IncludedMACs, router.MAC)) {
+						if ingress.Interface == segment.Interface && !slices.Contains(ingress.ExcludedMACs, routerMAC) {
 							return ErrListScopeChanged
 						}
 					}

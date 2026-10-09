@@ -352,6 +352,13 @@ func TestListScopeRejectsUnapprovedCommitAndUnsafeRouterMembership(t *testing.T)
 			listScopeOperation(t, a, func(ctx context.Context) {
 				c := listScopeCompilation(t, ctx, a, b)
 				if kind == "router-all" {
+					gate := c.LAN().Ingress
+					gate[0].ExcludedMACs = nil
+					var err error
+					c.lan, err = dataplane.CompileLANPolicyRuntime(c.Digest(), gate)
+					if err != nil {
+						t.Fatal(err)
+					}
 					if err := b.BindCompilation(ctx, c); err == nil {
 						t.Fatal("broad membership dropped actual router negatives")
 					}
