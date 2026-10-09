@@ -30,6 +30,9 @@ func (r *LANPolicyRuntime) Preflight(ctx context.Context, p *LANPolicyRuntimePla
 	if err := r.check(ctx, p); err != nil {
 		return lanPolicyPreflightAt("scope-open", err)
 	}
+	if p.Mode == LANPolicyNFQWSDirectMode {
+		return r.preflightDirect(ctx, p)
+	}
 	for _, family := range []int{4, 6} {
 		args := []string{"-4", "-N", "rule", "show"}
 		if family == 6 {
@@ -174,6 +177,9 @@ func lanPolicyTransportSyntax(family, table int, line string) bool {
 // owned RPDB selectors. This is required before another consumer activates.
 func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePlan) error {
 	p := CloneLANPolicyRuntime(plan)
+	if p != nil && p.Mode == LANPolicyNFQWSDirectMode {
+		return r.Preflight(ctx, p)
+	}
 	if err := r.check(ctx, p); err != nil {
 		return err
 	}

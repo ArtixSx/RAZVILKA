@@ -115,6 +115,9 @@ func (b *LANPolicyReceiptBinding) prepare(ctx context.Context, plan *LANPolicyRu
 }
 
 func (b *LANPolicyReceiptBinding) Apply(ctx context.Context, plan *LANPolicyRuntimePlan, root string) error {
+	if plan != nil && plan.Mode == LANPolicyNFQWSDirectMode {
+		return b.applyDirect(ctx, CloneLANPolicyRuntime(plan), root)
+	}
 	c, err := b.prepare(ctx, plan, false)
 	if err != nil {
 		return err
@@ -130,6 +133,9 @@ func (b *LANPolicyReceiptBinding) Apply(ctx context.Context, plan *LANPolicyRunt
 }
 
 func (b *LANPolicyReceiptBinding) Remove(ctx context.Context, plan *LANPolicyRuntimePlan, root string) error {
+	if plan != nil && plan.Mode == LANPolicyNFQWSDirectMode {
+		return b.removeDirect(ctx, CloneLANPolicyRuntime(plan), root)
+	}
 	c, err := b.prepare(ctx, plan, true)
 	if err != nil {
 		return err
@@ -156,6 +162,9 @@ func (b *LANPolicyReceiptBinding) Inspect(ctx context.Context, plan *LANPolicyRu
 	if b == nil {
 		return PolicyAdditionStatus{}, ErrLANPolicyRuntime
 	}
+	if plan != nil && plan.Mode == LANPolicyNFQWSDirectMode {
+		return b.inspectDirect(ctx, CloneLANPolicyRuntime(plan), root)
+	}
 	expected, err := LANPolicyEffectsPlan(plan)
 	if err != nil {
 		return PolicyAdditionStatus{}, err
@@ -164,6 +173,9 @@ func (b *LANPolicyReceiptBinding) Inspect(ctx context.Context, plan *LANPolicyRu
 }
 
 func (b *LANPolicyReceiptBinding) Promote(ctx context.Context, plan *LANPolicyRuntimePlan, source, destination string) error {
+	if plan != nil && plan.Mode == LANPolicyNFQWSDirectMode {
+		return b.promoteDirect(ctx, CloneLANPolicyRuntime(plan), source, destination)
+	}
 	c, err := b.prepare(ctx, plan, false)
 	if err != nil {
 		return err

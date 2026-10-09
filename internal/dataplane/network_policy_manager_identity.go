@@ -15,12 +15,16 @@ var ErrNetworkPolicyIdentity = errors.New("LAN runtime requires its original fre
 // requires the entire owned gate namespace to be absent, including orphans.
 // These callbacks come from owners, never request/config capability flags.
 type NetworkPolicyAssemblyOptions struct {
+	// Mode is frozen by the concrete startup participant, including while
+	// proving absence after retirement. It never grants a consumer or effect.
+	Mode           string
 	Provider       *netidentity.Provider
 	Binding        *LANPolicyReceiptBinding
 	InventoryCheck func(context.Context, netidentity.Identity, *LANPolicyRuntimePlan) error
 }
 
 type networkPolicyIdentity struct {
+	mode        string
 	value       netidentity.Identity
 	provider    *netidentity.Provider
 	withCurrent func(context.Context, func(context.Context, netidentity.Identity) error) error
@@ -54,17 +58,17 @@ func NewNetworkPolicyAdapter(ctx context.Context, options NetworkPolicyAssemblyO
 	if err != nil {
 		return nil, errors.Join(ErrNetworkPolicyIdentity, err)
 	}
-	return newNetworkPolicyIdentityAdapter(options, &networkPolicyIdentity{value: identity, provider: options.Provider, withCurrent: options.Provider.WithCurrent})
+	return newNetworkPolicyIdentityAdapter(options, &networkPolicyIdentity{mode: options.Mode, value: identity, provider: options.Provider, withCurrent: options.Provider.WithCurrent})
 }
 
 func networkPolicyAssemblyOptionsValid(options NetworkPolicyAssemblyOptions) bool {
 	b := options.Binding
-	return b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
+	return (options.Mode == "" || options.Mode == LANPolicyNFQWSDirectMode) && b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
 		b.Runtime.ScopeCheck != nil && b.ApplyGuard != nil && b.CleanupGuard != nil && b.RetireCheck != nil && options.InventoryCheck != nil
 }
 
 func newNetworkPolicyIdentityAdapter(options NetworkPolicyAssemblyOptions, identity *networkPolicyIdentity) (*NetworkPolicyAdapter, error) {
-	if !networkPolicyAssemblyOptionsValid(options) || identity == nil || identity.value.Validate() != nil || identity.withCurrent == nil {
+	if !networkPolicyAssemblyOptionsValid(options) || identity == nil || identity.mode != options.Mode || identity.value.Validate() != nil || identity.withCurrent == nil {
 		return nil, ErrNetworkPolicyIdentity
 	}
 	// Freeze the descriptor and callbacks; caller changes cannot replace the
@@ -75,7 +79,7 @@ func newNetworkPolicyIdentityAdapter(options NetworkPolicyAssemblyOptions, ident
 	inventory := options.InventoryCheck
 	boundary := func(ctx context.Context, p *LANPolicyRuntimePlan, check func(context.Context) error) error {
 		return identity.use(ctx, func(c context.Context) error {
-			if p != nil && ValidateLANPolicyRuntime(p) != nil {
+			if p != nil && (ValidateLANPolicyRuntime(p) != nil || p.Mode != identity.mode) {
 				return ErrLANPolicyRuntime
 			}
 			if err := check(c); err != nil {
@@ -150,7 +154,7 @@ func (a *NetworkPolicyAdapter) gateFor(p Plan) (*networkPolicyGateState, error) 
 		return state, err
 	}
 	identity := a.identity.value
-	if identity.Validate() != nil {
+	if identity.Validate() != nil || state.LAN.Mode != a.identity.mode {
 		return nil, ErrNetworkPolicyIdentity
 	}
 	state.Schema, state.NetworkIdentity = 2, &identity
@@ -164,7 +168,7 @@ func (a *NetworkPolicyAdapter) gateIdentityMatches(state *networkPolicyGateState
 	if a.identity == nil {
 		return state.Schema == 1 && state.NetworkIdentity == nil
 	}
-	return state.Schema == 2 && state.NetworkIdentity != nil && state.NetworkIdentity.Validate() == nil && *state.NetworkIdentity == a.identity.value
+	return state.Schema == 2 && state.LAN != nil && state.LAN.Mode == a.identity.mode && state.NetworkIdentity != nil && state.NetworkIdentity.Validate() == nil && *state.NetworkIdentity == a.identity.value
 }
 
 func (m *Manager) executionNetworkIdentity() *networkPolicyIdentity {

@@ -66,6 +66,16 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	if err != nil {
 		return nil, err
 	}
+	// Only this actual NFQ owner selects the mark-free consumer mode. Its
+	// original physical compilation and exact negative-subtracted tuples remain
+	// mandatory; other engines keep their separately supported LAN mode.
+	if compilation.LAN() == nil {
+		return nil, ErrDefaultRouteCapability
+	}
+	compilation.lan, err = dataplane.CompileNFQWSDirectLANPolicyRuntime(compilation.Digest(), compilation.LAN().Ingress)
+	if err != nil {
+		return nil, err
+	}
 	phase = "bind-compilation"
 	if err := e.scope.BindCompilation(c, compilation); err != nil {
 		return nil, err

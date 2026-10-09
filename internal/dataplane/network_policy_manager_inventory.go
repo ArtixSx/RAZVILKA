@@ -27,7 +27,7 @@ func (c *NetworkPolicyChecks) ConsumerCheck(ctx context.Context, lan *LANPolicyR
 
 func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity netidentity.Identity, lan *LANPolicyRuntimePlan, requireConsumer bool) error {
 	lan = CloneLANPolicyRuntime(lan)
-	if lan != nil && ValidateLANPolicyRuntime(lan) != nil {
+	if lan != nil && (ValidateLANPolicyRuntime(lan) != nil || c == nil || c.gate == nil || c.gate.identity == nil || lan.Mode != c.gate.identity.mode) {
 		return ErrLANPolicyRuntime
 	}
 	return c.boundary(ctx, func(held context.Context) error {
@@ -52,7 +52,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if err != nil {
 			return err
 		}
-		if err := checkNetworkPolicyInventory(first, identity, lan, opening, openingNFQ...); err != nil {
+		if err := checkNetworkPolicyInventoryForMode(first, identity, lan, c.gate.identity.mode, opening, openingNFQ...); err != nil {
 			return err
 		}
 		closing, err := c.proxyConsumers(held, lan)
@@ -82,7 +82,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				nfqErr = errors.Join(nfqErr, o.current(held))
 			}
 		}
-		return errors.Join(checkNetworkPolicyInventory(last, identity, lan, closing, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr)
+		return errors.Join(checkNetworkPolicyInventoryForMode(last, identity, lan, c.gate.identity.mode, closing, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr)
 	})
 }
 
@@ -186,6 +186,17 @@ func networkPolicyInventoryAllowed(lan *LANPolicyRuntimePlan, consumers []networ
 }
 
 func checkNetworkPolicyInventory(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, consumers []networkPolicyProxyObservation, nfqConsumers ...networkPolicyNFQObservation) error {
+	mode := ""
+	if lan != nil {
+		mode = lan.Mode
+	}
+	return checkNetworkPolicyInventoryForMode(s, identity, lan, mode, consumers, nfqConsumers...)
+}
+
+func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, nfqConsumers ...networkPolicyNFQObservation) error {
+	if mode != "" && mode != LANPolicyNFQWSDirectMode || lan != nil && lan.Mode != mode {
+		return ErrLANPolicyRuntime
+	}
 	if err := s.RequireComplete(); err != nil || identity.Validate() != nil || s.Scope.Network != identity {
 		return errors.Join(ErrBackendInventoryUnknown, err)
 	}
@@ -198,7 +209,7 @@ func checkNetworkPolicyInventory(s BackendInventorySnapshot, identity netidentit
 		if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
 			return ErrBackendInventoryUnknown
 		}
-		reserved, err := networkPolicyReservedRow(row.Tokens)
+		reserved, err := networkPolicyReservedRowForMode(row.Tokens, mode)
 		if err != nil {
 			return err
 		}
@@ -256,6 +267,13 @@ func networkPolicyReferencesPrefix(tokens []string, prefix string) bool {
 }
 
 func networkPolicyReservedRow(tokens []string) (bool, error) {
+	return networkPolicyReservedRowForMode(tokens, "")
+}
+
+func networkPolicyReservedRowForMode(tokens []string, mode string) (bool, error) {
+	if mode != "" && mode != LANPolicyNFQWSDirectMode {
+		return false, ErrBackendInventoryUnknown
+	}
 	if len(tokens) < 2 {
 		return false, ErrBackendInventoryUnknown
 	}
@@ -295,9 +313,9 @@ func networkPolicyReservedRow(tokens []string) (bool, error) {
 				i++
 				operand = tokens[i]
 			}
-			reserved = reserved || lanPolicyMarkTouches(operand)
+			reserved = reserved || mode != LANPolicyNFQWSDirectMode && lanPolicyMarkTouches(operand)
 		case "--and-mark", "--restore-mark", "--save-mark":
-			reserved = true
+			reserved = reserved || mode != LANPolicyNFQWSDirectMode
 		case "-j", "-g", "--jump", "--goto", "-m", "--match":
 			if !inline {
 				if i+1 >= len(tokens) {
@@ -307,13 +325,13 @@ func networkPolicyReservedRow(tokens []string) (bool, error) {
 				operand = tokens[i]
 			}
 			if option == "-m" || option == "--match" {
-				reserved = reserved || operand == "connmark"
+				reserved = reserved || mode != LANPolicyNFQWSDirectMode && operand == "connmark"
 			} else {
-				reserved = reserved || networkPolicyReservedChain(operand) || slices.Contains([]string{"CONNMARK", "HMARK", "NFQUEUE", "QUEUE"}, operand)
+				reserved = reserved || networkPolicyReservedChain(operand) || slices.Contains([]string{"NFQUEUE", "QUEUE"}, operand) || mode != LANPolicyNFQWSDirectMode && slices.Contains([]string{"CONNMARK", "HMARK"}, operand)
 			}
 		default:
 			if strings.HasPrefix(option, "--") && strings.Contains(option, "mark") {
-				reserved = true
+				reserved = reserved || mode != LANPolicyNFQWSDirectMode
 			}
 		}
 	}

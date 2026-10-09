@@ -138,7 +138,7 @@ func (a *App) ConfigureReviewedStockNFQWSList(ctx, panel context.Context) (*Mana
 			}
 			return r.checks.RetireCheck(c, p)
 		}}
-	gate, err := dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Provider: provider, Binding: binding,
+	gate, err := dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyNFQWSDirectMode, Provider: provider, Binding: binding,
 		InventoryCheck: func(c context.Context, n netidentity.Identity, p *dataplane.LANPolicyRuntimePlan) error {
 			if r.checks == nil {
 				return dataplane.ErrNetworkPolicyConsumers
