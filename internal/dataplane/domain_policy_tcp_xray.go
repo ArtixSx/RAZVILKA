@@ -85,6 +85,14 @@ func (a *ProxyTunnelAdapter) WithDomainPolicyTCPXray(ctx context.Context, spec D
 		if a.Processes.Running(process) || a.Processes.Running(a.sidecarProcess()) {
 			return ErrDomainPolicyTCPConsumer
 		}
+		// Running may return false for a foreign/malformed retained PID. Do
+		// not let Start replace its file or erase that owner's launch receipt.
+		// The common owner must settle the old registration first.
+		for _, path := range []string{process.PIDPath, process.PIDPath + routeidentity.ReceiptSuffix, a.sidecarProcess().PIDPath} {
+			if _, err := os.Lstat(path); err == nil || !errors.Is(err, os.ErrNotExist) {
+				return errors.Join(ErrDomainPolicyTCPConsumer, err)
+			}
+		}
 		if err := os.MkdirAll(process.Dir, 0o700); err != nil {
 			return err
 		}

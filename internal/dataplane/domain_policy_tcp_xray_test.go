@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -288,6 +289,29 @@ func TestDomainPolicySyntheticTCPModelStopRetainsReplacementProcess(t *testing.T
 	})
 	if !errors.Is(err, ErrDomainPolicyTCPConsumer) || !f.processes.Running(f.a.engineProcess()) {
 		t.Fatal("replacement was stopped or cleanup pending disappeared", err)
+	}
+}
+
+func TestDomainPolicySyntheticTCPModelRefusesRetainedProcessBeforeWriting(t *testing.T) {
+	f, _, spec, owner := syntheticTCPModelFixture(t)
+	process := f.a.engineProcess()
+	if err := os.MkdirAll(process.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	previous := []byte("original retained config")
+	if err := os.WriteFile(process.MatchArg, previous, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(process.PIDPath, []byte("foreign or unsettled PID"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := f.a.WithDomainPolicyTCPXray(context.Background(), spec.Xray, owner, func(context.Context, *DomainPolicyTCPXray) error { t.Fatal("adopted retained process"); return nil })
+	if !errors.Is(err, ErrDomainPolicyTCPConsumer) || len(f.processes.startSpecs) != 0 {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(process.MatchArg)
+	if err != nil || !bytes.Equal(data, previous) {
+		t.Fatal("clobbered original config", err)
 	}
 }
 
