@@ -21,3 +21,15 @@ func TestListScopeOriginalPhysicalFailureKeepsExactSafeSubstage(t *testing.T) {
 		}
 	})
 }
+
+func TestListScopeBindRefusalIdentifiesOriginalInfrastructureMembership(t *testing.T) {
+	a, binding, _ := listScopeFixture(t, "all", true)
+	listScopeOperation(t, a, func(ctx context.Context) {
+		compiled := listScopeCompilation(t, ctx, a, binding)
+		err := binding.BindCompilation(ctx, compiled)
+		stage, reason := managedNFQFailureDiagnostic(err)
+		if stage != "bind-router-membership" || reason != "ORIGINAL_SCOPE_CHANGED" || !errors.Is(err, ErrListScopeChanged) || binding.boundOnce {
+			t.Fatal("infrastructure refusal lost or bound", stage, reason)
+		}
+	})
+}

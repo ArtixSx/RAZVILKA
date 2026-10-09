@@ -301,23 +301,33 @@ func (b *ListScopeBinding) compilerScope(now time.Time) (DefaultRouteSnapshot, e
 // It freezes one exact immutable LAN plan, without changing that plan or Input.
 // It cannot grant the path/effect and cannot be rebound to another generation.
 func (b *ListScopeBinding) BindCompilation(ctx context.Context, compilation *DefaultRouteCompilation) error {
-	return b.use(ctx, func(context.Context) error {
+	return b.use(ctx, func(context.Context) (resultErr error) {
+		phase := "bind-policy"
+		defer func() { resultErr = managedNFQFailureAt(phase, resultErr) }()
 		if compilation == nil || b.boundOnce || !reflect.DeepEqual(compilation.policy, b.expected.NetworkPolicy) {
 			return ErrListScopeChanged
 		}
+		phase = "bind-observed-scope"
 		actual, err := b.compilerScope(time.Now().UTC())
 		if err != nil {
 			return err
 		}
+		phase = "bind-snapshot"
 		want, have := defaultRouteIdentity(actual), defaultRouteIdentity(compilation.snapshot)
 		if have.Authority != want.Authority || have.DNSMode != "baseline" || have.Stopped || !reflect.DeepEqual(have.Scope, want.Scope) || !reflect.DeepEqual(have.Devices, want.Devices) || !slices.Equal(have.GuestSegmentIDs, want.GuestSegmentIDs) {
 			return ErrListScopeChanged
 		}
 		plan := compilation.LAN()
 		if plan != nil {
-			if dataplane.ValidateLANPolicyRuntime(plan) != nil || plan.Generation != compilation.Digest() {
+			phase = "bind-lan-plan"
+			if err := dataplane.ValidateLANPolicyRuntime(plan); err != nil {
+				return errors.Join(ErrListScopeChanged, err)
+			}
+			phase = "bind-lan-generation"
+			if plan.Generation != compilation.Digest() {
 				return ErrListScopeChanged
 			}
+			phase = "bind-router-membership"
 			for _, segment := range b.facts.Segments {
 				for _, router := range segment.RouterNeighbors {
 					for _, ingress := range plan.Ingress {
