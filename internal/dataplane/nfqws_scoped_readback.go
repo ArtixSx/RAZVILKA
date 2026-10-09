@@ -33,6 +33,20 @@ const (
 
 type nfqwsScopedRules map[PolicyEffectTool]map[string][][]string
 
+// Local read result only. A typed capture is produced by the retained whole
+// inventory reader, bound to this exact network binding and compiled plan.
+// Neither this image nor its pure classification grants effects or ownership.
+type nfqwsScopedReadImage struct {
+	rules   nfqwsScopedRules
+	capture *nfqwsScopedReadCapture
+}
+
+type nfqwsScopedReadCapture struct {
+	source   *nfqwsScopedNetworkBinding
+	plan     *NFQWSScopedPlan
+	snapshot BackendInventorySnapshot
+}
+
 // These copies never escape to Apply or a writer Runner. The common issuer's
 // Current guard may prove prepared phases without granting a capture effect.
 func nfqwsScopedBeforeStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) error {
@@ -63,16 +77,16 @@ func nfqwsScopedTokens(line string) ([]string, error) {
 	return out, nil
 }
 
-func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
 	if err := b.AdditionalReadback(ctx, p); err != nil {
-		return nil, err
+		return nfqwsScopedReadImage{}, err
 	}
 	result, err := b.readClassicRules(ctx, p)
 	if err != nil {
-		return nil, err
+		return nfqwsScopedReadImage{}, err
 	}
 	if err := b.AdditionalReadback(ctx, p); err != nil {
-		return nil, err
+		return nfqwsScopedReadImage{}, err
 	}
 	return result, ctx.Err()
 }
@@ -80,21 +94,21 @@ func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) 
 // Final decision boundary: preserve the whole other-backend/namespace bracket,
 // discard its classic image before the closing callback, then collect a new
 // all-ten-table image with no external predicate callback after those rows.
-func (b *NFQWSScopedBinding) readFinalRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+func (b *NFQWSScopedBinding) readFinalRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
 	if _, err := b.readRules(ctx, p); err != nil {
-		return nil, err
+		return nfqwsScopedReadImage{}, err
 	}
 	return b.readClassicRules(ctx, p)
 }
 
 // The runner performs only trusted fixed read commands here. Process, LAN,
 // Guard and AdditionalReadback predicate callbacks belong before this image.
-func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
 	if b.network != nil {
 		return b.network.rules(ctx, p)
 	}
 	if p == nil || p.resources.NetworkIdentity != nil {
-		return nil, ErrNFQWSScopedOwner
+		return nfqwsScopedReadImage{}, ErrNFQWSScopedOwner
 	}
 	result := nfqwsScopedRules{}
 	for _, tool := range []PolicyEffectTool{PolicyEffectIPTables, PolicyEffectIP6Tables} {
@@ -104,11 +118,11 @@ func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context, p *NFQWSScope
 		for _, table := range []string{"raw", "mangle", "nat", "filter", "security"} {
 			out, err := b.Runner.Run(ctx, b.Tools.command(tool), "-t", table, "-S")
 			if err != nil || ctx.Err() != nil || len(out) > 1<<20 || !utf8.Valid(out) {
-				return nil, errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
+				return nfqwsScopedReadImage{}, errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
 			}
 			lines := strings.Split(string(out), "\n")
 			if len(lines) > 8192 {
-				return nil, ErrNFQWSScopedOwner
+				return nfqwsScopedReadImage{}, ErrNFQWSScopedOwner
 			}
 			for _, line := range lines {
 				if strings.TrimSpace(line) == "" {
@@ -116,13 +130,13 @@ func (b *NFQWSScopedBinding) readClassicRules(ctx context.Context, p *NFQWSScope
 				}
 				fields, err := backendXTablesRowTokens(line)
 				if err != nil {
-					return nil, ErrNFQWSScopedOwner
+					return nfqwsScopedReadImage{}, ErrNFQWSScopedOwner
 				}
 				result[tool][table] = append(result[tool][table], fields)
 			}
 		}
 	}
-	return result, ctx.Err()
+	return nfqwsScopedReadImage{rules: result}, ctx.Err()
 }
 
 func nfqwsScopedRuleEqual(a, b []string) bool {
@@ -206,6 +220,14 @@ func nfqwsScopedRuleKey(fields []string) string {
 // Classification is pure: callers may consume counts only in the same local
 // read boundary. It never supplies a receipt or an admission grant.
 func (p *NFQWSScopedPlan) scopedRowCounts(rules nfqwsScopedRules) ([]int, error) {
+	return p.scopedRowCountsCompared(rules, nil)
+}
+
+func (p *NFQWSScopedPlan) scopedRowCountsCompared(rules nfqwsScopedRules, comparison []BackendInventoryRow) ([]int, error) {
+	compared := map[nfqwsDirectStockRowKey]bool{}
+	for _, row := range comparison {
+		compared[nfqwsDirectStockKey(row)] = true
+	}
 	counts := make([]int, len(p.mixed.Effects))
 	for tool, tables := range rules {
 		for table, lines := range tables {
@@ -216,6 +238,13 @@ func (p *NFQWSScopedPlan) scopedRowCounts(rules nfqwsScopedRules) ([]int, error)
 						counts[i]++
 						owned = true
 					}
+				}
+				family := 4
+				if tool == PolicyEffectIP6Tables {
+					family = 6
+				}
+				if len(compared) != 0 && compared[nfqwsDirectStockKey(BackendInventoryRow{Family: family, Table: table, Tokens: fields})] {
+					continue // Only exact rows from the SAME complete graph proof.
 				}
 				// This is a conservative global conflict policy. A different
 				// queue does not prove disjoint DPI processing of this scope.
@@ -237,7 +266,11 @@ func (p *NFQWSScopedPlan) scopedRowCounts(rules nfqwsScopedRules) ([]int, error)
 }
 
 func (p *NFQWSScopedPlan) ruleCounts(rules nfqwsScopedRules, mode nfqwsScopedReadMode) ([]int, error) {
-	counts, err := p.scopedRowCounts(rules)
+	return p.ruleCountsCompared(rules, mode, nil)
+}
+
+func (p *NFQWSScopedPlan) ruleCountsCompared(rules nfqwsScopedRules, mode nfqwsScopedReadMode, comparison []BackendInventoryRow) ([]int, error) {
+	counts, err := p.scopedRowCountsCompared(rules, comparison)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +459,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 		if err != nil {
 			return err
 		}
-		counts, err := p.ruleCounts(rules, mode)
+		counts, err := b.ruleCountsImage(p, rules, mode)
 		if err != nil {
 			return err
 		}
@@ -464,7 +497,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 	if err != nil {
 		return err
 	}
-	counts, err := p.ruleCounts(rules, mode)
+	counts, err := b.ruleCountsImage(p, rules, mode)
 	if err != nil || index >= len(counts) {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
@@ -483,7 +516,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 		if err != nil {
 			return err
 		}
-		if _, err := p.ruleCounts(rules, mode); err != nil {
+		if _, err := b.ruleCountsImage(p, rules, mode); err != nil {
 			return err
 		}
 	}
@@ -528,7 +561,7 @@ func (b *NFQWSScopedBinding) CheckKnownReferences(ctx context.Context, p *NFQWSS
 	if err != nil {
 		return err
 	}
-	if _, err := p.ruleCounts(rules, nfqwsScopedPartial); err != nil {
+	if _, err := b.ruleCountsImage(p, rules, nfqwsScopedPartial); err != nil {
 		return err
 	}
 	if err := b.checkProcess(ctx, p, false); err != nil {
@@ -642,7 +675,7 @@ func (b *NFQWSScopedBinding) inspect(ctx context.Context, p *NFQWSScopedPlan, in
 	if err != nil {
 		return 0, err
 	}
-	counts, err := p.ruleCounts(rules, nfqwsScopedPartial)
+	counts, err := b.ruleCountsImage(p, rules, nfqwsScopedPartial)
 	if err != nil {
 		return 0, err
 	}
@@ -659,7 +692,7 @@ func (b *NFQWSScopedBinding) beforeDelete(ctx context.Context, p *NFQWSScopedPla
 		return err
 	}
 	name := e.Add[3]
-	for _, tables := range rules {
+	for _, tables := range rules.rules {
 		for _, lines := range tables {
 			for _, f := range lines {
 				if f[0] == "-A" && f[1] == name {

@@ -49,7 +49,7 @@ func nfqwsScopedAfterStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p 
 	if err != nil {
 		return false, fmt.Errorf("all-capture readback: %w", err)
 	}
-	if _, err := p.ruleCounts(rules, nfqwsScopedBeforeStart); err != nil {
+	if _, err := b.ruleCountsImage(p, rules, nfqwsScopedBeforeStart); err != nil {
 		return false, fmt.Errorf("absent capture shape: %w", err)
 	}
 	if err := b.VerifyLAN(ctx, CloneLANPolicyRuntime(p.lan)); err != nil {

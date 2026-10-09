@@ -3,7 +3,10 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
@@ -75,16 +78,132 @@ func (b *NFQWSScopedBinding) checkQueueReadiness(ctx context.Context, p *NFQWSSc
 	return nfqwsScopedTypedQueueReadiness(ctx, b.network.provider, identity, p.resources.Queue, child)
 }
 
-func (n *nfqwsScopedNetworkBinding) rules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedRules, error) {
+func (n *nfqwsScopedNetworkBinding) rules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
 	identity, err := nfqwsScopedTypedNetwork(p)
 	if n == nil || err != nil {
-		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+		return nfqwsScopedReadImage{}, errors.Join(ErrNFQWSScopedOwner, err)
 	}
 	snapshot, err := n.inventory.Read(ctx, identity)
 	if err != nil || snapshot.RequireComplete() != nil || snapshot.Scope.Network != identity {
+		return nfqwsScopedReadImage{}, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	rules, err := nfqwsScopedInventoryRules(snapshot)
+	if err != nil {
+		return nfqwsScopedReadImage{}, err
+	}
+	return nfqwsScopedReadImage{rules: rules, capture: &nfqwsScopedReadCapture{source: n, plan: p, snapshot: snapshot}}, nil
+}
+
+func (b *NFQWSScopedBinding) stockComparisonRows(p *NFQWSScopedPlan, image nfqwsScopedReadImage) ([]BackendInventoryRow, error) {
+	if b == nil || p == nil {
+		return nil, ErrNFQWSScopedOwner
+	}
+	if image.capture == nil {
+		if b.network != nil || p.resources.NetworkIdentity != nil || p.spec.NetworkIdentity != nil {
+			return nil, ErrNFQWSScopedOwner
+		}
+		return nil, nil // Bare/untyped rule maps retain the global strict policy.
+	}
+	c := image.capture
+	identity, err := nfqwsScopedTypedNetwork(p)
+	if err != nil || b.network == nil || c.source != b.network || c.plan != p || p.resources.Queue == 0 || p.resources.Queue != p.spec.Queue {
 		return nil, errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	return nfqwsScopedInventoryRules(snapshot)
+	n := b.network
+	if n.provider == nil || n.inventory.reader.Provider != n.provider || n.inventory.reader.Runner == nil || n.inventory.reader.CheckTools == nil ||
+		b.Tools.IPTables != n.inventory.reader.IPTables || b.Tools.IP6Tables != n.inventory.reader.IP6Tables ||
+		c.snapshot.Scope.Network != identity || c.snapshot.Scope.ToolReviewID != n.inventory.review ||
+		c.snapshot.IPTables != n.inventory.reader.IPTables || c.snapshot.IP6Tables != n.inventory.reader.IP6Tables {
+		return nil, ErrNFQWSScopedOwner
+	}
+	if len(c.snapshot.Rows) > backendClassicRows {
+		return nil, ErrNFQWSScopedOwner
+	}
+	var budget nfqwsDirectStockBudget
+	for _, row := range c.snapshot.Rows {
+		if !budget.add(row) {
+			return nil, ErrNFQWSScopedOwner
+		}
+	}
+	projection, err := nfqwsScopedInventoryRules(c.snapshot)
+	if err != nil || !reflect.DeepEqual(projection, image.rules) {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	if p.lan == nil || p.lan.Mode != LANPolicyNFQWSDirectMode {
+		return nil, nil
+	}
+	ownedKeys := map[PolicyEffectTool]map[string]bool{}
+	for _, effect := range p.mixed.Effects {
+		if len(effect.Add) < 4 || effect.Add[0] != "-t" || effect.Add[1] != "mangle" || effect.Tool != PolicyEffectIPTables && effect.Tool != PolicyEffectIP6Tables {
+			return nil, ErrNFQWSScopedOwner
+		}
+		if ownedKeys[effect.Tool] == nil {
+			ownedKeys[effect.Tool] = map[string]bool{}
+		}
+		ownedKeys[effect.Tool][nfqwsScopedRuleKey(effect.Add[2:])] = true
+	}
+	var exactOwned []BackendInventoryRow
+	for _, row := range c.snapshot.Rows {
+		if row.Table != "mangle" {
+			continue
+		}
+		tool := PolicyEffectIPTables
+		if row.Family == 6 {
+			tool = PolicyEffectIP6Tables
+		}
+		if ownedKeys[tool][nfqwsScopedRuleKey(row.Tokens)] {
+			exactOwned = append(exactOwned, row)
+		}
+	}
+	comparison, err := inspectNFQWSDirectStockQueuesWithOwned(c.snapshot, p.resources.Queue, exactOwned)
+	if err != nil {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	return comparison, nil
+}
+
+func (b *NFQWSScopedBinding) ruleCountsImage(p *NFQWSScopedPlan, image nfqwsScopedReadImage, mode nfqwsScopedReadMode) ([]int, error) {
+	comparison, err := b.stockComparisonRows(p, image)
+	if err != nil {
+		return nil, err
+	}
+	return p.ruleCountsCompared(image.rules, mode, comparison)
+}
+
+func (b *NFQWSScopedBinding) scopedRowCountsImage(p *NFQWSScopedPlan, image nfqwsScopedReadImage) ([]int, error) {
+	comparison, err := b.stockComparisonRows(p, image)
+	if err != nil {
+		return nil, err
+	}
+	return p.scopedRowCountsCompared(image.rules, comparison)
+}
+
+// Post-RPC typed observations use a fresh original whole capture. A legacy
+// target-table image cannot manufacture coverage or borrow an earlier proof.
+func (b *NFQWSScopedBinding) readEffectImage(ctx context.Context, p *NFQWSScopedPlan, tool PolicyEffectTool) (nfqwsScopedReadImage, error) {
+	if b.network != nil {
+		return b.readClassicRules(ctx, p)
+	}
+	out, err := b.readTargetRules(ctx, p, tool)
+	if err != nil || ctx.Err() != nil || len(out) > 1<<20 || !utf8.Valid(out) {
+		return nfqwsScopedReadImage{}, errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
+	}
+	lines := strings.Split(string(out), "\n")
+	if len(lines) > 8192 {
+		return nfqwsScopedReadImage{}, ErrNFQWSScopedOwner
+	}
+	var rows [][]string
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields, err := backendXTablesRowTokens(line)
+		if err != nil {
+			return nfqwsScopedReadImage{}, ErrNFQWSScopedOwner
+		}
+		rows = append(rows, fields)
+	}
+	return nfqwsScopedReadImage{rules: nfqwsScopedRules{tool: {"mangle": rows}}}, nil
 }
 
 func nfqwsScopedInventoryRules(snapshot BackendInventorySnapshot) (nfqwsScopedRules, error) {

@@ -2,10 +2,7 @@ package dataplane
 
 import (
 	"context"
-	"errors"
 	"slices"
-	"strings"
-	"unicode/utf8"
 )
 
 // Remove-only, inside the existing common receipt operation. A matching frozen
@@ -49,11 +46,11 @@ func (r nfqwsScopedRemoveRunner) Run(ctx context.Context, command string, args .
 	if err != nil {
 		return nil, err
 	}
-	counts, err := r.scoped.ruleCounts(rules, nfqwsScopedCleanup)
+	counts, err := r.binding.ruleCountsImage(r.scoped, rules, nfqwsScopedCleanup)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.scoped.deleteReady(rules, counts, index); err != nil {
+	if err := r.scoped.deleteReady(rules.rules, counts, index); err != nil {
 		return nil, err
 	}
 	for i, count := range counts {
@@ -93,11 +90,11 @@ func (b *NFQWSScopedBinding) cleanupBoundary(ctx context.Context, p *NFQWSScoped
 	if err != nil {
 		return err
 	}
-	counts, err := p.ruleCounts(rules, nfqwsScopedCleanup)
+	counts, err := b.ruleCountsImage(p, rules, nfqwsScopedCleanup)
 	if err != nil {
 		return err
 	}
-	if err := p.deleteReady(rules, counts, index); err != nil {
+	if err := p.deleteReady(rules.rules, counts, index); err != nil {
 		return err
 	}
 	return b.checkProcess(ctx, p, true)
@@ -145,26 +142,11 @@ func (b *NFQWSScopedBinding) postDelete(ctx context.Context, p *NFQWSScopedPlan,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	out, err := b.readTargetRules(ctx, p, tool)
-	if err != nil || ctx.Err() != nil || len(out) > 1<<20 || !utf8.Valid(out) {
-		return errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
+	image, err := b.readEffectImage(ctx, p, tool)
+	if err != nil {
+		return err
 	}
-	lines := strings.Split(string(out), "\n")
-	if len(lines) > 8192 {
-		return ErrNFQWSScopedOwner
-	}
-	var rows [][]string
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		fields, err := backendXTablesRowTokens(line)
-		if err != nil {
-			return ErrNFQWSScopedOwner
-		}
-		rows = append(rows, fields)
-	}
-	counts, err := p.scopedRowCounts(nfqwsScopedRules{tool: {"mangle": rows}})
+	counts, err := b.scopedRowCountsImage(p, image)
 	if err != nil {
 		return err
 	}

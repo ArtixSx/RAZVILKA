@@ -2,10 +2,7 @@ package dataplane
 
 import (
 	"context"
-	"errors"
 	"slices"
-	"strings"
-	"unicode/utf8"
 )
 
 // Apply-only, held inside the common receipt operation. The frozen compiler
@@ -68,26 +65,11 @@ func (b *NFQWSScopedBinding) postAdd(ctx context.Context, p *NFQWSScopedPlan, to
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	out, err := b.readTargetRules(ctx, p, tool)
-	if err != nil || ctx.Err() != nil || len(out) > 1<<20 || !utf8.Valid(out) {
-		return errors.Join(ErrNFQWSScopedOwner, err, ctx.Err())
+	image, err := b.readEffectImage(ctx, p, tool)
+	if err != nil {
+		return err
 	}
-	lines := strings.Split(string(out), "\n")
-	if len(lines) > 8192 {
-		return ErrNFQWSScopedOwner
-	}
-	var rows [][]string
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		fields, err := backendXTablesRowTokens(line)
-		if err != nil {
-			return ErrNFQWSScopedOwner
-		}
-		rows = append(rows, fields)
-	}
-	counts, err := p.scopedRowCounts(nfqwsScopedRules{tool: {"mangle": rows}})
+	counts, err := b.scopedRowCountsImage(p, image)
 	if err != nil {
 		return err
 	}
