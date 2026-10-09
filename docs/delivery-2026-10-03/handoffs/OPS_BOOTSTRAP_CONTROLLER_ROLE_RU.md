@@ -39,8 +39,19 @@ inactivity и отсутствие фиксированного PID-файла �
 нужны текущие receipt2 `running` и file receipt2 `command-started`, BeforeFiles,
 точный quiesce command. Все три реальных процесса проверяются совместно.
 Named/renamed/hard-linked/different-inode controller без этой связи остаётся
-неподтверждённым. Process args/parent/hash/birth, review/record/identity и
-current Stop перечитываются вокруг классификации.
+неподтверждённым. Process args/parent/hash/birth, review/record/identity, running
+command receipt, matching file receipt и current Stop перечитываются вокруг
+классификации.
+
+ArchivePath/ArchiveSHA в review/argv — provenance потреблённого package, а не
+требование повторно читать original archive при каждом scanner peer. Producer
+обязан прочитать открытый no-follow original fd, проверить metadata/inode до и
+после streaming copy/hash, fsync новой job copy и проверить digest до extract
+или запуска bytes. После immutable review исходный внешний архив может быть
+удалён/изменён: роль опирается на verified extracted images и review, не на
+доступность original path. Role API не хеширует original archive и не заявляет
+его текущую неизменность. Отказ changed-archive в role tests — изменение
+checksum/path в exact argv binding, а не изменение внешнего файла после seal.
 
 ## Lifecycle и wiring
 
@@ -53,8 +64,8 @@ port/socket/kernel проверки остаются обязательными.
 завершения и не ECHILD. Existing supervisor по-прежнему обязан реально joined
 child tree и durable ECHILD до command inactivity/capture/replacement. API не
 усыновляет dead helper/unknown worker и не переписывает receipt. Reaped, armed,
-completed, cold-start, outer-child mismatch, reused birth и изменённый архив
-отвергаются для worker роли.
+completed, cold-start, outer-child mismatch, reused birth и изменённый archive
+path/checksum в argv отвергаются для worker роли.
 
 ## Проверки и незакрытые пункты
 

@@ -72,6 +72,7 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return refuse(err)
 	}
+	var openingFileReceipt selfupdatejournal.Receipt
 	if command.State == "running" {
 		store, err := a.OpenFileJournal()
 		if err != nil {
@@ -82,6 +83,7 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		if readErr != nil || !present || current.ID != id || current.Schema != selfupdatejournal.Schema || current.Phase != "command-started" || !current.BeforeFiles || current.Command != "quiesce-old-runtime" {
 			return refuse(readErr)
 		}
+		openingFileReceipt = current
 	}
 	// Prove all live roles as a closed group. In particular an arbitrary
 	// outer caller cannot classify a recorded helper by borrowing its ID.
@@ -121,6 +123,18 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		after, err := bootstrapControllerAt(ctx, fact.Process.PID)
 		if err != nil || !reflect.DeepEqual(after, fact) {
 			return refuse(err)
+		}
+	}
+	if command.State == "running" {
+		store, err := a.OpenFileJournal()
+		if err != nil {
+			return refuse(err)
+		}
+		closing, present, readErr := store.Current()
+		store.Close()
+		fresh, commandErr := readFileCommand(root, id, "quiesce-old-runtime")
+		if readErr != nil || commandErr != nil || !present || !reflect.DeepEqual(closing, openingFileReceipt) || fresh != command {
+			return refuse(errors.Join(readErr, commandErr))
 		}
 	}
 	return ctx.Err()
