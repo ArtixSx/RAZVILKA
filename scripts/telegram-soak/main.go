@@ -1,5 +1,5 @@
-// telegram-soak observes a previously verified, already running VLESS SOCKS
-// endpoint. It never loads a profile, starts an engine, or changes a route.
+// telegram-soak samples Telegram via an existing SOCKS endpoint or the system
+// network bound to one local IPv4. It never starts an engine or changes a route.
 package main
 
 import (
@@ -32,6 +32,7 @@ const maxBody = 256 << 10
 
 type options struct {
 	SOCKS          string
+	LANClient      netip.Addr
 	Pin            netip.Addr
 	Duration       time.Duration
 	Interval       time.Duration
@@ -52,13 +53,25 @@ func defaults() options {
 }
 
 func (o options) validate() error {
+	if o.validateMode() != nil || o.Duration <= 0 || o.Duration > time.Hour || o.Interval < time.Second || o.Interval > 5*time.Minute ||
+		o.ProbeTimeout <= 0 || o.ProbeTimeout > 30*time.Second || o.Duration <= o.cycleBudget() || o.ControlTimeout <= 0 || o.ControlTimeout > 5*time.Second ||
+		o.Pin.IsValid() && (!o.Pin.Is4() || !publicfetch.PublicAddress(o.Pin)) {
+		return errors.New("invalid options")
+	}
+	return nil
+}
+
+func (o options) validateMode() error {
+	if o.LANClient.IsValid() {
+		if o.SOCKS != "" || !validLANIPv4(o.LANClient) {
+			return errors.New("invalid options")
+		}
+		return nil
+	}
 	host, port, err := net.SplitHostPort(o.SOCKS)
 	address, parseErr := netip.ParseAddr(host)
 	number, portErr := strconv.Atoi(port)
-	if err != nil || parseErr != nil || !address.IsLoopback() || address.Zone() != "" || address.Is4In6() || portErr != nil || number < 1 || number > 65535 ||
-		o.Duration <= 0 || o.Duration > time.Hour || o.Interval < time.Second || o.Interval > 5*time.Minute ||
-		o.ProbeTimeout <= 0 || o.ProbeTimeout > 30*time.Second || o.Duration <= o.cycleBudget() || o.ControlTimeout <= 0 || o.ControlTimeout > 5*time.Second ||
-		o.Pin.IsValid() && (!o.Pin.Is4() || !publicfetch.PublicAddress(o.Pin)) {
+	if err != nil || parseErr != nil || !address.IsLoopback() || address.Zone() != "" || address.Is4In6() || portErr != nil || number < 1 || number > 65535 {
 		return errors.New("invalid options")
 	}
 	return nil
@@ -104,7 +117,9 @@ type report struct {
 	BuildRevision           string          `json:"build_revision,omitempty"`
 	BuildModified           bool            `json:"build_modified"`
 	Service                 string          `json:"service"`
-	Endpoint                string          `json:"loopback_socks_endpoint"`
+	ConnectionMode          string          `json:"connection_mode"`
+	Endpoint                string          `json:"loopback_socks_endpoint,omitempty"`
+	LANClient               string          `json:"lan_client_ipv4,omitempty"`
 	TargetMode              string          `json:"target_mode"`
 	StartedAt               time.Time       `json:"started_at"`
 	SamplingStartedAt       *time.Time      `json:"sampling_started_at,omitempty"`
@@ -144,9 +159,12 @@ type protocolReport struct {
 	Scope         string         `json:"scope"`
 }
 
-// The control is only a no-auth SOCKS5 greeting at the configured address.
-// It does not authenticate the listener or prove an unchanged process/node.
+// Controls are mode-specific: LAN address inventory or a no-auth SOCKS5
+// greeting. Neither proves the VLESS process or the packet path.
 func endpointControl(parent context.Context, o options) control {
+	if o.LANClient.IsValid() {
+		return lanEndpointControl(parent, o)
+	}
 	started := time.Now()
 	ctx, cancel := context.WithTimeout(parent, o.ControlTimeout)
 	defer cancel()
@@ -182,14 +200,16 @@ type httpsProber struct {
 }
 
 func newHTTPSProber(o options, roots *tls.Config) (*httpsProber, error) {
-	dialer, err := proxy.SOCKS5("tcp", o.SOCKS, nil, &net.Dialer{})
+	dialer, err := newOutboundDialer(o)
 	if err != nil {
-		return nil, errors.New("SOCKS dialer unavailable")
+		return nil, err
 	}
-	contextDialer, ok := dialer.(proxy.ContextDialer)
-	if !ok {
-		return nil, errors.New("SOCKS cancellation unavailable")
-	}
+	return newHTTPSProberWithDialer(o, roots, dialer)
+}
+
+// The injected dialer lets local socket fixtures retain the production target
+// and TLS checks. There is no CLI target or trust override.
+func newHTTPSProberWithDialer(o options, roots *tls.Config, dialer proxy.ContextDialer) (*httpsProber, error) {
 	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: telegramHost}
 	if roots != nil {
 		if roots.InsecureSkipVerify {
@@ -197,7 +217,7 @@ func newHTTPSProber(o options, roots *tls.Config) (*httpsProber, error) {
 		}
 		config.RootCAs = roots.RootCAs // Local fixtures only; no CLI trust override.
 	}
-	transport := &http.Transport{TLSClientConfig: config, DisableKeepAlives: true, DisableCompression: true, MaxResponseHeaderBytes: 64 << 10,
+	transport := &http.Transport{Proxy: nil, TLSClientConfig: config, DisableKeepAlives: true, DisableCompression: true, MaxResponseHeaderBytes: 64 << 10,
 		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
 			if target != net.JoinHostPort(telegramHost, "443") || network != "tcp" {
 				return nil, errors.New("target changed")
@@ -205,7 +225,7 @@ func newHTTPSProber(o options, roots *tls.Config) (*httpsProber, error) {
 			if o.Pin.IsValid() {
 				target = net.JoinHostPort(o.Pin.String(), "443")
 			}
-			return contextDialer.DialContext(ctx, "tcp", target)
+			return dialer.DialContext(ctx, "tcp", target)
 		},
 	}
 	return &httpsProber{transport: transport, client: &http.Client{Transport: transport,
@@ -287,19 +307,33 @@ func waitUntil(ctx context.Context, at time.Time) error {
 }
 
 func observe(parent context.Context, o options, roots *tls.Config) (report, error) {
+	return observeWithDialer(parent, o, roots, nil)
+}
+
+// A non-nil dialer is used only by local fixtures; normal runs construct their
+// mode-specific dialer after the initial control succeeds.
+func observeWithDialer(parent context.Context, o options, roots *tls.Config, dialer proxy.ContextDialer) (report, error) {
 	if err := o.validate(); err != nil {
 		return report{}, err
 	}
 	started := time.Now()
-	r := report{Schema: 1, Tool: "telegram-soak/2", Service: "telegram_https", Endpoint: o.SOCKS, TargetMode: "hostname_over_socks",
+	r := report{Schema: 1, Tool: "telegram-soak/3", Service: "telegram_https", ConnectionMode: "socks", Endpoint: o.SOCKS, TargetMode: "hostname_over_socks",
 		StartedAt: started.UTC(), SamplingDurationSeconds: o.Duration.Seconds(), IntervalSeconds: o.Interval.Seconds(), ProbeTimeoutSeconds: o.ProbeTimeout.Seconds(), ControlTimeoutSeconds: o.ControlTimeout.Seconds(),
 		Outcome: "refused", ExitCode: 1, Final: control{Code: "not_attempted"}, FailureCodes: map[string]int{}, HTTPStatuses: map[int]int{},
 		MTProto: "not_tested_not_requested",
 		Limits:  []string{"HTTPS TLS validation, HTTP 2xx, <=64KiB headers and <=256KiB body only; redirects refused", "No authenticated chats, account login, media, voice or authenticated MTProto server identity; no auth-key creation", "Endpoint controls verify SOCKS5 greeting at one configured loopback address, not unchanged PID/config/VLESS node/WAN", "No LAN/TUN, application UI or release acceptance; the operator must separately verify VLESS runtime and network identity", "Sampling lasts the requested duration; initial and final controls add at most two control timeouts, excluding report output and scheduler delays"},
 	}
+	if o.LANClient.IsValid() {
+		r.ConnectionMode, r.LANClient, r.TargetMode = "lan-client", o.LANClient.String(), "hostname_over_system_network_bound_ipv4"
+		r.Limits[2] = "Endpoint controls verify an up nonloopback interface with the selected local IPv4; they do not verify VLESS or the packet path"
+		r.Limits[3] = "HTTPS/unauth MTProto success uses the bound system network and is not proxy evidence; the operator separately verifies App owner, iptables counters, process and path"
+	}
 	if o.MTProto {
 		r.MTProto = "single_req_pq_multi_nonce_matched_resPQ_only"
 		r.Protocol = &protocolReport{DC: 2, BudgetSeconds: qaMTBudget.Seconds(), FailureCodes: map[string]int{}, Scope: "One unauthenticated req_pq_multi/resPQ through the same configured SOCKS endpoint; nonce/framing/TL/time checks only, not server authentication, account, media or voice"}
+		if o.LANClient.IsValid() {
+			r.Protocol.Scope = "One unauthenticated req_pq_multi/resPQ through the system network bound to the selected local IPv4; nonce/framing/TL/time checks only, not proxy evidence, server authentication, account, media or voice"
+		}
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -319,7 +353,14 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 	finalAttempted := false
 	r.Initial = endpointControl(parent, o)
 	if r.Initial.OK && contextStopCause(parent, time.Now()) == nil {
-		prober, err := newHTTPSProber(o, roots)
+		var err error
+		if dialer == nil {
+			dialer, err = newOutboundDialer(o)
+			if err != nil {
+				return report{}, err
+			}
+		}
+		prober, err := newHTTPSProberWithDialer(o, roots, dialer)
 		if err != nil {
 			return report{}, err
 		}
@@ -352,7 +393,7 @@ func observe(parent context.Context, o options, roots *tls.Config) (report, erro
 			}
 			if o.MTProto {
 				protocolStarted := time.Now()
-				observation := qaMTProbe(window, o.SOCKS)
+				observation := qaMTProbeWithDialer(window, dialer)
 				r.Protocol.Attempts++
 				protocolLatencies = append(protocolLatencies, float64(time.Since(protocolStarted))/float64(time.Millisecond))
 				if observation.Reply {
@@ -406,19 +447,26 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, `Build: go build -trimpath -o telegram-soak ./scripts/telegram-soak
 Run on the same host as the previously verified running VLESS SOCKS listener:
   ./telegram-soak -socks 127.0.0.1:1080 -duration 1h -interval 30s > telegram-soak.json
-Optional -mtproto adds one req_pq_multi/resPQ through that SOCKS to fixed production DC2 per cycle.
+Or sample the chosen LAN client through its ordinary system network:
+  ./telegram-soak --lan-client 192.168.1.100 -mtproto -duration 1h -interval 30s > telegram-lan-soak.json
+Exactly one of -socks and --lan-client is required. LAN mode requires an existing up nonloopback local IPv4.
+Both LAN probes bind that source address; a failed bind never retries without it. Proxy environment variables are ignored.
+Optional -mtproto adds one req_pq_multi/resPQ through the selected mode to fixed production DC2 per cycle.
 It checks unauthenticated echoed nonce and bounded wire format; no RSA/DH/server authentication or account methods.
 Optional -telegram-ip PUBLIC_IPV4 uses a separately admitted literal with original TLS Host/SNI.
 Defaults: probe-timeout 10s, control-timeout 2s; duration >0..1h, interval 1s..5m.
 Duration must exceed probe-timeout (plus 3s with -mtproto); only cycles with that full remaining budget start.
-No engine startup, credentials/profile reads, route changes, direct fallback, or local Telegram DNS.
+No engine startup, credentials/profile reads, route/DNS/OS setting changes or fallback to another mode.
+SOCKS mode sends Telegram names to SOCKS. LAN mode uses IPv4 system DNS unless -telegram-ip is provided.
 TLS verification is mandatory; only https Telegram homepage 2xx with <=256KiB body is accepted.
 SIGINT/SIGTERM cancel requests and waits; no final network control follows parent cancellation.
 One bounded JSON summary is written at exit; no bodies, URLs, raw errors or credentials are emitted.
-Exit 0: entire sampling window, both SOCKS controls, all HTTPS requests and all opted-in unauth resPQ checks accepted.
+Exit 0: entire sampling window, both mode-specific controls, all HTTPS requests and all opted-in unauth resPQ checks accepted.
 Exit 2: completed sampling with failed HTTPS/protocol requests or final endpoint control. Exit 1: refused/incomplete/deadline. Exit 130: canceled.
 SOCKS controls do not prove unchanged process/node/config/WAN. Verify these separately before/after.
-MTProto is not tested without -mtproto. Authenticated chats/media/voice, physical LAN/TUN and UI are not tested.
+LAN controls verify address presence only. LAN success is not proxy/VLESS/path evidence.
+Root separately verifies original App owner, iptables counters, process and packet path.
+MTProto is not tested without -mtproto. Authenticated chats/media/voice, TUN and UI are not tested.
 This prepares a read-only final test; Root owns the real hour, network gates and release.`)
 }
 
@@ -426,19 +474,35 @@ func parseOptions(args []string) (options, bool, error) {
 	o := defaults()
 	fs := flag.NewFlagSet("telegram-soak", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // Invalid values can contain private input; never echo them.
-	var pin string
+	var pin, lanClient string
 	fs.StringVar(&o.SOCKS, "socks", "", "literal loopback SOCKS endpoint")
+	fs.StringVar(&lanClient, "lan-client", "", "existing nonloopback local IPv4 for the system network")
 	fs.StringVar(&pin, "telegram-ip", "", "optional separately admitted public IPv4")
 	fs.BoolVar(&o.MTProto, "mtproto", false, "opt in to one unauthenticated req_pq_multi/resPQ per cycle")
 	fs.DurationVar(&o.Duration, "duration", o.Duration, "sampling window")
 	fs.DurationVar(&o.Interval, "interval", o.Interval, "scheduled request interval")
 	fs.DurationVar(&o.ProbeTimeout, "probe-timeout", o.ProbeTimeout, "whole request timeout")
-	fs.DurationVar(&o.ControlTimeout, "control-timeout", o.ControlTimeout, "SOCKS greeting timeout")
+	fs.DurationVar(&o.ControlTimeout, "control-timeout", o.ControlTimeout, "mode-specific control timeout")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return o, true, nil
 		}
 		return o, false, errors.New("invalid options")
+	}
+	var socksSet, lanSet bool
+	fs.Visit(func(f *flag.Flag) {
+		socksSet = socksSet || f.Name == "socks"
+		lanSet = lanSet || f.Name == "lan-client"
+	})
+	if socksSet == lanSet {
+		return o, false, errors.New("invalid options")
+	}
+	if lanSet {
+		var err error
+		o.LANClient, err = netip.ParseAddr(lanClient)
+		if err != nil {
+			return o, false, errors.New("invalid options")
+		}
 	}
 	if pin != "" {
 		var err error

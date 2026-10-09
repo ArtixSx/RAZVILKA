@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-func fixtureTLS(t *testing.T, name string, handler http.HandlerFunc) (*httptest.Server, *tls.Config) {
+func fixtureTLS(t *testing.T, name string, handler http.HandlerFunc, local ...string) (*httptest.Server, *tls.Config) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -43,6 +43,15 @@ func fixtureTLS(t *testing.T, name string, handler http.HandlerFunc) (*httptest.
 	pool := x509.NewCertPool()
 	pool.AddCert(parsed)
 	server := httptest.NewUnstartedServer(handler)
+	if len(local) == 1 {
+		listener, err := net.Listen("tcp4", local[0])
+		if err != nil {
+			server.Close()
+			t.Fatal(err)
+		}
+		_ = server.Listener.Close()
+		server.Listener = listener
+	}
 	server.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
 	server.StartTLS()
 	t.Cleanup(server.Close)

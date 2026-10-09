@@ -65,6 +65,15 @@ func qaMTProbe(ctx context.Context, address string) qaMTObservation {
 	return qaMTExchange(ctx, address, qaMTDial, time.Now)
 }
 
+func qaMTProbeWithDialer(ctx context.Context, dialer xnetproxy.ContextDialer) qaMTObservation {
+	return qaMTExchange(ctx, qaMTEndpoint, func(ctx context.Context, target string) (net.Conn, error) {
+		if target != qaMTEndpoint {
+			return nil, errors.New("MTProto QA target changed")
+		}
+		return dialer.DialContext(ctx, "tcp", target)
+	}, time.Now)
+}
+
 func qaMTExchange(parent context.Context, address string, dial func(context.Context, string) (net.Conn, error), now func() time.Time) qaMTObservation {
 	ctx, cancel := context.WithTimeout(parent, qaMTBudget)
 	defer cancel()
