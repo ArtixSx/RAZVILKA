@@ -51,6 +51,12 @@ func (l *Lease) commandImage(index int) (string, *heldImage) {
 	if index == 2 && l.profile.ipAlias != "" {
 		return l.profile.ipAlias, l.review.ipEntry
 	}
+	if index >= 3 && index <= 4 {
+		image := l.review.wgEntry[index-3]
+		if image != nil {
+			return image.path, image
+		}
+	}
 	return "", nil
 }
 

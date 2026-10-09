@@ -1,17 +1,21 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -56,6 +60,18 @@ func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Pl
 	// across COMMON's many commands. The current parent runtime is unchanged.
 	t.Setenv("GORACE", strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
 	a.Runner = wgExecRunner{adapter: a}
+	// This is explicitly a tool/NI model, never StartupTools native evidence.
+	// It retains the existing genuine Gate/COMMON/control and child Start/Wait
+	// assertions while the Linux fixture tests the actual held ELF producer.
+	program, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := &wgCommandProcessModel{review: strings.Repeat("a", 64)}
+	tools := WGCommandTools{EngineID: a.ID(), WG: program, AWG: program, IP: program, IPTables: program, IP6Tables: program, ReviewSHA256: model.review, Identity: netidentity.Identity{Version: 1, Kind: netidentity.ProcNetInode, BootID: "12345678-1234-1234-1234-123456789abc", Inode: 123}, Provider: netidentity.NewProcProvider(), Runner: model}
+	if err := a.BindWGCommandTools(tools); err != nil {
+		t.Fatal(err)
+	}
 	manager := New(t.TempDir())
 	if err := manager.Register(a); err != nil {
 		t.Fatal(err)
@@ -117,6 +133,86 @@ func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Pl
 		t.Fatal(err)
 	}
 	return a, owner, ctx, cancel, release, controlRoot
+}
+
+type wgCommandProcessModel struct {
+	review     string
+	insideLeaf atomic.Bool
+	escaped    context.Context
+	admission  WGCommandAdmission
+}
+
+func (m *wgCommandProcessModel) CheckWG(ctx context.Context, _ netidentity.Identity) error {
+	if m.insideLeaf.Load() {
+		return errors.New("full tool/Provider check reentered the short Start leaf")
+	}
+	return ctx.Err()
+}
+
+func (m *wgCommandProcessModel) RunWG(ctx context.Context, owner WGCommandAdmission, name string, args ...string) ([]byte, error) {
+	m.escaped, m.admission = ctx, owner
+	command := exec.CommandContext(ctx, name, args...)
+	var output bytes.Buffer
+	command.Stdout, command.Stderr, command.WaitDelay = &output, &output, 100*time.Millisecond
+	m.insideLeaf.Store(true)
+	startErr := owner.WithStart(ctx, name, args, m.review, command.Start)
+	m.insideLeaf.Store(false)
+	if command.Process == nil {
+		return output.Bytes(), startErr
+	}
+	return output.Bytes(), errors.Join(startErr, command.Wait())
+}
+
+func TestWGNetworkCommandOwnerRetainedToolsAndOneUseCarrier(t *testing.T) {
+	a, owner, ctx, _, _, _ := wgNetworkCommandOwnerFixture(t)
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_PROCESS", "echo")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	args := []string{"-test.run=^TestWGOperationCommandProcess$"}
+	if _, err := a.Runner.Run(context.Background(), a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("bound source downgraded to legacy execution", err)
+	}
+	if _, err := a.run(ctx, a.IP, args...); err != nil {
+		t.Fatal(err)
+	}
+	model := owner.tools.Runner.(*wgCommandProcessModel)
+	i := model.admission.(*wgToolInvocation)
+	starts := 0
+	for _, escaped := range []context.Context{model.escaped, context.WithValue(model.escaped, wgToolInvocationKey{}, nil), context.Background()} {
+		if err := model.admission.WithStart(escaped, a.IP, args, model.review, func() error { starts++; return nil }); !errors.Is(err, ErrWGOperationOwner) {
+			t.Fatal("escaped source admission", err)
+		}
+	}
+	copy := &wgToolInvocation{self: i, open: true, owner: i.owner, name: i.name, review: i.review, args: append([]string(nil), i.args...)}
+	if err := copy.WithStart(context.WithValue(model.escaped, wgToolInvocationKey{}, copy), a.IP, args, model.review, func() error { starts++; return nil }); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("copied source admission", err)
+	}
+	if starts != 0 {
+		t.Fatal("escaped carrier reached Start", starts)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	original := a.wgCommandTools
+	a.wgCommandTools = nil
+	if _, err := a.run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("missing held source", err)
+	}
+	a.wgCommandTools = original
+	changed := *original
+	changed.ReviewSHA256 = strings.Repeat("c", 64)
+	a.wgCommandTools = &changed
+	if _, err := a.run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("replaced descriptor", err)
+	}
+	a.wgCommandTools = original
+	model.review = strings.Repeat("d", 64)
+	if _, err := a.run(ctx, a.IP, args...); !errors.Is(err, ErrWGOperationOwner) {
+		t.Fatal("source's actual digest mismatch", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("changed source ran child", err)
+	}
 }
 
 func TestWGOperationCommandProcess(t *testing.T) {

@@ -1,7 +1,6 @@
 package dataplane
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os/exec"
@@ -51,12 +50,39 @@ func (r wgPolicyCommandRunner) Run(ctx context.Context, name string, args ...str
 // Manager owner is an error; it cannot fall back to an unadmitted process.
 type wgExecRunner struct{ adapter *WARPWireGuardAdapter }
 
+type wgToolInvocationKey struct{}
+type wgToolInvocation struct {
+	self         *wgToolInvocation
+	mu           sync.Mutex
+	open, used   bool
+	owner        *wgOperationOwner
+	name, review string
+	args         []string
+}
+
+func (*wgToolInvocation) wgCommandAdmission() {}
+func (i *wgToolInvocation) WithStart(ctx context.Context, name string, args []string, review string, begin func() error) error {
+	if i == nil || i.self != i || ctx == nil || ctx.Value(wgToolInvocationKey{}) != i || begin == nil {
+		return ErrWGOperationOwner
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !i.open || i.used || i.name != name || i.review != review || !slices.Equal(i.args, args) {
+		return ErrWGOperationOwner
+	}
+	i.used = true
+	return i.owner.withToolStart(ctx, name, args, review, begin)
+}
+
 func (r wgExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if ctx == nil {
 		return nil, ErrWGOperationOwner
 	}
 	rawOwner, rawMaterial := ctx.Value(wgOperationOwnerKey{}), ctx.Value(wgOperationMaterialKey{})
 	if rawOwner == nil && rawMaterial == nil {
+		if r.adapter != nil && r.adapter.wgCommandTools != nil {
+			return nil, ErrWGOperationOwner
+		}
 		return exec.CommandContext(ctx, name, args...).CombinedOutput()
 	}
 	o, owned := rawOwner.(*wgOperationOwner)
@@ -72,31 +98,24 @@ func (r wgExecRunner) Run(ctx context.Context, name string, args ...string) ([]b
 	if err := o.check(ctx, cleanup); err != nil {
 		return nil, err
 	}
-	// This preserves the existing path-based execution ABI. It is NOT the
-	// StartupTools held-fd/tool+loader producer and claims no pinned native
-	// evidence. CORE must compose that source before opening stock List mode.
-	cmd := exec.CommandContext(ctx, name, args...)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
-	start := func() error {
-		if cleanup {
-			return o.material.control.WithCleanupStart(ctx, o.material.cleanup, cmd.Start)
-		}
-		return o.material.control.WithStart(ctx, cmd.Start)
+	tools := o.adapter.wgCommandTools
+	if !tools.valid(o.adapter.ID()) {
+		return nil, ErrWGOperationOwner
 	}
-	startErr := r.withCommandStart(ctx, o, name, args, start)
-	if cmd.Process == nil {
-		return output.Bytes(), startErr
-	}
-	// Exactly one Wait, outside control/receipt admission. Both close barriers
-	// retain this owner until cancellation has killed and Wait has joined it.
-	waitErr := cmd.Wait()
+	// The concrete original StartupTools source owns held-fd Start, output
+	// bounds, lifetime cancellation, WaitDelay and exactly one Wait. Both WG
+	// barriers retain this operation until the source has joined that Wait.
+	invocation := &wgToolInvocation{open: true, owner: o, name: name, review: tools.ReviewSHA256, args: slices.Clone(args)}
+	invocation.self = invocation
+	ctx = context.WithValue(ctx, wgToolInvocationKey{}, invocation)
+	defer func() { invocation.mu.Lock(); invocation.open = false; invocation.mu.Unlock() }()
+	output, runErr := tools.Runner.RunWG(ctx, invocation, name, args...)
 	closingErr := o.check(ctx, cleanup)
-	if startErr != nil || waitErr != nil {
-		return output.Bytes(), errors.Join(startErr, waitErr, closingErr)
+	if runErr != nil {
+		return output, errors.Join(runErr, closingErr)
 	}
 	if cleanup && closingErr != nil {
-		return output.Bytes(), closingErr // Unknown closing cleanup keeps prerequisites/fence.
+		return output, closingErr // Unknown closing cleanup keeps prerequisites/fence.
 	}
 	if closingErr != nil && !cleanup {
 		o.mu.Lock()
@@ -105,12 +124,50 @@ func (r wgExecRunner) Run(ctx context.Context, name string, args ...string) ([]b
 	}
 	// Preserve the actual successful command ACK for COMMON/causal cleanup.
 	// A closing forward revocation refuses the next command/phase.
-	return output.Bytes(), nil
+	return output, nil
+}
+
+// withToolStart is called only by the one-use original RPC carrier under the
+// retained source's tool/Provider
+// bracket. Compare original pointers, frozen fields and COMMON/file ownership;
+// full guards, Store/Scope, NI and tool checks belong outside this leaf.
+func (o *wgOperationOwner) withToolStart(ctx context.Context, name string, args []string, review string, begin func() error) error {
+	if o == nil || o.self != o || ctx == nil || ctx.Value(wgOperationOwnerKey{}) != o || ctx.Value(wgOperationMaterialKey{}) != o.material || begin == nil || o.scope == nil || o.material == nil || !o.sameAdapter() || !o.adapter.wgCommandTools.valid(o.adapter.ID()) || review != o.adapter.wgCommandTools.ReviewSHA256 {
+		return ErrWGOperationOwner
+	}
+	cleanup := wgOperationCleanup(ctx)
+	o.material.mu.Lock()
+	closed := o.material.closed
+	o.material.mu.Unlock()
+	if closed || o.material.self != o.material || o.material.manager.StateRoot != o.material.root {
+		return ErrWGOperationOwner
+	}
+	o.scope.mu.Lock()
+	err := o.scope.checkOriginalOwner(ctx, nil, !cleanup, false)
+	o.scope.mu.Unlock()
+	if err != nil {
+		return errors.Join(ErrWGOperationOwner, err)
+	}
+	if !cleanup {
+		o.mu.Lock()
+		err = o.revoked
+		o.mu.Unlock()
+		if err != nil {
+			return err
+		}
+	}
+	return (wgExecRunner{adapter: o.adapter}).withCommandStart(ctx, o, name, args, func() error {
+		if cleanup {
+			return o.material.control.WithCleanupStart(ctx, o.material.cleanup, begin)
+		}
+		return o.material.control.WithStart(ctx, begin)
+	})
 }
 
 func (r wgExecRunner) withCommandStart(ctx context.Context, o *wgOperationOwner, name string, args []string, start func() error) error {
 	a := o.adapter
-	if name == "" || !validPolicyEffectArgs(args) || name != a.ip() && name != a.wg() && name != a.wgQuick() && name != a.wgNetworkFirewallBinary(false) && name != a.wgNetworkFirewallBinary(true) {
+	companionRead := a.wgCommandTools != nil && (name == a.wgCommandTools.WG || name == a.wgCommandTools.AWG) && len(args) == 3 && args[0] == "show" && args[1] == "all" && args[2] == "public-key"
+	if name == "" || !validPolicyEffectArgs(args) || name != a.ip() && name != a.wg() && name != a.wgNetworkFirewallBinary(false) && name != a.wgNetworkFirewallBinary(true) && !companionRead {
 		return ErrWGOperationOwner
 	}
 	if i, ok := ctx.Value(wgNativeInvocationKey{}).(*wgNativeInvocation); ok {

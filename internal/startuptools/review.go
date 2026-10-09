@@ -32,6 +32,7 @@ type heldReview struct {
 	extensions  []string
 	entry       [2]*heldImage
 	ipEntry     *heldImage
+	wgEntry     [2]*heldImage
 	bytes       int64
 	edges       int
 }
@@ -99,17 +100,23 @@ func (r *heldReview) digest() (string, error) {
 		n := r.nodes[path]
 		nodes = append(nodes, nodeBinding{path, n.link, uint32(n.info.Mode())})
 	}
+	var wgAliases *[2]string
+	if r.profile.wgEngine != "" {
+		aliases := r.profile.wgAliases
+		wgAliases = &aliases
+	}
 	raw, err := json.Marshal(struct {
 		Schema      int
 		Profile     string
 		Aliases     [2]string
-		IPAlias     string `json:",omitempty"`
+		IPAlias     string     `json:",omitempty"`
+		WGAliases   *[2]string `json:",omitempty"`
 		Environment []string
 		Images      []imageBinding
 		Nodes       []nodeBinding
 		Absent      []string
 		Extensions  []string
-	}{1, r.profile.id, r.profile.aliases, r.profile.ipAlias, r.profile.environment(), images, nodes, sortedKeys(r.absent), r.extensions})
+	}{1, r.profile.id, r.profile.aliases, r.profile.ipAlias, wgAliases, r.profile.environment(), images, nodes, sortedKeys(r.absent), r.extensions})
 	if err != nil || len(raw) > 1<<20 {
 		return "", at("REVIEW_DIGEST", err)
 	}

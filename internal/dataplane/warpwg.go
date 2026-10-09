@@ -53,6 +53,7 @@ type WARPWireGuardAdapter struct {
 	policyReceiptOptions    policyAdditionOptions                           // package-test fault/boot seam; production leaves zero
 	networkUDPProbe         func(context.Context, netip.Addr) error         // package-test transport seam
 	networkLANBridgeMembers func(context.Context, string) ([]string, error) // package-test physical scope seam
+	wgCommandTools          *WGCommandTools
 }
 
 type warpWGSelection struct {

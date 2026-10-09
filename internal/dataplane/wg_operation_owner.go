@@ -118,6 +118,7 @@ type wgOperationOwner struct {
 	scope    *executionResourceScope
 	adapter  *WARPWireGuardAdapter
 	shape    WARPWireGuardAdapter
+	tools    WGCommandTools
 	mu       sync.Mutex
 	revoked  error
 }
@@ -143,10 +144,10 @@ func newWGOperationOwner(ctx context.Context, scope *executionResourceScope) (*w
 		return nil, ErrWGOperationOwner
 	}
 	runner, ok := a.Runner.(wgExecRunner)
-	if !ok || runner.adapter != a {
+	if !ok || runner.adapter != a || !a.wgCommandTools.valid(a.ID()) {
 		return nil, ErrWGOperationOwner
 	}
-	o := &wgOperationOwner{material: m, scope: scope, adapter: a, shape: *a}
+	o := &wgOperationOwner{material: m, scope: scope, adapter: a, shape: *a, tools: *a.wgCommandTools}
 	o.self = o
 	if err := o.check(ctx, false); err != nil {
 		return nil, err
@@ -185,8 +186,7 @@ func (o *wgOperationOwner) check(ctx context.Context, cleanup bool) error {
 	if err := o.material.current(ctx, cleanup); err != nil {
 		return errors.Join(ErrWGOperationOwner, err)
 	}
-	a, frozen := o.adapter, &o.shape
-	if a.ID() != frozen.ID() || a.StateRoot != frozen.StateRoot || a.RuntimeConfigPath != frozen.RuntimeConfigPath || a.Interface != frozen.Interface || a.Table != frozen.Table || a.PriorityBase != frozen.PriorityBase || a.WG != frozen.WG || a.IP != frozen.IP || a.WGQuick != frozen.WGQuick || a.IPTables != frozen.IPTables || a.IP6Tables != frozen.IP6Tables || a.Configs != frozen.Configs || !sameNetworkPolicyDependency(a.Profiles, frozen.Profiles) || !sameNetworkPolicyDependency(a.Runner, frozen.Runner) {
+	if !o.sameAdapter() {
 		return ErrWGOperationOwner
 	}
 	s := o.scope
@@ -197,9 +197,15 @@ func (o *wgOperationOwner) check(ctx context.Context, cleanup bool) error {
 		return errors.Join(ErrWGOperationOwner, err)
 	}
 	if s.networkIdentity != nil {
+		if s.networkIdentity.provider != o.tools.Provider || s.networkIdentity.value != o.tools.Identity {
+			return ErrWGOperationOwner
+		}
 		if err := s.networkIdentity.check(ctx); err != nil {
 			return errors.Join(ErrWGOperationOwner, err)
 		}
+	}
+	if err := o.tools.Runner.CheckWG(ctx, o.tools.Identity); err != nil {
+		return errors.Join(ErrWGOperationOwner, err)
 	}
 	if !cleanup {
 		o.mu.Lock()
@@ -223,6 +229,18 @@ func (o *wgOperationOwner) check(ctx context.Context, cleanup bool) error {
 		return revoked
 	}
 	return ctx.Err()
+}
+
+func (o *wgOperationOwner) sameAdapter() bool {
+	if o == nil || o.adapter == nil {
+		return false
+	}
+	a, frozen := o.adapter, &o.shape
+	if a.ID() != frozen.ID() || a.StateRoot != frozen.StateRoot || a.RuntimeConfigPath != frozen.RuntimeConfigPath || a.Interface != frozen.Interface || a.Table != frozen.Table || a.PriorityBase != frozen.PriorityBase || a.WG != frozen.WG || a.IP != frozen.IP || a.WGQuick != frozen.WGQuick || a.IPTables != frozen.IPTables || a.IP6Tables != frozen.IP6Tables || a.NativeOnly != frozen.NativeOnly || !a.NativeOnly || a.Configs != frozen.Configs || !sameNetworkPolicyDependency(a.Profiles, frozen.Profiles) || !sameNetworkPolicyDependency(a.Runner, frozen.Runner) || a.wgCommandTools == nil || a.wgCommandTools != frozen.wgCommandTools {
+		return false
+	}
+	tools := *a.wgCommandTools
+	return tools.EngineID == o.tools.EngineID && tools.WG == o.tools.WG && tools.AWG == o.tools.AWG && tools.IP == o.tools.IP && tools.IPTables == o.tools.IPTables && tools.IP6Tables == o.tools.IP6Tables && tools.ReviewSHA256 == o.tools.ReviewSHA256 && tools.Identity == o.tools.Identity && tools.Provider == o.tools.Provider && sameNetworkPolicyDependency(tools.Runner, o.tools.Runner)
 }
 
 func wgOperationCleanupContext(ctx context.Context) context.Context {

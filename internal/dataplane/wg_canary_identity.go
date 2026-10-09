@@ -47,6 +47,9 @@ func (a *WARPWireGuardAdapter) inspectWGProbeIdentity(ctx context.Context, profi
 		awg.WG = ""
 	}
 	tools := map[string]string{"wireguard": wg.wg(), "amneziawg": awg.wg()}
+	if a.wgCommandTools != nil {
+		tools = map[string]string{"wireguard": a.wgCommandTools.WG, "amneziawg": a.wgCommandTools.AWG}
+	}
 	if a.wg() == "" {
 		return wgCanaryIdentityInspectionError("public identity inspection is unavailable")
 	}

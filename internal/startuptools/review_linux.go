@@ -343,7 +343,7 @@ func (r *heldReview) capture(ctx context.Context) error {
 			return err
 		}
 	}
-	return ctx.Err()
+	return r.captureWG(ctx)
 }
 
 func (r *heldReview) unchanged(ctx context.Context) error {

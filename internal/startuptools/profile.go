@@ -11,6 +11,8 @@ type profile struct {
 	stock                      bool
 	ipAlias, ipMain, ipSHA     string
 	ipVersion                  string
+	wgAliases                  [2]string
+	wgEngine                   string
 }
 
 func ubuntuPolicyProfile() profile {
