@@ -33,6 +33,7 @@ type SyntheticDNSExecutionBinding struct {
 	transport *SyntheticDNSTransportPlan
 	dns       *dnscontrol.Manager
 	root      string
+	phase     *syntheticBaselineExecutionPhase
 }
 
 func (*SyntheticDNSExecutionBinding) String() string {
@@ -66,6 +67,10 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 	b := &SyntheticDNSExecutionBinding{scope: scope, adapter: original, plan: frozen, domain: domain, transport: transport, dns: original.DNS, root: original.StateRoot}
 	b.self = b
 	if err := b.Current(ctx); err != nil {
+		return nil, err
+	}
+	b.phase, err = newSyntheticBaselineExecutionPhase(ctx, b)
+	if err != nil {
 		return nil, err
 	}
 	return b, nil

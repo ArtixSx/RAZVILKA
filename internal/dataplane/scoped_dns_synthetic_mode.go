@@ -67,10 +67,7 @@ func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding 
 			cancel()
 		}
 	}()
-	var owner dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner
-	if publication != nil {
-		owner = &scopedDNSSyntheticPublication{binding: binding, original: publication}
-	}
+	owner := &scopedDNSSyntheticPublication{binding: binding, original: publication}
 	source, err := dnscontrol.NewNetworkPolicyDNSSyntheticResolver(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner)
 	if err != nil {
 		return err
@@ -172,6 +169,7 @@ func (a *ScopedDNSAdapter) stopSyntheticDNSLocked(ctx context.Context) error {
 	finish := scopedDNSInactiveMutation(a.StateRoot)
 	defer finish()
 	err := s.synthetic.source.Close()
+	err = errors.Join(err, s.synthetic.binding.phase.Close())
 	s.resources.cancelled.Store(true)
 	s.cancel()
 	select {
@@ -188,6 +186,13 @@ func (a *ScopedDNSAdapter) stopSyntheticDNSLocked(ctx context.Context) error {
 type scopedDNSSyntheticPublication struct {
 	binding  *SyntheticDNSExecutionBinding
 	original dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner
+}
+
+func (o *scopedDNSSyntheticPublication) WithSyntheticRequestPhase(ctx context.Context, use func(context.Context) error) error {
+	if o == nil || o.binding == nil || o.binding.self != o.binding || o.binding.phase == nil {
+		return ErrSyntheticBaselineTransition
+	}
+	return o.binding.phase.WithRequest(ctx, use)
 }
 
 func (o *scopedDNSSyntheticPublication) valid() bool {

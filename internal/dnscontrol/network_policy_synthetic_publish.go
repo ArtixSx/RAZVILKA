@@ -193,11 +193,7 @@ func (s *NetworkPolicyDNSSyntheticResolver) Serve(ctx context.Context, udp *net.
 	}
 	return ServeScopedDNS(ctx, udp, tcp, ScopedDNSHandler{
 		Admit: func(ctx context.Context, client netip.Addr) error {
-			if err := s.current(ctx); err != nil {
-				return err
-			}
-			_, err := s.resolver.admission(ctx, client, "")
-			return err
+			return s.admitSyntheticRequest(ctx, client)
 		},
 		Exchange: func(ctx context.Context, client netip.Addr, query []byte, send func([]byte) error) error {
 			return s.Publish(ctx, client, query, send)

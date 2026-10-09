@@ -340,7 +340,7 @@ func (s *NetworkPolicyDNSSyntheticResolver) withRequest(ctx context.Context, use
 	if s.closed.Load() || s.ctx.Err() != nil {
 		return ErrSyntheticDNSMapping
 	}
-	return errors.Join(use(c), c.Err())
+	return errors.Join(s.withSyntheticRequestPhase(c, use), c.Err())
 }
 
 func (s *NetworkPolicyDNSSyntheticResolver) reserveAnswer(ctx context.Context, client netip.Addr, query []byte, answer *syntheticDNSRealAnswer) (*SyntheticDNSMapping, error) {
