@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -72,6 +73,8 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 		response["runtime_state"] = "stopped"
 	}
 	if err != nil {
+		stage, reason := managedNFQFailureDiagnostic(err)
+		log.Printf("Managed NFQ runtime %s refused at %s (%s)", input.Action, stage, reason)
 		status, code := http.StatusConflict, "MANAGED_NFQWS_RUNTIME_REFUSED"
 		if errors.Is(err, operationgate.ErrBusy) {
 			code = "MANAGED_NFQWS_RUNTIME_BUSY"
