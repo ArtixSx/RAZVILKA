@@ -226,6 +226,10 @@ func (a *App) managedNFQPlanHTTP(w http.ResponseWriter, r *http.Request, cfg con
 	}
 	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), "plan")
 	defer cancel()
+	if err := managedNFQResponseDeadline(w, ctx); err != nil {
+		writeManagedNFQRuntimeError(w, http.StatusServiceUnavailable, "MANAGED_NFQWS_RESPONSE_UNAVAILABLE")
+		return true
+	}
 	plan, review, err := runtime.review(ctx, serviceID, protocol, family, scope)
 	if err != nil {
 		logManagedNFQRuntimeFailure("plan", err)
@@ -251,6 +255,10 @@ func (a *App) managedNFQApplyHTTP(w http.ResponseWriter, r *http.Request, cfg co
 	}
 	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), "apply")
 	defer cancel()
+	if err := managedNFQResponseDeadline(w, ctx); err != nil {
+		writeManagedNFQRuntimeError(w, http.StatusServiceUnavailable, "MANAGED_NFQWS_RESPONSE_UNAVAILABLE")
+		return true
+	}
 	review := applyReview{Revision: *request.Revision, Digest: request.Digest}
 	execution, err := runtime.startReviewed(ctx, serviceID, protocol, family, scope, &review)
 	if err != nil {

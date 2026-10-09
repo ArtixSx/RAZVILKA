@@ -58,6 +58,12 @@ func (a *App) managedNFQListRuntimeHTTP(w http.ResponseWriter, r *http.Request) 
 	// joins its still-held original cleanup owner, without entering a new gate.
 	ctx, cancel := managedNFQRuntimeCallContext(r.Context(), input.Action)
 	defer cancel()
+	if input.Action == "start" {
+		if err := managedNFQResponseDeadline(w, ctx); err != nil {
+			writeManagedNFQRuntimeError(w, http.StatusServiceUnavailable, "MANAGED_NFQWS_RESPONSE_UNAVAILABLE")
+			return
+		}
+	}
 	var err error
 	response := map[string]any{"ok": true, "service_health": "unverified"}
 	switch input.Action {
