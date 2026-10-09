@@ -44,6 +44,8 @@ type NetworkPolicyDNSAdmission struct {
 // supply it. Service failures/refusals never become NoMatch. No independent
 // cache, scheduler or owner is created; the existing service ledger is reused.
 type NetworkPolicyDNSResolver struct {
+	self       *NetworkPolicyDNSResolver
+	frozenPlan *NetworkPolicyDNSPlan // original ForPlan construction only, never JSON restoration
 	authority  NetworkPolicyDNSAuthority
 	service    *ScopedDNSResolver
 	defaultDNS *ScopedDNSResolver
@@ -106,6 +108,7 @@ func (m *Manager) NewNetworkPolicyDNSResolver(ctx context.Context, defaultProfil
 		return nil, ErrNetworkPolicyDNS
 	}
 	r := &NetworkPolicyDNSResolver{authority: authority, choice: choice, guard: guard, admit: admit, now: time.Now, exclusions: exclusions}
+	r.self = r
 	r.defaultDNS = &ScopedDNSResolver{manager: m, choices: map[scopedDNSKey]scopedDNSChoice{}, guard: guard}
 	if len(bindings) != 0 {
 		var err error

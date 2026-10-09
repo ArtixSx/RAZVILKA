@@ -212,5 +212,6 @@ func (m *Manager) NewNetworkPolicyDNSResolverForPlan(ctx context.Context, plan *
 	if err := exclusions.current(ctx); err != nil {
 		return nil, err
 	}
+	r.frozenPlan = CloneNetworkPolicyDNSPlan(p)
 	return r, nil
 }

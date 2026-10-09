@@ -64,6 +64,11 @@ func (s *scopedDNSSession) serve(ctx context.Context) {
 	defer close(s.done)
 	defer s.resources.udp.Close()
 	defer s.resources.tcp.Close()
+	if s.synthetic != nil {
+		defer s.synthetic.source.Close()
+		_ = s.synthetic.source.Serve(ctx, s.resources.udp, s.resources.tcp)
+		return
+	}
 	_ = s.resolver.Serve(ctx, s.resources.udp, s.resources.tcp)
 }
 

@@ -43,6 +43,7 @@ type ScopedDNSAdapter struct {
 type scopedDNSSession struct {
 	state     scopedDNSState
 	resolver  *dnscontrol.ScopedDNSResolver
+	synthetic *scopedDNSSyntheticMode
 	cancel    context.CancelFunc
 	done      chan struct{}
 	resources scopedDNSInactiveResources
@@ -422,6 +423,9 @@ func (a *ScopedDNSAdapter) Reconcile(ctx context.Context, p Plan) error {
 }
 
 func (a *ScopedDNSAdapter) stopLocked(ctx context.Context) error {
+	if a.live != nil && a.live.synthetic != nil {
+		return a.stopSyntheticDNSLocked(ctx)
+	}
 	finish := scopedDNSInactiveMutation(a.StateRoot)
 	defer finish()
 	s, err := a.readState(a.statePath())
