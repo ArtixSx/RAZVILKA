@@ -20,3 +20,16 @@ func TestExternalBootstrapCommandRejectsUnknownInputBeforeProtectedRoots(t *test
 		t.Fatal("public command accepted fixture roots", code)
 	}
 }
+
+func TestExternalBootstrapDiagnosticNeverPrintsUnknownData(t *testing.T) {
+	for _, category := range []string{"candidate-version", "release-script-syntax", "review-capabilities", "staged-migration", "external-bootstrap-refused"} {
+		if got := externalBootstrapDiagnosticCategory([]byte(externalBootstrapFailureOutput(category) + "\n")); got != category {
+			t.Fatal("fixed diagnostic lost its category", got)
+		}
+	}
+	for _, diagnostic := range []string{"", "private-path/token/data", externalBootstrapFailureOutput("private-data") + "\n", externalBootstrapFailureOutput("filesystem") + "\nextra-private-data", "prefix\n" + externalBootstrapFailureOutput("filesystem") + "\n"} {
+		if got := externalBootstrapDiagnosticCategory([]byte(diagnostic)); got != "unrecognized-or-absent-diagnostic" {
+			t.Fatal("unknown diagnostic entered public output")
+		}
+	}
+}

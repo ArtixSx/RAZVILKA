@@ -143,7 +143,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 		Archive: Asset{Name: "RAZVILKA-0.20.0-entware.tar.gz", Size: archiveSize, Digest: "sha256:" + archiveSHA},
 		Binary:  Asset{Name: "razvilka-linux-" + runtime.GOARCH, Size: selfInfo.Size(), Digest: "sha256:" + self.ExecutableSHA256}}
 	record.Job.Release, record.Job.Stage = &release, "verifying"
-	if err := publishExternalBootstrapHeader(ctx, root, record, "preparing"); err != nil {
+	if err := publishExternalBootstrapHeader(ctx, root, &record, "preparing"); err != nil {
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
 	files, err := ExtractInstallFiles(ctx, job, "release.tar.gz", release)
@@ -151,11 +151,21 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
 	record.Job.Stage = "preflight"
-	if err := publishExternalBootstrapHeader(ctx, root, record, "preparing"); err != nil {
+	if err := publishExternalBootstrapHeader(ctx, root, &record, "preparing"); err != nil {
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
-	if err := preflightInstaller(ctx, filepath.Join(a.directory, id, "bundle"), release); err != nil || a.filesystem(ctx) != nil || owner(ctx, id) != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+	preparation, err := newExternalBootstrapPreparation(a, ctx, record, files, self, panel, oldSHA, archivePath, archiveSHA, owner)
+	if err != nil {
+		return result, externalBootstrapFailure("preparation-owner", err)
+	}
+	if err := preparation.preflight(ctx); err != nil {
+		return result, err
+	}
+	if err := a.filesystem(ctx); err != nil {
+		return result, externalBootstrapFailure("filesystem", err)
+	}
+	if err := preparation.current(ctx); err != nil {
+		return result, externalBootstrapFailure("preparation-owner", err)
 	}
 	record.Files, record.ExecutableHash = files, oldSHA
 	mode := "live"
@@ -163,9 +173,12 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 		mode = "offline"
 	}
 	binding := &fileBootstrapBinding{Role: externalOld193InstallerRole, Mode: mode, HelperSHA256: self.ExecutableSHA256, ArchivePath: archivePath, ArchiveSHA256: archiveSHA}
-	record.FileReviewSHA256, err = a.stageFileReviewWithBootstrap(ctx, record, authorityReview, binding)
-	if err != nil || owner(ctx, id) != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+	record.FileReviewSHA256, err = a.stageFileReviewWithBootstrap(ctx, record, authorityReview, binding, preparation)
+	if err != nil {
+		return result, externalBootstrapFailure("file-review", err)
+	}
+	if err := owner(ctx, id); err != nil {
+		return result, externalBootstrapFailure("review-owner", err)
 	}
 	currentSelf, currentPanel, currentOldSHA, err := externalBootstrapProcesses(ctx, deployment)
 	if err != nil || currentSelf != self || currentPanel != panel || currentOldSHA != oldSHA || !helperConfigMatches(record) {
@@ -173,7 +186,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 	}
 	record.Job.State, record.Job.Stage, record.Job.HelperPID = "restarting", "file-protocol", self.PID
 	record.Job.CanApply, record.Job.CanCancel = false, false
-	if err := publishExternalBootstrapHeader(ctx, root, record, "preparing"); err != nil {
+	if err := publishExternalBootstrapHeader(ctx, root, &record, "preparing"); err != nil {
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
 	_, review, err := a.load(ctx, id)
@@ -275,7 +288,10 @@ func writeInitialExternalBootstrap(root *ownedfs.Root, record updateRecord) erro
 	return syncSelfUpdateDirectory(root)
 }
 
-func publishExternalBootstrapHeader(ctx context.Context, root *ownedfs.Root, record updateRecord, previousState string) error {
+func publishExternalBootstrapHeader(ctx context.Context, root *ownedfs.Root, record *updateRecord, previousState string) error {
+	if record == nil {
+		return ErrExternalBootstrap
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

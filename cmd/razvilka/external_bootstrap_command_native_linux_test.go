@@ -68,7 +68,11 @@ func TestNativeExternalBootstrapPublicExecutableProducer(t *testing.T) {
 	stdout, stderr := &nativePairedRestoreOutput{}, &nativePairedRestoreOutput{}
 	command.Stdout, command.Stderr = stdout, stderr
 	if err := command.Run(); err != nil || stderr.Len() != 0 {
-		t.Fatal("actual public external producer refused; inspect isolated fixture privately", err)
+		exitCode := -1
+		if command.ProcessState != nil {
+			exitCode = command.ProcessState.ExitCode()
+		}
+		t.Fatalf("actual public external producer refused; category=%s exit_code=%d; retain isolated fixture", externalBootstrapDiagnosticCategory(stderr.Bytes()), exitCode)
 	}
 	var result updatecheck.SelfUpdateExternalBootstrapResult
 	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))

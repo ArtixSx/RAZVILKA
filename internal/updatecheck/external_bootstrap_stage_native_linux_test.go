@@ -3,8 +3,10 @@
 package updatecheck
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,12 +14,12 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
-// Actual producer/ELF probe/migration path, with a modeled old source that
-// cannot execute any ABI flag. This is not real0.19.3 migration acceptance.
-func TestNativeStageExternalBootstrapReviewUsesCandidateOnly(t *testing.T) {
+// A modeled old source and an executing test ELF cannot create the original
+// producer capability. Only Root's genuine public producer test can exercise
+// that positive path; no fixture metadata may grant it.
+func TestNativeStageExternalBootstrapReviewRejectsUnboundCandidate(t *testing.T) {
 	for _, mode := range []string{"live", "offline"} {
 		t.Run(mode, func(t *testing.T) { nativeStageExternalBootstrapReview(t, mode) })
 	}
@@ -92,27 +94,28 @@ func nativeStageExternalBootstrapReview(t *testing.T, mode string) {
 		record.Files[name] = digestBytes(data)
 	}
 	binding := &fileBootstrapBinding{Role: externalOld193InstallerRole, Mode: mode, HelperSHA256: sha, ArchivePath: filepath.Join(t.TempDir(), "consumed-package.tar.gz"), ArchiveSHA256: strings.Repeat("a", 64)}
+	stagedBefore, err := os.ReadFile(filepath.Join(job, "staged/config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
 	sealed, err := a.stageFileReviewWithBootstrap(ctx, record, func(c context.Context, id string) (SelfUpdateAuthority, error) {
+		called = true
 		if c != ctx || id != record.Job.ID {
 			return SelfUpdateAuthority{}, ErrFileProtocol
 		}
 		return SelfUpdateAuthority{strings.Repeat("b", 32), 1}, nil
 	}, binding)
-	if err != nil || !validDigest("sha256:"+sealed) {
-		t.Fatal("real producer demanded old reader ABI", err)
+	if !errors.Is(err, ErrExternalBootstrap) || sealed != "" || called {
+		t.Fatal("unbound fixture acquired original preparation authority", err)
 	}
-	controlSHA, err := hashRegularFile(filepath.Join(job, "control.bin"), MaximumBinaryBytes)
-	if err != nil || controlSHA != sha {
-		t.Fatal("old source adopted as helper", err)
+	stagedAfter, err := os.ReadFile(filepath.Join(job, "staged/config.json"))
+	if err != nil || !bytes.Equal(stagedBefore, stagedAfter) {
+		t.Fatal("unbound fixture changed prior staged evidence", err)
 	}
-	record.FileReviewSHA256, record.Job.State, record.Job.Stage = sealed, "restarting", "file-protocol"
-	record.Job.CanCancel = false
-	u.record = record
-	if err := u.persistLocked(); err != nil {
-		t.Fatal(err)
-	}
-	_, review, err := a.load(ctx, record.Job.ID)
-	if err != nil || review.Schema != selfupdatejournal.PairedSchema || review.JournalReaders != nil || review.Bootstrap == nil || review.OldExecutableSHA256 != digestBytes(oldSource) {
-		t.Fatal("producer erased old source or forged stopped proof", err)
+	for _, name := range []string{"control.bin", "file-review.json"} {
+		if _, err := os.Lstat(filepath.Join(job, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("unbound fixture produced staging effects", name, err)
+		}
 	}
 }

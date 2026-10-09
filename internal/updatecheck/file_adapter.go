@@ -321,7 +321,7 @@ func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record upda
 	return a.stageFileReviewWithBootstrap(ctx, record, authorityReview, nil)
 }
 
-func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding) (string, error) {
+func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding, preparations ...*externalBootstrapPreparation) (string, error) {
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "var/lib/razvilka")
@@ -330,6 +330,18 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	}
 	if bootstrap != nil && !validFileReviewOwner(fileReview{Schema: selfupdatejournal.PairedSchema, OldVersion: record.CurrentVersion, OldExecutableSHA256: record.ExecutableHash, Bootstrap: bootstrap}, record) {
 		return "", ErrFileProtocol
+	}
+	var preparation *externalBootstrapPreparation
+	if bootstrap != nil {
+		if len(preparations) != 1 || preparations[0] == nil {
+			return "", ErrExternalBootstrap
+		}
+		preparation = preparations[0]
+		if err := preparation.matches(ctx, a, record, bootstrap); err != nil {
+			return "", externalBootstrapFailure("preparation-owner", err)
+		}
+	} else if len(preparations) != 0 {
+		return "", ErrExternalBootstrap
 	}
 	if authorityReview == nil {
 		return "", ErrFileProtocol
@@ -356,7 +368,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if err != nil {
 		return "", err
 	}
-	if err := checkFileCapabilitiesForHistories(ctx, binary, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
+	if preparation != nil {
+		if err := preparation.capabilities(ctx, binary, requiredNodeReader, requiredComponentReader); err != nil {
+			return "", externalBootstrapFailure("review-capabilities", err)
+		}
+	} else if err := checkFileCapabilitiesForHistories(ctx, binary, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
 		return "", err
 	}
 	if bootstrap == nil {
@@ -379,21 +395,27 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if err := root.WriteAtomic("staged/config.json", old, 0600); err != nil {
 		return "", err
 	}
-	// Migration touches only the staged configuration and isolated empty
-	// private roots. Its final bytes are sealed before file Prepare.
-	args := []string{"-migrate-config", "-config", filepath.Join(jobPath, "staged", "config.json")}
-	for flag, name := range map[string]string{"-custom-services": "custom.json", "-devices": "devices.json", "-node-state": "nodes", "-stage": "engines", "-warp-state": "warp", "-cloudflare-state": "cloudflare"} {
-		args = append(args, flag, filepath.Join(jobPath, "staged", name))
-	}
-	for flag, name := range map[string]string{"-catalog": "service-catalog.json", "-sources": "sources.json", "-community-catalog": "community-catalog.json"} {
-		args = append(args, flag, filepath.Join(jobPath, "bundle", "configs", name))
-	}
-	command := exec.CommandContext(ctx, binary, args...)
-	command.Env = commandEnvironment()
-	command.Stdout = io.Discard
-	command.Stderr = io.Discard
-	if err := runBoundedCommand(command); err != nil {
-		return "", errors.New("staged-config-migration-refused")
+	// The actual external producer is itself the verified candidate. Its
+	// original capability confines genuine migration to this private file.
+	// Ordinary reader2 staging keeps its existing executable/ABI path.
+	if preparation != nil {
+		if err := preparation.migrate(ctx, root); err != nil {
+			return "", externalBootstrapFailure("staged-migration", err)
+		}
+	} else {
+		args := []string{"-migrate-config", "-config", filepath.Join(jobPath, "staged", "config.json")}
+		for flag, name := range map[string]string{"-custom-services": "custom.json", "-devices": "devices.json", "-node-state": "nodes", "-stage": "engines", "-warp-state": "warp", "-cloudflare-state": "cloudflare"} {
+			args = append(args, flag, filepath.Join(jobPath, "staged", name))
+		}
+		for flag, name := range map[string]string{"-catalog": "service-catalog.json", "-sources": "sources.json", "-community-catalog": "community-catalog.json"} {
+			args = append(args, flag, filepath.Join(jobPath, "bundle", "configs", name))
+		}
+		command := exec.CommandContext(ctx, binary, args...)
+		command.Env = commandEnvironment()
+		command.Stdout, command.Stderr = io.Discard, io.Discard
+		if err := runBoundedCommand(command); err != nil {
+			return "", errors.New("staged-config-migration-refused")
+		}
 	}
 	staged, err := root.ReadLimited("staged/config.json", 4<<20)
 	if err != nil {
@@ -457,6 +479,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if err = file.Sync(); err != nil {
 		return "", err
 	}
+	if preparation != nil {
+		if err := preparation.current(ctx); err != nil {
+			return "", externalBootstrapFailure("preparation-owner", err)
+		}
+	}
 	if err = file.Close(); err != nil {
 		return "", err
 	}
@@ -477,6 +504,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	freshAuthority, err := authorityReview(ctx, record.Job.ID)
 	if err != nil || freshAuthority != authority {
 		return "", errors.Join(ErrFileProtocol, err)
+	}
+	if preparation != nil {
+		if err := preparation.current(ctx); err != nil {
+			return "", externalBootstrapFailure("preparation-owner", err)
+		}
 	}
 	return digestBytes(data), nil
 }

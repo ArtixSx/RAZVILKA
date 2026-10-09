@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -114,7 +115,7 @@ func runExternalBootstrapCommand(args []string, roots selfUpdateJournalRoots) (b
 	adapter := updatecheck.NewSelfUpdateFileAdapterWithAuthority(selfUpdateStopCheck, admit, selfUpdateRuntimeInactive)
 	result, err := adapter.BootstrapExternalOld193(ctx, args[1], args[2], args[3], owner, authority)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "external old0.19.3 bootstrap requires review; retain package, journals and paired archive")
+		fmt.Fprintln(os.Stderr, externalBootstrapFailureOutput(updatecheck.ExternalBootstrapFailureCategory(err)))
 		if errors.Is(err, updatecheck.ErrFileCommandUnsettled) {
 			// Do not claim that a failed join has relinquished process effects.
 			gate.Fence()
@@ -122,4 +123,19 @@ func runExternalBootstrapCommand(args []string, roots selfUpdateJournalRoots) (b
 		return true, 3
 	}
 	return true, writeCommandJSON(result)
+}
+
+func externalBootstrapFailureOutput(category string) string {
+	return "external old0.19.3 bootstrap requires review; category=" + category + "; retain package, journals and paired archive"
+}
+
+// The native gate may print only a recognized complete fixed CLI diagnostic.
+// Arbitrary stderr, paths, result bytes and execution errors stay private.
+func externalBootstrapDiagnosticCategory(diagnostic []byte) string {
+	for _, category := range []string{"preparation-owner", "candidate-version", "source-config", "release-catalogs", "release-script-syntax", "filesystem", "review-capabilities", "staged-migration", "file-review", "review-owner", "external-bootstrap-refused"} {
+		if bytes.Equal(diagnostic, []byte(externalBootstrapFailureOutput(category)+"\n")) {
+			return category
+		}
+	}
+	return "unrecognized-or-absent-diagnostic"
 }
