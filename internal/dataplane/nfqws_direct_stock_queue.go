@@ -51,11 +51,18 @@ func inspectNFQWSDirectStockQueues(actualComplete BackendInventorySnapshot, mana
 // Missing planned effects are not passed; each supplied row must occur once.
 // The untouched complete graph includes every owned declaration/body/reference.
 func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnapshot, managedQueue uint16, exactOwned []BackendInventoryRow) ([]BackendInventoryRow, error) {
+	return inspectStockOutputQueueGraph(actualComplete, &managedQueue, exactOwned)
+}
+
+// nil managedQueue represents a consumer that owns no NFQ queue. It cannot
+// exempt any owned NFQ row or borrow a guessed reservation. NFQ callers pass
+// their original actual nonzero reservation through the unchanged wrappers.
+func inspectStockOutputQueueGraph(actualComplete BackendInventorySnapshot, managedQueue *uint16, exactOwned []BackendInventoryRow) ([]BackendInventoryRow, error) {
 	refuse := func() ([]BackendInventoryRow, error) { return nil, errNFQWSDirectStockQueue }
 	if err := actualComplete.RequireComplete(); err != nil {
 		return nil, errors.Join(errNFQWSDirectStockQueue, err)
 	}
-	if managedQueue == 0 || len(actualComplete.Rows) > backendClassicRows || len(exactOwned) > len(actualComplete.Rows) {
+	if managedQueue != nil && *managedQueue == 0 || managedQueue == nil && len(exactOwned) != 0 || len(actualComplete.Rows) > backendClassicRows || len(exactOwned) > len(actualComplete.Rows) {
 		return refuse()
 	}
 	owned := map[nfqwsDirectStockRowKey]int{}
@@ -185,7 +192,7 @@ func inspectNFQWSDirectStockQueuesWithOwned(actualComplete BackendInventorySnaps
 				return refuse()
 			}
 		case "NFQUEUE":
-			if action.queue == nil || actualOwned[i] && *action.queue != managedQueue || !actualOwned[i] && *action.queue == managedQueue {
+			if action.queue == nil || managedQueue != nil && (actualOwned[i] && *action.queue != *managedQueue || !actualOwned[i] && *action.queue == *managedQueue) {
 				return refuse()
 			}
 			if !actualOwned[i] {
