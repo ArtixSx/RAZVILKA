@@ -31,6 +31,7 @@ func nfqws2ActivePreparedFromContext(ctx context.Context) *NFQWSPreparedHandle {
 // Supplied only by DEFAULT's actual ordinary retained Manager execution.
 // Provider is the SAME concrete production provider, never a DTO issuer.
 type nfqws2ActiveProcessAdmission struct {
+	execution          *nfqws2ActiveExecution // Set only by the original ordinary participant.
 	Binding            NFQWSExecutionBinding
 	Spec               NFQWSScopedSpec
 	Provider           *netidentity.Provider

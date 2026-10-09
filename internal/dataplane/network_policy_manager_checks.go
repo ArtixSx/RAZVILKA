@@ -38,6 +38,7 @@ type NetworkPolicyChecks struct {
 	ids          []string
 	generation   uint64
 	read         func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)
+	inventory    *BackendInventory // SAME startup collector, never a supplied capture.
 	closed       atomic.Bool
 }
 
@@ -51,7 +52,11 @@ func (m *Manager) BindNetworkPolicyChecks(gate *NetworkPolicyAdapter, inventory 
 		return nil, ErrNetworkPolicyConsumers
 	}
 	frozen := *inventory
-	return m.bindNetworkPolicyChecks(gate, frozen.Read)
+	c, err := m.bindNetworkPolicyChecks(gate, frozen.Read)
+	if err == nil {
+		c.inventory = &frozen
+	}
+	return c, err
 }
 
 func (m *Manager) bindNetworkPolicyChecks(gate *NetworkPolicyAdapter, read func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)) (*NetworkPolicyChecks, error) {
@@ -254,6 +259,15 @@ func (c *NetworkPolicyChecks) RetireCheck(ctx context.Context, lan *LANPolicyRun
 		for _, id := range c.ids {
 			if err := c.current(held); err != nil {
 				return errors.Join(result, err)
+			}
+			if adapter, ok := c.adapters[id].(*NFQWS2Adapter); ok {
+				if e, present := held.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution); present && e != nil {
+					if err := c.retiredNFQConsumer(held, adapter, e); err != nil {
+						result = errors.Join(result, err)
+					}
+					result = errors.Join(result, c.current(held))
+					continue
+				}
 			}
 			observer, ok := c.adapters[id].(RuntimeInactivityObserver)
 			if !ok || observer == nil || isNilRuntimeObserver(observer) {

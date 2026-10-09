@@ -465,7 +465,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		e.mu.Unlock()
 		return err
 	}
-	admission := nfqws2ActiveProcessAdmission{Binding: r.Binding(), Spec: r.Plan().Spec(), Provider: e.material.provider,
+	admission := nfqws2ActiveProcessAdmission{execution: e, Binding: r.Binding(), Spec: r.Plan().Spec(), Provider: e.material.provider,
 		BeforeStart: r.BeforeStart, WithStart: r.WithStart, Current: func(c context.Context, b NFQWSExecutionBinding) error {
 			if b != r.Binding() {
 				return ErrNFQWSScopedOwner
@@ -653,7 +653,7 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 	if _, err := os.Lstat(filepath.Join(e.material.intent.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
 		return false, errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := e.checkOriginalQueueAbsent(ctx); err != nil {
 		return false, err
 	}
 	if e.activationSeal == nil {
@@ -669,18 +669,10 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 	if err != nil {
 		return false, err
 	}
-	snapshot, err := e.inventory.Read(ctx, e.material.intent.NetworkIdentity)
-	if err != nil {
+	if err := e.observeBackendAbsent(ctx, plan); err != nil {
 		return false, err
 	}
-	rules, err := nfqwsScopedInventoryRules(snapshot)
-	if err != nil {
-		return false, err
-	}
-	if _, err := plan.ruleCounts(rules, nfqwsScopedAbsent); err != nil {
-		return false, err
-	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := e.checkOriginalQueueAbsent(ctx); err != nil {
 		return false, err
 	}
 	return true, e.cleanupCurrent(ctx)

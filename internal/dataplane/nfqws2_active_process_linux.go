@@ -193,7 +193,7 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	}
 	// Only positively readable empty-to-exact-owner queue transition may wait.
 	for {
-		ready, e := nfqwsScopedTypedQueueReadiness(activation, admission.Provider, c.NetworkIdentity, admission.Spec.Queue, &o.child)
+		ready, e := nfqws2ActiveAdmissionQueueObserve(activation, admission, &o.child)
 		if e != nil {
 			return nil, e
 		}
@@ -266,7 +266,7 @@ func nfqws2ActiveRead(ctx context.Context, o *nfqws2ActiveOwner, live bool) (nfq
 		return zero, err
 	}
 	if live {
-		if err = CheckTypedNFQWSScopedQueue(ctx, o.admission.Provider, o.command.NetworkIdentity, o.admission.Spec.Queue, &l.Child); err != nil {
+		if err = nfqws2ActiveAdmissionQueueCheck(ctx, o.admission, &l.Child); err != nil {
 			return zero, err
 		}
 	}

@@ -170,17 +170,14 @@ func (s *nfqws2ActiveActivationSeal) current(e *nfqws2ActiveExecution) error {
 }
 
 // Original absence before native issuance, without compiling placeholder
-// commands or issuing a resource. Complete backend rejects ANY NFQ consumer.
+// commands or issuing a resource. The original whole graph separately proves
+// OUTPUT-only stock queues; every project or LAN NFQ consumer still refuses.
 func (e *nfqws2ActiveExecution) preparedAbsence(ctx context.Context) error {
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := e.checkOriginalQueueAbsent(ctx); err != nil {
 		return err
 	}
-	snapshot, err := e.inventory.Read(ctx, e.material.intent.NetworkIdentity)
-	if err != nil {
+	if err := e.observeBackendAbsent(ctx, nil); err != nil {
 		return err
 	}
-	if err := checkNetworkPolicyInventory(snapshot, e.material.intent.NetworkIdentity, e.plan.LAN, nil); err != nil {
-		return err
-	}
-	return CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.intent.NetworkIdentity, e.material.queue, nil)
+	return e.checkOriginalQueueAbsent(ctx)
 }

@@ -54,21 +54,13 @@ func (e *nfqws2ActiveExecution) observeUnlaunched(ctx context.Context) error {
 	if e.resource != nil && plan.Digest() != e.resource.Plan().Digest() {
 		return ErrNFQWSScopedOwner
 	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.command.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := e.checkOriginalQueueAbsent(ctx); err != nil {
 		return err
 	}
-	snapshot, err := e.inventory.Read(ctx, e.material.command.NetworkIdentity)
-	if err != nil {
+	if err := e.observeBackendAbsent(ctx, plan); err != nil {
 		return err
 	}
-	rules, err := nfqwsScopedInventoryRules(snapshot)
-	if err != nil {
-		return err
-	}
-	if _, err := plan.ruleCounts(rules, nfqwsScopedAbsent); err != nil {
-		return err
-	}
-	if err := CheckTypedNFQWSScopedQueue(ctx, e.material.provider, e.material.command.NetworkIdentity, e.material.queue, nil); err != nil {
+	if err := e.checkOriginalQueueAbsent(ctx); err != nil {
 		return err
 	}
 	return e.cleanupCurrent(ctx)

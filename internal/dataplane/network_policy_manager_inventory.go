@@ -34,6 +34,10 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if identity != c.gate.identity.value {
 			return lanPolicyPreflightAt("inventory-identity", ErrNetworkPolicyIdentity)
 		}
+		stock, err := c.stockQueueExecution(held)
+		if err != nil {
+			return lanPolicyPreflightAt("inventory-consumer-open", err)
+		}
 		opening, err := c.proxyConsumers(held, lan)
 		defer closeNetworkPolicyProxyObservations(opening)
 		if err != nil {
@@ -52,7 +56,11 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if err != nil {
 			return lanPolicyPreflightAt("inventory-read-open", err)
 		}
-		if err := checkNetworkPolicyInventoryForMode(first, identity, lan, c.gate.identity.mode, opening, openingNFQ...); err != nil {
+		stockRows, err := stock.comparison(first, openingNFQ)
+		if err != nil {
+			return lanPolicyPreflightAt("inventory-row-unallowed", err)
+		}
+		if err := checkNetworkPolicyInventoryWithStock(first, identity, lan, c.gate.identity.mode, opening, stockRows, openingNFQ...); err != nil {
 			return err
 		}
 		closing, err := c.proxyConsumers(held, lan)
@@ -67,6 +75,10 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 		}()
 		if err != nil || !equalNetworkPolicyNFQObservations(openingNFQ, closingNFQ) {
+			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+		}
+		closingStock, err := c.stockQueueExecution(held)
+		if err != nil || !stock.equal(closingStock) {
 			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		// No external owner callback runs after this final complete capture.
@@ -86,7 +98,11 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				nfqErr = errors.Join(nfqErr, o.current(held))
 			}
 		}
-		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(checkNetworkPolicyInventoryForMode(last, identity, lan, c.gate.identity.mode, closing, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr))
+		lastStockRows, stockErr := closingStock.comparison(last, closingNFQ)
+		if stockErr == nil && !reflect.DeepEqual(stockRows, lastStockRows) {
+			stockErr = ErrNetworkPolicyConsumers
+		}
+		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), checkNetworkPolicyInventoryWithStock(last, identity, lan, c.gate.identity.mode, closing, lastStockRows, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr))
 	}))
 }
 
@@ -198,6 +214,12 @@ func checkNetworkPolicyInventory(s BackendInventorySnapshot, identity netidentit
 }
 
 func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, nfqConsumers ...networkPolicyNFQObservation) error {
+	return checkNetworkPolicyInventoryWithStock(s, identity, lan, mode, consumers, nil, nfqConsumers...)
+}
+
+// Only the original-owner bridge above supplies exact stock comparison rows.
+// Public/bare observation predicates remain strict and cannot infer a queue.
+func checkNetworkPolicyInventoryWithStock(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, stockRows []BackendInventoryRow, nfqConsumers ...networkPolicyNFQObservation) error {
 	if mode != "" && mode != LANPolicyNFQWSDirectMode || lan != nil && lan.Mode != mode {
 		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
@@ -212,6 +234,17 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 	if err != nil {
 		return lanPolicyPreflightAt("inventory-definition", err)
 	}
+	stock := map[nfqwsDirectStockRowKey]int{}
+	for _, row := range stockRows {
+		if mode != LANPolicyNFQWSDirectMode || row.Table != "mangle" || networkPolicyNFQRow(row) || !nfqwsDirectStockOtherTableQueue(row.Tokens) {
+			return lanPolicyPreflightAt("inventory-definition", ErrNetworkPolicyConsumers)
+		}
+		key := nfqwsDirectStockKey(row)
+		if stock[key] != 0 {
+			return lanPolicyPreflightAt("inventory-definition", ErrNetworkPolicyConsumers)
+		}
+		stock[key] = 1
+	}
 	positions := map[string]int{}
 	for _, row := range s.Rows {
 		if row.Family != 4 && row.Family != 6 || !backendClassicTableName(row.Table) || len(row.Tokens) < 2 || len(row.Tokens) > 128 {
@@ -222,6 +255,11 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 			return lanPolicyPreflightAt("inventory-row-syntax", err)
 		}
 		if !reserved {
+			continue
+		}
+		stockKey := nfqwsDirectStockKey(row)
+		if stock[stockKey] > 0 {
+			stock[stockKey]--
 			continue
 		}
 		consumer := strings.HasPrefix(row.Tokens[1], "RZP_") || networkPolicyReferencesPrefix(row.Tokens, "RZP_") || networkPolicyNFQRow(row)
@@ -249,6 +287,11 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 		}
 	}
 	for _, count := range a.required {
+		if count != 0 {
+			return lanPolicyPreflightAt("inventory-consumer-required", ErrNetworkPolicyConsumers)
+		}
+	}
+	for _, count := range stock {
 		if count != 0 {
 			return lanPolicyPreflightAt("inventory-consumer-required", ErrNetworkPolicyConsumers)
 		}

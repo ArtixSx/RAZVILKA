@@ -536,11 +536,7 @@ func (r *ManagedNFQWSListRuntime) Stop(ctx context.Context) error {
 		if e.terminal == nil || e.terminal.VerifyRetiredObservation(c, e.terminalObservation) != nil {
 			return dataplane.ErrNFQWSScopedOwner
 		}
-		identity, err := r.provider.Observe(c)
-		if err != nil {
-			return err
-		}
-		return errors.Join(r.checks.InventoryCheck(c, identity, nil), r.checks.RetireCheck(c, e.plan.LAN))
+		return r.manager.CheckRetiredManagedNFQWSAbsence(c, cleanup, e.terminal, e.terminalObservation, r.checks)
 	}
 	e := r.active
 	c, closeOperation, err := r.operation(c, e, cleanup)

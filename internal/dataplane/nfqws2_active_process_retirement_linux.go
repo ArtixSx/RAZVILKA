@@ -30,7 +30,7 @@ func nfqws2ActiveRetireFile(ctx context.Context, o *nfqws2ActiveOwner, settled n
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err, decodeErr)
 	}
 	empty := func() error {
-		return CheckTypedNFQWSScopedQueue(ctx, o.admission.Provider, o.command.NetworkIdentity, o.admission.Spec.Queue, nil)
+		return nfqws2ActiveAdmissionQueueCheck(ctx, o.admission, nil)
 	}
 	if err = empty(); err != nil {
 		return err
