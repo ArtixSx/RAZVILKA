@@ -30,6 +30,11 @@ func TestManagedNFQResponseDeadlineUsesFiniteCallerAndRefusesUnsupportedTranspor
 	if err := managedNFQResponseDeadline(w, ctx); err != nil || w.deadline != deadline.Add(managedNFQResponseGrace) {
 		t.Fatal("response window lost original parent bound", w.deadline, err)
 	}
+	wrapped := &auditResponseWriter{ResponseWriter: w}
+	w.deadline = time.Time{}
+	if err := managedNFQResponseDeadline(wrapped, ctx); err != nil || w.deadline != deadline.Add(managedNFQResponseGrace) || wrapped.status != 0 {
+		t.Fatal("audited request lost transport access or wrote a response", err)
+	}
 	if err := managedNFQResponseDeadline(httptest.NewRecorder(), ctx); !errors.Is(err, http.ErrNotSupported) {
 		t.Fatal("unsupported response transport silently claimed long budget", err)
 	}

@@ -664,6 +664,11 @@ type auditResponseWriter struct {
 	status int
 }
 
+// Allow net/http's ResponseController to reach the actual response transport.
+func (writer *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return writer.ResponseWriter
+}
+
 func (writer *auditResponseWriter) WriteHeader(status int) {
 	if writer.status != 0 {
 		return
