@@ -360,11 +360,25 @@ func (b *ListScopeBinding) BindCompilation(ctx context.Context, compilation *Def
 }
 
 func (b *ListScopeBinding) ScopeCheck(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
-	return b.use(ctx, func(context.Context) error {
+	if b == nil || b.self != b || b.app == nil {
+		return ErrListScopeChanged
+	}
+	c, cancel, err := listScopeContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.app.Operations.WithExclusiveContext(c, func() error {
+		// This comparison touches no external state or effects. Close it with
+		// one complete fresh owner read under SAME mutex and actual operation,
+		// including when the proposed immutable plan itself mismatches.
+		var comparison error
 		if !b.boundOnce || b.bound == nil || dataplane.ValidateLANPolicyRuntime(plan) != nil || !reflect.DeepEqual(plan, b.bound) {
-			return ErrListScopeChanged
+			comparison = ErrListScopeChanged
 		}
-		return nil
+		return errors.Join(comparison, b.currentLocked(c))
 	})
 }
 
