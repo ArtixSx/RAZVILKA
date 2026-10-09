@@ -295,9 +295,21 @@ func (m *DomainPolicyTCPCaptureMapping) enterFlow(parent context.Context, conn *
 	m.flows.Add(1)
 	m.connections[conn] = struct{}{}
 	m.mu.Unlock()
-	life, cancel := context.WithCancel(m.ctx)
-	stop := context.AfterFunc(parent, cancel)
-	if parent.Err() != nil {
+	// The accepted flow's parent carries current admission/operation values.
+	// Capture startup values cannot replace that authority. Mapping lifetime
+	// adds revocation and only a stricter deadline to this SAME parent.
+	var life context.Context
+	var cancel context.CancelFunc
+	if deadline, bounded := m.ctx.Deadline(); bounded {
+		if parentDeadline, parentBounded := parent.Deadline(); !parentBounded || deadline.Before(parentDeadline) {
+			life, cancel = context.WithDeadline(parent, deadline)
+		}
+	}
+	if life == nil {
+		life, cancel = context.WithCancel(parent)
+	}
+	stop := context.AfterFunc(m.ctx, cancel)
+	if m.ctx.Err() != nil {
 		cancel()
 	}
 	return life, func() {

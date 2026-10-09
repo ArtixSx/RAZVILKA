@@ -155,3 +155,69 @@ func TestDomainPolicySyntheticTCPCaptureMappingCloseModelCancelsAndJoinsSocket(t
 		t.Fatal("closed mapping admitted new flow", err)
 	}
 }
+
+func TestDomainPolicySyntheticTCPCaptureFlowModelRetainsParentAuthorityAndBothRevocations(t *testing.T) {
+	type admissionKey struct{}
+	for _, kind := range []string{"parent cancel", "mapping cancel", "parent earlier deadline", "mapping earlier deadline"} {
+		t.Run(kind, func(t *testing.T) {
+			_, conn := domainPolicyTCPPair(t)
+			startup := context.WithValue(context.Background(), admissionKey{}, "capture-startup")
+			actual := context.WithValue(context.Background(), admissionKey{}, "actual-flow-admission")
+			mappingDeadline := time.Now().Add(4 * time.Second)
+			parentDeadline := time.Now().Add(3 * time.Second)
+			if kind == "parent earlier deadline" {
+				parentDeadline = time.Now().Add(80 * time.Millisecond)
+			}
+			if kind == "mapping earlier deadline" {
+				mappingDeadline = time.Now().Add(80 * time.Millisecond)
+			}
+			mappingCtx, revokeMapping := context.WithDeadline(startup, mappingDeadline)
+			defer revokeMapping()
+			parent, revokeParent := context.WithDeadline(actual, parentDeadline)
+			defer revokeParent()
+			watchDone := make(chan struct{})
+			close(watchDone)
+			m := &DomainPolicyTCPCaptureMapping{ctx: mappingCtx, cancel: revokeMapping, connections: make(map[*net.TCPConn]struct{}), watchDone: watchDone, closeDone: make(chan struct{})}
+			m.self = m
+			flow, release, err := m.enterFlow(parent, conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if flow.Value(admissionKey{}) != "actual-flow-admission" {
+				release()
+				t.Fatal("startup context replaced original flow admission")
+			}
+			deadline, ok := flow.Deadline()
+			want := parentDeadline
+			if mappingDeadline.Before(want) {
+				want = mappingDeadline
+			}
+			if !ok || !deadline.Equal(want) {
+				release()
+				t.Fatal("effective deadline changed", deadline, want)
+			}
+			joined := make(chan struct{})
+			go func() { <-flow.Done(); release(); close(joined) }()
+			switch kind {
+			case "parent cancel":
+				revokeParent()
+			case "mapping cancel":
+				revokeMapping()
+			}
+			select {
+			case <-joined:
+			case <-time.After(2 * time.Second):
+				t.Fatal("flow revocation did not close/join actual connection")
+			}
+			if flow.Err() == nil {
+				t.Fatal("revoked flow still current")
+			}
+			if _, err := conn.Write([]byte{1}); !errors.Is(err, net.ErrClosed) {
+				t.Fatal("joined connection still open", err)
+			}
+			if err := m.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
