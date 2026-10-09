@@ -12,7 +12,8 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_POLICY_CAS_SECOND_WRITER','UI_POLICY_CAS_STALE_EDITOR_READY','UI_POLICY_CAS_RECEIPT','UI_POLICY_CAS_DRAFT_RETAINED',
   'UI_POLICY_CAS_EXPLICIT_READ','UI_POLICY_CAS_READ_NO_REPLAY','UI_POLICY_CAS_RESET',
   'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK',
-  'UI_SERVICE_ASSIGN_FILTER','UI_SERVICE_ASSIGN_EDITOR','UI_SERVICE_ASSIGN_BUTTON_VISIBLE','UI_SERVICE_ASSIGN_RETURN','UI_SERVICE_ASSIGN_BOOKEND'
+  'UI_SERVICE_ASSIGN_FILTER','UI_SERVICE_ASSIGN_EDITOR','UI_SERVICE_ASSIGN_BUTTON_VISIBLE','UI_SERVICE_ASSIGN_RETURN','UI_SERVICE_ASSIGN_BOOKEND',
+  'UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
@@ -327,5 +328,52 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,diag
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
     return {closed,open,closeMethods:['Escape','close button','backdrop','drawer destination','bottom destination']};
     });
+
+  await test('strategy laboratory keeps the manual target editable without a probe or candidates', 'genuine Settings navigation, catalog selects and GET-only bookends', async()=>{
+    const start=requests.length;
+    const {before,lab,catalog}=await diagnose('UI_STRATEGY_LOCAL_FIXTURE',async()=>{
+      const before=await readJSON('/api/v1/status'),lab=await readJSON('/api/v1/strategy-lab'),services=await readJSON('/api/v1/services');
+      assert.equal(before.safe_mode,true);assert.equal(before.live_active,false);
+      assert.equal(lab.safety?.temporary_scoped_firewall_probe,false);
+      assert(Array.isArray(lab.candidates));assert.equal(lab.candidates.length,0);
+      assert(Array.isArray(services));const catalog=services.map(service=>service.id);
+      assert(catalog.length>1);assert(catalog.every(id=>typeof id==='string'&&id));
+      return {before,lab,catalog};
+    });
+    const original=await diagnose('UI_STRATEGY_LOCAL_EDITOR',async()=>{
+      await navTo(page,'settings');
+      const advanced=page.locator('#view-settings details.r5-advanced:has([data-rz-nav="strategylab"])');
+      if(!await advanced.evaluate(element=>element.open))await advanced.locator('summary').click();
+      await page.locator('#view-settings [data-rz-nav="strategylab"]').click();
+      await page.waitForFunction(()=>state.currentView==='strategylab'&&!panelLoad.request&&state.dataLoad.strategyLab?.phase==='ready'&&state.dataLoad.services?.phase==='ready');
+      assert(requests.slice(start).some(request=>request.method==='GET'&&request.path==='/api/v1/strategy-lab'),'laboratory did not read its real HTTP snapshot');
+      assert.equal(await page.locator('#view-strategylab').isVisible(),true);
+      assert.match(await page.locator('#strategyResourceBudget').textContent(),/ИЗОЛИРОВАННЫЙ ТЕСТ НЕДОСТУПЕН/);
+      assert.equal(await page.locator('#strategyCandidates .strategy-candidate').count(),0);
+      assert.equal(await page.locator('#strategyCandidates [data-strategy-manual], #strategyCandidates [data-strategy-probe]').count(),0);
+      const target=page.locator('#strategyTarget'),family=page.locator('#strategyFamily');
+      assert.equal(await target.isVisible(),true);assert.equal(await family.isVisible(),true);
+      assert.equal(await target.isEnabled(),true);assert.equal(await family.isEnabled(),true);
+      const options=await target.locator('option').evaluateAll(rows=>rows.map(row=>row.value));
+      assert.deepEqual([...options].sort(),[...catalog].sort());
+      const original={service:await target.inputValue(),family:await family.inputValue()};
+      assert(catalog.includes(original.service));assert(['ipv4','ipv6'].includes(original.family));
+      const service=catalog.find(id=>id!==original.service),nextFamily=original.family==='ipv4'?'ipv6':'ipv4';
+      await target.selectOption(service);await family.selectOption(nextFamily);
+      assert.equal(await target.inputValue(),service);assert.equal(await family.inputValue(),nextFamily);
+      assert.equal(await target.isEnabled(),true);assert.equal(await family.isEnabled(),true);
+      return original;
+    });
+    await diagnose('UI_STRATEGY_LOCAL_BOOKEND',async()=>{
+      await page.locator('#strategyTarget').selectOption(original.service);
+      await page.locator('#strategyFamily').selectOption(original.family);
+      await navTo(page,'overview');
+      const after=await readJSON('/api/v1/status'),afterLab=await readJSON('/api/v1/strategy-lab');
+      assert.equal(after.revision,before.revision);assert.equal(after.applied_revision,before.applied_revision);
+      assert.equal(after.safe_mode,before.safe_mode);assert.equal(after.live_active,before.live_active);
+      assert.deepEqual(afterLab.candidates,lab.candidates);assert.deepEqual(afterLab.selections,lab.selections);assert.deepEqual(afterLab.evidence,lab.evidence);
+      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'ordinary laboratory selection started a business mutation');
+    });
+  });
 
 }

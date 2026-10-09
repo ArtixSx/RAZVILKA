@@ -59,6 +59,14 @@ check(()=>{
   assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'known-scenario',status:'failed',code:'CLIENT_FAILED'});
 });
 assert.equal(await realHTTPDiagnosis('UI_NODE_IMPORT',()=>7),7);checks++;
+for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND']){
+  try{
+    await realHTTPDiagnosis(id,()=>assert.equal('private catalog id','private candidate material'));
+    assert.fail('expected private assertion failure');
+  }catch(error){
+    assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:id,status:'failed',code:'ASSERTION_FAILED'});checks++;
+  }
+}
 try{
   await realHTTPDiagnosis('UI_NODE_REMAINING_VLESS',()=>assert.equal('private actual URI','private expected profile'));
   assert.fail('expected assertion failure');
