@@ -14,7 +14,7 @@ type fileHelperIdentity struct {
 
 func sealFileHelperIdentity(a *SelfUpdateFileAdapter, id string, review fileReview) error {
 	process, err := fileHelperProcess()
-	if err != nil || process.PID != os.Getpid() || process.ExecutableSHA256 != review.OldExecutableSHA256 {
+	if err != nil || process.PID != os.Getpid() || process.ExecutableSHA256 != reviewedHelperSHA(review) {
 		return ErrFileProtocol
 	}
 	record, err := readAdapterRecord(a.directory, id)
@@ -91,7 +91,7 @@ func (a *SelfUpdateFileAdapter) readHelperIdentity(id string, review fileReview)
 	if err != nil {
 		return identity, err
 	}
-	if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != id || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != review.OldExecutableSHA256 || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot {
+	if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != id || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != reviewedHelperSHA(review) || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot {
 		return identity, ErrFileProtocol
 	}
 	return identity, nil

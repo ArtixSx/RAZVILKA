@@ -59,6 +59,7 @@ type fileReview struct {
 	ReleaseID               int64                    `json:"release_id"`
 	Files                   []selfupdatejournal.File `json:"files"`
 	JournalReaders          *journalReaderProof      `json:"journal_readers,omitempty"`
+	Bootstrap               *fileBootstrapBinding    `json:"bootstrap,omitempty"`
 }
 
 // Concrete neutral provider: this package does not import app. Production
@@ -170,7 +171,7 @@ func (a *SelfUpdateFileAdapter) loadBoundReview(ctx context.Context, id string, 
 	if err != nil || digestBytes(data) != record.FileReviewSHA256 || decodeFileProtocol(data, &review) != nil {
 		return record, review, ErrFileProtocol
 	}
-	if review.Schema != selfUpdateProtocolSchema || review.ID != id || !jobIDPattern.MatchString(review.AuthorityInstallationID) || review.AuthoritySequence == 0 || review.Revision != record.Job.ConfigRevision || review.ReleaseID != record.Job.Release.ID || review.OldVersion != record.CurrentVersion || review.NewVersion != record.Job.Release.Version || review.OldExecutableSHA256 != record.ExecutableHash || !validDigest("sha256:"+review.OldExecutableSHA256) || !validDigest("sha256:"+review.OldInitSHA256) || !validDigest("sha256:"+review.OldConfigSHA256) || !validDigest("sha256:"+review.MigratedConfigSHA256) {
+	if !validFileReviewOwner(review, record) || review.ID != id || !jobIDPattern.MatchString(review.AuthorityInstallationID) || review.AuthoritySequence == 0 || review.Revision != record.Job.ConfigRevision || review.ReleaseID != record.Job.Release.ID || review.OldVersion != record.CurrentVersion || review.NewVersion != record.Job.Release.Version || review.OldExecutableSHA256 != record.ExecutableHash || !validDigest("sha256:"+review.OldExecutableSHA256) || !validDigest("sha256:"+review.OldInitSHA256) || !validDigest("sha256:"+review.OldConfigSHA256) || !validDigest("sha256:"+review.MigratedConfigSHA256) {
 		return record, review, ErrFileProtocol
 	}
 	if verifyArtifacts {

@@ -286,14 +286,14 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	}
 	controller := filepath.Join(a.directory, id, "control.bin")
 	hash, err := hashRegularFile(controller, MaximumBinaryBytes)
-	if err != nil || hash != review.OldExecutableSHA256 {
+	if err != nil || hash != reviewedHelperSHA(review) {
 		return ErrFileProtocol
 	}
 	parent, err := fileProcessOf(os.Getpid())
 	if err != nil {
 		return err
 	}
-	if parent.ExecutableSHA256 != review.OldExecutableSHA256 && parent.ExecutableSHA256 != strings.TrimPrefix(record.Job.Release.Binary.Digest, "sha256:") {
+	if parent.ExecutableSHA256 != reviewedHelperSHA(review) && parent.ExecutableSHA256 != strings.TrimPrefix(record.Job.Release.Binary.Digest, "sha256:") {
 		return ErrFileProtocol
 	}
 	receipt := fileCommandReceipt{Schema: selfUpdateProtocolSchema, ID: id, Command: command, State: "intent", Parent: parent}
@@ -337,7 +337,7 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	// Capture the exact kernel/executable identity before starting the sole
 	// parent Wait. A receipt alone cannot establish which process we joined.
 	supervisor, identityErr := fileProcessOf(worker.Process.Pid)
-	if identityErr == nil && (supervisor.Boot != parent.Boot || supervisor.ExecutableSHA256 != review.OldExecutableSHA256) {
+	if identityErr == nil && (supervisor.Boot != parent.Boot || supervisor.ExecutableSHA256 != reviewedHelperSHA(review)) {
 		identityErr = ErrFileProtocol
 	}
 	done := make(chan error, 1)
@@ -484,7 +484,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		return err
 	}
 	r.Supervisor, err = fileProcessOf(os.Getpid())
-	if err != nil || r.Supervisor.ExecutableSHA256 != review.OldExecutableSHA256 {
+	if err != nil || r.Supervisor.ExecutableSHA256 != reviewedHelperSHA(review) {
 		return ErrFileProtocol
 	}
 	r.State = "armed"
@@ -1031,7 +1031,7 @@ func (a *SelfUpdateFileAdapter) RuntimeQuiesceAuthority(ctx context.Context, id 
 		if r.State == "running" {
 			self, err := fileProcessOf(os.Getpid())
 			_, parent, birthErr := fileBirth(os.Getpid())
-			if err != nil || birthErr != nil || r.DirectPID != self.PID || parent != workerPID || self.Boot != r.Supervisor.Boot || self.ExecutableSHA256 != review.OldExecutableSHA256 {
+			if err != nil || birthErr != nil || r.DirectPID != self.PID || parent != workerPID || self.Boot != r.Supervisor.Boot || self.ExecutableSHA256 != reviewedHelperSHA(review) {
 				return ErrFileProtocol
 			}
 			return a.AuthorityAction(ctx, id, revision, "stop-owned")

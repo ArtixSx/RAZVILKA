@@ -49,8 +49,9 @@ bounded directory entries). Все целевые образы готовятс�
 lock нет копирования, hash, fsync, ожидания процесса или открытия Store.
 Вытесненные файлы/деревья сохраняются; удаления/prune/reuse артефактов нет.
 
-Сначала публикуются guards для S99razvilka, S99artem-flow и сохранённого
-S99artem-flow.razvilka-disabled (последний mode0600). Прежние init bytes остаются
+Сначала публикуется обязательный guard S99razvilka и guards присутствующих
+prior/current S99artem-flow и S99artem-flow.razvilka-disabled (последний mode0600).
+Прежние init bytes остаются
 в неизменном offline archive. Прежний executable публикуется последним; старый
 PID никогда не возвращается как живой владелец.
 

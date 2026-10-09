@@ -304,7 +304,7 @@ func (a *SelfUpdateFileAdapter) pairedSettledFormats(ctx context.Context, record
 	seen := map[string]bool{}
 	for _, command := range receipt.Commands {
 		r, err := readFileCommand(root, review.ID, command)
-		if err != nil || r.Parent != identity.Process || r.Supervisor.ExecutableSHA256 != review.OldExecutableSHA256 || r.Cancelled || r.ExitCode != 0 {
+		if err != nil || r.Parent != identity.Process || r.Supervisor.ExecutableSHA256 != reviewedHelperSHA(review) || r.Cancelled || r.ExitCode != 0 {
 			return ErrFileCommandUnsettled
 		}
 		if command == "start-candidate-panel" {

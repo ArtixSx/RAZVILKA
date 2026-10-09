@@ -154,7 +154,7 @@ func (a *SelfUpdateFileAdapter) journalReaderImagesWithCurrent(ctx context.Conte
 			return nil, err
 		}
 		if !retired {
-			images = append(images, selfupdatejournal.BinaryImage{Path: filepath.Join(a.directory, r.ID, "control.bin"), SHA256: r.OldExecutableSHA256})
+			images = append(images, selfupdatejournal.BinaryImage{Path: filepath.Join(a.directory, r.ID, "control.bin"), SHA256: reviewedHelperSHA(r)})
 		}
 		binaries := 0
 		for _, file := range r.Files {
@@ -553,6 +553,9 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 		if required < selfUpdateProtocolSchema {
 			required = selfUpdateProtocolSchema
 		}
+		if required < review.Schema {
+			required = review.Schema
+		}
 		if review.JournalReaders != nil {
 			if !validJournalReaderProof(review.JournalReaders) {
 				return 0, ErrFileProtocol
@@ -634,7 +637,7 @@ func (a *SelfUpdateFileAdapter) checkHelperProcessFormats(ctx context.Context, r
 	data, err := root.ReadLimited("helper.identity.json", 4096)
 	if err == nil {
 		var identity fileHelperIdentity
-		if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != review.ID || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != review.OldExecutableSHA256 || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot || identity.Process.PID != record.Job.HelperPID || identity.OldPanel.PID != record.ParentPID {
+		if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != review.ID || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != reviewedHelperSHA(review) || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot || identity.Process.PID != record.Job.HelperPID || identity.OldPanel.PID != record.ParentPID {
 			return ErrFileProtocol
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
