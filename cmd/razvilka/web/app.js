@@ -194,7 +194,11 @@ async function api(url, options = {}) {
   const abort = () => controller?.abort();
   if (options.signal?.aborted) abort();
   options.signal?.addEventListener('abort', abort, { once: true });
-  const readTimeout = Number.isSafeInteger(readTimeoutMs) ? Math.max(250, Math.min(110000, readTimeoutMs)) : 20000;
+  // Plan may use eight minutes plus the server's one-minute closing grace.
+  // Allow ten seconds for delivery; metadata and mutation policies stay intact.
+  const planRead = /^\/api\/v1\/plan(?:\?|$)/.test(url);
+  const readLimit = planRead ? 550000 : 110000;
+  const readTimeout = Number.isSafeInteger(readTimeoutMs) ? Math.max(250, Math.min(readLimit, readTimeoutMs)) : planRead ? 550000 : 20000;
   const timer = controller ? setTimeout(() => { timedOut = true; controller.abort(); }, readTimeout) : null;
   try {
   const response = await fetch(url, { ...fetchOptions, method, headers, signal: controller?.signal || options.signal, credentials: 'same-origin' });
@@ -1590,6 +1594,9 @@ function renderStatus() {
     : 'Откройте изменённый раздел. Применение затронет только выбранную область.';
   $('#applyChanges').textContent = 'Открыть изменения';
   $('#applySettings').textContent = s.safe_mode ? 'Проверить изменения' : (failedApply ? 'Повторить проверку' : 'Проверить и применить');
+  if (state.applyRequest?.auth === (state.authGeneration || 0)) {
+    state.applyRequest.buttons.forEach(button => { button.disabled = true; button.textContent = state.applyRequest.phase === 'apply' ? 'Применение…' : 'Проверка…'; });
+  }
   $('#discardChanges').hidden = true;
 }
 
@@ -4580,8 +4587,9 @@ function openNodeServiceSection(id) {
 }
 
 async function applyDraft(scope = 'all', engineID = '', options = {}) {
-  const current = () => !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
-  if (!current()) return null;
+  const auth = state.authGeneration || 0;
+  const current = () => auth === (state.authGeneration || 0) && !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
+  if (!current() || state.applyRequest) return null;
   const progress = scope === 'engine' && typeof engineProgressBinding === 'function' ? engineProgressBinding(engineID, state.selectedEngineFile || 'main') : null;
   let awaitingReview = false;
   const closeCanceledReview = () => { if (awaitingReview && $('#applyReviewDialog').open) $('#applyReviewDialog').close(); };
@@ -4596,6 +4604,8 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     ? [$('#engineApplyConfig')]
     : [$('#applyChanges'), $('#applySettings')];
   const query = scope === 'all' ? '' : `?scope=${encodeURIComponent(scope)}${engineID ? `&engine=${encodeURIComponent(engineID)}` : ''}`;
+  const request = state.applyRequest = { auth, phase: 'plan', buttons };
+  const labels = buttons.map(button => button.textContent);
   buttons.forEach((b) => { b.disabled = true; b.textContent = 'Проверка…'; });
   try {
     const preview = options.preview || await planWithRetainedNodeCheck(query, { signal: options.signal, isCurrent: current });
@@ -4609,39 +4619,41 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
       return;
     }
     if (needsApplyReview(preview)) {
+      request.phase = 'review';
       awaitingReview = true;
       const accepted = await reviewApplyPlan(preview);
       awaitingReview = false;
       if (!accepted || !current()) return null;
     }
     if (!current()) return null;
+    request.phase = 'apply';
     buttons.forEach((b) => { b.textContent = 'Применение…'; });
     const result = await api(`/api/v1/apply${query}`, { method: 'POST', signal: options.signal, body: JSON.stringify({ expected_revision: review.expected_revision, reviewed_digest: review.reviewed_digest }) });
     if (!current()) return null;
+    request.phase = 'readback';
     await refreshCoreAfterEdit();
     if (!current()) return null;
     await refreshEngineConfigs(options.engineIntent || null);
     if (!current()) return null;
-    await showPlan();
+    await showPlan({ signal: options.signal, isCurrent: current });
     if (!current()) return null;
     if (typeof engineProgressApply === 'function') engineProgressApply(progress, preview, result);
-    if (result.safe_mode && result.reviewed && !result.live_applied) {
+    if (result.safe_mode === true && result.reviewed === true && result.live_applied !== true) {
       showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Изменения подготовлены. Чтобы включить их, разрешите применение в настройках и повторите проверку.', result, true);
-    } else if (result.live_applied && !result.scope_pending_changes) {
-      showNotice('success', 'Настройки применены', result.note || 'Маршруты активированы, проверены и зафиксированы.', result);
+    } else if (result.live_applied === true && !result.scope_pending_changes) {
+      showNotice('success', 'Настройки применены', result.note || 'Применение подтверждено. Доступ к сервисам проверяется отдельно.', result);
     } else if (result.scope_pending_changes) {
       showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что для каждого изменённого обхода выбран хотя бы один сервис.', result, true);
     } else if (result.pending_changes) {
-      showNotice('success', 'Изменения этого раздела применены', 'В другом разделе остались отдельные изменения. Текущие маршруты работают.', result);
+      showNotice('review', 'Изменения ещё ждут подтверждения', 'Проверьте состояние проекта перед повторным применением.', result, true);
     } else {
-      showNotice('success', 'Изменения обработаны', result.note || 'Операция завершена.', result);
+      showNotice('review', 'Применение не подтверждено', result.note || 'Ответ получен. Проверьте состояние проекта; принятие запроса не подтверждает применение.', result, true);
     }
     return result;
   } catch (error) {
 	if (!current()) return null;
+	if (error.status === 401) { showAuth(state.status, error.message); return null; }
 	if (scope === 'engine' && typeof invalidateEngineProgress === 'function') invalidateEngineProgress(engineID);
-	await showPlan();
-	if (!current()) return null;
 	const unused = (error.payload?.transaction?.blockers || []).filter((blocker) => blocker.code === 'ENGINE_DRAFT_UNUSED');
 	if (unused.length) {
 	  const names = unused.map((blocker) => fallbackLabels[blocker.adapter] || blocker.adapter).join(', ');
@@ -4652,12 +4664,19 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
 	    showRouteDependencyNotice(error);
 	  } else if (failure) {
 	    showNotice('error', failure.title || 'Изменения не применены', `${failure.message || error.message} ${failure.resolution || ''}`.trim(), error.payload, true);
+	  } else if (request.phase === 'apply' || request.phase === 'readback') {
+	    showNotice('review', request.phase === 'readback' ? 'Состояние после применения не прочитано' : 'Результат применения не подтверждён', `${error.payload?.note || error.message} Проверьте состояние проекта перед повторным действием.`, error.payload || { error: error.message }, true);
 	  } else {
 	    showNotice('error', 'Применение заблокировано', error.payload?.note || error.message, error.payload || { error: error.message }, true);
 	  }
 	}
+	if (request.phase === 'apply' || request.phase === 'readback') await showPlan({ signal: options.signal, isCurrent: current });
   } finally {
     options.signal?.removeEventListener('abort', closeCanceledReview);
+    if (state.applyRequest === request) {
+      state.applyRequest = null;
+      buttons.forEach((button,index) => { button.disabled = false; button.textContent = labels[index]; });
+    }
     if (current()) {
       buttons.forEach((button) => { button.disabled = false; });
       renderStatus();
@@ -4850,10 +4869,15 @@ async function inspectDomain() {
   finally { button.disabled = false; button.textContent = 'Разобрать'; }
 }
 
-async function showPlan() {
+async function showPlan(options = {}) {
   if (nodeActivityActive()) return;
+  const auth = state.authGeneration || 0;
+  const current = () => auth === (state.authGeneration || 0) && !options.signal?.aborted && (!options.isCurrent || options.isCurrent());
+  if (!current()) return;
+  $('#planBox').innerHTML = '<div class="transaction-clean">Проверяем план…</div>';
   try {
-    const plan = await api('/api/v1/plan');
+    const plan = await (options.isCurrent ? api('/api/v1/plan', { signal: options.signal }) : readPanelResource('/api/v1/plan', { signal: options.signal }));
+    if (!current()) return;
     const tx = plan.transaction || {};
     const blockers = tx.blockers || [];
     const warnings = tx.warnings || [];
@@ -4870,6 +4894,8 @@ async function showPlan() {
     const evidencePanel = `<div class="transaction-evidence ${evidenceReady ? 'confirmed' : ''}"><div><span>Нужно для подтверждения</span><b>${esc(evidenceLevelLabel(requiredEvidence))}</b></div><i>→</i><div><span>Наблюдается сейчас</span><b>${esc(evidenceLevelLabel(observedEvidence))}</b></div><p>${esc(tx.evidence_note || 'План не является доказательством работы маршрута.')}</p></div>`;
     $('#planBox').innerHTML = `<div class="transaction-head"><div><span class="eyebrow">ПЛАН ${esc(tx.plan_id || '—')}</span><h3>${esc(stateLabel)}</h3><p>${esc(tx.note || plan.note || '')}</p></div><span class="transaction-state ${stateClass}">${esc(planState)}</span></div><div class="transaction-metrics"><div><b>${routes.length}</b><span>маршрутов</span></div><div><b>${(tx.adapters || []).length}</b><span>обходов</span></div><div><b>${actions.length}</b><span>шагов</span></div><div><b>${blockers.length}</b><span>проблем</span></div></div>${evidencePanel}${blockers.length ? `<div class="transaction-blockers"><h4>Что мешает применению</h4>${blockers.map((item) => `<div class="transaction-blocker"><span>${esc(item.code)}</span><div><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.message)}</b>${item.resolution ? `<small>${esc(item.resolution)}</small>` : ''}</div></div>`).join('')}</div>` : '<div class="transaction-clean">Все обязательные проверки конфигурации пройдены. Доступ подтверждается отдельным health-check.</div>'}${warnings.length ? `<details class="transaction-details"><summary>Предупреждения (${warnings.length})</summary>${warnings.map((item) => `<div class="transaction-warning"><b>${item.adapter ? `${esc(item.adapter)} · ` : ''}${esc(item.code)}</b><span>${esc(item.message)}</span></div>`).join('')}</details>` : ''}<div class="transaction-flow">${actions.map((item) => `<div class="transaction-step"><span>${item.order}</span><div><b>${esc(phaseLabels[item.phase] || item.phase)} · ${esc(item.adapter)}</b><small>${esc(item.summary)}</small><code>${esc(item.target)}</code></div><i class="${item.razvilka_owned ? 'owned' : ''}">${item.razvilka_owned ? 'RAZVILKA' : 'ВНЕШНИЙ'}</i></div>`).join('') || '<div class="transaction-clean">Прямые маршруты не требуют изменения сетевых правил.</div>'}</div><details class="transaction-details"><summary>Маршруты (${routes.length}) и контрольная сумма</summary><div class="transaction-routes">${routes.map((route) => { const proof = routeEvidence.find((item) => item.service_id === route.service_id && item.route === route.resolved_route); return `<div><b>${esc(route.service_name)}</b><span>${esc(route.selected_route)} → ${esc(route.resolved_route)} · ${esc(evidenceLevelLabel(proof?.observed_evidence))}</span></div>`; }).join('') || '<span>Нет включённых сервисов.</span>'}</div><code class="transaction-digest">${esc(tx.digest || '—')}</code></details>`;
   } catch (error) {
+    if (!current() || error.name === 'AbortError') return;
+    if (error.status === 401) { showAuth(state.status, error.message); return; }
     $('#planBox').innerHTML = `<div class="transaction-error">План не построен: ${esc(error.message)}</div>`;
   }
 }
