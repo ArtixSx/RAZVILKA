@@ -89,7 +89,7 @@ func (a *App) preemptForRuntimeStop(acceptedID uint64) {
 }
 
 func (a *App) runDurableRuntimeJob(ctx context.Context, request serviceControlJobRequest) (serviceRuntimeOutcome, error) {
-	release, err := a.Operations.Exclusive(componentStopContext(ctx, request.Kind))
+	ctx, release, err := a.scopedRuntimeOperation(componentStopContext(ctx, request.Kind))
 	if err != nil {
 		return serviceRuntimeOutcome{}, err
 	}

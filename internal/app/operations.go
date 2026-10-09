@@ -28,9 +28,10 @@ type operationScope struct {
 
 func (s *operationScope) closeRequest() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.active = false
-	if !s.restoring {
+	release := !s.restoring
+	s.mu.Unlock()
+	if release {
 		s.release()
 	}
 }
@@ -46,13 +47,31 @@ func (s *operationScope) restoreAdmission() (func(), error) {
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
-			defer s.mu.Unlock()
 			s.restoring = false
-			if !s.active {
+			release := !s.active
+			s.mu.Unlock()
+			if release {
 				s.release()
 			}
 		})
 	}, nil
+}
+
+// Internal runtime callers retain the same concrete admission through their
+// Store publication and joined cleanup. A private runtime can borrow it once;
+// unknown cleanup keeps the original owner after the outer caller returns.
+func (a *App) scopedRuntimeOperation(ctx context.Context) (context.Context, func(), error) {
+	if a == nil || ctx == nil {
+		return nil, nil, operationgate.ErrBusy
+	}
+	bounded, cancel := context.WithTimeout(ctx, defaultDataplaneApplyTimeout)
+	admitted, release, err := a.Operations.ExclusiveContext(bounded)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	scope := &operationScope{app: a, exclusive: true, active: true, release: func() { release(); cancel() }}
+	return context.WithValue(admitted, operationContextKey{}, scope), scope.closeRequest, nil
 }
 
 // Protect reads too: GET /devices performs discovery and persists metadata.

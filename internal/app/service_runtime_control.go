@@ -51,13 +51,13 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Older clients keep the synchronous contract; production UI sends a key.
-	release, err := a.Operations.Exclusive(componentStopContext(r.Context(), request.Action))
+	ctx, release, err := a.scopedRuntimeOperation(componentStopContext(r.Context(), request.Action))
 	if err != nil {
 		a.writeOperationFailure(w, err)
 		return
 	}
 	defer release()
-	outcome := a.executeServiceRuntime(r.Context(), request.Action, *request.ExpectedRevision)
+	outcome := a.executeServiceRuntime(ctx, request.Action, *request.ExpectedRevision)
 	status := http.StatusOK
 	response := map[string]any{"ok": outcome.Code == "", "live_applied": outcome.LiveApplied}
 	if outcome.Code != "" {

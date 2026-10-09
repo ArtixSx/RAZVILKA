@@ -9,10 +9,51 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+func TestScopedRuntimeOperationRetainsSameActualAdmissionAcrossOuterClose(t *testing.T) {
+	a, foreign := &App{}, &App{}
+	parent, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ctx, closeOuter, err := a.scopedRuntimeOperation(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeOuter()
+	borrowed, closeBorrowed, err := a.privateExclusiveOperation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeBorrowed()
+	if a.Operations.Snapshot().Active != 1 || a.Operations.WithExclusiveContext(borrowed, func() error { return nil }) != nil {
+		t.Fatal("runtime borrow acquired a second owner or lost actual admission")
+	}
+	if err := foreign.Operations.WithExclusiveContext(borrowed, func() error { t.Fatal("foreign callback"); return nil }); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal("foreign App adopted runtime context", err)
+	}
+	closeOuter()
+	if a.Operations.Snapshot().Active != 1 {
+		t.Fatal("outer return released retained cleanup admission")
+	}
+	if _, _, err := a.privateExclusiveOperation(ctx); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal("returned runtime scope borrowed again", err)
+	}
+	if err := a.Operations.WithExclusiveContext(borrowed, func() error { return nil }); err != nil {
+		t.Fatal("original retained work lost its still-live caller", err)
+	}
+	closeBorrowed()
+	closeBorrowed()
+	if a.Operations.Snapshot().Active != 0 {
+		t.Fatal("joined cleanup failed to release original owner")
+	}
+	if err := a.Operations.WithExclusiveContext(borrowed, func() error { t.Fatal("released callback"); return nil }); !errors.Is(err, operationgate.ErrBusy) {
+		t.Fatal("released runtime context revived", err)
+	}
+}
 
 func TestHTTPExclusiveContextBelongsToActualRequest(t *testing.T) {
 	a := &App{}
