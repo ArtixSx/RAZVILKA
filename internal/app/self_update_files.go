@@ -113,12 +113,20 @@ func (f *SelfUpdateFiles) Current() (selfupdatejournal.Receipt, bool, error) {
 	if _, err := os.Lstat(f.Directory); errors.Is(err, os.ErrNotExist) {
 		return selfupdatejournal.Receipt{}, false, nil
 	}
-	s, err := selfupdatejournal.Open(f.Installation, f.Directory)
+	s, err := f.openFileJournal()
 	if err != nil {
 		return selfupdatejournal.Receipt{}, false, err
 	}
 	defer s.Close()
 	r, present, err := s.Current()
+	if err == nil && present && r.Schema == selfupdatejournal.PairedSchema {
+		// Current is a format reader. Paired state also needs the original
+		// adapter's complete retained archive/helper evidence and a closing
+		// current pointer/receipt bookend; metadata alone supplies neither.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		r, err = readPairedFileCurrent(ctx, s, r)
+	}
 	if err == nil && !present {
 		err = f.checkEmptyJournal()
 	}
@@ -300,7 +308,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 			return err
 		}
 	}
-	s, err := selfupdatejournal.Open(f.Installation, f.Directory)
+	s, err := f.openFileJournal()
 	if err != nil {
 		return err
 	}
@@ -313,7 +321,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		if err != nil || !present || r.ID != id {
 			return errors.Join(selfupdatejournal.ErrMismatch, err)
 		}
-		if r.Rollback || !selfUpdatePreFilesComplete(r.Commands) || r.Phase != "prepared" && r.Phase != "installing" {
+		if r.Rollback || !selfUpdatePreFilesComplete(r.Commands) || r.Phase != "prepared" && r.Phase != "paired-prepared" && r.Phase != "installing" {
 			return selfupdatejournal.ErrPending
 		}
 		return s.InstallAdmitted(ctx, id, authority, quiescence, func(c context.Context, effect string, begin func() error) error {
