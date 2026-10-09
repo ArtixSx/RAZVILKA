@@ -152,7 +152,18 @@ func (r *ScopedDNSResolver) resolve(ctx context.Context, client netip.Addr, quer
 				return nil, err
 			}
 		}
-		return cached, nil
+		// begin consumed age through its receipt timestamp. Fresh physical /
+		// answer guards above may spend additional time; consume that too
+		// before a caller can use this returned wire as a new receipt.
+		var answer dnsmessage.Message
+		if answer.Unpack(cached) != nil {
+			return nil, errDNSAnswer
+		}
+		elapsed := r.cache.clock().Sub(started)
+		if elapsed < 0 {
+			return nil, errDNSAnswer
+		}
+		return ageDNSWire(cached, uint64((elapsed+time.Second-1)/time.Second), networkPolicyDNSNegative(answer))
 	}
 	// Record a failure without extending the previous answer's expiry/grace.
 	var accepted bool
