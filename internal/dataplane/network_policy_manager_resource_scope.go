@@ -105,7 +105,8 @@ func (s *executionResourceScope) context() context.Context {
 func (s *executionResourceScope) contextWith(ctx context.Context) context.Context {
 	ctx = context.WithValue(ctx, nfqws2ActiveActivationRegistrarKey{}, s)
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
-	return context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
+	ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
+	return withSyntheticExecutionRegistrar(ctx, s)
 }
 
 // Called with s.mu held. Actual owner readback runs outside this mutex and
