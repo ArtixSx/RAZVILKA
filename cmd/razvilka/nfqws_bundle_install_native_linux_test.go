@@ -20,6 +20,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
@@ -90,6 +91,14 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &app.App{Store: store, Catalog: catalogue, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
+	actualTools := os.Getenv("RAZVILKA_NATIVE_MANAGED_INSTALL_TOOLS") == "1"
+	if actualTools {
+		configs := engineconfig.New(filepath.Join(root, "staged"), filepath.Join(root, "backups"))
+		a.Dataplane, err = newDataplaneManager(filepath.Join(root, "dataplane"), configs)
+		if err != nil {
+			t.Fatal("ordinary adapter construction", err)
+		}
+	}
 	defer a.CloseManagedNFQControl()
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		t.Fatal(err)
@@ -220,4 +229,19 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		t.Fatal("manual selection changed the installed generation")
 	}
 	t.Log("same App genuine compatibility -> manual HTTP selection -> independent neutral readback passed; unchanged configuration and no network effects")
+	if actualTools {
+		// Only construction and closure are tested here. No Start/Apply is
+		// called; real held tools must pass their ordinary production review.
+		list, err := configureManagedNFQList(ctx, a)
+		if err != nil || list == nil {
+			t.Fatal("ordinary stock factory with actual tools", err)
+		}
+		if err := list.Close(ctx); err != nil {
+			t.Fatal("idle stock factory closure", err)
+		}
+		if !reflect.DeepEqual(before, store.Get()) || a.Operations.Snapshot().Active != 0 {
+			t.Fatal("idle stock factory changed configuration or retained an operation")
+		}
+		t.Log("ordinary stock App factory and closure passed with actual held Entware tools; no Start, Apply or client-health claim")
+	}
 }
