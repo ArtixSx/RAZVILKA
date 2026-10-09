@@ -160,7 +160,8 @@ func (m *wgCommandProcessModel) RunWG(ctx context.Context, owner WGCommandAdmiss
 	if command.Process == nil {
 		return output.Bytes(), startErr
 	}
-	return output.Bytes(), errors.Join(startErr, command.Wait())
+	waitErr := command.Wait()
+	return output.Bytes(), errors.Join(startErr, waitErr)
 }
 
 func TestWGNetworkCommandOwnerRetainedToolsAndOneUseCarrier(t *testing.T) {
