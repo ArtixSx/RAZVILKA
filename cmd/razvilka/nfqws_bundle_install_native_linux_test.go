@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/app"
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -82,7 +83,13 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app.App{Store: store, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
+	// This is the actual catalog of this new test App, not an HTTP response
+	// replacement. Saving a choice must not enable this service or probe it.
+	catalogue := catalog.Catalog{Services: []catalog.Service{{ID: "native-manual", Name: "Native manual selection", Category: "test", Domains: []string{"example.com"}, Strategy: []string{"nfqws2"}}}}
+	if err := catalog.Validate(catalogue); err != nil {
+		t.Fatal(err)
+	}
+	a := &app.App{Store: store, Catalog: catalogue, StrategyLab: manager, Components: owner, Security: sec, SelfUpdate: files.Helper, SelfUpdateFiles: files, ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
 	defer a.CloseManagedNFQControl()
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		t.Fatal(err)
@@ -189,4 +196,28 @@ func TestManagedNFQBundleFirstInstallAppHTTP(t *testing.T) {
 		t.Fatal("compatibility changed the genuine installed generation", closeErr)
 	}
 	t.Log("same App first install -> actual authenticated dry-run/Lua -> saved ECHILD/ACK -> retired runtime lease passed; no firewall, routes or client-health claim")
+
+	manualBody, err := json.Marshal(map[string]string{"mode": "manual", "service_id": "native-manual", "protocol": "tcp", "ip_family": "ipv4", "candidate_id": candidate.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selected strategylab.Selection
+	if status := request("POST", "/api/v1/strategy-lab/selections", string(manualBody), &selected); status != http.StatusOK || selected.CandidateID != candidate.ID || selected.Mode != strategylab.ModeManual || !selected.Frozen || selected.Status != "manual-unchecked" || selected.Healthy || selected.Confidence != 0 || selected.LastHealthyAt != "" {
+		t.Fatal("actual manual selection after compatibility did not remain unverified", status, selected)
+	}
+	var observed strategylab.Snapshot
+	if status := request("GET", "/api/v1/strategy-lab", "", &observed); status != http.StatusOK || len(observed.Selections) != 1 || observed.Selections[0].CandidateID != candidate.ID || observed.Selections[0].Status != "manual-unchecked" || observed.Selections[0].Healthy || len(observed.Evidence) != 0 {
+		t.Fatal("actual API readback invented evidence or lost manual choice", status, observed.Selections)
+	}
+	if !reflect.DeepEqual(before, store.Get()) || manager.Executor != nil || observed.Safety["temporary_scoped_firewall_probe"] != false || observed.QuiescenceUnknown || a.Operations.Snapshot().Active != 0 {
+		t.Fatal("manual selection changed configuration, network admission or operation settlement")
+	}
+	current, err = owner.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal("manual selection retained the runtime writer lease", err)
+	}
+	if actual = current.Descriptor(); current.Close() != nil || actual.ReceiptID != result.Receipt.TransactionID || actual.ManifestSHA256 != digest {
+		t.Fatal("manual selection changed the installed generation")
+	}
+	t.Log("same App genuine compatibility -> manual HTTP selection -> independent neutral readback passed; unchanged configuration and no network effects")
 }
