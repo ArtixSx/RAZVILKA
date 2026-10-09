@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -549,5 +550,161 @@ func TestSyntheticDNSPublicationModelLostSendAckRemainsReserved(t *testing.T) {
 	defer cancel()
 	if _, err := NewNetworkPolicyDNSSyntheticResolver(ctx, context.Background(), f.r, f.control, f.root, f.definition, owner); !errors.Is(err, ErrSyntheticDNSTransitionPending) {
 		t.Fatal("lost ACK restart recreated permission", err)
+	}
+}
+
+func TestSyntheticDNSRepeatAndConcurrentQueriesReuseOriginalWithoutRenewingTTL(t *testing.T) {
+	f := syntheticDNSModelFixture(t, nil)
+	now := time.Now()
+	f.r.now = func() time.Time { return now }
+	f.r.service.cache.now = f.r.now
+	s := f.source(t, nil)
+	q := scopedQuery(t, "service.example.com", dnsmessage.TypeA)
+	original, err := s.Reserve(context.Background(), f.client, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := original.Observation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(10 * time.Second)
+	type result struct {
+		mapping *SyntheticDNSMapping
+		err     error
+	}
+	results := make(chan result, 16)
+	for i := 0; i < 16; i++ {
+		go func() { m, err := s.Reserve(context.Background(), f.client, q); results <- result{m, err} }()
+	}
+	for i := 0; i < 16; i++ {
+		got := <-results
+		if got.err != nil || got.mapping != original {
+			t.Fatal("repeat replaced original", got.err)
+		}
+	}
+	current, err := original.Observation(context.Background())
+	if err != nil || !current.ExpiresAt.Equal(first.ExpiresAt) || len(s.ledger.Reservations) != 1 {
+		t.Fatal("repeat renewed TTL or consumed pool", err, len(s.ledger.Reservations))
+	}
+	// A changed real answer gets a new address, while the old retained
+	// original remains current through its own expiry and negative fences.
+	scopedExchange(f.r.service, scopedDNSKey{f.client, "service.example.com"}, func(_ context.Context, q []byte) (dohResponse, error) {
+		answer := scopedResponse(t, q)
+		answer.Answers[0].Body = &dnsmessage.AResource{A: [4]byte{93, 184, 215, 15}}
+		return dohResponse{wire: scopedPack(t, answer)}, nil
+	})
+	changed, err := s.Reserve(context.Background(), f.client, q)
+	if err != nil || changed == original {
+		t.Fatal("changed real target reused original", err)
+	}
+	if err := original.Current(context.Background()); err != nil {
+		t.Fatal("new answer discarded prior retained mapping", err)
+	}
+}
+
+func TestSyntheticDNSExpiredOriginalNeverReused(t *testing.T) {
+	f := syntheticDNSModelFixture(t, nil)
+	now := time.Now()
+	f.r.now = func() time.Time { return now }
+	f.r.service.cache.now = f.r.now
+	s := f.source(t, nil)
+	q := scopedQuery(t, "service.example.com", dnsmessage.TypeA)
+	original, err := s.Reserve(context.Background(), f.client, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := original.Observation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = first.ExpiresAt.Add(time.Second)
+	newMapping, err := s.Reserve(context.Background(), f.client, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newMapping.Observation(context.Background())
+	if err != nil || newMapping == original || second.Synthetic == first.Synthetic || len(s.ledger.Reservations) != 2 {
+		t.Fatal("expired object/address reused", err)
+	}
+}
+
+func TestSyntheticDNSFullRetainedMetadataRefusesAllocationWithoutReuse(t *testing.T) {
+	f := syntheticDNSModelFixture(t, nil)
+	s := f.source(t, nil)
+	q := scopedQuery(t, "service.example.com", dnsmessage.TypeA)
+	original, err := s.Reserve(context.Background(), f.client, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := original.Observation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Protected unissued metadata models exhausted reservations only.
+	// Loading it creates no original mapping handles or ready effects.
+	ledger := syntheticDNSLedger{Schema: 1, Owner: syntheticDNSLedgerOwner}
+	for i := 0; i < syntheticDNSMaxReservations; i++ {
+		row := record
+		row.Synthetic = syntheticDNSAddress(i)
+		row.PublicationID = fmt.Sprintf("%032x", i+1)
+		ledger.Reservations = append(ledger.Reservations, row)
+	}
+	data, err := json.Marshal(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(f.root, syntheticDNSLedgerName)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	restarted := f.source(t, nil)
+	if _, err := restarted.Reserve(context.Background(), f.client, q); !errors.Is(err, ErrSyntheticDNSMapping) {
+		t.Fatal("full retained pool allocated", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !slices.Equal(after, data) {
+		t.Fatal("allocation rewrote retained reservations", err)
+	}
+}
+
+func TestSyntheticDNSPublicationModelAsynchronousReturnRevokesAndJoins(t *testing.T) {
+	f := syntheticDNSModelFixture(t, nil)
+	entered, joined := make(chan struct{}), make(chan struct{})
+	owner := &syntheticDNSPublicationModel{use: func(ctx context.Context, _ *SyntheticDNSMapping, use func(context.Context) error) error {
+		go func() { _ = use(ctx); close(joined) }()
+		<-entered
+		return nil
+	}, current: func(ctx context.Context, _ *SyntheticDNSMapping) error {
+		close(entered)
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	s := f.source(t, owner)
+	result := make(chan error, 1)
+	q := scopedQuery(t, "service.example.com", dnsmessage.TypeA)
+	go func() {
+		result <- s.Publish(context.Background(), f.client, q, func([]byte) error { t.Error("asynchronous receiver sent"); return nil })
+	}()
+	select {
+	case err := <-result:
+		if !errors.Is(err, ErrSyntheticDNSMapping) {
+			t.Fatal("asynchronous success", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("asynchronous receiver waited for whole request timeout")
+	}
+	// Source joined the callback before returning; the surrounding modeled
+	// owner's goroutine may need one scheduling step to report that join.
+	select {
+	case <-joined:
+	case <-time.After(time.Second):
+		t.Fatal("original callback did not join")
+	}
+	if len(s.ledger.Reservations) != 1 || s.ledger.Reservations[0].PossiblyIssued {
+		t.Fatal("unready asynchronous lease marked publication")
 	}
 }

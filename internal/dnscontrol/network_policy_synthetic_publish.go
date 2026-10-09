@@ -52,6 +52,7 @@ func (s *NetworkPolicyDNSSyntheticResolver) Publish(ctx context.Context, client 
 		}
 		var mu sync.Mutex
 		open, entered, misuse := true, false, false
+		var revoke context.CancelFunc
 		done := make(chan struct{})
 		var publicationErr error
 		ownerErr := s.publication.WithSyntheticPublication(ctx, mapping, func(ready context.Context) error {
@@ -62,11 +63,21 @@ func (s *NetworkPolicyDNSSyntheticResolver) Publish(ctx context.Context, client 
 				return ErrSyntheticDNSMapping
 			}
 			entered = true
+			// Freeze cancellation before exposing entry to the owner. A
+			// concurrently returning owner must be able to revoke and join.
+			deadline, bounded := ctx.Deadline()
+			if !bounded {
+				publicationErr = ErrSyntheticDNSMapping
+				mu.Unlock()
+				close(done)
+				return publicationErr
+			}
+			life, cancel := context.WithDeadline(ready, deadline)
+			revoke = cancel
 			mu.Unlock()
 			defer close(done)
 			// Cancellation cannot be detached by the coordinator. Its ready
 			// lease remains revocable through the actual final publication.
-			life, cancel := context.WithCancel(ready)
 			defer cancel()
 			stop := context.AfterFunc(ctx, cancel)
 			defer stop()
@@ -110,14 +121,28 @@ func (s *NetworkPolicyDNSSyntheticResolver) Publish(ctx context.Context, client 
 		})
 		mu.Lock()
 		open = false
-		didEnter := entered
+		didEnter, cancel := entered, revoke
 		mu.Unlock()
 		if didEnter {
-			<-done
+			select {
+			case <-done:
+			default:
+				mu.Lock()
+				misuse = true
+				mu.Unlock()
+				if cancel != nil {
+					cancel()
+				}
+				<-done
+			}
 		}
 		mu.Lock()
 		bad := misuse
 		mu.Unlock()
+		if bad {
+			s.invalid.Store(true)
+			s.cancel()
+		}
 		if !didEnter || bad {
 			return errors.Join(ErrSyntheticDNSMapping, ownerErr, publicationErr)
 		}

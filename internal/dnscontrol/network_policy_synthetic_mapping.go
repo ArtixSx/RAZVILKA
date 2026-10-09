@@ -339,13 +339,29 @@ func (s *NetworkPolicyDNSSyntheticResolver) reserveAnswer(ctx context.Context, c
 	if err != nil || len(details.Addresses) != 1 || !details.Addresses[0].Is4() || !publicDNSAddress(details.Addresses[0]) || details.TTLSeconds == nil || *details.TTLSeconds == 0 {
 		return nil, errors.Join(ErrSyntheticDNSMapping, err)
 	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return nil, err
-	}
 	var mapping *SyntheticDNSMapping
 	err = networkPolicyDNSOperation(ctx, s.resolver.operations, func(held context.Context) error {
 		if err := s.current(held); err != nil {
+			return err
+		}
+		// DNS repeats retain the SAME original mapping and expiry. Only a
+		// still-live handle with identical source/client/name/authority and
+		// real answer pins is reusable. Loaded metadata has no such handle.
+		s.mu.Lock()
+		for _, record := range s.ledger.Reservations {
+			if record.Authority == answer.admission.Authority && record.Client == client && record.QName == answer.name && record.RealIPv4 == details.Addresses[0] && slices.Equal(record.CNAMEChain, details.CNAMEChain) && s.resolver.now().Before(record.ExpiresAt) {
+				if original := s.mappings[record.Synthetic]; original != nil {
+					mapping = original
+					break
+				}
+			}
+		}
+		s.mu.Unlock()
+		if mapping != nil {
+			return mapping.Current(held)
+		}
+		var nonce [16]byte
+		if _, err := rand.Read(nonce[:]); err != nil {
 			return err
 		}
 		s.mu.Lock()
