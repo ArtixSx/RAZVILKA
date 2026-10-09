@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"slices"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
@@ -168,8 +169,12 @@ type kernelFence struct {
 	fd     int
 	pid    uint32
 	cookie uint64
-	closed bool
-	failed bool
+	// Actual kernel readback; the requested SO_RCVBUF can be capped. It is
+	// diagnostic metadata only, never proof that notification loss is impossible.
+	receiveBuffer int
+	reader        *originalFenceCollector
+	closeOnce     sync.Once
+	closeErr      error
 }
 
 func openFence(ctx context.Context) (lifecycleFence, error) {
@@ -185,7 +190,41 @@ func openFence(ctx context.Context) (lifecycleFence, error) {
 		_ = unix.Close(fd)
 		return nil, at("fence.cookie", err)
 	}
-	return &kernelFence{fd: fd, pid: pid, cookie: cookie}, nil
+	actualBuffer, err := unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF)
+	if err != nil || actualBuffer <= 0 {
+		_ = unix.Close(fd)
+		return nil, at("fence.receive-buffer.read", err)
+	}
+	f := &kernelFence{fd: fd, pid: pid, cookie: cookie, receiveBuffer: actualBuffer}
+	f.reader = newOriginalFenceCollector(fenceCollectorSource{
+		current: f.currentError,
+		receive: func(buf []byte) (int, bool, error) {
+			n, err := receive(f.fd, buf)
+			if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
+				return 0, true, nil
+			}
+			if err == unix.ENOBUFS {
+				return 0, false, boundary("fence.receive.loss", err)
+			}
+			if err != nil {
+				return 0, false, boundary("fence.receive.read", err)
+			}
+			return n, false, nil
+		},
+		wait: func() error {
+			poll := []unix.PollFd{{Fd: int32(f.fd), Events: unix.POLLIN}}
+			if _, err := unix.Poll(poll, 20); err != nil && err != unix.EINTR {
+				return boundary("fence.poll.read", err)
+			}
+			if poll[0].Revents&(unix.POLLHUP|unix.POLLNVAL) != 0 {
+				return at("fence.poll.descriptor", nil)
+			}
+			// POLLERR wakes the sole reader, which must receive the actual
+			// socket error (including ENOBUFS); it is never muted or cleared.
+			return nil
+		},
+	})
+	return f, nil
 }
 func (f *kernelFence) currentError() error {
 	cookie, err := unix.GetsockoptUint64(f.fd, unix.SOL_SOCKET, unix.SO_COOKIE)
@@ -212,60 +251,18 @@ func (f *kernelFence) currentError() error {
 	return nil
 }
 func (f *kernelFence) close() error {
-	if f.closed {
-		return nil
-	}
-	f.closed = true
-	if err := f.currentError(); err != nil {
-		return boundary("fence.close.descriptor", err)
-	} // Never close a replaced descriptor.
-	return unix.Close(f.fd)
+	f.closeOnce.Do(func() {
+		f.reader.close() // Cancel and join before touching the descriptor.
+		if err := f.currentError(); err != nil {
+			f.closeErr = boundary("fence.close.descriptor", err)
+			return // Never close a replaced descriptor.
+		}
+		f.closeErr = unix.Close(f.fd)
+	})
+	return f.closeErr
 }
 func (f *kernelFence) check(ctx context.Context, segments []Segment, devices []Device) error {
-	if f.closed {
-		return at("fence.check.closed", nil)
-	}
-	if f.failed {
-		return at("fence.check.failed", nil)
-	}
-	if ctx.Err() != nil {
-		return boundary("fence.check.context", ctx.Err())
-	}
-	if err := f.currentError(); err != nil {
-		return boundary("fence.check.descriptor", err)
-	}
-	buf := make([]byte, 1<<20)
-	total := 0
-	fail := func(stage string, err error) error { f.failed = true; return boundary(stage, err) }
-	for {
-		if ctx.Err() != nil {
-			return fail("fence.drain.context", ctx.Err())
-		}
-		n, err := receive(f.fd, buf)
-		if err == unix.EAGAIN || err == unix.EWOULDBLOCK {
-			if err := f.currentError(); err != nil {
-				return fail("fence.drain.closing-descriptor", err)
-			}
-			return nil
-		}
-		if err != nil {
-			if err == unix.ENOBUFS {
-				return fail("fence.receive.loss", err)
-			}
-			return fail("fence.receive.read", err)
-		}
-		total += n
-		if total > maxNetBytes {
-			return fail("fence.receive.byte-limit", nil)
-		}
-		frames, err := messages(buf[:n])
-		if err != nil {
-			return fail("fence.datagram.decode", err)
-		}
-		if err := checkNotifications(frames, segments, devices); err != nil {
-			return fail("fence.notifications", err)
-		}
-	}
+	return f.reader.check(ctx, segments, devices)
 }
 
 func captureKernel(ctx context.Context, selection Selection, native []nativeSegment, stock bool) ([]Segment, []Device, error) {
