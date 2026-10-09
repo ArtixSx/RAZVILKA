@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"golang.org/x/sys/unix"
 )
 
@@ -14,13 +15,17 @@ import (
 // existing unicast NETLINK_NETFILTER transport, not its NFT request/decoder.
 // The sole request here is CT_GET(AF_INET,DUMP). A kernel may autoload its
 // module; NONBLOCK cannot preempt that synchronous kernel handler.
-func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resultErr error) {
+func readSyntheticConntrack(ctx context.Context, actual netidentity.Identity) (result syntheticCTImage, resultErr error) {
 	if ctx == nil || ctx.Err() != nil {
 		return result, syntheticCTFailure(syntheticCTContext, nil)
 	}
 	deadline, bounded := ctx.Deadline()
 	if !bounded || time.Until(deadline) > 2*time.Second {
 		return result, syntheticCTFailure(syntheticCTContext, nil)
+	}
+	abi, err := syntheticCTABIForIdentity(actual)
+	if err != nil {
+		return result, err
 	}
 	session, err := openBackendNFTSocket(ctx)
 	if err != nil {
@@ -44,7 +49,7 @@ func readSyntheticConntrack(ctx context.Context) (result syntheticCTImage, resul
 	if err != nil {
 		return result, err
 	}
-	d, err := newSyntheticCTDecoder(s.sequence, s.port)
+	d, err := newSyntheticCTDecoderForABI(s.sequence, s.port, abi)
 	if err != nil {
 		return result, err
 	}

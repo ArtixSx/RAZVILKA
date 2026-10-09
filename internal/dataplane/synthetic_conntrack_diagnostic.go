@@ -50,6 +50,14 @@ const (
 	syntheticCTUnknownAttr     syntheticCTReason = "row-attribute-unknown"
 )
 
+const (
+	syntheticCTScopeIdentity    syntheticCTReason = "abi-identity"
+	syntheticCTABIUnknown       syntheticCTReason = "decoder-abi"
+	syntheticCTStockMarkShape   syntheticCTReason = "stock-ndmmark-shape"
+	syntheticCTStockIfacesShape syntheticCTReason = "stock-ndm-ifaces-shape"
+	syntheticCTStockNTCEShape   syntheticCTReason = "stock-ntce-shape"
+)
+
 func (r syntheticCTReason) label() string {
 	switch r {
 	case syntheticCTContext, syntheticCTOpen, syntheticCTTransport, syntheticCTClose,
@@ -61,7 +69,8 @@ func (r syntheticCTReason) label() string {
 		syntheticCTFinish, syntheticCTDrain, syntheticCTAttribute, syntheticCTDuplicateAttr,
 		syntheticCTNestedFlags, syntheticCTFamily, syntheticCTTupleShape, syntheticCTReplyProtocol,
 		syntheticCTStatusShape, syntheticCTIDShape, syntheticCTStatusMask, syntheticCTZeroID,
-		syntheticCTRowShape, syntheticCTAttr24, syntheticCTAttr25, syntheticCTAttr26, syntheticCTUnknownAttr:
+		syntheticCTRowShape, syntheticCTAttr24, syntheticCTAttr25, syntheticCTAttr26, syntheticCTUnknownAttr,
+		syntheticCTScopeIdentity, syntheticCTABIUnknown, syntheticCTStockMarkShape, syntheticCTStockIfacesShape, syntheticCTStockNTCEShape:
 		return string(r)
 	default:
 		return "unclassified"

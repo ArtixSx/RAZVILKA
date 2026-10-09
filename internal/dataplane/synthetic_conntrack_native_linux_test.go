@@ -51,7 +51,7 @@ func TestSyntheticConntrackNativeObservation(t *testing.T) {
 		tid := unix.Gettid()
 		stage = "conntrack-read"
 		var err error
-		image, err = readSyntheticConntrack(held)
+		image, err = readSyntheticConntrack(held, identity)
 		if err != nil {
 			return err
 		}

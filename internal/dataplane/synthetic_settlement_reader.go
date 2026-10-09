@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -43,7 +44,7 @@ type syntheticSettlementReader struct {
 	prepared   *DomainPolicyTCPCaptureMapping
 	captureEnd *DomainPolicyTCPCaptureRetirement
 	endpoint   netip.AddrPort
-	read       func(context.Context) (syntheticCTImage, error) // private socket-free model seam
+	read       func(context.Context, netidentity.Identity) (syntheticCTImage, error) // private socket-free model seam
 }
 
 func (b *SyntheticDNSExecutionBinding) settlementReader(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, control *operationgate.ControlEpochReview, capture *DomainPolicyTCPCapture) (*syntheticSettlementReader, error) {
@@ -122,7 +123,7 @@ func (r *syntheticSettlementReader) observe(ctx context.Context) (observation sy
 		}
 		// Provider brackets the socket in the SAME actual thread namespace.
 		// Do not reenter provider.check inside its callback.
-		err := s.networkIdentity.use(c, func(held context.Context) error {
+		err := syntheticCTWithOriginalIdentity(c, s.networkIdentity, func(held context.Context, actual netidentity.Identity) error {
 			if err := checkLocal(held); err != nil {
 				return err
 			}
@@ -130,7 +131,7 @@ func (r *syntheticSettlementReader) observe(ctx context.Context) (observation sy
 				return err
 			}
 			var err error
-			image, err = r.read(held)
+			image, err = r.read(held, actual)
 			return errors.Join(err, r.control.CurrentForCleanup(held), checkLocal(held))
 		})
 		return image, errors.Join(err, checkLocal(c))
@@ -299,7 +300,7 @@ func syntheticSettlementCoordinatesEqual(a, b dnscontrol.SyntheticDNSMappingObse
 
 func compareSyntheticSettlement(first, second syntheticCTImage, mapping dnscontrol.SyntheticDNSMappingObservation, capture netip.AddrPort) (syntheticSettlementObservation, error) {
 	var o syntheticSettlementObservation
-	if !first.complete || !second.complete || !mapping.Client.Is4() || !mapping.Synthetic.Is4() || !mapping.RealIPv4.Is4() || !capture.IsValid() {
+	if !first.complete || !second.complete || !first.abi.valid() || first.abi != second.abi || !mapping.Client.Is4() || !mapping.Synthetic.Is4() || !mapping.RealIPv4.Is4() || !capture.IsValid() {
 		return o, errSyntheticConntrack
 	}
 	classify := func(image syntheticCTImage) []syntheticSettlementCandidate {
@@ -311,10 +312,10 @@ func compareSyntheticSettlement(first, second syntheticCTImage, mapping dnscontr
 				continue
 			}
 			kind := "unsupported"
-			const unsafeStatus = uint32(1 | 0x40 | 0x200 | 0x800 | 0x1000 | 0x2000 | 0x4000 | 0x8000)
+			const unsafeStatus = uint32(1|0x40|0x200|0x800|0x1000|0x2000|0x4000|0x8000) | syntheticCTStockStatusUnsafe
 			plainReply := row.Reply.Destination == mapping.Client && row.Reply.DestinationPort == row.Original.SourcePort
 			snat := row.Status&(0x10|0x80) == (0x10|0x80) && row.Reply.Destination.IsGlobalUnicast()
-			if row.Original.Source == mapping.Client && row.Original.Destination == mapping.Synthetic && row.Original.Protocol == 6 && row.Reply.Protocol == 6 && row.Original.SourcePort != 0 && (row.Original.DestinationPort == 80 || row.Original.DestinationPort == 443) && row.Reply.DestinationPort != 0 && (plainReply || snat) && row.Zone == 0 && row.Original.Zone == 0 && row.Reply.Zone == 0 && row.MarkPresent && !row.Unsafe && row.Status&unsafeStatus == 0 && row.Status&(8|0x20|0x100) == (8|0x20|0x100) {
+			if row.Original.Source == mapping.Client && row.Original.Destination == mapping.Synthetic && row.Original.Protocol == 6 && row.Reply.Protocol == 6 && row.Original.SourcePort != 0 && (row.Original.DestinationPort == 80 || row.Original.DestinationPort == 443) && row.Reply.DestinationPort != 0 && (plainReply || snat) && row.Zone == 0 && row.Original.Zone == 0 && row.Reply.Zone == 0 && row.MarkPresent && !row.Unsafe && row.Stock == (syntheticCTStockObservation{}) && row.Status&unsafeStatus == 0 && row.Status&(8|0x20|0x100) == (8|0x20|0x100) {
 				// Preserve observed reply.dst, including firmware SNAT. A
 				// reciprocal NAT-shaped tuple is still NOT flow ownership.
 				if row.Reply.Source == mapping.RealIPv4 && row.Reply.SourcePort == row.Original.DestinationPort {

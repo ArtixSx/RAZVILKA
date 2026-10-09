@@ -2,8 +2,12 @@
 
 package dataplane
 
-import "context"
+import (
+	"context"
 
-func readSyntheticConntrack(context.Context) (syntheticCTImage, error) {
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+)
+
+func readSyntheticConntrack(context.Context, netidentity.Identity) (syntheticCTImage, error) {
 	return syntheticCTImage{}, errSyntheticConntrack
 }

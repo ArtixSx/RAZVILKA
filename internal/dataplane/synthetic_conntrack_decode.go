@@ -24,8 +24,8 @@ type syntheticCTTuple struct {
 	Auxiliary                   [6]uint16 // ICMP and other supported L4 attributes
 }
 
-// Kernel ID is only an observation. Linux 2.6.36 emits a truncated pointer;
-// even equal ID/tuple images cannot rule out delete/reinsert (ABA).
+// Kernel ID is only an observation: an old truncated pointer or a reviewed
+// stock 32-bit hash is not a generation. Equal images cannot rule out ABA.
 type syntheticCTRow struct {
 	Original, Reply  syntheticCTTuple
 	Master           syntheticCTTuple
@@ -36,14 +36,17 @@ type syntheticCTRow struct {
 	Birth            uint64
 	BirthPresent     bool
 	Unsafe           bool // helper/master/sequence adjustment or policy extensions
+	Stock            syntheticCTStockObservation
 }
 
 type syntheticCTImage struct {
 	rows     []syntheticCTRow
 	complete bool
+	abi      syntheticCTABI
 }
 
 type syntheticCTDecoder struct {
+	abi              syntheticCTABI
 	sequence, port   uint32
 	bytes, datagrams int
 	done, failed     bool
@@ -66,10 +69,17 @@ func syntheticCTRequest(sequence, port uint32) ([]byte, error) {
 }
 
 func newSyntheticCTDecoder(sequence, port uint32) (*syntheticCTDecoder, error) {
+	return newSyntheticCTDecoderForABI(sequence, port, syntheticCTGeneric)
+}
+
+func newSyntheticCTDecoderForABI(sequence, port uint32, abi syntheticCTABI) (*syntheticCTDecoder, error) {
+	if !abi.valid() {
+		return nil, syntheticCTFailure(syntheticCTABIUnknown, nil)
+	}
 	if _, err := syntheticCTRequest(sequence, port); err != nil {
 		return nil, err
 	}
-	return &syntheticCTDecoder{sequence: sequence, port: port, ids: map[uint32]bool{}}, nil
+	return &syntheticCTDecoder{abi: abi, sequence: sequence, port: port, ids: map[uint32]bool{}}, nil
 }
 
 func (d *syntheticCTDecoder) consume(packet backendNFTDatagram) (err error) {
@@ -80,6 +90,9 @@ func (d *syntheticCTDecoder) consume(packet backendNFTDatagram) (err error) {
 	}()
 	if d == nil || d.failed || d.done {
 		return syntheticCTFailure(syntheticCTState, nil)
+	}
+	if !d.abi.valid() {
+		return syntheticCTFailure(syntheticCTABIUnknown, nil)
 	}
 	if packet.SenderPID != 0 || packet.Groups != 0 {
 		return syntheticCTFailure(syntheticCTSender, nil)
@@ -128,7 +141,7 @@ func (d *syntheticCTDecoder) consume(packet backendNFTDatagram) (err error) {
 			}
 			d.done = true
 		case syntheticCTNew:
-			row, err := decodeSyntheticCTRow(body)
+			row, err := decodeSyntheticCTRowForABI(body, d.abi)
 			if err != nil {
 				return err
 			}
@@ -154,11 +167,15 @@ func (d *syntheticCTDecoder) finishReceive(receive func() (backendNFTDatagram, b
 	if d == nil || d.failed || !d.done || receive == nil {
 		return syntheticCTImage{}, syntheticCTFailure(syntheticCTFinish, nil)
 	}
+	if !d.abi.valid() {
+		d.failed = true
+		return syntheticCTImage{}, syntheticCTFailure(syntheticCTABIUnknown, nil)
+	}
 	if _, queued, err := receive(); queued || err != nil {
 		d.failed = true
 		return syntheticCTImage{}, syntheticCTFailure(syntheticCTDrain, err)
 	}
-	return syntheticCTImage{rows: append([]syntheticCTRow(nil), d.rows...), complete: true}, nil
+	return syntheticCTImage{rows: append([]syntheticCTRow(nil), d.rows...), complete: true, abi: d.abi}, nil
 }
 
 type syntheticCTAttr struct {
@@ -197,7 +214,14 @@ func (a syntheticCTAttr) nested() (map[uint16]syntheticCTAttr, error) {
 }
 
 func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
+	return decodeSyntheticCTRowForABI(body, syntheticCTGeneric)
+}
+
+func decodeSyntheticCTRowForABI(body []byte, abi syntheticCTABI) (syntheticCTRow, error) {
 	var r syntheticCTRow
+	if !abi.valid() {
+		return r, syntheticCTFailure(syntheticCTABIUnknown, nil)
+	}
 	if len(body) < 4 || body[0] != 2 || !backendAllZero(body[1:4]) {
 		return r, syntheticCTFailure(syntheticCTFamily, nil)
 	}
@@ -221,10 +245,21 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 		return r, syntheticCTFailure(syntheticCTIDShape, nil)
 	}
 	r.Status, r.ID = binary.BigEndian.Uint32(a[3].data), binary.BigEndian.Uint32(a[12].data)
+	statusMask := uint32(0xffff)
+	if abi == syntheticCTStockNC1812 {
+		// Pinned ctnetlink_dump_id passes nf_ct_get_id straight to
+		// nla_put_be32, without htonl or a NET_BYTEORDER attribute flag.
+		if !a[12].scalar(4, false) {
+			return r, syntheticCTFailure(syntheticCTIDShape, nil)
+		}
+		r.ID = binary.NativeEndian.Uint32(a[12].data)
+		statusMask = syntheticCTStockStatusMask
+		r.Unsafe = r.Status&syntheticCTStockStatusUnsafe != 0
+	}
 	if r.ID == 0 {
 		return r, syntheticCTFailure(syntheticCTZeroID, nil)
 	}
-	if r.Status&^uint32(0xffff) != 0 {
+	if r.Status&^statusMask != 0 {
 		return r, syntheticCTFailure(syntheticCTStatusMask, nil)
 	}
 	for kind, v := range a {
@@ -317,11 +352,30 @@ func decodeSyntheticCTRow(body []byte) (syntheticCTRow, error) {
 			}
 			r.Unsafe = true
 		case 24:
-			return r, syntheticCTFailure(syntheticCTAttr24, nil)
+			if abi != syntheticCTStockNC1812 {
+				return r, syntheticCTFailure(syntheticCTAttr24, nil)
+			}
+			if !v.scalar(4, false) {
+				return r, syntheticCTFailure(syntheticCTStockMarkShape, nil)
+			}
+			r.Stock.NDMMark, r.Stock.NDMMarkPresent = binary.NativeEndian.Uint32(v.data), true
+			r.Unsafe = true
 		case 25:
-			return r, syntheticCTFailure(syntheticCTAttr25, nil)
+			if abi != syntheticCTStockNC1812 {
+				return r, syntheticCTFailure(syntheticCTAttr25, nil)
+			}
+			if r.Stock.Ifaces, err = decodeSyntheticCTStockIfaces(v); err != nil {
+				return r, err
+			}
+			r.Stock.IfacesPresent, r.Unsafe = true, true
 		case 26:
-			return r, syntheticCTFailure(syntheticCTAttr26, nil)
+			if abi != syntheticCTStockNC1812 {
+				return r, syntheticCTFailure(syntheticCTAttr26, nil)
+			}
+			if r.Stock.NTCE, err = decodeSyntheticCTStockNTCE(v); err != nil {
+				return r, err
+			}
+			r.Stock.NTCEPresent, r.Unsafe = true, true
 		default:
 			// The supported subset is explicit. An extension, absent ID or
 			// malformed foreign row makes FULL coverage unknown, never zero.
