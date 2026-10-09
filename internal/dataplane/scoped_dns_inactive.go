@@ -16,14 +16,15 @@ var ErrScopedDNSRuntimeInactive = errors.New("fresh scoped DNS runtime inactivit
 var _ RuntimeInactivityObserver = (*ScopedDNSAdapter)(nil)
 
 type scopedDNSInactiveProof struct {
-	procRoot       string
-	netRoot        string
-	threadNetRoot  func() string
-	stage          *string // private ROOT dependency QA: fixed labels only, no callback
-	selfPID        int
-	readlink       func(string) (string, error)
-	sameExecutable func(string, string) (bool, error)
-	withCurrent    func(context.Context, func(context.Context, netidentity.Identity) error) error
+	procRoot           string
+	netRoot            string
+	threadNetRoot      func() string
+	stage              *string // private ROOT dependency QA: fixed labels only, no callback
+	selfPID            int
+	readlink           func(string) (string, error)
+	sameExecutable     func(string, string) (bool, error)
+	withCurrent        func(context.Context, func(context.Context, netidentity.Identity) error) error
+	installerPeerCheck func(context.Context, int) error // fixed original provider; private model seam
 }
 
 // VerifyRuntimeInactive performs no effects, cancellation, migration or cleanup.
@@ -38,6 +39,9 @@ func (a *ScopedDNSAdapter) VerifyRuntimeInactive(ctx context.Context) error {
 		return errors.Join(ErrScopedDNSRuntimeInactive, err)
 	}
 	proof.withCurrent = a.InactivityIdentity.WithCurrent
+	if a.installerRole != nil {
+		proof.installerPeerCheck = a.installerRole.check
+	}
 	return a.verifyDNSRuntimeInactive(ctx, proof)
 }
 
@@ -50,6 +54,7 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
 	root, settings, identity, kernel, manager := a.StateRoot, a.InactivitySettingsPath, a.InactivityIdentity, a.InactivityKernelCheck, a.DNS
+	installer := a.installerRole
 	kernelPC := reflect.ValueOf(kernel).Pointer()
 	checkLocal := func() (uint64, error) {
 		if err := ctx.Err(); err != nil {
@@ -60,7 +65,7 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 		}
 		live := a.live
 		a.mu.Unlock()
-		if live != nil || a.StateRoot != root || a.InactivitySettingsPath != settings || a.InactivityIdentity != identity || a.DNS != manager ||
+		if live != nil || a.installerRole != installer || installer != nil && installer.current(ctx) != nil || a.StateRoot != root || a.InactivitySettingsPath != settings || a.InactivityIdentity != identity || a.DNS != manager ||
 			a.InactivityKernelCheck == nil || reflect.ValueOf(a.InactivityKernelCheck).Pointer() != kernelPC || manager != nil && manager.Path != settings {
 			return 0, ErrScopedDNSRuntimeInactive
 		}

@@ -37,6 +37,7 @@ type ScopedDNSAdapter struct {
 	lifetime               context.Context
 	mu                     sync.Mutex
 	live                   *scopedDNSSession
+	installerRole          *scopedDNSInstallerRole
 	listen                 func(netip.AddrPort) (*net.UDPConn, *net.TCPListener, error)
 }
 

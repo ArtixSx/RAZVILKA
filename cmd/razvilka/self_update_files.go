@@ -146,6 +146,10 @@ func selfUpdateRuntimeInactive(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	adapter, ok := nativeSelfUpdateFileAdapter().(*updatecheck.SelfUpdateFileAdapter)
+	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, adapter, id) != nil {
+		return dataplane.ErrRuntimeInactivity
+	}
 	if err := verifySelfUpdateRuntimeInactive(ctx, manager); err != nil {
 		return err
 	}
@@ -323,6 +327,10 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	}
 	manager, err := selfUpdateRuntimeManager()
 	if err != nil {
+		return 3
+	}
+	installer, ok := adapter.(*updatecheck.SelfUpdateFileAdapter)
+	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, installer, args[0]) != nil {
 		return 3
 	}
 	if _, err := manager.Deactivate(ctx); err != nil {

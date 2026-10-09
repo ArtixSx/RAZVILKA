@@ -93,6 +93,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			return ErrScopedDNSRuntimeInactive
 		}
 		exeBefore := ""
+		installerPeer := false
 		mark("proc.cmdline-shape")
 		if len(cmd) == 0 {
 			if flags&0x00200000 == 0 {
@@ -140,19 +141,27 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 					clear(cmd)
 					continue
 				}
-				if err != nil || same {
+				if err != nil {
 					return ErrScopedDNSRuntimeInactive
 				}
+				controller := same || scopedDNSInstallerCommand(args)
 				mark("proc.controller-ownership")
 				for _, name := range []string{filepath.Base(strings.TrimSuffix(exe, " (deleted)")), filepath.Base(args[0])} {
 					if strings.EqualFold(name, selfName) || strings.EqualFold(name, "razvilka") || strings.EqualFold(name, "razvilka.exe") {
-						return ErrScopedDNSRuntimeInactive
+						controller = true
 					}
 				}
 				for _, arg := range args {
 					if arg == settings || arg == root || arg == filepath.Dir(root) || strings.TrimPrefix(arg, "--dns-state=") == settings || strings.TrimPrefix(arg, "--dataplane-state=") == filepath.Dir(root) {
+						controller = true
+					}
+				}
+				if controller {
+					mark("proc.installer-role-open")
+					if p.installerPeerCheck == nil || p.installerPeerCheck(ctx, pid) != nil {
 						return ErrScopedDNSRuntimeInactive
 					}
+					installerPeer = true
 				}
 			}
 		}
@@ -191,6 +200,12 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		_, _, current, parseErr := proxyInactiveProcStat(again, pid)
 		if err != nil || parseErr != nil || ticks != current {
 			return ErrScopedDNSRuntimeInactive
+		}
+		if installerPeer {
+			mark("proc.installer-role-close")
+			if p.installerPeerCheck(ctx, pid) != nil {
+				return ErrScopedDNSRuntimeInactive
+			}
 		}
 		self = self || pid == p.selfPID
 	}
