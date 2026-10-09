@@ -27,6 +27,9 @@ type DomainPolicyTCPFlow struct {
 	Client          autonomy.ClientPacket
 	DefaultCoverage string
 	Coalesced       bool
+	// Set only by the actual synthetic capture consumer. Destination remains
+	// the kernel-observed synthetic tuple; this seal holds its separate target.
+	synthetic *domainPolicyTCPSyntheticBinding
 }
 
 // DomainPolicyTCPRuntime is the existing engine's synchronous flow seam. Guard
@@ -53,7 +56,13 @@ func (r DomainPolicyTCPRuntime) now() time.Time {
 }
 
 func (p *DomainPolicy) validTCPFlow(flow DomainPolicyTCPFlow) bool {
-	return p != nil && flow.Generation == p.generation && len(flow.FlowID) > 0 && len(flow.FlowID) <= 256 && !strings.ContainsAny(flow.FlowID, "\x00\r\n") && flow.Source.IsValid() && flow.Source.Port() != 0 && flow.Source.Addr().Is4() && flow.Source.Addr() == flow.Client.Address && flow.Destination.IsValid() && flow.Destination.Addr().Is4() && flow.Destination.Addr().IsGlobalUnicast() && !flow.Destination.Addr().IsPrivate() && !netip.MustParsePrefix("100.64.0.0/10").Contains(flow.Destination.Addr()) && !netip.MustParsePrefix("198.18.0.0/15").Contains(flow.Destination.Addr()) && (flow.Destination.Port() == 80 || flow.Destination.Port() == 443)
+	if p == nil || flow.Generation != p.generation || len(flow.FlowID) == 0 || len(flow.FlowID) > 256 || strings.ContainsAny(flow.FlowID, "\x00\r\n") || !flow.Source.IsValid() || flow.Source.Port() == 0 || !flow.Source.Addr().Is4() || flow.Source.Addr() != flow.Client.Address || !flow.Destination.IsValid() || (flow.Destination.Port() != 80 && flow.Destination.Port() != 443) {
+		return false
+	}
+	if flow.synthetic != nil {
+		return flow.synthetic.matches(flow)
+	}
+	return domainPolicyTCPPublicIPv4(flow.Destination.Addr())
 }
 
 // HandleTCP is an actual pre-outbound consumer: it reads this connection's
@@ -75,7 +84,11 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 	if err = errors.Join(err, ctx.Err()); err != nil {
 		return d, err
 	}
-	question := DomainPolicyFlow{Client: flow.Client, Destination: flow.Destination.Addr(), Protocol: "tcp", DefaultCoverage: flow.DefaultCoverage, Coalesced: flow.Coalesced}
+	target := flow.Destination.Addr()
+	if flow.synthetic != nil {
+		target = flow.synthetic.mapping.RealIP
+	}
+	question := DomainPolicyFlow{Client: flow.Client, Destination: target, Protocol: "tcp", DefaultCoverage: flow.DefaultCoverage, Coalesced: flow.Coalesced}
 	gate := p.DecideWithScope(question, scope, runtime.now())
 	if gate.Kind == "outside" {
 		return gate, nil
@@ -90,6 +103,10 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 	}
 	question.Name, question.NameSource, question.NameState = evidence.Name, evidence.Source, evidence.State
 	question.BeforeOutbound = true
+	if flow.synthetic != nil && (evidence.State != DomainPolicyNameVisible || evidence.Name != flow.synthetic.mapping.Name || flow.Coalesced) {
+		d.Reason = "SYNTHETIC_FLOW_NAME_MISMATCH"
+		return d, ErrDomainPolicy
+	}
 	scope, err = runtime.Guard(ctx, flow)
 	if err = errors.Join(err, ctx.Err()); err != nil {
 		return d, err
@@ -97,6 +114,10 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 	d = p.DecideWithScope(question, scope, runtime.now())
 	if d.Kind == "outside" {
 		return d, nil
+	}
+	if flow.synthetic != nil && !flow.synthetic.acceptsDecision(d) {
+		d.Kind, d.Reason = "refused", "SYNTHETIC_POSITIVE_ROUTE_REQUIRED"
+		return d, ErrDomainPolicy
 	}
 	if d.Kind != "default" && d.Kind != "service" && d.Kind != "baseline" {
 		return d, ErrDomainPolicy
@@ -182,7 +203,8 @@ func (p *DomainPolicy) forwardTCP(ctx context.Context, conn net.Conn, flow Domai
 		return err
 	}
 	// Every byte consumed by sniffing, including any already-read body/early
-	// data, is replayed exactly once. Original IP/port never changes to a name.
+	// data, is replayed exactly once. The captured tuple stays immutable; the
+	// synthetic consumer dials only its separately sealed numeric real target.
 	return relayDomainPolicyTCP(ctx, conn, outbound, prefix)
 }
 
