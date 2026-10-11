@@ -43,6 +43,17 @@ require_installation_paths() {
     [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
       echo "Unsafe installation directory: $DIR; rollback not started" >&2; return 1;
     }
+    case "$DIR" in
+      "$BASE/razvilka"|"$BASE/razvilka/"*)
+        if [ -d "$DIR" ]; then
+          PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$DIR" | awk '
+            NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+            END { if (NR != 1 || !ok) exit 1 }
+          ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || {
+            echo "Unsafe private installation owner or permissions: $DIR; rollback not started" >&2; return 1;
+          }
+        fi ;;
+    esac
   done
   [ ! -L "$STATEDIR/current-backup" ] && { [ ! -e "$STATEDIR/current-backup" ] || [ -f "$STATEDIR/current-backup" ]; } || {
     echo "Unsafe current backup pointer; rollback not started" >&2; return 1;

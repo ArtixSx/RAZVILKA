@@ -138,8 +138,21 @@ else
   DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
 fi
 
-TMP_ROOT="${TMPDIR:-$BASE/tmp}"
+check_private_cache() {
+  for PRIVATE_DIR in "$BASE/razvilka" "$BASE/razvilka/cache"; do
+    [ ! -L "$PRIVATE_DIR" ] && { [ ! -e "$PRIVATE_DIR" ] || [ -d "$PRIVATE_DIR" ]; } || { echo "Unsafe private bootstrap directory: $PRIVATE_DIR" >&2; exit 12; }
+    if [ -d "$PRIVATE_DIR" ]; then
+      PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$PRIVATE_DIR" | awk '
+        NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+        END { if (NR != 1 || !ok) exit 1 }
+      ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || { echo "Unsafe private bootstrap owner or permissions: $PRIVATE_DIR" >&2; exit 12; }
+    fi
+  done
+}
+check_private_cache
+TMP_ROOT="${TMPDIR:-$BASE/razvilka/cache}"
 mkdir -p "$TMP_ROOT"
+[ -n "${TMPDIR:-}" ] || check_private_cache
 TMP_ROOT="$(CDPATH= cd -- "$TMP_ROOT" && pwd -P)"
 WORKDIR="$(mktemp -d "$TMP_ROOT/razvilka-install.XXXXXX")"
 cleanup() {

@@ -24,6 +24,19 @@ FAILURE_WINDOW="${RAZVILKA_FAILURE_WINDOW_SECONDS:-300}"
 HEALTH_RETRIES="${RAZVILKA_HEALTH_RETRIES:-130}"
 DAEMON="${RAZVILKA_START_STOP_DAEMON:-$BASE/sbin/start-stop-daemon}"
 
+check_private_directories() {
+  for DIR in "$BASE/razvilka" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$RUNDIR"; do
+    [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || { echo "Unsafe private installation directory: $DIR" >&2; return 1; }
+    if [ -d "$DIR" ]; then
+      PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$DIR" | awk '
+        NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+        END { if (NR != 1 || !ok) exit 1 }
+      ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || { echo "Unsafe private installation owner or permissions: $DIR" >&2; return 1; }
+    fi
+  done
+}
+check_private_directories
+
 detect_lan_ip() {
   WAN_DEV="$(ip route show default 2>/dev/null | awk '{print $5; exit}')"
   LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
@@ -132,6 +145,7 @@ start_process() {
   [ -x "$DAEMON" ] || { echo "start-stop-daemon is unavailable: $DAEMON" >&2; record_failure; return 1; }
 
   mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR/staging" "$STATEDIR/backups" "$STATEDIR/warp" "$LOGDIR" "$RUNDIR"
+  check_private_directories
   LAN_IP="$(detect_lan_ip)"
   export RAZVILKA_USQUE_REPAIR_STATE="$STATEDIR/usque-repair"
   set --

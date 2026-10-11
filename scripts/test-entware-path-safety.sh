@@ -49,6 +49,33 @@ for SCRIPT in upgrade-entware.sh rollback-entware.sh uninstall-entware.sh; do
   done
 done
 
+# Real Unix metadata only: Windows ACL emulation cannot prove UID or chmod.
+if [ "$NATIVE_LINKS" -eq 1 ]; then
+  for SCRIPT in upgrade-entware.sh rollback-entware.sh uninstall-entware.sh S99razvilka; do
+    for RELATIVE in razvilka razvilka/run razvilka/state; do
+      for KIND in writable foreign-owner; do
+        [ "$KIND" != foreign-owner ] || [ "$(id -u)" = 0 ] || continue
+        CASE_ROOT="$TEST_ROOT/owner-$SCRIPT-$KIND-$(printf '%s' "$RELATIVE" | tr '/' '_')"
+        BASE="$CASE_ROOT/opt"
+        mkdir -p "$BASE/$RELATIVE"
+        printf retained >"$BASE/$RELATIVE/other-app.conf"
+        if [ "$KIND" = foreign-owner ]; then chown 1001 "$BASE/$RELATIVE"; else chmod 777 "$BASE/$RELATIVE"; fi
+        BEFORE="$(ls -nd "$BASE/$RELATIVE")"
+        CODE=0
+        set --
+        [ "$SCRIPT" != S99razvilka ] || set -- status
+        RAZVILKA_BASE="$BASE" sh "$ROOT/scripts/$SCRIPT" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
+        [ "$CODE" != 0 ] && grep -q '^Unsafe private installation owner or permissions:' "$CASE_ROOT/output" || {
+          echo "Private foreign/writable tree reached a producer: $SCRIPT $RELATIVE $KIND" >&2; exit 1;
+        }
+        [ "$(cat "$BASE/$RELATIVE/other-app.conf")" = retained ] && [ "$(ls -nd "$BASE/$RELATIVE")" = "$BEFORE" ] || {
+          echo "Private owner refusal changed foreign bytes or permissions" >&2; exit 1;
+        }
+      done
+    done
+  done
+fi
+
 # These paths are read/written by install and rollback, and are preserved by
 # uninstall. Refuse a linked backup root/pointer before selecting a snapshot.
 for SCRIPT in upgrade-entware.sh rollback-entware.sh; do

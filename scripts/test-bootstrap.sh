@@ -16,7 +16,7 @@ REAL_CP="$(command -v cp)"
 REAL_MKDIR="$(command -v mkdir)"
 export REAL_CP REAL_MKDIR
 mkdir -p "$TEST_ROOT/essential" "$TEST_ROOT/providers" "$TEST_ROOT/source/RAZVILKA-fixture/scripts"
-for TOOL in cat chmod cp mkdir rm mv uname sh; do
+for TOOL in cat chmod cp mkdir rm mv uname sh ls; do
   REAL_TOOL="$(command -v "$TOOL")"
   printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/essential/$TOOL"
   chmod 700 "$TEST_ROOT/essential/$TOOL"
@@ -116,11 +116,21 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
+  case "$CASE_NAME" in install-default-cache|private-owner|private-writable)
+    [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ] || continue ;;
+  esac
   CASE_ROOT="$TEST_ROOT/$CASE_NAME"
   BASE="$CASE_ROOT/base"
   mkdir -p "$BASE/bin" "$BASE/sbin" "$BASE/tmp" "$BASE/etc/ssl/certs"
+  RUN_TMP="$BASE/tmp"
+  case "$CASE_NAME" in
+    install-default-cache) RUN_TMP='' ;;
+    private-owner) mkdir "$BASE/razvilka"; chown 1001 "$BASE/razvilka" ;;
+    private-writable) mkdir "$BASE/razvilka"; chmod 777 "$BASE/razvilka" ;;
+    private-type) printf foreign >"$BASE/razvilka" ;;
+  esac
   printf ca >"$BASE/etc/ssl/certs/ca-certificates.crt"
   cp "$TEST_ROOT/providers/"* "$BASE/bin/"
   cp "$TEST_ROOT/providers/start-stop-daemon" "$BASE/sbin/"
@@ -179,7 +189,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   CODE=0
   ARCH_OVERRIDE=""
   [ "$CASE_NAME" != install-explicit-mipsel ] || ARCH_OVERRIDE=mipsle
-  PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$BASE/tmp" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
+  PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$RUN_TMP" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
     "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
     install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback)
@@ -188,6 +198,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
       [ "$(cat "$CASE_ROOT/helper-architecture")" = "$ARCH_OVERRIDE" ] || { echo "Architecture override was lost before the release helper" >&2; exit 1; }
+      if [ "$CASE_NAME" = install-default-cache ]; then
+        [ -d "$BASE/razvilka/cache" ] && [ -z "$(find "$BASE/razvilka/cache" -mindepth 1 -print)" ] &&
+          [ "$(ls -nd "$BASE/razvilka" | awk '{print $1,$3}')" = 'drwx------ 0' ] || { echo "Bootstrap default cache is not private/root-owned/clean" >&2; exit 1; }
+      fi
       if [ "$ARCH" = mips ]; then
         grep -q 'платформа ядра: mips' "$CASE_ROOT/output" || { echo "Kernel identity is mislabeled as selected architecture" >&2; exit 1; }
       fi
@@ -209,6 +223,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     *)
       [ "$CODE" != 0 ] && [ ! -e "$CASE_ROOT/helper-called" ] || { echo "Unsafe bootstrap accepted: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
       case "$CASE_NAME" in
+        private-owner|private-writable|private-type)
+          [ "$CODE" = 12 ] && [ ! -e "$CASE_ROOT/downloads" ] || { echo "Foreign private tree reached a download/helper" >&2; exit 1; }
+          ;;
         timeout-still-incompatible)
           [ "$CODE" = 12 ] && [ ! -e "$CASE_ROOT/downloads" ] || { echo "Unusable timeout reached release download/helper" >&2; exit 1; }
           ;;

@@ -25,6 +25,15 @@ esac
 # or partially removed tree contains links. Do not follow them into another app.
 for DIR in "$BASE" "$BASE/bin" "$BASE/etc" "$BASE/etc/init.d" "$APPDIR" "$BASE/razvilka" "$BASE/razvilka/run" "$STATEDIR"; do
   [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || { echo "Unsafe installation directory: $DIR" >&2; exit 1; }
+  case "$DIR" in
+    "$BASE/razvilka"|"$BASE/razvilka/"*)
+      if [ -d "$DIR" ]; then
+        PRIVATE_OWNER="$(LC_ALL=C ls -nd -- "$DIR" | awk '
+          NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+          END { if (NR != 1 || !ok) exit 1 }
+        ')" && [ "$PRIVATE_OWNER" = "$(id -u)" ] || { echo "Unsafe private installation owner or permissions: $DIR" >&2; exit 1; }
+      fi ;;
+  esac
 done
 for FILE in "$INIT" "$BINARY"; do
   [ ! -L "$FILE" ] && { [ ! -e "$FILE" ] || { [ -f "$FILE" ] && [ -x "$FILE" ]; }; } || { echo "Unsafe installation file: $FILE" >&2; exit 1; }
