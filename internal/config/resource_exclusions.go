@@ -49,8 +49,28 @@ func ResourceExclusionStateEqual(a, b *NetworkPolicy) bool {
 		if p != nil {
 			p = CloneNetworkPolicy(p)
 			v.Exclusions, v.Russian = p.Exclusions, p.Russian
+			// JSON [] and null both describe an empty negative set. Canonicalize
+			// only this detached comparison, retaining every document/metadata
+			// field and leaving the approved config and strict Store CAS exact.
+			if len(v.Russian.ServiceIDs) == 0 {
+				v.Russian.ServiceIDs = nil
+			}
+			if len(v.Russian.BroadTLDs) == 0 {
+				v.Russian.BroadTLDs = nil
+			}
+			if v.Exclusions != nil {
+				if len(v.Exclusions.Manual) == 0 {
+					v.Exclusions.Manual = nil
+				}
+				if snapshot := v.Exclusions.RussianSnapshot; snapshot != nil && len(snapshot.Entries) == 0 {
+					snapshot.Entries = nil
+				}
+			}
 			for _, r := range p.Rules {
 				if r.Action == "direct" {
+					if len(r.DeviceIDs) == 0 {
+						r.DeviceIDs = nil
+					}
 					v.Rules = append(v.Rules, r)
 				}
 			}
