@@ -67,6 +67,10 @@ for the commands below.
 | MIPS | [mipssf-k3.4](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) | `mips`, soft-float |
 | MIPSel | [mipselsf-k3.4](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) | `mipsle`, soft-float |
 
+> The three architectures are build targets. Current managed LIST startup is
+> tied to the reviewed stock NC-1812 profile; other ARM64, MIPS and MIPSel targets
+> are refused for this mode. [Runtime support matrix (RU)](docs/RUNTIME_SUPPORT_RU.md).
+
 Check that Entware is available:
 
 ```sh

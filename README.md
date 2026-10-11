@@ -93,6 +93,10 @@
 | MIPS | [mipssf-k3.4](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) | `mips`, soft-float |
 | MIPSel | [mipselsf-k3.4](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) | `mipsle`, soft-float |
 
+> Три архитектуры — цели сборки. Текущий managed LIST привязан к проверенному
+> штатному профилю NC-1812; другие ARM64, MIPS и MIPSel получают отказ запуска
+> этого режима. [Матрица поддержки запуска](docs/RUNTIME_SUPPORT_RU.md).
+
 Проверьте, что Entware доступен:
 
 ```sh
