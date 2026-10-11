@@ -198,7 +198,7 @@ func (a *SelfUpdateFileAdapter) stoppedSettlementInactive(ctx context.Context, i
 	if err := a.verifyPrivateRestore(ctx, id); err != nil {
 		return err
 	}
-	if _, err := os.Lstat(filepath.Join(a.installation, "var/run/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(filepath.Join(a.installation, "razvilka/run/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
 		return ErrFileProtocol
 	}
 	if a.runtimeInactive == nil {

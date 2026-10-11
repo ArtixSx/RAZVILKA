@@ -140,7 +140,7 @@ func TestMain(m *testing.M) {
 }
 
 func nativeFileAdapter(directory string, p nativeFileProfile) *SelfUpdateFileAdapter {
-	a := &SelfUpdateFileAdapter{directory: directory, installation: p.Installation, fileJournal: filepath.Join(p.Installation, "var/lib/razvilka/self-update-files"), owned: func(string) error { return nil }, layout: func(Deployment) error { return nil }, capabilities: func(context.Context, string) error { return nil }}
+	a := &SelfUpdateFileAdapter{directory: directory, installation: p.Installation, fileJournal: filepath.Join(p.Installation, "razvilka/state/self-update-files"), owned: func(string) error { return nil }, layout: func(Deployment) error { return nil }, capabilities: func(context.Context, string) error { return nil }}
 	a.stopCheck = func(ctx context.Context, id string) (bool, error) {
 		r, present, err := operationgate.ReadSelfUpdateStop(ctx, p.Control)
 		if !present && err == nil {
@@ -181,7 +181,7 @@ func nativeFileFixture(t *testing.T, scenario string) (*SelfUpdateFileAdapter, *
 		t.Fatal(err)
 	}
 	p := nativeFileProfile{Installation: filepath.Join(u.Directory, "installation"), Control: filepath.Join(u.Directory, "control"), Scenario: scenario}
-	for _, path := range []string{"bin", "etc/init.d", "etc/razvilka", "var/run", "var/lib/razvilka/self-update-files"} {
+	for _, path := range []string{"bin", "etc/init.d", "etc/razvilka", "razvilka/run", "razvilka/state/self-update-files"} {
 		if err := os.MkdirAll(filepath.Join(p.Installation, filepath.FromSlash(path)), 0700); err != nil {
 			t.Fatal(err)
 		}

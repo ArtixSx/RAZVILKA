@@ -397,7 +397,7 @@ func TestSelfUpdateStaleHandoffAndCandidateRefusal(t *testing.T) {
 	if job := u.Snapshot(); job.State != "requires-review" {
 		t.Fatalf("stale handoff stuck: %+v", job)
 	}
-	v := NewUpdater("0.18.1-dev", t.TempDir(), Deployment{Executable: "/opt/var/lib/razvilka-candidate/bin/razvilka", Port: "8788", Paths: ProductionPaths()})
+	v := NewUpdater("0.18.1-dev", t.TempDir(), Deployment{Executable: "/opt/razvilka/candidate/state/bin/razvilka", Port: "8788", Paths: ProductionPaths()})
 	called := false
 	v.Client = &http.Client{Transport: updateTransport(func(*http.Request) (*http.Response, error) {
 		called = true

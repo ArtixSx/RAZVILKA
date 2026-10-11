@@ -30,7 +30,7 @@ func TestNativeStageFileReviewBeforeCurrentReviewPublication(t *testing.T) {
 	}
 	sha := digestBytes(program)
 	job := filepath.Join(a.directory, u.record.Job.ID)
-	for _, path := range []string{filepath.Join(a.installation, "bin"), filepath.Join(a.installation, "etc/init.d"), filepath.Join(a.installation, "etc/razvilka"), filepath.Join(a.installation, "var/lib/razvilka")} {
+	for _, path := range []string{filepath.Join(a.installation, "bin"), filepath.Join(a.installation, "etc/init.d"), filepath.Join(a.installation, "etc/razvilka"), filepath.Join(a.installation, "razvilka/state")} {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			t.Fatal(err)
 		}

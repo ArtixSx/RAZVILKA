@@ -12,7 +12,7 @@ BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
 [ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
 PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
 export PATH
-STATEDIR="$BASE/var/lib/razvilka"
+STATEDIR="$BASE/razvilka/state"
 BACKUPROOT="$STATEDIR/update-backups"
 APPDIR="$BASE/etc/razvilka"
 BINDIR="$BASE/bin"
@@ -38,8 +38,8 @@ for ARG in "$@"; do
 done
 
 require_installation_paths() {
-  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/var" \
-    "$BASE/var/run" "$BASE/var/lib" "$STATEDIR" "$BACKUPROOT"; do
+  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/razvilka" \
+    "$BASE/razvilka/run" "$STATEDIR" "$BACKUPROOT"; do
     [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
       echo "Unsafe installation directory: $DIR; rollback not started" >&2; return 1;
     }

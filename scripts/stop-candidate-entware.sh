@@ -7,7 +7,7 @@ BASE="${BASE%/}"
 case "$BASE/" in /|*/../*|*/./*|*//*) echo "Candidate base must be a non-root normalized path" >&2; exit 1 ;; esac
 [ -d "$BASE" ] || { echo "Candidate base directory is missing" >&2; exit 1; }
 BINARY="$BASE/bin/razvilka-candidate"
-PID_FILE="$BASE/var/run/razvilka-candidate.pid"
+PID_FILE="$BASE/razvilka/candidate/run/razvilka.pid"
 for TARGET in "$BINARY" "$PID_FILE"; do
     CHECK="$TARGET"
     while [ "$CHECK" != "$BASE" ]; do

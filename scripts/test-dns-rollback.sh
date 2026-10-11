@@ -15,7 +15,7 @@ trap cleanup EXIT HUP INT TERM
 # router process, network rule, DNS query or external download is involved.
 for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-file invalid; do
   BASE="$TEST_ROOT/$MODE"
-  STATE="$BASE/var/lib/razvilka"
+  STATE="$BASE/razvilka/state"
   BACKUP="$STATE/update-backups/before"
   mkdir -p "$BACKUP" "$BASE/bin" "$BASE/etc/init.d" "$BASE/etc/razvilka" "$STATE/dns"
   printf '%s\n' '{"schema":5}' >"$STATE/dns/state.json"
@@ -25,7 +25,7 @@ for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-f
 case "${1:-}" in
   -self-update-read-version|-self-update-schema) printf 'flag provided but not defined: %s\n' "$1" >&2; exit 2 ;;
   -check-node-history-state)
-    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/var/lib/razvilka" ] || exit 99
+    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/razvilka/state" ] || exit 99
     printf '%s\n' '{"ok":true}' ;;
   -check-dns-state)
     [ "$DNS_TEST_MODE" != legacy-unsupported ] || exit 1
@@ -42,9 +42,9 @@ echo "$1" >>"$RAZVILKA_BASE/service-actions"
 case "$1" in
   start)
     case "$DNS_TEST_MODE" in
-      present) [ "$(cat "$RAZVILKA_BASE/var/lib/razvilka/dns/state.json")" = '{"schema":4}' ] ;;
-      absent) [ ! -e "$RAZVILKA_BASE/var/lib/razvilka/dns/state.json" ] ;;
-      legacy) [ "$(cat "$RAZVILKA_BASE/var/lib/razvilka/dns/state.json")" = '{"schema":5}' ] ;;
+      present) [ "$(cat "$RAZVILKA_BASE/razvilka/state/dns/state.json")" = '{"schema":4}' ] ;;
+      absent) [ ! -e "$RAZVILKA_BASE/razvilka/state/dns/state.json" ] ;;
+      legacy) [ "$(cat "$RAZVILKA_BASE/razvilka/state/dns/state.json")" = '{"schema":5}' ] ;;
     esac ;;
 esac
 INIT
@@ -99,7 +99,7 @@ done
 awk '/^backup_file\(\) \{/ {copy=1} copy {print} copy && /^\}$/ {exit}' "$ROOT/scripts/upgrade-entware.sh" >"$TEST_ROOT/backup-function.sh"
 grep '^backup_file "\$STATEDIR/dns/state.json" dns-state.json$' "$ROOT/scripts/upgrade-entware.sh" >"$TEST_ROOT/backup-call.sh"
 grep -q '^DNS_STATE_PRESENT=\$DNS_STATE_PRESENT$' "$ROOT/scripts/upgrade-entware.sh"
-STATEDIR="$TEST_ROOT/present/var/lib/razvilka"
+STATEDIR="$TEST_ROOT/present/razvilka/state"
 BACKUP="$TEST_ROOT/snapshot"
 mkdir "$BACKUP"
 . "$TEST_ROOT/backup-function.sh"

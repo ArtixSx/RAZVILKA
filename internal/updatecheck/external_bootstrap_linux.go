@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -31,7 +32,7 @@ func externalBootstrapProcesses(ctx context.Context, deployment Deployment) (fil
 	if err := ctx.Err(); err != nil {
 		return zero, zero, "", err
 	}
-	root, err := ownedfs.Open("/opt/var/run")
+	root, err := ownedfs.Open(installpath.Run)
 	if err != nil {
 		return zero, zero, "", err
 	}

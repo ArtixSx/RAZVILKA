@@ -35,7 +35,7 @@ export TEST_PID
 
 prepare() {
     BASE="$TEST_ROOT/$1"
-    mkdir -p "$BASE/bin" "$BASE/sbin" "$BASE/var/run" "$BASE/etc"
+    mkdir -p "$BASE/bin" "$BASE/sbin" "$BASE/razvilka/candidate/run" "$BASE/etc"
     cat >"$BASE/bin/razvilka-candidate" <<'EOF'
 #!/bin/sh
 [ "$1" = -healthcheck ] && [ "$2" = http://192.168.1.1:8788/api/v1/status ] && [ "$3" = -healthcheck-pid ] && [ "$4" = "$TEST_PID" ] || exit 99
@@ -68,7 +68,7 @@ refuse_stop() {
     if RAZVILKA_CANDIDATE_BASE="$BASE" sh "$STOP_SCRIPT" >"$BASE/stop.log" 2>&1; then
         echo "Unsafe candidate stop was accepted" >&2; exit 1
     fi
-    [ -f "$BASE/var/run/razvilka-candidate.pid" ] || { echo "Refused stop erased its PID file" >&2; exit 1; }
+    [ -f "$BASE/razvilka/candidate/run/razvilka.pid" ] || { echo "Refused stop erased its PID file" >&2; exit 1; }
 }
 refused() {
     if launch; then echo "Unsafe candidate launch was accepted" >&2; exit 1; fi
@@ -80,15 +80,15 @@ TEST_HEALTH_FAILURES=2
 export TEST_HEALTH_FAILURES
 launch
 [ "$(cat "$TEST_CAPTURE.health")" = 3 ] || { echo "Candidate did not wait for readiness" >&2; exit 1; }
-[ -f "$BASE/var/lib/razvilka-candidate/.candidate-layout-v1" ] || { echo "Layout ownership missing" >&2; exit 1; }
-[ "$(cat "$TEST_CAPTURE.env")" = "$BASE/var/lib/razvilka-candidate/usque-repair" ] || exit 1
+[ -f "$BASE/razvilka/candidate/state/.candidate-layout-v1" ] || { echo "Layout ownership missing" >&2; exit 1; }
+[ "$(cat "$TEST_CAPTURE.env")" = "$BASE/razvilka/candidate/state/usque-repair" ] || exit 1
 
 # Verify every main writable flag, not just the historical small override set.
 for FLAG in config catalog sources cache stage backups token-file credentials-file custom-services community-catalog devices node-state cloudflare-state warp-state smart-route-state dataplane-state metrics-history strategy-lab-state audit-log dns-state; do
     VALUE="$(awk -v flag="-$FLAG" '$0 == flag { getline; print; found=1; exit } END { if (!found) exit 1 }' "$TEST_CAPTURE")" || {
         echo "Candidate omitted a required state flag: $FLAG" >&2; exit 1;
     }
-    case "$VALUE" in "$BASE"/*/razvilka-candidate|"$BASE"/*/razvilka-candidate/*) ;; *) echo "Candidate state escaped its installation: $FLAG" >&2; exit 1 ;; esac
+    case "$VALUE" in "$BASE/etc/razvilka-candidate"|"$BASE/etc/razvilka-candidate/"*|"$BASE/razvilka/candidate/"*) ;; *) echo "Candidate state escaped its installation: $FLAG" >&2; exit 1 ;; esac
 done
 
 # Existing owned PID returns without invoking the daemon again.
@@ -98,14 +98,14 @@ launch
 
 # Owned state survives a real apply/restart workflow; startup must not be
 # permanently read-only just because its own journal now exists.
-rm "$BASE/var/run/razvilka-candidate.pid"
-mkdir -p "$BASE/var/lib/razvilka-candidate/dataplane"
-printf '%s\n' owned-journal >"$BASE/var/lib/razvilka-candidate/dataplane/latest-committed-plan.json"
+rm "$BASE/razvilka/candidate/run/razvilka.pid"
+mkdir -p "$BASE/razvilka/candidate/state/dataplane"
+printf '%s\n' owned-journal >"$BASE/razvilka/candidate/state/dataplane/latest-committed-plan.json"
 launch
-[ "$(cat "$BASE/var/lib/razvilka-candidate/dataplane/latest-committed-plan.json")" = owned-journal ] || exit 1
+[ "$(cat "$BASE/razvilka/candidate/state/dataplane/latest-committed-plan.json")" = owned-journal ] || exit 1
 
 prepare foreign-pid
-printf '%s\n' "$TEST_PID" >"$BASE/var/run/razvilka-candidate.pid"
+printf '%s\n' "$TEST_PID" >"$BASE/razvilka/candidate/run/razvilka.pid"
 TEST_RUNNING_BINARY="$TEST_ROOT/outside/production-daemon"
 export TEST_RUNNING_BINARY
 refused
@@ -113,12 +113,12 @@ refuse_stop
 
 for BAD_PID in 0 1 invalid; do
     prepare "invalid-pid-$BAD_PID"
-    printf '%s\n' "$BAD_PID" >"$BASE/var/run/razvilka-candidate.pid"
+    printf '%s\n' "$BAD_PID" >"$BASE/razvilka/candidate/run/razvilka.pid"
     refused
     refuse_stop
 done
 
-for JOURNAL in var/lib/razvilka-candidate/dataplane var/lib/razvilka-candidate/usque-repair etc/razvilka-candidate/private-restore etc/razvilka-candidate/private-restore-nodes-v1 etc/razvilka-candidate/private-restore-native-v1 etc/razvilka-candidate/private-restore-feeds-v1; do
+for JOURNAL in razvilka/candidate/state/dataplane razvilka/candidate/state/usque-repair etc/razvilka-candidate/private-restore etc/razvilka-candidate/private-restore-nodes-v1 etc/razvilka-candidate/private-restore-native-v1 etc/razvilka-candidate/private-restore-feeds-v1; do
     prepare "journal-$(printf '%s' "$JOURNAL" | tr '/' '-')"
     mkdir -p "$BASE/$JOURNAL"
     printf '%s\n' copied-production >"$BASE/$JOURNAL/record.json"
@@ -127,8 +127,8 @@ for JOURNAL in var/lib/razvilka-candidate/dataplane var/lib/razvilka-candidate/u
 done
 
 prepare bad-marker
-mkdir -p "$BASE/var/lib/razvilka-candidate"
-printf '%s\n' another-installation >"$BASE/var/lib/razvilka-candidate/.candidate-layout-v1"
+mkdir -p "$BASE/razvilka/candidate/state"
+printf '%s\n' another-installation >"$BASE/razvilka/candidate/state/.candidate-layout-v1"
 refused
 
 prepare not-ready
@@ -136,7 +136,7 @@ TEST_HEALTH_FAILURES=99
 export TEST_HEALTH_FAILURES
 if launch; then echo "Unready candidate advertised successful start" >&2; exit 1; fi
 [ "$(cat "$TEST_CAPTURE.health")" = 12 ] || { echo "Readiness retry was not bounded" >&2; exit 1; }
-[ -f "$BASE/var/run/razvilka-candidate.pid" ] || { echo "Readiness failure erased running PID" >&2; exit 1; }
+[ -f "$BASE/razvilka/candidate/run/razvilka.pid" ] || { echo "Readiness failure erased running PID" >&2; exit 1; }
 
 prepare symlink-store
 if ln -s "$TEST_ROOT/outside" "$BASE/etc/razvilka-candidate" && [ -L "$BASE/etc/razvilka-candidate" ]; then
@@ -152,7 +152,7 @@ else
     echo "SKIP symlink-file: filesystem does not create native symlinks"
 fi
 prepare symlink-pid
-if ln -s "$TEST_ROOT/outside/config.json" "$BASE/var/run/razvilka-candidate.pid" && [ -L "$BASE/var/run/razvilka-candidate.pid" ]; then
+if ln -s "$TEST_ROOT/outside/config.json" "$BASE/razvilka/candidate/run/razvilka.pid" && [ -L "$BASE/razvilka/candidate/run/razvilka.pid" ]; then
     refused
     refuse_stop
 else

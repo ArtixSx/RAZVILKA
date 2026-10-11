@@ -11,12 +11,18 @@ cleanup() { case "$TEST_ROOT" in "$TMP_BASE"/razvilka-uninstall.*) rm -rf "$TEST
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
-for CASE in success symlink-base stop-failed recovery-failed deactivate-failed missing-binary unsafe-directory; do
+for CASE in success foreign-shared-var symlink-base stop-failed recovery-failed deactivate-failed missing-binary unsafe-directory; do
   [ "$CASE" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   BASE="$TEST_ROOT/$CASE"
-  mkdir -p "$BASE/bin" "$BASE/etc/init.d" "$BASE/etc/razvilka/nodes-private" "$BASE/var/lib/razvilka/update-backups/previous"
-  printf '%s\n' "$BASE/var/lib/razvilka/update-backups/previous" >"$BASE/var/lib/razvilka/current-backup"
-  printf '%s\n' old-binary >"$BASE/var/lib/razvilka/update-backups/previous/razvilka.bin"
+  mkdir -p "$BASE/var"
+  printf keep-foreign >"$BASE/var/other-app.conf"
+  if [ "$CASE" = foreign-shared-var ] && [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ]; then
+    chown 1001 "$BASE/var"
+  fi
+  FOREIGN_BEFORE="$(ls -nd "$BASE/var")"
+  mkdir -p "$BASE/bin" "$BASE/etc/init.d" "$BASE/etc/razvilka/nodes-private" "$BASE/razvilka/state/update-backups/previous"
+  printf '%s\n' "$BASE/razvilka/state/update-backups/previous" >"$BASE/razvilka/state/current-backup"
+  printf '%s\n' old-binary >"$BASE/razvilka/state/update-backups/previous/razvilka.bin"
   printf '%s\n' current-settings >"$BASE/etc/razvilka/config.json"
   printf '%s\n' current-credentials >"$BASE/etc/razvilka/admin.credentials.json"
   printf '%s\n' current-nodes >"$BASE/etc/razvilka/nodes-private/nodes.private.json"
@@ -56,7 +62,7 @@ BINARY
   fi
   CODE=0
   RAZVILKA_BASE="$RUN_BASE" sh "$ROOT/scripts/uninstall-entware.sh" >"$BASE/output" 2>&1 || CODE=$?
-  if [ "$CASE" = success ] || [ "$CASE" = symlink-base ]; then
+  if [ "$CASE" = success ] || [ "$CASE" = foreign-shared-var ] || [ "$CASE" = symlink-base ]; then
     [ "$CODE" = 0 ] && [ ! -e "$BASE/bin/razvilka" ] && [ ! -e "$BASE/etc/init.d/S99razvilka" ] || { cat "$BASE/output"; exit 1; }
     [ "$(tr '\n' ',' <"$BASE/calls")" = stop,recovery,deactivate, ] || { echo "Uninstall did not stop/recover/deactivate in order" >&2; exit 1; }
     # A second removal must be harmless, even though the saved upgrade snapshot exists.
@@ -79,7 +85,10 @@ BINARY
   [ "$(cat "$BASE/etc/razvilka/config.json")" = current-settings ] &&
     [ "$(cat "$BASE/etc/razvilka/admin.credentials.json")" = current-credentials ] &&
     [ "$(cat "$BASE/etc/razvilka/nodes-private/nodes.private.json")" = current-nodes ] &&
-    [ "$(cat "$BASE/var/lib/razvilka/update-backups/previous/razvilka.bin")" = old-binary ] || { echo "Removal changed retained private data/backup" >&2; exit 1; }
+    [ "$(cat "$BASE/razvilka/state/update-backups/previous/razvilka.bin")" = old-binary ] || { echo "Removal changed retained private data/backup" >&2; exit 1; }
+  [ "$(cat "$BASE/var/other-app.conf")" = keep-foreign ] && [ "$(ls -nd "$BASE/var")" = "$FOREIGN_BEFORE" ] || {
+    echo "Uninstall changed shared Entware /var metadata or bytes" >&2; exit 1;
+  }
 done
 for BAD_BASE in / relative; do
   if RAZVILKA_BASE="$BAD_BASE" sh "$ROOT/scripts/uninstall-entware.sh" >/dev/null 2>&1; then

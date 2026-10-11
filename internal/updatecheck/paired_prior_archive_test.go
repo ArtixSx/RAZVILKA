@@ -37,7 +37,7 @@ func pairedArchiveFixture(t *testing.T, large bool) *priorArchiveFixture {
 	var cancel context.CancelFunc
 	f.ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
-	for _, path := range []string{f.journal, filepath.Join(f.installation, "bin"), filepath.Join(f.installation, "etc/init.d"), filepath.Join(f.installation, "etc/razvilka"), filepath.Join(f.installation, "var/lib/razvilka/components/releases"), filepath.Join(f.installation, "var/cache/razvilka")} {
+	for _, path := range []string{f.journal, filepath.Join(f.installation, "bin"), filepath.Join(f.installation, "etc/init.d"), filepath.Join(f.installation, "etc/razvilka"), filepath.Join(f.installation, "razvilka/state/components/releases"), filepath.Join(f.installation, "razvilka/cache")} {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -66,12 +66,12 @@ func pairedArchiveFixture(t *testing.T, large bool) *priorArchiveFixture {
 		"etc/init.d/S99artem-flow.razvilka-disabled":                  []byte("prior disabled legacy init, bytes only"),
 		"etc/razvilka/nodes-private/known.private.json":               []byte("private prior node bytes"),
 		"etc/razvilka/private-restore-native-v1/restore.private.json": []byte("unknown retained evidence, never a retirement grant"),
-		"var/lib/razvilka/warp/native-enrollment/current.json":        []byte("unknown native outcome, preserved unchanged"),
-		"var/lib/razvilka/backups/lkg/frozen":                         []byte("paired retained LKG"),
-		"var/lib/razvilka/components/releases/runtime":                []byte("prior component bytes"),
-		"var/cache/razvilka/retained-cache":                           []byte("prior cache"),
+		"razvilka/state/warp/native-enrollment/current.json":          []byte("unknown native outcome, preserved unchanged"),
+		"razvilka/state/backups/lkg/frozen":                           []byte("paired retained LKG"),
+		"razvilka/state/components/releases/runtime":                  []byte("prior component bytes"),
+		"razvilka/cache/retained-cache":                               []byte("prior cache"),
 	} {
-		if large && path == "var/lib/razvilka/components/releases/runtime" {
+		if large && path == "razvilka/state/components/releases/runtime" {
 			content = bytes.Repeat([]byte("component bytes\n"), (5<<20)/16+1)
 		}
 		retainedFile(t, f.installation, filepath.FromSlash(path), content)
@@ -284,7 +284,7 @@ func TestPairedPriorArchiveRefusesThirdSourceAndStopBeforePublication(t *testing
 					}
 					return os.Chtimes(filepath.Dir(path), parent.ModTime(), parent.ModTime())
 				case "root-appears":
-					return os.MkdirAll(filepath.Join(f.installation, "var/log/razvilka"), 0700)
+					return os.MkdirAll(filepath.Join(f.installation, "razvilka/log"), 0700)
 				case "stop":
 					_, err := operationgate.RequestSelfUpdateStop(f.ctx, f.control, pairedArchiveTestID, 0)
 					return err

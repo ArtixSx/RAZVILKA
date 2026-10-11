@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -439,7 +440,7 @@ func (m *Manager) removeExternal(spec Spec) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	stateDir := defaultValue(m.StateDir, "/opt/var/lib/razvilka/components")
+	stateDir := defaultValue(m.StateDir, installpath.State+"/components")
 	stamp := time.Now().UTC().Format("20060102T150405.000000000Z")
 	backupDir := filepath.Join(stateDir, "removed", spec.ID+"-"+stamp)
 	if err := os.MkdirAll(backupDir, 0o700); err != nil {

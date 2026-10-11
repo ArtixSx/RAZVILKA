@@ -16,7 +16,7 @@ for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-f
   BASE="$TEST_ROOT/$MODE"
   APPDIR="$BASE/etc/razvilka"
   STATE="$APPDIR/config.json.automation.json.autonomy.json"
-  BACKUP="$BASE/var/lib/razvilka/update-backups/before"
+  BACKUP="$BASE/razvilka/state/update-backups/before"
   mkdir -p "$BACKUP" "$BASE/bin" "$BASE/etc/init.d" "$APPDIR"
   echo new-state >"$STATE"
   echo retained >"$APPDIR/unrelated"
@@ -25,7 +25,7 @@ for MODE in present absent legacy legacy-unsupported missing unsafe-dir unsafe-f
 case "${1:-}" in
   -self-update-read-version|-self-update-schema) printf 'flag provided but not defined: %s\n' "$1" >&2; exit 2 ;;
   -check-node-history-state)
-    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/var/lib/razvilka" ] || exit 99
+    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$RAZVILKA_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$RAZVILKA_BASE/razvilka/state" ] || exit 99
     printf '%s\n' '{"ok":true}' ;;
   -check-autonomy-state)
     [ "$AUTONOMY_TEST_MODE" != legacy-unsupported ] || exit 1

@@ -1,8 +1,9 @@
 #!/bin/sh
 # RAZVILKA Test Lab preflight. Read-only: it does not alter routing, DNS or firewall.
 set -u
+umask 077
 PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:/usr/sbin:/usr/bin:/sbin:/bin
-OUTDIR=/opt/var/log/razvilka
+OUTDIR=/opt/razvilka/log
 mkdir -p "$OUTDIR" 2>/dev/null || OUTDIR=/tmp
 STAMP="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
 OUT="$OUTDIR/preflight-$STAMP.txt"

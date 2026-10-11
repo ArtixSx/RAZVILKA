@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -86,7 +87,7 @@ type updateTransaction struct {
 }
 
 func (m *Manager) updateJournalDir() string {
-	return filepath.Join(defaultValue(m.StateDir, "/opt/var/lib/razvilka/components"), "update-journal")
+	return filepath.Join(defaultValue(m.StateDir, installpath.State+"/components"), "update-journal")
 }
 
 func openUpdateRoot(path string, create bool) (*ownedfs.Root, error) {

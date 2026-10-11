@@ -13,9 +13,9 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 for SCRIPT in upgrade-entware.sh rollback-entware.sh uninstall-entware.sh; do
-  DIRECTORIES='bin etc etc/init.d etc/razvilka var var/run var/lib var/lib/razvilka'
+  DIRECTORIES='bin etc etc/init.d etc/razvilka razvilka razvilka/run razvilka/state'
   if [ "$SCRIPT" = upgrade-entware.sh ]; then
-    DIRECTORIES="$DIRECTORIES var/cache var/cache/razvilka var/log var/log/razvilka"
+    DIRECTORIES="$DIRECTORIES razvilka/cache razvilka/log"
   fi
   for RELATIVE in $DIRECTORIES; do
     for KIND in file link broken-link; do
@@ -52,23 +52,23 @@ done
 # These paths are read/written by install and rollback, and are preserved by
 # uninstall. Refuse a linked backup root/pointer before selecting a snapshot.
 for SCRIPT in upgrade-entware.sh rollback-entware.sh; do
-  for RELATIVE in var/lib/razvilka/update-backups var/lib/razvilka/current-backup; do
+  for RELATIVE in razvilka/state/update-backups razvilka/state/current-backup; do
     for KIND in wrong-type link broken-link; do
       [ "$KIND" = wrong-type ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
       CASE_ROOT="$TEST_ROOT/$SCRIPT-$KIND-$(printf '%s' "$RELATIVE" | tr '/' '_')"
       BASE="$CASE_ROOT/opt"
-      mkdir -p "$BASE/var/lib/razvilka" "$CASE_ROOT/foreign"
+      mkdir -p "$BASE/razvilka/state" "$CASE_ROOT/foreign"
       printf retained >"$CASE_ROOT/foreign/pointer"
       case "$KIND" in
         wrong-type)
-          if [ "$RELATIVE" = var/lib/razvilka/update-backups ]; then
+          if [ "$RELATIVE" = razvilka/state/update-backups ]; then
             printf foreign >"$BASE/$RELATIVE"
           else
             mkdir "$BASE/$RELATIVE"
           fi ;;
         link)
           TARGET="$CASE_ROOT/foreign"
-          [ "$RELATIVE" = var/lib/razvilka/update-backups ] || TARGET="$TARGET/pointer"
+          [ "$RELATIVE" = razvilka/state/update-backups ] || TARGET="$TARGET/pointer"
           ln -s "$TARGET" "$BASE/$RELATIVE" ;;
         broken-link) ln -s "$CASE_ROOT/missing" "$BASE/$RELATIVE" ;;
       esac

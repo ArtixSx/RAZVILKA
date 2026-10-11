@@ -79,10 +79,10 @@ func TestNativeStoppedSettlementActualECHILDAndPreservedStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(a.installation, "var/run/razvilka.pid"), []byte(fmt.Sprintf("%d\n", oldPanel.Process.Pid)), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(a.installation, "razvilka/run/razvilka.pid"), []byte(fmt.Sprintf("%d\n", oldPanel.Process.Pid)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	init := []byte(fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = stop ]; then kill -TERM %d; rm -f '%s'; fi\nexit 0\n", oldPanel.Process.Pid, filepath.Join(a.installation, "var/run/razvilka.pid")))
+	init := []byte(fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = stop ]; then kill -TERM %d; rm -f '%s'; fi\nexit 0\n", oldPanel.Process.Pid, filepath.Join(a.installation, "razvilka/run/razvilka.pid")))
 	for _, path := range []string{filepath.Join(a.installation, "etc/init.d/S99razvilka"), filepath.Join(job, "bundle/scripts/S99razvilka")} {
 		if err := os.WriteFile(path, init, 0755); err != nil {
 			t.Fatal(err)

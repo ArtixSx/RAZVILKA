@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
@@ -188,7 +189,7 @@ func pairedRetirementExecutingApp(ctx context.Context, expected fileProcess) err
 	if err != nil || actual != expected || checkProductionPID(actual.PID, path) != nil {
 		return errors.Join(ErrPairedRetirementOwner, err)
 	}
-	root, err := ownedfs.Open(filepath.Dir("/opt/var/run/razvilka.pid"))
+	root, err := ownedfs.Open(filepath.Dir(installpath.Run + "/razvilka.pid"))
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -43,7 +44,7 @@ func (execRunner) RunIn(ctx context.Context, dir, name string, args ...string) (
 }
 
 func (m *Manager) rollbackDir() string {
-	return filepath.Join(defaultValue(m.StateDir, "/opt/var/lib/razvilka/components"), "rollback-packages")
+	return filepath.Join(defaultValue(m.StateDir, installpath.State+"/components"), "rollback-packages")
 }
 
 func (m *Manager) infoDir() string { return defaultValue(m.InfoDir, "/opt/lib/opkg/info") }

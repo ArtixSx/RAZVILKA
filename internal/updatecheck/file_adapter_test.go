@@ -74,20 +74,20 @@ func fileAdapterFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, fileRev
 func TestPrivateSnapshotExcludesRetainedNativeRuntimeAndLKG(t *testing.T) {
 	a, _, r := fileAdapterFixture(t)
 	ctx := context.Background()
-	for _, rel := range []string{"etc/razvilka", "var/lib/razvilka"} {
+	for _, rel := range []string{"etc/razvilka", "razvilka/state"} {
 		if err := os.MkdirAll(filepath.Join(a.installation, filepath.FromSlash(rel)), 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	retained := map[string][]byte{
-		"var/lib/razvilka/warp/native-enrollment.private.json":              []byte("unknown authoritative native intent"),
-		"var/lib/razvilka/warp/native-enrollment/attempt-1/private-key.bin": []byte("immutable retained key"),
-		"var/lib/razvilka/warp/health-policy.json":                          []byte("latest accounting"),
-		"etc/razvilka/cloudflare-private/accounts.private.json":             []byte("latest provider state"),
-		"etc/razvilka/private-restore-native-v1/restore.private.json":       []byte("retained generation"),
-		"etc/razvilka/private-restore-feeds-v1/restore.private.json":        []byte("retained feeds generation"),
-		"var/lib/razvilka/dataplane/journal":                                []byte("latest owned network receipt"),
-		"var/lib/razvilka/backups/final-lkg/record":                         []byte("final LKG"),
+		"razvilka/state/warp/native-enrollment.private.json":              []byte("unknown authoritative native intent"),
+		"razvilka/state/warp/native-enrollment/attempt-1/private-key.bin": []byte("immutable retained key"),
+		"razvilka/state/warp/health-policy.json":                          []byte("latest accounting"),
+		"etc/razvilka/cloudflare-private/accounts.private.json":           []byte("latest provider state"),
+		"etc/razvilka/private-restore-native-v1/restore.private.json":     []byte("retained generation"),
+		"etc/razvilka/private-restore-feeds-v1/restore.private.json":      []byte("retained feeds generation"),
+		"razvilka/state/dataplane/journal":                                []byte("latest owned network receipt"),
+		"razvilka/state/backups/final-lkg/record":                         []byte("final LKG"),
 	}
 	for path, data := range retained {
 		retainedFile(t, a.installation, path, data)

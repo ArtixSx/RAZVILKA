@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -62,7 +63,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 			return result, errors.Join(ErrExternalBootstrap, err)
 		}
 	}
-	if err := externalBootstrapLegacyControllersAbsent(ctx, filepath.Join(a.installation, "var/lib/razvilka/update-backups"), a.owned); err != nil {
+	if err := externalBootstrapLegacyControllersAbsent(ctx, filepath.Join(a.installation, "razvilka/state/update-backups"), a.owned); err != nil {
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
 	self, panel, oldSHA, err := externalBootstrapProcesses(ctx, deployment)
@@ -75,7 +76,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 	if err != nil || oldVersion != "0.19.3\n" {
 		return result, ErrExternalBootstrap
 	}
-	configRoot, err := ownedfs.Open("/opt/etc/razvilka")
+	configRoot, err := ownedfs.Open(installpath.Config)
 	if err != nil {
 		return result, errors.Join(ErrExternalBootstrap, err)
 	}
@@ -441,7 +442,7 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 	if err := check(ctx); err != nil {
 		return err
 	}
-	if err := externalBootstrapLegacyControllersAbsent(ctx, filepath.Join(a.installation, "var/lib/razvilka/update-backups"), a.owned); err != nil {
+	if err := externalBootstrapLegacyControllersAbsent(ctx, filepath.Join(a.installation, "razvilka/state/update-backups"), a.owned); err != nil {
 		return err
 	}
 	if err := a.SealPairedPriorState(ctx, id); err != nil {

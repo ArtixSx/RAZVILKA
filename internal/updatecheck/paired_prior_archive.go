@@ -18,7 +18,7 @@ import (
 const pairedPriorArchiveSchema = 3
 const pairedPriorArchiveKind = "razvilka-paired-prior-state"
 const pairedPriorManifestEffect = "paired-offline-manifest"
-const pairedPriorArchiveDirectory = "var/lib/razvilka-offline-recovery"
+const pairedPriorArchiveDirectory = "razvilka/state-offline-recovery"
 const maximumPairedArchiveBytes int64 = 2 << 30
 const maximumPairedArchiveFileBytes int64 = MaximumBinaryBytes
 
@@ -39,10 +39,10 @@ var pairedPriorRoots = []priorRootSpec{
 	{"etc/init.d/S99artem-flow", false, false},
 	{"etc/init.d/S99artem-flow.razvilka-disabled", false, false},
 	{"etc/razvilka", true, true},
-	{"var/lib/razvilka", true, true},
-	{"var/cache/razvilka", true, false},
-	{"var/log/razvilka", true, false},
-	{"var/run/razvilka.pid", false, false},
+	{"razvilka/state", true, true},
+	{"razvilka/cache", true, false},
+	{"razvilka/log", true, false},
+	{"razvilka/run/razvilka.pid", false, false},
 }
 
 type pairedPriorBinding struct {

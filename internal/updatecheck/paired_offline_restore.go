@@ -50,11 +50,11 @@ var pairedOfflineProtected = []string{
 	"etc/razvilka/private-restore", "etc/razvilka/private-restore-nodes-v1",
 	"etc/razvilka/private-restore-native-v1", "etc/razvilka/private-restore-feeds-v1",
 	"etc/razvilka/cloudflare-private",
-	"var/lib/razvilka/self-update", "var/lib/razvilka/self-update-files", "var/lib/razvilka/self-update-stop",
-	"var/lib/razvilka/update-backups", "var/lib/razvilka/current-backup",
-	"var/lib/razvilka/dataplane", "var/lib/razvilka/warp", "var/lib/razvilka/backups",
-	"var/lib/razvilka/components/update-journal", "var/lib/razvilka/components/operations",
-	"var/lib/razvilka/components/rollback-packages",
+	"razvilka/state/self-update", "razvilka/state/self-update-files", "razvilka/state/self-update-stop",
+	"razvilka/state/update-backups", "razvilka/state/current-backup",
+	"razvilka/state/dataplane", "razvilka/state/warp", "razvilka/state/backups",
+	"razvilka/state/components/update-journal", "razvilka/state/components/operations",
+	"razvilka/state/components/rollback-packages",
 }
 
 type offlinePriorNode struct {
@@ -114,7 +114,7 @@ func offlineProtected(path string) bool {
 }
 
 func offlineAnchor(path string) bool {
-	if path == "etc/razvilka" || path == "var/lib/razvilka" {
+	if path == "etc/razvilka" || path == "razvilka/state" {
 		return true // Never exchange a live control/config root inode.
 	}
 	for _, prefix := range pairedOfflineProtected {
@@ -712,7 +712,7 @@ func restorePairedOffline(ctx context.Context, installation string, receipt self
 			after[name] = offlinePriorNode{mode: mode, size: int64(len(guard)), sha: digestBytes(guard), data: guard}
 		}
 	}
-	delete(after, "var/run/razvilka.pid") // A historical PID is not a live owner.
+	delete(after, "razvilka/run/razvilka.pid") // A historical PID is not a live owner.
 	plan, err := offlineRestorePlan(before, after, seen)
 	if err != nil || len(plan) >= 40000 {
 		if err == nil {

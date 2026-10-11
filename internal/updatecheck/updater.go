@@ -15,11 +15,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 const updaterOwner = "razvilka-self-update-v1"
-const productionUpdateRoot = "/opt/var/lib/razvilka/self-update"
+const productionUpdateRoot = installpath.State + "/self-update"
 
 var ErrBusy = errors.New("self-update-busy")
 var ErrReviewChanged = errors.New("self-update-review-changed")

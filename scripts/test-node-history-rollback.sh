@@ -12,14 +12,14 @@ trap cleanup EXIT HUP INT TERM
 
 for MODE in after-stop after-recovery stop-during-history not-running; do
   BASE="$TEST_ROOT/$MODE"
-  STATE="$BASE/var/lib/razvilka"
+  STATE="$BASE/razvilka/state"
   BACKUP="$STATE/update-backups/before"
   mkdir -p "$BACKUP" "$BASE/bin" "$BASE/etc/init.d" "$BASE/etc/razvilka"
   printf '%s\n' '{"retained":true}' >"$BASE/etc/razvilka/config.json"
   cat >"$BASE/bin/razvilka" <<'BINARY'
 #!/bin/sh
 set -eu
-STATE="$RAZVILKA_BASE/var/lib/razvilka"
+STATE="$RAZVILKA_BASE/razvilka/state"
 case "${1:-}" in
   -self-update-read-version) printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
   -self-update-schema) printf '0\n' ;;

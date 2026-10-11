@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -42,10 +43,10 @@ func ConfigFingerprint(value any) string {
 
 func ProductionPaths() map[string]string {
 	return map[string]string{
-		"config": "/opt/etc/razvilka/config.json", "catalog": "/opt/etc/razvilka/service-catalog.json", "sources": "/opt/etc/razvilka/sources.json", "community": "/opt/etc/razvilka/community-catalog.json",
-		"token": "/opt/etc/razvilka/admin.token", "credentials": "/opt/etc/razvilka/admin.credentials.json", "custom": "/opt/etc/razvilka/custom-services.json", "devices": "/opt/etc/razvilka/devices.json",
-		"cloudflare": "/opt/etc/razvilka/cloudflare-private", "nodes": "/opt/etc/razvilka/nodes-private", "stage": "/opt/var/lib/razvilka/staging", "backups": "/opt/var/lib/razvilka/backups", "warp": "/opt/var/lib/razvilka/warp", "dataplane": "/opt/var/lib/razvilka/dataplane",
-		"dns": "/opt/var/lib/razvilka/dns/state.json",
+		"config": installpath.Config + "/config.json", "catalog": installpath.Config + "/service-catalog.json", "sources": installpath.Config + "/sources.json", "community": installpath.Config + "/community-catalog.json",
+		"token": installpath.Config + "/admin.token", "credentials": installpath.Config + "/admin.credentials.json", "custom": installpath.Config + "/custom-services.json", "devices": installpath.Config + "/devices.json",
+		"cloudflare": installpath.Config + "/cloudflare-private", "nodes": installpath.Config + "/nodes-private", "stage": installpath.State + "/staging", "backups": installpath.State + "/backups", "warp": installpath.State + "/warp", "dataplane": installpath.State + "/dataplane",
+		"dns": installpath.State + "/dns/state.json",
 	}
 }
 
@@ -69,7 +70,7 @@ func checkDeploymentLayout(deployment Deployment) error {
 	if err := checkInstallerWritePaths("/opt", checkRootOwnedPath); err != nil {
 		return errors.New("production-path-ownership-refused")
 	}
-	for _, path := range append([]string{"/opt/bin/razvilka", "/opt/etc/init.d/S99razvilka", "/opt/sbin/start-stop-daemon", "/opt/var/run/razvilka.pid", productionUpdateRoot}, mapValues(deployment.Paths)...) {
+	for _, path := range append([]string{"/opt/bin/razvilka", "/opt/etc/init.d/S99razvilka", "/opt/sbin/start-stop-daemon", installpath.Run + "/razvilka.pid", productionUpdateRoot}, mapValues(deployment.Paths)...) {
 		if err := checkRootOwnedPath(path); err != nil {
 			return errors.New("production-path-ownership-refused")
 		}
@@ -87,7 +88,7 @@ func checkDeploymentLayout(deployment Deployment) error {
 // in addition to the daemon's configured files. In particular current-backup
 // is redirected by the shell, so a pre-existing symlink must fail preflight.
 func checkInstallerWritePaths(base string, check func(string) error) error {
-	for _, rel := range []string{"var/lib/razvilka/update-backups", "var/lib/razvilka/current-backup", "var/lib/razvilka/start-failures", "var/lib/razvilka/boot-disabled", "var/log/razvilka/server.log", "var/cache/razvilka", "var/run/razvilka.pid", "etc/razvilka/source-state.json", "etc/init.d/S99artem-flow", "etc/init.d/S99artem-flow.razvilka-disabled"} {
+	for _, rel := range []string{"razvilka/state/update-backups", "razvilka/state/current-backup", "razvilka/state/start-failures", "razvilka/state/boot-disabled", "razvilka/log/server.log", "razvilka/cache", "razvilka/run/razvilka.pid", "etc/razvilka/source-state.json", "etc/init.d/S99artem-flow", "etc/init.d/S99artem-flow.razvilka-disabled"} {
 		if err := check(filepath.Join(base, filepath.FromSlash(rel))); err != nil {
 			return err
 		}

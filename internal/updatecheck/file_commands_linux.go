@@ -171,7 +171,7 @@ func (a *SelfUpdateFileAdapter) filePanelAbsent(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	_, err := os.Lstat(filepath.Join(a.installation, "var/run/razvilka.pid"))
+	_, err := os.Lstat(filepath.Join(a.installation, "razvilka/run/razvilka.pid"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -851,7 +851,7 @@ func (a *SelfUpdateFileAdapter) ownedPanelBeforeStop(id string, review fileRevie
 			return ErrFileProtocol
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(a.installation, "var/run/razvilka.pid"))
+	data, err := os.ReadFile(filepath.Join(a.installation, "razvilka/run/razvilka.pid"))
 	if err != nil || len(data) > 32 {
 		return ErrFileProtocol
 	}
@@ -926,7 +926,7 @@ func killFileChildren(parent int) {
 
 func (a *SelfUpdateFileAdapter) ownedFileRuntime(id string, helper int, review fileReview, rollback bool) (fileProcess, error) {
 	var runtime fileProcess
-	data, err := os.ReadFile(filepath.Join(a.installation, "var/run/razvilka.pid"))
+	data, err := os.ReadFile(filepath.Join(a.installation, "razvilka/run/razvilka.pid"))
 	if err != nil {
 		return runtime, err
 	}

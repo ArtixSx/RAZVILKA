@@ -17,11 +17,12 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
-const productionFileJournal = "/opt/var/lib/razvilka/self-update-files"
+const productionFileJournal = installpath.State + "/self-update-files"
 
 var ErrFileAuthorityStopped = errors.New("self update authority was durably revoked")
 
@@ -324,7 +325,7 @@ func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record upda
 func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding, preparations ...*externalBootstrapPreparation) (string, error) {
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
-	stateRootPath := filepath.Join(a.installation, "var/lib/razvilka")
+	stateRootPath := filepath.Join(a.installation, "razvilka/state")
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -539,11 +540,11 @@ func copyFileController(root *ownedfs.Root, path, expected string) error {
 }
 
 func checkFileCapabilities(ctx context.Context, binary string) error {
-	required, err := RequiredRetainedNodeHistoryReadVersion(ctx, "/opt/etc/razvilka", "/opt/var/lib/razvilka", validatedNodeHistoryRead)
+	required, err := RequiredRetainedNodeHistoryReadVersion(ctx, installpath.Config, installpath.State, validatedNodeHistoryRead)
 	if err != nil {
 		return err
 	}
-	componentRequired, err := components.RequiredRetainedManagedUpdateReadVersion(ctx, "/opt/var/lib/razvilka/components")
+	componentRequired, err := components.RequiredRetainedManagedUpdateReadVersion(ctx, installpath.State+"/components")
 	if err != nil {
 		return err
 	}

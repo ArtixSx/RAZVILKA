@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
@@ -45,7 +46,7 @@ type ComponentHistoryAdmission struct {
 }
 
 func NewComponentHistoryAdmission(currentReadVersion int) *ComponentHistoryAdmission {
-	return &ComponentHistoryAdmission{stateRoot: "/opt/var/lib/razvilka", installation: "/opt", executable: "/opt/bin/razvilka", currentReadVersion: currentReadVersion, inspect: components.InspectRetainedManagedUpdateReadVersion, identity: checkNodeHistoryControllerIdentity, owned: checkRootOwnedPath, layout: checkDeploymentLayout, probe: probeComponentHistoryBinary}
+	return &ComponentHistoryAdmission{stateRoot: installpath.State, installation: "/opt", executable: "/opt/bin/razvilka", currentReadVersion: currentReadVersion, inspect: components.InspectRetainedManagedUpdateReadVersion, identity: checkNodeHistoryControllerIdentity, owned: checkRootOwnedPath, layout: checkDeploymentLayout, probe: probeComponentHistoryBinary}
 }
 
 func (a *ComponentHistoryAdmission) CheckReadable(ctx context.Context) error {

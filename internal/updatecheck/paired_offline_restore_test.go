@@ -19,7 +19,7 @@ func offlineRestoreFixture(t *testing.T, large bool) (*priorArchiveFixture, self
 	t.Helper()
 	f := pairedArchiveFixture(t, large)
 	retainedFile(t, f.installation, "etc/init.d/S99artem-flow", []byte("old legacy Start hook"))
-	retainedFile(t, f.installation, "var/log/razvilka/old.log", []byte("prior log"))
+	retainedFile(t, f.installation, "razvilka/log/old.log", []byte("prior log"))
 	retainedFile(t, f.installation, "etc/razvilka/prior-only/unknown", []byte("opaque prior application data"))
 	digest, err := f.capture(nil)
 	if err != nil {
@@ -36,13 +36,13 @@ func offlineRestoreFixture(t *testing.T, large bool) (*priorArchiveFixture, self
 		"etc/razvilka/candidate-only/file":                            []byte("candidate-only data"),
 		"etc/razvilka/private-restore-native-v1/restore.private.json": []byte("new unknown native journal"),
 		"etc/razvilka/private-restore-future-v9/unknown":              []byte("new future independent journal"),
-		"var/lib/razvilka/self-update-stop/current-v1.json":           []byte("current Stop is never rewound"),
-		"var/lib/razvilka/components/update-journal/future":           []byte("current unknown component evidence"),
-		"var/lib/razvilka/components/releases/runtime":                []byte("new component bytes"),
-		"var/lib/razvilka/warp/native-enrollment/current.json":        []byte("new native enrollment bytes"),
-		"var/lib/razvilka/backups/lkg/frozen":                         []byte("new independent LKG"),
-		"var/cache/razvilka/retained-cache":                           []byte("new cache"),
-		"var/log/razvilka/old.log":                                    []byte("new log"),
+		"razvilka/state/self-update-stop/current-v1.json":             []byte("current Stop is never rewound"),
+		"razvilka/state/components/update-journal/future":             []byte("current unknown component evidence"),
+		"razvilka/state/components/releases/runtime":                  []byte("new component bytes"),
+		"razvilka/state/warp/native-enrollment/current.json":          []byte("new native enrollment bytes"),
+		"razvilka/state/backups/lkg/frozen":                           []byte("new independent LKG"),
+		"razvilka/cache/retained-cache":                               []byte("new cache"),
+		"razvilka/log/old.log":                                        []byte("new log"),
 	} {
 		retainedFile(t, f.installation, filepath.FromSlash(path), data)
 	}
@@ -115,13 +115,13 @@ func TestPairedOfflineRestoreStreamsFullPairAndRetainsCurrentIndependentState(t 
 		"etc/razvilka/prior-only/unknown":                             []byte("opaque prior application data"),
 		"etc/razvilka/private-restore-native-v1/restore.private.json": []byte("new unknown native journal"),
 		"etc/razvilka/private-restore-future-v9/unknown":              []byte("new future independent journal"),
-		"var/lib/razvilka/self-update-stop/current-v1.json":           []byte("current Stop is never rewound"),
-		"var/lib/razvilka/components/update-journal/future":           []byte("current unknown component evidence"),
-		"var/lib/razvilka/components/releases/runtime":                bytes.Repeat([]byte("component bytes\n"), (5<<20)/16+1),
-		"var/lib/razvilka/warp/native-enrollment/current.json":        []byte("new native enrollment bytes"),
-		"var/lib/razvilka/backups/lkg/frozen":                         []byte("new independent LKG"),
-		"var/cache/razvilka/retained-cache":                           []byte("prior cache"),
-		"var/log/razvilka/old.log":                                    []byte("prior log"),
+		"razvilka/state/self-update-stop/current-v1.json":             []byte("current Stop is never rewound"),
+		"razvilka/state/components/update-journal/future":             []byte("current unknown component evidence"),
+		"razvilka/state/components/releases/runtime":                  bytes.Repeat([]byte("component bytes\n"), (5<<20)/16+1),
+		"razvilka/state/warp/native-enrollment/current.json":          []byte("new native enrollment bytes"),
+		"razvilka/state/backups/lkg/frozen":                           []byte("new independent LKG"),
+		"razvilka/cache/retained-cache":                               []byte("prior cache"),
+		"razvilka/log/old.log":                                        []byte("prior log"),
 	} {
 		actual, err := os.ReadFile(filepath.Join(f.installation, filepath.FromSlash(path)))
 		if err != nil || !bytes.Equal(actual, expected) {
@@ -204,7 +204,7 @@ func TestPairedOfflineRestoreRefusesCorruptionCurrentChangesAndOwnerLoss(t *test
 				if stage == "before:offline-effects" {
 					switch fault {
 					case "staged-tree":
-						parent := filepath.Join(f.installation, "var/cache")
+						parent := filepath.Join(f.installation, "razvilka")
 						entries, err := os.ReadDir(parent)
 						if err != nil {
 							t.Fatal(err)

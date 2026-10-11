@@ -111,7 +111,7 @@ func TestNativeSelfUpdatePersistentCrashRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		installation := os.Getenv("RAZVILKA_TEST_NATIVE_FILE_CRASH_INSTALLATION")
-		f := &app.SelfUpdateFiles{Installation: installation, Directory: filepath.Join(installation, "var/lib/razvilka/self-update-files"), ControlRoot: updatecheck.NativeFileAcceptanceControl(t, ctx, a, id), Adapter: a}
+		f := &app.SelfUpdateFiles{Installation: installation, Directory: filepath.Join(installation, "razvilka/state/self-update-files"), ControlRoot: updatecheck.NativeFileAcceptanceControl(t, ctx, a, id), Adapter: a}
 		action := os.Getenv("RAZVILKA_TEST_NATIVE_FILE_CRASH_ACTION")
 		resume := os.Getenv("RAZVILKA_TEST_NATIVE_FILE_CRASH_RESUME") == "1"
 		if effect := os.Getenv("RAZVILKA_TEST_NATIVE_FILE_CRASH_EFFECT"); effect != "" {

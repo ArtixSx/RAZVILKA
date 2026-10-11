@@ -34,7 +34,7 @@ func nativeStageExternalBootstrapReview(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	sha := digestBytes(program)
-	for _, path := range []string{filepath.Join(a.installation, "etc/razvilka"), filepath.Join(a.installation, "etc/init.d"), filepath.Join(a.installation, "var/lib/razvilka"), filepath.Join(a.installation, "bin")} {
+	for _, path := range []string{filepath.Join(a.installation, "etc/razvilka"), filepath.Join(a.installation, "etc/init.d"), filepath.Join(a.installation, "razvilka/state"), filepath.Join(a.installation, "bin")} {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			t.Fatal(err)
 		}

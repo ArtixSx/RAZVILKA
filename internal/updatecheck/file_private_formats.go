@@ -9,7 +9,7 @@ import (
 // only; they neither open a live Store nor restore any retained state.
 var filePrivateDirectories = map[string]string{
 	"nodes": "etc/razvilka/nodes-private", "feeds": "etc/razvilka/subscriptions-private", "cloudflare": "etc/razvilka/cloudflare-private",
-	"engines": "var/lib/razvilka/staging", "runtime": "var/lib/razvilka/dataplane", "warp": "var/lib/razvilka/warp", "dns": "var/lib/razvilka/dns", "lkg": "var/lib/razvilka/backups",
+	"engines": "razvilka/state/staging", "runtime": "razvilka/state/dataplane", "warp": "razvilka/state/warp", "dns": "razvilka/state/dns", "lkg": "razvilka/state/backups",
 }
 var filePrivateFiles = map[string]string{
 	"token": "etc/razvilka/admin.token", "credentials": "etc/razvilka/admin.credentials.json", "custom": "etc/razvilka/custom-services.json", "devices": "etc/razvilka/devices.json", "source-state": "etc/razvilka/source-state.json", "autonomy": "etc/razvilka/config.json.automation.json.autonomy.json",

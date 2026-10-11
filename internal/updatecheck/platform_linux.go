@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"golang.org/x/sys/unix"
 )
 
@@ -48,7 +49,7 @@ func checkOwnedAncestors(path, boundary string) error {
 }
 
 func checkProductionPID(expected int, executable string) error {
-	data, err := os.ReadFile("/opt/var/run/razvilka.pid")
+	data, err := os.ReadFile(installpath.Run + "/razvilka.pid")
 	if err != nil {
 		return errors.New("production-pid-unavailable")
 	}
@@ -104,7 +105,7 @@ func checkUpdateSpace(directory string, archiveBytes int64) error {
 	}
 	backupBytes := int64(0)
 	entries := 0
-	for _, directory := range []string{"/opt/etc/razvilka", "/opt/var/lib/razvilka/dataplane", "/opt/var/lib/razvilka/staging", "/opt/var/lib/razvilka/dns"} {
+	for _, directory := range []string{installpath.Config, installpath.State + "/dataplane", installpath.State + "/staging", installpath.State + "/dns"} {
 		err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, err error) error {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil

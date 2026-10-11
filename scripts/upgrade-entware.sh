@@ -33,9 +33,9 @@ BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
 PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
 export PATH
 APPDIR="$BASE/etc/razvilka"
-CACHEDIR="$BASE/var/cache/razvilka"
-STATEDIR="$BASE/var/lib/razvilka"
-LOGDIR="$BASE/var/log/razvilka"
+CACHEDIR="$BASE/razvilka/cache"
+STATEDIR="$BASE/razvilka/state"
+LOGDIR="$BASE/razvilka/log"
 BINDIR="$BASE/bin"
 INITDIR="$BASE/etc/init.d"
 BACKUPROOT="$STATEDIR/update-backups"
@@ -55,9 +55,8 @@ LEGACY_CONTROL=""
 require_installation_paths() {
   # Only the explicit Entware base may be resolved through a link. A linked
   # destination below it must never redirect installation or snapshot writes.
-  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/var" \
-    "$BASE/var/run" "$BASE/var/cache" "$CACHEDIR" "$BASE/var/lib" "$STATEDIR" \
-    "$BASE/var/log" "$LOGDIR" "$BACKUPROOT"; do
+  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/razvilka" \
+    "$BASE/razvilka/run" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BACKUPROOT"; do
     [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
       echo "Unsafe installation directory: $DIR; installation unchanged" >&2; return 1;
     }

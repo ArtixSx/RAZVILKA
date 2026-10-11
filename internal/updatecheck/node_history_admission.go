@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
@@ -41,7 +42,7 @@ type NodeHistoryAdmission struct {
 }
 
 func NewNodeHistoryAdmission(read NodeHistoryReader, currentReadVersion int) *NodeHistoryAdmission {
-	return &NodeHistoryAdmission{configRoot: "/opt/etc/razvilka", stateRoot: "/opt/var/lib/razvilka", installation: "/opt", executable: "/opt/bin/razvilka", read: read, currentReadVersion: currentReadVersion, identity: checkNodeHistoryControllerIdentity, probe: probeNodeHistoryBinary}
+	return &NodeHistoryAdmission{configRoot: installpath.Config, stateRoot: installpath.State, installation: "/opt", executable: "/opt/bin/razvilka", read: read, currentReadVersion: currentReadVersion, identity: checkNodeHistoryControllerIdentity, probe: probeNodeHistoryBinary}
 }
 
 // CheckReadable is the target binary's downgrade CLI consumer. Its compiled

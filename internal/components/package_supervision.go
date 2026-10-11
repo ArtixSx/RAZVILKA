@@ -14,11 +14,12 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 const packageContainment = "linux-subreaper-v1"
-const productionPackageJournal = "/opt/var/lib/razvilka/components/update-journal"
+const productionPackageJournal = installpath.State + "/components/update-journal"
 
 type packageSupervision struct {
 	Schema        int    `json:"schema"`

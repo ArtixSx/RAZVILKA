@@ -62,7 +62,7 @@ func NativeFileAcceptanceFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater
 	if err != nil {
 		t.Fatal(err)
 	}
-	pid := filepath.Join(a.installation, "var/run/razvilka.pid")
+	pid := filepath.Join(a.installation, "razvilka/run/razvilka.pid")
 	if err := os.WriteFile(pid, []byte(fmt.Sprintf("%d\n", panel.Process.Pid)), 0600); err != nil {
 		t.Fatal(err)
 	}

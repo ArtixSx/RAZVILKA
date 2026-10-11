@@ -45,7 +45,7 @@ func pairedReaderSetup(t *testing.T) *pairedReaderFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := filepath.Join(a.installation, "var/lib/razvilka")
+	state := filepath.Join(a.installation, "razvilka/state")
 	for _, path := range []string{filepath.Join(a.installation, "bin"), filepath.Join(a.installation, "etc/init.d"), filepath.Join(a.installation, "etc/razvilka"), state} {
 		if err := os.MkdirAll(path, 0700); err != nil {
 			t.Fatal(err)
@@ -223,7 +223,7 @@ func (f *pairedReaderFixture) inventoryPlacement(t *testing.T) {
 		return
 	}
 	f.store.Close()
-	path := filepath.Join(f.adapter.installation, "var/lib/razvilka/self-update-files")
+	path := filepath.Join(f.adapter.installation, "razvilka/state/self-update-files")
 	if err := os.Rename(f.adapter.fileJournal, path); err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestPairedReadersShareActualArchiveAndSingleDisposition(t *testing.T) {
 	if err != nil || len(images) != 1 || images[0].SHA256 != f.newSHA {
 		t.Fatal("helper reader disagreed", err)
 	}
-	state := filepath.Join(f.adapter.installation, "var/lib/razvilka")
+	state := filepath.Join(f.adapter.installation, "razvilka/state")
 	images, err = retainedControllerImagesWithAdapter(f.ctx, f.adapter.installation, state, f.adapter)
 	if err != nil || len(images) != 0 {
 		t.Fatal("common fleet reader disagreed", err)
@@ -353,7 +353,7 @@ func TestPairedReadersAllRefuseCorruptArchiveAndOrphanEvidence(t *testing.T) {
 			if _, err := f.adapter.journalReaderImagesWithCurrent(f.ctx, f.review, f.newSHA); err == nil {
 				t.Fatal("helper reader ignored invalid paired evidence")
 			}
-			if _, err := retainedControllerImagesWithAdapter(f.ctx, f.adapter.installation, filepath.Join(f.adapter.installation, "var/lib/razvilka"), f.adapter); err == nil {
+			if _, err := retainedControllerImagesWithAdapter(f.ctx, f.adapter.installation, filepath.Join(f.adapter.installation, "razvilka/state"), f.adapter); err == nil {
 				t.Fatal("common fleet reader ignored invalid paired evidence")
 			}
 		})

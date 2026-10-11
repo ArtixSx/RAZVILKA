@@ -1,6 +1,7 @@
 #!/bin/sh
 # Installs only the RAZVILKA control plane in Safe Mode, then runs diagnostics.
 set -eu
+umask 077
 PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:/usr/sbin:/usr/bin:/sbin:/bin
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
@@ -9,10 +10,10 @@ echo "[1/5] Checking clean Entware base..."
 command -v opkg >/dev/null 2>&1 || { echo "ERROR: opkg not found; install/activate Entware first" >&2; exit 11; }
 [ -x /opt/etc/init.d/rc.unslung ] || echo "WARN: /opt/etc/init.d/rc.unslung not found; autostart may need Keenetic OPKG initrc setup"
 [ -r /opt/etc/init.d/rc.func ] || { echo "ERROR: /opt/etc/init.d/rc.func is missing; Entware init framework is incomplete" >&2; exit 12; }
-mkdir -p /opt/var/log/razvilka
+mkdir -p /opt/razvilka/log
 
 echo "[2/5] Running preflight before installation..."
-"$HERE/scripts/lab-preflight.sh" >/opt/var/log/razvilka/preflight-before-install.txt 2>&1 || true
+"$HERE/scripts/lab-preflight.sh" >/opt/razvilka/log/preflight-before-install.txt 2>&1 || true
 
 echo "[3/5] Installing RAZVILKA manager in Safe Mode..."
 "$HERE/scripts/install-entware.sh"
@@ -28,14 +29,14 @@ else
 fi
 
 echo "[5/5] Running post-install preflight..."
-"$HERE/scripts/lab-preflight.sh" >/opt/var/log/razvilka/preflight-after-install.txt 2>&1 || true
+"$HERE/scripts/lab-preflight.sh" >/opt/razvilka/log/preflight-after-install.txt 2>&1 || true
 
 echo ""
 echo "RAZVILKA Test Lab manager is installed in SAFE MODE."
 echo "No firewall, DNS, policy routes or bypass engines were changed."
 echo "Reports:"
-echo "  /opt/var/log/razvilka/preflight-before-install.txt"
-echo "  /opt/var/log/razvilka/preflight-after-install.txt"
+echo "  /opt/razvilka/log/preflight-before-install.txt"
+echo "  /opt/razvilka/log/preflight-after-install.txt"
 echo ""
 echo "Next: open the Web UI and send the output of:"
-echo "  cat /opt/var/log/razvilka/preflight-after-install.txt"
+echo "  cat /opt/razvilka/log/preflight-after-install.txt"

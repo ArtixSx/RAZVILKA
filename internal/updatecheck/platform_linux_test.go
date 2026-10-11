@@ -41,7 +41,7 @@ func TestSelfUpdateInstallerDestinationsRejectSymlinkBeforeWrites(t *testing.T) 
 	if err := os.WriteFile(outside, []byte("preserved"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	link := filepath.Join(base, "var/lib/razvilka/current-backup")
+	link := filepath.Join(base, "razvilka/state/current-backup")
 	if err := os.MkdirAll(filepath.Dir(link), 0700); err != nil {
 		t.Fatal(err)
 	}

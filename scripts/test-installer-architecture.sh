@@ -70,7 +70,7 @@ case "$1" in
     printf 'flag provided but not defined: -self-update-read-version\n' >&2; exit 2 ;;
   -check-node-history-state)
     FIXTURE_BASE="$(CDPATH= cd -- "$RAZVILKA_BASE" && pwd -P)"
-    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$FIXTURE_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$FIXTURE_BASE/var/lib/razvilka" ] || exit 99
+    [ "$#" = 5 ] && [ "$2" = -node-history-config-root ] && [ "$3" = "$FIXTURE_BASE/etc/razvilka" ] && [ "$4" = -node-history-state-root ] && [ "$5" = "$FIXTURE_BASE/razvilka/state" ] || exit 99
     printf '{"ok":true}\n' ;;
   -version) printf '0.18.1-rc.2\n' ;;
   -check) printf '{"ok": true}\n' ;;

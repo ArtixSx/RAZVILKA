@@ -15,10 +15,10 @@ esac
 [ -d "$BASE" ] || { echo "Candidate base directory is missing" >&2; exit 1; }
 BINARY="$BASE/bin/razvilka-candidate"
 CONFIG_DIR="$BASE/etc/razvilka-candidate"
-STATE_DIR="$BASE/var/lib/razvilka-candidate"
-CACHE_DIR="$BASE/var/cache/razvilka-candidate"
-LOG_DIR="$BASE/var/log/razvilka-candidate"
-PID_FILE="$BASE/var/run/razvilka-candidate.pid"
+STATE_DIR="$BASE/razvilka/candidate/state"
+CACHE_DIR="$BASE/razvilka/candidate/cache"
+LOG_DIR="$BASE/razvilka/candidate/log"
+PID_FILE="$BASE/razvilka/candidate/run/razvilka.pid"
 LOG_FILE="$LOG_DIR/server.log"
 DAEMON="$BASE/sbin/start-stop-daemon"
 LAYOUT_MARKER="$STATE_DIR/.candidate-layout-v1"
@@ -100,7 +100,7 @@ else
     done
 fi
 
-mkdir -p "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR/staging" "$STATE_DIR/backups" "$LOG_DIR" "$BASE/var/run"
+mkdir -p "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR/staging" "$STATE_DIR/backups" "$LOG_DIR" "${PID_FILE%/*}"
 chmod 700 "$CONFIG_DIR" "$CACHE_DIR" "$STATE_DIR" "$STATE_DIR/staging" "$STATE_DIR/backups" "$LOG_DIR"
 if [ ! -e "$LAYOUT_MARKER" ]; then
     (set -C; printf '%s\n' "$EXPECTED_LAYOUT" >"$LAYOUT_MARKER") || exit 1

@@ -26,7 +26,7 @@ func saveStoppedReview(t *testing.T, a *SelfUpdateFileAdapter, u *Updater, revie
 func stoppedAdapterFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, fileReview, SelfUpdateStoppedSettlementAuthority) {
 	t.Helper()
 	a, u, review := fileAdapterFixture(t)
-	for _, path := range []string{"bin", "etc/init.d", "etc/razvilka", "var/run", "var/lib/razvilka"} {
+	for _, path := range []string{"bin", "etc/init.d", "etc/razvilka", "razvilka/run", "razvilka/state"} {
 		if err := os.MkdirAll(filepath.Join(a.installation, filepath.FromSlash(path)), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -194,7 +194,7 @@ func TestStoppedAdapterRefusesMissingOrChangedEvidence(t *testing.T) {
 			case "private-drift":
 				_ = os.WriteFile(filepath.Join(a.installation, "etc/razvilka/admin.token"), []byte("foreign"), 0600)
 			case "pidfile":
-				_ = os.WriteFile(filepath.Join(a.installation, "var/run/razvilka.pid"), []byte("23\n"), 0600)
+				_ = os.WriteFile(filepath.Join(a.installation, "razvilka/run/razvilka.pid"), []byte("23\n"), 0600)
 			case "unknown":
 				store, err := selfupdatejournal.Open(a.installation, a.fileJournal)
 				if err != nil {

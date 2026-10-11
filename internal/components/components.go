@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"io"
 	"net/http"
 	"os"
@@ -139,7 +140,7 @@ type Manager struct {
 }
 
 func New() *Manager {
-	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: "/opt/var/lib/razvilka/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
+	return &Manager{Opkg: findOpkg(), RepoDir: "/opt/etc/opkg", BinDir: "/opt/bin", InitDir: "/opt/etc/init.d", StateDir: installpath.State + "/components", Arch: runtime.GOARCH, Client: releaseHTTPClient(), Timeout: 90 * time.Second, Runner: execRunner{}, external: map[string]releaseInfo{}, retryDelay: 2 * time.Second}
 }
 
 func Specs() []Spec {

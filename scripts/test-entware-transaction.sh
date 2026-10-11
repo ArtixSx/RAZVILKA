@@ -42,6 +42,9 @@ trap cleanup EXIT HUP INT TERM
 prepare_root() {
   BASE="$1"
   mkdir -p "$BASE/sbin"
+  mkdir -p "$BASE/var/lib"
+  printf '%s\n' keep-other-app >"$BASE/var/lib/other-app.conf"
+  if [ "$(id -u)" = 0 ]; then chown 1001 "$BASE/var"; fi
   ln -s "$DAEMON" "$BASE/sbin/start-stop-daemon"
 }
 
@@ -300,16 +303,20 @@ test_snapshot_pruning() (
 assert_uninstall_preserves_data() (
   REMOVAL_BASE="$1"
   sha256sum "$REMOVAL_BASE/etc/razvilka/config.json" "$REMOVAL_BASE/etc/razvilka/admin.token" \
-    "$REMOVAL_BASE/etc/razvilka/community-catalog.json" "$REMOVAL_BASE/var/lib/razvilka/current-backup" >"$TEST_ROOT/removal-before"
-  installation_image "$REMOVAL_BASE/var/lib/razvilka/update-backups" "$TEST_ROOT/backups-before"
+    "$REMOVAL_BASE/etc/razvilka/community-catalog.json" "$REMOVAL_BASE/razvilka/state/current-backup" >"$TEST_ROOT/removal-before"
+  installation_image "$REMOVAL_BASE/razvilka/state/update-backups" "$TEST_ROOT/backups-before"
+  SHARED_METADATA="$(ls -nd "$REMOVAL_BASE/var")"
   RAZVILKA_BASE="$REMOVAL_BASE" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
   assert_absent "$REMOVAL_BASE/bin/razvilka"
   assert_absent "$REMOVAL_BASE/etc/init.d/S99razvilka"
   sha256sum "$REMOVAL_BASE/etc/razvilka/config.json" "$REMOVAL_BASE/etc/razvilka/admin.token" \
-    "$REMOVAL_BASE/etc/razvilka/community-catalog.json" "$REMOVAL_BASE/var/lib/razvilka/current-backup" >"$TEST_ROOT/removal-after"
+    "$REMOVAL_BASE/etc/razvilka/community-catalog.json" "$REMOVAL_BASE/razvilka/state/current-backup" >"$TEST_ROOT/removal-after"
   cmp -s "$TEST_ROOT/removal-before" "$TEST_ROOT/removal-after" || { echo "Uninstall changed saved data" >&2; exit 1; }
-  installation_image "$REMOVAL_BASE/var/lib/razvilka/update-backups" "$TEST_ROOT/backups-after"
+  installation_image "$REMOVAL_BASE/razvilka/state/update-backups" "$TEST_ROOT/backups-after"
   cmp -s "$TEST_ROOT/backups-before" "$TEST_ROOT/backups-after" || { echo "Uninstall changed rollback snapshots" >&2; exit 1; }
+  [ "$(cat "$REMOVAL_BASE/var/lib/other-app.conf")" = keep-other-app ] && [ "$(ls -nd "$REMOVAL_BASE/var")" = "$SHARED_METADATA" ] || {
+    echo "Uninstall changed shared foreign Entware var" >&2; exit 1;
+  }
   # A second uninstall is harmless; this is not a second raw installation.
   RAZVILKA_BASE="$REMOVAL_BASE" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
 )
@@ -324,18 +331,18 @@ prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"
 
 # Actual native fresh-install preflight must not repair legacy permissions.
-mkdir -p "$PRIMARY/var/lib/razvilka/staging/sing-box"
-chmod 755 "$PRIMARY/var/lib/razvilka/staging/sing-box"
+mkdir -p "$PRIMARY/razvilka/state/staging/sing-box"
+chmod 755 "$PRIMARY/razvilka/state/staging/sing-box"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$UPGRADE" --dry-run >/dev/null
 assert_absent "$PRIMARY/bin/razvilka"
 assert_absent "$PRIMARY/etc/init.d/S99razvilka"
-[ "$(ls -ld "$PRIMARY/var/lib/razvilka/staging/sing-box" | awk '{print $1}')" = drwxr-xr-x ] || {
+[ "$(ls -ld "$PRIMARY/razvilka/state/staging/sing-box" | awk '{print $1}')" = drwxr-xr-x ] || {
   echo "Read-only preflight changed legacy staging permissions" >&2; exit 1;
 }
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 "$UPGRADE" --apply --without-components >/dev/null
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$PRIMARY/etc/init.d/S99razvilka" status >/dev/null
 assert_native_metadata "$PRIMARY"
-PRIMARY_BACKUP="$(cat "$PRIMARY/var/lib/razvilka/current-backup")"
+PRIMARY_BACKUP="$(cat "$PRIMARY/razvilka/state/current-backup")"
 [ -d "$PRIMARY_BACKUP" ] || { echo "Fresh-install snapshot is missing" >&2; exit 1; }
 [ "$(ls -ld "$PRIMARY_BACKUP" | awk '{print $1}')" = drwx------ ] || { echo "Snapshot mode is not 700" >&2; exit 1; }
 [ "$(ls -ld "$PRIMARY_BACKUP/manifest" | awk '{print $1}')" = -rw------- ] || { echo "Manifest mode is not 600" >&2; exit 1; }
@@ -348,13 +355,13 @@ MANAGED_REFUSAL='This controller requires the journaled self update workflow; ra
 PRIMARY_PID="$(RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$PRIMARY/etc/init.d/S99razvilka" pid)"
 [ -n "$PRIMARY_PID" ] || { echo "Fresh installation has no supervised PID" >&2; exit 1; }
 sha256sum "$PRIMARY/bin/razvilka" "$PRIMARY/etc/init.d/S99razvilka" "$PRIMARY/etc/razvilka/config.json" \
-  "$PRIMARY/etc/razvilka/admin.token" "$PRIMARY_BACKUP/manifest" "$PRIMARY/var/lib/razvilka/current-backup" >"$TEST_ROOT/live-before"
+  "$PRIMARY/etc/razvilka/admin.token" "$PRIMARY_BACKUP/manifest" "$PRIMARY/razvilka/state/current-backup" >"$TEST_ROOT/live-before"
 assert_refused live-raw-upgrade "$PRIMARY" "$MANAGED_REFUSAL" "$UPGRADE" --apply --without-components
 assert_primary_pid
 assert_refused live-raw-rollback "$PRIMARY" "$MANAGED_REFUSAL" "$ROLLBACK" "$PRIMARY_BACKUP"
 assert_primary_pid
 sha256sum "$PRIMARY/bin/razvilka" "$PRIMARY/etc/init.d/S99razvilka" "$PRIMARY/etc/razvilka/config.json" \
-  "$PRIMARY/etc/razvilka/admin.token" "$PRIMARY_BACKUP/manifest" "$PRIMARY/var/lib/razvilka/current-backup" >"$TEST_ROOT/live-after"
+  "$PRIMARY/etc/razvilka/admin.token" "$PRIMARY_BACKUP/manifest" "$PRIMARY/razvilka/state/current-backup" >"$TEST_ROOT/live-after"
 cmp -s "$TEST_ROOT/live-before" "$TEST_ROOT/live-after" || { echo "Live reader3 refusal changed installed files" >&2; exit 1; }
 
 # A conflicting fresh installation fails readiness after copying reader3.
@@ -373,7 +380,7 @@ RAZVILKA_BASE="$CONFLICT" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=2 "$UPGR
   echo "Failed fresh installation lost its reader3 repair files" >&2; exit 1;
 }
 assert_native_metadata "$CONFLICT"
-set -- "$CONFLICT/var/lib/razvilka/update-backups/"*
+set -- "$CONFLICT/razvilka/state/update-backups/"*
 [ "$#" -eq 1 ] && [ -f "$1/manifest" ] || { echo "Failed fresh installation lost its snapshot" >&2; exit 1; }
 RAZVILKA_BASE="$CONFLICT" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
 assert_absent "$CONFLICT/bin/razvilka"
@@ -382,8 +389,8 @@ assert_absent "$CONFLICT/etc/init.d/S99razvilka"
 # Stop the actual process to make whole-tree byte/metadata comparisons stable.
 # This is process quiescence, not durable D11 Stop or stopped settlement.
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$PRIMARY/etc/init.d/S99razvilka" stop >/dev/null
-mkdir -p "$PRIMARY/var/lib/razvilka/staging/test-private" "$PRIMARY/etc/razvilka/cloudflare-private/test-private"
-printf '%s\n' staged-original >"$PRIMARY/var/lib/razvilka/staging/test-private/marker"
+mkdir -p "$PRIMARY/razvilka/state/staging/test-private" "$PRIMARY/etc/razvilka/cloudflare-private/test-private"
+printf '%s\n' staged-original >"$PRIMARY/razvilka/state/staging/test-private/marker"
 printf '%s\n' provider-original >"$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker"
 printf '%s\n' '{"schema":1,"draft":{"telegram-cidrs":false},"applied":{"telegram-cidrs":true}}' >"$PRIMARY/etc/razvilka/source-state.json"
 installation_image "$PRIMARY" "$TEST_ROOT/installed-before"
@@ -401,10 +408,10 @@ assert_installation_unchanged
 
 # These manifest/path validators run before reader admission. Assert their
 # specific diagnostics, so an earlier reader3 refusal cannot mask the coverage.
-MALICIOUS="$PRIMARY/var/lib/razvilka/update-backups/malicious-test"
+MALICIOUS="$PRIMARY/razvilka/state/update-backups/malicious-test"
 cp -a "$PRIMARY_BACKUP" "$MALICIOUS"
 printf 'EVIL=$(touch %s)\n' "$MARKER" >>"$MALICIOUS/manifest"
-INCOMPLETE="$PRIMARY/var/lib/razvilka/update-backups/incomplete-private-test"
+INCOMPLETE="$PRIMARY/razvilka/state/update-backups/incomplete-private-test"
 cp -a "$PRIMARY_BACKUP" "$INCOMPLETE"
 rm -rf "$INCOMPLETE/staging"
 installation_image "$PRIMARY" "$TEST_ROOT/installed-before"
@@ -413,8 +420,8 @@ assert_absent "$MARKER"
 assert_installation_unchanged
 assert_refused incomplete-snapshot "$PRIMARY" 'Snapshot directory is missing or unsafe: staging' "$ROLLBACK" "$INCOMPLETE"
 assert_installation_unchanged
-assert_refused traversal "$PRIMARY" "Refusing rollback outside $PRIMARY/var/lib/razvilka/update-backups: $PRIMARY/var/lib" \
-  "$ROLLBACK" "$PRIMARY/var/lib/razvilka/update-backups/../.."
+assert_refused traversal "$PRIMARY" "Refusing rollback outside $PRIMARY/razvilka/state/update-backups: $PRIMARY/var/lib" \
+  "$ROLLBACK" "$PRIMARY/razvilka/state/update-backups/../.."
 assert_installation_unchanged
 # Remove only these test-owned malformed snapshots before native effect helpers;
 # their rejection checks above are complete, and the valid snapshot is retained.
@@ -423,14 +430,14 @@ rm -rf "$MALICIOUS" "$INCOMPLETE"
 # Actual uninstall removes the current reader3 panel and keeps saved data.
 # It does not use raw rollback to undo the successful fresh installation.
 assert_uninstall_preserves_data "$PRIMARY"
-[ "$(cat "$PRIMARY/var/lib/razvilka/staging/test-private/marker")" = staged-original ] &&
+[ "$(cat "$PRIMARY/razvilka/state/staging/test-private/marker")" = staged-original ] &&
   [ "$(cat "$PRIMARY/etc/razvilka/cloudflare-private/test-private/marker")" = provider-original ] || {
   echo "Uninstall removed retained private data" >&2; exit 1;
 }
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 "$UPGRADE" --apply --without-components >/dev/null
 RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$REMOVAL/etc/init.d/S99razvilka" status >/dev/null
 assert_native_metadata "$REMOVAL"
-REMOVAL_BACKUP="$(cat "$REMOVAL/var/lib/razvilka/current-backup")"
+REMOVAL_BACKUP="$(cat "$REMOVAL/razvilka/state/current-backup")"
 grep -q '^RAZ_BINARY_PRESENT=0$' "$REMOVAL_BACKUP/manifest" || { echo "Uninstall fixture was not a fresh installation" >&2; exit 1; }
 assert_uninstall_preserves_data "$REMOVAL"
 
