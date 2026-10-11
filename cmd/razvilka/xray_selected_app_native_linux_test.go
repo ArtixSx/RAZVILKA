@@ -295,11 +295,14 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("manual_mode", "PUT", "/api/v1/service-control", map[string]any{"expected_revision": store.Get().Revision, "mode": "manual", "confirm": "SAVE_SERVICE_CONTROL"}, 200, nil)
 	var service catalog.Service
 	call("custom_service", "POST", "/api/v1/custom-services", xraySelectedQAService(in.HTTPS), 201, &service)
+	// Compare later reads with the original store clone; the HTTP response
+	// preserves empty domains as [], while List returns the canonical nil slice.
+	originalCustom := custom.List()
 	customParent, err := os.Lstat(filepath.Dir(filepath.Join(in.Root, "custom-services.json")))
 	if err != nil || !os.SameFile(rootInfo, customParent) || !xraySelectedSoakPrivate(customParent, true) || customParent.Mode()&os.ModeSymlink != 0 {
 		t.Fatal("stage=custom_service code=original_private_0700_parent_required")
 	}
-	if len(service.Domains) != 0 || service.ID != xraySelectedQAID || !reflect.DeepEqual(service.CIDRs, xraySelectedQAService(in.HTTPS).CIDRs) || !reflect.DeepEqual(a.Catalog, builtIn) {
+	if len(service.Domains) != 0 || service.ID != xraySelectedQAID || !reflect.DeepEqual(service.CIDRs, xraySelectedQAService(in.HTTPS).CIDRs) || len(originalCustom) != 1 || originalCustom[0].ID != service.ID || len(originalCustom[0].Domains) != 0 || !slices.Equal(originalCustom[0].CIDRs, service.CIDRs) || !reflect.DeepEqual(a.Catalog, builtIn) {
 		t.Fatal("stage=custom_service code=definition_changed_or_built_in_modified")
 	}
 	call("enable_qa_definition", "PUT", "/api/v1/services/"+service.ID,
@@ -327,7 +330,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 		t.Fatal("stage=persisted_check code=actual_history_missing")
 	}
 	record := after.Nodes[0].Health.History[0]
-	if record.ProbeID != result.ProbeID || record.ServiceID != service.ID || record.RoutePathID != route || record.NetworkProfile != result.NetworkProfile || record.Verdict != "PASS" || record.State != "available" || record.DirectLeak || !record.CheckedAt.Equal(result.FinishedAt) || !record.ExpiresAt.After(time.Now()) || !reflect.DeepEqual(custom.List(), []catalog.Service{service}) {
+	if record.ProbeID != result.ProbeID || record.ServiceID != service.ID || record.RoutePathID != route || record.NetworkProfile != result.NetworkProfile || record.Verdict != "PASS" || record.State != "available" || record.DirectLeak || !record.CheckedAt.Equal(result.FinishedAt) || !record.ExpiresAt.After(time.Now()) || !reflect.DeepEqual(custom.List(), originalCustom) {
 		t.Fatal("stage=persisted_check code=exact_definition_history_mismatch")
 	}
 	call("selected_node_route", "PUT", "/api/v1/services/"+service.ID,
@@ -350,7 +353,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 			Digest   string  `json:"reviewed_digest"`
 		} `json:"review"`
 	}
-	call("original_plan_review", "GET", "/api/v1/plan?scope=services", nil, 200, &plan)
+	call("original_plan_review", "GET", "/api/v1/plan?scope=all", nil, 200, &plan)
 	if plan.Review.Revision == nil || *plan.Review.Revision != store.Get().Revision || len(plan.Review.Digest) != 64 || plan.Transaction.Noop || len(plan.Transaction.Routes) != 1 || plan.Transaction.Routes[0].Selected != route {
 		t.Fatal("stage=original_plan_review code=original_nonempty_review_required")
 	}
@@ -428,7 +431,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 		LiveApplied bool `json:"live_applied"`
 		Pending     bool `json:"scope_pending_changes"`
 	}
-	call("original_apply", "POST", "/api/v1/apply?scope=services",
+	call("original_apply", "POST", "/api/v1/apply?scope=all",
 		map[string]any{"expected_revision": *plan.Review.Revision, "reviewed_digest": plan.Review.Digest}, 200, &applyBody)
 	committed, exists, err := manager.Committed()
 	if err != nil || !applyBody.OK || !applyBody.LiveApplied || applyBody.Pending || !exists || committed.State != "committed" || !committed.Ready || committed.LAN == nil || len(committed.Routes) != 1 || committed.Routes[0].Selected != route || manager.ObserveCommittedRuntime(ctx, committed) != nil {
@@ -441,7 +444,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 			Now: time.Now, Wait: xraySelectedSoakWait, Command: soakFiles.Command, Publish: soakFiles.Publish,
 			Observe: func(observe context.Context) error {
 				if a.Store != store || a.Nodes != nodes || a.Dataplane != manager || a.Sources != activeSources || a.CustomServices != custom || a.DNS != dns || a.SelfUpdateFiles != files ||
-					!reflect.DeepEqual(store.Get(), activeConfig) || !reflect.DeepEqual(custom.List(), []catalog.Service{service}) || !reflect.DeepEqual(a.Catalog, builtIn) {
+					!reflect.DeepEqual(store.Get(), activeConfig) || !reflect.DeepEqual(custom.List(), originalCustom) || !reflect.DeepEqual(a.Catalog, builtIn) {
 					return app.ErrXrayListSource
 				}
 				current, err := nodes.Snapshot(observe, time.Now())

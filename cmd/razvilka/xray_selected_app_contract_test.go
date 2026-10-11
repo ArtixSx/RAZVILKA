@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -221,6 +223,47 @@ func TestXraySelectedNativeCatalogAcceptsGenuineStarterAndRejectsQACollision(t *
 	collision.Services = append(collision.Services, xraySelectedQAService(netip.MustParseAddr("149.154.167.99")))
 	if xraySelectedCatalogAllowsNewQA(collision) {
 		t.Fatal("existing QA identity must not be replaced or reused")
+	}
+}
+
+func TestXraySelectedNativeCustomDefinitionUsesOriginalStoreClone(t *testing.T) {
+	root := t.TempDir()
+	store, err := config.Load(filepath.Join(root, "config.json"))
+	if err != nil {
+		t.Fatal("fixture config unavailable")
+	}
+	path := filepath.Join(root, "custom-services.json")
+	custom, err := customservices.Load(path)
+	if err != nil {
+		t.Fatal("fixture custom store unavailable")
+	}
+	a := &app.App{Store: store, CustomServices: custom, Catalog: catalog.NFQWS2Starter()}
+	input, err := json.Marshal(xraySelectedQAService(netip.MustParseAddr("149.154.167.99")))
+	if err != nil {
+		t.Fatal("fixture service unavailable")
+	}
+	response := httptest.NewRecorder()
+	a.Handler(http.NotFoundHandler()).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/custom-services", bytes.NewReader(input)))
+	var created catalog.Service
+	if response.Code != http.StatusCreated || json.Unmarshal(response.Body.Bytes(), &created) != nil {
+		t.Fatal("actual public custom creation failed")
+	}
+	original := custom.List()
+	if len(original) != 1 || original[0].Domains != nil || created.Domains == nil || len(created.Domains) != 0 {
+		t.Fatal("actual store/HTTP empty-domain boundary changed")
+	}
+	created.Domains = nil
+	if !reflect.DeepEqual(original, []catalog.Service{created}) {
+		t.Fatal("public definition differs beyond the empty-domain representation")
+	}
+	reopened, err := customservices.Load(path)
+	if err != nil || !reflect.DeepEqual(reopened.List(), original) {
+		t.Fatal("persisted original definition changed")
+	}
+	changed := custom.List()[0]
+	changed.Probes[0].Expect.StatusCodes[0] = 204
+	if _, err := custom.Update(changed.ID, changed); err != nil || reflect.DeepEqual(custom.List(), original) || original[0].Probes[0].Expect.StatusCodes[0] != 200 {
+		t.Fatal("actual definition mutation escaped the independent original clone")
 	}
 }
 
