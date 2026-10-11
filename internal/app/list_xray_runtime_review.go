@@ -20,16 +20,21 @@ func (e *managedXraySelectedTCPListExecution) applyReview(scope changeScope) app
 
 func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceID string, scope changeScope) (plan dataplane.Plan, review applyReview, resultErr error) {
 	if !r.original() {
-		return plan, review, ErrXrayListSource
+		return plan, review, managedXrayReviewAt("admission", ctx, ErrXrayListSource)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
+	stage := "admission"
+	// Runs after the original cleanup/unlock, but before this review's cancel.
+	// Only a real failed boundary may retain the actual caller/deadline cause.
+	defer func() { resultErr = managedXrayReviewAt(stage, ctx, resultErr) }()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pending != nil || r.preparing != nil {
 		return plan, review, ErrXrayListSource
 	}
 	if r.active != nil {
+		stage = "final-check"
 		return r.reviewActiveLocked(ctx, scope)
 	}
 	c, end, err := r.app.privateExclusiveOperation(ctx)
@@ -37,6 +42,7 @@ func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceI
 		return plan, review, err
 	}
 	defer end()
+	stage = "control"
 	if err := r.policy.control.Current(c); err != nil {
 		return plan, review, err
 	}
@@ -46,10 +52,19 @@ func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceI
 	e := &managedXraySelectedTCPListExecution{runtime: r}
 	e.self = e
 	r.preparing = e
-	defer func() { r.preparing = nil; resultErr = errors.Join(resultErr, e.close()) }()
+	defer func() {
+		r.preparing = nil
+		cleanupErr := e.close()
+		resultErr = errors.Join(resultErr, cleanupErr)
+		if cleanupErr != nil {
+			stage = "cleanup"
+		}
+	}()
+	stage = "prepare"
 	if _, err := e.prepare(c, serviceID); err != nil {
 		return plan, review, err
 	}
+	stage = "final-check"
 	if err := errors.Join(e.preparation.current(c), e.primary.Current(c)); err != nil {
 		return plan, review, err
 	}
@@ -103,19 +118,20 @@ func (a *App) managedXrayApplyTarget(cfg config.Config, scope changeScope) (*Man
 }
 
 func (a *App) managedXrayPlanHTTP(w http.ResponseWriter, r *http.Request, cfg config.Config, scope changeScope) bool {
+	started := time.Now()
 	runtime, serviceID, handled, err := a.managedXrayApplyTarget(cfg, scope)
 	if !handled {
 		return false
 	}
 	if err != nil {
-		writeManagedXrayRuntimeError(w, http.StatusConflict, "XRAY_SELECTED_TCP_REVIEW_REFUSED")
+		writeManagedXrayReviewError(w, managedXrayReviewAt("target", r.Context(), err), started)
 		return true
 	}
 	c, end := managedNFQRuntimeCallContext(r.Context(), "plan")
 	defer end()
 	plan, review, err := runtime.review(c, serviceID, scope)
 	if err != nil {
-		writeManagedXrayRuntimeError(w, http.StatusConflict, "XRAY_SELECTED_TCP_REVIEW_REFUSED")
+		writeManagedXrayReviewError(w, err, started)
 		return true
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "scope": scope, "transaction": plan, "review": review, "service_health": "unverified", "traffic": "tcp/443", "change_summary": a.changeSummary(cfg, scope, plan)})
