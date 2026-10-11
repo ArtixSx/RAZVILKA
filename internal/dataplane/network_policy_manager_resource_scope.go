@@ -19,35 +19,37 @@ import (
 // revokes every retained callback and cancels borrowers; unfinished resources
 // keep the existing journal fenced. No persisted outcome creates an issuer.
 type executionResourceScope struct {
-	mu                 sync.Mutex
-	closeMu            sync.Mutex
-	startMu            sync.RWMutex
-	manager            *Manager
-	managerRoot        string
-	adapterOwner       Adapter
-	plan               Plan
-	adapter            string
-	registryGeneration uint64
-	execution          *Execution
-	root               string
-	owned              *ownedfs.Root
-	anchor             os.FileInfo
-	ctx                context.Context
-	cancel             context.CancelFunc
-	guard              func(context.Context) error
-	open               bool
-	observationOpen    atomic.Bool // Read-only observers never reenter mu/guards.
-	failure            error
-	closedErr          error
-	issued             map[string]*executionTransitResource
-	nfqws              map[string]*NFQWSExecutionResource
-	networkIdentity    *networkPolicyIdentity
-	nfqwsTransfer      *nfqwsExecutionTransferBarrier
-	retained           bool
-	retainedOwner      *retainedNFQWSExecution
-	syntheticPhases    map[*syntheticBaselineExecutionPhase]struct{}
-	syntheticClosing   bool
-	pending            bool // Original unknown Apply: cleanup only, never ACTIVE.
+	mu                      sync.Mutex
+	closeMu                 sync.Mutex
+	startMu                 sync.RWMutex
+	manager                 *Manager
+	managerRoot             string
+	adapterOwner            Adapter
+	plan                    Plan
+	adapter                 string
+	registryGeneration      uint64
+	execution               *Execution
+	root                    string
+	owned                   *ownedfs.Root
+	anchor                  os.FileInfo
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	guard                   func(context.Context) error
+	open                    bool
+	observationOpen         atomic.Bool // Read-only observers never reenter mu/guards.
+	failure                 error
+	closedErr               error
+	issued                  map[string]*executionTransitResource
+	nfqws                   map[string]*NFQWSExecutionResource
+	networkIdentity         *networkPolicyIdentity
+	nfqwsTransfer           *nfqwsExecutionTransferBarrier
+	retained                bool
+	retainedOwner           *retainedNFQWSExecution
+	syntheticPhases         map[*syntheticBaselineExecutionPhase]struct{}
+	syntheticClosing        bool
+	pending                 bool // Original unknown Apply: cleanup only, never ACTIVE.
+	syntheticBaselineSource *syntheticBaselineCoordinator
+	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 }
 
 type executionTransitResource struct {
@@ -260,6 +262,9 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.nfqws {
 		ids[id] = true
 	}
+	for id := range s.syntheticBaselines {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -422,7 +427,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if s.nfqws[resource.ID] != nil && (resource.State == "prepared" || resource.State == "active") {
+		if s.nfqws[resource.ID] != nil && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -437,7 +442,7 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
