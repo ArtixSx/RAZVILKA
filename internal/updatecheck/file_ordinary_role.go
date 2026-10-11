@@ -30,8 +30,9 @@ func OriginalOrdinaryInstallerControllerAdapter(ctx context.Context, id string) 
 	return originalOrdinaryInstallerControllerAdapter(ctx, id)
 }
 
-// VerifyOrdinaryInstallerControllerRole classifies only the sealed ordinary
-// helper group. It grants no effect, inactivity, health or retirement result.
+// VerifyOrdinaryInstallerControllerRole classifies a different process in the
+// sealed ordinary helper group. It never classifies the caller itself and
+// grants no effect, inactivity, health or retirement result.
 // The existing bootstrap role API remains distinct and unchanged.
 func (a *SelfUpdateFileAdapter) VerifyOrdinaryInstallerControllerRole(ctx context.Context, id string, pid int) error {
 	if a == nil || ctx == nil || pid <= 1 || !jobIDPattern.MatchString(id) {
@@ -42,6 +43,28 @@ func (a *SelfUpdateFileAdapter) VerifyOrdinaryInstallerControllerRole(ctx contex
 		return errors.Join(ErrOrdinaryInstallerControllerRole, ctx.Err())
 	}
 	return a.verifyOrdinaryInstallerControllerRole(ctx, id, pid)
+}
+
+// VerifyCurrentOrdinaryInstallerControllerRole verifies the actual calling
+// quiescer or original joined command worker against the complete sealed
+// ordinary group. No supplied PID, persisted receipt or role label selects
+// that caller. Peer classification remains a separate read.
+func (a *SelfUpdateFileAdapter) VerifyCurrentOrdinaryInstallerControllerRole(ctx context.Context, id string) error {
+	if a == nil || ctx == nil || !jobIDPattern.MatchString(id) {
+		return ErrOrdinaryInstallerControllerRole
+	}
+	deadline, finite := ctx.Deadline()
+	if !finite || !deadline.After(time.Now()) || ctx.Err() != nil {
+		return errors.Join(ErrOrdinaryInstallerControllerRole, ctx.Err())
+	}
+	return a.verifyCurrentOrdinaryInstallerControllerRole(ctx, id)
+}
+
+func ordinaryControllerReadRole(role string, pid, caller int, joined, current bool) bool {
+	if current {
+		return pid == caller && ((!joined && role == "quiesce-child") || (joined && role == "quiesce-supervisor"))
+	}
+	return pid != caller && role != "" && (!joined || role != "quiesce-child")
 }
 
 func ordinaryControllerRole(review fileReview, record updateRecord, identity fileHelperIdentity, command fileCommandReceipt, fact bootstrapControllerFact) string {

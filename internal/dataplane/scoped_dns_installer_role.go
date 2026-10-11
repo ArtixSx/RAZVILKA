@@ -3,7 +3,6 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -47,7 +46,7 @@ func (a *ScopedDNSAdapter) bindInstallerControllerRoles(ctx context.Context, ada
 		return ErrScopedDNSRuntimeInactive
 	}
 	if ordinary {
-		if err := adapter.VerifyOrdinaryInstallerControllerRole(ctx, id, os.Getpid()); err != nil {
+		if err := adapter.VerifyCurrentOrdinaryInstallerControllerRole(ctx, id); err != nil {
 			return errors.Join(ErrScopedDNSRuntimeInactive, err)
 		}
 	}

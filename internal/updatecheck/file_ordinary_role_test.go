@@ -163,6 +163,66 @@ func TestOrdinaryRoleAPIFailsWithoutFiniteOriginalContext(t *testing.T) {
 	}
 }
 
+// These are role-selector models after the original complete group reader;
+// they do not supply a native process or mint an installer capability.
+func TestOrdinaryCurrentControllerReadIsDistinctFromPeerClassification(t *testing.T) {
+	review, record, identity, command, facts := ordinaryRoleFixture(t)
+	child := facts[2]
+	childRole := ordinaryControllerRole(review, record, identity, command, child)
+	if !ordinaryControllerReadRole(childRole, child.Process.PID, child.Process.PID, false, true) {
+		t.Fatal("live verified quiesce caller cannot bind its current-controller reader")
+	}
+	if ordinaryControllerReadRole(childRole, child.Process.PID, child.Process.PID, false, false) {
+		t.Fatal("current caller was classified as a peer")
+	}
+	supervisor := facts[1]
+	supervisorRole := ordinaryControllerRole(review, record, identity, command, supervisor)
+	if !ordinaryControllerReadRole(supervisorRole, supervisor.Process.PID, child.Process.PID, false, false) ||
+		!ordinaryControllerReadRole(supervisorRole, supervisor.Process.PID, supervisor.Process.PID, true, true) {
+		t.Fatal("verified live peer or original joined caller was refused")
+	}
+	for _, invalid := range []struct {
+		role         string
+		pid, caller  int
+		joined, self bool
+	}{
+		{childRole, child.Process.PID, child.Process.PID, true, true},
+		{childRole, child.Process.PID, supervisor.Process.PID, true, false},
+		{supervisorRole, supervisor.Process.PID, supervisor.Process.PID, false, true},
+		{supervisorRole, supervisor.Process.PID, child.Process.PID, true, true},
+		{"ordinary-installer", facts[0].Process.PID, facts[0].Process.PID, false, true},
+		{"", child.Process.PID, child.Process.PID, false, true},
+	} {
+		if ordinaryControllerReadRole(invalid.role, invalid.pid, invalid.caller, invalid.joined, invalid.self) {
+			t.Fatal("wrong current observer, peer incarnation or join role was accepted", invalid)
+		}
+	}
+}
+
+func TestOrdinaryCurrentControllerAPIRefusesUnprovenCaller(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef"
+	finite, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cancelled, stop := context.WithTimeout(context.Background(), time.Minute)
+	stop()
+	for _, test := range []struct {
+		adapter *SelfUpdateFileAdapter
+		ctx     context.Context
+		id      string
+	}{
+		{nil, finite, id},
+		{&SelfUpdateFileAdapter{}, nil, id},
+		{&SelfUpdateFileAdapter{}, context.Background(), id},
+		{&SelfUpdateFileAdapter{}, cancelled, id},
+		{&SelfUpdateFileAdapter{}, finite, "borrowed"},
+		{&SelfUpdateFileAdapter{}, finite, id},
+	} {
+		if !errors.Is(test.adapter.VerifyCurrentOrdinaryInstallerControllerRole(test.ctx, test.id), ErrOrdinaryInstallerControllerRole) {
+			t.Fatal("unproven caller acquired an ordinary current-controller read")
+		}
+	}
+}
+
 func TestOriginalOrdinaryAdapterAccessorSeparatesAbsentAndInvalidJoin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

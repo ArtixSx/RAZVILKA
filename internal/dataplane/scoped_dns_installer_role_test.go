@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
@@ -106,5 +107,19 @@ func TestScopedDNSInstallerRoleCarrierIsFiniteOriginalAndNoRoleGrant(t *testing.
 	a := &ScopedDNSAdapter{}
 	if a.BindInstallerControllerRoles(context.Background(), nil, strings.Repeat("a", 32)) == nil || a.installerRole != nil {
 		t.Fatal("missing original fixed provider or finite context installed role reader")
+	}
+}
+
+func TestScopedDNSOrdinaryInstallerBindingRequiresVerifiedCurrentController(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	a := &ScopedDNSAdapter{StateRoot: filepath.Join(installpath.State+"/dataplane", scopedDNSAdapterID)}
+	// The finite construction context and canonical path do not replace the
+	// actual original caller/group proof, and a refusal installs no reader.
+	if err := a.BindOrdinaryInstallerControllerRoles(ctx, &updatecheck.SelfUpdateFileAdapter{}, strings.Repeat("a", 32)); !errors.Is(err, ErrScopedDNSRuntimeInactive) || a.installerRole != nil {
+		t.Fatal("unverified current controller installed an ordinary peer reader", err)
+	}
+	if err := a.BindOrdinaryInstallerControllerRoles(context.Background(), updatecheck.NewSelfUpdateFileAdapter(), strings.Repeat("a", 32)); !errors.Is(err, ErrScopedDNSRuntimeInactive) || a.installerRole != nil {
+		t.Fatal("unbounded current controller installed an ordinary peer reader", err)
 	}
 }

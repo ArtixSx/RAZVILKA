@@ -28,6 +28,14 @@ func productionOrdinaryRoleAdapter(a *SelfUpdateFileAdapter) bool {
 }
 
 func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerRole(ctx context.Context, id string, pid int) error {
+	return a.verifyOrdinaryInstallerControllerGroup(ctx, id, pid, false)
+}
+
+func (a *SelfUpdateFileAdapter) verifyCurrentOrdinaryInstallerControllerRole(ctx context.Context, id string) error {
+	return a.verifyOrdinaryInstallerControllerGroup(ctx, id, os.Getpid(), true)
+}
+
+func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx context.Context, id string, pid int, current bool) error {
 	refuse := func(err error) error { return errors.Join(ErrOrdinaryInstallerControllerRole, err) }
 	if !productionOrdinaryRoleAdapter(a) || a.checkStop(ctx, id, "read/observe") != nil {
 		return refuse(ErrFileProtocol)
@@ -86,15 +94,23 @@ func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerRole(ctx contex
 		facts = append(facts, child)
 	}
 	caller, err := bootstrapControllerAt(ctx, os.Getpid())
-	if err != nil || ordinaryControllerRole(review, record, identity, command, caller) == "" {
+	callerRole := ordinaryControllerRole(review, record, identity, command, caller)
+	if err != nil || callerRole == "" {
 		return refuse(err)
 	}
-	peer, err := bootstrapControllerAt(ctx, pid)
-	peerRole := ordinaryControllerRole(review, record, identity, command, peer)
-	if err != nil || pid == caller.Process.PID || peerRole == "" || joined != nil && peerRole == "quiesce-child" {
-		return refuse(err)
+	facts = append(facts, caller)
+	if current {
+		if !ordinaryControllerReadRole(callerRole, pid, caller.Process.PID, joined != nil, true) {
+			return refuse(ErrOrdinaryInstallerControllerRole)
+		}
+	} else {
+		peer, err := bootstrapControllerAt(ctx, pid)
+		peerRole := ordinaryControllerRole(review, record, identity, command, peer)
+		if err != nil || !ordinaryControllerReadRole(peerRole, pid, caller.Process.PID, joined != nil, false) {
+			return refuse(err)
+		}
+		facts = append(facts, peer)
 	}
-	facts = append(facts, caller, peer)
 	freshRecord, freshReview, err := a.loadHeader(ctx, id)
 	freshIdentity, identityErr := a.helperIdentity(id, review)
 	if err != nil || identityErr != nil || freshIdentity != identity || !reflect.DeepEqual(freshRecord, record) || !reflect.DeepEqual(freshReview, review) ||

@@ -8,6 +8,10 @@ func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerRole(context.Co
 	return ErrOrdinaryInstallerControllerRole
 }
 
+func (a *SelfUpdateFileAdapter) verifyCurrentOrdinaryInstallerControllerRole(context.Context, string) error {
+	return ErrOrdinaryInstallerControllerRole
+}
+
 func originalOrdinaryInstallerControllerAdapter(context.Context, string) (*SelfUpdateFileAdapter, error) {
 	return nil, ErrOrdinaryInstallerControllerRole
 }
