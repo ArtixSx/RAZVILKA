@@ -43,6 +43,7 @@ type nativeSelectedNeighborShape struct {
 	AddressDecoded     bool                              `json:"address_decoded"`
 	AddressClass       string                            `json:"address_class"`
 	LLAddressBytes     int                               `json:"lladdr_bytes"`
+	LLAddressClass     string                            `json:"lladdr_class"`
 	LLAddressUnicast   bool                              `json:"lladdr_valid_unicast"`
 	IntentMACMatch     bool                              `json:"intent_mac_match"`
 	Bookkeeping        bool                              `json:"selected_bookkeeping"`
@@ -102,6 +103,22 @@ func nativeSelectedNeighborClass(family byte, m message, segments map[int]Segmen
 	s.DestinationBytes, s.LLAddressBytes = len(a[1]), len(a[2])
 	mac := net.HardwareAddr(a[2]).String()
 	s.LLAddressUnicast, s.IntentMACMatch = validMAC(mac), wanted[mac]
+	switch {
+	case a[2] == nil:
+		s.LLAddressClass = "absent"
+	case len(a[2]) == 0:
+		s.LLAddressClass = "empty"
+	case bytes.Equal(a[2], []byte{0, 0, 0, 0, 0, 0}):
+		s.LLAddressClass = "all_zero"
+	case bytes.Equal(a[2], []byte{255, 255, 255, 255, 255, 255}):
+		s.LLAddressClass = "broadcast"
+	case s.LLAddressUnicast:
+		s.LLAddressClass = "unicast"
+	case len(a[2]) == 6 && a[2][0]&1 != 0:
+		s.LLAddressClass = "multicast"
+	default:
+		s.LLAddressClass = "invalid"
+	}
 	address, ok := netip.AddrFromSlice(a[1])
 	s.AddressDecoded = ok
 	switch {
