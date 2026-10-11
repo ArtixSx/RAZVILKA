@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
@@ -23,8 +24,8 @@ type selfUpdateJournalRoots struct {
 func productionSelfUpdateJournalRoots() selfUpdateJournalRoots {
 	return selfUpdateJournalRoots{
 		installation: selfUpdateDefaultPath("/opt"),
-		helper:       selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update"),
-		files:        selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-files"),
+		helper:       selfUpdateDefaultPath(installpath.State + "/self-update"),
+		files:        selfUpdateDefaultPath(installpath.State + "/self-update-files"),
 	}
 }
 

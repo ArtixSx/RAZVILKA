@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/startuptools"
 )
@@ -43,7 +44,7 @@ func selfUpdateRuntimeManagerBound(ctx context.Context) (*dataplane.Manager, fun
 	if err != nil {
 		return closeRefused(err)
 	}
-	if err := manager.BindRuntimeInactivitySources(ctx, provider, inventory, selfUpdateDefaultPath("/opt/var/lib/razvilka/dns/state.json")); err != nil {
+	if err := manager.BindRuntimeInactivitySources(ctx, provider, inventory, selfUpdateDefaultPath(installpath.State+"/dns/state.json")); err != nil {
 		return closeRefused(err)
 	}
 	return manager, tools.Close, nil

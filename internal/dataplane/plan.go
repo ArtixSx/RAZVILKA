@@ -16,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/routekind"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
@@ -478,7 +479,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		plan.Actions = append(plan.Actions, Action{Order: order, Phase: phase, Adapter: adapter, Kind: kind, Target: target, Summary: summary, Owned: owned})
 		order++
 	}
-	addAction("snapshot", "manager", "journal", "/opt/var/lib/razvilka/dataplane", "Зафиксировать revision, digest и снимок только объектов RAZVILKA.", true)
+	addAction("snapshot", "manager", "journal", installpath.State+"/dataplane", "Зафиксировать revision, digest и снимок только объектов RAZVILKA.", true)
 	for _, adapter := range plan.RetiringAdapters {
 		engineState, exists := engineByID[adapter]
 		addAction("deactivate", adapter, "retire", adapter, "Отключить прежний обход только после snapshot и вернуть его при ошибке следующего этапа.", true)
@@ -634,16 +635,16 @@ func addAdapterActions(plan *Plan, adapter string, canary bool, order *int) {
 		appendAction("stage", "lan-intent", "physical LAN", "Сохранить точные границы источников и MAC в общей транзакции.", true)
 		appendAction("validate", "lan-preflight", "IPv4/IPv6 gate", "Проверить физическую область и отсутствие конфликтов до сетевых изменений.", true)
 	case "nfqws2":
-		appendAction("stage", "lists", "/opt/var/lib/razvilka/dataplane/nfqws2", "Сгенерировать нормализованные domain/CIDR-листы в изолированной staging-папке.", true)
+		appendAction("stage", "lists", installpath.State+"/dataplane/nfqws2", "Сгенерировать нормализованные domain/CIDR-листы в изолированной staging-папке.", true)
 		appendAction("validate", "native", "nfqws2 + iptables", "Проверить синтаксис, NFQUEUE, WAN binding, IPv4/IPv6 и offload без записи правил.", true)
 	case "usque":
-		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/usque", "Запустить candidate SOCKS/TUN рядом с рабочим профилем.", true)
+		appendAction("stage", "candidate", installpath.State+"/dataplane/usque", "Запустить candidate SOCKS/TUN рядом с рабочим профилем.", true)
 		appendAction("validate", "route", "MASQUE endpoint", "Закрепить bootstrap route и подтвердить handshake/egress.", true)
 	case "warp-wg", "amneziawg", "wireguard":
-		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/"+adapter, "Создать отдельный candidate interface без замены live-профиля.", true)
+		appendAction("stage", "candidate", installpath.State+"/dataplane/"+adapter, "Создать отдельный candidate interface без замены live-профиля.", true)
 		appendAction("validate", "handshake", adapter+" endpoint", "Проверить handshake, egress и сервисные probes.", true)
 	case "sing-box", "xray":
-		appendAction("stage", "candidate", "/opt/var/lib/razvilka/dataplane/"+adapter, "Сгенерировать candidate-конфиг со стабильными node ID.", true)
+		appendAction("stage", "candidate", installpath.State+"/dataplane/"+adapter, "Сгенерировать candidate-конфиг со стабильными node ID.", true)
 		appendAction("validate", "native", adapter+" check", "Выполнить native config check и локальный proxy probe.", true)
 	}
 	if canary {

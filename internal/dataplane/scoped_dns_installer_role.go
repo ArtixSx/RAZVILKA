@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
@@ -26,7 +27,7 @@ type scopedDNSInstallerRole struct {
 // every relevant peer must pass the existing fixed OPS /proc+journal reader.
 func (a *ScopedDNSAdapter) BindInstallerControllerRoles(ctx context.Context, adapter *updatecheck.SelfUpdateFileAdapter, id string) error {
 	if runtime.GOOS != "linux" || a == nil || adapter == nil || ctx == nil || ctx.Err() != nil || len(id) != 32 || strings.Trim(id, "0123456789abcdef") != "" ||
-		a.StateRoot != filepath.Join("/opt/var/lib/razvilka/dataplane", scopedDNSAdapterID) {
+		a.StateRoot != filepath.Join(installpath.State+"/dataplane", scopedDNSAdapterID) {
 		return ErrScopedDNSRuntimeInactive
 	}
 	deadline, finite := ctx.Deadline()

@@ -10,9 +10,10 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
-const productionComponentStateDirectory = "/opt/var/lib/razvilka/components"
+const productionComponentStateDirectory = installpath.State + "/components"
 
 var errComponentReadState = errors.New("retained component state is unreadable; preserve journals, receipts and generations")
 

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 // The installed helper takes only the private invocation ID. Its configured
@@ -13,7 +15,7 @@ func runNFQWSCompatibilityCommand(args []string, supervise func(string, string, 
 	if len(args) != 1 || len(args[0]) != 32 || strings.Trim(args[0], "0123456789abcdef") != "" || supervise == nil {
 		return 2
 	}
-	state := getenv("RAZVILKA_STRATEGY_LAB_STATE", "/opt/var/lib/razvilka/strategy-lab.json")
+	state := getenv("RAZVILKA_STRATEGY_LAB_STATE", installpath.State+"/strategy-lab.json")
 	if !filepath.IsAbs(state) || filepath.Clean(state) != state || strings.TrimSpace(state) != state || strings.ContainsAny(state, "\x00\r\n") {
 		return 3
 	}

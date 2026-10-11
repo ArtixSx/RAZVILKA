@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 // The early helper accepts an invocation identity only. Trusted startup
@@ -13,7 +15,7 @@ func runNFQWSManagedProcessCommand(args []string, supervise func(string, string,
 	if len(args) != 1 || len(args[0]) != 32 || strings.Trim(args[0], "0123456789abcdef") != "" || supervise == nil {
 		return 2
 	}
-	base := getenv("RAZVILKA_DATAPLANE_STATE", "/opt/var/lib/razvilka/dataplane")
+	base := getenv("RAZVILKA_DATAPLANE_STATE", installpath.State+"/dataplane")
 	if strings.TrimSpace(base) != base {
 		return 3
 	}

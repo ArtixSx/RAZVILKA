@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	"github.com/ArtixSx/razvilka/internal/cloudflareprovider"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 // Do not probe files at boot. A separate config uses its own profile location
@@ -19,7 +20,7 @@ func cloudflareLegacySources(configPath, warpState string) (*cloudflareprovider.
 	specs := []cloudflareprovider.LegacySpec{
 		{ID: "warp-profile", Label: "WARP · профиль RAZVILKA", Kind: cloudflareprovider.SourceWireGuard, Path: filepath.Join(filepath.Dir(configPath), "warp", "wgcf-profile.conf")},
 	}
-	if warpState != "" && (standard || filepath.Clean(warpState) != filepath.FromSlash("/opt/var/lib/razvilka/warp")) {
+	if warpState != "" && (standard || filepath.Clean(warpState) != filepath.FromSlash(installpath.State+"/warp")) {
 		root, err := filepath.Abs(warpState)
 		if err != nil {
 			return nil, cloudflareprovider.ErrLegacySource

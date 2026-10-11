@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -18,7 +19,7 @@ import (
 
 const (
 	ManagedComponentReadVersion   = components.ManagedNFQWSJournalSchema
-	managedComponentsState        = "/opt/var/lib/razvilka/components"
+	managedComponentsState        = installpath.State + "/components"
 	managedNFQBundlePlanPath      = "/api/v1/components/nfqws2/managed-bundle/plan"
 	managedNFQBundleInstallPath   = "/api/v1/components/nfqws2/managed-bundle/install"
 	managedNFQBundleInstalledPath = "/api/v1/components/nfqws2/managed-bundle/installed"

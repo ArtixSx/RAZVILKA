@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -41,7 +42,7 @@ func runPairedRestoreCommand(args []string, roots selfUpdateJournalRoots) (bool,
 		return true, 3
 	}
 	defer release() // All synchronous restore work finishes before owner release.
-	owner, err := openPairedRestoreOwner(ctx, &gate, selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop"), args[1])
+	owner, err := openPairedRestoreOwner(ctx, &gate, selfUpdateDefaultPath(installpath.State+"/self-update-stop"), args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "paired offline restore requires matching current durable Stop; preserve all evidence")
 		return true, 3

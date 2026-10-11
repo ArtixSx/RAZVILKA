@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 func TestLegacyLocationsIsolateCandidateConfig(t *testing.T) {
 	root := t.TempDir()
-	registry, err := cloudflareLegacySources(filepath.Join(root, "config.json"), "/opt/var/lib/razvilka/warp")
+	registry, err := cloudflareLegacySources(filepath.Join(root, "config.json"), installpath.State+"/warp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +32,7 @@ func TestStandardLinuxLegacyLocations(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux standard layout")
 	}
-	registry, err := cloudflareLegacySources("/opt/etc/razvilka/config.json", "/opt/var/lib/razvilka/warp")
+	registry, err := cloudflareLegacySources(installpath.Config+"/config.json", installpath.State+"/warp")
 	if err != nil || len(registry.Locations()) != 6 {
 		t.Fatalf("standard sources: %v", err)
 	}

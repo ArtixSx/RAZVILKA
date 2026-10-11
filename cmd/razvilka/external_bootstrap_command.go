@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
@@ -42,7 +43,7 @@ func runExternalBootstrapCommand(args []string, roots selfUpdateJournalRoots) (b
 		return true, 3
 	}
 	defer release() // The synchronous provider joins commands before release.
-	control := selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop")
+	control := selfUpdateDefaultPath(installpath.State + "/self-update-stop")
 	var epoch *operationgate.ControlEpochReview
 	defer func() {
 		if epoch != nil {
@@ -70,7 +71,7 @@ func runExternalBootstrapCommand(args []string, roots selfUpdateJournalRoots) (b
 		}); err != nil {
 			return err
 		}
-		return independentSelfUpdateFences(c, "/opt/etc/razvilka/config.json", "/opt/var/lib/razvilka/dataplane")
+		return independentSelfUpdateFences(c, "/opt/etc/razvilka/config.json", installpath.State+"/dataplane")
 	}
 	authority := func(c context.Context, transaction string) (updatecheck.SelfUpdateAuthority, error) {
 		if c != ctx || transaction != args[1] {

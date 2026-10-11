@@ -23,6 +23,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -37,7 +38,7 @@ func nativeSelfUpdateFileAdapter() app.SelfUpdateFileAdapter {
 }
 
 func selfUpdateStopCheck(ctx context.Context, id string) (bool, error) {
-	r, present, err := operationgate.ReadSelfUpdateStop(ctx, selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop"))
+	r, present, err := operationgate.ReadSelfUpdateStop(ctx, selfUpdateDefaultPath(installpath.State+"/self-update-stop"))
 	if err != nil {
 		return false, err
 	}
@@ -51,7 +52,7 @@ func selfUpdateStopCheck(ctx context.Context, id string) (bool, error) {
 }
 
 func selfUpdateEffectAdmission(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
-	return selfUpdateEffectAdmissionAt(ctx, selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop"), selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), id, installationID, sequence, action, effect, begin)
+	return selfUpdateEffectAdmissionAt(ctx, selfUpdateDefaultPath(installpath.State+"/self-update-stop"), selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), id, installationID, sequence, action, effect, begin)
 }
 
 // The production worker supplies its fixed roots above. A bootstrap's offline
@@ -117,7 +118,7 @@ func verifySelfUpdateRuntimeInactive(ctx context.Context, observer dataplane.Run
 }
 
 func selfUpdateRuntimeManager() (*dataplane.Manager, error) {
-	manager, err := newDataplaneManager(selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane"), nil)
+	manager, err := newDataplaneManager(selfUpdateDefaultPath(installpath.State+"/dataplane"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +140,7 @@ func selfUpdateRuntimeInactive(ctx context.Context, id string) (result error) {
 	if _, err := selfUpdateStopCheck(ctx, id); err != nil {
 		return err
 	}
-	if err := independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")); err != nil {
+	if err := independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath(installpath.State+"/dataplane")); err != nil {
 		return err
 	}
 	manager, closeRuntimeSource, err := selfUpdateRuntimeManagerBound(ctx)
@@ -173,7 +174,7 @@ func configuredSelfUpdateFiles(installation, files, helper string, control ...st
 	if len(control) == 1 {
 		controlRoot = control[0]
 	}
-	defaults := []string{"/opt", "/opt/var/lib/razvilka/self-update-files", "/opt/var/lib/razvilka/self-update", "/opt/var/lib/razvilka/self-update-stop"}
+	defaults := []string{"/opt", installpath.State + "/self-update-files", installpath.State + "/self-update", installpath.State + "/self-update-stop"}
 	values := []string{installation, files, helper, controlRoot}
 	for i, value := range values {
 		if strings.TrimSpace(value) != value {
@@ -251,7 +252,7 @@ func runSelfUpdateFileCommand(args []string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	guard := func(c context.Context) error {
-		if err := independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")); err != nil {
+		if err := independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath(installpath.State+"/dataplane")); err != nil {
 			return err
 		}
 		store, err := config.LoadExisting(selfUpdateDefaultPath("/opt/etc/razvilka/config.json"))
@@ -277,7 +278,7 @@ func runSelfUpdateFileHelper(id string) int {
 		return 3
 	}
 	guard := func(c context.Context) error {
-		return independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane"))
+		return independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath(installpath.State+"/dataplane"))
 	}
 	return updatecheck.RunInstallerHelperWithAuthority(id, func(ctx context.Context, job string) error {
 		return f.RunHelper(ctx, job, guard)
@@ -325,7 +326,7 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("authority-opening")
 	}
-	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")) != nil {
+	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath(installpath.State+"/dataplane")) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("independent-opening")
 	}
 	manager, closeRuntimeSource, err := selfUpdateRuntimeManagerBound(ctx)
