@@ -17,9 +17,24 @@ func (a *App) appendNodeRouteOptions(ctx context.Context, options []routecatalog
 		if !option.Installed {
 			continue
 		}
-		if option.ID == "sing-box" && a.Dataplane.Capable("sing-box") || option.ID == "xray" && a.Dataplane.XrayNodeRouteCapable() && a.nodeHistoryAdmission(ctx, "xray") == nil {
-			engines[option.ID] = option
+		switch option.ID {
+		case "sing-box":
+			if !a.Dataplane.Capable("sing-box") {
+				continue
+			}
+			option.Ready = true
+		case "xray":
+			legacy := a.Dataplane.XrayNodeRouteCapable()
+			if !legacy && !a.managedXrayNodeSelectionCapable(ctx) || a.nodeHistoryAdmission(ctx, "xray") != nil {
+				continue
+			}
+			// Managed selected TCP prepares its own concrete plan. Selection
+			// exposes exact service health, never LAN or Apply readiness.
+			option.Ready = legacy
+		default:
+			continue
 		}
+		engines[option.ID] = option
 	}
 	if len(engines) == 0 {
 		return base
@@ -52,7 +67,12 @@ func (a *App) appendNodeRouteOptions(ctx context.Context, options []routecatalog
 			}
 			options = append(options, routecatalog.Option{ID: engine + ":" + node.ID, Name: name + " · " + node.Name,
 				Kind: "node", Description: "Точно проверенный узел для выбранного сервиса и текущей сети",
-				Installed: true, Configured: true, Running: option.Running, Selectable: true, Ready: true, Services: services})
+				Installed: true, Configured: true, Running: option.Running, Selectable: true, Ready: option.Ready, Services: services})
+		}
+		// The managed selected TCP consumer accepts exact node IDs only.
+		// Preserve groups solely for the existing scoped executor path.
+		if engine == "xray" && !option.Ready {
+			continue
 		}
 		for _, group := range snapshot.Groups {
 			services := available[group.ID]
@@ -69,4 +89,51 @@ func (a *App) appendNodeRouteOptions(ctx context.Context, options []routecatalog
 		}
 	}
 	return options
+}
+
+// Observe the original completed managed startup registration only. No source
+// review, preparation, native observation or operation owner is acquired here.
+func (a *App) managedXrayNodeSelectionCapable(ctx context.Context) bool {
+	if a == nil || ctx == nil || ctx.Err() != nil || a.Dataplane == nil {
+		return false
+	}
+	a.managedXraySelectedTCPListMu.Lock()
+	r := a.managedXraySelectedTCPList
+	a.managedXraySelectedTCPListMu.Unlock()
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	original := r.original() && r.app == a && r.manager == a.Dataplane
+	p, manager, adapter := r.policy, r.manager, r.adapter
+	r.mu.Unlock()
+	if !original || p == nil || adapter == nil || adapter.Configs == nil || adapter.NodeRoutes == nil || adapter.FreshProfile == nil {
+		return false
+	}
+	// Startup fields and the App policy slot are published by this mutex.
+	// Never nest policy/runtime locks: runtime Close releases through policy.
+	a.managedListPolicyMu.Lock()
+	original = a.managedListPolicy == p && p.original() && !p.closed.Load() && p.startupReady && p.startupFailure == nil
+	a.managedListPolicyMu.Unlock()
+	if !original {
+		return false
+	}
+	p.mu.Lock()
+	attached := p.xray == r && !p.xrayClosed && !p.closed.Load()
+	p.mu.Unlock()
+	if !attached {
+		return false
+	}
+	// This read-only Manager API requires a finite live observation context;
+	// the bound adds no command admission or runtime execution permission.
+	c, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	registered, err := manager.OriginalXraySelectedTCPDispatcher(c)
+	if err != nil || registered != adapter {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.original() && r.app == a && r.manager == manager && r.policy == p && r.adapter == registered &&
+		!p.closed.Load() && p.panel.Err() == nil && c.Err() == nil
 }
