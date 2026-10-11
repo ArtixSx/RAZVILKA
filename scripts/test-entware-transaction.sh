@@ -420,7 +420,7 @@ assert_absent "$MARKER"
 assert_installation_unchanged
 assert_refused incomplete-snapshot "$PRIMARY" 'Snapshot directory is missing or unsafe: staging' "$ROLLBACK" "$INCOMPLETE"
 assert_installation_unchanged
-assert_refused traversal "$PRIMARY" "Refusing rollback outside $PRIMARY/razvilka/state/update-backups: $PRIMARY/var/lib" \
+assert_refused traversal "$PRIMARY" "Refusing rollback outside $PRIMARY/razvilka/state/update-backups: $PRIMARY/razvilka" \
   "$ROLLBACK" "$PRIMARY/razvilka/state/update-backups/../.."
 assert_installation_unchanged
 # Remove only these test-owned malformed snapshots before native effect helpers;
