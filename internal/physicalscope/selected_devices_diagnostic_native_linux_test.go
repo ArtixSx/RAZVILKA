@@ -47,6 +47,7 @@ type nativeSelectedNeighborShape struct {
 	LLAddressUnicast   bool                              `json:"lladdr_valid_unicast"`
 	IntentMACMatch     bool                              `json:"intent_mac_match"`
 	Bookkeeping        bool                              `json:"selected_bookkeeping"`
+	ForeignBookkeeping bool                              `json:"foreign_bookkeeping"`
 	ParseStages        []string                          `json:"parse_stages"`
 	SelectedStages     []string                          `json:"selected_decoder_stages"`
 	ProductionStages   []string                          `json:"production_stages"`
@@ -83,7 +84,8 @@ func nativeSelectedNeighborClass(family byte, m message, segments map[int]Segmen
 		} else if selected {
 			s.ProductionStages = slices.Clone(s.SelectedStages)
 		} else {
-			s.ProductionStages = slices.Clone(s.ParseStages)
+			_, bookkeeping, err := decodeForeignKernelNeighbor(m)
+			s.ForeignBookkeeping, s.ProductionStages = bookkeeping, DiagnosticStages(err)
 		}
 	}
 	a, err := attrs(m.data[12:])
@@ -184,6 +186,7 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 		TotalRows          int            `json:"total_rows"`
 		SelectedRows       int            `json:"selected_rows"`
 		ForeignRows        int            `json:"foreign_rows"`
+		ForeignBookkeeping int            `json:"foreign_bookkeeping_rows"`
 		ProductionRefusals int            `json:"production_decoder_refusals"`
 		UnclassifiedRows   int            `json:"unclassified_refusals"`
 		ClassifiedRefusals []countedShape `json:"classified_refusals"`
@@ -246,6 +249,9 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 				} else if shape.Ingress == "foreign" {
 					result.ForeignRows++
 				}
+				if shape.ForeignBookkeeping {
+					result.ForeignBookkeeping++
+				}
 				if len(shape.ProductionStages) == 0 {
 					continue
 				}
@@ -284,27 +290,42 @@ func TestNativeSelectedDiagnosticRetainsSelectedDecodeFailureAndRedactsFacts(t *
 	}
 	byIndex := map[int]Segment{fixture.Segments[0].IfIndex: fixture.Segments[0]}
 	wanted, _ := projectionIntentMACs(selectedTestSelection().SelectedDevices)
+	foreignBroadcast := func(mac string) message {
+		m := neighborFrame(30, "0.0.0.0", mac, 64)
+		if mac == "" {
+			m.data = append(m.data, attr(2, nil)...)
+		}
+		m.data[11] = 3
+		m.data = append(m.data, attr(3, make([]byte, 16))...)
+		m.data = append(m.data, attr(4, make([]byte, 4))...)
+		return m
+	}
 	for name, candidate := range map[string]struct {
 		row         message
 		address     string
 		mac         string
 		ingress     string
 		class       string
+		llclass     string
 		parseFailed bool
+		bookkeeping bool
 	}{
-		"selected-multicast":  {neighborFrame(9, "224.0.0.1", "01:00:5e:00:00:01", 4), "224.0.0.1", "01:00:5e:00:00:01", "selected", "multicast", false},
-		"foreign-unspecified": {neighborFrame(30, "0.0.0.0", projectionOtherMAC, 4), "0.0.0.0", projectionOtherMAC, "foreign", "unspecified", true},
+		"selected-multicast":    {neighborFrame(9, "224.0.0.1", "01:00:5e:00:00:01", 4), "224.0.0.1", "01:00:5e:00:00:01", "selected", "multicast", "multicast", false, false},
+		"foreign-unspecified":   {neighborFrame(30, "0.0.0.0", projectionOtherMAC, 4), "0.0.0.0", projectionOtherMAC, "foreign", "unspecified", "unicast", true, false},
+		"foreign-empty-MAC":     {foreignBroadcast(""), "0.0.0.0", "", "foreign", "unspecified", "empty", true, true},
+		"foreign-zero-MAC":      {foreignBroadcast("00:00:00:00:00:00"), "0.0.0.0", "00:00:00:00:00:00", "foreign", "unspecified", "all_zero", true, true},
+		"foreign-broadcast-MAC": {foreignBroadcast("ff:ff:ff:ff:ff:ff"), "0.0.0.0", "ff:ff:ff:ff:ff:ff", "foreign", "unspecified", "broadcast", true, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			shape := nativeSelectedNeighborClass(2, candidate.row, byIndex, wanted)
-			if shape.Ingress != candidate.ingress || shape.AddressClass != candidate.class || (len(shape.ParseStages) != 0) != candidate.parseFailed || !slices.Contains(shape.ProductionStages, "kernel.bindings.neighbor.address") {
+			if shape.Ingress != candidate.ingress || shape.AddressClass != candidate.class || shape.LLAddressClass != candidate.llclass || (len(shape.ParseStages) != 0) != candidate.parseFailed || shape.ForeignBookkeeping != candidate.bookkeeping || slices.Contains(shape.ProductionStages, "kernel.bindings.neighbor.address") == candidate.bookkeeping {
 				t.Fatal("diagnostic hid decoder refusal")
 			}
 			if candidate.ingress == "selected" && !slices.Contains(shape.SelectedStages, "kernel.bindings.neighbor.address") {
 				t.Fatal("successful common parse hid selected segment rejection")
 			}
 			raw, err := json.Marshal(shape)
-			if err != nil || bytes.Contains(raw, []byte(candidate.address)) || bytes.Contains(raw, []byte(candidate.mac)) || bytes.Contains(raw, []byte(fixture.Segments[0].Interface)) || bytes.Contains(raw, []byte(fixture.Devices[0].ID)) {
+			if err != nil || bytes.Contains(raw, []byte(candidate.address)) || candidate.mac != "" && bytes.Contains(raw, []byte(candidate.mac)) || bytes.Contains(raw, []byte(fixture.Segments[0].Interface)) || bytes.Contains(raw, []byte(fixture.Devices[0].ID)) {
 				t.Fatal("classified diagnostic exposed physical facts")
 			}
 		})

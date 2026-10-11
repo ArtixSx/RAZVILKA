@@ -394,9 +394,12 @@ func checkSnapshotNotifications(frames []message, snapshot Snapshot) error {
 					return at(neighborMismatch(n, segment, devices), nil)
 				}
 			} else if watch != nil && (m.data[0] == 2 || m.data[0] == 10) {
-				n, err := parseKernelNeighbor(m)
+				n, bookkeeping, err := decodeForeignKernelNeighbor(m)
 				if err != nil {
 					return boundary("notifications.neighbor.decode", err)
+				}
+				if bookkeeping {
+					continue
 				}
 				if watch.owns(n) {
 					return at("projection.bindings.ingress", nil)

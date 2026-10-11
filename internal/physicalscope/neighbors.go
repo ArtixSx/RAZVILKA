@@ -76,6 +76,28 @@ func parseKernelNeighbor(m message) (kernelNeighbor, error) {
 	return n, nil
 }
 
+// The caller must first prove this ifindex is OUTSIDE the selected L3 segments.
+// Actual stock NC1812 emits precisely these IPv4 zero-destination NOARP
+// RTN_BROADCAST rows with an empty or all-zero Ethernet address. Neither can
+// identify a protected canonical unicast MAC or a valid bound LAN address.
+// Selected segments always use the unchanged strict decoder instead.
+func decodeForeignKernelNeighbor(m message) (kernelNeighbor, bool, error) {
+	n, originalErr := parseKernelNeighbor(m)
+	if originalErr == nil {
+		return n, false, nil
+	}
+	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 2 || binary.NativeEndian.Uint16(m.data[8:10]) != 64 || m.data[10] != 0 || m.data[11] != 3 {
+		return kernelNeighbor{}, false, originalErr
+	}
+	index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
+	a, err := attrs(m.data[12:])
+	_, hasLLAddress := a[2]
+	if index <= 0 || err != nil || len(a) != 4 || !hasLLAddress || !bytes.Equal(a[1], []byte{0, 0, 0, 0}) || len(a[3]) != 16 || len(a[4]) != 4 || len(a[2]) != 0 && !bytes.Equal(a[2], []byte{0, 0, 0, 0, 0, 0}) {
+		return kernelNeighbor{}, false, originalErr
+	}
+	return kernelNeighbor{index: index, address: netip.IPv4Unspecified(), mac: net.HardwareAddr(a[2]).String(), state: 64, kind: 3}, true, nil
+}
+
 func validateUnicastNeighbor(n kernelNeighbor) error {
 	if n.address.IsMulticast() {
 		return at("kernel.bindings.neighbor.address", nil)
@@ -220,7 +242,7 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 					if m.data[0] != family {
 						return nil, at("kernel.bindings.neighbor.dump-family", nil)
 					}
-					n, err := parseKernelNeighbor(m)
+					n, bookkeeping, err := decodeForeignKernelNeighbor(m)
 					if err != nil {
 						return nil, err
 					}
@@ -231,6 +253,9 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 					totalRecords++
 					if totalBytes > 1<<20 || totalRecords > 4096 {
 						return nil, at("kernel.bindings.neighbor.limit", nil)
+					}
+					if bookkeeping {
+						continue
 					}
 					foreignNeighbors = append(foreignNeighbors, n)
 				}
