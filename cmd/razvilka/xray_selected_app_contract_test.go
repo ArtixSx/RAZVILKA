@@ -23,6 +23,10 @@ const xraySelectedQAID = "custom-qa-xray-selected-tcp"
 const xraySelectedTelegramDC2 = "149.154.167.51/32"
 const xraySelectedMaxResponse = 1 << 20
 
+func xraySelectedCatalogAllowsNewQA(c catalog.Catalog) bool {
+	return !slices.ContainsFunc(c.Services, func(service catalog.Service) bool { return service.ID == xraySelectedQAID })
+}
+
 type xraySelectedNativeInput struct {
 	Root, Profile, Catalog, Sources, Scope string
 	HTTPS, Client                          netip.Addr
@@ -134,6 +138,21 @@ func xraySelectedCall(ctx context.Context, client *http.Client, base, token, met
 		return response.StatusCode, nil, errors.New("response incomplete or over limit")
 	}
 	return response.StatusCode, data, nil
+}
+
+func TestXraySelectedNativeCatalogAcceptsGenuineStarterAndRejectsQACollision(t *testing.T) {
+	actual, err := catalog.Load(filepath.Join("..", "..", "configs", "service-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !xraySelectedCatalogAllowsNewQA(actual) {
+		t.Fatal("genuine bundled catalog must allow the separate public QA definition")
+	}
+	collision := catalog.NFQWS2Starter()
+	collision.Services = append(collision.Services, xraySelectedQAService(netip.MustParseAddr("149.154.167.99")))
+	if xraySelectedCatalogAllowsNewQA(collision) {
+		t.Fatal("existing QA identity must not be replaced or reused")
+	}
 }
 
 func TestXraySelectedNativeInputAndScopeRejectWidening(t *testing.T) {

@@ -35,6 +35,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/sources"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
@@ -122,15 +123,8 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal("stage=catalog code=actual_catalog_unavailable")
 	}
-	telegramDomains := false
-	for _, service := range builtIn.Services {
-		telegramDomains = telegramDomains || service.ID == "telegram" && len(service.Domains) > 0
-		if service.ID == xraySelectedQAID {
-			t.Fatal("stage=catalog code=qa_definition_must_be_new")
-		}
-	}
-	if !telegramDomains {
-		t.Fatal("stage=catalog code=built_in_telegram_domains_required")
+	if !xraySelectedCatalogAllowsNewQA(builtIn) {
+		t.Fatal("stage=catalog code=qa_definition_must_be_new")
 	}
 	registry, err := sources.LoadRegistry(in.Sources)
 	if err != nil {
@@ -173,6 +167,16 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal("stage=main_constructor code=actual_components_unavailable")
 	}
+	strategyLab, err := strategylab.New(filepath.Join(in.Root, "strategy-lab.json"))
+	if err != nil {
+		t.Fatal("stage=main_constructor code=actual_strategy_lab_unavailable")
+	}
+	strategyLab.Validator = strategylab.CompatibleValidator{}
+	strategyLab.Executor = nil
+	strategyLab.PackKeys, err = strategylab.LoadPackKeys("")
+	if err != nil {
+		t.Fatal("stage=main_constructor code=actual_strategy_pack_keys_unavailable")
+	}
 	files, err := configuredSelfUpdateFiles("/opt", filepath.Join(in.Root, "self-update-files"), filepath.Join(in.Root, "self-update"), filepath.Join(in.Root, "control"))
 	if err != nil {
 		t.Fatal("stage=main_constructor code=actual_control_unavailable")
@@ -192,7 +196,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	}
 	a := &app.App{Store: store, Catalog: builtIn, Nodes: nodes, Dataplane: manager, EngineConfigs: configs, DNS: dns, Devices: deviceStore, CustomServices: custom,
 		Sources:    sources.NewManager(registry, filepath.Join(in.Root, "source-cache"), filepath.Join(in.Root, "sources-selection.json")),
-		Components: components, Security: gate, SelfUpdate: files.Helper, SelfUpdateFiles: files, FreshProfile: fresh,
+		Components: components, StrategyLab: strategyLab, Security: gate, SelfUpdate: files.Helper, SelfUpdateFiles: files, FreshProfile: fresh,
 		ComponentHistory: updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)}
 	if a.InitializeComponentRecoveryGate() != nil {
 		t.Fatal("stage=main_constructor code=actual_component_gate_refused")
