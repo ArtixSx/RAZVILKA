@@ -32,11 +32,11 @@ type scopedDNSInactiveProof struct {
 // trusted common complete-inventory consumer always refuse, including first use.
 func (a *ScopedDNSAdapter) VerifyRuntimeInactive(ctx context.Context) error {
 	if a == nil || a.InactivityIdentity == nil {
-		return ErrScopedDNSRuntimeInactive
+		return scopedDNSInactiveAt("source", nil)
 	}
 	proof, err := scopedDNSInactivePlatformProof()
 	if err != nil {
-		return errors.Join(ErrScopedDNSRuntimeInactive, err)
+		return scopedDNSInactiveAt("platform", err)
 	}
 	proof.withCurrent = a.InactivityIdentity.WithCurrent
 	if a.installerRole != nil {
@@ -49,7 +49,7 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 	if parent == nil || a == nil || proof.withCurrent == nil || proof.readlink == nil || proof.sameExecutable == nil || proof.selfPID < 1 ||
 		!scopedDNSInactivePath(a.StateRoot) || filepath.Base(a.StateRoot) != scopedDNSAdapterID ||
 		!scopedDNSInactivePath(a.InactivitySettingsPath) || a.InactivityKernelCheck == nil || !scopedDNSInactivePath(proof.procRoot) {
-		return ErrScopedDNSRuntimeInactive
+		return scopedDNSInactiveAt("source", nil)
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
@@ -73,47 +73,64 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 	}
 	var opening map[string]scopedDNSInactiveImage
 	var openingEpoch uint64
+	callbackComplete := false
 	err := proof.withCurrent(ctx, func(c context.Context, scope netidentity.Identity) error {
 		if err := scope.Validate(); err != nil {
-			return err
+			return scopedDNSInactiveAt("identity-validation", err)
 		}
 		epoch, err := checkLocal()
 		if err != nil {
-			return err
+			return scopedDNSInactiveAt("lifecycle-opening", err)
 		}
 		before, ports, err := scopedDNSInactiveFiles(c, root, settings)
 		if err != nil {
-			return fmt.Errorf("saved intent: %w", err)
+			return scopedDNSInactiveAt("intent-opening", fmt.Errorf("saved intent: %w", err))
 		}
 		opening, openingEpoch = before, epoch
 		if err := scopedDNSInactiveProc(c, proof, root, settings, ports); err != nil {
-			return fmt.Errorf("process/socket inventory: %w", err)
+			return scopedDNSInactiveAt("proc-opening", fmt.Errorf("process/socket inventory: %w", err))
 		}
 		if err := kernel(c, scope); err != nil {
-			return fmt.Errorf("complete backend inventory: %w", err)
+			return scopedDNSInactiveAt("backend-inventory", fmt.Errorf("complete backend inventory: %w", err))
 		}
 		if err := scopedDNSInactiveProc(c, proof, root, settings, ports); err != nil {
-			return err
+			return scopedDNSInactiveAt("proc-closing", err)
 		}
 		after, _, err := scopedDNSInactiveFiles(c, root, settings)
 		if err != nil || !scopedDNSInactiveSameFiles(before, after) {
-			return errors.Join(ErrScopedDNSRuntimeInactive, err)
+			return scopedDNSInactiveAt("intent-closing", err)
 		}
 		current, err := checkLocal()
 		if err != nil || current != epoch {
-			return errors.Join(ErrScopedDNSRuntimeInactive, err)
+			return scopedDNSInactiveAt("lifecycle-closing", err)
 		}
-		return c.Err()
+		if err := c.Err(); err != nil {
+			return scopedDNSInactiveAt("callback-closing", err)
+		}
+		callbackComplete = true
+		return nil
 	})
 	if err != nil || ctx.Err() != nil {
-		return errors.Join(ErrScopedDNSRuntimeInactive, err, ctx.Err())
+		result := errors.Join(ErrScopedDNSRuntimeInactive, err, ctx.Err())
+		if ScopedDNSRuntimeInactiveStage(err) == "" {
+			stage := "identity-opening"
+			if callbackComplete {
+				stage = "identity-closing"
+			}
+			return scopedDNSInactiveAt(stage, result)
+		}
+		return result
 	}
 	// The provider's closing identity observation is itself a slow boundary.
 	// Finish with callback-free local/file bookends after it has returned.
 	closing, _, err := scopedDNSInactiveFiles(ctx, root, settings)
 	epoch, localErr := checkLocal()
 	if opening == nil || err != nil || localErr != nil || epoch != openingEpoch || !scopedDNSInactiveSameFiles(opening, closing) {
-		return errors.Join(ErrScopedDNSRuntimeInactive, err, localErr)
+		stage := "intent-final"
+		if opening != nil && err == nil && (localErr != nil || epoch != openingEpoch) {
+			stage = "lifecycle-final"
+		}
+		return scopedDNSInactiveAt(stage, errors.Join(err, localErr))
 	}
 	return nil
 }

@@ -123,3 +123,39 @@ func TestScopedDNSOrdinaryInstallerBindingRequiresVerifiedCurrentController(t *t
 		t.Fatal("unbounded current controller installed an ordinary peer reader", err)
 	}
 }
+
+type scopedDNSPrivateDiagnosticError struct{}
+
+func (scopedDNSPrivateDiagnosticError) Error() string { panic("private peer cause text was inspected") }
+
+// Actual modeled scanner branches retain the original returned peer error;
+// these negative cases classify no real installer and grant no inactivity.
+func TestScopedDNSInstallerObservationPreservesOpeningAndClosingPeerCause(t *testing.T) {
+	for _, failureCall := range []int{1, 2} {
+		f := newScopedDNSInactiveFixture(t)
+		f.process(t, 102, "other")
+		writeDNSInactiveFixture(t, filepath.Join(f.proof.procRoot, "102", "cmdline"), []byte("other\x00self-update-command-helper\x00"))
+		private := scopedDNSPrivateDiagnosticError{}
+		cause := errors.Join(private, context.DeadlineExceeded)
+		calls := 0
+		f.proof.installerPeerCheck = func(context.Context, int) error {
+			calls++
+			if calls == failureCall {
+				return cause
+			}
+			return nil
+		}
+		failure := f.verify()
+		want := "proc-opening-proc.installer-role-open"
+		if failureCall == 2 {
+			want = "proc-opening-proc.installer-role-close"
+		}
+		if failure == nil || !errors.Is(failure, cause) || !errors.Is(failure, context.DeadlineExceeded) ||
+			!errors.Is(failure, ErrScopedDNSRuntimeInactive) || ScopedDNSRuntimeInactiveStage(failure) != want || calls != failureCall || f.kernelCalls != 0 {
+			t.Fatal("original peer boundary/cause was lost or inventory continued after refusal", ScopedDNSRuntimeInactiveStage(failure), calls)
+		}
+		if failure.Error() != ErrScopedDNSRuntimeInactive.Error()+"\nscoped DNS inactivity observation failed" {
+			t.Fatal("peer cause text entered observer diagnostic")
+		}
+	}
+}

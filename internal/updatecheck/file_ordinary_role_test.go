@@ -241,3 +241,23 @@ func TestOriginalOrdinaryAdapterAccessorSeparatesAbsentAndInvalidJoin(t *testing
 		t.Fatal("cancelled original owner was accepted")
 	}
 }
+
+type ordinaryRolePrivateDiagnosticError struct{}
+
+func (ordinaryRolePrivateDiagnosticError) Error() string { panic("private cause text was inspected") }
+
+func TestOrdinaryControllerDiagnosticRetainsOnlyOriginalTypedCause(t *testing.T) {
+	private := ordinaryRolePrivateDiagnosticError{}
+	failure := ordinaryInstallerRoleAt("facts-closing", errors.Join(private, context.DeadlineExceeded))
+	if OrdinaryInstallerControllerFailureStage(failure) != "facts-closing" || !errors.Is(failure, private) ||
+		!errors.Is(failure, context.DeadlineExceeded) || !errors.Is(failure, ErrOrdinaryInstallerControllerRole) {
+		t.Fatal("original reader stage or causal chain was lost")
+	}
+	if failure.Error() != "ordinary installer controller observation failed" {
+		t.Fatal("diagnostic formatted non-closed cause data")
+	}
+	if OrdinaryInstallerControllerFailureStage(errors.New("facts-closing private/PID/token")) != "" ||
+		OrdinaryInstallerControllerFailureStage(ordinaryInstallerRoleAt("private/PID/token", private)) != "" {
+		t.Fatal("unrecognized text became an original observation label")
+	}
+}

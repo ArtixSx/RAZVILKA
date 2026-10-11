@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
@@ -43,7 +44,7 @@ func knownRuntimeQuiesceFailure(stage string) bool {
 			return true
 		}
 	}
-	return false
+	return knownRuntimeQuiesceInactiveObservation(strings.TrimSuffix(stage, "-source-close"))
 }
 
 func RuntimeQuiesceFailureOutput(stage string) string {
@@ -54,10 +55,13 @@ func RuntimeQuiesceFailureOutput(stage string) string {
 }
 
 func runtimeQuiesceDiagnosticStage(data []byte) string {
-	for _, stage := range runtimeQuiesceFailureStages {
-		if bytes.Equal(data, []byte(RuntimeQuiesceFailureOutput(stage)+"\n")) {
-			return stage
-		}
+	const prefix = "runtime quiesce refused; category="
+	if len(data) > 512 || !bytes.HasPrefix(data, []byte(prefix)) || !bytes.HasSuffix(data, []byte("\n")) {
+		return ""
+	}
+	stage := string(data[len(prefix) : len(data)-1])
+	if knownRuntimeQuiesceFailure(stage) && bytes.Equal(data, []byte(RuntimeQuiesceFailureOutput(stage)+"\n")) {
+		return stage
 	}
 	return ""
 }

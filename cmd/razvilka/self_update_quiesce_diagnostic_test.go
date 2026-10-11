@@ -39,3 +39,17 @@ func TestRuntimeQuiesceInactiveDiagnosticUsesOnlyActualClosedCauses(t *testing.T
 		t.Fatal("private error text forged a causal owner")
 	}
 }
+
+func TestRuntimeQuiesceInactiveDiagnosticUsesOriginalDNSObservation(t *testing.T) {
+	var owner *dataplane.ScopedDNSAdapter
+	// The actual public negative source branch supplies the private stage;
+	// neither arbitrary Error text nor this diagnostic grants an observer.
+	cause := errors.Join(quiesceDiagnosticPrivateError{}, owner.VerifyRuntimeInactive(context.Background()), context.DeadlineExceeded, dataplane.ErrNFQWSManagedKernelOwner)
+	want := "runtime-inactivity-deadline-scoped-dns-nfq-kernel-dns-observation-source"
+	if got := selfUpdateRuntimeInactiveFailureStage(cause); got != want {
+		t.Fatal("actual DNS observation or other joined causal bit was lost", got)
+	}
+	if updatecheck.RuntimeQuiesceFailureOutput(want) != "runtime quiesce refused; category="+want {
+		t.Fatal("original closed observation was refused by the sole output formatter")
+	}
+}

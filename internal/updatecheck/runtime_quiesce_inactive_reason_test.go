@@ -38,11 +38,49 @@ func TestRuntimeQuiesceInactiveReasonVocabularyIsClosedAndBounded(t *testing.T) 
 	}
 }
 
+func TestRuntimeQuiesceObservationDetailsRemainClosedAndPreserveCleanup(t *testing.T) {
+	reasons := QuiesceInactiveDeadline | QuiesceInactiveScopedDNS | QuiesceInactiveNFQKernel
+	base := RuntimeQuiesceInactiveFailureStage(reasons)
+	for _, phase := range []string{"proc-opening-", "proc-closing-"} {
+		for _, proc := range runtimeQuiesceDNSProcStages {
+			dns := phase + proc
+			stage := RuntimeQuiesceInactiveObservationFailureStage(reasons, dns, "facts-closing")
+			want := base + "-dns-observation-" + dns
+			if runtimeQuiesceDNSRoleObservation(dns) {
+				want += "-ordinary-observation-facts-closing"
+			}
+			if stage != want || len(RuntimeQuiesceFailureOutput(stage))+1 > 512 || runtimeQuiesceDiagnosticStage([]byte(RuntimeQuiesceFailureOutput(stage)+"\n")) != stage {
+				t.Fatal("closed observation or original causal bits were lost", stage)
+			}
+			combined := RuntimeQuiesceSourceCleanupFailureStage(stage)
+			if combined != stage+"-source-close" || RuntimeQuiesceSourceCleanupFailureStage(combined) != combined ||
+				runtimeQuiesceDiagnosticStage([]byte(RuntimeQuiesceFailureOutput(combined)+"\n")) != combined {
+				t.Fatal("source join erased the original observation")
+			}
+		}
+	}
+	for _, dns := range []string{"", "private/PID/token", "proc-opening-proc.installer-role-open\nsecret", "proc-opening-unknown"} {
+		if RuntimeQuiesceInactiveObservationFailureStage(reasons, dns, "facts-closing") != base {
+			t.Fatal("unrecognized observation entered a closed output")
+		}
+	}
+	for _, stage := range []string{
+		base + "-dns-observation-source-ordinary-observation-facts-closing",
+		base + "-dns-observation-proc-opening-proc.installer-role-open-ordinary-observation-private/PID/token",
+		base + "-dns-observation-source-source-close-source-close",
+		"runtime-inactivity-deadline-dns-observation-source",
+	} {
+		if knownRuntimeQuiesceFailure(stage) || runtimeQuiesceDiagnosticStage([]byte("runtime quiesce refused; category="+stage+"\n")) != "" {
+			t.Fatal("unrecognized or unrelated detail forged a retained observation")
+		}
+	}
+}
+
 func TestRuntimeQuiesceInactiveDiagnosticChild(t *testing.T) {
 	if os.Getenv("RAZVILKA_TEST_QUIESCE_DIAGNOSTIC") != "actual-inactivity-child" {
 		return
 	}
-	stage := RuntimeQuiesceInactiveFailureStage(QuiesceInactiveScopedDNS | QuiesceInactiveNFQKernel)
+	stage := RuntimeQuiesceInactiveObservationFailureStage(QuiesceInactiveScopedDNS|QuiesceInactiveNFQKernel, "proc-closing-proc.installer-role-close", "facts-closing")
 	os.Stderr.WriteString(RuntimeQuiesceFailureOutput(stage) + "\n")
 	os.Exit(3)
 }
@@ -73,7 +111,7 @@ func TestRuntimeQuiesceInactiveDiagnosticJoinsActualChildAndCause(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	data, err := pipe.finish(ctx)
-	stage := "runtime-inactivity-scoped-dns-nfq-kernel"
+	stage := "runtime-inactivity-scoped-dns-nfq-kernel-dns-observation-proc-closing-proc.installer-role-close-ordinary-observation-facts-closing"
 	if err != nil || runtimeQuiesceDiagnosticStage(data) != stage {
 		t.Fatal("actual joined child causes were lost", err)
 	}

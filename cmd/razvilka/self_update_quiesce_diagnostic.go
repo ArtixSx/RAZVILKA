@@ -29,5 +29,5 @@ func selfUpdateRuntimeInactiveFailureStage(err error) string {
 			reasons |= reason.bit
 		}
 	}
-	return updatecheck.RuntimeQuiesceInactiveFailureStage(reasons)
+	return updatecheck.RuntimeQuiesceInactiveObservationFailureStage(reasons, dataplane.ScopedDNSRuntimeInactiveStage(err), updatecheck.OrdinaryInstallerControllerFailureStage(err))
 }

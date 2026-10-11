@@ -13,8 +13,15 @@ import (
 
 // DNS serves in the controller process. Other controller incarnations cannot
 // be cleared by this process's lifecycle accounting, even with a missing owner.
-func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, settings string, ports map[uint16]bool) error {
+func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, settings string, ports map[uint16]bool) (result error) {
+	stage := ""
+	defer func() {
+		if result != nil {
+			result = &scopedDNSInactiveProcFailure{stage, result}
+		}
+	}()
 	mark := func(label string) {
+		stage = label
 		if p.stage != nil {
 			*p.stage = label
 		}
@@ -158,8 +165,11 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 				}
 				if controller {
 					mark("proc.installer-role-open")
-					if p.installerPeerCheck == nil || p.installerPeerCheck(ctx, pid) != nil {
+					if p.installerPeerCheck == nil {
 						return ErrScopedDNSRuntimeInactive
+					}
+					if err := p.installerPeerCheck(ctx, pid); err != nil {
+						return errors.Join(ErrScopedDNSRuntimeInactive, err)
 					}
 					installerPeer = true
 				}
@@ -203,8 +213,8 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		}
 		if installerPeer {
 			mark("proc.installer-role-close")
-			if p.installerPeerCheck(ctx, pid) != nil {
-				return ErrScopedDNSRuntimeInactive
+			if err := p.installerPeerCheck(ctx, pid); err != nil {
+				return errors.Join(ErrScopedDNSRuntimeInactive, err)
 			}
 		}
 		self = self || pid == p.selfPID
