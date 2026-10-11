@@ -164,6 +164,9 @@ func nativeFileAdapter(directory string, p nativeFileProfile) *SelfUpdateFileAda
 		if err != nil || string(data) != "owned\n" {
 			return ErrFileProtocol
 		}
+		if p.Scenario == "ordinary-join" {
+			return observeNativeOrdinaryJoin(ctx, a, id)
+		}
 		return nil
 	}
 	a.filesystem = func(ctx context.Context) error { return probePrivateFilesystems(ctx, p.Installation) }

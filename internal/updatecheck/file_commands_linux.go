@@ -665,6 +665,7 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	r.DirectPID = cmd.Process.Pid
 	r.State = "running"
 	writeErr := writeFileCommand(root, r)
+	launched := r
 	code, seen, ready := 1, false, false
 	nextStopCheck := time.Time{}
 	cleanup := writeErr != nil
@@ -796,7 +797,20 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		r.Cancelled = true
 	}
 	if code == 0 && command == "quiesce-old-runtime" {
-		if a.runtimeInactive == nil || a.runtimeInactive(ctx, id) != nil {
+		inactiveCtx := ctx
+		releaseJoin := func() {}
+		if review.Bootstrap == nil {
+			// This point follows actual direct-child exit 0 and wait4 ECHILD.
+			// Keep the original finite context and revoke the join after this
+			// synchronous observation; a process receipt cannot mint it.
+			inactiveCtx, releaseJoin = ordinaryJoinedQuiesceContext(a, ctx, launched, r.Reaped)
+		}
+		inactiveErr := ErrFileProtocol
+		if a.runtimeInactive != nil {
+			inactiveErr = a.runtimeInactive(inactiveCtx, id)
+		}
+		releaseJoin()
+		if inactiveErr != nil {
 			code = 125
 			r.Cancelled = true
 		}
