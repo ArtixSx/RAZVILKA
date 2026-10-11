@@ -173,6 +173,11 @@ func (b *ListScopeBinding) selection(ctx context.Context) (physicalscope.Selecti
 	}
 	s := physicalscope.Selection{Revision: cfg.DefaultRouteConsent.ApprovalRevision, PolicyRevision: cfg.NetworkPolicy.Revision, SegmentIDs: slices.Clone(cfg.NetworkPolicy.Clients.SegmentIDs)}
 	slices.Sort(s.SegmentIDs)
+	if clients := cfg.NetworkPolicy.Clients; clients.Mode == "selected_devices" && clients.NewDevices == "base" {
+		s.SelectedDevices = &physicalscope.SelectedDeviceProjection{DeviceIDs: slices.Clone(clients.DeviceIDs), ExcludedDeviceIDs: slices.Clone(clients.ExcludedDeviceIDs)}
+		slices.Sort(s.SelectedDevices.DeviceIDs)
+		slices.Sort(s.SelectedDevices.ExcludedDeviceIDs)
+	}
 	return s, b.scope.Current(ctx)
 }
 
