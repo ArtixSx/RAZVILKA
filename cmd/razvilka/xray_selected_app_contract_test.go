@@ -319,6 +319,8 @@ func xraySelectedRefusal(data []byte) string {
 		"SERVICE_RUNTIME_SAFE_MODE", "SERVICE_RUNTIME_UNAVAILABLE", "SERVICE_RUNTIME_UNCONFIGURED", "SERVICE_CONTROL_CHANGED",
 		"SERVICE_POLICY_INVALID", "SERVICE_POLICY_CHANGED",
 		"NETWORK_POLICY_REVIEW_CHANGED", "NETWORK_POLICY_EXCLUSIONS_SEPARATE", "RESTORE_OPERATION_BUSY", "OPERATION_CANCELED",
+		"XRAY_SELECTED_TCP_REVIEW_REFUSED", "XRAY_SELECTED_TCP_REVIEW_REQUIRED", "XRAY_SELECTED_TCP_RUNTIME_REFUSED", "XRAY_SELECTED_TCP_RESPONSE_UNAVAILABLE",
+		"NODE_ROUTE_DEPENDENCY", "NODE_REVIEW_CHANGED", "NODE_NETWORK_CHANGED",
 		"node-service-ip-path-failed", "node-service-ip-unavailable", "node-service-probe-failed", "node-cleanup-failed", "node-check-deadline",
 	} {
 		if bytes.Contains(data, []byte(code)) {
@@ -337,6 +339,40 @@ func TestXraySelectedClosedConsentRefusals(t *testing.T) {
 	}
 	if got := xraySelectedRefusal([]byte(`{"code":"unknown-private-value","error":"private diagnostic"}`)); got != "production_refused" {
 		t.Fatal("unrecognized diagnostics must stay private")
+	}
+}
+
+func xraySelectedReviewDiagnostic(data []byte) string {
+	var body struct {
+		Stage   string `json:"review_stage"`
+		Cause   string `json:"cause"`
+		Elapsed *int64 `json:"elapsed_ms"`
+	}
+	stage, cause, elapsed := "unclassified", "unclassified", int64(-1)
+	if json.Unmarshal(data, &body) == nil {
+		switch body.Stage {
+		case "target", "admission", "control", "prepare", "final-check", "cleanup":
+			stage = body.Stage
+		}
+		switch body.Cause {
+		case "none", "deadline", "canceled", "refused":
+			cause = body.Cause
+		}
+		if body.Elapsed != nil && *body.Elapsed >= 0 && *body.Elapsed <= 120000 {
+			elapsed = *body.Elapsed
+		}
+	}
+	return fmt.Sprintf("review_stage=%s cause=%s elapsed_ms=%d", stage, cause, elapsed)
+}
+
+func TestXraySelectedReviewDiagnosticKeepsOnlyClosedMetadata(t *testing.T) {
+	if got := xraySelectedReviewDiagnostic([]byte(`{"review_stage":"prepare","cause":"deadline","elapsed_ms":12000,"error":"private-profile"}`)); got != "review_stage=prepare cause=deadline elapsed_ms=12000" {
+		t.Fatal("known review metadata lost")
+	}
+	for _, raw := range []string{`{`, `{}`, `{"review_stage":"private-profile","cause":"private-token","elapsed_ms":120001}`, `{"review_stage":{},"elapsed_ms":-1}`} {
+		if got := xraySelectedReviewDiagnostic([]byte(raw)); got != "review_stage=unclassified cause=unclassified elapsed_ms=-1" {
+			t.Fatal("unrecognized review metadata escaped")
+		}
 	}
 }
 

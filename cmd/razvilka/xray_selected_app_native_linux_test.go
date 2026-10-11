@@ -291,7 +291,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 		t.Helper()
 		status, data, err := xraySelectedCall(ctx, client, base, token, method, route, value)
 		if err != nil || status != expected || target != nil && json.Unmarshal(data, target) != nil {
-			t.Fatalf("stage=%s status=%d code=%s", stage, status, xraySelectedRefusal(data))
+			t.Fatalf("stage=%s status=%d code=%s %s", stage, status, xraySelectedRefusal(data), xraySelectedReviewDiagnostic(data))
 		}
 		t.Logf("stage=%s status=%d", stage, status)
 		return data
