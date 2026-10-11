@@ -4,13 +4,17 @@
 
 # RAZVILKA
 
+> Documentation for the upcoming **0.20.0**: a clean installation and subsequent
+> updates to **0.20+** releases. End-to-end list and exclusions acceptance and the
+> one-hour Telegram over VLESS check remain incomplete. [Current status (RU)](docs/CURRENT_STATUS_RU.md).
+
 **Choose which services use which connection, directly on your router.**
 
 A local web panel for **Keenetic and Netcraze with Entware**. Manage services,
 devices, NFQWS2, WARP and VPN connections in one place. The panel and saved
 schedules run on the router without an open browser.
 
-[Download stable release](https://github.com/ArtixSx/RAZVILKA/releases/latest) ·
+[Published releases](https://github.com/ArtixSx/RAZVILKA/releases) ·
 [Install](#install) · [Documentation](docs/README.md) · [Русский](README.md) ·
 [News and support](https://t.me/RAZVILKA_UI)
 
@@ -28,7 +32,27 @@ Autopilot operates within your settings. Access depends on the node, provider
 and router capabilities; a running process alone does not establish a working
 connection. [Verified results and limitations (RU)](docs/CURRENT_STATUS_RU.md).
 
+## How traffic is selected
+
+For 0.20.0, the approved policy is **bypass only for the active list** of services,
+domains and supported IP/CIDR rules in selected home networks. The list can cover
+an entire selected network without assigning every service to every device.
+
+- Device exclusions, manual resource exclusions and the accepted Russian resource
+  list take priority over positive rules and a pinned connection.
+- An empty list and traffic without a match use the router's ordinary policy.
+- Downloading a catalog or updating its definitions does not activate bypass.
+
+Applying a plan depends on the engine, firmware and selected scope.
+[Full list and exclusions contract (RU)](docs/delivery-2026-10-03/LIST_MODE_CORRECTION_RU.md).
+
 ## Install
+
+These instructions cover a **clean installation of 0.20.0** on Entware without
+an existing RAZVILKA installation. Migration from 0.19.3 is outside this scope.
+The installation command below requires the published `v0.20.0` tag in
+[Releases](https://github.com/ArtixSx/RAZVILKA/releases); this version cannot be
+installed before that release is published.
 
 ### 1. Prepare Entware
 
@@ -63,11 +87,11 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=v0.20.0 sh /opt/tmp/razvilka-setup.sh
 ```
 
 The script runs only after a successful download. It adds missing basic tools,
-selects the architecture, checks the stable release checksums and starts the panel.
+selects the architecture, checks the selected release checksums and starts the panel.
 Install the required bypass components separately.
 
 ### 3. Open the panel and configure a connection
@@ -80,19 +104,22 @@ address on port `8787`. The installer prints the actual address.
 2. Use the Autopilot wizard to choose services and devices, or configure them manually.
 3. Install the required component through component settings and add VLESS or another
    profile in the connections section.
-4. Check access to the selected service and apply its route. Safe Mode is enabled
-   on a fresh installation; enabling routes requires a separate action.
+4. Check the selected connection for the service, review the plan and apply it
+   after enabling routes. Safe Mode is enabled on a fresh installation.
+   A node check from the router and access from the selected client device are checked separately.
 
-## Update
+## Subsequent updates to 0.20+ releases
 
-Run the installer again to get the latest stable release. It preserves settings
-and creates a rollback snapshot:
+After a clean installation, update RAZVILKA to subsequent published 0.20+
+releases. Enter the exact tag from [Releases](https://github.com/ArtixSx/RAZVILKA/releases)
+in the variable below. The installer preserves settings and creates a rollback snapshot:
 
 ```sh
+razvilka_release_tag='' # Enter the published tag of the next 0.20+ release
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION="${razvilka_release_tag:?Enter the published tag of a 0.20+ update}" sh /opt/tmp/razvilka-setup.sh
 ```
 
 Wait for the check result and retain the printed snapshot path. If the route is
