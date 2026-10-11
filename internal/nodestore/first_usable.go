@@ -67,6 +67,21 @@ type SearchResult struct {
 	Unsupported, Rejected                   []string
 }
 
+func searchRecordTerminalFailure(record CheckRecord) bool {
+	if nodequality.ServiceFailure(record.Verdict, record.TestLevel, record.Stage, record.ErrorCode, record.DirectLeak) {
+		return true
+	}
+	// ExactNodeChecker emits node-egress-failed only after measured direct
+	// control; transport failure occurs before that control runs. Global control
+	// loss has a different code and an INCONCLUSIVE verdict. These two terminal
+	// classes allow cursor progress, never usable route proof or reputation loss.
+	if record.State != "unavailable" || record.DirectLeak || record.Verdict != "ERROR" || record.HTTPStatus != 0 || record.EgressIP != "" {
+		return false
+	}
+	return record.TestLevel == "protocol" && record.Stage == "egress" && record.ErrorCode == "node-egress-failed" ||
+		record.TestLevel == "transport" && record.Stage == "transport" && record.ErrorCode == "node-transport-failed"
+}
+
 // SearchFirstUsable checks candidates sequentially within the shared checker
 // budget (1..4) and applies the first usable one immediately. It never waits for
 // a reserve target. After a verified B rollback, C always gets a NEW check; a
@@ -297,7 +312,7 @@ func (s *Store) verifySearchRecord(ctx context.Context, req SearchRequest, id st
 		if !routeCheckUsableForEngine(latest, req.Engine, id, req.ServiceID, req.NetworkProfile, now) {
 			return ErrRouteProof
 		}
-	} else if !nodequality.ServiceFailure(latest.Verdict, latest.TestLevel, latest.Stage, latest.ErrorCode, latest.DirectLeak) {
+	} else if !searchRecordTerminalFailure(latest) {
 		return ErrSearchInconclusive
 	}
 	return nil

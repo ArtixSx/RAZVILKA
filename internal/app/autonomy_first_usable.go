@@ -15,12 +15,27 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 var errAutonomySearchBudget = errors.New("autonomy apply budget exhausted")
 var errAutonomySearchPersistence = errors.New("autonomy traversal could not be persisted")
+
+// This consumes one search candidate, never grants Apply or assigns a source
+// reputation penalty. Local errors and fresh identity/permission checks must
+// already have closed through the ordinary check-and-record owner.
+func autonomySearchTerminalFailure(result dataplane.NodeCheckResult) bool {
+	if nodequality.ServiceFailure(string(result.Verdict), result.TestLevel, result.Stage, result.ErrorCode, result.DirectLeak) {
+		return true
+	}
+	if result.Available || result.DirectLeak || result.Verdict != evidence.VerdictError || result.HTTPStatus != 0 || result.EgressIP != "" {
+		return false
+	}
+	return result.DirectControl == "measured" && result.TestLevel == "protocol" && result.Stage == "egress" && result.ErrorCode == "node-egress-failed" ||
+		result.DirectControl == "not_run" && result.TestLevel == "transport" && result.Stage == "transport" && result.ErrorCode == "node-transport-failed"
+}
 
 func autonomyNodeEngine(route string) string {
 	if strings.HasPrefix(route, "xray:") || route == "xray" {
@@ -166,7 +181,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			if autonomyNodeObservation(check, time.Now()) == "PASS" {
 				outcome = nodestore.SearchUsable
 			} else {
-				if !nodequality.ServiceFailure(string(check.Verdict), check.TestLevel, check.Stage, check.ErrorCode, check.DirectLeak) {
+				if !autonomySearchTerminalFailure(check) {
 					checkState, checkMessage = "unconfirmed", "Проверка не подтвердила отказ сервиса; узел не признан неисправным."
 					return nodestore.SearchCheck{}, nodestore.ErrSearchInconclusive
 				}
