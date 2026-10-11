@@ -369,9 +369,10 @@ func (a *App) enqueueDurableServiceJob(ctx context.Context, request serviceContr
 		}
 	} else if isRuntimeJob(request.Kind) || request.Kind == "dns-apply" {
 		// The immutable intent is exactly action + expected revision, not a
-		// partially applied Store snapshot. The executor validates that revision
-		// and its committed route scope after admission. No Store reads here.
-		if a.Operations.Snapshot().Fenced {
+		// partially applied Store snapshot. A fenced Stop may only queue for
+		// the still-held original managed Xray cleanup owner. This comparison
+		// grants no durable authority; the executor rechecks it before dispatch.
+		if a.Operations.Snapshot().Fenced && (request.Kind != "stop" || !a.hasOriginalPendingManagedXrayStop()) {
 			return durableServiceJob{}, operationgate.ErrRecovery
 		}
 		if a.SelfUpdate != nil && a.SelfUpdate.InstallationLocked() {
@@ -679,6 +680,10 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 			<-done
 		}
 	} // Includes cleanup and lease release; never detach a second owner.
+	// Compare the original completion outside the durable mutex. Managed
+	// runtime cleanup may need that mutex while holding its own runtime lock.
+	completedOriginalStop := request.Kind == "stop" && err == nil && runtimeOutcome.Code == "" &&
+		a.originalManagedXrayStopCompleted(runtimeOutcome.originalManagedXrayStop)
 	cancel()
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -702,6 +707,10 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		j.State, j.Phase, j.CleanupOutcome = "queued", "waiting", "not-started"
 		j.Attempts--
 		j.NotBefore = time.Now().Add(5 * time.Second)
+	} else if completedOriginalStop {
+		// The original terminal Stop is complete even if an earlier cleanup
+		// failure permanently fenced forward work. Keep that fence installed.
+		finishDurableJob(j, "completed", "", time.Now())
 	} else if a.Operations.Snapshot().Fenced {
 		finishDurableJob(j, "failed", "cleanup-unverified", time.Now())
 		j.CleanupOutcome = "unverified"

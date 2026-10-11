@@ -93,6 +93,9 @@ type serviceRuntimeOutcome struct {
 	LiveApplied bool
 	Execution   *dataplane.Execution
 	Failure     *applyFailureAdvice
+	// Memory-only receipt of the actual original managed Xray terminal Stop.
+	// Durable requests and responses never carry cleanup authority or this proof.
+	originalManagedXrayStop *managedXrayStopCompletion
 }
 
 func (a *App) observeCommittedRuntime(ctx context.Context, plan dataplane.Plan) error {

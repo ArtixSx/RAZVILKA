@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 func isRuntimeJob(kind string) bool { return kind == "stop" || kind == "resume" }
@@ -89,6 +91,21 @@ func (a *App) preemptForRuntimeStop(acceptedID uint64) {
 }
 
 func (a *App) runDurableRuntimeJob(ctx context.Context, request serviceControlJobRequest) (serviceRuntimeOutcome, error) {
+	if err := ctx.Err(); err != nil {
+		return serviceRuntimeOutcome{}, err
+	}
+	if a.Operations.Snapshot().Fenced {
+		if request.Kind != "stop" || !a.hasOriginalPendingManagedXrayStop() {
+			return serviceRuntimeOutcome{}, operationgate.ErrRecovery
+		}
+		// Recheck through the exact managed Xray dispatcher. If its original
+		// owner disappears, never fall through to a fresh generic admission.
+		if handled, outcome := a.executeManagedXrayServiceRuntime(ctx, request.Kind, *request.ExpectedRevision); handled {
+			a.wakePanelSnapshot()
+			return outcome, nil
+		}
+		return serviceRuntimeOutcome{}, operationgate.ErrRecovery
+	}
 	if handled, outcome := a.executeManagedServiceRuntime(ctx, request.Kind, *request.ExpectedRevision); handled {
 		a.wakePanelSnapshot()
 		return outcome, nil
