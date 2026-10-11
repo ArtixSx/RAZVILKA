@@ -3,14 +3,11 @@
 package dataplane
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"golang.org/x/sys/unix"
@@ -65,30 +62,21 @@ func (r *XrayDomainTCPExecutionResource) readDomainProcess(ctx context.Context, 
 	if err != nil || parseErr != nil || parent != p.parent || group != p.pid {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
-	argv, err := proc.read(ctx, proc.child, "cmdline", 64<<10)
-	if err != nil || !bytes.Equal(argv, []byte(strings.Join(args, "\x00")+"\x00")) {
-		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
-	}
-	boot, err := proc.read(ctx, proc.root, "sys/kernel/random/boot_id", 37)
-	if err != nil || string(boot) != network.BootID+"\n" || proc.network(ctx, network) != nil {
-		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
-	}
-	exe, err := proc.readlink(proc.child, "exe")
-	if err != nil || exe != r.executable.path || !filepath.IsAbs(exe) || filepath.Clean(exe) != exe || strings.ContainsAny(exe, "\x00\r\n") {
-		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
-	}
-	fd, err := unix.Openat(proc.child, "exe", unix.O_PATH|unix.O_CLOEXEC, 0) // Only the actual child's kernel executable link.
-	if err != nil {
-		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
-	}
-	f := os.NewFile(uintptr(fd), "[actual original domain Xray executable]")
-	executable, statErr := f.Stat()
-	closeErr := f.Close()
-	if statErr != nil || closeErr != nil || !sameXrayDomainTCPFile(r.executable.info, executable) {
+	image, err := proc.domainKernelImage(ctx, network)
+	if err != nil || !image.matches(args, r.executable.path, r.executable.info) {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	if err := r.readDomainConfigFD(ctx, proc); err != nil {
 		return xraySelectedTCPProcessObservation{}, err
+	}
+	// execve/setns can preserve PID/start/parent/group and the proc directory.
+	// Re-read actual kernel image/argv/namespace after config bytes, then the
+	// actual child FD4 again; local duplicated FDs cannot close either relation.
+	closingImage, imageErr := proc.domainKernelImage(ctx, network)
+	closingConfig, configErr := proc.domainConfigFDInfo(ctx)
+	if imageErr != nil || configErr != nil || !closingImage.matches(args, r.executable.path, r.executable.info) || !image.same(closingImage) ||
+		!sameXrayDomainTCPFile(r.configInfo, closingConfig) {
+		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	closing, err := proc.read(ctx, proc.child, "stat", 8192)
 	closeStart, closeParent, closeGroup, parseErr := xraySelectedTCPStat(closing, p.pid)
@@ -96,10 +84,10 @@ func (r *XrayDomainTCPExecutionResource) readDomainProcess(ctx context.Context, 
 		proc.current(ctx) != nil || r.domainProcessCurrent(ctx) != nil || r.filesCurrent(ctx) != nil {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
-	argumentHash := sha256.Sum256(argv)
-	return xraySelectedTCPProcessObservation{pid: p.pid, parent: parent, group: group, boot: network.BootID, start: start, exe: exe,
+	argumentHash := sha256.Sum256(closingImage.argv)
+	return xraySelectedTCPProcessObservation{pid: p.pid, parent: parent, group: group, boot: network.BootID, start: start, exe: closingImage.exe,
 		argumentsSHA256: hex.EncodeToString(argumentHash[:]), configSHA256: r.definition.ConfigSHA256,
-		executable: executable, config: r.configInfo, network: network}, nil
+		executable: closingImage.executable, config: closingConfig, network: network}, nil
 }
 
 func sameXrayDomainTCPFile(original, current os.FileInfo) bool {
@@ -134,8 +122,10 @@ func (r *XrayDomainTCPExecutionResource) readDomainConfigFD(ctx context.Context,
 	hash := sha256.Sum256(data)
 	after, statErr := f.Stat()
 	closing, originalErr := r.config.Stat()
-	if err != nil || statErr != nil || originalErr != nil || int64(len(data)) != r.configInfo.Size() ||
+	childClosing, childErr := proc.domainConfigFDInfo(ctx)
+	if err != nil || statErr != nil || originalErr != nil || childErr != nil || int64(len(data)) != r.configInfo.Size() ||
 		!sameXrayDomainTCPFile(before, after) || !sameXrayDomainTCPFile(r.configInfo, closing) ||
+		!sameXrayDomainTCPFile(r.configInfo, childClosing) ||
 		hex.EncodeToString(hash[:]) != r.definition.ConfigSHA256 || !proc.procFile(directory, unix.S_IFDIR) || !proc.sameMount(ctx, directory) ||
 		proc.current(ctx) != nil || r.domainProcessCurrent(ctx) != nil {
 		return ErrXrayDomainTCPOriginal
