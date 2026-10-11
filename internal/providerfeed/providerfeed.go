@@ -81,7 +81,7 @@ var builtinPresets = []Preset{
 	// exact check (Telegram): these lists passed far more often than the
 	// other presets. Measurements describe one network and one day only.
 	{ID: "igareck-reality-mobile", Name: "igareck · VLESS Reality для белых списков", URL: "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher selection for Russian whitelists; local exact check required", DefaultRefreshIntervalMinutes: 120},
-	{ID: "igareck-black-vless", Name: "igareck · VLESS для России", URL: "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher collection checked from abroad; local exact check required", DefaultRefreshIntervalMinutes: 120},
+	{ID: "igareck-black-vless", Name: "igareck · VLESS для России", URL: "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher collection for Russia; local exact check required", DefaultRefreshIntervalMinutes: 120},
 	{ID: "kort0881-ru-sni", Name: "Kort0881 · RU SNI", URL: "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/data/githubmirror/ru-sni/vless.txt", Format: "uri-lines", License: "GPL-3.0", Verification: "publisher SNI selection, not measured location or local availability; local exact check required", DefaultRefreshIntervalMinutes: 240},
 }
 
