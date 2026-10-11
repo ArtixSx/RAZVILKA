@@ -256,13 +256,17 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	// The same production keeper retries actual cleanup with fresh bounded
 	// budgets. An unsuccessful Close never lets this test discard the owner.
 	defer retainManagedListRetirement(closeManaged)
+	nfqStartupStarted := time.Now()
 	managedNFQ, err = configureManagedNFQList(managedLife, a)
+	nfqStartupElapsed := time.Since(nfqStartupStarted).Milliseconds()
 	nfqStartupErr := err
+	xrayStartupStarted := time.Now()
 	managedXray, err = configureManagedXraySelectedTCPList(managedLife, a)
+	xrayStartupElapsed := time.Since(xrayStartupStarted).Milliseconds()
 	xrayStartupErr := err
+	t.Logf("stage=managed_startup component=nfqws2 elapsed_ms=%d returned_handle=%t startup_stage=%s cause=%s tools_stage=%s inactivity_stage=%s backend_stage=%s", nfqStartupElapsed, managedNFQ != nil, app.ManagedListStartupFailureStage(nfqStartupErr), xraySelectedStartupCause(nfqStartupErr), xraySelectedStartupToolStage(nfqStartupErr), xraySelectedStartupInactiveStage(nfqStartupErr), xraySelectedStartupBackendStage(nfqStartupErr))
+	t.Logf("stage=managed_startup component=xray elapsed_ms=%d returned_handle=%t startup_stage=%s cause=%s tools_stage=%s inactivity_stage=%s backend_stage=%s", xrayStartupElapsed, managedXray != nil, app.ManagedListStartupFailureStage(xrayStartupErr), xraySelectedStartupCause(xrayStartupErr), xraySelectedStartupToolStage(xrayStartupErr), xraySelectedStartupInactiveStage(xrayStartupErr), xraySelectedStartupBackendStage(xrayStartupErr))
 	if nfqStartupErr != nil || xrayStartupErr != nil || managedNFQ == nil || managedXray == nil {
-		t.Logf("stage=managed_startup component=nfqws2 returned_handle=%t startup_stage=%s cause=%s tools_stage=%s", managedNFQ != nil, app.ManagedListStartupFailureStage(nfqStartupErr), xraySelectedStartupCause(nfqStartupErr), xraySelectedStartupToolStage(nfqStartupErr))
-		t.Logf("stage=managed_startup component=xray returned_handle=%t startup_stage=%s cause=%s tools_stage=%s", managedXray != nil, app.ManagedListStartupFailureStage(xrayStartupErr), xraySelectedStartupCause(xrayStartupErr), xraySelectedStartupToolStage(xrayStartupErr))
 		if soakFiles != nil {
 			if soakFiles.Publish(xraySelectedSoakStatus{RunID: soakFiles.runID, Phase: "cleanup_unconfirmed", Code: "managed_startup_unconfirmed", UpdatedAt: time.Now()}) != nil {
 				t.Error("stage=soak_status code=failed_startup_status_unconfirmed; retain original QA artifacts")

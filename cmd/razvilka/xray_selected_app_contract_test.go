@@ -108,6 +108,63 @@ func xraySelectedStartupCause(err error) string {
 	return "unclassified_refusal"
 }
 
+func xraySelectedStartupInactiveStage(err error) string {
+	if err == nil {
+		return "none"
+	}
+	stage := dataplane.NFQWSRuntimeInactiveStage(err)
+	if slices.Contains([]string{"source", "platform", "coordinates", "identity", "inventory", "closure"}, stage) {
+		return stage
+	}
+	return "unclassified"
+}
+
+func xraySelectedBackendStageLabel(text string) string {
+	for _, stage := range []string{"SCOPE", "TOOLS_A", "OPEN_A", "GETGEN_A", "GETTABLE", "TOOLS_B", "CLASSIC", "OPEN_B", "GETGEN_B", "CLOSE"} {
+		if text == "network backend inventory refused at "+stage {
+			return stage
+		}
+	}
+	return "unclassified"
+}
+
+func xraySelectedStartupBackendStage(err error) string {
+	if err == nil {
+		return "none"
+	}
+	pending := []error{err}
+	labels := []string{}
+	for count := 0; len(pending) > 0 && count < 32; count++ {
+		current := pending[0]
+		pending = pending[1:]
+		if current == nil {
+			continue
+		}
+		// Match the concrete private producer before inspecting its fixed text.
+		// Foreign errors with identical text cannot claim this diagnostic stage.
+		kind := reflect.TypeOf(current)
+		if kind.Kind() == reflect.Pointer && kind.Elem().PkgPath() == "github.com/ArtixSx/razvilka/internal/dataplane" && kind.Elem().Name() == "backendInventoryFailure" {
+			label := xraySelectedBackendStageLabel(current.Error())
+			if !slices.Contains(labels, label) {
+				labels = append(labels, label)
+			}
+		}
+		switch wrapped := current.(type) {
+		case interface{ Unwrap() []error }:
+			children := wrapped.Unwrap()
+			pending = append(pending, children[:min(len(children), 32-count-len(pending))]...)
+		case interface{ Unwrap() error }:
+			if len(pending) < 32-count {
+				pending = append(pending, wrapped.Unwrap())
+			}
+		}
+	}
+	if len(labels) == 0 {
+		return "unclassified"
+	}
+	return strings.Join(labels, ",")
+}
+
 func xraySelectedStartupToolStage(err error) string {
 	pending := []error{err}
 	stage := "unclassified"
@@ -326,6 +383,26 @@ func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.
 	}
 	if got := xraySelectedStartupToolStage(errors.New("trusted startup tools: ACQUIRE " + secret)); got != "unclassified" {
 		t.Fatal("arbitrary tool diagnostic text escaped allowlist", got)
+	}
+	_, inactiveErr := dataplane.NewNFQWSRuntimeInactiveSource(context.Background(), nil, nil)
+	if got := xraySelectedStartupInactiveStage(errors.Join(context.DeadlineExceeded, errors.New(secret), inactiveErr)); got != "source" {
+		t.Fatal("actual nested inactivity source stage hidden")
+	}
+	if xraySelectedStartupInactiveStage(nil) != "none" || xraySelectedStartupBackendStage(nil) != "none" || xraySelectedStartupInactiveStage(errors.New("NFQWS runtime inactivity: source")) != "unclassified" {
+		t.Fatal("absent or forged inactivity stage misclassified")
+	}
+	for _, stage := range []string{"SCOPE", "TOOLS_A", "OPEN_A", "GETGEN_A", "GETTABLE", "TOOLS_B", "CLASSIC", "OPEN_B", "GETGEN_B", "CLOSE"} {
+		text := "network backend inventory refused at " + stage
+		if xraySelectedBackendStageLabel(text) != stage || xraySelectedBackendStageLabel(text+" "+secret) != "unclassified" || xraySelectedStartupBackendStage(errors.Join(context.DeadlineExceeded, errors.New(text))) != "unclassified" {
+			t.Fatal("backend label privacy or concrete-type check failed")
+		}
+	}
+	wide := make([]error, 128)
+	for i := range wide {
+		wide[i] = errors.New(secret)
+	}
+	if xraySelectedStartupBackendStage(errors.Join(wide...)) != "unclassified" {
+		t.Fatal("foreign nested errors escaped bounded diagnostic traversal")
 	}
 }
 
