@@ -190,6 +190,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	stage = "wg-inactivity-sources"
 	p.wgInactivity = make(map[string]*dataplane.WGInactivityRead, 2)
 	for _, engine := range []string{"wireguard", "amneziawg"} {
+		stage = "wg-inactivity-sources-" + engine
 		source, err := tools.ReviewWGInactivity(c, p.manager, control, engine)
 		if err != nil {
 			return nil, err

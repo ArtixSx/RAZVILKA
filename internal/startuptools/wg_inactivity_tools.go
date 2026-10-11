@@ -2,6 +2,7 @@ package startuptools
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -27,7 +28,7 @@ func (l *Lease) ReviewWGInactivity(ctx context.Context, manager *dataplane.Manag
 	var tools dataplane.WGCommandTools
 	err := func() error {
 		if err := l.lock(c); err != nil {
-			return err
+			return wgInactivityStartupAt("WG_INACTIVITY_LOCK", errors.Join(err, c.Err()))
 		}
 		defer l.unlock()
 		if l.profile.wgEngine != managedListWGProfile || l.review == nil || l.review.ipEntry == nil || l.digest == "" || l.provider == nil {
@@ -37,10 +38,10 @@ func (l *Lease) ReviewWGInactivity(ctx context.Context, manager *dataplane.Manag
 			return at("WG_INACTIVITY_UNISSUED", nil)
 		}
 		if err := l.review.wgAbsencesCurrent(c); err != nil {
-			return err
+			return wgInactivityStartupAt("WG_INACTIVITY_ABSENCE", errors.Join(err, c.Err()))
 		}
 		if err := l.current(c, l.identity, true); err != nil {
-			return err
+			return wgInactivityStartupAt("WG_INACTIVITY_CURRENT", errors.Join(err, c.Err()))
 		}
 		aliases := l.profile.wgAliases
 		for i := range aliases {
@@ -58,7 +59,8 @@ func (l *Lease) ReviewWGInactivity(ctx context.Context, manager *dataplane.Manag
 		return nil, err
 	}
 	// DP control/source admission and full Check happen OUTSIDE the tool gate.
-	return dataplane.ReviewWGInactivityRead(ctx, l.lifetime, manager, control, tools)
+	source, err := dataplane.ReviewWGInactivityRead(ctx, l.lifetime, manager, control, tools)
+	return source, wgInactivityStartupAt("WG_INACTIVITY_SOURCE", err)
 }
 
 type wgInactivityRunner struct {

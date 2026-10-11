@@ -55,26 +55,35 @@ func (*WGInactivityRead) GoString() string { return "[original WG inactivity rea
 // full closure, one-use actual Start and sole joined Wait. Never expose this
 // assembly as a DTO/HTTP owner constructor or use callback success as evidence.
 func ReviewWGInactivityRead(ctx, lifetime context.Context, manager *Manager, control *operationgate.ControlEpochReview, tools WGCommandTools) (*WGInactivityRead, error) {
-	if !wgInactivityFinite(ctx) || lifetime == nil || lifetime.Err() != nil || manager == nil || control == nil || !wgInactivityToolsValid(tools) {
-		return nil, ErrWGOperationOwner
+	if !wgInactivityFinite(ctx) {
+		return nil, wgInactivityReadAt("review-context", errors.Join(ErrWGOperationOwner, wgInactivityContextCause(ctx)))
+	}
+	if lifetime == nil || lifetime.Err() != nil {
+		return nil, wgInactivityReadAt("review-lifetime", errors.Join(ErrWGOperationOwner, wgInactivityContextCause(lifetime)))
+	}
+	if manager == nil || control == nil || !wgInactivityToolsValid(tools) {
+		return nil, wgInactivityReadAt("review-input", ErrWGOperationOwner)
 	}
 	if err := control.Current(ctx); err != nil {
-		return nil, err
+		return nil, wgInactivityReadAt("review-control", errors.Join(err, wgInactivityContextCause(ctx)))
 	}
 	manager.registryMu.RLock()
 	a, ok := manager.Adapters[tools.EngineID].(*WARPWireGuardAdapter)
 	registry := manager.registryGeneration
 	manager.registryMu.RUnlock()
 	if !ok || a == nil || a.ID() != tools.EngineID {
-		return nil, ErrWGOperationOwner
+		return nil, wgInactivityReadAt("review-adapter", ErrWGOperationOwner)
 	}
 	runner, ok := a.Runner.(wgExecRunner)
-	if !ok || runner.adapter != a || !filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot || !filepath.IsAbs(a.RuntimeConfigPath) || filepath.Clean(a.RuntimeConfigPath) != a.RuntimeConfigPath || filepath.Dir(a.RuntimeConfigPath) != a.StateRoot {
-		return nil, ErrWGOperationOwner
+	if !ok || runner.adapter != a {
+		return nil, wgInactivityReadAt("review-runner", ErrWGOperationOwner)
+	}
+	if !filepath.IsAbs(a.StateRoot) || filepath.Clean(a.StateRoot) != a.StateRoot || !filepath.IsAbs(a.RuntimeConfigPath) || filepath.Clean(a.RuntimeConfigPath) != a.RuntimeConfigPath || filepath.Dir(a.RuntimeConfigPath) != a.StateRoot {
+		return nil, wgInactivityReadAt("review-paths", ErrWGOperationOwner)
 	}
 	root, anchor, err := openNetworkPolicyObservationRoot(manager.StateRoot)
 	if err != nil {
-		return nil, err
+		return nil, wgInactivityReadAt("review-root", err)
 	}
 	life, cancel := context.WithCancel(lifetime)
 	r := &WGInactivityRead{life: life, cancel: cancel, manager: manager, root: manager.StateRoot, registry: registry, owned: root, anchor: anchor,
@@ -84,7 +93,7 @@ func ReviewWGInactivityRead(ctx, lifetime context.Context, manager *Manager, con
 		r.bound = *a.wgCommandTools
 		if !tools.Runner.(WGInactivityToolRunner).SameWGToolSource(r.bound.Runner) {
 			_ = r.Close()
-			return nil, ErrWGOperationOwner
+			return nil, wgInactivityReadAt("review-source", ErrWGOperationOwner)
 		}
 	}
 	if err := r.current(ctx, nil); err != nil {
@@ -124,28 +133,40 @@ func wgInactivityToolsValid(t WGCommandTools) bool {
 
 // Metadata/files only: safe under the original tool/Provider Start bracket.
 func (r *WGInactivityRead) pureCurrent(ctx context.Context) error {
-	if r == nil || r.self != r || !wgInactivityFinite(ctx) || r.closed.Load() || r.life == nil || r.life.Err() != nil || r.manager == nil || r.manager.StateRoot != r.root || r.owned == nil || r.control == nil || !wgInactivityToolsValid(r.tools) {
-		return ErrWGOperationOwner
+	if r == nil || r.self != r {
+		return wgInactivityReadAt("owner", ErrWGOperationOwner)
+	}
+	if !wgInactivityFinite(ctx) {
+		return wgInactivityReadAt("context", errors.Join(ErrWGOperationOwner, wgInactivityContextCause(ctx)))
+	}
+	if r.closed.Load() || r.life == nil || r.life.Err() != nil {
+		return wgInactivityReadAt("lifetime", errors.Join(ErrWGOperationOwner, wgInactivityContextCause(r.life)))
+	}
+	if r.manager == nil || r.manager.StateRoot != r.root || r.owned == nil || r.control == nil || !wgInactivityToolsValid(r.tools) {
+		return wgInactivityReadAt("owner", ErrWGOperationOwner)
 	}
 	a, s := r.adapter, &r.shape
 	if a == nil || a.ID() != s.ID() || a.StateRoot != s.StateRoot || a.RuntimeConfigPath != s.RuntimeConfigPath || a.Interface != s.Interface || a.Table != s.Table || a.PriorityBase != s.PriorityBase || a.WG != s.WG || a.IP != s.IP || a.IPTables != s.IPTables || a.IP6Tables != s.IP6Tables || a.WGQuick != s.WGQuick || a.NativeOnly != s.NativeOnly || a.Configs != s.Configs || !sameNetworkPolicyDependency(a.Profiles, s.Profiles) || !sameNetworkPolicyDependency(a.Runner, s.Runner) || a.wgCommandTools != s.wgCommandTools {
-		return ErrWGOperationOwner
+		return wgInactivityReadAt("adapter-shape", ErrWGOperationOwner)
 	}
 	if s.wgCommandTools != nil {
 		bound := r.bound
 		if !sameWGCommandShape(a, s, bound) || bound.EngineID != r.tools.EngineID || bound.Provider != r.tools.Provider || bound.Identity != r.tools.Identity || bound.ReviewSHA256 != r.tools.ReviewSHA256 || bound.IP != r.tools.IP || bound.IPTables != r.tools.IPTables || bound.IP6Tables != r.tools.IP6Tables || bound.WG != r.tools.WG || bound.AWG != r.tools.AWG {
-			return ErrWGOperationOwner
+			return wgInactivityReadAt("bound-tools", ErrWGOperationOwner)
 		}
 	}
 	if r.manager.executionNetworkIdentity() != r.identity || r.identity != nil && (r.identity.provider != r.tools.Provider || r.identity.value != r.tools.Identity) {
-		return ErrWGOperationOwner
+		return wgInactivityReadAt("identity", ErrWGOperationOwner)
 	}
 	r.manager.registryMu.RLock()
 	valid := r.manager.registryGeneration == r.registry && r.manager.Adapters[a.ID()] == a
 	r.manager.registryMu.RUnlock()
 	info, err := os.Lstat(r.root)
-	if !valid || err != nil || !networkPolicyPrivateDirectory(info) || !os.SameFile(r.anchor, info) {
-		return errors.Join(ErrWGOperationOwner, err)
+	if !valid {
+		return wgInactivityReadAt("registry", errors.Join(ErrWGOperationOwner, err))
+	}
+	if err != nil || !networkPolicyPrivateDirectory(info) || !os.SameFile(r.anchor, info) {
+		return wgInactivityReadAt("root", errors.Join(ErrWGOperationOwner, err))
 	}
 	return nil
 }
@@ -155,12 +176,16 @@ func (r *WGInactivityRead) current(ctx context.Context, cleanup *operationgate.E
 		return err
 	}
 	if err := r.controlCurrent(ctx, cleanup); err != nil {
-		return err
+		return wgInactivityReadAt("control-opening", errors.Join(err, wgInactivityContextCause(ctx)))
 	}
 	if err := r.tools.Runner.CheckWG(ctx, r.tools.Identity); err != nil {
-		return err
+		return wgInactivityReadAt("tools", errors.Join(err, wgInactivityContextCause(ctx)))
 	}
-	return errors.Join(r.controlCurrent(ctx, cleanup), r.pureCurrent(ctx))
+	closing := r.controlCurrent(ctx, cleanup)
+	if closing != nil {
+		closing = wgInactivityReadAt("control-closing", errors.Join(closing, wgInactivityContextCause(ctx)))
+	}
+	return errors.Join(closing, r.pureCurrent(ctx))
 }
 
 func (r *WGInactivityRead) controlCurrent(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
