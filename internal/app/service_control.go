@@ -116,7 +116,7 @@ func (a *App) serviceControlView(ctx context.Context) map[string]any {
 				// Result freshness and actual owned runtime each have their own
 				// bounded observation. A slow WAN sample must not spend the
 				// runtime's inspection budget; caller cancellation still applies.
-				runtimeErr = a.Dataplane.ObserveCommittedRuntime(ctx, committed)
+				runtimeErr = a.observeCommittedRuntime(ctx, committed)
 				if runtimeErr == nil {
 					state = "running"
 				}

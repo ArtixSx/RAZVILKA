@@ -79,22 +79,23 @@ type ResourceConflict struct {
 }
 
 type Input struct {
-	managedNFQWS       *NFQWSActiveMaterial       // Original in-call managed owner; never JSON/HTTP input.
-	LAN                *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
-	DNS                *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
-	DomainPolicy       *DomainPolicyRuntimePlan   `json:"domain_policy,omitempty"`
-	SyntheticDNS       *SyntheticDNSTransportPlan `json:"synthetic_dns,omitempty"`
-	SuspendDNS         bool                       `json:"suspend_dns,omitempty"`
-	DiscardDNS         bool                       `json:"discard_dns,omitempty"`
-	NetworkProfileID   string                     `json:"network_profile_id,omitempty"`
-	Revision           uint64                     `json:"revision"`
-	SafeMode           bool                       `json:"safe_mode"`
-	Routes             []Route                    `json:"routes"`
-	RetiringAdapters   []string                   `json:"retiring_adapters,omitempty"`
-	Engines            []Engine                   `json:"engines"`
-	EngineConfigDrafts []string                   `json:"engine_config_drafts,omitempty"`
-	ResourceConflicts  []ResourceConflict         `json:"resource_conflicts,omitempty"`
-	Host               HostState                  `json:"host"`
+	managedNFQWS           *NFQWSActiveMaterial       // Original in-call managed owner; never JSON/HTTP input.
+	LAN                    *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
+	DNS                    *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
+	DomainPolicy           *DomainPolicyRuntimePlan   `json:"domain_policy,omitempty"`
+	SyntheticDNS           *SyntheticDNSTransportPlan `json:"synthetic_dns,omitempty"`
+	SuspendDNS             bool                       `json:"suspend_dns,omitempty"`
+	DiscardDNS             bool                       `json:"discard_dns,omitempty"`
+	NetworkProfileID       string                     `json:"network_profile_id,omitempty"`
+	Revision               uint64                     `json:"revision"`
+	SafeMode               bool                       `json:"safe_mode"`
+	Routes                 []Route                    `json:"routes"`
+	RetiringAdapters       []string                   `json:"retiring_adapters,omitempty"`
+	Engines                []Engine                   `json:"engines"`
+	EngineConfigDrafts     []string                   `json:"engine_config_drafts,omitempty"`
+	ResourceConflicts      []ResourceConflict         `json:"resource_conflicts,omitempty"`
+	Host                   HostState                  `json:"host"`
+	managedXraySelectedTCP *XrayOperationMaterial     // Original selected TCP compiler owner; never JSON/HTTP input.
 }
 
 type Action struct {
@@ -527,12 +528,26 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			}
 			plan.Warnings = append(plan.Warnings, Warning{Code: "ENDPOINT_BOOTSTRAP", Adapter: adapter, Message: "До активации нужен отдельный маршрут к endpoint, иначе возможен self-tunnel loop."})
 		case "sing-box", "xray":
+			if adapter == "xray" && input.managedXraySelectedTCP != nil {
+				material := input.managedXraySelectedTCP
+				if material.self != material || material.material == nil || input.LAN == nil || input.LAN.Mode != LANPolicyXraySelectedTCPMode || !xraySelectedTCPScopeRouteMatches(Plan{Routes: input.Routes}, material.material) {
+					plan.Blockers = append(plan.Blockers, Blocker{Code: "MANAGED_XRAY_SOURCE_UNAVAILABLE", Adapter: adapter, Message: "Исходный допуск выбранного TCP-маршрута недоступен."})
+				}
+				if !input.Host.IPCommand || !input.Host.IPTables || !input.Host.IP6Tables {
+					plan.Blockers = append(plan.Blockers, Blocker{Code: "MANAGED_XRAY_TOOLS_UNAVAILABLE", Adapter: adapter, Message: "Проверка системных сетевых инструментов не завершена."})
+				}
+				break
+			}
 			addProxyTunnelPreflight(&plan, adapter, input.Host)
 			plan.Warnings = append(plan.Warnings, Warning{Code: "PROXY_LOOP_GUARD", Adapter: adapter, Message: "До активации требуется исключить endpoint узла и управляющий трафик из проксирования."})
 		}
 		for _, route := range input.Routes {
 			if adapterID(route.Resolved) == adapter && len(route.Sources) > 0 && adapter != "nfqws2" {
-				plan.Warnings = append(plan.Warnings, Warning{Code: "DEVICE_SCOPE_KERNEL_PROBE", Adapter: adapter, Message: "Для ограниченного устройства Apply подтверждает from/to маршрут ядра; HTTP-probe с адреса LAN-клиента выполняется отдельно в аппаратных тестах."})
+				if adapter == "xray" && input.managedXraySelectedTCP != nil {
+					plan.Warnings = append(plan.Warnings, Warning{Code: "SELECTED_CLIENT_ACCEPTANCE_PENDING", Adapter: adapter, Message: "Работа маршрута для выбранного устройства ещё требует проверки с самого устройства."})
+				} else {
+					plan.Warnings = append(plan.Warnings, Warning{Code: "DEVICE_SCOPE_KERNEL_PROBE", Adapter: adapter, Message: "Для ограниченного устройства Apply подтверждает from/to маршрут ядра; HTTP-probe с адреса LAN-клиента выполняется отдельно в аппаратных тестах."})
+				}
 				break
 			}
 		}

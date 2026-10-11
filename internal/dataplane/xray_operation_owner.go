@@ -28,6 +28,7 @@ type XrayOperationMaterial struct {
 	barrier      sync.RWMutex
 	closed       atomic.Bool
 	closeDone    chan struct{}
+	closeErr     error
 	ctx          context.Context
 	cancel       context.CancelFunc
 	manager      *Manager
@@ -112,6 +113,34 @@ func (m *XrayOperationMaterial) current(ctx context.Context, cleanup bool) error
 	if err := m.registration.Current(ctx); err != nil {
 		return errors.Join(ErrXrayOperationOwner, err)
 	}
+	if value := ctx.Value(xrayRetainedOperationKey{}); value != nil {
+		op, ok := value.(*xrayRetainedOperation)
+		if !ok || op == nil || op.self != op || !op.open.Load() || op.owner == nil || op.owner.self != op.owner || op.owner.execution == nil || op.owner.execution.material != m ||
+			op.owner.scope == nil || op.owner.scope.checkRetainedXrayOperation(ctx, !cleanup) != nil || ctx.Value(xraySelectedTCPExecutionKey{}) != op.owner.execution {
+			return ErrXrayOperationOwner
+		}
+		if cleanup {
+			if op.cleanup == nil {
+				return ErrXrayOperationOwner
+			}
+			return op.cleanup.WithCurrent(ctx, func() error {
+				if err := m.control.CurrentForCleanupOperation(ctx, op.cleanup); err != nil {
+					return err
+				}
+				return op.owner.execution.cleanupGuard(ctx, op.owner.execution.plan)
+			})
+		}
+		if !op.forward || op.owner.pending || op.owner.execution.node == nil {
+			return ErrXrayOperationOwner
+		}
+		if err := m.control.Current(ctx); err != nil {
+			return err
+		}
+		if err := op.owner.execution.node.current(ctx); err != nil {
+			return err
+		}
+		return op.owner.execution.committedGuard(ctx, op.owner.execution.plan)
+	}
 	if cleanup {
 		return errors.Join(m.control.CurrentForCleanupOperation(ctx, m.cleanup), ctx.Err())
 	}
@@ -161,15 +190,54 @@ func (m *XrayOperationMaterial) IsCleanupContext(ctx context.Context) bool {
 	return cleanup && o != nil && o.self == o && o.material == m && o.scope != nil && o.scope.manager == m.manager
 }
 
+// Comparison for the concrete retained App guard. Only the original private
+// retained Manager operation can satisfy it; no fresh context extends Apply.
+func (m *XrayOperationMaterial) RetainedOperationContext(ctx context.Context) bool {
+	if m == nil || m.self != m || m.closed.Load() || ctx == nil || ctx.Value(xrayOperationMaterialKey{}) != m {
+		return false
+	}
+	op, ok := ctx.Value(xrayRetainedOperationKey{}).(*xrayRetainedOperation)
+	return ok && op != nil && op.self == op && op.open.Load() && op.owner != nil && op.owner.self == op.owner && op.owner.execution != nil && op.owner.execution.material == m && op.owner.scope != nil && op.owner.scope.checkRetainedXrayOperation(ctx, op.forward) == nil
+}
+
 // Close cancels before joining in-flight reads, then erases only this leaf's
 // private config. Caller-owned proof, Store, control and scope remain open.
 func (m *XrayOperationMaterial) Close() error {
 	if m == nil || m.self != m {
 		return ErrXrayOperationOwner
 	}
+	// The leaf cannot revoke an actual live/unknown execution's compensation.
+	// Only its joined terminal scope may release the original association.
+	xraySelectedTCPExecutions.Lock()
+	e := xraySelectedTCPExecutions.live[m.adapter]
+	xraySelectedTCPExecutions.Unlock()
+	if e != nil && e.material == m && !m.closed.Load() {
+		if !e.mu.TryLock() {
+			return ErrPolicyAdditionUnknown
+		}
+		r := e.resource
+		settled := r == nil && !e.started
+		if r != nil && r.mu.TryLock() {
+			settled = r.descriptorsClosed && r.descriptorsErr == nil
+			r.mu.Unlock()
+		}
+		if !settled {
+			e.mu.Unlock()
+			return ErrPolicyAdditionUnknown
+		}
+		xraySelectedTCPExecutions.Lock()
+		if xraySelectedTCPExecutions.live[m.adapter] != e {
+			xraySelectedTCPExecutions.Unlock()
+			e.mu.Unlock()
+			return ErrXrayOperationOwner
+		}
+		delete(xraySelectedTCPExecutions.live, m.adapter)
+		xraySelectedTCPExecutions.Unlock()
+		e.mu.Unlock()
+	}
 	if !m.closed.CompareAndSwap(false, true) {
 		<-m.closeDone
-		return nil
+		return m.closeErr
 	}
 	m.cancel()
 	m.barrier.Lock()
@@ -178,9 +246,12 @@ func (m *XrayOperationMaterial) Close() error {
 		clear(m.material.config)
 		m.material.config = nil
 	}
-	err := m.registration.Close()
+	m.closeErr = m.registration.Close()
+	if e != nil && e.material == m && e.resource != nil {
+		m.closeErr = errors.Join(m.closeErr, e.resource.records.close())
+	}
 	close(m.closeDone)
-	return err
+	return m.closeErr
 }
 
 type xrayOperationOwner struct {
@@ -259,7 +330,7 @@ func (o *xrayOperationOwner) checkHeld(ctx context.Context, cleanup bool) error 
 	}
 	s := o.scope
 	s.mu.Lock()
-	err := s.checkOriginalOwner(ctx, nil, !cleanup, false)
+	err := s.checkOriginalOwner(ctx, nil, !cleanup, cleanup)
 	s.mu.Unlock()
 	if err == nil && s.networkIdentity != nil {
 		err = s.networkIdentity.check(ctx)
@@ -271,7 +342,7 @@ func (o *xrayOperationOwner) checkHeld(ctx context.Context, cleanup bool) error 
 	}
 	if err == nil {
 		s.mu.Lock()
-		err = s.checkOriginalOwner(ctx, nil, !cleanup, false)
+		err = s.checkOriginalOwner(ctx, nil, !cleanup, cleanup)
 		s.mu.Unlock()
 	}
 	if err == nil {

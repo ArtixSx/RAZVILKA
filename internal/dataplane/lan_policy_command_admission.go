@@ -136,9 +136,19 @@ func WithLANPolicyCommandStart(ctx context.Context, name string, args []string, 
 	}
 	cleanup := o.cleanup
 	if c.cleanup {
+		if ctx.Value(nfqwsRetainedOperationKey{}) != nil && ctx.Value(xrayRetainedOperationKey{}) != nil {
+			return true, ErrLANPolicyRuntime
+		}
 		if raw := ctx.Value(nfqwsRetainedOperationKey{}); raw != nil {
 			op, ok := raw.(*nfqwsRetainedOperation)
 			if !ok || op == nil || op.self != op || !op.open.Load() || op.forward || op.owner == nil || op.owner.self != op.owner || op.owner.scope.manager != o.manager || op.owner.execution.gate != o.gate || op.owner.execution.material.control != o.control || op.cleanup == nil {
+				return true, ErrLANPolicyRuntime
+			}
+			cleanup = op.cleanup
+		}
+		if raw := ctx.Value(xrayRetainedOperationKey{}); raw != nil {
+			op, ok := raw.(*xrayRetainedOperation)
+			if !ok || op == nil || op.self != op || !op.open.Load() || op.forward || op.owner == nil || op.owner.self != op.owner || op.owner.scope == nil || op.owner.execution == nil || op.owner.scope.manager != o.manager || op.owner.execution.gate != o.gate || op.owner.execution.material == nil || op.owner.execution.material.control != o.control || op.cleanup == nil {
 				return true, ErrLANPolicyRuntime
 			}
 			cleanup = op.cleanup

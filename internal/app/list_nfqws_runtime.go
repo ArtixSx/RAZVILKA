@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -25,6 +24,7 @@ const managedNFQWSListQueue = uint16(200)
 // or permission callback. Generic route review and domains remain closed.
 type ManagedNFQWSListRuntime struct {
 	self            *ManagedNFQWSListRuntime
+	policy          *managedListPolicyOwner
 	mu              sync.Mutex
 	app             *App
 	manager         *dataplane.Manager
@@ -72,113 +72,32 @@ type managedNFQWSListOperationKey struct{}
 // ConfigureReviewedStockNFQWSList is the concrete main/App entrypoint. The
 // caller supplies the App service lifetime; each actual operation is separate.
 func (a *App) ConfigureReviewedStockNFQWSList(ctx, panel context.Context) (*ManagedNFQWSListRuntime, error) {
-	if a == nil || a.Dataplane == nil || a.Store == nil || a.Components == nil || a.StrategyLab == nil || a.SelfUpdateFiles == nil || panel == nil || panel.Err() != nil || ctx == nil {
+	if a == nil {
 		return nil, dataplane.ErrNFQWSScopedOwner
 	}
 	a.managedNFQListMu.Lock()
 	defer a.managedNFQListMu.Unlock()
-	if a.managedNFQList != nil {
-		if a.managedNFQList.closed {
+	if r := a.managedNFQList; r != nil {
+		if r.closed || !r.original() {
 			return nil, dataplane.ErrNFQWSScopedOwner
 		}
-		return a.managedNFQList, nil
+		return r, nil
 	}
-	c, release, err := a.privateExclusiveOperation(ctx)
+	policy, err := a.configureReviewedStockListPolicy(ctx, panel)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-	if _, ok := c.Deadline(); !ok {
+	r := &ManagedNFQWSListRuntime{policy: policy, app: a, manager: policy.manager, panel: policy.panel, provider: policy.provider, tools: policy.tools, inventory: policy.inventory, gate: policy.gate, checks: policy.checks, control: policy.control}
+	r.self = r
+	policy.mu.Lock()
+	defer policy.mu.Unlock()
+	if policy.nfq != nil || policy.closed.Load() {
 		return nil, dataplane.ErrNFQWSScopedOwner
 	}
-	control, err := a.managedNFQControl(c)
-	if err != nil {
-		return nil, err
-	}
-	defer a.closeUnretainedManagedNFQControl(control)
-	provider, err := netidentity.NewReviewedStockNC1812Provider(c)
-	if err != nil {
-		return nil, err
-	}
-	tools, err := startuptools.AcquireReviewedStockNC1812Policy(panel, provider)
-	if err != nil {
-		return nil, err
-	}
-	keep := false
-	defer func() {
-		if !keep {
-			tools.Close()
-		}
-	}()
-	descriptor, err := tools.InventoryTools()
-	if err != nil {
-		return nil, err
-	}
-	inventory, err := dataplane.NewReviewedStockNC1812BackendInventory(provider, descriptor)
-	if err != nil {
-		return nil, err
-	}
-	policyTools, runner, err := tools.PolicyRuntimeTools()
-	if err != nil {
-		return nil, err
-	}
-	r := &ManagedNFQWSListRuntime{app: a, manager: a.Dataplane, panel: panel, provider: provider, tools: tools, inventory: inventory, control: control}
-	r.self = r
-	lan := &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: r.scopeCheck,
-		ConsumerCheck: func(c context.Context, p *dataplane.LANPolicyRuntimePlan) error {
-			if r.checks == nil {
-				return dataplane.ErrNetworkPolicyConsumers
-			}
-			return r.checks.ConsumerCheck(c, p)
-		}}
-	binding := &dataplane.LANPolicyReceiptBinding{Runtime: lan, ApplyGuard: r.lanApplyGuard, CleanupGuard: r.lanCleanupGuard,
-		RetireCheck: func(c context.Context, p *dataplane.LANPolicyRuntimePlan) error {
-			if r.checks == nil {
-				return dataplane.ErrNetworkPolicyConsumers
-			}
-			return r.checks.RetireCheck(c, p)
-		}}
-	gate, err := dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyNFQWSDirectMode, Provider: provider, Binding: binding,
-		InventoryCheck: func(c context.Context, n netidentity.Identity, p *dataplane.LANPolicyRuntimePlan) error {
-			if r.checks == nil {
-				return dataplane.ErrNetworkPolicyConsumers
-			}
-			return r.checks.InventoryCheck(c, n, p)
-		}})
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(r.manager.StateRoot, 0700); err != nil {
-		return nil, err
-	}
-	if err := r.manager.Register(gate); err != nil {
-		return nil, err
-	}
-	r.gate = gate
-	r.checks, err = r.manager.BindNetworkPolicyChecks(gate, inventory)
-	if err != nil {
-		// The actual registered participant cannot be replaced by retrying a
-		// failed constructor. Its guards stay closed; a fresh App is required.
-		r.closed = true
-		a.managedNFQList = r
-		return nil, err
-	}
-	if a.DNS == nil {
-		r.closed = true
-		a.managedNFQList = r
-		return nil, dataplane.ErrRuntimeInactivity
-	}
-	if err := r.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path); err != nil {
-		r.closed = true
-		a.managedNFQList = r
-		return nil, err
-	}
-	a.retainManagedNFQControl(control)
+	policy.nfq = r
 	a.managedNFQList = r
-	keep = true
 	return r, nil
 }
-
 func (r *ManagedNFQWSListRuntime) operation(ctx context.Context, e *managedNFQWSListExecution, cleanup *operationgate.ExclusiveCleanupReview) (context.Context, func(), error) {
 	if r == nil || r.self != r || r.closed || e == nil || e.self != e || e.runtime != r || r.app.Dataplane != r.manager || ctx == nil || ctx.Err() != nil || cleanup == nil {
 		return nil, nil, dataplane.ErrNFQWSScopedOwner
@@ -483,6 +402,40 @@ func (r *ManagedNFQWSListRuntime) Current(ctx context.Context) error {
 	return r.currentLocked(ctx)
 }
 
+func (a *App) observeCommittedManagedNFQ(ctx context.Context, expected dataplane.Plan) (bool, error) {
+	if expected.LAN == nil || expected.LAN.Mode != dataplane.LANPolicyNFQWSDirectMode {
+		return false, nil
+	}
+	a.managedNFQListMu.Lock()
+	r := a.managedNFQList
+	a.managedNFQListMu.Unlock()
+	if r == nil || !r.original() || expected.State != "committed" {
+		return true, dataplane.ErrNFQWSScopedOwner
+	}
+	c, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e := r.active
+	if e == nil || r.pending != nil || expected.PlanID != e.plan.PlanID || expected.Digest != e.plan.Digest || expected.Revision != e.plan.Revision || expected.NetworkProfileID != e.plan.NetworkProfileID || !reflect.DeepEqual(expected.LAN, e.plan.LAN) || !reflect.DeepEqual(expected.Routes, e.plan.Routes) {
+		return true, dataplane.ErrNFQWSScopedOwner
+	}
+	verify := func() error {
+		actual, found, err := r.manager.Committed()
+		if err != nil || !found || !reflect.DeepEqual(actual, expected) {
+			return errors.Join(dataplane.ErrNFQWSScopedOwner, err)
+		}
+		return nil
+	}
+	if err := verify(); err != nil {
+		return true, err
+	}
+	if err := r.currentLocked(c); err != nil {
+		return true, err
+	}
+	return true, verify()
+}
+
 func (r *ManagedNFQWSListRuntime) currentLocked(ctx context.Context) error {
 	if r.active == nil || r.closed {
 		return dataplane.ErrNFQWSScopedOwner
@@ -654,9 +607,15 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 		return dataplane.ErrNFQWSScopedOwner
 	}
 	if r.closed {
+		if r.policy != nil {
+			return r.policy.releaseNFQ(r)
+		}
 		return nil
 	}
 	r.closed = true
+	if r.policy != nil {
+		return r.policy.releaseNFQ(r)
+	}
 	var checksErr error
 	if r.checks != nil {
 		checksErr = r.checks.Close()

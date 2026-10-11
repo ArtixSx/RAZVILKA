@@ -50,6 +50,8 @@ type executionResourceScope struct {
 	pending                 bool // Original unknown Apply: cleanup only, never ACTIVE.
 	syntheticBaselineSource *syntheticBaselineCoordinator
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
+	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
+	retainedXrayOwner       *retainedXrayExecution
 }
 
 type executionTransitResource struct {
@@ -96,7 +98,7 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 	}
 	s := &executionResourceScope{manager: m, managerRoot: m.StateRoot, adapterOwner: adapterOwner, plan: plan, adapter: adapter, execution: execution,
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
-		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
+		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, xraySelectedTCP: map[string]*XraySelectedTCPExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
 	s.observationOpen.Store(true)
 	return s, nil
 }
@@ -111,6 +113,7 @@ func (s *executionResourceScope) contextWith(ctx context.Context) context.Contex
 	ctx = context.WithValue(ctx, nfqws2ActiveActivationRegistrarKey{}, s)
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
+	ctx = context.WithValue(ctx, xraySelectedTCPRegistrarKey{}, xraySelectedTCPRegistrar(s.issueXraySelectedTCP))
 	return withSyntheticExecutionRegistrar(ctx, s)
 }
 
@@ -135,9 +138,15 @@ func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resourc
 			return ErrNFQWSScopedOwner
 		}
 		if s.retained {
-			op, err := s.retainedOperation(ctx)
-			if err != nil || !op.forward {
-				return ErrNFQWSScopedOwner
+			if s.retainedXrayOwner != nil {
+				if err := s.checkRetainedXrayOperation(ctx, true); err != nil {
+					return err
+				}
+			} else {
+				op, err := s.retainedOperation(ctx)
+				if err != nil || !op.forward {
+					return ErrNFQWSScopedOwner
+				}
 			}
 		} else if err := s.ctx.Err(); err != nil {
 			return err // Cancellation detachment grants cleanup only.
@@ -265,6 +274,9 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.syntheticBaselines {
 		ids[id] = true
 	}
+	for id := range s.xraySelectedTCP {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -295,9 +307,12 @@ func (s *executionResourceScope) persist() error {
 			return err
 		}
 	}
-	err := s.manager.writeExecution(s.root, *s.execution)
+	err := s.manager.writeExecutionOwned(s.root, *s.execution, s)
 	if err == nil && s.retainedOwner != nil {
 		err = s.retainedOwner.captureRecords()
+	}
+	if err == nil && s.retainedXrayOwner != nil {
+		err = s.retainedXrayOwner.captureRecords()
 	}
 	if err != nil {
 		s.failure = errors.Join(s.failure, err)
@@ -417,8 +432,8 @@ func (s *executionResourceScope) close() error {
 	s.startMu.Lock()
 	defer s.startMu.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if !s.open {
+		s.mu.Unlock()
 		return s.closedErr
 	}
 	s.open = false
@@ -427,7 +442,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if s.nfqws[resource.ID] != nil && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
+		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -442,11 +457,21 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
 	err := errors.Join(phaseErr, s.failure, validateExecutionResources(*s.execution, false), validateExecutionResources(ownedExecution, true))
+	xrayResources := make([]*XraySelectedTCPExecutionResource, 0, len(s.xraySelectedTCP))
+	for _, resource := range s.xraySelectedTCP {
+		xrayResources = append(xrayResources, resource)
+	}
+	s.mu.Unlock()
+	for _, resource := range xrayResources {
+		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.closedErr = errors.Join(err, s.owned.Close())
 	return s.closedErr
 }

@@ -51,6 +51,18 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Older clients keep the synchronous contract; production UI sends a key.
+	if handled, outcome := a.executeManagedXrayServiceRuntime(r.Context(), request.Action, *request.ExpectedRevision); handled {
+		status := http.StatusOK
+		response := map[string]any{"ok": outcome.Code == "", "live_applied": outcome.LiveApplied}
+		if outcome.Code != "" {
+			status = http.StatusConflict
+			response["code"], response["error"] = outcome.Code, outcome.Message
+		} else {
+			response["control"] = a.serviceControlView(r.Context())
+		}
+		writeJSON(w, status, response)
+		return
+	}
 	ctx, release, err := a.scopedRuntimeOperation(componentStopContext(r.Context(), request.Action))
 	if err != nil {
 		a.writeOperationFailure(w, err)
@@ -81,6 +93,16 @@ type serviceRuntimeOutcome struct {
 	LiveApplied bool
 	Execution   *dataplane.Execution
 	Failure     *applyFailureAdvice
+}
+
+func (a *App) observeCommittedRuntime(ctx context.Context, plan dataplane.Plan) error {
+	if handled, err := a.observeCommittedManagedXray(ctx, plan); handled {
+		return err
+	}
+	if handled, err := a.observeCommittedManagedNFQ(ctx, plan); handled {
+		return err
+	}
+	return a.Dataplane.ObserveCommittedRuntime(ctx, plan)
 }
 
 // Caller owns exclusive admission through transaction cleanup. This core has
@@ -197,7 +219,7 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		return nil
 	})
 	if stop && current.DNS != nil {
-		if err := a.Dataplane.ObserveCommittedRuntime(ctx, current); err != nil {
+		if err := a.observeCommittedRuntime(ctx, current); err != nil {
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 				return fail("SERVICE_RUNTIME_CHANGED", "Проверка состояния не завершена. Повторите выключение.")
 			}

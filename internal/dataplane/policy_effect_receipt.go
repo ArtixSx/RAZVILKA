@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -163,14 +164,39 @@ type policyEffectSession struct {
 	borrow *policyEffectReceiptBorrow
 }
 
-func (s *policyEffectSession) save(ctx context.Context) error {
-	if err := s.policyAdditionSession.save(ctx); err != nil {
+func (s *policyEffectSession) save(ctx context.Context) (result error) {
+	if s.borrow == nil {
+		return s.policyAdditionSession.save(ctx)
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if s.borrow != nil {
-		return s.borrow.saved()
+	s.doc.Checksum = policyAdditionChecksum(s.doc)
+	data, err := json.Marshal(s.doc)
+	if err != nil || len(data) > policyAdditionMaxBytes {
+		return ErrPolicyAdditionReceipt
 	}
-	return nil
+	file, err := s.root.WriteAtomicRetained(policyAdditionFile, data, 0600)
+	if err != nil {
+		return errors.Join(ErrPolicyAdditionReceipt, err)
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			result = errors.Join(result, file.Close())
+		}
+	}()
+	if runtime.GOOS == "linux" && s.root.Sync() != nil {
+		return ErrPolicyAdditionReceipt
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := s.borrow.savedOriginal(file); err != nil {
+		return err
+	}
+	transferred = true
+	return captureXraySelectedTCPPolicyPublication(ctx, s.borrow)
 }
 
 func openPolicyEffectSession(ctx context.Context, plan PolicyEffectPlan, path string, options policyAdditionOptions) (*policyEffectSession, error) {
@@ -550,6 +576,9 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	}
 	s.borrow = borrow
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
+	if err := checkXraySelectedTCPOriginalLoadedReceipt(ctx, borrow); err != nil {
+		return err
+	}
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {
 		return err
 	}

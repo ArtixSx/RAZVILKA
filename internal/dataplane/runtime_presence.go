@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"time"
 )
@@ -50,6 +51,18 @@ func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) (r
 	if err := verify(); err != nil {
 		return err
 	}
+	if expected.LAN != nil && expected.LAN.Mode == LANPolicyXraySelectedTCPMode {
+		owner := m.retainedXrayOwner()
+		if owner == nil || owner.scope == nil || owner.scope.manager != m || owner.execution == nil || !xraySelectedTCPSamePlan(owner.execution.plan, expected) {
+			return ErrXrayOperationOwner
+		}
+		held, end, err := owner.operation(ctx, nil, true)
+		if err != nil {
+			return err
+		}
+		defer end()
+		ctx = held
+	}
 	for _, id := range expected.Adapters {
 		registered, exists := m.adapter(id)
 		if !exists {
@@ -67,6 +80,23 @@ func (m *Manager) ObserveCommittedRuntime(ctx context.Context, expected Plan) (r
 }
 
 func (a *ProxyTunnelAdapter) ObserveOwnedRuntime(ctx context.Context) error {
+	xraySelectedTCPExecutions.Lock()
+	associated := xraySelectedTCPExecutions.live[a]
+	xraySelectedTCPExecutions.Unlock()
+	if associated != nil {
+		if associated.material == nil {
+			return ErrXrayOperationOwner
+		}
+		root := filepath.Join(associated.material.managerRoot, "transactions", associated.plan.PlanID, "xray")
+		e, _, err := xraySelectedTCPExecutionFor(ctx, a, associated.plan, root)
+		if err != nil {
+			return err
+		}
+		return e.health(ctx)
+	}
+	if ctx != nil && ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
+		return ErrXrayOperationOwner
+	}
 	if err := a.checkSidecarIdentity(); err != nil {
 		return err
 	}

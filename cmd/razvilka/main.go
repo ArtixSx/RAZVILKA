@@ -60,10 +60,12 @@ import (
 var embedded embed.FS
 
 func main() {
-	mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots())
+	if code := mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots()); code != 0 {
+		os.Exit(code)
+	}
 }
 
-func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
+func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCode int) {
 	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
 		os.Exit(code)
 	}
@@ -698,27 +700,36 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	managedNFQLifetime, cancelManagedNFQLifetime := context.WithCancel(context.Background())
 	managedNFQList, managedNFQListErr := configureManagedNFQList(managedNFQLifetime, a)
 	if managedNFQListErr != nil {
-		cancelManagedNFQLifetime()
 		log.Print("Managed NFQ list startup owner is unavailable; scoped activation remains closed")
 	}
+	managedXrayList, managedXrayListErr := configureManagedXraySelectedTCPList(managedNFQLifetime, a)
+	if managedXrayListErr != nil {
+		log.Print("Selected Xray TCP startup owner is unavailable; scoped activation remains closed")
+	}
 	managedNFQCloseAttempted := false
-	closeManagedNFQList := func(ctx context.Context) {
+	closeManagedNFQList := func(ctx context.Context) error {
 		if managedNFQCloseAttempted {
-			return
+			return nil
 		}
-		managedNFQCloseAttempted = true
+		if managedXrayList != nil {
+			if err := managedXrayList.Close(ctx); err != nil {
+				log.Print("Selected Xray retirement remains unconfirmed; original tools and cleanup owner were not released")
+				return err
+			}
+		}
 		if managedNFQList != nil {
 			if err := managedNFQList.Close(ctx); err != nil {
 				log.Print("Managed NFQ retirement remains unconfirmed; original tools and cleanup owner were not released")
-				return
+				return err
 			}
 		}
+		managedNFQCloseAttempted = true
 		cancelManagedNFQLifetime()
+		return nil
 	}
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		closeManagedNFQList(ctx)
+		stopRuntime()
+		retainManagedListRetirement(closeManagedNFQList)
 	}()
 	a.StartSelfUpdate(runtimeContext)
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
@@ -737,7 +748,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
 		cancelUSQUERecovery()
 		if usqueRecoveryErr != nil {
-			log.Fatal("USQUE repair recovery gate: unfinished repair requires manual review")
+			log.Print("USQUE repair recovery gate: unfinished repair requires manual review")
+			return 1
 		}
 		if usqueRecovery != restorejournal.Clean {
 			log.Printf("USQUE repair recovery completed: %s", usqueRecovery)
@@ -799,7 +811,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	serverErrors := make(chan error, 1)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		return 1
 	}
 	a.StartNodeChecks(runtimeContext)
 	a.StartNodeFeeds(runtimeContext)
@@ -809,7 +822,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 	select {
 	case serverErr := <-serverErrors:
 		if !errors.Is(serverErr, http.ErrServerClosed) {
-			log.Fatal(serverErr)
+			log.Print(serverErr)
+			exitCode = 1
 		}
 	case <-runtimeContext.Done():
 		// One total grace period fits the init script's 75-second stop budget.
@@ -844,8 +858,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) {
 		if err := a.WaitNodeFeeds(nodeShutdownContext); err != nil {
 			log.Print("Subscription update cleanup did not finish before shutdown")
 		}
-		closeManagedNFQList(shutdownContext)
+		if err := closeManagedNFQList(shutdownContext); err != nil {
+			log.Print("Managed list shutdown will continue with the original cleanup owners")
+		}
 	}
+	return exitCode
 }
 
 func runCommand(args []string) (bool, int) {

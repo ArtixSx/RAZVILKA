@@ -56,6 +56,7 @@ type XrayListRuntimeSource struct {
 	control                                             *operationgate.ControlEpochReview
 	registration                                        *dataplane.XrayRegistrationReview
 	cidrs                                               *sources.ServiceCIDRReview
+	inline                                              *xrayListInlineSource
 	node                                                *dataplane.NodeDefaultSourceReview
 }
 
@@ -65,6 +66,7 @@ type XrayListSourceObservation struct {
 	ServiceID, Selected, Resolved, ProbeURL, WANProfile, RouteMaterialSHA256 string
 	Service                                                                  catalog.Service
 	Sources                                                                  sources.ServiceCIDRObservation
+	Inline                                                                   *XrayListInlineSourceObservation
 	Node                                                                     dataplane.NodeDefaultSourceReference
 	NetworkIdentity                                                          netidentity.Identity
 }
@@ -110,7 +112,7 @@ func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 				matches++
 			}
 		}
-		if matches != 1 || len(r.frozen.Domains) != 0 || len(r.frozen.CIDRs) == 0 || len(r.frozen.SourceRefs) == 0 {
+		if matches != 1 || len(r.frozen.Domains) != 0 || len(r.frozen.CIDRs) == 0 {
 			return ErrXrayListSource
 		}
 		var err error
@@ -118,20 +120,15 @@ func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 		if err != nil {
 			return err
 		}
-		r.cidrs, err = r.sources.ReviewServiceCIDRs(c, serviceID, r.frozen.SourceRefs)
-		if err != nil {
-			return err
-		}
-		observation, err := r.cidrs.Observation(c)
-		if err != nil || !slices.Equal(r.frozen.CIDRs, observation.CIDRs) || !xrayListLiteralProbeInCIDRs(r.frozen) {
-			return errors.Join(ErrXrayListSource, err)
-		}
 		r.registration, err = r.manager.ReviewXrayRegistration(c, original)
 		if err != nil {
 			return err
 		}
 		r.control, err = a.Operations.ReviewControlEpoch(c, r.root)
 		if err != nil {
+			return err
+		}
+		if err := r.reviewDestinations(c); err != nil {
 			return err
 		}
 		r.wan, err = a.freshNetworkProfile(c)
@@ -227,7 +224,7 @@ func (r *XrayListRuntimeSource) currentNodeMaterial(ctx context.Context) (string
 }
 
 func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
-	if r.invalid || r.control == nil || r.registration == nil || r.cidrs == nil || r.node == nil {
+	if r.invalid || r.control == nil || r.registration == nil || (r.cidrs == nil) == (r.inline == nil) || r.node == nil {
 		return ErrXrayListSource
 	}
 	if err := r.currentApp(); err != nil {
@@ -250,7 +247,7 @@ func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
 			if err := r.registration.Current(c); err != nil {
 				return err
 			}
-			if err := r.cidrs.Current(c); err != nil {
+			if err := r.currentDestinations(c); err != nil {
 				return err
 			}
 			wan, err := r.app.freshNetworkProfile(c)
@@ -261,7 +258,7 @@ func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
 			if err != nil || material != r.materialHash {
 				return errors.Join(ErrXrayListSource, err)
 			}
-			if err := r.cidrs.Current(c); err != nil {
+			if err := r.currentDestinations(c); err != nil {
 				return err
 			}
 			if err := r.registration.Current(c); err != nil {
@@ -298,7 +295,7 @@ func (r *XrayListRuntimeSource) Observation(ctx context.Context) (XrayListSource
 		r.invalid = true
 		return XrayListSourceObservation{}, err
 	}
-	observation, err := r.cidrs.Observation(ctx)
+	observation, inline, err := r.destinationObservation(ctx)
 	if err != nil {
 		r.invalid = true
 		return XrayListSourceObservation{}, err
@@ -308,7 +305,7 @@ func (r *XrayListRuntimeSource) Observation(ctx context.Context) (XrayListSource
 		return XrayListSourceObservation{}, err
 	}
 	return XrayListSourceObservation{ServiceID: r.service, Selected: r.selected, Resolved: r.selected, ProbeURL: r.frozen.ProbeURL, WANProfile: r.wan,
-		RouteMaterialSHA256: r.materialHash, Service: defaultRouteCloneCatalogService(r.frozen), Sources: observation, Node: r.node.Reference(), NetworkIdentity: r.identity}, nil
+		RouteMaterialSHA256: r.materialHash, Service: defaultRouteCloneCatalogService(r.frozen), Sources: observation, Inline: inline, Node: r.node.Reference(), NetworkIdentity: r.identity}, nil
 }
 
 // Close cancels and joins reads before closing only this capture's handles.
@@ -330,6 +327,9 @@ func (r *XrayListRuntimeSource) Close() error {
 	}
 	if r.cidrs != nil {
 		r.closeErr = errors.Join(r.closeErr, r.cidrs.Close())
+	}
+	if r.inline != nil {
+		r.closeErr = errors.Join(r.closeErr, r.inline.review.Close())
 	}
 	if r.control != nil {
 		r.closeErr = errors.Join(r.closeErr, r.control.Close())

@@ -269,6 +269,12 @@ func (c *NetworkPolicyChecks) RetireCheck(ctx context.Context, lan *LANPolicyRun
 					continue
 				}
 			}
+			if adapter, ok := c.adapters[id].(*ProxyTunnelAdapter); ok && id == "xray" {
+				if e, present := held.Value(xraySelectedTCPExecutionKey{}).(*xraySelectedTCPExecution); present && e != nil {
+					result = errors.Join(result, c.retiredXrayConsumer(held, adapter, e), c.current(held))
+					continue
+				}
+			}
 			observer, ok := c.adapters[id].(RuntimeInactivityObserver)
 			if !ok || observer == nil || isNilRuntimeObserver(observer) {
 				result = errors.Join(result, fmt.Errorf("%w: %s has no owner observer", ErrRuntimeInactivity, id))

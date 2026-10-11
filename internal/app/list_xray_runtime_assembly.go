@@ -20,7 +20,7 @@ type listXrayRuntimePreparation struct {
 	compilation *DefaultRouteCompilation
 }
 
-func (r *XrayListRuntimeSource) prepare(ctx context.Context) (*listXrayRuntimePreparation, error) {
+func (r *XrayListRuntimeSource) prepare(ctx context.Context, selectedTCP ...bool) (*listXrayRuntimePreparation, error) {
 	if r == nil || r.self != r || xrayListSourceContext(ctx) != nil || r.closed.Load() {
 		return nil, ErrXrayListSource
 	}
@@ -66,6 +66,21 @@ func (r *XrayListRuntimeSource) prepare(ctx context.Context) (*listXrayRuntimePr
 	if len(compilation.rules) == 0 || compilation.LAN() == nil {
 		return nil, ErrDefaultRouteCapability
 	}
+	if len(selectedTCP) > 1 {
+		return nil, ErrDefaultRouteCapability
+	}
+	if len(selectedTCP) == 1 && selectedTCP[0] {
+		if err := r.narrowSelectedTCP(compilation); err != nil {
+			return nil, err
+		}
+		compilation.bindDigest(r.expected.Revision)
+	}
+	physical := compilation.LAN()
+	direct, err := dataplane.CompileXraySelectedTCPLANPolicyRuntime(compilation.Digest(), physical.Ingress)
+	if err != nil {
+		return nil, err
+	}
+	compilation.lan = direct
 	if err := proof.Current(ctx); err != nil {
 		return nil, err
 	}
@@ -123,7 +138,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.invalid || r.control == nil || r.registration == nil || r.cidrs == nil || r.node == nil {
+	if r.invalid || r.control == nil || r.registration == nil || (r.cidrs == nil) == (r.inline == nil) || r.node == nil {
 		return ErrXrayListSource
 	}
 	deadline, _ := r.ctx.Deadline()
@@ -145,7 +160,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 			if err := r.registration.Current(c); err != nil {
 				return err
 			}
-			if err := r.cidrs.Current(c); err != nil {
+			if err := r.currentDestinations(c); err != nil {
 				return err
 			}
 			wan, err := r.app.freshNetworkProfile(c)
@@ -156,7 +171,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 			if err != nil || material != r.materialHash {
 				return errors.Join(ErrXrayListSource, err)
 			}
-			if err := r.cidrs.Current(c); err != nil {
+			if err := r.currentDestinations(c); err != nil {
 				return err
 			}
 			if err := r.registration.Current(c); err != nil {

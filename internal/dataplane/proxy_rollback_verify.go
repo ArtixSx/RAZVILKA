@@ -14,6 +14,12 @@ import (
 // is not enough: processes may already have died, a file may differ, or router
 // hooks may have removed/reordered the restored RPDB/firewall rules.
 func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return false, err
+		}
+		return e.verifyRollback(ctx)
+	}
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}

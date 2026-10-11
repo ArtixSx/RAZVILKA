@@ -83,6 +83,9 @@ func (m *Manager) checkExecutionRecovery() error {
 	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
+	if err := m.checkRetainedXrayRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
 	return nil
 }
 
@@ -112,7 +115,7 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 		return false, nil
 	}
 	// A documentary ACTIVE row cannot reconstruct the original live owner.
-	if m.checkRetainedNFQWSRecord(*latest) != nil {
+	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {
@@ -149,6 +152,15 @@ func validExecutionPlanID(id string) bool {
 }
 
 func (m *Manager) writeExecution(root string, execution Execution) error {
+	return m.writeExecutionOwned(root, execution, nil)
+}
+
+// scope is the actual original issuer passed by the serialized Manager
+// operation or scope.persist. A decoded resource never locates this receiver.
+func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
+		return executionJournalError(ErrExecutionJournal)
+	}
 	terminal := execution.State == "committed" || execution.State == "committing" || execution.State == "rolled-back" || execution.State == "canary-failed" || execution.State == "network-stale" || execution.State == "temporary-complete"
 	if err := validateExecutionResources(execution, terminal); err != nil {
 		return executionJournalError(err)
@@ -165,6 +177,36 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 	if err != nil {
 		return executionJournalError(err)
 	}
+	if scope != nil && len(scope.xraySelectedTCP) != 0 {
+		if len(scope.xraySelectedTCP) != 1 {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		for _, resource := range scope.xraySelectedTCP {
+			if resource == nil || resource.records == nil {
+				return executionJournalError(ErrExecutionJournal)
+			}
+			if err := resource.records.beforePublication(); err != nil {
+				return executionJournalError(err)
+			}
+		}
+		publish := func(index int, path string) error {
+			file, err := writeDataplaneJournalRetained(path, data)
+			if err != nil {
+				return err
+			}
+			info, err := file.Stat()
+			if err == nil {
+				err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
+			}
+			if err != nil {
+				return errors.Join(err, file.Close())
+			}
+			return nil // Original sink accepted ownership of this writer's FD.
+		}
+		transactionErr := publish(0, filepath.Join(root, "execution.json"))
+		latestErr := publish(1, filepath.Join(m.StateRoot, "latest-execution.json"))
+		return executionJournalError(errors.Join(transactionErr, latestErr))
+	}
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)
@@ -174,6 +216,9 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
+		if resource.XraySelectedTCP != nil {
+			return true
+		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {
 			return true
 		}
@@ -252,6 +297,22 @@ func writeDataplaneJournal(path string, data []byte) error {
 	// A renamed file without a synced directory is not a durable commit on
 	// the router. Failure here is uncertain publication and requires rollback.
 	return syncDataplaneJournalDirectory(root)
+}
+
+func writeDataplaneJournalRetained(path string, data []byte) (*os.File, error) {
+	root, err := openJournalDirectory(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	file, err := root.WriteAtomicRetained(filepath.Base(path), data, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syncDataplaneJournalDirectory(root); err != nil {
+		return nil, errors.Join(err, file.Close())
+	}
+	return file, nil
 }
 
 func (m *Manager) prepareExecutionRoot(transactionRoot string) error {

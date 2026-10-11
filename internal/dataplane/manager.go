@@ -61,6 +61,8 @@ type Manager struct {
 	retainedNFQMu      sync.Mutex
 	retainedNFQ        *retainedNFQWSExecution
 	pendingNFQ         *pendingNFQWSExecution
+	retainedXrayMu     sync.Mutex
+	retainedXray       *retainedXrayExecution
 }
 
 type Adapter interface {
@@ -1148,7 +1150,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if err := validateDomainTransportForExecution(plan); err != nil {
 		return execution, err
 	}
-	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() {
+	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil {
 		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
 	}
 	if err := m.checkManagedNFQWSApply(ctx, plan); err != nil {
@@ -1209,7 +1211,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
-	writeExecution := func() error { return m.writeExecution(transactionRoot, execution) }
+	var activeNFQScope, activeXrayScope *executionResourceScope
+	writeExecution := func() error {
+		if activeNFQScope != nil && activeXrayScope != nil {
+			return executionJournalError(ErrNetworkPolicyAuthority)
+		}
+		scope := activeNFQScope
+		if activeXrayScope != nil {
+			scope = activeXrayScope
+		}
+		return m.writeExecutionOwned(transactionRoot, execution, scope)
+	}
 	restoreCommitted, journalErr := m.preserveCommittedJournal()
 	if journalErr == nil {
 		journalErr = writeExecution()
@@ -1224,9 +1236,24 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	var undoCommit func() error
 	commitPublicationAttempted := false
 	liveMutation := false
-	var activeNFQScope *executionResourceScope
 	var retryNFQRollback func(context.Context) error
+	var retryXrayRollback func(context.Context) error
 	defer func() {
+		if activeXrayScope != nil && !activeXrayScope.retained {
+			if result.State == "rollback-failed" && retryXrayRollback != nil {
+				if err := m.retainPendingXray(ctx, activeXrayScope, retryXrayRollback); err == nil {
+					result.Resources = cloneExecutionResources(result.Resources)
+					result.Steps = slices.Clone(result.Steps)
+					return
+				} else {
+					resultErr = errors.Join(resultErr, err)
+				}
+			}
+			if err := activeXrayScope.close(); err != nil {
+				resultErr = errors.Join(resultErr, executionJournalError(err))
+				result.RollbackVerified = false
+			}
+		}
 		if (activeNFQScope == nil || !activeNFQScope.retained) && result.State == "rollback-failed" && retryNFQRollback != nil {
 			if err := m.retainPendingNFQWS(ctx, activeNFQScope, retryNFQRollback); err == nil {
 				// Returned data never aliases the private retained original owner.
@@ -1271,7 +1298,22 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		var err error
 		_, actualNFQ := adapter.(*NFQWS2Adapter)
-		if actualNFQ && plan.LAN != nil && (phase == "activate" || phase == "health" || phase == "commit-adapter" || restoring) {
+		actualXray, isXray := adapter.(*ProxyTunnelAdapter)
+		_, selectedXray, xrayErr := xraySelectedTCPExecutionFor(runCtx, actualXray, plan, adapterRoot)
+		if isXray && selectedXray {
+			if xrayErr != nil {
+				err = xrayErr
+			} else {
+				if activeXrayScope == nil && !restoring {
+					activeXrayScope, err = m.newExecutionResourceScope(ctx, plan, adapter.ID(), &execution, transactionRoot)
+				}
+				if err == nil && activeXrayScope != nil {
+					err = action(activeXrayScope.contextWith(runCtx), cloneExecutionResourcePlan(activeXrayScope.plan), adapterRoot)
+				} else if restoring {
+					err = action(runCtx, plan, adapterRoot)
+				}
+			}
+		} else if actualNFQ && plan.LAN != nil && (phase == "activate" || phase == "health" || phase == "commit-adapter" || restoring) {
 			if activeNFQScope == nil && !restoring {
 				activeNFQScope, err = m.newExecutionResourceScope(ctx, plan, adapter.ID(), &execution, transactionRoot)
 			}
@@ -1439,6 +1481,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		return nil
 	}
+	retryXrayRollback = func(parent context.Context) error {
+		rollbackParent = parent
+		_ = rollback(ErrXrayOperationOwner)
+		if execution.State != "rolled-back" || !execution.RollbackVerified {
+			return executionJournalError(ErrXrayOperationOwner)
+		}
+		return nil
+	}
 	rejectCanary := func(cause error) error {
 		plan.Ready = false
 		plan.State = "canary-failed"
@@ -1486,6 +1536,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	finishCommit := func() error {
 		execution.State = "committing"
+		if activeXrayScope != nil {
+			if err := activeXrayScope.prepareActiveXray(ctx); err != nil {
+				return rollback(err)
+			}
+		}
 		if activeNFQScope != nil {
 			if err := activeNFQScope.prepareActiveNFQWS(ctx); err != nil {
 				return rollback(err)
@@ -1505,6 +1560,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		if activeNFQScope != nil {
 			if err := m.retainActiveNFQWS(ctx, activeNFQScope); err != nil {
+				return rollback(err)
+			}
+		}
+		if activeXrayScope != nil {
+			if err := m.retainActiveXray(ctx, activeXrayScope); err != nil {
 				return rollback(err)
 			}
 		}

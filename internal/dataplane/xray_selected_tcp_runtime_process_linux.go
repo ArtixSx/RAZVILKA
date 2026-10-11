@@ -80,7 +80,9 @@ func (p *xraySelectedTCPProcess) readProcess(ctx context.Context, proc *xraySele
 		return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
 	}
 	args := p.image.args
-	if len(args) != 4 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] || args[1] != "run" || args[2] != "-config" || args[3] != filepath.Join(p.image.dir, "xray-redirect.json") {
+	ownedFD := p.image.path == "/proc/self/fd/3" && len(p.image.extras) == 2 && len(args) == 4 && args[3] == "/proc/self/fd/4"
+	if len(args) != 4 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] || args[1] != "run" || args[2] != "-config" ||
+		!ownedFD && args[3] != filepath.Join(p.image.dir, "xray-redirect.json") {
 		return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
 	}
 	stat, err := proc.read(ctx, proc.child, "stat", 8192)
@@ -116,9 +118,20 @@ func (p *xraySelectedTCPProcess) readProcess(ctx context.Context, proc *xraySele
 	if err != nil || !executable.Mode().IsRegular() {
 		return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
 	}
+	if ownedFD {
+		original, err := p.image.extras[0].Stat()
+		if err != nil || !os.SameFile(original, executable) || original.Size() != executable.Size() || original.Mode() != executable.Mode() || !original.ModTime().Equal(executable.ModTime()) {
+			return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
+		}
+	}
 	config, configHash, err := p.readConfig(ctx)
 	if err != nil {
 		return xraySelectedTCPProcessObservation{}, err
+	}
+	if ownedFD {
+		if err := p.readOriginalConfigFD(ctx, proc, config, configHash); err != nil {
+			return xraySelectedTCPProcessObservation{}, err
+		}
 	}
 	closing, err := proc.read(ctx, proc.child, "stat", 8192)
 	closeStart, closeParent, closeGroup, parseErr := xraySelectedTCPStat(closing, p.pid)
@@ -128,6 +141,43 @@ func (p *xraySelectedTCPProcess) readProcess(ctx context.Context, proc *xraySele
 	argumentHash := sha256.Sum256(argv)
 	return xraySelectedTCPProcessObservation{pid: p.pid, parent: parent, group: group, boot: network.BootID, start: start, exe: exe,
 		argumentsSHA256: hex.EncodeToString(argumentHash[:]), configSHA256: configHash, executable: executable, config: config, network: network}, nil
+}
+
+func (p *xraySelectedTCPProcess) readOriginalConfigFD(ctx context.Context, proc *xraySelectedTCPProc, named os.FileInfo, expectedHash string) error {
+	if len(p.image.extras) != 2 || p.image.extras[1] == nil || proc == nil || p.liveCurrent(ctx) != nil {
+		return errXraySelectedTCPRuntime
+	}
+	original, err := p.image.extras[1].Stat()
+	if err != nil || !os.SameFile(original, named) || original.Mode() != named.Mode() || original.Size() != named.Size() || !original.ModTime().Equal(named.ModTime()) {
+		return errXraySelectedTCPRuntime
+	}
+	directory, err := proc.open(ctx, proc.child, "fd", true)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(directory)
+	fd, err := unix.Openat(directory, "4", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0) // Follow only the SAME actual child's kernel FD4 magic link.
+	if err != nil {
+		return errXraySelectedTCPRuntime
+	}
+	f := os.NewFile(uintptr(fd), "[actual original Xray config FD4]")
+	defer f.Close()
+	held, err := f.Stat()
+	if err != nil || !os.SameFile(original, held) || held.Size() != original.Size() || held.Mode() != original.Mode() || !held.ModTime().Equal(original.ModTime()) {
+		return errXraySelectedTCPRuntime
+	}
+	data, err := xraySelectedTCPReadFD(ctx, fd, 1<<20)
+	defer clear(data)
+	hash := sha256.Sum256(data)
+	after, statErr := f.Stat()
+	closing, originalErr := p.image.extras[1].Stat()
+	if err != nil || statErr != nil || originalErr != nil || len(data) == 0 || int64(len(data)) != original.Size() ||
+		!os.SameFile(held, after) || !os.SameFile(original, closing) || after.Size() != held.Size() || after.Mode() != held.Mode() ||
+		!after.ModTime().Equal(held.ModTime()) || closing.Size() != original.Size() || !closing.ModTime().Equal(original.ModTime()) ||
+		hex.EncodeToString(hash[:]) != expectedHash || proc.current(ctx) != nil || p.liveCurrent(ctx) != nil {
+		return errXraySelectedTCPRuntime
+	}
+	return nil
 }
 
 func (p *xraySelectedTCPProcess) readConfig(ctx context.Context) (os.FileInfo, string, error) {

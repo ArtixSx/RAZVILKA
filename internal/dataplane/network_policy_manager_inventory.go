@@ -38,6 +38,10 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if err != nil {
 			return lanPolicyPreflightAt("inventory-consumer-open", err)
 		}
+		xrayStock, err := c.xraySelectedTCPStockExecution(held)
+		if err != nil || stock != nil && xrayStock != nil {
+			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+		}
 		opening, err := c.proxyConsumers(held, lan)
 		defer closeNetworkPolicyProxyObservations(opening)
 		if err != nil {
@@ -49,7 +53,12 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				o.close()
 			}
 		}()
-		if err != nil || requireConsumer && len(opening)+len(openingNFQ) == 0 {
+		if err != nil {
+			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+		}
+		openingXray, err := c.xraySelectedTCPConsumers(held, lan)
+		defer closeNetworkPolicyXrayObservations(openingXray)
+		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray) == 0 {
 			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		first, err := c.read(held, identity)
@@ -57,10 +66,13 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			return lanPolicyPreflightAt("inventory-read-open", err)
 		}
 		stockRows, err := stock.comparison(first, openingNFQ)
+		if err == nil && xrayStock != nil {
+			stockRows, err = xrayStock.comparison(first)
+		}
 		if err != nil {
 			return lanPolicyPreflightAt("inventory-row-unallowed", err)
 		}
-		if err := checkNetworkPolicyInventoryWithStock(first, identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ...); err != nil {
+		if err := checkNetworkPolicyInventoryWithXray(first, identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ, openingXray); err != nil {
 			return err
 		}
 		closing, err := c.proxyConsumers(held, lan)
@@ -77,8 +89,17 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if err != nil || !equalNetworkPolicyNFQObservations(openingNFQ, closingNFQ) {
 			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
+		closingXray, err := c.xraySelectedTCPConsumers(held, lan)
+		defer closeNetworkPolicyXrayObservations(closingXray)
+		if err != nil || !equalNetworkPolicyXraySelectedTCPObservations(openingXray, closingXray) {
+			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+		}
 		closingStock, err := c.stockQueueExecution(held)
 		if err != nil || !stock.equal(closingStock) {
+			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
+		}
+		closingXrayStock, err := c.xraySelectedTCPStockExecution(held)
+		if err != nil || !xrayStock.equal(closingXrayStock) || closingStock != nil && closingXrayStock != nil {
 			return lanPolicyPreflightAt("inventory-consumer-close", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		// No external owner callback runs after this final complete capture.
@@ -99,11 +120,26 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 		}
 		lastStockRows, stockErr := closingStock.comparison(last, closingNFQ)
+		if stockErr == nil && closingXrayStock != nil {
+			lastStockRows, stockErr = closingXrayStock.comparison(last)
+		}
 		if stockErr == nil && !reflect.DeepEqual(stockRows, lastStockRows) {
 			stockErr = ErrNetworkPolicyConsumers
 		}
-		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), checkNetworkPolicyInventoryWithStock(last, identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ...), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr))
+		var xrayErr error
+		for _, observations := range [][]networkPolicyXraySelectedTCPObservation{openingXray, closingXray} {
+			for _, o := range observations {
+				xrayErr = errors.Join(xrayErr, o.current(held))
+			}
+		}
+		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithXray(last, identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr))
 	}))
+}
+
+func closeNetworkPolicyXrayObservations(observations []networkPolicyXraySelectedTCPObservation) {
+	for _, o := range observations {
+		o.close()
+	}
 }
 
 // CheckLANPolicyInventory is a pure observation predicate allowing only the
@@ -124,6 +160,14 @@ func networkPolicyRowKey(row BackendInventoryRow, consumer bool) string {
 	var body string
 	if len(row.Tokens) < 2 {
 		return ""
+	}
+	if networkPolicyXraySelectedTCPRow(row) {
+		key, err := xraySelectedTCPNATRuleKey(row)
+		if err != nil {
+			return ""
+		}
+		data, _ := json.Marshal([]any{row.Family, row.Table, "xray-selected-tcp", key})
+		return string(data)
 	}
 	if networkPolicyNFQRow(row) {
 		key := nfqwsScopedRuleKey(row.Tokens)
@@ -158,6 +202,10 @@ func networkPolicyChainCoordinate(row BackendInventoryRow) string {
 }
 
 func networkPolicyInventoryAllowed(lan *LANPolicyRuntimePlan, consumers []networkPolicyProxyObservation, nfqConsumers ...networkPolicyNFQObservation) (networkPolicyInventoryAllowance, error) {
+	return networkPolicyInventoryAllowedWithXray(lan, consumers, nfqConsumers, nil)
+}
+
+func networkPolicyInventoryAllowedWithXray(lan *LANPolicyRuntimePlan, consumers []networkPolicyProxyObservation, nfqConsumers []networkPolicyNFQObservation, xrayConsumers []networkPolicyXraySelectedTCPObservation) (networkPolicyInventoryAllowance, error) {
 	a := networkPolicyInventoryAllowance{counts: map[string]int{}, required: map[string]int{}, gateOrder: map[string][]string{}}
 	add := func(row BackendInventoryRow, consumer bool) {
 		key := networkPolicyRowKey(row, consumer)
@@ -202,6 +250,21 @@ func networkPolicyInventoryAllowed(lan *LANPolicyRuntimePlan, consumers []networ
 			}
 		}
 	}
+	for _, consumer := range xrayConsumers {
+		if len(consumer.rows) != len(consumer.required) {
+			return a, ErrNetworkPolicyConsumers
+		}
+		for i, row := range consumer.rows {
+			key := networkPolicyRowKey(row, true)
+			if key == "" || !networkPolicyXraySelectedTCPRow(row) {
+				return a, ErrNetworkPolicyConsumers
+			}
+			a.counts[key]++
+			if consumer.required[i] {
+				a.required[key]++
+			}
+		}
+	}
 	return a, nil
 }
 
@@ -220,6 +283,12 @@ func checkNetworkPolicyInventoryForMode(s BackendInventorySnapshot, identity net
 // Only the original-owner bridge above supplies exact stock comparison rows.
 // Public/bare observation predicates remain strict and cannot infer a queue.
 func checkNetworkPolicyInventoryWithStock(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, stockRows []BackendInventoryRow, nfqConsumers ...networkPolicyNFQObservation) error {
+	return checkNetworkPolicyInventoryWithXray(s, identity, lan, mode, consumers, stockRows, nfqConsumers, nil)
+}
+
+// Only observeInventory supplies Xray observations from the original scope,
+// COMMON writer and child. Public comparison entry points cannot supply them.
+func checkNetworkPolicyInventoryWithXray(s BackendInventorySnapshot, identity netidentity.Identity, lan *LANPolicyRuntimePlan, mode string, consumers []networkPolicyProxyObservation, stockRows []BackendInventoryRow, nfqConsumers []networkPolicyNFQObservation, xrayConsumers []networkPolicyXraySelectedTCPObservation) error {
 	if mode != "" && !networkPolicyDirectInventoryMode(mode) || lan != nil && lan.Mode != mode {
 		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
@@ -230,7 +299,7 @@ func checkNetworkPolicyInventoryWithStock(s BackendInventorySnapshot, identity n
 		}
 		return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
 	}
-	a, err := networkPolicyInventoryAllowed(lan, consumers, nfqConsumers...)
+	a, err := networkPolicyInventoryAllowedWithXray(lan, consumers, nfqConsumers, xrayConsumers)
 	if err != nil {
 		return lanPolicyPreflightAt("inventory-definition", err)
 	}
@@ -262,7 +331,7 @@ func checkNetworkPolicyInventoryWithStock(s BackendInventorySnapshot, identity n
 			stock[stockKey]--
 			continue
 		}
-		consumer := strings.HasPrefix(row.Tokens[1], "RZP_") || networkPolicyReferencesPrefix(row.Tokens, "RZP_") || networkPolicyNFQRow(row)
+		consumer := strings.HasPrefix(row.Tokens[1], "RZP_") || networkPolicyReferencesPrefix(row.Tokens, "RZP_") || networkPolicyNFQRow(row) || networkPolicyXraySelectedTCPRow(row)
 		key := networkPolicyRowKey(row, consumer)
 		if key == "" || a.counts[key] <= 0 {
 			stage := "inventory-row-unallowed"
@@ -296,11 +365,11 @@ func checkNetworkPolicyInventoryWithStock(s BackendInventorySnapshot, identity n
 			return lanPolicyPreflightAt("inventory-consumer-required", ErrNetworkPolicyConsumers)
 		}
 	}
-	return nil
+	return lanPolicyPreflightAt("inventory-row-order", xraySelectedTCPInventoryOrder(s, xrayConsumers))
 }
 
 func networkPolicyReservedChain(value string) bool {
-	for _, prefix := range []string{"RZG_", "RZP_", "RZC_", "RZD_", "RZQ_", "RZT_"} {
+	for _, prefix := range []string{"RZG_", "RZP_", "RZC_", "RZD_", "RZQ_", "RZT_", "RZX_"} {
 		if strings.HasPrefix(value, prefix) {
 			return true
 		}

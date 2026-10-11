@@ -139,38 +139,42 @@ type applyChangeSummary struct {
 }
 
 type App struct {
-	communityPreparationCount atomic.Int32
-	panelSnapshots            panelSnapshotState
-	autonomy                  autonomyState
-	PrivateRestore            *privaterestore.Coordinator
-	Operations                operationgate.Gate
-	Store                     *config.Store
-	Catalog                   catalog.Catalog
-	Sources                   *sources.Manager
-	Telemetry                 *telemetry.Store
-	EngineConfigs             *engineconfig.Manager
-	EngineLab                 *enginelab.Manager
-	StrategyLab               *strategylab.Manager
-	strategyCompatibility     strategyCompatibilityState
-	Components                *components.Manager
-	ComponentHistory          *updatecheck.ComponentHistoryAdmission
-	managedNFQBundle          managedNFQBundleState
-	managedNFQListMu          sync.Mutex
-	managedNFQList            *ManagedNFQWSListRuntime
-	componentRecoveryChecks   componentRecoveryChecks
-	Community                 *community.Manager
-	CustomServices            *customservices.Manager
-	Dataplane                 *dataplane.Manager
-	Devices                   *devices.Manager
-	DNS                       *dnscontrol.Manager
-	dnsServiceComparer        serviceDNSComparer
-	dnsAddressProbe           func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult
-	Warp                      *warp.Manager
-	AWGCapabilityProbe        func(context.Context) awgprofile.Capabilities
-	Cloudflare                *cloudflareprovider.Store
-	Nodes                     *nodestore.Store
-	defaultConsent            defaultConsentState
-	NodeChecker               dataplane.NodeChecker
+	communityPreparationCount    atomic.Int32
+	panelSnapshots               panelSnapshotState
+	autonomy                     autonomyState
+	PrivateRestore               *privaterestore.Coordinator
+	Operations                   operationgate.Gate
+	Store                        *config.Store
+	Catalog                      catalog.Catalog
+	Sources                      *sources.Manager
+	Telemetry                    *telemetry.Store
+	EngineConfigs                *engineconfig.Manager
+	EngineLab                    *enginelab.Manager
+	StrategyLab                  *strategylab.Manager
+	strategyCompatibility        strategyCompatibilityState
+	Components                   *components.Manager
+	ComponentHistory             *updatecheck.ComponentHistoryAdmission
+	managedNFQBundle             managedNFQBundleState
+	managedNFQListMu             sync.Mutex
+	managedNFQList               *ManagedNFQWSListRuntime
+	managedListPolicyMu          sync.Mutex
+	managedListPolicy            *managedListPolicyOwner
+	managedXraySelectedTCPListMu sync.Mutex
+	managedXraySelectedTCPList   *ManagedXraySelectedTCPListRuntime
+	componentRecoveryChecks      componentRecoveryChecks
+	Community                    *community.Manager
+	CustomServices               *customservices.Manager
+	Dataplane                    *dataplane.Manager
+	Devices                      *devices.Manager
+	DNS                          *dnscontrol.Manager
+	dnsServiceComparer           serviceDNSComparer
+	dnsAddressProbe              func(context.Context, catalog.Service, netip.Addr) routeprobe.DNSAddressResult
+	Warp                         *warp.Manager
+	AWGCapabilityProbe           func(context.Context) awgprofile.Capabilities
+	Cloudflare                   *cloudflareprovider.Store
+	Nodes                        *nodestore.Store
+	defaultConsent               defaultConsentState
+	NodeChecker                  dataplane.NodeChecker
 	// Fixed views of one shared dispatcher, configured before HTTP serving.
 	NodeCheckers map[string]dataplane.NodeChecker
 	// OPS must admit the dual-engine history format before Xray checks write
@@ -877,7 +881,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 				// A committed journal describes an earlier transaction. Present
 				// processes, forwarding grants and policy precedence must still
 				// match before the panel or installer can call that runtime live.
-				if cfg.ServiceControl.Stopped || appliedPlan.Revision != cfg.AppliedRevision || a.Dataplane.ObserveCommittedRuntime(r.Context(), *appliedPlan) != nil {
+				if cfg.ServiceControl.Stopped || appliedPlan.Revision != cfg.AppliedRevision || a.observeCommittedRuntime(r.Context(), *appliedPlan) != nil {
 					liveActive = false
 					dataplaneRecoveryState = "runtime-unverified"
 				}
@@ -3436,6 +3440,9 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := a.Store.Get()
+	if a.managedXrayPlanHTTP(w, r, cfg, scope) {
+		return
+	}
 	options := a.routeOptionsSnapshot()
 	if a.managedNFQPlanHTTP(w, r, cfg, scope) {
 		return
@@ -3543,6 +3550,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := a.Store.Get()
+	if a.managedXrayApplyHTTP(w, r, cfg, scope, reviewRequest) {
+		return
+	}
 	if a.managedNFQApplyHTTP(w, r, cfg, scope, reviewRequest) {
 		return
 	}

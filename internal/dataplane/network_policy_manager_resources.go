@@ -24,6 +24,7 @@ type ExecutionResource struct {
 	NFQWS             *ExecutionNFQWSDefinition             `json:"nfqws,omitempty"`
 	SyntheticBaseline *ExecutionSyntheticBaselineDefinition `json:"synthetic_baseline,omitempty"`
 	Phase             string                                `json:"phase,omitempty"`
+	XraySelectedTCP   *ExecutionXraySelectedTCPDefinition   `json:"xray_selected_tcp,omitempty"`
 }
 
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
@@ -40,6 +41,10 @@ func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource 
 	result := slices.Clone(resources)
 	for i := range result {
 		result[i].SyntheticBaseline = cloneExecutionSyntheticBaselineDefinition(result[i].SyntheticBaseline)
+		if result[i].XraySelectedTCP != nil {
+			definition := result[i].XraySelectedTCP.Clone()
+			result[i].XraySelectedTCP = &definition
+		}
 		if result[i].NodeTransit != nil {
 			spec := *result[i].NodeTransit
 			result[i].NodeTransit = &spec
@@ -83,11 +88,19 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			prefix = "nq-"
 		} else if resource.Kind == "synthetic-baseline" {
 			prefix = "sb-"
+		} else if resource.Kind == "xray-selected-tcp" {
+			prefix = "xr-"
 		}
 		if (len(resource.ID) != len(prefix)+16 && len(resource.ID) != len(prefix)+32) || !strings.HasPrefix(resource.ID, prefix) || strings.Trim(strings.TrimPrefix(resource.ID, prefix), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.XraySelectedTCP != nil && resource.Kind != "xray-selected-tcp" {
+			return ErrExecutionJournal
+		}
+		if resource.SyntheticBaseline != nil && resource.Kind != "synthetic-baseline" {
+			return ErrExecutionJournal
+		}
 		switch resource.Kind {
 		case "node-transit":
 			if resource.NodeTransit == nil || resource.NFQWS != nil || resource.SyntheticBaseline != nil || resource.Phase != "" || resource.NodeTransit.PlanID != planID || resource.NodeTransit.PlanDigest != execution.Digest {
@@ -139,6 +152,16 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			if err := validateExecutionSyntheticBaselineResource(execution, resource, resource.SyntheticBaseline); err != nil {
 				return err
 			}
+		case "xray-selected-tcp":
+			if resource.XraySelectedTCP == nil || resource.XraySelectedTCP.PlanID != planID || resource.XraySelectedTCP.PlanDigest != execution.Digest {
+				return ErrExecutionJournal
+			}
+			if err := validateXraySelectedTCPExecutionResource(resource, terminal); err != nil {
+				return err
+			}
+			if resource.Phase == "active" && execution.State != "committing" && execution.State != "committed" && execution.State != "rolling-back" && execution.State != "rollback-failed" {
+				return ErrExecutionJournal
+			}
 		default:
 			return ErrExecutionJournal
 		}
@@ -149,7 +172,7 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			}
 		case "removed", "unused":
 		case "active":
-			if resource.Kind != "nfqws-scoped" || resource.Phase != "active" {
+			if (resource.Kind != "nfqws-scoped" && resource.Kind != "xray-selected-tcp") || resource.Phase != "active" {
 				return ErrExecutionJournal
 			}
 		default:

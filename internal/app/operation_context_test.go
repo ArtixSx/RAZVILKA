@@ -94,7 +94,7 @@ func TestHTTPSharedContextCannotBecomeExclusiveAuthority(t *testing.T) {
 			t.Fatal("shared upgrade", err)
 		}
 	}))
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/services", nil))
 	if a.Operations.Snapshot().Active != 0 {
 		t.Fatal("shared request retained")
 	}

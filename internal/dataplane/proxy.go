@@ -192,6 +192,12 @@ func (a *ProxyTunnelAdapter) checkRouteNetwork(ctx context.Context, plan RoutePl
 }
 
 func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.snapshot(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchXrayPlan(plan, root, false)
 		if err != nil {
@@ -339,6 +345,12 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 }
 
 func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.prepare(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
 		if err != nil {
@@ -485,6 +497,12 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 }
 
 func (a *ProxyTunnelAdapter) Validate(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.validate(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
 		if err != nil {
@@ -543,6 +561,12 @@ func (a *ProxyTunnelAdapter) Validate(ctx context.Context, plan Plan, root strin
 // port. It does not stop the working process, create a TUN interface or touch
 // policy routing. The candidate is always removed before Activate can run.
 func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root string) (retErr error) {
+	if e, handled, err := xraySelectedTCPExecutionForRoutes(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.canary(ctx, plan)
+	}
 	if a.xrayPlanDispatch {
 		plan.Routes = cloneNetworkPolicyRoutes(plan.Routes)
 		plan.LAN = CloneLANPolicyRuntime(plan.LAN)
@@ -737,6 +761,12 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 }
 
 func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.activate(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
 		if err != nil {
@@ -917,6 +947,12 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 }
 
 func (a *ProxyTunnelAdapter) Health(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.health(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
 		if err != nil {
@@ -1008,6 +1044,9 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 }
 
 func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr error) {
+	if xraySelectedTCPOriginalAssociated(a) {
+		return xraySelectedTCPObserveOriginalAssociated(ctx, a)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
 		if err != nil {
@@ -1130,6 +1169,9 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 }
 
 func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool, error) {
+	if xraySelectedTCPOriginalAssociated(a) {
+		return false, xraySelectedTCPObserveOriginalAssociated(ctx, a)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCurrentXrayPlan(ctx, plan)
 		if err != nil {
@@ -1241,6 +1283,9 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 }
 
 func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
+	if xraySelectedTCPOriginalAssociated(a) {
+		return ErrXrayOperationOwner // Explicit original Stop must join this owner first.
+	}
 	if a.xrayPlanDispatch {
 		mode, err := a.currentXrayRuntimeMode(ctx)
 		if err != nil {
@@ -1307,6 +1352,12 @@ func (a *ProxyTunnelAdapter) Deactivate(ctx context.Context) error {
 }
 
 func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.commit(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchCandidateXrayPlan(plan, root, true)
 		if err != nil {
@@ -1386,6 +1437,12 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 }
 
 func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root string) error {
+	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
+		if err != nil {
+			return err
+		}
+		return e.rollback(ctx)
+	}
 	if a.xrayPlanDispatch {
 		view, frozen, err := a.dispatchXrayPlan(plan, root, true)
 		if err != nil {

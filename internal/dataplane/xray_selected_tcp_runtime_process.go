@@ -35,18 +35,19 @@ type xraySelectedTCPCommandImage struct {
 }
 
 type xraySelectedTCPProcess struct {
-	self    *xraySelectedTCPProcess
-	cmd     *exec.Cmd
-	child   *os.Process
-	pid     int
-	parent  int
-	image   xraySelectedTCPCommandImage
-	ctx     context.Context
-	cancel  context.CancelFunc
-	closed  atomic.Bool
-	done    chan struct{}
-	state   *os.ProcessState
-	waitErr error
+	self        *xraySelectedTCPProcess
+	cmd         *exec.Cmd
+	child       *os.Process
+	pid         int
+	parent      int
+	image       xraySelectedTCPCommandImage
+	ctx         context.Context
+	cancel      context.CancelFunc
+	closed      atomic.Bool
+	done        chan struct{}
+	state       *os.ProcessState
+	waitErr     error
+	waitStarted bool // Protected by the original Cmd association mutex.
 }
 
 func (*xraySelectedTCPProcess) String() string   { return "[private original Xray child Wait owner]" }
@@ -94,9 +95,88 @@ func retainXraySelectedTCPProcessWait(ctx context.Context, cmd *exec.Cmd) (*xray
 	p := &xraySelectedTCPProcess{cmd: cmd, child: cmd.Process, pid: cmd.Process.Pid, parent: os.Getpid(), ctx: life, cancel: cancel, done: make(chan struct{}),
 		image: xraySelectedTCPCommandImage{path: cmd.Path, dir: cmd.Dir, args: slices.Clone(cmd.Args), env: slices.Clone(cmd.Env), extras: slices.Clone(cmd.ExtraFiles)}}
 	p.self = p
+	p.waitStarted = true
 	xraySelectedTCPWaits.live[cmd] = p
 	go p.wait()
 	return p, nil
+}
+
+// Reserve sole-Wait capacity BEFORE the upper original publisher's Start.
+// Reservation grants no Start: only that actual resource/control publisher can
+// use its private Cmd. A failed syscall releases only a never-started slot.
+func reserveXraySelectedTCPProcessWait(ctx context.Context, cmd *exec.Cmd) (*xraySelectedTCPProcess, error) {
+	if xraySelectedTCPFinite(ctx) != nil || cmd == nil || cmd.Process != nil || cmd.ProcessState != nil || cmd.Cancel != nil ||
+		!filepath.IsAbs(cmd.Path) || filepath.Clean(cmd.Path) != cmd.Path || !filepath.IsAbs(cmd.Dir) || filepath.Clean(cmd.Dir) != cmd.Dir ||
+		len(cmd.Args) == 0 || len(cmd.Args) > 16 || len(cmd.Env) > 128 || len(cmd.ExtraFiles) > 8 {
+		return nil, errXraySelectedTCPRuntime
+	}
+	bytes := len(cmd.Path) + len(cmd.Dir)
+	for _, values := range [][]string{cmd.Args, cmd.Env} {
+		for _, value := range values {
+			if len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n") {
+				return nil, errXraySelectedTCPRuntime
+			}
+			bytes += len(value)
+		}
+	}
+	if bytes > 64<<10 {
+		return nil, errXraySelectedTCPRuntime
+	}
+	xraySelectedTCPWaits.Lock()
+	defer xraySelectedTCPWaits.Unlock()
+	if xraySelectedTCPWaits.live[cmd] != nil || len(xraySelectedTCPWaits.live) >= maxExecutionResources {
+		return nil, errXraySelectedTCPRuntime
+	}
+	life, cancel := context.WithCancel(ctx)
+	p := &xraySelectedTCPProcess{cmd: cmd, parent: os.Getpid(), ctx: life, cancel: cancel, done: make(chan struct{}),
+		image: xraySelectedTCPCommandImage{path: cmd.Path, dir: cmd.Dir, args: slices.Clone(cmd.Args), env: slices.Clone(cmd.Env), extras: slices.Clone(cmd.ExtraFiles)}}
+	p.self = p
+	xraySelectedTCPWaits.live[cmd] = p
+	return p, nil
+}
+
+// Acknowledge the actual SAME Cmd's Start without yet reaping it. The native
+// publisher captures process birth while the actual child cannot be PID-reused.
+func (p *xraySelectedTCPProcess) acknowledgeStart() error {
+	if p == nil || p.self != p {
+		return errXraySelectedTCPRuntime
+	}
+	xraySelectedTCPWaits.Lock()
+	defer xraySelectedTCPWaits.Unlock()
+	if xraySelectedTCPWaits.live[p.cmd] != p || p.waitStarted || p.child != nil || p.cmd.Process == nil || p.cmd.Process.Pid <= 1 || p.cmd.ProcessState != nil {
+		return errXraySelectedTCPRuntime
+	}
+	p.child, p.pid = p.cmd.Process, p.cmd.Process.Pid
+	return p.commandCurrent()
+}
+
+func (p *xraySelectedTCPProcess) beginReservedWait() error {
+	if p == nil || p.self != p {
+		return errXraySelectedTCPRuntime
+	}
+	xraySelectedTCPWaits.Lock()
+	defer xraySelectedTCPWaits.Unlock()
+	if xraySelectedTCPWaits.live[p.cmd] != p || p.waitStarted || p.child == nil || p.cmd.Process != p.child {
+		return errXraySelectedTCPRuntime
+	}
+	p.waitStarted = true
+	go p.wait()
+	return nil
+}
+
+func (p *xraySelectedTCPProcess) abandonUnstartedWait() error {
+	if p == nil || p.self != p {
+		return errXraySelectedTCPRuntime
+	}
+	xraySelectedTCPWaits.Lock()
+	defer xraySelectedTCPWaits.Unlock()
+	if xraySelectedTCPWaits.live[p.cmd] != p || p.waitStarted || p.child != nil || p.cmd.Process != nil || p.cmd.ProcessState != nil {
+		return errXraySelectedTCPRuntime
+	}
+	delete(xraySelectedTCPWaits.live, p.cmd)
+	p.closed.Store(true)
+	p.cancel()
+	return nil
 }
 
 func (p *xraySelectedTCPProcess) wait() {
@@ -131,6 +211,10 @@ func (p *xraySelectedTCPProcess) forwardContext(ctx context.Context) (context.Co
 	if p.liveCurrent(ctx) != nil {
 		return nil, nil, errXraySelectedTCPRuntime
 	}
+	if xraySelectedTCPOriginalProcessRead(ctx, p) {
+		c, cancel := context.WithCancel(ctx)
+		return c, cancel, nil
+	}
 	deadline, _ := p.ctx.Deadline()
 	c, cancel := context.WithDeadline(ctx, deadline)
 	stop := context.AfterFunc(p.ctx, cancel)
@@ -138,7 +222,7 @@ func (p *xraySelectedTCPProcess) forwardContext(ctx context.Context) (context.Co
 }
 
 func (p *xraySelectedTCPProcess) liveCurrent(ctx context.Context) error {
-	if p == nil || p.self != p || p.ctx == nil || p.closed.Load() || p.ctx.Err() != nil || xraySelectedTCPFinite(ctx) != nil || p.commandCurrent() != nil {
+	if p == nil || p.self != p || p.ctx == nil || p.closed.Load() || p.ctx.Err() != nil && !xraySelectedTCPOriginalProcessRead(ctx, p) || xraySelectedTCPFinite(ctx) != nil || p.commandCurrent() != nil {
 		return errXraySelectedTCPRuntime
 	}
 	select {
