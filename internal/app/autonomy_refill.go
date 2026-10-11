@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -17,7 +18,7 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	}
 	store := a.Store
 	cfg := store.Get()
-	if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || len(r.Reserves) >= p.ReserveTarget {
+	if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
 		return
 	}
 	service, ok := a.autonomyService(s.ID)
@@ -49,8 +50,16 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	}
 	// Candidates are checked a few per round. Fetching more while many wait
 	// only fills the bounded catalogue with records nobody has checked.
-	snapshot, err := a.Nodes.Snapshot(ctx, time.Now())
+	now := time.Now()
+	snapshot, err := a.Nodes.Snapshot(ctx, now)
 	if err != nil {
+		return
+	}
+	// Cached reserve IDs can outlive their permitted origin or latest exact
+	// proof when first-usable returns before the normal reserve maintenance.
+	// This is scheduling only: never renew proof or mutate the cached list.
+	count, err := a.freshAutonomyReserveCount(ctx, snapshot, p, s, r, engine, profile, now)
+	if err != nil || count >= p.ReserveTarget {
 		return
 	}
 	if r.Search != nil && r.Search.Version == autonomyTraversalVersion(p, s, engine, profile) && !r.Search.Exhausted {
@@ -84,6 +93,30 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	}
 	// Only bounded typed metadata, never endpoints or tokens.
 	a.autonomy.refillState = decision
+}
+
+func (a *App) freshAutonomyReserveCount(ctx context.Context, snapshot nodestore.Snapshot, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, engine, profile string, now time.Time) (int, error) {
+	permitted := map[string]bool{}
+	for _, node := range snapshot.Nodes {
+		if allowedAutonomyNode(p, node, now) {
+			permitted[node.ID] = true
+		}
+	}
+	ready := []string{}
+	for _, id := range r.Reserves {
+		if !permitted[id] || r.CandidateCoolingDown(id) {
+			continue
+		}
+		if _, err := a.Nodes.ResolveRouteForEngine(ctx, engine, id, s.ID, profile, "", time.Time{}, now); err != nil {
+			if errors.Is(err, nodestore.ErrRouteProof) {
+				continue
+			}
+			return 0, err // An unreadable store is not evidence of an empty pool.
+		}
+		ready = append(ready, id)
+	}
+	selected, err := a.Nodes.SelectReserveIDs(ctx, ready, p.ReserveTarget)
+	return len(selected), err
 }
 
 // Bind automatic IP refresh to immutable applied intent; passive catalogue
