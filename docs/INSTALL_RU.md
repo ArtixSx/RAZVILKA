@@ -2,6 +2,12 @@
 
 [Короткая инструкция](../README.md) · [Документация](README.md)
 
+> Инструкция для готовящейся **0.20.0**: чистая установка на Entware без
+> установленной RAZVILKA и будущие обновления **0.20+**. Переход с 0.19.3
+> в неё не входит. Команда установки требует опубликованного тега `v0.20.0`;
+> до публикации эта версия недоступна. Сквозная приёмка ещё продолжается —
+> см. [текущий статус](CURRENT_STATUS_RU.md).
+
 ## Подготовка Entware
 
 RAZVILKA устанавливается **поверх готового Entware**. Установщик приложения
@@ -57,7 +63,7 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=v0.20.0 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Скрипт сначала полностью скачивается; он запускается только при успешной загрузке.
@@ -70,6 +76,20 @@ sh /opt/tmp/razvilka-setup.sh
 выведенной им ссылке настройки. Затем настройте нужные сервисы.
 Общего пароля, зашитого в дистрибутив, нет.
 При обновлении существующая учётная запись сохраняется.
+
+Настройки и подключения хранятся в `/opt/etc/razvilka`. У чистой установки
+0.20+ приватные рабочие каталоги находятся в `/opt/razvilka`:
+
+| Назначение | Путь |
+| --- | --- |
+| Состояние, копии и журналы обновлений компонентов | `/opt/razvilka/state`, компоненты — `state/components` |
+| PID панели | `/opt/razvilka/run/razvilka.pid` |
+| Кэш | `/opt/razvilka/cache` |
+| Журнал службы | `/opt/razvilka/log/server.log` |
+| Снимки установки и обновлений | `/opt/razvilka/state/update-backups` |
+
+Приватные каталоги создаются от `root` с правами `0700`. Установщик не меняет
+владельца и права общих каталогов Entware, включая `/opt/var`.
 
 ## Какие утилиты нужны
 
@@ -131,19 +151,19 @@ Go для работы панели не обязательны.
 
 ## Обновление
 
-Повторите скачивание и запуск установщика. Получится последний стабильный выпуск,
-существующие настройки сохранятся. Установщик печатает путь созданного снимка.
-
-Для конкретной версии скачайте bootstrap без запуска и укажите нужный тег:
+Для установленной 0.20+ скачайте bootstrap заново и запустите его с `latest`
+после публикации обновлений 0.20+. Установщик сам выбирает последний стабильный
+выпуск, сохраняет настройки и печатает путь созданного снимка:
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.18.9 sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=latest sh /opt/tmp/razvilka-setup.sh
 ```
 
-Нужен именно опубликованный тег из [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
+Выбор конкретного опубликованного выпуска 0.20+ через `RAZVILKA_VERSION`
+вместо `latest` остаётся дополнительной возможностью ручного обслуживания.
 Старые инструкции кандидатов в `docs/archive` не относятся к текущему выпуску.
 
 ## Ручная установка из архива
@@ -173,7 +193,7 @@ sh /opt/tmp/razvilka-setup.sh --uninstall
 
 Скрипт останавливает панель, убирает её собственные активные маршруты, бинарник
 и автозапуск. Каталоги настроек `/opt/etc/razvilka`, состояния
-`/opt/var/lib/razvilka` и кэша `/opt/var/cache/razvilka` сохраняются вместе
+`/opt/razvilka/state` и кэша `/opt/razvilka/cache` сохраняются вместе
 с подключениями и снимками. Entware и чужие службы не удаляются.
 
 **Откат последнего обновления** возвращает сохранённый снимок:
@@ -188,7 +208,7 @@ sh /opt/tmp/razvilka-setup.sh --rollback
 При ручной работе из распакованного выпуска:
 
 ```sh
-sh scripts/rollback-entware.sh /opt/var/lib/razvilka/update-backups/<снимок>
+sh scripts/rollback-entware.sh /opt/razvilka/state/update-backups/<снимок>
 ```
 
 Подставьте путь, который вывел установщик. Не удаляйте вручную весь `/opt`:

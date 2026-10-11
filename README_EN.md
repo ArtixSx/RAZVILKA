@@ -94,6 +94,10 @@ The script runs only after a successful download. It adds missing basic tools,
 selects the architecture, checks the selected release checksums and starts the panel.
 Install the required bypass components separately.
 
+Settings and connections for 0.20+ are stored in `/opt/etc/razvilka`; working
+data is stored in `/opt/razvilka/{state,run,cache,log}`. Update snapshots are
+stored in `/opt/razvilka/state/update-backups`.
+
 ### 3. Open the panel and configure a connection
 
 Open **[http://192.168.1.1:8787](http://192.168.1.1:8787)**, or your router's LAN

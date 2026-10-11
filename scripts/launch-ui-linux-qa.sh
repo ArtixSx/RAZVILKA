@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Coordinator-only disposable VM helper. The external browser client is separate.
+# Requires matching clean-0.20 Main defaults from internal/installpath.
 set +x
 set -Eeuo pipefail
 umask 077
@@ -18,10 +19,18 @@ trusted_path() {
   done
 }
 
+private_directory() {
+  trusted_path "$1" && [[ -d "$1" && "$(stat -c %a -- "$1")" == 700 ]]
+}
+readonly -a app_paths=(/opt/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/cache /opt/razvilka/log)
+
 inside() {
-  local run="$1" port="$2" lifetime="$3" parent_namespace="$4"
+  local run="$1" port="$2" lifetime="$3" parent_namespace="$4" target
   [[ "$(readlink /proc/self/ns/mnt)" != "$parent_namespace" ]] || fail PRIVATE_NAMESPACE_REQUIRED
-  trusted_path "$run" && [[ -d "$run/config" && -d "$run/state" && -f "$run/razvilka" ]] || fail PRIVATE_RUN_INVALID
+  trusted_path "$run" && [[ -f "$run/razvilka" ]] || fail PRIVATE_RUN_INVALID
+  for target in "$run/config" "$run/app" "$run/app/state" "$run/app/run" "$run/app/cache" "$run/app/log"; do
+    private_directory "$target" || fail PRIVATE_RUN_INVALID
+  done
   exec 2>>"$run/launcher.log"
   local server_pid='' server_start='' cleanup_done=0 deadline
   local -a mounted=()
@@ -50,7 +59,7 @@ inside() {
     for ((index=${#mounted[@]}-1; index>=0; index--)); do
       if ! umount -- "${mounted[index]}"; then exit_status=1; fi
     done
-    if ! stat -Lc '%n %d:%i' -- /opt/etc/razvilka /opt/var/lib/razvilka /opt/bin/razvilka >"$run/mountpoints.after" ||
+    if ! stat -Lc '%n %d:%i' -- /opt/etc/razvilka "${app_paths[@]}" /opt/bin/razvilka >"$run/mountpoints.after" ||
        ! cmp -s -- "$run/mountpoints.before" "$run/mountpoints.after"; then exit_status=1; fi
     printf 'STOPPED exit=%s joined=true\n' "$exit_status" >"$run/lifecycle.status"
     printf 'QA_STOPPED status=%s\n' "$exit_status"
@@ -64,9 +73,11 @@ inside() {
   launcher_line="$(<"/proc/$$/stat")"; read -r -a launcher_fields <<<"${launcher_line##*) }"
   printf '%s\n' "${launcher_fields[19]}" >"$run/launcher.starttime"
   readlink /proc/self/ns/mnt >"$run/mount.namespace"
-  stat -Lc '%n %d:%i' -- /opt/etc/razvilka /opt/var/lib/razvilka /opt/bin/razvilka >"$run/mountpoints.before"
+  stat -Lc '%n %d:%i' -- /opt/etc/razvilka "${app_paths[@]}" /opt/bin/razvilka >"$run/mountpoints.before"
   mount --bind "$run/config" /opt/etc/razvilka; mounted+=(/opt/etc/razvilka)
-  mount --bind "$run/state" /opt/var/lib/razvilka; mounted+=(/opt/var/lib/razvilka)
+  # Isolate every mutable App path, including run/cache/log and recovery leaves.
+  mount --bind "$run/app" /opt/razvilka; mounted+=(/opt/razvilka)
+  [[ "$(stat -Lc '%d:%i' /opt/razvilka)" == "$(stat -Lc '%d:%i' "$run/app")" ]] || fail APP_BIND_MISMATCH
   mount --bind "$run/razvilka" /opt/bin/razvilka; mounted+=(/opt/bin/razvilka)
   mount -o remount,bind,ro /opt/bin/razvilka
   [[ "$(stat -Lc '%d:%i' /opt/bin/razvilka)" == "$(stat -Lc '%d:%i' "$run/razvilka")" ]] || fail BINARY_BIND_MISMATCH
@@ -131,13 +142,14 @@ done
 trusted_path "$binary" && [[ -f "$binary" && -x "$binary" ]] || fail BINARY_PATH_INVALID
 trusted_path "$repository" && [[ -d "$repository/configs" ]] || fail REPOSITORY_PATH_INVALID
 trusted_path "$parent" && [[ -d "$parent" ]] || fail RUN_PARENT_INVALID
-for target in /opt/etc/razvilka /opt/var/lib/razvilka /opt/bin/razvilka; do trusted_path "$target" || fail CANONICAL_MOUNTPOINT_INVALID; done
-[[ -d /opt/etc/razvilka && -d /opt/var/lib/razvilka && -f /opt/bin/razvilka ]] || fail CANONICAL_MOUNTPOINT_INVALID
+for target in /opt/etc/razvilka "${app_paths[@]}" /opt/bin/razvilka; do trusted_path "$target" || fail CANONICAL_MOUNTPOINT_INVALID; done
+for target in "${app_paths[@]}"; do private_directory "$target" || fail CANONICAL_PRIVATE_DIRECTORY_INVALID; done
+[[ -d /opt/etc/razvilka && -f /opt/bin/razvilka ]] || fail CANONICAL_MOUNTPOINT_INVALID
 [[ -z "$(ss -H -ltn "sport = :$port")" ]] || fail QA_PORT_OCCUPIED
 [[ "$(sha256sum -- "$binary" | cut -d' ' -f1)" == "$expected_sha" ]] || fail BINARY_SHA_MISMATCH
 run="$(mktemp -d "$parent/ui-linux-qa.XXXXXXXX")"
 exec 2>>"$run/launcher.log"
-install -m 0700 -d -- "$run/config" "$run/state"
+install -m 0700 -d -- "$run/config" "$run/app" "$run/app/state" "$run/app/run" "$run/app/cache" "$run/app/log"
 install -m 0700 -- "$binary" "$run/razvilka"
 [[ "$(sha256sum -- "$run/razvilka" | cut -d' ' -f1)" == "$expected_sha" ]] || fail BINARY_COPY_MISMATCH
 python3 - "$repository" "$run/config" <<'PY'
