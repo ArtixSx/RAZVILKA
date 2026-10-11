@@ -105,6 +105,25 @@ func TestRuntimeQuiesceDiagnosticRejectsUnknownOutputAndPreservesPriorEvidence(t
 	}
 }
 
+func TestRuntimeQuiesceSourceCleanupUsesOnlyClosedJoinedStages(t *testing.T) {
+	for _, primary := range []string{"installer-role-binding", "inactivity-owner-bind", "runtime-inactivity-canceled-nfq-kernel"} {
+		// Only an already known exact category can acquire a cleanup suffix.
+		want := primary + "-source-close"
+		if !knownRuntimeQuiesceFailure(primary) {
+			want = "runtime-source-close"
+		}
+		stage := RuntimeQuiesceSourceCleanupFailureStage(primary)
+		if stage != want || runtimeQuiesceDiagnosticStage([]byte(RuntimeQuiesceFailureOutput(stage)+"\n")) != stage || RuntimeQuiesceSourceCleanupFailureStage(stage) != stage {
+			t.Fatal("joined source cleanup was lost or repeated")
+		}
+	}
+	for _, unknown := range []string{"", "private-token-path-output", "installer-role-binding\nprivate", "runtime-source-close-source-close"} {
+		if RuntimeQuiesceSourceCleanupFailureStage(unknown) != "runtime-source-close" {
+			t.Fatal("untrusted cause text became a diagnostic")
+		}
+	}
+}
+
 func TestRuntimeQuiesceDiagnosticPipeDrainsOverflowAndJoinsCancellation(t *testing.T) {
 	command := exec.Command("not-executed")
 	pipe, err := newFileQuiesceDiagnosticPipe(command)

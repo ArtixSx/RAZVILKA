@@ -306,7 +306,7 @@ func runSelfUpdateRuntimeQuiesce(args []string) int {
 	return runSelfUpdateRuntimeQuiesceWithJournalRoots(args, productionSelfUpdateJournalRoots())
 }
 
-func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots selfUpdateJournalRoots) int {
+func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (result int) {
 	if len(args) != 3 {
 		return 2
 	}
@@ -341,27 +341,40 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	}
 	manager, closeRuntimeSource, err := selfUpdateRuntimeManagerBound(ctx)
 	if err != nil {
-		return refuseSelfUpdateRuntimeQuiesce("manager-construction")
+		return refuseSelfUpdateRuntimeQuiesce(selfUpdateRuntimeManagerFailureStage(err))
 	}
+	failureStage := ""
+	// Join even when installer-role binding fails. Emit exactly one diagnostic
+	// after that join, so a cleanup failure cannot erase the primary refusal.
+	defer func() {
+		if stage := finishSelfUpdateRuntimeQuiesce(failureStage, closeRuntimeSource); stage != "" {
+			result = refuseSelfUpdateRuntimeQuiesce(stage)
+		}
+	}()
 	installer, ok := adapter.(*updatecheck.SelfUpdateFileAdapter)
 	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, installer, args[0]) != nil {
-		return refuseSelfUpdateRuntimeQuiesce("installer-role-binding")
+		failureStage = "installer-role-binding"
+		return 3
 	}
-	defer closeRuntimeSource()
 	if _, err := manager.Deactivate(ctx); err != nil {
-		return refuseSelfUpdateRuntimeQuiesce("deactivate")
+		failureStage = "deactivate"
+		return 3
 	}
 	if err := verifySelfUpdateRuntimeInactive(ctx, manager); err != nil {
-		return refuseSelfUpdateRuntimeQuiesce(selfUpdateRuntimeInactiveFailureStage(err))
+		failureStage = selfUpdateRuntimeInactiveFailureStage(err)
+		return 3
 	}
 	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
-		return refuseSelfUpdateRuntimeQuiesce("authority-closing")
+		failureStage = "authority-closing"
+		return 3
 	}
 	if closeRuntimeSource() != nil {
+		failureStage = "runtime-source-close"
 		return 3
 	}
 	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), manager.StateRoot) != nil {
-		return refuseSelfUpdateRuntimeQuiesce("independent-closing")
+		failureStage = "independent-closing"
+		return 3
 	}
 	return 0
 }

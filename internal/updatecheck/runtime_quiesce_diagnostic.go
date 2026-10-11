@@ -13,7 +13,28 @@ import (
 
 const runtimeQuiesceDiagnosticFile = "quiesce-old-runtime.diagnostic"
 
-var runtimeQuiesceFailureStages = append([]string{"entry", "provider", "authority-opening", "independent-opening", "manager-construction", "installer-role-binding", "deactivate", "runtime-inactivity", "authority-closing", "independent-closing"}, runtimeQuiesceInactiveFailureStages()...)
+var runtimeQuiesceFailureStages = runtimeQuiesceClosedFailureStages()
+
+func runtimeQuiesceClosedFailureStages() []string {
+	stages := append([]string{"entry", "provider", "authority-opening", "independent-opening", "manager-construction", "installer-role-binding", "deactivate", "runtime-inactivity", "authority-closing", "independent-closing",
+		"manager-context", "manager-platform", "manager-registry", "network-provider", "tools-acquire", "tools-inventory", "backend-inventory", "inactivity-owner-bind"}, runtimeQuiesceInactiveFailureStages()...)
+	// Preserve an actual primary refusal together with a joined source-close
+	// failure, within one exact diagnostic line. Neither is effect authority.
+	for _, stage := range append([]string(nil), stages...) {
+		stages = append(stages, stage+"-source-close")
+	}
+	return append(stages, "runtime-source-close")
+}
+
+func RuntimeQuiesceSourceCleanupFailureStage(primary string) string {
+	if primary == "" || !knownRuntimeQuiesceFailure(primary) {
+		return "runtime-source-close"
+	}
+	if knownRuntimeQuiesceFailure(primary + "-source-close") {
+		return primary + "-source-close"
+	}
+	return primary // Already includes the actual source-close refusal.
+}
 
 func knownRuntimeQuiesceFailure(stage string) bool {
 	for _, known := range runtimeQuiesceFailureStages {
