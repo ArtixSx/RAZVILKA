@@ -82,7 +82,7 @@ func (r *wgInactivityRunner) RunWG(ctx context.Context, admission dataplane.WGCo
 	if r == nil || r.lease == nil || admission == nil || r.lease.review == nil || !wgInactivitySourceArguments(r.lease, name, args) {
 		return nil, at("WG_INACTIVITY_ABI", nil)
 	}
-	return r.lease.runWG(WithCommandAdmission(ctx, admission), r.engine, name, args...)
+	return r.lease.runWGInactivity(WithCommandAdmission(ctx, admission), name, args...)
 }
 
 // An independent source ABI: even another sealed admission cannot turn this

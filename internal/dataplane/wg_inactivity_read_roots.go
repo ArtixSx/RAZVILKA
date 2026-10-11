@@ -82,7 +82,7 @@ func (o *wgInactivityRootObservation) captureTree(ctx context.Context, index, de
 	if depth > 16 || len(o.nodes) > 384 || ctx.Err() != nil {
 		return errors.Join(ErrWGOperationOwner, ctx.Err())
 	}
-	entries, err := wgInactivityDirectoryEntries(o.nodes[index].path)
+	entries, err := wgInactivityDirectoryEntries(ctx, o.nodes[index])
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (o wgInactivityRootObservation) current(ctx context.Context) error {
 			return ErrWGOperationOwner
 		}
 		if node.names != nil {
-			entries, err := wgInactivityDirectoryEntries(node.path)
+			entries, err := wgInactivityDirectoryEntries(ctx, node)
 			if err != nil {
 				return err
 			}
@@ -191,18 +191,48 @@ func (o wgInactivityRootObservation) current(ctx context.Context) error {
 	return nil
 }
 
-func wgInactivityDirectoryEntries(path string) (entries []os.DirEntry, result error) {
-	file, err := openWGInactivityObservationFile(path)
+func wgInactivityDirectoryEntries(ctx context.Context, node wgInactivityRootNode) (entries []os.DirEntry, result error) {
+	file, err := openWGInactivityObservationFile(node.path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { result = errors.Join(result, file.Close()) }()
-	entries, err = file.ReadDir(385)
+	return wgInactivityDirectoryFDEntries(ctx, node, file)
+}
+
+// The enumerating FD must name the SAME original directory as the retained
+// node, even if a temporary replacement disappears before a pathname bookend.
+// Reopening gives each concurrent reader its own directory offset.
+func wgInactivityDirectoryFDEntries(ctx context.Context, node wgInactivityRootNode, file *os.File) ([]os.DirEntry, error) {
+	if ctx == nil || node.file == nil || node.info == nil || file == nil {
+		return nil, ErrWGOperationOwner
+	}
+	check := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		retained, retainedErr := node.file.Stat()
+		actual, actualErr := file.Stat()
+		named, namedErr := os.Lstat(node.path)
+		if retainedErr != nil || actualErr != nil || namedErr != nil ||
+			!networkPolicyPrivateDirectory(retained) || !networkPolicyPrivateDirectory(actual) || !networkPolicyPrivateDirectory(named) ||
+			!os.SameFile(node.info, retained) || !os.SameFile(node.info, actual) || !os.SameFile(node.info, named) {
+			return errors.Join(ErrWGOperationOwner, retainedErr, actualErr, namedErr)
+		}
+		return ctx.Err()
+	}
+	if err := check(); err != nil {
+		return nil, err
+	}
+	entries, err := file.ReadDir(385)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	if len(entries) > 384 {
 		return nil, ErrWGOperationOwner
+	}
+	if err := check(); err != nil {
+		return nil, err
 	}
 	slices.SortFunc(entries, func(a, b os.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
 	return entries, nil

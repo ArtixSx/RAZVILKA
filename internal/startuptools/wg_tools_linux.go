@@ -99,6 +99,12 @@ func (l *Lease) runWG(ctx context.Context, engine, name string, args ...string) 
 	if index < 0 || !wgArguments(index, engine, frozen) {
 		return nil, at("WG_ABI", nil)
 	}
+	// This fixed public/numeric read subset preserves ordinary command
+	// diagnostics after its original held-fd Start/Wait and closing review.
+	// All effects and broader WG reads keep the strict producer below.
+	if wgInactivitySourceArguments(l, name, frozen) {
+		return l.runWGInactivityHeld(ctx, name, frozen...)
+	}
 	// Every native WG RPC, including readback, uses the original owner's
 	// admission. The existing policy producer owns the actual held-fd Start,
 	// short tool/Provider gate, cancellation and exactly one Wait outside it.
