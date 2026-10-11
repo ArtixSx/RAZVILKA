@@ -189,7 +189,12 @@ func TestXrayDomainTCPKernelAssociationHelper(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := unix.Exec(executable, []string{executable, "-test.run=^TestXrayDomainTCPKernelAssociationHelper$", "--", "changed-child-argv"}, append(os.Environ(), "RAZVILKA_DOMAIN_FD4_AFTER_EXEC=1")); err != nil {
+				// Raw unix.Exec does not deduplicate unlike exec.Cmd. Replace
+				// the initial value before obtaining the new child's environment.
+				if err := os.Setenv("RAZVILKA_DOMAIN_FD4_AFTER_EXEC", "1"); err != nil {
+					t.Fatal(err)
+				}
+				if err := unix.Exec(executable, []string{executable, "-test.run=^TestXrayDomainTCPKernelAssociationHelper$", "--", "changed-child-argv"}, os.Environ()); err != nil {
 					t.Fatal(err)
 				}
 			default:
