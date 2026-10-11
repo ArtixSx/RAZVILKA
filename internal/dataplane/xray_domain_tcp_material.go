@@ -34,6 +34,7 @@ type XrayDomainTCPOperationMaterial struct {
 	binaryField  string
 	binary       string
 	processes    ProcessController
+	resource     *XrayDomainTCPExecutionResource
 	registration *XrayRegistrationReview
 	binding      *SyntheticDNSExecutionBinding
 	session      *scopedDNSSession
@@ -271,6 +272,9 @@ func (m *XrayDomainTCPOperationMaterial) Close() error {
 	defer m.mu.Unlock()
 	if m.closed {
 		return nil
+	}
+	if m.resource != nil && !m.resource.descriptorsClosed.Load() {
+		return ErrXrayDomainTCPOriginal
 	}
 	m.closed = true
 	m.cancel()
