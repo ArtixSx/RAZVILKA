@@ -44,7 +44,7 @@ Windows/amd64 Go 1.26.5; `GOTOOLCHAIN=local`, `GOMAXPROCS=2`, `GOFLAGS=-p=2`.
 | То же `go vet`, `GOOS=linux GOARCH=arm64` | RC0 после финального изменения |
 | `GOOS=linux GOARCH=amd64 go test -c ./internal/dataplane` | RC0, финальная версия; не Linux runtime |
 | `GOOS=linux GOARCH=arm64 go test -c ./internal/dataplane` | RC0, финальная версия; не Linux runtime |
-| `go test ./internal/dataplane ./internal/dnscontrol ./internal/startuptools -count=1` | Выполняется отдельно; старт до финального четырёхстрочного Start barrier, не считать PASS до завершения |
+| `go test ./internal/dataplane ./internal/dnscontrol ./internal/startuptools -count=1` | RC0: dataplane 446.910s, dnscontrol 9.279s, startuptools 0.548s; старт до финального четырёхстрочного Start barrier, который отдельно прошёл финальные targeted/vet/cross-build |
 | Race | Не проверен: текущий `go env CGO_ENABLED` = 0 |
 | `git diff --cached --check` | RC0 для согласованной порции |
 

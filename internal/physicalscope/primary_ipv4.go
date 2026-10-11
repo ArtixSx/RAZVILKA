@@ -18,16 +18,17 @@ import (
 type PrimaryIPv4Review struct{ state *primaryIPv4ReviewState }
 
 type primaryIPv4ReviewState struct {
-	self     *PrimaryIPv4Review
-	observer *Observer
-	original *Review
-	ingress  string
-	address  netip.Addr
-	index    int
-	row      primaryIPv4Row
-	read     func(context.Context) ([]message, error)
-	issued   bool
-	invalid  bool // Protected by the original Review's mutex, also used by Close.
+	self           *PrimaryIPv4Review
+	observer       *Observer
+	original       *Review
+	ingress        string
+	address        netip.Addr
+	index          int
+	row            primaryIPv4Row
+	read           func(context.Context) ([]message, error)
+	issued         bool
+	invalid        bool // Protected by the original Review's mutex, also used by Close.
+	forwardInvalid bool // Selection revocation never becomes retained physical authority.
 }
 
 type primaryIPv4Row struct {
@@ -68,6 +69,10 @@ func (o *Observer) reviewPrimaryIPv4(ctx context.Context, original *Review, ingr
 // selected members and address churn. Fresh selection and NI/boot/build checks
 // bracket BOTH complete IPv4 dumps. A copied witness cannot substitute itself.
 func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
+	return p.current(ctx, false)
+}
+
+func (p *PrimaryIPv4Review) current(ctx context.Context, retained bool) error {
 	if p == nil || p.state == nil || p.state.self != p {
 		return at("primary.original", nil)
 	}
@@ -84,7 +89,7 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 	s := r.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.issuer != v.observer || s.closed || s.invalid || s.physicalInvalid || s.fence == nil || v.invalid {
+	if s.issuer != v.observer || s.closed || (!retained && (s.invalid || v.forwardInvalid)) || s.physicalInvalid || s.fence == nil || v.invalid || retained && !v.issued {
 		return at("primary.review.unavailable", nil)
 	}
 	refuse := func(stage string, err error) error {
@@ -95,15 +100,18 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 		return boundary(stage, err)
 	}
 	checkSelection := func() error {
+		if retained {
+			return nil
+		}
 		selection, err := v.observer.readSelection(c)
 		if err != nil || !reflect.DeepEqual(selection, s.snapshot.Selection) {
-			s.invalid = true
+			s.invalid, v.forwardInvalid = true, true
 			return errors.Join(ErrUnknown, err)
 		}
 		return nil
 	}
 	if err := checkSelection(); err != nil {
-		return refuse("primary.selection.before", err)
+		return boundary("primary.selection.before", err)
 	}
 	index := 0
 	bits := 0
@@ -169,7 +177,7 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 		return refuse("primary.current", errors.Join(err, c.Err()))
 	}
 	if err := checkSelection(); err != nil {
-		return refuse("primary.selection.after", err)
+		return boundary("primary.selection.after", err)
 	}
 	// Close queued churn during the selection read in the same original scope.
 	closingEntered := false
@@ -188,7 +196,9 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 	if err != nil || !closingEntered || c.Err() != nil || v.issued && v.row != observed {
 		return refuse("primary.closing", errors.Join(err, c.Err()))
 	}
-	v.row, v.index, v.issued = observed, index, true
+	if !v.issued {
+		v.row, v.index, v.issued = observed, index, true
+	}
 	return nil
 }
 
