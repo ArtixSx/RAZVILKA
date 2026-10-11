@@ -277,7 +277,7 @@ func TestProductionWGReadonlyFIBDiagnosticNative(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "control")
 	if _, err := operationgate.InitializeSelfUpdateControl(original, root); err != nil {
 		t.Fatal(err)
 	}
