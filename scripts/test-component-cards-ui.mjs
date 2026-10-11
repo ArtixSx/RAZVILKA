@@ -109,6 +109,34 @@ state.components[0].update_check_error = '<img src=x onerror=attack()>';
 assert.doesNotMatch(card(), /<script>|<img src=x/);
 assert.match(card(), /&lt;script&gt;/);
 
+// The component strip must distinguish an unconfirmed managed runtime from
+// a known stopped process without discarding detector installation facts.
+{
+  const elements = Object.fromEntries(['componentSummary', 'componentEmpty', 'componentStrip'].map(id => [id, {}]));
+  const current = {components:[], engineConfigs:[], componentFilter:'all'};
+  const ctx = vm.createContext({state:current, esc, $:selector=>elements[selector.slice(1)], $$:()=>[], inventoryObservationStale:()=>false});
+  vm.runInContext(slice(app, 'function renderComponents(', 'async function refreshComponents('), ctx);
+  const render = component => {
+    current.components = [component];
+    ctx.renderComponents();
+    return elements.componentStrip.innerHTML;
+  };
+  const installed = {...base, update_available:false, configured:true, running:false, can_install:false, can_update:false, can_remove:false};
+  for (const id of ['nfqws2', 'xray']) {
+    const unknown = render({...installed, id, runtime_observation:'unknown'});
+    assert.match(unknown, /component-runtime unknown">СОСТОЯНИЕ НЕ ПОДТВЕРЖДЕНО/);
+    assert.doesNotMatch(unknown, /НАСТРОЕН · НЕ ЗАПУЩЕН|component-runtime running/);
+    assert.match(unknown, /установлена 1\.0\.1/);
+    assert.match(elements.componentSummary.innerHTML, /Установлено<\/span><b>1<\/b>/);
+    assert.doesNotMatch(unknown, /component-verification verified/, 'runtime observation must not verify installation');
+    assert.match(render({...installed, id}), /component-runtime configured">НАСТРОЕН · НЕ ЗАПУЩЕН/);
+    assert.match(render({...installed, id, running:true, runtime_observation:'unknown'}), /component-runtime unknown">СОСТОЯНИЕ НЕ ПОДТВЕРЖДЕНО/, 'unknown must take precedence over process flags');
+    const owned = render({...installed, id, running:true, runtime_observation:'owned'});
+    assert.match(owned, /component-runtime running">ЗАПУЩЕН/);
+    assert.doesNotMatch(owned, /component-verification verified/, 'structural ownership must not verify installation');
+  }
+}
+
 const lifecycleCode = slice(app, 'async function refreshComponents(', 'function renderStatus(');
 function fixture() {
   const calls=[], notices=[], details=[];
@@ -224,4 +252,4 @@ await apiContext.api('/api/v1/components?refresh=true',{readTimeoutMs:9999999});
 await apiContext.api('/api/v1/components/usque/remove',{method:'POST',readTimeoutMs:110000});
 assert.deepEqual(timers,[110000,20000,110000], 'only explicit bounded reads may wait longer; mutations must not gain read timeout');
 assert.ok(transport.every(call=>!Object.hasOwn(call.options,'readTimeoutMs')),'internal timeout option leaked into fetch');
-console.log('PASS component cards: truthful versions/inventory/update errors, protected actions, reviewed removal, single-flight refresh and auth fences');
+console.log('PASS component cards: truthful runtime unknown/stopped states, versions/inventory/update errors, protected actions, reviewed removal, single-flight refresh and auth fences');

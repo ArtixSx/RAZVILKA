@@ -1392,7 +1392,9 @@ function renderComponents() {
       : c.installed
       ? ['unverified', 'УСТАНОВЛЕН ВНЕ RAZVILKA ИЛИ ЕЩЁ НЕ ПРОВЕРЕН']
       : ['', ''];
-    const runtime = c.running ? '<span class="component-runtime running">ЗАПУЩЕН</span>' : c.configured ? '<span class="component-runtime configured">НАСТРОЕН · НЕ ЗАПУЩЕН</span>' : c.installed ? '<span class="component-runtime">НЕ НАСТРОЕН</span>' : '';
+    const runtime = c.runtime_observation === 'unknown'
+      ? '<span class="component-runtime unknown">СОСТОЯНИЕ НЕ ПОДТВЕРЖДЕНО</span>'
+      : c.running ? '<span class="component-runtime running">ЗАПУЩЕН</span>' : c.configured ? '<span class="component-runtime configured">НАСТРОЕН · НЕ ЗАПУЩЕН</span>' : c.installed ? '<span class="component-runtime">НЕ НАСТРОЕН</span>' : '';
     const verificationHTML = verification[1] ? `<span class="component-verification ${verification[0]}">${verification[1]}${c.last_action_at ? ` · ${esc(timeAgo(c.last_action_at))} назад` : ''}</span>` : '';
     const operationName = ({ install: 'УСТАНОВКА', update: 'ОБНОВЛЕНИЕ', remove: 'УДАЛЕНИЕ' })[c.operation_action] || 'ОПЕРАЦИЯ';
     const operationLabels = {
