@@ -58,12 +58,21 @@ func (a *NFQWS2Adapter) observeManagedNFQWSProcessInactive(ctx context.Context) 
 	return lease, nil
 }
 
-// VerifyRuntimeInactive cannot promote process-only settlement to whole adapter
-// inactivity. Until the common scoped NFQUEUE owner supplies exact IPv4/IPv6
-// attachment/foreign-owner readback, managed and legacy admission stays closed.
+// VerifyRuntimeInactive requires the startup owner's original concrete source.
+// Process settlement, successful Stop or an absent lease never grants this
+// independent full process/files/kernel/queue observation on its own.
 func (a *NFQWS2Adapter) VerifyRuntimeInactive(ctx context.Context) error {
-	if _, err := a.observeManagedNFQWSProcessInactive(ctx); err != nil {
-		return err
+	if ctx == nil || a == nil {
+		return nfqws2InactiveAt("source", nil)
 	}
-	return ErrNFQWSManagedKernelOwner
+	if err := ctx.Err(); err != nil {
+		return nfqws2InactiveAt("context", err)
+	}
+	nfqws2ActiveAdapterMu.Lock()
+	source := a.inactivity
+	nfqws2ActiveAdapterMu.Unlock()
+	if source == nil || source.adapter != a {
+		return nfqws2InactiveAt("source", nil)
+	}
+	return source.verify(ctx, source.platform)
 }

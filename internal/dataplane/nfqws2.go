@@ -48,6 +48,7 @@ type NFQWS2Adapter struct {
 	activationLeaseReady func()             // Deterministic fault injection before the first global write.
 	activeProcess        *nfqws2ActiveOwner // Only the actual separate producer can install it.
 	activeExecution      *nfqws2ActiveExecution
+	inactivity           *NFQWSRuntimeInactiveSource // Bound once by the trusted startup owner.
 }
 
 type nfqws2Snapshot struct {
