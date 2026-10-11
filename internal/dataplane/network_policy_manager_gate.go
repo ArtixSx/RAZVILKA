@@ -142,7 +142,11 @@ func (a *NetworkPolicyAdapter) Snapshot(ctx context.Context, p Plan, root string
 		return err
 	}
 	if prior != nil {
-		return preflightRefusalError{ErrNetworkPolicyReplacement}
+		pair, pairErr := a.replacement(ctx, p)
+		if pairErr != nil || pair == nil || !reflect.DeepEqual(prior, pair.gateBefore) || pair.priorStructural(ctx) != nil {
+			return preflightRefusalError{errors.Join(ErrNetworkPolicyReplacement, pairErr)}
+		}
+		return writeNetworkPolicyGate(filepath.Join(root, "snapshot.json"), networkPolicyGateSnapshot{Prior: prior})
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -194,8 +198,14 @@ func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string
 		return errors.Join(err, ErrLANPolicyRuntime)
 	}
 	prior, err := a.readOwner()
-	if err != nil || prior != nil {
+	if err != nil {
 		return preflightRefusalError{errors.Join(err, ErrNetworkPolicyReplacement)}
+	}
+	if prior != nil {
+		pair, pairErr := a.replacement(ctx, p)
+		if pairErr != nil || pair == nil || !reflect.DeepEqual(prior, pair.gateBefore) || pair.priorStructural(ctx) != nil {
+			return preflightRefusalError{errors.Join(ErrNetworkPolicyReplacement, pairErr)}
+		}
 	}
 	// Retain typed intent before receipt/effect creation. A crash can no longer
 	// turn a missing manifest into permission to ignore a pending generation.
@@ -321,7 +331,17 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 	if err != nil {
 		return err
 	}
+	pair, pairErr := a.replacement(ctx, p)
+	if pairErr != nil {
+		return pairErr
+	}
+	if pair != nil && reflect.DeepEqual(current, pair.gateBefore) {
+		return pair.priorStructural(ctx)
+	}
 	if current == nil {
+		if pair != nil {
+			return ErrReviewChanged
+		}
 		return a.inspectAbsent(ctx, want.LAN)
 	}
 	want.Promoted = current.Promoted
@@ -347,6 +367,15 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 			return err
 		}
 	}
+	if pair != nil {
+		if err := pair.priorStructural(ctx); err != nil {
+			return err
+		}
+		if actual, err := a.readOwner(); err != nil || !reflect.DeepEqual(actual, current) {
+			return errors.Join(ErrReviewChanged, err)
+		}
+		return writeNetworkPolicyGate(a.ownerPath(), pair.gateBefore)
+	}
 	return a.clearOwner(current)
 }
 
@@ -357,6 +386,13 @@ func (a *NetworkPolicyAdapter) VerifyRollback(ctx context.Context, p Plan, root 
 		return false, err
 	}
 	owner, err := a.readOwner()
+	if pair, pairErr := a.replacement(ctx, p); pairErr != nil || pair != nil {
+		if pairErr != nil || err != nil || !reflect.DeepEqual(owner, pair.gateBefore) {
+			return false, errors.Join(ErrLANPolicyRuntime, pairErr, err)
+		}
+		err = pair.priorStructural(ctx)
+		return err == nil, err
+	}
 	if err != nil || owner != nil {
 		return false, errors.Join(err, ErrLANPolicyRuntime)
 	}

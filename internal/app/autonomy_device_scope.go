@@ -21,21 +21,24 @@ type autonomyDeviceScopeKey struct{}
 // path, effect or cleanup permission. Config publication can change a service
 // route, but cannot renew the original physical Review or its frozen intent.
 type autonomyDeviceScope struct {
-	self     *autonomyDeviceScope
-	mu       sync.Mutex
-	app      *App
-	store    *config.Store
-	original context.Context
-	policy   *config.NetworkPolicy
-	consent  *config.DefaultRouteConsent
-	facts    physicalscope.Snapshot
-	source   func(context.Context) error
-	verify   func(context.Context) error
-	snapshot func() physicalscope.Snapshot
-	close    func() error
-	closed   bool
-	invalid  bool
-	closeErr error
+	self                 *autonomyDeviceScope
+	mu                   sync.Mutex
+	app                  *App
+	store                *config.Store
+	original             context.Context
+	policy               *config.NetworkPolicy
+	consent              *config.DefaultRouteConsent
+	facts                physicalscope.Snapshot
+	source               func(context.Context) error
+	verify               func(context.Context) error
+	snapshot             func() physicalscope.Snapshot
+	close                func() error
+	closed               bool
+	invalid              bool
+	closeErr             error
+	observer             *physicalscope.Observer
+	review               *physicalscope.Review
+	borrowed, borrowUsed bool
 }
 
 func (a *App) autonomyDeviceContext(ctx context.Context, cfg config.Config) (context.Context, func() error, error) {
@@ -63,14 +66,23 @@ func (a *App) autonomyDeviceContext(ctx context.Context, cfg config.Config) (con
 		}
 		return p.control.Current(c)
 	}
-	return newAutonomyDeviceScope(ctx, a, cfg, source, func(c context.Context, selection physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error) {
+	var originalObserver *physicalscope.Observer
+	var originalReview *physicalscope.Review
+	owned, closeScope, err := newAutonomyDeviceScope(ctx, a, cfg, source, func(c context.Context, selection physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error) {
 		observer := physicalscope.NewReviewedStockNC1812(p.provider, selection)
 		review, err := observer.Observe(c)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		originalObserver, originalReview = observer, review
 		return func(c context.Context) error { return observer.Verify(c, review) }, review.Snapshot, review.Close, nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	d := owned.Value(autonomyDeviceScopeKey{}).(*autonomyDeviceScope)
+	d.observer, d.review = originalObserver, originalReview
+	return owned, closeScope, nil
 }
 
 // The private acquisition seam models physical facts in source tests only.
@@ -219,7 +231,7 @@ func (d *autonomyDeviceScope) Close() error {
 	defer d.mu.Unlock()
 	if !d.closed {
 		d.closed = true
-		if d.close != nil {
+		if !d.borrowed && d.close != nil {
 			d.closeErr = d.close()
 		}
 	}

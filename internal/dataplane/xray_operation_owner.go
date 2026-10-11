@@ -42,6 +42,7 @@ type XrayOperationMaterial struct {
 	binary       string
 	processes    ProcessController
 	material     *xraySelectedTCPRedirectMaterial
+	execution    *xraySelectedTCPExecution
 }
 
 func (*XrayOperationMaterial) String() string {
@@ -209,8 +210,12 @@ func (m *XrayOperationMaterial) Close() error {
 	// The leaf cannot revoke an actual live/unknown execution's compensation.
 	// Only its joined terminal scope may release the original association.
 	xraySelectedTCPExecutions.Lock()
-	e := xraySelectedTCPExecutions.live[m.adapter]
+	e := m.execution
+	associatedAtEntry := xraySelectedTCPExecutions.live[m.adapter]
 	xraySelectedTCPExecutions.Unlock()
+	if e == nil && associatedAtEntry != nil && associatedAtEntry.material == m {
+		return ErrXrayOperationOwner
+	}
 	if e != nil && e.material == m && !m.closed.Load() {
 		if !e.mu.TryLock() {
 			return ErrPolicyAdditionUnknown
@@ -226,12 +231,17 @@ func (m *XrayOperationMaterial) Close() error {
 			return ErrPolicyAdditionUnknown
 		}
 		xraySelectedTCPExecutions.Lock()
-		if xraySelectedTCPExecutions.live[m.adapter] != e {
+		associated := xraySelectedTCPExecutions.live[m.adapter]
+		pair := e.replacement
+		closedPrior := pair != nil && pair.self == pair && pair.prior != nil && pair.closed.Load() && pair.committed.Load() && pair.prior.execution == e && pair.candidate == associated
+		if !xraySelectedTCPAssociated(associated, e) && (pair == nil || pair.prior == nil || pair.prior.execution != associated) && !closedPrior {
 			xraySelectedTCPExecutions.Unlock()
 			e.mu.Unlock()
 			return ErrXrayOperationOwner
 		}
-		delete(xraySelectedTCPExecutions.live, m.adapter)
+		if associated == e {
+			delete(xraySelectedTCPExecutions.live, m.adapter)
+		}
 		xraySelectedTCPExecutions.Unlock()
 		e.mu.Unlock()
 	}

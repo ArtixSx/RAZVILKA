@@ -55,9 +55,10 @@ func (r *XrayListRuntimeSource) prepare(ctx context.Context, selectedTCP ...bool
 	snapshot.Paths = map[string]DefaultRoutePath{r.service: {Selected: r.selected, Resolved: r.selected, ProbeURL: r.frozen.ProbeURL,
 		ProfileDigest: reference.CompiledMaterialSHA256, ProofDigest: reference.ProofSHA256}}
 	service := defaultRouteCloneCatalogService(r.frozen)
+	planning := r.planningConfig()
 	route := dataplane.Route{ServiceID: r.service, ServiceName: service.Name, Selected: r.selected, Resolved: r.selected,
-		CIDRs: slices.Clone(service.CIDRs), Sources: slices.Clone(r.expected.Services[r.service].Sources), ProbeURL: service.ProbeURL, ProbeService: &service}
-	compilation, err := CompileDefaultRoutePolicy(r.expected, snapshot, []dataplane.Route{route}, time.Now().UTC())
+		CIDRs: slices.Clone(service.CIDRs), Sources: slices.Clone(planning.Services[r.service].Sources), ProbeURL: service.ProbeURL, ProbeService: &service}
+	compilation, err := CompileDefaultRoutePolicy(planning, snapshot, []dataplane.Route{route}, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,7 @@ type xraySelectedTCPExecution struct {
 	resource                     *XraySelectedTCPExecutionResource
 	node                         *xraySelectedTCPCommittedNode
 	bound, started, retired      bool
+	replacement                  *xraySelectedTCPReplacement
 }
 
 type xraySelectedTCPExecutionKey struct{}
@@ -37,6 +38,10 @@ var xraySelectedTCPExecutions = struct {
 }{live: make(map[*ProxyTunnelAdapter]*xraySelectedTCPExecution)}
 
 func (m *XrayOperationMaterial) BindExecution(ctx, panel context.Context, expected Plan, inventory *BackendInventory, gate *NetworkPolicyAdapter, checks *NetworkPolicyChecks, committed, cleanupGuard XraySelectedTCPActiveGuard) (context.Context, error) {
+	return m.bindExecution(ctx, panel, expected, inventory, gate, checks, committed, cleanupGuard, nil)
+}
+
+func (m *XrayOperationMaterial) bindExecution(ctx, panel context.Context, expected Plan, inventory *BackendInventory, gate *NetworkPolicyAdapter, checks *NetworkPolicyChecks, committed, cleanupGuard XraySelectedTCPActiveGuard, pair *xraySelectedTCPReplacement) (context.Context, error) {
 	if m == nil || m.self != m || xraySelectedTCPFinite(ctx) != nil || panel == nil || panel.Err() != nil || inventory == nil || gate == nil || checks == nil || committed == nil || cleanupGuard == nil ||
 		ctx.Value(xraySelectedTCPExecutionKey{}) != nil || expected.LAN == nil || expected.LAN.Mode != LANPolicyXraySelectedTCPMode || m.material == nil || !reflect.DeepEqual(expected.LAN, m.material.spec.LAN) || !xraySelectedTCPScopeRouteMatches(expected, m.material) ||
 		gate.identity == nil || !gate.identity.acceptsMode(LANPolicyXraySelectedTCPMode) || inventory.reader.Provider != gate.identity.provider || checks.gate != gate || checks.manager != m.manager || checks.inventory == nil ||
@@ -62,11 +67,17 @@ func (m *XrayOperationMaterial) BindExecution(ctx, panel context.Context, expect
 	e := &xraySelectedTCPExecution{material: m, plan: cloneExecutionResourcePlan(expected), panel: panel, inventory: inventory, gate: gate, checks: checks, committedGuard: committed, cleanupGuard: cleanupGuard, bound: true}
 	e.node = node
 	e.self = e
+	e.replacement = pair
 	xraySelectedTCPExecutions.Lock()
 	defer xraySelectedTCPExecutions.Unlock()
-	if xraySelectedTCPExecutions.live[m.adapter] != nil || len(xraySelectedTCPExecutions.live) >= maxExecutionResources {
+	prior := xraySelectedTCPExecutions.live[m.adapter]
+	if pair == nil && prior != nil || pair != nil && (pair.self != pair || pair.candidate != nil || pair.prior.execution != prior || pair.manager != m.manager) || prior == nil && len(xraySelectedTCPExecutions.live) >= maxExecutionResources {
 		return nil, ErrXrayOperationOwner
 	}
+	if pair != nil {
+		pair.candidate = e
+	}
+	m.execution = e
 	xraySelectedTCPExecutions.live[m.adapter] = e
 	return context.WithValue(context.WithValue(ctx, xrayOperationMaterialKey{}, m), xraySelectedTCPExecutionKey{}, e), nil
 }
@@ -86,7 +97,7 @@ func xraySelectedTCPExecutionFor(ctx context.Context, original *ProxyTunnelAdapt
 		return nil, false, nil
 	}
 	e, ok := value.(*xraySelectedTCPExecution)
-	if !ok || e == nil || e.self != e || e.material == nil || e.material.self != e.material || original != e.material.adapter || associated != e ||
+	if !ok || e == nil || e.self != e || e.material == nil || e.material.self != e.material || original != e.material.adapter || !xraySelectedTCPAssociated(associated, e) ||
 		!xraySelectedTCPSamePlan(e.plan, plan) || root != filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID, "xray") || xraySelectedTCPFinite(ctx) != nil {
 		return nil, true, ErrXrayOperationOwner
 	}
@@ -112,7 +123,7 @@ func (e *xraySelectedTCPExecution) owners(ctx context.Context) error {
 		return ErrXrayOperationOwner
 	}
 	xraySelectedTCPExecutions.Lock()
-	original := xraySelectedTCPExecutions.live[e.material.adapter] == e
+	original := xraySelectedTCPAssociated(xraySelectedTCPExecutions.live[e.material.adapter], e)
 	xraySelectedTCPExecutions.Unlock()
 	if !original || e.material.registration.Current(ctx) != nil {
 		return ErrXrayOperationOwner
@@ -132,6 +143,9 @@ func (e *xraySelectedTCPExecution) forward(ctx context.Context) error {
 func (e *xraySelectedTCPExecution) snapshot(ctx context.Context) error {
 	if err := e.forward(ctx); err != nil {
 		return err
+	}
+	if e.replacement != nil {
+		return e.replacement.priorStructural(ctx)
 	}
 	mode, err := e.material.adapter.currentXrayRuntimeMode(ctx)
 	if err != nil || mode != proxyXrayModeCold {

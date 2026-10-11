@@ -46,11 +46,15 @@ type managedXraySelectedTCPListExecution struct {
 	pendingStop                           bool
 	stopBefore, stopCommitted             *config.Config
 	pendingCloseOperation, pendingRelease func()
+	previous                              *managedXraySelectedTCPListExecution
+	pendingReplacementComplete            bool
+	stopCompletion                        *managedXrayStopCompletion
 }
 
 type managedXraySelectedTCPListOperation struct {
 	self      *managedXraySelectedTCPListOperation
 	execution *managedXraySelectedTCPListExecution
+	prior     *managedXraySelectedTCPListExecution
 	cleanup   *operationgate.ExclusiveCleanupReview
 	open      atomic.Bool
 }
@@ -70,8 +74,13 @@ func (r *ManagedXraySelectedTCPListRuntime) executionFor(ctx context.Context) (*
 		return nil, nil, ErrXrayListSource
 	}
 	e := o.execution
+	if o.prior != nil && o.prior.self == o.prior && o.execution.previous == o.prior && o.prior.material != nil && o.prior.material.IsCleanupContext(ctx) {
+		e = o.prior
+	}
 	if r.preparing != e && r.pending != e && r.active != e && r.stopped != e {
-		return nil, nil, ErrXrayListSource
+		if e != o.prior || (r.preparing != o.execution && r.pending != o.execution && r.active != o.execution) {
+			return nil, nil, ErrXrayListSource
+		}
 	}
 	return e, o, nil
 }
@@ -80,7 +89,7 @@ func (r *ManagedXraySelectedTCPListRuntime) operation(ctx context.Context, e *ma
 	if !r.original() || xrayListSourceContext(ctx) != nil || e == nil || e.self != e || e.runtime != r || cleanup == nil {
 		return nil, nil, ErrXrayListSource
 	}
-	o := &managedXraySelectedTCPListOperation{execution: e, cleanup: cleanup}
+	o := &managedXraySelectedTCPListOperation{execution: e, prior: e.previous, cleanup: cleanup}
 	o.self = o
 	o.open.Store(true)
 	ctx = context.WithValue(ctx, managedXraySelectedTCPListOperationKey{}, o)

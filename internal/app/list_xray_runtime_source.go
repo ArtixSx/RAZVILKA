@@ -58,6 +58,7 @@ type XrayListRuntimeSource struct {
 	cidrs                                               *sources.ServiceCIDRReview
 	inline                                              *xrayListInlineSource
 	node                                                *dataplane.NodeDefaultSourceReview
+	autonomy                                            *xrayAutonomyCandidate
 }
 
 // Detached comparison data only. No constructor accepts this observation, and
@@ -78,6 +79,10 @@ func (*XrayListRuntimeSource) GoString() string { return "[private original Xray
 // in this App's Manager. serviceID selects existing local intent; it supplies no
 // destinations, expected provenance, node material or permission callback.
 func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeBinding, serviceID string, original *dataplane.ProxyTunnelAdapter) (*XrayListRuntimeSource, error) {
+	return a.reviewXrayListRuntimeSource(ctx, scope, serviceID, original, nil)
+}
+
+func (a *App) reviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeBinding, serviceID string, original *dataplane.ProxyTunnelAdapter, candidate *xrayAutonomyCandidate) (*XrayListRuntimeSource, error) {
 	if xrayListSourceContext(ctx) != nil || a == nil || a.Store == nil || a.Dataplane == nil || a.Nodes == nil || a.Sources == nil || a.SelfUpdateFiles == nil ||
 		scope == nil || scope.self != scope || scope.app != a || scope.store != a.Store {
 		return nil, ErrXrayListSource
@@ -85,7 +90,7 @@ func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 	lifetime, cancel := context.WithCancel(ctx)
 	r := &XrayListRuntimeSource{ctx: lifetime, cancel: cancel, app: a, store: a.Store, manager: a.Dataplane, files: a.SelfUpdateFiles,
 		nodes: a.Nodes, sources: a.Sources, custom: a.CustomServices, dns: a.DNS, scope: scope, root: a.SelfUpdateFiles.ControlRoot,
-		service: serviceID, closeDone: make(chan struct{})}
+		service: serviceID, closeDone: make(chan struct{}), autonomy: candidate}
 	r.self = r
 	keep := false
 	defer func() {
@@ -95,11 +100,19 @@ func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 	}()
 	err := scope.use(ctx, func(c context.Context) error {
 		r.expected = r.store.Get()
+		if candidate != nil {
+			if candidate.self != candidate || candidate.app != a || candidate.spec.ID != serviceID || !reflect.DeepEqual(candidate.before, r.expected) || candidate.current(c) != nil {
+				return ErrXrayListSource
+			}
+		}
 		state, exists := r.expected.Services[serviceID]
 		if !exists || !state.Enabled || !wgListBaselineDNS(r.dns, serviceID) {
 			return ErrXrayListSource
 		}
 		r.selected = selectedRoute(state)
+		if candidate != nil {
+			r.selected = candidate.route
+		}
 		if !strings.HasPrefix(r.selected, "xray:node-") {
 			return ErrXrayListSource
 		}
@@ -200,6 +213,13 @@ func (r *XrayListRuntimeSource) currentApp() error {
 	return nil
 }
 
+func (r *XrayListRuntimeSource) planningConfig() config.Config {
+	if r.autonomy != nil && !r.autonomy.committed {
+		return r.autonomy.planned
+	}
+	return r.expected
+}
+
 // Check exact existing Xray/service/WAN eligibility, then compile privately.
 // Generation/material bookends prevent borrowing another revision's PASS.
 func (r *XrayListRuntimeSource) currentNodeMaterial(ctx context.Context) (string, error) {
@@ -240,6 +260,11 @@ func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
 		return r.scope.use(c, func(c context.Context) error {
 			if err := r.currentApp(); err != nil {
 				return err
+			}
+			if r.autonomy != nil {
+				if err := r.autonomy.current(c); err != nil {
+					return err
+				}
 			}
 			if err := r.control.Current(c); err != nil {
 				return err

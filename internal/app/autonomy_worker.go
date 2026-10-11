@@ -38,7 +38,7 @@ func (a *App) autonomyConsent(p autonomy.Policy, s autonomy.Service) bool {
 // One service per coordinator round; all mutations use the same admission as
 // manual Apply/restore. No browser timer or second networking daemon is used.
 func (a *App) autonomyRound(ctx context.Context, now time.Time) {
-	ctx, release, err := a.privateExclusiveOperation(ctx)
+	ctx, release, err := a.scopedRuntimeOperation(ctx)
 	if err != nil {
 		return
 	}
@@ -563,6 +563,12 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	if err := a.autonomyResourceGuard(ctx, p, s, base, service); err != nil {
 		return err
 	}
+	if base.NetworkPolicy != nil && strings.HasPrefix(route, "xray:node-") {
+		if err := a.applyManagedAutonomyXray(ctx, p, s, base, profile, route); err != nil {
+			return err
+		}
+		return a.recordAutonomyRoute(ctx, p, s, route)
+	}
 	hypothetical := nodeRouteConfigForScope(base, s.ID, "unused", s.Sources)
 	state := hypothetical.Services[s.ID]
 	state.Route = route
@@ -657,6 +663,13 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	})
 	if err != nil {
 		return &autonomyApplyFailure{Plan: plan, Execution: execution, Cause: err}
+	}
+	return a.recordAutonomyRoute(ctx, p, s, route)
+}
+
+func (a *App) recordAutonomyRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, route string) error {
+	if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil {
+		return dataplane.ErrReviewChanged
 	}
 	// A crash before this sidecar receipt safely pauses for review; it never
 	// authorizes blind re-application. Dataplane still has its durable journal.

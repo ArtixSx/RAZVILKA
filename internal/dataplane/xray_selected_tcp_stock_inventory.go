@@ -10,12 +10,47 @@ type networkPolicyXraySelectedTCPStockObservation struct {
 	checks   *NetworkPolicyChecks
 	resource *XraySelectedTCPExecutionResource
 	record   ExecutionResource
+	pair     *xraySelectedTCPReplacement
+	prior    *networkPolicyXraySelectedTCPStockObservation
 }
 
 // Only this SAME collector and actual original Xray scope can introduce the
 // foreign stock OUTPUT comparison. Missing context stays strict. No queue,
 // native inventory DTO, chain name or copied resource can construct this owner.
 func (c *NetworkPolicyChecks) xraySelectedTCPStockExecution(ctx context.Context) (*networkPolicyXraySelectedTCPStockObservation, error) {
+	if ctx != nil && ctx.Value(xraySelectedTCPReplacementKey{}) != nil {
+		p, err := c.xrayReplacement(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var a, candidate *networkPolicyXraySelectedTCPStockObservation
+		err = p.withExecution(ctx, p.prior.execution, func(held context.Context) error {
+			var err error
+			a, err = c.singleXraySelectedTCPStockExecution(held)
+			return err
+		})
+		if err != nil || a == nil {
+			return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		a.pair = p
+		if p.candidate.resource == nil {
+			return a, nil
+		}
+		err = p.withExecution(ctx, p.candidate, func(held context.Context) error {
+			var err error
+			candidate, err = c.singleXraySelectedTCPStockExecution(held)
+			return err
+		})
+		if err != nil || candidate == nil {
+			return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		candidate.pair, candidate.prior = p, a
+		return candidate, nil
+	}
+	return c.singleXraySelectedTCPStockExecution(ctx)
+}
+
+func (c *NetworkPolicyChecks) singleXraySelectedTCPStockExecution(ctx context.Context) (*networkPolicyXraySelectedTCPStockObservation, error) {
 	if c == nil || ctx == nil {
 		return nil, ErrNetworkPolicyConsumers
 	}
@@ -60,7 +95,7 @@ func (o *networkPolicyXraySelectedTCPStockObservation) equal(other *networkPolic
 	if o == nil || other == nil {
 		return o == other
 	}
-	return o.checks == other.checks && o.resource == other.resource && reflect.DeepEqual(o.record, other.record)
+	return o.checks == other.checks && o.resource == other.resource && o.pair == other.pair && o.prior.equal(other.prior) && reflect.DeepEqual(o.record, other.record)
 }
 
 // Pure final bookend. Provider, file/source, process and physical observations
@@ -69,6 +104,16 @@ func (o *networkPolicyXraySelectedTCPStockObservation) current(ctx context.Conte
 	if o == nil {
 		return nil
 	}
+	if o.pair != nil {
+		if err := o.prior.current(ctx); err != nil {
+			return err
+		}
+		return o.pair.withExecution(ctx, o.resource.material.execution, o.singleCurrent)
+	}
+	return o.singleCurrent(ctx)
+}
+
+func (o *networkPolicyXraySelectedTCPStockObservation) singleCurrent(ctx context.Context) error {
 	r := o.resource
 	if xraySelectedTCPFinite(ctx) != nil || r == nil || r.self != r || r.scope == nil || r.material == nil || r.material.closed.Load() ||
 		ctx.Value(xrayOperationOwnerKey{}) != r.owner || ctx.Value(xrayOperationMaterialKey{}) != r.material {

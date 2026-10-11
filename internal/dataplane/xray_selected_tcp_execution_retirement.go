@@ -23,6 +23,20 @@ func (e *xraySelectedTCPExecution) rollback(ctx context.Context) error {
 	if err := e.removeOriginalEffects(bound); err != nil {
 		return err
 	}
+	// A's original selectors no longer admit new flows. Existing A-only
+	// connections must settle naturally before signalling its original child;
+	// candidate C and its distinct listener are not part of this observation.
+	if p := e.replacement; p != nil && p.self == p && p.prior != nil && p.prior.execution == e {
+		if !p.committed.Load() || p.closed.Load() || p.candidateCurrent(ctx) != nil {
+			return ErrXrayOperationOwner
+		}
+		if err := xraySelectedTCPObserveConntrackSettled(bound, r.scope.networkIdentity.provider, r.definition.NetworkIdentity, r.definition.Match); err != nil {
+			return err
+		}
+		if err := p.candidateCurrent(ctx); err != nil {
+			return err
+		}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.startACK {
@@ -116,7 +130,7 @@ func xraySelectedTCPExecutionForRoutes(ctx context.Context, original *ProxyTunne
 		return nil, false, nil
 	}
 	value, ok := ctx.Value(xraySelectedTCPExecutionKey{}).(*xraySelectedTCPExecution)
-	if !ok || value == nil || value.self != value || value != e || !reflect.DeepEqual(routes, value.plan.RoutePlanFor("xray")) {
+	if !ok || value == nil || value.self != value || !xraySelectedTCPAssociated(e, value) || !reflect.DeepEqual(routes, value.plan.RoutePlanFor("xray")) {
 		return nil, true, ErrXrayOperationOwner
 	}
 	return xraySelectedTCPExecutionFor(ctx, original, value.plan, root)

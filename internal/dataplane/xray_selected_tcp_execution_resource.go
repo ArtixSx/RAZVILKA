@@ -175,9 +175,12 @@ func (s *executionResourceScope) issueXraySelectedTCP(ctx context.Context, mater
 	r := &XraySelectedTCPExecutionResource{scope: s, owner: owner, material: material, definition: d.Clone(), effects: compiled, rootPath: filepath.Join(s.root, relative), relative: relative, id: filepath.Base(relative), anchor: anchor}
 	r.self = r
 	published := false
+	ownRecords := false
 	defer func() {
 		if !published {
-			_ = r.records.close()
+			if ownRecords {
+				_ = r.records.close()
+			}
 			if r.config != nil {
 				_ = r.config.Close()
 			}
@@ -227,12 +230,15 @@ func (s *executionResourceScope) issueXraySelectedTCP(ctx context.Context, mater
 	if err = owner.checkHeld(bound, false); err != nil {
 		return nil, err
 	}
-	journalRoot, journalAnchor, err := openNetworkPolicyObservationRoot(s.managerRoot)
-	if err != nil {
-		return nil, err
+	if p, ok := ctx.Value(xraySelectedTCPReplacementKey{}).(*xraySelectedTCPReplacement); ok && p != nil {
+		if p.self != p || p.scope != s || p.manager != s.manager || p.records == nil || p.records.scope != s || p.candidate == nil || p.candidate.material != material || p.records.current(bound, true) != nil {
+			return nil, ErrXrayOperationOwner
+		}
+		r.records = p.records
+	} else {
+		r.records, err = newXraySelectedTCPRecords(s)
+		ownRecords = err == nil
 	}
-	r.records = &xraySelectedTCPExecutionRecords{scope: s, root: journalRoot, anchor: journalAnchor}
-	r.records.transactionRoot, r.records.transactionAnchor, err = openNetworkPolicyObservationRoot(s.root)
 	if err != nil || !os.SameFile(s.anchor, r.records.transactionAnchor) {
 		return nil, errors.Join(ErrExecutionJournal, err)
 	}

@@ -108,7 +108,7 @@ func (m *Manager) retainOriginalXray(ctx context.Context, s *executionResourceSc
 	o.self = o
 	m.retainedXrayMu.Lock()
 	defer m.retainedXrayMu.Unlock()
-	if m.retainedXray != nil {
+	if m.retainedXray != nil && (m.replacementXray == nil || m.replacementXray.self != m.replacementXray || m.replacementXray.prior != m.retainedXray || m.replacementXray.candidate != e || m.replacementXray.scope != s) {
 		return ErrXrayOperationOwner
 	}
 	if !pending {
@@ -137,6 +137,9 @@ func (m *Manager) retainedXrayOwner() *retainedXrayExecution {
 }
 
 func (m *Manager) checkRetainedXrayRecord(record Execution) error {
+	if m.hasPendingXrayReplacement() {
+		return ErrPolicyAdditionUnknown
+	}
 	active := false
 	for _, resource := range record.Resources {
 		active = active || resource.Kind == "xray-selected-tcp" && resource.State == "active"
@@ -186,6 +189,12 @@ func (m *Manager) CheckRetainedManagedXraySelectedTCP(ctx context.Context) error
 		return err
 	}
 	defer m.endOperation()
+	m.retainedXrayMu.Lock()
+	replacing := m.replacementXray != nil
+	m.retainedXrayMu.Unlock()
+	if replacing {
+		return ErrXrayOperationOwner
+	}
 	o := m.retainedXrayOwner()
 	if o == nil {
 		return ErrXrayOperationOwner
@@ -202,6 +211,9 @@ func (m *Manager) CheckRetainedManagedXraySelectedTCP(ctx context.Context) error
 }
 
 func (m *Manager) HasPendingManagedXraySelectedTCP() bool {
+	if m.hasPendingXrayReplacement() {
+		return true
+	}
 	o := m.retainedXrayOwner()
 	return o != nil && o.self == o && o.pending
 }

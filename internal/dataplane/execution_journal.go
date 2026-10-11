@@ -177,6 +177,12 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	if err != nil {
 		return executionJournalError(err)
 	}
+	m.retainedXrayMu.Lock()
+	pair := m.replacementXray
+	m.retainedXrayMu.Unlock()
+	if pair != nil && pair.self == pair && pair.prior != nil && !pair.closed.Load() && scope != nil && (scope == pair.scope || scope == pair.prior.scope) {
+		return executionJournalError(pair.publish(scope, data))
+	}
 	if scope != nil && len(scope.xraySelectedTCP) != 0 {
 		if len(scope.xraySelectedTCP) != 1 {
 			return executionJournalError(ErrExecutionJournal)

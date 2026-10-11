@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -25,6 +26,7 @@ type xraySelectedTCPExecutionRecords struct {
 	infos             [2]os.FileInfo
 	images            [2][]byte
 	closed            bool
+	replacement       atomic.Pointer[xraySelectedTCPReplacement]
 }
 
 // Private sink called by CORE's actual two journal writers. Caller holds the
@@ -43,22 +45,35 @@ func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, f
 		return ErrExecutionJournal
 	}
 	d := r.records
+	root, name := d.recordPath(index)
+	return d.captureOriginalRecord(index, file, info, canonical, root, name)
+}
+
+func (d *xraySelectedTCPExecutionRecords) recordPath(index int) (*ownedfs.Root, string) {
+	if index == 0 {
+		return d.transactionRoot, "execution.json"
+	}
+	if p := d.replacement.Load(); p != nil && p.self == p && p.prior != nil && p.prior.records == d && p.priorAlias.Load() {
+		return d.transactionRoot, "replacement-execution.json"
+	}
+	return d.root, "latest-execution.json"
+}
+
+func (d *xraySelectedTCPExecutionRecords) captureOriginalRecord(index int, file *os.File, info os.FileInfo, canonical []byte, root *ownedfs.Root, name string) error {
+	if d == nil || d.scope == nil || root == nil || file == nil || info == nil || index < 0 || index > 1 {
+		return ErrExecutionJournal
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed || d.root == nil {
 		return ErrExecutionJournal
 	}
-	expected, err := json.Marshal(s.execution)
+	expected, err := json.Marshal(d.scope.execution)
 	var compact bytes.Buffer
 	if err != nil || json.Compact(&compact, canonical) != nil || !bytes.Equal(expected, compact.Bytes()) {
 		return ErrExecutionJournal
 	}
 	held, err := file.Stat()
-	root := d.transactionRoot
-	name := "execution.json"
-	if index == 1 {
-		root, name = d.root, "latest-execution.json"
-	}
 	named, statErr := root.Stat(name)
 	if err != nil || statErr != nil || !validNetworkPolicyReceiptFile(held) || !os.SameFile(info, held) || !os.SameFile(held, named) || held.Size() <= 0 || held.Size() > 16<<20 {
 		return ErrExecutionJournal
@@ -121,24 +136,37 @@ func (d *xraySelectedTCPExecutionRecords) currentLocked(ctx context.Context, com
 	if complete && (len(d.images[0]) == 0 || !bytes.Equal(d.images[0], d.images[1])) {
 		return ErrExecutionJournal
 	}
-	for i, root := range []*ownedfs.Root{d.transactionRoot, d.root} {
+	for i := range 2 {
+		root, name := d.recordPath(i)
 		if d.files[i] == nil || d.infos[i] == nil || len(d.images[i]) == 0 {
 			if allowMissing && d.files[i] == nil && d.infos[i] == nil && len(d.images[i]) == 0 {
 				continue
 			}
 			return ErrExecutionJournal
 		}
-		name := []string{"execution.json", "latest-execution.json"}[i]
 		before, err := d.files[i].Stat()
 		named, namedErr := root.Stat(name)
-		if err != nil || namedErr != nil || !validNetworkPolicyReceiptFile(before) || !os.SameFile(before, d.infos[i]) || !os.SameFile(before, named) || before.Size() != d.infos[i].Size() || before.Mode() != d.infos[i].Mode() || !before.ModTime().Equal(d.infos[i].ModTime()) || before.Size() <= 0 || before.Size() > 16<<20 {
+		detached := false
+		if i == 1 {
+			if p := d.replacement.Load(); p != nil && p.self == p && p.prior != nil && p.prior.records == d && !p.priorAlias.Load() && p.handedOver.Load() {
+				detached = p.latestCurrent(ctx) == nil
+			}
+		}
+		if err != nil || namedErr != nil || !validNetworkPolicyReceiptFile(before) || !os.SameFile(before, d.infos[i]) || !detached && !os.SameFile(before, named) || before.Size() != d.infos[i].Size() || before.Mode() != d.infos[i].Mode() || !before.ModTime().Equal(d.infos[i].ModTime()) || before.Size() <= 0 || before.Size() > 16<<20 {
 			return ErrExecutionJournal
 		}
 		data := make([]byte, int(before.Size()))
 		n, readErr := d.files[i].ReadAt(data, 0)
 		var compact bytes.Buffer
 		after, statErr := root.Stat(name)
-		if readErr != nil || n != len(data) || statErr != nil || !os.SameFile(after, before) || json.Compact(&compact, data) != nil || !bytes.Equal(compact.Bytes(), d.images[i]) {
+		closing := statErr == nil && os.SameFile(after, before)
+		heldAfter, heldErr := d.files[i].Stat()
+		closing = closing && heldErr == nil && os.SameFile(heldAfter, before) && heldAfter.Size() == before.Size() && heldAfter.Mode() == before.Mode() && heldAfter.ModTime().Equal(before.ModTime())
+		if detached {
+			p := d.replacement.Load()
+			closing = heldErr == nil && os.SameFile(heldAfter, before) && heldAfter.Size() == before.Size() && heldAfter.Mode() == before.Mode() && heldAfter.ModTime().Equal(before.ModTime()) && p != nil && p.latestCurrent(ctx) == nil
+		}
+		if readErr != nil || n != len(data) || !closing || json.Compact(&compact, data) != nil || !bytes.Equal(compact.Bytes(), d.images[i]) {
 			return ErrExecutionJournal
 		}
 	}

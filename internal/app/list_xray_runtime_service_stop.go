@@ -64,10 +64,20 @@ func (a *App) executeManagedXrayServiceRuntime(parent context.Context, action st
 		return fail("SERVICE_RUNTIME_FAILED", "Остановка не завершена. Проверьте состояние и повторите действие.")
 	}
 	if r.pending != nil && !r.pending.pendingStop {
-		if err := r.joinPending(ctx); err != nil {
+		pair := r.pending.previous != nil && r.pending.source != nil && r.pending.source.autonomy != nil
+		if err := r.joinPending(ctx, pair); err != nil {
 			return fail("SERVICE_RUNTIME_FAILED", "Возврат исходной транзакции ещё не завершён. Откройте журнал.")
 		}
-		return fail("SERVICE_RUNTIME_CHANGED", "Исходная транзакция возвращена. Обновите состояние перед следующим действием.")
+		if !pair {
+			return fail("SERVICE_RUNTIME_CHANGED", "Исходная транзакция возвращена. Обновите состояние перед следующим действием.")
+		}
+		// Our own exact original undo/cutover can change the Store revision;
+		// terminal Stop keeps the same cleanup lifetime and compares this image.
+		cfg = a.Store.Get()
+		plan, found, planErr = a.Dataplane.Committed()
+		if planErr != nil {
+			return fail("SERVICE_RUNTIME_FAILED", "Применённое состояние ещё не подтверждено. Исходный владелец сохранён.")
+		}
 	}
 	e := r.active
 	if e == nil {
@@ -101,7 +111,74 @@ func (a *App) executeManagedXrayServiceRuntime(parent context.Context, action st
 		return fail("SERVICE_RUNTIME_FAILED", "Остановка ещё не подтверждена. Исходный владелец сохранён; откройте журнал и повторите действие.")
 	}
 	a.wakeReconciler()
-	return true, serviceRuntimeOutcome{LiveApplied: true}
+	proof := &managedXrayStopCompletion{app: a, runtime: r, execution: e, store: a.Store, terminal: e.terminal, policy: r.policy, control: r.policy.control, committed: a.Store.Get()}
+	proof.self = proof
+	e.stopCompletion = proof
+	return true, serviceRuntimeOutcome{LiveApplied: true, originalManagedXrayStop: proof}
+}
+
+// Documentary receipt of this exact completed original Stop. It never issues
+// cleanup/forward permission or repairs the global fence. Durable job closing
+// may report the terminal success only while every original pointer/image is
+// still the actual App's completed stopped slot.
+type managedXrayStopCompletion struct {
+	self      *managedXrayStopCompletion
+	app       *App
+	runtime   *ManagedXraySelectedTCPListRuntime
+	execution *managedXraySelectedTCPListExecution
+	store     *config.Store
+	terminal  *dataplane.XraySelectedTCPTerminal
+	policy    *managedListPolicyOwner
+	control   *operationgate.ControlEpochReview
+	committed config.Config
+}
+
+func (a *App) originalManagedXrayStopCompleted(p *managedXrayStopCompletion) bool {
+	if a == nil || p == nil || p.self != p || p.app != a || p.store != a.Store || p.runtime == nil || p.policy == nil || p.control == nil || a.SelfUpdateFiles == nil || !p.control.MatchesControlRoot(a.SelfUpdateFiles.ControlRoot) || !p.runtime.mu.TryLock() {
+		return false
+	}
+	r := p.runtime
+	defer r.mu.Unlock()
+	e := p.execution
+	a.managedListPolicyMu.Lock()
+	actualPolicy := a.managedListPolicy
+	a.managedListPolicyMu.Unlock()
+	return r.original() && r.policy == p.policy && actualPolicy == p.policy && p.policy.original() && !p.policy.closed.Load() && p.policy.control == p.control && r.stopped == e && r.active == nil && r.pending == nil && r.preparing == nil && e != nil && e.self == e && e.runtime == r && e.stopCompletion == p && p.terminal != nil && e.terminal == p.terminal && e.stopCommitted != nil &&
+		p.committed.ServiceControl.Stopped && reflect.DeepEqual(p.committed, *e.stopCommitted) && reflect.DeepEqual(a.Store.Get(), p.committed)
+}
+
+// Admission comparison only. A public keyed STOP may reach this App's SAME
+// retained unfinished cleanup; a fence, decoded journal or pending flag alone
+// cannot create an owner. The executor repeats the actual lifetime/control,
+// physics, resource, writer and Store checks before any effect.
+func (a *App) hasOriginalPendingManagedXrayStop() bool {
+	if a == nil || a.Store == nil || a.Dataplane == nil {
+		return false
+	}
+	a.managedXraySelectedTCPListMu.Lock()
+	r := a.managedXraySelectedTCPList
+	a.managedXraySelectedTCPListMu.Unlock()
+	if r == nil || !r.mu.TryLock() {
+		return false
+	}
+	defer r.mu.Unlock()
+	if !r.original() || !r.policy.original() || r.policy.closed.Load() || r.preparing != nil || r.pending == nil {
+		return false
+	}
+	e := r.pending
+	if e.self != e || e.runtime != r || e.pendingContext == nil || e.pendingCloseOperation == nil || e.pendingRelease == nil || e.material == nil {
+		return false
+	}
+	if !e.pendingStop && (e.previous == nil || e.previous.self != e.previous || e.previous.runtime != r || e.source == nil || e.source.autonomy == nil || e.source.autonomy.self != e.source.autonomy) {
+		return false
+	}
+	c, cancel := context.WithTimeout(context.WithoutCancel(e.pendingContext), time.Second)
+	defer cancel()
+	actual, op, err := r.executionFor(c)
+	if err != nil || actual != e || op.cleanup == nil {
+		return false
+	}
+	return op.cleanup.WithCurrent(c, func() error { return nil }) == nil
 }
 
 func (e *managedXraySelectedTCPListExecution) appliedStopRoutes(cfg config.Config) (map[string]string, error) {

@@ -63,6 +63,7 @@ type Manager struct {
 	pendingNFQ         *pendingNFQWSExecution
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
+	replacementXray    *xraySelectedTCPReplacement
 	retainedWGMu       sync.Mutex
 	retainedWG         *retainedWGExecution
 }
@@ -1144,15 +1145,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	execution := Execution{PlanID: plan.PlanID, Digest: plan.Digest, State: "applying", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []ExecutionStep{}}
 	if err := m.beginOperation(ctx); err != nil {
 		execution.State = "cancelled"
+		if m.pendingUnenteredXrayReplacement(ctx, plan) {
+			execution.State = "replacement-pending"
+		}
 		execution.Error = err.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
 	defer m.endOperation()
+	pair, pairErr := m.xrayReplacementFor(ctx, plan)
+	if pairErr != nil {
+		if m.pendingUnenteredXrayReplacement(ctx, plan) {
+			execution.State = "replacement-pending"
+		}
+		return execution, pairErr
+	}
+	pairInResourceDefer := false
+	defer func() {
+		if pair != nil && !pairInResourceDefer {
+			pair.settleApply(ctx, &result, &resultErr)
+		}
+	}()
 	if err := validateDomainTransportForExecution(plan); err != nil {
 		return execution, err
 	}
-	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil || m.retainedWGOwner() != nil {
+	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil && pair == nil || m.retainedWGOwner() != nil {
 		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
 	}
 	if err := m.checkManagedNFQWSApply(ctx, plan); err != nil {
@@ -1214,6 +1231,16 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	var activeNFQScope, activeXrayScope, activeWGScope *executionResourceScope
+	if pair != nil {
+		var attachErr error
+		activeXrayScope, attachErr = m.newExecutionResourceScope(ctx, plan, "xray", &execution, transactionRoot)
+		if attachErr == nil {
+			attachErr = pair.attachScope(activeXrayScope)
+		}
+		if attachErr != nil {
+			return execution, attachErr
+		}
+	}
 	writeExecution := func() error {
 		count := 0
 		for _, candidate := range []*executionResourceScope{activeNFQScope, activeXrayScope, activeWGScope} {
@@ -1250,7 +1277,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	var retryNFQRollback func(context.Context) error
 	var retryXrayRollback func(context.Context) error
 	var retryWGRollback func(context.Context) error
+	pairInResourceDefer = true
 	defer func() {
+		if pair != nil {
+			pair.retry = retryXrayRollback
+			if result.State == "rollback-failed" && activeXrayScope != nil && pair.candidate.resource != nil && !activeXrayScope.retained && retryXrayRollback != nil {
+				resultErr = errors.Join(resultErr, m.retainPendingXray(ctx, activeXrayScope, retryXrayRollback))
+			}
+			pair.settleApply(ctx, &result, &resultErr)
+			if pair.pending.Load() {
+				return // Both actual issuers/compensation roots remain open.
+			}
+		}
 		if activeWGScope != nil && !activeWGScope.retained {
 			if result.State == "rollback-failed" && retryWGRollback != nil {
 				if err := m.retainOriginalWG(ctx, activeWGScope, retryWGRollback); err == nil {

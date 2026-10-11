@@ -49,14 +49,26 @@ func (a *App) ConfigureReviewedStockXraySelectedTCPList(ctx, panel context.Conte
 	return r, nil
 }
 
-func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, serviceID string) (*DefaultRouteCompilation, error) {
+func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, serviceID string, candidates ...*xrayAutonomyCandidate) (*DefaultRouteCompilation, error) {
 	r := e.runtime
 	var err error
-	e.scope, err = NewReviewedStockNC1812ListScopeBinding(ctx, r.app, r.policy.provider)
+	if len(candidates) > 1 {
+		return nil, ErrXrayListSource
+	}
+	var candidate *xrayAutonomyCandidate
+	if len(candidates) == 1 {
+		candidate = candidates[0]
+		if candidate == nil || candidate.self != candidate || candidate.app != r.app {
+			return nil, ErrXrayListSource
+		}
+		e.scope, err = r.app.autonomyXrayScope(ctx)
+	} else {
+		e.scope, err = NewReviewedStockNC1812ListScopeBinding(ctx, r.app, r.policy.provider)
+	}
 	if err != nil {
 		return nil, err
 	}
-	e.source, err = r.app.ReviewXrayListRuntimeSource(ctx, e.scope, serviceID, r.adapter)
+	e.source, err = r.app.reviewXrayListRuntimeSource(ctx, e.scope, serviceID, r.adapter, candidate)
 	if err != nil {
 		return nil, err
 	}
@@ -99,13 +111,21 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 	if !address.IsValid() || address == client.Addr() {
 		return nil, ErrListScopeChanged
 	}
-	e.listener = netip.AddrPortFrom(address, managedXraySelectedTCPListenerPort)
+	port := managedXraySelectedTCPListenerPort
+	if e.previous != nil {
+		if e.previous.listener.Port() == managedXraySelectedTCPListenerPort {
+			port++
+		} else if e.previous.listener.Port() != managedXraySelectedTCPListenerPort+1 {
+			return nil, ErrXrayListSource
+		}
+	}
+	e.listener = netip.AddrPortFrom(address, port)
 	e.primary, err = e.scope.originalPhysicalObserver.ReviewPrimaryIPv4(ctx, e.scope.originalPhysicalReview, lan.Ingress[0].Interface, address)
 	if err != nil {
 		return nil, err
 	}
 	spec := dataplane.XraySelectedTCPRedirectSpec{Schema: 1, Generation: c.Digest(), ServiceID: e.source.service, NodeID: e.source.node.Reference().NodeID,
-		LAN: lan, Destinations: slices.Clone(e.source.frozen.CIDRs), Ports: []dataplane.XraySelectedTCPPortRange{{First: 443, Last: 443}}, Listener: netip.AddrPortFrom(address, managedXraySelectedTCPListenerPort)}
+		LAN: lan, Destinations: slices.Clone(e.source.frozen.CIDRs), Ports: []dataplane.XraySelectedTCPPortRange{{First: 443, Last: 443}}, Listener: e.listener}
 	e.material, err = dataplane.ReviewXrayOperationMaterial(ctx, r.manager, r.policy.control, r.adapter, e.preparation.proof, spec)
 	if err != nil {
 		return nil, err
@@ -322,7 +342,22 @@ func (r *ManagedXraySelectedTCPListRuntime) Stop(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pending != nil {
-		return r.joinPending(ctx)
+		pair := r.pending.previous != nil && r.pending.source != nil && r.pending.source.autonomy != nil
+		if err := r.joinPending(ctx, pair); err != nil {
+			return err
+		}
+		if !pair {
+			return nil
+		}
+		// The original cleanup lease is transferred to the surviving owner.
+		// Public service Stop performs its Store CAS through the same path.
+		e := r.pending
+		if e == nil || !e.pendingStop {
+			return ErrXrayListSource
+		}
+		before := r.app.Store.Get()
+		e.stopBefore = &before
+		return r.stopServiceRuntimeLocked(ctx, e)
 	}
 	e := r.active
 	if e == nil {
@@ -376,7 +411,10 @@ func (r *ManagedXraySelectedTCPListRuntime) Stop(ctx context.Context) error {
 	return err
 }
 
-func (r *ManagedXraySelectedTCPListRuntime) joinPending(ctx context.Context) error {
+func (r *ManagedXraySelectedTCPListRuntime) joinPending(ctx context.Context, retainForStop ...bool) error {
+	if len(retainForStop) > 1 {
+		return ErrXrayListSource
+	}
 	e := r.pending
 	if xrayListSourceContext(ctx) != nil || e == nil || e.pendingContext == nil || e.pendingCloseOperation == nil || e.pendingRelease == nil {
 		return ErrXrayListSource
@@ -391,6 +429,54 @@ func (r *ManagedXraySelectedTCPListRuntime) joinPending(ctx context.Context) err
 	_, op, err := r.executionFor(c)
 	if err != nil {
 		return err
+	}
+	if e.previous != nil && e.source != nil && e.source.autonomy != nil {
+		committed := e.pendingReplacementComplete
+		if !committed {
+			var err error
+			committed, err = r.manager.JoinPendingManagedXrayReplacement(c, len(retainForStop) == 1 && retainForStop[0])
+			if err != nil {
+				return err
+			}
+			e.pendingReplacementComplete = committed
+		}
+		if committed {
+			if err := e.previous.close(); err != nil {
+				return err
+			}
+			if err := r.app.recordAutonomyRoute(c, e.source.autonomy.policy, e.source.autonomy.spec, e.source.selected); err != nil {
+				return err
+			}
+			r.active = e
+		} else {
+			if err := e.close(); err != nil {
+				return err
+			}
+			r.active = e.previous
+		}
+		stop := len(retainForStop) == 1 && retainForStop[0]
+		if stop {
+			// Transfer the SAME held Gate lifetime and preissued cleanup review.
+			// This private App association issues no new Gate/native permission.
+			survivor := r.active
+			next, closeNext, err := r.operation(c, survivor, op.cleanup)
+			if err != nil {
+				return err
+			}
+			release := e.pendingRelease
+			e.pendingCloseOperation()
+			e.pendingContext, e.pendingCloseOperation, e.pendingRelease = nil, nil, nil
+			e.previous = nil
+			survivor.pendingContext, survivor.pendingCloseOperation, survivor.pendingRelease = next, closeNext, release
+			survivor.pendingStop = true
+			r.pending = survivor
+			return nil
+		}
+		e.pendingCloseOperation()
+		e.pendingRelease()
+		e.pendingContext, e.pendingCloseOperation, e.pendingRelease = nil, nil, nil
+		e.previous, r.pending = nil, nil
+		return nil
 	}
 	var terminal *dataplane.XraySelectedTCPTerminal
 	if e.pendingStop {

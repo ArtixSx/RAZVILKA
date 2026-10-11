@@ -29,7 +29,14 @@ type networkPolicyXraySelectedTCPObservation struct {
 func (o networkPolicyXraySelectedTCPObservation) close() { o.borrow.close() }
 
 func (o networkPolicyXraySelectedTCPObservation) current(ctx context.Context) error {
-	if o.stock == nil || o.stock.current(ctx) != nil {
+	if o.stock != nil && o.stock.pair != nil {
+		return o.stock.pair.withExecution(ctx, o.resource.material.execution, o.singleCurrent)
+	}
+	return o.singleCurrent(ctx)
+}
+
+func (o networkPolicyXraySelectedTCPObservation) singleCurrent(ctx context.Context) error {
+	if o.stock == nil || o.stock.singleCurrent(ctx) != nil {
 		return ErrNetworkPolicyConsumers
 	}
 	r := o.resource
@@ -81,7 +88,40 @@ func equalNetworkPolicyXraySelectedTCPObservations(a, b []networkPolicyXraySelec
 }
 
 func (c *NetworkPolicyChecks) xraySelectedTCPConsumers(ctx context.Context, lan *LANPolicyRuntimePlan) (out []networkPolicyXraySelectedTCPObservation, result error) {
-	stock, err := c.xraySelectedTCPStockExecution(ctx)
+	if ctx != nil && ctx.Value(xraySelectedTCPReplacementKey{}) != nil {
+		p, err := c.xrayReplacement(ctx)
+		if err != nil || lan == nil || (!reflect.DeepEqual(lan, p.candidate.plan.LAN) && !reflect.DeepEqual(lan, p.prior.execution.plan.LAN)) {
+			return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		defer func() {
+			if result != nil {
+				closeNetworkPolicyXrayObservations(out)
+				out = nil
+			}
+		}()
+		for _, execution := range []*xraySelectedTCPExecution{p.prior.execution, p.candidate} {
+			if execution.resource == nil {
+				continue
+			}
+			err := p.withExecution(ctx, execution, func(held context.Context) error {
+				observations, err := c.singleXraySelectedTCPConsumers(held, execution.plan.LAN)
+				for i := range observations {
+					observations[i].stock.pair = p
+				}
+				out = append(out, observations...)
+				return err
+			})
+			if err != nil {
+				return out, err
+			}
+		}
+		return out, nil // Actual A then C writers imply C insert-at-one precedes A.
+	}
+	return c.singleXraySelectedTCPConsumers(ctx, lan)
+}
+
+func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context, lan *LANPolicyRuntimePlan) (out []networkPolicyXraySelectedTCPObservation, result error) {
+	stock, err := c.singleXraySelectedTCPStockExecution(ctx)
 	if err != nil || stock == nil {
 		return nil, err
 	}

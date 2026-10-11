@@ -24,6 +24,12 @@ func (m *Manager) StopRetainedManagedXraySelectedTCP(ctx context.Context, cleanu
 		return nil, err
 	}
 	defer m.endOperation()
+	m.retainedXrayMu.Lock()
+	replacing := m.replacementXray != nil
+	m.retainedXrayMu.Unlock()
+	if replacing {
+		return nil, ErrXrayOperationOwner
+	}
 	o := m.retainedXrayOwner()
 	if o == nil {
 		return nil, ErrXrayOperationOwner
@@ -160,8 +166,15 @@ func (t *XraySelectedTCPTerminal) ObserveRetired(ctx context.Context, cleanup *o
 }
 
 func (c *NetworkPolicyChecks) retiredXrayConsumer(ctx context.Context, a *ProxyTunnelAdapter, e *xraySelectedTCPExecution) error {
-	if c == nil || e == nil || e.self != e || e.material == nil || e.material.adapter != a || e.checks != c || e.resource == nil {
+	if c == nil || e == nil || e.self != e || e.material == nil || e.material.adapter != a || e.checks != c {
 		return ErrNetworkPolicyConsumers
+	}
+	if e.resource == nil {
+		p, err := c.xrayReplacement(ctx)
+		if err != nil || p.unusedCandidate(ctx, e) != nil {
+			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		return nil
 	}
 	if t, ok := ctx.Value(xraySelectedTCPTerminalKey{}).(*XraySelectedTCPTerminal); ok {
 		if t == nil || t.self != t || t.owner == nil || t.owner.execution != e {
