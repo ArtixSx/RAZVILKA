@@ -135,17 +135,18 @@ func selfUpdateRuntimeManager() (*dataplane.Manager, error) {
 	return manager, nil
 }
 
-func selfUpdateRuntimeInactive(ctx context.Context, id string) error {
+func selfUpdateRuntimeInactive(ctx context.Context, id string) (result error) {
 	if _, err := selfUpdateStopCheck(ctx, id); err != nil {
 		return err
 	}
 	if err := independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")); err != nil {
 		return err
 	}
-	manager, err := selfUpdateRuntimeManager()
+	manager, closeRuntimeSource, err := selfUpdateRuntimeManagerBound(ctx)
 	if err != nil {
 		return err
 	}
+	defer func() { result = errors.Join(result, closeRuntimeSource()) }()
 	adapter, ok := nativeSelfUpdateFileAdapter().(*updatecheck.SelfUpdateFileAdapter)
 	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, adapter, id) != nil {
 		return dataplane.ErrRuntimeInactivity
@@ -327,7 +328,7 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath("/opt/var/lib/razvilka/dataplane")) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("independent-opening")
 	}
-	manager, err := selfUpdateRuntimeManager()
+	manager, closeRuntimeSource, err := selfUpdateRuntimeManagerBound(ctx)
 	if err != nil {
 		return refuseSelfUpdateRuntimeQuiesce("manager-construction")
 	}
@@ -335,6 +336,7 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, installer, args[0]) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("installer-role-binding")
 	}
+	defer closeRuntimeSource()
 	if _, err := manager.Deactivate(ctx); err != nil {
 		return refuseSelfUpdateRuntimeQuiesce("deactivate")
 	}
@@ -343,6 +345,9 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 	}
 	if adapter.RuntimeQuiesceAuthority(ctx, args[0], revision, worker) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("authority-closing")
+	}
+	if closeRuntimeSource() != nil {
+		return 3
 	}
 	if independentSelfUpdateFences(ctx, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), manager.StateRoot) != nil {
 		return refuseSelfUpdateRuntimeQuiesce("independent-closing")

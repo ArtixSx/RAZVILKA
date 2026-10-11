@@ -163,6 +163,16 @@ func (a *App) ConfigureReviewedStockNFQWSList(ctx, panel context.Context) (*Mana
 		a.managedNFQList = r
 		return nil, err
 	}
+	if a.DNS == nil {
+		r.closed = true
+		a.managedNFQList = r
+		return nil, dataplane.ErrRuntimeInactivity
+	}
+	if err := r.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path); err != nil {
+		r.closed = true
+		a.managedNFQList = r
+		return nil, err
+	}
 	a.retainManagedNFQControl(control)
 	a.managedNFQList = r
 	keep = true
