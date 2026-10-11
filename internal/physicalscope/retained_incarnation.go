@@ -28,8 +28,7 @@ func (o *Observer) VerifyRetainedIncarnation(ctx context.Context, r *Review) err
 		return at("retained.review.unavailable", nil)
 	}
 	selection := cloneSnapshot(s.snapshot).Selection
-	snapshot, _, err := o.captureObservation(c, selection, s.snapshot.Identity, s.fence, &s.snapshot, false)
-	snapshot.ReviewID = s.snapshot.ReviewID
+	snapshot, _, err := o.captureObservation(c, selection, s.snapshot.Identity, s.fence, &s.snapshot, false, s.snapshot.ReviewID)
 	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
 		s.invalid, s.physicalInvalid = true, true
 		if err != nil {

@@ -261,8 +261,8 @@ func (f *kernelFence) close() error {
 	})
 	return f.closeErr
 }
-func (f *kernelFence) check(ctx context.Context, segments []Segment, devices []Device) error {
-	return f.reader.check(ctx, segments, devices)
+func (f *kernelFence) check(ctx context.Context, snapshot Snapshot) error {
+	return f.reader.check(ctx, snapshot)
 }
 
 func captureKernel(ctx context.Context, selection Selection, native []nativeSegment, stock bool) ([]Segment, []Device, error) {
@@ -286,13 +286,16 @@ func captureKernel(ctx context.Context, selection Selection, native []nativeSegm
 	if err != nil {
 		return nil, nil, err // Retain the closed assembler branch; no raw data.
 	}
-	bindings, err := observeKernelBindings(ctx, segments)
+	bindings, err := observeSelectedKernelBindings(ctx, selection, segments)
 	if err != nil {
 		return nil, nil, err // Retain the closed binding branch; no raw data.
 	}
 	return segments, bindings, nil
 }
 func observeKernelBindings(ctx context.Context, segments []Segment) ([]Device, error) {
+	return observeSelectedKernelBindings(ctx, Selection{}, segments)
+}
+func observeSelectedKernelBindings(ctx context.Context, selection Selection, segments []Segment) ([]Device, error) {
 	families := map[byte][]message{}
 	for _, family := range []byte{2, 10} {
 		frames, err := dump(ctx, 30, family)
@@ -304,5 +307,5 @@ func observeKernelBindings(ctx context.Context, segments []Segment) ([]Device, e
 		}
 		families[family] = frames
 	}
-	return bindKernelNeighbors(ctx, segments, families)
+	return bindSelectedKernelNeighbors(ctx, selection, segments, families)
 }

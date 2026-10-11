@@ -129,7 +129,7 @@ func checkFenceTest(t *testing.T, r *originalFenceCollector, segments []Segment,
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return r.check(ctx, segments, devices)
+	return r.check(ctx, Snapshot{Segments: segments, Devices: devices})
 }
 func assertFenceFailure(t *testing.T, err error, stage string) {
 	t.Helper()
@@ -144,7 +144,7 @@ func TestOriginalFenceCollectorDrainsBetweenChecksWithoutRefreshing(t *testing.T
 	t.Cleanup(r.close)
 	segments := []Segment{{Interface: "Home", IfIndex: 9, Members: []Link{{Interface: "eth0", IfIndex: 4}}}}
 	ctx, cancel := context.WithCancel(context.Background())
-	if err := r.check(ctx, segments, nil); err != nil {
+	if err := r.check(ctx, Snapshot{Segments: segments}); err != nil {
 		t.Fatal(err)
 	}
 	cancel() // The operation context is not the retained reader's lifetime.
@@ -377,7 +377,7 @@ func TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader(t *testing.T) 
 		wg.Go(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			err := r.check(ctx, nil, nil)
+			err := r.check(ctx, Snapshot{})
 			if err != nil && !errors.Is(err, ErrUnknown) {
 				errorsFound <- err
 			}

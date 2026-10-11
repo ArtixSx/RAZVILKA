@@ -34,7 +34,7 @@ type fenceCheckpoint struct {
 // lifetime is the Review's Close, independent of Observe's operation context.
 // Before the first actual check, raw datagrams have finite byte/count bounds.
 // Thereafter every frame is checked against a detached, immutable first
-// baseline by the unchanged notification predicate; no event is coalesced.
+// full snapshot, including explicit projection intent; no event is coalesced.
 type originalFenceCollector struct {
 	source   fenceCollectorSource
 	checks   chan fenceCheckpoint
@@ -76,7 +76,7 @@ func (r *originalFenceCollector) completedError() error {
 	return at("fence.check.closed", nil)
 }
 
-func (r *originalFenceCollector) check(ctx context.Context, segments []Segment, devices []Device) error {
+func (r *originalFenceCollector) check(ctx context.Context, snapshot Snapshot) error {
 	if ctx == nil {
 		return at("fence.check.context", nil)
 	}
@@ -88,7 +88,7 @@ func (r *originalFenceCollector) check(ctx context.Context, segments []Segment, 
 	}
 	req := fenceCheckpoint{
 		ctx:      ctx,
-		original: cloneSnapshot(Snapshot{Segments: segments, Devices: devices}),
+		original: cloneSnapshot(snapshot),
 		reply:    make(chan error, 1),
 	}
 	select {
@@ -175,7 +175,7 @@ func (s *fenceCollectorState) checkpoint(req fenceCheckpoint, buf []byte) error 
 			if err != nil {
 				return boundary("fence.datagram.decode", err)
 			}
-			if err := checkNotifications(frames, s.original.Segments, s.original.Devices); err != nil {
+			if err := checkSnapshotNotifications(frames, s.original); err != nil {
 				return boundary("fence.notifications", err)
 			}
 		}
@@ -234,7 +234,7 @@ func (s *fenceCollectorState) drain(ctx context.Context, buf []byte) error {
 			return boundary("fence.datagram.decode", err)
 		}
 		if s.bound {
-			if err := checkNotifications(frames, s.original.Segments, s.original.Devices); err != nil {
+			if err := checkSnapshotNotifications(frames, s.original); err != nil {
 				return boundary("fence.notifications", err)
 			}
 			continue

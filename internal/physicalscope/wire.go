@@ -270,6 +270,15 @@ func uniqueSorted(values []string) ([]string, error) {
 }
 
 func checkNotifications(frames []message, segments []Segment, devices []Device) error {
+	return checkSnapshotNotifications(frames, Snapshot{Segments: segments, Devices: devices})
+}
+
+func checkSnapshotNotifications(frames []message, snapshot Snapshot) error {
+	segments, devices := snapshot.Segments, snapshot.Devices
+	watch, err := selectedSnapshotWatch(snapshot)
+	if err != nil {
+		return err
+	}
 	tracked, roots, names := map[int]bool{}, map[int]bool{}, map[string]bool{}
 	byIndex := map[int]Segment{}
 	routerMACs := map[string]bool{}
@@ -346,6 +355,15 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 				if bookkeeping {
 					continue
 				}
+				if watch != nil {
+					irrelevant, err := watch.irrelevant(n)
+					if err != nil {
+						return err
+					}
+					if irrelevant {
+						continue
+					}
+				}
 				if m.kind == 29 {
 					return at("notifications.neighbor.delete", nil)
 				}
@@ -374,6 +392,14 @@ func checkNotifications(frames []message, segments []Segment, devices []Device) 
 						return at("notifications.neighbor.binding.ambiguous", nil)
 					}
 					return at(neighborMismatch(n, segment, devices), nil)
+				}
+			} else if watch != nil && (m.data[0] == 2 || m.data[0] == 10) {
+				n, err := parseKernelNeighbor(m)
+				if err != nil {
+					return boundary("notifications.neighbor.decode", err)
+				}
+				if watch.owns(n) {
+					return at("projection.bindings.ingress", nil)
 				}
 			}
 		case 24, 25:

@@ -49,6 +49,9 @@ type Selection struct {
 	SegmentIDs      []string `json:"segment_ids"`
 	HomeSegmentID   string   `json:"home_segment_id"`
 	GuestSegmentIDs []string `json:"guest_segment_ids"`
+	// An explicit selected-device intent narrows only client observation. Nil
+	// retains the complete segment boundary, including legacy/lan_except users.
+	SelectedDevices *SelectedDeviceProjection `json:"selected_devices,omitempty"`
 }
 type SelectionReader func(context.Context) (Selection, error)
 
@@ -142,7 +145,7 @@ type Snapshot struct {
 }
 
 type lifecycleFence interface {
-	check(context.Context, []Segment, []Device) error
+	check(context.Context, Snapshot) error
 	close() error
 }
 type observerSource struct {
@@ -189,6 +192,11 @@ var segmentID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,63}$`)
 var interfaceName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,14}$`)
 
 func canonicalSelection(s Selection) (Selection, error) {
+	projection, err := canonicalSelectedDeviceProjection(s.SelectedDevices)
+	if err != nil {
+		return Selection{}, err
+	}
+	s.SelectedDevices = projection
 	if len(s.SegmentIDs) > 0 {
 		if s.HomeSegmentID != "" || len(s.GuestSegmentIDs) != 0 || len(s.SegmentIDs) > 16 {
 			return Selection{}, ErrUnknown
@@ -289,23 +297,22 @@ func (o *Observer) Observe(ctx context.Context) (*Review, error) {
 	}
 	r := &Review{state: &reviewState{issuer: o, fence: fence}}
 	r.state.self = r
-	r.state.snapshot, err = o.capture(c, selection, identity, fence, nil)
+	r.state.snapshot, err = o.capture(c, selection, identity, fence, nil, hex.EncodeToString(nonce[:]))
 	if err != nil {
 		_ = r.Close()
 		return nil, boundary("observe.capture", err)
 	}
-	r.state.snapshot.ReviewID = hex.EncodeToString(nonce[:])
 	return r, nil
 }
-func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot) (Snapshot, error) {
-	snapshot, _, err := o.captureObservation(ctx, selection, expected, fence, baseline, true)
+func (o *Observer) capture(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot, reviewID string) (Snapshot, error) {
+	snapshot, _, err := o.captureObservation(ctx, selection, expected, fence, baseline, true, reviewID)
 	return snapshot, err
 }
 
 // Only forward observations reread user selection. Both paths retain identical
 // physical capture passes and closing original NI/fence checks. physicalFailed
 // distinguishes actual physical uncertainty from a selection-only refusal.
-func (o *Observer) captureObservation(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot, checkSelection bool) (snapshot Snapshot, physicalFailed bool, err error) {
+func (o *Observer) captureObservation(ctx context.Context, selection Selection, expected netidentity.Identity, fence lifecycleFence, baseline *Snapshot, checkSelection bool, reviewID string) (snapshot Snapshot, physicalFailed bool, err error) {
 	var result Snapshot
 	for pass := 0; pass < 2; pass++ {
 		stage := [2]string{"capture.initial", "capture.pass"}[pass]
@@ -323,7 +330,7 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 				original = &result
 			}
 			if original != nil {
-				if err := fence.check(held, original.Segments, original.Devices); err != nil {
+				if err := fence.check(held, *original); err != nil {
 					return boundary(stage+".fence.before", err)
 				}
 			}
@@ -332,10 +339,13 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 			if err != nil {
 				return boundary(stage+".facts", err)
 			}
+			if err := validateSelectedDevices(selection.SelectedDevices, devices); err != nil {
+				return boundary(stage+".facts", err)
+			}
 			if original != nil {
-				err = fence.check(held, original.Segments, original.Devices)
+				err = fence.check(held, *original)
 			} else {
-				err = fence.check(held, segments, devices)
+				err = fence.check(held, Snapshot{ReviewID: reviewID, Identity: expected, Selection: selection, Segments: segments, Devices: devices})
 			}
 			if err != nil {
 				return boundary(stage+".fence.after", err)
@@ -345,7 +355,7 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 		if err != nil {
 			return Snapshot{}, true, boundary(stage+".current", err)
 		}
-		current := Snapshot{Identity: expected, Selection: selection, Segments: segments, Devices: devices}
+		current := Snapshot{ReviewID: reviewID, Identity: expected, Selection: selection, Segments: segments, Devices: devices}
 		if pass == 0 {
 			result = current
 		} else if !reflect.DeepEqual(result, current) {
@@ -355,9 +365,7 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 	// A later selection refusal must not hide physical drift already observed
 	// against the original baseline, even if both capture passes agree.
 	if baseline != nil {
-		originalComparison := result
-		originalComparison.ReviewID = baseline.ReviewID
-		physicalFailed = !reflect.DeepEqual(originalComparison, *baseline)
+		physicalFailed = !reflect.DeepEqual(result, *baseline)
 	}
 	if checkSelection {
 		closing, err := o.readSelection(ctx)
@@ -377,7 +385,7 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 		if baseline != nil {
 			original = baseline
 		}
-		if err := fence.check(c, original.Segments, original.Devices); err != nil {
+		if err := fence.check(c, *original); err != nil {
 			return boundary("capture.closing.fence", err)
 		}
 		return nil
@@ -414,8 +422,7 @@ func (o *Observer) Verify(ctx context.Context, r *Review) error {
 		}
 		return at("verify.selection.changed", nil)
 	}
-	snapshot, physicalFailed, err := o.captureObservation(c, selection, s.snapshot.Identity, s.fence, &s.snapshot, true)
-	snapshot.ReviewID = s.snapshot.ReviewID
+	snapshot, physicalFailed, err := o.captureObservation(c, selection, s.snapshot.Identity, s.fence, &s.snapshot, true, s.snapshot.ReviewID)
 	if err != nil || !reflect.DeepEqual(snapshot, s.snapshot) {
 		s.invalid = true
 		s.physicalInvalid = physicalFailed || err == nil
@@ -429,6 +436,7 @@ func (o *Observer) Verify(ctx context.Context, r *Review) error {
 func cloneSnapshot(s Snapshot) Snapshot {
 	s.Selection.SegmentIDs = slices.Clone(s.Selection.SegmentIDs)
 	s.Selection.GuestSegmentIDs = slices.Clone(s.Selection.GuestSegmentIDs)
+	s.Selection.SelectedDevices = cloneSelectedDeviceProjection(s.Selection.SelectedDevices)
 	s.Segments = slices.Clone(s.Segments)
 	for i := range s.Segments {
 		s.Segments[i].Prefixes = slices.Clone(s.Segments[i].Prefixes)

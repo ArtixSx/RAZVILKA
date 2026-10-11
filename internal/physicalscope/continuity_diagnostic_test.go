@@ -39,8 +39,8 @@ type rejectingDiagnosticFence struct {
 }
 
 func (f *rejectingDiagnosticFence) close() error { return f.base.close() }
-func (f *rejectingDiagnosticFence) check(ctx context.Context, s []Segment, d []Device) error {
-	if err := f.base.check(ctx, s, d); err != nil {
+func (f *rejectingDiagnosticFence) check(ctx context.Context, snapshot Snapshot) error {
+	if err := f.base.check(ctx, snapshot); err != nil {
 		return err
 	}
 	if f.base.checks == f.reject {

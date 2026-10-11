@@ -15,7 +15,7 @@ type modelFence struct {
 	checks                  int
 }
 
-func (f *modelFence) check(ctx context.Context, _ []Segment, _ []Device) error {
+func (f *modelFence) check(ctx context.Context, _ Snapshot) error {
 	f.checks++
 	if !f.opened || f.closed || f.changed || ctx.Err() != nil {
 		return ErrUnknown

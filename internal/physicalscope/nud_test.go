@@ -30,13 +30,13 @@ type packetFence struct {
 	closed bool
 }
 
-func (f *packetFence) check(c context.Context, s []Segment, d []Device) error {
+func (f *packetFence) check(c context.Context, snapshot Snapshot) error {
 	if f.closed || c.Err() != nil {
 		return ErrUnknown
 	}
 	events := f.events
 	f.events = nil
-	return checkNotifications(events, s, d)
+	return checkSnapshotNotifications(events, snapshot)
 }
 func (f *packetFence) close() error { f.closed = true; return nil }
 func TestPhysicalReviewKeepsOriginalTupleAcrossNUDAndRefusesReplacement(t *testing.T) {

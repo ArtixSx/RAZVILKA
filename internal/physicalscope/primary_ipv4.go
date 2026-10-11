@@ -139,7 +139,7 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 			return at("primary.identity.context", nil)
 		}
 		for pass := 0; pass < 2; pass++ {
-			if err := s.fence.check(held, s.snapshot.Segments, s.snapshot.Devices); err != nil {
+			if err := s.fence.check(held, s.snapshot); err != nil {
 				return boundary("primary.fence.before", err)
 			}
 			frames, err := v.read(held)
@@ -153,7 +153,7 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 			if int(row.prefix) != bits {
 				return at("primary.prefix.changed", nil)
 			}
-			if err := s.fence.check(held, s.snapshot.Segments, s.snapshot.Devices); err != nil {
+			if err := s.fence.check(held, s.snapshot); err != nil {
 				return boundary("primary.fence.after", err)
 			}
 			row.preferred, row.valid = 0, 0 // Residence aging is not an incarnation.
@@ -183,7 +183,7 @@ func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
 		if !finite || deadline.After(originalDeadline) {
 			return at("primary.identity.closing.context", nil)
 		}
-		return s.fence.check(held, s.snapshot.Segments, s.snapshot.Devices)
+		return s.fence.check(held, s.snapshot)
 	})
 	if err != nil || !closingEntered || c.Err() != nil || v.issued && v.row != observed {
 		return refuse("primary.closing", errors.Join(err, c.Err()))

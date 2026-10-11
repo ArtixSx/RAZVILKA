@@ -180,6 +180,14 @@ func selectedBroadcast(address netip.Addr, prefixes []string) (bool, error) {
 // observed MAC from client identity, retaining every active mapping and its
 // ORIGINAL flags separately. It does not invent a router bit on other addresses.
 func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byte][]message) ([]Device, error) {
+	return bindSelectedKernelNeighbors(ctx, Selection{}, segments, frames)
+}
+
+func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segments []Segment, frames map[byte][]message) ([]Device, error) {
+	intentMACs, err := projectionIntentMACs(selection.SelectedDevices)
+	if err != nil {
+		return nil, err
+	}
 	rows := kernelNeighborRows{}
 	byIndex := map[int]int{}
 	for i, s := range segments {
@@ -188,6 +196,7 @@ func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byt
 		segments[i].RouterNeighbors = nil
 	}
 	var neighbors []kernelNeighbor
+	var foreignNeighbors []kernelNeighbor
 	routerMACs := map[string]bool{}
 	seen := map[string]bool{}
 	totalBytes, totalRecords := 0, 0
@@ -205,6 +214,26 @@ func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byt
 			}
 			position, selected := byIndex[int(binary.NativeEndian.Uint32(m.data[4:8]))]
 			if !selected {
+				// IP-neighbor evidence of a cohort MAC on another ingress is
+				// relevant even though that bridge is not a selected segment.
+				if selection.SelectedDevices != nil && (m.data[0] == 2 || m.data[0] == 10) {
+					if m.data[0] != family {
+						return nil, at("kernel.bindings.neighbor.dump-family", nil)
+					}
+					n, err := parseKernelNeighbor(m)
+					if err != nil {
+						return nil, err
+					}
+					if intentMACs[n.mac] {
+						return nil, at("projection.bindings.ingress", nil)
+					}
+					totalBytes += len(n.row())
+					totalRecords++
+					if totalBytes > 1<<20 || totalRecords > 4096 {
+						return nil, at("kernel.bindings.neighbor.limit", nil)
+					}
+					foreignNeighbors = append(foreignNeighbors, n)
+				}
 				continue
 			}
 			if m.data[0] != family {
@@ -233,12 +262,19 @@ func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byt
 			}
 		}
 	}
+	wanted, err := validateProjectedNeighbors(selection.SelectedDevices, segments, neighbors, foreignNeighbors, routerMACs)
+	if err != nil {
+		return nil, err
+	}
 	for _, n := range neighbors {
 		position := byIndex[n.index]
 		if routerMACs[n.mac] {
 			if n.state != 1 && n.state != 32 {
 				segments[position].RouterNeighbors = append(segments[position].RouterNeighbors, RouterNeighbor{Address: n.address.String(), MAC: n.mac, Flags: n.flags, Type: n.kind})
 			}
+			continue
+		}
+		if selection.SelectedDevices != nil && !wanted[n.mac] {
 			continue
 		}
 		family := n.address.Is6()
@@ -252,5 +288,12 @@ func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byt
 			return strings.Compare(a.MAC, b.MAC)
 		})
 	}
-	return bindDevices(ctx, segments, rows)
+	devices, err := bindDevices(ctx, segments, rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateSelectedDevices(selection.SelectedDevices, devices); err != nil {
+		return nil, err
+	}
+	return devices, nil
 }
