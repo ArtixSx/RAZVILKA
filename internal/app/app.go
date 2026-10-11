@@ -3901,8 +3901,9 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 				ServiceID:                service.ID, ServiceName: service.Name, Selected: selected, Resolved: resolved,
 				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
 			}
-			if engine, target, exactNode := routekind.ParseNodeRoute(resolved); exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
-				// The actual node runtime consumes the catalog's complete service
+			engine, target, exactNode := routekind.ParseNodeRoute(resolved)
+			if resolved == "usque" || exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
+				// The actual runtime consumes the catalog's complete service
 				// predicate. Keep it in the reviewed plan for ordinary Apply and
 				// autonomy alike, detached from later catalog/editor changes.
 				frozen := defaultRouteCloneCatalogService(service)

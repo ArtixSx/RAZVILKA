@@ -19,6 +19,7 @@ type usquePlanContextKey struct{}
 func usquePlanFixture(t *testing.T, selected string) (*App, config.Config, []routecatalog.Option) {
 	t.Helper()
 	a := genericReviewFixture(t)
+	a.Catalog.Services[0].Category = "Messaging"
 	a.Catalog.Services[0].ProbeURL = "https://telegram.org/"
 	a.Catalog.Services[0].Strategy = []string{"usque"}
 	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: selected, Sources: []string{"192.168.1.40/32"}}); err != nil {

@@ -101,7 +101,7 @@ func nodeApplyFixture(t *testing.T) (*App, string, *nodeApplyAdapter) {
 	if err = store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "usque"}); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{Nodes: nodes, Store: store, FreshProfile: stableNodeProfile, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}, {ID: "youtube", Name: "YouTube", Domains: []string{"youtube.com"}, ProbeURL: "https://youtube.com/"}}}}
+	a := &App{Nodes: nodes, Store: store, FreshProfile: stableNodeProfile, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "Messaging", Strategy: []string{"sing-box"}, Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}, {ID: "youtube", Name: "YouTube", Category: "Video", Strategy: []string{"usque"}, Domains: []string{"youtube.com"}, ProbeURL: "https://youtube.com/"}}}}
 	a.Dataplane.FreshProfile = stableNodeProfile
 	a.DataplaneHost = func() dataplane.HostState { return dataplane.HostState{IPCommand: true, TUN: true, SingBox: true} }
 	a.nodeReviews.options = func() []routecatalog.Option {
