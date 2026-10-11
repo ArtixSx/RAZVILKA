@@ -124,9 +124,9 @@ RAZVILKA_VERSION=latest sh /opt/tmp/razvilka-setup.sh
 Scheduled update settings are located separately under «Обновления»
 (Updates) → «Окна обслуживания» (Maintenance windows) → «Изменить расписание»
 (Change schedule). The interface distinguishes checking, preparing and installing
-application updates automatically. Automatic installation is currently disabled;
-automatic installation and rollback acceptance (D11) remains incomplete.
-Readiness is recorded in [current status (RU)](docs/CURRENT_STATUS_RU.md).
+application updates automatically. Scheduled automatic installation is implemented.
+End-to-end installation and rollback acceptance on the target Entware system for
+0.20.0 (D11) remains incomplete; readiness is recorded in [current status (RU)](docs/CURRENT_STATUS_RU.md).
 Selecting a specific published 0.20+ release through `RAZVILKA_VERSION` remains an
 optional advanced choice for manual maintenance.
 
