@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/netip"
@@ -11,7 +12,66 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
+
+// Actual registry and imported Store, testing only the endpoint callback's
+// closing source boundary. No DNS session/binding, full factory, native child
+// or readiness grant is fabricated by this lower comparison regression.
+func TestXrayDomainTCPPinnedEndpointClosesAfterResolverSourceChange(t *testing.T) {
+	for _, changed := range []string{"unchanged", "engine", "processes", "adapter-root", "manager-root", "registration", "node-generation"} {
+		t.Run(changed, func(t *testing.T) {
+			f := newNodeDefaultSourceFixture(t, nodeDefaultSourceFixtureURI)
+			manager := New(t.TempDir())
+			adapter := &ProxyTunnelAdapter{EngineID: "xray", StateRoot: filepath.Join(manager.StateRoot, "xray"), EngineBin: filepath.Join(manager.StateRoot, "bin", "xray"),
+				Processes: OSProcessController{}, SOCKSPort: 16444, xrayPlanDispatch: true, nodeRouterVerifier: true}
+			if err := manager.Register(adapter); err != nil {
+				t.Fatal(err)
+			}
+			registration, err := manager.ReviewXrayRegistration(f.ctx, adapter)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer registration.Close()
+			life, cancel := context.WithCancel(f.ctx)
+			defer cancel()
+			m := &XrayDomainTCPOperationMaterial{ctx: life, cancel: cancel, manager: manager, managerRoot: manager.StateRoot, adapter: adapter, adapterRoot: adapter.StateRoot,
+				binaryField: adapter.EngineBin, binary: adapter.engineBinary(), processes: adapter.Processes, registration: registration, nodeSource: f.review(t, "xray"),
+				private: netip.MustParseAddrPort("127.0.0.1:16444"), nodeHost: "source-node.example", nodePin: netip.MustParseAddrPort("8.8.8.8:443")}
+			m.self = m
+			calls := 0
+			adapter.Resolver = func(ctx context.Context, _ string) ([]netip.Addr, error) {
+				calls++
+				switch changed {
+				case "engine":
+					adapter.EngineBin += "-changed"
+				case "processes":
+					adapter.Processes = &OSProcessController{}
+				case "adapter-root":
+					adapter.StateRoot += "-changed"
+				case "manager-root":
+					manager.StateRoot += "-changed"
+				case "registration":
+					if err := registration.Close(); err != nil {
+						return nil, err
+					}
+				case "node-generation":
+					if _, err := f.store.Import(ctx, nodestore.Source{ID: "closing-change", Kind: "manual"}, nodeDefaultSourceFixtureURI, f.now, time.Hour, false); err != nil {
+						return nil, err
+					}
+				}
+				return []netip.Addr{m.nodePin.Addr()}, nil
+			}
+			if err := m.metadataCurrent(f.ctx); err != nil {
+				t.Fatal("opening source metadata comparison failed", err)
+			}
+			err = m.currentPinnedNodeEndpoint(f.ctx)
+			if calls != 1 || (err == nil) != (changed == "unchanged") {
+				t.Fatal("resolver changed the frozen source without closing refusal", calls, err)
+			}
+		})
+	}
+}
 
 // Real imported NodeStore, original check history and canonical materializer.
 // The check record is a test fixture, not live eligibility/native PC proof.

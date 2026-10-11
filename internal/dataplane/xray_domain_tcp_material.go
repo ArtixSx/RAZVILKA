@@ -213,22 +213,62 @@ func (m *XrayDomainTCPOperationMaterial) compile(ctx context.Context, material [
 }
 
 func (m *XrayDomainTCPOperationMaterial) Current(ctx context.Context) error {
+	if m == nil || m.self != m || xraySelectedTCPFinite(ctx) != nil || m.binding == nil || m.control == nil || m.mapping == nil || m.dnsSource == nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	m.mu.Lock()
+	if m.metadataCurrentLocked() != nil {
+		m.mu.Unlock()
+		return ErrXrayDomainTCPOriginal
+	}
+	image := slices.Clone(m.config)
+	deadline, _ := m.ctx.Deadline()
+	m.mu.Unlock()
+	defer clear(image)
+	// External guards/resolvers run without material.mu. Scope integration may
+	// enter its original guard; Close remains visible at the closing bookend.
+	c, cancel := context.WithDeadline(ctx, deadline)
+	stop := context.AfterFunc(m.ctx, cancel)
+	defer func() { stop(); cancel() }()
+	if err := m.originalSourcesCurrent(c); err != nil {
+		return err
+	}
+	material, proof, err := m.readNodeAdmission(c)
+	defer clear(material)
+	if err != nil || !reflect.DeepEqual(proof, m.proof) {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	if err := m.currentPinnedNodeEndpoint(c); err != nil {
+		return err
+	}
+	config, err := compileXrayDomainTCPConfig(material, m.spec.Xray, m.private, m.nodePin)
+	defer clear(config)
+	if err != nil || !slices.Equal(config, image) {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	return errors.Join(m.originalSourcesCurrent(c), c.Err())
+}
+
+func (m *XrayDomainTCPOperationMaterial) metadataCurrentLocked() error {
+	if m.closed || m.ctx == nil || m.ctx.Err() != nil || m.manager == nil || m.adapter == nil || m.registration == nil || m.nodeSource == nil ||
+		m.manager.StateRoot != m.managerRoot || m.adapter.StateRoot != m.adapterRoot || m.adapter.EngineID != "xray" || !m.adapter.xrayPlanDispatch || !m.adapter.nodeRouterVerifier || m.adapter.scopedXray || m.adapter.xrayOperation ||
+		m.adapter.EngineBin != m.binaryField || m.adapter.engineBinary() != m.binary || !sameNetworkPolicyDependency(m.processes, m.adapter.Processes) || m.adapter.SOCKSPort != int(m.private.Port()) {
+		return ErrXrayDomainTCPOriginal
+	}
+	return nil
+}
+
+func (m *XrayDomainTCPOperationMaterial) metadataCurrent(ctx context.Context) error {
 	if m == nil || m.self != m || xraySelectedTCPFinite(ctx) != nil {
 		return ErrXrayDomainTCPOriginal
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed || m.ctx.Err() != nil || m.manager.StateRoot != m.managerRoot || m.adapter.StateRoot != m.adapterRoot || m.adapter.EngineBin != m.binaryField || m.adapter.engineBinary() != m.binary || !sameNetworkPolicyDependency(m.processes, m.adapter.Processes) || m.adapter.SOCKSPort != int(m.private.Port()) {
-		return ErrXrayDomainTCPOriginal
-	}
-	deadline, _ := m.ctx.Deadline()
-	c, cancel := context.WithDeadline(ctx, deadline)
-	stop := context.AfterFunc(m.ctx, cancel)
-	defer func() { stop(); cancel() }()
+	return m.metadataCurrentLocked()
+}
+
+func (m *XrayDomainTCPOperationMaterial) originalSourcesCurrent(c context.Context) error {
 	if err := m.control.Current(c); err != nil {
-		return err
-	}
-	if err := m.registration.Current(c); err != nil {
 		return err
 	}
 	if err := m.binding.Current(c); err != nil {
@@ -245,21 +285,30 @@ func (m *XrayDomainTCPOperationMaterial) Current(ctx context.Context) error {
 	if err != nil || !syntheticSettlementCoordinatesEqual(observation, m.observation) {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
-	material, proof, err := m.readNodeAdmission(c)
-	defer clear(material)
-	if err != nil || !reflect.DeepEqual(proof, m.proof) {
-		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	if err := m.registration.Current(c); err != nil {
+		return err
+	}
+	if err := m.nodeSource.Current(c); err != nil {
+		return err
+	}
+	return errors.Join(m.control.Current(c), m.metadataCurrent(c))
+}
+
+// Resolver callbacks may mutate a source after the opening admission read.
+// Close with callback-free metadata, actual registry and original Store
+// checks. The full Current separately closes its genuine DNS binding/mapping.
+func (m *XrayDomainTCPOperationMaterial) currentPinnedNodeEndpoint(c context.Context) error {
+	if err := m.metadataCurrent(c); err != nil {
+		return err
 	}
 	addresses, err := m.adapter.resolveNodeEndpoint(c, m.nodeHost)
-	if err != nil || !slices.Contains(addresses, m.nodePin.Addr()) {
+	if err != nil || !slices.Contains(addresses, m.nodePin.Addr()) || m.metadataCurrent(c) != nil {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
-	config, err := compileXrayDomainTCPConfig(material, m.spec.Xray, m.private, m.nodePin)
-	defer clear(config)
-	if err != nil || !slices.Equal(config, m.config) {
-		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	if err := m.registration.Current(c); err != nil {
+		return err
 	}
-	return errors.Join(m.control.Current(c), m.mapping.Current(c))
+	return errors.Join(m.nodeSource.Current(c), m.metadataCurrent(c))
 }
 
 // This unpublished preparation owns no child, resource, mapping or DNS source;

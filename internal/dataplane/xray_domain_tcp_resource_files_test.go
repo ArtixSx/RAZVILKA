@@ -84,3 +84,59 @@ func TestXrayDomainTCPFilesRefuseConfigAndExecutableReplacement(t *testing.T) {
 		})
 	}
 }
+
+func TestXrayDomainTCPFilesRefuseDifferentHeldRootWithMatchingConfig(t *testing.T) {
+	parent := t.TempDir()
+	pathA, pathB := filepath.Join(parent, "original"), filepath.Join(parent, "different-held")
+	for _, path := range []string{pathA, pathB} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootA, err := ownedfs.Open(pathA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rootA.Close()
+	anchorA, err := rootA.RootInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootB, err := ownedfs.Open(pathB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rootB.Close()
+	data := []byte("same-private-config-fixture")
+	if err := rootA.WriteAtomic(xrayDomainTCPConfigName, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	config, err := rootB.WriteAtomicRetained(xrayDomainTCPConfigName, data, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer config.Close()
+	info, err := config.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exeData := []byte("not-an-ELF-or-native-proof")
+	exe, err := rootB.WriteAtomicRetained("xray", exeData, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer exe.Close()
+	exeInfo, err := exe.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &XrayDomainTCPExecutionResource{root: rootB, rootPath: pathA, anchor: anchorA, config: config, configInfo: info,
+		executable: &xrayDomainTCPExecutable{file: exe, info: exeInfo, path: filepath.Join(pathB, "xray"), sha256: nodeDefaultSourceMaterialHash(exeData)},
+		definition: ExecutionXrayDomainTCPDefinition{ConfigSHA256: nodeDefaultSourceMaterialHash(data)}}
+	r.self = r // Physical file-comparison model only; no material/scope/issuer.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := r.filesCurrent(ctx); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+		t.Fatal("matching bytes in a different held root supplied the original directory", err)
+	}
+}

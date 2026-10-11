@@ -35,6 +35,7 @@ type XrayDomainTCPExecutionResource struct {
 	config            *os.File
 	configInfo        os.FileInfo
 	executable        *xrayDomainTCPExecutable
+	child             *xraySelectedTCPProcess
 	descriptorsClosed atomic.Bool
 	descriptorsErr    error
 }
@@ -107,6 +108,9 @@ func (s *executionResourceScope) prepareXrayDomainTCPResource(ctx context.Contex
 	if err != nil {
 		return nil, executionJournalError(err)
 	}
+	if err := r.directoryCurrent(); err != nil {
+		return nil, err
+	}
 	// Retain the FD actually authored by the atomic writer; reopening matching
 	// named bytes could adopt a same-byte replacement between write and open.
 	r.config, err = r.root.WriteAtomicRetained(xrayDomainTCPConfigName, image, 0600)
@@ -142,10 +146,12 @@ func (r *XrayDomainTCPExecutionResource) filesCurrent(ctx context.Context) error
 		return ErrXrayDomainTCPOriginal
 	}
 	check := func() error {
-		directory, err := os.Lstat(r.rootPath)
+		if err := r.directoryCurrent(); err != nil {
+			return err
+		}
 		held, heldErr := r.config.Stat()
 		named, namedErr := r.root.Stat(xrayDomainTCPConfigName)
-		if err != nil || heldErr != nil || namedErr != nil || !networkPolicyPrivateDirectory(directory) || !os.SameFile(r.anchor, directory) ||
+		if heldErr != nil || namedErr != nil ||
 			!validNetworkPolicyReceiptFile(held) || !validNetworkPolicyReceiptFile(named) || !os.SameFile(r.configInfo, held) || !os.SameFile(held, named) ||
 			held.Mode() != r.configInfo.Mode() || named.Mode() != held.Mode() || held.Size() != r.configInfo.Size() || named.Size() != held.Size() || held.Size() <= 0 || held.Size() > 1<<20 ||
 			!held.ModTime().Equal(r.configInfo.ModTime()) || !named.ModTime().Equal(held.ModTime()) {
@@ -164,10 +170,26 @@ func (r *XrayDomainTCPExecutionResource) filesCurrent(ctx context.Context) error
 	return errors.Join(check(), r.executable.current(ctx), ctx.Err())
 }
 
+// The held root must be the directory anchored before Open, as well as the
+// directory currently named by rootPath. Matching config bytes/inodes inside
+// a different held root cannot close an A->B(Open)->A directory replacement.
+func (r *XrayDomainTCPExecutionResource) directoryCurrent() error {
+	if r == nil || r.self != r || r.root == nil || r.anchor == nil || r.descriptorsClosed.Load() {
+		return ErrXrayDomainTCPOriginal
+	}
+	held, heldErr := r.root.RootInfo()
+	named, namedErr := os.Lstat(r.rootPath)
+	if heldErr != nil || namedErr != nil || !networkPolicyPrivateDirectory(held) || !networkPolicyPrivateDirectory(named) ||
+		!os.SameFile(r.anchor, held) || !os.SameFile(held, named) {
+		return ErrXrayDomainTCPOriginal
+	}
+	return nil
+}
+
 // Private unpublished-constructor compensation ONLY. The eventual published
 // Close must first join its original child/capture and journal protocol.
 func (r *XrayDomainTCPExecutionResource) closeUnpublishedFiles() error {
-	if r == nil || r.self != r {
+	if r == nil || r.self != r || r.child != nil {
 		return ErrXrayDomainTCPOriginal
 	}
 	if r.descriptorsClosed.Swap(true) {
