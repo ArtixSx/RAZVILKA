@@ -110,17 +110,25 @@ address on port `8787`. The installer prints the actual address.
 
 ## Subsequent updates to 0.20+ releases
 
-After a clean installation, update RAZVILKA to subsequent published 0.20+
-releases. Enter the exact tag from [Releases](https://github.com/ArtixSx/RAZVILKA/releases)
-in the variable below. The installer preserves settings and creates a rollback snapshot:
+After a clean installation of 0.20+, the installer selects the latest published
+stable release automatically. To start an update manually, use the commands below
+once 0.20+ updates are published. Settings are preserved and a rollback snapshot is created:
 
 ```sh
-razvilka_release_tag='' # Enter the published tag of the next 0.20+ release
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-RAZVILKA_VERSION="${razvilka_release_tag:?Enter the published tag of a 0.20+ update}" sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=latest sh /opt/tmp/razvilka-setup.sh
 ```
+
+Scheduled update settings are located separately under «Обновления»
+(Updates) → «Окна обслуживания» (Maintenance windows) → «Изменить расписание»
+(Change schedule). The interface distinguishes checking, preparing and installing
+application updates automatically. Automatic installation is currently disabled;
+automatic installation and rollback acceptance (D11) remains incomplete.
+Readiness is recorded in [current status (RU)](docs/CURRENT_STATUS_RU.md).
+Selecting a specific published 0.20+ release through `RAZVILKA_VERSION` remains an
+optional advanced choice for manual maintenance.
 
 Wait for the check result and retain the printed snapshot path. If the route is
 not confirmed after the update, inspect the installation result and diagnostics;
