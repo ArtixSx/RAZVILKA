@@ -151,6 +151,10 @@ func (m *Manager) Job(id string) (Job, error) {
 	view := entry.view
 	if view.Result != nil {
 		r := *view.Result
+		if r.Fetch != nil {
+			fetch := *r.Fetch
+			r.Fetch = &fetch
+		}
 		r.NodeIDs = append([]string(nil), r.NodeIDs...)
 		r.Issues = append(r.Issues[:0:0], r.Issues...)
 		view.Result = &r

@@ -97,6 +97,7 @@ func (Request) String() string   { return "[private provider feed request]" }
 func (Request) GoString() string { return "[private provider feed request]" }
 
 type Result struct {
+	Fetch           *FetchObservation            `json:"fetch,omitempty"`
 	Cursor          int                          `json:"cursor,omitempty"`
 	SnapshotEntries int                          `json:"snapshot_entries,omitempty"`
 	SourceID        string                       `json:"source_id"`
@@ -111,6 +112,18 @@ type Result struct {
 	OriginExpiresAt time.Time                    `json:"origin_expires_at,omitempty"`
 	TotalEntries    int                          `json:"total_entries"`
 	AcceptedEntries int                          `json:"accepted_entries"`
+}
+
+// FetchObservation describes the actual HTTP exchange, not candidate health or
+// permission to use a route. A cached 304 never has a fresh body digest.
+type FetchObservation struct {
+	RequestStartedAt   time.Time `json:"request_started_at"`
+	ResponseFinishedAt time.Time `json:"response_finished_at"`
+	HTTPStatus         int       `json:"http_status"`
+	BodyClosed         bool      `json:"body_closed"`
+	BodyBytes          int64     `json:"body_bytes"`
+	BodySHA256         string    `json:"body_sha256,omitempty"`
+	FreshBody          bool      `json:"fresh_body"`
 }
 
 type State struct {
@@ -409,6 +422,23 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 		// Subscription tokens may occur in paths: reject even same-origin redirects
 		// instead of allowing an upstream to steer a credential-bearing request.
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return publicfetch.ErrRedirect }
+		observed := &FetchObservation{RequestStartedAt: time.Now().UTC()}
+		result.Fetch = observed
+		var completeBody bool
+		var freshDigest string
+		defer func() {
+			if response != nil {
+				observed.HTTPStatus = response.StatusCode
+				if response.Body != nil {
+					observed.BodyClosed = response.Body.Close() == nil
+				}
+			}
+			observed.ResponseFinishedAt = time.Now().UTC()
+			if observed.HTTPStatus == http.StatusOK && completeBody && observed.BodyClosed && ctx.Err() == nil {
+				observed.BodySHA256 = freshDigest
+				observed.FreshBody = true
+			}
+		}()
 		response, err = client.Do(req)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -416,7 +446,6 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 			}
 			return "stale", ErrFetch
 		}
-		defer response.Body.Close()
 		if response.StatusCode == http.StatusNotModified {
 			if !conditionalSent {
 				return "failed", ErrFetch
@@ -445,6 +474,7 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 		}
 		if raw == nil {
 			raw, err = io.ReadAll(io.LimitReader(response.Body, MaxBytes+1))
+			observed.BodyBytes = int64(len(raw))
 			if err != nil {
 				if ctx.Err() != nil {
 					return "stale", ctx.Err()
@@ -457,6 +487,9 @@ func (m *Manager) syncAdmitted(parent context.Context, s source, acceptPartial b
 		}
 		cursor := 0
 		digest = snapshotDigest(raw)
+		if response.StatusCode == http.StatusOK {
+			completeBody, freshDigest = true, digest
+		}
 		if useSnapshot && len(cachedBody) > 0 && previous.snapshot != nil && previous.snapshot.Digest == digest {
 			cursor = previous.snapshot.Cursor
 		}
