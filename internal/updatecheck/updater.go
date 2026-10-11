@@ -467,7 +467,19 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		failure = err
 		return
 	}
-	if err = u.preflight(ctx, filepath.Join(u.Directory, id, "bundle"), release); err != nil {
+	var ordinary *ordinaryPreparation
+	if u.Directory == productionUpdateRoot && ordinaryFutureVersions(u.Current, release.Version) {
+		ordinary, err = newOrdinaryPreparation(ctx, u, files, done)
+		if err != nil {
+			failure = err
+			return
+		}
+		defer ordinary.active.Store(false)
+		err = ordinary.preflight(ctx)
+	} else {
+		err = u.preflight(ctx, filepath.Join(u.Directory, id, "bundle"), release)
+	}
+	if err != nil {
 		failure = err
 		return
 	}
@@ -483,8 +495,18 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		u.mu.Unlock()
 		reviewRecord.Files = files
 		reviewRecord.ExecutableHash = executableHash
-		fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview, u.FileEffectAdmission)
+		if ordinary != nil {
+			fileReviewSHA, err = ordinary.adapter.stageFileReviewWithOrdinaryPreparation(ctx, reviewRecord, u.FileAuthorityReview, ordinary)
+		} else {
+			fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview, u.FileEffectAdmission)
+		}
 		if err != nil {
+			failure = err
+			return
+		}
+	}
+	if ordinary != nil {
+		if err := ordinary.current(ctx); err != nil {
 			failure = err
 			return
 		}
@@ -493,6 +515,10 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 	defer u.mu.Unlock()
 	if ctx.Err() != nil {
 		failure = ctx.Err()
+		return
+	}
+	if ordinary != nil && (u.done != ordinary.done || u.cancel == nil || u.handoffActive || !reflect.DeepEqual(u.record, ordinary.record)) {
+		failure = errOrdinaryPreparation
 		return
 	}
 	var token [32]byte

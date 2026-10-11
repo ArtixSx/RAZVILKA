@@ -25,6 +25,9 @@ func sealFileHelperIdentity(a *SelfUpdateFileAdapter, id string, review fileRevi
 	if err != nil || oldPanel.ExecutableSHA256 != review.OldExecutableSHA256 {
 		return ErrFileProtocol
 	}
+	if review.PreparationParent != nil && oldPanel != *review.PreparationParent {
+		return ErrFileProtocol
+	}
 	root, err := a.commandRoot(id)
 	if err != nil {
 		return err
@@ -74,7 +77,7 @@ func (a *SelfUpdateFileAdapter) helperIdentityForRecord(id string, review fileRe
 }
 
 func bindHelperIdentity(id string, review fileReview, record updateRecord, identity fileHelperIdentity) (fileHelperIdentity, error) {
-	if review.ID != id || record.Owner != updaterOwner || record.Job.ID != id || record.Job.HelperPID != identity.Process.PID || record.ParentPID != identity.OldPanel.PID {
+	if review.ID != id || record.Owner != updaterOwner || record.Job.ID != id || record.Job.HelperPID != identity.Process.PID || record.ParentPID != identity.OldPanel.PID || review.PreparationParent != nil && *review.PreparationParent != identity.OldPanel {
 		return identity, ErrFileProtocol
 	}
 	return identity, nil

@@ -637,7 +637,7 @@ func (a *SelfUpdateFileAdapter) checkHelperProcessFormats(ctx context.Context, r
 	data, err := root.ReadLimited("helper.identity.json", 4096)
 	if err == nil {
 		var identity fileHelperIdentity
-		if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != review.ID || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != reviewedHelperSHA(review) || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot || identity.Process.PID != record.Job.HelperPID || identity.OldPanel.PID != record.ParentPID {
+		if decodeFileProtocol(data, &identity) != nil || identity.Schema != selfUpdateProtocolSchema || identity.ID != review.ID || !validFileProcess(identity.Process) || !validFileProcess(identity.OldPanel) || identity.Process.ExecutableSHA256 != reviewedHelperSHA(review) || identity.OldPanel.ExecutableSHA256 != review.OldExecutableSHA256 || identity.Process.Boot != identity.OldPanel.Boot || identity.Process.PID != record.Job.HelperPID || identity.OldPanel.PID != record.ParentPID || review.PreparationParent != nil && *review.PreparationParent != identity.OldPanel {
 			return ErrFileProtocol
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

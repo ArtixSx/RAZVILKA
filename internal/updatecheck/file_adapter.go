@@ -61,6 +61,7 @@ type fileReview struct {
 	Files                   []selfupdatejournal.File `json:"files"`
 	JournalReaders          *journalReaderProof      `json:"journal_readers,omitempty"`
 	Bootstrap               *fileBootstrapBinding    `json:"bootstrap,omitempty"`
+	PreparationParent       *fileProcess             `json:"preparation_parent,omitempty"`
 }
 
 // Concrete neutral provider: this package does not import app. Production
@@ -81,6 +82,9 @@ type SelfUpdateFileAdapter struct {
 	// Only the synchronous external bootstrap retains actual exec-created
 	// Wait completions here. It never reconstructs a join from a receipt PID.
 	bootstrapCommandWait func(string, func(context.Context) error)
+	// Issued only to the actual finite Updater.prepare generation. Public
+	// inventory adapters never reconstruct this capability from persisted data.
+	ordinaryPreparation *ordinaryPreparation
 }
 
 func NewSelfUpdateFileAdapterWithAuthority(stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) *SelfUpdateFileAdapter {
@@ -323,6 +327,17 @@ func (a *SelfUpdateFileAdapter) stageFileReview(ctx context.Context, record upda
 }
 
 func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding, preparations ...*externalBootstrapPreparation) (string, error) {
+	return a.stageFileReviewProducer(ctx, record, authorityReview, bootstrap, nil, preparations...)
+}
+
+func (a *SelfUpdateFileAdapter) stageFileReviewWithOrdinaryPreparation(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), preparation *ordinaryPreparation) (string, error) {
+	if preparation == nil || preparation.matches(ctx, a, record) != nil {
+		return "", errOrdinaryPreparation
+	}
+	return a.stageFileReviewProducer(ctx, record, authorityReview, nil, preparation)
+}
+
+func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), bootstrap *fileBootstrapBinding, ordinary *ordinaryPreparation, preparations ...*externalBootstrapPreparation) (string, error) {
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "razvilka/state")
@@ -343,6 +358,9 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 		}
 	} else if len(preparations) != 0 {
 		return "", ErrExternalBootstrap
+	}
+	if ordinary != nil && (bootstrap != nil || ordinary.matches(ctx, a, record) != nil) {
+		return "", errOrdinaryPreparation
 	}
 	if authorityReview == nil {
 		return "", ErrFileProtocol
@@ -369,7 +387,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if err != nil {
 		return "", err
 	}
-	if preparation != nil {
+	if ordinary != nil {
+		if err := ordinary.capabilities(ctx, binary, requiredNodeReader, requiredComponentReader); err != nil {
+			return "", err
+		}
+	} else if preparation != nil {
 		if err := preparation.capabilities(ctx, binary, requiredNodeReader, requiredComponentReader); err != nil {
 			return "", externalBootstrapFailure("review-capabilities", err)
 		}
@@ -377,7 +399,13 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 		return "", err
 	}
 	if bootstrap == nil {
-		if err := checkFileCapabilitiesForHistories(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader, probeFileCapability); err != nil {
+		var err error
+		if ordinary != nil {
+			err = ordinary.capabilities(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader)
+		} else {
+			err = checkFileCapabilitiesForHistories(ctx, record.Deployment.Executable, requiredNodeReader, requiredComponentReader, probeFileCapability)
+		}
+		if err != nil {
 			return "", errors.New("current-file-controller-capability-refused")
 		}
 	}
@@ -399,7 +427,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	// The actual external producer is itself the verified candidate. Its
 	// original capability confines genuine migration to this private file.
 	// Ordinary reader2 staging keeps its existing executable/ABI path.
-	if preparation != nil {
+	if ordinary != nil {
+		if err := ordinary.migrate(ctx, root); err != nil {
+			return "", err
+		}
+	} else if preparation != nil {
 		if err := preparation.migrate(ctx, root); err != nil {
 			return "", externalBootstrapFailure("staged-migration", err)
 		}
@@ -426,6 +458,10 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 		return "", err
 	}
 	review := fileReview{Schema: selfUpdateProtocolSchema, ID: record.Job.ID, Revision: record.Job.ConfigRevision, OldConfigSHA256: digestBytes(old), MigratedConfigSHA256: digestBytes(staged), OldExecutableSHA256: record.ExecutableHash, OldVersion: record.CurrentVersion, NewVersion: record.Job.Release.Version, ReleaseID: record.Job.Release.ID}
+	if ordinary != nil {
+		parent := ordinary.producer
+		review.PreparationParent = &parent
+	}
 	if bootstrap != nil {
 		binding := *bootstrap
 		review.Schema, review.Bootstrap = selfupdatejournal.PairedSchema, &binding
@@ -448,9 +484,25 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	// Keeping the schema2 encoding unchanged lets the existing reader2 helper
 	// perform an ordinary live upgrade; it cannot write the new terminal3.
 	if bootstrap == nil {
-		review.JournalReaders, err = a.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, a.probeJournalReader)
+		probe := a.probeJournalReader
+		if ordinary != nil {
+			probe = func(c context.Context, r fileReview, image selfupdatejournal.BinaryImage) (int, error) {
+				if ordinary.matches(ctx, a, record) != nil {
+					return 0, errOrdinaryPreparation
+				}
+				version, err := a.probeJournalReader(c, r, image)
+				if err != nil {
+					return 0, err
+				}
+				return version, ordinary.current(ctx)
+			}
+		}
+		review.JournalReaders, err = a.sealOptionalJournalReadersWithProbe(ctx, review, authorityReview, probe)
 		if err != nil {
 			return "", err
+		}
+		if ordinary != nil && !ordinaryFutureReview(record, review) {
+			return "", errOrdinaryPreparation
 		}
 	} else {
 		// The verified external candidate is the only modern controller of
@@ -468,6 +520,12 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	}
 	if len(data) > 256<<10 {
 		return "", ErrFileProtocol
+	}
+	if ordinary != nil {
+		if err := ordinary.current(ctx); err != nil {
+			return "", err
+		}
+		ordinary.reviewSHA = digestBytes(data)
 	}
 	file, err := root.OpenFile("file-review.json", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
@@ -491,6 +549,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if err := syncSelfUpdateDirectory(root); err != nil {
 		return "", err
 	}
+	if ordinary != nil {
+		if err := ordinary.current(ctx); err != nil {
+			return "", err
+		}
+	}
 	if !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -509,6 +572,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewWithBootstrap(ctx context.Context
 	if preparation != nil {
 		if err := preparation.current(ctx); err != nil {
 			return "", externalBootstrapFailure("preparation-owner", err)
+		}
+	}
+	if ordinary != nil {
+		if err := ordinary.current(ctx); err != nil {
+			return "", err
 		}
 	}
 	return digestBytes(data), nil
@@ -612,7 +680,7 @@ func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {
 	if a == nil || a.admission == nil || a.runtimeInactive == nil || a.filesystem == nil {
 		return ErrFileProtocol
 	}
-	record, _, err := a.load(ctx, id)
+	record, review, err := a.load(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -624,6 +692,9 @@ func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {
 	}
 	if err := a.filesystem(ctx); err != nil {
 		return err
+	}
+	if ordinaryFutureReview(record, review) {
+		return a.ordinaryFutureReady(ctx, id, record, review)
 	}
 	if err := a.capabilities(ctx, filepath.Join(a.directory, id, "bundle", "dist", record.Job.Release.Binary.Name)); err != nil {
 		return err

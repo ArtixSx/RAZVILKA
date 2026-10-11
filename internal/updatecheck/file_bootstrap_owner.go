@@ -28,6 +28,11 @@ type fileBootstrapBinding struct {
 }
 
 func validFileReviewOwner(review fileReview, record updateRecord) bool {
+	if review.PreparationParent != nil && (review.Schema != selfUpdateProtocolSchema || review.Bootstrap != nil || !validFileProcess(*review.PreparationParent) ||
+		review.PreparationParent.PID != record.ParentPID || review.PreparationParent.ExecutableSHA256 != review.OldExecutableSHA256 ||
+		!ordinaryFutureVersions(review.OldVersion, review.NewVersion) || !validJournalReaderProof(review.JournalReaders) || review.JournalReaders.RequiredReader != selfupdatejournal.PairedSchema) {
+		return false
+	}
 	if review.Schema == selfUpdateProtocolSchema {
 		return review.Bootstrap == nil
 	}

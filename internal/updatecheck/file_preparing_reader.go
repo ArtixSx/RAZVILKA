@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 )
 
 // Preparing is a known read-only producer stage, before Files, ExecutableHash
@@ -48,6 +49,23 @@ func (a *SelfUpdateFileAdapter) preparingHelper(ctx context.Context, current upd
 			}
 		case "release.tar.gz", "control.bin":
 			if !entry.Type().IsRegular() {
+				return false, ErrFileProtocol
+			}
+		case "file-review.json":
+			// A completed private review may precede current publication. Only
+			// the original active producer can read this exact cut; cold/public
+			// readers continue to fence an uncommitted review.
+			p := a.ordinaryPreparation
+			if p == nil || p.adapter != a || p.reviewSHA == "" || p.lifetime(ctx) != nil || !reflect.DeepEqual(current, p.record) {
+				return false, ErrFileProtocol
+			}
+			root, err := a.commandRoot(current.Job.ID)
+			if err != nil {
+				return false, err
+			}
+			data, err := root.ReadLimited(entry.Name(), 256<<10)
+			root.Close()
+			if err != nil || digestBytes(data) != p.reviewSHA {
 				return false, ErrFileProtocol
 			}
 		default:
