@@ -23,7 +23,7 @@ for TOOL in cat chmod cp mkdir rm mv uname sh; do
 done
 printf '#!/bin/sh\nprintf "0\\n"\n' >"$TEST_ROOT/essential/id"
 chmod 700 "$TEST_ROOT/essential/id"
-for TOOL in sha256sum tar gzip mktemp readlink awk dd od grep; do
+for TOOL in sha256sum tar gzip mktemp readlink timeout awk dd od grep; do
   REAL_TOOL="$(command -v "$TOOL")"
   [ -n "$REAL_TOOL" ] || { echo "Bootstrap test needs host $TOOL" >&2; exit 1; }
   printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/providers/$TOOL"
@@ -102,6 +102,10 @@ for PACKAGE in "$@"; do
     coreutils-sha256sum) TOOLS=sha256sum ;;
     coreutils-mktemp) TOOLS=mktemp ;;
     coreutils-readlink) TOOLS=readlink ;;
+    coreutils-timeout)
+      TOOLS=timeout
+      [ "$CASE_NAME" != timeout-still-incompatible ] || TOOLS=
+      ;;
     busybox) TOOLS='awk dd od pidof grep'; "$REAL_CP" "$PROVIDERS/start-stop-daemon" "$RAZVILKA_BASE/sbin/start-stop-daemon" ;;
     ip-full) TOOLS=ip ;;
     ca-bundle) TOOLS=; "$REAL_MKDIR" -p "$RAZVILKA_BASE/etc/ssl/certs"; printf ca >"$RAZVILKA_BASE/etc/ssl/certs/ca-certificates.crt" ;;
@@ -112,7 +116,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel symlink-base missing-dependencies https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   CASE_ROOT="$TEST_ROOT/$CASE_NAME"
   BASE="$CASE_ROOT/base"
@@ -134,11 +138,14 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     rollback) set -- --rollback ;;
     invalid-options) set -- --uninstall --rollback ;;
     missing-dependencies|opkg-failed)
-      for TOOL in curl wget sha256sum tar gzip mktemp readlink awk dd od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
+      for TOOL in curl wget sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
       rm "$BASE/sbin/start-stop-daemon" "$BASE/etc/ssl/certs/ca-certificates.crt"
       ;;
     https-bootstrap)
       printf '#!/bin/sh\nprintf "BusyBox wget HTTP only\\n"\n' >"$BASE/bin/wget"
+      ;;
+    incompatible-timeout|timeout-still-incompatible)
+      printf '#!/bin/sh\n[ "$1" != -k ] || exit 2\nexit 0\n' >"$BASE/bin/timeout"
       ;;
   esac
   cp -R "$TEST_ROOT/source" "$CASE_ROOT/source"
@@ -175,7 +182,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$BASE/tmp" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
     "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|https-bootstrap|uninstall|rollback)
+    install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
       case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
@@ -186,9 +193,12 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       fi
       if [ "$CASE_NAME" = missing-dependencies ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] || { echo "Dependencies were not installed in one bounded batch" >&2; exit 1; }
-        for PACKAGE in curl wget-ssl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink busybox ip-full ca-bundle; do
+        for PACKAGE in curl wget-ssl coreutils-sha256sum tar gzip coreutils-mktemp coreutils-readlink coreutils-timeout busybox ip-full ca-bundle; do
           grep -q " $PACKAGE" "$CASE_ROOT/opkg-called" || { echo "Missing dependency: $PACKAGE" >&2; exit 1; }
         done
+      elif [ "$CASE_NAME" = incompatible-timeout ]; then
+        [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] &&
+          grep -q '^install coreutils-timeout$' "$CASE_ROOT/opkg-called" || { echo "Incompatible timeout was not replaced before release download" >&2; exit 1; }
       elif [ "$CASE_NAME" = https-bootstrap ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 4 ] || { echo "HTTPS bootstrap was not bounded" >&2; exit 1; }
         [ -f "$CASE_ROOT/tls-installed" ] || { echo "HTTPS downloader was not installed" >&2; exit 1; }
@@ -199,6 +209,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     *)
       [ "$CODE" != 0 ] && [ ! -e "$CASE_ROOT/helper-called" ] || { echo "Unsafe bootstrap accepted: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
       case "$CASE_NAME" in
+        timeout-still-incompatible)
+          [ "$CODE" = 12 ] && [ ! -e "$CASE_ROOT/downloads" ] || { echo "Unusable timeout reached release download/helper" >&2; exit 1; }
+          ;;
         traversal|traversal-warning|list-failed|types-warning)
           [ "$CODE" = 16 ] || { echo "Fixture did not reach the archive listing refusal: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
           ;;

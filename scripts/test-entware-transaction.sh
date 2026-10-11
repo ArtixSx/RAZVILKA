@@ -3,6 +3,7 @@ set -eu
 umask 077
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+sh "$ROOT/scripts/test-entware-path-safety.sh"
 sh "$ROOT/scripts/test-installer-architecture.sh"
 UPGRADE="$ROOT/scripts/upgrade-entware.sh"
 ROLLBACK="$ROOT/scripts/rollback-entware.sh"

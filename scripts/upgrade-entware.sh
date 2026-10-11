@@ -52,6 +52,22 @@ LEGACY_INIT="$INITDIR/S99artem-flow"
 LEGACY_DISABLED="$INITDIR/S99artem-flow.razvilka-disabled"
 LEGACY_CONTROL=""
 
+require_installation_paths() {
+  # Only the explicit Entware base may be resolved through a link. A linked
+  # destination below it must never redirect installation or snapshot writes.
+  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/var" \
+    "$BASE/var/run" "$BASE/var/cache" "$CACHEDIR" "$BASE/var/lib" "$STATEDIR" \
+    "$BASE/var/log" "$LOGDIR" "$BACKUPROOT"; do
+    [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
+      echo "Unsafe installation directory: $DIR; installation unchanged" >&2; return 1;
+    }
+  done
+  [ ! -L "$CURRENT_BACKUP" ] && { [ ! -e "$CURRENT_BACKUP" ] || [ -f "$CURRENT_BACKUP" ]; } || {
+    echo "Unsafe current backup pointer; installation unchanged" >&2; return 1;
+  }
+}
+require_installation_paths
+
 ARCH_RAW="$(uname -m)"
 ARCH_REQUEST="${RAZVILKA_ARCH:-$ARCH_RAW}"
 case "$ARCH_REQUEST" in
@@ -363,9 +379,9 @@ require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
 if [ "$MODE" = apply ]; then require_legacy_file_protocol_free; fi
 
-VERSION="$($BIN_SOURCE -version)"
+VERSION="$("$BIN_SOURCE" -version)"
 [ -n "$VERSION" ] || { echo "Candidate did not report a version" >&2; exit 1; }
-CHECK_OUTPUT="$($BIN_SOURCE -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE" -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp")"
+CHECK_OUTPUT="$("$BIN_SOURCE" -check -config "$CONFIG_SOURCE" -catalog "$CATALOG_SOURCE" -sources "$SOURCES_SOURCE" -community-catalog "$COMMUNITY_SOURCE" -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp")"
 printf '%s\n' "$CHECK_OUTPUT" | grep -q '"ok": true' || { echo "Candidate preflight did not report success" >&2; exit 1; }
 
 echo "RAZVILKA transactional preflight"
@@ -455,13 +471,14 @@ require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
 
 require_legacy_file_protocol_free
+require_installation_paths
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
 
 # The candidate understands the newest journal format. Settle any interrupted
 # private restore while all writers are stopped, before taking a backup or
 # changing a live file. A corrupt or ambiguous journal stops the upgrade.
 SAFE_TO_RESTART=0
-RECOVERY_OUTPUT="$($BIN_SOURCE -recover-private-restore \
+RECOVERY_OUTPUT="$("$BIN_SOURCE" -recover-private-restore \
   -config "$APPDIR/config.json" \
   -custom-services "$APPDIR/custom-services.json" \
   -devices "$APPDIR/devices.json" \
@@ -620,6 +637,7 @@ trap 'exit 143' TERM
 stage 2 "Устанавливаем проверенные файлы с безопасными правами..."
 require_target_self_update_compatibility "$BIN_SOURCE"
 require_legacy_file_protocol_free
+require_installation_paths
 install_atomic() {
   SRC="$1"
   DST="$2"

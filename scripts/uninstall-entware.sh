@@ -23,7 +23,7 @@ esac
 
 # Deletion and execution must stay inside this installation, even when an old
 # or partially removed tree contains links. Do not follow them into another app.
-for DIR in "$BASE/bin" "$BASE/etc" "$BASE/etc/init.d" "$APPDIR" "$BASE/var" "$BASE/var/lib" "$STATEDIR"; do
+for DIR in "$BASE" "$BASE/bin" "$BASE/etc" "$BASE/etc/init.d" "$APPDIR" "$BASE/var" "$BASE/var/run" "$BASE/var/lib" "$STATEDIR"; do
   [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || { echo "Unsafe installation directory: $DIR" >&2; exit 1; }
 done
 for FILE in "$INIT" "$BINARY"; do

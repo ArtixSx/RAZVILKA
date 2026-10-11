@@ -37,6 +37,19 @@ for ARG in "$@"; do
   esac
 done
 
+require_installation_paths() {
+  for DIR in "$BASE" "$BINDIR" "$BASE/etc" "$INITDIR" "$APPDIR" "$BASE/var" \
+    "$BASE/var/run" "$BASE/var/lib" "$STATEDIR" "$BACKUPROOT"; do
+    [ ! -L "$DIR" ] && { [ ! -e "$DIR" ] || [ -d "$DIR" ]; } || {
+      echo "Unsafe installation directory: $DIR; rollback not started" >&2; return 1;
+    }
+  done
+  [ ! -L "$STATEDIR/current-backup" ] && { [ ! -e "$STATEDIR/current-backup" ] || [ -f "$STATEDIR/current-backup" ]; } || {
+    echo "Unsafe current backup pointer; rollback not started" >&2; return 1;
+  }
+}
+require_installation_paths
+
 if [ -z "$BACKUP" ]; then
   [ -r "$STATEDIR/current-backup" ] || { echo "No current rollback snapshot" >&2; exit 1; }
   BACKUP="$(cat "$STATEDIR/current-backup")"
@@ -354,6 +367,7 @@ if [ "$AUTO" -ne 1 ]; then
 fi
 
 require_legacy_file_protocol_free
+require_installation_paths
 CURRENT_WAS_RUNNING=0
 if [ -x "$RAZ_INIT" ]; then
   if RAZVILKA_BASE="$BASE" "$RAZ_INIT" status >/dev/null 2>&1; then
@@ -421,6 +435,7 @@ restore_or_remove() {
   fi
 }
 
+require_installation_paths
 mkdir -p "$APPDIR" "$BINDIR" "$INITDIR"
 restore_or_remove "$RAZ_BINARY_PRESENT" razvilka.bin "$BINDIR/razvilka" 755
 restore_or_remove "$RAZ_INIT_PRESENT" S99razvilka "$RAZ_INIT" 755

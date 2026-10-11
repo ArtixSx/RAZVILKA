@@ -83,6 +83,10 @@ command -v tar >/dev/null 2>&1 || need_package tar
 command -v gzip >/dev/null 2>&1 || need_package gzip
 command -v mktemp >/dev/null 2>&1 || need_package coreutils-mktemp
 command -v readlink >/dev/null 2>&1 || need_package coreutils-readlink
+supports_timeout() {
+  command -v timeout >/dev/null 2>&1 && timeout -k 1 2 sh -c 'exit 0' >/dev/null 2>&1
+}
+supports_timeout || need_package coreutils-timeout
 for TOOL in awk dd od pidof grep; do
   command -v "$TOOL" >/dev/null 2>&1 || need_package busybox
 done
@@ -110,10 +114,12 @@ if [ -n "$PACKAGES" ]; then
   fi
   # Package names are exclusively the fixed allowlist above. No global upgrade.
   opkg install $PACKAGES
+  hash -r 2>/dev/null || true
 fi
-for TOOL in curl sha256sum tar gzip mktemp readlink awk dd od pidof grep ip; do
+for TOOL in curl sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do
   command -v "$TOOL" >/dev/null 2>&1 || { echo "Required tool is still unavailable after opkg: $TOOL" >&2; exit 12; }
 done
+supports_timeout || { echo "Entware timeout must support -k; check coreutils-timeout and PATH." >&2; exit 12; }
 case "$(wget --version 2>/dev/null || true)" in
   *+https*) ;;
   *) echo "Для HTTPS-каталогов opkg нужен wget-ssl. Проверьте PATH и установку пакета." >&2; exit 12 ;;

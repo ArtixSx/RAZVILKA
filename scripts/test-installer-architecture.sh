@@ -20,7 +20,7 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-BUNDLE="$TEST_ROOT/bundle"
+BUNDLE="$TEST_ROOT/bundle with spaces"
 BASE="$TEST_ROOT/base"
 mkdir -p "$BUNDLE/scripts" "$BUNDLE/dist" "$BUNDLE/configs" "$BASE/sbin" "$TEST_ROOT/mocks"
 cp "$ROOT/scripts/upgrade-entware.sh" "$BUNDLE/scripts/upgrade-entware.sh"
