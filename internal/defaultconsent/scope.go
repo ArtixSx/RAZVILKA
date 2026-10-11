@@ -3,6 +3,7 @@ package defaultconsent
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -13,10 +14,11 @@ import (
 // strategy permission. Reference is comparison data only; it cannot recreate
 // this handle or authorize a local executable, route, probe or client traffic.
 type ScopeReview struct {
-	self   *ScopeReview
-	review *Review
-	mu     sync.RWMutex
-	closed bool
+	self            *ScopeReview
+	review          *Review
+	mu              sync.RWMutex
+	closed          bool
+	autonomyInvalid atomic.Bool
 }
 
 func (*ScopeReview) String() string   { return "[private selected-list scope review]" }
@@ -38,7 +40,7 @@ func (s *ScopeReview) withReview(use func(*Review) error) error {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.closed || s.review == nil || !s.review.scopeOnly {
+	if s.closed || s.autonomyInvalid.Load() || s.review == nil || !s.review.scopeOnly {
 		return ErrChanged
 	}
 	return use(s.review)
