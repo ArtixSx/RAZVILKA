@@ -234,6 +234,22 @@ func (s *policyAdditionSession) save(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if ctx.Value(wgCommonWriterKey{}) != nil && ctx.Value(wgOperationOwnerKey{}) != nil {
+		if err := checkWGCommonBeforePublication(ctx, s); err != nil {
+			return err
+		}
+		s.doc.Checksum = policyAdditionChecksum(s.doc)
+		data, err := json.Marshal(s.doc)
+		if err != nil || len(data) > policyAdditionMaxBytes {
+			return ErrPolicyAdditionReceipt
+		}
+		file, err := s.root.WriteAtomicRetained(policyAdditionFile, data, 0600)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		return saveWGCommonOriginal(ctx, s, file, nil)
+	}
 	s.doc.Checksum = policyAdditionChecksum(s.doc)
 	data, err := json.Marshal(s.doc)
 	if err != nil || len(data) > policyAdditionMaxBytes {

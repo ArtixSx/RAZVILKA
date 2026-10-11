@@ -63,6 +63,8 @@ type Manager struct {
 	pendingNFQ         *pendingNFQWSExecution
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
+	retainedWGMu       sync.Mutex
+	retainedWG         *retainedWGExecution
 }
 
 type Adapter interface {
@@ -1150,7 +1152,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if err := validateDomainTransportForExecution(plan); err != nil {
 		return execution, err
 	}
-	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil {
+	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil || m.retainedWGOwner() != nil {
 		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
 	}
 	if err := m.checkManagedNFQWSApply(ctx, plan); err != nil {
@@ -1211,14 +1213,23 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
-	var activeNFQScope, activeXrayScope *executionResourceScope
+	var activeNFQScope, activeXrayScope, activeWGScope *executionResourceScope
 	writeExecution := func() error {
-		if activeNFQScope != nil && activeXrayScope != nil {
+		count := 0
+		for _, candidate := range []*executionResourceScope{activeNFQScope, activeXrayScope, activeWGScope} {
+			if candidate != nil {
+				count++
+			}
+		}
+		if count > 1 {
 			return executionJournalError(ErrNetworkPolicyAuthority)
 		}
 		scope := activeNFQScope
 		if activeXrayScope != nil {
 			scope = activeXrayScope
+		}
+		if activeWGScope != nil {
+			scope = activeWGScope
 		}
 		return m.writeExecutionOwned(transactionRoot, execution, scope)
 	}
@@ -1238,7 +1249,20 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	liveMutation := false
 	var retryNFQRollback func(context.Context) error
 	var retryXrayRollback func(context.Context) error
+	var retryWGRollback func(context.Context) error
 	defer func() {
+		if activeWGScope != nil && !activeWGScope.retained {
+			if result.State == "rollback-failed" && retryWGRollback != nil {
+				if err := m.retainOriginalWG(ctx, activeWGScope, retryWGRollback); err == nil {
+					result.Resources = cloneExecutionResources(result.Resources)
+					result.Steps = slices.Clone(result.Steps)
+					return
+				} else {
+					resultErr = errors.Join(resultErr, err)
+				}
+			}
+			resultErr = errors.Join(resultErr, activeWGScope.close())
+		}
 		if activeXrayScope != nil && !activeXrayScope.retained {
 			if result.State == "rollback-failed" && retryXrayRollback != nil {
 				if err := m.retainPendingXray(ctx, activeXrayScope, retryXrayRollback); err == nil {
@@ -1269,8 +1293,39 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 	}()
+	// Issue one original WG command owner before Snapshot/Stage/Canary. The
+	// SAME scope also supplies the shared LAN participant's consumer context.
+	for _, id := range plan.Adapters {
+		adapter, _ := m.adapter(id)
+		if a, ok := adapter.(*WARPWireGuardAdapter); ok && a != nil && a.wgCommandTools != nil {
+			if activeWGScope != nil || plan.LAN == nil {
+				return execution, ErrWGOperationOwner
+			}
+			material, _ := ctx.Value(wgOperationMaterialKey{}).(*WGOperationMaterial)
+			if material == nil || material.source == nil || material.source.Current(ctx) != nil {
+				return execution, ErrWGOperationOwner
+			}
+			var err error
+			activeWGScope, err = m.newExecutionResourceScope(ctx, plan, id, &execution, transactionRoot)
+			if err != nil {
+				return execution, err
+			}
+		}
+	}
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		restoring := phase == "rollback" || phase == "verify-rollback"
+		if activeWGScope != nil {
+			if restoring {
+				var err error
+				runCtx, err = activeWGScope.wgOwner.cleanupContext(runCtx)
+				if err != nil {
+					return err
+				}
+			} else {
+				runCtx = activeWGScope.contextWith(runCtx)
+			}
+			runCtx = networkPolicyConsumerContext(runCtx, activeWGScope.plan)
+		}
 		if !restoring {
 			if err := m.checkPlanNetwork(runCtx, plan); err != nil {
 				return err
@@ -1300,7 +1355,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		_, actualNFQ := adapter.(*NFQWS2Adapter)
 		actualXray, isXray := adapter.(*ProxyTunnelAdapter)
 		_, selectedXray, xrayErr := xraySelectedTCPExecutionFor(runCtx, actualXray, plan, adapterRoot)
-		if isXray && selectedXray {
+		if activeWGScope != nil {
+			err = action(runCtx, plan, adapterRoot)
+		} else if isXray && selectedXray {
 			if xrayErr != nil {
 				err = xrayErr
 			} else {
@@ -1339,8 +1396,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			// same rollback fence and retained LAN boundary as live mutations.
 			liveMutation = true
 		}
+		wgMutation := activeWGScope != nil && activeWGScope.wgOwner.mutationAttempted.Load()
+		if wgMutation {
+			liveMutation = true
+		}
 		var preflight preflightRefusalError
-		if !previouslyMutated && errors.As(err, &preflight) && validateExecutionResources(execution, true) == nil {
+		if !previouslyMutated && !wgMutation && errors.As(err, &preflight) && validateExecutionResources(execution, true) == nil {
 			liveMutation = false
 		}
 		if err == nil && !restoring {
@@ -1447,6 +1508,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 		execution.RollbackVerified = verified
+		if activeWGScope != nil && consumersVerified && rollbackErr == nil {
+			activeWGScope.mu.Lock()
+			activeWGScope.wgCleanupJoined = true
+			activeWGScope.mu.Unlock()
+		}
 		plan.Ready = false
 		plan.State = "rolled-back"
 		execution.State = "rolled-back"
@@ -1486,6 +1552,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		_ = rollback(ErrXrayOperationOwner)
 		if execution.State != "rolled-back" || !execution.RollbackVerified {
 			return executionJournalError(ErrXrayOperationOwner)
+		}
+		return nil
+	}
+	retryWGRollback = func(parent context.Context) error {
+		rollbackParent = parent
+		_ = rollback(ErrWGOperationOwner)
+		if execution.State != "rolled-back" || !execution.RollbackVerified {
+			return executionJournalError(ErrWGOperationOwner)
 		}
 		return nil
 	}
@@ -1565,6 +1639,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		if activeXrayScope != nil {
 			if err := m.retainActiveXray(ctx, activeXrayScope); err != nil {
+				return rollback(err)
+			}
+		}
+		if activeWGScope != nil {
+			if err := m.retainOriginalWG(activeWGScope.contextWith(ctx), activeWGScope, nil); err != nil {
 				return rollback(err)
 			}
 		}

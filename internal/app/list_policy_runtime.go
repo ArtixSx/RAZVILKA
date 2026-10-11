@@ -30,6 +30,10 @@ type managedListPolicyOwner struct {
 	control               *operationgate.ControlEpochReview
 	nfq                   *ManagedNFQWSListRuntime
 	xray                  *ManagedXraySelectedTCPListRuntime
+	wg                    *ManagedWGListRuntime
+	wgClosed              bool
+	wgAvailable           map[string]bool
+	wgInactivity          map[string]*dataplane.WGInactivityRead
 	nfqClosed, xrayClosed bool
 	closed                atomic.Bool
 	closeErr              error // guarded by mu; repeated release preserves a failed join
@@ -54,7 +58,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	}
 	p := &managedListPolicyOwner{app: a, manager: a.Dataplane, panel: panel}
 	p.self = p
-	a.managedListPolicy = p // Retain the actual attempt before its first owned handle.
+	a.managedListPolicy = p
 	stage := "operation"
 	defer func() {
 		if resultErr != nil {
@@ -86,7 +90,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	}
 	p.provider = provider
 	stage = "startup-tools"
-	tools, err := startuptools.AcquireReviewedStockNC1812Policy(panel, provider)
+	tools, err := startuptools.AcquireReviewedStockNC1812ManagedList(panel, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +111,41 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	if err != nil {
 		return nil, err
 	}
+	stage = "wg-tools"
+	p.wgAvailable = map[string]bool{}
+	actualIdentity, err := provider.Observe(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := tools.Check(c, actualIdentity); err != nil {
+		return nil, err
+	}
+	for _, engine := range []string{"wireguard", "amneziawg"} {
+		descriptor, toolErr := tools.WGCommandTools(engine)
+		if toolErr != nil {
+			// A failed descriptor may mean a newly changed absence or lifetime.
+			// Close with the original complete lease check before accepting only
+			// its still-absent optional primary as unavailable for activation.
+			if err := tools.Check(c, actualIdentity); err != nil {
+				return nil, errors.Join(toolErr, err)
+			}
+			continue
+		}
+		if err := p.manager.BindManagedWGCommandTools(c, descriptor); err != nil {
+			return nil, err
+		}
+		p.wgAvailable[engine] = true
+	}
+	if err := tools.Check(c, actualIdentity); err != nil {
+		return nil, err
+	}
 	lan := &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: p.scopeCheck,
+		TransportCheck: func(c context.Context, plan *dataplane.LANPolicyRuntimePlan, family int, line string) error {
+			if p.checks == nil {
+				return dataplane.ErrNetworkPolicyConsumers
+			}
+			return p.checks.WGTransportCheck(c, plan, family, line)
+		},
 		ConsumerCheck: func(c context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
 			if p.checks == nil {
 				return dataplane.ErrNetworkPolicyConsumers
@@ -122,7 +160,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 			return p.checks.RetireCheck(c, plan)
 		}}
 	stage = "policy-gate"
-	p.gate, err = dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyManagedListDirectMode, Provider: provider, Binding: binding,
+	p.gate, err = dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyManagedListMode, Provider: provider, Binding: binding,
 		InventoryCheck: func(c context.Context, identity netidentity.Identity, plan *dataplane.LANPolicyRuntimePlan) error {
 			if p.checks == nil {
 				return dataplane.ErrNetworkPolicyConsumers
@@ -155,6 +193,19 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	if err := p.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path); err != nil {
 		return nil, err
 	}
+	stage = "wg-inactivity-sources"
+	p.wgInactivity = make(map[string]*dataplane.WGInactivityRead, 2)
+	for _, engine := range []string{"wireguard", "amneziawg"} {
+		source, err := tools.ReviewWGInactivity(c, p.manager, control, engine)
+		if err != nil {
+			return nil, err
+		}
+		p.wgInactivity[engine] = source
+	}
+	stage = "wg-inactivity-binding"
+	if err := p.checks.BindManagedWGInactivitySources(c, p.wgInactivity); err != nil {
+		return nil, err
+	}
 	a.retainManagedNFQControl(control)
 	return p, nil
 }
@@ -170,6 +221,9 @@ func (p *managedListPolicyOwner) runtimeFor(ctx context.Context) (*ManagedNFQWSL
 		return nil, nil, dataplane.ErrNetworkPolicyAuthority
 	}
 	n, x := ctx.Value(managedNFQWSListOperationKey{}), ctx.Value(managedXraySelectedTCPListOperationKey{})
+	if ctx.Value(managedWGListOperationKey{}) != nil {
+		return nil, nil, dataplane.ErrNetworkPolicyAuthority
+	}
 	if (n == nil) == (x == nil) {
 		return nil, nil, dataplane.ErrNetworkPolicyAuthority
 	}
@@ -194,6 +248,12 @@ func (p *managedListPolicyOwner) runtimeFor(ctx context.Context) (*ManagedNFQWSL
 }
 
 func (p *managedListPolicyOwner) scopeCheck(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
+	if r, err := p.wgRuntimeFor(ctx); r != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return r.scopeCheck(ctx, plan)
+	}
 	n, x, err := p.runtimeFor(ctx)
 	if err != nil {
 		return err
@@ -205,6 +265,12 @@ func (p *managedListPolicyOwner) scopeCheck(ctx context.Context, plan *dataplane
 }
 
 func (p *managedListPolicyOwner) lanApplyGuard(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan, effect dataplane.LANPolicyEffect) error {
+	if r, err := p.wgRuntimeFor(ctx); r != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return r.lanApplyGuard(ctx, plan, effect)
+	}
 	n, x, err := p.runtimeFor(ctx)
 	if err != nil {
 		return err
@@ -216,6 +282,12 @@ func (p *managedListPolicyOwner) lanApplyGuard(ctx context.Context, plan *datapl
 }
 
 func (p *managedListPolicyOwner) lanCleanupGuard(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan, effect dataplane.LANPolicyEffect) error {
+	if r, err := p.wgRuntimeFor(ctx); r != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return r.lanCleanupGuard(ctx, plan, effect)
+	}
 	n, x, err := p.runtimeFor(ctx)
 	if err != nil {
 		return err
@@ -266,12 +338,22 @@ func (p *managedListPolicyOwner) releaseNFQ(r *ManagedNFQWSListRuntime) error {
 }
 
 func (p *managedListPolicyOwner) closeIfReleased() error {
-	if p.nfq != nil && !p.nfqClosed || p.xray != nil && !p.xrayClosed {
+	if p.nfq != nil && !p.nfqClosed || p.xray != nil && !p.xrayClosed || p.wg != nil && !p.wgClosed {
 		return nil
 	}
 	if p.closed.Swap(true) {
 		return p.closeErr
 	}
-	p.closeErr = errors.Join(p.checks.Close(), p.tools.Close())
+	p.closeErr = errors.Join(p.closeWGInactivity(), p.checks.Close(), p.tools.Close())
 	return p.closeErr
+}
+
+func (p *managedListPolicyOwner) closeWGInactivity() error {
+	var result error
+	for _, engine := range []string{"wireguard", "amneziawg"} {
+		if source := p.wgInactivity[engine]; source != nil {
+			result = errors.Join(result, source.Close())
+		}
+	}
+	return result
 }

@@ -26,10 +26,14 @@ func (*WGSourceProfileCapture) GoString() string {
 }
 
 func (r *WGSourceReadReview) CaptureProfile(ctx context.Context, profile string) (*WGSourceProfileCapture, error) {
+	return r.captureProfile(ctx, profile, false)
+}
+
+func (r *WGSourceReadReview) captureProfile(ctx context.Context, profile string, retained bool) (*WGSourceProfileCapture, error) {
 	if profile == "" {
 		return nil, ErrWGOperationOwner
 	}
-	if err := r.Current(ctx); err != nil {
+	if err := r.sourceCurrent(ctx, retained); err != nil {
 		return nil, err
 	}
 	c := &WGSourceProfileCapture{reader: r, profile: profile}
@@ -63,7 +67,7 @@ func (r *WGSourceReadReview) CaptureProfile(ctx context.Context, profile string)
 	}
 	hash := sha256.Sum256([]byte(c.content))
 	c.digest = hex.EncodeToString(hash[:])
-	if err := r.Current(ctx); err != nil {
+	if err := r.sourceCurrent(ctx, retained); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -76,10 +80,14 @@ func (c *WGSourceProfileCapture) Observation(ctx context.Context) (WGSourceProfi
 	return WGSourceProfileObservation{EngineID: c.reader.adapter.ID(), ProfileID: c.profile, Revision: c.revision, ContentSHA256: c.digest}, nil
 }
 func (c *WGSourceProfileCapture) Current(ctx context.Context) error {
+	return c.sourceCurrent(ctx, false)
+}
+
+func (c *WGSourceProfileCapture) sourceCurrent(ctx context.Context, retained bool) error {
 	if c == nil || c.self != c || c.reader == nil {
 		return ErrWGOperationOwner
 	}
-	actual, err := c.reader.CaptureProfile(ctx, c.profile)
+	actual, err := c.reader.captureProfile(ctx, c.profile, retained)
 	if err != nil || actual.content != c.content || actual.digest != c.digest || actual.revision != c.revision || actual.source != c.source || actual.path != c.path {
 		return errors.Join(ErrWGOperationOwner, err)
 	}
@@ -90,10 +98,14 @@ func (c *WGSourceProfileCapture) Current(ctx context.Context) error {
 // public addresses avoid granting selected-DNS consent or resolver callbacks.
 // Only a SAME reader's actual captured profile can select this read target.
 func (r *WGSourceReadReview) ObserveNumericEndpoint(ctx context.Context, capture *WGSourceProfileCapture) (WGEndpointState, error) {
+	return r.observeNumericEndpoint(ctx, capture, false)
+}
+
+func (r *WGSourceReadReview) observeNumericEndpoint(ctx context.Context, capture *WGSourceProfileCapture, retained bool) (WGEndpointState, error) {
 	if capture == nil || capture.self != capture || capture.reader != r {
 		return WGEndpointState{}, ErrWGOperationOwner
 	}
-	if err := capture.Current(ctx); err != nil {
+	if err := capture.sourceCurrent(ctx, retained); err != nil {
 		return WGEndpointState{}, err
 	}
 	endpoint, err := wgEndpoint(capture.content)
@@ -106,11 +118,14 @@ func (r *WGSourceReadReview) ObserveNumericEndpoint(ctx context.Context, capture
 	}
 	reader := *r.adapter
 	reader.Runner, reader.Resolver, reader.EndpointResolver, reader.EndpointNow = r, nil, nil, nil
+	if retained {
+		reader.Runner = wgRetainedSourceRunner{r}
+	}
 	_, wan, err := reader.stageWGEndpointForNetwork(ctx, capture.content, true)
 	if err != nil || wan == nil {
 		return WGEndpointState{}, errors.Join(ErrWGOperationOwner, err)
 	}
-	if err := capture.Current(ctx); err != nil {
+	if err := capture.sourceCurrent(ctx, retained); err != nil {
 		return WGEndpointState{}, err
 	}
 	return *wan, nil

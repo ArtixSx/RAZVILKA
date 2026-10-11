@@ -89,7 +89,7 @@ func (a *App) preemptForRuntimeStop(acceptedID uint64) {
 }
 
 func (a *App) runDurableRuntimeJob(ctx context.Context, request serviceControlJobRequest) (serviceRuntimeOutcome, error) {
-	if handled, outcome := a.executeManagedXrayServiceRuntime(ctx, request.Kind, *request.ExpectedRevision); handled {
+	if handled, outcome := a.executeManagedServiceRuntime(ctx, request.Kind, *request.ExpectedRevision); handled {
 		a.wakePanelSnapshot()
 		return outcome, nil
 	}

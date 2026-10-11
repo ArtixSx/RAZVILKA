@@ -79,7 +79,14 @@ func ReviewWGSourceRead(ctx context.Context, manager *Manager, control *operatio
 
 // No Guard/Scope/Store/NI/tool callback may run under the tool/Provider gate.
 func (r *WGSourceReadReview) pureCurrent(ctx context.Context) error {
-	if r == nil || r.self != r || ctx == nil || ctx.Err() != nil || r.ctx == nil || r.ctx.Err() != nil || r.closed.Load() || r.manager == nil || r.manager.StateRoot != r.root || r.control == nil || r.owned == nil {
+	if r == nil || r.ctx == nil || r.ctx.Err() != nil {
+		return ErrWGOperationOwner
+	}
+	return r.metadataCurrent(ctx)
+}
+
+func (r *WGSourceReadReview) metadataCurrent(ctx context.Context) error {
+	if r == nil || r.self != r || ctx == nil || ctx.Err() != nil || r.closed.Load() || r.manager == nil || r.manager.StateRoot != r.root || r.control == nil || r.owned == nil {
 		return ErrWGOperationOwner
 	}
 	if _, bounded := ctx.Deadline(); !bounded {
@@ -136,6 +143,7 @@ type wgSourceReadInvocation struct {
 	self         *wgSourceReadInvocation
 	mu           sync.Mutex
 	open, used   bool
+	retained     bool
 	owner        *WGSourceReadReview
 	name, review string
 	args         []string
@@ -152,7 +160,7 @@ func (i *wgSourceReadInvocation) WithStart(ctx context.Context, name string, arg
 		return ErrWGOperationOwner
 	}
 	i.used = true
-	if err := i.owner.pureCurrent(ctx); err != nil {
+	if err := i.owner.sourceCurrentPure(ctx, i.retained); err != nil {
 		return err
 	}
 	return i.owner.control.WithStart(ctx, begin)
@@ -161,27 +169,35 @@ func (i *wgSourceReadInvocation) WithStart(ctx context.Context, name string, arg
 // Run is only for the existing private endpoint parser's inspection calls.
 // The independent held tool ABI and this one-use carrier both reject effects.
 func (r *WGSourceReadReview) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return r.runSource(ctx, false, name, args...)
+}
+
+func (r *WGSourceReadReview) runSource(ctx context.Context, retained bool, name string, args ...string) ([]byte, error) {
 	if r == nil || r.self != r || !wgSourceReadCommand(r.adapter, name, args) || !validPolicyEffectArgs(args) {
 		return nil, ErrWGOperationOwner
 	}
 	r.barrier.RLock()
 	defer r.barrier.RUnlock()
-	if err := r.Current(ctx); err != nil {
+	if err := r.sourceCurrent(ctx, retained); err != nil {
 		return nil, err
 	}
 	// Execute with the original operation capability, retaining the caller's
 	// shorter deadline/cancellation without accepting it as new authority.
 	deadline, _ := ctx.Deadline() // Current already required a bounded context.
-	c, cancel := context.WithDeadline(r.ctx, deadline)
+	parent := r.ctx
+	if retained {
+		parent = ctx
+	}
+	c, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
-	i := &wgSourceReadInvocation{open: true, owner: r, name: name, review: r.tools.ReviewSHA256, args: slices.Clone(args)}
+	i := &wgSourceReadInvocation{open: true, owner: r, name: name, review: r.tools.ReviewSHA256, args: slices.Clone(args), retained: retained}
 	i.self = i
 	c = context.WithValue(c, wgSourceReadKey{}, i)
 	defer func() { i.mu.Lock(); i.open = false; i.mu.Unlock() }()
 	out, err := r.tools.Runner.RunWG(c, i, name, args...)
-	closing := r.Current(c)
+	closing := r.sourceCurrent(c, retained)
 	if err != nil || closing != nil {
 		return nil, errors.Join(err, closing)
 	}

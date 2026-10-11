@@ -200,6 +200,40 @@ func (r *WGListRuntimeSource) currentApp() error {
 	return nil
 }
 
+func (r *WGListRuntimeSource) currentRetained(ctx context.Context) error {
+	if r == nil || r.self != r || ctx == nil || r.closed.Load() {
+		return dataplane.ErrWGOperationOwner
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.invalid {
+		return dataplane.ErrWGOperationOwner
+	}
+	err := func() error {
+		if err := r.currentApp(); err != nil {
+			return err
+		}
+		if err := r.control.Current(ctx); err != nil {
+			return err
+		}
+		if err := r.scope.cleanupScopeCheck(ctx, r.scope.bound); err != nil {
+			return err
+		}
+		if err := r.profile.CurrentRetained(ctx); err != nil {
+			return err
+		}
+		wan, err := r.reader.ObserveNumericEndpointRetained(ctx, r.profile)
+		if err != nil || !sameWGListSourceWAN(r.wan, wan) {
+			return errors.Join(dataplane.ErrWGOperationOwner, err)
+		}
+		return errors.Join(r.currentApp(), r.control.Current(ctx))
+	}()
+	if err != nil {
+		r.invalid = true
+	}
+	return err
+}
+
 func wgListBaselineDNS(dns *dnscontrol.Manager, service string) bool {
 	if dns == nil {
 		return true

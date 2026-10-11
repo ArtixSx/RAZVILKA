@@ -29,6 +29,15 @@ func configureManagedXraySelectedTCPList(parent context.Context, a *app.App) (*a
 	return a.ConfigureReviewedStockXraySelectedTCPList(ctx, parent)
 }
 
+func configureManagedWGList(parent context.Context, a *app.App) (*app.ManagedWGListRuntime, error) {
+	if parent == nil || a == nil {
+		return nil, dataplane.ErrWGOperationOwner
+	}
+	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
+	defer cancel()
+	return a.ConfigureReviewedStockWGList(ctx, parent)
+}
+
 // Returning from main destroys the original owners and held files even when
 // their child is detached. Every unsuccessful join therefore keeps this process
 // alive. The init script reports a timed-out stop and keeps its PID file; it does

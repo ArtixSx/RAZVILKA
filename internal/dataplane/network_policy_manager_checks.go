@@ -40,6 +40,7 @@ type NetworkPolicyChecks struct {
 	read         func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)
 	inventory    *BackendInventory // SAME startup collector, never a supplied capture.
 	closed       atomic.Bool
+	wgInactivity map[string]*WGInactivityRead // Frozen once by original startup.
 }
 
 // BindNetworkPolicyChecks freezes actual registered instances, their registry
@@ -254,38 +255,48 @@ func (c *NetworkPolicyChecks) RetireCheck(ctx context.Context, lan *LANPolicyRun
 	if ValidateLANPolicyRuntime(lan) != nil {
 		return ErrLANPolicyRuntime
 	}
-	return c.boundary(ctx, func(held context.Context) error {
-		var result error
-		for _, id := range c.ids {
-			if err := c.current(held); err != nil {
-				return errors.Join(result, err)
-			}
-			if adapter, ok := c.adapters[id].(*NFQWS2Adapter); ok {
-				if e, present := held.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution); present && e != nil {
-					if err := c.retiredNFQConsumer(held, adapter, e); err != nil {
-						result = errors.Join(result, err)
+	return c.withWGInactivity(ctx, func(bookends func() error) error {
+		return c.boundary(ctx, func(held context.Context) error {
+			var result error
+			for _, id := range c.ids {
+				if err := c.current(held); err != nil {
+					return errors.Join(result, err)
+				}
+				if source := c.wgInactivity[id]; source != nil {
+					continue // Full SAME source observer ran before this Provider boundary.
+				}
+				if adapter, ok := c.adapters[id].(*NFQWS2Adapter); ok {
+					if e, present := held.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution); present && e != nil {
+						if err := c.retiredNFQConsumer(held, adapter, e); err != nil {
+							result = errors.Join(result, err)
+						}
+						result = errors.Join(result, c.current(held))
+						continue
 					}
-					result = errors.Join(result, c.current(held))
+				}
+				if adapter, ok := c.adapters[id].(*ProxyTunnelAdapter); ok && id == "xray" {
+					if e, present := held.Value(xraySelectedTCPExecutionKey{}).(*xraySelectedTCPExecution); present && e != nil {
+						result = errors.Join(result, c.retiredXrayConsumer(held, adapter, e), c.current(held))
+						continue
+					}
+				}
+				observer, ok := c.adapters[id].(RuntimeInactivityObserver)
+				if !ok || observer == nil || isNilRuntimeObserver(observer) {
+					result = errors.Join(result, fmt.Errorf("%w: %s has no owner observer", ErrRuntimeInactivity, id))
 					continue
 				}
-			}
-			if adapter, ok := c.adapters[id].(*ProxyTunnelAdapter); ok && id == "xray" {
-				if e, present := held.Value(xraySelectedTCPExecutionKey{}).(*xraySelectedTCPExecution); present && e != nil {
-					result = errors.Join(result, c.retiredXrayConsumer(held, adapter, e), c.current(held))
-					continue
+				if err := observer.VerifyRuntimeInactive(held); err != nil {
+					result = errors.Join(result, fmt.Errorf("%w: %s: %w", ErrNetworkPolicyConsumers, id, err))
 				}
+				result = errors.Join(result, c.current(held))
 			}
-			observer, ok := c.adapters[id].(RuntimeInactivityObserver)
-			if !ok || observer == nil || isNilRuntimeObserver(observer) {
-				result = errors.Join(result, fmt.Errorf("%w: %s has no owner observer", ErrRuntimeInactivity, id))
-				continue
+			if result == nil && c.identity.mode == LANPolicyManagedListMode {
+				// Keep BOTH original WG source sessions live through the final
+				// whole image. No retired consumer can supply an active allowance.
+				result = c.retiredWGInventory(held, lan)
 			}
-			if err := observer.VerifyRuntimeInactive(held); err != nil {
-				result = errors.Join(result, fmt.Errorf("%w: %s: %w", ErrNetworkPolicyConsumers, id, err))
-			}
-			result = errors.Join(result, c.current(held))
-		}
-		return result
+			return errors.Join(result, bookends())
+		})
 	})
 }
 

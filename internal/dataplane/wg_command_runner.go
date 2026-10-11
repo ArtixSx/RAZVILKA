@@ -143,10 +143,19 @@ func (o *wgOperationOwner) withToolStart(ctx context.Context, name string, args 
 		return ErrWGOperationOwner
 	}
 	o.scope.mu.Lock()
-	err := o.scope.checkOriginalOwner(ctx, nil, !cleanup, false)
+	err := o.scope.checkOriginalOwner(ctx, nil, !cleanup, cleanup)
 	o.scope.mu.Unlock()
 	if err != nil {
 		return errors.Join(ErrWGOperationOwner, err)
+	}
+	if o.scope.wgRecords == nil {
+		return ErrExecutionJournal
+	}
+	// A failed second journal publication keeps both original authored FDs.
+	// Their phase images can differ for physical cleanup only; a missing or
+	// replaced inode still refuses. Forward Start requires the complete pair.
+	if err := o.scope.wgRecords.current(ctx, !cleanup); err != nil {
+		return err
 	}
 	if !cleanup {
 		o.mu.Lock()
@@ -157,8 +166,17 @@ func (o *wgOperationOwner) withToolStart(ctx context.Context, name string, args 
 		}
 	}
 	return (wgExecRunner{adapter: o.adapter}).withCommandStart(ctx, o, name, args, func() error {
+		// Retain prerequisites even when a started mutation has no successful
+		// command ACK. Only Manager's genuine rollback/inactivity can join it.
+		if !wgReadOnlyCommand(o.adapter, name, args) {
+			o.mutationAttempted.Store(true)
+		}
 		if cleanup {
-			return o.material.control.WithCleanupStart(ctx, o.material.cleanup, begin)
+			cap := o.material.cleanup
+			if op, ok := ctx.Value(wgRetainedOperationKey{}).(*wgRetainedOperation); ok && op != nil && op.self == op && op.open.Load() && op.owner != nil && op.owner.scope == o.scope {
+				cap = op.cleanup
+			}
+			return o.material.control.WithCleanupStart(ctx, cap, begin)
 		}
 		return o.material.control.WithStart(ctx, begin)
 	})

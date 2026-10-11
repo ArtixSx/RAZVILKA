@@ -30,7 +30,12 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 	if lan != nil && (ValidateLANPolicyRuntime(lan) != nil || c == nil || c.gate == nil || c.gate.identity == nil || !c.gate.identity.acceptsMode(lan.Mode)) {
 		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
-	return lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
+	wg, err := c.wgConsumers(ctx, lan)
+	if err != nil {
+		return lanPolicyPreflightAt("inventory-wg-open", err)
+	}
+	var finalImage BackendInventorySnapshot
+	err = lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
 		if identity != c.gate.identity.value {
 			return lanPolicyPreflightAt("inventory-identity", ErrNetworkPolicyIdentity)
 		}
@@ -58,7 +63,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		}
 		openingXray, err := c.xraySelectedTCPConsumers(held, lan)
 		defer closeNetworkPolicyXrayObservations(openingXray)
-		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray) == 0 {
+		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 {
 			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		first, err := c.read(held, identity)
@@ -72,7 +77,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		if err != nil {
 			return lanPolicyPreflightAt("inventory-row-unallowed", err)
 		}
-		if err := checkNetworkPolicyInventoryWithXray(first, identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ, openingXray); err != nil {
+		if err := checkNetworkPolicyInventoryWithWG(first, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), opening, stockRows, openingNFQ, openingXray, wg); err != nil {
 			return err
 		}
 		closing, err := c.proxyConsumers(held, lan)
@@ -113,6 +118,12 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 			return lanPolicyPreflightAt(stage, errors.Join(ErrBackendInventoryUnknown, err))
 		}
+		finalImage = last
+		for _, ob := range wg {
+			if err := ob.currentFiles(held); err != nil {
+				return err
+			}
+		}
 		var nfqErr error
 		for _, observations := range [][]networkPolicyNFQObservation{openingNFQ, closingNFQ} {
 			for _, o := range observations {
@@ -132,8 +143,27 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				xrayErr = errors.Join(xrayErr, o.current(held))
 			}
 		}
-		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithXray(last, identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr))
+		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr))
 	}))
+	if err != nil || len(wg) == 0 {
+		return err
+	}
+	closing, err := c.wgConsumers(ctx, lan)
+	if err != nil || !reflect.DeepEqual(wg, closing) {
+		return errors.Join(ErrNetworkPolicyConsumers, err)
+	}
+	return c.boundary(ctx, func(held context.Context) error {
+		last, err := c.read(held, identity)
+		if err != nil || !reflect.DeepEqual(finalImage, last) {
+			return errors.Join(ErrBackendInventoryUnknown, err)
+		}
+		for _, ob := range closing {
+			if err := ob.currentFiles(held); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func closeNetworkPolicyXrayObservations(observations []networkPolicyXraySelectedTCPObservation) {
@@ -395,7 +425,7 @@ func networkPolicyReservedRow(tokens []string) (bool, error) {
 }
 
 func networkPolicyDirectInventoryMode(mode string) bool {
-	return lanPolicyDirectMode(mode) || mode == LANPolicyManagedListDirectMode
+	return lanPolicyDirectMode(mode) || mode == LANPolicyManagedListDirectMode || mode == LANPolicyManagedListMode
 }
 
 func networkPolicyReservedRowForMode(tokens []string, mode string) (bool, error) {

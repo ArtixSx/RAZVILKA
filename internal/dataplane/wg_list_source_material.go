@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
@@ -77,12 +78,14 @@ func ReviewWGListSourceMaterial(ctx context.Context, reader *WGSourceReadReview,
 	if err != nil {
 		return nil, err
 	}
+	hashWAN := wan
+	hashWAN.ResolvedAt = time.Time{} // Numeric inspection time is not source intent.
 	encoded, err := json.Marshal(struct {
 		Profile  WGSourceProfileObservation
 		Service  catalog.Service
 		WAN      WGEndpointState
 		Registry uint64
-	}{meta, frozen, wan, reader.registry})
+	}{meta, frozen, hashWAN, reader.registry})
 	if err != nil {
 		return nil, err
 	}
@@ -116,13 +119,17 @@ func (r *WGListSourceMaterial) Current(ctx context.Context) error {
 }
 
 func (r *WGListSourceMaterial) current(ctx context.Context) error {
-	if err := r.profile.Current(ctx); err != nil {
+	return r.currentSource(ctx, false)
+}
+
+func (r *WGListSourceMaterial) currentSource(ctx context.Context, retained bool) error {
+	if err := r.profile.sourceCurrent(ctx, retained); err != nil {
 		return err
 	}
 	if r.reader.registry != r.reference.RegistryGeneration {
 		return ErrWGOperationOwner
 	}
-	wan, err := r.reader.ObserveNumericEndpoint(ctx, r.profile)
+	wan, err := r.reader.observeNumericEndpoint(ctx, r.profile, retained)
 	// Numeric endpoints have no DNS lease. A new inspection timestamp is
 	// not a changed WAN tuple and must not renew the frozen source predicate.
 	wan.ResolvedAt = r.wan.ResolvedAt
@@ -138,7 +145,25 @@ func (r *WGListSourceMaterial) current(ctx context.Context) error {
 			return err
 		}
 	}
-	return r.profile.Current(ctx)
+	return r.profile.sourceCurrent(ctx, retained)
+}
+
+func (r *WGListSourceMaterial) CurrentRetained(ctx context.Context) error {
+	if r == nil || r.self != r || r.closed.Load() {
+		return ErrWGOperationOwner
+	}
+	r.barrier.RLock()
+	defer r.barrier.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.invalid {
+		return ErrWGOperationOwner
+	}
+	err := r.currentSource(ctx, true)
+	if err != nil {
+		r.invalid = true
+	}
+	return err
 }
 
 func (r *WGListSourceMaterial) Observation(ctx context.Context) (WGListSourceMaterialReference, error) {

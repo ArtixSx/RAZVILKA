@@ -52,6 +52,10 @@ type executionResourceScope struct {
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
 	retainedXrayOwner       *retainedXrayExecution
+	wgOwner                 *wgOperationOwner
+	wgRecords               *wgExecutionRecords
+	retainedWGOwner         *retainedWGExecution
+	wgCleanupJoined         bool // Actual complete rollback or native retirement only.
 }
 
 type executionTransitResource struct {
@@ -100,6 +104,23 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
 		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, xraySelectedTCP: map[string]*XraySelectedTCPExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
 	s.observationOpen.Store(true)
+	if a, ok := adapterOwner.(*WARPWireGuardAdapter); ok && a != nil && a.wgCommandTools != nil {
+		s.wgOwner, err = newWGOperationOwner(ctx, s)
+		if err == nil {
+			s.wgRecords, err = newWGExecutionRecords(s)
+		}
+		if err == nil {
+			err = m.writeExecutionOwned(root, *execution, s)
+		}
+		if err != nil {
+			cancel()
+			if s.wgRecords != nil {
+				_ = s.wgRecords.close()
+			}
+			_ = owned.Close()
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -110,6 +131,10 @@ func (s *executionResourceScope) context() context.Context {
 // Preserve the actual phase's cancellation and values, including a finite
 // original-owner cleanup context. The issuer still checks its own lifetime.
 func (s *executionResourceScope) contextWith(ctx context.Context) context.Context {
+	if s.wgOwner != nil {
+		ctx = context.WithValue(ctx, wgOperationMaterialKey{}, s.wgOwner.material)
+		ctx = context.WithValue(ctx, wgOperationOwnerKey{}, s.wgOwner)
+	}
 	ctx = context.WithValue(ctx, nfqws2ActiveActivationRegistrarKey{}, s)
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
@@ -138,7 +163,11 @@ func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resourc
 			return ErrNFQWSScopedOwner
 		}
 		if s.retained {
-			if s.retainedXrayOwner != nil {
+			if s.retainedWGOwner != nil {
+				if err := s.checkRetainedWGOperation(ctx, true); err != nil {
+					return err
+				}
+			} else if s.retainedXrayOwner != nil {
 				if err := s.checkRetainedXrayOperation(ctx, true); err != nil {
 					return err
 				}
@@ -409,6 +438,10 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if s.wgOwner != nil && s.wgOwner.mutationAttempted.Load() && !s.wgCleanupJoined {
+		s.mu.Unlock()
+		return ErrWGOperationOwner
+	}
 	if !s.open {
 		err := s.closedErr
 		s.mu.Unlock()
@@ -469,6 +502,12 @@ func (s *executionResourceScope) close() error {
 	s.mu.Unlock()
 	for _, resource := range xrayResources {
 		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	if s.wgRecords != nil {
+		err = errors.Join(err, s.wgRecords.close())
+	}
+	if s.wgOwner != nil {
+		err = errors.Join(err, s.wgOwner.closeCommon())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

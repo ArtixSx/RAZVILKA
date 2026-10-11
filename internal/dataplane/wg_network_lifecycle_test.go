@@ -131,7 +131,21 @@ func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Pl
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = scope.close() })
+	t.Cleanup(func() {
+		// This primitive fixture's child only records argv; it implements no
+		// WG/link/firewall effect. Join the real child barrier, then settle its
+		// explicit empty kernel model before closing the actual journal FDs.
+		// This is fixture teardown, never native retirement evidence.
+		if err := material.Close(); err != nil {
+			t.Error(err)
+		}
+		scope.mu.Lock()
+		scope.wgCleanupJoined = true
+		scope.mu.Unlock()
+		if err := scope.close(); err != nil {
+			t.Error(err)
+		}
+	})
 	owner, err := newWGOperationOwner(ctx, scope)
 	if err != nil {
 		t.Fatal(err)

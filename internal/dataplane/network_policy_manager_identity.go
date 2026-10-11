@@ -37,11 +37,14 @@ func (n *networkPolicyIdentity) acceptsMode(mode string) bool {
 	if n.mode == LANPolicyManagedListDirectMode {
 		return lanPolicyDirectMode(mode)
 	}
+	if n.mode == LANPolicyManagedListMode {
+		return mode == "" || lanPolicyDirectMode(mode)
+	}
 	return mode == n.mode
 }
 
 func (n *networkPolicyIdentity) inventoryMode(lan *LANPolicyRuntimePlan) string {
-	if n.mode == LANPolicyManagedListDirectMode && lan != nil {
+	if (n.mode == LANPolicyManagedListDirectMode || n.mode == LANPolicyManagedListMode) && lan != nil {
 		return lan.Mode
 	}
 	return n.mode
@@ -80,7 +83,7 @@ func NewNetworkPolicyAdapter(ctx context.Context, options NetworkPolicyAssemblyO
 
 func networkPolicyAssemblyOptionsValid(options NetworkPolicyAssemblyOptions) bool {
 	b := options.Binding
-	return (options.Mode == "" || lanPolicyDirectMode(options.Mode) || options.Mode == LANPolicyManagedListDirectMode) && b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
+	return (options.Mode == "" || lanPolicyDirectMode(options.Mode) || options.Mode == LANPolicyManagedListDirectMode || options.Mode == LANPolicyManagedListMode) && b != nil && b.Runtime != nil && b.Runtime.Runner != nil && b.Runtime.IP != "" && b.Runtime.IPTables != "" && b.Runtime.IP6Tables != "" &&
 		b.Runtime.ScopeCheck != nil && b.ApplyGuard != nil && b.CleanupGuard != nil && b.RetireCheck != nil && options.InventoryCheck != nil
 }
 
@@ -95,6 +98,24 @@ func newNetworkPolicyIdentityAdapter(options NetworkPolicyAssemblyOptions, ident
 	physical, apply, cleanup, retire := runtime.ScopeCheck, binding.ApplyGuard, binding.CleanupGuard, binding.RetireCheck
 	inventory := options.InventoryCheck
 	boundary := func(ctx context.Context, p *LANPolicyRuntimePlan, stage string, check func(context.Context) error) error {
+		if options.Mode == LANPolicyManagedListMode {
+			// Full retained WG/tool/control owners must run outside the held
+			// Provider/collector leaf. The SAME identity brackets each actual
+			// command and complete inventory, with explicit outer bookends.
+			if err := identity.check(ctx); err != nil {
+				return lanPolicyPreflightAt("boundary-identity", err)
+			}
+			if p != nil && (ValidateLANPolicyRuntime(p) != nil || !identity.acceptsMode(p.Mode)) {
+				return lanPolicyPreflightAt("boundary-plan", ErrLANPolicyRuntime)
+			}
+			if err := check(ctx); err != nil {
+				return lanPolicyPreflightAt(stage, err)
+			}
+			if err := inventory(ctx, identity.value, CloneLANPolicyRuntime(p)); err != nil {
+				return lanPolicyPreflightAt("boundary-inventory", err)
+			}
+			return lanPolicyPreflightAt("boundary-identity", identity.check(ctx))
+		}
 		return lanPolicyPreflightAt("boundary-identity", identity.use(ctx, func(c context.Context) error {
 			if p != nil && (ValidateLANPolicyRuntime(p) != nil || !identity.acceptsMode(p.Mode)) {
 				return lanPolicyPreflightAt("boundary-plan", ErrLANPolicyRuntime)

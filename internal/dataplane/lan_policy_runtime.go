@@ -23,6 +23,7 @@ const (
 	LANPolicyXraySelectedTCPMode = "xray-selected-tcp"
 	// A startup profile for one original shared owner, never a plan mode.
 	LANPolicyManagedListDirectMode        = "managed-list-direct"
+	LANPolicyManagedListMode              = "managed-list"
 	LANPolicyManagedMark           uint32 = 0x20000000
 	LANPolicyBypassMark            uint32 = 0x08000000
 	LANPolicyGateMask              uint32 = LANPolicyManagedMark | LANPolicyBypassMark

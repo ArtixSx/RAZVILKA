@@ -84,6 +84,7 @@ func (r *ManagedXraySelectedTCPListRuntime) operation(ctx context.Context, e *ma
 	o.self = o
 	o.open.Store(true)
 	ctx = context.WithValue(ctx, managedXraySelectedTCPListOperationKey{}, o)
+	ctx = dataplane.WithWGInactivityCleanup(ctx, cleanup)
 	ctx = startuptools.WithCommandAdmission(ctx, r)
 	return ctx, func() { o.open.Store(false) }, nil
 }

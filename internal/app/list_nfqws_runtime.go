@@ -106,6 +106,7 @@ func (r *ManagedNFQWSListRuntime) operation(ctx context.Context, e *managedNFQWS
 	o.self = o
 	o.open.Store(true)
 	ctx = context.WithValue(ctx, managedNFQWSListOperationKey{}, o)
+	ctx = dataplane.WithWGInactivityCleanup(ctx, cleanup)
 	ctx = startuptools.WithCommandAdmission(ctx, r)
 	return ctx, func() { o.open.Store(false) }, nil
 }

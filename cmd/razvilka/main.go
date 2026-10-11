@@ -706,10 +706,19 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if managedXrayListErr != nil {
 		log.Printf("Selected Xray TCP startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedXrayListErr))
 	}
+	managedWGList, managedWGListErr := configureManagedWGList(managedNFQLifetime, a)
+	if managedWGListErr != nil {
+		log.Printf("Managed WG startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedWGListErr))
+	}
 	managedNFQCloseAttempted := false
 	closeManagedNFQList := func(ctx context.Context) error {
 		if managedNFQCloseAttempted {
 			return nil
+		}
+		if managedWGList != nil {
+			if err := managedWGList.Close(ctx); err != nil {
+				return err
+			}
 		}
 		if managedXrayList != nil {
 			if err := managedXrayList.Close(ctx); err != nil {

@@ -161,6 +161,8 @@ type App struct {
 	managedListPolicy            *managedListPolicyOwner
 	managedXraySelectedTCPListMu sync.Mutex
 	managedXraySelectedTCPList   *ManagedXraySelectedTCPListRuntime
+	managedWGListMu              sync.Mutex
+	managedWGList                *ManagedWGListRuntime
 	componentRecoveryChecks      componentRecoveryChecks
 	Community                    *community.Manager
 	CustomServices               *customservices.Manager
@@ -3441,6 +3443,9 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := a.Store.Get()
+	if a.managedWGPlanHTTP(w, r, cfg, scope) {
+		return
+	}
 	if a.managedXrayPlanHTTP(w, r, cfg, scope) {
 		return
 	}
@@ -3551,6 +3556,9 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := a.Store.Get()
+	if a.managedWGApplyHTTP(w, r, cfg, scope, reviewRequest) {
+		return
+	}
 	if a.managedXrayApplyHTTP(w, r, cfg, scope, reviewRequest) {
 		return
 	}

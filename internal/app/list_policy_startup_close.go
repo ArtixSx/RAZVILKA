@@ -35,13 +35,13 @@ func (p *managedListPolicyOwner) closeStartupResources() error {
 	if p == nil || p.self != p || p.app == nil || p.app.managedListPolicy != p || p.app.Dataplane != p.manager || p.manager == nil {
 		return dataplane.ErrRuntimeInactivity
 	}
-	if p.nfq != nil && !p.nfqClosed || p.xray != nil && !p.xrayClosed {
+	if p.nfq != nil && !p.nfqClosed || p.xray != nil && !p.xrayClosed || p.wg != nil && !p.wgClosed {
 		return dataplane.ErrRuntimeInactivity
 	}
 	if p.closed.Load() {
 		return p.closeErr
 	}
-	var err error
+	err := p.closeWGInactivity()
 	if p.checks != nil {
 		err = errors.Join(err, p.checks.Close())
 	}
@@ -79,7 +79,7 @@ func (a *App) CloseManagedListStartup(ctx context.Context) error {
 	if !p.startupReady && p.startupFailure == nil {
 		return dataplane.ErrRuntimeInactivity
 	}
-	if p.nfq != a.managedNFQList || p.xray != a.managedXraySelectedTCPList {
+	if p.nfq != a.managedNFQList || p.xray != a.managedXraySelectedTCPList || p.wg != a.managedWGList {
 		return dataplane.ErrRuntimeInactivity
 	}
 	if p.nfq != nil && (!p.nfqClosed || !p.nfq.closed || p.nfq.active != nil || p.nfq.pending != nil) {
@@ -88,7 +88,10 @@ func (a *App) CloseManagedListStartup(ctx context.Context) error {
 	if p.xray != nil && (!p.xrayClosed || !p.xray.closed || p.xray.preparing != nil || p.xray.active != nil || p.xray.pending != nil) {
 		return dataplane.ErrRuntimeInactivity
 	}
-	if a.Dataplane.HasPendingManagedNFQWS() || a.Dataplane.HasPendingManagedXraySelectedTCP() {
+	if p.wg != nil && (!p.wgClosed || !p.wg.closed || p.wg.preparing != nil || p.wg.active != nil || p.wg.pending != nil || p.wg.stopped != nil) {
+		return dataplane.ErrRuntimeInactivity
+	}
+	if a.Dataplane.HasPendingManagedNFQWS() || a.Dataplane.HasPendingManagedXraySelectedTCP() || a.Dataplane.HasPendingManagedWG() {
 		return dataplane.ErrRuntimeInactivity
 	}
 	return errors.Join(p.closeStartupResources(), ctx.Err())

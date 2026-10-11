@@ -207,6 +207,15 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 		latestErr := publish(1, filepath.Join(m.StateRoot, "latest-execution.json"))
 		return executionJournalError(errors.Join(transactionErr, latestErr))
 	}
+	if scope != nil && scope.wgOwner != nil {
+		if scope.wgRecords == nil || scope.wgRecords.scope != scope {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		if err := scope.wgRecords.beforePublication(); err != nil {
+			return executionJournalError(err)
+		}
+		return executionJournalError(errors.Join(scope.wgRecords.publishOriginal(0, data), scope.wgRecords.publishOriginal(1, data)))
+	}
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)

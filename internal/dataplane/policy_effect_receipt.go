@@ -171,6 +171,9 @@ func (s *policyEffectSession) save(ctx context.Context) (result error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := checkWGCommonBeforePublication(ctx, s.policyAdditionSession); err != nil {
+		return err
+	}
 	s.doc.Checksum = policyAdditionChecksum(s.doc)
 	data, err := json.Marshal(s.doc)
 	if err != nil || len(data) > policyAdditionMaxBytes {
@@ -186,6 +189,11 @@ func (s *policyEffectSession) save(ctx context.Context) (result error) {
 			result = errors.Join(result, file.Close())
 		}
 	}()
+	if ctx.Value(wgCommonWriterKey{}) != nil && ctx.Value(wgOperationOwnerKey{}) != nil {
+		borrowErr := s.borrow.savedOriginal(file)
+		transferred = borrowErr == nil
+		return saveWGCommonOriginal(ctx, s.policyAdditionSession, file, borrowErr)
+	}
 	if runtime.GOOS == "linux" && s.root.Sync() != nil {
 		return ErrPolicyAdditionReceipt
 	}
@@ -196,7 +204,7 @@ func (s *policyEffectSession) save(ctx context.Context) (result error) {
 		return err
 	}
 	transferred = true
-	return captureXraySelectedTCPPolicyPublication(ctx, s.borrow)
+	return errors.Join(captureXraySelectedTCPPolicyPublication(ctx, s.borrow), captureWGCommonPublication(ctx, s.policyAdditionSession, file))
 }
 
 func openPolicyEffectSession(ctx context.Context, plan PolicyEffectPlan, path string, options policyAdditionOptions) (*policyEffectSession, error) {
@@ -577,6 +585,9 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	s.borrow = borrow
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
 	if err := checkXraySelectedTCPOriginalLoadedReceipt(ctx, borrow); err != nil {
+		return err
+	}
+	if err := checkWGOriginalLoadedReceipt(ctx, borrow); err != nil {
 		return err
 	}
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {

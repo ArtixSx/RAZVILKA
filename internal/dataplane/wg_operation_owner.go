@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
@@ -29,6 +30,7 @@ type WGOperationMaterial struct {
 	control *operationgate.ControlEpochReview
 	cleanup *operationgate.ExclusiveCleanupReview
 	lan     *LANPolicyRuntimePlan
+	source  *WGListSourceMaterial
 }
 
 func (*WGOperationMaterial) String() string   { return "[private original WG operation material]" }
@@ -68,6 +70,16 @@ func (m *WGOperationMaterial) current(ctx context.Context, cleanup bool) error {
 	m.mu.Unlock()
 	if closed {
 		return ErrWGOperationOwner
+	}
+	if ctx.Value(wgRetainedOperationKey{}) != nil {
+		if !m.RetainedOperationContext(ctx) {
+			return ErrWGOperationOwner
+		}
+		op := ctx.Value(wgRetainedOperationKey{}).(*wgRetainedOperation)
+		if cleanup {
+			return m.control.CurrentForCleanupOperation(ctx, op.cleanup)
+		}
+		return m.control.Current(ctx)
 	}
 	return m.cleanup.WithCurrent(ctx, func() error {
 		if cleanup {
@@ -113,14 +125,17 @@ func (m *WGOperationMaterial) Close() error {
 }
 
 type wgOperationOwner struct {
-	self     *wgOperationOwner
-	material *WGOperationMaterial
-	scope    *executionResourceScope
-	adapter  *WARPWireGuardAdapter
-	shape    WARPWireGuardAdapter
-	tools    WGCommandTools
-	mu       sync.Mutex
-	revoked  error
+	self              *wgOperationOwner
+	material          *WGOperationMaterial
+	scope             *executionResourceScope
+	adapter           *WARPWireGuardAdapter
+	shape             WARPWireGuardAdapter
+	tools             WGCommandTools
+	mu                sync.Mutex
+	revoked           error
+	commonMu          sync.Mutex
+	common            map[string]*wgCommonPublication
+	mutationAttempted atomic.Bool
 }
 
 // CORE calls this once for the SAME actual Manager transaction, then keeps its
@@ -132,6 +147,13 @@ func newWGOperationOwner(ctx context.Context, scope *executionResourceScope) (*w
 	m, _ := ctx.Value(wgOperationMaterialKey{}).(*WGOperationMaterial)
 	if err := m.current(ctx, false); err != nil {
 		return nil, errors.Join(ErrWGOperationOwner, err)
+	}
+	if scope.wgOwner != nil {
+		o := scope.wgOwner
+		if o.material != m || o.scope != scope {
+			return nil, ErrWGOperationOwner
+		}
+		return o, o.check(ctx, false)
 	}
 	scope.mu.Lock()
 	a, ok := scope.adapterOwner.(*WARPWireGuardAdapter)
@@ -147,7 +169,7 @@ func newWGOperationOwner(ctx context.Context, scope *executionResourceScope) (*w
 	if !ok || runner.adapter != a || !a.wgCommandTools.valid(a.ID()) {
 		return nil, ErrWGOperationOwner
 	}
-	o := &wgOperationOwner{material: m, scope: scope, adapter: a, shape: *a, tools: *a.wgCommandTools}
+	o := &wgOperationOwner{material: m, scope: scope, adapter: a, shape: *a, tools: *a.wgCommandTools, common: map[string]*wgCommonPublication{}}
 	o.self = o
 	if err := o.check(ctx, false); err != nil {
 		return nil, err
@@ -191,7 +213,7 @@ func (o *wgOperationOwner) check(ctx context.Context, cleanup bool) error {
 	}
 	s := o.scope
 	s.mu.Lock()
-	err := s.checkOriginalOwner(ctx, nil, !cleanup, false)
+	err := s.checkOriginalOwner(ctx, nil, !cleanup, cleanup)
 	s.mu.Unlock()
 	if err != nil {
 		return errors.Join(ErrWGOperationOwner, err)

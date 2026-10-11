@@ -23,6 +23,7 @@ type WGListRuntimePreparation struct {
 	material    *dataplane.WGListSourceMaterial
 	compilation *DefaultRouteCompilation
 	binding     *listWGOperationBinding
+	execution   *managedWGListExecution
 }
 
 func (*WGListRuntimePreparation) String() string   { return "[original WG App list preparation]" }
@@ -92,6 +93,9 @@ func (r *WGListRuntimeSource) Prepare(ctx context.Context) (*WGListRuntimePrepar
 	if err != nil {
 		return nil, err
 	}
+	if err := p.binding.material.BindSourceReview(ctx, material); err != nil {
+		return nil, err
+	}
 	if err := p.Current(ctx); err != nil {
 		return nil, err
 	}
@@ -144,13 +148,40 @@ func (p *WGListRuntimePreparation) guard(ctx context.Context) error {
 	if p == nil || p.self != p || p.closed.Load() || p.binding == nil || p.compilation == nil {
 		return dataplane.ErrWGOperationOwner
 	}
+	if p.execution != nil {
+		if _, _, err := p.execution.runtime.executionFor(ctx); err != nil {
+			return err
+		}
+	}
 	if p.binding.material.IsCleanupContext(ctx) {
+		if p.execution != nil {
+			return p.execution.runtime.lanCleanupGuard(ctx, p.compilation.LAN(), dataplane.LANPolicyEffect{})
+		}
 		// Only a SAME Manager-issued cleanup owner can select this branch.
 		// Forward Store/profile selection is not consulted for compensation;
 		// the original cap/control and retained physical scope are checked.
 		return p.binding.withCleanup(ctx, p.compilation.LAN(), func(c context.Context) error { return c.Err() })
 	}
+	if p.binding.material.RetainedOperationContext(ctx) {
+		if p.execution == nil {
+			return dataplane.ErrWGOperationOwner
+		}
+		return p.CurrentRetained(ctx)
+	}
 	return p.Current(ctx)
+}
+
+func (p *WGListRuntimePreparation) CurrentRetained(ctx context.Context) error {
+	if p == nil || p.self != p || p.closed.Load() || p.execution == nil || p.binding == nil || !p.binding.material.RetainedOperationContext(ctx) {
+		return dataplane.ErrWGOperationOwner
+	}
+	if err := p.source.currentRetained(ctx); err != nil {
+		return err
+	}
+	if err := p.material.CurrentRetained(ctx); err != nil {
+		return err
+	}
+	return p.source.scope.cleanupScopeCheck(ctx, p.compilation.LAN())
 }
 
 func (p *WGListRuntimePreparation) Close() error {

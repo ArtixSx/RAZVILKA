@@ -13,6 +13,9 @@ import (
 var errComponentServiceProofUnconfirmed = errors.New("managed component service proof is unconfirmed")
 
 func managedComponentForPlan(plan dataplane.Plan) string {
+	if managedWGPlan(plan) {
+		return dataplane.AdapterID(plan.Routes[0].Resolved)
+	}
 	if plan.LAN != nil {
 		switch plan.LAN.Mode {
 		case dataplane.LANPolicyNFQWSDirectMode:
@@ -58,6 +61,8 @@ func (a *App) observeManagedComponentRuntime(ctx context.Context, expected datap
 	var err error
 	if ownerComponent == "nfqws2" {
 		err = a.observeManagedNFQComponent(c, expected)
+	} else if ownerComponent == "wireguard" || ownerComponent == "amneziawg" {
+		err = a.observeManagedWGComponent(c, expected)
 	} else {
 		err = a.observeManagedXrayComponent(c, expected)
 	}
@@ -127,7 +132,7 @@ func (a *App) mergeManagedComponentRuntimeObservation(ctx context.Context, views
 	component := managedComponentForPlan(plan)
 	for i := range views {
 		view := &views[i]
-		if view.ID != "nfqws2" && view.ID != "xray" {
+		if view.ID != "nfqws2" && view.ID != "xray" && view.ID != "wireguard" && view.ID != "amneziawg" {
 			continue
 		}
 		if view.ID != component && readErr == nil && !a.hasManagedComponentExecution(view.ID) {
@@ -152,6 +157,25 @@ func (a *App) mergeManagedComponentRuntimeObservation(ctx context.Context, views
 // An App slot with unfinished work selects the closed observation path even
 // when its named committed record is lost or replaced. This is not authority.
 func (a *App) hasManagedComponentExecution(component string) bool {
+	if component == "wireguard" || component == "amneziawg" {
+		a.managedWGListMu.Lock()
+		r := a.managedWGList
+		a.managedWGListMu.Unlock()
+		if r == nil {
+			return false
+		}
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, e := range []*managedWGListExecution{r.preparing, r.active, r.pending} {
+			if e == nil {
+				continue
+			}
+			if e.source == nil || e.source.resolved == component {
+				return true
+			}
+		}
+		return false
+	}
 	if component == "nfqws2" {
 		a.managedNFQListMu.Lock()
 		r := a.managedNFQList

@@ -51,7 +51,7 @@ func (a *App) serviceControlRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Older clients keep the synchronous contract; production UI sends a key.
-	if handled, outcome := a.executeManagedXrayServiceRuntime(r.Context(), request.Action, *request.ExpectedRevision); handled {
+	if handled, outcome := a.executeManagedServiceRuntime(r.Context(), request.Action, *request.ExpectedRevision); handled {
 		status := http.StatusOK
 		response := map[string]any{"ok": outcome.Code == "", "live_applied": outcome.LiveApplied}
 		if outcome.Code != "" {
@@ -96,6 +96,9 @@ type serviceRuntimeOutcome struct {
 }
 
 func (a *App) observeCommittedRuntime(ctx context.Context, plan dataplane.Plan) error {
+	if handled, err := a.observeCommittedManagedWG(ctx, plan); handled {
+		return err
+	}
 	if handled, err := a.observeCommittedManagedXray(ctx, plan); handled {
 		return err
 	}

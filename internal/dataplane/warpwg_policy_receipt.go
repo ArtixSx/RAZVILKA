@@ -294,7 +294,9 @@ func (a *WARPWireGuardAdapter) applyWGPolicyGenerationBound(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		return applyPolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, rollbackOwner == ""), compiled.plan, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+		path := a.wgPolicyGenerationRoot(ref, transaction)
+		ctx = wgCommonWriterContext(ctx, a, ref, compiled, path)
+		return applyPolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, rollbackOwner == ""), compiled.plan, path, a.policyReceiptOptions)
 	}
 	return applyPolicyAddition(ctx, wgNamedForwardRunner{base: a.Runner}, a.ip(), state, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 }
@@ -309,7 +311,9 @@ func (a *WARPWireGuardAdapter) removeWGPolicyReference(ctx context.Context, ref 
 		if err != nil {
 			return err
 		}
-		return removePolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, false), compiled.plan, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
+		path := a.wgPolicyGenerationRoot(ref, transaction)
+		ctx = wgCommonWriterContext(ctx, a, ref, compiled, path)
+		return removePolicyEffects(ctx, a.wgNetworkEffectRuntime(ref, compiled, false), compiled.plan, path, a.policyReceiptOptions)
 	}
 	return removePolicyAddition(ctx, a.Runner, a.ip(), ref.Policy, a.wgPolicyGenerationRoot(ref, transaction), a.policyReceiptOptions)
 }
@@ -357,6 +361,7 @@ func (a *WARPWireGuardAdapter) promoteWGPolicyGeneration(ctx context.Context, st
 		if err != nil {
 			return ref, err
 		}
+		ctx = wgCommonWriterContext(ctx, a, ref, compiled, source, destination)
 		if err := promotePolicyEffects(ctx, compiled.plan, source, destination, a.policyReceiptOptions); err != nil {
 			return ref, err
 		}
