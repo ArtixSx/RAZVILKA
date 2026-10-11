@@ -15,10 +15,34 @@ import (
 )
 
 type servicePolicyView struct {
-	Policy    config.ServicePolicy `json:"policy"`
-	Persisted bool                 `json:"persisted"`
-	State     string               `json:"state"`
-	Reason    string               `json:"reason"`
+	Policy        config.ServicePolicy `json:"policy"`
+	Persisted     bool                 `json:"persisted"`
+	State         string               `json:"state"`
+	Reason        string               `json:"reason"`
+	ManagedBy     string               `json:"managed_by,omitempty"`
+	ManagementURL string               `json:"management_url,omitempty"`
+}
+
+// Presentation follows the same ownership decision as the legacy worker.
+// Admission still uses servicePolicyState without this overlay.
+func (a *App) presentServicePolicy(cfg config.Config, p config.ServicePolicy, persisted bool) servicePolicyView {
+	state, reason := servicePolicyState(cfg, p)
+	view := servicePolicyView{Policy: p, Persisted: persisted, State: state, Reason: reason}
+	if !a.autonomyOwnsService(p.ServiceID) {
+		return view
+	}
+	a.autonomy.mu.Lock()
+	blocked := a.autonomy.blocked
+	a.autonomy.mu.Unlock()
+	view.State = "managed-by-autopilot"
+	view.ManagedBy = "autopilot"
+	view.ManagementURL = "/index.html#/managed"
+	view.Reason = "Сервис закреплён за Автопилотом, в том числе во время паузы. Автоматическая замена по правилу резервной группы не выполняется. Откройте Автопилот для настройки сервиса."
+	if blocked {
+		view.State = "autopilot-requires-review"
+		view.Reason = "Автопилот требует проверки сохранённых разрешений. Владение сервисом сохраняется; автоматическая замена по правилу резервной группы не выполняется. Откройте Автопилот для проверки."
+	}
+	return view
 }
 
 func servicePolicyCapabilities() map[string]any {
@@ -53,8 +77,7 @@ func (a *App) servicePolicies(w http.ResponseWriter, r *http.Request) {
 		if !exists {
 			p = proposedServicePolicy(service.ID, cfg.AppliedServices[service.ID], snapshot)
 		}
-		state, reason := servicePolicyState(cfg, p)
-		views[service.ID] = servicePolicyView{Policy: p, Persisted: exists, State: state, Reason: reason}
+		views[service.ID] = a.presentServicePolicy(cfg, p, exists)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"schema": config.ServicePolicySchema, "config_revision": cfg.Revision, "policies": views, "capabilities": servicePolicyCapabilities(), "reconciler": a.reconcilerSnapshot()})
 }
@@ -156,8 +179,12 @@ func (a *App) servicePolicyUpdate(w http.ResponseWriter, r *http.Request) {
 		a.nodeAutofallback.entries[id] = entry
 	}
 	a.nodeAutofallback.mu.Unlock()
-	state, reason := servicePolicyState(a.Store.Get(), p)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "policy": p, "state": state, "reason": reason, "config_revision": a.Store.Get().Revision, "live_applied": false})
+	view := a.presentServicePolicy(a.Store.Get(), p, true)
+	response := map[string]any{"ok": true, "policy": p, "state": view.State, "reason": view.Reason, "config_revision": a.Store.Get().Revision, "live_applied": false}
+	if view.ManagedBy != "" {
+		response["managed_by"], response["management_url"] = view.ManagedBy, view.ManagementURL
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func proposedServicePolicy(id string, applied config.ServiceState, snapshot nodestore.Snapshot) config.ServicePolicy {

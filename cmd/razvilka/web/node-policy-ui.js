@@ -6,7 +6,9 @@ async function openNodePolicy(serviceID) {
   closeNodePolicy();
   const editor = { serviceID, controller: new AbortController(), data: null, busy: true };
   nodePolicyEditor = editor;
-  $('#nodePolicyTitle').textContent = `${state.services.find(service => service.id === serviceID)?.name || serviceID}: автоподбор`;
+  $('#nodePolicyTitle').textContent = `${state.services.find(service => service.id === serviceID)?.name || serviceID}: резервная группа`;
+  const description = $('#nodePolicyTitle').nextElementSibling;
+  if (description) description.textContent = 'Резервная группа Sing-box работает на роутере при закрытом браузере. Проверенный текущий узел сохраняется; замена выбирается при подтверждённом отказе.';
   $('#nodePolicyStatus').textContent = 'Получаем действующее правило…';
   $('#nodePolicySave').disabled = true;
   $('#nodePolicyFields').hidden = true;
@@ -16,8 +18,9 @@ async function openNodePolicy(serviceID) {
     const [data, inventory, services] = await Promise.all([api('/api/v1/service-policies', { signal: editor.controller.signal }), api('/api/v1/nodes', { signal: editor.controller.signal }), api('/api/v1/services', { signal: editor.controller.signal })]);
     if (nodePolicyEditor !== editor || editor.controller.signal.aborted) return;
     const view = data.policies?.[serviceID];
-    if (!view) throw new Error('Для сервиса пока нет правила автоподбора.');
+    if (!view) throw new Error('Для сервиса пока нет правила резервной группы.');
     editor.data = data; editor.view = view; editor.inventory = inventory;
+    if (renderNodePolicyOwnership(view)) return;
     const service = services.find(service => service.id === serviceID);
     const group = inventory.groups?.find(group => service?.applied_enabled && `sing-box:${group.id}` === service.applied_route && group.mode === 'fallback');
     const policy = { ...view.policy, group_id: group?.id || '', device_sources: service?.applied_sources || [] };
@@ -43,16 +46,29 @@ async function openNodePolicy(serviceID) {
   finally { if (nodePolicyEditor === editor) editor.busy = false; }
 }
 
+function renderNodePolicyOwnership(view) {
+  if (view?.managed_by !== 'autopilot') return false;
+  $('#nodePolicyFields').hidden = true;
+  for (const field of $$('#nodePolicyFields input, #nodePolicyFields select')) field.disabled = true;
+  const description = $('#nodePolicyTitle').nextElementSibling;
+  if (description) description.textContent = 'Настройки этого сервиса доступны в Автопилоте. Правило резервной группы сейчас не выполняет автоматическую замену.';
+  $('#nodePolicyStatus').innerHTML = `${esc(view.reason)} <a href="/index.html#/managed">Открыть Автопилот</a>`;
+  $('#nodePolicySave').textContent = view.state === 'autopilot-requires-review' ? 'Автопилот требует проверки' : 'Управляет Автопилот';
+  $('#nodePolicySave').disabled = true;
+  return true;
+}
+
 function updateNodePolicyMode() {
+  if (renderNodePolicyOwnership(nodePolicyEditor?.view)) return;
   const auto = $('#nodePolicyMode').value === 'auto';
-  $('#nodePolicySave').textContent = auto ? 'Включить автоподбор' : 'Применить правило';
+  $('#nodePolicySave').textContent = auto ? 'Включить замену в резервной группе' : 'Применить правило';
   $('#nodePolicySave').disabled = !nodePolicyEditor?.data || auto && !nodePolicyEditor.group;
 }
 
 async function saveNodePolicy(event) {
   event.preventDefault();
   const editor = nodePolicyEditor;
-  if (!editor?.data || editor.busy) return;
+  if (!editor?.data || editor.busy || editor.view?.managed_by === 'autopilot') return;
   const mode = $('#nodePolicyMode').value;
   const policy = { ...editor.basePolicy, mode, enabled: mode === 'auto', check_interval_seconds: Number($('#nodePolicyInterval').value) * 60, hold_down_seconds: Number($('#nodePolicyHold').value) * 60, max_switches_per_hour: Number($('#nodePolicyBudget').value) };
   if (mode === 'auto') {
@@ -72,15 +88,16 @@ async function saveNodePolicy(event) {
   editor.busy = true;
   for (const field of $$('#nodePolicyFields input, #nodePolicyFields select')) field.disabled = true;
   $('#nodePolicySave').disabled = true;
-  $('#nodePolicyStatus').textContent = 'Применяем правило автоподбора…';
+  $('#nodePolicyStatus').textContent = 'Сохраняем правило резервной группы…';
   try {
     const result = await api(`/api/v1/service-policies/${encodeURIComponent(editor.serviceID)}`, { method: 'PUT', signal: editor.controller.signal, body: JSON.stringify({ config_revision: editor.data.config_revision, expected_revision: editor.view.policy.revision, policy, confirm: 'SAVE_SERVICE_POLICY' }) });
     if (nodePolicyEditor !== editor || editor.controller.signal.aborted) return;
-    $('#nodePolicyStatus').textContent = result.reason;
+    editor.view = result;
+    if (!renderNodePolicyOwnership(result)) $('#nodePolicyStatus').textContent = result.reason;
     editor.data = null;
     await refreshAfterMutation();
   } catch (error) { if (nodePolicyEditor === editor && !editor.controller.signal.aborted) { $('#nodePolicyStatus').textContent = `${error.message} Закройте правило и откройте заново.`; editor.data = null; } }
-  finally { if (nodePolicyEditor === editor) { editor.busy = false; $('#nodePolicySave').disabled = true; $('#nodePolicySave').textContent = 'Откройте правило заново'; } }
+  finally { if (nodePolicyEditor === editor) { editor.busy = false; if (!renderNodePolicyOwnership(editor.view)) { $('#nodePolicySave').disabled = true; $('#nodePolicySave').textContent = 'Откройте правило заново'; } } }
 }
 
 function closeNodePolicy() {
