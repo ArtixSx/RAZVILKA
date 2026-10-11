@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
@@ -24,6 +25,8 @@ func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceI
 	}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
+	ctx, finishTimings := beginManagedNFQTimings(ctx)
+	defer func() { finishTimings("xray-review", resultErr) }()
 	stage := "admission"
 	// Runs after the original cleanup/unlock, but before this review's cancel.
 	// Only a real failed boundary may retain the actual caller/deadline cause.
@@ -169,4 +172,18 @@ func (a *App) managedXrayApplyHTTP(w http.ResponseWriter, r *http.Request, cfg c
 
 func writeManagedXrayRuntimeError(w http.ResponseWriter, status int, code string) {
 	writeJSON(w, status, map[string]any{"ok": false, "code": code, "error": "Проверка исходного Xray TCP пути не завершена. Проверьте журнал и состояние маршрута.", "service_health": "unverified"})
+}
+
+// The phase is an internal boundary label, never an error message or source
+// identity. This observation adds no timer, admission or runtime permission.
+func logManagedXrayPrepareFailure(phase string, elapsed time.Duration, err error) {
+	if err == nil {
+		return
+	}
+	switch phase {
+	case "input", "scope-acquire", "source-review", "source-prepare", "shape", "primary-review", "material-review", "plan-build", "closing-current":
+	default:
+		phase = "unclassified"
+	}
+	log.Printf("Managed Xray prepare refused substage=%s elapsed_ms=%d", phase, max(int64(0), min(elapsed.Milliseconds(), int64(120000))))
 }

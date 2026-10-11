@@ -49,7 +49,9 @@ func (a *App) ConfigureReviewedStockXraySelectedTCPList(ctx, panel context.Conte
 	return r, nil
 }
 
-func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, serviceID string, candidates ...*xrayAutonomyCandidate) (*DefaultRouteCompilation, error) {
+func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, serviceID string, candidates ...*xrayAutonomyCandidate) (compilation *DefaultRouteCompilation, resultErr error) {
+	phase, phaseStarted := "input", time.Now()
+	defer func() { logManagedXrayPrepareFailure(phase, time.Since(phaseStarted), resultErr) }()
 	r := e.runtime
 	var err error
 	if len(candidates) > 1 {
@@ -61,21 +63,26 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 		if candidate == nil || candidate.self != candidate || candidate.app != r.app {
 			return nil, ErrXrayListSource
 		}
+		phase, phaseStarted = "scope-acquire", time.Now()
 		e.scope, err = r.app.autonomyXrayScope(ctx)
 	} else {
+		phase, phaseStarted = "scope-acquire", time.Now()
 		e.scope, err = NewReviewedStockNC1812ListScopeBinding(ctx, r.app, r.policy.provider)
 	}
 	if err != nil {
 		return nil, err
 	}
+	phase, phaseStarted = "source-review", time.Now()
 	e.source, err = r.app.reviewXrayListRuntimeSource(ctx, e.scope, serviceID, r.adapter, candidate)
 	if err != nil {
 		return nil, err
 	}
+	phase, phaseStarted = "source-prepare", time.Now()
 	e.preparation, err = e.source.prepare(ctx, true)
 	if err != nil {
 		return nil, err
 	}
+	phase, phaseStarted = "shape", time.Now()
 	c := e.preparation.compilation
 	lan := c.LAN()
 	if lan == nil || len(lan.Ingress) != 1 || len(lan.Ingress[0].Sources) != 1 || e.scope.originalPhysicalObserver == nil || e.scope.originalPhysicalReview == nil {
@@ -120,16 +127,19 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 		}
 	}
 	e.listener = netip.AddrPortFrom(address, port)
+	phase, phaseStarted = "primary-review", time.Now()
 	e.primary, err = e.scope.originalPhysicalObserver.ReviewPrimaryIPv4(ctx, e.scope.originalPhysicalReview, lan.Ingress[0].Interface, address)
 	if err != nil {
 		return nil, err
 	}
 	spec := dataplane.XraySelectedTCPRedirectSpec{Schema: 1, Generation: c.Digest(), ServiceID: e.source.service, NodeID: e.source.node.Reference().NodeID,
 		LAN: lan, Destinations: slices.Clone(e.source.frozen.CIDRs), Ports: []dataplane.XraySelectedTCPPortRange{{First: 443, Last: 443}}, Listener: e.listener}
+	phase, phaseStarted = "material-review", time.Now()
 	e.material, err = dataplane.ReviewXrayOperationMaterial(ctx, r.manager, r.policy.control, r.adapter, e.preparation.proof, spec)
 	if err != nil {
 		return nil, err
 	}
+	phase, phaseStarted = "plan-build", time.Now()
 	plan, err := dataplane.BuildManagedXraySelectedTCPList(ctx, input, e.material, time.Now().UTC())
 	if err != nil || !plan.Ready {
 		return nil, errors.Join(ErrDefaultRouteCapability, err)
@@ -141,6 +151,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 	}
 	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
 	e.plan = defaultRouteClonePlan(plan)
+	phase, phaseStarted = "closing-current", time.Now()
 	return c, errors.Join(e.primary.Current(ctx), e.preparation.current(ctx))
 }
 
