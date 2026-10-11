@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -83,6 +84,7 @@ func xraySelectedStartupCause(err error) string {
 		code string
 	}{
 		{context.DeadlineExceeded, "deadline"}, {context.Canceled, "canceled"},
+		{dataplane.ErrWGOperationOwner, "wg_operation_owner"},
 		{operationgate.ErrJournalRecovery, "network_journal_recovery"},
 		{operationgate.ErrRecovery, "operation_recovery"}, {operationgate.ErrBusy, "operation_busy"},
 		{operationgate.ErrChanged, "operation_changed"},
@@ -106,6 +108,44 @@ func xraySelectedStartupCause(err error) string {
 		return "component_recovery"
 	}
 	return "unclassified_refusal"
+}
+
+func xraySelectedStartupStageLabel(stage string) string {
+	if slices.Contains([]string{
+		"constructor", "operation", "control", "network-identity", "startup-tools", "inventory-tools", "backend-inventory", "policy-tools",
+		"wg-tools", "wg-tools-identity", "wg-tools-observation", "wg-tools-bind-wireguard", "wg-tools-bind-amneziawg",
+		"policy-gate", "state-root", "register-policy", "consumer-checks", "dns-owner", "inactivity-sources",
+		"wg-inactivity-sources", "wg-inactivity-sources-wireguard", "wg-inactivity-sources-amneziawg", "wg-inactivity-binding",
+	}, stage) {
+		return stage
+	}
+	return "unclassified"
+}
+
+func xraySelectedStartupStage(err error) string {
+	return xraySelectedStartupStageLabel(app.ManagedListStartupFailureStage(err))
+}
+
+func xraySelectedStartupWGSourceStage(err error) string {
+	stage := dataplane.WGInactivityReadStage(err)
+	if slices.Contains([]string{
+		"none", "review-context", "review-lifetime", "review-input", "review-control", "review-adapter", "review-runner", "review-paths", "review-root", "review-source",
+		"owner", "context", "lifetime", "adapter-shape", "bound-tools", "identity", "registry", "root", "control-opening", "tools", "control-closing",
+	}, stage) {
+		return stage
+	}
+	return "unclassified"
+}
+
+func xraySelectedStartupWGToolsStage(err error) string {
+	stage := startuptools.WGStartupStage(err)
+	if slices.Contains([]string{
+		"none", "WG_STARTUP_CONTEXT", "WG_STARTUP_OWNER", "WG_STARTUP_OPEN_CURRENT", "WG_STARTUP_DESCRIPTORS", "WG_STARTUP_CLOSE_CURRENT", "WG_STARTUP_OBSERVATION",
+		"WG_INACTIVITY_UNISSUED", "WG_INACTIVITY_DEADLINE", "WG_INACTIVITY_LOCK", "WG_INACTIVITY_ABSENCE", "WG_INACTIVITY_CURRENT", "WG_INACTIVITY_SOURCE",
+	}, stage) {
+		return stage
+	}
+	return "unclassified"
 }
 
 func xraySelectedStartupInactiveStage(err error) string {
@@ -369,6 +409,10 @@ func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.
 		want string
 	}{
 		{nil, "none"}, {errors.Join(errors.New(secret), operationgate.ErrBusy), "operation_busy"},
+		{errors.Join(errors.New(secret), dataplane.ErrWGOperationOwner), "wg_operation_owner"},
+		{errors.Join(dataplane.ErrWGOperationOwner, context.DeadlineExceeded), "deadline"},
+		{errors.Join(dataplane.ErrWGOperationOwner, context.Canceled), "canceled"},
+		{errors.New(dataplane.ErrWGOperationOwner.Error()), "unclassified_refusal"},
 		{errors.Join(errors.New(secret), startuptools.ErrUnknown), "startup_tools"},
 		{errors.New("self update requires matching file/helper recovery"), "self_update_recovery"},
 		{errors.New("self update requires matching file/helper recovery: " + secret), "unclassified_refusal"},
@@ -403,6 +447,88 @@ func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.
 	}
 	if xraySelectedStartupBackendStage(errors.Join(wide...)) != "unclassified" {
 		t.Fatal("foreign nested errors escaped bounded diagnostic traversal")
+	}
+}
+
+type xraySelectedWGDiagnosticCycle struct{}
+
+func (*xraySelectedWGDiagnosticCycle) Error() string {
+	panic("WG diagnostic must not read foreign error text")
+}
+func (e *xraySelectedWGDiagnosticCycle) Unwrap() error { return e }
+
+func TestXraySelectedNativeWGStartupDiagnosticsKeepTypedStagesClosed(t *testing.T) {
+	marker := "vless://UUID:PRIVATE-KEY@private.invalid/" + strings.Repeat("PRIVATE", 6000)
+	_, sourceErr := dataplane.ReviewWGInactivityRead(nil, nil, nil, nil, dataplane.WGCommandTools{})
+	var lease *startuptools.Lease
+	_, contextErr := lease.ManagedListWGCommandTools(nil, netidentity.Identity{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, unissuedErr := lease.ReviewWGInactivity(ctx, nil, nil, "wireguard")
+	for _, test := range []struct {
+		err           error
+		source, tools string
+	}{
+		{nil, "none", "none"},
+		{sourceErr, "review-context", "unclassified"},
+		{contextErr, "unclassified", "WG_STARTUP_CONTEXT"},
+		{unissuedErr, "unclassified", "WG_INACTIVITY_UNISSUED"},
+		{errors.Join(contextErr, sourceErr), "review-context", "WG_STARTUP_CONTEXT"},
+	} {
+		err := test.err
+		if err != nil {
+			err = errors.Join(errors.New(marker), fmt.Errorf("private wrapper: %w", errors.Join(err, context.DeadlineExceeded)))
+		}
+		if xraySelectedStartupWGSourceStage(err) != test.source || xraySelectedStartupWGToolsStage(err) != test.tools {
+			t.Fatal("actual nested typed WG stage hidden or widened")
+		}
+		if test.err == nil {
+			continue
+		}
+		for _, text := range []string{test.err.Error(), test.err.Error() + marker, marker} {
+			spoof := errors.New(text)
+			if xraySelectedStartupWGSourceStage(spoof) != "unclassified" || xraySelectedStartupWGToolsStage(spoof) != "unclassified" {
+				t.Fatal("foreign WG diagnostic text escaped the typed projection")
+			}
+		}
+	}
+	cycle := &xraySelectedWGDiagnosticCycle{}
+	if xraySelectedStartupWGSourceStage(cycle) != "unclassified" || xraySelectedStartupWGToolsStage(cycle) != "unclassified" {
+		t.Fatal("cyclic foreign diagnostic escaped the bounded typed walk")
+	}
+	wide := make([]error, 128)
+	for i := range wide {
+		wide[i] = errors.New(marker)
+	}
+	wide[len(wide)-1] = sourceErr
+	if xraySelectedStartupWGSourceStage(errors.Join(wide...)) != "unclassified" {
+		t.Fatal("WG source diagnostic exceeded its bounded walk")
+	}
+	wide[len(wide)-1] = contextErr
+	if xraySelectedStartupWGToolsStage(errors.Join(wide...)) != "unclassified" {
+		t.Fatal("WG tool diagnostic exceeded its bounded walk")
+	}
+}
+
+func TestXraySelectedNativeStartupStagesRejectDynamicMarkers(t *testing.T) {
+	const marker = "vless://UUID:PRIVATE-KEY@private.invalid/"
+	for _, stage := range []string{
+		"constructor", "operation", "control", "network-identity", "startup-tools", "inventory-tools", "backend-inventory", "policy-tools",
+		"wg-tools", "wg-tools-identity", "wg-tools-observation", "wg-tools-bind-wireguard", "wg-tools-bind-amneziawg",
+		"policy-gate", "state-root", "register-policy", "consumer-checks", "dns-owner", "inactivity-sources",
+		"wg-inactivity-sources", "wg-inactivity-sources-wireguard", "wg-inactivity-sources-amneziawg", "wg-inactivity-binding",
+	} {
+		if xraySelectedStartupStageLabel(stage) != stage || xraySelectedStartupStageLabel(stage+marker) != "unclassified" {
+			t.Fatal("startup stage changed or dynamic marker escaped allowlist")
+		}
+	}
+	for _, stage := range []string{"", marker, "wg-tools-bind-foreign", "wg-inactivity-sources-foreign", "wg-inactivity-sources-wireguard " + marker} {
+		if xraySelectedStartupStageLabel(stage) != "unclassified" {
+			t.Fatal("unknown engine or startup stage escaped allowlist")
+		}
+	}
+	if xraySelectedStartupStage(nil) != "constructor" || xraySelectedStartupStage(errors.New(marker)) != "constructor" {
+		t.Fatal("foreign error manufactured a typed App startup stage")
 	}
 }
 
