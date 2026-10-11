@@ -35,7 +35,7 @@ func (a *SelfUpdateFileAdapter) verifyCurrentOrdinaryInstallerControllerRole(ctx
 	return a.verifyOrdinaryInstallerControllerGroup(ctx, id, os.Getpid(), true)
 }
 
-func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx context.Context, id string, pid int, current bool) error {
+func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx context.Context, id string, pid int, current bool) (result error) {
 	refuse := ordinaryInstallerRoleAt
 	if !productionOrdinaryRoleAdapter(a) {
 		return refuse("source", ErrFileProtocol)
@@ -86,23 +86,33 @@ func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx conte
 	if err != nil {
 		return refuse("join-opening", err)
 	}
-	helper, err := bootstrapControllerAt(ctx, identity.Process.PID)
+	image, err := newOrdinaryExecutableImage(ctx, review.OldExecutableSHA256)
+	if err != nil {
+		return refuse("helper-opening", err)
+	}
+	defer func() {
+		image.clear()
+		if err := ctx.Err(); result == nil && err != nil {
+			result = refuse("context-closing", err)
+		}
+	}()
+	helper, err := image.controllerAt(identity.Process.PID)
 	if err != nil || ordinaryControllerRole(review, record, identity, command, helper) != "ordinary-installer" {
 		return refuse("helper-opening", err)
 	}
-	supervisor, err := bootstrapControllerAt(ctx, command.Supervisor.PID)
+	supervisor, err := image.controllerAt(command.Supervisor.PID)
 	if err != nil || ordinaryControllerRole(review, record, identity, command, supervisor) != "quiesce-supervisor" {
 		return refuse("supervisor-opening", err)
 	}
 	facts := []bootstrapControllerFact{helper, supervisor}
 	if joined == nil {
-		child, err := bootstrapControllerAt(ctx, command.DirectPID)
+		child, err := image.controllerAt(command.DirectPID)
 		if err != nil || ordinaryControllerRole(review, record, identity, command, child) != "quiesce-child" {
 			return refuse("child-opening", err)
 		}
 		facts = append(facts, child)
 	}
-	caller, err := bootstrapControllerAt(ctx, os.Getpid())
+	caller, err := image.controllerAt(os.Getpid())
 	callerRole := ordinaryControllerRole(review, record, identity, command, caller)
 	if err != nil || callerRole == "" {
 		return refuse("caller-opening", err)
@@ -113,7 +123,7 @@ func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx conte
 			return refuse("caller-opening", ErrOrdinaryInstallerControllerRole)
 		}
 	} else {
-		peer, err := bootstrapControllerAt(ctx, pid)
+		peer, err := image.controllerAt(pid)
 		peerRole := ordinaryControllerRole(review, record, identity, command, peer)
 		if err != nil || !ordinaryControllerReadRole(peerRole, pid, caller.Process.PID, joined != nil, false) {
 			return refuse("peer-opening", err)
@@ -135,7 +145,7 @@ func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx conte
 		return refuse("control-closing", err)
 	}
 	for _, fact := range facts {
-		after, err := bootstrapControllerAt(ctx, fact.Process.PID)
+		after, err := image.controllerAt(fact.Process.PID)
 		if err != nil || !reflect.DeepEqual(after, fact) {
 			return refuse("facts-closing", err)
 		}
