@@ -148,9 +148,19 @@ func selfUpdateRuntimeInactive(ctx context.Context, id string) (result error) {
 		return err
 	}
 	defer func() { result = errors.Join(result, closeRuntimeSource()) }()
-	adapter, ok := nativeSelfUpdateFileAdapter().(*updatecheck.SelfUpdateFileAdapter)
-	if !ok || bindSelfUpdateInstallerRoles(ctx, manager, adapter, id) != nil {
-		return dataplane.ErrRuntimeInactivity
+	adapter, err := updatecheck.OriginalOrdinaryInstallerControllerAdapter(ctx, id)
+	if err != nil {
+		return errors.Join(dataplane.ErrRuntimeInactivity, err)
+	}
+	if adapter == nil {
+		var ok bool
+		adapter, ok = nativeSelfUpdateFileAdapter().(*updatecheck.SelfUpdateFileAdapter)
+		if !ok {
+			return dataplane.ErrRuntimeInactivity
+		}
+	}
+	if err := bindSelfUpdateInstallerRoles(ctx, manager, adapter, id); err != nil {
+		return errors.Join(dataplane.ErrRuntimeInactivity, err)
 	}
 	if err := verifySelfUpdateRuntimeInactive(ctx, manager); err != nil {
 		return err
