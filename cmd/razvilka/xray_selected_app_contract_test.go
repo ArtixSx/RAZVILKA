@@ -33,6 +33,16 @@ const xraySelectedQAID = "custom-qa-xray-selected-tcp"
 const xraySelectedTelegramDC2 = "149.154.167.51/32"
 const xraySelectedMaxResponse = 1 << 20
 
+func xraySelectedTCPIntent(cfg config.Config, serviceID, nodeID string) config.ServicePolicy {
+	// This settings endpoint retains the actual applied device boundary. The
+	// selected /32 draft is authorized separately by network policy and Apply.
+	permission := config.DefaultServicePolicy(serviceID, cfg.AppliedServices[serviceID])
+	permission.Enabled, permission.Mode, permission.PinnedNodeID = true, "manual", nodeID
+	permission.AllowedEngines, permission.AllowedNodeIDs = []string{"xray"}, []string{nodeID}
+	permission.Scenario = config.ServiceScenario{Kind: "web", RequireUDP: false, RequireIPv6: false}
+	return permission
+}
+
 func xraySelectedCatalogAllowsNewQA(c catalog.Catalog) bool {
 	return !slices.ContainsFunc(c.Services, func(service catalog.Service) bool { return service.ID == xraySelectedQAID })
 }
@@ -307,6 +317,7 @@ func xraySelectedRefusal(data []byte) string {
 		"NETWORK_POLICY_EXECUTOR_REQUIRED", "NETWORK_POLICY_CONSENT_UNAVAILABLE", "NETWORK_POLICY_PROFILE_OWNER_REQUIRED", "NETWORK_POLICY_SOURCE_UNKNOWN",
 		"NETWORK_POLICY_LIST_REQUIRED", "APPLY_REVIEW_CHANGED", "ROUTE_UNAVAILABLE", "SERVICE_RUNTIME_CHANGED", "SERVICE_RUNTIME_CHECK_REQUIRED",
 		"SERVICE_RUNTIME_SAFE_MODE", "SERVICE_RUNTIME_UNAVAILABLE", "SERVICE_RUNTIME_UNCONFIGURED", "SERVICE_CONTROL_CHANGED",
+		"SERVICE_POLICY_INVALID", "SERVICE_POLICY_CHANGED",
 		"node-service-ip-path-failed", "node-service-ip-unavailable", "node-service-probe-failed", "node-cleanup-failed", "node-check-deadline",
 	} {
 		if bytes.Contains(data, []byte(code)) {
@@ -399,6 +410,88 @@ func TestXraySelectedNativeCustomDefinitionUsesOriginalStoreClone(t *testing.T) 
 	changed.Probes[0].Expect.StatusCodes[0] = 204
 	if _, err := custom.Update(changed.ID, changed); err != nil || reflect.DeepEqual(custom.List(), original) || original[0].Probes[0].Expect.StatusCodes[0] != 200 {
 		t.Fatal("actual definition mutation escaped the independent original clone")
+	}
+}
+
+func TestXraySelectedNativeTCPIntentUsesActualAppliedScopeWithoutAutoEnrollment(t *testing.T) {
+	for _, priorApplied := range []bool{false, true} {
+		name := "first-unused-service"
+		if priorApplied {
+			name = "previously-applied-direct-scope"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+			if err != nil {
+				t.Fatal("actual config fixture unavailable")
+			}
+			service := xraySelectedQAService(netip.MustParseAddr("149.154.167.99"))
+			// Model a previous DIRECT configuration through the real Store API.
+			// No dataplane process, owned route or native Apply is manufactured.
+			if priorApplied {
+				if err := store.UpdateService(service.ID, config.ServiceState{Enabled: true, Route: "direct", Sources: []string{"192.168.1.41/32"}}); err != nil {
+					t.Fatal("prior direct draft unavailable")
+				}
+				if err := store.ApplyDraft(); err != nil {
+					t.Fatal("prior direct configuration commit unavailable")
+				}
+			}
+			nodeID := "node-" + strings.Repeat("a", 64) // Reference only; settings grant no node health.
+			if err := store.UpdateService(service.ID, config.ServiceState{Enabled: true, Route: "xray:" + nodeID, Sources: []string{"192.168.1.40/32"}}); err != nil {
+				t.Fatal("desired selected draft unavailable")
+			}
+			mode := "manual"
+			if err := store.UpdateServiceControl(&mode, nil, store.Get().Revision); err != nil {
+				t.Fatal("manual control intent unavailable")
+			}
+			a := &app.App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{service}}}
+			handler := a.Handler(http.NotFoundHandler())
+			before := store.Get()
+			put := func(permission config.ServicePolicy) *httptest.ResponseRecorder {
+				t.Helper()
+				data, err := json.Marshal(map[string]any{"config_revision": before.Revision, "expected_revision": 0, "policy": permission, "confirm": "SAVE_SERVICE_POLICY"})
+				if err != nil {
+					t.Fatal("bounded policy request unavailable")
+				}
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/service-policies/"+service.ID, bytes.NewReader(data)))
+				return response
+			}
+			wrong := xraySelectedTCPIntent(before, service.ID, nodeID)
+			wrong.DeviceSources = slices.Clone(before.Services[service.ID].Sources)
+			refused := put(wrong)
+			var refusal struct {
+				Code string `json:"code"`
+			}
+			if refused.Code != http.StatusBadRequest || json.Unmarshal(refused.Body.Bytes(), &refusal) != nil || refusal.Code != "SERVICE_POLICY_INVALID" ||
+				xraySelectedRefusal(refused.Body.Bytes()) != "SERVICE_POLICY_INVALID" || !reflect.DeepEqual(store.Get(), before) {
+				t.Fatal("draft scope was accepted or actual applied-scope refusal changed")
+			}
+			permission := xraySelectedTCPIntent(before, service.ID, nodeID)
+			accepted := put(permission)
+			var result struct {
+				OK          bool                 `json:"ok"`
+				LiveApplied bool                 `json:"live_applied"`
+				Policy      config.ServicePolicy `json:"policy"`
+			}
+			if accepted.Code != http.StatusOK || json.Unmarshal(accepted.Body.Bytes(), &result) != nil || !result.OK || result.LiveApplied {
+				t.Fatalf("actual applied-scope manual policy refused: status=%d", accepted.Code)
+			}
+			after := store.Get()
+			p := after.ServicePolicies[service.ID]
+			if p.Revision != 1 || after.Revision != before.Revision+1 || p.Mode != "manual" || !p.Enabled || p.PinFallback || p.LegacyOptIn || p.GroupID != "" ||
+				p.PinnedNodeID != nodeID || !slices.Equal(p.AllowedNodeIDs, []string{nodeID}) || !slices.Equal(p.AllowedEngines, []string{"xray"}) ||
+				p.Scenario != (config.ServiceScenario{Kind: "web"}) || !reflect.DeepEqual(p.DeviceSources, before.AppliedServices[service.ID].Sources) ||
+				!reflect.DeepEqual(before.Services, after.Services) || !reflect.DeepEqual(before.AppliedServices, after.AppliedServices) ||
+				before.AppliedRevision != after.AppliedRevision || !reflect.DeepEqual(before.ServiceControl, after.ServiceControl) ||
+				!reflect.DeepEqual(before.NetworkPolicy, after.NetworkPolicy) || !reflect.DeepEqual(before.DefaultRouteConsent, after.DefaultRouteConsent) {
+				t.Fatal("manual TCP/IPv4 intent changed scope, applied state or automatic enrollment")
+			}
+			stale := put(permission)
+			if stale.Code != http.StatusConflict || json.Unmarshal(stale.Body.Bytes(), &refusal) != nil || refusal.Code != "SERVICE_POLICY_CHANGED" ||
+				xraySelectedRefusal(stale.Body.Bytes()) != "SERVICE_POLICY_CHANGED" || !reflect.DeepEqual(store.Get(), after) {
+				t.Fatal("service policy revision fence was bypassed")
+			}
+		})
 	}
 }
 

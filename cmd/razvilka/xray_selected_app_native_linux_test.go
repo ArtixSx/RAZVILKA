@@ -340,10 +340,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("selected_node_route", "PUT", "/api/v1/services/"+service.ID,
 		map[string]any{"enabled": true, "route": route, "sources": []string{in.Client.String() + "/32"}, "expected_revision": store.Get().Revision}, 200, nil)
 	call("actual_device_discovery", "GET", "/api/v1/devices?view=status", nil, 200, nil)
-	permission := config.DefaultServicePolicy(service.ID, store.Get().Services[service.ID])
-	permission.Enabled, permission.Mode, permission.PinnedNodeID = true, "manual", id
-	permission.AllowedEngines, permission.AllowedNodeIDs = []string{"xray"}, []string{id}
-	permission.Scenario = config.ServiceScenario{Kind: "web", RequireUDP: false, RequireIPv6: false}
+	permission := xraySelectedTCPIntent(store.Get(), service.ID, id)
 	call("tcp_ipv4_intent", "PUT", "/api/v1/service-policies/"+service.ID,
 		map[string]any{"config_revision": store.Get().Revision, "expected_revision": 0, "policy": permission, "confirm": "SAVE_SERVICE_POLICY"}, 200, nil)
 	grant := config.DefaultRouteGrant{Resolved: route, ProviderClass: "node", ProviderID: id, SourceIDs: []string{"manual"}, SourceKinds: []string{"manual"}, Protocols: []string{"vless"}}
