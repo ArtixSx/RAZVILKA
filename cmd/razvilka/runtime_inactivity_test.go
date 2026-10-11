@@ -84,6 +84,33 @@ func TestSelfUpdateRuntimeSourceFailureKeepsCausesPrivateAndCleanupVisible(t *te
 	}
 }
 
+func TestSelfUpdateRuntimeBindDiagnosticReadsOnlyOriginalClosedConstructorCause(t *testing.T) {
+	// This actual public constructor refusal happens before opening any source.
+	// Its private typed branch survives wrappers without inspecting Error text.
+	_, refused := dataplane.NewNFQWSRuntimeInactiveSource(context.Background(), nil, nil)
+	if refused == nil {
+		t.Fatal("unbounded missing source did not refuse")
+	}
+	err := selfUpdateRuntimeSourceFailed("inactivity-owner-bind", fmt.Errorf("private-path-token: %w", refused))
+	if selfUpdateRuntimeManagerFailureStage(err) != "inactivity-owner-bind-nfq-source" || strings.Contains(err.Error(), "private-path-token") || !errors.Is(err, refused) {
+		t.Fatal("actual typed NFQ cause lost or raw text disclosed")
+	}
+	joined := selfUpdateRuntimeSourceFailed("inactivity-owner-bind", errors.Join(refused, errSelfUpdateRuntimeSourceClose))
+	if selfUpdateRuntimeManagerFailureStage(joined) != "inactivity-owner-bind-nfq-source-source-close" {
+		t.Fatal("source refusal and cleanup failure were not preserved together")
+	}
+	for _, stage := range []string{"source", "platform", "coordinates", "identity", "inventory", "closure"} {
+		if selfUpdateRuntimeBindFailureStage(stage) != "inactivity-owner-bind-nfq-"+stage {
+			t.Fatal("closed constructor stage was lost")
+		}
+	}
+	for _, unknown := range []string{"", "private-path-token", "inventory.source", "processes", "inventory\nprivate"} {
+		if selfUpdateRuntimeBindFailureStage(unknown) != "inactivity-owner-bind" {
+			t.Fatal("unrelated raw data became a constructor diagnosis")
+		}
+	}
+}
+
 func TestSelfUpdateRuntimeQuiesceJoinsOnRefusalAndUsesOneFinalStage(t *testing.T) {
 	for _, tc := range []struct {
 		primary, want string

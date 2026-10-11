@@ -59,13 +59,28 @@ func selfUpdateRuntimeManagerFailureStage(err error) string {
 	if errors.As(err, &failure) {
 		switch failure.stage {
 		case "manager-context", "manager-platform", "manager-registry", "network-provider", "tools-acquire", "tools-inventory", "backend-inventory", "inactivity-owner-bind":
-			if errors.Is(err, errSelfUpdateRuntimeSourceClose) {
-				return updatecheck.RuntimeQuiesceSourceCleanupFailureStage(failure.stage)
+			stage := failure.stage
+			if stage == "inactivity-owner-bind" {
+				stage = selfUpdateRuntimeBindFailureStage(dataplane.NFQWSRuntimeInactiveStage(err))
 			}
-			return failure.stage
+			if errors.Is(err, errSelfUpdateRuntimeSourceClose) {
+				return updatecheck.RuntimeQuiesceSourceCleanupFailureStage(stage)
+			}
+			return stage
 		}
 	}
 	return "manager-construction"
+}
+
+// Only the actual original constructor error supplies this private branch.
+// Unknown branches retain the broad refusal; no Error text or new read is used.
+func selfUpdateRuntimeBindFailureStage(nfqStage string) string {
+	switch nfqStage {
+	case "source", "platform", "coordinates", "identity", "inventory", "closure":
+		return "inactivity-owner-bind-nfq-" + nfqStage
+	default:
+		return "inactivity-owner-bind"
+	}
 }
 
 var errSelfUpdateRuntimeSourceClose = errors.New("runtime source closure failed")

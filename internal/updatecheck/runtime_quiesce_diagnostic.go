@@ -17,7 +17,8 @@ var runtimeQuiesceFailureStages = runtimeQuiesceClosedFailureStages()
 
 func runtimeQuiesceClosedFailureStages() []string {
 	stages := append([]string{"entry", "provider", "authority-opening", "independent-opening", "manager-construction", "installer-role-binding", "deactivate", "runtime-inactivity", "authority-closing", "independent-closing",
-		"manager-context", "manager-platform", "manager-registry", "network-provider", "tools-acquire", "tools-inventory", "backend-inventory", "inactivity-owner-bind"}, runtimeQuiesceInactiveFailureStages()...)
+		"manager-context", "manager-platform", "manager-registry", "network-provider", "tools-acquire", "tools-inventory", "backend-inventory", "inactivity-owner-bind",
+		"inactivity-owner-bind-nfq-source", "inactivity-owner-bind-nfq-platform", "inactivity-owner-bind-nfq-coordinates", "inactivity-owner-bind-nfq-identity", "inactivity-owner-bind-nfq-inventory", "inactivity-owner-bind-nfq-closure"}, runtimeQuiesceInactiveFailureStages()...)
 	// Preserve an actual primary refusal together with a joined source-close
 	// failure, within one exact diagnostic line. Neither is effect authority.
 	for _, stage := range append([]string(nil), stages...) {
