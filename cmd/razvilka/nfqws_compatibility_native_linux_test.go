@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
@@ -29,6 +32,9 @@ import (
 // production early CLI dispatch. No provider test prefix or asset approval is
 // introduced; all other invocations use the ordinary Go test runner.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "-node-history-read-version" {
+		os.Exit(mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots()))
+	}
 	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
 		os.Exit(code)
 	}
@@ -40,6 +46,19 @@ func TestMain(m *testing.M) {
 		os.Exit(code)
 	}
 	os.Exit(m.Run())
+}
+
+func TestNativeTestBinaryNodeHistoryMetadataDispatch(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal("actual test executable unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, self, "-node-history-read-version").Output()
+	if err != nil || ctx.Err() != nil || len(output) > 32 || string(output) != strconv.Itoa(nodestore.ExactHistoryReadVersion)+"\n" {
+		t.Fatal("actual test binary did not dispatch the production node history metadata reader")
+	}
 }
 
 // Root opts in only with an existing genuine installer-produced Components
