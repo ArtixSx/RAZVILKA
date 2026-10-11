@@ -307,7 +307,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("private_import", "POST", "/api/v1/nodes/import", map[string]any{"profile": string(profile), "engine": "xray", "confirm": "STORE_REMOTE_NODES"}, 200, nil)
 	clear(profile)
 	before, err := nodes.Snapshot(ctx, time.Now())
-	if err != nil || len(before.Nodes) != 1 || before.Nodes[0].Protocol != "vless" || len(before.Nodes[0].Health.History) != 0 {
+	if err != nil || len(before.Nodes) != 1 || before.Nodes[0].Protocol != "VLESS" || len(before.Nodes[0].Health.History) != 0 {
 		t.Fatal("stage=private_import code=fresh_single_node_without_history_required")
 	}
 	id, route := before.Nodes[0].ID, "xray:"+before.Nodes[0].ID
