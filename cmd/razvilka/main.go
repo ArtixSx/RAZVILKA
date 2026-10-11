@@ -700,11 +700,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	managedNFQLifetime, cancelManagedNFQLifetime := context.WithCancel(context.Background())
 	managedNFQList, managedNFQListErr := configureManagedNFQList(managedNFQLifetime, a)
 	if managedNFQListErr != nil {
-		log.Print("Managed NFQ list startup owner is unavailable; scoped activation remains closed")
+		log.Printf("Managed NFQ list startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedNFQListErr))
 	}
 	managedXrayList, managedXrayListErr := configureManagedXraySelectedTCPList(managedNFQLifetime, a)
 	if managedXrayListErr != nil {
-		log.Print("Selected Xray TCP startup owner is unavailable; scoped activation remains closed")
+		log.Printf("Selected Xray TCP startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedXrayListErr))
 	}
 	managedNFQCloseAttempted := false
 	closeManagedNFQList := func(ctx context.Context) error {
@@ -722,6 +722,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 				log.Print("Managed NFQ retirement remains unconfirmed; original tools and cleanup owner were not released")
 				return err
 			}
+		}
+		if err := a.CloseManagedListStartup(ctx); err != nil {
+			return err
 		}
 		managedNFQCloseAttempted = true
 		cancelManagedNFQLifetime()

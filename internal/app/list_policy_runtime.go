@@ -33,20 +33,37 @@ type managedListPolicyOwner struct {
 	nfqClosed, xrayClosed bool
 	closed                atomic.Bool
 	closeErr              error // guarded by mu; repeated release preserves a failed join
+	startupReady          bool
+	startupFailure        error
 }
 
-func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (*managedListPolicyOwner, error) {
+func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (result *managedListPolicyOwner, resultErr error) {
 	if a == nil || a.Dataplane == nil || a.Store == nil || a.Components == nil || a.StrategyLab == nil || a.SelfUpdateFiles == nil || ctx == nil || panel == nil || panel.Err() != nil {
 		return nil, dataplane.ErrNetworkPolicyAuthority
 	}
 	a.managedListPolicyMu.Lock()
 	defer a.managedListPolicyMu.Unlock()
 	if p := a.managedListPolicy; p != nil {
+		if p.startupFailure != nil {
+			return nil, p.startupFailure
+		}
 		if !p.original() || p.closed.Load() || p.panel != panel {
 			return nil, dataplane.ErrNetworkPolicyAuthority
 		}
 		return p, nil
 	}
+	p := &managedListPolicyOwner{app: a, manager: a.Dataplane, panel: panel}
+	p.self = p
+	a.managedListPolicy = p // Retain the actual attempt before its first owned handle.
+	stage := "operation"
+	defer func() {
+		if resultErr != nil {
+			p.startupFailure = &managedListStartupFailure{stage: stage, cause: resultErr}
+			resultErr = errors.Join(p.startupFailure, p.closeStartupResources())
+		} else {
+			p.startupReady = true
+		}
+	}()
 	c, release, err := a.privateExclusiveOperation(ctx)
 	if err != nil {
 		return nil, err
@@ -55,39 +72,41 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (*man
 	if _, finite := c.Deadline(); !finite {
 		return nil, dataplane.ErrNetworkPolicyAuthority
 	}
+	stage = "control"
 	control, err := a.managedNFQControl(c)
 	if err != nil {
 		return nil, err
 	}
 	defer a.closeUnretainedManagedNFQControl(control)
+	p.control = control
+	stage = "network-identity"
 	provider, err := netidentity.NewReviewedStockNC1812Provider(c)
 	if err != nil {
 		return nil, err
 	}
+	p.provider = provider
+	stage = "startup-tools"
 	tools, err := startuptools.AcquireReviewedStockNC1812Policy(panel, provider)
 	if err != nil {
 		return nil, err
 	}
-	keep := false
-	defer func() {
-		if !keep {
-			_ = tools.Close()
-		}
-	}()
+	p.tools = tools
+	stage = "inventory-tools"
 	descriptor, err := tools.InventoryTools()
 	if err != nil {
 		return nil, err
 	}
+	stage = "backend-inventory"
 	inventory, err := dataplane.NewReviewedStockNC1812BackendInventory(provider, descriptor)
 	if err != nil {
 		return nil, err
 	}
+	p.inventory = inventory
+	stage = "policy-tools"
 	policyTools, runner, err := tools.PolicyRuntimeTools()
 	if err != nil {
 		return nil, err
 	}
-	p := &managedListPolicyOwner{app: a, manager: a.Dataplane, panel: panel, provider: provider, tools: tools, inventory: inventory, control: control}
-	p.self = p
 	lan := &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: p.scopeCheck,
 		ConsumerCheck: func(c context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
 			if p.checks == nil {
@@ -102,6 +121,7 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (*man
 			}
 			return p.checks.RetireCheck(c, plan)
 		}}
+	stage = "policy-gate"
 	p.gate, err = dataplane.NewNetworkPolicyAdapter(c, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyManagedListDirectMode, Provider: provider, Binding: binding,
 		InventoryCheck: func(c context.Context, identity netidentity.Identity, plan *dataplane.LANPolicyRuntimePlan) error {
 			if p.checks == nil {
@@ -112,29 +132,30 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (*man
 	if err != nil {
 		return nil, err
 	}
+	stage = "state-root"
 	if err := os.MkdirAll(p.manager.StateRoot, 0700); err != nil {
 		return nil, err
 	}
+	stage = "register-policy"
 	if err := p.manager.Register(p.gate); err != nil {
 		return nil, err
 	}
 	// A registered participant cannot be silently replaced after a failed bind.
 	a.managedListPolicy = p
+	stage = "consumer-checks"
 	p.checks, err = p.manager.BindNetworkPolicyChecks(p.gate, inventory)
 	if err != nil {
-		p.closed.Store(true)
 		return nil, err
 	}
+	stage = "dns-owner"
 	if a.DNS == nil {
-		p.closed.Store(true)
 		return nil, dataplane.ErrRuntimeInactivity
 	}
+	stage = "inactivity-sources"
 	if err := p.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path); err != nil {
-		p.closed.Store(true)
 		return nil, err
 	}
 	a.retainManagedNFQControl(control)
-	keep = true
 	return p, nil
 }
 
