@@ -13,7 +13,10 @@ import (
 // Writer-only regression: real atomic publication and held inodes, without
 // issuing a terminal, native retirement or a runtime admission capability.
 func TestXrayStoppedPlanWriterRejectsSameBytesReplacementWithoutAdoption(t *testing.T) {
-	path := t.TempDir()
+	path := filepath.Join(t.TempDir(), "manager")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
 	root, anchor, err := openNetworkPolicyObservationRoot(path)
 	if err != nil {
 		t.Fatal(err)
