@@ -218,7 +218,7 @@ func (a *App) runMaintenanceCheck(ctx context.Context, name string, w autonomy.W
 	if check.Err() != nil || result.State == "check-failed" {
 		return false, false, "Проверка версии не завершена."
 	}
-	return true, false, "Версия проверена. Автоматическая установка пока закрыта."
+	return true, false, "Версия проверена. В этом окне выбран режим проверки; установка не запускается."
 }
 
 // autoInstallFailed blocks replay of an attempted version while another
