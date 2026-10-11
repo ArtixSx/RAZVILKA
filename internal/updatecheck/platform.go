@@ -173,9 +173,10 @@ func preflightInstaller(ctx context.Context, bundle string, release Release) err
 	configureBoundedCommand(command)
 	command.Env = commandEnvironment()
 	command.Stdout = io.Discard
-	command.Stderr = io.Discard
+	errorOutput := &cappedOutput{maximum: 8192}
+	command.Stderr = errorOutput
 	if err := runBoundedCommand(command); err != nil {
-		return errors.New("installer-preflight-refused")
+		return errors.New(installerPreflightFailureCode(errorOutput.String()))
 	}
 	return checkCtx.Err()
 }
