@@ -36,3 +36,34 @@ func TestXrayDomainTCPListenerKeepsLoopbackPredicateSeparate(t *testing.T) {
 		t.Fatal("missing original listener supplied presence", err)
 	}
 }
+
+func TestXrayDomainTCPListenerAbsenceKeepsLoopbackPredicateSeparate(t *testing.T) {
+	endpoint := netip.MustParseAddrPort("127.0.0.1:16444")
+	if err := xrayDomainTCPListenerAbsent(nil, nil, endpoint); err != nil {
+		t.Fatal("empty complete-table comparison failed", err)
+	}
+	if err := xraySelectedTCPListenerAbsent(nil, nil, endpoint); err == nil {
+		t.Fatal("domain absence widened literal LAN endpoint admission")
+	}
+	for _, conflict := range []xraySelectedTCPSocketRow{
+		{local: endpoint, state: 10, inode: 91},
+		{local: netip.MustParseAddrPort("0.0.0.0:16444"), state: 10, inode: 92},
+		{local: netip.MustParseAddrPort("[::]:16444"), state: 10, inode: 92},
+		{local: netip.MustParseAddrPort("[::ffff:127.0.0.1]:16444"), state: 10, inode: 92},
+	} {
+		v4, v6 := []xraySelectedTCPSocketRow(nil), []xraySelectedTCPSocketRow(nil)
+		if conflict.local.Addr().Is4() {
+			v4 = append(v4, conflict)
+		} else {
+			v6 = append(v6, conflict)
+		}
+		if err := xrayDomainTCPListenerAbsent(v4, v6, endpoint); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+			t.Fatal("present or overlapping listener supplied absence", err)
+		}
+	}
+	for _, invalid := range []netip.AddrPort{netip.MustParseAddrPort("0.0.0.0:16444"), netip.MustParseAddrPort("127.0.0.1:8787")} {
+		if err := xrayDomainTCPListenerAbsent(nil, nil, invalid); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+			t.Fatal("another endpoint supplied private domain absence", err)
+		}
+	}
+}
