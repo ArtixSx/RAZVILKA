@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"net/url"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
@@ -20,7 +21,7 @@ var errAutonomyResourceIneligible = errors.New("automatic resource observation i
 // The original round owner precedes Store admission; the callback uses only
 // detached inputs and never calls Store, Gate, or a provider.
 func (a *App) autonomyResourceGuard(ctx context.Context, p autonomy.Policy, s autonomy.Service, cfg config.Config, service catalog.Service) error {
-	if a.Store == nil || !a.autonomyConsent(p, s) {
+	if ctx == nil || a.Store == nil || !a.autonomyConsent(p, s) {
 		return dataplane.ErrReviewChanged
 	}
 	current, known := a.autonomyService(s.ID)
@@ -28,19 +29,39 @@ func (a *App) autonomyResourceGuard(ctx context.Context, p autonomy.Policy, s au
 		return dataplane.ErrReviewChanged
 	}
 	store := a.Store
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	return a.Operations.WithExclusiveContext(ctx, func() error {
-		if a.Store != store {
-			return dataplane.ErrReviewChanged
-		}
-		return store.WithResourceExclusionObservation(ctx, cfg, func(set config.EffectiveExclusionSet) error {
-			return autonomyResourceEligibility(ctx, cfg, s, service, set)
+	leaf := func(ctx context.Context, devices []string) error {
+		ctx, cancel := context.WithTimeout(ctx, time.Second)
+		defer cancel()
+		return a.Operations.WithExclusiveContext(ctx, func() error {
+			if a.Store != store {
+				return dataplane.ErrReviewChanged
+			}
+			return store.WithResourceExclusionObservation(ctx, cfg, func(set config.EffectiveExclusionSet) error {
+				return autonomyResourceEligibilityForDevices(ctx, cfg, s, service, set, devices)
+			})
 		})
-	})
+	}
+	// An original selected-device round remains bound to that owner even when
+	// a fresh Store image changes mode. Dispatching from the new mode would
+	// bypass the original intent and physical continuity checks.
+	if carrier := ctx.Value(autonomyDeviceScopeKey{}); carrier != nil {
+		d, ok := carrier.(*autonomyDeviceScope)
+		if !ok || d == nil || d.app != a || d.store != store {
+			return errAutonomyResourceIneligible
+		}
+		return d.use(ctx, cfg, s, leaf)
+	}
+	if cfg.NetworkPolicy != nil && cfg.NetworkPolicy.Clients.Mode == "selected_devices" {
+		return errAutonomyResourceIneligible
+	}
+	return leaf(ctx, nil)
 }
 
 func autonomyResourceEligibility(ctx context.Context, cfg config.Config, s autonomy.Service, service catalog.Service, set config.EffectiveExclusionSet) error {
+	return autonomyResourceEligibilityForDevices(ctx, cfg, s, service, set, nil)
+}
+
+func autonomyResourceEligibilityForDevices(ctx context.Context, cfg config.Config, s autonomy.Service, service catalog.Service, set config.EffectiveExclusionSet, devices []string) error {
 	// Bound the work performed inside the Store observation. Larger definitions
 	// require review rather than extending a closed leaf into unbounded work.
 	if len(service.Domains)+len(service.Probes)+len(service.CIDRs) > 256 {
@@ -56,9 +77,18 @@ func autonomyResourceEligibility(ctx context.Context, cfg config.Config, s auton
 	if err != nil {
 		return errAutonomyResourceIneligible
 	}
-	// These observations have no actual device-identity witness. Never invent
-	// one from a CIDR or silently waive a configured device exclusion.
-	if set.Clients.Mode == "selected_devices" || len(set.Clients.ExcludedDeviceIDs) != 0 {
+	// Only the original round's observed device cohort supplies these IDs.
+	// The legacy path still refuses missing identities and device exclusions.
+	if set.Clients.Mode == "selected_devices" {
+		if len(devices) == 0 || len(devices) > 128 {
+			return errAutonomyResourceIneligible
+		}
+		for _, id := range devices {
+			if !slices.Contains(set.Clients.DeviceIDs, id) || slices.Contains(set.Clients.ExcludedDeviceIDs, id) {
+				return errAutonomyResourceIneligible
+			}
+		}
+	} else if len(devices) != 0 || len(set.Clients.ExcludedDeviceIDs) != 0 {
 		return errAutonomyResourceIneligible
 	}
 	for _, excluded := range set.Clients.ExcludedCIDRs {
@@ -77,12 +107,19 @@ func autonomyResourceEligibility(ctx context.Context, cfg config.Config, s auton
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		excluded, err := set.Matches(target)
-		if err != nil {
-			return err
+		ids := devices
+		if len(ids) == 0 {
+			ids = []string{""}
 		}
-		if excluded {
-			return errAutonomyResourceIneligible
+		for _, id := range ids {
+			target.DeviceID = id
+			excluded, err := set.Matches(target)
+			if err != nil {
+				return err
+			}
+			if excluded {
+				return errAutonomyResourceIneligible
+			}
 		}
 		return nil
 	}
@@ -144,6 +181,9 @@ func autonomyResourceEligibility(ctx context.Context, cfg config.Config, s auton
 			}
 		}
 		for _, negative := range set.LegacyRules {
+			if len(devices) != 0 && len(negative.DeviceIDs) != 0 && !slices.ContainsFunc(devices, func(id string) bool { return slices.Contains(negative.DeviceIDs, id) }) {
+				continue
+			}
 			if err := appendPrefix(negative.Kind, negative.Value); err != nil {
 				return err
 			}

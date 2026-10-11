@@ -120,6 +120,27 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if chosen == "" {
 		return
 	}
+	// Retain one original selected-device Review through checks, ordinary
+	// route publication and passive refill. No later guard can reopen it.
+	if !spec.Removing && cfg.NetworkPolicy != nil && cfg.NetworkPolicy.Clients.Mode == "selected_devices" {
+		window, cancelWindow := context.WithTimeout(ctx, defaultDataplaneApplyTimeout)
+		defer cancelWindow()
+		owned, closeDevices, err := a.autonomyDeviceContext(window, cfg)
+		if err != nil {
+			state.State, state.Message = "paused", "Выбранные устройства или их исходная область не подтверждены. Маршрут не меняется."
+			state.NextCheck = now.Add(time.Duration(p.CheckSeconds) * time.Second)
+			a.autonomyRuntime(chosen, state)
+			return
+		}
+		ctx = owned
+		defer func() {
+			if err := closeDevices(); err != nil {
+				a.Operations.FenceJournal()
+				state.State, state.Message = "paused", "Не удалось завершить наблюдение устройств. Автоматические действия остановлены."
+				a.autonomyRuntime(chosen, state)
+			}
+		}()
+	}
 	state.NextCheck = now.Add(time.Duration(p.CheckSeconds) * time.Second)
 	state.State = "checking"
 	state.Message = "Проверяем точный путь сервиса."
