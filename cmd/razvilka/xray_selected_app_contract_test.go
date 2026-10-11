@@ -318,6 +318,7 @@ func xraySelectedRefusal(data []byte) string {
 		"NETWORK_POLICY_LIST_REQUIRED", "APPLY_REVIEW_CHANGED", "ROUTE_UNAVAILABLE", "SERVICE_RUNTIME_CHANGED", "SERVICE_RUNTIME_CHECK_REQUIRED",
 		"SERVICE_RUNTIME_SAFE_MODE", "SERVICE_RUNTIME_UNAVAILABLE", "SERVICE_RUNTIME_UNCONFIGURED", "SERVICE_CONTROL_CHANGED",
 		"SERVICE_POLICY_INVALID", "SERVICE_POLICY_CHANGED",
+		"NETWORK_POLICY_REVIEW_CHANGED", "NETWORK_POLICY_EXCLUSIONS_SEPARATE", "RESTORE_OPERATION_BUSY", "OPERATION_CANCELED",
 		"node-service-ip-path-failed", "node-service-ip-unavailable", "node-service-probe-failed", "node-cleanup-failed", "node-check-deadline",
 	} {
 		if bytes.Contains(data, []byte(code)) {
@@ -325,6 +326,18 @@ func xraySelectedRefusal(data []byte) string {
 		}
 	}
 	return "production_refused"
+}
+
+func TestXraySelectedClosedConsentRefusals(t *testing.T) {
+	for _, code := range []string{"NETWORK_POLICY_REVIEW_CHANGED", "NETWORK_POLICY_EXCLUSIONS_SEPARATE", "RESTORE_OPERATION_BUSY", "OPERATION_CANCELED"} {
+		data, err := json.Marshal(map[string]string{"code": code, "error": "private diagnostic must not be returned"})
+		if err != nil || xraySelectedRefusal(data) != code {
+			t.Fatalf("known consent refusal %q was not preserved", code)
+		}
+	}
+	if got := xraySelectedRefusal([]byte(`{"code":"unknown-private-value","error":"private diagnostic"}`)); got != "production_refused" {
+		t.Fatal("unrecognized diagnostics must stay private")
+	}
 }
 
 func xraySelectedCall(ctx context.Context, client *http.Client, base, token, method, route string, value any) (int, []byte, error) {
