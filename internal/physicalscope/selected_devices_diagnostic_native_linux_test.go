@@ -32,6 +32,9 @@ type nativeSelectedNeighborShape struct {
 	HeaderComplete     bool                              `json:"header_complete"`
 	Ingress            string                            `json:"ingress"`
 	IndexPositive      bool                              `json:"index_positive"`
+	LinkKnown          bool                              `json:"link_known"`
+	LinkType           uint16                            `json:"link_type"`
+	LinkFlags          uint32                            `json:"link_flags"`
 	State              uint16                            `json:"state"`
 	Flags              byte                              `json:"flags"`
 	Type               byte                              `json:"type"`
@@ -179,17 +182,19 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 		Count int                         `json:"count"`
 	}
 	result := struct {
-		ObservationOnly    bool           `json:"observation_only"`
-		Capability         string         `json:"capability"`
-		OriginalReview     bool           `json:"original_review"`
-		CompleteDualStack  bool           `json:"complete_dual_stack"`
-		TotalRows          int            `json:"total_rows"`
-		SelectedRows       int            `json:"selected_rows"`
-		ForeignRows        int            `json:"foreign_rows"`
-		ForeignBookkeeping int            `json:"foreign_bookkeeping_rows"`
-		ProductionRefusals int            `json:"production_decoder_refusals"`
-		UnclassifiedRows   int            `json:"unclassified_refusals"`
-		ClassifiedRefusals []countedShape `json:"classified_refusals"`
+		ObservationOnly    bool                          `json:"observation_only"`
+		Capability         string                        `json:"capability"`
+		OriginalReview     bool                          `json:"original_review"`
+		CompleteDualStack  bool                          `json:"complete_dual_stack"`
+		TotalRows          int                           `json:"total_rows"`
+		SelectedRows       int                           `json:"selected_rows"`
+		ForeignRows        int                           `json:"foreign_rows"`
+		ForeignBookkeeping int                           `json:"foreign_bookkeeping_rows"`
+		ProductionRefusals int                           `json:"production_decoder_refusals"`
+		UnclassifiedRows   int                           `json:"unclassified_refusals"`
+		ClassifiedRefusals []countedShape                `json:"classified_refusals"`
+		ProjectionStages   []string                      `json:"projection_stages"`
+		AddressConflicts   nativeSelectedConflictSummary `json:"address_conflicts"`
 	}{ObservationOnly: true, Capability: "ungranted"}
 	classes := map[string]int{}
 	err = provider.WithCurrent(ctx, func(c context.Context, identity netidentity.Identity) error {
@@ -230,6 +235,17 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 		for _, segment := range segments {
 			byIndex[segment.IfIndex] = segment
 		}
+		linkMetadata := map[int]nativeSelectedDiagnosticLink{}
+		for _, m := range links {
+			if len(m.data) < 16 {
+				return at("native.selected-diagnostic.link-header", nil)
+			}
+			index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
+			linkMetadata[index] = nativeSelectedDiagnosticLink{binary.NativeEndian.Uint16(m.data[2:4]), binary.NativeEndian.Uint32(m.data[8:12])}
+		}
+		var selectedInputs, foreignInputs []nativeSelectedConflictInput
+		var selectedNeighbors, foreignNeighbors []kernelNeighbor
+		routers := map[string]bool{}
 		for _, family := range []byte{2, 10} {
 			frames, err := dump(c, 30, family)
 			if err != nil {
@@ -244,6 +260,29 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 					return at("native.selected-diagnostic.row-limit", nil)
 				}
 				shape := nativeSelectedNeighborClass(family, m, byIndex, wanted)
+				if len(m.data) >= 12 {
+					index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
+					link, known := linkMetadata[index]
+					shape.LinkKnown, shape.LinkType, shape.LinkFlags = known, link.Type, link.Flags
+					if m.data[0] == family && len(shape.ProductionStages) == 0 {
+						if segment, selected := byIndex[index]; selected {
+							n, bookkeeping, err := decodeSegmentNeighbor(m, segment)
+							if err == nil && !bookkeeping {
+								selectedNeighbors = append(selectedNeighbors, n)
+								selectedInputs = append(selectedInputs, nativeSelectedConflictInput{n, shape})
+								if n.flags&128 != 0 {
+									routers[n.mac] = true
+								}
+							}
+						} else if family == 2 || family == 10 {
+							n, bookkeeping, err := decodeForeignKernelNeighbor(m)
+							if err == nil && !bookkeeping {
+								foreignNeighbors = append(foreignNeighbors, n)
+								foreignInputs = append(foreignInputs, nativeSelectedConflictInput{n, shape})
+							}
+						}
+					}
+				}
 				if shape.Ingress == "selected" {
 					result.SelectedRows++
 				} else if shape.Ingress == "foreign" {
@@ -271,6 +310,12 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 			}
 		}
 		result.CompleteDualStack = true
+		_, projectionErr := validateProjectedNeighbors(selection.SelectedDevices, segments, selectedNeighbors, foreignNeighbors, routers)
+		result.ProjectionStages = DiagnosticStages(projectionErr)
+		result.AddressConflicts, err = nativeSelectedConflictClasses(selection, segments, selectedInputs, foreignInputs, routers, linkMetadata)
+		if err != nil {
+			return at("native.selected-diagnostic.conflict-class", nil)
+		}
 		return c.Err()
 	})
 	if err != nil {
