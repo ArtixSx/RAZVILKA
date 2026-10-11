@@ -80,7 +80,11 @@ func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Pl
 	if err := a.BindWGCommandTools(tools); err != nil {
 		t.Fatal(err)
 	}
-	manager := New(t.TempDir())
+	managerRoot := t.TempDir()
+	if err := os.Chmod(managerRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(managerRoot)
 	if err := manager.Register(a); err != nil {
 		t.Fatal(err)
 	}

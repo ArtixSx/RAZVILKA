@@ -45,7 +45,11 @@ func sharedWGInactivityFixture(t *testing.T) (*wgSourceReadFixture, Plan, *Netwo
 		t.Fatal(err)
 	}
 	tools.WG, tools.AWG = "", ""
-	m := New(t.TempDir())
+	managerRoot := t.TempDir()
+	if err := os.Chmod(managerRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := New(managerRoot)
 	for _, a := range []*WARPWireGuardAdapter{NewWireGuardAdapter(f.a.Configs, m.StateRoot), NewAmneziaWGAdapter(f.a.Configs, m.StateRoot)} {
 		if err := m.Register(a); err != nil {
 			t.Fatal(err)
