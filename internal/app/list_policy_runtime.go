@@ -111,33 +111,27 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	if err != nil {
 		return nil, err
 	}
-	stage = "wg-tools"
+	stage = "wg-tools-identity"
 	p.wgAvailable = map[string]bool{}
 	actualIdentity, err := provider.Observe(c)
 	if err != nil {
 		return nil, err
 	}
-	if err := tools.Check(c, actualIdentity); err != nil {
+	stage = "wg-tools-observation"
+	wgTools, err := tools.ManagedListWGCommandTools(c, actualIdentity)
+	if err != nil {
 		return nil, err
 	}
 	for _, engine := range []string{"wireguard", "amneziawg"} {
-		descriptor, toolErr := tools.WGCommandTools(engine)
-		if toolErr != nil {
-			// A failed descriptor may mean a newly changed absence or lifetime.
-			// Close with the original complete lease check before accepting only
-			// its still-absent optional primary as unavailable for activation.
-			if err := tools.Check(c, actualIdentity); err != nil {
-				return nil, errors.Join(toolErr, err)
-			}
+		descriptor, available := wgTools[engine]
+		if !available {
 			continue
 		}
+		stage = "wg-tools-bind-" + engine
 		if err := p.manager.BindManagedWGCommandTools(c, descriptor); err != nil {
 			return nil, err
 		}
 		p.wgAvailable[engine] = true
-	}
-	if err := tools.Check(c, actualIdentity); err != nil {
-		return nil, err
 	}
 	lan := &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: p.scopeCheck,
 		TransportCheck: func(c context.Context, plan *dataplane.LANPolicyRuntimePlan, family int, line string) error {

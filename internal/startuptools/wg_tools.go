@@ -62,6 +62,12 @@ func (l *Lease) WGCommandTools(engine string) (dataplane.WGCommandTools, error) 
 		return dataplane.WGCommandTools{}, err
 	}
 	defer l.unlock()
+	return l.wgCommandToolsHeld(c, engine)
+}
+
+// The caller retains the original tool gate. This pure descriptor projection
+// never enters Provider, runs a command or creates command admission.
+func (l *Lease) wgCommandToolsHeld(c context.Context, engine string) (dataplane.WGCommandTools, error) {
 	primary := 0
 	if engine == "amneziawg" {
 		primary = 1
