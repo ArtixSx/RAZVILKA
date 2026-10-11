@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/customservices"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
@@ -32,6 +34,42 @@ const xraySelectedMaxResponse = 1 << 20
 
 func xraySelectedCatalogAllowsNewQA(c catalog.Catalog) bool {
 	return !slices.ContainsFunc(c.Services, func(service catalog.Service) bool { return service.ID == xraySelectedQAID })
+}
+
+// Only fixed producer enums and bounded scalars leave this projection.
+// Result identities, addresses, evidence and free-form messages stay private.
+func xraySelectedCheckDiagnostic(result dataplane.NodeCheckResult) string {
+	closed := func(value string, allowed ...string) string {
+		if value == "" {
+			return "none"
+		}
+		if slices.Contains(allowed, value) {
+			return value
+		}
+		return "unclassified"
+	}
+	verdict := closed(string(result.Verdict), "PASS", "PARTIAL", "BLOCKED", "MISROUTED", "INCONCLUSIVE", "ERROR")
+	stage := closed(result.Stage, "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "service_ip", "cleanup", "deadline", "canceled", "resource_scope")
+	level := closed(result.TestLevel, "dns", "transport", "protocol", "egress", "service")
+	code := closed(result.ErrorCode,
+		"node-check-deadline", "node-check-canceled", "node-config-invalid", "node-dns-failed", "node-transport-failed", "node-network-changed", "node-cleanup-failed",
+		"node-runtime-config-rejected", "node-protocol-start-failed", "node-route-runtime-changed", "node-route-protocol-mismatch", "node-route-identity-failed",
+		"node-egress-control-unavailable", "node-egress-failed", "node-direct-leak", "node-direct-control-unavailable", "node-service-probe-failed",
+		"node-service-ip-unavailable", "node-service-ip-path-failed", "node-route-mismatch", "node-service-not-confirmed", "node-resource-refused",
+		"node-route-receipt-missing", "node-route-pid-invalid", "node-route-process-unavailable", "node-route-process-stat-invalid", "node-route-engine-mismatch",
+		"node-route-network-namespace-mismatch", "node-route-command-unverified", "node-route-config-invalid", "node-route-outbound-missing", "node-route-outbound-ambiguous",
+		"node-route-direct-outbound", "node-route-rules-unverified", "node-route-dynamic-config-unverified", "node-route-chain-unverified", "node-route-outbound-unsupported",
+		"node-route-remote-endpoint-unverified", "node-route-listener-unsupported", "node-route-listener-unavailable", "node-route-listener-ambiguous", "node-route-listener-owner-unavailable", "node-route-listener-owner-mismatch",
+		"request-failed", "response-body-invalid", "route-identity-mismatch", "redirect-host-rejected", "redirect-not-resolved", "unexpected-http-status", "known-block-page",
+		"content-type-mismatch", "json-sample-incomplete", "invalid-json", "json-schema-mismatch", "body-predicate-mismatch")
+	status := result.HTTPStatus
+	if status != 0 && (status < 100 || status > 599) {
+		status = -1
+	}
+	if status >= 100 && result.ErrorCode == fmt.Sprintf("http-%d", status) {
+		code = "http-status"
+	}
+	return fmt.Sprintf("available=%t verdict=%s check_stage=%s error_code=%s http_status=%d direct_leak=%t test_level=%s", result.Available, verdict, stage, code, status, result.DirectLeak, level)
 }
 
 // Diagnostic categories are observations only. Never forward raw errors,
@@ -288,6 +326,24 @@ func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.
 	}
 	if got := xraySelectedStartupToolStage(errors.New("trusted startup tools: ACQUIRE " + secret)); got != "unclassified" {
 		t.Fatal("arbitrary tool diagnostic text escaped allowlist", got)
+	}
+}
+
+func TestXraySelectedNativeCheckDiagnosticKeepsTypedFieldsClosed(t *testing.T) {
+	result := dataplane.NodeCheckResult{Available: false, Verdict: "ERROR", Stage: "service_ip", ErrorCode: "node-service-ip-path-failed", HTTPStatus: 200, TestLevel: "service"}
+	if got := xraySelectedCheckDiagnostic(result); got != "available=false verdict=ERROR check_stage=service_ip error_code=node-service-ip-path-failed http_status=200 direct_leak=false test_level=service" {
+		t.Fatal("known typed check diagnostic changed")
+	}
+	result.ErrorCode, result.HTTPStatus = "http-503", 503
+	if !strings.Contains(xraySelectedCheckDiagnostic(result), "error_code=http-status http_status=503") {
+		t.Fatal("bounded HTTP refusal category lost")
+	}
+	for _, secret := range []string{"vless://UUID:PRIVATE-KEY@private.invalid/", "node-service-ip-path-failed private.invalid", strings.Repeat("PRIVATE-KEY", 4096)} {
+		result := dataplane.NodeCheckResult{Available: true, Verdict: evidence.Verdict(secret), Stage: secret, ErrorCode: secret, HTTPStatus: 1 << 30, DirectLeak: true, TestLevel: secret,
+			NodeID: secret, ServiceID: secret, RoutePathID: secret, NetworkProfile: secret, EgressIP: secret, Message: secret, DirectControl: secret}
+		if got := xraySelectedCheckDiagnostic(result); got != "available=true verdict=unclassified check_stage=unclassified error_code=unclassified http_status=-1 direct_leak=true test_level=unclassified" {
+			t.Fatal("unknown diagnostic fields escaped the closed projection")
+		}
 	}
 }
 

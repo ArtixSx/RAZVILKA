@@ -323,7 +323,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	result := checked.Result
 	if !checked.OK || checked.WorkingRoutesChanged || !result.Available || result.DirectLeak || result.ServiceID != service.ID || result.NodeID != id || result.RoutePathID != route || result.TestLevel != "service" || result.Verdict != evidence.VerdictPass || !result.Evidence.Valid() ||
 		!result.Evidence.AssuranceLevel().AtLeast(evidence.Service) || result.Evidence.Engine != "xray" || result.Evidence.Service != service.ID || result.Evidence.NetworkProfile != result.NetworkProfile || result.Evidence.ExpectedRoutePathID != route || result.Evidence.ObservedRoutePathID != route {
-		t.Fatalf("stage=exact_public_check code=%s", xraySelectedRefusal(data))
+		t.Fatalf("stage=exact_public_check code=%s %s", xraySelectedRefusal(data), xraySelectedCheckDiagnostic(result))
 	}
 	after, err := nodes.Snapshot(ctx, time.Now())
 	if err != nil || after.Generation != before.Generation+1 || len(after.Nodes) != 1 || len(after.Nodes[0].Health.History) != 1 {
