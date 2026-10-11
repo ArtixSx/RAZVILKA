@@ -42,8 +42,9 @@ Native AWG3.1, router HIL/soak, missing/wrong module на аппаратном �
 
 ## CORE/VLESS wiring и оставшиеся ограничения
 
-1. CORE: заменить read-only blocker/canary admission в `internal/app/amneziawg.go` с version-only Check на CheckRuntime. Existing injected fixture `ToolVersion:"awg v3.1..."` не является новой проверенной identity: trusted test fixture должна задавать official identity + все raw module/kernel/hash facts. Для настоящего adapter VerifyTool также нужен реальный test regular file с matching hash. Не выдавать CompatibilityVerified за network/HIL proof; import корректного unsupported draft остаётся допустимым.
-2. VLESS получил ownership нового `policy_addition_receipt*.go` по CORE контракту. NET не создаёт другой primitive. WG wiring выполняется после конкретного общего API. [NET_POLICY_RECEIPT_CONTRACT_RU.md](NET_POLICY_RECEIPT_CONTRACT_RU.md) фиксирует successful-addition/compensation authority и crash/EEXIST Manager.Rollback regressions.
-3. Текущий `warpwg.go.Rollback` всё ещё имеет broad staged-intent cleanup, описанный CORE. Direct AWG admission test доказывает отсутствие эффектов до отказа **в Activate**, но не безопасность последующего вызова Rollback из полного Manager.Apply. Этот риск не скрыт новой compatibility проверкой и должен быть устранён receipt wiring до D07/HIL.
-4. D05 mutation→marker crash и rollback предыдущего отличающегося live peer остаются отдельным аудитом. Native AWG fixture не заявляет полноценные Commit/reboot/Stop/LAN default executor acceptance.
-5. Следующая независимая часть NET — D08: real bounded CNAME/address TTL, expiry/revalidation и scoped DNS. Общий LAN/default executor остаётся CORE.
+Актуальное состояние на 11.10.2026: [WG и AWG prerequisites для подключения App](NET_WG_AWG_PREREQUISITE_AUDIT_20261011_RU.md).
+
+1. CORE: четыре App blocker/canary вызова по-прежнему используют version-only `Check`. Воспроизводимый fixture получает ноль blockers при трёх отказах `CheckRuntime`. Требуется raw-facts admission; хранение unsupported draft допустимо. Настоящий adapter уже отказывает до эффектов.
+2. WG receipt wiring выполнен в `334a62ad`, restoration/publication recovery — в `ef2d7b5a`. Текущий Manager late EEXIST, unknown result, pre-admission Rollback и retained generation regressions проходят. Staged intent больше не является fallback cleanup authority. [NET_POLICY_RECEIPT_CONTRACT_RU.md](NET_POLICY_RECEIPT_CONTRACT_RU.md) сохраняет исходный исторический контракт.
+3. Реальные WG App source и operation binding пока не имеют production callers. Native network fixture с LAN default routes не подтверждает контракт активного списка, приоритет исключений или обычный App lifecycle. Подключение принадлежит CORE; native/router acceptance — Root.
+4. D08 получил отдельный synthetic baseline issuer `9bd6d7fc`, но production domain process factory, consumer и Commit retainer ещё требуются. Literal Xray resource не разрешает domain SOCKS mode; точный контракт передан VLESS и CORE.

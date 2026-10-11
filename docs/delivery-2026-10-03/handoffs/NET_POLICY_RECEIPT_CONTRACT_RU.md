@@ -2,6 +2,8 @@
 
 > 08.10.2026: продуктовый контракт уточнён — [активный список и обязательные исключения](../LIST_MODE_CORRECTION_RU.md). Прежний full-tunnel охват не является текущей задачей или разрешением на применение. Ниже сохранена история реализации и проверок; затронутые сценарии требуют повторной проверки.
 
+> 11.10.2026: исходный контракт ниже уже реализован для WG в `334a62ad` и дополнен restoration/publication recovery в `ef2d7b5a`. Текущие Manager receipt regressions проходят. Оставшиеся App admission/source wiring и native ограничения описаны в [актуальном аудите WG и AWG](NET_WG_AWG_PREREQUISITE_AUDIT_20261011_RU.md); исторический staged-intent blocker ниже больше не описывает текущий `Rollback`.
+
 Прочитан актуальный read-only `delivery-review/.../handoffs/CORE_RU.md`, раздел policy default admission (`b3bc486`, сообщён координатором). NET подтверждает проблему своего `WARPWireGuardAdapter.Rollback`: текущий `removePolicy(desired)` получает **полный staged intent**, а не список успешно добавленных ресурсов. `wg-interface-created` доказывает создание интерфейса, но не default route или всех selectors. Эти факты нельзя заменять совпадением kernel tuple.
 
 Это **контракт/блокер, а не реализованное исправление**. Координатор подтвердил новый owner `policy_addition_receipt*.go`: VLESS, по опубликованному CORE контракту; existing policy_mutation/kernel/manager/app остаются CORE. NET ждёт конкретный общий API, не создаёт свою параллельную реализацию. Независимый D05 native-wg-08 PASS не моделирует этот concurrent EEXIST → subsequent Manager.Rollback сценарий. До закрытия риска нельзя объявлять полную rollback concurrency safety или начинать D07/HIL на этом основании.
