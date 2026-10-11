@@ -14,7 +14,7 @@ import (
 // Actual middleware and actual Gate admission only. No runtime fixture or
 // private copied Xray object may manufacture process/COMMON authority here.
 func TestListXrayOrdinaryReadersRetainActualRequestAdmission(t *testing.T) {
-	for _, path := range []string{"/api/v1/plan", "/api/v1/status", "/api/v1/service-control"} {
+	for _, path := range []string{"/api/v1/plan", "/api/v1/status", "/api/v1/service-control", "/api/v1/components"} {
 		t.Run(path, func(t *testing.T) {
 			a := &App{}
 			var escaped context.Context

@@ -171,7 +171,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			// This bounded read compares the actual retained control owner.
 			exclusive = true
 		}
-		if r.Method == http.MethodGet && (r.URL.Path == "/api/v1/plan" || r.URL.Path == "/api/v1/status" || r.URL.Path == "/api/v1/service-control") || r.Method == http.MethodPut && r.URL.Path == "/api/v1/service-control" {
+		if r.Method == http.MethodGet && (r.URL.Path == "/api/v1/plan" || r.URL.Path == "/api/v1/status" || r.URL.Path == "/api/v1/service-control" || r.URL.Path == "/api/v1/components") || r.Method == http.MethodPut && r.URL.Path == "/api/v1/service-control" {
 			// Bounded managed readers retain the original request admission.
 			// Their concrete runtime check cannot upgrade a shared operation.
 			exclusive = true

@@ -156,6 +156,14 @@ func (a *App) checkComponentLive(ctx context.Context, id string) error {
 	if err != nil || !exists || plan.Revision != a.Store.Get().AppliedRevision {
 		return errComponentRuntimeUnconfirmed
 	}
+	if handled, err := a.observeManagedComponentRuntime(ctx, plan, id); handled {
+		if err != nil {
+			return err
+		}
+		// The original process/rules are current. No selected-client service
+		// proof producer exists here, so presence cannot settle accept-live.
+		return errComponentServiceProofUnconfirmed
+	}
 	// This calls owned live probes only. It never stages or runs a candidate.
 	if err := a.Dataplane.CheckComponentLive(ctx, plan, id); err != nil {
 		return err

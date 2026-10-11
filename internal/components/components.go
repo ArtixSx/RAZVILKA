@@ -65,6 +65,7 @@ type View struct {
 	InstalledVersionSource string `json:"installed_version_source,omitempty"`
 	AvailableVersionSource string `json:"available_version_source,omitempty"`
 	RuntimeVersion         string `json:"runtime_version,omitempty"`
+	RuntimeObservation     string `json:"runtime_observation,omitempty"`
 	CatalogStale           bool   `json:"catalog_stale"`
 	UpdateCheckError       string `json:"update_check_error,omitempty"`
 	InventoryError         string `json:"inventory_error,omitempty"`

@@ -1406,6 +1406,7 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 	}
 	runtimes := engine.Detector{}.Inventory()
 	mergeComponentRuntimes(views, runtimes)
+	a.mergeManagedComponentRuntimeObservation(ctx, views)
 	for i := range views {
 		desired, applied := a.componentServiceReferences(views[i].ID)
 		referenced := len(desired) > 0 || len(applied) > 0
