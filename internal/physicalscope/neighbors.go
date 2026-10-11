@@ -77,14 +77,14 @@ func parseKernelNeighbor(m message) (kernelNeighbor, error) {
 }
 
 // The caller must first prove this ifindex is OUTSIDE the selected L3 segments.
-// Actual stock NC1812 emits precisely these IPv4 zero-destination NOARP
-// RTN_BROADCAST rows with an empty or all-zero Ethernet address. Neither can
-// identify a protected canonical unicast MAC or a valid bound LAN address.
+// Actual stock NC1812 emits IPv4 zero-destination NOARP/RTN_BROADCAST rows
+// and the narrowly classified bridge-local IPv6 loopback alias below. Neither
+// exemption identifies a protected canonical unicast client/router MAC.
 // Selected segments always use the unchanged strict decoder instead.
-func decodeForeignKernelNeighbor(m message) (kernelNeighbor, bool, error) {
+func decodeForeignKernelNeighbor(m message, segments []Segment) (kernelNeighbor, bool, error) {
 	n, originalErr := parseKernelNeighbor(m)
 	if originalErr == nil {
-		return n, false, nil
+		return n, foreignBridgeLocalLoopbackNeighbor(m, n, segments), nil
 	}
 	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 2 || binary.NativeEndian.Uint16(m.data[8:10]) != 64 || m.data[10] != 0 || m.data[11] != 3 {
 		return kernelNeighbor{}, false, originalErr
@@ -96,6 +96,45 @@ func decodeForeignKernelNeighbor(m message) (kernelNeighbor, bool, error) {
 		return kernelNeighbor{}, false, originalErr
 	}
 	return kernelNeighbor{index: index, address: netip.IPv4Unspecified(), mac: net.HardwareAddr(a[2]).String(), state: 64, kind: 3}, true, nil
+}
+
+// Reviewed kernel-49 fixes LOOPBACK_IFINDEX to 1 per network namespace and
+// ndisc_constructor emits NOARP/RTN_LOCAL with the loopback's zero Ethernet
+// address. Only an EXACT selected bridge host address can be that local alias;
+// subnet membership, client/router addresses and link-local keys never suffice.
+// Capture supplies fresh kernel segments; notifications supply the ORIGINAL
+// snapshot segments. Both callers account the row before ignoring this alias.
+func foreignBridgeLocalLoopbackNeighbor(m message, n kernelNeighbor, segments []Segment) bool {
+	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 10 || n.index != 1 || n.state != 64 || n.flags != 0 || n.kind != 2 || !n.address.Is6() || n.address.Is4In6() || n.address.IsUnspecified() || n.address.IsLoopback() || n.address.IsMulticast() || n.address.IsLinkLocalUnicast() {
+		return false
+	}
+	a, err := attrs(m.data[12:])
+	if err != nil || len(a) != 4 || len(a[1]) != 16 || !bytes.Equal(a[2], []byte{0, 0, 0, 0, 0, 0}) || len(a[3]) != 16 || len(a[4]) != 4 {
+		return false
+	}
+	for raw := m.data[12:]; len(raw) != 0; {
+		if binary.NativeEndian.Uint16(raw[2:4])&0xc000 != 0 {
+			return false
+		}
+		size := int(binary.NativeEndian.Uint16(raw[:2]))
+		raw = raw[(size+3)&^3:]
+	}
+	matches := 0
+	for _, segment := range segments {
+		if segment.IfIndex <= 1 || !validMAC(segment.MAC) {
+			return false
+		}
+		for _, raw := range segment.LinkAddresses {
+			prefix, err := netip.ParsePrefix(raw)
+			if err != nil {
+				return false
+			}
+			if prefix.Addr() == n.address {
+				matches++
+			}
+		}
+	}
+	return matches == 1
 }
 
 func validateUnicastNeighbor(n kernelNeighbor) error {
@@ -242,7 +281,7 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 					if m.data[0] != family {
 						return nil, at("kernel.bindings.neighbor.dump-family", nil)
 					}
-					n, bookkeeping, err := decodeForeignKernelNeighbor(m)
+					n, bookkeeping, err := decodeForeignKernelNeighbor(m, segments)
 					if err != nil {
 						return nil, err
 					}

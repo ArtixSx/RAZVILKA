@@ -87,7 +87,11 @@ func nativeSelectedNeighborClass(family byte, m message, segments map[int]Segmen
 		} else if selected {
 			s.ProductionStages = slices.Clone(s.SelectedStages)
 		} else {
-			_, bookkeeping, err := decodeForeignKernelNeighbor(m)
+			var selectedSegments []Segment
+			for _, segment := range segments {
+				selectedSegments = append(selectedSegments, segment)
+			}
+			_, bookkeeping, err := decodeForeignKernelNeighbor(m, selectedSegments)
 			s.ForeignBookkeeping, s.ProductionStages = bookkeeping, DiagnosticStages(err)
 		}
 	}
@@ -275,7 +279,7 @@ func TestPhysicalScopeNativeSelectedNeighborDiagnostic(t *testing.T) {
 								}
 							}
 						} else if family == 2 || family == 10 {
-							n, bookkeeping, err := decodeForeignKernelNeighbor(m)
+							n, bookkeeping, err := decodeForeignKernelNeighbor(m, segments)
 							if err == nil && !bookkeeping {
 								foreignNeighbors = append(foreignNeighbors, n)
 								foreignInputs = append(foreignInputs, nativeSelectedConflictInput{n, shape})
