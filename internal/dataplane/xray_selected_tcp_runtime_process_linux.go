@@ -383,7 +383,11 @@ func (r *xraySelectedTCPProc) readlink(base int, name string) (string, error) {
 	return string(data[:n]), nil
 }
 func xraySelectedTCPReadFD(ctx context.Context, fd int, limit int) ([]byte, error) {
-	if xraySelectedTCPFinite(ctx) != nil || limit <= 0 || limit > 8<<20 {
+	return xraySelectedTCPReadBoundedFD(ctx, fd, limit, 8<<20)
+}
+
+func xraySelectedTCPReadBoundedFD(ctx context.Context, fd int, limit, maximum int) ([]byte, error) {
+	if xraySelectedTCPFinite(ctx) != nil || maximum != 8<<20 && maximum != xraySelectedTCPConntrackLimit || limit <= 0 || limit > maximum {
 		return nil, errXraySelectedTCPRuntime
 	}
 	var data []byte

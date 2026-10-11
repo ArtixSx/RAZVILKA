@@ -9,13 +9,15 @@ import (
 
 var ErrXraySelectedTCPConntrackPending = errors.New("original selected TCP redirect conntrack settlement is pending")
 
+const xraySelectedTCPConntrackLimit = 32 << 20
+
 // Read-only whole-table comparison. No tuple becomes a delete permission or
 // an accepted-flow owner. A possibly selected old REDIRECT keeps Stop pending.
 func xraySelectedTCPConntrackSettled(data []byte, legacy bool, spec XraySelectedTCPRedirectSpec) error {
 	if spec.LAN == nil || len(spec.LAN.Ingress) != 1 || len(spec.Destinations) == 0 || len(spec.Ports) == 0 || !spec.Listener.IsValid() {
 		return errXraySelectedTCPRuntime
 	}
-	if len(data) > 32<<20 || len(data) != 0 && data[len(data)-1] != '\n' || strings.ContainsAny(string(data), "\x00\r") {
+	if len(data) > xraySelectedTCPConntrackLimit || len(data) != 0 && data[len(data)-1] != '\n' || strings.ContainsAny(string(data), "\x00\r") {
 		return errXraySelectedTCPRuntime
 	}
 	if len(data) == 0 {

@@ -8,7 +8,30 @@ import (
 	"os"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"golang.org/x/sys/unix"
 )
+
+// Only these actual rooted proc aliases use the whole conntrack-table bound.
+// Other process/socket reads retain their independent smaller limits.
+func (r *xraySelectedTCPProc) readConntrack(ctx context.Context, name string) ([]byte, error) {
+	if name != "net/nf_conntrack" && name != "net/ip_conntrack" {
+		return nil, errXraySelectedTCPRuntime
+	}
+	fd, err := r.open(ctx, r.child, name, false)
+	if err != nil {
+		return nil, err
+	}
+	defer unix.Close(fd)
+	data, err := xraySelectedTCPReadConntrackFD(ctx, fd)
+	if err != nil || !r.procFile(fd, unix.S_IFREG) || !r.sameMount(ctx, fd) {
+		return nil, errXraySelectedTCPRuntime
+	}
+	return data, nil
+}
+
+func xraySelectedTCPReadConntrackFD(ctx context.Context, fd int) ([]byte, error) {
+	return xraySelectedTCPReadBoundedFD(ctx, fd, xraySelectedTCPConntrackLimit, xraySelectedTCPConntrackLimit)
+}
 
 func xraySelectedTCPObserveConntrackSettled(ctx context.Context, provider *netidentity.Provider, expected netidentity.Identity, spec XraySelectedTCPRedirectSpec) error {
 	if provider == nil || xraySelectedTCPFinite(ctx) != nil || expected.Validate() != nil {
@@ -50,7 +73,7 @@ func xraySelectedTCPObserveConntrackSettled(ctx context.Context, provider *netid
 				if !present[name[4:]] {
 					continue
 				}
-				data, err := proc.read(held, proc.child, name, 32<<20)
+				data, err := proc.readConntrack(held, name)
 				if err != nil {
 					return err
 				}
