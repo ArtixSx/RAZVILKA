@@ -82,6 +82,37 @@ func (r *scopedDNSInstallerRole) check(ctx context.Context, pid int) error {
 	return errors.Join(r.adapter.VerifyInstallerControllerRole(held, r.id, pid), r.current(ctx))
 }
 
+// One ordinary observation owns the complete original group around the whole
+// DNS identity callback. Every scanner peer bookend still reads a fresh peer.
+func (r *scopedDNSInstallerRole) observe(ctx context.Context, use func(context.Context, func(context.Context, int) error) error) error {
+	if err := r.current(ctx); err != nil {
+		return err
+	}
+	if !r.ordinary || use == nil {
+		return ErrScopedDNSRuntimeInactive
+	}
+	held, cancel := context.WithDeadline(ctx, r.deadline)
+	stop := context.AfterFunc(r.original, cancel)
+	defer cancel()
+	defer stop()
+	started := false
+	var callbackErr error
+	err := r.adapter.WithOrdinaryInstallerControllerObservation(held, r.id, func(c context.Context, observation *updatecheck.OrdinaryInstallerControllerObservation) error {
+		started = true
+		callbackErr = use(c, observation.VerifyPeer)
+		return callbackErr
+	})
+	err = errors.Join(err, r.current(ctx))
+	if err != nil && callbackErr == nil {
+		stage := "proc-opening"
+		if started {
+			stage = "proc-closing"
+		}
+		return scopedDNSInactiveAt(stage, err)
+	}
+	return err
+}
+
 // These command names trigger a positive role check even when the recorded
 // installer has a different filename/inode. They never establish the role.
 func scopedDNSInstallerCommand(args []string) bool {

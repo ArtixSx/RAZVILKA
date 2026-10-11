@@ -16,15 +16,16 @@ var ErrScopedDNSRuntimeInactive = errors.New("fresh scoped DNS runtime inactivit
 var _ RuntimeInactivityObserver = (*ScopedDNSAdapter)(nil)
 
 type scopedDNSInactiveProof struct {
-	procRoot           string
-	netRoot            string
-	threadNetRoot      func() string
-	stage              *string // private ROOT dependency QA: fixed labels only, no callback
-	selfPID            int
-	readlink           func(string) (string, error)
-	sameExecutable     func(string, string) (bool, error)
-	withCurrent        func(context.Context, func(context.Context, netidentity.Identity) error) error
-	installerPeerCheck func(context.Context, int) error // fixed original provider; private model seam
+	procRoot             string
+	netRoot              string
+	threadNetRoot        func() string
+	stage                *string // private ROOT dependency QA: fixed labels only, no callback
+	selfPID              int
+	readlink             func(string) (string, error)
+	sameExecutable       func(string, string) (bool, error)
+	withCurrent          func(context.Context, func(context.Context, netidentity.Identity) error) error
+	installerPeerCheck   func(context.Context, int) error // fixed original provider; private model seam
+	installerObservation func(context.Context, func(context.Context, func(context.Context, int) error) error) error
 }
 
 // VerifyRuntimeInactive performs no effects, cancellation, migration or cleanup.
@@ -41,6 +42,9 @@ func (a *ScopedDNSAdapter) VerifyRuntimeInactive(ctx context.Context) error {
 	proof.withCurrent = a.InactivityIdentity.WithCurrent
 	if a.installerRole != nil {
 		proof.installerPeerCheck = a.installerRole.check
+		if a.installerRole.ordinary {
+			proof.installerObservation = a.installerRole.observe
+		}
 	}
 	return a.verifyDNSRuntimeInactive(ctx, proof)
 }
@@ -55,6 +59,18 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 	defer cancel()
 	root, settings, identity, kernel, manager := a.StateRoot, a.InactivitySettingsPath, a.InactivityIdentity, a.InactivityKernelCheck, a.DNS
 	installer := a.installerRole
+	if proof.installerObservation != nil {
+		withCurrent := proof.withCurrent
+		proof.withCurrent = func(c context.Context, use func(context.Context, netidentity.Identity) error) error {
+			return proof.installerObservation(c, func(held context.Context, peerCheck func(context.Context, int) error) error {
+				if peerCheck == nil {
+					return ErrScopedDNSRuntimeInactive
+				}
+				proof.installerPeerCheck = peerCheck
+				return withCurrent(held, use)
+			})
+		}
+	}
 	kernelPC := reflect.ValueOf(kernel).Pointer()
 	checkLocal := func() (uint64, error) {
 		if err := ctx.Err(); err != nil {
