@@ -5,6 +5,9 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -123,5 +126,88 @@ func TestScopedDNSOrdinaryObservationCannotGrantAfterClosingFailure(t *testing.T
 				t.Fatal("original callback or closing cause was lost")
 			}
 		})
+	}
+}
+
+// Actual context and lifecycle mutex, with the existing private inventory
+// fixture. Cancellation occurs after final checkLocal's opening ctx check,
+// while its real epoch read is waiting on the mutex; no sleep selects the race.
+func TestScopedDNSOrdinaryObservationFinalMutexCancellationRefuses(t *testing.T) {
+	f := newScopedDNSInactiveFixture(t)
+	parent, cancel := context.WithCancel(context.Background())
+	locked, started, finished := make(chan struct{}), make(chan string, 1), make(chan struct{})
+	result := make(chan error, 1)
+	var held atomic.Bool
+	f.proof.installerObservation = func(ctx context.Context, use func(context.Context, func(context.Context, int) error) error) error {
+		err := use(ctx, func(c context.Context, pid int) error { return c.Err() })
+		if err != nil {
+			return err
+		}
+		scopedDNSInactiveLifecycle.Lock()
+		held.Store(true)
+		close(locked)
+		return nil
+	}
+	defer func() {
+		cancel()
+		if held.Swap(false) {
+			scopedDNSInactiveLifecycle.Unlock()
+		}
+		select {
+		case <-finished:
+		case <-time.After(3 * time.Second):
+			t.Error("final epoch observer failed to join")
+		}
+	}()
+	go func() {
+		var identity [128]byte
+		n := runtime.Stack(identity[:], false)
+		fields := strings.Fields(string(identity[:n]))
+		started <- fields[1]
+		result <- f.a.verifyDNSRuntimeInactive(parent, f.proof)
+		close(finished)
+	}()
+	id := <-started
+	select {
+	case <-locked:
+	case <-time.After(time.Second):
+		t.Fatal("group observation never reached closing")
+	}
+	// Observe the exact verifier goroutine in the real epoch reader. The held
+	// mutex prevents it from returning, and the preceding ctx check has passed.
+	wait := time.NewTimer(time.Second)
+	defer wait.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	var stacks [64 << 10]byte
+	for {
+		n := runtime.Stack(stacks[:], true)
+		blocked := false
+		for _, stack := range strings.Split(string(stacks[:n]), "\n\n") {
+			if strings.HasPrefix(stack, "goroutine "+id+" ") && strings.Contains(stack, "scopedDNSInactiveEpoch(") {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			break
+		}
+		select {
+		case <-wait.C:
+			t.Fatal("final checkLocal did not wait on the held lifecycle mutex")
+		case <-tick.C:
+		}
+	}
+	cancel()
+	if held.Swap(false) {
+		scopedDNSInactiveLifecycle.Unlock()
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) || !errors.Is(err, ErrScopedDNSRuntimeInactive) || ScopedDNSRuntimeInactiveStage(err) != "lifecycle-final" {
+			t.Fatal("cancelled final epoch read granted success", ScopedDNSRuntimeInactiveStage(err))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled final observer failed to return")
 	}
 }

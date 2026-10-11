@@ -148,6 +148,9 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 		}
 		return scopedDNSInactiveAt(stage, errors.Join(err, localErr))
 	}
+	if err := ctx.Err(); err != nil {
+		return scopedDNSInactiveAt("lifecycle-final", err)
+	}
 	return nil
 }
 
