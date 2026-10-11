@@ -14,9 +14,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
+	"github.com/ArtixSx/razvilka/internal/startuptools"
 )
 
 const xraySelectedQAID = "custom-qa-xray-selected-tcp"
@@ -25,6 +30,70 @@ const xraySelectedMaxResponse = 1 << 20
 
 func xraySelectedCatalogAllowsNewQA(c catalog.Catalog) bool {
 	return !slices.ContainsFunc(c.Services, func(service catalog.Service) bool { return service.ID == xraySelectedQAID })
+}
+
+// Diagnostic categories are observations only. Never forward raw errors,
+// paths or profiles, including text attached to an otherwise known refusal.
+func xraySelectedStartupCause(err error) string {
+	if err == nil {
+		return "none"
+	}
+	for _, known := range []struct {
+		err  error
+		code string
+	}{
+		{context.DeadlineExceeded, "deadline"}, {context.Canceled, "canceled"},
+		{operationgate.ErrJournalRecovery, "network_journal_recovery"},
+		{operationgate.ErrRecovery, "operation_recovery"}, {operationgate.ErrBusy, "operation_busy"},
+		{operationgate.ErrChanged, "operation_changed"},
+		{operationgate.ErrSelfUpdateStopped, "control_stopped"}, {operationgate.ErrSelfUpdateStopJournal, "control_journal"},
+		{operationgate.ErrSelfUpdateStopChanged, "control_changed"},
+		{startuptools.ErrUnknown, "startup_tools"}, {netidentity.ErrUnknown, "network_identity"},
+		{dataplane.ErrRuntimeInactivity, "runtime_inactivity"}, {dataplane.ErrNetworkPolicyAuthority, "network_policy_authority"},
+		{dataplane.ErrNetworkPolicyConsumers, "network_policy_consumers"},
+		{dataplane.ErrXrayRegistration, "xray_registration"}, {app.ErrXrayListSource, "xray_source"},
+	} {
+		if errors.Is(err, known.err) {
+			return known.code
+		}
+	}
+	// These App sentinels are private. Match their complete fixed messages,
+	// returning only our fixed category; any added text stays unclassified.
+	switch err.Error() {
+	case "self update requires matching file/helper recovery":
+		return "self_update_recovery"
+	case "component update requires reviewed recovery":
+		return "component_recovery"
+	}
+	return "unclassified_refusal"
+}
+
+func xraySelectedStartupToolStage(err error) string {
+	pending := []error{err}
+	stage := "unclassified"
+	for count := 0; len(pending) > 0 && count < 32; count++ {
+		current := pending[0]
+		pending = pending[1:]
+		if current == nil {
+			continue
+		}
+		// Only complete, source-known fixed stages may leave this function.
+		for _, known := range []string{"ACQUIRE", "ACQUIRE_IDENTITY", "ACQUIRE_PLATFORM", "UNISSUED", "POLICY_UNISSUED", "POLICY_PLATFORM", "POLICY_ALIAS", "POLICY_ABI"} {
+			if current.Error() == "trusted startup tools: "+known {
+				stage = known
+			}
+		}
+		switch wrapped := current.(type) {
+		case interface{ Unwrap() []error }:
+			children := wrapped.Unwrap()
+			pending = append(pending, children[:min(len(children), 32-count-len(pending))]...)
+		case interface{ Unwrap() error }:
+			if len(pending) < 32-count {
+				pending = append(pending, wrapped.Unwrap())
+			}
+		}
+	}
+	return stage
 }
 
 type xraySelectedNativeInput struct {
@@ -152,6 +221,30 @@ func TestXraySelectedNativeCatalogAcceptsGenuineStarterAndRejectsQACollision(t *
 	collision.Services = append(collision.Services, xraySelectedQAService(netip.MustParseAddr("149.154.167.99")))
 	if xraySelectedCatalogAllowsNewQA(collision) {
 		t.Fatal("existing QA identity must not be replaced or reused")
+	}
+}
+
+func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.T) {
+	const secret = "vless://UUID:PRIVATE-KEY@private.invalid/"
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{nil, "none"}, {errors.Join(errors.New(secret), operationgate.ErrBusy), "operation_busy"},
+		{errors.Join(errors.New(secret), startuptools.ErrUnknown), "startup_tools"},
+		{errors.New("self update requires matching file/helper recovery"), "self_update_recovery"},
+		{errors.New("self update requires matching file/helper recovery: " + secret), "unclassified_refusal"},
+		{errors.New(secret), "unclassified_refusal"},
+	} {
+		if got := xraySelectedStartupCause(test.err); got != test.want {
+			t.Fatal("unexpected fixed startup category", got)
+		}
+	}
+	if got := xraySelectedStartupToolStage(errors.Join(errors.New(secret), errors.New("trusted startup tools: ACQUIRE"))); got != "ACQUIRE" {
+		t.Fatal("known tool stage hidden", got)
+	}
+	if got := xraySelectedStartupToolStage(errors.New("trusted startup tools: ACQUIRE " + secret)); got != "unclassified" {
+		t.Fatal("arbitrary tool diagnostic text escaped allowlist", got)
 	}
 }
 

@@ -259,7 +259,10 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	managedNFQ, err = configureManagedNFQList(managedLife, a)
 	nfqStartupErr := err
 	managedXray, err = configureManagedXraySelectedTCPList(managedLife, a)
-	if nfqStartupErr != nil || err != nil || managedNFQ == nil || managedXray == nil {
+	xrayStartupErr := err
+	if nfqStartupErr != nil || xrayStartupErr != nil || managedNFQ == nil || managedXray == nil {
+		t.Logf("stage=managed_startup component=nfqws2 returned_handle=%t cause=%s tools_stage=%s", managedNFQ != nil, xraySelectedStartupCause(nfqStartupErr), xraySelectedStartupToolStage(nfqStartupErr))
+		t.Logf("stage=managed_startup component=xray returned_handle=%t cause=%s tools_stage=%s", managedXray != nil, xraySelectedStartupCause(xrayStartupErr), xraySelectedStartupToolStage(xrayStartupErr))
 		if soakFiles != nil {
 			if soakFiles.Publish(xraySelectedSoakStatus{RunID: soakFiles.runID, Phase: "cleanup_unconfirmed", Code: "managed_startup_unconfirmed", UpdatedAt: time.Now()}) != nil {
 				t.Error("stage=soak_status code=failed_startup_status_unconfirmed; retain original QA artifacts")
