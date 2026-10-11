@@ -67,9 +67,9 @@ import (
 // plain text, never runtime grants. No automatic Stop exactly at 3600s:
 // STOP before 1h fails; no valid STOP by 70m fails and ordinary cleanup runs.
 //
-// Known at Root88f998fb: the selected TCP Xray publisher and Main->App Apply
-// integration are not installed yet. Custom CIDRs do not manufacture an applied
-// ServiceCIDRReview/cache receipt either. A public API refusal is a FAIL stage,
+// Use the same genuine Main managed-list startup helpers and shared lifetime.
+// Custom CIDRs do not manufacture an applied ServiceCIDRReview/cache receipt.
+// A refused startup or public API operation is a FAIL stage,
 // never an alternate launcher, READY fixture, forged journal or PASS gate.
 func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	if os.Getenv("RAZVILKA_NATIVE_XRAY_SELECTED") != "1" {
@@ -220,6 +220,49 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 		t.Fatal("stage=main_constructor code=actual_scope_binding_refused")
 	}
 	defer a.CloseDefaultConsent()
+	// The Main managed lifetime survives cancellation of admission, HTTP and
+	// soak work. Its original tools remain held until both real owners join.
+	managedLife, stopManagedLife := context.WithCancel(context.Background())
+	var managedNFQ *app.ManagedNFQWSListRuntime
+	var managedXray *app.ManagedXraySelectedTCPListRuntime
+	managedJoined := false
+	closeManaged := func(cleanup context.Context) error {
+		if managedJoined {
+			return nil
+		}
+		// A failed constructor can retain a shared registered participant even
+		// without a returned runtime. Nil handles alone prove no retirement.
+		if managedNFQ == nil && managedXray == nil {
+			return dataplane.ErrRuntimeInactivity
+		}
+		if managedXray != nil {
+			if err := managedXray.Close(cleanup); err != nil {
+				return err
+			}
+		}
+		if managedNFQ != nil {
+			if err := managedNFQ.Close(cleanup); err != nil {
+				return err
+			}
+		}
+		managedJoined = true
+		stopManagedLife()
+		return nil
+	}
+	// The same production keeper retries actual cleanup with fresh bounded
+	// budgets. An unsuccessful Close never lets this test discard the owner.
+	defer retainManagedListRetirement(closeManaged)
+	managedNFQ, err = configureManagedNFQList(managedLife, a)
+	nfqStartupErr := err
+	managedXray, err = configureManagedXraySelectedTCPList(managedLife, a)
+	if nfqStartupErr != nil || err != nil || managedNFQ == nil || managedXray == nil {
+		if soakFiles != nil {
+			if soakFiles.Publish(xraySelectedSoakStatus{RunID: soakFiles.runID, Phase: "cleanup_unconfirmed", Code: "managed_startup_unconfirmed", UpdatedAt: time.Now()}) != nil {
+				t.Error("stage=soak_status code=failed_startup_status_unconfirmed; retain original QA artifacts")
+			}
+		}
+		t.Fatal("stage=main_constructor code=actual_managed_list_startup_unconfirmed; retain original QA artifacts")
+	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal("stage=http_server code=local_listener_unavailable")
@@ -343,6 +386,14 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 			t.Error("stage=retirement code=actual_runtime_absence_unconfirmed; retain original QA artifacts")
 			ok = false
 		}
+		// Preserve the original public Stop and inactivity checks while the
+		// source owners are still alive; only then join Xray followed by NFQ.
+		joinedCleanup, joinedCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if closeManaged(joinedCleanup) != nil {
+			t.Error("stage=retirement code=managed_runtime_join_unconfirmed; retain original QA artifacts")
+			ok = false
+		}
+		joinedCancel()
 		return ok
 	}
 	defer func() {
