@@ -69,6 +69,12 @@ func (l *Lease) WGCommandTools(engine string) (dataplane.WGCommandTools, error) 
 	if engine != "wireguard" && engine != "amneziawg" || l.profile.wgEngine == "" || l.review == nil || l.review.wgEntry[primary] == nil || l.review.ipEntry == nil || l.digest == "" || l.provider == nil || l.identity.Validate() != nil {
 		return dataplane.WGCommandTools{}, at("WG_UNISSUED", nil)
 	}
+	if l.review.profile.wgEngine != l.profile.wgEngine || l.review.profile.wgAliases != l.profile.wgAliases {
+		return dataplane.WGCommandTools{}, at("WG_UNISSUED", nil)
+	}
+	if err := l.review.wgAbsencesCurrent(c); err != nil {
+		return dataplane.WGCommandTools{}, err
+	}
 	aliases := l.profile.wgAliases
 	for i := range aliases {
 		if l.review.wgEntry[i] == nil {

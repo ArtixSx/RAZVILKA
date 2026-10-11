@@ -15,11 +15,9 @@ func (r *heldReview) captureWG(ctx context.Context) error {
 	if r.profile.wgEngine == "" {
 		return ctx.Err()
 	}
-	primary := 0
-	if r.profile.wgEngine == "amneziawg" {
-		primary = 1
-	} else if r.profile.wgEngine != "wireguard" {
-		return at("WG_PROFILE", nil)
+	primary, err := wgRequiredEntry(r.profile.wgEngine)
+	if err != nil {
+		return err
 	}
 	for i, alias := range r.profile.wgAliases {
 		if alias == "" {
