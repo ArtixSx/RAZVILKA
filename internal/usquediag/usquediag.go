@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
@@ -209,7 +210,7 @@ func New() *Manager {
 		Architecture:            runtime.GOARCH,
 		FeedPatterns:            []string{"/opt/etc/opkg.conf", "/opt/etc/opkg/*.conf"},
 		PackageStatusCandidates: []string{"/opt/lib/opkg/status", "/opt/var/lib/opkg/status"},
-		BackupPatterns:          []string{"/opt/var/lib/razvilka/backups/usque/*", "/opt/etc/usque/*.bak", "/opt/etc/usque/backup-*/*"},
+		BackupPatterns:          []string{installpath.State + "/backups/usque/*", "/opt/etc/usque/*.bak", "/opt/etc/usque/backup-*/*"},
 		ConfigPath:              "/opt/etc/usque/usque.conf", SessionPath: "/opt/etc/usque/session.conf",
 		InitPath: "/opt/etc/init.d/S51usque", NDMCPath: "/bin/ndmc",
 		IPCandidates:    []string{"/opt/sbin/ip", "/opt/bin/ip", "ip"},
@@ -221,8 +222,8 @@ func New() *Manager {
 			"/etc/ssl/certs/ca-certificates.crt",
 			"/etc/ssl/cert.pem",
 		},
-		EvidencePath: "/opt/var/lib/razvilka/dataplane/usque/evidence.json",
-		RepairRoot:   "/opt/var/lib/razvilka/usque-repair",
+		EvidencePath: installpath.State + "/dataplane/usque/evidence.json",
+		RepairRoot:   installpath.State + "/usque-repair",
 		ShellPath:    "/bin/sh",
 	}
 }

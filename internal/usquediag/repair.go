@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -182,7 +183,7 @@ func ensurePrivateRoot(path string) error {
 func (m *Manager) repairPaths() (root, shell string) {
 	root, shell = m.RepairRoot, m.ShellPath
 	if root == "" {
-		root = "/opt/var/lib/razvilka/usque-repair"
+		root = installpath.State + "/usque-repair"
 	}
 	if shell == "" {
 		shell = "/bin/sh"

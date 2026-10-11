@@ -27,6 +27,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	proof "github.com/ArtixSx/razvilka/internal/evidence"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
@@ -47,7 +48,7 @@ type Manager struct {
 func New(configs *engineconfig.Manager) *Manager {
 	return &Manager{
 		Configs:       configs,
-		DataplaneRoot: "/opt/var/lib/razvilka/dataplane",
+		DataplaneRoot: installpath.State + "/dataplane",
 		USQUEConfig:   "/opt/etc/usque/usque.conf",
 		Statuses:      func() []engine.Status { return (engine.Detector{}).All() },
 		System:        systemprobe.Probe,
