@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -31,18 +32,33 @@ func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
 		t.Run(cut, func(t *testing.T) {
 			a, u, review, profile := nativeFileFixture(t, "candidate-stopped-"+cut)
 			oldJob := filepath.Join(a.directory, review.ID)
+			// Keep Installation/Control outside the helper inventory, exactly
+			// like the established native stopped fixture below. Reader admission
+			// must still reject every non-job directory in the helper root.
+			helperDirectory := t.TempDir()
 			id := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" // Existing actual S fixture's job.
-			job := filepath.Join(a.directory, id)
-			if oldJob != job {
-				if err := os.Rename(oldJob, job); err != nil {
-					t.Fatal(err)
-				}
+			job := filepath.Join(helperDirectory, id)
+			if err := os.Rename(oldJob, job); err != nil {
+				t.Fatal(err)
 			}
+			u.Directory = helperDirectory
+			a = nativeFileAdapter(helperDirectory, profile)
 			u.record.Job.ID, review.ID = id, id
 			u.record.CurrentVersion, review.OldVersion = "0.20.0", "0.20.0"
 			u.record.Job.Release.Version, review.NewVersion = "0.20.1", "0.20.1"
 			review.Files = reviewedFileList(job, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
 			saveStoppedReview(t, a, u, review)
+			entries, err := os.ReadDir(a.directory)
+			if err != nil || u.Directory != a.directory || len(entries) != 2 || entries[0].Name() != id || !entries[0].IsDir() || entries[0].Type()&os.ModeSymlink != 0 || entries[1].Name() != "current.json" || entries[1].Type() != 0 {
+				t.Fatal("helper inventory must contain only its real job and current record", err)
+			}
+			for _, path := range []string{profile.Installation, profile.Control} {
+				relative, err := filepath.Rel(a.directory, path)
+				info, statErr := os.Lstat(path)
+				if err != nil || statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+					t.Fatal("actual Installation/Control must remain outside the helper inventory", err, statErr)
+				}
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 			defer cancel()
 			helper := exec.CommandContext(ctx, filepath.Join(job, "control.bin"), "self-update-helper", id)
