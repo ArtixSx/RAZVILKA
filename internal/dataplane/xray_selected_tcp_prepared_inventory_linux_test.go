@@ -157,9 +157,48 @@ func newXrayPreparedManagerFixture(t *testing.T, audit func(*xrayPreparedManager
 	return f
 }
 
-func assertXrayPreparedOriginalRollback(t *testing.T, f *xrayPreparedManagerFixture, result Execution) {
+func assertXrayPreparedOriginalRollback(t *testing.T, f *xrayPreparedManagerFixture, result Execution, cause error) {
 	t.Helper()
 	if result.State != "rolled-back" || len(result.Resources) != 1 || result.Resources[0].State != "unused" || result.Resources[0].Phase != "unused" {
+		classes := []struct {
+			name  string
+			value error
+		}{
+			{"forward_cut", f.cut}, {"owner", ErrXrayOperationOwner}, {"journal", ErrExecutionJournal}, {"review", ErrReviewChanged},
+			{"identity", ErrNetworkPolicyIdentity}, {"consumers", ErrNetworkPolicyConsumers}, {"node_transit", ErrNodeTransitUnavailable},
+			{"runtime", errXraySelectedTCPRuntime}, {"receipt", ErrPolicyAdditionReceipt}, {"unknown", ErrPolicyAdditionUnknown},
+			{"deadline", context.DeadlineExceeded}, {"canceled", context.Canceled},
+		}
+		for _, step := range result.Steps {
+			var names []string
+			for _, class := range classes {
+				// These are known package sentinels and this fixture's fixed
+				// cut text. Never format the private step detail/cause itself.
+				if strings.Contains(step.Detail, class.value.Error()) {
+					names = append(names, class.name)
+				}
+			}
+			t.Logf("fixture_step adapter=%s phase=%s state=%s detail=%t classes=%s", step.Adapter, step.Phase, step.State, step.Detail != "", strings.Join(names, ","))
+		}
+		for _, resource := range result.Resources {
+			t.Logf("fixture_resource state=%s phase=%s", resource.State, resource.Phase)
+		}
+		for _, class := range classes {
+			t.Logf("fixture_error class=%s present=%t", class.name, errors.Is(cause, class.value))
+		}
+		e := f.x.material.execution
+		e.mu.Lock()
+		r, started, retired, preparing := e.resource, e.started, e.retired, e.preparing
+		e.mu.Unlock()
+		if r != nil {
+			r.observationMu.RLock()
+			t.Logf("fixture_lifecycle started=%t retired=%t preparing=%t version_used=%t version_child=%t start_used=%t start_ack=%t child=%t selector_used=%t descriptors_closed=%t",
+				started, retired, preparing, r.versionUsed, r.versionChild != nil, r.startUsed, r.startACK, r.child != nil, r.selectorUsed, r.descriptorsClosed)
+			r.observationMu.RUnlock()
+			r.scope.mu.Lock()
+			t.Logf("fixture_scope open=%t pending=%t failure=%t observation_open=%t", r.scope.open, r.scope.pending, r.scope.failure != nil, r.scope.observationOpen.Load())
+			r.scope.mu.Unlock()
+		}
 		t.Fatalf("original prepared resource did not settle through rollback: state=%s resources=%d", result.State, len(result.Resources))
 	}
 	r := f.x.material.execution.resource
@@ -186,7 +225,7 @@ func TestXrayPreparedInventoryOriginalManagerStageValidateRollback(t *testing.T)
 	result, err := f.x.manager.Apply(f.ctx, f.plan, nil)
 	// Assert original cleanup even for the old-source negative overlay, before
 	// rejecting its prematurely failed LAN Validate coordinate.
-	assertXrayPreparedOriginalRollback(t, f, result)
+	assertXrayPreparedOriginalRollback(t, f, result, err)
 	for _, want := range []struct{ adapter, phase string }{{NetworkPolicyAdapterID, "snapshot"}, {"xray", "snapshot"}, {NetworkPolicyAdapterID, "stage"}, {"xray", "stage"}, {NetworkPolicyAdapterID, "validate"}} {
 		found := false
 		for _, step := range result.Steps {
@@ -235,7 +274,7 @@ func TestXrayPreparedInventoryBookendsAndTrueFinalImage(t *testing.T) {
 	if !errors.Is(err, f.cut) {
 		t.Fatal(err)
 	}
-	assertXrayPreparedOriginalRollback(t, f, result)
+	assertXrayPreparedOriginalRollback(t, f, result, err)
 }
 
 func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T) {
@@ -343,7 +382,7 @@ func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 			if !errors.Is(err, f.cut) {
 				t.Fatal(err)
 			}
-			assertXrayPreparedOriginalRollback(t, f, result)
+			assertXrayPreparedOriginalRollback(t, f, result, err)
 		})
 	}
 }
@@ -403,5 +442,5 @@ func TestXrayPreparedInventoryOriginalContextAndLifecycle(t *testing.T) {
 	if !errors.Is(err, f.cut) {
 		t.Fatal(err)
 	}
-	assertXrayPreparedOriginalRollback(t, f, result)
+	assertXrayPreparedOriginalRollback(t, f, result, err)
 }
