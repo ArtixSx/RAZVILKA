@@ -436,14 +436,19 @@ func nativeStoppedQuiesceJoin(ctx context.Context, a *SelfUpdateFileAdapter, bin
 	if err != nil {
 		return err
 	}
-	r.State = "armed"
-	if err := writeFileCommand(root, r); err != nil {
-		return err
-	}
+	// The actual S must consume H's intent and publish armed/running itself.
+	// H only captures the kernel child and owns its sole Wait; a second
+	// publication here can replace intent before S admits that transition.
 	err = worker.Wait()
 	waited = true
 	w.observeWait(err)
 	if err != nil {
+		final, receiptErr := readFileCommand(root, id, r.Command)
+		exitCode := -1
+		if worker.ProcessState != nil {
+			exitCode = worker.ProcessState.ExitCode()
+		}
+		fmt.Fprintf(os.Stderr, "native stopped quiesce failed-wait exit=%d receipt_valid=%t intent=%t armed=%t running=%t reaped=%t wait_echild=%t cancelled=%t supervisor_match=%t parent_match=%t\n", exitCode, receiptErr == nil, receiptErr == nil && final.State == "intent", receiptErr == nil && final.State == "armed", receiptErr == nil && final.State == "running", receiptErr == nil && final.State == "reaped", receiptErr == nil && final.WaitECHILD, receiptErr == nil && final.Cancelled, receiptErr == nil && final.Supervisor == r.Supervisor, receiptErr == nil && final.Parent == parent)
 		return err
 	}
 	final, err := readFileCommand(root, id, r.Command)
