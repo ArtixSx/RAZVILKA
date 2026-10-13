@@ -182,6 +182,22 @@ func TestPhysicalScopeNativeIPv4LANPacketLifecycle(t *testing.T) {
 	if original.Identity.Kind != netidentity.ReviewedSingleInitNet || original.ScopeID == "" || original.Home.ID != initial.SegmentIDs[0] || !original.Home.Home || original.Home.Guest || len(original.IPv4Prefixes) == 0 || !reflect.DeepEqual(original.Intent, initial) || original.Control != control.Reference() {
 		t.Fatal("IPv4 LAN packet original facts refused")
 	}
+	// Reuse the pure closed classifier on immutable original A, with no new
+	// kernel/provider/intent read or notification capture.
+	roles, _, roleErr := packetNativeNeighborClasses(held, scope.topology, nil, original.Intent, map[byte][]message{2: {}, 10: {}})
+	if roleErr != nil {
+		t.Fatal("original wireless role classification refused")
+	}
+	roleJSON, roleErr := json.Marshal(struct {
+		Phase          string                          `json:"phase"`
+		Groups         []packetNativeWirelessRoleGroup `json:"groups"`
+		GroupsOmitted  int                             `json:"groups_omitted"`
+		MembersOmitted int                             `json:"members_omitted"`
+	}{"original_wireless_roles", roles.WirelessRoleGroups, roles.WirelessRoleGroupsOmitted, roles.WirelessMembersOmitted})
+	if roleErr != nil {
+		t.Fatal("original wireless closed role encoding refused")
+	}
+	t.Log(string(roleJSON))
 	unchanged := func() bool { return reflect.DeepEqual(original, scope.PacketFacts()) }
 	_, currentErr := packetNativePhase(t, held, "current", scope.Current)
 	if currentErr != nil {
@@ -716,6 +732,24 @@ type packetNativeNeighborStageCount struct {
 	Stage string `json:"stage"`
 	Count int    `json:"count"`
 }
+type packetNativeWirelessRole struct {
+	Source          string `json:"source"`
+	OriginNDM       bool   `json:"origin_ndm"`
+	AccessPoint     bool   `json:"access_point"`
+	NativeIDPresent bool   `json:"native_id_present"`
+	KindEmpty       bool   `json:"kind_empty"`
+	Ethernet        bool   `json:"ethernet"`
+	MasterEquals    bool   `json:"master_equals"`
+	VLANKnown       bool   `json:"vlan_known"`
+	ForeignParent   bool   `json:"foreign_parent"`
+	FlagsUp         bool   `json:"flags_up"`
+	FlagsLowerUp    bool   `json:"flags_lower_up"`
+	FlagsRunning    bool   `json:"flags_running"`
+}
+type packetNativeWirelessRoleGroup struct {
+	Role  packetNativeWirelessRole `json:"role"`
+	Count int                      `json:"count"`
+}
 type packetNativeNeighborReport struct {
 	Phase                     string                           `json:"phase"`
 	Records                   int                              `json:"records"`
@@ -729,10 +763,36 @@ type packetNativeNeighborReport struct {
 	OtherStagesOmitted        int                              `json:"other_stages_omitted"`
 	OtherStageCountsOmitted   int                              `json:"other_stage_counts_omitted"`
 	OtherUnclassifiedRefusals int                              `json:"other_unclassified_refusals"`
+	WirelessRoleGroups        []packetNativeWirelessRoleGroup  `json:"wireless_role_groups,omitempty"`
+	WirelessRoleGroupsOmitted int                              `json:"wireless_role_groups_omitted"`
+	WirelessMembersOmitted    int                              `json:"wireless_members_omitted"`
 }
 
 func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent, frames map[byte][]message) (packetNativeNeighborReport, error, error) {
 	report := packetNativeNeighborReport{Phase: "neighbor_summary"}
+	roleCounts := map[packetNativeWirelessRole]int{}
+	var roleOrder []packetNativeWirelessRole
+	for _, segment := range topology.boundarySegments() {
+		source := "synthetic_foreign"
+		if segment.IfIndex == topology.home.IfIndex {
+			source = "home"
+		}
+		for _, member := range segment.Members {
+			role := packetNativeWirelessRole{Source: source, OriginNDM: member.Origin == "ndm", AccessPoint: member.NativeType == "AccessPoint", NativeIDPresent: member.NativeID != "", KindEmpty: member.Kind == "", Ethernet: member.LinkType == 1, MasterEquals: member.MasterIfIndex == segment.IfIndex, VLANKnown: member.VLAN.Known, ForeignParent: member.ForeignParent, FlagsUp: member.Flags&1 != 0, FlagsLowerUp: member.Flags&0x10000 != 0, FlagsRunning: member.Flags&0x40 != 0}
+			if _, known := roleCounts[role]; !known {
+				roleOrder = append(roleOrder, role)
+			}
+			roleCounts[role]++
+		}
+	}
+	for i, role := range roleOrder {
+		if i < 16 {
+			report.WirelessRoleGroups = append(report.WirelessRoleGroups, packetNativeWirelessRoleGroup{Role: role, Count: roleCounts[role]})
+		} else {
+			report.WirelessRoleGroupsOmitted++
+			report.WirelessMembersOmitted += roleCounts[role]
+		}
+	}
 	groups := map[packetNativeNeighborClassKey]int{}
 	otherStages := map[string]int{}
 	var order []packetNativeNeighborClassKey
@@ -1057,6 +1117,35 @@ func TestIPv4LANPacketNativeHarnessNeighborClassPrivacyAndBounds(t *testing.T) {
 	report, refusal, readErr := packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
 	if readErr != nil || !slices.Contains(DiagnosticStages(refusal), "kernel.bindings.neighbor.mac") || report.MACRefusals != 18 || report.GroupCount != 18 || len(report.Groups) != 16 || report.GroupsOmitted != 2 || report.RecordsOmitted != 2 {
 		t.Fatal("closed shape grouping bound lost")
+	}
+	encoded, _ = json.Marshal(report)
+	for _, private := range []string{topology.home.ID, topology.home.Interface, topology.home.MAC, projectionClientMAC, address, privateName} {
+		if private != "" && bytes.Contains(encoded, []byte(private)) {
+			t.Fatal("private value escaped wireless role booleans")
+		}
+	}
+	roleTopology := clonePacketTopology(topology)
+	roleTopology.links, roleTopology.home.Members = nil, nil
+	for bits := 0; bits < 18; bits++ {
+		member := Link{Interface: privateName, NativeID: privateName, MAC: projectionClientMAC, Kind: "vlan"}
+		if bits&1 != 0 {
+			member.Origin = "ndm"
+		}
+		if bits&2 != 0 {
+			member.NativeType = "AccessPoint"
+		}
+		if bits&4 != 0 {
+			member.NativeID = ""
+		}
+		if bits&8 != 0 {
+			member.Kind = ""
+		}
+		member.VLAN.Known = bits&16 != 0
+		roleTopology.home.Members = append(roleTopology.home.Members, member)
+	}
+	roles, _, readErr := packetNativeNeighborClasses(context.Background(), roleTopology, nil, intent, map[byte][]message{2: {}, 10: {}})
+	if readErr != nil || len(roles.WirelessRoleGroups) != 16 || roles.WirelessRoleGroupsOmitted != 2 || roles.WirelessMembersOmitted != 2 {
+		t.Fatal("wireless role grouping bound lost")
 	}
 	frames[2] = make([]message, 4097)
 	for i := range frames[2] {
