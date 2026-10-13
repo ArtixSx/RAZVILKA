@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -10,6 +11,65 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
+
+// Actual authenticated preview/Apply, Store CAS and Manager publication. The
+// existing sing-box adapter model performs no native effect: this exercises
+// only the journal precondition used by the autonomous managed matcher, never
+// fabricates an original managed owner or declares native health.
+func TestAutonomyManagedXrayJournalMatchesActualCommittedPublicationToOriginalPlannedIntent(t *testing.T) {
+	a, id, _ := nodeApplyFixture(t)
+	preview := nodeRouteRequest(a, id, "preview", map[string]any{"service_id": "telegram"}, "owner-a", context.Background())
+	var reviewed struct {
+		Ready       bool            `json:"ready"`
+		Review      nodeRouteReview `json:"review"`
+		Transaction dataplane.Plan  `json:"transaction"`
+	}
+	if preview.Code != 200 || json.Unmarshal(preview.Body.Bytes(), &reviewed) != nil || !reviewed.Ready || reviewed.Transaction.State != "planned" {
+		t.Fatal("actual original planned review was not produced", preview.Code)
+	}
+	applied := nodeRouteRequest(a, id, "apply", nodeApplyBody(reviewed.Review), "owner-a", context.Background())
+	if applied.Code != 200 {
+		t.Fatal("actual Manager publication failed", applied.Code, applied.Body.String())
+	}
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil || !exists || committed.State != "committed" || reflect.DeepEqual(committed, reviewed.Transaction) {
+		t.Fatal("fixture did not exercise actual planned/committed difference", err)
+	}
+	revision := a.Store.Get().AppliedRevision
+	if !autonomyManagedXrayJournalMatches(a.Dataplane, committed, reviewed.Transaction, revision) {
+		t.Fatal("actual committed documentary fields revoked unchanged original intent")
+	}
+	for _, change := range []string{"plan-ID", "digest", "revision", "route", "scope", "recipe", "noncommitted", "document-copy"} {
+		t.Run(change, func(t *testing.T) {
+			original, actual := defaultRouteClonePlan(reviewed.Transaction), defaultRouteClonePlan(committed)
+			switch change {
+			case "plan-ID":
+				original.PlanID += "-foreign"
+			case "digest":
+				original.Digest = "foreign"
+			case "revision":
+				original.Revision++
+			case "route":
+				original.Routes[0].Resolved = "direct"
+			case "scope":
+				original.Routes[0].Sources = []string{"192.168.1.55/32"}
+			case "recipe":
+				original.Actions = append(original.Actions, dataplane.Action{})
+			case "noncommitted":
+				actual.State = "planned"
+			case "document-copy":
+				actual.ObservedEvidence = "foreign"
+			}
+			if autonomyManagedXrayJournalMatches(a.Dataplane, actual, original, revision) {
+				t.Fatal("changed original/current journal accepted", change)
+			}
+		})
+	}
+	if autonomyManagedXrayJournalMatches(dataplane.New(t.TempDir()), committed, reviewed.Transaction, revision) ||
+		autonomyManagedXrayJournalMatches(a.Dataplane, committed, reviewed.Transaction, revision+1) {
+		t.Fatal("foreign journal or wrong applied revision accepted")
+	}
+}
 
 // Actual source, Store receipt, private NodeStore and selected-device compiler.
 // Only physical acquisition, WAN and recorded health use explicit models.

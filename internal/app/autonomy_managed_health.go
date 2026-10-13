@@ -33,6 +33,18 @@ func autonomyManagedXrayCompiledMatches(plan dataplane.Plan, compilation *Defaul
 		reflect.DeepEqual(route.Ingress, []string{ingress.Interface}) && route.NetworkPolicyGeneration == compilation.Digest() && route.NetworkPolicyRole == "override"
 }
 
+// Manager publishes documentary phase/evidence after applying the immutable
+// intent. Compare that intent separately, and require the actual original
+// Manager's complete current committed image. Neither comparison grants any
+// retained owner, process, health or Apply admission.
+func autonomyManagedXrayJournalMatches(manager *dataplane.Manager, actual, original dataplane.Plan, appliedRevision uint64) bool {
+	if manager == nil || actual.State != "committed" || actual.Revision != appliedRevision || !sameManagedXrayAppliedPlan(actual, original) {
+		return false
+	}
+	current, exists, err := manager.Committed()
+	return err == nil && exists && reflect.DeepEqual(current, actual)
+}
+
 // Call with the original runtime lock held. The journal plan must be the SAME
 // retained execution and the actual Store must still contain its full image.
 func (r *ManagedXraySelectedTCPListRuntime) autonomyCommittedMatches(cfg config.Config, plan dataplane.Plan, id, current string) bool {
@@ -42,7 +54,7 @@ func (r *ManagedXraySelectedTCPListRuntime) autonomyCommittedMatches(cfg config.
 	e := r.active
 	if e.self != e || e.runtime != r || e.scope == nil || e.source == nil || e.source.self != e.source || e.preparation == nil ||
 		e.preparation.self != e.preparation || e.preparation.source != e.source || e.scope != e.source.scope ||
-		!reflect.DeepEqual(plan, e.plan) || !cfg.AppliedServices[id].Enabled || selectedRoute(cfg.AppliedServices[id]) != current {
+		!autonomyManagedXrayJournalMatches(r.manager, plan, e.plan, cfg.AppliedRevision) || !cfg.AppliedServices[id].Enabled || selectedRoute(cfg.AppliedServices[id]) != current {
 		return false
 	}
 	source := e.source
