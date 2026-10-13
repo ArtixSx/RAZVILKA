@@ -88,6 +88,19 @@ export async function realHTTPAwaitIdentity(instance,read,{now=()=>performance.n
   }
   realHTTPAssert(false,'QA_IDENTITY_WAIT_TIMEOUT');
 }
+export async function realHTTPAwaitInventory(instance,read,{now=()=>performance.now(),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
+  // Observe a new real publication; retained inventory never satisfies preflight.
+  const deadline=now()+8000;
+  for(let attempt=0;attempt<17;attempt++){
+    const remaining=deadline-now();realHTTPAssert(remaining>0,'QA_INVENTORY_WAIT_TIMEOUT');
+    const value=await read(Math.max(1,Math.min(3000,Math.ceil(remaining))));
+    realHTTPAssert(realHTTPIdentityFieldsValid(value,instance)&&['available','retained'].includes(value.state),'QA_INSTANCE_MISMATCH_OR_STALE');
+    realHTTPAssert(now()<deadline,'QA_INVENTORY_WAIT_TIMEOUT');
+    if(value.state==='available'){realHTTPIdentity(value,instance);return value;}
+    await pause(Math.max(0,Math.min(500,deadline-now())));
+  }
+  realHTTPAssert(false,'QA_INVENTORY_WAIT_TIMEOUT');
+}
 export function realHTTPIdentityFacts(value,instance) {
   const age=value?.data_age_ms,limit=value?.max_age_seconds;
   const ageValid=Number.isFinite(age)&&age>=0&&Number.isFinite(limit)&&limit>0;
@@ -189,7 +202,7 @@ export async function runRealHTTPUI(config) {
     }
     stage='verify-QA-instance';const auth=await readJSON('/api/v1/auth/status');realHTTPAssert(auth.authenticated===true,'QA_SESSION_REQUIRED');
     const snapshot=await readJSON('/api/v1/panel/snapshot');realHTTPIdentity(snapshot,config.instance);
-    const inventory=await readJSON('/api/v1/panel/inventory'),nodes=await readJSON('/api/v1/nodes'),recovery=await readJSON('/api/v1/components/recovery');
+    const inventory=await realHTTPAwaitInventory(config.instance,timeout=>readJSON('/api/v1/panel/inventory',{},timeout)),nodes=await readJSON('/api/v1/nodes'),recovery=await readJSON('/api/v1/components/recovery');
     let status=await readJSON('/api/v1/status'),services=await readJSON('/api/v1/services'),autonomy=await readJSON('/api/v1/autonomy');
     if(config.preparePolicy){
       stage='prepare-disabled-QA-policy';realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},config.instance);

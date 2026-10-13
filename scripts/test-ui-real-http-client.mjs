@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis} from './ui-real-http-scenarios.mjs';
-import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
+import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPAwaitInventory,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
   RAZVILKA_QA_UI_INSTANCE:instance,RAZVILKA_QA_UI_CHROME:'installed-chrome',RAZVILKA_QA_UI_SESSION:'private-session.json'};
@@ -163,6 +163,63 @@ for(const state of ['empty','expired','unknown']){
   let elapsed=0;
   try{await realHTTPAwaitIdentity(instance,async()=>{elapsed=9000;return idle;},{now:()=>elapsed,pause:async()=>{assert.fail('overdue read must stop');}});assert.fail('expected overdue rejection');}
   catch(error){assert.equal(realHTTPFailure(error,'known-scenario').code,'QA_IDENTITY_WAIT_TIMEOUT');checks++;}
+}
+{
+  const available={...envelope,data:{system:{opt_ready:true,kernel:'qa'},private_value:'private response body'}},retained={...available,state:'retained',data_age_ms:63336};
+  const rejectInventory=async(values,code)=>{
+    const f=waitFixture(values);
+    await assert.rejects(realHTTPAwaitInventory(instance,f.read,f.clock),error=>{
+      assert.deepEqual(realHTTPFailure(error,'inventory-preflight'),{stage:'inventory-preflight',status:'failed',code});return true;
+    });
+    checks++;return f.counts();
+  };
+  {
+    const f=waitFixture([available]),before=structuredClone(available);
+    assert.equal(await realHTTPAwaitInventory(instance,f.read,f.clock),available);assert.deepEqual(available,before);
+    assert.equal(Object.hasOwn(available,'admission'),false);assert.deepEqual(f.counts(),{reads:1,pauses:0,elapsed:0});checks++;
+  }
+  {
+    const f=waitFixture([retained,available]),before=structuredClone(retained);
+    assert.equal(await realHTTPAwaitInventory(instance,f.read,f.clock),available);assert.deepEqual(retained,before);
+    assert.equal(retained.state,'retained');assert.deepEqual(f.counts(),{reads:2,pauses:1,elapsed:500});checks++;
+  }
+  for(const state of ['available','retained'])assert.deepEqual(await rejectInventory([retained,{...available,state,instance_id:'b'.repeat(32)}],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:2,pauses:1,elapsed:500});
+  for(const value of [null,{...retained,schema:2},{...retained,dataplane:'unknown'},{...retained,data_age_ms:'private age'},
+    {...retained,data_age_ms:-1},{...retained,data_age_ms:Infinity},{...retained,max_age_seconds:0},
+    {...retained,max_age_seconds:1,data_age_ms:1000},{...retained,data_age_ms:120000},
+    ...['empty','expired','unknown'].map(state=>({...retained,state}))]){
+    assert.deepEqual(await rejectInventory([value],'QA_INSTANCE_MISMATCH_OR_STALE'),{reads:1,pauses:0,elapsed:0});
+  }
+  {
+    const counts=await rejectInventory([retained],'QA_INVENTORY_WAIT_TIMEOUT');
+    assert(counts.reads<=17);assert.equal(counts.elapsed,8000);
+  }
+  {
+    let reads=0,pauses=0;
+    await assert.rejects(realHTTPAwaitInventory(instance,async()=>{reads++;return retained;},{now:()=>0,pause:async ms=>{assert.equal(ms,500);pauses++;}}),
+      error=>realHTTPFailure(error,'inventory-preflight').code==='QA_INVENTORY_WAIT_TIMEOUT');
+    assert.equal(reads,17);assert.equal(pauses,17);checks++;
+  }
+  for(const returnedAt of [8000,9000]){
+    let elapsed=0,reads=0;
+    await assert.rejects(realHTTPAwaitInventory(instance,async timeout=>{assert.equal(timeout,3000);reads++;elapsed=returnedAt;return available;},
+      {now:()=>elapsed,pause:async()=>assert.fail('late available must refuse before another pause')}),
+      error=>realHTTPFailure(error,'inventory-preflight').code==='QA_INVENTORY_WAIT_TIMEOUT');
+    assert.equal(reads,1);checks++;
+  }
+  {
+    let elapsed=0,reads=0;const timeouts=[];
+    const value=await realHTTPAwaitInventory(instance,async timeout=>{assert(timeout<=8000-elapsed);timeouts.push(timeout);elapsed+=++reads<3?2700:1599;return reads<3?retained:available;},
+      {now:()=>elapsed,pause:async ms=>{assert(ms>0&&ms<=500);elapsed+=ms;}});
+    assert.equal(value,available);assert.deepEqual(timeouts,[3000,3000,1600]);assert.equal(elapsed,7999);checks++;
+  }
+  for(const kind of ['http','network']){
+    let reads=0,original;
+    if(kind==='http')try{realHTTPAssert(false,'HTTP_READ_REJECTED');}catch(error){original=error;}
+    else original=Object.assign(new Error('private request credentials and URI'),{actual:'private body'});
+    await assert.rejects(realHTTPAwaitInventory(instance,async()=>{reads++;throw original;},{now:()=>0,pause:async()=>assert.fail('read errors must not retry')}),error=>error===original);
+    assert.equal(reads,1);assert.deepEqual(realHTTPFailure(original,'inventory-preflight'),{stage:'inventory-preflight',status:'failed',code:kind==='http'?'HTTP_READ_REJECTED':'CLIENT_FAILED'});checks++;
+  }
 }
 {
   const fixture=({catalog=false,open=false,count=1,visible=true}={})=>{
