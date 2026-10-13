@@ -238,6 +238,54 @@ func TestXrayPreparedInventoryBookendsAndTrueFinalImage(t *testing.T) {
 	assertXrayPreparedOriginalRollback(t, f, result)
 }
 
+func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T) {
+	f := newXrayPreparedManagerFixture(t, func(f *xrayPreparedManagerFixture, ctx context.Context, r *XraySelectedTCPExecutionResource) {
+		e := f.x.material.execution
+		originalRead, originalGuard := f.checks.read, r.scope.guard
+		defer func() { f.checks.read, r.scope.guard = originalRead, originalGuard }()
+		readReached, fullGuards := false, 0
+		r.scope.guard = func(ctx context.Context) error {
+			e.mu.Lock()
+			started := e.started
+			e.mu.Unlock()
+			if started {
+				fullGuards++
+			}
+			return originalGuard(ctx)
+		}
+		f.checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+			e.mu.Lock()
+			started := e.started
+			e.mu.Unlock()
+			if started {
+				readReached = true
+				if ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}) != nil {
+					t.Fatal("original Activate adopted a prepared collector grant")
+				}
+				return BackendInventorySnapshot{}, f.cut // Before any native call.
+			}
+			return originalRead(ctx, identity)
+		}
+		// Invoke the unchanged original publisher with the SAME actual issued
+		// Manager resource/context. It must consume e.started and reach legacy
+		// inventory, whose first complete read refuses before native/version.
+		err := e.activate(ctx)
+		e.mu.Lock()
+		started := e.started
+		e.mu.Unlock()
+		if !errors.Is(err, f.cut) || !started || !readReached || fullGuards != 3 {
+			t.Fatalf("original Activate did not dispatch its inventory: cut=%t started=%t read=%t full_guards=%d", errors.Is(err, f.cut), started, readReached, fullGuards)
+		}
+		if r.versionUsed || r.startUsed || r.versionChild != nil || r.child != nil || r.selectorUsed {
+			t.Fatal("activation inventory refusal reached a native/version/effect issuer")
+		}
+	})
+	_, err := f.x.manager.Apply(f.ctx, f.plan, nil)
+	if !errors.Is(err, f.cut) {
+		t.Fatal(err)
+	}
+}
+
 func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 	for _, which := range []string{"opening-guard", "closing-guard", "provisional-image", "final-image", "final-process", "closing-process", "closing-common", "final-common", "cancel"} {
 		t.Run(which, func(t *testing.T) {

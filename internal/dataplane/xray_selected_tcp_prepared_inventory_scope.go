@@ -64,8 +64,12 @@ func (c *NetworkPolicyChecks) openXraySelectedTCPPreparedInventoryScope(ctx cont
 	}
 	e.mu.Lock()
 	r := e.resource
+	eligible := e.bound && !e.started && !e.retired && !e.preparing && e.replacement == nil
 	e.mu.Unlock()
-	if r == nil {
+	if r == nil || !eligible {
+		// Activate consumes e.started before its original inventory preflight,
+		// while the resource is still planned. That attempt keeps legacy reads;
+		// an already-open prepared session cannot adopt this transition.
 		return ctx, nil, nil
 	}
 	if c.identity == nil || c.inventory == nil || c.current(ctx) != nil {
