@@ -36,8 +36,112 @@ function fixture(){
    retry(){const item=[...timers.values()].find(value=>value.ms===10000||value.ms===5000);assert(item,'retry missing');timers.clear();item.fn();},
  };
 }
+function engineFixture(){
+ const f=fixture();Object.assign(f.state,{authenticated:true,authGeneration:4,currentView:'engines',selectedEngine:'sing-box',selectedEngineFile:'main',engineConfigs:[],engineEditorDirty:false});
+ Object.assign(f.context,{captureEngineEditorContext:()=>({}),engineEditorContextCurrent:()=>true,engineIntentCurrent:()=>true,
+   selectedEngineView:()=>f.state.engineConfigs.find(e=>e.id===f.state.selectedEngine),invalidateEngineEditorContext(){},
+   noticeBelongsOnlyToEngine:()=>false,askConfirmation:async()=>true,setView:name=>{f.state.currentView=name;}});
+ vm.runInContext(['readEngineNavigationMetadata','refreshEngineConfigs','openEngineConfiguration','selectEngine'].map(extract).join('\n'),f.context);
+ return f;
+}
+function holdEngineNavigation(f){
+ const status=deferred(),catalog=deferred(),configs=[{id:'xray',files:[{id:'main'}]}];let statuses=0,catalogs=0;
+ f.handler(url=>{
+   if(url==='/api/v1/status')return ++statuses===1?status.promise:Promise.reject(Object.assign(new Error('modeled admission busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}}));
+   if(url==='/api/v1/engine-configs')return ++catalogs===1?catalog.promise:configs;
+   return f.normal(url);
+ });
+ f.context.refreshPanelView('engines');
+ return {status,catalog,configs,counts:()=>({status:statuses,catalog:catalogs}),finish:async()=>{status.resolve(f.normal('/api/v1/status'));catalog.resolve(configs);await f.panelLoad.request;}};
+}
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
+
+await test('legacy unowned metadata refresh duplicates active navigation and exposes its 409',async()=>{
+ const f=engineFixture(),held=holdEngineNavigation(f);await flush();
+ await assert.rejects(f.context.refreshEngineConfigs(),error=>error.status===409&&error.payload.code==='RESTORE_OPERATION_BUSY');
+ assert.deepEqual(held.counts(),{status:2,catalog:2});await held.finish();
+});
+
+await test('missing-catalog card joins the actual navigation snapshot and selects its exact engine',async()=>{
+ const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
+ assert.deepEqual(held.counts(),{status:1,catalog:1});await held.finish();assert.equal(await opened,true);
+ assert.equal(f.state.selectedEngine,'xray');assert.equal(f.state.currentView,'engineconfig');
+ assert.equal(f.calls.filter(call=>call.options.method&&call.options.method!=='GET').length,0);
+});
+
+await test('same-owner status or catalog failure rejects the card without a fallback read',async()=>{
+ for(const section of ['status','catalog'])for(const phase of ['busy','error']){
+   const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
+   const error=Object.assign(new Error('modeled '+phase),{status:phase==='busy'?409:503,payload:{code:phase==='busy'?'RESTORE_OPERATION_BUSY':'SOURCE_UNAVAILABLE'}});
+   held[section].reject(error);if(section==='status')held.catalog.resolve(held.configs);else held.status.resolve(f.normal('/api/v1/status'));
+   assert.equal(await opened,false);assert.equal(f.state.selectedEngine,'sing-box');assert.equal(f.state.currentView,'engines');
+   assert.deepEqual(held.counts(),{status:1,catalog:1});assert.equal(f.state.dataLoad[section==='status'?'status':'engineConfigs'].phase,phase);
+   assert.match(f.notices.at(-1)[1],/не прочитаны/);assert.equal(f.notices.at(-1)[2],'modeled '+phase);
+ }
+});
+
+await test('ordinary refresh joins navigation and a subsequent explicit refresh obtains one fresh pair',async()=>{
+ const f=engineFixture(),held=holdEngineNavigation(f);await flush();const joined=f.context.refreshAll();
+ assert.deepEqual(held.counts(),{status:1,catalog:1});await held.finish();await joined;
+ f.handler(f.normal);await f.context.refreshAll();
+ for(const url of ['/api/v1/status','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,2);
+});
+
+await test('card with an existing description starts no metadata fallback',async()=>{
+ const f=engineFixture();f.state.engineConfigs=[{id:'xray',files:[{id:'main'}]}];
+ assert.equal(await f.context.openEngineConfiguration('xray'),true);assert.equal(f.calls.length,0);assert.equal(f.state.currentView,'engineconfig');
+});
+
+await test('navigation without a snapshot owner shares active metadata GETs and never their completed bodies',async()=>{
+ const f=engineFixture(),status=deferred(),catalog=deferred();let statuses=0,catalogs=0;
+ const configs=[{id:'xray',files:[{id:'main'}]}];
+ f.handler(url=>url==='/api/v1/status'?(++statuses===1?status.promise:f.normal(url)):url==='/api/v1/engine-configs'?(++catalogs===1?catalog.promise:configs):f.normal(url));
+ const observedStatus=f.context.readPanelResource('/api/v1/status'),observedCatalog=f.context.readPanelResource('/api/v1/engine-configs');await flush();
+ const read=f.context.readEngineNavigationMetadata();await flush();assert.equal(statuses,1);assert.equal(catalogs,1);
+ status.resolve(f.normal('/api/v1/status'));catalog.resolve(configs);await Promise.all([observedStatus,observedCatalog]);assert.equal(await read,true);
+ assert.equal(await f.context.readEngineNavigationMetadata(),true);assert.equal(statuses,2);assert.equal(catalogs,2);
+});
+
+await test('unowned navigation exposes current 409 and 401 without admitting catalog or status',async()=>{
+ for(const status of [409,401]){
+   const f=engineFixture(),catalog=deferred();
+   f.handler(url=>url==='/api/v1/status'?Promise.reject(Object.assign(new Error('modeled read denied'),{status,payload:{code:status===409?'RESTORE_OPERATION_BUSY':'AUTH_REQUIRED'}})):catalog.promise);
+   assert.equal(await f.context.openEngineConfiguration('xray'),false);catalog.resolve([{id:'xray',files:[{id:'main'}]}]);await flush();
+   assert.equal(f.state.selectedEngine,'sing-box');assert.equal(f.state.engineConfigs.length,0);assert.equal(f.state.status.revision,undefined);assert.equal(f.calls.length,2);
+   if(status===401)assert.equal(f.$('#authScreen').hidden,false);else assert.match(f.notices.at(-1)[1],/не прочитаны/);
+ }
+});
+
+await test('post-write engine readback remains independent of pre-write passive transports',async()=>{
+ const f=engineFixture(),oldStatus=deferred(),oldCatalog=deferred();let committed=false;
+ f.handler(url=>url==='/api/v1/status'?(committed?{revision:35}:oldStatus.promise):url==='/api/v1/engine-configs'?(committed?[{id:'after-write'}]:oldCatalog.promise):f.normal(url));
+ const beforeStatus=f.context.readPanelResource('/api/v1/status'),beforeCatalog=f.context.readPanelResource('/api/v1/engine-configs');await flush();committed=true;
+ assert.equal(await f.context.refreshEngineConfigs(),true);assert.equal(f.state.status.revision,35);assert.equal(f.state.engineConfigs[0].id,'after-write');
+ for(const url of ['/api/v1/status','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,2);
+ oldStatus.resolve({revision:34});oldCatalog.resolve([{id:'before-write'}]);await Promise.all([beforeStatus,beforeCatalog]);
+ assert.equal(f.state.status.revision,35);assert.equal(f.state.engineConfigs[0].id,'after-write');
+});
+
+await test('old navigation owner cannot open a card after auth, view, request or snapshot changes',async()=>{
+ for(const leave of ['auth','view','request','snapshot']){
+   const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
+   if(leave==='auth')f.state.authGeneration++;else if(leave==='view')f.state.currentView='settings';else if(leave==='request')f.state.engineNavigationRequest++;else f.panelLoad.generation++;
+   await held.finish();assert.equal(await opened,false);assert.equal(f.state.selectedEngine,'sing-box');
+   assert.deepEqual(held.counts(),{status:1,catalog:1});assert.equal(f.notices.length,0);
+ }
+});
+
+await test('passive navigation metadata cannot replace state after its auth, view or request is revoked',async()=>{
+ for(const leave of ['auth','view','request']){
+   const f=engineFixture(),status=deferred(),catalog=deferred();let current=true;
+   f.handler(url=>url==='/api/v1/status'?status.promise:catalog.promise);
+   const read=f.context.readEngineNavigationMetadata(()=>current);const outcome=read.then(value=>value,error=>error.name);await flush();
+   if(leave==='auth')f.state.authGeneration++;else if(leave==='view')f.state.currentView='settings';else current=false;
+   status.resolve({revision:99});catalog.resolve([{id:'old-result'}]);assert.equal(await outcome,leave==='auth'?'AbortError':false);
+   assert.equal(f.state.status.revision,undefined);assert.equal(f.state.engineConfigs.length,0);
+ }
+});
 
 await test('passive readers share transport while navigation cancels only its subscription',async()=>{
  const f=fixture(),pending=deferred(),controller=new AbortController();f.handler(()=>pending.promise);

@@ -13,7 +13,7 @@ function fixture(){
  let confirmation=async()=>true,refresh=async()=>true;
  const $=id=>{if(!elements.has(id))elements.set(id,{hidden:id==='#authScreen',disabled:false,focus(){focus.push(id);},value:'private draft'});return elements.get(id);};
  const ctx={state,interfaceState,$,consoleEngineMeta:{'sing-box':{},xray:{},usque:{}},Object,Promise,
-   askConfirmation:(...args)=>confirmation(...args),refreshEngineConfigs:async()=>{calls.push({method:'GET',path:'/api/v1/engine-configs'});return refresh();},
+   askConfirmation:(...args)=>confirmation(...args),readEngineNavigationMetadata:async()=>{calls.push({method:'GET',path:'/api/v1/engine-configs'});return refresh();},
    selectedEngineView:()=>state.engineConfigs.find(e=>e.id===state.selectedEngine),invalidateEngineEditorContext(){},
    noticeBelongsOnlyToEngine:()=>false,hideNotice(){},showNotice:(...args)=>notices.push(args),renderEngineControl(){},
    setView:name=>{state.currentView=name;},switchEngineTab:tab=>tabs.push(tab),
@@ -49,6 +49,16 @@ await test('missing description cannot fall back to a different engine',async()=
 await test('independent read can provide the requested description',async()=>{
  const f=fixture();f.state.engineConfigs=f.state.engineConfigs.filter(e=>e.id!=='xray');f.refresh(async()=>{f.state.engineConfigs.push({id:'xray',files:[{id:'main'}]});return true;});
  await f.ctx.interfaceOpenEngineStep('xray','profile');assert.equal(f.state.selectedEngine,'xray');assert.equal(f.state.currentView,'engineconfig');assert.equal(f.calls[0].method,'GET');
+});
+await test('a revoked navigation read cannot open an engine even if a retained description appears',async()=>{
+ const f=fixture();f.state.engineConfigs=[];f.refresh(async()=>{f.state.engineConfigs.push({id:'xray',files:[{id:'main'}]});return false;});
+ await f.ctx.interfaceOpenEngineStep('xray','profile');assert.equal(f.state.currentView,'engines');assert.equal(f.state.selectedEngine,'sing-box');assert.equal(f.focus.length,0);assert.equal(f.notices.length,0);
+});
+await test('busy missing-catalog navigation preserves the chosen engine and local dirty profile',async()=>{
+ const f=fixture();f.state.engineEditorDirty=true;f.state.engineConfigs=f.state.engineConfigs.filter(e=>e.id!=='xray');
+ f.refresh(async()=>{throw Object.assign(new Error('modeled read busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});});
+ await f.ctx.interfaceOpenEngineStep('xray','profile');assert.equal(f.state.currentView,'engines');assert.equal(f.state.selectedEngine,'sing-box');assert(f.state.engineEditorDirty);
+ assert.equal(f.$('#engineEditor').value,'private draft');assert.equal(f.focus.length,0);assert.equal(f.calls.length,1);assert.match(f.notices.at(-1)[1],/не прочитаны/);
 });
 await test('leaving during a switch review revokes the old selection',async()=>{
  const f=fixture(),review=deferred();f.state.engineEditorDirty=true;f.confirm(()=>review.promise);const pending=f.ctx.interfaceOpenEngineStep('xray','check');

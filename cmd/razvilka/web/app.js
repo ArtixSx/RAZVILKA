@@ -2130,12 +2130,41 @@ function engineRoleGuide(id) {
   })[String(id || '')] || null;
 }
 
+async function readEngineNavigationMetadata(isCurrent = () => true) {
+  const context=panelReadContext(),view=state.currentView;
+  const current=()=>isCurrent()&&panelReadContextCurrent(context)&&state.currentView===view&&!state.engineIntent;
+  if(!current())return false;
+  const owner=panelLoad.request&&panelLoad.view===view&&panelViewKeys(view).includes('engineConfigs')
+    ? {request:panelLoad.request,generation:panelLoad.generation}:null;
+  if(owner){
+    await owner.request;
+    if(!current()||panelLoad.generation!==owner.generation)return false;
+    for(const key of ['status','engineConfigs']){
+      const load=state.dataLoad?.[key];
+      if(load?.phase!=='ready')throw new Error(load?.message||'Сведения об обходах не прочитаны. Обновите состояние.');
+    }
+    return true;
+  }
+  // Navigation shares active passive transports. Writes keep their independent
+  // refreshEngineConfigs readback; neither of these metadata GETs is cached.
+  const [configs,status]=await Promise.all([
+    readPanelResource('/api/v1/engine-configs'),readPanelResource('/api/v1/status')
+  ]);
+  if(!current())return false;
+  state.engineConfigs=configs;state.status=status;
+  panelSectionState('engineConfigs','ready');panelSectionState('status','ready');
+  renderStatus();
+  if(view==='engineconfig')renderEngineControl();
+  else if(typeof renderInterfaceEngines==='function')renderInterfaceEngines();
+  return true;
+}
+
 async function openEngineConfiguration(id = '') {
   const request=state.engineNavigationRequest=(state.engineNavigationRequest||0)+1,generation=state.authGeneration,view=state.currentView;
   const current=()=>request===state.engineNavigationRequest && generation===state.authGeneration && state.currentView===view && $('#authScreen')?.hidden!==false;
   if(state.engineIntent){showNotice('review','Операция ещё выполняется','Дождитесь её завершения перед переключением обхода.');return false;}
   if(id && !state.engineConfigs.some(engine=>engine.id===id)){
-    try{await refreshEngineConfigs();}catch(error){if(current()){if(error.status===401)showAuth({...state.status,authenticated:false},error.message);else showNotice('review','Настройки обхода не прочитаны',error.message);}return false;}
+    try{if(!await readEngineNavigationMetadata(current))return false;}catch(error){if(current()){if(error.status===401)showAuth({...state.status,authenticated:false},error.message);else showNotice('review','Настройки обхода не прочитаны',error.message);}return false;}
     if(!current())return false;
     if(!state.engineConfigs.some(engine=>engine.id===id)){showNotice('review','Настройки обхода недоступны','Сервер не вернул описание выбранного обхода. Обновите состояние; другой обход не выбирался.');return false;}
   }
