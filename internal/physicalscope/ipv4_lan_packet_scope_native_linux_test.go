@@ -687,20 +687,29 @@ type packetNativeNeighborGroup struct {
 	Shape packetNativeNeighborShape `json:"shape"`
 	Count int                       `json:"count"`
 }
+type packetNativeNeighborStageCount struct {
+	Stage string `json:"stage"`
+	Count int    `json:"count"`
+}
 type packetNativeNeighborReport struct {
-	Phase          string                      `json:"phase"`
-	Records        int                         `json:"records"`
-	MACRefusals    int                         `json:"mac_refusals"`
-	OtherRefusals  int                         `json:"other_refusals"`
-	GroupCount     int                         `json:"group_count"`
-	GroupsOmitted  int                         `json:"groups_omitted"`
-	RecordsOmitted int                         `json:"records_omitted"`
-	Groups         []packetNativeNeighborGroup `json:"groups,omitempty"`
+	Phase                     string                           `json:"phase"`
+	Records                   int                              `json:"records"`
+	MACRefusals               int                              `json:"mac_refusals"`
+	OtherRefusals             int                              `json:"other_refusals"`
+	GroupCount                int                              `json:"group_count"`
+	GroupsOmitted             int                              `json:"groups_omitted"`
+	RecordsOmitted            int                              `json:"records_omitted"`
+	Groups                    []packetNativeNeighborGroup      `json:"groups,omitempty"`
+	OtherStages               []packetNativeNeighborStageCount `json:"other_stages,omitempty"`
+	OtherStagesOmitted        int                              `json:"other_stages_omitted"`
+	OtherStageCountsOmitted   int                              `json:"other_stage_counts_omitted"`
+	OtherUnclassifiedRefusals int                              `json:"other_unclassified_refusals"`
 }
 
 func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent, frames map[byte][]message) (packetNativeNeighborReport, error, error) {
 	report := packetNativeNeighborReport{Phase: "neighbor_summary"}
 	groups := map[packetNativeNeighborShape]int{}
+	otherStages := map[string]int{}
 	var order []packetNativeNeighborShape
 	bytesSeen := 0
 	for _, family := range []byte{2, 10} {
@@ -726,6 +735,9 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 			}
 			if !slices.Contains(DiagnosticStages(err), "kernel.bindings.neighbor.mac") {
 				report.OtherRefusals++
+				if packetNativeCountNeighborOtherRefusal(err, otherStages) {
+					report.OtherUnclassifiedRefusals++
+				}
 				continue
 			}
 			report.MACRefusals++
@@ -745,10 +757,46 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 			report.RecordsOmitted += groups[shape]
 		}
 	}
+	packetNativeNeighborOtherSummary(&report, otherStages)
 	// Unchanged complete boundary check supplies the same first refusal, including
 	// duplicate/ownership checks. Shape counts never replace this classification.
 	_, _, refusal := packetNeighborBoundary(ctx, topology, frames)
 	return report, refusal, nil
+}
+
+// Count each exact allowlisted stage at most once per refused record. Foreign
+// cause text is ignored; absent and lookalike labels stay unclassified.
+func packetNativeCountNeighborOtherRefusal(err error, counts map[string]int) bool {
+	seen := map[string]bool{}
+	unclassified := false
+	for _, stage := range DiagnosticStages(err) {
+		switch stage {
+		case "kernel.bindings.neighbor.header", "kernel.bindings.neighbor.family", "kernel.bindings.neighbor.attributes", "kernel.bindings.neighbor.index", "kernel.bindings.neighbor.address", "kernel.bindings.neighbor.state", "kernel.bindings.neighbor.flags", "kernel.bindings.neighbor.router-flag", "kernel.bindings.neighbor.bookkeeping-attributes", "kernel.bindings.neighbor.type", "kernel.bindings.neighbor.router-state", "kernel.bindings.neighbor.segment", "kernel.bindings.neighbor.bookkeeping-state", "kernel.bindings.neighbor.bookkeeping-mac", "kernel.bindings.neighbor.multicast-tuple", "kernel.bindings.neighbor.broadcast-tuple", "kernel.bindings.neighbor.broadcast-prefix", "kernel.bindings.neighbor.broadcast-type", "packet.neighbor.mac", "packet.owned.neighbor.conflict":
+			if !seen[stage] {
+				counts[stage]++
+				seen[stage] = true
+			}
+		default:
+			unclassified = true
+		}
+	}
+	return unclassified || len(seen) == 0
+}
+
+func packetNativeNeighborOtherSummary(report *packetNativeNeighborReport, counts map[string]int) {
+	stages := make([]string, 0, len(counts))
+	for stage := range counts {
+		stages = append(stages, stage)
+	}
+	slices.Sort(stages)
+	for i, stage := range stages {
+		if i < 16 {
+			report.OtherStages = append(report.OtherStages, packetNativeNeighborStageCount{Stage: stage, Count: counts[stage]})
+		} else {
+			report.OtherStagesOmitted++
+			report.OtherStageCountsOmitted += counts[stage]
+		}
+	}
 }
 
 func packetNativeNeighborClass(family byte, m message, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent) packetNativeNeighborShape {
@@ -950,5 +998,67 @@ func TestIPv4LANPacketNativeHarnessNeighborClassPrivacyAndBounds(t *testing.T) {
 	_, _, readErr = packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
 	if !slices.Contains(DiagnosticStages(readErr), "kernel.bindings.neighbor.limit") {
 		t.Fatal("diagnostic record bound lost")
+	}
+}
+
+func TestIPv4LANPacketNativeHarnessNeighborOtherStagesPrivacyAndBounds(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	intent := IPv4LANPacketIntent{Mode: "lan_except", NewDevices: "inherit", SegmentIDs: []string{"Bridge0"}}
+	topology, err := packetTopologyFromFacts(in, intent)
+	if err != nil {
+		t.Fatal("modeled topology refused")
+	}
+	wrongType := neighborFrame(12, "198.51.100.9", projectionClientMAC, 2)
+	wrongType.data[11] = 2
+	frames := map[byte][]message{2: {
+		neighborFrame(12, "198.51.100.8", "", 64),
+		wrongType,
+		neighborFrame(9, "192.0.2.1", projectionClientMAC, 2),
+	}, 10: {}}
+	report, refusal, readErr := packetNativeNeighborClasses(context.Background(), topology, nil, intent, frames)
+	want := []packetNativeNeighborStageCount{{"kernel.bindings.neighbor.type", 1}, {"packet.owned.neighbor.conflict", 1}}
+	if readErr != nil || !slices.Contains(DiagnosticStages(refusal), "kernel.bindings.neighbor.mac") || report.MACRefusals != 1 || report.OtherRefusals != 2 || report.OtherUnclassifiedRefusals != 0 || !slices.Equal(report.OtherStages, want) {
+		t.Fatal("other stage counts changed the first decoder refusal or lost closed branches")
+	}
+	secret := "modeled-private-value"
+	counts := map[string]int{}
+	if packetNativeCountNeighborOtherRefusal(errors.Join(at("kernel.bindings.neighbor.type", errors.New(secret)), at("kernel.bindings.neighbor.type", nil)), counts) || counts["kernel.bindings.neighbor.type"] != 1 {
+		t.Fatal("one record counted a repeated closed stage twice")
+	}
+	for _, hidden := range []error{errors.New(secret), at(secret, nil), at("kernel.bindings.neighbor."+secret, nil), at("packet.owned.neighbor."+secret, nil)} {
+		if !packetNativeCountNeighborOtherRefusal(hidden, counts) || len(counts) != 1 {
+			t.Fatal("opaque or lookalike label escaped classification")
+		}
+	}
+	if !packetNativeCountNeighborOtherRefusal(errors.Join(at("packet.neighbor.mac", nil), at(secret, nil)), counts) || counts["packet.neighbor.mac"] != 1 {
+		t.Fatal("partially unclassified refusal lost its closed stage")
+	}
+	encoded, encodeErr := json.Marshal(struct {
+		Report packetNativeNeighborReport `json:"report"`
+		Counts map[string]int             `json:"counts"`
+	}{report, counts})
+	if encodeErr != nil {
+		t.Fatal("closed stage counts encoding refused")
+	}
+	for _, value := range []string{secret, "198.51.100.9", "198.51.100.8", "192.0.2.1", projectionClientMAC, "Bridge0"} {
+		if bytes.Contains(encoded, []byte(value)) {
+			t.Fatal("private value escaped other stage counts")
+		}
+	}
+	counts = map[string]int{}
+	for _, stage := range []string{"kernel.bindings.neighbor.header", "kernel.bindings.neighbor.family", "kernel.bindings.neighbor.attributes", "kernel.bindings.neighbor.index", "kernel.bindings.neighbor.address", "kernel.bindings.neighbor.state", "kernel.bindings.neighbor.flags", "kernel.bindings.neighbor.router-flag", "kernel.bindings.neighbor.bookkeeping-attributes", "kernel.bindings.neighbor.type", "kernel.bindings.neighbor.router-state", "kernel.bindings.neighbor.segment", "kernel.bindings.neighbor.bookkeeping-state", "kernel.bindings.neighbor.bookkeeping-mac", "kernel.bindings.neighbor.multicast-tuple", "kernel.bindings.neighbor.broadcast-tuple", "kernel.bindings.neighbor.broadcast-prefix", "kernel.bindings.neighbor.broadcast-type"} {
+		if packetNativeCountNeighborOtherRefusal(at(stage, nil), counts) {
+			t.Fatal("finite decoder stage unexpectedly unclassified")
+		}
+	}
+	bounded := packetNativeNeighborReport{}
+	packetNativeNeighborOtherSummary(&bounded, counts)
+	if len(bounded.OtherStages) != 16 || bounded.OtherStagesOmitted != 2 || bounded.OtherStageCountsOmitted != 2 {
+		t.Fatal("other stage output bound lost")
+	}
+	for i := 1; i < len(bounded.OtherStages); i++ {
+		if bounded.OtherStages[i-1].Stage >= bounded.OtherStages[i].Stage {
+			t.Fatal("closed stage output order is unstable")
+		}
 	}
 }
