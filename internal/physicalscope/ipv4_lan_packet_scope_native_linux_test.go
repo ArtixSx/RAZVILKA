@@ -685,7 +685,12 @@ type packetNativeNeighborShape struct {
 }
 type packetNativeNeighborGroup struct {
 	Shape packetNativeNeighborShape `json:"shape"`
+	Stage string                    `json:"stage,omitempty"`
 	Count int                       `json:"count"`
+}
+type packetNativeNeighborClassKey struct {
+	Shape packetNativeNeighborShape
+	Stage string
 }
 type packetNativeNeighborStageCount struct {
 	Stage string `json:"stage"`
@@ -708,9 +713,9 @@ type packetNativeNeighborReport struct {
 
 func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent, frames map[byte][]message) (packetNativeNeighborReport, error, error) {
 	report := packetNativeNeighborReport{Phase: "neighbor_summary"}
-	groups := map[packetNativeNeighborShape]int{}
+	groups := map[packetNativeNeighborClassKey]int{}
 	otherStages := map[string]int{}
-	var order []packetNativeNeighborShape
+	var order []packetNativeNeighborClassKey
 	bytesSeen := 0
 	for _, family := range []byte{2, 10} {
 		rows, ok := frames[family]
@@ -733,15 +738,21 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 			if err == nil {
 				continue
 			}
-			if !slices.Contains(DiagnosticStages(err), "kernel.bindings.neighbor.mac") {
+			stages := DiagnosticStages(err)
+			stage := ""
+			if !slices.Contains(stages, "kernel.bindings.neighbor.mac") {
 				report.OtherRefusals++
 				if packetNativeCountNeighborOtherRefusal(err, otherStages) {
 					report.OtherUnclassifiedRefusals++
 				}
-				continue
+				if !slices.Contains(stages, "kernel.bindings.neighbor.type") {
+					continue
+				}
+				stage = "kernel.bindings.neighbor.type"
+			} else {
+				report.MACRefusals++
 			}
-			report.MACRefusals++
-			shape := packetNativeNeighborClass(family, m, topology, links, intent)
+			shape := packetNativeNeighborClassKey{Shape: packetNativeNeighborClass(family, m, topology, links, intent), Stage: stage}
 			if _, ok := groups[shape]; !ok {
 				order = append(order, shape)
 			}
@@ -751,7 +762,7 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 	report.GroupCount = len(order)
 	for i, shape := range order {
 		if i < 16 {
-			report.Groups = append(report.Groups, packetNativeNeighborGroup{Shape: shape, Count: groups[shape]})
+			report.Groups = append(report.Groups, packetNativeNeighborGroup{Shape: shape.Shape, Stage: shape.Stage, Count: groups[shape]})
 		} else {
 			report.GroupsOmitted++
 			report.RecordsOmitted += groups[shape]
@@ -1060,5 +1071,41 @@ func TestIPv4LANPacketNativeHarnessNeighborOtherStagesPrivacyAndBounds(t *testin
 		if bounded.OtherStages[i-1].Stage >= bounded.OtherStages[i].Stage {
 			t.Fatal("closed stage output order is unstable")
 		}
+	}
+}
+
+func TestIPv4LANPacketNativeHarnessNeighborTypeShapePrivacyAndAggregateBound(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	intent := IPv4LANPacketIntent{Mode: "lan_except", NewDevices: "inherit", SegmentIDs: []string{"Bridge0"}}
+	topology, err := packetTopologyFromFacts(in, intent)
+	if err != nil {
+		t.Fatal("modeled topology refused")
+	}
+	privateName, privateAddress := "modeled-secret0", "2001:db8::90"
+	links := map[int]Link{12: {IfIndex: 12, Interface: privateName, LinkType: 65534}}
+	row := neighborFrame(12, privateAddress, "", 64)
+	row.data = append(row.data, attr(2, nil)...)
+	row.data[11] = 2
+	frames := map[byte][]message{2: {}, 10: {row}}
+	report, refusal, readErr := packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if readErr != nil || !slices.Contains(DiagnosticStages(refusal), "kernel.bindings.neighbor.type") || report.OtherRefusals != 1 || report.MACRefusals != 0 || len(report.Groups) != 1 {
+		t.Fatal("exact non-MAC type refusal shape lost or decoder changed")
+	}
+	group := report.Groups[0]
+	if group.Stage != "kernel.bindings.neighbor.type" || group.Count != 1 || !group.Shape.Parsed || group.Shape.Kind != 2 || group.Shape.LinkType != 65534 || group.Shape.HomeRelation != "unrelated" || group.Shape.LLAddressClass != "empty" || group.Shape.ExplicitMACRelation != "unobservable" {
+		t.Fatal("type shape guessed or omitted a closed field")
+	}
+	encoded, encodeErr := json.Marshal(report)
+	if encodeErr != nil || bytes.Contains(encoded, []byte(privateName)) || bytes.Contains(encoded, []byte(privateAddress)) || bytes.Contains(encoded, []byte("Bridge0")) {
+		t.Fatal("private value escaped exact type shape")
+	}
+	for length := 1; length <= 17; length++ {
+		m := neighborFrame(12, "198.51.100.9", "", 64)
+		m.data = append(m.data, attr(2, make([]byte, length))...)
+		frames[2] = append(frames[2], m)
+	}
+	report, _, readErr = packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if readErr != nil || report.MACRefusals != 17 || report.OtherRefusals != 1 || report.GroupCount != 18 || len(report.Groups) != 16 || report.GroupsOmitted != 2 || report.RecordsOmitted != 2 {
+		t.Fatal("MAC and type shapes exceeded their shared aggregate bound")
 	}
 }
