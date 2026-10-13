@@ -77,6 +77,13 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPStockExecution(ctx context.Co
 		} else {
 			ownerErr = read.current(ctx)
 		}
+	} else if value := ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}); value != nil {
+		read, ok := value.(*xraySelectedTCPPreparedInventoryScope)
+		if !ok || read == nil || read.checks != c || read.owner != o {
+			ownerErr = ErrXrayOperationOwner
+		} else {
+			ownerErr = read.current(ctx)
+		}
 	} else {
 		ownerErr = o.checkHeld(ctx, cleanup)
 	}
@@ -141,6 +148,12 @@ func (o *networkPolicyXraySelectedTCPStockObservation) singleCurrent(ctx context
 		return o.pre.current(ctx)
 	}
 	r := o.resource
+	if value := ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}); value != nil {
+		read, ok := value.(*xraySelectedTCPPreparedInventoryScope)
+		if !ok || read == nil || read.checks != o.checks || read.resource != r || read.current(ctx) != nil {
+			return ErrNetworkPolicyConsumers
+		}
+	}
 	if xraySelectedTCPFinite(ctx) != nil || r == nil || r.self != r || r.scope == nil || r.material == nil || r.material.closed.Load() ||
 		ctx.Value(xrayOperationOwnerKey{}) != r.owner || ctx.Value(xrayOperationMaterialKey{}) != r.material {
 		return ErrNetworkPolicyConsumers

@@ -40,6 +40,12 @@ func (o networkPolicyXraySelectedTCPObservation) singleCurrent(ctx context.Conte
 		return ErrNetworkPolicyConsumers
 	}
 	r := o.resource
+	if value := ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}); value != nil {
+		read, ok := value.(*xraySelectedTCPPreparedInventoryScope)
+		if !ok || read == nil || read.resource != r || read.currentFinal(ctx) != nil {
+			return ErrNetworkPolicyConsumers
+		}
+	}
 	directory, err := os.Lstat(r.rootPath)
 	if err != nil || !networkPolicyPrivateDirectory(directory) || !os.SameFile(r.anchor, directory) {
 		return ErrNetworkPolicyConsumers
@@ -133,7 +139,12 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 		return nil, ErrNetworkPolicyConsumers
 	}
 	r.observationMu.RLock()
-	defer r.observationMu.RUnlock()
+	locked := true
+	defer func() {
+		if locked {
+			r.observationMu.RUnlock()
+		}
+	}()
 	o := networkPolicyXraySelectedTCPObservation{resource: r, stock: stock, beforeStart: !r.startACK}
 	defer func() {
 		if result != nil {
@@ -200,6 +211,16 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 		if err != nil {
 			return nil, err
 		}
+	}
+	if value := ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}); value != nil {
+		read, ok := value.(*xraySelectedTCPPreparedInventoryScope)
+		if !ok || read == nil || read.resource != r || read.observationHeld(ctx) != nil || !o.beforeStart || !o.absent || o.borrowed {
+			return nil, ErrNetworkPolicyConsumers
+		}
+		// current's closing lifecycle comparison takes its own read lock. Do
+		// not recursively acquire it while a native/Close writer is waiting.
+		r.observationMu.RUnlock()
+		locked = false
 	}
 	if err := o.current(ctx); err != nil {
 		return nil, err

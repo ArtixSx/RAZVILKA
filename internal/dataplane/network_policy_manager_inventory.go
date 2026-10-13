@@ -37,6 +37,13 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 	if xrayScope != nil {
 		defer xrayScope.close()
 	}
+	ctx, prepared, err := c.openXraySelectedTCPPreparedInventoryScope(ctx)
+	if err != nil {
+		return lanPolicyPreflightAt("inventory-consumer-open", err)
+	}
+	if prepared != nil {
+		defer prepared.close()
+	}
 	wg, err := c.wgConsumers(ctx, lan)
 	if err != nil {
 		return lanPolicyPreflightAt("inventory-wg-open", err)
@@ -153,7 +160,11 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 				xrayErr = errors.Join(xrayErr, o.current(held))
 			}
 		}
-		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr))
+		result := errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr)
+		if result == nil && prepared != nil {
+			result = prepared.remember(closingXrayStock, closing, closingNFQ, closingXray)
+		}
+		return lanPolicyPreflightAt("inventory-owner-current", result)
 	}))
 	if err != nil {
 		return err
@@ -166,19 +177,27 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			return lanPolicyPreflightAt("inventory-consumer-close", err)
 		}
 	}
+	if prepared != nil {
+		if err := prepared.checkClosing(ctx); err != nil {
+			return lanPolicyPreflightAt("inventory-consumer-close", err)
+		}
+	}
 	var closing []networkPolicyWGObservation
-	if len(wg) != 0 || xrayScope != nil {
+	if len(wg) != 0 || xrayScope != nil || prepared != nil {
 		closing, err = c.wgConsumers(ctx, lan)
 		if err != nil || !reflect.DeepEqual(wg, closing) {
 			return errors.Join(ErrNetworkPolicyConsumers, err)
 		}
 	}
-	if xrayScope == nil && len(wg) == 0 {
+	if xrayScope == nil && prepared == nil && len(wg) == 0 {
 		return nil
 	}
 	return c.boundary(ctx, func(held context.Context) error {
 		if xrayScope != nil {
 			return xrayScope.confirm(held, finalImage, lan)
+		}
+		if prepared != nil {
+			return prepared.confirm(held, finalImage, lan, closing)
 		}
 		last, err := c.read(held, identity)
 		if err != nil || !reflect.DeepEqual(finalImage, last) {
