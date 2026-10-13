@@ -18,6 +18,7 @@ type networkPolicyXraySelectedTCPObservation struct {
 	process                       xraySelectedTCPListenerObservation
 	borrow                        policyEffectBorrowObservation
 	borrowed, absent, beforeStart bool
+	unused                        bool
 	joined                        bool
 	checksum                      string
 	fileInfo                      os.FileInfo
@@ -40,6 +41,11 @@ func (o networkPolicyXraySelectedTCPObservation) singleCurrent(ctx context.Conte
 		return ErrNetworkPolicyConsumers
 	}
 	r := o.resource
+	if o.unused {
+		if !o.beforeStart || !o.absent || o.borrowed || len(o.rows) != 0 || len(o.required) != 0 || o.unusedCurrent(ctx) != nil {
+			return ErrNetworkPolicyConsumers
+		}
+	}
 	if value := ctx.Value(xraySelectedTCPPreparedInventoryScopeKey{}); value != nil {
 		read, ok := value.(*xraySelectedTCPPreparedInventoryScope)
 		if !ok || read == nil || read.resource != r || read.currentFinal(ctx) != nil {
@@ -73,13 +79,70 @@ func (o networkPolicyXraySelectedTCPObservation) singleCurrent(ctx context.Conte
 	return p.current(ctx)
 }
 
+// This comparison witnesses the SAME original never-started resource after
+// actual rollback. It supplies no row allowance and never issues cleanup.
+func (o networkPolicyXraySelectedTCPObservation) unusedCurrent(ctx context.Context) error {
+	r := o.resource
+	if !o.unused || o.stock == nil || o.stock.resource != r || o.stock.pre != nil || o.stock.pair != nil ||
+		r == nil || r.self != r || r.material == nil || r.material.self != r.material || r.owner == nil || r.scope == nil ||
+		ctx == nil || !r.material.IsCleanupContext(ctx) || xraySelectedTCPFinite(ctx) != nil || ctx.Value(xraySelectedTCPReplacementKey{}) != nil ||
+		ctx.Value(xrayOperationOwnerKey{}) != r.owner || ctx.Value(xrayOperationMaterialKey{}) != r.material {
+		return ErrNetworkPolicyConsumers
+	}
+	e, c, s := r.material.execution, o.stock.checks, r.scope
+	if e == nil || e.self != e || c == nil || c.current(ctx) != nil || ctx.Value(xraySelectedTCPExecutionKey{}) != e ||
+		r.owner.material != r.material || r.owner.scope != s || r.material.manager != c.manager || r.material.adapter != c.adapters["xray"] ||
+		s.manager != c.manager || s.managerRoot != c.root || s.networkIdentity != c.identity || s.adapterOwner != r.material.adapter ||
+		c.inventory == nil || c.identity == nil || c.inventory.reader.Provider != c.identity.provider || r.definition.NetworkIdentity != c.network {
+		return ErrNetworkPolicyConsumers
+	}
+	e.mu.Lock()
+	valid := e.bound && e.retired && !e.preparing && e.replacement == nil && e.resource == r && e.material == r.material &&
+		e.checks == c && e.gate == c.gate && reflect.DeepEqual(e.plan, s.plan)
+	e.mu.Unlock()
+	if !valid {
+		return ErrNetworkPolicyConsumers
+	}
+	xraySelectedTCPExecutions.Lock()
+	registered := xraySelectedTCPExecutions.live[r.material.adapter] == e
+	xraySelectedTCPExecutions.Unlock()
+	if !registered {
+		return ErrNetworkPolicyConsumers
+	}
+	// e.started is only the logical Activate attempt; its pre-native refusal
+	// may retire unused. Actual native/version/selector history stays strict.
+	s.mu.Lock()
+	i, err := r.matching()
+	valid = err == nil && s.open && s.observationOpen.Load() && len(s.xraySelectedTCP) == 1 && s.resourceCount() == 1 &&
+		s.checkOriginalOwner(ctx, nil, false, true) == nil && reflect.DeepEqual(o.stock.record, s.execution.Resources[i]) &&
+		o.stock.record.State == "unused" && o.stock.record.Phase == "unused" && validateXraySelectedTCPExecutionResource(o.stock.record, true) == nil
+	s.mu.Unlock()
+	if !valid {
+		return ErrNetworkPolicyConsumers
+	}
+	r.observationMu.RLock()
+	err = o.unusedObservationHeld()
+	r.observationMu.RUnlock()
+	return err
+}
+
+// Caller holds the actual resource's observation lock. No nested read lock.
+func (o networkPolicyXraySelectedTCPObservation) unusedObservationHeld() error {
+	r := o.resource
+	if r.versionUsed || r.versionVerified || r.versionChild != nil || r.startUsed || r.startACK || r.startFailed || r.child != nil || r.birth != nil ||
+		r.selectorUsed || r.active || r.stopped || r.descriptorsClosed || r.config == nil || r.executable == nil {
+		return ErrNetworkPolicyConsumers
+	}
+	return nil
+}
+
 func equalNetworkPolicyXraySelectedTCPObservations(a, b []networkPolicyXraySelectedTCPObservation) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := range a {
 		if a[i].resource != b[i].resource || !a[i].stock.equal(b[i].stock) || a[i].borrowed != b[i].borrowed || a[i].absent != b[i].absent ||
-			a[i].beforeStart != b[i].beforeStart || a[i].joined != b[i].joined || a[i].checksum != b[i].checksum || !slices.Equal(a[i].states, b[i].states) ||
+			a[i].beforeStart != b[i].beforeStart || a[i].unused != b[i].unused || a[i].joined != b[i].joined || a[i].checksum != b[i].checksum || !slices.Equal(a[i].states, b[i].states) ||
 			!reflect.DeepEqual(a[i].rows, b[i].rows) || !reflect.DeepEqual(a[i].required, b[i].required) {
 			return false
 		}
@@ -135,8 +198,14 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 		return nil, stock.pre.current(ctx) // Never an active consumer allowance.
 	}
 	r := stock.resource
-	if lan == nil || !reflect.DeepEqual(lan, r.definition.Match.LAN) {
+	if lan != nil && !reflect.DeepEqual(lan, r.definition.Match.LAN) {
 		return nil, ErrNetworkPolicyConsumers
+	}
+	unused := lan == nil
+	if unused {
+		if err := (networkPolicyXraySelectedTCPObservation{resource: r, stock: stock, unused: true}).unusedCurrent(ctx); err != nil {
+			return nil, err
+		}
 	}
 	r.observationMu.RLock()
 	locked := true
@@ -145,12 +214,15 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 			r.observationMu.RUnlock()
 		}
 	}()
-	o := networkPolicyXraySelectedTCPObservation{resource: r, stock: stock, beforeStart: !r.startACK}
+	o := networkPolicyXraySelectedTCPObservation{resource: r, stock: stock, beforeStart: !r.startACK, unused: unused}
 	defer func() {
 		if result != nil {
 			o.close()
 		}
 	}()
+	if unused && o.unusedObservationHeld() != nil {
+		return nil, ErrNetworkPolicyConsumers
+	}
 	if !o.beforeStart {
 		if !r.versionVerified || r.child == nil || r.birth == nil || r.descriptorsClosed {
 			return nil, ErrNetworkPolicyConsumers
@@ -206,6 +278,9 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 	if o.beforeStart && !o.absent {
 		return nil, ErrPolicyAdditionReceipt
 	}
+	if unused && (o.borrowed || !o.absent) {
+		return nil, ErrPolicyAdditionReceipt
+	}
 	if !o.absent {
 		o.rows, o.required, err = xraySelectedTCPReceiptRows(r.effects, o.states, present)
 		if err != nil {
@@ -219,6 +294,12 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 		}
 		// current's closing lifecycle comparison takes its own read lock. Do
 		// not recursively acquire it while a native/Close writer is waiting.
+		r.observationMu.RUnlock()
+		locked = false
+	}
+	if unused {
+		// Its final lifecycle comparison obtains a fresh read lock; release
+		// this one before a queued native/Close writer can block recursion.
 		r.observationMu.RUnlock()
 		locked = false
 	}

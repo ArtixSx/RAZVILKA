@@ -319,10 +319,11 @@ func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T)
 			t.Fatal("activation inventory refusal reached a native/version/effect issuer")
 		}
 	})
-	_, err := f.x.manager.Apply(f.ctx, f.plan, nil)
+	result, err := f.x.manager.Apply(f.ctx, f.plan, nil)
 	if !errors.Is(err, f.cut) {
 		t.Fatal(err)
 	}
+	assertXrayPreparedOriginalRollback(t, f, result, err)
 }
 
 func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
