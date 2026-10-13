@@ -125,6 +125,9 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPConsumers(ctx context.Context
 	if err != nil || stock == nil {
 		return nil, err
 	}
+	if stock.pre != nil {
+		return nil, stock.pre.current(ctx) // Never an active consumer allowance.
+	}
 	r := stock.resource
 	if lan == nil || !reflect.DeepEqual(lan, r.definition.Match.LAN) {
 		return nil, ErrNetworkPolicyConsumers

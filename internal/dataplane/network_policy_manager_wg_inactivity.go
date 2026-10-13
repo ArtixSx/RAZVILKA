@@ -12,18 +12,41 @@ import (
 // independently settled. Read the complete image twice with no intervening
 // owner callback; only this original LAN body can remain during its cleanup.
 func (c *NetworkPolicyChecks) retiredWGInventory(ctx context.Context, lan *LANPolicyRuntimePlan) error {
+	var stock *networkPolicyXraySelectedTCPStockObservation
+	if ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
+		e, ok := ctx.Value(xraySelectedTCPExecutionKey{}).(*xraySelectedTCPExecution)
+		if !ok || e == nil || e.self != e || e.material == nil || e.material.execution != e || e.checks != c || !e.material.IsCleanupContext(ctx) {
+			return ErrNetworkPolicyConsumers
+		}
+		var err error
+		stock, err = c.xraySelectedTCPStockExecution(ctx)
+		if err != nil || stock == nil || stock.pre != nil && stock.pre.execution != e ||
+			stock.resource != nil && stock.resource.material.execution != e {
+			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+	}
+	compare := func(image BackendInventorySnapshot) error {
+		if stock == nil {
+			return checkNetworkPolicyInventory(image, c.network, lan, nil)
+		}
+		rows, err := stock.comparison(image)
+		if err != nil {
+			return err
+		}
+		return checkNetworkPolicyInventoryWithStock(image, c.network, lan, c.identity.inventoryMode(lan), nil, rows)
+	}
 	first, err := c.read(ctx, c.network)
 	if err != nil {
 		return err
 	}
-	if err := checkNetworkPolicyInventory(first, c.network, lan, nil); err != nil {
+	if err := compare(first); err != nil {
 		return err
 	}
 	last, err := c.read(ctx, c.network)
 	if err != nil || !reflect.DeepEqual(first, last) {
 		return errors.Join(ErrBackendInventoryUnknown, err)
 	}
-	return checkNetworkPolicyInventory(last, c.network, lan, nil)
+	return errors.Join(compare(last), stock.current(ctx))
 }
 
 type wgInactivityCleanupKey struct{}

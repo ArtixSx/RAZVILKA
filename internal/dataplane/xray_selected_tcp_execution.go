@@ -25,7 +25,9 @@ type xraySelectedTCPExecution struct {
 	resource                     *XraySelectedTCPExecutionResource
 	node                         *xraySelectedTCPCommittedNode
 	bound, started, retired      bool
+	preparing                    bool
 	replacement                  *xraySelectedTCPReplacement
+	preResource                  *xraySelectedTCPPreResource
 }
 
 type xraySelectedTCPExecutionKey struct{}
@@ -152,7 +154,7 @@ func (e *xraySelectedTCPExecution) snapshot(ctx context.Context) error {
 		return errors.Join(ErrXrayOperationOwner, err)
 	}
 	// Clean-install selected-TCP does not import another native/legacy owner.
-	snapshot, err := e.inventory.Read(ctx, e.gate.identity.value)
+	snapshot, err := e.originalSnapshotInventory(ctx)
 	if err != nil || snapshot.RequireComplete() != nil {
 		return errors.Join(ErrXrayOperationOwner, err)
 	}
@@ -167,14 +169,19 @@ func (e *xraySelectedTCPExecution) prepare(ctx context.Context) error {
 		return err
 	}
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.resource != nil || e.started || e.retired {
+	if e.resource != nil || e.started || e.retired || e.preparing {
+		e.mu.Unlock()
 		return ErrXrayOperationOwner
 	}
+	e.preparing = true
+	e.mu.Unlock()
 	r, err := AcquireXraySelectedTCPExecutionResource(ctx, e.material, e.material.material.spec.Clone())
+	e.mu.Lock()
 	if r != nil {
 		e.resource = r
 	} // A lost publication ACK retains original compensation.
+	e.preparing = false
+	e.mu.Unlock()
 	return err
 }
 

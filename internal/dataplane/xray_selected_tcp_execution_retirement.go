@@ -14,7 +14,10 @@ func (e *xraySelectedTCPExecution) rollback(ctx context.Context) error {
 	r := e.resource
 	e.mu.Unlock()
 	if r == nil {
-		return nil
+		if e.replacement != nil {
+			return e.replacement.unusedCandidate(ctx, e)
+		}
+		return e.preResource.unused(ctx, e)
 	} // No original resource publication, no native/effect issuer.
 	bound, err := r.owner.cleanupContext(networkPolicyConsumerContext(ctx, e.plan))
 	if err != nil {
@@ -86,7 +89,13 @@ func (e *xraySelectedTCPExecution) verifyRollback(ctx context.Context) (bool, er
 	retired := e.retired
 	e.mu.Unlock()
 	if r == nil {
-		return true, nil
+		var err error
+		if e.replacement != nil {
+			err = e.replacement.unusedCandidate(ctx, e)
+		} else {
+			err = e.preResource.unused(ctx, e)
+		}
+		return err == nil, err
 	}
 	if !retired {
 		return false, ErrXrayOperationOwner

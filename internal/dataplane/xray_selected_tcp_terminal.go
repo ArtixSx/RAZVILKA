@@ -170,6 +170,9 @@ func (c *NetworkPolicyChecks) retiredXrayConsumer(ctx context.Context, a *ProxyT
 		return ErrNetworkPolicyConsumers
 	}
 	if e.resource == nil {
+		if e.replacement == nil && e.preResource != nil {
+			return e.preResource.unused(ctx, e)
+		}
 		p, err := c.xrayReplacement(ctx)
 		if err != nil || p.unusedCandidate(ctx, e) != nil {
 			return errors.Join(ErrNetworkPolicyConsumers, err)

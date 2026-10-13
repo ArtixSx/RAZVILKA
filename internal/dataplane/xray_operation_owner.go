@@ -221,7 +221,7 @@ func (m *XrayOperationMaterial) Close() error {
 			return ErrPolicyAdditionUnknown
 		}
 		r := e.resource
-		settled := r == nil && !e.started
+		settled := r == nil && !e.started && !e.preparing
 		if r != nil && r.mu.TryLock() {
 			settled = r.descriptorsClosed && r.descriptorsErr == nil
 			r.mu.Unlock()

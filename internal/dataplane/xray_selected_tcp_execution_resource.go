@@ -111,6 +111,9 @@ func (s *executionResourceScope) issueXraySelectedTCP(ctx context.Context, mater
 	if s == nil || xraySelectedTCPFinite(ctx) != nil || material == nil || material.self != material || ctx.Value(xrayOperationMaterialKey{}) != material {
 		return nil, errXraySelectedTCPRuntime
 	}
+	if err := xraySelectedTCPMaterializationAttempt(ctx, s, material); err != nil {
+		return nil, err
+	}
 	// Close joins this issuer's original file publication. Source/provider
 	// readers and file I/O remain outside the scope metadata mutex.
 	s.startMu.RLock()

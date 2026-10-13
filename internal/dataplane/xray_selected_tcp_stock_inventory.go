@@ -12,6 +12,7 @@ type networkPolicyXraySelectedTCPStockObservation struct {
 	record   ExecutionResource
 	pair     *xraySelectedTCPReplacement
 	prior    *networkPolicyXraySelectedTCPStockObservation
+	pre      *xraySelectedTCPPreResource
 }
 
 // Only this SAME collector and actual original Xray scope can introduce the
@@ -73,6 +74,14 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPStockExecution(ctx context.Co
 	}
 	s := o.scope
 	s.mu.Lock()
+	if len(s.xraySelectedTCP) == 0 && s.open && s.observationOpen.Load() {
+		s.mu.Unlock()
+		e := o.material.execution
+		if e == nil || e.preResource == nil || e.preResource.owner != o || e.preResource.current(ctx) != nil {
+			return nil, ErrNetworkPolicyConsumers
+		}
+		return &networkPolicyXraySelectedTCPStockObservation{checks: c, pre: e.preResource}, nil
+	}
 	defer s.mu.Unlock()
 	if len(s.xraySelectedTCP) != 1 || !s.open || !s.observationOpen.Load() {
 		return nil, ErrNetworkPolicyConsumers
@@ -95,7 +104,7 @@ func (o *networkPolicyXraySelectedTCPStockObservation) equal(other *networkPolic
 	if o == nil || other == nil {
 		return o == other
 	}
-	return o.checks == other.checks && o.resource == other.resource && o.pair == other.pair && o.prior.equal(other.prior) && reflect.DeepEqual(o.record, other.record)
+	return o.checks == other.checks && o.resource == other.resource && o.pre == other.pre && o.pair == other.pair && o.prior.equal(other.prior) && reflect.DeepEqual(o.record, other.record)
 }
 
 // Pure final bookend. Provider, file/source, process and physical observations
@@ -114,6 +123,12 @@ func (o *networkPolicyXraySelectedTCPStockObservation) current(ctx context.Conte
 }
 
 func (o *networkPolicyXraySelectedTCPStockObservation) singleCurrent(ctx context.Context) error {
+	if o.pre != nil {
+		if o.resource != nil || o.pair != nil || o.pre.self != o.pre || o.pre.execution == nil || o.pre.execution.checks != o.checks {
+			return ErrNetworkPolicyConsumers
+		}
+		return o.pre.current(ctx)
+	}
 	r := o.resource
 	if xraySelectedTCPFinite(ctx) != nil || r == nil || r.self != r || r.scope == nil || r.material == nil || r.material.closed.Load() ||
 		ctx.Value(xrayOperationOwnerKey{}) != r.owner || ctx.Value(xrayOperationMaterialKey{}) != r.material {
@@ -133,8 +148,15 @@ func (o *networkPolicyXraySelectedTCPStockObservation) comparison(actual Backend
 		return nil, nil
 	}
 	c := o.checks
-	if c == nil || c.inventory == nil || actual.Scope.Network != o.resource.definition.NetworkIdentity || actual.Scope.Network != c.network ||
+	if c == nil || c.inventory == nil || actual.Scope.Network != c.network ||
 		actual.Scope.ToolReviewID != c.inventory.review || actual.IPTables != c.inventory.reader.IPTables || actual.IP6Tables != c.inventory.reader.IP6Tables {
+		return nil, ErrNetworkPolicyConsumers
+	}
+	if o.pre != nil {
+		if o.resource != nil || o.pre.self != o.pre || o.pre.owner == nil || o.pre.owner.scope == nil || o.pre.owner.scope.networkIdentity != c.identity {
+			return nil, ErrNetworkPolicyConsumers
+		}
+	} else if o.resource == nil || actual.Scope.Network != o.resource.definition.NetworkIdentity {
 		return nil, ErrNetworkPolicyConsumers
 	}
 	// This predicate authenticates only foreign stock OUTPUT rows. Original NAT

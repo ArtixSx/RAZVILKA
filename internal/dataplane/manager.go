@@ -1231,6 +1231,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	var activeNFQScope, activeXrayScope, activeWGScope *executionResourceScope
+	var xrayPreResource *xraySelectedTCPPreResource
 	if pair != nil {
 		var attachErr error
 		activeXrayScope, attachErr = m.newExecutionResourceScope(ctx, plan, "xray", &execution, transactionRoot)
@@ -1352,6 +1353,22 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		restoring := phase == "rollback" || phase == "verify-rollback"
+		if xrayPreResource == nil && activeXrayScope == nil && !restoring && adapter.ID() == NetworkPolicyAdapterID &&
+			validPlanID(plan.PlanID) && ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
+			var err error
+			activeXrayScope, xrayPreResource, err = m.originalXrayPreResourceScope(ctx, plan, &execution, transactionRoot)
+			if err != nil {
+				return err
+			}
+		}
+		if xrayPreResource != nil && (adapter.ID() == NetworkPolicyAdapterID || adapter == xrayPreResource.owner.material.adapter) {
+			var err error
+			runCtx, err = xrayPreResource.context(runCtx, restoring)
+			if err != nil {
+				return err
+			}
+			runCtx = networkPolicyConsumerContext(runCtx, activeXrayScope.plan)
+		}
 		if activeWGScope != nil {
 			if restoring {
 				var err error
