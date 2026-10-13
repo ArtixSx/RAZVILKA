@@ -738,6 +738,21 @@ if [ "$DATAPLANE_STATE_PRESENT" -eq 1 ]; then
   cp -a "$BACKUP/dataplane/." "$STATEDIR/dataplane/"
 fi
 
+# Only a genuinely new installation creates the independent control epoch.
+# The original guards already refused retained control/file protocol. The
+# native entry admits the actual fixed installed image and protected clean
+# config; RAZVILKA_BASE cannot redirect its authority.
+if [ "$RAZ_BINARY_PRESENT" -eq 0 ] && [ "$CONFIG_PRESENT" -eq 0 ]; then
+  INSTALLED_SHA="$(sha256sum "$BINDIR/razvilka" | awk '{print $1}')"
+  [ "$INSTALLED_SHA" = "$ACTUAL" ] || { echo "CLEAN_INSTALL_CONTROL_IMAGE_CHANGED" >&2; exit 1; }
+  CONTROL_RESULT="$("$BINDIR/razvilka" install-control-initialize "$ACTUAL")" || {
+    echo "CLEAN_INSTALL_CONTROL_REFUSED" >&2; exit 1;
+  }
+  [ "$CONTROL_RESULT" = CLEAN_INSTALL_CONTROL_READY ] || { echo "CLEAN_INSTALL_CONTROL_UNCONFIRMED" >&2; exit 1; }
+  INSTALLED_CLOSING_SHA="$(sha256sum "$BINDIR/razvilka" | awk '{print $1}')"
+  [ "$INSTALLED_CLOSING_SHA" = "$ACTUAL" ] || { echo "CLEAN_INSTALL_CONTROL_IMAGE_CHANGED" >&2; exit 1; }
+fi
+
 stage 6 "Запускаем новую версию и ждём готовности панели..."
 RAZVILKA_BASE="$BASE" "$RAZ_INIT" clear-guard
 START_CODE=0

@@ -1,4 +1,7 @@
 #!/bin/sh
+# Temp-base transaction: a test-only Go overlay models the NEW native initializer
+# leaf only. Ordinary Main and every installer/S99 script remain unchanged.
+# This test makes no claim of native canonical control initialization.
 set -eu
 umask 077
 
@@ -46,6 +49,58 @@ prepare_root() {
   printf '%s\n' keep-other-app >"$BASE/var/lib/other-app.conf"
   if [ "$(id -u)" = 0 ]; then chown 1001 "$BASE/var"; fi
   ln -s "$DAEMON" "$BASE/sbin/start-stop-daemon"
+}
+
+prepare_modeled_clean_bundle() {
+  # No production path/env override is added. The canonical command cannot
+  # authorize this temp installation; record ONLY its exact shell boundary.
+  MODEL_BUNDLE="$TEST_ROOT/modeled-clean-control-bundle"
+  mkdir -p "$MODEL_BUNDLE/dist"
+  cp -a "$ROOT/scripts" "$ROOT/configs" "$MODEL_BUNDLE/"
+  case "$(uname -m)" in
+    x86_64|amd64) MODEL_ARCH=amd64 ;;
+    aarch64|arm64) MODEL_ARCH=arm64 ;;
+    *) echo "Transaction model requires the existing native AMD64/ARM64 Main" >&2; exit 1 ;;
+  esac
+  RAZVILKA_TEST_CLEAN_CONTROL_LOG="$TEST_ROOT/clean-control-invocations"
+  export RAZVILKA_TEST_CLEAN_CONTROL_LOG
+  cat >"$TEST_ROOT/modeled-native-leaf.go" <<'CLEAN_CONTROL_MODEL'
+package main
+import (
+  "context"
+  "os"
+  "github.com/ArtixSx/razvilka/internal/operationgate"
+)
+// TEST MODEL ONLY. No native issuer, ledger, image replacement or permissions.
+func initializeNativeCleanInstallControl(ctx context.Context, gate *operationgate.Gate, expected string) error {
+  if ctx == nil || gate == nil || len(expected) != 64 { return operationgate.ErrSelfUpdateStopJournal }
+  return gate.WithExclusiveContext(ctx, func() error {
+    path := os.Getenv("RAZVILKA_TEST_CLEAN_CONTROL_LOG")
+    if path == "" { return operationgate.ErrSelfUpdateStopJournal }
+    file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+    if err != nil { return err }
+    _, err = file.WriteString("MODELED_INSTALL_CONTROL_COMMAND\n")
+    closeErr := file.Close()
+    if err != nil { return err }
+    return closeErr
+  })
+}
+CLEAN_CONTROL_MODEL
+  # Replace exactly the dedicated initializer leaf, not Main/dispatch, shell
+  # checks or S99. The model ELF remains identical before/after the command.
+  python3 - "$ROOT/cmd/razvilka/clean_install_control_linux.go" "$TEST_ROOT/modeled-native-leaf.go" \
+    "$TEST_ROOT/clean-control-overlay.json" <<'CLEAN_CONTROL_OVERLAY'
+import json, pathlib, sys
+original, modeled, output = map(pathlib.Path, sys.argv[1:])
+with output.open('x', encoding='utf-8') as stream:
+    json.dump({'Replace': {str(original.resolve()): str(modeled.resolve())}}, stream)
+CLEAN_CONTROL_OVERLAY
+  (cd "$ROOT" && GOOS=linux GOARCH="$MODEL_ARCH" CGO_ENABLED=0 go build -trimpath \
+    -overlay "$TEST_ROOT/clean-control-overlay.json" -o "$MODEL_BUNDLE/dist/razvilka-linux-$MODEL_ARCH" ./cmd/razvilka)
+  (cd "$MODEL_BUNDLE" && sha256sum dist/razvilka-linux-* >dist/SHA256SUMS)
+  UPGRADE="$MODEL_BUNDLE/scripts/upgrade-entware.sh"
+  ROLLBACK="$MODEL_BUNDLE/scripts/rollback-entware.sh"
+  UNINSTALL="$MODEL_BUNDLE/scripts/uninstall-entware.sh"
 }
 
 assert_absent() {
@@ -226,7 +281,8 @@ assert_installation_unchanged() {
   }
 }
 
-# This executes the actual installed binary, with no metadata shim or downshift.
+# Main delivers every actual metadata flag without a shim/downshift. Only the
+# explicit NEW native initializer leaf was replaced in this test-only ELF.
 # check-self-update-state intentionally has fixed /opt roots; RAZVILKA_BASE here
 # does not relocate its retained-format scanner to the test installation.
 assert_native_metadata() (
@@ -323,6 +379,7 @@ assert_uninstall_preserves_data() (
 
 # Granular inert shell contracts only. The fake rollback in readiness tests
 # observes trap dispatch; it does not prove native reader3 rollback succeeds.
+prepare_modeled_clean_bundle
 test_upgrade_readiness
 test_prior_route_evidence
 test_snapshot_pruning
@@ -330,7 +387,7 @@ prepare_root "$PRIMARY"
 prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"
 
-# Actual native fresh-install preflight must not repair legacy permissions.
+# Actual installer preflight/ordinary Main must not repair legacy permissions.
 mkdir -p "$PRIMARY/razvilka/state/staging/sing-box"
 chmod 755 "$PRIMARY/razvilka/state/staging/sing-box"
 RAZVILKA_BASE="$PRIMARY" RAZVILKA_PORT="$PORT" "$UPGRADE" --dry-run >/dev/null
@@ -441,7 +498,15 @@ REMOVAL_BACKUP="$(cat "$REMOVAL/razvilka/state/current-backup")"
 grep -q '^RAZ_BINARY_PRESENT=0$' "$REMOVAL_BACKUP/manifest" || { echo "Uninstall fixture was not a fresh installation" >&2; exit 1; }
 assert_uninstall_preserves_data "$REMOVAL"
 
+[ "$(wc -l <"$RAZVILKA_TEST_CLEAN_CONTROL_LOG")" -eq 3 ] || {
+  echo "Temp transaction lost the three exact modeled clean-control calls" >&2; exit 1;
+}
+for MODEL_BASE in "$PRIMARY" "$CONFLICT" "$REMOVAL"; do
+  assert_absent "$MODEL_BASE/razvilka/state/self-update-stop"
+done
+
 trap - EXIT HUP INT TERM
 cleanup
-echo "Entware native fresh install/uninstall, readonly metadata and reader3 raw refusal: OK"
+echo "Entware actual shell/S99/Main transaction (test-only modeled native initializer), readonly metadata and reader3 raw refusal: OK"
+echo "Canonical Linux clean control and first consent POST before Prepare require the separate genuine clean-install probe."
 echo "Journaled update, durable Stop settlement and Resume acceptance are separate D11 gates."
