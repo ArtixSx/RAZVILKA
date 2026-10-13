@@ -2,6 +2,7 @@ package physicalscope
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"net"
 	"slices"
@@ -72,7 +73,13 @@ type scopeOptionsInput struct {
 	links, addresses, routes []message
 }
 
-type scopeOptionsBindings func(context.Context, []Segment) ([]Device, error)
+type scopeOptionsBindingFacts struct {
+	devices           []Device
+	unknownRouter     bool
+	rejectedCandidate bool
+}
+
+type scopeOptionsBindings func(context.Context, []Segment) (scopeOptionsBindingFacts, error)
 
 // Both callers and tests must explicitly supply current read facts. Cached
 // discovery labels never enter this classifier or provide an association.
@@ -117,7 +124,7 @@ func scopeOptionsFromFacts(ctx context.Context, in scopeOptionsInput, bindings s
 		iface := segment.Interface
 		option.Interface, option.State, option.Code, option.SelectionCandidate = &iface, "observed", "OBSERVED_HOME", true
 		r.Segments = append(r.Segments, option)
-		devices, bindingErr := bindings(ctx, segments)
+		facts, bindingErr := bindings(ctx, segments)
 		if err := ctx.Err(); err != nil {
 			return unavailableScopeOptions("SOURCE_UNAVAILABLE"), err
 		}
@@ -125,6 +132,13 @@ func scopeOptionsFromFacts(ctx context.Context, in scopeOptionsInput, bindings s
 			r.State, r.Code = "partial", "BINDINGS_UNAVAILABLE"
 			continue
 		}
+		if facts.unknownRouter {
+			r.State, r.Code = "partial", "BINDINGS_ROUTER_UNKNOWN"
+		}
+		if facts.rejectedCandidate {
+			r.State, r.Code = "partial", "BINDINGS_CONFLICT"
+		}
+		devices := facts.devices
 		if len(devices) > 512-len(r.Devices) {
 			return unavailableScopeOptions("BOUNDS_EXCEEDED"), nil
 		}
@@ -151,6 +165,154 @@ func scopeOptionsFromFacts(ctx context.Context, in scopeOptionsInput, bindings s
 	until := now.Add(ScopeOptionsFreshness)
 	r.ObservedAt, r.FreshUntil = &now, &until
 	return r, nil
+}
+
+// This display-only binder has no Selection, revisions, finite purpose,
+// Snapshot or issuer. UNKNOWN router rows remain in the local conflict input;
+// they never supply a device identity or complete negative MAC coverage.
+func bindScopeOptionsKernelNeighbors(ctx context.Context, segments []Segment, frames map[byte][]message) (scopeOptionsBindingFacts, error) {
+	var facts scopeOptionsBindingFacts
+	if len(segments) != 1 || !segments[0].Home || segments[0].Guest || segments[0].ID == "" || segments[0].Interface == "" || segments[0].IfIndex <= 0 {
+		return facts, at("scope-options.bindings.segment", nil)
+	}
+	segment := segments[0]
+	infraMACs := map[string]bool{}
+	addInfra := func(mac string) error {
+		if !validMAC(mac) {
+			return at("scope-options.bindings.infrastructure", nil)
+		}
+		infraMACs[mac] = true
+		return nil
+	}
+	if err := addInfra(segment.MAC); err != nil {
+		return facts, err
+	}
+	for _, member := range segment.Members {
+		if err := addInfra(member.MAC); err != nil {
+			return facts, err
+		}
+		if member.Parent.Known {
+			if err := addInfra(member.Parent.MAC); err != nil {
+				return facts, err
+			}
+		}
+	}
+	var neighbors, foreign []kernelNeighbor
+	routerMACs, foreignMACs, candidates := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	seen := map[string]bool{}
+	totalBytes, totalRecords := 0, 0
+	for _, family := range []byte{2, 10} {
+		messages, ok := frames[family]
+		if !ok {
+			return scopeOptionsBindingFacts{}, at("kernel.bindings.neighbor.family-missing", nil)
+		}
+		for _, m := range messages {
+			if err := ctx.Err(); err != nil {
+				return scopeOptionsBindingFacts{}, err
+			}
+			totalBytes += len(m.data)
+			totalRecords++
+			if totalBytes > 1<<20 || totalRecords > 4096 {
+				return scopeOptionsBindingFacts{}, at("kernel.bindings.neighbor.limit", nil)
+			}
+			if len(m.data) < 12 {
+				return scopeOptionsBindingFacts{}, at("kernel.bindings.neighbor.header", nil)
+			}
+			if m.data[0] != family {
+				return scopeOptionsBindingFacts{}, at("kernel.bindings.neighbor.dump-family", nil)
+			}
+			selected := int(int32(binary.NativeEndian.Uint32(m.data[4:8]))) == segment.IfIndex
+			var n kernelNeighbor
+			var bookkeeping bool
+			var err error
+			if selected {
+				n, bookkeeping, err = decodeSegmentNeighbor(m, segment)
+			} else {
+				n, bookkeeping, err = decodeForeignKernelNeighbor(m, segments)
+				// Foreign router rows use the same exact UNKNOWN classifier.
+				if err == nil && !bookkeeping && n.flags&128 != 0 {
+					err = validateUnicastNeighbor(n)
+				}
+			}
+			unknown := scopeOptionsUnknownRouter(n, err)
+			if err != nil && !unknown {
+				return scopeOptionsBindingFacts{}, err
+			}
+			facts.unknownRouter = facts.unknownRouter || unknown
+			if selected {
+				key := n.address.String()
+				if seen[key] {
+					return scopeOptionsBindingFacts{}, at("kernel.bindings.neighbor.duplicate", nil)
+				}
+				seen[key] = true
+			}
+			if bookkeeping {
+				continue
+			}
+			if n.flags&128 != 0 && n.mac != "" {
+				routerMACs[n.mac] = true
+			}
+			if !selected {
+				foreign = append(foreign, n)
+				if n.mac != "" {
+					foreignMACs[n.mac] = true
+				}
+				continue
+			}
+			neighbors = append(neighbors, n)
+			if n.flags&128 == 0 && n.state != 1 && n.state != 32 {
+				candidates[n.mac] = true
+				if len(candidates) > 512 {
+					return scopeOptionsBindingFacts{}, at("scope-options.bindings.device-limit", nil)
+				}
+			}
+		}
+	}
+	allowed := map[string]bool{}
+	for mac := range candidates {
+		if err := ctx.Err(); err != nil {
+			return scopeOptionsBindingFacts{}, err
+		}
+		if infraMACs[mac] || routerMACs[mac] {
+			continue
+		}
+		if foreignMACs[mac] {
+			facts.rejectedCandidate = true
+			continue
+		}
+		// Reuse only the pure conflict checker, with an actually observed MAC.
+		// No user Selection or physical permission is manufactured from it.
+		p := &SelectedDeviceProjection{DeviceIDs: []string{physicalDeviceID(mac)}}
+		_, err := validateProjectedNeighbors(p, segments, neighbors, foreign, routerMACs)
+		if err != nil {
+			f, closed := err.(*failure)
+			if closed && (f.stage == "projection.bindings.address-conflict" || f.stage == "projection.bindings.role-state" || f.stage == "projection.bindings.ingress") {
+				facts.rejectedCandidate = true
+				continue
+			}
+			return scopeOptionsBindingFacts{}, err
+		}
+		allowed[mac] = true
+	}
+	rows := kernelNeighborRows{segment.Interface: {false: {}, true: {}}}
+	for _, n := range neighbors {
+		if allowed[n.mac] {
+			family := n.address.Is6()
+			rows[segment.Interface][family] = append(rows[segment.Interface][family], []byte(n.row())...)
+		}
+	}
+	devices, err := bindDevices(ctx, segments, rows)
+	if err != nil {
+		return scopeOptionsBindingFacts{}, err
+	}
+	facts.devices = devices
+	return facts, nil
+}
+
+func scopeOptionsUnknownRouter(n kernelNeighbor, err error) bool {
+	f, ok := err.(*failure)
+	return ok && f != nil && f.stage == "kernel.bindings.neighbor.router-state" && n.kind == 1 && n.address.Is6() &&
+		!n.address.IsMulticast() && n.mac == "" && n.flags&128 != 0 && (n.state == 1 || n.state == 32)
 }
 
 func errOrUnknown(err error) error {

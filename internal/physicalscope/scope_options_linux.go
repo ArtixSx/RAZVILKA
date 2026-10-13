@@ -39,8 +39,23 @@ func readScopeOptions(ctx context.Context) (ScopeOptionsObservation, error) {
 			}
 			in.routes = append(in.routes, frames...)
 		}
-		r, err = scopeOptionsFromFacts(c, in, observeKernelBindings)
+		r, err = scopeOptionsFromFacts(c, in, observeScopeOptionsBindings)
 		return err
 	})
 	return r, err
+}
+
+func observeScopeOptionsBindings(ctx context.Context, segments []Segment) (scopeOptionsBindingFacts, error) {
+	families := map[byte][]message{}
+	for _, family := range []byte{2, 10} {
+		frames, err := dump(ctx, 30, family)
+		if err != nil {
+			if family == 2 {
+				return scopeOptionsBindingFacts{}, at("kernel.bindings.ipv4.dump", err)
+			}
+			return scopeOptionsBindingFacts{}, at("kernel.bindings.ipv6.dump", err)
+		}
+		families[family] = frames
+	}
+	return bindScopeOptionsKernelNeighbors(ctx, segments, families)
 }
