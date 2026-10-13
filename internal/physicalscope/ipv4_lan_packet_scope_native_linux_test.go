@@ -284,6 +284,12 @@ func packetNativeMetricFor(phase string, elapsed time.Duration, err error) packe
 			m.Stages = append(m.Stages, stage)
 		case "netlink.socket.open", "netlink.socket.receive-buffer", "netlink.socket.bind", "netlink.socket.name", "netlink.socket.binding", "netlink.receive.sender-type", "netlink.receive.sender-port", "netlink.receive.truncated", "netlink.receive.empty", "context.canceled", "context.deadline":
 			m.Stages = append(m.Stages, stage)
+		case "packet.notifications.neighbor.flags", "packet.notifications.link.flags", "packet.notifications.owned-link", "packet.notifications.address.flags", "packet.notifications.owned-address", "packet.membership.epoch.overflow":
+			m.Stages = append(m.Stages, stage)
+		case "notifications.link.flags", "notifications.address.flags", "notifications.neighbor.flags", "notifications.route.flags", "notifications.unknown.flags", "notifications.link.tracked-index", "notifications.link.selected-master", "notifications.link.tracked-name", "notifications.link.tracked-parent", "notifications.address.header", "notifications.address.tracked", "notifications.neighbor.header", "notifications.neighbor.delete", "notifications.neighbor.incomplete", "notifications.neighbor.failed", "notifications.neighbor.mac", "notifications.neighbor.binding.ambiguous", "notifications.route.tracked", "notifications.kind":
+			m.Stages = append(m.Stages, stage)
+		case "notifications.wireless.name", "notifications.wireless.binding", "notifications.wireless.role", "notifications.wireless.header", "notifications.wireless.attributes", "notifications.wireless.payload.length", "notifications.wireless.payload.command", "notifications.wireless.payload.padding", "notifications.wireless.payload.tokens":
+			m.Stages = append(m.Stages, stage)
 		default:
 			m.UnclassifiedStage = true
 		}
@@ -493,6 +499,16 @@ func TestIPv4LANPacketNativeHarnessClosedMetricsAndJoin(t *testing.T) {
 			t.Fatal("foreign decoder cause leaked into metric")
 		}
 	}
+	for _, stage := range []string{"packet.notifications.neighbor.flags", "packet.notifications.link.flags", "packet.notifications.owned-link", "packet.notifications.address.flags", "packet.notifications.owned-address", "packet.membership.epoch.overflow", "notifications.link.flags", "notifications.address.flags", "notifications.neighbor.flags", "notifications.route.flags", "notifications.unknown.flags", "notifications.link.tracked-index", "notifications.link.selected-master", "notifications.link.tracked-name", "notifications.link.tracked-parent", "notifications.address.header", "notifications.address.tracked", "notifications.neighbor.header", "notifications.neighbor.delete", "notifications.neighbor.incomplete", "notifications.neighbor.failed", "notifications.neighbor.mac", "notifications.neighbor.binding.ambiguous", "notifications.route.tracked", "notifications.kind", "notifications.wireless.name", "notifications.wireless.binding", "notifications.wireless.role", "notifications.wireless.header", "notifications.wireless.attributes", "notifications.wireless.payload.length", "notifications.wireless.payload.command", "notifications.wireless.payload.padding", "notifications.wireless.payload.tokens"} {
+		metric := packetNativeMetricFor("constructor", time.Millisecond, boundary("packet.capture", boundary("fence.notifications", at(stage, errors.New(secret)))))
+		if metric.Status != "refused" || metric.UnclassifiedStage || !slices.Equal(metric.Stages, []string{"packet.capture", "fence.notifications", stage}) {
+			t.Fatal("exact nested notification stage lost")
+		}
+		encoded, encodeErr := json.Marshal(metric)
+		if encodeErr != nil || bytes.Contains(encoded, []byte(secret)) {
+			t.Fatal("foreign notification cause escaped closed metric")
+		}
+	}
 	for _, sentinel := range []error{context.Canceled, context.DeadlineExceeded} {
 		metric := packetNativeMetricFor("constructor", time.Millisecond, boundary("packet.capture", errors.Join(errors.New(secret), sentinel)))
 		label := "context.canceled"
@@ -503,7 +519,7 @@ func TestIPv4LANPacketNativeHarnessClosedMetricsAndJoin(t *testing.T) {
 			t.Fatal("exact nested context sentinel lost")
 		}
 	}
-	for _, prefix := range []string{"kernel.bindings.neighbor.", "ndm.duplicate-", "netlink.socket."} {
+	for _, prefix := range []string{"kernel.bindings.neighbor.", "ndm.duplicate-", "netlink.socket.", "packet.notifications.", "notifications."} {
 		metric := packetNativeMetricFor("constructor", time.Millisecond, boundary("packet.capture", at(prefix+secret, errors.New(secret))))
 		encoded, encodeErr := json.Marshal(metric)
 		if encodeErr != nil || bytes.Contains(encoded, []byte(secret)) || !metric.UnclassifiedStage || !slices.Equal(metric.Stages, []string{"packet.capture"}) {
