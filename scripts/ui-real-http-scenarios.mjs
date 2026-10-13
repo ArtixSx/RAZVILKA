@@ -22,6 +22,22 @@ export const realHTTPDiagnosticIDs=Object.freeze([
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
 
+export async function realHTTPEnginePanelRead(page,{afterGeneration=null,explicit=false}={}) {
+  if(afterGeneration!==null)await page.waitForFunction(generation=>state.currentView==='engines'&&panelLoad.view==='engines'&&panelLoad.generation>generation,afterGeneration);
+  const receipt=await page.evaluate(async explicit=>{
+    const auth=state.authGeneration,generation=panelLoad.generation;
+    const current=()=>state.authGeneration===auth&&state.currentView==='engines'&&panelLoad.view==='engines'&&$('#authScreen')?.hidden!==false;
+    if(panelLoad.request)await panelLoad.request;
+    if(!current()||panelLoad.generation!==generation)return {current:false,status_ready:false,catalog_ready:false};
+    let expected=generation;
+    if(explicit){const request=refreshAll();expected=panelLoad.generation;await request;}
+    return {current:current()&&panelLoad.generation===expected,status_ready:state.dataLoad.status?.phase==='ready',catalog_ready:state.dataLoad.engineConfigs?.phase==='ready'};
+  },explicit);
+  assert.equal(receipt.current,true,'engine metadata reader lost its navigation or authentication context');
+  assert.equal(receipt.status_ready,true,'the actual engine status read did not complete successfully');
+  assert.equal(receipt.catalog_ready,true,'the actual engine catalog read did not complete successfully');
+}
+
 export async function runRealHTTPOfflineSources({page,requests,test,readJSON}) {
   await test('saved Sources uses actual GET-only offline handler','real HTTP; saved metadata only',async()=>{
     const start=requests.length;await navTo(page,'settings');
@@ -246,8 +262,8 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
     await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
       const start=requests.length;
       await diagnose('UI_ENGINE_CARD_INITIAL_REFRESH',async()=>{
-        await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
-        await page.waitForFunction(()=>!panelLoad.request);
+        const generation=await page.evaluate(()=>panelLoad.generation);
+        await nav('engines');await realHTTPEnginePanelRead(page,{afterGeneration:generation});
         assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
       });
       const step=async(id,name)=>{const button=page.locator('[data-engine-step="'+name+'"][data-card-engine="'+id+'"]');if(!await button.isVisible())await page.locator('[data-engine-disclosure="'+id+'-flow"] summary').click();await button.click();};
@@ -255,7 +271,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
         const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');
         if(!await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open))await summary.click();
         await summary.focus();
-        await page.evaluate(()=>refreshEngineConfigs());
+        await realHTTPEnginePanelRead(page,{explicit:true});
         assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
         assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
       });

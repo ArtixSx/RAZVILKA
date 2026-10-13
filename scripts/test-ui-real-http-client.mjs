@@ -1,5 +1,7 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {realHTTPEnginePanelRead} from './ui-real-http-scenarios.mjs';
 import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
@@ -159,5 +161,32 @@ for(const state of ['empty','expired','unknown']){
   let elapsed=0;
   try{await realHTTPAwaitIdentity(instance,async()=>{elapsed=9000;return idle;},{now:()=>elapsed,pause:async()=>{assert.fail('overdue read must stop');}});assert.fail('expected overdue rejection');}
   catch(error){assert.equal(realHTTPFailure(error,'known-scenario').code,'QA_IDENTITY_WAIT_TIMEOUT');checks++;}
+}
+{
+  const held=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
+  const fixture=()=>{
+    const state={authGeneration:4,currentView:'engines',dataLoad:{status:{phase:'loading'},engineConfigs:{phase:'loading'}}};
+    const panelLoad={generation:8,view:'engines',request:null},initial=held(),next=held();let refreshes=0;
+    const context={state,panelLoad,$:()=>({hidden:true}),refreshAll(){refreshes++;panelLoad.generation++;panelLoad.request=next.promise;return next.promise;}};
+    panelLoad.request=initial.promise;vm.createContext(context);
+    const page={evaluate:(fn,arg)=>vm.runInContext('('+fn.toString()+')',context)(arg),waitForFunction:async(fn,arg)=>assert.equal(vm.runInContext('('+fn.toString()+')',context)(arg),true)};
+    const complete=(read,phase='ready')=>{state.dataLoad.status.phase=phase;state.dataLoad.engineConfigs.phase='ready';panelLoad.request=null;read.resolve(true);};
+    return {state,panelLoad,page,initial,next,complete,refreshes:()=>refreshes};
+  };
+  const f=fixture(),initialRead=realHTTPEnginePanelRead(f.page,{afterGeneration:7});let settled=false;initialRead.then(()=>settled=true);
+  await Promise.resolve();assert.equal(settled,false);assert.equal(f.refreshes(),0);f.complete(f.initial);await initialRead;checks++;
+  const fresh=realHTTPEnginePanelRead(f.page,{explicit:true});assert.equal(f.refreshes(),1);f.complete(f.next);await fresh;assert.equal(f.refreshes(),1);checks++;
+  const queued=fixture(),explicitRead=realHTTPEnginePanelRead(queued.page,{explicit:true});assert.equal(queued.refreshes(),0);
+  queued.complete(queued.initial);await new Promise(resolve=>setImmediate(resolve));assert.equal(queued.refreshes(),1);queued.complete(queued.next);await explicitRead;checks++;
+  for(const phase of ['busy','error']){
+    const failed=fixture(),read=realHTTPEnginePanelRead(failed.page);const rejection=assert.rejects(read,error=>error.code==='ERR_ASSERTION');failed.complete(failed.initial,phase);await rejection;checks++;
+    const refreshed=fixture();refreshed.complete(refreshed.initial);const freshRead=realHTTPEnginePanelRead(refreshed.page,{explicit:true});
+    const freshRejection=assert.rejects(freshRead,error=>error.code==='ERR_ASSERTION');refreshed.complete(refreshed.next,phase);await freshRejection;assert.equal(refreshed.refreshes(),1);checks++;
+  }
+  for(const leave of ['auth','view','generation']){
+    const stale=fixture(),read=realHTTPEnginePanelRead(stale.page);const rejection=assert.rejects(read,error=>error.code==='ERR_ASSERTION');
+    if(leave==='auth')stale.state.authGeneration++;else if(leave==='view')stale.state.currentView='settings';else stale.panelLoad.generation++;
+    stale.complete(stale.initial);await rejection;checks++;
+  }
 }
 console.log('PASS pure real HTTP client checks '+checks);
