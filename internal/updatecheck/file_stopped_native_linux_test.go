@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 	"golang.org/x/sys/unix"
 )
@@ -159,15 +161,176 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	review.OldInitSHA256, u.record.Files["scripts/S99razvilka"] = digestBytes(init), digestBytes(init)
 	review.Files = reviewedFileList(job, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
 	saveStoppedReview(t, a, u, review)
-	proof, err := a.sealJournalReaders(ctx, review, func(c context.Context, _ string) (SelfUpdateAuthority, error) {
+	// Private diagnosis only: the actual production seal/probe predicates and
+	// original refusal stay intact. Never print paths, PIDs, argv, hashes, raw
+	// child output or raw errors. Extra read-only probes run only after failure.
+	errorClass := func(err error) string {
+		var exited *exec.ExitError
+		switch {
+		case err == nil:
+			return "none"
+		case errors.Is(err, context.DeadlineExceeded):
+			return "deadline"
+		case errors.Is(err, context.Canceled):
+			return "cancelled"
+		case errors.Is(err, operationgate.ErrSelfUpdateStopped):
+			return "stopped"
+		case errors.Is(err, os.ErrNotExist):
+			return "missing"
+		case errors.As(err, &exited):
+			return "child-exit"
+		case errors.Is(err, ErrFileProtocol):
+			return "protocol"
+		default:
+			return "other"
+		}
+	}
+	imageRole := func(image selfupdatejournal.BinaryImage) string {
+		switch image.Path {
+		case filepath.Join(a.installation, "bin/razvilka"):
+			return "installed"
+		case filepath.Join(a.directory, review.ID, "control.bin"):
+			return "helper"
+		}
+		for _, file := range review.Files {
+			if file.Target == "bin/razvilka" && file.Candidate == image.Path {
+				return "candidate"
+			}
+		}
+		return "retained"
+	}
+	admission := a.admission
+	admissionCalls, authorityCalls, probeCalls := 0, 0, 0
+	a.admission = func(c context.Context, jobID, installationID string, sequence uint64, action, effect string, begin func() error) error {
+		admissionCalls++
+		began := false
+		var beginErr error
+		admitErr := admission(c, jobID, installationID, sequence, action, effect, func() error {
+			began = true
+			beginErr = begin()
+			return beginErr
+		})
+		t.Logf("reader-seal admission call=%d job_match=%t installation_match=%t epoch_match=%t action_match=%t effect_match=%t began=%t begin=%s result=%s context=%s", admissionCalls, jobID == review.ID, installationID == review.AuthorityInstallationID, sequence == review.AuthoritySequence, action == "start/live", effect == journalReaderProbeEffect, began, errorClass(beginErr), errorClass(admitErr), errorClass(c.Err()))
+		return admitErr
+	}
+	sealStarted := time.Now()
+	proof, err := a.sealJournalReadersWithProbe(ctx, review, func(c context.Context, _ string) (SelfUpdateAuthority, error) {
 		stop, present, err := operationgate.ReadSelfUpdateStop(c, profile.Control)
+		authorityCalls++
+		t.Logf("reader-seal authority call=%d present=%t stopped=%t installation_match=%t epoch_match=%t result=%s", authorityCalls, present, stop.Stopped, stop.InstallationID == review.AuthorityInstallationID, stop.Sequence == review.AuthoritySequence, errorClass(err))
 		if err != nil || !present || stop.Stopped {
 			return SelfUpdateAuthority{}, errors.Join(ErrFileProtocol, err)
 		}
 		return SelfUpdateAuthority{stop.InstallationID, stop.Sequence}, nil
+	}, func(c context.Context, r fileReview, image selfupdatejournal.BinaryImage) (int, error) {
+		probeCalls++
+		started := time.Now()
+		t.Logf("reader-seal probe call=%d role=%s started=true", probeCalls, imageRole(image))
+		version, probeErr := a.probeJournalReader(c, r, image)
+		t.Logf("reader-seal probe call=%d role=%s reader=%d elapsed_ms=%d result=%s context=%s", probeCalls, imageRole(image), version, time.Since(started).Milliseconds(), errorClass(probeErr), errorClass(c.Err()))
+		return version, probeErr
 	})
+	a.admission = admission
+	t.Logf("reader-seal boundary proof_present=%t proof_valid=%t authority_calls=%d probe_calls=%d admission_calls=%d elapsed_ms=%d result=%s", proof != nil, validJournalReaderProof(proof), authorityCalls, probeCalls, admissionCalls, time.Since(sealStarted).Milliseconds(), errorClass(err))
 	if err != nil {
-		t.Fatal(err)
+		sealErr := err // Diagnostics cannot replace or satisfy this refusal.
+		current, currentErr := readAdapterRecord(a.directory, id)
+		t.Logf("reader-seal record result=%s owner_match=%t job_match=%t old_version_match=%t new_version_match=%t expected_old_version=%t expected_new_version=%t installation_match=%t executable_match=%t review_owner_valid=%t", errorClass(currentErr), current.Owner == updaterOwner, current.Job.ID == review.ID, current.CurrentVersion == review.OldVersion, current.Job.Release != nil && current.Job.Release.Version == review.NewVersion, review.OldVersion == "0.20.0", review.NewVersion == "0.20.1", profile.Installation == a.installation, current.ExecutableHash == review.OldExecutableSHA256, validFileReviewOwner(review, current))
+		boundRecord, boundReview, boundErr := a.loadBoundReview(ctx, id, true, false)
+		t.Logf("reader-seal bound-review result=%s record_match=%t review_match=%t", errorClass(boundErr), reflect.DeepEqual(boundRecord, current), reflect.DeepEqual(boundReview, review))
+		formatsErr := a.checkHelperProcessFormats(ctx, current, review)
+		t.Logf("reader-seal helper-formats result=%s", errorClass(formatsErr))
+		if root, rootErr := a.commandRoot(id); rootErr == nil {
+			identityData, identityErr := root.ReadLimited("helper.identity.json", 4096)
+			root.Close()
+			var identity fileHelperIdentity
+			decoded := identityErr == nil && decodeFileProtocol(identityData, &identity) == nil
+			t.Logf("reader-seal helper-identity result=%s decoded=%t schema_match=%t job_match=%t helper_valid=%t old_panel_valid=%t helper_image_match=%t old_image_match=%t boot_match=%t helper_record_match=%t old_panel_record_match=%t helper_is_actual_h=%t preparation_parent_match=%t", errorClass(identityErr), decoded, identity.Schema == selfUpdateProtocolSchema, identity.ID == review.ID, validFileProcess(identity.Process), validFileProcess(identity.OldPanel), identity.Process.ExecutableSHA256 == reviewedHelperSHA(review), identity.OldPanel.ExecutableSHA256 == review.OldExecutableSHA256, identity.Process.Boot == identity.OldPanel.Boot, identity.Process.PID == current.Job.HelperPID, identity.OldPanel.PID == current.ParentPID, identity.Process.PID == os.Getpid(), review.PreparationParent == nil || *review.PreparationParent == identity.OldPanel)
+		} else {
+			t.Logf("reader-seal helper-identity root=%s", errorClass(rootErr))
+		}
+		required, requiredErr := a.requiredJournalReadVersion(ctx)
+		t.Logf("reader-seal required reader=%d result=%s", required, errorClass(requiredErr))
+		images, inventoryErr := a.journalReaderImages(ctx, review)
+		roles := make(map[string]bool)
+		for _, image := range images {
+			roles[imageRole(image)] = true
+		}
+		knownInventory := inventoryErr == nil && len(images) == 3 && roles["installed"] && roles["helper"] && roles["candidate"]
+		t.Logf("reader-seal inventory images=%d result=%s expected_layout=%t", len(images), errorClass(inventoryErr), knownInventory)
+		// This fixture has exactly three reviewed copies of one test image.
+		// Unknown inventories refuse diagnosis child starts too.
+		if knownInventory {
+			sameImage := images[0].SHA256 == images[1].SHA256 && images[1].SHA256 == images[2].SHA256
+			t.Logf("reader-seal diagnostic shared_image=%t", sameImage)
+			for i, image := range images {
+				started := time.Now()
+				version, probeErr := a.probeJournalReader(ctx, review, image)
+				t.Logf("reader-seal diagnostic-probe index=%d role=%s reader=%d required_match=%t elapsed_ms=%d result=%s", i, imageRole(image), version, requiredErr == nil && version >= required, time.Since(started).Milliseconds(), errorClass(probeErr))
+			}
+			// Independently capture closed metadata facts of the same copied
+			// bytes under the production environment and actual admission/Wait.
+			if sameImage {
+				image := images[0]
+				root, copyErr := ownedfs.Open(filepath.Dir(image.Path))
+				var copied []byte
+				if copyErr == nil {
+					copied, copyErr = root.ReadLimited(filepath.Base(image.Path), MaximumBinaryBytes)
+					root.Close()
+				}
+				copyMatch := copyErr == nil && digestBytes(copied) == image.SHA256
+				t.Logf("reader-seal metadata-copy result=%s image_match=%t", errorClass(copyErr), copyMatch)
+				if copyMatch {
+					path := filepath.Join(t.TempDir(), "controller")
+					if writeErr := os.WriteFile(path, copied, 0700); writeErr != nil {
+						t.Logf("reader-seal metadata-copy write=%s", errorClass(writeErr))
+					} else {
+						for _, metadata := range []struct{ flag, label, expected string }{
+							{"-self-update-read-version", "reader", strconv.Itoa(SelfUpdateReadVersion)},
+							{"-self-update-schema", "protocol", "2"},
+							{"-component-update-schema", "component", "3"},
+							{"-node-history-read-version", "nodes", "3"},
+							{"-native-enrollment-schema", "enrollment", "1"},
+							{"-subscription-schema", "subscription", "1"},
+							{"-version", "version", review.NewVersion},
+						} {
+							probeCtx, probeCancel := context.WithTimeout(ctx, 3*time.Second)
+							command := exec.CommandContext(probeCtx, path, metadata.flag)
+							command.Env = commandEnvironment()
+							stdout, stderr := &cappedOutput{maximum: 16}, &cappedOutput{maximum: 4096}
+							command.Stdout, command.Stderr = stdout, stderr
+							configureBoundedCommand(command)
+							started := time.Now()
+							_, done, admitErr := startInstallerHelperCommand(probeCtx, command, func(begin func() error) error {
+								return a.admission(probeCtx, review.ID, review.AuthorityInstallationID, review.AuthoritySequence, "start/live", journalReaderProbeEffect, begin)
+							})
+							var waitErr error
+							if done != nil {
+								if admitErr != nil {
+									probeCancel()
+									cleanupCommand(command)
+								}
+								waitErr = <-done // Sole actual Wait supplied by the existing handoff.
+							}
+							value, parseErr := strconv.Atoi(strings.TrimSuffix(stdout.String(), "\n"))
+							canonical := parseErr == nil && value >= 1 && value <= SelfUpdateReadVersion && stdout.String() == strconv.Itoa(value)+"\n"
+							if !canonical {
+								value = 0
+							}
+							exitCode := -1
+							if command.ProcessState != nil {
+								exitCode = command.ProcessState.ExitCode()
+							}
+							t.Logf("reader-seal metadata kind=%s began=%t joined=%t exit=%d admission=%s wait=%s context=%s stderr_present=%t numeric_canonical=%t numeric=%d expected_match=%t ordinary_protocol_match=%t old_version_match=%t fixture_version_match=%t elapsed_ms=%d", metadata.label, command.Process != nil, done != nil, exitCode, errorClass(admitErr), errorClass(waitErr), errorClass(probeCtx.Err()), stderr.Len() != 0, canonical, value, stdout.String() == metadata.expected+"\n", metadata.label == "protocol" && stdout.String() == "0\n", metadata.label == "version" && stdout.String() == review.OldVersion+"\n", metadata.label == "version" && stdout.String() == "fixture-probe\n", time.Since(started).Milliseconds())
+							probeCancel()
+						}
+					}
+				}
+			}
+			fresh, freshErr := a.journalReaderImages(ctx, review)
+			t.Logf("reader-seal fresh-inventory images=%d result=%s opening_match=%t", len(fresh), errorClass(freshErr), reflect.DeepEqual(images, fresh))
+		}
+		t.Fatalf("reader-seal original refusal: %s", errorClass(sealErr))
 	}
 	review.JournalReaders = proof
 	saveStoppedReview(t, a, u, review)
