@@ -682,6 +682,10 @@ type packetNativeNeighborShape struct {
 	OwnedMACRelation     string `json:"owned_mac_relation"`
 	ExplicitMACRelation  string `json:"explicit_mac_relation"`
 	LiteralCIDRRelation  string `json:"literal_cidr_relation"`
+	AddressClass         string `json:"address_class,omitempty"`
+	LinkFlags            uint32 `json:"link_flags,omitempty"`
+	LinkLoopbackFlag     bool   `json:"link_loopback_flag,omitempty"`
+	LinkAttachments      string `json:"link_attachments,omitempty"`
 }
 type packetNativeNeighborGroup struct {
 	Shape packetNativeNeighborShape `json:"shape"`
@@ -753,6 +757,9 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 				report.MACRefusals++
 			}
 			shape := packetNativeNeighborClassKey{Shape: packetNativeNeighborClass(family, m, topology, links, intent), Stage: stage}
+			if stage == "kernel.bindings.neighbor.type" {
+				shape.Shape = packetNativeNeighborTypeFacts(shape.Shape, m, links)
+			}
 			if _, ok := groups[shape]; !ok {
 				order = append(order, shape)
 			}
@@ -773,6 +780,39 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 	// duplicate/ownership checks. Shape counts never replace this classification.
 	_, _, refusal := packetNeighborBoundary(ctx, topology, frames)
 	return report, refusal, nil
+}
+
+// Extra closed facts are emitted only for the exact type-refusal group.
+func packetNativeNeighborTypeFacts(s packetNativeNeighborShape, m message, links map[int]Link) packetNativeNeighborShape {
+	s.AddressClass, s.LinkAttachments = "other", "unknown"
+	if len(m.data) < 12 {
+		return s
+	}
+	if link, ok := links[int(int32(binary.NativeEndian.Uint32(m.data[4:8])))]; ok {
+		s.LinkFlags, s.LinkLoopbackFlag = link.Flags, link.Flags&8 != 0
+		s.LinkAttachments = "present"
+		if link.MasterIfIndex == 0 && link.ParentIfIndex == 0 && !link.ForeignParent {
+			s.LinkAttachments = "absent"
+		}
+	}
+	a, err := attrs(m.data[12:])
+	ip, ok := netip.AddrFromSlice(a[1])
+	if err != nil || !ok || !ip.Is6() || ip.Is4In6() {
+		return s
+	}
+	switch {
+	case ip.IsMulticast():
+		s.AddressClass = "ipv6_multicast"
+	case ip.IsLinkLocalUnicast():
+		s.AddressClass = "ipv6_link_local"
+	case ip.IsLoopback():
+		s.AddressClass = "ipv6_loopback"
+	case ip.IsUnspecified():
+		s.AddressClass = "ipv6_unspecified"
+	case ip.IsGlobalUnicast():
+		s.AddressClass = "ipv6_global"
+	}
+	return s
 }
 
 // Count each exact allowlisted stage at most once per refused record. Foreign
@@ -1092,7 +1132,7 @@ func TestIPv4LANPacketNativeHarnessNeighborTypeShapePrivacyAndAggregateBound(t *
 		t.Fatal("exact non-MAC type refusal shape lost or decoder changed")
 	}
 	group := report.Groups[0]
-	if group.Stage != "kernel.bindings.neighbor.type" || group.Count != 1 || !group.Shape.Parsed || group.Shape.Kind != 2 || group.Shape.LinkType != 65534 || group.Shape.HomeRelation != "unrelated" || group.Shape.LLAddressClass != "empty" || group.Shape.ExplicitMACRelation != "unobservable" {
+	if group.Stage != "kernel.bindings.neighbor.type" || group.Count != 1 || !group.Shape.Parsed || group.Shape.Kind != 2 || group.Shape.LinkType != 65534 || group.Shape.HomeRelation != "unrelated" || group.Shape.LLAddressClass != "empty" || group.Shape.ExplicitMACRelation != "unobservable" || group.Shape.AddressClass != "ipv6_global" || group.Shape.LinkAttachments != "absent" {
 		t.Fatal("type shape guessed or omitted a closed field")
 	}
 	encoded, encodeErr := json.Marshal(report)
@@ -1107,5 +1147,29 @@ func TestIPv4LANPacketNativeHarnessNeighborTypeShapePrivacyAndAggregateBound(t *
 	report, _, readErr = packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
 	if readErr != nil || report.MACRefusals != 17 || report.OtherRefusals != 1 || report.GroupCount != 18 || len(report.Groups) != 16 || report.GroupsOmitted != 2 || report.RecordsOmitted != 2 {
 		t.Fatal("MAC and type shapes exceeded their shared aggregate bound")
+	}
+	for address, want := range map[string]string{"ff02::1": "ipv6_multicast", "fe80::90": "ipv6_link_local", "::1": "ipv6_loopback", "::": "ipv6_unspecified", privateAddress: "ipv6_global", "192.0.2.90": "other"} {
+		facts := packetNativeNeighborTypeFacts(packetNativeNeighborShape{}, neighborFrame(12, address, "", 64), links)
+		if facts.AddressClass != want {
+			t.Fatal("closed address class was guessed")
+		}
+	}
+	links[12] = Link{IfIndex: 12, Interface: privateName, LinkType: 772, Flags: 9}
+	facts := packetNativeNeighborTypeFacts(packetNativeNeighborShape{}, row, links)
+	if facts.LinkFlags != 9 || !facts.LinkLoopbackFlag || facts.LinkAttachments != "absent" {
+		t.Fatal("observed loopback flags or absent attachments lost")
+	}
+	for _, attached := range []Link{{IfIndex: 12, MasterIfIndex: 9}, {IfIndex: 12, ParentIfIndex: 9}, {IfIndex: 12, ForeignParent: true}} {
+		links[12] = attached
+		if packetNativeNeighborTypeFacts(packetNativeNeighborShape{}, row, links).LinkAttachments != "present" {
+			t.Fatal("present attachment was classified absent")
+		}
+	}
+	if packetNativeNeighborTypeFacts(packetNativeNeighborShape{}, row, nil).LinkAttachments != "unknown" {
+		t.Fatal("missing link became proof of absent attachments")
+	}
+	encoded, _ = json.Marshal(facts)
+	if bytes.Contains(encoded, []byte(privateName)) || bytes.Contains(encoded, []byte(privateAddress)) {
+		t.Fatal("private value escaped loopback facts")
 	}
 }
