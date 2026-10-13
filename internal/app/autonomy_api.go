@@ -136,7 +136,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			}
 			mode := "auto"
 			cfg := a.Store.Get()
-			if a.Store.UpdateServiceControl(&mode, nil, cfg.Revision) != nil {
+			if cfg.ServiceControl.EffectiveMode() != "auto" && a.updateServiceControlMode(r.Context(), &mode, nil, cfg.Revision) != nil {
 				writeJSON(w, 409, map[string]any{"error": "Политика сохранена; проверьте общий режим управления."})
 				return
 			}

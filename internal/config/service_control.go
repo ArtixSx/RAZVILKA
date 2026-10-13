@@ -122,6 +122,10 @@ func validateServiceControl(c ServiceControl) error {
 func (s *Store) UpdateServiceControl(mode *string, schedule *ServiceCheckSchedule, revision uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.updateServiceControlLocked(mode, schedule, revision)
+}
+
+func (s *Store) updateServiceControlLocked(mode *string, schedule *ServiceCheckSchedule, revision uint64) error {
 	if s.cfg.Revision != revision || revision == ^uint64(0) {
 		return ErrRevisionChanged
 	}

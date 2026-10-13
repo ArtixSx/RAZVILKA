@@ -194,7 +194,7 @@ func (a *App) serviceControl(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if err := a.Store.UpdateServiceControl(request.Mode, request.Schedule, request.ExpectedRevision); err != nil {
+		if err := a.updateServiceControlMode(r.Context(), request.Mode, request.Schedule, request.ExpectedRevision); err != nil {
 			status := http.StatusBadRequest
 			if errors.Is(err, config.ErrRevisionChanged) {
 				status = http.StatusConflict
