@@ -1,6 +1,6 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
-import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis} from './test-ui-real-http-browser.mjs';
+import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
   RAZVILKA_QA_UI_INSTANCE:instance,RAZVILKA_QA_UI_CHROME:'installed-chrome',RAZVILKA_QA_UI_SESSION:'private-session.json'};
@@ -52,6 +52,22 @@ reject(()=>{const value=fixture();value.autonomy.policy.components.mode='install
 reject(()=>{const value=fixture();value.autonomy.policy.reserve_seconds=120;realHTTPFixture(value,instance);},'QA_POLICY_TUNING_REQUIRED');
 reject(()=>{const value=fixture();value.recovery.recovery_required=true;realHTTPFixture(value,instance);},'QA_RECOVERY_CLEAR_REQUIRED');
 check(()=>assert.equal(realHTTPCode('NODE_HISTORY_ADMISSION_REQUIRED'),'NODE_HISTORY_ADMISSION_REQUIRED'));
+for(const path of ['/api/v1/networkpolicy/review','/api/v1/networkpolicy/scope-options']){
+  check(()=>assert.equal(realHTTPUIReadAllowed(path,'GET'),true));
+  for(const method of ['POST','PUT','DELETE','PATCH'])check(()=>assert.equal(realHTTPUIReadAllowed(path,method),false));
+}
+for(const path of ['/api/v1/networkpolicy/exclusions','/api/v1/apply','/api/v1/networkpolicy/review?private=token'])check(()=>assert.equal(realHTTPUIReadAllowed(path,'GET'),false));
+for(const code of ['BINDINGS_UNAVAILABLE','SOURCE_UNAVAILABLE','HOME_ROLE_UNKNOWN','NETWORK_POLICY_SCOPE_OPTIONS_CHANGED'])check(()=>assert.equal(realHTTPCode(code),code));
+const scopeFacts={branch:'first-setup',saved_segment_count:0,saved_excluded_device_count:0,unobserved_excluded_device_count:0,retained_ids_checked:false,
+  observation_state:'unavailable',observation_code:'SOURCE_UNAVAILABLE',effect_authorized:false,live_applied:false};
+check(()=>assert.deepEqual(realHTTPSharedScopeFacts({...scopeFacts,private_ids:['private URI'],policy:{password:'secret'}}),scopeFacts));
+const savedScopeFacts={...scopeFacts,branch:'saved-policy',saved_segment_count:1,saved_excluded_device_count:2,unobserved_excluded_device_count:1,retained_ids_checked:true,observation_state:'partial',observation_code:'BINDINGS_UNAVAILABLE'};
+check(()=>assert.deepEqual(realHTTPSharedScopeFacts(savedScopeFacts),savedScopeFacts));
+reject(()=>realHTTPSharedScopeFacts({...scopeFacts,retained_ids_checked:true}),'QA_SCOPE_FACTS_INVALID');
+reject(()=>realHTTPSharedScopeFacts({...savedScopeFacts,unobserved_excluded_device_count:0}),'QA_SCOPE_FACTS_INVALID');
+reject(()=>realHTTPSharedScopeFacts({...scopeFacts,effect_authorized:true}),'QA_SCOPE_FACTS_INVALID');
+reject(()=>realHTTPSharedScopeFacts({...scopeFacts,saved_segment_count:'private identifier'}),'QA_SCOPE_FACTS_INVALID');
+check(()=>assert.equal(realHTTPSharedScopeFacts({...scopeFacts,observation_code:'PRIVATE_UNKNOWN_VALUE'}).observation_code,'UNKNOWN_TYPED_CODE'));
 check(()=>assert.equal(realHTTPCode('PRIVATE_UNRECOGNIZED_VALUE'),'UNKNOWN_TYPED_CODE'));
 for(const code of ['private value',`TOKEN_${'A'.repeat(100)}`,{secret:'private'},null])check(()=>assert.equal(realHTTPCode(code),null));
 check(()=>{
@@ -59,7 +75,7 @@ check(()=>{
   assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'known-scenario',status:'failed',code:'CLIENT_FAILED'});
 });
 assert.equal(await realHTTPDiagnosis('UI_NODE_IMPORT',()=>7),7);checks++;
-for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND']){
+for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND','UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND']){
   try{
     await realHTTPDiagnosis(id,()=>assert.equal('private catalog id','private candidate material'));
     assert.fail('expected private assertion failure');

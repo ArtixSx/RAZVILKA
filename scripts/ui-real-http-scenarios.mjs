@@ -13,7 +13,8 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_POLICY_CAS_EXPLICIT_READ','UI_POLICY_CAS_READ_NO_REPLAY','UI_POLICY_CAS_RESET',
   'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK',
   'UI_SERVICE_ASSIGN_FILTER','UI_SERVICE_ASSIGN_EDITOR','UI_SERVICE_ASSIGN_BUTTON_VISIBLE','UI_SERVICE_ASSIGN_RETURN','UI_SERVICE_ASSIGN_BOOKEND',
-  'UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND'
+  'UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND',
+  'UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
@@ -149,7 +150,7 @@ export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,wri
   await navTo(page,'overview');
 }
 
-export async function runRealHTTPReadScenarios({page,requests,test,readJSON,diagnose}) {
+export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRead,recordSharedScope,diagnose}) {
   const nav=async name=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name,name);};
   await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
     const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
@@ -373,6 +374,81 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,diag
       assert.equal(after.safe_mode,before.safe_mode);assert.equal(after.live_active,before.live_active);
       assert.deepEqual(afterLab.candidates,lab.candidates);assert.deepEqual(afterLab.selections,lab.selections);assert.deepEqual(afterLab.evidence,lab.evidence);
       assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'ordinary laboratory selection started a business mutation');
+    });
+  });
+
+  await test('shared home scope read-only editor with separate first-setup or saved-reference outcome','real policy/options GETs and genuine read-only navigation',async()=>{
+    const start=requests.length;
+    const before=await diagnose('UI_SCOPE_FIXTURE',async()=>{
+      const review=await readJSON('/api/v1/networkpolicy/review'),exclusions=await readJSON('/api/v1/networkpolicy/exclusions'),status=await readJSON('/api/v1/status');
+      // ROOT seeds this saved intent through the real review API before the
+      // browser starts. It is neither an observed segment nor route authority.
+      assert.equal(review.live_applied,false);
+      if(review.policy!==null){assert.equal(review.policy.traffic.mode,'selected_services');assert.equal(review.policy.clients.mode,'lan_except');assert.equal(review.policy.clients.segment_ids?.length,1);assert(review.policy.clients.excluded_device_ids?.length>0);}
+      else assert.equal(review.consent,null);
+      assert.equal(exclusions.live_applied,false);assert.equal(exclusions.scope_configured,review.policy!==null);assert.equal(exclusions.revision,review.revision);assert.equal(exclusions.policy_revision,review.policy?.revision||0);
+      assert.equal(status.safe_mode,true);assert.equal(status.live_active,false);
+      return {review,exclusions,status};
+    });
+    const savedSegments=before.review.policy?.clients.segment_ids||[],savedNegatives=before.review.policy?.clients.excluded_device_ids||[];
+    let scopeFacts;
+    await diagnose('UI_SCOPE_EDITOR',async()=>{
+      const attempted=await page.evaluate(()=>listScopeEditor.optionsAttempted),entered=requests.length;
+      await navTo(page,'devices');
+      await page.waitForFunction(()=>state.dataLoad.networkPolicyReview?.phase==='ready'&&!listScopeEditor.optionsRead);
+      assert.equal(await page.locator('#listScopeContent').count(),1);assert.equal(await page.locator('#listScopeContent').isVisible(),true);
+      assert.equal(await page.locator('#listScopeContent [data-scope-field="mode"]').inputValue(),'lan_except');
+      const selected=await page.locator('#listScopeContent [data-scope-list="segment_ids"]:checked').evaluateAll(inputs=>inputs.map(input=>input.dataset.scopeId));
+      assert.deepEqual(selected,savedSegments);
+      const excluded=await page.locator('#listScopeContent [data-scope-list="excluded_device_ids"]:checked').evaluateAll(inputs=>inputs.map(input=>input.dataset.scopeId));
+      assert.deepEqual([...excluded].sort(),[...savedNegatives].sort());
+      assert.equal(requests.slice(entered).filter(r=>r.path==='/api/v1/networkpolicy/scope-options').length,attempted?0:1);
+      assert.equal(await page.locator('#listScopeContent [data-scope-save]').isEnabled(),false);
+      if(before.review.policy===null)assert.match(await page.locator('#listScopeContent').textContent(),/Общая область пока не настроена/);
+    });
+    await diagnose('UI_SCOPE_OBSERVATION',async()=>{
+      const refreshed=requests.length;
+      const options=await uiRead('/api/v1/networkpolicy/scope-options',()=>page.locator('#listScopeContent [data-scope-refresh]').click());
+      await page.waitForFunction(()=>!listScopeEditor.optionsRead&&state.dataLoad.homeScope?.phase==='ready');
+      assert.equal(options.schema,1);assert.equal(options.ok,true);assert.equal(options.effect_authorized,false);assert.equal(options.live_applied,false);
+      assert(['available','partial','unavailable'].includes(options.state));assert.equal(options.revision,before.review.revision);assert.equal(options.policy_revision,before.review.policy?.revision||0);
+      assert(Array.isArray(options.segments)&&Array.isArray(options.devices)&&Array.isArray(options.retained_device_ids));
+      const unobserved=savedNegatives.filter(id=>options.devices.some(row=>row.id===id&&['not_observed','unknown','unavailable'].includes(row.state)&&row.selection_candidate===false));
+      if(before.review.policy!==null)assert(unobserved.length>0,'saved policy fixture lacks an unobserved negative identity');
+      for(const id of unobserved)assert(options.retained_device_ids.includes(id));
+      const rows=await page.locator('#listScopeContent [data-scope-list="excluded_device_ids"]').evaluateAll(inputs=>inputs.map(input=>({id:input.dataset.scopeId,checked:input.checked,visible:!!input.getClientRects().length,text:input.closest('label').textContent})));
+      for(const id of unobserved){const row=rows.find(row=>row.id===id);assert(row?.checked&&row.visible);assert.match(row.text,/не наблюдается|наблюдение не подтверждено/i);}
+      const text=await page.locator('#listScopeContent').textContent();
+      if(options.state==='partial')assert.match(text,/Наблюдение неполное/);
+      if(options.state==='unavailable')assert.match(text,/Домашние сегменты не подтверждены свежим чтением/);
+      assert.equal(requests.slice(refreshed).filter(r=>r.path==='/api/v1/networkpolicy/scope-options').length,1);
+      scopeFacts={branch:before.review.policy===null?'first-setup':'saved-policy',saved_segment_count:savedSegments.length,saved_excluded_device_count:savedNegatives.length,
+        unobserved_excluded_device_count:unobserved.length,retained_ids_checked:before.review.policy!==null,
+        observation_state:options.state,observation_code:options.code,effect_authorized:options.effect_authorized,live_applied:options.live_applied};
+      // Zero observed devices and unsupported Linux observation are legitimate
+      // responses. Saved negative IDs must remain visible in either branch.
+    });
+    await diagnose('UI_SCOPE_NAVIGATION',async()=>{
+      const left=requests.length;
+      await page.locator('#listScopeContent button[data-rz-nav="exclusions"]').click();
+      await page.waitForFunction(()=>state.currentView==='exclusions'&&!panelLoad.request);
+      assert.equal(await page.locator('#resourceExclusionsContent').isVisible(),true);assert.match(await page.locator('#resourceExclusionsContent').textContent(),/Сайты без обхода/);
+      assert.equal(await page.locator('#listScopeContent').count(),1);assert.equal(await page.locator('#listScopeContent').isVisible(),false);
+      await navTo(page,'devices');await page.evaluate(()=>refreshAll());await page.waitForFunction(()=>!panelLoad.request&&!listScopeEditor.optionsRead);
+      assert.equal(requests.slice(left).filter(r=>r.path==='/api/v1/networkpolicy/scope-options').length,0,'ordinary reads repeated the expensive observation');
+      assert.equal(await page.locator('#listScopeContent').isVisible(),true);
+      const excluded=await page.locator('#listScopeContent [data-scope-list="excluded_device_ids"]:checked').evaluateAll(inputs=>inputs.map(input=>input.dataset.scopeId));
+      assert.deepEqual([...excluded].sort(),[...savedNegatives].sort());
+    });
+    await diagnose('UI_SCOPE_BOOKEND',async()=>{
+      const review=await readJSON('/api/v1/networkpolicy/review'),exclusions=await readJSON('/api/v1/networkpolicy/exclusions'),status=await readJSON('/api/v1/status');
+      assert.deepEqual(review,before.review);assert.deepEqual(exclusions,before.exclusions);
+      assert.equal(status.revision,before.status.revision);assert.equal(status.applied_revision,before.status.applied_revision);
+      assert.equal(status.safe_mode,true);assert.equal(status.live_active,false);
+      assert.equal(requests.slice(start).filter(r=>r.method!=='GET').length,0,'shared scope read/navigation caused a mutation');
+      await navTo(page,'overview');
+      assert.equal(requests.slice(start).filter(r=>r.method!=='GET').length,0,'return navigation caused a mutation');
+      recordSharedScope(scopeFacts);
     });
   });
 

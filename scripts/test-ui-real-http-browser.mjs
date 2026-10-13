@@ -11,7 +11,23 @@ import {runRealHTTPReadScenarios,runRealHTTPOfflineSources,runRealHTTPDraftScena
 
 const diagnostics=new WeakMap();
 const diagnosticStages=new WeakMap(),allowedDiagnosticIDs=new Set(realHTTPDiagnosticIDs);
-const publicCodes=new Set(['NODE_HISTORY_ADMISSION_REQUIRED','PARTIAL_IMPORT_CONFIRMATION_REQUIRED','APPLY_REVIEW_CHANGED','WIREGUARD_ASSIGNMENT_CHANGED']);
+const publicCodes=new Set(['NODE_HISTORY_ADMISSION_REQUIRED','PARTIAL_IMPORT_CONFIRMATION_REQUIRED','APPLY_REVIEW_CHANGED','WIREGUARD_ASSIGNMENT_CHANGED',
+  'OBSERVED','NO_HOME_CANDIDATES','SOURCE_UNAVAILABLE','SOURCE_TIMEOUT','SOURCE_CANCELED','BOUNDS_EXCEEDED','ALIAS_CONFLICT',
+  'AMBIGUOUS_BINDINGS','HOME_UNAVAILABLE','HOME_ROLE_UNKNOWN','BINDINGS_UNAVAILABLE','NETWORK_POLICY_SCOPE_OPTIONS_CHANGED']);
+export function realHTTPUIReadAllowed(path,method) {
+  return method==='GET'&&['/api/v1/networkpolicy/review','/api/v1/networkpolicy/scope-options'].includes(path);
+}
+export function realHTTPSharedScopeFacts(value) {
+  realHTTPAssert(value&&['first-setup','saved-policy'].includes(value.branch)
+    &&['saved_segment_count','saved_excluded_device_count','unobserved_excluded_device_count'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0&&value[key]<=128)
+    &&['available','partial','unavailable'].includes(value.observation_state)&&value.effect_authorized===false&&value.live_applied===false,'QA_SCOPE_FACTS_INVALID');
+  realHTTPAssert(value.branch==='saved-policy'
+    ? value.saved_segment_count===1&&value.saved_excluded_device_count>0&&value.unobserved_excluded_device_count>0&&value.unobserved_excluded_device_count<=value.saved_excluded_device_count&&value.retained_ids_checked===true
+    : value.saved_segment_count===0&&value.saved_excluded_device_count===0&&value.unobserved_excluded_device_count===0&&value.retained_ids_checked===false,'QA_SCOPE_FACTS_INVALID');
+  return {branch:value.branch,saved_segment_count:value.saved_segment_count,saved_excluded_device_count:value.saved_excluded_device_count,
+    unobserved_excluded_device_count:value.unobserved_excluded_device_count,retained_ids_checked:value.retained_ids_checked,
+    observation_state:value.observation_state,observation_code:realHTTPCode(value.observation_code),effect_authorized:false,live_applied:false};
+}
 export function realHTTPAssert(condition,code) {
   assert(/^[A-Z][A-Z0-9_]{0,79}$/.test(code));
   if(condition)return;
@@ -141,6 +157,12 @@ export async function runRealHTTPUI(config) {
     const [response]=await Promise.all([pending,action()]);
     const receipt=await recordResponse(response,path,method,'ui-receipt');realHTTPAssert(response.status()===expectedStatus,'HTTP_UI_WRITE_REJECTED');return receipt;
   };
+  const uiRead=async(path,action)=>{
+    realHTTPAssert(realHTTPUIReadAllowed(path,'GET'),'UNDECLARED_UI_READ');
+    const pending=page.waitForResponse(response=>response.url()===config.origin+path&&response.request().method()==='GET');
+    const [response]=await Promise.all([pending,action()]);
+    const receipt=await recordResponse(response,path,'GET','ui-read-receipt');realHTTPAssert(response.status()===200,'HTTP_UI_READ_REJECTED');return receipt;
+  };
   const test=async(name,boundary,action)=>{
     stage=name;await action();realHTTPAssert(report.browser_errors===0,'BROWSER_ERROR');
     const index=report.steps.length+1;report.steps.push({scenario:name,status:'passed'});console.log('PASS scenario '+index);
@@ -194,7 +216,8 @@ export async function runRealHTTPUI(config) {
     realHTTPAssert(document?.status()===200,'DOCUMENT_REJECTED');
     const csp=document.headers()['content-security-policy'];realHTTPAssert(csp?.includes("default-src 'self'")&&csp.includes("frame-ancestors 'none'"),'CSP_REQUIRED');
     await page.waitForFunction(()=>state.authenticated&&!panelLoad.request);
-    const shared={page,requests:browserRequests,test,readJSON,writeJSON,uiReceipt,beforeMutation,diagnose:realHTTPDiagnosis};
+    const shared={page,requests:browserRequests,test,readJSON,writeJSON,uiReceipt,uiRead,beforeMutation,diagnose:realHTTPDiagnosis,
+      recordSharedScope:value=>{report.shared_scope=realHTTPSharedScopeFacts(value);}};
     await runRealHTTPReadScenarios(shared);await runRealHTTPOfflineSources(shared);
     if(config.draftMutations)await runRealHTTPDraftScenarios(shared);
     stage='verify-final-QA-boundary';await checkIdentity();
