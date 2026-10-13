@@ -1,18 +1,20 @@
 package projectmeta
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 var (
-	markdownLinkPattern = regexp.MustCompile(`\[[^\]]+\]\(([^)]+)\)`)
-	versionPattern      = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	markdownLinkPattern  = regexp.MustCompile(`\[[^\]]+\]\(([^)]+)\)`)
+	versionPattern       = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	projectModulePattern = regexp.MustCompile(`(?m)^[\t ]*module[\t ]+(github\.com/ArtixSx/razvilka|"github\.com/ArtixSx/razvilka")[\t ]*(//[^\r\n]*)?\r?$`)
 )
 
 // VERSION identifies the source release. CI appends its own build metadata,
@@ -47,11 +49,63 @@ func TestCanonicalVersionAcceptsStableAndPrerelease(t *testing.T) {
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate project metadata test")
+	directory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("locate project metadata working directory: %v", err)
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+	root, err := findRepositoryRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// Go runs package tests in their source directory. Unlike runtime.Caller,
+// this path still identifies the actual checkout when built with -trimpath.
+// Stop at the nearest module so a foreign checkout cannot borrow our parent.
+func findRepositoryRoot(directory string) (string, error) {
+	for directory = filepath.Clean(directory); ; directory = filepath.Dir(directory) {
+		data, err := os.ReadFile(filepath.Join(directory, "go.mod"))
+		if err == nil {
+			if !projectModulePattern.Match(data) {
+				return "", fmt.Errorf("nearest go.mod at %s is not the RAZVILKA module", directory)
+			}
+			return directory, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("read project module marker: %w", err)
+		}
+		if filepath.Dir(directory) == directory {
+			return "", fmt.Errorf("cannot locate RAZVILKA go.mod from the test working directory")
+		}
+	}
+}
+
+func TestRepositoryRootUsesNearestExactModule(t *testing.T) {
+	for _, module := range []string{"module github.com/ArtixSx/razvilka\n", "module \"github.com/ArtixSx/razvilka\" // source checkout\r\n"} {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(module), 0600); err != nil {
+			t.Fatal(err)
+		}
+		packageDirectory := filepath.Join(root, "internal", "projectmeta")
+		if err := os.MkdirAll(packageDirectory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, start := range []string{root, packageDirectory} {
+			found, err := findRepositoryRoot(start)
+			if err != nil || found != root {
+				t.Fatalf("actual module root not found: %s, %v", found, err)
+			}
+		}
+		// A similarly named nested module must refuse instead of selecting
+		// the valid parent and silently checking another checkout's files.
+		if err := os.WriteFile(filepath.Join(packageDirectory, "go.mod"), []byte("module github.com/ArtixSx/razvilka-other\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if found, err := findRepositoryRoot(packageDirectory); err == nil || found != "" {
+			t.Fatal("foreign module borrowed the parent's source checks")
+		}
+	}
 }
 
 func readFile(t *testing.T, root, name string) string {
