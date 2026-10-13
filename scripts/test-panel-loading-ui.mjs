@@ -57,15 +57,71 @@ function holdEngineNavigation(f){
 let count=0;
 async function test(name,fn){await fn();count++;console.log('PASS',name);}
 
+await test('engines waits for status settlement before protected reads and keeps inventory parallel',async()=>{
+ for(const inventoryTiming of ['early','late']){
+   const f=engineFixture(),status=deferred(),inventory=deferred(),services=deferred();
+   f.handler(url=>url==='/api/v1/status'?status.promise:url==='/api/v1/panel/inventory'?inventory.promise:url==='/api/v1/services'?services.promise:f.normal(url));
+   const refresh=f.context.refreshAll();await flush();
+   assert.equal(f.calls.filter(call=>call.url==='/api/v1/panel/inventory').length,1);
+   assert.equal(f.calls.filter(call=>['/api/v1/services','/api/v1/engine-configs'].includes(call.url)).length,0,'protected metadata overlapped the exclusive status reader');
+   if(inventoryTiming==='early'){inventory.resolve(f.normal('/api/v1/panel/inventory'));await flush();assert.equal(f.state.dataLoad.inventory.phase,'ready');assert.equal(f.state.dataLoad.status.phase,'loading');}
+   status.resolve(f.normal('/api/v1/status'));await flush();
+   assert.equal(f.state.dataLoad.status.phase,'ready');assert.equal(f.state.dataLoad.engineConfigs.phase,'ready');assert.equal(f.state.dataLoad.services.phase,'loading');
+   if(inventoryTiming==='late')assert.equal(f.state.dataLoad.inventory.phase,'loading','slow inventory became a catalog prerequisite');
+   services.resolve(f.normal('/api/v1/services'));inventory.resolve(f.normal('/api/v1/panel/inventory'));assert.equal(await refresh,true);
+   for(const url of ['/api/v1/status','/api/v1/services','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,1);
+   assert.equal(f.calls.filter(call=>call.options.method&&call.options.method!=='GET').length,0);
+ }
+});
+
+await test('engines busy status stays busy while independent metadata succeeds and existing retry can recover',async()=>{
+ const f=engineFixture(),services=[{id:'fresh-service'}],configs=[{id:'fresh-engine'}];
+ f.handler(url=>url==='/api/v1/status'?Promise.reject(Object.assign(new Error('modeled writer busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}})):url==='/api/v1/services'?services:url==='/api/v1/engine-configs'?configs:f.normal(url));
+ assert.equal(await f.context.refreshAll(),true);
+ assert.equal(f.state.dataLoad.status.phase,'busy');
+ assert.equal(f.state.services[0].id,services[0].id);assert.equal(f.state.engineConfigs[0].id,configs[0].id);
+ for(const key of ['services','engineConfigs'])assert.equal(f.state.dataLoad[key].phase,'ready');
+ assert.equal(f.state.loadIssues.length,1);assert.equal(f.state.loadIssues[0].section,'status');assert.equal(f.state.loadIssues[0].busy,true);
+ f.handler(f.normal);f.retry();await f.panelLoad.request;
+ for(const key of ['status','services','engineConfigs'])assert.equal(f.state.dataLoad[key].phase,'ready');
+ for(const url of ['/api/v1/services','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,1);
+ assert.equal(f.state.loadIssues.length,0);
+});
+
+await test('engines preserves independent metadata after an ordinary status error',async()=>{
+ const f=engineFixture();f.handler(url=>url==='/api/v1/status'?Promise.reject(Object.assign(new Error('status unavailable'),{status:503})):f.normal(url));
+ assert.equal(await f.context.refreshAll(),true);assert.equal(f.state.dataLoad.status.phase,'error');
+ for(const key of ['services','engineConfigs'])assert.equal(f.state.dataLoad[key].phase,'ready');
+ assert.equal(f.state.loadIssues.length,1);assert.equal(f.state.loadIssues[0].section,'status');
+});
+
+await test('engines revokes queued metadata on status 401, auth epoch, navigation or mutation cancellation',async()=>{
+ for(const leave of ['401','auth','view','read-epoch']){
+   const f=engineFixture(),status=deferred();f.handler(url=>url==='/api/v1/status'?status.promise:f.normal(url));
+   const refresh=f.context.refreshAll();await flush();
+   if(leave==='401')status.reject(Object.assign(new Error('login expired'),{status:401}));
+   else{if(leave==='auth'){f.state.authGeneration++;f.context.showAuth();}else if(leave==='view'){f.state.currentView='settings';f.context.cancelPanelRefresh();}else f.context.invalidatePanelReads();status.resolve(f.normal('/api/v1/status'));}
+   await refresh;assert.equal(f.calls.filter(call=>['/api/v1/services','/api/v1/engine-configs'].includes(call.url)).length,0);
+   assert.equal(f.state.engineConfigs.length,0);assert(!f.renders.includes('renderEngineControl'));assert.equal(f.timers.size,0);
+ }
+});
+
+await test('other views retain concurrent metadata while status is pending',async()=>{
+ const f=fixture(),status=deferred();f.handler(url=>url==='/api/v1/status'?status.promise:f.normal(url));
+ const refresh=f.context.refreshAll();await flush();
+ for(const url of ['/api/v1/services','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,1);
+ assert.equal(f.state.dataLoad.engineConfigs.phase,'ready');status.resolve(f.normal('/api/v1/status'));await refresh;
+});
+
 await test('legacy unowned metadata refresh duplicates active navigation and exposes its 409',async()=>{
  const f=engineFixture(),held=holdEngineNavigation(f);await flush();
  await assert.rejects(f.context.refreshEngineConfigs(),error=>error.status===409&&error.payload.code==='RESTORE_OPERATION_BUSY');
- assert.deepEqual(held.counts(),{status:2,catalog:2});await held.finish();
+ await held.finish();assert.deepEqual(held.counts(),{status:2,catalog:2});
 });
 
 await test('missing-catalog card joins the actual navigation snapshot and selects its exact engine',async()=>{
  const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
- assert.deepEqual(held.counts(),{status:1,catalog:1});await held.finish();assert.equal(await opened,true);
+ assert.deepEqual(held.counts(),{status:1,catalog:0});await held.finish();assert.equal(await opened,true);assert.deepEqual(held.counts(),{status:1,catalog:1});
  assert.equal(f.state.selectedEngine,'xray');assert.equal(f.state.currentView,'engineconfig');
  assert.equal(f.calls.filter(call=>call.options.method&&call.options.method!=='GET').length,0);
 });
@@ -74,7 +130,7 @@ await test('same-owner status or catalog failure rejects the card without a fall
  for(const section of ['status','catalog'])for(const phase of ['busy','error']){
    const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
    const error=Object.assign(new Error('modeled '+phase),{status:phase==='busy'?409:503,payload:{code:phase==='busy'?'RESTORE_OPERATION_BUSY':'SOURCE_UNAVAILABLE'}});
-   held[section].reject(error);if(section==='status')held.catalog.resolve(held.configs);else held.status.resolve(f.normal('/api/v1/status'));
+   if(section==='catalog'){held.status.resolve(f.normal('/api/v1/status'));await flush();held.catalog.reject(error);}else{held.status.reject(error);held.catalog.resolve(held.configs);}
    assert.equal(await opened,false);assert.equal(f.state.selectedEngine,'sing-box');assert.equal(f.state.currentView,'engines');
    assert.deepEqual(held.counts(),{status:1,catalog:1});assert.equal(f.state.dataLoad[section==='status'?'status':'engineConfigs'].phase,phase);
    assert.match(f.notices.at(-1)[1],/не прочитаны/);assert.equal(f.notices.at(-1)[2],'modeled '+phase);
@@ -83,7 +139,7 @@ await test('same-owner status or catalog failure rejects the card without a fall
 
 await test('ordinary refresh joins navigation and a subsequent explicit refresh obtains one fresh pair',async()=>{
  const f=engineFixture(),held=holdEngineNavigation(f);await flush();const joined=f.context.refreshAll();
- assert.deepEqual(held.counts(),{status:1,catalog:1});await held.finish();await joined;
+ assert.deepEqual(held.counts(),{status:1,catalog:0});await held.finish();await joined;assert.deepEqual(held.counts(),{status:1,catalog:1});
  f.handler(f.normal);await f.context.refreshAll();
  for(const url of ['/api/v1/status','/api/v1/engine-configs'])assert.equal(f.calls.filter(call=>call.url===url).length,2);
 });
@@ -128,7 +184,7 @@ await test('old navigation owner cannot open a card after auth, view, request or
    const f=engineFixture(),held=holdEngineNavigation(f);await flush();const opened=f.context.openEngineConfiguration('xray');
    if(leave==='auth')f.state.authGeneration++;else if(leave==='view')f.state.currentView='settings';else if(leave==='request')f.state.engineNavigationRequest++;else f.panelLoad.generation++;
    await held.finish();assert.equal(await opened,false);assert.equal(f.state.selectedEngine,'sing-box');
-   assert.deepEqual(held.counts(),{status:1,catalog:1});assert.equal(f.notices.length,0);
+   assert.deepEqual(held.counts(),{status:1,catalog:leave==='request'?1:0});assert.equal(f.notices.length,0);
  }
 });
 

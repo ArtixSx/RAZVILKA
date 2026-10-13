@@ -1245,7 +1245,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     const requests = panelViewRequests().filter(([key]) => key === 'status' || !retryFailed || retryKeys.has(key) || !state.dataLoad[key]?.loaded);
     requests.forEach(([key]) => panelSectionState(key, 'loading'));
     renderPanelLoad();
-    await settlePanelReads(requests, async ([key, url]) => {
+    const readSection = async ([key, url]) => {
       if (!panelSnapshotCurrent(generation)) return;
       const context = panelReadContext();
       try {
@@ -1272,7 +1272,22 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         issues.push({ section: key, url, busy: panelBusy(error), message: error.message || 'Раздел временно недоступен', technical: error.technicalMessage || '' });
         renderPanelLoad();
       }
-    });
+    };
+    if(panelLoad.view==='engines'){
+      // Status owns exclusive server admission. Keep memory inventory parallel,
+      // then start protected metadata after this status reader has settled.
+      const context=panelReadContext(),status=requests.find(([key])=>key==='status');
+      const inventory=requests.filter(([key])=>key==='inventory');
+      const metadata=requests.filter(([key])=>key!=='status'&&key!=='inventory');
+      await Promise.allSettled([
+        settlePanelReads(inventory,readSection),
+        (async()=>{
+          if(status)await readSection(status);
+          if(!panelSnapshotCurrent(generation)||!panelReadContextCurrent(context)||state.currentView!=='engines')return;
+          await settlePanelReads(metadata,readSection);
+        })()
+      ]);
+    }else await settlePanelReads(requests,readSection);
     if (!panelSnapshotCurrent(generation)) return false;
     state.loadIssues = issues;
     renderPanelLoad();
