@@ -34,12 +34,14 @@ type managedXraySelectedTCPListExecution struct {
 	self                                  *managedXraySelectedTCPListExecution
 	runtime                               *ManagedXraySelectedTCPListRuntime
 	scope                                 *ListScopeBinding
+	finiteScope                           *xrayFiniteScopeBinding
 	source                                *XrayListRuntimeSource
 	preparation                           *listXrayRuntimePreparation
 	material                              *dataplane.XrayOperationMaterial
 	plan                                  dataplane.Plan
 	listener                              netip.AddrPort
 	primary                               *physicalscope.PrimaryIPv4Review
+	finitePrimary                         *physicalscope.FiniteIPv4PrimaryReview
 	lanAdmission                          *dataplane.LANPolicyCommandAdmission
 	terminal                              *dataplane.XraySelectedTCPTerminal
 	pendingContext                        context.Context
@@ -103,7 +105,7 @@ func (e *managedXraySelectedTCPListExecution) guard(ctx context.Context) error {
 	if _, _, err := r.executionFor(ctx); err != nil {
 		return err
 	}
-	if e.source == nil || e.scope == nil || e.material == nil {
+	if e.source == nil || !e.scopeOwner().matches(r.app, r.app.Store) || e.material == nil {
 		return ErrXrayListSource
 	}
 	if e.material.IsCleanupContext(ctx) {
@@ -116,7 +118,7 @@ func (e *managedXraySelectedTCPListExecution) guard(ctx context.Context) error {
 		if err := e.source.Current(ctx); err != nil {
 			return err
 		}
-		if err := e.scope.ScopeCheck(ctx, e.plan.LAN); err != nil {
+		if err := e.scopeOwner().ScopeCheck(ctx, e.plan.LAN); err != nil {
 			return err
 		}
 		return e.source.Current(ctx)
@@ -128,7 +130,7 @@ func (e *managedXraySelectedTCPListExecution) committedGuard(ctx context.Context
 	if _, _, err := r.executionFor(ctx); err != nil {
 		return err
 	}
-	if e.source == nil || e.scope == nil || e.material == nil || plan.PlanID != e.plan.PlanID || plan.Digest != e.plan.Digest || plan.Revision != e.plan.Revision || !reflect.DeepEqual(plan.LAN, e.plan.LAN) {
+	if e.source == nil || !e.scopeOwner().matches(r.app, r.app.Store) || e.material == nil || plan.PlanID != e.plan.PlanID || plan.Digest != e.plan.Digest || plan.Revision != e.plan.Revision || !reflect.DeepEqual(plan.LAN, e.plan.LAN) {
 		return ErrXrayListSource
 	}
 	return r.app.Operations.WithExclusiveContext(ctx, func() error {
@@ -148,13 +150,10 @@ func (e *managedXraySelectedTCPListExecution) committedGuard(ctx context.Context
 		if err != nil || wan != s.wan {
 			return errors.Join(ErrXrayListSource, err)
 		}
-		if err := e.scope.cleanupScopeCheck(ctx, plan.LAN); err != nil {
+		if err := e.scopeOwner().cleanupScopeCheck(ctx, plan.LAN); err != nil {
 			return err
 		}
-		if e.primary == nil {
-			return ErrXrayListSource
-		}
-		if err := e.primary.CurrentRetained(ctx); err != nil {
+		if err := e.primaryCurrentRetained(ctx); err != nil {
 			return err
 		}
 		return errors.Join(s.registration.Current(ctx), s.currentDestinations(ctx))
@@ -170,7 +169,7 @@ func (e *managedXraySelectedTCPListExecution) cleanupGuard(ctx context.Context, 
 
 func (r *ManagedXraySelectedTCPListRuntime) scopeCheck(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
 	e, _, err := r.executionFor(ctx)
-	if err != nil || e.scope == nil || !reflect.DeepEqual(plan, e.plan.LAN) {
+	if err != nil || !e.scopeOwner().matches(r.app, r.app.Store) || !reflect.DeepEqual(plan, e.plan.LAN) {
 		return errors.Join(ErrListScopeChanged, err)
 	}
 	if e.material != nil && e.material.IsCleanupContext(ctx) {
@@ -179,7 +178,7 @@ func (r *ManagedXraySelectedTCPListRuntime) scopeCheck(ctx context.Context, plan
 	if e.material != nil && e.material.RetainedOperationContext(ctx) {
 		return e.committedGuard(ctx, e.plan)
 	}
-	return e.scope.ScopeCheck(ctx, plan)
+	return e.scopeOwner().ScopeCheck(ctx, plan)
 }
 
 func (r *ManagedXraySelectedTCPListRuntime) lanApplyGuard(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan, _ dataplane.LANPolicyEffect) error {
@@ -192,14 +191,14 @@ func (r *ManagedXraySelectedTCPListRuntime) lanApplyGuard(ctx context.Context, p
 
 func (r *ManagedXraySelectedTCPListRuntime) lanCleanupGuard(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan, _ dataplane.LANPolicyEffect) error {
 	e, o, err := r.executionFor(ctx)
-	if err != nil || e.scope == nil || !reflect.DeepEqual(plan, e.plan.LAN) {
+	if err != nil || !e.scopeOwner().matches(r.app, r.app.Store) || !reflect.DeepEqual(plan, e.plan.LAN) {
 		return errors.Join(ErrListScopeChanged, err)
 	}
 	return o.cleanup.WithCurrent(ctx, func() error {
 		if err := r.policy.control.CurrentForCleanupOperation(ctx, o.cleanup); err != nil {
 			return err
 		}
-		return e.scope.cleanupScopeCheck(ctx, plan)
+		return e.scopeOwner().cleanupScopeCheck(ctx, plan)
 	})
 }
 

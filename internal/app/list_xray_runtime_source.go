@@ -49,6 +49,7 @@ type XrayListRuntimeSource struct {
 	custom                                              *customservices.Manager
 	dns                                                 *dnscontrol.Manager
 	scope                                               *ListScopeBinding
+	finiteScope                                         *xrayFiniteScopeBinding
 	root, catalog, service, selected, wan, materialHash string
 	expected                                            config.Config
 	frozen                                              catalog.Service
@@ -83,13 +84,17 @@ func (a *App) ReviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 }
 
 func (a *App) reviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeBinding, serviceID string, original *dataplane.ProxyTunnelAdapter, candidate *xrayAutonomyCandidate) (*XrayListRuntimeSource, error) {
+	return a.reviewXrayListRuntimeSourceOwner(ctx, xrayRuntimeScope{full: scope}, serviceID, original, candidate)
+}
+
+func (a *App) reviewXrayListRuntimeSourceOwner(ctx context.Context, scope xrayRuntimeScope, serviceID string, original *dataplane.ProxyTunnelAdapter, candidate *xrayAutonomyCandidate) (*XrayListRuntimeSource, error) {
 	if xrayListSourceContext(ctx) != nil || a == nil || a.Store == nil || a.Dataplane == nil || a.Nodes == nil || a.Sources == nil || a.SelfUpdateFiles == nil ||
-		scope == nil || scope.self != scope || scope.app != a || scope.store != a.Store {
+		!scope.matches(a, a.Store) {
 		return nil, ErrXrayListSource
 	}
 	lifetime, cancel := context.WithCancel(ctx)
 	r := &XrayListRuntimeSource{ctx: lifetime, cancel: cancel, app: a, store: a.Store, manager: a.Dataplane, files: a.SelfUpdateFiles,
-		nodes: a.Nodes, sources: a.Sources, custom: a.CustomServices, dns: a.DNS, scope: scope, root: a.SelfUpdateFiles.ControlRoot,
+		nodes: a.Nodes, sources: a.Sources, custom: a.CustomServices, dns: a.DNS, scope: scope.full, finiteScope: scope.finite, root: a.SelfUpdateFiles.ControlRoot,
 		service: serviceID, closeDone: make(chan struct{}), autonomy: candidate}
 	r.self = r
 	keep := false
@@ -145,10 +150,10 @@ func (a *App) reviewXrayListRuntimeSource(ctx context.Context, scope *ListScopeB
 			return err
 		}
 		r.wan, err = a.freshNetworkProfile(c)
-		if err != nil || r.wan != scope.networkID {
+		if err != nil || r.wan != scope.networkID() {
 			return errors.Join(ErrXrayListSource, err)
 		}
-		r.identity = scope.facts.Identity
+		r.identity = scope.identity()
 		r.node, err = dataplane.ReviewNodeDefaultSource(c, r.nodes, r.selected)
 		if err != nil {
 			return err
@@ -206,7 +211,7 @@ func xrayListLiteralProbeInCIDRs(service catalog.Service) bool {
 func (r *XrayListRuntimeSource) currentApp() error {
 	if r.closed.Load() || r.app == nil || r.app.Store != r.store || r.app.Dataplane != r.manager || r.app.Nodes != r.nodes || r.app.Sources != r.sources ||
 		r.app.CustomServices != r.custom || r.app.DNS != r.dns || r.app.SelfUpdateFiles != r.files || r.files.ControlRoot != r.root ||
-		r.scope.self != r.scope || r.scope.app != r.app || r.scope.store != r.store || !reflect.DeepEqual(r.store.Get(), r.expected) ||
+		!r.scopeOwner().matches(r.app, r.store) || !reflect.DeepEqual(r.store.Get(), r.expected) ||
 		applyReviewHash(r.app.catalogSnapshot()) != r.catalog || !wgListBaselineDNS(r.dns, r.service) {
 		return ErrXrayListSource
 	}
@@ -257,7 +262,7 @@ func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
 	stop := context.AfterFunc(r.ctx, cancel)
 	defer func() { stop(); cancel() }()
 	return r.app.Operations.WithExclusiveContext(r.ctx, func() error {
-		return r.scope.use(c, func(c context.Context) error {
+		return r.scopeOwner().use(c, func(c context.Context) error {
 			if err := r.currentApp(); err != nil {
 				return err
 			}
@@ -276,7 +281,7 @@ func (r *XrayListRuntimeSource) currentLocked(ctx context.Context) error {
 				return err
 			}
 			wan, err := r.app.freshNetworkProfile(c)
-			if err != nil || wan != r.wan || r.scope.facts.Identity != r.identity {
+			if err != nil || wan != r.wan || r.scopeOwner().identity() != r.identity {
 				return errors.Join(ErrXrayListSource, err)
 			}
 			material, err := r.currentNodeMaterial(c)

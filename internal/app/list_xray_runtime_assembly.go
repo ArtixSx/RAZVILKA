@@ -44,7 +44,7 @@ func (r *XrayListRuntimeSource) prepare(ctx context.Context, selectedTCP ...bool
 	if err != nil || reference.NodeGeneration != r.node.Reference().NodeGeneration || reference.CompiledMaterialSHA256 != r.materialHash {
 		return nil, errors.Join(ErrXrayListSource, err)
 	}
-	snapshot, err := r.scope.Observe(ctx)
+	snapshot, err := r.scopeOwner().Observe(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (r *XrayListRuntimeSource) prepare(ctx context.Context, selectedTCP ...bool
 		r.invalid = true
 		return nil, err
 	}
-	if err := r.scope.BindCompilation(ctx, compilation); err != nil {
+	if err := r.scopeOwner().BindCompilation(ctx, compilation); err != nil {
 		return nil, err
 	}
 	if err := proof.Current(ctx); err != nil {
@@ -115,7 +115,7 @@ func (p *listXrayRuntimePreparation) current(ctx context.Context) error {
 	if err := p.proof.Current(ctx); err != nil {
 		return err
 	}
-	if err := p.source.scope.ScopeCheck(ctx, p.compilation.LAN()); err != nil {
+	if err := p.source.scopeOwner().ScopeCheck(ctx, p.compilation.LAN()); err != nil {
 		return err
 	}
 	return p.source.Current(ctx)
@@ -165,7 +165,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 				return err
 			}
 			wan, err := r.app.freshNetworkProfile(c)
-			if err != nil || wan != r.wan || r.scope.facts.Identity != r.identity {
+			if err != nil || wan != r.wan || r.scopeOwner().identity() != r.identity {
 				return errors.Join(ErrXrayListSource, err)
 			}
 			material, err := r.currentNodeMaterial(c)
@@ -189,7 +189,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 			}
 			// The retained ScopeReview accepts this exact CAS and verifies the
 			// original physical incarnation before our config reference advances.
-			if err := r.scope.AcceptCommitted(c, after, started, finished); err != nil {
+			if err := r.scopeOwner().AcceptCommitted(c, after, started, finished); err != nil {
 				return err
 			}
 			r.expected = after // defensive original Store clone, never a DTO
@@ -208,7 +208,7 @@ func (r *XrayListRuntimeSource) acceptCommitted(ctx context.Context, started, fi
 func (r *XrayListRuntimeSource) commitOwnersCurrent() error {
 	if r.closed.Load() || r.app == nil || r.app.Store != r.store || r.app.Dataplane != r.manager || r.app.Nodes != r.nodes || r.app.Sources != r.sources ||
 		r.app.CustomServices != r.custom || r.app.DNS != r.dns || r.app.SelfUpdateFiles != r.files || r.files.ControlRoot != r.root ||
-		r.scope.self != r.scope || r.scope.app != r.app || r.scope.store != r.store ||
+		!r.scopeOwner().matches(r.app, r.store) ||
 		applyReviewHash(r.app.catalogSnapshot()) != r.catalog || !wgListBaselineDNS(r.dns, r.service) {
 		return ErrXrayListSource
 	}

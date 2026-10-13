@@ -86,7 +86,7 @@ func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceI
 		return plan, review, err
 	}
 	stage = "final-check"
-	if err := errors.Join(e.preparation.current(c), e.primary.Current(c)); err != nil {
+	if err := errors.Join(e.preparation.current(c), e.primaryCurrent(c)); err != nil {
 		return plan, review, err
 	}
 	return defaultRouteClonePlan(e.plan), e.applyReview(scope), nil

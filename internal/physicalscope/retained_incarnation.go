@@ -13,6 +13,13 @@ import (
 // This is a read-only fact check, NOT cleanup/effect/forward admission. The caller
 // must hold its separate original cleanup capability and exact original receipts.
 func (o *Observer) VerifyRetainedIncarnation(ctx context.Context, r *Review) error {
+	if o != nil && o.finite != nil {
+		return at("retained.dependencies", nil)
+	}
+	return o.verifyRetainedIncarnation(ctx, r)
+}
+
+func (o *Observer) verifyRetainedIncarnation(ctx context.Context, r *Review) error {
 	if !o.ready() || r == nil || r.state == nil || r.state.self != r {
 		return at("retained.dependencies", nil)
 	}

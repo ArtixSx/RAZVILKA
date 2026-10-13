@@ -245,6 +245,25 @@ func bindKernelNeighbors(ctx context.Context, segments []Segment, frames map[byt
 }
 
 func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segments []Segment, frames map[byte][]message) ([]Device, error) {
+	return bindKernelNeighborProjection(ctx, selection, segments, frames, nil)
+}
+
+type finiteIPv4NeighborPurpose struct{}
+
+func bindFiniteIPv4KernelNeighbors(ctx context.Context, selection Selection, segments []Segment, frames map[byte][]message) ([]Device, error) {
+	if err := finiteIPv4Intent(selection); err != nil {
+		return nil, err
+	}
+	return bindKernelNeighborProjection(ctx, selection, segments, frames, &finiteIPv4NeighborPurpose{})
+}
+
+func finiteUnresolvedRouter(n kernelNeighbor, err error) bool {
+	f, ok := err.(*failure)
+	return ok && f != nil && f.stage == "kernel.bindings.neighbor.router-state" && n.kind == 1 && n.address.Is6() &&
+		!n.address.IsMulticast() && n.mac == "" && n.flags&128 != 0 && (n.state == 1 || n.state == 32)
+}
+
+func bindKernelNeighborProjection(ctx context.Context, selection Selection, segments []Segment, frames map[byte][]message, finite *finiteIPv4NeighborPurpose) ([]Device, error) {
 	intentMACs, err := projectionIntentMACs(selection.SelectedDevices)
 	if err != nil {
 		return nil, err
@@ -255,6 +274,7 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 		rows[s.Interface] = map[bool][]byte{false: {}, true: {}}
 		byIndex[s.IfIndex] = i
 		segments[i].RouterNeighbors = nil
+		segments[i].unresolvedRouters = nil
 	}
 	var neighbors []kernelNeighbor
 	var foreignNeighbors []kernelNeighbor
@@ -304,7 +324,8 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 				return nil, at("kernel.bindings.neighbor.dump-family", nil)
 			}
 			n, bookkeeping, err := decodeSegmentNeighbor(m, segments[position])
-			if err != nil {
+			unresolved := finite != nil && finiteUnresolvedRouter(n, err)
+			if err != nil && !unresolved {
 				return nil, err
 			}
 			totalBytes += len(n.row())
@@ -317,6 +338,12 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 				return nil, at("kernel.bindings.neighbor.duplicate", nil)
 			}
 			seen[key] = true
+			if unresolved {
+				// Preserve UNKNOWN as an original keyed fact. It supplies no MAC,
+				// client identity, non-router promise or full-Snapshot coverage.
+				segments[position].unresolvedRouters = append(segments[position].unresolvedRouters, n)
+				continue
+			}
 			if bookkeeping {
 				continue
 			}
@@ -326,7 +353,14 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 			}
 		}
 	}
-	wanted, err := validateProjectedNeighbors(selection.SelectedDevices, segments, neighbors, foreignNeighbors, routerMACs)
+	projected := neighbors
+	if finite != nil {
+		projected = slices.Clone(neighbors)
+		for _, segment := range segments {
+			projected = append(projected, segment.unresolvedRouters...)
+		}
+	}
+	wanted, err := validateProjectedNeighbors(selection.SelectedDevices, segments, projected, foreignNeighbors, routerMACs)
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +379,7 @@ func bindSelectedKernelNeighbors(ctx context.Context, selection Selection, segme
 		rows[segments[position].Interface][family] = append(rows[segments[position].Interface][family], []byte(n.row())...)
 	}
 	for i := range segments {
+		slices.SortFunc(segments[i].unresolvedRouters, func(a, b kernelNeighbor) int { return a.address.Compare(b.address) })
 		slices.SortFunc(segments[i].RouterNeighbors, func(a, b RouterNeighbor) int {
 			if n := strings.Compare(a.Address, b.Address); n != 0 {
 				return n

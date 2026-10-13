@@ -27,6 +27,7 @@ type fenceCollectorSource struct {
 type fenceCheckpoint struct {
 	ctx      context.Context
 	original Snapshot
+	finite   *finiteIPv4FenceSnapshot
 	reply    chan error
 }
 
@@ -77,6 +78,16 @@ func (r *originalFenceCollector) completedError() error {
 }
 
 func (r *originalFenceCollector) check(ctx context.Context, snapshot Snapshot) error {
+	return r.checkOriginal(ctx, snapshot, nil)
+}
+
+type finiteIPv4FenceSnapshot struct{ original Snapshot }
+
+func (r *originalFenceCollector) checkFinite(ctx context.Context, snapshot Snapshot) error {
+	return r.checkOriginal(ctx, snapshot, &finiteIPv4FenceSnapshot{original: cloneSnapshot(snapshot)})
+}
+
+func (r *originalFenceCollector) checkOriginal(ctx context.Context, snapshot Snapshot, finite *finiteIPv4FenceSnapshot) error {
 	if ctx == nil {
 		return at("fence.check.context", nil)
 	}
@@ -89,6 +100,7 @@ func (r *originalFenceCollector) check(ctx context.Context, snapshot Snapshot) e
 	req := fenceCheckpoint{
 		ctx:      ctx,
 		original: cloneSnapshot(snapshot),
+		finite:   finite,
 		reply:    make(chan error, 1),
 	}
 	select {
@@ -120,6 +132,7 @@ func (r *originalFenceCollector) close() {
 type fenceCollectorState struct {
 	reader   *originalFenceCollector
 	original Snapshot
+	finite   *finiteIPv4FenceSnapshot
 	bound    bool
 	pending  [][]byte
 	bytes    int
@@ -163,7 +176,7 @@ func (s *fenceCollectorState) checkpoint(req fenceCheckpoint, buf []byte) error 
 		return boundary("fence.drain.context", err)
 	}
 	if !s.bound {
-		s.original, s.bound = req.original, true
+		s.original, s.finite, s.bound = req.original, req.finite, true
 		for _, raw := range s.pending {
 			if s.reader.stopped() {
 				return errFenceCollectorStopped
@@ -175,12 +188,12 @@ func (s *fenceCollectorState) checkpoint(req fenceCheckpoint, buf []byte) error 
 			if err != nil {
 				return boundary("fence.datagram.decode", err)
 			}
-			if err := checkSnapshotNotifications(frames, s.original); err != nil {
+			if err := s.checkNotifications(frames); err != nil {
 				return boundary("fence.notifications", err)
 			}
 		}
 		s.pending, s.bytes = nil, 0
-	} else if !reflect.DeepEqual(s.original, req.original) {
+	} else if !reflect.DeepEqual(s.original, req.original) || !reflect.DeepEqual(s.finite, req.finite) {
 		return at("fence.check.baseline.changed", nil)
 	}
 	// Every request performs a NEW actual drain through EAGAIN, with descriptor
@@ -234,7 +247,7 @@ func (s *fenceCollectorState) drain(ctx context.Context, buf []byte) error {
 			return boundary("fence.datagram.decode", err)
 		}
 		if s.bound {
-			if err := checkSnapshotNotifications(frames, s.original); err != nil {
+			if err := s.checkNotifications(frames); err != nil {
 				return boundary("fence.notifications", err)
 			}
 			continue

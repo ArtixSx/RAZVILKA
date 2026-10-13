@@ -56,16 +56,17 @@ type Selection struct {
 type SelectionReader func(context.Context) (Selection, error)
 
 type Segment struct {
-	ID                  string   `json:"id"`
-	NativeName          string   `json:"native_name"`
-	NativeInterfaceName string   `json:"native_interface_name"`
-	NativeIndex         uint32   `json:"native_index"`
-	Interface           string   `json:"interface"`
-	IfIndex             int      `json:"ifindex"`
-	MAC                 string   `json:"mac"`
-	Prefixes            []string `json:"prefixes"`
-	LinkAddresses       []string `json:"link_addresses"`
-	Members             []Link   `json:"members"`
+	unresolvedRouters   []kernelNeighbor // Private finite-principal facts, never a full-view client/negative MAC.
+	ID                  string           `json:"id"`
+	NativeName          string           `json:"native_name"`
+	NativeInterfaceName string           `json:"native_interface_name"`
+	NativeIndex         uint32           `json:"native_index"`
+	Interface           string           `json:"interface"`
+	IfIndex             int              `json:"ifindex"`
+	MAC                 string           `json:"mac"`
+	Prefixes            []string         `json:"prefixes"`
+	LinkAddresses       []string         `json:"link_addresses"`
+	Members             []Link           `json:"members"`
 	// Actual NTF_ROUTER mappings and other mappings sharing their observed MAC
 	// are negative facts only. Their flags are retained exactly; none is a client.
 	RouterNeighbors []RouterNeighbor `json:"router_neighbors"`
@@ -154,6 +155,7 @@ type observerSource struct {
 	capture func(context.Context, Selection) ([]Segment, []Device, error)
 }
 type Observer struct {
+	finite    *FiniteIPv4PacketPrincipal
 	selection SelectionReader
 	source    observerSource
 }
@@ -258,6 +260,13 @@ func (o *Observer) ready() bool {
 // and closes both selection and network identity. No deadline survives as an
 // admission context; each later Verify needs its caller's fresh bounded context.
 func (o *Observer) Observe(ctx context.Context) (*Review, error) {
+	if o != nil && o.finite != nil {
+		return nil, at("observe.dependencies", nil)
+	}
+	return o.observe(ctx)
+}
+
+func (o *Observer) observe(ctx context.Context) (*Review, error) {
 	if !o.ready() {
 		return nil, at("observe.dependencies", nil)
 	}
@@ -400,6 +409,13 @@ func (o *Observer) captureObservation(ctx context.Context, selection Selection, 
 // facts or a restored tuple cannot refresh it. This is a read before an effect,
 // not a wrapper around the whole Apply, a policy owner or cleanup admission.
 func (o *Observer) Verify(ctx context.Context, r *Review) error {
+	if o != nil && o.finite != nil {
+		return at("verify.dependencies", nil)
+	}
+	return o.verify(ctx, r)
+}
+
+func (o *Observer) verify(ctx context.Context, r *Review) error {
 	if !o.ready() || r == nil || r.state == nil || r.state.self != r {
 		return at("verify.dependencies", nil)
 	}
@@ -443,6 +459,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 		s.Segments[i].LinkAddresses = slices.Clone(s.Segments[i].LinkAddresses)
 		s.Segments[i].Members = slices.Clone(s.Segments[i].Members)
 		s.Segments[i].RouterNeighbors = slices.Clone(s.Segments[i].RouterNeighbors)
+		s.Segments[i].unresolvedRouters = slices.Clone(s.Segments[i].unresolvedRouters)
 	}
 	s.Devices = slices.Clone(s.Devices)
 	for i := range s.Devices {
@@ -457,6 +474,9 @@ func (r *Review) Snapshot() Snapshot {
 	}
 	r.state.mu.Lock()
 	defer r.state.mu.Unlock()
+	if r.state.issuer != nil && r.state.issuer.finite != nil {
+		return Snapshot{}
+	}
 	return cloneSnapshot(r.state.snapshot)
 }
 

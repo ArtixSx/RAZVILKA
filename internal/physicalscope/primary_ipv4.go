@@ -49,6 +49,9 @@ func (*PrimaryIPv4Review) GoString() string { return "[original physical primary
 // fixed native RTM_GETADDR reader inside the original provider's current-scope
 // bookends. No public API accepts a snapshot, fact reader, flag or boolean.
 func (o *Observer) ReviewPrimaryIPv4(ctx context.Context, original *Review, ingress string, address netip.Addr) (*PrimaryIPv4Review, error) {
+	if o != nil && o.finite != nil {
+		return nil, at("primary.dependencies", nil)
+	}
 	return o.reviewPrimaryIPv4(ctx, original, ingress, address, readPrimaryIPv4Dump)
 }
 
@@ -59,7 +62,7 @@ func (o *Observer) reviewPrimaryIPv4(ctx context.Context, original *Review, ingr
 	}
 	p := &PrimaryIPv4Review{state: &primaryIPv4ReviewState{observer: o, original: original, ingress: ingress, address: address, read: read}}
 	p.state.self = p
-	if err := p.Current(ctx); err != nil {
+	if err := p.current(ctx, false); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -69,6 +72,9 @@ func (o *Observer) reviewPrimaryIPv4(ctx context.Context, original *Review, ingr
 // selected members and address churn. Fresh selection and NI/boot/build checks
 // bracket BOTH complete IPv4 dumps. A copied witness cannot substitute itself.
 func (p *PrimaryIPv4Review) Current(ctx context.Context) error {
+	if p != nil && p.state != nil && p.state.observer != nil && p.state.observer.finite != nil {
+		return at("primary.original", nil)
+	}
 	return p.current(ctx, false)
 }
 

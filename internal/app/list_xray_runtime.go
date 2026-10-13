@@ -67,13 +67,13 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 		e.scope, err = r.app.autonomyXrayScope(ctx)
 	} else {
 		phase, phaseStarted = "scope-acquire", time.Now()
-		e.scope, err = NewReviewedStockNC1812ListScopeBinding(ctx, r.app, r.policy.provider)
+		e.finiteScope, err = newReviewedStockXrayFiniteScopeBinding(ctx, r.app, r.policy.provider)
 	}
 	if err != nil {
 		return nil, err
 	}
 	phase, phaseStarted = "source-review", time.Now()
-	e.source, err = r.app.reviewXrayListRuntimeSource(ctx, e.scope, serviceID, r.adapter, candidate)
+	e.source, err = r.app.reviewXrayListRuntimeSourceOwner(ctx, e.scopeOwner(), serviceID, r.adapter, candidate)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 	phase, phaseStarted = "shape", time.Now()
 	c := e.preparation.compilation
 	lan := c.LAN()
-	if lan == nil || len(lan.Ingress) != 1 || len(lan.Ingress[0].Sources) != 1 || e.scope.originalPhysicalObserver == nil || e.scope.originalPhysicalReview == nil {
+	if lan == nil || len(lan.Ingress) != 1 || len(lan.Ingress[0].Sources) != 1 || !e.scopeOwner().hasPhysicalIssuer() {
 		return nil, ErrDefaultRouteCapability
 	}
 	client, err := netip.ParsePrefix(lan.Ingress[0].Sources[0])
@@ -97,7 +97,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 		return nil, ErrDefaultRouteCapability
 	}
 	var address netip.Addr
-	for _, segment := range e.scope.originalPhysicalReview.Snapshot().Segments {
+	for _, segment := range e.scopeOwner().segments() {
 		if segment.Interface != lan.Ingress[0].Interface {
 			continue
 		}
@@ -128,7 +128,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 	}
 	e.listener = netip.AddrPortFrom(address, port)
 	phase, phaseStarted = "primary-review", time.Now()
-	e.primary, err = e.scope.originalPhysicalObserver.ReviewPrimaryIPv4(ctx, e.scope.originalPhysicalReview, lan.Ingress[0].Interface, address)
+	err = e.reviewPrimary(ctx, lan.Ingress[0].Interface, address)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
 	e.plan = defaultRouteClonePlan(plan)
 	phase, phaseStarted = "closing-current", time.Now()
-	return c, errors.Join(e.primary.Current(ctx), e.preparation.current(ctx))
+	return c, errors.Join(e.primaryCurrent(ctx), e.preparation.current(ctx))
 }
 
 func (e *managedXraySelectedTCPListExecution) close() error {
@@ -181,9 +181,9 @@ func (e *managedXraySelectedTCPListExecution) close() error {
 		err = errors.Join(err, closeErr)
 		logManagedXrayReviewClose("source-close", time.Since(started), closeErr)
 	}
-	if e.scope != nil {
+	if e.scope != nil || e.finiteScope != nil {
 		started := time.Now()
-		closeErr := e.scope.Close()
+		closeErr := e.scopeOwner().Close()
 		err = errors.Join(err, closeErr)
 		logManagedXrayReviewClose("scope-close", time.Since(started), closeErr)
 	}

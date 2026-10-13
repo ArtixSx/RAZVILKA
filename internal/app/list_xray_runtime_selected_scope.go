@@ -18,7 +18,7 @@ func (r *XrayListRuntimeSource) narrowSelectedTCP(c *DefaultRouteCompilation) er
 	}
 	var client netip.Addr
 	found := false
-	for _, device := range r.scope.facts.Devices {
+	for _, device := range r.scopeOwner().devices() {
 		if device.Interface != g.Interface || !strings.EqualFold(device.MAC, g.IncludedMACs[0]) {
 			continue
 		}

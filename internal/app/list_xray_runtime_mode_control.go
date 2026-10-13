@@ -47,7 +47,7 @@ func (s *XrayListRuntimeSource) acceptServiceModeComparison(ctx context.Context,
 		if err != nil || wan != s.wan {
 			return errors.Join(ErrXrayListSource, err)
 		}
-		if err := s.scope.cleanupScopeCheck(ctx, plan.LAN); err != nil {
+		if err := s.scopeOwner().cleanupScopeCheck(ctx, plan.LAN); err != nil {
 			return err
 		}
 		if err := s.registration.Current(ctx); err != nil {

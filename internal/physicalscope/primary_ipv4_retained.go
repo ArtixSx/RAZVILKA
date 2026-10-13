@@ -9,6 +9,13 @@ import "context"
 // Original physical capture/provider/fence bracket both complete RTM_GETADDR
 // dumps. Close joins these reads on the original Review; no new Review opens.
 func (p *PrimaryIPv4Review) CurrentRetained(ctx context.Context) error {
+	if p != nil && p.state != nil && p.state.observer != nil && p.state.observer.finite != nil {
+		return at("primary.retained.original", nil)
+	}
+	return p.currentRetained(ctx)
+}
+
+func (p *PrimaryIPv4Review) currentRetained(ctx context.Context) error {
 	if p == nil || p.state == nil || p.state.self != p {
 		return at("primary.retained.original", nil)
 	}
@@ -29,13 +36,13 @@ func (p *PrimaryIPv4Review) CurrentRetained(ctx context.Context) error {
 	if !current {
 		return at("primary.retained.unavailable", nil)
 	}
-	if err := v.observer.VerifyRetainedIncarnation(c, r); err != nil {
+	if err := v.observer.verifyRetainedIncarnation(c, r); err != nil {
 		return boundary("primary.retained.physical.before", err)
 	}
 	if err := p.current(c, true); err != nil {
 		return err
 	}
-	if err := v.observer.VerifyRetainedIncarnation(c, r); err != nil {
+	if err := v.observer.verifyRetainedIncarnation(c, r); err != nil {
 		return boundary("primary.retained.physical.after", err)
 	}
 	return c.Err()

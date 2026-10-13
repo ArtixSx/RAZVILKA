@@ -14,6 +14,12 @@ import (
 )
 
 func platformSource(provider *netidentity.Provider, stock bool) observerSource {
+	return platformSourceWithBindings(provider, stock, bindSelectedKernelNeighbors)
+}
+
+type kernelNeighborBinder func(context.Context, Selection, []Segment, map[byte][]message) ([]Device, error)
+
+func platformSourceWithBindings(provider *netidentity.Provider, stock bool, bind kernelNeighborBinder) observerSource {
 	return observerSource{
 		current: func(ctx context.Context, use func(context.Context, netidentity.Identity) error) error {
 			return provider.WithCurrent(ctx, func(c context.Context, id netidentity.Identity) error {
@@ -36,10 +42,34 @@ func platformSource(provider *netidentity.Provider, stock bool) observerSource {
 					return nil, nil, at("ndm.text", err)
 				}
 			}
-			return captureKernel(ctx, selection, native, stock)
+			return captureKernelWithBindings(ctx, selection, native, stock, bind)
 		},
 	}
 }
+
+func platformFiniteIPv4Source(provider *netidentity.Provider) observerSource {
+	source := platformSourceWithBindings(provider, true, bindFiniteIPv4KernelNeighbors)
+	open := source.open
+	source.open = func(c context.Context) (lifecycleFence, error) {
+		fence, err := open(c)
+		if err != nil {
+			return nil, err
+		}
+		f, ok := fence.(*kernelFence)
+		if !ok {
+			return nil, at("finite.fence.original", fence.close())
+		}
+		return &finiteIPv4KernelFence{original: f}, nil
+	}
+	return source
+}
+
+type finiteIPv4KernelFence struct{ original *kernelFence }
+
+func (f *finiteIPv4KernelFence) check(c context.Context, snapshot Snapshot) error {
+	return f.original.reader.checkFinite(c, snapshot)
+}
+func (f *finiteIPv4KernelFence) close() error { return f.original.close() }
 
 const fenceGroups = 1 | 4 | 0x10 | 0x100 | 0x40 | 0x400 // LINK, NEIGH, IPv4/IPv6 address and route.
 const maxNetBytes = 4 << 20
@@ -266,6 +296,10 @@ func (f *kernelFence) check(ctx context.Context, snapshot Snapshot) error {
 }
 
 func captureKernel(ctx context.Context, selection Selection, native []nativeSegment, stock bool) ([]Segment, []Device, error) {
+	return captureKernelWithBindings(ctx, selection, native, stock, bindSelectedKernelNeighbors)
+}
+
+func captureKernelWithBindings(ctx context.Context, selection Selection, native []nativeSegment, stock bool, bind kernelNeighborBinder) ([]Segment, []Device, error) {
 	linkFrames, err := dump(ctx, 18, 0)
 	if err != nil {
 		return nil, nil, at("kernel.links", err)
@@ -286,7 +320,7 @@ func captureKernel(ctx context.Context, selection Selection, native []nativeSegm
 	if err != nil {
 		return nil, nil, err // Retain the closed assembler branch; no raw data.
 	}
-	bindings, err := observeSelectedKernelBindings(ctx, selection, segments)
+	bindings, err := observeKernelBindingsWith(ctx, selection, segments, bind)
 	if err != nil {
 		return nil, nil, err // Retain the closed binding branch; no raw data.
 	}
@@ -296,6 +330,10 @@ func observeKernelBindings(ctx context.Context, segments []Segment) ([]Device, e
 	return observeSelectedKernelBindings(ctx, Selection{}, segments)
 }
 func observeSelectedKernelBindings(ctx context.Context, selection Selection, segments []Segment) ([]Device, error) {
+	return observeKernelBindingsWith(ctx, selection, segments, bindSelectedKernelNeighbors)
+}
+
+func observeKernelBindingsWith(ctx context.Context, selection Selection, segments []Segment, bind kernelNeighborBinder) ([]Device, error) {
 	families := map[byte][]message{}
 	for _, family := range []byte{2, 10} {
 		frames, err := dump(ctx, 30, family)
@@ -307,5 +345,5 @@ func observeSelectedKernelBindings(ctx context.Context, selection Selection, seg
 		}
 		families[family] = frames
 	}
-	return bindSelectedKernelNeighbors(ctx, selection, segments, families)
+	return bind(ctx, selection, segments, families)
 }
