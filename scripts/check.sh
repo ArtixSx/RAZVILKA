@@ -84,6 +84,10 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-devices-persistence-ui.mjs
   node scripts/test-device-addresses-ui.mjs
   node scripts/test-exclusions-ui.mjs
+  node scripts/test-resource-exclusions-model.mjs
+  node scripts/test-resource-exclusions-ui.mjs
+  node --check cmd/razvilka/web/list-scope-ui.js
+  node scripts/test-list-scope-ui.mjs
   node scripts/test-usque-dns-ui.mjs
   node scripts/test-provider-import-ui.mjs
   node scripts/test-node-route-ui.mjs
