@@ -46,20 +46,20 @@ type SelfUpdateFileAdapter interface {
 // confirmed command may enter the separate rollback sequence.
 func (f *SelfUpdateFiles) RunHelper(ctx context.Context, id string, guard selfupdatejournal.Check) error {
 	if f == nil || f.Adapter == nil || guard == nil || !selfUpdateID.MatchString(id) {
-		return errSelfUpdateRecovery
+		return updatecheck.SelfUpdateFileFailureAt("helper", "source", errSelfUpdateRecovery)
 	}
 	if r, present, err := f.Current(); err != nil {
-		return err
+		return updatecheck.SelfUpdateFileFailureAt("helper", "journal-current", err)
 	} else if present && (r.Pending() || r.ID == id) {
-		return selfupdatejournal.ErrPending
+		return updatecheck.SelfUpdateFileFailureAt("helper", "journal-order", selfupdatejournal.ErrPending)
 	} else if present {
 		if err := f.Adapter.Inspect(ctx, r.ID); err != nil {
-			return err
+			return updatecheck.SelfUpdateFileFailureAt("helper", "previous-review", err)
 		}
 	}
 	revision, _, _, err := f.Adapter.Review(ctx, id)
 	if err != nil {
-		return err
+		return updatecheck.SelfUpdateFileFailureAt("helper", "review", err)
 	}
 	for _, action := range []string{"prepare", "stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "install", "start-candidate-panel"} {
 		if err := f.Action(ctx, id, action, revision, guard); err != nil {
@@ -235,7 +235,8 @@ func (f *SelfUpdateFiles) Pending() bool {
 	return false
 }
 
-func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revision uint64, guard selfupdatejournal.Check) error {
+func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revision uint64, guard selfupdatejournal.Check) (result error) {
+	defer func() { result = updatecheck.SelfUpdateFileFailureAt(action, "action", result) }()
 	if f == nil || f.Adapter == nil || guard == nil || !selfUpdateID.MatchString(id) || !selfUpdateFileAction(action) {
 		return errSelfUpdateRecovery
 	}
@@ -244,26 +245,29 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 	}
 	reviewRevision, migratedSHA, files, err := f.Adapter.Review(ctx, id)
 	if err != nil {
-		return err
+		return updatecheck.SelfUpdateFileFailureAt(action, "review", err)
 	}
 	if reviewRevision != revision {
-		return selfupdatejournal.ErrMismatch
+		return updatecheck.SelfUpdateFileFailureAt(action, "review", selfupdatejournal.ErrMismatch)
 	}
-	authority := func(c context.Context) error {
+	authorityAt := func(c context.Context, boundary string) error {
 		if err := f.controlAction(c, id, revision, action); err != nil {
-			return err
+			return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-control", err)
 		}
 		if err := guard(c); err != nil {
-			return err
+			return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-guard", err)
 		}
 		if f.RecoveryGuard != nil {
 			if err := f.RecoveryGuard(c); err != nil {
-				return err
+				return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-recovery", err)
 			}
 		}
-		return f.Adapter.AuthorityAction(c, id, revision, selfUpdateActionAuthority(action))
+		return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-provider", f.Adapter.AuthorityAction(c, id, revision, selfUpdateActionAuthority(action)))
 	}
-	quiescence := func(c context.Context) error { return f.Adapter.Quiescence(c, id) }
+	authority := func(c context.Context) error { return authorityAt(c, "authority") }
+	quiescence := func(c context.Context) error {
+		return updatecheck.SelfUpdateFileFailureAt(action, "quiescence", f.Adapter.Quiescence(c, id))
+	}
 	if err := authority(ctx); err != nil {
 		return err
 	}
@@ -310,7 +314,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 	}
 	s, err := f.openFileJournal()
 	if err != nil {
-		return err
+		return updatecheck.SelfUpdateFileFailureAt(action, "journal-open", err)
 	}
 	defer s.Close()
 	switch action {
@@ -319,14 +323,14 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 	case "install":
 		r, present, err := s.Current()
 		if err != nil || !present || r.ID != id {
-			return errors.Join(selfupdatejournal.ErrMismatch, err)
+			return updatecheck.SelfUpdateFileFailureAt(action, "journal-current", errors.Join(selfupdatejournal.ErrMismatch, err))
 		}
 		if r.Rollback || !selfUpdatePreFilesComplete(r.Commands) || r.Phase != "prepared" && r.Phase != "paired-prepared" && r.Phase != "installing" {
-			return selfupdatejournal.ErrPending
+			return updatecheck.SelfUpdateFileFailureAt(action, "journal-order", selfupdatejournal.ErrPending)
 		}
-		return s.InstallAdmitted(ctx, id, authority, quiescence, func(c context.Context, effect string, begin func() error) error {
-			return f.Adapter.EffectAdmission(c, id, "start/live", effect, begin)
-		})
+		return updatecheck.SelfUpdateFileFailureAt(action, "install-journal", s.InstallAdmitted(ctx, id, authority, quiescence, func(c context.Context, effect string, begin func() error) error {
+			return updatecheck.SelfUpdateFileFailureAt(action, "file-admission", f.Adapter.EffectAdmission(c, id, "start/live", effect, begin))
+		}))
 	case "restore":
 		r, present, err := s.Current()
 		if err != nil || !present || r.ID != id {
@@ -402,7 +406,7 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 		if err := s.Execute(ctx, id, action, authority, func(c context.Context) error { return f.Adapter.Run(c, id, action) }); err != nil {
 			return err
 		}
-		return authority(ctx)
+		return authorityAt(ctx, "post-authority")
 	default:
 		return errors.New("unsupported self update file action")
 	}

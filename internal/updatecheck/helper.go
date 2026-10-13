@@ -93,7 +93,7 @@ func runInstallerHelperWithAdapter(id string, run func(context.Context, string) 
 	}
 	fresh.Job.State = "requires-review"
 	fresh.Job.Stage = "file-protocol"
-	fresh.Job.Code = "file-protocol-needs-review"
+	fresh.Job.Code = SelfUpdateFileFailureCode(err)
 	fresh.Job.CanApply = false
 	fresh.Job.CanCancel = false
 	fresh.Job.UpdatedAt = time.Now().UTC()
