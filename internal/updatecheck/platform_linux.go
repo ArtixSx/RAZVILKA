@@ -5,6 +5,7 @@ package updatecheck
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,45 +100,80 @@ func cleanupCommand(command *exec.Cmd) {
 }
 
 func checkUpdateSpace(directory string, archiveBytes int64) error {
-	var stat unix.Statfs_t
-	if unix.Statfs(directory, &stat) != nil {
-		return errors.New("update-space-unavailable")
+	roots := []string{installpath.Config, installpath.State + "/dataplane", installpath.State + "/staging", installpath.State + "/dns"}
+	return checkUpdateSpaceScan(directory, archiveBytes, roots, func(path string) (uint64, int64, error) {
+		var stat unix.Statfs_t
+		err := unix.Statfs(path, &stat)
+		return uint64(stat.Bavail), int64(stat.Bsize), err
+	}, filepath.WalkDir)
+}
+
+// The production caller supplies only Statfs, WalkDir and the fixed backup
+// roots. Local parameters allow deterministic race tests without global hooks.
+func checkUpdateSpaceScan(directory string, archiveBytes int64, roots []string, statfs func(string) (uint64, int64, error), walk func(string, fs.WalkDirFunc) error) error {
+	if archiveBytes <= 0 || archiveBytes > MaximumArchiveBytes {
+		return errors.New("asset-size-or-digest-invalid")
 	}
-	backupBytes := int64(0)
-	entries := 0
-	for _, directory := range []string{installpath.Config, installpath.State + "/dataplane", installpath.State + "/staging", installpath.State + "/dns"} {
-		err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, err error) error {
-			if errors.Is(err, os.ErrNotExist) {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			entries++
-			if entries > 20000 || entry.Type()&os.ModeSymlink != 0 {
-				return errors.New("backup-layout-refused")
-			}
-			if !entry.IsDir() {
-				info, err := entry.Info()
+	for attempt := 0; attempt < 2; attempt++ {
+		availableBlocks, blockBytes, err := statfs(directory)
+		if err != nil || blockBytes <= 0 {
+			return errors.New("update-space-unavailable")
+		}
+		backupBytes := int64(0)
+		entries := 0
+		infoMissing := false
+		for _, root := range roots {
+			err := walk(root, func(path string, entry os.DirEntry, err error) error {
+				if errors.Is(err, os.ErrNotExist) {
+					return nil
+				}
 				if err != nil {
 					return err
 				}
-				backupBytes += info.Size()
-				if backupBytes > 2<<30 {
-					return errors.New("backup-size-refused")
+				entries++
+				if entries > 20000 || entry.Type()&os.ModeSymlink != 0 {
+					return errors.New("backup-layout-refused")
 				}
+				if !entry.IsDir() {
+					info, err := entry.Info()
+					if err != nil {
+						infoMissing = errors.Is(err, os.ErrNotExist)
+						return err
+					}
+					size := info.Size()
+					if size < 0 || size > 2<<30-backupBytes {
+						return errors.New("backup-size-refused")
+					}
+					backupBytes += size
+				}
+				return nil
+			})
+			if err != nil {
+				if infoMissing {
+					break
+				}
+				return errors.New("update-backup-space-unavailable")
 			}
-			return nil
-		})
-		if err != nil {
-			return errors.New("update-backup-space-unavailable")
 		}
+		if infoMissing {
+			// An atomic writer can rename an enumerated temporary file before
+			// Info. Discard every partial total and allow one fresh full scan;
+			// never omit the unknown size or retry any other refusal.
+			continue
+		}
+		// Validated archive and backup bounds keep this sum below 5 GiB.
+		needed := uint64(archiveBytes + MaximumBinaryBytes*2 + backupBytes*2 + 32<<20)
+		blockSize := uint64(blockBytes)
+		neededBlocks := needed / blockSize
+		if needed%blockSize != 0 {
+			neededBlocks++
+		}
+		if availableBlocks < neededBlocks {
+			return errors.New("insufficient-update-space")
+		}
+		return nil
 	}
-	needed := uint64(archiveBytes + MaximumBinaryBytes*2 + backupBytes*2 + 32<<20)
-	if uint64(stat.Bavail)*uint64(stat.Bsize) < needed {
-		return errors.New("insufficient-update-space")
-	}
-	return nil
+	return errors.New("update-backup-entry-missing")
 }
 
 func launchInstallerHelper(ctx context.Context, id string, admission func(func() error) error) (int, error) {
