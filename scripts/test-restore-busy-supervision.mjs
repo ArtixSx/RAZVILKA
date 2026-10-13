@@ -69,7 +69,7 @@ assert(rollback.includes('-warp-state "$STATEDIR/warp"'));
 // Upgrade and rollback must settle the private journal only while the server is
 // stopped, and a backup becomes valid only after all directory images exist.
 const stopAt = upgrade.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
-const recoverAt = upgrade.indexOf('$BIN_SOURCE -recover-private-restore');
+const recoverAt = upgrade.indexOf('"$BIN_SOURCE" -recover-private-restore');
 const backupAt = upgrade.indexOf('BACKUP="$BACKUPROOT/$STAMP"');
 const manifestAt = upgrade.indexOf('mv "$BACKUP/manifest.tmp" "$BACKUP/manifest"');
 assert(stopAt >= 0 && stopAt < recoverAt && recoverAt < backupAt && backupAt < manifestAt);
