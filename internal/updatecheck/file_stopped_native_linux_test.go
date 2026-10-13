@@ -11,12 +11,441 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
+	"golang.org/x/sys/unix"
 )
+
+// Private copied-controller layout; all H/S/C/R identities, Waits, process
+// receipts, Stop admission and file/private restore effects are real. Fixed
+// production-root selection and the complete dataplane registry remain Root's
+// genuine future Stop acceptance, never a fixture environment override.
+func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
+	for _, cut := range []string{"before", "after"} {
+		t.Run(cut, func(t *testing.T) {
+			a, u, review, profile := nativeFileFixture(t, "candidate-stopped-"+cut)
+			oldJob := filepath.Join(a.directory, review.ID)
+			id := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" // Existing actual S fixture's job.
+			job := filepath.Join(a.directory, id)
+			if oldJob != job {
+				if err := os.Rename(oldJob, job); err != nil {
+					t.Fatal(err)
+				}
+			}
+			u.record.Job.ID, review.ID = id, id
+			u.record.CurrentVersion, review.OldVersion = "0.20.0", "0.20.0"
+			u.record.Job.Release.Version, review.NewVersion = "0.20.1", "0.20.1"
+			review.Files = reviewedFileList(job, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
+			saveStoppedReview(t, a, u, review)
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			defer cancel()
+			helper := exec.CommandContext(ctx, filepath.Join(job, "control.bin"), "self-update-helper", id)
+			output, err := helper.CombinedOutput() // Actual original H, sole outer Wait.
+			if err != nil {
+				t.Fatalf("original H fixture: %v\n%s", err, output)
+			}
+			if ctx.Err() != nil {
+				t.Fatal("fixture backstop cannot be PASS", ctx.Err())
+			}
+			store, err := a.OpenFileJournal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, present, err := store.Current()
+			store.Close()
+			if err != nil || !present || r.Schema != selfupdatejournal.StoppedSchema || r.Phase != stoppedRollbackState {
+				t.Fatal("actual H did not publish stopped terminal", r.Phase, err)
+			}
+			stop, present, err := operationgate.ReadSelfUpdateStop(ctx, profile.Control)
+			if err != nil || !present || !stop.Stopped || stop.TransactionID != id {
+				t.Fatal("exact Stop was not preserved", err)
+			}
+			if err := a.Inspect(ctx, id); err != nil {
+				t.Fatal("cold terminal inspection", err)
+			}
+		})
+	}
+}
+
+func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
+	if len(os.Args) != 3 || os.Args[1] != "self-update-helper" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, id := filepath.Dir(binary), os.Args[2]
+	data, err := os.ReadFile(filepath.Join(job, "native-fixture.json"))
+	var profile nativeFileProfile
+	if err != nil || decodeFileProtocol(data, &profile) != nil {
+		t.Fatal(err)
+	}
+	a := nativeFileAdapter(filepath.Dir(job), profile)
+	record, err := readAdapterRecord(a.directory, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(job, "file-review.json"))
+	var review fileReview
+	if err != nil || decodeFileProtocol(data, &review) != nil {
+		t.Fatal(err)
+	}
+	u := &Updater{Directory: a.directory, Deployment: record.Deployment, record: record}
+	oldPanel := exec.Command(binary, "fixture-old-panel")
+	input, err := oldPanel.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := oldPanel.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := oldPanel.Start(); err != nil {
+		t.Fatal(err)
+	}
+	oldWaited := false
+	t.Cleanup(func() {
+		input.Close()
+		if !oldWaited {
+			_ = oldPanel.Process.Kill()
+			_ = oldPanel.Wait()
+		}
+	})
+	readyBytes := make([]byte, 6)
+	if _, err := io.ReadFull(output, readyBytes); err != nil || string(readyBytes) != "ready\n" {
+		t.Fatal("old panel readiness", err)
+	}
+	old, err := fileProcessOf(oldPanel.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.record.ParentPID, u.record.Job.HelperPID = old.PID, os.Getpid()
+	u.record.Job.State, u.record.Job.Stage, u.record.Job.CanCancel = "restarting", "file-protocol", false
+	pidPath := filepath.Join(a.installation, "razvilka/run/razvilka.pid")
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(old.PID)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	init := []byte(fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = stop ]; then kill -TERM %d; rm -f '%s'; fi\nexit 0\n", old.PID, pidPath))
+	for _, path := range []string{filepath.Join(a.installation, "etc/init.d/S99razvilka"), filepath.Join(job, "bundle/scripts/S99razvilka")} {
+		if err := os.WriteFile(path, init, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	review.OldInitSHA256, u.record.Files["scripts/S99razvilka"] = digestBytes(init), digestBytes(init)
+	review.Files = reviewedFileList(job, *u.record.Job.Release, u.record.Files, review.MigratedConfigSHA256)
+	saveStoppedReview(t, a, u, review)
+	proof, err := a.sealJournalReaders(ctx, review, func(c context.Context, _ string) (SelfUpdateAuthority, error) {
+		stop, present, err := operationgate.ReadSelfUpdateStop(c, profile.Control)
+		if err != nil || !present || stop.Stopped {
+			return SelfUpdateAuthority{}, errors.Join(ErrFileProtocol, err)
+		}
+		return SelfUpdateAuthority{stop.InstallationID, stop.Sequence}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	review.JournalReaders = proof
+	saveStoppedReview(t, a, u, review)
+	if err := sealFileHelperIdentity(a, id, review); err != nil {
+		t.Fatal(err)
+	}
+	store, err := a.OpenFileJournal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	okay := func(context.Context) error { return nil }
+	if err := store.Prepare(ctx, id, review.Files, okay, okay); err != nil {
+		t.Fatal(err)
+	}
+	retainedFile(t, a.installation, "etc/razvilka/admin.token", []byte("original private token"))
+	retainedFile(t, a.installation, "etc/razvilka/admin.credentials.json", []byte(`{"fixture":"original credentials"}`))
+	for _, command := range []string{"stop-old-panel", "prepare-private-state"} {
+		if err := store.Execute(ctx, id, command, okay, func(c context.Context) error { return a.Run(c, id, command) }); err != nil {
+			t.Fatal(err)
+		}
+		if command == "stop-old-panel" {
+			_ = oldPanel.Wait()
+			oldWaited = true
+		}
+	}
+	if err := runOrdinaryInstallerJoinScope(a, ctx, id, func(held context.Context) error {
+		if err := store.Execute(held, id, "quiesce-old-runtime", okay, func(c context.Context) error { return nativeStoppedQuiesceJoin(c, a, binary, id) }); err != nil {
+			return err
+		}
+		quiet := func(c context.Context) error { return a.Quiescence(c, id) }
+		if err := store.Install(held, id, okay, quiet); err != nil {
+			return err
+		}
+		w, final := nativeStoppedCandidateDeath(t, held, a, store, binary, job, id)
+		request := func() {
+			if _, err := operationgate.RequestSelfUpdateStop(held, profile.Control, id, review.Revision); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if profile.Scenario == "candidate-stopped-before" {
+			request()
+		}
+		if err := store.Execute(held, id, "stop-candidate-panel", okay, func(cctx context.Context) error {
+			intent, _, err := store.Current()
+			if err != nil {
+				return err
+			}
+			if err := executeCandidateCleanup(cctx, w, final, func() error { return candidateProcessesAbsent(cctx, w.ready) }, func(begin func() error) error {
+				return a.EffectAdmission(cctx, id, "stop-owned", candidateKnownAbsentPIDEffect, begin)
+			}, removeCandidatePID); err != nil {
+				return err
+			}
+			if err := a.filePanelAbsent(cctx); err != nil {
+				return err
+			}
+			return sealCandidateAbsenceCompletion(cctx, w, final, intent, a.candidateStoppedCompletionFacts, a.candidateStoppedCompletionObservation)
+		}); err != nil {
+			return err
+		}
+		if profile.Scenario == "candidate-stopped-after" {
+			request()
+		}
+		controlBefore, err := os.ReadFile(filepath.Join(profile.Control, "current-v1.json"))
+		if err != nil {
+			return err
+		}
+		requestBefore, err := os.ReadFile(filepath.Join(profile.Control, "stop-"+id+".json"))
+		if err != nil {
+			return err
+		}
+		admit := func(c context.Context, effect string, begin func() error) error {
+			return a.EffectAdmission(c, id, "replace-to-rollback", effect, begin)
+		}
+		if err := store.RestoreAdmitted(held, id, okay, quiet, admit); err != nil {
+			return err
+		}
+		if err := store.Execute(held, id, "restore-private-state", okay, func(c context.Context) error { return a.Run(c, id, "restore-private-state") }); err != nil {
+			return err
+		}
+		r, present, err := store.Current()
+		if err != nil || !present || r.Command != "restore-private-state" || r.Phase != "command-finished" {
+			return errors.Join(ErrFileProtocol, err)
+		}
+		if err := a.AuthorityAction(held, id, review.Revision, "start/live"); !errors.Is(err, ErrFileAuthorityStopped) {
+			return errors.Join(ErrFileProtocol, err)
+		}
+		if _, err := os.Stat(filepath.Join(job, "stop-candidate-panel.process.json")); !errors.Is(err, os.ErrNotExist) {
+			return ErrFileProtocol
+		}
+		authority := nativeStoppedCandidateAuthority(a, profile.Control)
+		if err := a.SettleStoppedRollback(ctx, id, authority); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("cold first settlement did not refuse missing ledger", err)
+		}
+		legacyRuntime := a.runtimeInactive
+		a.runtimeInactive = func(c context.Context, job string) error {
+			if c.Value(candidateStoppedReadKey{}) == nil {
+				return legacyRuntime(c, job)
+			}
+			return a.VerifyCurrentOrdinaryInstallerControllerRole(c, job)
+		}
+		if err := a.SettleStoppedRollback(held, id, authority); err != nil {
+			return err
+		}
+		controlAfter, err := os.ReadFile(filepath.Join(profile.Control, "current-v1.json"))
+		if err != nil {
+			return err
+		}
+		requestAfter, err := os.ReadFile(filepath.Join(profile.Control, "stop-"+id+".json"))
+		if err != nil {
+			return err
+		}
+		if string(controlBefore) != string(controlAfter) || string(requestBefore) != string(requestAfter) {
+			return ErrFileProtocol
+		}
+		return a.Inspect(held, id)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SettleStoppedRollback(ctx, id, nativeStoppedCandidateAuthority(a, profile.Control)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("exited H was reconstructed for cold retry", err)
+	}
+}
+
+func nativeStoppedCandidateAuthority(a *SelfUpdateFileAdapter, control string) SelfUpdateStoppedSettlementAuthority {
+	return SelfUpdateStoppedSettlementAuthority{
+		Check: func(ctx context.Context, id, installation string, sequence, revision uint64) error {
+			stop, present, err := operationgate.ReadSelfUpdateStop(ctx, control)
+			if err != nil || !present || !stop.Stopped || stop.TransactionID != id || stop.InstallationID != installation || stop.Sequence != sequence+1 || stop.ConfigRevision != revision {
+				return errors.Join(ErrFileProtocol, err)
+			}
+			return nil
+		}, AdmitReaders: func(ctx context.Context, id string, reader int) error {
+			return a.CheckRetainedJournalReaders(ctx, id, reader)
+		},
+	}
+}
+
+func nativeStoppedQuiesceJoin(ctx context.Context, a *SelfUpdateFileAdapter, binary, id string) error {
+	root, err := a.commandRoot(id)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	parent, err := fileProcessOf(os.Getpid())
+	if err != nil {
+		return err
+	}
+	r := fileCommandReceipt{Schema: selfUpdateProtocolSchema, ID: id, Command: "quiesce-old-runtime", State: "intent", Parent: parent}
+	if err := writeFileCommand(root, r); err != nil {
+		return err
+	}
+	worker := exec.CommandContext(ctx, binary, "self-update-command-helper", id, r.Command)
+	worker.Stderr = os.Stderr
+	if err := a.EffectAdmission(ctx, id, "stop-owned", "command-worker-"+r.Command, worker.Start); err != nil {
+		return err
+	}
+	waited := false
+	defer func() {
+		if !waited {
+			_ = worker.Process.Kill()
+			_ = worker.Wait()
+		}
+	}()
+	r.Supervisor, err = fileProcessOf(worker.Process.Pid)
+	if err != nil {
+		return err
+	}
+	w, err := beginOrdinaryInstallerWait(ctx, a, id, worker, parent, r.Supervisor)
+	if err != nil {
+		return err
+	}
+	r.State = "armed"
+	if err := writeFileCommand(root, r); err != nil {
+		return err
+	}
+	err = worker.Wait()
+	waited = true
+	w.observeWait(err)
+	if err != nil {
+		return err
+	}
+	final, err := readFileCommand(root, id, r.Command)
+	if err != nil {
+		return err
+	}
+	return w.complete(ctx, final)
+}
+
+func nativeStoppedCandidateDeath(t *testing.T, ctx context.Context, a *SelfUpdateFileAdapter, store *selfupdatejournal.Store, binary, job, id string) (*candidateStartWait, fileCommandReceipt) {
+	t.Helper()
+	input, release, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := exec.Command(binary, "-test.run=^TestCandidateCleanupNativeSupervisorFixture$")
+	worker.Env = append(os.Environ(), "RAZVILKA_TEST_CANDIDATE_ROLE=supervisor", "RAZVILKA_TEST_CANDIDATE_DIRECTORY="+job)
+	worker.Stdin, worker.Stderr = input, os.Stderr
+	var once sync.Once
+	done := make(chan struct{})
+	var waitErr error
+	startWait := func() { once.Do(func() { go func() { waitErr = worker.Wait(); close(done) }() }) }
+	t.Cleanup(func() {
+		input.Close()
+		release.Close()
+		if worker.Process != nil {
+			startWait()
+			select {
+			case <-done:
+			case <-time.After(8 * time.Second):
+				_ = worker.Process.Kill()
+				<-done
+			}
+		}
+	})
+	root, err := a.commandRoot(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	var w *candidateStartWait
+	var ready fileCommandReceipt
+	if err := store.Execute(ctx, id, "start-candidate-panel", func(c context.Context) error { return a.AuthorityAction(c, id, 7, "start/live") }, func(c context.Context) error {
+		if err := worker.Start(); err != nil {
+			return err
+		}
+		input.Close()
+		parent, err := fileProcessOf(os.Getpid())
+		if err != nil {
+			return err
+		}
+		supervisor, err := fileProcessOf(worker.Process.Pid)
+		if err != nil {
+			return err
+		}
+		w, err = beginCandidateStartWait(c, a, id, worker, parent, supervisor)
+		if err != nil {
+			return err
+		}
+		w.record, w.review, err = a.load(c, id)
+		if err != nil {
+			return err
+		}
+		w.identity, err = a.helperIdentity(id, w.review)
+		if err != nil {
+			return err
+		}
+		for {
+			ready, err = readFileCommand(root, id, "start-candidate-panel")
+			if err == nil && ready.State == "runtime-ready" {
+				break
+			}
+			if c.Err() != nil {
+				return c.Err()
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		pid, err := captureCandidatePID(job, ready.Runtime.PID, syscall.O_NOFOLLOW)
+		if err != nil {
+			return err
+		}
+		if err := w.rememberReady(c, ready, pid); err != nil {
+			pid.close()
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fd, err := unix.PidfdOpen(ready.Runtime.PID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(fd)
+	actual, err := fileProcessOf(ready.Runtime.PID)
+	if err != nil || actual != ready.Runtime {
+		t.Fatal("runtime kernel handle identity", err)
+	}
+	if err := unix.PidfdSendSignal(fd, syscall.SIGKILL, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := release.Write([]byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	release.Close()
+	startWait()
+	<-done
+	w.observeWait(waitErr)
+	final, err := readFileCommand(root, id, "start-candidate-panel")
+	if err != nil || final.State != "reaped" || final.Reaped != 2 || !final.WaitECHILD || waitErr != nil {
+		t.Fatal("actual sole candidate Wait/ECHILD", err, waitErr)
+	}
+	return w, final
+}
 
 // Root runs this natively. The copied fixture controller and private layout
 // own no network object/listener. All process receipts come from real workers,

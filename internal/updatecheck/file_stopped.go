@@ -27,6 +27,12 @@ type SelfUpdateStoppedSettlementAuthority struct {
 }
 
 func (a *SelfUpdateFileAdapter) SettleStoppedRollback(ctx context.Context, id string, authority SelfUpdateStoppedSettlementAuthority) error {
+	return a.withCandidateStoppedRead(ctx, id, func(held context.Context) error {
+		return a.settleStoppedRollback(held, id, authority)
+	})
+}
+
+func (a *SelfUpdateFileAdapter) settleStoppedRollback(ctx context.Context, id string, authority SelfUpdateStoppedSettlementAuthority) error {
 	if authority.Check == nil || authority.AdmitReaders == nil {
 		return ErrFileProtocol
 	}
@@ -153,6 +159,16 @@ func (a *SelfUpdateFileAdapter) stoppedSettlementInactive(ctx context.Context, i
 	for _, command := range []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state", "start-rollback-panel"} {
 		commandReceipt, err := readFileCommand(root, id, command)
 		if errors.Is(err, os.ErrNotExist) && !seen[command] {
+			continue
+		}
+		if errors.Is(err, os.ErrNotExist) && seen[command] && command == "stop-candidate-panel" && ctx.Value(candidateStoppedReadKey{}) != nil {
+			s, sourceErr := candidateStoppedReadFor(ctx, a, id)
+			if sourceErr != nil {
+				return sourceErr
+			}
+			if err := s.completion.receipt(r); err != nil {
+				return err
+			}
 			continue
 		}
 		if err != nil {

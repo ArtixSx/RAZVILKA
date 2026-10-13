@@ -7,9 +7,15 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 const candidateKnownAbsentPIDEffect = "candidate-known-absent-pid"
@@ -32,6 +38,7 @@ type candidateStartWait struct {
 	record                                 updateRecord
 	review                                 fileReview
 	identity                               fileHelperIdentity
+	completion                             *candidateAbsenceCompletion
 }
 
 func beginCandidateStartWait(ctx context.Context, a *SelfUpdateFileAdapter, id string, worker *exec.Cmd, parent, supervisor fileProcess) (*candidateStartWait, error) {
@@ -100,11 +107,180 @@ func (w *candidateStartWait) completed(ctx context.Context, final fileCommandRec
 	if err := w.current(ctx); err != nil {
 		return err
 	}
+	return w.waitCompleted(final)
+}
+
+// Caller holds w.mu. Completion remains readable after effect consumption;
+// only the original, still active H can open a settlement read session.
+func (w *candidateStartWait) waitCompleted(final fileCommandReceipt) error {
 	if !w.reported || !w.successful || w.worker.Process != w.process || w.worker.ProcessState != w.state || w.state == nil || w.pid == nil || w.ready.State != "runtime-ready" || !validFileCommandReceipt(final) || final.ID != w.owner.id || final.Command != "start-candidate-panel" || final.State != "reaped" || !final.WaitECHILD || final.Cancelled || final.ExitCode != 0 ||
 		final.Parent != w.ready.Parent || final.Supervisor != w.ready.Supervisor || final.Runtime != w.ready.Runtime || final.DirectPID != w.ready.DirectPID || final.Reaped <= w.ready.Reaped {
 		return ErrFileCommandUnsettled
 	}
 	return nil
+}
+
+type candidateStoppedReadKey struct{}
+
+type candidateAbsenceCompletion struct {
+	self    *candidateAbsenceCompletion
+	wait    *candidateStartWait
+	final   fileCommandReceipt
+	intent  selfupdatejournal.Receipt
+	fresh   func(context.Context, *candidateAbsenceCompletion) error
+	observe func(context.Context, *candidateAbsenceCompletion, func(context.Context, *OrdinaryInstallerControllerObservation) error) error
+}
+
+// Only the authenticated native cleanup producer seals this after all
+// closing checks, including panel absence. Neither JSON nor consumption alone
+// creates completion. Tests use local callbacks, never a production hook.
+func sealCandidateAbsenceCompletion(ctx context.Context, w *candidateStartWait, final fileCommandReceipt, intent selfupdatejournal.Receipt,
+	fresh func(context.Context, *candidateAbsenceCompletion) error,
+	observe func(context.Context, *candidateAbsenceCompletion, func(context.Context, *OrdinaryInstallerControllerObservation) error) error) error {
+	if w == nil || fresh == nil || observe == nil || !w.mu.TryLock() {
+		return ErrFileCommandUnsettled
+	}
+	defer w.mu.Unlock()
+	if w.self != w || w.owner == nil || ctx != w.owner.held || w.failed || !w.consumed || w.completion != nil || !candidateStopIntent(intent, w.owner.id) {
+		return ErrFileCommandUnsettled
+	}
+	if err := w.owner.current(ctx, w.owner.adapter, w.owner.id); err != nil {
+		return err
+	}
+	if !w.owner.mu.TryLock() {
+		return ErrFileCommandUnsettled
+	}
+	sameSlot := w.owner.candidate == w
+	w.owner.mu.Unlock()
+	if !sameSlot {
+		return ErrFileCommandUnsettled
+	}
+	if err := w.waitCompleted(final); err != nil {
+		return err
+	}
+	if exists, err := w.pid.observe(); err != nil || exists {
+		return errors.Join(ErrFileCommandUnsettled, err)
+	}
+	intent.Commands, intent.Files = slices.Clone(intent.Commands), slices.Clone(intent.Files)
+	c := &candidateAbsenceCompletion{wait: w, final: final, intent: intent, fresh: fresh, observe: observe}
+	c.self = c
+	w.completion = c
+	return nil
+}
+
+func candidateStopIntent(r selfupdatejournal.Receipt, id string) bool {
+	return r.Schema == selfupdatejournal.Schema && r.ID == id && r.Phase == "command-started" && r.Command == "stop-candidate-panel" && r.Index == 6 && !r.Rollback && !r.BeforeFiles &&
+		slices.Equal(r.Commands, []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel"})
+}
+
+func (c *candidateAbsenceCompletion) receipt(r selfupdatejournal.Receipt) error {
+	if c == nil || c.self != c || c.wait == nil {
+		return ErrFileCommandUnsettled
+	}
+	expected := c.intent
+	expected.Commands = append(slices.Clone(expected.Commands), "restore-private-state")
+	expected.Rollback, expected.Phase, expected.Command = true, "command-finished", "restore-private-state"
+	if r.Schema == selfupdatejournal.StoppedSchema && r.Phase == stoppedRollbackState {
+		review := c.wait.review
+		binding := selfupdatejournal.StoppedBinding{InstallationID: review.AuthorityInstallationID, PreStopSequence: review.AuthoritySequence, StopSequence: review.AuthoritySequence + 1, Revision: review.Revision, RequiredReader: selfupdatejournal.StoppedSchema}
+		expected.Schema, expected.Phase, expected.Command, expected.Stopped = r.Schema, stoppedRollbackState, "", &binding
+	}
+	if !reflect.DeepEqual(r, expected) {
+		return ErrFileCommandUnsettled
+	}
+	return nil
+}
+
+func (c *candidateAbsenceCompletion) current(ctx context.Context, a *SelfUpdateFileAdapter, id string) error {
+	if c == nil || c.self != c || c.wait == nil || c.fresh == nil || c.observe == nil || !c.wait.mu.TryLock() {
+		return ErrFileCommandUnsettled
+	}
+	w := c.wait
+	defer w.mu.Unlock()
+	if w.self != w || w.owner == nil || w.completion != c || !w.consumed || w.failed {
+		return ErrFileCommandUnsettled
+	}
+	if err := w.owner.current(ctx, a, id); err != nil {
+		return err
+	}
+	if !w.owner.mu.TryLock() {
+		return ErrFileCommandUnsettled
+	}
+	sameSlot := w.owner.candidate == w
+	w.owner.mu.Unlock()
+	if !sameSlot {
+		return ErrFileCommandUnsettled
+	}
+	if err := w.waitCompleted(c.final); err != nil {
+		return err
+	}
+	if exists, err := w.pid.observe(); err != nil || exists {
+		return errors.Join(ErrFileCommandUnsettled, err)
+	}
+	return c.fresh(ctx, c)
+}
+
+type candidateStoppedRead struct {
+	self       *candidateStoppedRead
+	completion *candidateAbsenceCompletion
+	original   context.Context
+	deadline   time.Time
+	active     atomic.Bool
+}
+
+func (a *SelfUpdateFileAdapter) withCandidateStoppedRead(ctx context.Context, id string, use func(context.Context) error) (result error) {
+	if ctx == nil || use == nil || ctx.Value(candidateStoppedReadKey{}) != nil {
+		return ErrFileCommandUnsettled
+	}
+	if ctx.Value(ordinaryInstallerJoinKey{}) == nil {
+		return use(ctx) // Cold paths still require every seen process ledger.
+	}
+	o, err := ordinaryInstallerOwner(ctx, a, id)
+	if err != nil {
+		return err
+	}
+	if ctx != o.held {
+		return ErrFileCommandUnsettled
+	}
+	o.mu.Lock()
+	w := o.candidate
+	o.mu.Unlock()
+	if w == nil {
+		return use(ctx)
+	}
+	w.mu.Lock()
+	c := w.completion
+	w.mu.Unlock()
+	if c == nil {
+		return use(ctx)
+	}
+	if err := c.current(ctx, a, id); err != nil {
+		return err
+	}
+	deadline, _ := ctx.Deadline()
+	s := &candidateStoppedRead{completion: c, original: ctx, deadline: deadline}
+	s.self = s
+	s.active.Store(true)
+	defer func() {
+		s.active.Store(false)
+		result = errors.Join(result, c.current(ctx, a, id), ctx.Err())
+	}()
+	return use(context.WithValue(ctx, candidateStoppedReadKey{}, s))
+}
+
+func candidateStoppedReadFor(ctx context.Context, a *SelfUpdateFileAdapter, id string) (*candidateStoppedRead, error) {
+	if ctx == nil {
+		return nil, ErrFileCommandUnsettled
+	}
+	s, ok := ctx.Value(candidateStoppedReadKey{}).(*candidateStoppedRead)
+	deadline, finite := ctx.Deadline()
+	if !ok || s == nil || s.self != s || !s.active.Load() || s.original == nil || s.original.Err() != nil || !finite || deadline.After(s.deadline) || !s.deadline.After(time.Now()) || ctx.Err() != nil {
+		return nil, ErrFileCommandUnsettled
+	}
+	if err := s.completion.current(ctx, a, id); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (w *candidateStartWait) close() {

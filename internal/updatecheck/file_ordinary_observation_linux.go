@@ -12,6 +12,13 @@ import (
 )
 
 func (a *SelfUpdateFileAdapter) withOrdinaryInstallerControllerObservation(ctx context.Context, id string, use func(context.Context, *OrdinaryInstallerControllerObservation) error) (result error) {
+	if ctx.Value(candidateStoppedReadKey{}) != nil {
+		s, err := candidateStoppedReadFor(ctx, a, id)
+		if err != nil {
+			return err
+		}
+		return s.completion.observe(ctx, s.completion, use)
+	}
 	if ctx.Value(ordinaryInstallerJoinKey{}) != nil {
 		return a.withJoinedOrdinaryInstallerObservation(ctx, id, use)
 	}

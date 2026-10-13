@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,21 @@ type nativeFileProfile struct {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == "self-update-helper" {
+		binary, err := os.Executable()
+		if err != nil || filepath.Base(binary) != "control.bin" || filepath.Base(filepath.Dir(binary)) != os.Args[2] {
+			os.Exit(91)
+		}
+		data, err := os.ReadFile(filepath.Join(filepath.Dir(binary), "native-fixture.json"))
+		var p nativeFileProfile
+		if err != nil || decodeFileProtocol(data, &p) != nil || (p.Scenario != "candidate-stopped-before" && p.Scenario != "candidate-stopped-after") {
+			os.Exit(92)
+		}
+		if flag.Set("test.run", "^TestNativeCandidateStoppedCompletionHelperFixture$") != nil {
+			os.Exit(93)
+		}
+		os.Exit(m.Run()) // Actual kernel argv remains self-update-helper <job>.
+	}
 	if len(os.Args) == 2 {
 		value := ""
 		switch os.Args[1] {
@@ -149,6 +165,15 @@ func nativeFileAdapter(directory string, p nativeFileProfile) *SelfUpdateFileAda
 		return r.Stopped, err
 	}
 	a.admission = func(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
+		if p.Scenario == "candidate-stopped-before" || p.Scenario == "candidate-stopped-after" {
+			stop, present, err := operationgate.ReadSelfUpdateStop(ctx, p.Control)
+			if err != nil || !present {
+				return errors.Join(ErrFileProtocol, err)
+			}
+			if stop.Stopped {
+				return operationgate.WithSelfUpdateStoppedEffectAdmission(ctx, p.Control, id, installationID, sequence, 7, action, effect, begin)
+			}
+		}
 		if p.Scenario == "stop-before-child" && effect == "command-child-quiesce-old-runtime" {
 			if _, err := operationgate.RequestSelfUpdateStop(ctx, p.Control, id, 7); err != nil {
 				return err

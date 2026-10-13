@@ -9,12 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strconv"
 	"syscall"
 	"time"
-
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 func (a *SelfUpdateFileAdapter) prepareCandidateStartWait(ctx context.Context, id string, worker *exec.Cmd, parent fileProcess, record updateRecord, review fileReview, identity fileHelperIdentity) (func(fileProcess) (*candidateStartWait, error), error) {
@@ -115,11 +112,6 @@ func candidateProcessesAbsent(ctx context.Context, ready fileCommandReceipt) err
 		}
 	}
 	return ctx.Err()
-}
-
-func candidateStopIntent(r selfupdatejournal.Receipt, id string) bool {
-	return r.Schema == selfupdatejournal.Schema && r.ID == id && r.Phase == "command-started" && r.Command == "stop-candidate-panel" && r.Index == 6 && !r.Rollback && !r.BeforeFiles &&
-		slices.Equal(r.Commands, []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel"})
 }
 
 func candidatePIDOwnership(pid *candidatePIDImage) error {
@@ -267,5 +259,119 @@ func (a *SelfUpdateFileAdapter) cleanupAbsentCandidate(ctx context.Context, id s
 	if err == nil {
 		err = a.filePanelAbsent(ctx)
 	}
+	if err == nil {
+		err = sealCandidateAbsenceCompletion(ctx, w, final, intent, a.candidateStoppedCompletionFresh, a.candidateStoppedCompletionObservation)
+	}
 	return true, err
+}
+
+// Called with the original source's mutex held. The terminal helper record
+// may change only through the existing data-only publication; its immutable
+// identity/review/release fields remain exactly those authenticated by H.
+func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFresh(ctx context.Context, c *candidateAbsenceCompletion) error {
+	if !productionOrdinaryRoleAdapter(a) {
+		return ErrFileProtocol
+	}
+	return a.candidateStoppedCompletionFacts(ctx, c)
+}
+
+// Intrinsic facts are separately exercised by the bounded native fixture.
+// Production always enters through the fixed-root check above.
+func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFacts(ctx context.Context, c *candidateAbsenceCompletion) error {
+	w := c.wait
+	if a.stopCheck == nil {
+		return ErrFileProtocol
+	}
+	stopped, err := a.stopCheck(ctx, w.owner.id)
+	if err != nil || !stopped {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	if err := a.AuthorityAction(ctx, w.owner.id, w.review.Revision, "replace-to-rollback"); err != nil {
+		return err
+	}
+	record, review, err := a.load(ctx, w.owner.id)
+	if err != nil || !reflect.DeepEqual(review, w.review) {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	if record.Job.State == stoppedRollbackState {
+		if record.Job.Stage != stoppedRollbackState || record.Job.Code != "" || record.Job.Message != "Данные приложения восстановлены. Приложение остановлено." || record.Job.UpdatedAt.Before(w.record.Job.UpdatedAt) {
+			return ErrFileProtocol
+		}
+		record.Job.State, record.Job.Stage, record.Job.Code, record.Job.Message, record.Job.UpdatedAt = w.record.Job.State, w.record.Job.Stage, w.record.Job.Code, w.record.Job.Message, w.record.Job.UpdatedAt
+	}
+	if !reflect.DeepEqual(record, w.record) {
+		return ErrFileProtocol
+	}
+	identity, err := a.helperIdentity(w.owner.id, review)
+	if err != nil || identity != w.identity {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	fact, err := bootstrapControllerAt(ctx, os.Getpid())
+	if err != nil || ordinaryInstallerIdentityRole(w.review, w.record, w.identity, fact) != "ordinary-installer" {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	store, err := a.OpenFileJournal()
+	if err != nil {
+		return err
+	}
+	current, present, err := store.Current()
+	store.Close()
+	if err != nil || !present {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	if err := c.receipt(current); err != nil {
+		return err
+	}
+	root, err := a.commandRoot(w.owner.id)
+	if err != nil {
+		return err
+	}
+	actual, err := readFileCommand(root, w.owner.id, "start-candidate-panel")
+	root.Close()
+	if err != nil || actual != c.final {
+		return errors.Join(ErrFileProtocol, err)
+	}
+	quiesce, err := w.owner.joined(ctx, a, w.owner.id, os.Getpid())
+	if err != nil {
+		return err
+	}
+	if err := ordinaryJoinedProcessesAbsent(ctx, quiesce); err != nil {
+		return err
+	}
+	if err := a.oldPanelInactive(ctx, w.owner.id); err != nil {
+		return err
+	}
+	if err := a.filePanelAbsent(ctx); err != nil {
+		return err
+	}
+	if err := candidatePIDOwnership(w.pid); err != nil {
+		return err
+	}
+	return candidateProcessesAbsent(ctx, w.ready)
+}
+
+func (a *SelfUpdateFileAdapter) candidateStoppedCompletionObservation(ctx context.Context, c *candidateAbsenceCompletion, use func(context.Context, *OrdinaryInstallerControllerObservation) error) (result error) {
+	if err := c.current(ctx, a, c.wait.owner.id); err != nil {
+		return err
+	}
+	w := c.wait
+	command, err := w.owner.joined(ctx, a, w.owner.id, os.Getpid())
+	if err != nil {
+		return err
+	}
+	image, err := newOrdinaryExecutableImage(ctx, w.review.OldExecutableSHA256)
+	if err != nil {
+		return err
+	}
+	// Classification uses the original authenticated H snapshot. Fresh checks
+	// below validate the actual Stop/restored/terminal state on every bookend.
+	source := ordinaryObservationSource{review: w.review, record: w.record, identity: w.identity, command: command, caller: os.Getpid(), installerJoin: w.owner,
+		read: image.controllerAt, check: func(cctx context.Context, _ bool) error {
+			s, err := candidateStoppedReadFor(cctx, a, w.owner.id)
+			if err != nil || s.completion != c {
+				return errors.Join(ErrFileCommandUnsettled, err)
+			}
+			return nil
+		}, clear: image.clear}
+	return runOrdinaryControllerObservation(ctx, source, use)
 }

@@ -77,11 +77,29 @@ func (f *SelfUpdateFiles) RunHelper(ctx context.Context, id string, guard selfup
 		}
 		for _, action := range []string{"stop-candidate-panel", "restore", "restore-private-state", "start-rollback-panel", "accept-rollback"} {
 			if rollbackErr := f.Action(ctx, id, action, revision, guard); rollbackErr != nil {
+				if action == "start-rollback-panel" && f.originalHelperStopSettlement(ctx, id, revision, rollbackErr) {
+					// The original H callback is still active. Settlement may read
+					// its completed cleanup source, but must never resume a start.
+					return errors.Join(err, rollbackErr, f.Action(ctx, id, "settle-stopped-rollback", revision, guard))
+				}
 				return errors.Join(err, rollbackErr)
 			}
 		}
 		return err // Rolled back is an unsuccessful upgrade, even after true acceptance.
 	}
+}
+
+func (f *SelfUpdateFiles) originalHelperStopSettlement(ctx context.Context, id string, revision uint64, refusal error) bool {
+	if ctx == nil || ctx.Err() != nil || f.ControlRoot == "" || !errors.Is(refusal, operationgate.ErrSelfUpdateStopped) || updatecheck.SelfUpdateFileFailureCode(refusal) != "file-protocol-start-rollback-authority-control" {
+		return false
+	}
+	stop, present, err := operationgate.ReadSelfUpdateStop(ctx, f.ControlRoot)
+	if err != nil || !present || !stop.Stopped || stop.TransactionID != id || stop.ConfigRevision != revision {
+		return false
+	}
+	r, present, err := f.Current()
+	return err == nil && present && r.Schema == selfupdatejournal.Schema && r.ID == id && r.Phase == "command-finished" && r.Command == "restore-private-state" && r.Rollback && !r.BeforeFiles && r.Index == 6 &&
+		slices.Equal(r.Commands, []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel", "restore-private-state"})
 }
 
 // SelfUpdateFiles opens pre-existing roots on each observation/action. Changing

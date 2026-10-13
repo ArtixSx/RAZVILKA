@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 // Actual PE/ELF supervisor handle and sole Wait, with model kernel/review
@@ -40,6 +42,182 @@ func candidateCleanupFixture(t *testing.T, held context.Context, a *SelfUpdateFi
 	final := ready
 	final.State, final.Reaped, final.WaitECHILD = "reaped", ready.Reaped+1, true
 	return w, final, wait
+}
+
+func candidateCompletionIntent(id string) selfupdatejournal.Receipt {
+	return selfupdatejournal.Receipt{Schema: selfupdatejournal.Schema, ID: id, Phase: "command-started", Command: "stop-candidate-panel", Index: 6,
+		Commands: []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime", "start-candidate-panel", "stop-candidate-panel"}}
+}
+
+// Actual supervisor Wait; callbacks model only platform/record checks. This
+// cannot mint a native role or authorize a production settlement.
+func TestCandidateStoppedCompletionLifetimeAndReceipt(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	a := NewSelfUpdateFileAdapter()
+	id := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	var escaped context.Context
+	err := runOrdinaryInstallerJoinScope(a, ctx, id, func(held context.Context) error {
+		w, final, wait := candidateCleanupFixture(t, held, a, 0)
+		w.review.AuthorityInstallationID, w.review.AuthoritySequence, w.review.Revision = "cccccccccccccccccccccccccccccccc", 10, 7
+		intent := candidateCompletionIntent(id)
+		freshChecks := 0
+		fresh := func(c context.Context, _ *candidateAbsenceCompletion) error { freshChecks++; return c.Err() }
+		observe := func(context.Context, *candidateAbsenceCompletion, func(context.Context, *OrdinaryInstallerControllerObservation) error) error {
+			return ErrFileProtocol
+		}
+		if err := sealCandidateAbsenceCompletion(held, w, final, intent, fresh, observe); err == nil {
+			t.Fatal("JSON and no actual Wait created completion")
+		}
+		w.observeWait(wait())
+		if err := executeCandidateCleanup(held, w, final, func() error { return nil }, func(begin func() error) error { return begin() }, func(p *candidatePIDImage) error { return p.root.Remove("razvilka.pid") }); err != nil {
+			return err
+		}
+		if err := sealCandidateAbsenceCompletion(held, w, final, intent, fresh, observe); err != nil {
+			return err
+		}
+		if err := sealCandidateAbsenceCompletion(held, w, final, intent, fresh, observe); err == nil {
+			t.Fatal("duplicate completion accepted")
+		}
+		derived := context.WithValue(held, candidateStoppedReadKey{}, nil)
+		if err := a.withCandidateStoppedRead(derived, id, func(context.Context) error { t.Fatal("derived entry accepted"); return nil }); err == nil {
+			t.Fatal("derived context opened a session")
+		}
+		return a.withCandidateStoppedRead(held, id, func(read context.Context) error {
+			escaped = read
+			child := context.WithValue(read, struct{}{}, "writer observation")
+			s, err := candidateStoppedReadFor(child, a, id)
+			if err != nil {
+				return err
+			}
+			before := freshChecks
+			state, process := w.state, w.process
+			w.state = nil
+			if _, err := candidateStoppedReadFor(child, a, id); err == nil || freshChecks != before {
+				t.Fatal("missing actual Wait state reached platform checks", err)
+			}
+			w.state, w.process = state, nil
+			if _, err := candidateStoppedReadFor(child, a, id); err == nil || freshChecks != before {
+				t.Fatal("foreign process handle reached platform checks", err)
+			}
+			w.process = process
+			w.owner.candidate = nil
+			if _, err := candidateStoppedReadFor(child, a, id); err == nil || freshChecks != before {
+				t.Fatal("detached original slot reached platform checks", err)
+			}
+			w.owner.candidate = w
+			cancelled, revoke := context.WithCancel(child)
+			revoke()
+			if _, err := candidateStoppedReadFor(cancelled, a, id); err == nil || freshChecks != before {
+				t.Fatal("cancelled read reached platform checks", err)
+			}
+			copySession := candidateStoppedRead{self: s.self, completion: s.completion, original: s.original, deadline: s.deadline}
+			copySession.active.Store(true)
+			if _, err := candidateStoppedReadFor(context.WithValue(child, candidateStoppedReadKey{}, &copySession), a, id); err == nil {
+				t.Fatal("copied session accepted")
+			}
+			copyCompletion := *s.completion
+			if err := copyCompletion.current(child, a, id); err == nil {
+				t.Fatal("copied completion accepted")
+			}
+			restored := intent
+			restored.Commands = append(append([]string{}, intent.Commands...), "restore-private-state")
+			restored.Rollback, restored.Phase, restored.Command = true, "command-finished", "restore-private-state"
+			if err := s.completion.receipt(restored); err != nil {
+				return err
+			}
+			terminal := restored
+			terminal.Schema, terminal.Phase, terminal.Command = selfupdatejournal.StoppedSchema, stoppedRollbackState, ""
+			binding := selfupdatejournal.StoppedBinding{InstallationID: w.review.AuthorityInstallationID, PreStopSequence: 10, StopSequence: 11, Revision: 7, RequiredReader: selfupdatejournal.StoppedSchema}
+			terminal.Stopped = &binding
+			if err := s.completion.receipt(terminal); err != nil {
+				return err
+			}
+			for _, change := range []func(*selfupdatejournal.StoppedBinding){
+				func(b *selfupdatejournal.StoppedBinding) { b.InstallationID = "dddddddddddddddddddddddddddddddd" },
+				func(b *selfupdatejournal.StoppedBinding) { b.PreStopSequence++ },
+				func(b *selfupdatejournal.StoppedBinding) { b.StopSequence++ },
+				func(b *selfupdatejournal.StoppedBinding) { b.Revision++ },
+			} {
+				badBinding := binding
+				change(&badBinding)
+				bad := terminal
+				bad.Stopped = &badBinding
+				if err := s.completion.receipt(bad); err == nil {
+					t.Fatal("unrelated Stop binding accepted")
+				}
+			}
+			for _, change := range []func(*selfupdatejournal.Receipt){
+				func(r *selfupdatejournal.Receipt) { r.Phase = "command-started" },
+				func(r *selfupdatejournal.Receipt) { r.ID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+				func(r *selfupdatejournal.Receipt) { r.Rollback = false },
+				func(r *selfupdatejournal.Receipt) { r.Index-- },
+				func(r *selfupdatejournal.Receipt) { r.Commands = intent.Commands },
+				func(r *selfupdatejournal.Receipt) { r.Command = "start-rollback-panel" },
+			} {
+				bad := restored
+				change(&bad)
+				if err := s.completion.receipt(bad); err == nil {
+					t.Fatal("unrelated/unknown receipt accepted")
+				}
+			}
+			if err := executeCandidateCleanup(held, w, final, func() error { t.Fatal("consumed cleanup check ran"); return nil }, func(func() error) error { return nil }, func(*candidatePIDImage) error { t.Fatal("unlink repeated"); return nil }); err == nil {
+				t.Fatal("completion restored effect authority")
+			}
+			before = freshChecks
+			if err := os.WriteFile(filepath.Join(w.pid.directory, "razvilka.pid"), w.pid.data, 0600); err != nil {
+				return err
+			}
+			if _, err := candidateStoppedReadFor(child, a, id); err == nil || freshChecks != before {
+				t.Fatal("replacement PID reached fresh completion checks", err)
+			}
+			if err := os.Remove(filepath.Join(w.pid.directory, "razvilka.pid")); err != nil {
+				return err
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := candidateStoppedReadFor(escaped, a, id); err == nil {
+		t.Fatal("session survived H callback exit")
+	}
+}
+
+func TestCandidateStoppedCompletionClosingRefusalHasNoSource(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	a := NewSelfUpdateFileAdapter()
+	id := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := runOrdinaryInstallerJoinScope(a, ctx, id, func(held context.Context) error {
+		w, final, wait := candidateCleanupFixture(t, held, a, 0)
+		w.observeWait(wait())
+		checks := 0
+		err := executeCandidateCleanup(held, w, final, func() error {
+			checks++
+			if checks == 3 {
+				return ErrReviewChanged
+			}
+			return nil
+		}, func(begin func() error) error { return begin() }, func(p *candidatePIDImage) error { return p.root.Remove("razvilka.pid") })
+		if !errors.Is(err, ErrReviewChanged) || w.consumed || w.completion != nil {
+			t.Fatal("failed closing cleanup created completion", err)
+		}
+		fresh := func(context.Context, *candidateAbsenceCompletion) error {
+			t.Fatal("failed cleanup reached fresh source")
+			return nil
+		}
+		observe := func(context.Context, *candidateAbsenceCompletion, func(context.Context, *OrdinaryInstallerControllerObservation) error) error {
+			return nil
+		}
+		if err := sealCandidateAbsenceCompletion(held, w, final, candidateCompletionIntent(id), fresh, observe); err == nil {
+			t.Fatal("absence after failed bookend created completion")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCandidateCleanupRequiresOriginalActualWait(t *testing.T) {

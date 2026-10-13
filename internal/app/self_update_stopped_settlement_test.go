@@ -19,6 +19,90 @@ import (
 
 type stoppedSettlementTraceKey struct{}
 
+type helperStopSettlementProof struct {
+	*stoppedSettlementProof
+	control string
+	mode    string
+}
+
+func (p *helperStopSettlementProof) Run(ctx context.Context, id, command string) error {
+	if p.mode == "after-start-intent" && command == "start-rollback-panel" {
+		stop, err := operationgate.RequestSelfUpdateStop(ctx, p.control, id, p.revision)
+		p.stop = stop
+		return errors.Join(operationgate.ErrSelfUpdateStopped, err)
+	}
+	if err := p.fileUpdateProof.Run(ctx, id, command); err != nil {
+		return err
+	}
+	if command == "restore-private-state" && p.mode != "after-start-intent" {
+		actualID, revision := id, p.revision
+		if p.mode == "wrong-job" {
+			actualID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		}
+		if p.mode == "wrong-revision" {
+			revision++
+		}
+		stop, err := operationgate.RequestSelfUpdateStop(ctx, p.control, actualID, revision)
+		p.stop = stop
+		return err
+	}
+	return nil
+}
+
+// Actual control and file journal, model process provider. Native tests own
+// the real H/S Wait, missing ledger and runtime observer proof separately.
+func TestSelfUpdateOriginalHelperSettlesOnlyExactStopBeforeRollbackIntent(t *testing.T) {
+	for _, mode := range []string{"matching", "wrong-job", "wrong-revision", "independent-guard", "after-start-intent"} {
+		t.Run(mode, func(t *testing.T) {
+			a, file := fileUpdateHTTPFixture(t)
+			fileUpdateEnableControl(t, a)
+			cause := errors.New("candidate did not pass live acceptance")
+			file.liveError = cause
+			base := &stoppedSettlementProof{fileUpdateProof: file, installation: a.SelfUpdateFiles.Installation, directory: a.SelfUpdateFiles.Directory, eligible: true}
+			p := &helperStopSettlementProof{stoppedSettlementProof: base, control: a.SelfUpdateFiles.ControlRoot, mode: mode}
+			a.SelfUpdateFiles.Adapter = p
+			a.SelfUpdateFiles.JournalReadGuard = func(c context.Context, reader int) error {
+				p.readerCalls++
+				if reader != 3 || c.Value(stoppedSettlementTraceKey{}) != "original-provider-context" {
+					return errSelfUpdateRecovery
+				}
+				return c.Err()
+			}
+			guard := func(context.Context) error {
+				if mode == "independent-guard" && p.stop.Stopped {
+					return errors.New("independent recovery fence")
+				}
+				return nil
+			}
+			err := a.SelfUpdateFiles.RunHelper(context.Background(), fileUpdateID, guard)
+			if err == nil || !errors.Is(err, cause) {
+				t.Fatal("stopped rollback reported live upgrade success", err)
+			}
+			r, present, readErr := a.SelfUpdateFiles.Current()
+			if readErr != nil || !present {
+				t.Fatal(readErr)
+			}
+			if mode == "matching" {
+				if p.calls != 1 || p.readerCalls == 0 || r.Phase != "rolled-back-stopped" || r.Schema != selfupdatejournal.StoppedSchema {
+					t.Fatal("matching original helper did not settle", p.calls, p.readerCalls, r.Phase)
+				}
+				stop, present, err := operationgate.ReadSelfUpdateStop(context.Background(), p.control)
+				if err != nil || !present || stop != p.stop {
+					t.Fatal("settlement changed exact Stop", err)
+				}
+			} else if p.calls != 0 || r.Phase == "rolled-back-stopped" {
+				t.Fatal("unrelated/unknown failure reached settlement", mode, p.calls, r.Phase)
+			}
+			if mode == "after-start-intent" && (r.Phase != "command-started" || r.Command != "start-rollback-panel") {
+				t.Fatal("unknown start intent was cleared", r.Phase, r.Command)
+			}
+			if len(p.finishes) != 0 || len(p.lives) != 1 || p.lives[0] {
+				t.Fatal("Stop reached rollback live acceptance", p.lives, p.finishes)
+			}
+		})
+	}
+}
+
 // Actual HTTP/auth/config/file journal; the optional provider below models
 // only supervised process/private/runtime evidence. It is not native D11 PASS.
 type stoppedSettlementProof struct {

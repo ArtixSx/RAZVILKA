@@ -39,6 +39,14 @@ func (a *SelfUpdateFileAdapter) verifyCurrentOrdinaryInstallerControllerRole(ctx
 }
 
 func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx context.Context, id string, pid int, current bool) (result error) {
+	if ctx.Value(candidateStoppedReadKey{}) != nil {
+		return a.withOrdinaryInstallerControllerObservation(ctx, id, func(c context.Context, observation *OrdinaryInstallerControllerObservation) error {
+			if current && pid == os.Getpid() {
+				return nil
+			}
+			return observation.VerifyPeer(c, pid)
+		})
+	}
 	if ctx.Value(ordinaryInstallerJoinKey{}) != nil {
 		return a.withJoinedOrdinaryInstallerObservation(ctx, id, func(c context.Context, observation *OrdinaryInstallerControllerObservation) error {
 			if current && pid == os.Getpid() {
