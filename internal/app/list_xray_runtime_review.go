@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/physicalscope"
 	"log"
 	"net/http"
 	"reflect"
@@ -203,6 +204,15 @@ func logManagedXrayPrepareFailure(phase string, elapsed time.Duration, err error
 		phase = "unclassified"
 	}
 	log.Printf("Managed Xray prepare refused substage=%s elapsed_ms=%d", phase, max(int64(0), min(elapsed.Milliseconds(), int64(120000))))
+	stages := physicalscope.DiagnosticStages(err)
+	for _, stage := range stages {
+		if stage != "context.canceled" && stage != "context.deadline" {
+			// Only a private physical boundary adds this field. The extractor
+			// bounds traversal and never formats the retained foreign cause.
+			log.Printf("Managed Xray prepare physical substage=%s physical_stages=%s", phase, strings.Join(stages, ">"))
+			break
+		}
+	}
 }
 
 func logManagedXrayReviewClose(phase string, elapsed time.Duration, err error) {
