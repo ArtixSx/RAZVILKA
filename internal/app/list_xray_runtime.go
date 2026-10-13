@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"net/netip"
@@ -145,11 +143,10 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 		return nil, errors.Join(ErrDefaultRouteCapability, err)
 	}
 	plan.Digest = defaultRouteDigest(struct{ Plan, Policy string }{plan.Digest, c.Digest()})
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	plan.PlanID, err = newDefaultRouteAttemptID()
+	if err != nil {
 		return nil, err
 	}
-	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
 	e.plan = defaultRouteClonePlan(plan)
 	phase, phaseStarted = "closing-current", time.Now()
 	return c, errors.Join(e.primaryCurrent(ctx), e.preparation.current(ctx))

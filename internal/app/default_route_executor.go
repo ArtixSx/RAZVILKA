@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -153,11 +151,10 @@ func (e *DefaultRouteExecutor) Review(ctx context.Context, services []dataplane.
 	// Existing adapter receipts share this complete identity; a policy,
 	// profile, consent or control transition cannot reuse an old transaction.
 	plan.Digest = defaultRouteDigest(struct{ Plan, Policy string }{plan.Digest, c.digest})
-	var attempt [8]byte
-	if _, err := rand.Read(attempt[:]); err != nil {
+	plan.PlanID, err = newDefaultRouteAttemptID()
+	if err != nil {
 		return nil, err
 	}
-	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(attempt[:])
 	r := &DefaultRouteReview{owner: e, cfg: cfg, compilation: c, plan: defaultRouteClonePlan(plan), committed: previous, hasCommitted: exists, catalogHash: applyReviewHash(e.app.catalogSnapshot())}
 	r.digest = defaultRouteDigest(struct{ Plan, Config, Catalog string }{plan.Digest, applyReviewHash(cfg), r.catalogHash})
 	if err := e.guard(ctx, r, cfg, true); err != nil {

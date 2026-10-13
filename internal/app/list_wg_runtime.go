@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"reflect"
 	"sync"
@@ -187,11 +185,10 @@ func (e *managedWGListExecution) prepare(ctx context.Context, serviceID string) 
 		return errors.Join(ErrDefaultRouteCapability, err)
 	}
 	plan.Digest = defaultRouteDigest(struct{ Plan, Policy string }{plan.Digest, e.preparation.compilation.Digest()})
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	plan.PlanID, err = newDefaultRouteAttemptID()
+	if err != nil {
 		return err
 	}
-	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
 	e.plan = defaultRouteClonePlan(plan)
 	e.preparation.execution = e
 	return e.preparation.Current(ctx)

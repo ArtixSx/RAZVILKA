@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"reflect"
@@ -98,11 +96,10 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		return nil, errors.Join(ErrDefaultRouteCapability, err)
 	}
 	plan.Digest = defaultRouteDigest(struct{ Plan, Policy string }{plan.Digest, compilation.Digest()})
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	plan.PlanID, err = newDefaultRouteAttemptID()
+	if err != nil {
 		return nil, err
 	}
-	plan.PlanID = "dp-" + plan.Digest[:16] + "-" + hex.EncodeToString(nonce[:])
 	e.plan = defaultRouteClonePlan(plan)
 	var matches []dataplane.NFQWSScopedMatch
 	for _, rule := range compilation.Rules() {
