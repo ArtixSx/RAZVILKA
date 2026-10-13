@@ -435,7 +435,27 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 	call("original_apply", "POST", "/api/v1/apply?scope=all",
 		map[string]any{"expected_revision": *plan.Review.Revision, "reviewed_digest": plan.Review.Digest}, 200, &applyBody)
 	committed, exists, err := manager.Committed()
-	if err != nil || !applyBody.OK || !applyBody.LiveApplied || applyBody.Pending || !exists || committed.State != "committed" || !committed.Ready || committed.LAN == nil || len(committed.Routes) != 1 || committed.Routes[0].Selected != route || manager.ObserveCommittedRuntime(ctx, committed) != nil {
+	if err != nil || !applyBody.OK || !applyBody.LiveApplied || applyBody.Pending || !exists || committed.State != "committed" || !committed.Ready || committed.LAN == nil || len(committed.Routes) != 1 || committed.Routes[0].Selected != route {
+		t.Fatal("stage=active_runtime code=actual_owned_runtime_unconfirmed")
+	}
+	// The original managed handle opens the real private App operation for
+	// retained observation. Keep the entire published journal unchanged across
+	// that observation; plain request contexts cannot supply its owner grant.
+	observeCommitted := func(observe context.Context) error {
+		current, exists, err := manager.Committed()
+		if err != nil || !exists || !reflect.DeepEqual(current, committed) {
+			return app.ErrXrayListSource
+		}
+		if err := managedXray.Current(observe); err != nil {
+			return err
+		}
+		current, exists, err = manager.Committed()
+		if err != nil || !exists || !reflect.DeepEqual(current, committed) {
+			return app.ErrXrayListSource
+		}
+		return nil
+	}
+	if observeCommitted(ctx) != nil {
 		t.Fatal("stage=active_runtime code=actual_owned_runtime_unconfirmed")
 	}
 	activeConfig, activeSources := store.Get(), a.Sources
@@ -452,7 +472,7 @@ func TestXraySelectedAppNativeHTTP(t *testing.T) {
 				if err != nil || current.Generation != after.Generation {
 					return app.ErrXrayListSource
 				}
-				return manager.ObserveCommittedRuntime(observe, committed)
+				return observeCommitted(observe)
 			},
 		})
 		if err != nil {
