@@ -29,12 +29,23 @@ export async function realHTTPAIGroupFacts(page) {
     const groups=[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')]
       .filter(element=>element.querySelector('summary strong')?.textContent?.includes('ИИ-сервисы'));
     const target=groups.length===1?groups[0]:null,rect=target?.getBoundingClientRect();
+    const buttons=[...document.querySelectorAll('[data-r5-catalog]')],button=buttons.length===1?buttons[0]:null;
+    const canonical=document.getElementById('r5CatalogButton'),buttonRect=button?.getBoundingClientRect();
+    const centerX=buttonRect?buttonRect.left+buttonRect.width/2:null,centerY=buttonRect?buttonRect.top+buttonRect.height/2:null;
+    const centerInView=!!button&&centerX>=0&&centerX<innerWidth&&centerY>=0&&centerY<innerHeight;
     return {current_services:state.currentView==='services',panel_pending:!!panelLoad.request,
       services_ready:state.dataLoad.services?.phase==='ready',catalog_mode:interfaceState.filter==='all',
       query_empty:interfaceState.query==='',category_empty:interfaceState.category==='',
       group_count:groups.length===0?'0':groups.length===1?'1':'many',
       target_visible:!!target&&rect.width>0&&rect.height>0&&getComputedStyle(target).visibility!=='hidden',
-      target_open:!!target&&target.open===true};
+      target_open:!!target&&target.open===true,
+      catalog_button_count:buttons.length===0?'0':buttons.length===1?'1':'many',catalog_id_exists:!!canonical,
+      catalog_locator_matches_id:!!button&&button===canonical,
+      services_view_active:document.getElementById('view-services')?.classList.contains('active')===true,
+      catalog_button_visible:!!button&&buttonRect.width>0&&buttonRect.height>0&&!['hidden','collapse'].includes(getComputedStyle(button).visibility),
+      catalog_button_enabled:!!button&&!button.disabled&&!button.matches(':disabled'),catalog_button_inert:!!button&&!!button.closest('[inert]'),
+      catalog_center_in_view:centerInView,catalog_center_receives_events:centerInView&&button.contains(document.elementFromPoint(centerX,centerY)),
+      auth_hidden:document.getElementById('authScreen')?.hidden===true,modal_open:!!document.querySelector('dialog:modal')};
   });
 }
 

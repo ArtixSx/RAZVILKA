@@ -170,11 +170,20 @@ for(const state of ['empty','expired','unknown']){
     const interfaceState={filter:catalog?'all':'selected',query:'',category:''};
     const target={open,visibility:visible?'visible':'hidden',private_id:'private service ID',
       querySelector:()=>({textContent:'ИИ-сервисы private catalog title'}),getBoundingClientRect:()=>({width:100,height:40})};
-    const context={state,panelLoad,interfaceState,document:{querySelectorAll:()=>Array.from({length:count},()=>target)},getComputedStyle:element=>({visibility:element.visibility})};
+    const child={private_id:'private icon ID'},button={disabled:false,fieldsetDisabled:false,inert:false,visibility:'visible',private_id:'private button ID',
+      rect:{left:40,top:100,width:160,height:40},getBoundingClientRect(){return this.rect;},matches:()=>button.fieldsetDisabled,
+      closest:()=>button.inert?{private_id:'private ancestor ID'}:null,contains:element=>element===button||element===child};
+    const dom={buttons:[button],canonical:button,active:true,auth:{hidden:true},modal:null,hit:child};
+    const context={state,panelLoad,interfaceState,innerWidth:1280,innerHeight:900,
+      document:{querySelectorAll:selector=>selector==='[data-r5-catalog]'?dom.buttons:Array.from({length:count},()=>target),
+        getElementById:id=>id==='r5CatalogButton'?dom.canonical:id==='view-services'?{classList:{contains:()=>dom.active}}:id==='authScreen'?dom.auth:null,
+        querySelector:()=>dom.modal,elementFromPoint:()=>dom.hit},getComputedStyle:element=>({visibility:element.visibility})};
     vm.createContext(context);let observations=0;
     const page={evaluate:fn=>{observations++;return vm.runInContext('('+fn.toString()+')',context)();}};
-    return {state,panelLoad,interfaceState,target,page,observations:()=>observations};
+    return {state,panelLoad,interfaceState,target,button,dom,page,observations:()=>observations};
   };
+  const actionFacts={catalog_button_count:'1',catalog_id_exists:true,catalog_locator_matches_id:true,services_view_active:true,
+    catalog_button_visible:true,catalog_button_enabled:true,catalog_button_inert:false,catalog_center_in_view:true,catalog_center_receives_events:true,auth_hidden:true,modal_open:false};
   const capture=async action=>{
     const rows=[],log=console.log;
     console.log=value=>{assert.equal(typeof value,'string');assert(value.startsWith('AI_GROUP_DIAGNOSTIC '));rows.push(JSON.parse(value.slice('AI_GROUP_DIAGNOSTIC '.length)));};
@@ -185,7 +194,7 @@ for(const state of ['empty','expired','unknown']){
     const f=fixture({catalog,open});
     const facts=await realHTTPAIGroupFacts(f.page);
     assert.deepEqual(JSON.parse(JSON.stringify(facts)),{current_services:true,panel_pending:false,services_ready:true,catalog_mode:catalog,
-      query_empty:true,category_empty:true,group_count:'1',target_visible:true,target_open:open});
+      query_empty:true,category_empty:true,group_count:'1',target_visible:true,target_open:open,...actionFacts});
     assert.equal(f.interfaceState.filter,catalog?'all':'selected');assert.equal(f.target.open,open);assert.equal(f.observations(),1);checks++;
     await capture(async rows=>{
       const error=Object.assign(new Error('private response body and credentials'),{name:'TimeoutError',actual:'private profile URI'});let calls=0;
@@ -208,7 +217,31 @@ for(const state of ['empty','expired','unknown']){
     const f=fixture({visible:false,open:true});f.state.currentView='private view';f.state.dataLoad.services.phase='private error';f.panelLoad.request=Promise.resolve();
     f.interfaceState.query='private search URI';f.interfaceState.category='private category ID';
     assert.deepEqual(JSON.parse(JSON.stringify(await realHTTPAIGroupFacts(f.page))),{current_services:false,panel_pending:true,services_ready:false,catalog_mode:false,
-      query_empty:false,category_empty:false,group_count:'1',target_visible:false,target_open:true});checks++;
+      query_empty:false,category_empty:false,group_count:'1',target_visible:false,target_open:true,...actionFacts});checks++;
+  }
+  const actionCases=[
+    [f=>{f.dom.buttons=[];f.dom.canonical=null;},{catalog_button_count:'0',catalog_id_exists:false,catalog_locator_matches_id:false,
+      catalog_button_visible:false,catalog_button_enabled:false,catalog_center_in_view:false,catalog_center_receives_events:false}],
+    [f=>{f.dom.buttons=[];},{catalog_button_count:'0',catalog_locator_matches_id:false,catalog_button_visible:false,
+      catalog_button_enabled:false,catalog_center_in_view:false,catalog_center_receives_events:false}],
+    [f=>{f.dom.buttons.push({...f.button,private_id:'private duplicate ID'});},{catalog_button_count:'many',catalog_locator_matches_id:false,
+      catalog_button_visible:false,catalog_button_enabled:false,catalog_center_in_view:false,catalog_center_receives_events:false}],
+    [f=>{f.dom.canonical={private_id:'private different canonical ID'};},{catalog_locator_matches_id:false}],
+    [f=>{f.button.visibility='hidden';},{catalog_button_visible:false}],
+    [f=>{f.button.visibility='collapse';},{catalog_button_visible:false}],
+    [f=>{f.button.rect.width=0;},{catalog_button_visible:false}],
+    [f=>{f.button.disabled=true;},{catalog_button_enabled:false}],
+    [f=>{f.button.fieldsetDisabled=true;},{catalog_button_enabled:false}],
+    [f=>{f.button.inert=true;},{catalog_button_inert:true}],
+    [f=>{f.button.rect.top=-200;},{catalog_center_in_view:false,catalog_center_receives_events:false}],
+    [f=>{f.button.rect.top=900;},{catalog_center_in_view:false,catalog_center_receives_events:false}],
+    [f=>{f.dom.hit={private_id:'private covering element ID'};},{catalog_center_receives_events:false}],
+    [f=>{f.dom.active=false;f.dom.auth.hidden=false;f.dom.modal={private_id:'private dialog ID'};},{services_view_active:false,auth_hidden:false,modal_open:true}]
+  ];
+  for(const [prepare,expected] of actionCases){
+    const f=fixture();prepare(f);const facts=await realHTTPAIGroupFacts(f.page);
+    assert.deepEqual(Object.fromEntries(Object.keys(actionFacts).map(key=>[key,facts[key]])),{...actionFacts,...expected});
+    assert(!JSON.stringify(facts).includes('private'));assert.equal(f.interfaceState.filter,'selected');assert.equal(f.target.open,false);assert.equal(f.observations(),1);checks++;
   }
   await capture(async rows=>{
     const page={evaluate:()=>{throw new Error('private page error');}},error=Object.assign(new Error('private action error'),{name:'TimeoutError'});let calls=0;
