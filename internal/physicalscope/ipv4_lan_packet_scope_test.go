@@ -2,6 +2,7 @@ package physicalscope
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"path/filepath"
 	"reflect"
@@ -38,11 +39,14 @@ type packetTestModel struct {
 // Model only kernel/provider I/O; use actual typed control review and Gate,
 // production topology/boundary/binding and the continuous original collector.
 // This is not native hardware/packet/effect attestation.
-func packetTestScope(t *testing.T) (*IPv4LANPacketScope, *packetTestModel, context.Context) {
+func packetTestScope(t *testing.T, setup ...func(*packetTestModel)) (*IPv4LANPacketScope, *packetTestModel, context.Context) {
 	t.Helper()
 	in, frames := scopeOptionsKernelFixture()
 	in.native = append(in.native, []byte(ndmObject("Guest", "Bridge1", "Guest", "Bridge")+ndmField("security-level", "protected"))...)
 	m := &packetTestModel{input: in, frames: frames, intent: IPv4LANPacketIntent{Revision: 7, PolicyRevision: 3, Mode: "lan_except", NewDevices: "inherit", SegmentIDs: []string{"Bridge0"}, ExcludedDeviceIDs: []string{physicalDeviceID("02:00:00:00:00:40")}, ExcludedCIDRs: []string{"198.51.100.0/24", "2001:db8:1::/64"}}, id: netidentity.Identity{Version: 1, Kind: netidentity.ReviewedSingleInitNet, BootID: "12345678-1234-1234-1234-123456789abc", PlatformReviewSHA256: "f77d10cde0399faf1ab9ab6060bc52aa54e61e25c3d4c2381f4f712e78144733"}, transport: newFenceTestTransport(), controlRoot: filepath.Join(t.TempDir(), "control")}
+	for _, configure := range setup {
+		configure(m)
+	}
 	if _, err := operationgate.InitializeSelfUpdateControl(context.Background(), m.controlRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -458,4 +462,183 @@ func TestIPv4LANPacketScopeOwnOriginFactsAndClosedBounds(t *testing.T) {
 	in.links = make([]message, 4097)
 	_, err = packetTopologyFromFacts(in, intent)
 	assertFenceFailure(t, err, "packet.structure.limit")
+}
+
+func packetTestNoneLink() message {
+	m := linkFrame(12, "modeledNone", "", "", 0)
+	binary.NativeEndian.PutUint16(m.data[2:4], 65534)
+	return m
+}
+func packetTestOpaqueNOARP(address string) message {
+	m := neighborFrame(12, address, "", 64)
+	m.data = append(m.data, attr(2, nil)...)
+	return m
+}
+func packetTestWithOpaque(m *packetTestModel) {
+	m.input.links = append(m.input.links, packetTestNoneLink())
+	m.frames[10] = append(m.frames[10], packetTestOpaqueNOARP("2001:db8:2::90"))
+}
+
+func TestIPv4LANPacketScopeOpaqueForeignNOARPKeepsAddressAndNegatives(t *testing.T) {
+	p, m, ctx := packetTestScope(t, packetTestWithOpaque)
+	row := m.frames[10][len(m.frames[10])-1]
+	n, bookkeeping, err := packetDecodeNeighbor(row, p.topology)
+	if err != nil || bookkeeping || n.index != 12 || n.mac != "" || n.address.String() != "2001:db8:2::90" || n.state != 64 || len(p.topology.noneLinks) != 1 {
+		t.Fatal("opaque foreign observation was omitted or became an identity")
+	}
+	assertFenceFailure(t, validateUnicastNeighbor(n), "kernel.bindings.neighbor.mac")
+	_, foreign, err := packetNeighborBoundary(ctx, p.topology, m.frames)
+	if err != nil || !slices.Contains(foreign, n) {
+		t.Fatal("opaque observation lost from foreign boundary")
+	}
+	facts := p.PacketFacts()
+	if !slices.Equal(facts.ExcludedMACs, []string{"02:00:00:00:00:40"}) || !slices.Equal(facts.Intent.ExcludedCIDRs, m.intent.ExcludedCIDRs) || slices.Contains(facts.OwnedMACs, "") {
+		t.Fatal("literal negatives changed or a MAC was invented")
+	}
+	b, err := p.ObserveMembership(ctx)
+	if err != nil {
+		t.Fatal(DiagnosticStages(err))
+	}
+	defer b.Close()
+	if len(b.Facts().Devices) != 3 || slices.ContainsFunc(b.Facts().Devices, func(d Device) bool { return d.IfIndex == 12 || d.MAC == "" }) {
+		t.Fatal("opaque observation became a selected client")
+	}
+	// An opaque global IPv6 observation still conflicts with a Home client's
+	// actual association; failure of this B does not discard structural A.
+	m.frames[10] = append(m.frames[10], neighborFrame(9, n.address.String(), projectionClientMAC, 2))
+	_, err = p.ObserveMembership(ctx)
+	assertFenceFailure(t, err, "packet.membership.address-conflict")
+	if err := p.Current(ctx); err != nil {
+		t.Fatal("opaque B conflict discarded A", DiagnosticStages(err))
+	}
+}
+
+func TestIPv4LANPacketScopeOpaqueForeignNOARPNarrowAndOwnedGuards(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	in.links = append(in.links, packetTestNoneLink())
+	topology, err := packetTopologyFromFacts(in, IPv4LANPacketIntent{SegmentIDs: []string{"Bridge0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []string{"missing-link", "ethernet", "other-type", "loopback", "home", "member", "parent", "known-parent", "master", "link-parent", "foreign-parent", "missing-lladdr", "zero-lladdr", "bad-lladdr", "ipv4", "state", "local-type", "flags", "router", "owned-home-address", "owned-same-address", "message-type"} {
+		t.Run(change, func(t *testing.T) {
+			top := clonePacketTopology(topology)
+			row := packetTestOpaqueNOARP("2001:db8:2::90")
+			switch change {
+			case "missing-link":
+				top.noneLinks = nil
+			case "ethernet":
+				top.noneLinks[0].LinkType = 1
+			case "other-type":
+				top.noneLinks[0].LinkType = 512
+			case "loopback":
+				top.noneLinks[0].LinkType = 772
+			case "home":
+				binary.NativeEndian.PutUint32(row.data[4:8], uint32(top.home.IfIndex))
+			case "member":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 12})
+			case "parent":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 13, ParentIfIndex: 12})
+			case "known-parent":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 13, Parent: ParentLink{Known: true, IfIndex: 12}})
+			case "master":
+				top.noneLinks[0].MasterIfIndex = top.home.IfIndex
+			case "link-parent":
+				top.noneLinks[0].ParentIfIndex = 13
+			case "foreign-parent":
+				top.noneLinks[0].ForeignParent = true
+			case "missing-lladdr":
+				row = neighborFrame(12, "2001:db8:2::90", "", 64)
+			case "zero-lladdr":
+				row = neighborFrame(12, "2001:db8:2::90", "00:00:00:00:00:00", 64)
+			case "bad-lladdr":
+				row = neighborFrame(12, "2001:db8:2::90", "", 64)
+				row.data = append(row.data, attr(2, []byte{1})...)
+			case "ipv4":
+				row = packetTestOpaqueNOARP("198.51.100.90")
+			case "state":
+				binary.NativeEndian.PutUint16(row.data[8:10], 4)
+			case "local-type":
+				row.data[11] = 2
+			case "flags":
+				row.data[10] = 2
+			case "router":
+				row.data[10] = 128
+			case "owned-home-address":
+				row = packetTestOpaqueNOARP("2001:db8::1")
+			case "owned-same-address":
+				top.addresses = append(top.addresses, packetOwnedAddress{12, "2001:db8:2::90/64"})
+			case "message-type":
+				row.kind = 30
+			}
+			if _, _, err := packetDecodeNeighbor(row, top); err == nil {
+				t.Fatal("narrow or owned guard accepted drift")
+			}
+		})
+	}
+	// Old ordinary unresolved/valid-MAC behavior is independent of this exception.
+	for _, row := range []message{neighborFrame(12, "2001:db8:2::90", "", 1), neighborFrame(12, "2001:db8:2::90", "", 32), neighborFrame(12, "2001:db8:2::90", projectionClientMAC, 64)} {
+		n, err := parseKernelNeighbor(row)
+		if err != nil || packetOpaqueForeignNOARP(row, n, topology) {
+			t.Fatal("ordinary row mistaken for the opaque exception")
+		}
+		if _, _, err := packetDecodeNeighbor(row, topology); err != nil {
+			t.Fatal("ordinary grammar changed")
+		}
+	}
+	row := packetTestOpaqueNOARP("2001:db8:2::90")
+	_, _, err = packetNeighborBoundary(context.Background(), topology, map[byte][]message{2: {}, 10: {row, row}})
+	assertFenceFailure(t, err, "kernel.bindings.neighbor.duplicate")
+	// 481's separate foreign loopback/RTN_LOCAL zero-LLADDR shape stays refused.
+	local := neighborFrame(1, "2001:db8:2::91", "00:00:00:00:00:00", 64)
+	local.data[11] = 2
+	_, _, err = packetDecodeNeighbor(local, topology)
+	assertFenceFailure(t, err, "kernel.bindings.neighbor.type")
+}
+
+func TestIPv4LANPacketScopeOpaqueForeignNOARPEpochAndStickyLink(t *testing.T) {
+	p, m, ctx := packetTestScope(t, packetTestWithOpaque)
+	b, err := p.ObserveMembership(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	m.transport.push(fenceTestDatagram{raw: frame(packetTestOpaqueNOARP("2001:db8:2::91"))})
+	waitFenceTestDrained(t, m.transport, 1)
+	if err := p.Current(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertFenceFailure(t, b.Current(ctx), "packet.membership.changed")
+	fresh, err := p.ObserveMembership(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	if fresh.Facts().Epoch != b.Facts().Epoch+1 || !reflect.DeepEqual(fresh.Facts().Devices, b.Facts().Devices) {
+		t.Fatal("opaque event did not revoke only old B")
+	}
+	// Original ifindex must remain protected even after a type change with no MAC.
+	event := packetTestNoneLink()
+	binary.NativeEndian.PutUint16(event.data[2:4], 772)
+	m.transport.push(fenceTestDatagram{raw: frame(event)})
+	waitFenceTest(t, m.reader.done)
+	assertFenceFailure(t, p.Current(ctx), "packet.notifications.owned-link")
+	if p.RetainedCurrent(ctx) == nil {
+		t.Fatal("original NONE link drift was accepted")
+	}
+}
+
+func TestIPv4LANPacketScopeOpaqueForeignNOARPCaptureDriftIsSticky(t *testing.T) {
+	p, m, ctx := packetTestScope(t, packetTestWithOpaque)
+	original := m.input.links[len(m.input.links)-1]
+	changed := packetTestNoneLink()
+	binary.NativeEndian.PutUint32(changed.data[8:12], 0)
+	m.input.links[len(m.input.links)-1] = changed
+	if p.Current(ctx) == nil {
+		t.Fatal("private NONE structural facts were not compared")
+	}
+	m.input.links[len(m.input.links)-1] = original
+	if p.Current(ctx) == nil || p.RetainedCurrent(ctx) == nil {
+		t.Fatal("restoring NONE link revived original A")
+	}
 }

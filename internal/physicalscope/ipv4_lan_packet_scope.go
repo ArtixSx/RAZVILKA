@@ -66,6 +66,7 @@ type ipv4LANPacketTopology struct {
 	home      Segment
 	native    []nativeSegment
 	links     []Link
+	noneLinks []Link // Private original ARPHRD_NONE facts, not positive L2 identities.
 	addresses []packetOwnedAddress
 }
 type ipv4LANPacketCapture struct {
@@ -232,6 +233,7 @@ func clonePacketSegments(s []Segment) []Segment { return cloneSnapshot(Snapshot{
 func clonePacketTopology(t ipv4LANPacketTopology) ipv4LANPacketTopology {
 	t.home = clonePacketSegments([]Segment{t.home})[0]
 	t.links = slices.Clone(t.links)
+	t.noneLinks = slices.Clone(t.noneLinks)
 	t.addresses = slices.Clone(t.addresses)
 	t.native = slices.Clone(t.native)
 	for i := range t.native {
@@ -590,8 +592,12 @@ func packetTopologyFromFacts(in scopeOptionsInput, intent IPv4LANPacketIntent) (
 		if validMAC(l.MAC) {
 			t.links = append(t.links, l.Link)
 		}
+		if l.LinkType == 65534 {
+			t.noneLinks = append(t.noneLinks, l.Link)
+		}
 	}
 	slices.SortFunc(t.links, func(a, b Link) int { return a.IfIndex - b.IfIndex })
+	slices.SortFunc(t.noneLinks, func(a, b Link) int { return a.IfIndex - b.IfIndex })
 	for _, m := range in.addresses {
 		a, e := packetDecodeOwnedAddress(m)
 		if e != nil || !indexes[a.index] {
@@ -704,6 +710,11 @@ func packetDecodeNeighbor(m message, t ipv4LANPacketTopology) (kernelNeighbor, b
 	if f, ok := err.(*failure); ok && f.stage == "kernel.bindings.neighbor.router-state" && n.kind == 1 && n.address.Is6() && !n.address.IsMulticast() && n.flags&128 != 0 && (n.state == 1 || n.state == 32) && (n.mac == "" || validMAC(n.mac)) {
 		err = nil
 	}
+	if f, ok := err.(*failure); ok && f.stage == "kernel.bindings.neighbor.mac" && packetOpaqueForeignNOARP(m, n, t) {
+		// Retain the actual foreign address/state below. It is neither
+		// bookkeeping nor a MAC association; all owned guards still apply.
+		err = nil
+	}
 	if err != nil || bookkeeping {
 		return n, bookkeeping, err
 	}
@@ -731,6 +742,32 @@ func packetDecodeNeighbor(m message, t ipv4LANPacketTopology) (kernelNeighbor, b
 		return n, false, at("packet.owned.neighbor.conflict", nil)
 	}
 	return n, ownedMAC || ownedAddress, nil // Proven own infrastructure is negative only.
+}
+
+// Purpose-specific observed AF10 NOARP shape. Unknown link/attachment facts
+// never prove foreign ingress. Shared full/finite neighbor grammar is unchanged.
+func packetOpaqueForeignNOARP(m message, n kernelNeighbor, t ipv4LANPacketTopology) bool {
+	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 10 || n.index <= 1 || n.kind != 1 || n.state != 64 || n.flags != 0 || n.mac != "" || !n.address.Is6() || n.address.IsMulticast() {
+		return false
+	}
+	a, err := attrs(m.data[12:])
+	ll, present := a[2]
+	if err != nil || !present || len(ll) != 0 || n.index == t.home.IfIndex {
+		return false
+	}
+	for _, member := range t.home.Members {
+		if n.index == member.IfIndex || n.index == member.ParentIfIndex || member.Parent.Known && n.index == member.Parent.IfIndex {
+			return false
+		}
+	}
+	for _, link := range t.noneLinks {
+		if link.IfIndex == n.index {
+			// Require a native namespace link with positively absent attachments;
+			// no indirect/foreign parent relationship is inferred from a name.
+			return link.LinkType == 65534 && !link.ForeignParent && link.MasterIfIndex == 0 && link.ParentIfIndex == 0
+		}
+	}
+	return false
 }
 func packetNeighborBoundary(ctx context.Context, t ipv4LANPacketTopology, frames map[byte][]message) ([]kernelNeighbor, []kernelNeighbor, error) {
 	var home, foreign []kernelNeighbor
@@ -856,7 +893,7 @@ func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error 
 			if err != nil {
 				return err
 			}
-			if validMAC(l.MAC) {
+			if validMAC(l.MAC) || l.LinkType == 65534 || slices.ContainsFunc(t.noneLinks, func(original Link) bool { return original.IfIndex == l.IfIndex }) {
 				return at("packet.notifications.owned-link", nil)
 			}
 		}
