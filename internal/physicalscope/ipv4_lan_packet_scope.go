@@ -63,11 +63,12 @@ type packetOwnedAddress struct {
 	prefix string
 }
 type ipv4LANPacketTopology struct {
-	home      Segment
-	native    []nativeSegment
-	links     []Link
-	noneLinks []Link // Private original ARPHRD_NONE facts, not positive L2 identities.
-	addresses []packetOwnedAddress
+	home          Segment
+	native        []nativeSegment
+	links         []Link
+	noneLinks     []Link // Private original ARPHRD_NONE facts, not positive L2 identities.
+	loopbackLinks []Link // Private original loopback facts for scoped opaque observations.
+	addresses     []packetOwnedAddress
 }
 type ipv4LANPacketCapture struct {
 	topology ipv4LANPacketTopology
@@ -234,6 +235,7 @@ func clonePacketTopology(t ipv4LANPacketTopology) ipv4LANPacketTopology {
 	t.home = clonePacketSegments([]Segment{t.home})[0]
 	t.links = slices.Clone(t.links)
 	t.noneLinks = slices.Clone(t.noneLinks)
+	t.loopbackLinks = slices.Clone(t.loopbackLinks)
 	t.addresses = slices.Clone(t.addresses)
 	t.native = slices.Clone(t.native)
 	for i := range t.native {
@@ -595,9 +597,13 @@ func packetTopologyFromFacts(in scopeOptionsInput, intent IPv4LANPacketIntent) (
 		if l.LinkType == 65534 {
 			t.noneLinks = append(t.noneLinks, l.Link)
 		}
+		if l.LinkType == 772 {
+			t.loopbackLinks = append(t.loopbackLinks, l.Link)
+		}
 	}
 	slices.SortFunc(t.links, func(a, b Link) int { return a.IfIndex - b.IfIndex })
 	slices.SortFunc(t.noneLinks, func(a, b Link) int { return a.IfIndex - b.IfIndex })
+	slices.SortFunc(t.loopbackLinks, func(a, b Link) int { return a.IfIndex - b.IfIndex })
 	for _, m := range in.addresses {
 		a, e := packetDecodeOwnedAddress(m)
 		if e != nil || !indexes[a.index] {
@@ -715,6 +721,11 @@ func packetDecodeNeighbor(m message, t ipv4LANPacketTopology) (kernelNeighbor, b
 		// bookkeeping nor a MAC association; all owned guards still apply.
 		err = nil
 	}
+	if f, ok := err.(*failure); ok && f.stage == "kernel.bindings.neighbor.type" && packetOpaqueForeignLoopback(m, n, t) {
+		// Exact zero LLADDR on proven loopback is unobservable L2, not a MAC.
+		// Preserve the original link-local address/index for all guards below.
+		n.mac, err = "", nil
+	}
 	if err != nil || bookkeeping {
 		return n, bookkeeping, err
 	}
@@ -765,6 +776,36 @@ func packetOpaqueForeignNOARP(m message, n kernelNeighbor, t ipv4LANPacketTopolo
 			// Require a native namespace link with positively absent attachments;
 			// no indirect/foreign parent relationship is inferred from a name.
 			return link.LinkType == 65534 && !link.ForeignParent && link.MasterIfIndex == 0 && link.ParentIfIndex == 0
+		}
+	}
+	return false
+}
+
+// Only this purpose retains the observed link-local RTN_LOCAL loopback tuple
+// as foreign and opaque. It never promotes an address to owned infrastructure.
+func packetOpaqueForeignLoopback(m message, n kernelNeighbor, t ipv4LANPacketTopology) bool {
+	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 10 || n.index <= 0 || n.kind != 2 || n.state != 64 || n.flags != 0 || !n.address.Is6() || !n.address.IsLinkLocalUnicast() || n.index == t.home.IfIndex {
+		return false
+	}
+	a, err := attrs(m.data[12:])
+	if err != nil || len(a) != 4 || len(a[1]) != 16 || !bytes.Equal(a[2], []byte{0, 0, 0, 0, 0, 0}) || len(a[3]) != 16 || len(a[4]) != 4 {
+		return false
+	}
+	for raw := m.data[12:]; len(raw) != 0; {
+		if binary.NativeEndian.Uint16(raw[2:4])&0xc000 != 0 {
+			return false
+		}
+		size := int(binary.NativeEndian.Uint16(raw[:2]))
+		raw = raw[(size+3)&^3:]
+	}
+	for _, member := range t.home.Members {
+		if n.index == member.IfIndex || n.index == member.ParentIfIndex || member.Parent.Known && n.index == member.Parent.IfIndex {
+			return false
+		}
+	}
+	for _, link := range t.loopbackLinks {
+		if link.IfIndex == n.index {
+			return link.LinkType == 772 && link.Flags&8 != 0 && !link.ForeignParent && link.MasterIfIndex == 0 && link.ParentIfIndex == 0
 		}
 	}
 	return false
@@ -893,7 +934,7 @@ func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error 
 			if err != nil {
 				return err
 			}
-			if validMAC(l.MAC) || l.LinkType == 65534 || slices.ContainsFunc(t.noneLinks, func(original Link) bool { return original.IfIndex == l.IfIndex }) {
+			if validMAC(l.MAC) || l.LinkType == 65534 || l.LinkType == 772 || slices.ContainsFunc(t.noneLinks, func(original Link) bool { return original.IfIndex == l.IfIndex }) || slices.ContainsFunc(t.loopbackLinks, func(original Link) bool { return original.IfIndex == l.IfIndex }) {
 				return at("packet.notifications.owned-link", nil)
 			}
 		}

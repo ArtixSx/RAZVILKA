@@ -589,7 +589,7 @@ func TestIPv4LANPacketScopeOpaqueForeignNOARPNarrowAndOwnedGuards(t *testing.T) 
 	row := packetTestOpaqueNOARP("2001:db8:2::90")
 	_, _, err = packetNeighborBoundary(context.Background(), topology, map[byte][]message{2: {}, 10: {row, row}})
 	assertFenceFailure(t, err, "kernel.bindings.neighbor.duplicate")
-	// 481's separate foreign loopback/RTN_LOCAL zero-LLADDR shape stays refused.
+	// A global RTN_LOCAL near miss remains outside the link-local exception.
 	local := neighborFrame(1, "2001:db8:2::91", "00:00:00:00:00:00", 64)
 	local.data[11] = 2
 	_, _, err = packetDecodeNeighbor(local, topology)
@@ -640,5 +640,192 @@ func TestIPv4LANPacketScopeOpaqueForeignNOARPCaptureDriftIsSticky(t *testing.T) 
 	m.input.links[len(m.input.links)-1] = original
 	if p.Current(ctx) == nil || p.RetainedCurrent(ctx) == nil {
 		t.Fatal("restoring NONE link revived original A")
+	}
+}
+
+func packetTestLoopbackLink() message {
+	m := linkFrame(1, "lo", "", "00:00:00:00:00:00", 0)
+	binary.NativeEndian.PutUint16(m.data[2:4], 772)
+	binary.NativeEndian.PutUint32(m.data[8:12], 65609)
+	return m
+}
+func packetTestOpaqueLoopback(address string) message {
+	m := neighborFrame(1, address, "00:00:00:00:00:00", 64)
+	m.data[11] = 2
+	m.data = append(m.data, attr(3, make([]byte, 16))...)
+	m.data = append(m.data, attr(4, integer(0))...)
+	return m
+}
+func packetTestWithLoopback(m *packetTestModel) {
+	m.input.links = append(m.input.links, packetTestLoopbackLink())
+	m.frames[10] = append(m.frames[10], packetTestOpaqueLoopback("fe80::90"))
+}
+
+func TestIPv4LANPacketScopeOpaqueLoopbackRetainsScopedAddressAndConflicts(t *testing.T) {
+	p, m, ctx := packetTestScope(t, packetTestWithLoopback)
+	row := m.frames[10][len(m.frames[10])-1]
+	n, bookkeeping, err := packetDecodeNeighbor(row, p.topology)
+	if err != nil || bookkeeping || n.mac != "" || n.index != 1 || n.address.String() != "fe80::90" || len(p.topology.loopbackLinks) != 1 {
+		t.Fatal("loopback observation became bookkeeping/identity or lost its address/index")
+	}
+	if _, legacy, err := decodeForeignKernelNeighbor(row, p.topology.boundarySegments()); err != nil || legacy {
+		t.Fatal("shared loopback alias grammar changed")
+	}
+	raw, err := parseKernelNeighbor(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFenceFailure(t, validateUnicastNeighbor(raw), "kernel.bindings.neighbor.type")
+	_, foreign, err := packetNeighborBoundary(ctx, p.topology, m.frames)
+	if err != nil || !slices.Contains(foreign, n) {
+		t.Fatal("opaque loopback address omitted")
+	}
+	b, err := p.ObserveMembership(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if len(b.Facts().Devices) != 3 || slices.ContainsFunc(b.Facts().Devices, func(d Device) bool { return d.IfIndex == 1 || d.MAC == "" }) {
+		t.Fatal("loopback became a selected client")
+	}
+	// Link-local equality on another interface is a different scoped address.
+	m.frames[10] = append(m.frames[10], neighborFrame(9, "fe80::90", projectionClientMAC, 2))
+	if _, err := packetBindMembership(ctx, p.topology, m.frames); err != nil {
+		t.Fatal("link-local ifindex was discarded")
+	}
+	// Same original ifindex/address now collides with actual owned address facts.
+	top := clonePacketTopology(p.topology)
+	top.addresses = append(top.addresses, packetOwnedAddress{1, "fe80::90/64"})
+	_, _, err = packetDecodeNeighbor(row, top)
+	assertFenceFailure(t, err, "packet.owned.neighbor.conflict")
+	_, err = packetBindMembership(ctx, top, m.frames)
+	assertFenceFailure(t, err, "packet.owned.neighbor.conflict")
+	m.frames[2] = append(m.frames[2], neighborFrame(5, "198.51.100.20", projectionClientMAC, 2))
+	_, err = packetBindMembership(ctx, p.topology, m.frames)
+	assertFenceFailure(t, err, "packet.membership.foreign")
+	facts := p.PacketFacts()
+	if slices.Contains(facts.OwnedAddresses, "fe80::90") || !slices.Equal(facts.ExcludedMACs, []string{"02:00:00:00:00:40"}) || !slices.Equal(facts.Intent.ExcludedCIDRs, m.intent.ExcludedCIDRs) {
+		t.Fatal("opaque address promoted or literal negatives changed")
+	}
+}
+
+func TestIPv4LANPacketScopeOpaqueLoopbackRejectsSpoofAndNearMiss(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	in.links = append(in.links, packetTestLoopbackLink())
+	topology, err := packetTopologyFromFacts(in, IPv4LANPacketIntent{SegmentIDs: []string{"Bridge0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []string{"missing-link", "ethernet", "no-loopback-flag", "master", "parent", "foreign-parent", "index", "home", "member", "member-parent", "known-parent", "global", "multicast", "loopback-address", "ipv4", "state", "kind", "flags", "router", "nonzero-lladdr", "empty-lladdr", "extra-attr", "missing-probes", "attr-flags", "message-kind"} {
+		t.Run(change, func(t *testing.T) {
+			top := clonePacketTopology(topology)
+			row := packetTestOpaqueLoopback("fe80::90")
+			switch change {
+			case "missing-link":
+				top.loopbackLinks = nil
+			case "ethernet":
+				top.loopbackLinks[0].LinkType = 1
+			case "no-loopback-flag":
+				top.loopbackLinks[0].Flags &^= 8
+			case "master":
+				top.loopbackLinks[0].MasterIfIndex = 9
+			case "parent":
+				top.loopbackLinks[0].ParentIfIndex = 5
+			case "foreign-parent":
+				top.loopbackLinks[0].ForeignParent = true
+			case "index":
+				binary.NativeEndian.PutUint32(row.data[4:8], 5)
+			case "home":
+				binary.NativeEndian.PutUint32(row.data[4:8], 9)
+			case "member":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 1})
+			case "member-parent":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 13, ParentIfIndex: 1})
+			case "known-parent":
+				top.home.Members = append(top.home.Members, Link{IfIndex: 13, Parent: ParentLink{Known: true, IfIndex: 1}})
+			case "global":
+				row = packetTestOpaqueLoopback("2001:db8:2::90")
+			case "multicast":
+				row = packetTestOpaqueLoopback("ff02::90")
+			case "loopback-address":
+				row = packetTestOpaqueLoopback("::1")
+			case "ipv4":
+				row = packetTestOpaqueLoopback("198.51.100.90")
+			case "state":
+				binary.NativeEndian.PutUint16(row.data[8:10], 4)
+			case "kind":
+				row.data[11] = 1
+			case "flags":
+				row.data[10] = 2
+			case "router":
+				row.data[10] = 128
+			case "nonzero-lladdr":
+				row = neighborFrame(1, "fe80::90", projectionClientMAC, 64)
+				row.data[11] = 2
+				row.data = append(row.data, attr(3, make([]byte, 16))...)
+				row.data = append(row.data, attr(4, integer(0))...)
+			case "empty-lladdr":
+				row = neighborFrame(1, "fe80::90", "", 64)
+				row.data[11] = 2
+				row.data = append(row.data, attr(2, nil)...)
+				row.data = append(row.data, attr(3, make([]byte, 16))...)
+				row.data = append(row.data, attr(4, integer(0))...)
+			case "extra-attr":
+				row.data = append(row.data, attr(5, integer(0))...)
+			case "missing-probes":
+				row.data = row.data[:len(row.data)-8]
+			case "attr-flags":
+				binary.NativeEndian.PutUint16(row.data[14:16], 0x8001)
+			case "message-kind":
+				row.kind = 30
+			}
+			if _, _, err := packetDecodeNeighbor(row, top); err == nil {
+				t.Fatal("spoof/near miss accepted")
+			}
+		})
+	}
+	row := packetTestOpaqueLoopback("fe80::90")
+	_, _, err = packetNeighborBoundary(context.Background(), topology, map[byte][]message{2: {}, 10: {row, row}})
+	assertFenceFailure(t, err, "kernel.bindings.neighbor.duplicate")
+}
+
+func TestIPv4LANPacketScopeOpaqueLoopbackEpochAndStickyDrift(t *testing.T) {
+	for _, change := range []string{"capture", "link-event", "shape-event"} {
+		t.Run(change, func(t *testing.T) {
+			p, m, ctx := packetTestScope(t, packetTestWithLoopback)
+			b, err := p.ObserveMembership(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer b.Close()
+			m.transport.push(fenceTestDatagram{raw: frame(packetTestOpaqueLoopback("fe80::91"))})
+			waitFenceTestDrained(t, m.transport, 1)
+			if err := p.Current(ctx); err != nil {
+				t.Fatal(err)
+			}
+			assertFenceFailure(t, b.Current(ctx), "packet.membership.changed")
+			original := m.input.links[len(m.input.links)-1]
+			if change == "capture" {
+				changed := packetTestLoopbackLink()
+				binary.NativeEndian.PutUint32(changed.data[8:12], 9)
+				m.input.links[len(m.input.links)-1] = changed
+			} else {
+				event := packetTestLoopbackLink()
+				if change == "link-event" {
+					binary.NativeEndian.PutUint16(event.data[2:4], 512)
+				} else {
+					event = packetTestOpaqueLoopback("2001:db8:2::90")
+				}
+				m.transport.push(fenceTestDatagram{raw: frame(event)})
+				waitFenceTest(t, m.reader.done)
+			}
+			if p.Current(ctx) == nil {
+				t.Fatal("loopback drift accepted")
+			}
+			m.input.links[len(m.input.links)-1] = original
+			if p.Current(ctx) == nil || p.RetainedCurrent(ctx) == nil {
+				t.Fatal("original A revived after loopback drift")
+			}
+		})
 	}
 }
