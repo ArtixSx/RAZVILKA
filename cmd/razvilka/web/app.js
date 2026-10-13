@@ -1034,7 +1034,8 @@ function renderPanelSection(key) {
     nodeFeeds: renderNodes, nodeAutofallback: renderNodes,
     routeOptions: () => { renderServices(); if (state.currentView === 'testlab' && state.dataLoad.testlab?.loaded) renderTestLab(); },
     connections: renderConnections, devices: renderDevices, testlab: renderTestLab,
-    resourceExclusions: () => { if (typeof renderResourceExclusions === 'function') renderResourceExclusions(); },
+    resourceExclusions: () => { if (typeof renderResourceExclusions === 'function') renderResourceExclusions(); if (typeof renderListScope === 'function') renderListScope(); },
+    networkPolicyReview: () => { if (typeof renderListScope === 'function') renderListScope(); },
     engineLab: renderEngineLab, audit: renderAudit, strategyLab: renderStrategyLab,
     z2kPreview: renderStrategyLab, smartRoute: renderStrategyLab,
     serviceControl: () => { if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls(); },
@@ -1049,6 +1050,7 @@ function acceptPanelSection(key, value, requestStartedAt) {
   if (key === 'sourceOffline') { acceptSourceOfflineCatalog(value); panelSectionState(key, 'ready'); return; }
   if (key === 'inventory') { acceptPanelInventory(value, requestStartedAt); return; }
   if (key === 'resourceExclusions') { acceptResourceExclusions(value); panelSectionState(key, 'ready'); return; }
+  if (key === 'networkPolicyReview') { acceptListScopeReview(value); panelSectionState(key, 'ready'); return; }
   const arrays = ['services', 'engines', 'engineConfigs', 'components', 'sources', 'routeOptions'];
   if (arrays.includes(key) && !Array.isArray(value)) throw new Error('Получен неполный список. Последние данные сохранены.');
   if (value === null || typeof value !== 'object') throw new Error('Получен неполный ответ. Последние данные сохранены.');
@@ -1144,13 +1146,13 @@ function panelViewKeys(view = state.currentView || 'overview') {
     'subscription-settings': ['status','nodeFeeds'],
     engines: ['status','inventory','services','engineConfigs'],
     engineconfig: ['status','inventory','services','engineConfigs','routeOptions','nodes','warp'],
-    devices: ['status','devices','services'], exclusions: ['status','devices','services','resourceExclusions'],
+    devices: ['status','devices','services','networkPolicyReview','resourceExclusions'], exclusions: ['status','devices','services','resourceExclusions','networkPolicyReview'],
     activity: ['status','audit'], settings: ['status','sessions'],
     dns: ['status','services','dns','dnsPlan'],
     strategylab: ['status','inventory','services','strategyLab','z2kPreview','smartRoute'],
     testlab: ['status','inventory','services','testlab','routeOptions'],
     diagnostics: ['status','inventory','services','metrics','engineLab','testlab','audit'],
-    onboard: ['status','inventory','services','nodeFeeds','devices','engineConfigs'],
+    onboard: ['status','inventory','services','nodeFeeds','devices','engineConfigs','networkPolicyReview'],
     managed: ['status','services','nodes','routeOptions'],
     updates: ['status','inventory','serviceControl'],
     connections: ['status','connections','devices'], sources: ['status',state.sourceView === 'offline' ? 'sourceOffline' : 'sources','services']
@@ -1167,7 +1169,7 @@ function panelViewRequests(view = state.currentView || 'overview') {
     connections:'/api/v1/connections?include_closed=true', devices:'/api/v1/devices?view=status',
     testlab:'/api/v1/testlab', engineLab:'/api/v1/engine-lab', audit:'/api/v1/audit/current?limit=40',
     strategyLab:'/api/v1/strategy-lab', z2kPreview:'/api/v1/migrations/z2k/preview', smartRoute:'/api/v1/smart-route',
-    serviceControl:'/api/v1/service-control', resourceExclusions:'/api/v1/networkpolicy/exclusions', dns:'/api/v1/dns', dnsPlan:'/api/v1/dns/plan', sessions:'/api/v1/auth/sessions'
+    serviceControl:'/api/v1/service-control', resourceExclusions:'/api/v1/networkpolicy/exclusions', networkPolicyReview:'/api/v1/networkpolicy/review', dns:'/api/v1/dns', dnsPlan:'/api/v1/dns/plan', sessions:'/api/v1/auth/sessions'
   };
   return panelViewKeys(view).map(key => [key, paths[key]]);
 }

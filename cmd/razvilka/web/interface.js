@@ -403,6 +403,7 @@ function renderInterface(){
  if(view==='overview')calls.push(['home',()=>renderInterfaceHome(interfaceSummaries())]);
  if(view==='services')calls.push(['services',()=>renderInterfaceServices(interfaceSummaries())]);
  if(view==='exclusions'&&typeof renderResourceExclusions==='function')calls.push(['resource-exclusions',()=>renderResourceExclusions()]);
+  if(view==='devices'&&typeof renderListScope==='function')calls.push(['list-scope',()=>renderListScope()]);
  if(view==='engines'||view==='engineconfig')calls.push(['engines',()=>renderInterfaceEngines()]);
  if(view==='settings')calls.push(['settings',()=>renderInterfaceSettings()]);
  if(interfaceState.inspector)calls.push(['inspector',()=>interfaceUpdateInspector()]);
