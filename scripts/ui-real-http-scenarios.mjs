@@ -17,10 +17,40 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND',
   'UI_ENGINE_CARD_INITIAL_REFRESH','UI_ENGINE_CARD_FOCUSED_REFRESH','UI_ENGINE_CARD_PROFILE_OPEN','UI_ENGINE_CARD_WORKFLOW_PROGRESS',
   'UI_ENGINE_CARD_EXPERT_DRAFT','UI_ENGINE_CARD_OTHER_CANCEL','UI_ENGINE_CARD_CHECK_RETURN','UI_ENGINE_CARD_DISCARD_DRAFT',
-  'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW'
+  'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW',
+  'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
+  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
+
+export async function realHTTPAIGroupFacts(page) {
+  return await page.evaluate(()=>{
+    const groups=[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')]
+      .filter(element=>element.querySelector('summary strong')?.textContent?.includes('ИИ-сервисы'));
+    const target=groups.length===1?groups[0]:null,rect=target?.getBoundingClientRect();
+    return {current_services:state.currentView==='services',panel_pending:!!panelLoad.request,
+      services_ready:state.dataLoad.services?.phase==='ready',catalog_mode:interfaceState.filter==='all',
+      query_empty:interfaceState.query==='',category_empty:interfaceState.category==='',
+      group_count:groups.length===0?'0':groups.length===1?'1':'many',
+      target_visible:!!target&&rect.width>0&&rect.height>0&&getComputedStyle(target).visibility!=='hidden',
+      target_open:!!target&&target.open===true};
+  });
+}
+
+export async function realHTTPAIGroupDiagnosis(page,id,diagnose,action) {
+  return await diagnose(id,async()=>{
+    const observe=async moment=>{
+      let facts;
+      try{facts={observation_available:true,...await realHTTPAIGroupFacts(page)};}
+      catch(_){facts={observation_available:false};}
+      console.log('AI_GROUP_DIAGNOSTIC '+JSON.stringify({checkpoint:id,moment,...facts}));
+    };
+    await observe('before');
+    try{return await action();}
+    catch(error){await observe('failed');throw error;}
+  });
+}
 
 export async function realHTTPEnginePanelRead(page,{afterGeneration=null,explicit=false}={}) {
   if(afterGeneration!==null)await page.waitForFunction(generation=>state.currentView==='engines'&&panelLoad.view==='engines'&&panelLoad.generation>generation,afterGeneration);
@@ -323,18 +353,34 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
       });
     });
     await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{
-      const start=requests.length;await nav('services');await page.waitForFunction(()=>!panelLoad.request);
-      await page.locator('[data-r5-catalog]').click();
+      const start=requests.length;
+      const aiDiagnosis=(id,action)=>realHTTPAIGroupDiagnosis(page,id,diagnose,action);
+      await aiDiagnosis('UI_AI_GROUP_NAVIGATION',async()=>{
+        await nav('services');await page.waitForFunction(()=>!panelLoad.request);
+      });
+      await aiDiagnosis('UI_AI_GROUP_CATALOG',async()=>{
+        await page.locator('[data-r5-catalog]').click();
+      });
       const group=page.locator('#ui3ServiceCatalog [data-rz-group]').filter({has:page.locator('summary strong', {hasText:'ИИ-сервисы'})});
-      await group.locator('summary').click();await page.waitForFunction(()=>[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')].some(el=>el.open));
-      assert(await group.locator('[data-rz-card]').count()>1);assert.equal(await group.locator('.ui3-status.good').count(),0,'empty fixture AI group claimed working service');
-      await group.locator('summary').focus();await page.evaluate(()=>refreshAll());await page.waitForFunction(()=>!panelLoad.request);
-      assert.equal(await group.evaluate(el=>el.open),true);assert.equal(await page.evaluate(()=>document.activeElement?.tagName),'SUMMARY');
-      await page.locator('#ui3ServiceSearch').fill('ChatGPT');assert.equal(await group.locator('[data-rz-card]').count(),1);
-      await page.locator('#ui3ServiceSearch').fill('');assert(await group.locator('[data-rz-card]').count()>1);
-      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
-      await group.locator('summary').click();assert.equal(await group.evaluate(el=>el.open),false);
-      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+      await aiDiagnosis('UI_AI_GROUP_OPEN',async()=>{
+        await group.locator('summary').click();await page.waitForFunction(()=>[...document.querySelectorAll('#ui3ServiceCatalog [data-rz-group]')].some(el=>el.open));
+        assert(await group.locator('[data-rz-card]').count()>1);assert.equal(await group.locator('.ui3-status.good').count(),0,'empty fixture AI group claimed working service');
+      });
+      await aiDiagnosis('UI_AI_GROUP_READBACK',async()=>{
+        await group.locator('summary').focus();await page.evaluate(()=>refreshAll());await page.waitForFunction(()=>!panelLoad.request);
+        assert.equal(await group.evaluate(el=>el.open),true);assert.equal(await page.evaluate(()=>document.activeElement?.tagName),'SUMMARY');
+      });
+      await aiDiagnosis('UI_AI_GROUP_SEARCH',async()=>{
+        await page.locator('#ui3ServiceSearch').fill('ChatGPT');assert.equal(await group.locator('[data-rz-card]').count(),1);
+        await page.locator('#ui3ServiceSearch').fill('');assert(await group.locator('[data-rz-card]').count()>1);
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+      });
+      await aiDiagnosis('UI_AI_GROUP_CLOSE',async()=>{
+        await group.locator('summary').click();assert.equal(await group.evaluate(el=>el.open),false);
+      });
+      await aiDiagnosis('UI_AI_GROUP_BOOKEND',async()=>{
+        await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+      });
     });
     await test('mobile drawer fits, closes with focus and retains bottom navigation', 'real HTTP and browser layout 390 × 844', async()=>{
     await nav('nodes');await page.waitForFunction(()=>!panelLoad.request);

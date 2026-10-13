@@ -1,7 +1,7 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {realHTTPEnginePanelRead} from './ui-real-http-scenarios.mjs';
+import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis} from './ui-real-http-scenarios.mjs';
 import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
@@ -80,7 +80,9 @@ assert.equal(await realHTTPDiagnosis('UI_NODE_IMPORT',()=>7),7);checks++;
 for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND','UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND',
   'UI_ENGINE_CARD_INITIAL_REFRESH','UI_ENGINE_CARD_FOCUSED_REFRESH','UI_ENGINE_CARD_PROFILE_OPEN','UI_ENGINE_CARD_WORKFLOW_PROGRESS',
   'UI_ENGINE_CARD_EXPERT_DRAFT','UI_ENGINE_CARD_OTHER_CANCEL','UI_ENGINE_CARD_CHECK_RETURN','UI_ENGINE_CARD_DISCARD_DRAFT',
-  'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW']){
+  'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW',
+  'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
+  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND']){
   try{
     await realHTTPDiagnosis(id,()=>assert.equal('private catalog id','private candidate material'));
     assert.fail('expected private assertion failure');
@@ -161,6 +163,67 @@ for(const state of ['empty','expired','unknown']){
   let elapsed=0;
   try{await realHTTPAwaitIdentity(instance,async()=>{elapsed=9000;return idle;},{now:()=>elapsed,pause:async()=>{assert.fail('overdue read must stop');}});assert.fail('expected overdue rejection');}
   catch(error){assert.equal(realHTTPFailure(error,'known-scenario').code,'QA_IDENTITY_WAIT_TIMEOUT');checks++;}
+}
+{
+  const fixture=({catalog=false,open=false,count=1,visible=true}={})=>{
+    const state={currentView:'services',dataLoad:{services:{phase:'ready'}}},panelLoad={request:null};
+    const interfaceState={filter:catalog?'all':'selected',query:'',category:''};
+    const target={open,visibility:visible?'visible':'hidden',private_id:'private service ID',
+      querySelector:()=>({textContent:'ИИ-сервисы private catalog title'}),getBoundingClientRect:()=>({width:100,height:40})};
+    const context={state,panelLoad,interfaceState,document:{querySelectorAll:()=>Array.from({length:count},()=>target)},getComputedStyle:element=>({visibility:element.visibility})};
+    vm.createContext(context);let observations=0;
+    const page={evaluate:fn=>{observations++;return vm.runInContext('('+fn.toString()+')',context)();}};
+    return {state,panelLoad,interfaceState,target,page,observations:()=>observations};
+  };
+  const capture=async action=>{
+    const rows=[],log=console.log;
+    console.log=value=>{assert.equal(typeof value,'string');assert(value.startsWith('AI_GROUP_DIAGNOSTIC '));rows.push(JSON.parse(value.slice('AI_GROUP_DIAGNOSTIC '.length)));};
+    try{await action(rows);}
+    finally{console.log=log;}
+  };
+  for(const catalog of [false,true])for(const open of [false,true]){
+    const f=fixture({catalog,open});
+    const facts=await realHTTPAIGroupFacts(f.page);
+    assert.deepEqual(JSON.parse(JSON.stringify(facts)),{current_services:true,panel_pending:false,services_ready:true,catalog_mode:catalog,
+      query_empty:true,category_empty:true,group_count:'1',target_visible:true,target_open:open});
+    assert.equal(f.interfaceState.filter,catalog?'all':'selected');assert.equal(f.target.open,open);assert.equal(f.observations(),1);checks++;
+    await capture(async rows=>{
+      const error=Object.assign(new Error('private response body and credentials'),{name:'TimeoutError',actual:'private profile URI'});let calls=0;
+      await assert.rejects(realHTTPAIGroupDiagnosis(f.page,'UI_AI_GROUP_OPEN',realHTTPDiagnosis,()=>{
+        calls++;f.target.open=!f.target.open;throw error;
+      }),caught=>caught===error);
+      assert.equal(calls,1);assert.equal(f.target.open,!open);assert.equal(f.interfaceState.filter,catalog?'all':'selected');
+      assert.equal(rows.length,2);assert.deepEqual(rows.map(row=>[row.checkpoint,row.moment,row.target_open]),
+        [['UI_AI_GROUP_OPEN','before',open],['UI_AI_GROUP_OPEN','failed',!open]]);
+      assert(rows.every(row=>row.observation_available===true));assert(!JSON.stringify(rows).includes('private'));
+      assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'UI_AI_GROUP_OPEN',status:'failed',code:'TIMEOUT'});checks++;
+    });
+  }
+  for(const count of [0,2,1000]){
+    const f=fixture({count,open:true}),facts=await realHTTPAIGroupFacts(f.page);
+    assert.equal(facts.group_count,count===0?'0':'many');assert.equal(facts.target_open,false);assert.equal(facts.target_visible,false);
+    assert(!JSON.stringify(facts).includes('private'));checks++;
+  }
+  {
+    const f=fixture({visible:false,open:true});f.state.currentView='private view';f.state.dataLoad.services.phase='private error';f.panelLoad.request=Promise.resolve();
+    f.interfaceState.query='private search URI';f.interfaceState.category='private category ID';
+    assert.deepEqual(JSON.parse(JSON.stringify(await realHTTPAIGroupFacts(f.page))),{current_services:false,panel_pending:true,services_ready:false,catalog_mode:false,
+      query_empty:false,category_empty:false,group_count:'1',target_visible:false,target_open:true});checks++;
+  }
+  await capture(async rows=>{
+    const page={evaluate:()=>{throw new Error('private page error');}},error=Object.assign(new Error('private action error'),{name:'TimeoutError'});let calls=0;
+    await assert.rejects(realHTTPAIGroupDiagnosis(page,'UI_AI_GROUP_READBACK',realHTTPDiagnosis,()=>{calls++;throw error;}),caught=>caught===error);
+    assert.equal(calls,1);assert.deepEqual(rows,[{checkpoint:'UI_AI_GROUP_READBACK',moment:'before',observation_available:false},
+      {checkpoint:'UI_AI_GROUP_READBACK',moment:'failed',observation_available:false}]);
+    assert.deepEqual(realHTTPFailure(error,'known-scenario'),{stage:'UI_AI_GROUP_READBACK',status:'failed',code:'TIMEOUT'});checks++;
+    assert.equal(await realHTTPAIGroupDiagnosis(page,'UI_AI_GROUP_BOOKEND',realHTTPDiagnosis,()=>{calls++;return 7;}),7);
+    assert.equal(calls,2);assert.deepEqual(rows[2],{checkpoint:'UI_AI_GROUP_BOOKEND',moment:'before',observation_available:false});checks++;
+  });
+  await capture(async rows=>{
+    const f=fixture();let calls=0;
+    await assert.rejects(realHTTPAIGroupDiagnosis(f.page,'private dynamic ID',realHTTPDiagnosis,()=>calls++),error=>realHTTPFailure(error,'known-scenario').code==='INVALID_DIAGNOSTIC_ID');
+    assert.equal(calls,0);assert.equal(f.observations(),0);assert.deepEqual(rows,[]);checks++;
+  });
 }
 {
   const held=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
