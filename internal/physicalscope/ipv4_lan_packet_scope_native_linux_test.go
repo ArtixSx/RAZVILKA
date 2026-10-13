@@ -5,9 +5,12 @@ package physicalscope
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -527,4 +530,425 @@ func TestIPv4LANPacketNativeHarnessClosedMetricsAndJoin(t *testing.T) {
 	<-called
 	close(release)
 	<-finished
+}
+
+// Separate ROOT-only fresh diagnostic read, never a constructor retry or a
+// successful A/B Review. The unchanged production decoder still refuses rows.
+// RAZVILKA_PHYSICAL_SCOPE_IPV4_LAN_PACKET_NEIGHBOR_NATIVE=1
+// plus the same stock-nc1812 marker and private explicit intent file as above.
+// Its classes describe THIS observation, not a reconstruction of native 473.
+func TestPhysicalScopeNativeIPv4LANPacketNeighborClass(t *testing.T) {
+	if os.Getenv("RAZVILKA_PHYSICAL_SCOPE_IPV4_LAN_PACKET_NEIGHBOR_NATIVE") != "1" {
+		t.Skip("ROOT-only IPv4 LAN packet neighbor-class opt-in")
+	}
+	if os.Getenv("RAZVILKA_PHYSICAL_SCOPE_NATIVE") != "stock-nc1812" || os.Geteuid() != 0 {
+		t.Fatal("neighbor-class read requires actual stock NC1812 Linux ARM64/root")
+	}
+	base, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if deadline, ok := t.Deadline(); ok {
+		limited, finish := context.WithDeadline(base, deadline)
+		defer finish()
+		base = limited
+	}
+	path := os.Getenv("RAZVILKA_PHYSICAL_SCOPE_IPV4_LAN_PACKET_INTENT_FILE")
+	var intent IPv4LANPacketIntent
+	if _, err := packetNativePhase(t, base, "neighbor_intent", func(ctx context.Context) error {
+		var err error
+		intent, err = packetNativeReadIntent(ctx, path)
+		return err
+	}); err != nil {
+		t.Fatal("neighbor-class private intent refused")
+	}
+	var provider *netidentity.Provider
+	if _, err := packetNativePhase(t, base, "neighbor_provider", func(ctx context.Context) error {
+		var err error
+		provider, err = netidentity.NewReviewedStockNC1812Provider(ctx)
+		return err
+	}); err != nil {
+		t.Fatal("neighbor-class actual provider refused")
+	}
+	var report packetNativeNeighborReport
+	var decodeRefusal error
+	if _, err := packetNativePhase(t, base, "neighbor_observation", func(ctx context.Context) error {
+		return provider.WithCurrent(ctx, func(c context.Context, id netidentity.Identity) error {
+			if id.Validate() != nil || id.Kind != netidentity.ReviewedSingleInitNet {
+				return at("packet.identity.kind", nil)
+			}
+			fresh, err := packetNativeReadIntent(c, path)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(intent, fresh) {
+				return at("packet.intent.changed", nil)
+			}
+			var in scopeOptionsInput
+			in.native, err = provider.ReadReviewedStockInterfaces(c)
+			if err != nil {
+				return err
+			}
+			in.links, err = dump(c, 18, 0)
+			if err != nil {
+				return err
+			}
+			in.addresses, err = dump(c, 22, 0)
+			if err != nil {
+				return err
+			}
+			for _, family := range []byte{2, 10} {
+				rows, err := dump(c, 26, family)
+				if err != nil {
+					return err
+				}
+				in.routes = append(in.routes, rows...)
+			}
+			topology, err := packetTopologyFromFacts(in, intent)
+			if err != nil {
+				return err
+			}
+			links := map[int]Link{}
+			for _, m := range in.links {
+				link, err := decodeLink(m)
+				if err != nil {
+					return err
+				}
+				links[link.IfIndex] = link.Link
+			}
+			frames := map[byte][]message{}
+			for _, family := range []byte{2, 10} {
+				frames[family], err = dump(c, 30, family)
+				if err != nil {
+					return err
+				}
+			}
+			report, decodeRefusal, err = packetNativeNeighborClasses(c, topology, links, intent, frames)
+			if err != nil {
+				return err
+			}
+			closing, err := packetNativeReadIntent(c, path)
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(intent, closing) {
+				return at("packet.intent.changed", nil)
+			}
+			// A decoder refusal is the diagnostic result, not permission. Return
+			// nil only for completed reads so the provider closes its actual NI
+			// bookend before any shape is logged. No scope/identity is issued.
+			return nil
+		})
+	}); err != nil {
+		t.Fatal("neighbor-class original read did not close")
+	}
+	packetNativeLog(t, packetNativeMetricFor("neighbor_decoder", 0, decodeRefusal))
+	for _, group := range report.Groups {
+		raw, err := json.Marshal(struct {
+			Phase string                    `json:"phase"`
+			Group packetNativeNeighborGroup `json:"group"`
+		}{"neighbor_class", group})
+		if err != nil {
+			t.Fatal("neighbor-class closed group encoding refused")
+		}
+		t.Log(string(raw))
+	}
+	report.Groups = nil
+	raw, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal("neighbor-class closed summary encoding refused")
+	}
+	t.Log(string(raw))
+	// PASS means a bounded diagnostic GET closed, even if every row refused.
+	// It does not assert a working lifecycle, MAC matcher, or LIST admission.
+}
+
+// Comparable grouping key: enums, lengths and relations only. Values used to
+// compare ownership/intent remain private; even opaque hashes are forbidden.
+type packetNativeNeighborShape struct {
+	DumpFamily           byte   `json:"dump_family"`
+	HeaderFamily         byte   `json:"header_family"`
+	Parsed               bool   `json:"parsed"`
+	State                uint16 `json:"state"`
+	Kind                 byte   `json:"kind"`
+	Flags                byte   `json:"flags"`
+	RouterFlag           bool   `json:"router_flag"`
+	Ingress              string `json:"ingress"`
+	HomeRelation         string `json:"home_relation"`
+	LinkPresent          bool   `json:"link_present"`
+	LinkType             uint16 `json:"link_type"`
+	LinkClass            string `json:"link_class"`
+	LLAddressBytes       int    `json:"lladdr_bytes"`
+	LLAddressClass       string `json:"lladdr_class"`
+	OwnedAddressRelation string `json:"owned_address_relation"`
+	OwnedMACRelation     string `json:"owned_mac_relation"`
+	ExplicitMACRelation  string `json:"explicit_mac_relation"`
+	LiteralCIDRRelation  string `json:"literal_cidr_relation"`
+}
+type packetNativeNeighborGroup struct {
+	Shape packetNativeNeighborShape `json:"shape"`
+	Count int                       `json:"count"`
+}
+type packetNativeNeighborReport struct {
+	Phase          string                      `json:"phase"`
+	Records        int                         `json:"records"`
+	MACRefusals    int                         `json:"mac_refusals"`
+	OtherRefusals  int                         `json:"other_refusals"`
+	GroupCount     int                         `json:"group_count"`
+	GroupsOmitted  int                         `json:"groups_omitted"`
+	RecordsOmitted int                         `json:"records_omitted"`
+	Groups         []packetNativeNeighborGroup `json:"groups,omitempty"`
+}
+
+func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent, frames map[byte][]message) (packetNativeNeighborReport, error, error) {
+	report := packetNativeNeighborReport{Phase: "neighbor_summary"}
+	groups := map[packetNativeNeighborShape]int{}
+	var order []packetNativeNeighborShape
+	bytesSeen := 0
+	for _, family := range []byte{2, 10} {
+		rows, ok := frames[family]
+		if !ok {
+			return report, nil, at("kernel.bindings.neighbor.family-missing", nil)
+		}
+		for _, m := range rows {
+			if ctx.Err() != nil {
+				return report, nil, ctx.Err()
+			}
+			report.Records++
+			bytesSeen += len(m.data)
+			if report.Records > 4096 || bytesSeen > 1<<20 {
+				return report, nil, at("kernel.bindings.neighbor.limit", nil)
+			}
+			if len(m.data) < 12 || m.data[0] != family {
+				return report, nil, at("kernel.bindings.neighbor.dump-family", nil)
+			}
+			_, _, err := packetDecodeNeighbor(m, topology)
+			if err == nil {
+				continue
+			}
+			if !slices.Contains(DiagnosticStages(err), "kernel.bindings.neighbor.mac") {
+				report.OtherRefusals++
+				continue
+			}
+			report.MACRefusals++
+			shape := packetNativeNeighborClass(family, m, topology, links, intent)
+			if _, ok := groups[shape]; !ok {
+				order = append(order, shape)
+			}
+			groups[shape]++
+		}
+	}
+	report.GroupCount = len(order)
+	for i, shape := range order {
+		if i < 16 {
+			report.Groups = append(report.Groups, packetNativeNeighborGroup{Shape: shape, Count: groups[shape]})
+		} else {
+			report.GroupsOmitted++
+			report.RecordsOmitted += groups[shape]
+		}
+	}
+	// Unchanged complete boundary check supplies the same first refusal, including
+	// duplicate/ownership checks. Shape counts never replace this classification.
+	_, _, refusal := packetNeighborBoundary(ctx, topology, frames)
+	return report, refusal, nil
+}
+
+func packetNativeNeighborClass(family byte, m message, topology ipv4LANPacketTopology, links map[int]Link, intent IPv4LANPacketIntent) packetNativeNeighborShape {
+	s := packetNativeNeighborShape{DumpFamily: family, Ingress: "unknown", HomeRelation: "unknown", LinkClass: "unknown", LLAddressClass: "unknown", OwnedAddressRelation: "unknown", OwnedMACRelation: "unobservable", ExplicitMACRelation: "unobservable", LiteralCIDRRelation: "unknown"}
+	if len(m.data) < 12 {
+		return s
+	}
+	s.HeaderFamily = m.data[0]
+	s.State = binary.NativeEndian.Uint16(m.data[8:10])
+	s.Kind = m.data[11]
+	s.Flags = m.data[10]
+	s.RouterFlag = s.Flags&128 != 0
+	index := int(int32(binary.NativeEndian.Uint32(m.data[4:8])))
+	if index > 0 {
+		s.Ingress = "foreign"
+		if index == topology.home.IfIndex {
+			s.Ingress = "home"
+		}
+	}
+	if link, ok := links[index]; ok {
+		s.LinkPresent = true
+		s.HomeRelation = "unrelated"
+		if index == topology.home.IfIndex {
+			s.HomeRelation = "home"
+		}
+		for _, member := range topology.home.Members {
+			if index == member.IfIndex {
+				s.HomeRelation = "member"
+			}
+			if member.Parent.Known && index == member.Parent.IfIndex || member.ParentIfIndex != 0 && index == member.ParentIfIndex {
+				s.HomeRelation = "parent"
+			}
+		}
+		if s.HomeRelation == "unrelated" && (link.MasterIfIndex == topology.home.IfIndex || link.ParentIfIndex == topology.home.IfIndex) {
+			s.HomeRelation = "home_linked"
+		}
+		s.LinkType = link.LinkType
+		switch link.LinkType {
+		case 1:
+			s.LinkClass = "ethernet"
+		case 772:
+			s.LinkClass = "loopback"
+		case 0:
+			s.LinkClass = "unknown"
+		default:
+			s.LinkClass = "non_ethernet"
+		}
+	}
+	a, err := attrs(m.data[12:])
+	if err != nil {
+		return s
+	}
+	ll, present := a[2]
+	s.LLAddressBytes = len(ll)
+	mac := ""
+	if len(ll) == 6 {
+		mac = net.HardwareAddr(ll).String()
+	}
+	switch {
+	case !present:
+		s.LLAddressClass = "absent"
+	case len(ll) == 0:
+		s.LLAddressClass = "empty"
+	case bytes.Equal(ll, []byte{0, 0, 0, 0, 0, 0}):
+		s.LLAddressClass = "zero"
+	case validMAC(mac):
+		s.LLAddressClass = "valid_unicast"
+	case bytes.Equal(ll, []byte{255, 255, 255, 255, 255, 255}):
+		s.LLAddressClass = "broadcast"
+	case len(ll) == 6 && ll[0]&1 != 0:
+		s.LLAddressClass = "multicast"
+	default:
+		s.LLAddressClass = "invalid_length_or_form"
+	}
+	if validMAC(mac) {
+		s.OwnedMACRelation = "no_match"
+		s.ExplicitMACRelation = "no_match"
+		for _, link := range topology.links {
+			if link.MAC == mac {
+				s.OwnedMACRelation = "match"
+			}
+		}
+		for _, id := range intent.ExcludedDeviceIDs {
+			if physicalDeviceID(mac) == id {
+				s.ExplicitMACRelation = "match"
+			}
+		}
+	}
+	n, err := parseKernelNeighbor(m)
+	if err != nil {
+		return s
+	}
+	s.Parsed = true
+	same, other := 0, 0
+	for _, address := range topology.addresses {
+		prefix, _ := netip.ParsePrefix(address.prefix)
+		if projectionAddressKey(address.index, prefix.Addr()) == projectionAddressKey(n.index, n.address) {
+			if address.index == n.index {
+				same++
+			} else {
+				other++
+			}
+		}
+	}
+	switch {
+	case same+other == 0:
+		s.OwnedAddressRelation = "none"
+	case same+other > 1:
+		s.OwnedAddressRelation = "ambiguous"
+	case same == 1:
+		s.OwnedAddressRelation = "same_interface"
+	default:
+		s.OwnedAddressRelation = "other_interface"
+	}
+	s.LiteralCIDRRelation = "no_match"
+	for _, raw := range intent.ExcludedCIDRs {
+		prefix, err := netip.ParsePrefix(raw)
+		if err != nil {
+			s.LiteralCIDRRelation = "unknown"
+			break
+		}
+		if prefix.Contains(n.address) {
+			s.LiteralCIDRRelation = "match"
+		}
+	}
+	return s
+}
+
+func TestIPv4LANPacketNativeHarnessNeighborClassPrivacyAndBounds(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	intent := IPv4LANPacketIntent{Mode: "lan_except", NewDevices: "inherit", SegmentIDs: []string{"Bridge0"}, ExcludedDeviceIDs: []string{physicalDeviceID(projectionClientMAC)}, ExcludedCIDRs: []string{"198.51.100.0/24"}}
+	topology, err := packetTopologyFromFacts(in, intent)
+	if err != nil {
+		t.Fatal("modeled topology refused")
+	}
+	links := map[int]Link{}
+	for _, m := range in.links {
+		link, err := decodeLink(m)
+		if err != nil {
+			t.Fatal("modeled link refused")
+		}
+		links[link.IfIndex] = link.Link
+	}
+	privateName := "secret0"
+	nonEther := linkFrame(12, privateName, "", "", 0)
+	binary.NativeEndian.PutUint16(nonEther.data[2:4], 512)
+	link, err := decodeLink(nonEther)
+	if err != nil {
+		t.Fatal("modeled non-Ethernet link refused")
+	}
+	links[link.IfIndex] = link.Link
+	address := "198.51.100.9"
+	row := neighborFrame(12, address, "", 64)
+	shape := packetNativeNeighborClass(2, row, topology, links, intent)
+	if !shape.Parsed || shape.State != 64 || shape.Kind != 1 || shape.Ingress != "foreign" || shape.LinkClass != "non_ethernet" || shape.LLAddressClass != "absent" || shape.OwnedAddressRelation != "none" || shape.OwnedMACRelation != "unobservable" || shape.ExplicitMACRelation != "unobservable" || shape.LiteralCIDRRelation != "match" {
+		t.Fatal("modeled shape guessed an identity or lost literal intent")
+	}
+	if _, _, err := packetDecodeNeighbor(row, topology); !slices.Contains(DiagnosticStages(err), "kernel.bindings.neighbor.mac") {
+		t.Fatal("diagnostic classification weakened production decoder")
+	}
+	for _, state := range []uint16{1, 32} {
+		unresolved := neighborFrame(9, "192.0.2.90", "", state)
+		if _, _, err := packetDecodeNeighbor(unresolved, topology); err != nil {
+			t.Fatal("ordinary unresolved row unexpectedly refused")
+		}
+	}
+	unknown := packetNativeNeighborClass(2, neighborFrame(99, address, "", 64), topology, links, intent)
+	if unknown.LinkPresent || unknown.LinkClass != "unknown" || unknown.HomeRelation != "unknown" || unknown.ExplicitMACRelation != "unobservable" {
+		t.Fatal("missing kernel link became known non-Ethernet")
+	}
+	home := packetNativeNeighborClass(2, neighborFrame(9, "192.0.2.1", projectionClientMAC, 2), topology, links, intent)
+	if home.Ingress != "home" || home.LinkClass != "ethernet" || home.OwnedAddressRelation != "same_interface" || home.ExplicitMACRelation != "match" {
+		t.Fatal("exact modeled ownership/negative comparison lost")
+	}
+	encoded, _ := json.Marshal(home)
+	for _, value := range []string{privateName, address, "192.0.2.1", projectionClientMAC, physicalDeviceID(projectionClientMAC), "Home", "Bridge0"} {
+		if bytes.Contains(encoded, []byte(value)) {
+			t.Fatal("modeled private value escaped closed shape")
+		}
+	}
+	encoded, _ = json.Marshal(shape)
+	if bytes.Contains(encoded, []byte(privateName)) || bytes.Contains(encoded, []byte(address)) {
+		t.Fatal("non-Ethernet private value escaped closed shape")
+	}
+	frames := map[byte][]message{2: {}, 10: {}}
+	for length := 1; length <= 18; length++ {
+		m := neighborFrame(12, address, "", 64)
+		m.data = append(m.data, attr(2, make([]byte, length))...)
+		frames[2] = append(frames[2], m)
+	}
+	report, refusal, readErr := packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if readErr != nil || !slices.Contains(DiagnosticStages(refusal), "kernel.bindings.neighbor.mac") || report.MACRefusals != 18 || report.GroupCount != 18 || len(report.Groups) != 16 || report.GroupsOmitted != 2 || report.RecordsOmitted != 2 {
+		t.Fatal("closed shape grouping bound lost")
+	}
+	frames[2] = make([]message, 4097)
+	for i := range frames[2] {
+		frames[2][i] = row
+	}
+	_, _, readErr = packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if !slices.Contains(DiagnosticStages(readErr), "kernel.bindings.neighbor.limit") {
+		t.Fatal("diagnostic record bound lost")
+	}
 }
