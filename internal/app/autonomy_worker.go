@@ -342,10 +342,14 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			return finish("requires-review", "Применённый маршрут не подтверждён журналом. Автоматическое восстановление остановлено.")
 		}
 		matched, outdated := false, false
-		for _, route := range committed.Routes {
-			if route.ServiceID == s.ID && route.Resolved == current && route.Selected == selectedRoute(cfg.AppliedServices[s.ID]) && sameNodeRecoveryStrings(route.Sources, cfg.AppliedServices[s.ID].Sources) {
-				matched = nodeRecoveryServiceMatches(route, service)
-				outdated = !matched
+		if autonomyManagedXraySelected(cfg, committed, current) {
+			matched = a.autonomyManagedXrayCommittedMatches(cfg, committed, s.ID, current)
+		} else {
+			for _, route := range committed.Routes {
+				if route.ServiceID == s.ID && route.Resolved == current && route.Selected == selectedRoute(cfg.AppliedServices[s.ID]) && sameNodeRecoveryStrings(route.Sources, cfg.AppliedServices[s.ID].Sources) {
+					matched = nodeRecoveryServiceMatches(route, service)
+					outdated = !matched
+				}
 			}
 		}
 		if outdated {
@@ -388,7 +392,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 			return nil
 		}
-		if a.Dataplane.CheckCommittedNodeHealth(dataplane.WithReviewGuard(ctx, guard), committed) != nil {
+		if a.checkAutonomyCommittedNodeHealth(ctx, cfg, committed, s.ID, current, guard) != nil {
 			if guard(ctx) != nil {
 				return finish("paused", "Проверка маршрута отменена: сеть или разрешения изменились.")
 			}

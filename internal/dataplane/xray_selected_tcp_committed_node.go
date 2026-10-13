@@ -34,11 +34,17 @@ func captureXraySelectedTCPCommittedNode(ctx context.Context, m *XrayOperationMa
 	if err != nil || snapshot.Generation != n.generation {
 		return nil, errors.Join(ErrXrayOperationOwner, err)
 	}
-	n.sources = snapshot.Sources
 	for _, candidate := range snapshot.Nodes {
 		if candidate.ID == source.ref.NodeID {
-			n.node = xraySelectedTCPNodeIdentity(candidate)
+			n.node = candidate
 			break
+		}
+	}
+	for _, origin := range n.node.Origins {
+		for _, source := range snapshot.Sources {
+			if source.ID == origin.SourceID {
+				n.sources = append(n.sources, source)
+			}
 		}
 	}
 	if n.node.ID == "" || n.node.Disabled || n.current(ctx) != nil || m.current(ctx, false) != nil {
@@ -48,10 +54,36 @@ func captureXraySelectedTCPCommittedNode(ctx context.Context, m *XrayOperationMa
 }
 
 func xraySelectedTCPNodeIdentity(node nodestore.Node) nodestore.Node {
-	// Only these two display labels are calculated from the caller's wall clock.
-	// Actual history/provenance/timestamps remain complete exact comparisons.
-	node.State, node.Health.State = "", ""
+	// Health records and subscription freshness are observations, not the
+	// identity of the admitted child. Keep source IDs and all material/permission
+	// fields; current separately checks original source kinds and monotonic
+	// origin timestamps. This does not grant fresh PASS or new Apply admission.
+	node.State, node.Health = "", nodestore.Health{}
+	node.Origins = append([]nodestore.Origin(nil), node.Origins...)
+	for i := range node.Origins {
+		node.Origins[i].ReceivedAt, node.Origins[i].ExpiresAt = time.Time{}, time.Time{}
+	}
 	return node
+}
+
+func (n *xraySelectedTCPCommittedNode) matches(snapshot nodestore.Snapshot, node nodestore.Node) bool {
+	if node.Disabled || !reflect.DeepEqual(xraySelectedTCPNodeIdentity(node), xraySelectedTCPNodeIdentity(n.node)) || len(n.sources) != len(n.node.Origins) {
+		return false
+	}
+	for i, origin := range node.Origins {
+		original := n.node.Origins[i]
+		if origin.ReceivedAt.Before(original.ReceivedAt) || origin.ExpiresAt.Before(original.ExpiresAt) {
+			return false
+		}
+		found := false
+		for _, source := range snapshot.Sources {
+			found = found || source == n.sources[i]
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func (n *xraySelectedTCPCommittedNode) current(ctx context.Context) error {
@@ -61,11 +93,11 @@ func (n *xraySelectedTCPCommittedNode) current(ctx context.Context) error {
 	}
 	read := func() error {
 		snapshot, err := n.store.Snapshot(ctx, time.Now().UTC())
-		if err != nil || snapshot.Generation != n.generation || !reflect.DeepEqual(snapshot.Sources, n.sources) {
+		if err != nil || snapshot.Generation < n.generation {
 			return errors.Join(ErrXrayOperationOwner, err)
 		}
 		for _, node := range snapshot.Nodes {
-			if node.ID == n.node.ID && !node.Disabled && reflect.DeepEqual(xraySelectedTCPNodeIdentity(node), n.node) {
+			if node.ID == n.node.ID && n.matches(snapshot, node) {
 				return nil
 			}
 		}

@@ -222,14 +222,15 @@ func (a *App) applyManagedAutonomyXray(ctx context.Context, p autonomy.Policy, s
 		return err
 	}
 	c = dataplane.WithReviewGuard(c, e.guard)
+	store := e.source.store // The actual original source owner alone writes CAS.
 	execution, applyErr := a.applyDataplane(c, e.plan, func() (func() error, error) {
 		if err := e.guard(c); err != nil {
 			return nil, err
 		}
-		if !reflect.DeepEqual(a.Store.Get(), before) {
+		if a.Store != store || !reflect.DeepEqual(store.Get(), before) {
 			return nil, dataplane.ErrReviewChanged
 		}
-		undo, receipt, err := a.Store.ApplyAutonomyRouteReviewedWithRollback(s.ID, route, s.Sources, before.Revision)
+		undo, receipt, err := store.ApplyAutonomyRouteReviewedWithRollback(s.ID, route, s.Sources, before.Revision)
 		if err != nil {
 			return undo, err
 		}

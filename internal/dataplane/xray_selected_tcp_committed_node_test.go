@@ -36,7 +36,7 @@ func TestXraySelectedTCPCommittedNodeDoesNotRenewOriginalPASSOrApplyContext(t *t
 	for _, node := range expired.Nodes {
 		if node.ID == n.node.ID {
 			nodeFound = true
-			if !reflect.DeepEqual(xraySelectedTCPNodeIdentity(node), n.node) {
+			if !reflect.DeepEqual(xraySelectedTCPNodeIdentity(node), xraySelectedTCPNodeIdentity(n.node)) {
 				t.Fatal("expiry changed retained original history/material identity")
 			}
 		}
@@ -62,8 +62,8 @@ func TestXraySelectedTCPCommittedNodeDoesNotRenewOriginalPASSOrApplyContext(t *t
 	}
 }
 
-func TestXraySelectedTCPCommittedNodeRefusesChangedOriginalStoreAndHistory(t *testing.T) {
-	for _, change := range []string{"disabled", "new-history", "closed-store", "copy"} {
+func TestXraySelectedTCPCommittedNodeRefusesChangedOriginalStoreAndOwner(t *testing.T) {
+	for _, change := range []string{"disabled", "deleted", "closed-store", "copy"} {
 		t.Run(change, func(t *testing.T) {
 			x := newXrayOperationFixture(t)
 			n, err := captureXraySelectedTCPCommittedNode(x.ctx, x.material)
@@ -73,9 +73,8 @@ func TestXraySelectedTCPCommittedNodeRefusesChangedOriginalStoreAndHistory(t *te
 			switch change {
 			case "disabled":
 				_, err = x.f.store.SetDisabled(x.ctx, x.f.id, true, time.Now())
-			case "new-history":
-				check := nodeServiceProofFixtureCheck(x.f, "new-exact-check")
-				_, err = x.f.store.RecordCheck(x.ctx, x.f.id, check, x.f.now)
+			case "deleted":
+				_, err = x.f.store.Delete(x.ctx, x.f.id, x.f.now)
 			case "closed-store":
 				err = x.f.store.Close()
 			case "copy":
