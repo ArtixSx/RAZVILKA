@@ -30,9 +30,19 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 	if lan != nil && (ValidateLANPolicyRuntime(lan) != nil || c == nil || c.gate == nil || c.gate.identity == nil || !c.gate.identity.acceptsMode(lan.Mode)) {
 		return lanPolicyPreflightAt("inventory-mode", ErrLANPolicyRuntime)
 	}
+	ctx, xrayScope, err := c.openXraySelectedTCPInventoryScope(ctx)
+	if err != nil {
+		return lanPolicyPreflightAt("inventory-consumer-open", err)
+	}
+	if xrayScope != nil {
+		defer xrayScope.close()
+	}
 	wg, err := c.wgConsumers(ctx, lan)
 	if err != nil {
 		return lanPolicyPreflightAt("inventory-wg-open", err)
+	}
+	if xrayScope != nil && len(wg) != 0 {
+		return lanPolicyPreflightAt("inventory-consumer-open", ErrNetworkPolicyConsumers)
 	}
 	var finalImage BackendInventorySnapshot
 	err = lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
@@ -63,7 +73,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		}
 		openingXray, err := c.xraySelectedTCPConsumers(held, lan)
 		defer closeNetworkPolicyXrayObservations(openingXray)
-		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 {
+		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 || xrayScope != nil && len(opening)+len(openingNFQ)+len(openingXray) != 0 {
 			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		first, err := c.read(held, identity)
@@ -145,14 +155,31 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		}
 		return lanPolicyPreflightAt("inventory-owner-current", errors.Join(stockErr, stock.current(held), closingStock.current(held), xrayStock.current(held), closingXrayStock.current(held), checkNetworkPolicyInventoryWithWG(last, *c.gate.identity, lan, c.gate.identity.inventoryMode(lan), closing, lastStockRows, closingNFQ, closingXray, wg), checkNetworkPolicyProxyObservations(opening), checkNetworkPolicyProxyObservations(closing), nfqErr, xrayErr))
 	}))
-	if err != nil || len(wg) == 0 {
+	if err != nil {
 		return err
 	}
-	closing, err := c.wgConsumers(ctx, lan)
-	if err != nil || !reflect.DeepEqual(wg, closing) {
-		return errors.Join(ErrNetworkPolicyConsumers, err)
+	// Full original App/source/control/physical checks run outside the held
+	// Provider capture. A final complete image below detects changes made while
+	// these closing checks ran; it is followed only by pure owner bookends.
+	if xrayScope != nil {
+		if err := xrayScope.checkClosing(ctx); err != nil {
+			return lanPolicyPreflightAt("inventory-consumer-close", err)
+		}
+	}
+	var closing []networkPolicyWGObservation
+	if len(wg) != 0 || xrayScope != nil {
+		closing, err = c.wgConsumers(ctx, lan)
+		if err != nil || !reflect.DeepEqual(wg, closing) {
+			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+	}
+	if xrayScope == nil && len(wg) == 0 {
+		return nil
 	}
 	return c.boundary(ctx, func(held context.Context) error {
+		if xrayScope != nil {
+			return xrayScope.confirm(held, finalImage, lan)
+		}
 		last, err := c.read(held, identity)
 		if err != nil || !reflect.DeepEqual(finalImage, last) {
 			return errors.Join(ErrBackendInventoryUnknown, err)

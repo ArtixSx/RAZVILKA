@@ -69,8 +69,19 @@ func (c *NetworkPolicyChecks) singleXraySelectedTCPStockExecution(ctx context.Co
 		return nil, ErrNetworkPolicyConsumers
 	}
 	cleanup := o.material.IsCleanupContext(ctx)
-	if err := o.checkHeld(ctx, cleanup); err != nil {
-		return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+	var ownerErr error
+	if value := ctx.Value(xraySelectedTCPInventoryScopeKey{}); value != nil {
+		read, ok := value.(*xraySelectedTCPInventoryScope)
+		if !ok || read == nil || read.checks != c || read.pre == nil || read.pre.owner != o {
+			ownerErr = ErrXrayOperationOwner
+		} else {
+			ownerErr = read.current(ctx)
+		}
+	} else {
+		ownerErr = o.checkHeld(ctx, cleanup)
+	}
+	if ownerErr != nil {
+		return nil, errors.Join(ErrNetworkPolicyConsumers, ownerErr)
 	}
 	s := o.scope
 	s.mu.Lock()
