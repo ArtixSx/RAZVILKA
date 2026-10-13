@@ -717,6 +717,9 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
+	if effect == candidateKnownAbsentPIDEffect {
+		return action == "stop-owned"
+	}
 	if action == bootstrapOfflineAction {
 		if effect == pairedPriorManifestEffect || effect == "paired-seal-paired-receipt" || effect == "paired-seal-paired-current" || strings.HasPrefix(effect, "install-file-") {
 			return true
@@ -752,6 +755,9 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
+	if effect == candidateKnownAbsentPIDEffect {
+		return true
+	}
 	if effect == installerHelperEffect || effect == journalReaderProbeEffect || pairedFileEffect(effect) || fileLiveProbeEffect(effect) {
 		return true
 	}

@@ -531,6 +531,11 @@ func WithSelfUpdateStoppedEffectAdmission(ctx context.Context, path, id, install
 
 func stoppedCompensationEffect(action, effect string) bool {
 	if action == "stop-owned" {
+		// The owning provider still requires the original H's actual start
+		// supervisor Wait and fresh absence before unlinking its held PID file.
+		if effect == "candidate-known-absent-pid" {
+			return true
+		}
 		for _, prefix := range []string{"command-worker-", "command-child-"} {
 			for _, command := range []string{"stop-old-panel", "stop-candidate-panel", "quiesce-old-runtime"} {
 				if effect == prefix+command {

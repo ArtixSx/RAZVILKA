@@ -277,6 +277,11 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
+	if command == "stop-candidate-panel" {
+		if handled, err := a.cleanupAbsentCandidate(ctx, id, record, review, helperIdentity); handled {
+			return err
+		}
+	}
 	root, err := a.commandRoot(id)
 	if err != nil {
 		return err
@@ -334,8 +339,15 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 		return err
 	}
 	var originalInstallerStarted func(fileProcess) (*ordinaryInstallerWait, error)
+	var candidateStarted func(fileProcess) (*candidateStartWait, error)
 	if command == "quiesce-old-runtime" && ctx.Value(ordinaryInstallerJoinKey{}) != nil {
 		originalInstallerStarted, err = a.prepareOriginalOrdinaryInstallerWait(ctx, id, worker, parent, record, review, helperIdentity)
+		if err != nil {
+			return err
+		}
+	}
+	if command == "start-candidate-panel" && ctx.Value(ordinaryInstallerJoinKey{}) != nil {
+		candidateStarted, err = a.prepareCandidateStartWait(ctx, id, worker, parent, record, review, helperIdentity)
 		if err != nil {
 			return err
 		}
@@ -354,8 +366,12 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 		identityErr = ErrFileProtocol
 	}
 	var installerWait *ordinaryInstallerWait
+	var candidateWait *candidateStartWait
 	if originalInstallerStarted != nil && identityErr == nil {
 		installerWait, identityErr = originalInstallerStarted(supervisor)
+	}
+	if candidateStarted != nil && identityErr == nil {
+		candidateWait, identityErr = candidateStarted(supervisor)
 	}
 	done := make(chan error, 1)
 	joined := make(chan struct{})
@@ -364,6 +380,9 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 		supervisorWaitErr = worker.Wait()
 		if installerWait != nil {
 			installerWait.observeWait(supervisorWaitErr)
+		}
+		if candidateWait != nil {
+			candidateWait.observeWait(supervisorWaitErr)
 		}
 		done <- supervisorWaitErr
 		close(joined)
@@ -445,6 +464,11 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 				}
 				if err := ctx.Err(); err != nil {
 					return cleanup(err)
+				}
+				if candidateWait != nil {
+					if err := candidateWait.captureReady(ctx, r); err != nil {
+						return cleanup(err)
+					}
 				}
 				return nil
 			}

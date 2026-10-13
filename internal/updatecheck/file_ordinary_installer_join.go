@@ -17,16 +17,17 @@ type ordinaryInstallerJoinKey struct{}
 // This owner exists only around the original H callback. A completed receipt
 // cannot create it or attach the exec-created child and its sole actual Wait.
 type ordinaryInstallerJoin struct {
-	self     *ordinaryInstallerJoin
-	adapter  *SelfUpdateFileAdapter
-	id       string
-	original context.Context
-	held     context.Context
-	deadline time.Time
-	active   atomic.Bool
-	failed   atomic.Bool
-	mu       sync.Mutex
-	wait     *ordinaryInstallerWait
+	self      *ordinaryInstallerJoin
+	adapter   *SelfUpdateFileAdapter
+	id        string
+	original  context.Context
+	held      context.Context
+	deadline  time.Time
+	active    atomic.Bool
+	failed    atomic.Bool
+	mu        sync.Mutex
+	wait      *ordinaryInstallerWait
+	candidate *candidateStartWait
 }
 
 type ordinaryInstallerWait struct {
@@ -62,6 +63,12 @@ func runOrdinaryInstallerJoinScope(a *SelfUpdateFileAdapter, ctx context.Context
 	o.held = context.WithValue(ctx, ordinaryInstallerJoinKey{}, o)
 	defer func() {
 		o.active.Store(false)
+		o.mu.Lock()
+		candidate := o.candidate
+		o.mu.Unlock()
+		if candidate != nil {
+			candidate.close()
+		}
 		if o.failed.Load() {
 			result = errors.Join(result, ErrOrdinaryInstallerControllerRole)
 		}

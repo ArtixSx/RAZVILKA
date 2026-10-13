@@ -23,9 +23,9 @@ func TestSelfUpdateStoppedCompensationCannotRestoreStartAuthority(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, effect := range []string{"command-worker-stop-old-panel", "command-child-stop-candidate-panel", "command-worker-quiesce-old-runtime", "command-child-quiesce-old-runtime", "rollback-file-0", "rollback-file-5", "command-worker-restore-private-state", "rollback-private-nodes"} {
+	for _, effect := range []string{"command-worker-stop-old-panel", "command-child-stop-candidate-panel", "command-worker-quiesce-old-runtime", "command-child-quiesce-old-runtime", "candidate-known-absent-pid", "rollback-file-0", "rollback-file-5", "command-worker-restore-private-state", "rollback-private-nodes"} {
 		action := "replace-to-rollback"
-		if strings.HasPrefix(effect, "command-") && effect != "command-worker-restore-private-state" {
+		if strings.HasPrefix(effect, "command-") && effect != "command-worker-restore-private-state" || effect == "candidate-known-absent-pid" {
 			action = "stop-owned"
 		}
 		called := false
@@ -35,6 +35,12 @@ func TestSelfUpdateStoppedCompensationCannotRestoreStartAuthority(t *testing.T) 
 		}
 	}
 	for _, test := range []struct{ action, effect string }{
+		{"start/live", "candidate-known-absent-pid"},
+		{"replace-to-rollback", "candidate-known-absent-pid"},
+		{"bootstrap-offline", "candidate-known-absent-pid"},
+		{"read/observe", "candidate-known-absent-pid"},
+		{"stop-owned", "candidate-known-absent-pid-extra"},
+		{"stop-owned", "candidate-known-absent-pid-../other"},
 		{"start/live", "command-child-start-candidate-panel"},
 		{"start/live", "command-child-start-rollback-panel"},
 		{"replace-to-rollback", "install-file-0"},
@@ -95,10 +101,12 @@ func TestSelfUpdateStoppedCompensationRequiresExactSealedIdentityAndIntent(t *te
 				cancel()
 				ctx = c
 			}
-			called := false
-			err = WithSelfUpdateStoppedEffectAdmission(ctx, path, id, installation, epoch, revision, "replace-to-rollback", "rollback-file-0", func() error { called = true; return nil })
-			if err == nil || called {
-				t.Fatal("unproven compensation admitted", err)
+			for _, effect := range []struct{ action, id string }{{"replace-to-rollback", "rollback-file-0"}, {"stop-owned", "candidate-known-absent-pid"}} {
+				called := false
+				err = WithSelfUpdateStoppedEffectAdmission(ctx, path, id, installation, epoch, revision, effect.action, effect.id, func() error { called = true; return nil })
+				if err == nil || called {
+					t.Fatal("unproven compensation admitted", effect, err)
+				}
 			}
 		})
 	}
