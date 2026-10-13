@@ -162,7 +162,11 @@ func xraySelectedStartupInactiveStage(err error) string {
 	if err == nil {
 		return "none"
 	}
-	stage := dataplane.NFQWSRuntimeInactiveStage(err)
+	stage := dataplane.RuntimeInactivityBindingStage(err)
+	if slices.Contains([]string{"binding-context", "binding-inputs", "binding-settings", "binding-participants", "binding-roots", "binding-already-bound", "binding-dns-settings"}, stage) {
+		return stage
+	}
+	stage = dataplane.NFQWSRuntimeInactiveStage(err)
 	if slices.Contains([]string{"source", "platform", "coordinates", "identity", "inventory", "closure"}, stage) {
 		return stage
 	}
@@ -591,6 +595,39 @@ func TestXraySelectedNativeStartupDiagnosticsKeepPrivateCausesClosed(t *testing.
 	}
 	if xraySelectedStartupBackendStage(errors.Join(wide...)) != "unclassified" {
 		t.Fatal("foreign nested errors escaped bounded diagnostic traversal")
+	}
+}
+
+func TestXraySelectedNativeStartupInactivityBindingKeepsOriginalContextCause(t *testing.T) {
+	for _, change := range []string{"deadline", "cancelled", "unbounded", "inputs"} {
+		t.Run(change, func(t *testing.T) {
+			ctx := context.Background()
+			end := func() {}
+			wantCause, wantStage := "runtime_inactivity", "binding-context"
+			switch change {
+			case "deadline":
+				ctx, end = context.WithDeadline(ctx, time.Now().Add(-time.Second))
+				wantCause = "deadline"
+			case "cancelled":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			case "inputs":
+				ctx, end = context.WithTimeout(ctx, time.Minute)
+				wantStage = "binding-inputs"
+			}
+			defer end()
+			if change == "cancelled" {
+				wantCause = "canceled"
+			}
+			err := dataplane.New(t.TempDir()).BindRuntimeInactivitySources(ctx, nil, nil, "")
+			if xraySelectedStartupCause(err) != wantCause || xraySelectedStartupInactiveStage(err) != wantStage {
+				t.Fatal("Main startup diagnostics hid original binding cause or coordinate", xraySelectedStartupCause(err), xraySelectedStartupInactiveStage(err))
+			}
+		})
+	}
+	if xraySelectedStartupInactiveStage(errors.New("runtime inactivity binding refused at binding-context")) != "unclassified" {
+		t.Fatal("untyped text fabricated original binding evidence")
 	}
 }
 
