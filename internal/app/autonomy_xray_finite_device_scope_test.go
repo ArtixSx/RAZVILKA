@@ -19,10 +19,17 @@ import (
 // The private loan helper tests lifetime composition; it does not mint the
 // concrete production issuer or claim a native runtime/path PASS.
 func autonomyFiniteXrayFixture(t *testing.T, use func(*listXraySourceFixture, context.Context, autonomy.Policy, autonomy.Service, string, *autonomyDeviceScope, *int)) {
+	autonomyFiniteXrayFixtureWithSetup(t, nil, use)
+}
+
+func autonomyFiniteXrayFixtureWithSetup(t *testing.T, setup func(*listXraySourceFixture, context.Context), use func(*listXraySourceFixture, context.Context, autonomy.Policy, autonomy.Service, string, *autonomyDeviceScope, *int)) {
 	t.Helper()
 	autonomyXrayCandidateFixture(t, func(f *listXraySourceFixture, parent context.Context, p autonomy.Policy, s autonomy.Service, route string) {
 		// Mask the legacy fixture's model-only carrier, keeping its actual Gate.
 		ctx := context.WithValue(parent, autonomyDeviceScopeKey{}, nil)
+		if setup != nil {
+			setup(f, ctx)
+		}
 		service, known := f.a.autonomyService(s.ID)
 		if !known {
 			t.Fatal("actual catalog missing")
@@ -60,6 +67,146 @@ func autonomyFiniteXrayFixture(t *testing.T, use func(*listXraySourceFixture, co
 		defer close()
 		d := owned.Value(autonomyDeviceScopeKey{}).(*autonomyDeviceScope)
 		use(f, owned, p, s, route, d, &retainedReads)
+	})
+}
+
+// Change only real approved intent before opening the new original round.
+// The explicit physical model retains canonical native IDs and supplies both
+// excluded bindings; the source selection callback canonicalizes their IDs.
+func autonomyFiniteMembershipSetup(t *testing.T, alias, exclusions bool) func(*listXraySourceFixture, context.Context) {
+	t.Helper()
+	return func(f *listXraySourceFixture, ctx context.Context) {
+		before := f.a.Store.Get()
+		policy := config.CloneNetworkPolicy(before.NetworkPolicy)
+		policy.Revision++
+		if alias {
+			policy.Clients.SegmentIDs = []string{"Home"}
+		}
+		if exclusions {
+			policy.Clients.ExcludedDeviceIDs = []string{"excluded-z", "excluded-a"}
+			f.physical.facts.Devices = append(f.physical.facts.Devices,
+				physicalscope.Device{ID: "excluded-z", MAC: "02:00:00:00:00:02", IfIndex: 3, Interface: "br0", SegmentID: "Bridge0", Addresses: []string{"192.168.1.41"}},
+				physicalscope.Device{ID: "excluded-a", MAC: "02:00:00:00:00:04", IfIndex: 3, Interface: "br0", SegmentID: "Bridge0", Addresses: []string{"192.168.1.42"}})
+		}
+		if _, err := f.a.Store.ApproveDefaultRouteConsent(ctx, before, policy, nil, before.DefaultRouteConsent.InstallationID, before.DefaultRouteConsent.Sequence); err != nil {
+			t.Fatal("actual client scope approval", err)
+		}
+	}
+}
+
+func TestAutonomyFiniteXrayMembershipNativeNameAndExactExcludedSet(t *testing.T) {
+	for _, kind := range []string{"native-name", "exclusion-order", "both"} {
+		t.Run(kind, func(t *testing.T) {
+			alias, exclusions := kind != "exclusion-order", kind != "native-name"
+			autonomyFiniteXrayFixtureWithSetup(t, autonomyFiniteMembershipSetup(t, alias, exclusions), func(f *listXraySourceFixture, ctx context.Context, p autonomy.Policy, s autonomy.Service, route string, d *autonomyDeviceScope, _ *int) {
+				facts, policy, before := d.finite.observe(), config.CloneNetworkPolicy(d.policy), f.a.Store.Get()
+				if facts.Segments[0].ID != "Bridge0" || facts.Devices[0].SegmentID != "Bridge0" || alias && facts.Selection.SegmentIDs[0] != "Home" {
+					t.Fatal("model did not preserve original intent/canonical facts")
+				}
+				if exclusions && (!slices.Equal(policy.Clients.ExcludedDeviceIDs, []string{"excluded-z", "excluded-a"}) || !slices.Equal(facts.Selection.SelectedDevices.ExcludedDeviceIDs, []string{"excluded-a", "excluded-z"})) {
+					t.Fatal("reordered exclusions not reproduced")
+				}
+				service, _ := f.a.autonomyService(s.ID)
+				if err := f.a.autonomyResourceGuard(ctx, p, s, before, service); err != nil {
+					t.Fatal("original finite membership refused", err)
+				}
+				candidate, err := f.a.xrayAutonomyCandidate(ctx, p, s, before, f.physical.network, route)
+				if err != nil {
+					t.Fatal(err)
+				}
+				full, b, err := f.a.borrowAutonomyXrayFiniteScope(ctx, d, nil)
+				if err != nil || full != nil || b == nil {
+					t.Fatal("same model round loan refused", err)
+				}
+				defer b.Close()
+				r, err := f.a.reviewXrayListRuntimeSourceOwner(ctx, xrayRuntimeScope{finite: b}, s.ID, f.adapter, candidate)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer r.Close()
+				prepared, err := r.prepare(ctx, true)
+				if err != nil {
+					t.Fatal("original finite compilation refused", err)
+				}
+				defer prepared.close()
+				lan := prepared.compilation.LAN()
+				if len(lan.Ingress) != 1 || lan.Ingress[0].SegmentID != policy.Clients.SegmentIDs[0] || lan.Ingress[0].Interface != "br0" || !slices.Equal(lan.Ingress[0].Sources, s.Sources) || !slices.Equal(lan.Ingress[0].IncludedMACs, []string{"02:00:00:00:00:01"}) || !slices.Contains(lan.Ingress[0].ExcludedMACs, "02:00:00:00:00:FF") {
+					t.Fatal("attachment or known negative changed")
+				}
+				if exclusions {
+					for _, mac := range []string{"02:00:00:00:00:02", "02:00:00:00:00:04"} {
+						if !slices.Contains(lan.Ingress[0].ExcludedMACs, mac) {
+							t.Fatal("explicit negative lost")
+						}
+					}
+				}
+				if err := prepared.current(ctx); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(d.finite.facts, facts) || !reflect.DeepEqual(d.policy, policy) || !reflect.DeepEqual(f.a.Store.Get(), before) {
+					t.Fatal("membership rewrote selection/facts/policy/Store")
+				}
+			})
+		})
+	}
+}
+
+func TestAutonomyFiniteXrayMembershipRefusesAliasAndExclusionConflicts(t *testing.T) {
+	autonomyFiniteXrayFixtureWithSetup(t, autonomyFiniteMembershipSetup(t, true, true), func(f *listXraySourceFixture, ctx context.Context, p autonomy.Policy, s autonomy.Service, _ string, d *autonomyDeviceScope, _ *int) {
+		original := d.finite.observe()
+		for _, change := range []string{"conflicting-aliases", "unknown-alias", "empty-alias", "device-alias-not-canonical", "ifindex", "interface", "selection-alias-changed", "dropped-excluded", "added-excluded", "changed-excluded", "duplicate-observed", "duplicate-intent", "duplicates-both", "empty-excluded"} {
+			t.Run(change, func(t *testing.T) {
+				d.finite.facts = d.finite.observe()
+				defer func() { d.finite.facts = original }()
+				clients := config.CloneNetworkPolicy(d.policy).Clients
+				projection := d.finite.facts.Selection.SelectedDevices
+				switch change {
+				case "conflicting-aliases":
+					second := d.finite.facts.Segments[0]
+					second.ID = "Bridge1"
+					second.IfIndex++
+					d.finite.facts.Segments = append(d.finite.facts.Segments, second)
+				case "unknown-alias":
+					d.finite.facts.Segments[0].NativeName = "Guest"
+				case "empty-alias":
+					clients.SegmentIDs = []string{""}
+					d.finite.facts.Selection.SegmentIDs = []string{""}
+					d.finite.facts.Segments[0].NativeName = ""
+				case "device-alias-not-canonical":
+					d.finite.facts.Devices[0].SegmentID = "Home"
+				case "ifindex":
+					d.finite.facts.Devices[0].IfIndex++
+				case "interface":
+					d.finite.facts.Devices[0].Interface = "foreign0"
+				case "selection-alias-changed":
+					d.finite.facts.Selection.SegmentIDs = []string{"Bridge0"}
+				case "dropped-excluded":
+					projection.ExcludedDeviceIDs = projection.ExcludedDeviceIDs[:1]
+				case "added-excluded":
+					projection.ExcludedDeviceIDs = append(projection.ExcludedDeviceIDs, "excluded-other")
+				case "changed-excluded":
+					projection.ExcludedDeviceIDs[0] = "excluded-other"
+				case "duplicate-observed":
+					projection.ExcludedDeviceIDs = []string{"excluded-a", "excluded-a"}
+				case "duplicate-intent":
+					clients.ExcludedDeviceIDs = []string{"excluded-a", "excluded-a"}
+				case "duplicates-both":
+					projection.ExcludedDeviceIDs = []string{"excluded-a", "excluded-a"}
+					clients.ExcludedDeviceIDs = []string{"excluded-a", "excluded-a"}
+				case "empty-excluded":
+					projection.ExcludedDeviceIDs = []string{"", "excluded-z"}
+					clients.ExcludedDeviceIDs = []string{"", "excluded-z"}
+				}
+				if ids, err := d.finite.members(s, clients); err == nil || len(ids) != 0 {
+					t.Fatal("changed/ambiguous membership accepted", change)
+				}
+			})
+		}
+		d.finite.facts = original
+		service, _ := f.a.autonomyService(s.ID)
+		if err := f.a.autonomyResourceGuard(ctx, p, s, f.a.Store.Get(), service); err != nil {
+			t.Fatal("detached proposed mismatch revoked original scope", err)
+		}
 	})
 }
 

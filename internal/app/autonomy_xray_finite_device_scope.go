@@ -206,7 +206,14 @@ func (f *autonomyXrayFiniteDeviceScope) original() bool {
 }
 
 func (f *autonomyXrayFiniteDeviceScope) members(s autonomy.Service, clients config.ClientScope) ([]string, error) {
-	if !f.original() || f.purpose == nil || len(s.Sources) != 1 || s.ID != f.purpose.spec.ID || s.AllLAN || !slices.Equal(s.Sources, f.purpose.spec.Sources) || clients.Mode != "selected_devices" || clients.NewDevices != "base" || len(clients.DeviceIDs) != 1 || len(clients.SegmentIDs) != 1 || f.facts.Selection.SelectedDevices == nil || !slices.Equal(f.facts.Selection.SelectedDevices.DeviceIDs, clients.DeviceIDs) || !slices.Equal(f.facts.Selection.SelectedDevices.ExcludedDeviceIDs, clients.ExcludedDeviceIDs) || len(f.facts.Segments) != 1 || f.facts.Segments[0].ID != clients.SegmentIDs[0] {
+	if !f.original() || f.purpose == nil || len(s.Sources) != 1 || s.ID != f.purpose.spec.ID || s.AllLAN || !slices.Equal(s.Sources, f.purpose.spec.Sources) || clients.Mode != "selected_devices" || clients.NewDevices != "base" || len(clients.DeviceIDs) != 1 || len(clients.SegmentIDs) != 1 || f.facts.Selection.SelectedDevices == nil || !slices.Equal(f.facts.Selection.SelectedDevices.DeviceIDs, clients.DeviceIDs) || !autonomyFiniteExcludedDevicesEqual(f.facts.Selection.SelectedDevices.ExcludedDeviceIDs, clients.ExcludedDeviceIDs) || !slices.Equal(f.facts.Selection.SegmentIDs, clients.SegmentIDs) || len(f.facts.Segments) != 1 {
+		return nil, errAutonomyResourceIneligible
+	}
+	// Native resolution retains intent as supplied, but emits canonical IDs
+	// for the observed segment and its devices. Resolve only this SAME single
+	// observed segment; keep the original selection/facts unchanged.
+	segment := f.facts.Segments[0]
+	if segment.ID == "" || clients.SegmentIDs[0] == "" || clients.SegmentIDs[0] != segment.ID && clients.SegmentIDs[0] != segment.NativeName {
 		return nil, errAutonomyResourceIneligible
 	}
 	prefix, err := netip.ParsePrefix(s.Sources[0])
@@ -222,7 +229,7 @@ func (f *autonomyXrayFiniteDeviceScope) members(s autonomy.Service, clients conf
 		if d.ID != selected {
 			continue
 		}
-		if d.IfIndex <= 0 || d.IfIndex != f.facts.Segments[0].IfIndex || d.Interface != f.facts.Segments[0].Interface || d.SegmentID != clients.SegmentIDs[0] || d.MAC == "" {
+		if d.IfIndex <= 0 || d.IfIndex != segment.IfIndex || d.Interface != segment.Interface || d.SegmentID != segment.ID || d.MAC == "" {
 			return nil, ErrListScopeChanged
 		}
 		ipv4 := 0
@@ -247,6 +254,23 @@ func (f *autonomyXrayFiniteDeviceScope) members(s autonomy.Service, clients conf
 		return nil, ErrListScopeChanged
 	}
 	return []string{selected}, nil
+}
+
+// Only order is immaterial. The original complete projection and policy must
+// contain the exact same bounded IDs, with no duplicate removal or guessing.
+func autonomyFiniteExcludedDevicesEqual(observed, intent []string) bool {
+	if len(observed) != len(intent) || len(observed) > 128 {
+		return false
+	}
+	a, b := slices.Clone(observed), slices.Clone(intent)
+	slices.Sort(a)
+	slices.Sort(b)
+	for i := range a {
+		if a[i] == "" || b[i] == "" || i > 0 && (a[i] == a[i-1] || b[i] == b[i-1]) {
+			return false
+		}
+	}
+	return slices.Equal(a, b)
 }
 
 // Closed acquire dispatch. A finite carrier never falls back to a full
