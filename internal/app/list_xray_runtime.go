@@ -176,10 +176,16 @@ func (e *managedXraySelectedTCPListExecution) close() error {
 		err = errors.Join(err, e.preparation.close())
 	}
 	if e.source != nil {
-		err = errors.Join(err, e.source.Close())
+		started := time.Now()
+		closeErr := e.source.Close()
+		err = errors.Join(err, closeErr)
+		logManagedXrayReviewClose("source-close", time.Since(started), closeErr)
 	}
 	if e.scope != nil {
-		err = errors.Join(err, e.scope.Close())
+		started := time.Now()
+		closeErr := e.scope.Close()
+		err = errors.Join(err, closeErr)
+		logManagedXrayReviewClose("scope-close", time.Since(started), closeErr)
 	}
 	return err
 }

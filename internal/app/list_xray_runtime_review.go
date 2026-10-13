@@ -12,6 +12,23 @@ import (
 	"time"
 )
 
+// Native stock observation cost requires a whole-review budget longer than
+// one physical read. Earlier caller deadlines and all leaf budgets still win.
+const managedXrayPlanReviewTimeout = 60 * time.Second
+
+func managedXrayReviewContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, managedXrayPlanReviewTimeout)
+}
+
+func managedXrayCompleteReview(ctx context.Context, stage string, plan dataplane.Plan, review applyReview, err error) (dataplane.Plan, applyReview, error) {
+	// Cleanup must join even after cancellation. Its completion cannot turn a
+	// now-expired forward review into a successful response.
+	if err == nil && ctx.Err() != nil {
+		plan, review, err = dataplane.Plan{}, applyReview{}, ctx.Err()
+	}
+	return plan, review, managedXrayReviewAt(stage, ctx, err)
+}
+
 func (e *managedXraySelectedTCPListExecution) applyReview(scope changeScope) applyReview {
 	return applyReview{Revision: e.source.expected.Revision, Digest: applyReviewHash(struct {
 		Kind, Config, Catalog, Compilation, Listener string
@@ -23,14 +40,14 @@ func (r *ManagedXraySelectedTCPListRuntime) review(ctx context.Context, serviceI
 	if !r.original() {
 		return plan, review, managedXrayReviewAt("admission", ctx, ErrXrayListSource)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	ctx, cancel := managedXrayReviewContext(ctx)
 	defer cancel()
 	ctx, finishTimings := beginManagedNFQTimings(ctx)
 	defer func() { finishTimings("xray-review", resultErr) }()
 	stage := "admission"
 	// Runs after the original cleanup/unlock, but before this review's cancel.
 	// Only a real failed boundary may retain the actual caller/deadline cause.
-	defer func() { resultErr = managedXrayReviewAt(stage, ctx, resultErr) }()
+	defer func() { plan, review, resultErr = managedXrayCompleteReview(ctx, stage, plan, review, resultErr) }()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.pending != nil || r.preparing != nil {
@@ -186,4 +203,15 @@ func logManagedXrayPrepareFailure(phase string, elapsed time.Duration, err error
 		phase = "unclassified"
 	}
 	log.Printf("Managed Xray prepare refused substage=%s elapsed_ms=%d", phase, max(int64(0), min(elapsed.Milliseconds(), int64(120000))))
+}
+
+func logManagedXrayReviewClose(phase string, elapsed time.Duration, err error) {
+	if phase != "source-close" && phase != "scope-close" {
+		phase = "unclassified"
+	}
+	cause := "none"
+	if err != nil {
+		cause = "refused"
+	}
+	log.Printf("Managed Xray review close stage=%s cause=%s elapsed_ms=%d", phase, cause, max(int64(0), min(elapsed.Milliseconds(), int64(120000))))
 }
