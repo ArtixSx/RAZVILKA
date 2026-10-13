@@ -273,6 +273,14 @@ func packetNativeMetricFor(phase string, elapsed time.Duration, err error) packe
 		switch stage {
 		case "packet.capture", "packet.home", "packet.home.ipv4-missing", "packet.identity.changed", "packet.identity.kind", "packet.fence.open", "packet.structure.changed", "packet.structure.limit", "packet.control.changed", "packet.control.initial", "packet.control.closing", "packet.intent.initial", "packet.intent.changed", "packet.intent.purpose", "packet.intent.segment", "packet.intent.exclusion-unmappable", "packet.intent.excluded-prefix", "packet.owned.address", "packet.owned.address.duplicate", "packet.owned.neighbor.conflict", "packet.foreign.prefix.overlap", "packet.neighbor.mac", "packet.unavailable", "packet.membership.capture.changed", "packet.membership.epoch.changed", "packet.membership.foreign", "packet.membership.address-conflict", "packet.membership.limit", "fence.notifications", "fence.check.descriptor", "fence.check.closed", "fence.drain.context", "fence.drain.closing-descriptor", "fence.datagram.decode", "kernel.bindings.neighbor.router-state", "kernel.bindings.neighbor.family-missing", "kernel.bindings.neighbor.dump-family", "kernel.bindings.neighbor.duplicate", "kernel.bindings.neighbor.limit", "native.packet.intent.path", "native.packet.intent.file", "native.packet.intent.limit", "native.packet.intent.schema", "native.packet.join.timeout":
 			m.Stages = append(m.Stages, stage)
+		// Finite first-capture labels absent from the old metric allowlist.
+		// 470's filtered log cannot identify its actual refusal label.
+		case "kernel.bindings.neighbor.header", "kernel.bindings.neighbor.family", "kernel.bindings.neighbor.attributes", "kernel.bindings.neighbor.index", "kernel.bindings.neighbor.address", "kernel.bindings.neighbor.state", "kernel.bindings.neighbor.flags", "kernel.bindings.neighbor.router-flag", "kernel.bindings.neighbor.bookkeeping-attributes", "kernel.bindings.neighbor.mac", "kernel.bindings.neighbor.type", "kernel.bindings.neighbor.bookkeeping-state", "kernel.bindings.neighbor.bookkeeping-mac", "kernel.bindings.neighbor.multicast-tuple", "kernel.bindings.neighbor.broadcast-tuple", "kernel.bindings.neighbor.broadcast-prefix", "kernel.bindings.neighbor.broadcast-type":
+			m.Stages = append(m.Stages, stage)
+		case "ndm.envelope", "ndm.text-shape", "ndm.control-byte", "ndm.native-id-shape", "ndm.index-shape", "ndm.header-shape", "ndm.line-bound", "ndm.field-shape", "ndm.member-shape", "ndm.duplicate-native-object", "ndm.required-id", "ndm.required-index", "ndm.required-interface-name", "ndm.required-type", "ndm.duplicate-id", "ndm.duplicate-index", "ndm.duplicate-interface-name", "ndm.duplicate-type", "ndm.duplicate-global", "ndm.duplicate-public", "ndm.duplicate-security-level", "ndm.duplicate-link", "ndm.duplicate-state", "ndm.duplicate-connected", "ndm.duplicate-mac", "ndm.duplicate-address", "ndm.duplicate-mask", "ndm.duplicate-ipv6", "ndm.duplicate-bridge":
+			m.Stages = append(m.Stages, stage)
+		case "netlink.socket.open", "netlink.socket.receive-buffer", "netlink.socket.bind", "netlink.socket.name", "netlink.socket.binding", "netlink.receive.sender-type", "netlink.receive.sender-port", "netlink.receive.truncated", "netlink.receive.empty", "context.canceled", "context.deadline":
+			m.Stages = append(m.Stages, stage)
 		default:
 			m.UnclassifiedStage = true
 		}
@@ -468,6 +476,36 @@ func TestIPv4LANPacketNativeHarnessClosedMetricsAndJoin(t *testing.T) {
 	raw, _ := json.Marshal(packetNativeMetricFor("constructor", time.Millisecond, err))
 	if bytes.Contains(raw, []byte(secret)) || !bytes.Contains(raw, []byte(`"unclassified_stage":true`)) {
 		t.Fatal("unallowlisted error leaked into metric")
+	}
+	// Model an actual nested decoder boundary, preserving both closed labels
+	// and refusal while withholding arbitrary foreign error text.
+	for _, stage := range []string{"kernel.bindings.neighbor.type", "ndm.duplicate-id", "netlink.receive.sender-port"} {
+		nested := boundary("packet.capture", at(stage, errors.New(secret)))
+		metric := packetNativeMetricFor("constructor", time.Millisecond, nested)
+		if metric.Status != "refused" || metric.UnclassifiedStage || !slices.Equal(metric.Stages, []string{"packet.capture", stage}) {
+			t.Fatal("closed nested decoder refusal lost")
+		}
+		encoded, encodeErr := json.Marshal(metric)
+		if encodeErr != nil || bytes.Contains(encoded, []byte(secret)) {
+			t.Fatal("foreign decoder cause leaked into metric")
+		}
+	}
+	for _, sentinel := range []error{context.Canceled, context.DeadlineExceeded} {
+		metric := packetNativeMetricFor("constructor", time.Millisecond, boundary("packet.capture", errors.Join(errors.New(secret), sentinel)))
+		label := "context.canceled"
+		if sentinel == context.DeadlineExceeded {
+			label = "context.deadline"
+		}
+		if metric.Status != "refused" || metric.UnclassifiedStage || !slices.Equal(metric.Stages, []string{"packet.capture", label}) || metric.DeadlineExceeded != (sentinel == context.DeadlineExceeded) {
+			t.Fatal("exact nested context sentinel lost")
+		}
+	}
+	for _, prefix := range []string{"kernel.bindings.neighbor.", "ndm.duplicate-", "netlink.socket."} {
+		metric := packetNativeMetricFor("constructor", time.Millisecond, boundary("packet.capture", at(prefix+secret, errors.New(secret))))
+		encoded, encodeErr := json.Marshal(metric)
+		if encodeErr != nil || bytes.Contains(encoded, []byte(secret)) || !metric.UnclassifiedStage || !slices.Equal(metric.Stages, []string{"packet.capture"}) {
+			t.Fatal("lookalike stage admitted through a prefix wildcard")
+		}
 	}
 	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
