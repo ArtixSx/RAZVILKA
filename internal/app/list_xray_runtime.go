@@ -64,7 +64,7 @@ func (e *managedXraySelectedTCPListExecution) prepare(ctx context.Context, servi
 			return nil, ErrXrayListSource
 		}
 		phase, phaseStarted = "scope-acquire", time.Now()
-		e.scope, err = r.app.autonomyXrayScope(ctx)
+		e.scope, e.finiteScope, err = r.app.autonomyXrayScopeOwner(ctx)
 	} else {
 		phase, phaseStarted = "scope-acquire", time.Now()
 		e.finiteScope, err = newReviewedStockXrayFiniteScopeBinding(ctx, r.app, r.policy.provider)

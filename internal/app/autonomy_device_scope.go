@@ -38,6 +38,7 @@ type autonomyDeviceScope struct {
 	closeErr             error
 	observer             *physicalscope.Observer
 	review               *physicalscope.Review
+	finite               *autonomyXrayFiniteDeviceScope
 	borrowed, borrowUsed bool
 }
 
@@ -65,6 +66,9 @@ func (a *App) autonomyDeviceContext(ctx context.Context, cfg config.Config) (con
 			return ErrListScopeChanged
 		}
 		return p.control.Current(c)
+	}
+	if purpose := a.autonomyXrayFinitePurpose(cfg, p); purpose != nil {
+		return newReviewedAutonomyXrayFiniteDeviceScope(ctx, a, cfg, source, p.provider, purpose)
 	}
 	var originalObserver *physicalscope.Observer
 	var originalReview *physicalscope.Review
@@ -170,7 +174,7 @@ func (d *autonomyDeviceScope) selection(ctx context.Context) (physicalscope.Sele
 }
 
 func (d *autonomyDeviceScope) current(ctx context.Context) error {
-	if d.closed || d.invalid || d.verify == nil || d.snapshot == nil {
+	if d.closed || d.invalid {
 		return ErrListScopeChanged
 	}
 	err := d.owner(ctx)
@@ -178,10 +182,7 @@ func (d *autonomyDeviceScope) current(ctx context.Context) error {
 		err = d.source(ctx)
 	}
 	if err == nil {
-		err = d.verify(ctx)
-	}
-	if err == nil && !reflect.DeepEqual(d.snapshot(), d.facts) {
-		err = ErrListScopeChanged
+		err = d.physicalCurrent(ctx)
 	}
 	if err == nil {
 		err = d.source(ctx)
@@ -213,7 +214,12 @@ func (d *autonomyDeviceScope) use(ctx context.Context, cfg config.Config, servic
 	if err := d.current(c); err != nil {
 		return err
 	}
-	ids, err := autonomyPhysicalDeviceMembers(d.facts, service, d.policy.Clients)
+	var ids []string
+	if d.finite != nil {
+		ids, err = d.finite.members(service, d.policy.Clients)
+	} else {
+		ids, err = autonomyPhysicalDeviceMembers(d.facts, service, d.policy.Clients)
+	}
 	if err == nil {
 		err = leaf(c, ids)
 	}

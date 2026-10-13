@@ -92,7 +92,7 @@ func (r *XrayListRuntimeSource) acceptAutonomyCommitted(ctx context.Context, rec
 	if err != nil || !reflect.DeepEqual(before, r.expected) || selectedRoute(after.Services[r.service]) != r.selected || !slices.Equal(after.Services[r.service].Sources, r.autonomy.planned.Services[r.service].Sources) {
 		return fail(err)
 	}
-	if err := r.scope.AcceptAutonomyCommitted(ctx, receipt); err != nil {
+	if err := r.scopeOwner().AcceptAutonomyCommitted(ctx, receipt); err != nil {
 		return fail(err)
 	}
 	r.expected, r.autonomy.committed = after, true
@@ -119,7 +119,7 @@ func (a *App) autonomyXrayScope(ctx context.Context) (*ListScopeBinding, error) 
 		return nil, ErrListScopeChanged
 	}
 	d.mu.Lock()
-	if d.observer == nil || d.review == nil || d.borrowUsed || d.current(ctx) != nil {
+	if d.finite != nil || d.observer == nil || d.review == nil || d.borrowUsed || d.current(ctx) != nil {
 		d.mu.Unlock()
 		return nil, ErrListScopeChanged
 	}
