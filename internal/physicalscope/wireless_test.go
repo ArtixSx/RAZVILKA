@@ -64,7 +64,7 @@ func TestPhysicalWirelessPartialNotificationDoesNotAssertZeroTopology(t *testing
 }
 
 func TestPhysicalWirelessRefusesChangedBindingHeaderRoleAndExtraAttributes(t *testing.T) {
-	for _, variant := range []string{"name", "index", "negative-index", "flags", "netlink-flags", "seq", "pid", "family", "pad", "link-type", "change-mask", "delete", "master", "mac", "link-info", "unknown-attribute", "duplicate-name", "duplicate-wireless", "nested-name", "malformed-attribute", "missing-name", "missing-wireless", "origin", "native-type", "native-id", "member-master", "vlan", "foreign-parent", "down", "ambiguous", "root", "parent"} {
+	for _, variant := range []string{"name", "index", "negative-index", "flags", "netlink-flags", "seq", "pid", "family", "pad", "link-type", "change-mask", "delete", "master", "mac", "link-info", "unknown-attribute", "duplicate-name", "duplicate-wireless", "nested-name", "malformed-attribute", "missing-name", "missing-wireless", "origin", "native-type", "native-id", "member-kind", "member-link-type", "member-master", "vlan", "foreign-parent", "down", "first-role", "ambiguous", "root", "parent"} {
 		t.Run(variant, func(t *testing.T) {
 			segments := wirelessSegments()
 			member := segments[0].Members[0]
@@ -121,6 +121,12 @@ func TestPhysicalWirelessRefusesChangedBindingHeaderRoleAndExtraAttributes(t *te
 				segments[0].Members[0].NativeType = "Port"
 			case "native-id":
 				segments[0].Members[0].NativeID = ""
+			case "member-kind":
+				segments[0].Members[0].Kind = "vlan"
+			case "member-link-type":
+				segments[0].Members[0].LinkType = 772
+			case "first-role":
+				segments[0].Members[0].Origin, segments[0].Members[0].NativeType = "kernel", "Port"
 			case "member-master":
 				segments[0].Members[0].MasterIfIndex = 10
 			case "vlan":
@@ -140,8 +146,13 @@ func TestPhysicalWirelessRefusesChangedBindingHeaderRoleAndExtraAttributes(t *te
 				member.Interface, member.IfIndex = "radio-parent", 21
 				event = wirelessFrame(member, wirelessCustom(nil))
 			}
-			if err := checkNotifications([]message{event}, segments, nil); err == nil {
+			err := checkNotifications([]message{event}, segments, nil)
+			if err == nil {
 				t.Fatal("unproved partial LINK was waived", variant)
+			}
+			reason := map[string]string{"origin": "origin", "native-type": "native-type", "native-id": "native-id", "member-kind": "kind", "member-link-type": "link-type", "member-master": "master", "vlan": "vlan", "foreign-parent": "foreign-parent", "down": "flags", "first-role": "origin"}[variant]
+			if reason != "" && !slices.Equal(DiagnosticStages(err), []string{"notifications.wireless.role", "notifications.wireless.role." + reason}) {
+				t.Fatal("original role refusal lost its first closed reason")
 			}
 		})
 	}

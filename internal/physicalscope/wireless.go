@@ -41,7 +41,26 @@ func originalWirelessNotification(m message, segments []Segment) (bool, error) {
 		return false, at("notifications.wireless.binding", nil)
 	}
 	if original.Origin != "ndm" || original.NativeType != "AccessPoint" || original.NativeID == "" || original.Kind != "" || original.LinkType != 1 || original.MasterIfIndex != master || original.VLAN.Known || original.ForeignParent || original.Flags&(1|0x10000) != 1|0x10000 {
-		return false, at("notifications.wireless.role", nil)
+		reason := "flags"
+		switch {
+		case original.Origin != "ndm":
+			reason = "origin"
+		case original.NativeType != "AccessPoint":
+			reason = "native-type"
+		case original.NativeID == "":
+			reason = "native-id"
+		case original.Kind != "":
+			reason = "kind"
+		case original.LinkType != 1:
+			reason = "link-type"
+		case original.MasterIfIndex != master:
+			reason = "master"
+		case original.VLAN.Known:
+			reason = "vlan"
+		case original.ForeignParent:
+			reason = "foreign-parent"
+		}
+		return false, at("notifications.wireless.role", at("notifications.wireless.role."+reason, nil))
 	}
 	if m.kind != 16 || m.flags != 0 || m.seq != 0 || m.pid != 0 || m.data[0] != 0 || m.data[1] != 0 || binary.NativeEndian.Uint16(m.data[2:4]) != original.LinkType || binary.NativeEndian.Uint32(m.data[8:12]) != original.Flags || binary.NativeEndian.Uint32(m.data[12:16]) != 0 {
 		return false, at("notifications.wireless.header", nil)
