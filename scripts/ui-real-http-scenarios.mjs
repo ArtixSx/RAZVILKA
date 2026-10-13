@@ -14,7 +14,10 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_POLICY_RESTORE_DISABLED_TUNING','UI_POLICY_RESTORE_READBACK',
   'UI_SERVICE_ASSIGN_FILTER','UI_SERVICE_ASSIGN_EDITOR','UI_SERVICE_ASSIGN_BUTTON_VISIBLE','UI_SERVICE_ASSIGN_RETURN','UI_SERVICE_ASSIGN_BOOKEND',
   'UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRATEGY_LOCAL_BOOKEND',
-  'UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND'
+  'UI_SCOPE_FIXTURE','UI_SCOPE_EDITOR','UI_SCOPE_OBSERVATION','UI_SCOPE_NAVIGATION','UI_SCOPE_BOOKEND',
+  'UI_ENGINE_CARD_INITIAL_REFRESH','UI_ENGINE_CARD_FOCUSED_REFRESH','UI_ENGINE_CARD_PROFILE_OPEN','UI_ENGINE_CARD_WORKFLOW_PROGRESS',
+  'UI_ENGINE_CARD_EXPERT_DRAFT','UI_ENGINE_CARD_OTHER_CANCEL','UI_ENGINE_CARD_CHECK_RETURN','UI_ENGINE_CARD_DISCARD_DRAFT',
+  'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
@@ -241,45 +244,67 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
     });
   });
     await test('engine card steps keep the chosen engine and dirty profile without writes', 'real engine metadata HTTP and local draft', async()=>{
-      const start=requests.length;await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
-      await page.waitForFunction(()=>!panelLoad.request);
-      assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
+      const start=requests.length;
+      await diagnose('UI_ENGINE_CARD_INITIAL_REFRESH',async()=>{
+        await nav('engines');await page.evaluate(()=>refreshEngineConfigs());
+        await page.waitForFunction(()=>!panelLoad.request);
+        assert.equal(requests.slice(start).filter(request=>/^\/api\/v1\/engine-configs\/[^/]+\/guided$/.test(request.path)).length,0,'hidden profile reader ran on the cards page');
+      });
       const step=async(id,name)=>{const button=page.locator('[data-engine-step="'+name+'"][data-card-engine="'+id+'"]');if(!await button.isVisible())await page.locator('[data-engine-disclosure="'+id+'-flow"] summary').click();await button.click();};
-      const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');
-      if(!await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open))await summary.click();
-      await summary.focus();
-      await page.evaluate(()=>refreshEngineConfigs());
-      assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
-      assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
-      await step('xray','profile');
-      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
-      await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
-      const workspaceProgress=await page.locator('#ui3EngineSteps [data-engine-workspace-progress]').evaluateAll(rows=>rows.map(row=>({step:row.dataset.engineWorkspaceProgress,complete:row.classList.contains('confirmed')})));
-      assert.deepEqual(workspaceProgress.map(row=>row.step),['install','profile','check','apply']);
-      const matchingProgress=await page.evaluate(()=>engineWorkflowPresentation('xray').complete);
-      for(const row of workspaceProgress)assert.equal(row.complete,matchingProgress[row.step],'workspace used unrelated runtime/route proof');
-      assert.doesNotMatch(await page.locator('#ui3EngineSteps').textContent(),/Процесс|Маршруты/);
-      await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
-      const draft='{"log":{"loglevel":"warning"}}';await page.locator('#engineEditor').fill(draft);
-      await nav('engines');await step('usque','profile');
-      await page.locator('#actionDialog').waitFor({state:'visible'});await page.locator('#actionDialog [value="cancel"]').click();
-      await page.waitForFunction(()=>!document.getElementById('actionDialog').open);
-      assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
-      assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
-      await step('xray','check');
-      await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4Validate');
-      assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
-      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
-      await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
-      await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
-      assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
-      await nav('engines');await page.setViewportSize({width:390,height:844});
-      const disclosure=page.locator('[data-engine-disclosure="xray-flow"]');
-      if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();
-      await page.locator('[data-engine-card="xray"]').scrollIntoViewIfNeeded();
-      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth),0,'expanded engine workflow overflows the mobile viewport');
-      await page.setViewportSize({width:1280,height:900});
-      await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+      await diagnose('UI_ENGINE_CARD_FOCUSED_REFRESH',async()=>{
+        const summary=page.locator('[data-engine-disclosure="xray-flow"] summary');
+        if(!await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open))await summary.click();
+        await summary.focus();
+        await page.evaluate(()=>refreshEngineConfigs());
+        assert.equal(await page.locator('[data-engine-disclosure="xray-flow"]').evaluate(element=>element.open),true);
+        assert.equal(await summary.evaluate(element=>document.activeElement===element),true,'workflow disclosure lost focus on metadata readback');
+      });
+      await diagnose('UI_ENGINE_CARD_PROFILE_OPEN',async()=>{
+        await step('xray','profile');
+        await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray');
+        await page.waitForFunction(()=>document.activeElement?.id==='engineFileSelect');
+      });
+      await diagnose('UI_ENGINE_CARD_WORKFLOW_PROGRESS',async()=>{
+        const workspaceProgress=await page.locator('#ui3EngineSteps [data-engine-workspace-progress]').evaluateAll(rows=>rows.map(row=>({step:row.dataset.engineWorkspaceProgress,complete:row.classList.contains('confirmed')})));
+        assert.deepEqual(workspaceProgress.map(row=>row.step),['install','profile','check','apply']);
+        const matchingProgress=await page.evaluate(()=>engineWorkflowPresentation('xray').complete);
+        for(const row of workspaceProgress)assert.equal(row.complete,matchingProgress[row.step],'workspace used unrelated runtime/route proof');
+        assert.doesNotMatch(await page.locator('#ui3EngineSteps').textContent(),/Процесс|Маршруты/);
+      });
+      const draft='{"log":{"loglevel":"warning"}}';
+      await diagnose('UI_ENGINE_CARD_EXPERT_DRAFT',async()=>{
+        await page.locator('#engineModeExpert').click();await page.waitForFunction(()=>state.engineMode==='expert');
+        await page.locator('#engineEditor').fill(draft);
+      });
+      await diagnose('UI_ENGINE_CARD_OTHER_CANCEL',async()=>{
+        await nav('engines');await step('usque','profile');
+        await page.locator('#actionDialog').waitFor({state:'visible'});await page.locator('#actionDialog [value="cancel"]').click();
+        await page.waitForFunction(()=>!document.getElementById('actionDialog').open);
+        assert.equal(await page.evaluate(()=>state.currentView),'engines');assert.equal(await page.evaluate(()=>state.selectedEngine),'xray');
+        assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+      });
+      await diagnose('UI_ENGINE_CARD_CHECK_RETURN',async()=>{
+        await step('xray','check');
+        await page.waitForFunction(()=>state.currentView==='engineconfig' && state.selectedEngine==='xray' && document.activeElement?.id==='r4Validate');
+        assert.equal(await page.locator('#engineEditor').inputValue(),draft);assert.equal(await page.evaluate(()=>state.engineEditorDirty),true);
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'card navigation started a configuration/check/package write');
+      });
+      await diagnose('UI_ENGINE_CARD_DISCARD_DRAFT',async()=>{
+        await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
+        await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
+      });
+      await diagnose('UI_ENGINE_CARD_MOBILE_LAYOUT',async()=>{
+        await nav('engines');await page.setViewportSize({width:390,height:844});
+        const disclosure=page.locator('[data-engine-disclosure="xray-flow"]');
+        if(!await disclosure.evaluate(element=>element.open))await disclosure.locator('summary').click();
+        await page.locator('[data-engine-card="xray"]').scrollIntoViewIfNeeded();
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth),0,'expanded engine workflow overflows the mobile viewport');
+        await page.setViewportSize({width:1280,height:900});
+      });
+      await diagnose('UI_ENGINE_CARD_RETURN_OVERVIEW',async()=>{
+        await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+      });
     });
     await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{
       const start=requests.length;await nav('services');await page.waitForFunction(()=>!panelLoad.request);
