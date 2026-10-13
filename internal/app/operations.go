@@ -223,7 +223,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		}
 		release, err := enter(labeled)
 		if errors.Is(err, operationgate.ErrBusy) {
-			release, err = waitForAdmission(labeled, enter, a.admissionPatience(r))
+			statusRead := r.Method == http.MethodGet && r.URL.Path == "/api/v1/status"
+			release, err = waitForAdmission(labeled, enter, a.admissionPatience(r), statusRead)
 		}
 		if err != nil {
 			a.writeOperationFailure(w, err)
@@ -344,11 +345,17 @@ func operatorIntent(r *http.Request) bool {
 
 // admissionPatience bounds how long a panel request waits for a busy gate.
 // Reads only ride over short observations; an operator action interrupts
-// automation and waits for its cleanup. The status endpoint never waits:
-// supervisors must see RESTORE_OPERATION_BUSY promptly.
+// automation and waits for its cleanup. Status only rides over a short read
+// or publication; supervisors still see a prolonged busy owner promptly.
 func (a *App) admissionPatience(r *http.Request) time.Duration {
-	if a.AdmissionPatience <= 0 || r.URL.Path == "/api/v1/status" {
+	if a.AdmissionPatience <= 0 {
 		return 0
+	}
+	if r.URL.Path == "/api/v1/status" {
+		if r.Method != http.MethodGet {
+			return 0
+		}
+		return min(a.AdmissionPatience, 125*time.Millisecond)
 	}
 	if operatorIntent(r) {
 		return a.AdmissionPatience
@@ -358,22 +365,51 @@ func (a *App) admissionPatience(r *http.Request) time.Duration {
 
 // waitForAdmission retries a busy admission until patience runs out. The gate
 // itself never queues; this only spares the operator an immediate refusal.
-func waitForAdmission(ctx context.Context, enter func(context.Context) (func(), error), patience time.Duration) (func(), error) {
+func waitForAdmission(ctx context.Context, enter func(context.Context) (func(), error), patience time.Duration, statusRead bool) (func(), error) {
 	if patience <= 0 {
 		return nil, operationgate.ErrBusy
 	}
+	cutoff := time.Now().Add(patience)
 	deadline := time.NewTimer(patience)
 	defer deadline.Stop()
-	retry := time.NewTicker(100 * time.Millisecond)
+	interval := 100 * time.Millisecond
+	if statusRead {
+		interval = 10 * time.Millisecond
+	}
+	retry := time.NewTicker(interval)
 	defer retry.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-deadline.C:
+			if statusRead && ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, operationgate.ErrBusy
 		case <-retry.C:
+			if statusRead {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if !time.Now().Before(cutoff) {
+					return nil, operationgate.ErrBusy
+				}
+			}
 			if release, err := enter(ctx); !errors.Is(err, operationgate.ErrBusy) {
+				if statusRead && err == nil {
+					// Admission keeps the original request context. A slow guard
+					// can grant after cancellation or the grace cutoff; release
+					// that owner before refusing, without ever running the handler.
+					if err := ctx.Err(); err != nil {
+						release()
+						return nil, err
+					}
+					if !time.Now().Before(cutoff) {
+						release()
+						return nil, operationgate.ErrBusy
+					}
+				}
 				return release, err
 			}
 		}
