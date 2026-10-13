@@ -32,15 +32,16 @@ type ordinaryObservationFailure struct{ cause error }
 // The fixed platform reader alone supplies these private leaves. Tests model
 // them to exercise the aggregate contract without claiming a native role.
 type ordinaryObservationSource struct {
-	review   fileReview
-	record   updateRecord
-	identity fileHelperIdentity
-	command  fileCommandReceipt
-	caller   int
-	joined   bool
-	read     func(int) (bootstrapControllerFact, error)
-	check    func(context.Context, bool) error
-	clear    func()
+	review        fileReview
+	record        updateRecord
+	identity      fileHelperIdentity
+	command       fileCommandReceipt
+	caller        int
+	joined        bool
+	installerJoin *ordinaryInstallerJoin
+	read          func(int) (bootstrapControllerFact, error)
+	check         func(context.Context, bool) error
+	clear         func()
 }
 
 // WithOrdinaryInstallerControllerObservation authenticates the complete
@@ -101,6 +102,18 @@ func (o *OrdinaryInstallerControllerObservation) open() error {
 	if err := o.source.check(o.original, false); err != nil {
 		return err
 	}
+	if owner := o.source.installerJoin; owner != nil {
+		command, err := owner.joined(o.original, owner.adapter, o.source.review.ID, o.source.caller)
+		if err != nil || command != o.source.command {
+			return ordinaryInstallerRoleAt("join-opening", err)
+		}
+		fact, err := o.source.read(o.source.identity.Process.PID)
+		if err != nil || fact.Process.PID != o.source.caller || ordinaryJoinedInstallerRole(o.source.review, o.source.record, o.source.identity, command, fact) != "ordinary-installer" {
+			return ordinaryInstallerRoleAt("helper-opening", err)
+		}
+		o.members = append(o.members, fact)
+		return o.contextCurrent(o.original)
+	}
 	pids := []int{o.source.identity.Process.PID, o.source.command.Supervisor.PID}
 	stages := []string{"helper-opening", "supervisor-opening", "child-opening"}
 	roles := []string{"ordinary-installer", "quiesce-supervisor", "quiesce-child"}
@@ -153,6 +166,9 @@ func (o *OrdinaryInstallerControllerObservation) VerifyPeer(ctx context.Context,
 	}()
 	if !o.active.Load() {
 		return ErrOrdinaryInstallerControllerRole
+	}
+	if o.source.installerJoin != nil {
+		return ordinaryInstallerRoleAt("peer-opening", nil)
 	}
 	var original *bootstrapControllerFact
 	for i := range o.members {

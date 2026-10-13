@@ -12,7 +12,7 @@ import (
 var ErrOrdinaryInstallerControllerRole = errors.New("self update controller has no current verified ordinary installer role")
 
 // OriginalOrdinaryInstallerControllerAdapter returns the actual command
-// worker's adapter only during its original post-wait observation. (nil, nil)
+// worker's or joined original helper's adapter in its finite owner scope. (nil, nil)
 // means this finite context has no ordinary join: a live child uses its local
 // adapter and still has to prove the entire live group. A present invalid join
 // returns an error, never permission to fall back to a bootstrap role.
@@ -24,7 +24,7 @@ func OriginalOrdinaryInstallerControllerAdapter(ctx context.Context, id string) 
 	if !finite || !deadline.After(time.Now()) || ctx.Err() != nil {
 		return nil, errors.Join(ErrOrdinaryInstallerControllerRole, ctx.Err())
 	}
-	if ctx.Value(ordinaryQuiesceJoinKey{}) == nil {
+	if ctx.Value(ordinaryQuiesceJoinKey{}) == nil && ctx.Value(ordinaryInstallerJoinKey{}) == nil {
 		return nil, nil
 	}
 	return originalOrdinaryInstallerControllerAdapter(ctx, id)
@@ -46,7 +46,7 @@ func (a *SelfUpdateFileAdapter) VerifyOrdinaryInstallerControllerRole(ctx contex
 }
 
 // VerifyCurrentOrdinaryInstallerControllerRole verifies the actual calling
-// quiescer or original joined command worker against the complete sealed
+// quiescer, joined command worker or original joined helper against its sealed
 // ordinary group. No supplied PID, persisted receipt or role label selects
 // that caller. Peer classification remains a separate read.
 func (a *SelfUpdateFileAdapter) VerifyCurrentOrdinaryInstallerControllerRole(ctx context.Context, id string) error {

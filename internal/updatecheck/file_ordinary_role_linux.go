@@ -12,6 +12,9 @@ import (
 )
 
 func originalOrdinaryInstallerControllerAdapter(ctx context.Context, id string) (*SelfUpdateFileAdapter, error) {
+	if ctx.Value(ordinaryInstallerJoinKey{}) != nil {
+		return originalJoinedOrdinaryInstallerAdapter(ctx, id)
+	}
 	c, ok := ctx.Value(ordinaryQuiesceJoinKey{}).(*ordinaryQuiesceJoin)
 	if !ok || c == nil || c.adapter == nil || c.command.ID != id || !productionOrdinaryRoleAdapter(c.adapter) {
 		return nil, ErrOrdinaryInstallerControllerRole
@@ -36,6 +39,14 @@ func (a *SelfUpdateFileAdapter) verifyCurrentOrdinaryInstallerControllerRole(ctx
 }
 
 func (a *SelfUpdateFileAdapter) verifyOrdinaryInstallerControllerGroup(ctx context.Context, id string, pid int, current bool) (result error) {
+	if ctx.Value(ordinaryInstallerJoinKey{}) != nil {
+		return a.withJoinedOrdinaryInstallerObservation(ctx, id, func(c context.Context, observation *OrdinaryInstallerControllerObservation) error {
+			if current && pid == os.Getpid() {
+				return nil
+			}
+			return observation.VerifyPeer(c, pid)
+		})
+	}
 	refuse := ordinaryInstallerRoleAt
 	if !productionOrdinaryRoleAdapter(a) {
 		return refuse("source", ErrFileProtocol)

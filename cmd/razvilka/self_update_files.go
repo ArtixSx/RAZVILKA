@@ -291,7 +291,13 @@ func runSelfUpdateFileHelper(id string) int {
 		return independentSelfUpdateFences(c, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), selfUpdateDefaultPath(installpath.State+"/dataplane"))
 	}
 	return updatecheck.RunInstallerHelperWithAuthority(id, func(ctx context.Context, job string) error {
-		return f.RunHelper(ctx, job, guard)
+		adapter, ok := f.Adapter.(*updatecheck.SelfUpdateFileAdapter)
+		if !ok {
+			return updatecheck.ErrOrdinaryInstallerControllerRole
+		}
+		return adapter.WithOriginalOrdinaryInstallerJoin(ctx, job, func(held context.Context) error {
+			return f.RunHelper(held, job, guard)
+		})
 	}, selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
 }
 

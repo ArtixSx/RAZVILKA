@@ -270,7 +270,8 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if err != nil {
 		return err
 	}
-	if _, err := a.helperIdentity(id, review); err != nil {
+	helperIdentity, err := a.helperIdentity(id, review)
+	if err != nil {
 		return err
 	}
 	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
@@ -332,6 +333,13 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
+	var originalInstallerStarted func(fileProcess) (*ordinaryInstallerWait, error)
+	if command == "quiesce-old-runtime" && ctx.Value(ordinaryInstallerJoinKey{}) != nil {
+		originalInstallerStarted, err = a.prepareOriginalOrdinaryInstallerWait(ctx, id, worker, parent, record, review, helperIdentity)
+		if err != nil {
+			return err
+		}
+	}
 	admissionErr := a.EffectAdmission(ctx, id, fileCommandAuthorityForReview(review, command), "command-worker-"+command, worker.Start)
 	if worker.Process == nil {
 		if admissionErr != nil {
@@ -345,11 +353,18 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	if identityErr == nil && (supervisor.Boot != parent.Boot || supervisor.ExecutableSHA256 != reviewedHelperSHA(review)) {
 		identityErr = ErrFileProtocol
 	}
+	var installerWait *ordinaryInstallerWait
+	if originalInstallerStarted != nil && identityErr == nil {
+		installerWait, identityErr = originalInstallerStarted(supervisor)
+	}
 	done := make(chan error, 1)
 	joined := make(chan struct{})
 	var supervisorWaitErr error
 	go func() {
 		supervisorWaitErr = worker.Wait()
+		if installerWait != nil {
+			installerWait.observeWait(supervisorWaitErr)
+		}
 		done <- supervisorWaitErr
 		close(joined)
 	}()
@@ -411,6 +426,9 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 					return runtimeQuiesceCommandFailure(root, errors.Join(ErrFileProtocol, waitErr))
 				}
 				return ErrFileProtocol
+			}
+			if installerWait != nil {
+				return installerWait.complete(ctx, r)
 			}
 			return nil
 		case <-tick.C:

@@ -12,6 +12,9 @@ import (
 )
 
 func (a *SelfUpdateFileAdapter) withOrdinaryInstallerControllerObservation(ctx context.Context, id string, use func(context.Context, *OrdinaryInstallerControllerObservation) error) (result error) {
+	if ctx.Value(ordinaryInstallerJoinKey{}) != nil {
+		return a.withJoinedOrdinaryInstallerObservation(ctx, id, use)
+	}
 	refuse := ordinaryInstallerRoleAt
 	if !productionOrdinaryRoleAdapter(a) {
 		return refuse("source", ErrFileProtocol)
