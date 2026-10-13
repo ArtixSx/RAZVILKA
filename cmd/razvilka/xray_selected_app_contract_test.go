@@ -302,7 +302,9 @@ func xraySelectedScope(data []byte) (*config.NetworkPolicy, error) {
 		return nil, errors.New("one selected device list-only scope intent required")
 	}
 	p.Revision = 1
-	p.Rules = []config.NetworkRule{{ID: "qa-selected-tcp", Revision: 1, Kind: "service", Value: xraySelectedQAID, Action: "bypass"}}
+	// The actual enabled service and its reviewed node route supply the list
+	// selection. Preserve empty rules; a standalone bypass is unsupported by
+	// the IP compiler and is not required by the consent API.
 	if config.ValidateListNetworkPolicy(&p) != nil {
 		return nil, errors.New("invalid scope intent")
 	}
@@ -712,8 +714,8 @@ func TestXraySelectedNativeInputAndScopeRejectWidening(t *testing.T) {
 		Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}}
 	data, _ := json.Marshal(p)
 	approved, err := xraySelectedScope(data)
-	if err != nil || len(approved.Rules) != 1 || approved.Rules[0].Value != xraySelectedQAID {
-		t.Fatal("one-device intent did not retain its exact QA rule")
+	if err != nil || len(approved.Rules) != 0 || approved.Revision != 1 || !reflect.DeepEqual(approved.Clients, p.Clients) || approved.Traffic != p.Traffic {
+		t.Fatal("one-device list intent changed or gained a standalone rule")
 	}
 	for _, cut := range []string{"all-except", "multiple-devices", "unrelated-rule", "ready-dto"} {
 		changed := config.CloneNetworkPolicy(&p)
