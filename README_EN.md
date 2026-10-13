@@ -25,7 +25,7 @@ schedules run on the router without an open browser.
 | Home and Autopilot | View network state and choose services, devices and permitted connections |
 | Services | Assign a route to a site or application, check access and apply changes |
 | Connections | Import VLESS and other profiles, refresh subscriptions, select nodes by country and check results, and open bypass settings |
-| Devices | Restrict a route to selected devices |
+| Devices | Choose the home network and excluded devices, or limit bypass to individual devices when needed |
 | Events and settings | Review errors, install and update components, manage access and backups |
 
 Autopilot operates within your settings. Access depends on the node, provider
@@ -37,6 +37,10 @@ connection. [Verified results and limitations (RU)](docs/CURRENT_STATUS_RU.md).
 For 0.20.0, the approved policy is **bypass only for the active list** of services,
 domains and supported IP/CIDR rules in selected home networks. The list can cover
 an entire selected network without assigning every service to every device.
+For example, enabled YouTube applies to that network while an excluded TV keeps
+its ordinary route. An excluded site also keeps its ordinary route even when
+it belongs to an enabled service. This is the intended behavior; end-to-end
+router verification of the shared network mode remains incomplete.
 
 - Device exclusions, manual resource exclusions and the accepted Russian resource
   list take priority over positive rules and a pinned connection.
