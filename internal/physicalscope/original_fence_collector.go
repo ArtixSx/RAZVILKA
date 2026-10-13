@@ -28,14 +28,21 @@ type fenceCheckpoint struct {
 	ctx      context.Context
 	original Snapshot
 	finite   *finiteIPv4FenceSnapshot
-	reply    chan error
+	packet   *ipv4LANPacketFenceSnapshot
+	reply    chan fenceCheckpointReply
+}
+
+type fenceCheckpointReply struct {
+	epoch uint64
+	err   error
 }
 
 // This is a transport for one original fence, not an observation factory. Its
 // lifetime is the Review's Close, independent of Observe's operation context.
 // Before the first actual check, raw datagrams have finite byte/count bounds.
-// Thereafter every frame is checked against a detached, immutable first
-// full snapshot, including explicit projection intent; no event is coalesced.
+// Thereafter every frame is checked against the detached, immutable first
+// purpose (full, finite or IPv4 LAN structure); no event is coalesced. Packet
+// membership epochs are comparison metadata, never another scope authority.
 type originalFenceCollector struct {
 	source   fenceCollectorSource
 	checks   chan fenceCheckpoint
@@ -88,39 +95,44 @@ func (r *originalFenceCollector) checkFinite(ctx context.Context, snapshot Snaps
 }
 
 func (r *originalFenceCollector) checkOriginal(ctx context.Context, snapshot Snapshot, finite *finiteIPv4FenceSnapshot) error {
+	return r.checkRequest(ctx, fenceCheckpoint{original: cloneSnapshot(snapshot), finite: finite}).err
+}
+
+func (r *originalFenceCollector) checkPacket(ctx context.Context, topology ipv4LANPacketTopology) (uint64, error) {
+	reply := r.checkRequest(ctx, fenceCheckpoint{packet: &ipv4LANPacketFenceSnapshot{original: clonePacketTopology(topology)}})
+	return reply.epoch, reply.err
+}
+
+func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceCheckpoint) fenceCheckpointReply {
+	fail := func(err error) fenceCheckpointReply { return fenceCheckpointReply{err: err} }
 	if ctx == nil {
-		return at("fence.check.context", nil)
+		return fail(at("fence.check.context", nil))
 	}
 	if err := ctx.Err(); err != nil {
-		return boundary("fence.check.context", err)
+		return fail(boundary("fence.check.context", err))
 	}
 	if r.stopped() {
-		return at("fence.check.closed", nil)
+		return fail(at("fence.check.closed", nil))
 	}
-	req := fenceCheckpoint{
-		ctx:      ctx,
-		original: cloneSnapshot(snapshot),
-		finite:   finite,
-		reply:    make(chan error, 1),
-	}
+	req.ctx, req.reply = ctx, make(chan fenceCheckpointReply, 1)
 	select {
 	case <-ctx.Done():
-		return boundary("fence.check.context", ctx.Err())
+		return fail(boundary("fence.check.context", ctx.Err()))
 	case <-r.stop:
-		return at("fence.check.closed", nil)
+		return fail(at("fence.check.closed", nil))
 	case <-r.done:
-		return r.completedError()
+		return fail(r.completedError())
 	case r.checks <- req:
 	}
 	select {
-	case err := <-req.reply:
-		return err
+	case reply := <-req.reply:
+		return reply
 	case <-ctx.Done():
-		return boundary("fence.check.context", ctx.Err())
+		return fail(boundary("fence.check.context", ctx.Err()))
 	case <-r.stop:
-		return at("fence.check.closed", nil)
+		return fail(at("fence.check.closed", nil))
 	case <-r.done:
-		return r.completedError()
+		return fail(r.completedError())
 	}
 }
 
@@ -130,12 +142,14 @@ func (r *originalFenceCollector) close() {
 }
 
 type fenceCollectorState struct {
-	reader   *originalFenceCollector
-	original Snapshot
-	finite   *finiteIPv4FenceSnapshot
-	bound    bool
-	pending  [][]byte
-	bytes    int
+	reader          *originalFenceCollector
+	original        Snapshot
+	finite          *finiteIPv4FenceSnapshot
+	packet          *ipv4LANPacketFenceSnapshot
+	membershipEpoch uint64
+	bound           bool
+	pending         [][]byte
+	bytes           int
 }
 
 func (r *originalFenceCollector) run() error {
@@ -150,7 +164,7 @@ func (r *originalFenceCollector) run() error {
 			if err == errFenceCollectorStopped {
 				return nil
 			}
-			req.reply <- err
+			req.reply <- fenceCheckpointReply{epoch: state.membershipEpoch, err: err}
 			if err != nil {
 				return err
 			}
@@ -176,7 +190,7 @@ func (s *fenceCollectorState) checkpoint(req fenceCheckpoint, buf []byte) error 
 		return boundary("fence.drain.context", err)
 	}
 	if !s.bound {
-		s.original, s.finite, s.bound = req.original, req.finite, true
+		s.original, s.finite, s.packet, s.bound = req.original, req.finite, req.packet, true
 		for _, raw := range s.pending {
 			if s.reader.stopped() {
 				return errFenceCollectorStopped
@@ -188,12 +202,12 @@ func (s *fenceCollectorState) checkpoint(req fenceCheckpoint, buf []byte) error 
 			if err != nil {
 				return boundary("fence.datagram.decode", err)
 			}
-			if err := s.checkNotifications(frames); err != nil {
+			if err := s.checkPurposeNotifications(frames); err != nil {
 				return boundary("fence.notifications", err)
 			}
 		}
 		s.pending, s.bytes = nil, 0
-	} else if !reflect.DeepEqual(s.original, req.original) || !reflect.DeepEqual(s.finite, req.finite) {
+	} else if !reflect.DeepEqual(s.original, req.original) || !reflect.DeepEqual(s.finite, req.finite) || !reflect.DeepEqual(s.packet, req.packet) {
 		return at("fence.check.baseline.changed", nil)
 	}
 	// Every request performs a NEW actual drain through EAGAIN, with descriptor
@@ -247,7 +261,7 @@ func (s *fenceCollectorState) drain(ctx context.Context, buf []byte) error {
 			return boundary("fence.datagram.decode", err)
 		}
 		if s.bound {
-			if err := s.checkNotifications(frames); err != nil {
+			if err := s.checkPurposeNotifications(frames); err != nil {
 				return boundary("fence.notifications", err)
 			}
 			continue

@@ -315,7 +315,7 @@ func TestOriginalFenceCollectorCanceledQueuedCheckpointAndJoin(t *testing.T) {
 	waitFenceTest(t, waiting)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // An enqueued request can expire before the reader accepts it.
-	reply := make(chan error, 1)
+	reply := make(chan fenceCheckpointReply, 1)
 	sent := make(chan struct{})
 	go func() {
 		r.checks <- fenceCheckpoint{ctx: ctx, reply: reply}
@@ -351,6 +351,149 @@ func TestOriginalFenceCollectorCloseWaitsForReader(t *testing.T) {
 	}
 	assertFenceFailure(t, checkFenceTest(t, r, nil, nil), "fence.check.closed")
 	r.close()
+}
+
+func packetCollectorTopology(t *testing.T) ipv4LANPacketTopology {
+	t.Helper()
+	in, _ := scopeOptionsKernelFixture()
+	topology, err := packetTopologyFromFacts(in, IPv4LANPacketIntent{SegmentIDs: []string{"Bridge0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return topology
+}
+
+func TestOriginalFenceCollectorPacketPendingAndFreshEpochBookends(t *testing.T) {
+	f := newFenceTestTransport()
+	r := newOriginalFenceCollector(f.source())
+	t.Cleanup(r.close)
+	topology := packetCollectorTopology(t)
+	unknown := finiteUnknownFrame()
+	deleted := neighborFrame(9, "192.0.2.20", projectionClientMAC, 2)
+	deleted.kind = 29
+	f.push(fenceTestDatagram{raw: frame(unknown)}, fenceTestDatagram{raw: frame(deleted)})
+	waitFenceTestDrained(t, f, 2)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, before := f.counts()
+	epoch, err := r.checkPacket(ctx, topology)
+	if err != nil || epoch != 2 {
+		t.Fatal("startup peer events lost", epoch, err)
+	}
+	_, after := f.counts()
+	if after <= before {
+		t.Fatal("checkpoint reused background EAGAIN")
+	}
+	// The same final tuple cannot roll back the original event epoch.
+	f.push(fenceTestDatagram{raw: frame(neighborFrame(9, "192.0.2.20", projectionClientMAC, 2))})
+	waitFenceTestDrained(t, f, 3)
+	epoch, err = r.checkPacket(ctx, topology)
+	if err != nil || epoch != 3 {
+		t.Fatal("event epoch restored/coalesced", epoch, err)
+	}
+	if _, err = r.checkPacket(ctx, topology); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOriginalFenceCollectorPacketPurposeCannotBeAdopted(t *testing.T) {
+	for _, direction := range []string{"packet-full", "packet-finite", "full-packet", "finite-packet", "packet-changed"} {
+		t.Run(direction, func(t *testing.T) {
+			f := newFenceTestTransport()
+			r := newOriginalFenceCollector(f.source())
+			t.Cleanup(r.close)
+			topology := packetCollectorTopology(t)
+			snapshot := Snapshot{Segments: []Segment{topology.home}}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			var err error
+			switch direction {
+			case "full-packet":
+				err = r.check(ctx, snapshot)
+			case "finite-packet":
+				err = r.checkFinite(ctx, snapshot)
+			default:
+				_, err = r.checkPacket(ctx, topology)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch direction {
+			case "packet-full":
+				err = r.check(ctx, snapshot)
+			case "packet-finite":
+				err = r.checkFinite(ctx, snapshot)
+			case "packet-changed":
+				topology.home.IfIndex++
+				_, err = r.checkPacket(ctx, topology)
+			default:
+				_, err = r.checkPacket(ctx, topology)
+			}
+			assertFenceFailure(t, err, "fence.check.baseline.changed")
+			if _, err = r.checkPacket(ctx, packetCollectorTopology(t)); err == nil {
+				t.Fatal("original collector revived")
+			}
+		})
+	}
+}
+
+func TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky(t *testing.T) {
+	for _, change := range []string{"loss", "truncated", "malformed", "neighbor-flags", "neighbor-type", "own-address-claim", "own-mac-claim", "owned-link", "owned-address", "home-route"} {
+		t.Run(change, func(t *testing.T) {
+			f := newFenceTestTransport()
+			r := newOriginalFenceCollector(f.source())
+			t.Cleanup(r.close)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			topology := packetCollectorTopology(t)
+			if _, err := r.checkPacket(ctx, topology); err != nil {
+				t.Fatal(err)
+			}
+			d := fenceTestDatagram{}
+			event := neighborFrame(9, "192.0.2.20", projectionClientMAC, 2)
+			switch change {
+			case "loss":
+				d.err = at("netlink.receive.overrun", nil)
+			case "truncated":
+				d.raw = make([]byte, fenceReceiveBytes+1)
+			case "malformed":
+				d.raw = []byte{1, 2, 3}
+			case "neighbor-flags":
+				event.flags = 2
+			case "neighbor-type":
+				event.data[11] = 7
+			case "own-address-claim":
+				event = neighborFrame(9, "192.0.2.1", projectionClientMAC, 2)
+			case "own-mac-claim":
+				event = neighborFrame(9, "192.0.2.20", "02:00:00:00:00:02", 2)
+			case "owned-link":
+				event = linkFrame(5, "eth1", "", "02:00:00:00:00:04", 0)
+			case "owned-address":
+				event = addressFrame(5, "198.51.100.1/24")
+			case "home-route":
+				event = routeFrame(9)
+			}
+			if d.raw == nil && d.err == nil {
+				d.raw = frame(event)
+			}
+			f.push(d)
+			waitFenceTest(t, r.done)
+			if _, err := r.checkPacket(ctx, topology); err == nil {
+				t.Fatal("loss/structure accepted")
+			}
+			if _, err := r.checkPacket(ctx, topology); err == nil {
+				t.Fatal("collector reissued after failure")
+			}
+		})
+	}
+}
+
+func TestOriginalFenceCollectorPacketEpochOverflowCannotWrap(t *testing.T) {
+	s := fenceCollectorState{packet: &ipv4LANPacketFenceSnapshot{original: packetCollectorTopology(t)}, membershipEpoch: ^uint64(0)}
+	assertFenceFailure(t, s.checkPurposeNotifications([]message{neighborFrame(9, "192.0.2.20", projectionClientMAC, 2)}), "packet.membership.epoch.overflow")
+	if s.membershipEpoch != ^uint64(0) {
+		t.Fatal("epoch wrapped")
+	}
 }
 
 func TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader(t *testing.T) {
