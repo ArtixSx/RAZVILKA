@@ -45,6 +45,10 @@ func saveAutonomyFixturePolicy(t *testing.T, a *App) autonomy.Policy {
 }
 func TestAutonomyAPIReadOnlyAndCAS(t *testing.T) {
 	a := autonomyAPIFixture(t)
+	// A leftover flag is cleared only by explicit consent, never silently.
+	if err := a.Store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	before := a.Store.Get()
 	w := httptest.NewRecorder()
 	a.autonomyAPI(w, httptest.NewRequest("GET", "/api/v1/autonomy", nil))

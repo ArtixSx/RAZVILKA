@@ -15,7 +15,7 @@ const cleanInstallControlCommand = "install-control-initialize"
 
 func cleanInstallConfigUnapplied(raw []byte) bool {
 	cfg, _, err := config.InspectBytes(raw)
-	return err == nil && cfg.SafeMode && !cfg.ServiceControl.Stopped && len(cfg.Services) == 0 && len(cfg.AppliedServices) == 0 &&
+	return err == nil && !cfg.ServiceControl.Stopped && len(cfg.Services) == 0 && len(cfg.AppliedServices) == 0 &&
 		cfg.NetworkPolicy == nil && cfg.DefaultRouteConsent == nil && cfg.AppliedNetworkPolicy == nil
 }
 

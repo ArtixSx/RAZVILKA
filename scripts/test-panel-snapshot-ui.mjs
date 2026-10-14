@@ -96,22 +96,21 @@ await test('fallback card has no action able to apply incomplete state', async (
   assert.match(card, /&lt;img>/); assert.doesNotMatch(card, /<button|data-r5-add|data-rz-action/);
   assert.match(card, /Выключен/);
 });
-await test('unknown and busy settings do not claim working mode or enable a toggle', async () => {
+await test('unknown and busy settings do not claim saved state', async () => {
   const app = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
   const fn = app.match(/function renderSettingsMode\([^]*?\n}\n/)[0];
   const elements = new Map();
   const context = { state: { status: {}, dataLoad: {} }, Date,
     $: id => { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
   vm.createContext(context); vm.runInContext(fn, context); context.renderSettingsMode();
-  assert.equal(elements.get('#settingSafeMode').textContent, 'Состояние уточняется');
+  assert.equal(elements.get('#settingPending').textContent, '—');
   assert.equal(elements.get('#settingRevision').textContent, '—');
-  assert.equal(elements.get('#toggleSafeMode').disabled, true);
-  context.state.status = { safe_mode: true, revision: 8, applied_revision: 4 };
+  assert.equal(elements.has('#settingSafeMode') || elements.has('#toggleSafeMode'), false);
+  context.state.status = { safe_mode: false, revision: 8, applied_revision: 4, pending_changes: true };
   context.state.dataLoad.status = { phase: 'ready' }; context.renderSettingsMode();
-  assert.equal(elements.get('#settingSafeMode').textContent, 'Безопасный');
+  assert.equal(elements.get('#settingPending').textContent, 'есть');
   assert.equal(elements.get('#settingRevision').textContent, '8 / 4');
-  assert.equal(elements.get('#toggleSafeMode').disabled, false);
   context.state.dataLoad.status.phase = 'busy'; context.renderSettingsMode();
-  assert.equal(elements.get('#toggleSafeMode').disabled, true);
+  assert.equal(elements.get('#settingRevision').textContent, '—');
 });
 console.log(JSON.stringify({ status: 'passed', tests: count }));

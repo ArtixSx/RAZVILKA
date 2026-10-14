@@ -41,7 +41,7 @@ func TestResourceExclusionsAtomicPersistenceIndependentManualAndFeed(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.NetworkPolicy.Exclusions.Revision != 1 || first.NetworkPolicy.Revision != 2 || first.Revision != 1 || !first.SafeMode || len(first.AppliedServices) != 0 || first.AppliedNetworkPolicy != nil {
+	if first.NetworkPolicy.Exclusions.Revision != 1 || first.NetworkPolicy.Revision != 2 || first.Revision != 1 || first.SafeMode || len(first.AppliedServices) != 0 || first.AppliedNetworkPolicy != nil {
 		t.Fatal("edit activated traffic or wrong revisions", first)
 	}
 	if first.NetworkPolicy.Exclusions.Manual[0].Value != "xn--e1afmkfd.xn--p1ai" {

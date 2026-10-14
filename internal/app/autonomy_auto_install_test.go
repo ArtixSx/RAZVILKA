@@ -115,8 +115,9 @@ func TestSelfUpdateAuthorityInSafeModeFollowsCommittedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !store.Get().SafeMode {
-		t.Fatal("clean configuration is expected to start in Safe Mode")
+	// A leftover flag (older build, offline restore marker) on a clean configuration.
+	if err := store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
 	}
 	manager := dataplane.New(t.TempDir())
 	a := &App{Store: store, Dataplane: manager}

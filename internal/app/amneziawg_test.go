@@ -50,6 +50,10 @@ func awgAPITest(t *testing.T) (*App, func(string, string, any) *httptest.Respons
 }
 func TestAWGWorkspaceImportCASAndPrivacy(t *testing.T) {
 	a, send := awgAPITest(t)
+	// A leftover Safe Mode flag (older build, offline restore) still fences the canary.
+	if err := a.Store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	w := send("POST", "/api/v1/amneziawg/preview", map[string]any{"content": awgTestProfile()})
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
@@ -127,6 +131,9 @@ func TestOnlyPureHandshakeFailureAuthorizesRefresh(t *testing.T) {
 }
 func TestSafeModeBlocksWarpAccountSideEffects(t *testing.T) {
 	a, _ := awgAPITest(t)
+	if err := a.Store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	a.Warp = warp.New(t.TempDir(), t.TempDir(), a.EngineConfigs)
 	p := a.Warp.Health().Policy
 	p.Enabled = true

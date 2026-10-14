@@ -125,7 +125,12 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		return fail("SERVICE_CONTROL_CHANGED", "Настройки изменились. Обновите состояние и повторите действие.")
 	}
 	if cfg.SafeMode {
-		return fail("SERVICE_RUNTIME_SAFE_MODE", "Безопасный режим запрещает изменение маршрутов. Проверьте настройки безопасности.")
+		// Safe Mode was removed. The operator's own Start/Stop clears a flag an
+		// older build or an offline restore left, unless an update still owns it.
+		if a.PendingSelfUpdateRecovery() || a.Store.SetSafeMode(false) != nil {
+			return fail("SERVICE_RUNTIME_SAFE_MODE", "Обновление программы ещё завершается. Повторите действие позже.")
+		}
+		cfg = a.Store.Get()
 	}
 	stop := action == "stop"
 	if stop == cfg.ServiceControl.Stopped {

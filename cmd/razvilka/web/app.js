@@ -4088,10 +4088,6 @@ async function saveDevicePolicy(event) {
 function renderSettingsMode() {
   const s = state.status || {};
   const known = typeof s.safe_mode === 'boolean' && !['loading', 'busy', 'error'].includes(state.dataLoad?.status?.phase);
-  $('#settingSafeMode').textContent = !known ? 'Состояние уточняется' : s.safe_mode ? 'Безопасный' : 'Рабочий';
-  $('#settingSafeMode').className = known && !s.safe_mode ? 'active-apply' : '';
-  $('#toggleSafeMode').disabled = !known;
-  $('#toggleSafeMode').textContent = !known ? 'Ожидаем состояние' : s.safe_mode ? 'Перейти в рабочий режим' : 'Включить безопасный режим';
   $('#settingPending').textContent = !known ? '—' : s.pending_changes ? 'есть' : 'нет';
   $('#settingEngineDrafts').textContent = known ? s.engine_config_drafts ?? '—' : '—';
   $('#settingApplied').textContent = known && s.last_applied_at ? new Date(s.last_applied_at).toLocaleString('ru-RU') : '—';
@@ -4104,23 +4100,6 @@ function renderSettings() {
 	$('#settingsUsername').textContent = s.username || 'admin';
 	$('#sessionList').innerHTML = (state.sessions || []).map((session) => `<div class="session-row ${session.current ? 'current' : ''}"><div><b>${session.current ? 'Текущий браузер' : esc(session.remote_ip || 'Неизвестный адрес')}</b><span>${esc(session.user_agent || 'Клиент API')}</span><small>Активность: ${timeAgo(session.last_seen_at)} · до ${session.expires_at ? new Date(session.expires_at).toLocaleString('ru-RU') : '—'}</small></div>${session.current ? '<em>ТЕКУЩИЙ</em>' : `<button class="secondary revoke-session" data-session-id="${esc(session.id)}">Завершить</button>`}</div>`).join('') || '<div class="empty-inline">Нет активных сеансов</div>';
 	$$('.revoke-session').forEach((button) => button.addEventListener('click', () => revokeSession(button.dataset.sessionId)));
-}
-
-async function toggleSafeMode() {
-  if (typeof state.status?.safe_mode !== 'boolean' || ['loading', 'busy', 'error'].includes(state.dataLoad?.status?.phase)) return;
-  const enable = !state.status.safe_mode;
-  const title = enable ? 'Включить безопасный режим' : 'Перейти в рабочий режим';
-  const message = enable
-    ? 'Новые применения будут только проверяться. Уже работающие маршруты останутся без изменений.'
-    : 'Следующее применение сможет изменить правила сети и маршруты. Перед записью RAZVILKA создаст снимок, проверит конфигурацию и вернёт прежнее состояние при ошибке.';
-  if (!await askConfirmation(title, message, enable ? 'Включить' : 'Разрешить')) return;
-  const controls = [$('#toggleSafeMode')];
-  controls.forEach((button) => { button.disabled = true; });
-  try {
-    await api('/api/v1/settings/safe-mode', { method: 'PUT', body: JSON.stringify({ enabled: enable }) });
-    await refreshCoreAfterEdit();
-  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Режим не изменён'); }
-  finally { renderSettingsMode(); }
 }
 
 async function refreshSessions() {
@@ -5390,7 +5369,6 @@ function bindEvents() {
   $('#applySettings').addEventListener('click', () => applyDraft('all'));
   $('#applyServiceChanges').addEventListener('click', () => applyDraft('services'));
   $('#applyDeviceChanges').addEventListener('click', () => applyDraft('devices'));
-  $('#toggleSafeMode').addEventListener('click', toggleSafeMode);
   $('#discardChanges').addEventListener('click', () => discardDraft(state.status.routing_pending_changes ? 'routing' : 'all'));
   $('#discardSettings').addEventListener('click', () => discardDraft('all'));
   $('#discardServiceChanges').addEventListener('click', () => discardDraft('services'));

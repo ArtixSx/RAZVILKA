@@ -62,7 +62,7 @@ const (
 )
 
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Listen: ":8787", Services: map[string]ServiceState{}, AppliedServices: map[string]ServiceState{}, EngineOrder: []string{"nfqws2", "usque", "warp-wg", "sing-box"}, SafeMode: true}
+	return Config{SchemaVersion: CurrentSchemaVersion, Listen: ":8787", Services: map[string]ServiceState{}, AppliedServices: map[string]ServiceState{}, EngineOrder: []string{"nfqws2", "usque", "warp-wg", "sing-box"}}
 }
 
 func Load(path string) (*Store, error) {
@@ -153,7 +153,9 @@ func (s *Store) updateService(id string, state ServiceState, revision *uint64) e
 }
 
 // SetSafeMode changes only the live-write gate. Existing committed routes are
-// not claimed as stopped or modified by this setting change.
+// not claimed as stopped or modified by this setting change. Safe Mode is
+// retired: nothing enables it any more, and callers only clear a flag left by
+// an older build or by the paired offline restore marker.
 func (s *Store) SetSafeMode(enabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

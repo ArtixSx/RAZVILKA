@@ -92,7 +92,7 @@ func TestWireGuardProfilesCRUDCASPrivacyAndReserve(t *testing.T) {
 	if _, err := catalog.Get(context.Background(), "backup"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("delete not observed by runtime", err)
 	}
-	if a.Store.Get().Revision != before.Revision || !a.Store.Get().SafeMode {
+	if a.Store.Get().Revision != before.Revision || a.Store.Get().SafeMode != before.SafeMode {
 		t.Fatal("catalog changed service configuration or Safe Mode")
 	}
 }

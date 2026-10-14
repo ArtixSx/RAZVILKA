@@ -263,7 +263,6 @@ func TestBypassViewsAndModeControlStaySeparated(t *testing.T) {
 		`id="projectModeAuto"`,
 		`id="projectModeManual"`,
 		`id="projectPower"`,
-		`id="toggleSafeMode"`,
 	} {
 		if !strings.Contains(html, required) {
 			t.Fatalf("usability control missing %q", required)

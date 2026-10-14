@@ -161,8 +161,8 @@ for name, output in [('config.example.json', 'config.json'), ('service-catalog.j
         raise SystemExit('PUBLIC_FIXTURE_INVALID')
     value = json.loads(path.read_text(encoding='utf-8'))
     if name == 'config.example.json':
-        if value.get('safe_mode') is not True or value.get('services') or value.get('applied_services'):
-            raise SystemExit('EMPTY_SAFE_MODE_CONFIG_REQUIRED')
+        if value.get('safe_mode', False) is not False or value.get('services') or value.get('applied_services'):
+            raise SystemExit('EMPTY_CONFIG_REQUIRED')
     if name == 'service-catalog.json':
         ids = {row['id'] for row in value['services']}
         for key, label in [('chatgpt', 'ChatGPT'), ('claude', 'Claude'), ('gemini', 'Gemini')]:

@@ -29,7 +29,7 @@ func TestConfigStaleWriterCannotOverwrite(t *testing.T) {
 	}
 	for _, mutate := range []func() error{
 		func() error { return second.UpdateService("telegram", ServiceState{Route: "usque"}) },
-		func() error { return second.SetSafeMode(false) },
+		func() error { return second.SetSafeMode(true) },
 		second.ApplyDraft,
 		second.DiscardDraft,
 		second.Save,

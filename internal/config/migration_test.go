@@ -17,8 +17,9 @@ func TestInspectLegacyConfigIsSafeAndReadOnly(t *testing.T) {
 	if !report.Changed || report.FromSchema != 0 || report.ToSchema != CurrentSchemaVersion {
 		t.Fatalf("unexpected report: %+v", report)
 	}
-	if cfg.SchemaVersion != CurrentSchemaVersion || !cfg.SafeMode {
-		t.Fatalf("unsafe migrated config: %+v", cfg)
+	// Safe Mode is retired: migration no longer enables it.
+	if cfg.SchemaVersion != CurrentSchemaVersion || cfg.SafeMode {
+		t.Fatalf("unexpected migrated config: %+v", cfg)
 	}
 	state := cfg.Services["youtube"]
 	if state.Route != "direct" || state.Mode != "direct" {

@@ -791,15 +791,13 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "network-stale", Actor: "system", RemoteIP: "local"})
 	} else if recoveryErr != nil {
 		log.Printf("dataplane boot recovery %s: %v", recovery.State, recoveryErr)
-		if safeErr := store.SetSafeMode(true); safeErr != nil {
-			log.Printf("enable Recovery Safe Mode: %v", safeErr)
-		} else {
-			log.Printf("Recovery Safe Mode enabled; live writes require explicit review")
-		}
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "failed", Actor: "system", RemoteIP: "local"})
 	} else if recovery.State == "recovered" {
 		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
+	}
+	if !selfRecoveryPending && !componentRecoveryPending {
+		retireSafeMode(store)
 	}
 	// Publish the initial settings before collectors/automation can take
 	// admission for a long first operation. Recovery above has already finished.
@@ -1229,11 +1227,26 @@ func retryFailedRollbackAtStart(ctx context.Context, manager *dataplane.Manager,
 	}
 }
 
+// retireSafeMode clears a Safe Mode flag left by an older build or by the
+// paired offline restore marker. Safe Mode was removed: Stop, the journal
+// fence and the dataplane boot-loop guard remain the protections, and an
+// unfinished update keeps the flag until its own recovery has settled.
+func retireSafeMode(store *config.Store) {
+	if !store.Get().SafeMode {
+		return
+	}
+	if err := store.SetSafeMode(false); err != nil {
+		log.Printf("clear retired Safe Mode flag: %v", err)
+		return
+	}
+	log.Print("retired Safe Mode flag cleared")
+}
+
 // closeRollbackSettingsMatch is rollbackAppliedSettingsMatch without the Safe
 // Mode refusal, for the explicit recovery modes run while the panel is
-// stopped. A fenced boot enables Safe Mode itself and the fence then blocks
-// clearing it, so requiring it off made a retry impossible after any restart
-// (0.19.2 on the owner's router). Closing only deactivates owned runtime;
+// stopped. Older builds enabled Safe Mode on a fenced boot and the fence then
+// blocked clearing it, so requiring it off made a retry impossible after any
+// restart (0.19.2 on the owner's router). Closing only deactivates owned runtime;
 // retrying restores the snapshot and verifies it strictly. Both leave Safe
 // Mode enabled for the operator to clear.
 func closeRollbackSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {

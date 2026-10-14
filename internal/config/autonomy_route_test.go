@@ -54,6 +54,10 @@ func TestAutonomyCommitHonorsSafeModeAndManualMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A leftover flag (older build, offline restore marker) still gates commits.
+	if err = s.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	before := s.Get()
 	if _, err = s.ApplyAutonomyRouteWithRollback("site", "nfqws2", nil, before.Revision); err == nil || !reflect.DeepEqual(before, s.Get()) {
 		t.Fatal("Safe Mode bypassed")

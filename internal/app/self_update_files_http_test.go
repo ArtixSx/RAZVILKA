@@ -104,6 +104,11 @@ func fileUpdateHTTPFixture(t *testing.T) (*App, *fileUpdateProof) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Installed configurations start at revision 1 (configs/config.example.json);
+	// a stopped rollback binding requires a non-zero revision.
+	if err := store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.SetSafeMode(false); err != nil {
 		t.Fatal(err)
 	}

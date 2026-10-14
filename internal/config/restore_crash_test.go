@@ -142,7 +142,7 @@ func killConfigChild(t *testing.T, base, point string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := other.SetSafeMode(false); !errors.Is(err, restorejournal.ErrBusy) {
+	if err := other.SetSafeMode(true); !errors.Is(err, restorejournal.ErrBusy) {
 		t.Fatal("other process wrote through restore lease")
 	}
 	if err := cmd.Process.Kill(); err != nil {
@@ -218,7 +218,7 @@ func TestConfigRecoveryBeforeCacheLoad(t *testing.T) {
 			if loaded.Get().Services["telegram"].Enabled != (point == "complete") {
 				t.Fatal("stale state loaded after recovery")
 			}
-			if !loaded.Get().AppliedServices["youtube"].Enabled || !loaded.Get().SafeMode {
+			if !loaded.Get().AppliedServices["youtube"].Enabled || loaded.Get().SafeMode {
 				t.Fatal("live/gate fields changed")
 			}
 			if err := loaded.UpdateService("telegram", ServiceState{Route: "direct"}); err != nil {

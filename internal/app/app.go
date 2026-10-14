@@ -4211,14 +4211,19 @@ func (a *App) safeModeSetting(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if err := a.Store.SetSafeMode(in.Enabled); err != nil {
+	if in.Enabled {
+		// Safe Mode was removed; Stop is the pause. Only a leftover flag can be cleared.
+		writeJSON(w, http.StatusGone, map[string]any{"error": "Безопасный режим удалён. Чтобы приостановить обходы, используйте «Остановить»."})
+		return
+	}
+	if err := a.Store.SetSafeMode(false); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	cfg := a.Store.Get()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "safe_mode": cfg.SafeMode, "revision": cfg.Revision,
-		"note": "Safe Mode controls future live writes. Existing committed dataplane state is unchanged until the next Apply.",
+		"note": "Safe Mode is retired; a leftover flag is cleared. Existing committed dataplane state is unchanged until the next Apply.",
 	})
 }
 

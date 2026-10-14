@@ -432,7 +432,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
     const start=requests.length;
     const {before,lab,catalog}=await diagnose('UI_STRATEGY_LOCAL_FIXTURE',async()=>{
       const before=await readJSON('/api/v1/status'),lab=await readJSON('/api/v1/strategy-lab'),services=await readJSON('/api/v1/services');
-      assert.equal(before.safe_mode,true);assert.equal(before.live_active,false);
+      assert.equal(before.safe_mode,false);assert.equal(before.live_active,false);
       assert.equal(lab.safety?.temporary_scoped_firewall_probe,false);
       assert(Array.isArray(lab.candidates));assert.equal(lab.candidates.length,0);
       assert(Array.isArray(services));const catalog=services.map(service=>service.id);
@@ -485,7 +485,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
       if(review.policy!==null){assert.equal(review.policy.traffic.mode,'selected_services');assert.equal(review.policy.clients.mode,'lan_except');assert.equal(review.policy.clients.segment_ids?.length,1);assert(review.policy.clients.excluded_device_ids?.length>0);}
       else assert.equal(review.consent,null);
       assert.equal(exclusions.live_applied,false);assert.equal(exclusions.scope_configured,review.policy!==null);assert.equal(exclusions.revision,review.revision);assert.equal(exclusions.policy_revision,review.policy?.revision||0);
-      assert.equal(status.safe_mode,true);assert.equal(status.live_active,false);
+      assert.equal(status.safe_mode,false);assert.equal(status.live_active,false);
       return {review,exclusions,status};
     });
     const savedSegments=before.review.policy?.clients.segment_ids||[],savedNegatives=before.review.policy?.clients.excluded_device_ids||[];
@@ -542,7 +542,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
       const review=await readJSON('/api/v1/networkpolicy/review'),exclusions=await readJSON('/api/v1/networkpolicy/exclusions'),status=await readJSON('/api/v1/status');
       assert.deepEqual(review,before.review);assert.deepEqual(exclusions,before.exclusions);
       assert.equal(status.revision,before.status.revision);assert.equal(status.applied_revision,before.status.applied_revision);
-      assert.equal(status.safe_mode,true);assert.equal(status.live_active,false);
+      assert.equal(status.safe_mode,false);assert.equal(status.live_active,false);
       assert.equal(requests.slice(start).filter(r=>r.method!=='GET').length,0,'shared scope read/navigation caused a mutation');
       await navTo(page,'overview');
       assert.equal(requests.slice(start).filter(r=>r.method!=='GET').length,0,'return navigation caused a mutation');

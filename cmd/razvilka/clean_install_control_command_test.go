@@ -51,7 +51,9 @@ func TestCleanInstallControlConfigIsDenialOnlyUnappliedSafeBaseline(t *testing.T
 		allowed bool
 	}{
 		{`{"schema_version":1,"safe_mode":true,"services":{},"applied_services":{}}`, true},
-		{`{"schema_version":1,"safe_mode":false}`, false},
+		// Safe Mode is retired: a clean baseline no longer needs the flag.
+		{`{"schema_version":1,"safe_mode":false}`, true},
+		{`{"schema_version":1,"services":{},"applied_services":{}}`, true},
 		{`{"schema_version":1,"safe_mode":true,"service_control":{"mode":"manual","stopped":true}}`, false},
 		{`{"schema_version":1,"safe_mode":true,"services":{"telegram":{"enabled":true}}}`, false},
 		{`{"schema_version":1,"safe_mode":true,"applied_services":{"telegram":{"enabled":true}}}`, false},

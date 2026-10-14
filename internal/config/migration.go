@@ -100,10 +100,6 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 		cfg.EngineOrder = append([]string(nil), Default().EngineOrder...)
 		report.add("engine_order initialized")
 	}
-	if _, present := fields["safe_mode"]; !present {
-		cfg.SafeMode = true
-		report.add("safe_mode defaulted to true")
-	}
 	if cfg.AppliedRevision == 0 && len(cfg.AppliedServices) > 0 {
 		cfg.AppliedRevision = cfg.Revision
 		report.add("applied_revision aligned with revision")

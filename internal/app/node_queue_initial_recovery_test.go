@@ -55,7 +55,7 @@ func TestServiceQueuesWaitForInitialReconcilerWithDisabledFeatures(t *testing.T)
 			if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
 				t.Fatal(err)
 			}
-			if !a.Store.Get().SafeMode || a.Store.Get().ServiceControl.Schedule.Enabled || a.Dataplane != nil {
+			if a.Store.Get().ServiceControl.Schedule.Enabled || a.Dataplane != nil {
 				t.Fatal("fixture must have disabled routing and scheduled checks")
 			}
 			a.reconciler.started = true

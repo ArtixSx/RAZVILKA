@@ -176,7 +176,7 @@ func killRegistryChild(t *testing.T, base, point string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := c.SetSafeMode(false); !errors.Is(err, restorejournal.ErrBusy) {
+	if err := c.SetSafeMode(true); !errors.Is(err, restorejournal.ErrBusy) {
 		t.Fatal("config lease bypass")
 	}
 	k, err := customservices.Load(filepath.Join(base, "custom.json"))
@@ -295,7 +295,7 @@ func TestRegistryRecoveryBeforeCacheLoad(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.Get().Services["telegram"].Enabled != (point == "complete") || !cfg.Get().SafeMode || !cfg.Get().AppliedServices["youtube"].Enabled {
+			if cfg.Get().Services["telegram"].Enabled != (point == "complete") || cfg.Get().SafeMode || !cfg.Get().AppliedServices["youtube"].Enabled {
 				t.Fatal("config/live fields wrong")
 			}
 			cat, err := customservices.Load(filepath.Join(base, "custom.json"))

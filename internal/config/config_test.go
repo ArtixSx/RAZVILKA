@@ -214,6 +214,9 @@ func TestSetSafeModePersistsAndDoesNotChangeAppliedServices(t *testing.T) {
 	if err := store.ApplyDraft(); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
 	before := store.Get()
 	if err := store.SetSafeMode(false); err != nil {
 		t.Fatal(err)

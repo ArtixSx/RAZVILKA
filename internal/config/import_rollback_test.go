@@ -31,7 +31,7 @@ func TestImportDraftGuardedRollback(t *testing.T) {
 			case "apply":
 				err = s.ApplyDraft()
 			case "safe-mode":
-				err = s.SetSafeMode(false)
+				err = s.SetSafeMode(true)
 			case "write-failure":
 				s.path = filepath.Join(path, "cannot-write.json")
 			}
