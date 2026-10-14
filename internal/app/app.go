@@ -803,7 +803,9 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 			enabled++
 		}
 	}
-	engines := engine.Visible((engine.Detector{}).All())
+	// Counts only: the inventory reads /proc and binaries without running
+	// version or init commands, which cost seconds on the router per refresh.
+	engines := engine.Visible((engine.Detector{}).Inventory())
 	running, installed := 0, 0
 	for _, e := range engines {
 		if e.Installed {
