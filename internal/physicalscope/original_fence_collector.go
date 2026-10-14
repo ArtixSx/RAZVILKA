@@ -3,6 +3,7 @@ package physicalscope
 import (
 	"context"
 	"errors"
+	"maps"
 	"reflect"
 	"slices"
 	"sync"
@@ -29,6 +30,7 @@ type fenceCheckpoint struct {
 	original Snapshot
 	finite   *finiteIPv4FenceSnapshot
 	packet   *ipv4LANPacketFenceSnapshot
+	seed     map[string]string // Membership classes only; never a checkpoint.
 	reply    chan fenceCheckpointReply
 }
 
@@ -103,6 +105,15 @@ func (r *originalFenceCollector) checkPacket(ctx context.Context, topology ipv4L
 	return reply.epoch, reply.err
 }
 
+// seedPacketMembership hands dumped membership classes to the bound packet
+// purpose. It neither drains nor moves the epoch.
+func (r *originalFenceCollector) seedPacketMembership(ctx context.Context, rows map[string]string) error {
+	if rows == nil {
+		rows = map[string]string{}
+	}
+	return r.checkRequest(ctx, fenceCheckpoint{seed: maps.Clone(rows)}).err
+}
+
 func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceCheckpoint) fenceCheckpointReply {
 	fail := func(err error) fenceCheckpointReply { return fenceCheckpointReply{err: err} }
 	if ctx == nil {
@@ -142,14 +153,15 @@ func (r *originalFenceCollector) close() {
 }
 
 type fenceCollectorState struct {
-	reader          *originalFenceCollector
-	original        Snapshot
-	finite          *finiteIPv4FenceSnapshot
-	packet          *ipv4LANPacketFenceSnapshot
-	membershipEpoch uint64
-	bound           bool
-	pending         [][]byte
-	bytes           int
+	reader            *originalFenceCollector
+	original          Snapshot
+	finite            *finiteIPv4FenceSnapshot
+	packet            *ipv4LANPacketFenceSnapshot
+	membershipEpoch   uint64
+	membershipClasses map[string]string // Last class per neighbor row; see membershipClassChanged.
+	bound             bool
+	pending           [][]byte
+	bytes             int
 }
 
 func (r *originalFenceCollector) run() error {
@@ -160,6 +172,11 @@ func (r *originalFenceCollector) run() error {
 		case <-r.stop:
 			return nil
 		case req := <-r.checks:
+			if req.seed != nil {
+				// A misuse is refused to its caller; it does not end the fence.
+				req.reply <- fenceCheckpointReply{epoch: state.membershipEpoch, err: state.seedMembership(req.seed)}
+				continue
+			}
 			err := state.checkpoint(req, buf)
 			if err == errFenceCollectorStopped {
 				return nil

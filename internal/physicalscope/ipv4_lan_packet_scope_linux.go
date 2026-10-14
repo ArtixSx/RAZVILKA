@@ -17,6 +17,12 @@ func (f *ipv4LANPacketKernelFence) check(ctx context.Context, t ipv4LANPacketTop
 	}
 	return f.original.reader.checkPacket(ctx, t)
 }
+func (f *ipv4LANPacketKernelFence) seed(ctx context.Context, rows map[string]string) error {
+	if f == nil || f.original == nil || f.original.reader == nil {
+		return at("packet.fence.original", nil)
+	}
+	return f.original.reader.seedPacketMembership(ctx, rows)
+}
 func (f *ipv4LANPacketKernelFence) close() error { return f.original.close() }
 
 func reviewedIPv4LANPacketSource(provider *netidentity.Provider, control *operationgate.ControlEpochReview, root string) ipv4LANPacketSource {

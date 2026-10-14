@@ -76,6 +76,9 @@ type ipv4LANPacketCapture struct {
 }
 type ipv4LANPacketFence interface {
 	check(context.Context, ipv4LANPacketTopology) (uint64, error)
+	// seed records the membership class of neighbor rows from an original
+	// dump for rows the collector has not seen yet. It never moves the epoch.
+	seed(context.Context, map[string]string) error
 	close() error
 }
 type ipv4LANPacketSource struct {
@@ -347,7 +350,8 @@ func (p *IPv4LANPacketScope) capture(ctx context.Context, intent IPv4LANPacketIn
 			if err != nil {
 				return err
 			}
-			if _, _, err := packetNeighborBoundary(c, read.topology, read.frames); err != nil {
+			home, foreign, err := packetNeighborBoundary(c, read.topology, read.frames)
+			if err != nil {
 				return err
 			}
 			if original != nil && !reflect.DeepEqual(*original, read.topology) {
@@ -359,8 +363,12 @@ func (p *IPv4LANPacketScope) capture(ctx context.Context, intent IPv4LANPacketIn
 			if original == nil {
 				original = &result
 			}
-			_, err = p.fence.check(c, *original)
-			return err
+			if _, err = p.fence.check(c, *original); err != nil {
+				return err
+			}
+			// The first bound check above drained every queued event, so a row
+			// the collector still has not seen is exactly as dumped.
+			return p.fence.seed(c, packetMembershipClasses(home, foreign))
 		})
 		if err != nil {
 			return ipv4LANPacketTopology{}, boundary("packet.capture", err)
@@ -487,7 +495,12 @@ func (p *IPv4LANPacketScope) ObserveMembership(ctx context.Context) (*IPv4LANMem
 			}
 			// Malformed/lost source observations revoke A. Association conflicts
 			// in the separately decoded membership below revoke only this B.
-			if _, _, e := packetNeighborBoundary(held, read.topology, read.frames); e != nil {
+			home, foreign, e := packetNeighborBoundary(held, read.topology, read.frames)
+			if e != nil {
+				p.physicalBad = true
+				return e
+			}
+			if e := p.fence.seed(held, packetMembershipClasses(home, foreign)); e != nil {
 				p.physicalBad = true
 				return e
 			}
@@ -900,6 +913,71 @@ func packetBindMembership(ctx context.Context, t ipv4LANPacketTopology, frames m
 
 type ipv4LANPacketFenceSnapshot struct{ original ipv4LANPacketTopology }
 
+// maxMembershipClasses bounds the collector's per-row memory. Beyond it an
+// unseen row always moves the epoch, as before this filter existed.
+const maxMembershipClasses = 8192
+
+func packetMembershipKey(n kernelNeighbor) string {
+	return projectionAddressKey(n.index, n.address) + "/" + strconv.Itoa(n.index)
+}
+
+// packetMembershipClass is what packetBindMembership reads from one row: its
+// MAC and whether the row counts (not INCOMPLETE/FAILED). Deletion is a class.
+func packetMembershipClass(kind uint16, n kernelNeighbor) string {
+	if kind == 29 {
+		return "deleted"
+	}
+	usable := "unusable"
+	if n.state != 1 && n.state != 32 {
+		usable = "usable"
+	}
+	return n.mac + "|" + usable
+}
+
+func packetMembershipClasses(home, foreign []kernelNeighbor) map[string]string {
+	out := make(map[string]string, len(home)+len(foreign))
+	for _, set := range [][]kernelNeighbor{home, foreign} {
+		for _, n := range set {
+			out[packetMembershipKey(n)] = packetMembershipClass(28, n)
+		}
+	}
+	return out
+}
+
+func (s *fenceCollectorState) membershipClassChanged(key, class string) bool {
+	if old, known := s.membershipClasses[key]; known {
+		if old == class {
+			return false
+		}
+		s.membershipClasses[key] = class
+		return true
+	}
+	if s.membershipClasses == nil {
+		s.membershipClasses = map[string]string{}
+	}
+	if len(s.membershipClasses) < maxMembershipClasses {
+		s.membershipClasses[key] = class
+	}
+	return true
+}
+
+// seedMembership records dumped classes for rows without an observed event.
+// A row seen in an event keeps that newer class.
+func (s *fenceCollectorState) seedMembership(rows map[string]string) error {
+	if !s.bound || s.packet == nil {
+		return at("fence.seed.purpose", nil)
+	}
+	if s.membershipClasses == nil {
+		s.membershipClasses = map[string]string{}
+	}
+	for key, class := range rows {
+		if _, known := s.membershipClasses[key]; !known && len(s.membershipClasses) < maxMembershipClasses {
+			s.membershipClasses[key] = class
+		}
+	}
+	return nil
+}
+
 func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error {
 	if s.packet == nil {
 		return s.checkNotifications(frames)
@@ -910,8 +988,16 @@ func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error 
 			if m.flags != 0 {
 				return at("packet.notifications.neighbor.flags", nil)
 			}
-			if _, _, err := packetDecodeNeighbor(m, t); err != nil {
+			n, bookkeeping, err := packetDecodeNeighbor(m, t)
+			if err != nil {
 				return err
+			}
+			// Proven own infrastructure never enters membership (see
+			// packetNeighborBoundary). An ordinary refresh of a known row
+			// (REACHABLE/STALE/DELAY/PROBE with the same MAC) cannot change
+			// the device list either; only a changed class moves the epoch.
+			if bookkeeping || !s.membershipClassChanged(packetMembershipKey(n), packetMembershipClass(m.kind, n)) {
+				continue
 			}
 			if s.membershipEpoch == ^uint64(0) {
 				return at("packet.membership.epoch.overflow", nil)
@@ -928,6 +1014,13 @@ func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error 
 				return err
 			}
 			if wireless {
+				continue
+			}
+			foreign, err := packetForeignWirelessNotification(m, t)
+			if err != nil {
+				return err
+			}
+			if foreign {
 				continue
 			}
 			l, err := decodeLink(m)

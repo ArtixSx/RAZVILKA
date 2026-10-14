@@ -20,6 +20,9 @@ type packetTestFence struct{ reader *originalFenceCollector }
 func (f *packetTestFence) check(ctx context.Context, t ipv4LANPacketTopology) (uint64, error) {
 	return f.reader.checkPacket(ctx, t)
 }
+func (f *packetTestFence) seed(ctx context.Context, rows map[string]string) error {
+	return f.reader.seedPacketMembership(ctx, rows)
+}
 func (f *packetTestFence) close() error { f.reader.close(); return nil }
 
 type packetTestModel struct {
