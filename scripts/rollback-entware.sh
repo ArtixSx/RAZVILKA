@@ -188,7 +188,10 @@ probe_self_update_metadata() (
   # Unsupported flags need the old Go ABI, never a guessed empty response.
   case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state) ;; *) exit 1 ;; esac
   [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ] || { echo "Self update metadata binary is unsafe; installation unchanged" >&2; exit 1; }
-  command -v timeout >/dev/null 2>&1 || { echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2; exit 1; }
+  command -v timeout >/dev/null 2>&1 || {
+    echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2
+    echo "Нужна утилита timeout: opkg install coreutils-timeout" >&2; exit 1;
+  }
   SELF_PROBE_DIR="$(mktemp -d "$STATEDIR/.rollback-reader.XXXXXX")" || exit 1
   trap 'rm -f "$SELF_PROBE_DIR/output" "$SELF_PROBE_DIR/error" "$SELF_PROBE_DIR/expected"; rmdir "$SELF_PROBE_DIR"' EXIT
   trap 'exit 1' HUP INT TERM

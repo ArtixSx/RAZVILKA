@@ -117,21 +117,20 @@ address on port `8787`. The installer prints the actual address.
 3. Install the required component through component settings and add VLESS or another
    profile in the connections section.
 4. Check the selected connection for the service, review the plan and apply it
-   after enabling routes. Safe Mode is enabled on a fresh installation.
+   after enabling routes. Nothing is applied before this review and your confirmation.
    A node check from the router and access from the selected client device are checked separately.
 
 ## Subsequent updates to 0.20+ releases
 
-After a clean installation of 0.20+, the installer selects the latest published
-stable release automatically. To start an update manually, use the commands below
-once 0.20+ updates are published. Settings are preserved and a rollback snapshot is created:
+An installed 0.20+ release updates from the panel: «Обновления» (Updates) → check
+the version → install the selected release, or automatically on schedule. The panel
+downloads the verified release from GitHub, keeps settings, creates a snapshot and
+returns the previous version on failure.
 
-```sh
-mkdir -p /opt/tmp &&
-curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=latest sh /opt/tmp/razvilka-setup.sh
-```
+Bootstrap and the manual archive installer are for new installations. On an
+installed 0.20+ release the installer refuses ("Use matching self update recovery…"
+or "This controller requires the journaled self update workflow…") and changes
+nothing: a raw binary replacement would bypass the update journal and its rollback.
 
 Scheduled update settings are located separately under «Обновления»
 (Updates) → «Окна обслуживания» (Maintenance windows) → «Изменить расписание»
@@ -139,8 +138,6 @@ Scheduled update settings are located separately under «Обновления»
 application updates automatically. Scheduled automatic installation is implemented.
 End-to-end installation and rollback acceptance on the target Entware system for
 0.20.0 (D11) remains incomplete; readiness is recorded in [current status (RU)](docs/CURRENT_STATUS_RU.md).
-Selecting a specific published 0.20+ release through `RAZVILKA_VERSION` remains an
-optional advanced choice for manual maintenance.
 
 Wait for the check result and retain the printed snapshot path. If the route is
 not confirmed after the update, inspect the installation result and diagnostics;
@@ -163,8 +160,10 @@ sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
 This removes the panel, its startup service and its own active routes. Settings,
-connections and backups are retained for reinstalling. Entware and separately
-installed engines remain.
+connections and backups are retained. Entware and separately installed engines
+remain. Reinstalling over the retained data is not yet supported by the installer:
+the update control journal (`/opt/razvilka/state/self-update-stop`) is retained and
+the installer refuses. Do not delete that directory by hand.
 
 ## Further reading
 
