@@ -536,15 +536,27 @@ func betterCandidate(left, right Result) bool {
 }
 
 func (r *Runner) Snapshot(cat catalog.Catalog) Snapshot {
-	profile := ""
-	if r.Profile != nil {
-		profile = r.Profile()
-	}
+	current := r.Current()
+	return Snapshot{Current: current, Matrix: r.matrix(cat, current)}
+}
+
+// Current returns the latest results without the route matrix, whose full
+// engine detection runs version commands. The fresh WAN profile is taken only
+// when a stored result has a route to compare with it.
+func (r *Runner) Current() []Result {
 	r.mu.RLock()
 	current := make([]Result, 0, len(r.latest))
 	for _, v := range r.latest {
-		v = cloneResult(v)
+		current = append(current, cloneResult(v))
+	}
+	r.mu.RUnlock()
+	profile, profiled := "", false
+	for i := range current {
+		v := &current[i]
 		if r.Profile != nil && v.Route != "current" {
+			if !profiled {
+				profile, profiled = r.Profile(), true
+			}
 			switch {
 			case !systemprobe.ValidWANProfileID(profile), !systemprobe.ValidWANProfileID(v.NetworkProfileID):
 				v.RouteProofError = "network-profile-unavailable"
@@ -553,9 +565,7 @@ func (r *Runner) Snapshot(cat catalog.Catalog) Snapshot {
 			}
 		}
 		v.NormalizeEvidence()
-		current = append(current, v)
 	}
-	r.mu.RUnlock()
 	sort.Slice(current, func(i, j int) bool {
 		if current[i].ServiceName == current[j].ServiceName {
 			if current[i].Route == current[j].Route {
@@ -565,7 +575,7 @@ func (r *Runner) Snapshot(cat catalog.Catalog) Snapshot {
 		}
 		return current[i].ServiceName < current[j].ServiceName
 	})
-	return Snapshot{Current: current, Matrix: r.matrix(cat, current)}
+	return current
 }
 
 func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {

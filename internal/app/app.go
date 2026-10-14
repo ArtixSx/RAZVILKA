@@ -378,7 +378,7 @@ func (a *App) serviceEvidenceSnapshotWithInventory(cfg config.Config, services [
 	if a.TestLab == nil {
 		return out
 	}
-	for _, result := range testlab.AggregateScenarios(a.TestLab.Snapshot(a.catalogSnapshot()).Current) {
+	for _, result := range testlab.AggregateScenarios(a.TestLab.Current()) {
 		result.NormalizeEvidence()
 		applied := cfg.AppliedServices[result.ServiceID]
 		if !applied.Enabled {

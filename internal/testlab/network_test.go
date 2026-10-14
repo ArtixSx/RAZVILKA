@@ -211,3 +211,27 @@ func assertNoRouteAuthority(t *testing.T, result Result) {
 		t.Fatalf("invalid network observation retained authority: %+v", result)
 	}
 }
+
+// Current is read on every panel status refresh: it takes the fresh WAN
+// profile only when a stored route result needs it, and once per call.
+func TestCurrentTakesTheWANProfileOnlyForStoredRoutes(t *testing.T) {
+	runner := NewRunner()
+	calls, current := 0, profileA
+	runner.Profile = func() string { calls++; return current }
+	if got := runner.Current(); len(got) != 0 || calls != 0 {
+		t.Fatalf("empty history took the profile: results=%d calls=%d", len(got), calls)
+	}
+	cat := networkTestCatalog()
+	results := runner.ProbeRoutesUnrecorded(context.Background(), cat, nil, []string{"direct"}, fakeRouteProber{})
+	if _, err := runner.RecordRoutesForProfile(profileA, results); err != nil {
+		t.Fatal(err)
+	}
+	calls = 0
+	if got := runner.Current(); len(got) != 1 || got[0].RouteProofError != "" || calls != 1 {
+		t.Fatalf("stored route: results=%+v calls=%d", got, calls)
+	}
+	current, calls = profileB, 0
+	if got := runner.Current(); got[0].RouteProofError != "network-profile-changed" || calls != 1 {
+		t.Fatalf("changed network not marked: %+v calls=%d", got, calls)
+	}
+}
