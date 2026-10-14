@@ -152,6 +152,12 @@ await check('options capture is first-entry/explicit only and never common perio
 await check('invalid options cannot replace retained data and labels cannot inject markup',()=>{
   const f=fixture(),bad=options();bad.effect_authorized=true;assert.throws(()=>f.c.acceptListScopeOptions(bad));assert.equal(f.state.homeScope.effect_authorized,false);f.state.homeScope.devices[0].label='<img src=x onerror=bad>';f.c.renderListScope();assert(!f.root.innerHTML.includes('<img'));assert.match(f.root.innerHTML,/&lt;img/);
 });
+await check('devices without a name show the host name or address, never only a raw ID',()=>{
+  const f=fixture();f.state.homeScope.devices.push({id:'mac-aa-bb-cc-dd-ee-05',label:'mac-aa-bb-cc-dd-ee-05',segment_id:'br0',state:'observed',code:'',selection_candidate:true},{id:'mac-aa-bb-cc-dd-ee-06',label:'mac-aa-bb-cc-dd-ee-06',segment_id:'br0',state:'observed',code:'',selection_candidate:true});
+  f.state.devices=[{id:'new-device',ips:['192.168.1.7']},{id:'mac-aa-bb-cc-dd-ee-05',hostname:'',ips:['fd00::5','192.168.1.5']},{id:'mac-aa-bb-cc-dd-ee-06',hostname:'nas',ips:['192.168.1.6']}];
+  f.c.renderListScope();const html=f.root.innerHTML;
+  assert.match(html,/192\.168\.1\.5/);assert.match(html,/>nas</);assert.match(html,/Компьютер/,'a router-known name is kept');
+});
 await check('bounded displayed choices preserve every negative ID and null/empty distinction',()=>{
   const f=fixture();f.state.homeScope.devices.push(...Array.from({length:400},(_,i)=>({id:`d-${i}`,label:`Device ${i}`,segment_id:'br0',state:'observed',code:'',selection_candidate:true})));f.c.renderListScope();assert((f.root.innerHTML.match(/data-scope-list="excluded_device_ids"/g)||[]).length<=102);assert.match(f.root.innerHTML,/gone-id/);assert.equal(f.e.draft.device_ids,null);assert.deepEqual(copy(f.e.draft.excluded_device_ids),policy.clients.excluded_device_ids);
 });

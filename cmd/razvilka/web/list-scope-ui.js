@@ -145,7 +145,11 @@ function listScopeChoiceHTML(key,rows) {
 function listScopeDeviceLabels() {
   return (state.homeScope?.devices||[]).map(row=>{
     const cached=(state.devices||[]).find(device=>device.id===row.id);
-    return cached?.name ? {...row,label:cached.name} : row;
+    // Show what the owner recognizes: a given name, a router-known name, the
+    // host name, then an address. The server sends the bare ID when it has none.
+    const ips=cached?.ips||[];
+    const label=cached?.name||(row.label&&row.label!==row.id?row.label:'')||cached?.hostname||ips.find(ip=>ip.includes('.'))||ips[0];
+    return label ? {...row,label} : row;
   });
 }
 let listScopeLastHTML='';
