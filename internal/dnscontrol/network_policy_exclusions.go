@@ -180,6 +180,17 @@ func (f *NetworkPolicyDNSExclusions) targets(ctx context.Context, device string,
 		}
 	}
 	for _, address := range addresses {
+		// An AAAA answer may carry an IPv4-mapped address; its resource is the
+		// IPv4 address, which IPv4 exclusions must also match. Sinkhole values
+		// of filtering resolvers (0.0.0.0, ::, loopback, link-local, multicast)
+		// can never be a bypass destination, so they are no resource to
+		// classify. The exclusion set refuses both as unknown identities, which
+		// failed the whole publication: the client got no answer and could fall
+		// back to another resolver outside the policy. Names are still checked.
+		address = address.Unmap()
+		if !address.IsGlobalUnicast() || address.Zone() != "" {
+			continue
+		}
 		targets = append(targets, config.ResourceTarget{Address: address, DeviceID: device})
 	}
 	if len(targets) > 512 {
