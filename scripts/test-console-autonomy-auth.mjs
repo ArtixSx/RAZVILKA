@@ -12,22 +12,22 @@ function snapshot(revision=1){
  const window={mode:'check',start:'02:00',end:'03:00',days:[1]};
  return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
 }
-function fixture(authenticated=true){
- const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map();
+function fixture(authenticated=true,staticInputs=[]){
+ const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
  let timerID=0,authCalls=0;
  function element(id){
   if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
   const result=elements.get(id);
   result.contains=target=>target===result;
   result.closest=()=>null;
-  if(['a1-starterItems','a1-initialExtras'].includes(id)&&!Object.getOwnPropertyDescriptor(result,'innerHTML').get){
+  if(['a1-starterItems','a1-initialExtras','a1-appDays','a1-engineDays','a1-wizardSources'].includes(id)&&!Object.getOwnPropertyDescriptor(result,'innerHTML').get){
    let html='';Object.defineProperty(result,'innerHTML',{get:()=>html,set(value){html=value;inputs.set(id,[...value.matchAll(/<input\b([^>]+)>/g)].map(([,attrs])=>({name:/name="([^"]*)"/.exec(attrs)?.[1],value:/value="([^"]*)"/.exec(attrs)?.[1],checked:/\bchecked\b/.test(attrs),closest:()=>({})})));}});
   }
   return result;
  }
  function listen(map,type,fn){if(!map.has(type))map.set(type,[]);map.get(type).push(fn);}
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
- const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
+ const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
  const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(){},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
@@ -162,6 +162,26 @@ await test('before first setup the hero action opens the wizard without writing'
  assert.equal(f.e('pauseButton').textContent,'Начать настройку');assert.equal(f.e('pauseButton').disabled,false);
  const before=f.requests.length;f.click('pauseButton');await flush();
  assert.equal(f.requests.length,before,'opening the wizard must not send a request');
+});
+
+await test('quick start saves a whole-network policy through the shared consent path',async()=>{
+ // The protocol boxes are static wizard markup that fillWizard checks.
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();initial.policy.setup_complete=false;initial.policy.enabled=false;initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('quickStart').hidden,false);assert.equal(f.e('wizardLayout').hidden,true);
+ const before=f.requests.length;f.click('quickStartButton');await flush();
+ assert.equal(f.requests.length,before,'without consent nothing is sent');assert.match(f.e('quickError').textContent,/Отметьте разрешение/);
+ f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();
+ const put=f.requests.find(r=>r.options?.method==='PUT');assert.ok(put,'policy was not saved: '+f.e('quickError').textContent);
+ const body=JSON.parse(put.options.body);
+ assert.equal(put.path,'/api/v1/autonomy');assert.equal(body.confirm,'SAVE_AUTONOMY');
+ assert.equal(body.policy.all_lan,true);assert.equal(body.policy.enabled,true);assert.equal(body.policy.setup_complete,true);assert.deepEqual(body.policy.default_sources,[]);
+});
+
+await test('advanced setup keeps the full four-step wizard',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;
+ f.respond(0,200,initial);await flush();f.click('quickAdvanced');
+ assert.equal(f.e('quickStart').hidden,true);assert.equal(f.e('wizardLayout').hidden,false);
 });
 
 await test('changed starter definition preserves subset and revokes previous consent',async()=>{

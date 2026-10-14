@@ -178,7 +178,7 @@
       $(`${prefix}Days`).innerHTML=dayLabels.map(([id,label])=>`<label><input type="checkbox" value="${id}" ${w.days.includes(id)?'checked':''}><span>${label}</span></label>`).join('');
     }
     $('revisionLabel').textContent=`Редакция ${p.revision}`;
-    renderReview();
+    renderReview();renderQuickStart();
   }
   let starterRenderedHash="";
  function renderStarterReview(){
@@ -238,6 +238,7 @@
   }
   function render() {
     const p=snapshot.policy,items=Object.values(snapshot.services||{}),runtimes=Object.entries(snapshot.runtime||{});
+    renderQuickStart();
     const active=presentationFresh&&p.enabled&&!snapshot.safe_mode&&!snapshot.manual&&!snapshot.stopped&&!snapshot.blocked;
     $('heroState').textContent=!presentationFresh?'Состояние обновляется':!p.setup_complete?'Нужна первоначальная настройка':active?'Автономный режим разрешён':'Автоматические изменения приостановлены';
     $('heroDot').classList.toggle('inactive',!active);
@@ -304,7 +305,40 @@
     requireGeneration(generation);
     notify(enabled?'Сервис передан в очередь. Применение ещё не подтверждено.':'Автоподбор сервиса приостановлен; рабочий маршрут сохранён.');await refresh(false,true);
   }
-  async function saveWizard(event) {
+  // First setup in three choices. It fills the same wizard fields and saves
+  // through saveWizard, so validation, consent and the starter set are shared.
+  let quickAdvanced=false;
+  function quickDevices(){
+    const rows=typeof state==='object'&&Array.isArray(state.devices)?state.devices:[];
+    return rows.map(d=>({ip:(d.ips||[]).find(ip=>/^\d+\.\d+\.\d+\.\d+$/.test(ip)),label:d.name||d.hostname||''})).filter(d=>d.ip);
+  }
+  function renderQuickStart(){
+    const card=$('quickStart'),layout=$('wizardLayout');if(!card||!layout)return;
+    const show=!!snapshot&&!snapshot.policy?.setup_complete&&!quickAdvanced;
+    card.hidden=!show;layout.hidden=show;if(!show)return;
+    const selected=new Set($$('input[name="quick-device"]:checked').map(x=>x.value)),devices=quickDevices();
+    $('quickDevices').innerHTML=devices.length?devices.map(d=>`<label><input type="checkbox" name="quick-device" value="${escapeHTML(d.ip)}" ${selected.has(d.ip)?'checked':''}><span>${escapeHTML(d.label||d.ip)}<small>${escapeHTML(d.label?d.ip:'')}</small></span></label>`).join(''):'<p>Устройства ещё не найдены. Откройте раздел «Устройства» или выберите всю домашнюю сеть.</p>';
+    $('quickDevices').hidden=$$('input[name="quick-scope"]:checked')[0]?.value!=='selected';
+    const starter=snapshot.starter?.eligible?(snapshot.starter.items||[]).map(s=>s.name):[];
+    $('quickStarter').textContent=(starter.length?`Сразу подключаются: ${starter.join(', ')}. `:'')+'Остальной интернет работает как обычно. Остановить можно в любой момент.';
+  }
+  async function runQuickStart(){
+    const error=$('quickError');error.textContent='';
+    try{
+      if(!snapshot||!editingPolicy)throw new Error('Настройки роутера ещё загружаются.');
+      if(!$('quickConsent').checked)throw new Error('Отметьте разрешение, чтобы запустить автопилот.');
+      const all=($$('input[name="quick-scope"]:checked')[0]?.value||'all')==='all';
+      const devices=$$('input[name="quick-device"]:checked').map(x=>`${x.value}/32`);
+      if(!all&&!devices.length)throw new Error('Выберите хотя бы одно устройство или всю домашнюю сеть.');
+      $('scopeMode').value=all?'all':'selected';$('scopeAddresses').value=devices.join('\n');$('scopeAddressesLabel').hidden=all;
+      $('autonomyEnabled').checked=true;$('inheritNew').checked=true;
+      $$('input[name="source"]').forEach(el=>{el.checked=$('quickSources').checked;});
+      dirty=true;renderReview();$('confirmConsent').checked=true;
+      $('quickStartButton').disabled=true;
+      await saveWizard({preventDefault(){}},error);
+    }catch(e){reportError(e,error);}finally{$('quickStartButton').disabled=false;}
+  }
+  async function saveWizard(event,errorTarget) {
     event.preventDefault();if(saving) return;
     const generation=authGeneration;
     try {
@@ -317,7 +351,7 @@
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:releaseRequested&&$('confirmConsent').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
       requireGeneration(generation);const refreshed=await refresh(true);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
-    } catch(e) { reportError(e,$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
+    } catch(e) { reportError(e,errorTarget||$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
     if(!event.target.closest('[data-autonomy]')) return;
@@ -336,7 +370,10 @@
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
   $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
-  $('wizardForm').addEventListener('submit',saveWizard);
+  $('wizardForm').addEventListener('submit',event=>saveWizard(event));
+  $('quickStartButton').addEventListener('click',()=>void runQuickStart());
+  $('quickAdvanced').addEventListener('click',()=>{quickAdvanced=true;renderQuickStart();setStep(0);});
+  $('quickStart').addEventListener('change',event=>{if(event.target.name==='quick-scope')renderQuickStart();});
   $('openOptionalCatalog')?.addEventListener('click',()=>{if(typeof openCommunityCatalog==='function')openCommunityCatalog();});
   document.getElementById('communityCatalogDialog')?.addEventListener('close',()=>void refresh());
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
