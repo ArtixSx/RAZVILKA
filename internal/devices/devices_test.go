@@ -62,3 +62,37 @@ func TestFailedAndInvalidNeighborsAreIgnored(t *testing.T) {
 		t.Fatalf("unexpected devices: %+v", got)
 	}
 }
+
+type routeAwareRunner map[string]string
+
+func (r routeAwareRunner) Run(_ context.Context, _ string, args ...string) ([]byte, error) {
+	key := ""
+	for _, arg := range args {
+		key += arg + " "
+	}
+	return []byte(r[key]), nil
+}
+
+// The provider gateway and other neighbors behind a default-route interface
+// (Router: eth3 for IPv4, a tunnel for IPv6) are not home devices.
+func TestDiscoveryLeavesOutNeighborsBehindDefaultRoutes(t *testing.T) {
+	root := t.TempDir()
+	arp := filepath.Join(root, "arp")
+	if err := os.WriteFile(arp, []byte("IP address HW type Flags HW address Mask Device\n100.64.128.2 0x1 0x2 80:7f:f8:5b:38:09 * eth3\n192.168.1.40 0x1 0x2 aa:bb:cc:dd:ee:40 * br0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{IPCommand: "ip", ARPPaths: []string{arp}, Runner: routeAwareRunner{
+		"-4 route show default ": "default via 100.64.128.1 dev eth3  metric 1000\n",
+		"-6 route show default ": "default proto static metric 1024\n\tnexthop dev nwg0 weight 1\n\tnexthop via fe80::1 dev eth4 weight 1\n",
+		"neigh show ": "100.64.128.1 dev eth3 lladdr 80:7f:f8:5b:38:08 REACHABLE\nfe80::9 dev nwg0 lladdr 02:00:00:00:00:09 STALE\nfe80::a dev eth4 lladdr 02:00:00:00:00:0a STALE\n" +
+			"192.168.1.25 dev br0 lladdr aa:bb:cc:dd:ee:ff REACHABLE\n172.16.1.95 dev br1 lladdr 3c:0b:4f:55:c1:4e STALE\n",
+	}}
+	rows := m.discover(context.Background())
+	if len(rows) != 3 || rows["mac-aa-bb-cc-dd-ee-ff"].Interface != "br0" || rows["mac-3c-0b-4f-55-c1-4e"].Interface != "br1" || rows["mac-aa-bb-cc-dd-ee-40"].Interface != "br0" {
+		t.Fatalf("home devices: %+v", rows)
+	}
+	// Without route information nothing is hidden.
+	if rows := (&Manager{IPCommand: "ip", Runner: fakeRunner{output: "100.64.128.1 dev eth3 lladdr 80:7f:f8:5b:38:08 REACHABLE\n"}}).discover(context.Background()); len(rows) != 1 {
+		t.Fatalf("a neighbor was hidden without a default route: %+v", rows)
+	}
+}

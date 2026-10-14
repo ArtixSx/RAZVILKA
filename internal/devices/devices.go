@@ -376,6 +376,9 @@ func cloneDevices(input map[string]Device) map[string]Device {
 	return out
 }
 
+// discover lists home devices. Neighbors behind an interface that carries a
+// default route (the provider gateway, an upstream tunnel) are not home
+// devices and are left out.
 func (m *Manager) discover(parent context.Context) map[string]Device {
 	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
 	defer cancel()
@@ -385,17 +388,51 @@ func (m *Manager) discover(parent context.Context) map[string]Device {
 	if ipCommand == "" {
 		ipCommand = findIPCommand()
 	}
+	upstream := map[string]bool{}
 	if m.Runner != nil && ipCommand != "" {
+		upstream = defaultRouteInterfaces(ctx, m.Runner, ipCommand)
 		if output, err := m.Runner.Run(ctx, ipCommand, "neigh", "show"); err == nil {
-			parseNeighbors(string(output), leases, rows)
+			parseNeighbors(string(output), leases, rows, upstream)
 		}
 	}
 	for _, path := range m.ARPPaths {
 		if data, err := os.ReadFile(path); err == nil {
-			parseARP(string(data), leases, rows)
+			parseARP(string(data), leases, rows, upstream)
 		}
 	}
 	return rows
+}
+
+// defaultRouteInterfaces returns the devices of the main-table default routes,
+// including multipath next hops. A failed read hides nothing.
+func defaultRouteInterfaces(ctx context.Context, runner Runner, ipCommand string) map[string]bool {
+	upstream := map[string]bool{}
+	for _, family := range []string{"-4", "-6"} {
+		output, err := runner.Run(ctx, ipCommand, family, "route", "show", "default")
+		if err != nil {
+			continue
+		}
+		inDefault := false
+		for _, line := range strings.Split(string(output), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			switch {
+			case fields[0] == "default":
+				inDefault = true
+			case fields[0] != "nexthop" || !inDefault:
+				inDefault = false
+				continue
+			}
+			for index := 1; index+1 < len(fields); index++ {
+				if fields[index] == "dev" {
+					upstream[fields[index+1]] = true
+				}
+			}
+		}
+	}
+	return upstream
 }
 
 type lease struct {
@@ -430,7 +467,7 @@ func (m *Manager) readLeases() map[string]lease {
 	return result
 }
 
-func parseNeighbors(output string, leases map[string]lease, rows map[string]Device) {
+func parseNeighbors(output string, leases map[string]lease, rows map[string]Device, upstream map[string]bool) {
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
@@ -450,14 +487,14 @@ func parseNeighbors(output string, leases map[string]lease, rows map[string]Devi
 				mac = normalizeMAC(fields[index+1])
 			}
 		}
-		if state == "failed" || state == "incomplete" {
+		if state == "failed" || state == "incomplete" || upstream[interfaceName] {
 			continue
 		}
 		addDiscovery(rows, address.String(), mac, interfaceName, state, leases)
 	}
 }
 
-func parseARP(output string, leases map[string]lease, rows map[string]Device) {
+func parseARP(output string, leases map[string]lease, rows map[string]Device, upstream map[string]bool) {
 	for index, line := range strings.Split(output, "\n") {
 		if index == 0 {
 			continue
@@ -468,7 +505,7 @@ func parseARP(output string, leases map[string]lease, rows map[string]Device) {
 		}
 		address, err := netip.ParseAddr(fields[0])
 		mac := normalizeMAC(fields[3])
-		if err != nil || mac == "" {
+		if err != nil || mac == "" || upstream[fields[5]] {
 			continue
 		}
 		addDiscovery(rows, address.Unmap().String(), mac, fields[5], "reachable", leases)
