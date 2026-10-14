@@ -156,6 +156,14 @@ await test('actual logout and login still invalidate the previous mutation and c
  assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1);
 });
 
+await test('before first setup the hero action opens the wizard without writing',async()=>{
+ const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;initial.policy.enabled=false;
+ f.respond(0,200,initial);await flush();
+ assert.equal(f.e('pauseButton').textContent,'Начать настройку');assert.equal(f.e('pauseButton').disabled,false);
+ const before=f.requests.length;f.click('pauseButton');await flush();
+ assert.equal(f.requests.length,before,'opening the wizard must not send a request');
+});
+
 await test('changed starter definition preserves subset and revokes previous consent',async()=>{
  const f=fixture(),initial=snapshot();initial.policy.setup_complete=false;
  initial.starter={eligible:true,sha256:'a'.repeat(64),items:[{id:'one',name:'One',domains:1},{id:'two',name:'Two',domains:2}]};
