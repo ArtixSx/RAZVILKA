@@ -787,26 +787,32 @@ prune_update_backups || echo "Старые снимки обновлений н�
 
 LAN_IP="$(ip -4 -o addr show br0 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
 [ -n "$LAN_IP" ] || LAN_IP="127.0.0.1"
+PANEL_URL="http://$LAN_IP:${RAZVILKA_PORT:-8787}"
 echo ""
 echo "============================================================"
 echo " [OK] RAZVILKA $VERSION установлена и запущена"
-echo " Панель: http://$LAN_IP:${RAZVILKA_PORT:-8787}"
-echo " Rollback: $BACKUP"
-echo ""
+echo " Панель: $PANEL_URL"
+# A clean installation has nothing to return to; print the snapshot only
+# when an existing installation was replaced.
+if [ "$CONFIG_PRESENT" -eq 1 ]; then
+  echo " Снимок для отката: $BACKUP"
+fi
+echo " Обходы включаются только после проверки и вашего подтверждения."
 if [ "$CREDENTIALS_PRESENT" -eq 0 ]; then
   ADMIN_TOKEN="$(tr -d '\r\n' < "$APPDIR/admin.token")"
-  echo " ПЕРВЫЙ ВХОД"
-  echo " Ключ настройки: $ADMIN_TOKEN"
+  # The first-login link is the last thing printed so it is easy to find.
   echo ""
-  echo " Откройте ссылку и создайте свой логин и пароль:"
-  echo " http://$LAN_IP:${RAZVILKA_PORT:-8787}/#setup=$ADMIN_TOKEN"
+  echo " ПЕРВЫЙ ВХОД — откройте ссылку в браузере на устройстве"
+  echo " из домашней сети и создайте свой логин и пароль:"
   echo ""
-  echo " Важно: сохраните recovery key в менеджере паролей."
+  echo "   $PANEL_URL/#setup=$ADMIN_TOKEN"
+  echo ""
+  echo " Этот же ключ потом служит ключом восстановления пароля."
+  echo " Храните его в менеджере паролей; сменить его можно в панели:"
+  echo " «Настройки» → «Перевыпустить и показать»."
   echo " RAZVILKA не использует и не хранит SSH-пароль роутера."
 else
   echo " Существующие логин и пароль UI сохранены."
-  echo " Recovery key скрыт и повторно в консоль не выводится."
+  echo " Ключ восстановления скрыт и повторно в консоль не выводится."
 fi
 echo "============================================================"
-echo " Рекомендация: сначала откройте мастер настройки; обходы"
-echo " включаются только после проверки и вашего подтверждения."
