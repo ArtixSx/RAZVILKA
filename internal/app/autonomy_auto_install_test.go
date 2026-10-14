@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
@@ -35,7 +38,7 @@ func TestAutoInstallAllowedOnlyForPreparedCurrentPackage(t *testing.T) {
 	p := autonomy.Default()
 	job := updatecheck.Job{ID: "job", ReviewToken: "token", State: "ready", ConfigRevision: 7, Channel: "stable", Release: &updatecheck.Release{Version: "9.9.9"}}
 	cfg := config.Config{Revision: 7}
-	if !autoInstallAllowed(job, cfg, false, p) {
+	if !autoInstallAllowed(job, cfg, false, false, p) {
 		t.Fatal("prepared package refused")
 	}
 	for name, mutate := range map[string]func(*updatecheck.Job, *config.Config, *bool){
@@ -50,7 +53,7 @@ func TestAutoInstallAllowedOnlyForPreparedCurrentPackage(t *testing.T) {
 	} {
 		j, c, d := job, cfg, false
 		mutate(&j, &c, &d)
-		if autoInstallAllowed(j, c, d, p) {
+		if autoInstallAllowed(j, c, d, false, p) {
 			t.Errorf("%s: installation allowed", name)
 		}
 	}
@@ -77,5 +80,63 @@ func TestAutoUpdateComponentsSummary(t *testing.T) {
 	views = append(views, components.View{Spec: components.Spec{ID: "nfqws2", Name: "NFQWS2"}, Installed: true, CanUpdate: true})
 	if got := a.autoUpdateComponents(context.Background(), views); !strings.Contains(got, "недоступны") || strings.Contains(got, "прежние версии сохранены") {
 		t.Fatalf("summary %q", got)
+	}
+}
+
+// Run 457: a clean 0.20.0 starts in Safe Mode and keeps a saved, unapplied
+// policy. With no committed live plan the update preserves both, so neither
+// may block it; every other condition still refuses.
+func TestAutoInstallOnQuietNetworkIgnoresSafeModeAndDraft(t *testing.T) {
+	p := autonomy.Default()
+	job := updatecheck.Job{ID: "job", ReviewToken: "token", State: "ready", ConfigRevision: 7, Channel: "stable", Release: &updatecheck.Release{Version: "9.9.9"}}
+	cfg := config.Config{Revision: 7, SafeMode: true}
+	if !autoInstallAllowed(job, cfg, true, true, p) {
+		t.Fatal("quiet clean install refused")
+	}
+	if autoInstallAllowed(job, cfg, false, false, p) || autoInstallAllowed(job, config.Config{Revision: 7}, true, false, p) {
+		t.Fatal("live network lost the Safe Mode or draft refusal")
+	}
+	for name, mutate := range map[string]func(*updatecheck.Job, *config.Config){
+		"other settings": func(_ *updatecheck.Job, c *config.Config) { c.Revision = 8 },
+		"other channel":  func(j *updatecheck.Job, _ *config.Config) { j.Channel = "preview" },
+		"stopped":        func(_ *updatecheck.Job, c *config.Config) { c.ServiceControl.Stopped = true },
+		"not ready":      func(j *updatecheck.Job, _ *config.Config) { j.State = "preparing" },
+	} {
+		j, c := job, cfg
+		mutate(&j, &c)
+		if autoInstallAllowed(j, c, true, true, p) {
+			t.Errorf("%s: quiet network allowed installation", name)
+		}
+	}
+}
+
+func TestSelfUpdateAuthorityInSafeModeFollowsCommittedPlan(t *testing.T) {
+	store, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !store.Get().SafeMode {
+		t.Fatal("clean configuration is expected to start in Safe Mode")
+	}
+	manager := dataplane.New(t.TempDir())
+	a := &App{Store: store, Dataplane: manager}
+	revision := store.Get().Revision
+	if err := a.selfUpdateFileAuthority(context.Background(), revision); err != nil {
+		t.Fatal("clean Safe Mode installation refused its update", err)
+	}
+	if err := manager.Record(dataplane.Plan{PlanID: "dp-1111111111111111", Digest: strings.Repeat("a", 64), State: "committed", Revision: revision, Adapters: []string{"nfqws2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.selfUpdateFileAuthority(context.Background(), revision); !errors.Is(err, updatecheck.ErrReviewChanged) {
+		t.Fatal("Safe Mode over a committed live plan allowed the installer", err)
+	}
+	if err := store.SetSafeMode(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.selfUpdateFileAuthority(context.Background(), revision); !errors.Is(err, updatecheck.ErrReviewChanged) {
+		t.Fatal("changed Safe Mode kept the job's revision binding", err)
+	}
+	if err := a.selfUpdateFileAuthority(context.Background(), store.Get().Revision); err != nil {
+		t.Fatal("ordinary live update refused", err)
 	}
 }

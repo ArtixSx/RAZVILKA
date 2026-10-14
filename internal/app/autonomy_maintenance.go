@@ -234,9 +234,11 @@ func (a *App) autoInstallFailed(version string) bool {
 // autoInstallAllowed reports whether a prepared package may be installed now:
 // it was prepared for these exact settings and channel, and the network is
 // not stopped, protected or waiting for the owner's review of a draft.
-func autoInstallAllowed(job updatecheck.Job, cfg config.Config, dirty bool, p autonomy.Policy) bool {
+// quiet: no committed live network plan (see selfUpdateNetworkQuiet). Safe
+// Mode and unapplied drafts then do not block the update, which preserves both.
+func autoInstallAllowed(job updatecheck.Job, cfg config.Config, dirty, quiet bool, p autonomy.Policy) bool {
 	return job.Release != nil && job.State == "ready" && job.ID != "" && job.ReviewToken != "" &&
-		!cfg.SafeMode && !cfg.ServiceControl.Stopped && !dirty && cfg.Revision == job.ConfigRevision &&
+		(quiet || !cfg.SafeMode && !dirty) && !cfg.ServiceControl.Stopped && cfg.Revision == job.ConfigRevision &&
 		updatecheck.NormalizedChannel(job.Channel) == updatecheck.NormalizedChannel(p.UpdateChannel)
 }
 
@@ -253,7 +255,7 @@ func (a *App) runAutoInstall(ctx context.Context, p autonomy.Policy) bool {
 	}
 	cfg := a.Store.Get()
 	_, windowOpen := autonomy.WindowKey(p.Application, p.Timezone, time.Now())
-	if !windowOpen || p.Application.Mode != "install" || a.componentMaintenancePending() || !autoInstallAllowed(*job, cfg, a.Store.Dirty(), p) || len(autoInstallAttemptPrefix)+len(job.Release.Version) > 64 || job.Release.Version == "" || a.autoInstallFailed(job.Release.Version) {
+	if !windowOpen || p.Application.Mode != "install" || a.componentMaintenancePending() || !autoInstallAllowed(*job, cfg, a.Store.Dirty(), a.selfUpdateNetworkQuiet(), p) || len(autoInstallAttemptPrefix)+len(job.Release.Version) > 64 || job.Release.Version == "" || a.autoInstallFailed(job.Release.Version) {
 		return false
 	}
 	if a.SelfUpdateFiles != nil {

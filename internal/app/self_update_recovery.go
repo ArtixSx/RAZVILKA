@@ -16,10 +16,28 @@ func (a *App) selfUpdateFileAuthority(ctx context.Context, revision uint64) erro
 		return errSelfUpdateRecovery
 	}
 	cfg := a.Store.Get()
-	if cfg.Revision != revision || cfg.SafeMode || cfg.ServiceControl.Stopped {
+	if cfg.Revision != revision || cfg.SafeMode && !a.selfUpdateNetworkQuiet() || cfg.ServiceControl.Stopped {
 		return updatecheck.ErrReviewChanged
 	}
 	return nil
+}
+
+// selfUpdateNetworkQuiet reports that no committed live network plan exists:
+// a clean installation (Safe Mode is the default) or Safe Mode before any
+// Apply. An application update there cannot replace or interrupt live routes,
+// and the new version keeps Safe Mode, drafts and every saved setting; without
+// this a clean 0.20.0 never updated, manually or by schedule (run 457). A live
+// plan keeps the refusal: Safe Mode then protects running routes from the
+// installer. A changed Safe Mode still changes the revision bound to the job.
+func (a *App) selfUpdateNetworkQuiet() bool {
+	if a.Dataplane == nil {
+		return true
+	}
+	plan, exists, err := a.Dataplane.Committed()
+	if err != nil {
+		return false
+	}
+	return !exists || plan.State != "committed" || plan.SafeMode || plan.Noop
 }
 
 func (a *App) selfUpdateRecovery(w http.ResponseWriter, r *http.Request) {
