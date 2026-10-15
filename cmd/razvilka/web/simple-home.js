@@ -5,6 +5,7 @@
 (function (root) {
   'use strict';
   const OK = new Set(['healthy', 'applied']);
+  const RECHECK = new Set(['pending', 'checking']);
   const PROGRESS = new Set(['pending', 'checking', 'applying', 'searching', 'scope-pending', 'removal-pending', 'rate-limited']);
   const SHORT = {
     pending: 'Ждёт проверки', checking: 'Проверяется', applying: 'Включается', searching: 'Подбирается способ обхода',
@@ -42,9 +43,12 @@
       const detail = String(runtime.message || '').slice(0, 220);
       // A waiting service says when it continues ("…через 12 мин.").
       const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
+      // After a restart every service waits for a fresh check, but an applied
+      // one already carries its bypass: say so instead of "waiting".
+      if (RECHECK.has(state) && snapshot.applied_services?.[id]?.enabled) return { id, name: label[id] || id, state, bucket: 'ok', short: 'Включён · перепроверяется', detail };
       return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || (OK.has(state) ? 'Работает' : 'Проверяется'), detail };
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
-    for (const s of services) if (s.bucket === 'ok') s.short = 'Работает';
+    for (const s of services) if (s.bucket === 'ok' && OK.has(s.state)) s.short = 'Работает';
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства — дальше автопилот всё сделает сам.' };

@@ -34,6 +34,12 @@ const waiting=model({...snap({discord:'rate-limited'}),runtime:{discord:{state:'
 assert.equal(waiting.services[0].short,'Следующая попытка примерно через 12 мин');
 assert.equal(model(snap({discord:'rate-limited'}),catalog).services[0].short,'Пауза между попытками');
 
+const restarted=model({...snap({youtube:'pending',discord:'pending'}),applied_services:{youtube:{enabled:true}}},catalog);
+assert.equal(restarted.tone,'progress','one service still waits for its first apply');
+assert.equal(restarted.services.find(s=>s.id==='youtube').short,'Включён · перепроверяется');
+assert.equal(restarted.services.find(s=>s.id==='discord').short,'Ждёт проверки');
+assert.equal(model({...snap({youtube:'checking'}),applied_services:{youtube:{enabled:true}}},catalog).title,'Всё работает');
+
 const removing=model({...snap({youtube:'healthy'}),services:{youtube:{id:'youtube'},discord:{id:'discord',removing:true}}},catalog);
 assert.deepEqual(Array.from(removing.services,s=>s.id),['youtube'],'a service being removed is not listed');
 
