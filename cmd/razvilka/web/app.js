@@ -555,6 +555,9 @@ function routeAvailable(id) {
 
 function setView(name) {
   if (typeof name !== 'string' || !document.getElementById(`view-${name}`)) name = 'overview';
+  // Details belong to their original workspace. A fixed drawer must not
+  // cover controls after the user has navigated to another page.
+  if (state.currentView !== name) $('#detailsPanel')?.classList.remove('open');
   // Navigation is local. A broken status/engine widget must not strand the
   // user on its page, submit a write, or silently discard an editor's draft.
   state.uiRenderIssues ||= {};
@@ -2842,13 +2845,22 @@ async function discardEngineConfigDraft() {
   if (!engine || !file || state.engineIntent) return;
   const intent = beginEngineIntent();
   if (!intent) return;
+  let discarded = false;
   try {
     if (file.staged) await api(`/api/v1/engine-configs/${encodeURIComponent(engine.id)}/discard?file=${encodeURIComponent(file.id)}`, { method: 'POST', signal: intent.controller.signal });
     if (!engineIntentCurrent(intent)) return;
     state.engineLoaded = null; state.engineGuided = null; state.engineEditorDirty = false; state.engineValidation = null;
     $('#engineEditor').value = '';
+    discarded = true;
     await refreshEngineConfigs(intent);
-  } catch (error) { if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Не удалось отменить изменения'); }
+  } catch (error) {
+    if (engineIntentCurrent(intent)) {
+      if (discarded) {
+        state.engineReadError = error.message;
+        $('#engineEditorMessage').textContent = `Изменения отменены. Не удалось перечитать настройки: ${error.message}`;
+      } else showDetails({ error: error.message }, 'Не удалось отменить изменения');
+    }
+  }
   finally { finishEngineIntent(intent); }
 }
 

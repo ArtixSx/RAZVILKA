@@ -175,6 +175,14 @@ reset();
 await context.discardEngineConfigDraft();
 assert.equal(state.engineEditorDirty, false, 'local-only changes cannot be canceled');
 assert.equal(calls.some(call => call.url.includes('/discard?')), false, 'canceling local-only editor touched server staging');
+reset();
+handler=async()=>{throw new Error('panel reader busy');};
+await context.discardEngineConfigDraft();
+assert.equal(state.engineEditorDirty,false,'a failed reread resurrected discarded local edits');
+assert.equal(state.engineIntent,null);
+assert.equal(calls.some(call=>call.options?.method&&call.options.method!=='GET'),false,'local discard started a write');
+assert.equal(messages.length,0,'a completed local discard opened a misleading failure drawer');
+assert.match($('#engineEditorMessage').textContent,/Изменения отменены/);
 console.log('Engine single-action staging, reviewed file guards, failed-save stop, local editing, cancellation/auth and late-response fences passed');
 
 reset();state.engineEditorDirty=false;state.engineMode='guided';

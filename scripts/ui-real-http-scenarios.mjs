@@ -359,6 +359,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
         await page.locator('.engine-tab[data-engine-tab="config"]').click();await page.locator('#engineDiscardDraft').click();
         await page.waitForFunction(()=>!state.engineEditorDirty && !state.engineIntent);
         assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0,'discarding a local unstaged draft wrote a file');
+        assert.equal(await page.locator('#detailsPanel').evaluate(element=>element.classList.contains('open')),false,'completed local discard opened a failure drawer');
       });
       await diagnose('UI_ENGINE_CARD_MOBILE_LAYOUT',async()=>{
         await nav('engines');await page.setViewportSize({width:390,height:844});
@@ -370,6 +371,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
       });
       await diagnose('UI_ENGINE_CARD_RETURN_OVERVIEW',async()=>{
         await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
+        assert.equal(await page.locator('#detailsPanel').evaluate(element=>element.classList.contains('open')),false,'old details cover controls after navigation');
       });
     });
     await test('AI group is a disclosure and keeps members separate across readback', 'real HTTP + three disposable catalog definitions; presentation only', async()=>{
