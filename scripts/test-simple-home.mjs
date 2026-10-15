@@ -59,6 +59,11 @@ assert.notEqual(model(returned,catalog,{youtube:{kind:'good',route:'sing-box:nod
 assert.equal(model(returned,catalog,{youtube:{kind:'bad',route:'nfqws2'}}).services[0].short,'Проверка не пройдена');
 assert.notEqual(model(snap({youtube:'healthy'}),catalog,proofs).tone,'ok','unapplied service cannot borrow a PASS');
 assert.notEqual(model({...returned,services:{youtube:{enabled:false}}},catalog,proofs).tone,'ok','a paused service cannot borrow a PASS');
+for(const recovery of [{safe_mode:true},{blocked:true}]){
+  const result=model(snap({youtube:'healthy'},{applied_services:applied,...recovery}),catalog,proofs);
+  assert.equal(result.phase,'recovery');
+  assert.equal(result.tone,'problem');
+}
 
 // Run the real shared proof adapter: TTL, revision, route, and the server's
 // freshness verification must all survive before simple mode can turn green.
@@ -91,6 +96,33 @@ assert.deepEqual(available(catalog,new Set(),'',1).length,1,'bounded');
 const {communityAvailable}=context.RazvilkaSimpleHome;
 const shared=[{id:'ga-netflix',name:'Netflix',category:'Видео'},{id:'ga-telegram',name:'Telegram',imported:true},{id:'ga-youtube',name:'YouTube'}];
 assert.deepEqual(Array.from(communityAvailable(shared,catalog),e=>e.id),['ga-netflix'],'imported and built-in names are not offered twice');
+
+// Exercise the actual one-click import action: overlapping source lists
+// require the same explicit confirmation as the advanced import dialog.
+const importAction=read('cmd/razvilka/web/simple-home.js').match(/  async function importCommunity\(id\) {[^]*?\n  }\n/);
+assert(importAction);
+for(const choice of ['cancel','accept','missing','clean']){
+  const calls=[],prompts=[],ui={busy:'',note:'',error:'',community:[{id:'ga-test'}]};
+  const preview={import_guard:'source-sha256',source_sha256:'a'.repeat(64),conflicts:choice==='clean'?[]:[{value:'shared.example',service_name:'Other service'}]};
+  const actionContext={ui,render(){},api:async(path,options)=>{
+    calls.push({path,options});
+    return path.endsWith('/preview')?preview:{service:{id:'custom-ga-test'}};
+  },interfaceManage:async(id,on)=>calls.push({manage:id,on})};
+  if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);return choice==='accept';};
+  vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);
+  await actionContext.importCommunity('ga-test');
+  const imported=calls.find(c=>c.path?.endsWith('/import'));
+  assert.equal(!!imported,choice==='accept'||choice==='clean',choice);
+  assert.equal(calls.some(c=>c.manage),!!imported,choice+' enrolls only an imported service');
+  assert.equal(prompts.length,choice==='clean'||choice==='missing'?0:1,choice);
+  if(imported){
+    const body=JSON.parse(imported.options.body);
+    assert.equal(body.allow_conflicts,choice==='accept');
+    assert.equal(body.expected_source_sha256,preview.source_sha256);
+  }
+  assert.equal(ui.busy,'',choice+' releases action lock');
+  assert.equal(ui.note,'',choice+' clears pending import text');
+}
 
 const {updateNotice}=context.RazvilkaSimpleHome;
 assert.equal(updateNotice({update_available:true,can_prepare:true,latest_version:'0.20.1'}).text,'Вышло обновление 0.20.1');

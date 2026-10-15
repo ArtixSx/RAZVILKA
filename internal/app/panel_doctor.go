@@ -170,6 +170,11 @@ func (a *App) doctorRazvilka() doctorCheck {
 		return c
 	}
 	cfg := a.Store.Get()
+	if cfg.SafeMode {
+		c.Status, c.Detail = "fail", "Восстановление после сбоя не завершено. Изменения сети приостановлены; работа обхода не подтверждена."
+		c.Action = &doctorAction{View: "diagnostics", Label: "Открыть восстановление"}
+		return c
+	}
 	if cfg.ServiceControl.Stopped {
 		c.Status, c.Detail = "warn", "Обход выключен кнопкой «Выключить всё». Включите его, чтобы сервисы снова открывались."
 		return c

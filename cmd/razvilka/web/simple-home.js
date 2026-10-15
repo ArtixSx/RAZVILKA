@@ -64,6 +64,7 @@
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
+    if (snapshot.blocked || snapshot.safe_mode) return { ...base, phase: 'recovery', tone: 'problem', title: 'Нужно восстановление', text: 'После сбоя изменения приостановлены. Проверьте восстановление; работа обхода пока не подтверждена.' };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства — дальше автопилот всё сделает сам.' };
     if (snapshot.stopped || policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };
@@ -272,8 +273,10 @@
       const request = typeof workflowRequest === 'function' ? workflowRequest : (path, options) => api(path, options);
       const preview = await request(`/api/v1/community/services/${encodeURIComponent(id)}/preview`, {}, 50000);
       if (preview?.import_guard !== 'source-sha256' || !/^[a-f0-9]{64}$/.test(preview?.source_sha256 || '')) throw new Error('Сервер не подтвердил отпечаток списка. Попробуйте ещё раз.');
+      const conflicts = preview.conflicts || [];
+      if (conflicts.length && (typeof askConfirmation !== 'function' || !await askConfirmation('Импортировать пересекающиеся списки?', `${conflicts.length} записей пересекаются с другими сервисами. Их маршруты не будут заменены.`, 'Импортировать'))) return;
       ui.note = 'Сохраняем сервис…'; render(true);
-      const saved = await request(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: (preview.conflicts || []).length > 0, refresh: false, expected_source_sha256: preview.source_sha256 }) }, 50000);
+      const saved = await request(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: conflicts.length > 0, refresh: false, expected_source_sha256: preview.source_sha256 }) }, 50000);
       if (!saved?.service?.id) throw new Error('Сервис не сохранён.');
       if (typeof refreshCoreAfterEdit === 'function') await refreshCoreAfterEdit();
       await interfaceManage(saved.service.id, true);
@@ -284,7 +287,7 @@
       ui.note = '';
       ui.error = (typeof workflowError === 'function' ? workflowError(e) : e?.message) || 'Сервис не добавлен.';
     } finally {
-      ui.busy = ''; render(true);
+      ui.busy = ''; ui.note = ''; render(true);
     }
   }
 
@@ -307,7 +310,7 @@
     // browser drops the click; never replace the page under a held pointer.
     if (ui.holding && !force) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
-    const action = m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
+    const action = m.phase === 'recovery' ? '<button type="button" class="primary" data-view="diagnostics">Открыть восстановление</button>' : m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
     const canAdd = m.phase === 'ready' || m.phase === 'empty';
     const doctor = doctorCard();

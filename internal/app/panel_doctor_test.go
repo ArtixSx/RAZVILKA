@@ -106,3 +106,17 @@ func TestPanelDoctorDoesNotRenewHistoricalWorkerStates(t *testing.T) {
 		})
 	}
 }
+
+func TestPanelDoctorHonorsHiddenRecoveryFlag(t *testing.T) {
+	a := doctorFixture(t, true, true)
+	if err := a.Store.SetSafeMode(true); err != nil {
+		t.Fatal(err)
+	}
+	if a.Operations.Snapshot().Fenced {
+		t.Fatal("fixture must exercise the persisted recovery flag independently")
+	}
+	got := a.doctorRazvilka()
+	if got.Status != "fail" || got.Action == nil || got.Action.View != "diagnostics" || !strings.Contains(got.Detail, "Восстановление") {
+		t.Fatalf("unfinished recovery reported as working: %+v", got)
+	}
+}
