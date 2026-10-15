@@ -57,6 +57,12 @@ func (strategyValidator) Validate(_ context.Context, arguments []string) strateg
 
 type strategyProbeExecutor struct{}
 
+type strategyProbeResources struct{}
+
+func (strategyProbeResources) Inspect() strategylab.ResourceBudget {
+	return strategylab.ResourceBudget{Observed: true, MemoryTotalKB: 256 * 1024, MemoryAvailableKB: 128 * 1024, CPUCount: 1, Load1: 0.25}
+}
+
 func TestClassifyWARPHandshakeFailure(t *testing.T) {
 	failure := classifyApplyFailure("WARP WireGuard handshake was not confirmed on UDP ports 2408, 500, 1701, 4500")
 	if failure.Code != "WARP_WIREGUARD_HANDSHAKE" || !failure.DraftPreserved || !failure.Retryable {
@@ -411,6 +417,8 @@ func TestStrategyLabProbeUsesCatalogURLAndRecordsEvidence(t *testing.T) {
 	}
 	manager.Validator = strategyValidator{}
 	manager.Executor = strategyProbeExecutor{}
+	// This route/API fixture must not depend on the host's current resource load.
+	manager.Resources = strategyProbeResources{}
 	candidate, err := manager.AddCandidate("tcp-tls", "TLS", "--filter-tcp=443", "expert")
 	if err != nil {
 		t.Fatal(err)
