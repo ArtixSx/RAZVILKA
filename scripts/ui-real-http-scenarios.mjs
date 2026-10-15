@@ -243,6 +243,24 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
     assert.equal(requests.filter(r=>r.method!=='GET').length,writes);
     assert.deepEqual(await page.evaluate(()=>state.uiRenderIssues),{});
   });
+  await test('saved device browse uses its real memory endpoint without granting device actions', 'real HTTP navigation and historical DTO; admission is not forced', async()=>{
+    const start=requests.length;
+    await navTo(page,'devices');
+    const snapshot=await readJSON('/api/v1/panel/devices');
+    assert.equal(await page.evaluate(value=>validSavedDeviceBrowse(value),snapshot),true);
+    if(snapshot.data)for(const device of snapshot.data.devices){
+      assert(Array.isArray(device.known_addresses));
+      for(const key of ['online','discovered','policies','routes','proof'])assert.equal(Object.hasOwn(device,key),false);
+    }
+    assert.equal(await page.evaluate(()=>state.devices.some(device=>Object.hasOwn(device,'known_addresses'))),false,'historical DTO entered the live device list');
+    const cards=page.locator('#deviceGrid .device-saved-card');
+    assert.equal(await cards.locator('button,input,select,[data-device-id]').count(),0);
+    const search=page.locator('#deviceSearch'),original=await search.inputValue();
+    await search.fill('ui-qa-device-search');assert.equal(await search.inputValue(),'ui-qa-device-search');await search.fill(original);
+    assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+    await navTo(page,'overview');
+    return {snapshot_read:true,historical_rows_have_actions:false,business_writes:0,admission_forced:false};
+  });
   await test('connection REST and stream follow the visible view with single-flight readback','real connection HTTP and SSE lifecycle',async()=>{
     const isConnection=request=>['/api/v1/connections','/api/v1/connections/stream'].includes(request.path);
     const hidden=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});

@@ -180,6 +180,7 @@ async function api(url, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
+  if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
   const headers = new Headers(options.headers || {});
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -226,6 +227,7 @@ async function api(url, options = {}) {
     throw error;
   } finally {
     if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
+    if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
   }
@@ -960,6 +962,7 @@ function panelSectionState(key, phase, error = null) {
   const previous = state.dataLoad[key] || {};
   state.dataLoad[key] = { loaded: previous.loaded === true || phase === 'ready', phase,
     message: error?.message || '', updatedAt: phase === 'ready' ? Date.now() : previous.updatedAt };
+  if (key === 'devices' && typeof deviceBrowseSectionChanged === 'function') deviceBrowseSectionChanged(phase);
 }
 
 function panelBusy(error) {
@@ -1009,6 +1012,7 @@ function renderPanelLoad() {
     catch (_) { state.uiRenderIssues[key] = 'Не удалось обновить виджет. Последние данные сохранены.'; }
   };
   if (state.currentView === 'sources') render('panel-sources', renderSources);
+  if (state.currentView === 'devices') render('panel-devices', renderDevices);
   render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
   render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
   const values = panelViewKeys().map(key => state.dataLoad?.[key]).filter(Boolean);
@@ -1249,6 +1253,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     hideAuth();
     document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
     if (typeof loadSavedPanelSnapshot === 'function') void loadSavedPanelSnapshot(generation, options);
+    if (panelViewKeys().includes('devices') && typeof loadSavedDeviceBrowse === 'function') void loadSavedDeviceBrowse(generation, options);
     // This already has its own single-flight scheduler and auth epoch.
     // Never await it here: a slow job-status endpoint is an isolated failure.
     scheduleNodeActivity(0);
@@ -1270,7 +1275,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         renderPanelSection(key);
       } catch (error) {
         if (!panelSnapshotCurrent(generation) || !panelReadContextCurrent(context)) return;
-        if (error.status === 401) {
+        if (error.status === 401 || key === 'devices' && error.status === 403) {
           cancelPanelRefresh();
           showAuth({ ...state.status, authenticated: false }, 'Сессия завершилась. Войдите снова.');
           return;
@@ -3996,6 +4001,7 @@ function deviceAddressesHTML(ips) {
 }
 
 function renderDevices() {
+  if (typeof renderSavedDeviceBrowse === 'function' && renderSavedDeviceBrowse()) return;
   const warning = $('#devicePersistenceWarning');
   warning.textContent = state.devicePersistenceWarning || '';
   warning.hidden = !state.devicePersistenceWarning;
@@ -4004,6 +4010,9 @@ function renderDevices() {
     if (!query) return true;
     return [device.name, device.hostname, device.mac, device.group, device.interface, ...(device.ips || [])].join(' ').toLowerCase().includes(query);
   });
+  const readOnly = typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed();
+  const policyReadOnly = readOnly || typeof deviceBrowseMutationAllowed === 'function'
+    && (state.dataLoad?.services?.phase !== 'ready' || state.services?.some(service => service.presentation_only));
   $('#deviceGrid').innerHTML = devices.map((device) => {
     const policies = device.policies || [];
     const selected = policies.filter((policy) => policy.scope === 'selected-device');
@@ -4014,7 +4023,7 @@ function renderDevices() {
       <div class="device-addresses">${deviceAddressesHTML(device.ips || [])}</div>
       <div class="device-meta"><span>Интерфейс <b>${esc(device.interface || '—')}</b></span><span>Группа <b>${esc(device.group || 'без группы')}</b></span><span>Свои политики <b>${selected.length}</b></span><span>Общие сервисы <b>${global.length}</b></span></div>
       <div class="device-policy-preview">${policyPreview || '<span>Индивидуальных областей пока нет</span>'}${selected.length > 4 ? `<small>+ ещё ${selected.length - 4}</small>` : ''}</div>
-      <div class="device-actions"><button class="secondary device-edit" data-device-id="${esc(device.id)}" type="button">Имя и группа</button><button class="primary device-policy" data-device-id="${esc(device.id)}" type="button" ${(device.ips || []).length ? '' : 'disabled'}>Назначить сервис</button></div>
+      <div class="device-actions"><button class="secondary device-edit" data-device-id="${esc(device.id)}" type="button" ${readOnly ? 'disabled' : ''}>Имя и группа</button><button class="primary device-policy" data-device-id="${esc(device.id)}" type="button" ${!policyReadOnly && (device.ips || []).length ? '' : 'disabled'}>Назначить сервис</button></div>
     </article>`;
   }).join('');
   $('#deviceEmpty').style.display = devices.length ? 'none' : 'grid';
@@ -4036,14 +4045,29 @@ function renderDevices() {
 async function refreshDevices() {
   const button = $('#refreshDevices');
   button.disabled = true; button.textContent = 'Поиск…';
+  const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
+  const current = () => !context || panelReadContextCurrent(context);
+  if (typeof panelSectionState === 'function') panelSectionState('devices', 'loading');
+  if (typeof loadSavedDeviceBrowse === 'function') void loadSavedDeviceBrowse(panelLoad.generation);
+  renderDevices();
   try {
-    acceptDeviceList(await api('/api/v1/devices?view=status'));
+    const value = await api('/api/v1/devices?view=status');
+    if (!current()) return;
+    acceptDeviceList(value);
+    if (typeof panelSectionState === 'function') panelSectionState('devices', 'ready');
     renderDevices();
-  } catch (error) { showDetails({ error: error.message }, 'Устройства не обновлены'); }
+  } catch (error) {
+    if (!current()) return;
+    if (typeof panelSectionState === 'function') panelSectionState('devices', panelBusy(error) ? 'busy' : 'error', error);
+    if ((error.status === 401 || error.status === 403) && typeof showAuth === 'function') showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.');
+    renderDevices();
+    showDetails({ error: error.message }, 'Устройства не обновлены');
+  }
   finally { button.disabled = false; button.textContent = 'Найти заново'; }
 }
 
 function openDeviceEdit(id) {
+  if (typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed()) return;
   const device = state.devices.find((item) => item.id === id);
   if (!device) return;
   $('#deviceEditID').value = device.id;
@@ -4057,7 +4081,9 @@ function openDeviceEdit(id) {
 
 async function saveDeviceEdit(event) {
   event.preventDefault();
+  if (typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed()) return;
   const id = $('#deviceEditID').value;
+  if (!id || !state.devices?.some(device => device.id === id)) return;
   try {
     await api(`/api/v1/devices/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name: $('#deviceEditName').value.trim(), group: $('#deviceEditGroup').value.trim() }) });
     $('#deviceEditDialog').close();
@@ -4066,6 +4092,8 @@ async function saveDeviceEdit(event) {
 }
 
 function openDevicePolicy(id) {
+  if (typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed()) return;
+  if (typeof deviceBrowseMutationAllowed === 'function' && (state.dataLoad?.services?.phase !== 'ready' || state.services?.some(service => service.presentation_only))) return;
   const device = state.devices.find((item) => item.id === id);
   if (!device || !(device.ips || []).length) return;
   $('#devicePolicyID').value = device.id;
@@ -4079,6 +4107,7 @@ function openDevicePolicy(id) {
 }
 
 function updateDevicePolicyForm() {
+  if (typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed()) return;
   const device = state.devices.find((item) => item.id === $('#devicePolicyID').value);
   const service = state.services.find((item) => item.id === $('#devicePolicyService').value);
   if (!device || !service) return;
@@ -4095,6 +4124,9 @@ function updateDevicePolicyForm() {
 
 async function saveDevicePolicy(event) {
   event.preventDefault();
+  if (typeof deviceBrowseMutationAllowed === 'function' && !deviceBrowseMutationAllowed()) return;
+  const token = typeof deviceBrowseMutationToken === 'function' ? deviceBrowseMutationToken() : null;
+  if (typeof deviceBrowseMutationAllowed === 'function' && (state.dataLoad?.services?.phase !== 'ready' || state.services?.some(service => service.presentation_only))) return;
   const device = state.devices.find((item) => item.id === $('#devicePolicyID').value);
   const service = state.services.find((item) => item.id === $('#devicePolicyService').value);
   if (!device || !service) return;
@@ -4107,6 +4139,8 @@ async function saveDevicePolicy(event) {
   try {
     const body = serviceDraftBody(service, { route, sources });
     if (!await askConfirmation('Сохранить область сервиса?', `${service.name}: область будет ограничена ${sources.length} адресом(ами). Маршрут ${routeLabel(route)} и состояние сервиса эта вкладка не изменяет.`, 'Сохранить в черновик')) return;
+    if (typeof deviceBrowseMutationCurrent === 'function' && !deviceBrowseMutationCurrent(token)) return;
+    if (typeof deviceBrowseMutationAllowed === 'function' && (state.dataLoad?.services?.phase !== 'ready' || state.services?.some(item => item.presentation_only))) return;
     await writeServiceDraft(service.id, body);
     $('#devicePolicyDialog').close();
     await refreshCoreAfterEdit();
