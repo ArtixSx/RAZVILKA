@@ -7,19 +7,21 @@ const context={};
 vm.runInNewContext(read('cmd/razvilka/web/simple-home.js'),context);
 const {model,available,plural}=context.RazvilkaSimpleHome;
 const catalog=[{id:'youtube',name:'YouTube',category:'Видео'},{id:'discord',name:'Discord',category:'Мессенджеры'},{id:'roblox',name:'Roblox',category:'Игры'}];
-const snap=(runtime,extra={})=>({policy:{setup_complete:true,enabled:true,revision:3},services:Object.fromEntries(Object.keys(runtime).map(id=>[id,{id}])),runtime:Object.fromEntries(Object.entries(runtime).map(([id,state])=>[id,{state,message:'detail '+id}])),...extra});
+const snap=(runtime,extra={})=>({policy:{setup_complete:true,enabled:true,revision:3},services:Object.fromEntries(Object.keys(runtime).map(id=>[id,{id,enabled:true}])),runtime:Object.fromEntries(Object.entries(runtime).map(([id,state])=>[id,{state,message:'detail '+id}])),...extra});
 
 assert.equal(model(null,catalog).phase,'loading');
 assert.equal(model({policy:{setup_complete:false}},catalog).phase,'setup');
 assert.equal(model(snap({},{stopped:true}),catalog).phase,'off');
 assert.equal(model(snap({}),catalog).phase,'empty');
 
-const ok=model(snap({youtube:'healthy',discord:'applied'}),catalog);
+const applied={youtube:{enabled:true,route:'nfqws2'},discord:{enabled:true,route:'nfqws2'}};
+const proofs={youtube:{kind:'good',route:'nfqws2'},discord:{kind:'good',route:'nfqws2'}};
+const ok=model(snap({youtube:'healthy',discord:'applied'},{applied_services:applied}),catalog,proofs);
 assert.equal(ok.tone,'ok');
 assert.equal(ok.title,'Всё работает');
 assert.deepEqual(Array.from(ok.services,s=>s.short),['Работает','Работает']);
 
-const busy=model(snap({youtube:'healthy',discord:'pending'}),catalog);
+const busy=model(snap({youtube:'healthy',discord:'pending'},{applied_services:applied}),catalog,proofs);
 assert.equal(busy.tone,'progress');
 assert.match(busy.title,/^Настраиваю 1 сервис…$/);
 
@@ -38,9 +40,46 @@ const restarted=model({...snap({youtube:'pending',discord:'pending'}),applied_se
 assert.equal(restarted.tone,'progress','one service still waits for its first apply');
 assert.equal(restarted.services.find(s=>s.id==='youtube').short,'Включён · перепроверяется');
 assert.equal(restarted.services.find(s=>s.id==='discord').short,'Ждёт проверки');
-assert.equal(model({...snap({youtube:'checking'}),applied_services:{youtube:{enabled:true}}},catalog).title,'Всё работает');
+assert.notEqual(model({...snap({youtube:'checking'}),applied_services:{youtube:{enabled:true}}},catalog).title,'Всё работает');
+assert.equal(model({...snap({youtube:'checking'}),applied_services:{youtube:{enabled:true}}},catalog).tone,'progress');
 
-const removing=model({...snap({youtube:'healthy'}),services:{youtube:{id:'youtube'},discord:{id:'discord',removing:true}}},catalog);
+// A restart, a successful Apply, and a historical healthy label never renew
+// the exact route/revision/network proof. Only the shared fresh result does.
+for(const runtime of ['pending','checking','applied','healthy']){
+  const input=snap({youtube:runtime},{applied_services:applied});
+  const result=model(input,catalog);
+  assert.notEqual(result.title,'Всё работает',runtime);
+  assert.notEqual(result.services[0].short,'Работает',runtime);
+}
+const returned=snap({youtube:'applied'},{applied_services:applied});
+returned.runtime.youtube.message='Ваш возврат на штатный NFQWS2 применён. Веб-проверка пока не подтверждена.';
+assert.match(model(returned,catalog).services[0].detail,/не подтверждена/);
+assert.equal(model(returned,catalog).tone,'progress');
+assert.notEqual(model(returned,catalog,{youtube:{kind:'good',route:'sing-box:node-old'}}).tone,'ok');
+assert.equal(model(returned,catalog,{youtube:{kind:'bad',route:'nfqws2'}}).services[0].short,'Проверка не пройдена');
+assert.notEqual(model(snap({youtube:'healthy'}),catalog,proofs).tone,'ok','unapplied service cannot borrow a PASS');
+assert.notEqual(model({...returned,services:{youtube:{enabled:false}}},catalog,proofs).tone,'ok','a paused service cannot borrow a PASS');
+
+// Run the real shared proof adapter: TTL, revision, route, and the server's
+// freshness verification must all survive before simple mode can turn green.
+const dashboardSource=read('cmd/razvilka/web/service-dashboard-ui.js');
+const proofContext={state:{status:{revision:9},serviceControl:{config_revision:9}},serviceDashboard:{control:{results:[]}}};
+vm.createContext(proofContext);
+vm.runInContext(['serviceDashboardApplied','serviceDashboardResult','serviceDashboardFresh','serviceDashboardSummary'].map(name=>{
+  const fn=dashboardSource.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'));
+  assert(fn,name);return fn[0];
+}).join('\n'),proofContext);
+const now=Date.now();
+const proof={service_id:'youtube',kind:'check',checked_route:'nfqws2',status:'pass',available:true,config_revision:9,checked_at:new Date(now-1000).toISOString(),valid_until:new Date(now+60000).toISOString(),freshness_verified:true};
+const live={id:'youtube',applied_state:applied.youtube};
+for(const change of [{},{freshness_verified:false},{config_revision:8},{valid_until:new Date(now-1).toISOString()},{checked_route:'sing-box:node-old'},{status:'fail',available:false}]){
+  proofContext.serviceDashboard.control.results=[{...proof,...change}];
+  const summary=proofContext.serviceDashboardSummary(live);
+  const result=model(returned,catalog,{youtube:summary});
+  assert.equal(result.services[0].bucket,Object.keys(change).length===0?'ok':change.status==='fail'?'problem':'progress',JSON.stringify(change));
+}
+
+const removing=model({...snap({youtube:'healthy'}),services:{youtube:{id:'youtube',enabled:true},discord:{id:'discord',removing:true}}},catalog);
 assert.deepEqual(Array.from(removing.services,s=>s.id),['youtube'],'a service being removed is not listed');
 
 const managed=new Set(['youtube']);

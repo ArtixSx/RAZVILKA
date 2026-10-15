@@ -214,9 +214,8 @@
     if(blocked){result.actionable=true;result.pendingLabel=result.pendingLabel||blockers[runtime.state];result.pendingDetail=text(runtime.message);}
     const progressing=['checking','applying','searching','pending'].includes(runtime.state)&&managed?.enabled===true;
     const matched=typeof summary.route==='string'&&summary.route!==''&&summary.route===result.route;
-    // The autopilot's own checks are not recorded as TestLab results; its
-    // current confirmation of the applied route is the freshest evidence.
-    if(result.applied&&managed?.enabled===true&&runtime.state==='healthy'&&!changed&&!blocked)return {...result,kind:'good',label:'Работает',detail:text(runtime.message)||'Автопилот подтвердил доступ для проверенного сценария.'};
+    // A runtime label has no current route/network/revision proof. Only the
+    // shared freshness-checked summary can confirm the applied assignment.
     if(result.applied&&summary.kind==='good'&&matched)return {...result,kind:'good',label:'Работает',detail:blocked?`Проверка сервиса прошла, но автопилот не завершил применение: ${text(runtime.message)||blockers[runtime.state]}`:'Доступ подтверждён для проверенного сценария. Другие функции приложения могут требовать отдельной проверки.'};
     if(summary.kind==='bad'&&matched)return {...result,kind:'bad',actionable:result.actionable||!progressing,label:'Проверка не пройдена',detail:text(summary.detail)||'Откройте сервис, чтобы посмотреть причину.'};
     if(blocked)return {...result,kind:'warn',label:blockers[runtime.state],detail:text(runtime.message)||'Откройте причину. Остальные сервисы продолжают управляться отдельно.'};
@@ -231,8 +230,7 @@
     return {rows,selected:selected.length,good:selected.filter(s=>s.kind==='good').length,
       excluded:rows.filter(s=>s.excluded).length,attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:rows.filter(s=>s.changed).length};
   }
-  // A route counts as verified by a matching TestLab result or by the
-  // autopilot's current confirmation of a service it manages.
+  // Only a freshness-checked summary for the applied route is verification.
   function engineUsage(services, summaries = {}, managed = {}, runtime = {}) {
     const counts = {};
     for (const service of services || []) {
@@ -242,8 +240,7 @@
       const row = counts[id] ||= {assigned:0, verified:0};
       row.assigned++;
       const tested = summaries[service.id]?.kind === 'good' && summaries[service.id]?.route === applied.route;
-      const confirmed = managed?.[service.id]?.enabled === true && runtime?.[service.id]?.state === 'healthy';
-      if (tested || confirmed) row.verified++;
+      if (tested) row.verified++;
     }
     return counts;
   }

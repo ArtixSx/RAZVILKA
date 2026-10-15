@@ -270,8 +270,12 @@ func (a *App) doctorServices() doctorCheck {
 		item := doctorItem{ID: r.id, Name: name, Detail: r.message}
 		switch r.state {
 		case "healthy", "applied":
-			item.Status = "ok"
-			good++
+			// These are historical worker states, including an explicit return
+			// to NFQWS2 whose web check did not pass. The memory-only doctor
+			// has no current network/revision-bound proof to renew them.
+			item.Status = "warn"
+			item.Detail = "Назначение сохранено; нужна свежая проверка доступа. " + r.message
+			waiting++
 		case "", "pending", "checking", "applying", "searching", "scope-pending", "rate-limited":
 			item.Status = "warn"
 			waiting++

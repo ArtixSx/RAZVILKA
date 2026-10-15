@@ -4,7 +4,8 @@
  * Pure helpers are exported for tests; actions reuse interfaceManage. */
 (function (root) {
   'use strict';
-  const OK = new Set(['healthy', 'applied']);
+  // Runtime labels are history, not a proof bound to the current route.
+  const HISTORICAL = new Set(['healthy', 'applied']);
   const RECHECK = new Set(['pending', 'checking']);
   const PROGRESS = new Set(['pending', 'checking', 'applying', 'searching', 'scope-pending', 'removal-pending', 'rate-limited']);
   const SHORT = {
@@ -20,8 +21,7 @@
   };
 
   function bucket(state) {
-    if (OK.has(state)) return 'ok';
-    if (!state || PROGRESS.has(state)) return 'progress';
+    if (!state || PROGRESS.has(state) || HISTORICAL.has(state)) return 'progress';
     return 'problem';
   }
 
@@ -39,22 +39,29 @@
   }
 
   // model turns the autopilot snapshot into what the simple home renders.
-  function model(snapshot, catalog) {
+  function model(snapshot, catalog, summaries = {}) {
     if (!snapshot || typeof snapshot !== 'object') return { phase: 'loading', services: [], tone: 'progress', title: 'Загружаем состояние…', text: '' };
     const policy = snapshot.policy || {};
     const label = names(catalog, snapshot);
-    const services = Object.entries(snapshot.services || {}).filter(([, s]) => s && !s.removing).map(([id]) => {
+    const services = Object.entries(snapshot.services || {}).filter(([, s]) => s && !s.removing).map(([id, spec]) => {
       const runtime = snapshot.runtime?.[id] || {};
       const state = runtime.state || 'pending';
       const detail = String(runtime.message || '').slice(0, 220);
+      if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', short: 'Автоподбор на паузе', detail };
       // A waiting service says when it continues ("…через 12 мин.").
       const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
-      // After a restart every service waits for a fresh check, but an applied
-      // one already carries its bypass: say so instead of "waiting".
-      if (RECHECK.has(state) && snapshot.applied_services?.[id]?.enabled) return { id, name: label[id] || id, state, bucket: 'ok', short: 'Включён · перепроверяется', detail };
-      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || (OK.has(state) ? 'Работает' : 'Проверяется'), detail };
+      const applied = snapshot.applied_services?.[id];
+      const proof = summaries[id];
+      const matched = applied?.enabled === true && proof?.route && proof.route === (applied.route || applied.mode);
+      if (matched && proof.kind === 'bad') return { id, name: label[id] || id, state, bucket: 'problem', short: 'Проверка не пройдена', detail: proof.detail || detail };
+      if (HISTORICAL.has(state)) {
+        const verified = matched && proof.kind === 'good';
+        return { id, name: label[id] || id, state, bucket: verified ? 'ok' : 'progress', short: verified ? 'Работает' : applied?.enabled ? 'Включён · нужна свежая проверка' : 'Ожидает применения', detail: verified ? proof.detail || detail : detail };
+      }
+      // Retain the applied assignment during recheck without claiming access.
+      if (RECHECK.has(state) && applied?.enabled) return { id, name: label[id] || id, state, bucket: 'progress', short: 'Включён · перепроверяется', detail };
+      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || 'Проверяется', detail };
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
-    for (const s of services) if (s.bucket === 'ok' && OK.has(s.state)) s.short = 'Работает';
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства — дальше автопилот всё сделает сам.' };
@@ -286,7 +293,9 @@
     const home = ensure();
     if (!home) return;
     const snap = snapshot();
-    const m = model(snap, catalog());
+    // Reuse the shared TTL/revision-aware result; runtime history alone does
+    // not carry the current network, route and configuration proof.
+    const m = model(snap, catalog(), typeof interfaceSummaries === 'function' ? interfaceSummaries() : {});
     // The advanced home renders the engine summary; simple mode shows the same
     // block beside the services instead of its own copy of that logic.
     const engines = simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '');

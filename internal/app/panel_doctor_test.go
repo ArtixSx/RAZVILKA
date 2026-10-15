@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,5 +83,26 @@ func TestPanelDoctorNamesTheFirstProblemInPlainGroups(t *testing.T) {
 		if w.Code != http.StatusMethodNotAllowed {
 			t.Fatal("doctor accepted a write", w.Code)
 		}
+	}
+}
+
+func TestPanelDoctorDoesNotRenewHistoricalWorkerStates(t *testing.T) {
+	for _, state := range []string{"healthy", "applied", "pending", "checking"} {
+		t.Run(state, func(t *testing.T) {
+			a := doctorFixture(t, true, true)
+			a.autonomy.doc.Services = map[string]autonomy.Service{"youtube": {ID: "youtube", Enabled: true}}
+			const message = "Возврат на NFQWS2 применён; веб-проверка не подтверждена."
+			a.autonomy.doc.Runtime = map[string]autonomy.Runtime{"youtube": {
+				State: state, Message: message, CheckedAt: time.Now().Add(-24 * time.Hour),
+				Network: "old-network", FailureNode: "sing-box:node-old",
+			}}
+			result := a.doctorServices()
+			if result.Status != "warn" || len(result.Items) != 1 || result.Items[0].Status != "warn" {
+				t.Fatalf("historical state renewed as current proof: %+v", result)
+			}
+			if !strings.Contains(result.Items[0].Detail, message) {
+				t.Fatalf("last worker result was lost: %+v", result)
+			}
+		})
 	}
 }
