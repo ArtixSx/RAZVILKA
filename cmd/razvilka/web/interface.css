@@ -1677,6 +1677,27 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-error{margin:0;color:var(--red)}.rz-sh-foot{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
 @media (max-width:640px){.rz-sh-status{flex-wrap:wrap;padding:18px}.rz-sh-status h2{font-size:19px}.rz-sh-status .primary{width:100%}.rz-sh-head .primary,.rz-sh-head .secondary{min-height:44px}}
 .rz-sh-note{margin:0;color:var(--muted);font-size:13px}
+.rz-doc-open{justify-self:start}
+.rz-doc{display:grid;gap:10px;padding:16px;border:1px solid var(--line2);border-radius:var(--radius);background:var(--panel)}
+.rz-doc h3{margin:0;font-size:16px}.rz-doc>p{margin:0}
+.rz-doc-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rz-doc-list>li{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.rz-doc-list>li>div{flex:1;min-width:0;display:grid;gap:2px}.rz-doc-list small{color:var(--muted)}
+.rz-doc-list ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+.rz-doc-mark{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;font-weight:800;color:var(--panel);background:var(--green)}
+.rz-doc-warn>.rz-doc-mark{background:var(--amber)}.rz-doc-fail>.rz-doc-mark{background:var(--red)}
+.rz-doc-list ul .rz-doc-fail{color:var(--red)}
+.rz-doc-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.rz-doc-actions .link-button,.rz-simple-settings .link-button{background:none;border:0;padding:0;color:var(--blue);cursor:pointer;text-decoration:underline;font:inherit}
+body:not(.rz-simple) #rzSimpleSettings{display:none}
+body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display:none!important}
+.rz-simple-settings{display:grid;gap:16px;max-width:760px;margin:0 auto 16px}
+.rz-set-card{display:grid;gap:4px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.rz-set-card h3{margin:0 0 6px;font-size:16px}
+.rz-set-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line)}
+.rz-set-card h3+.rz-set-row{border-top:0}
+.rz-set-row>span{display:grid;gap:2px;min-width:0}.rz-set-row small{color:var(--muted)}
+.rz-set-row input[type=checkbox]{flex:none;width:22px;height:22px}
 /* Simple mode keeps only banners that need the owner: no answer from the
    router or a journal review. Routine "busy" and "updating" notes are shown
    as one quiet line in the status card instead. */

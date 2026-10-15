@@ -196,6 +196,7 @@ type App struct {
 	cloudflareBusy        atomic.Bool
 	TestLab               *testlab.Runner
 	RouteProber           testlab.RouteProber
+	doctorProbes          doctorProbes
 	SmartRoute            *smartroute.Manager
 	Updates               *updatecheck.Manager
 	SelfUpdate            *updatecheck.Updater

@@ -64,6 +64,23 @@ assert.equal(quietEngine('0','Не установлен'),true);
 assert.equal(quietEngine('0','Процесс запущен'),false,'an installed engine stays visible');
 assert.equal(quietEngine('2','Не установлен'),false,'an assigned engine stays visible');
 
+const {doctorView,nightly,withNightly}=context.RazvilkaSimpleHome;
+const doc=doctorView({schema:1,status:'fail',summary:'Есть проблема.',checks:[{id:'internet',title:'Интернет роутера',status:'ok',detail:'ok'},{id:'services',title:'Ваши сервисы',status:'fail',detail:'Не работают: 1 из 2.',items:[{id:'a',name:'YouTube',status:'ok'},{id:'b',name:'Discord',status:'fail',detail:'Не удалось включить.'}],action:{view:'engines',label:'Открыть обходы'}},{id:'x',title:'X',status:'evil',action:{view:'javascript:alert(1)'}}]});
+assert.equal(doc.status,'fail');
+assert.equal(doc.rows[1].items.length,1,'working services are not repeated');
+assert.equal(doc.rows[1].items[0].name,'Discord');
+assert.equal(doc.rows[1].action.view,'engines');
+assert.equal(doc.rows[2].status,'warn','an unknown status reads as a warning');
+assert.equal(doc.rows[2].action,null,'an action outside panel views is dropped');
+assert.equal(doctorView({schema:2}),null);
+assert.equal(nightly({mode:'install'}),true);
+assert.equal(nightly({mode:'check'}),false);
+const base={revision:4,application:{mode:'install',start:'03:00',end:'04:00',days:[0,1]},components:{mode:'install'}};
+const off=withNightly(base,'application',false);
+assert.equal(off.application.mode,'check');
+assert.equal(off.application.start,'03:00','the window keeps its time');
+assert.equal(base.application.mode,'install','the snapshot is not mutated');
+
 assert.equal(plural(1,'сервис','сервиса','сервисов'),'1 сервис');
 assert.equal(plural(3,'сервис','сервиса','сервисов'),'3 сервиса');
 assert.equal(plural(11,'сервис','сервиса','сервисов'),'11 сервисов');

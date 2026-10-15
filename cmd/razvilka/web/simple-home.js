@@ -92,11 +92,37 @@
     return String(assigned).trim() === '0' && /не установлен/i.test(String(label || ''));
   }
 
-  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, quietEngine, bucket, plural });
+  // doctorView keeps the doctor's own wording; it only orders and labels.
+  function doctorView(report) {
+    if (!report || report.schema !== 1 || !Array.isArray(report.checks)) return null;
+    const mark = { ok: '✓', warn: '!', fail: '✕' };
+    return {
+      status: ['ok', 'warn', 'fail'].includes(report.status) ? report.status : 'warn',
+      summary: String(report.summary || ''),
+      rows: report.checks.map(c => ({
+        id: String(c.id || ''), title: String(c.title || ''), detail: String(c.detail || ''),
+        status: ['ok', 'warn', 'fail'].includes(c.status) ? c.status : 'warn', mark: mark[c.status] || '!',
+        items: (Array.isArray(c.items) ? c.items : []).filter(i => i && i.status !== 'ok').map(i => ({ name: String(i.name || i.id || ''), detail: String(i.detail || ''), status: i.status === 'fail' ? 'fail' : 'warn' })),
+        action: c.action && /^[a-z-]{1,40}$/.test(c.action.view || '') ? { view: c.action.view, label: String(c.action.label || 'Открыть') } : null,
+      })),
+    };
+  }
+
+  // nightly reports whether a maintenance window installs updates itself.
+  function nightly(window) { return window?.mode === 'install'; }
+
+  // withNightly returns a policy copy whose window installs or only checks.
+  function withNightly(policy, field, on) {
+    const next = JSON.parse(JSON.stringify(policy));
+    next[field] = { ...(next[field] || {}), mode: on ? 'install' : 'check' };
+    return next;
+  }
+
+  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, quietEngine, doctorView, nightly, withNightly, bucket, plural });
   if (typeof document === 'undefined') return;
 
   const KEY = 'razvilka.simpleMode';
-  const ui = { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null, communityState: '', note: '' };
+  const ui = { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null, communityState: '', note: '', doctor: '', report: null, doctorError: '', settingsBusy: '', settingsError: '', settingsKey: '' };
   let communityTimer = 0, communitySeq = 0;
   const html = value => (typeof esc === 'function' ? esc(value) : String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const snapshot = () => (typeof consoleSnapshot === 'object' ? consoleSnapshot : null);
@@ -126,6 +152,8 @@
       document.querySelector('[data-main-nav="overview"]')?.click();
     }
     render(true);
+    renderSettings(true);
+    if (typeof renderWorkspaceControls === 'function') renderWorkspaceControls();
   }
 
   function ensure() {
@@ -262,16 +290,18 @@
     // What the router is busy with replaces the technical availability banner.
     const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
     const activity = admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
-    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version, activity]);
+    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version, activity, ui.doctor, ui.report?.checked_at, ui.doctorError]);
     if (!force && key === ui.key) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
     ui.key = key;
     const action = m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
     const canAdd = m.phase === 'ready' || m.phase === 'empty';
+    const doctor = doctorCard();
     const main = (canAdd ? `<div class="rz-sh-head"><h3>Мои сервисы</h3><button type="button" class="${ui.open ? 'secondary' : 'primary'}" data-rz-sh-toggle-add aria-expanded="${ui.open}">${ui.open ? 'Готово' : 'Добавить сервис'}</button></div>${addPanel(m)}`
         + (m.services.length ? `<ul class="rz-sh-list">${m.services.map(serviceRow).join('')}</ul>` : '') : '')
       + (ui.error ? `<p class="rz-sh-error" role="alert">${html(ui.error)}</p>` : '')
+      + doctor
       + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
     home.classList.toggle('rz-sh-with-engines', !!engines);
     const updateRow = notice ? `<div class="rz-sh-update" role="status"><span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button></div>` : '';
@@ -304,6 +334,27 @@
     return box.innerHTML;
   }
 
+  function doctorCard() {
+    if (!ui.doctor) return '<button type="button" class="secondary rz-doc-open" data-rz-doc-run>Что-то не открывается? Проверить</button>';
+    if (ui.doctor === 'running') return '<section class="rz-doc" aria-busy="true"><h3>Проверяем…</h3><p class="rz-sh-note">Интернет, DNS, состояние RAZVILKA, способы обхода и сервисы. Это займёт несколько секунд.</p></section>';
+    const view = doctorView(ui.report);
+    if (!view) return `<section class="rz-doc"><h3>Проверка не выполнена</h3><p class="rz-sh-error">${html(ui.doctorError || 'Роутер не ответил на проверку.')}</p><button type="button" class="secondary" data-rz-doc-run>Повторить</button></section>`;
+    const rows = view.rows.map(r => `<li class="rz-doc-${r.status}"><span class="rz-doc-mark" aria-hidden="true">${r.mark}</span><div><b>${html(r.title)}</b><small>${html(r.detail)}</small>${r.items.length ? `<ul>${r.items.map(i => `<li class="rz-doc-${i.status}">${html(i.name)}${i.detail ? ` — ${html(i.detail)}` : ''}</li>`).join('')}</ul>` : ''}</div>${r.action ? `<button type="button" class="secondary" data-view="${html(r.action.view)}">${html(r.action.label)}</button>` : ''}</li>`).join('');
+    return `<section class="rz-doc rz-doc-${view.status}"><div class="rz-sh-head"><h3>Проверка</h3><button type="button" class="secondary" data-rz-doc-close>Скрыть</button></div><p>${html(view.summary)}</p><ul class="rz-doc-list">${rows}</ul><div class="rz-doc-actions"><button type="button" class="secondary" data-rz-doc-run>Проверить ещё раз</button><button type="button" class="link-button" data-rz-doc-report>Скачать отчёт для поддержки</button></div><small class="rz-sh-note">В отчёт не попадают ключи, пароли, адреса устройств и история сайтов.</small></section>`;
+  }
+
+  async function runDoctor() {
+    if (ui.doctor === 'running' || typeof api !== 'function') return;
+    ui.doctor = 'running'; ui.doctorError = ''; render(true);
+    try {
+      ui.report = await api('/api/v1/panel/doctor', { headers: { 'x-razvilka-read': 'passive' }, readTimeoutMs: 15000 });
+      ui.doctor = 'done';
+    } catch (e) {
+      ui.report = null; ui.doctor = 'failed'; ui.doctorError = e?.message || 'Роутер не ответил на проверку.';
+    }
+    render(true);
+  }
+
   async function act(id, remove) {
     if (typeof interfaceManage !== 'function' || ui.busy) return;
     ui.busy = id; ui.error = ''; render(true);
@@ -324,6 +375,9 @@
     if (target.dataset.rzShAddId) { void act(target.dataset.rzShAddId, false); return; }
     if (target.dataset.rzShCommunity) { void importCommunity(target.dataset.rzShCommunity); return; }
     if (target.dataset.rzShRemove) { void act(target.dataset.rzShRemove, true); return; }
+    if (target.hasAttribute('data-rz-doc-run')) { void runDoctor(); return; }
+    if (target.hasAttribute('data-rz-doc-close')) { ui.doctor = ''; ui.report = null; render(true); return; }
+    if (target.hasAttribute('data-rz-doc-report')) { if (typeof downloadDiagnostics === 'function') void downloadDiagnostics(); return; }
     if (target.hasAttribute('data-rz-sh-update')) { if (typeof openAppUpdate === 'function') void openAppUpdate(); return; }
     if (target.hasAttribute('data-rz-sh-custom')) {
       const dialog = document.getElementById('a1-addServiceDialog');
@@ -335,9 +389,81 @@
     ui.query = event.target.value; searchCommunity(ui.query); render();
   }
 
-  window.addEventListener('razvilka:autonomy-state', () => render());
+  function settingsSection() {
+    const view = document.getElementById('view-settings');
+    if (!view) return null;
+    let box = document.getElementById('rzSimpleSettings');
+    if (!box) {
+      box = document.createElement('section');
+      box.id = 'rzSimpleSettings';
+      box.className = 'rz-simple-settings';
+      box.setAttribute('aria-label', 'Основные настройки');
+      view.prepend(box);
+      box.addEventListener('click', onSettingsClick);
+      box.addEventListener('change', onSettingsChange);
+    }
+    return box;
+  }
+
+  function renderSettings(force = false) {
+    if (!enabled()) return;
+    const box = settingsSection();
+    if (!box) return;
+    const snap = snapshot();
+    const p = snap?.policy;
+    const version = typeof state === 'object' ? state?.status?.version || '' : '';
+    const devices = !p ? 'Загружаем…' : p.all_lan ? 'Обход действует для всех устройств домашней сети.' : `Обход действует только для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}.`;
+    const key = JSON.stringify([p?.revision, p?.application?.mode, p?.components?.mode, p?.all_lan, version, ui.settingsBusy, ui.settingsError]);
+    if (!force && key === ui.settingsKey) return;
+    ui.settingsKey = key;
+    const ready = !!p?.setup_complete && !ui.settingsBusy;
+    const toggle = (field, title, detail) => `<label class="rz-set-row"><span><b>${title}</b><small>${detail}</small></span><input type="checkbox" role="switch" data-rz-set-nightly="${field}" ${nightly(p?.[field]) ? 'checked' : ''} ${ready ? '' : 'disabled'}></label>`;
+    box.innerHTML = `<div class="rz-set-card"><h3>Обновления</h3>`
+      + toggle('application', 'Обновлять RAZVILKA ночью', 'Новая стабильная версия ставится сама; при сбое возвращается прежняя.')
+      + toggle('components', 'Обновлять способы обхода ночью', 'NFQWS2, Sing-box и другие компоненты обновляются с проверкой и откатом.')
+      + `<div class="rz-set-row"><span><b>Версия</b><small>${html(version ? 'Установлена ' + version : 'Загружаем…')}</small></span><button type="button" class="secondary" data-rz-set-update>Проверить обновления</button></div></div>`
+      + `<div class="rz-set-card"><h3>Устройства</h3><div class="rz-set-row"><span><b>Для кого работает обход</b><small>${html(devices)}</small></span><button type="button" class="secondary" data-view="devices">Открыть</button></div></div>`
+      + `<div class="rz-set-card"><h3>Резервная копия и помощь</h3><div class="rz-set-row"><span><b>Настройки</b><small>Сервисы и маршруты, без ключей и паролей.</small></span><button type="button" class="secondary" data-rz-set-export>Скачать</button></div><div class="rz-set-row"><span><b>Отчёт для поддержки</b><small>Без ключей, паролей, адресов устройств и истории сайтов.</small></span><button type="button" class="secondary" data-rz-doc-report>Скачать</button></div></div>`
+      + (ui.settingsError ? `<p class="rz-sh-error" role="alert">${html(ui.settingsError)}</p>` : '')
+      + `<p class="rz-sh-foot">Остальные параметры (DNS, списки сайтов, стратегии, перенос аккаунтов) — в <button type="button" class="link-button" data-rz-set-advanced>расширенном режиме</button>.</p>`;
+  }
+
+  async function saveNightly(field, on) {
+    const snap = snapshot();
+    if (!snap?.policy?.setup_complete || ui.settingsBusy) return;
+    ui.settingsBusy = field; ui.settingsError = ''; renderSettings(true);
+    try {
+      const policy = withNightly(snap.policy, field, on);
+      const request = typeof interfaceRequest === 'function'
+        ? (path, options = {}) => interfaceRequest(path, { ...options, body: options.body === undefined ? undefined : JSON.stringify(options.body) })
+        : (path, options = {}) => api(path, { ...options, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+      await request('/api/v1/autonomy', { method: 'PUT', body: { expected_revision: snap.policy.revision, policy, confirm: 'SAVE_AUTONOMY', release_safe_mode: false } });
+      const fresh = await request('/api/v1/autonomy');
+      window.dispatchEvent(new CustomEvent('razvilka:autonomy-state', { detail: fresh }));
+      if (typeof interfaceToast === 'function') interfaceToast(on ? 'Ночное обновление включено.' : 'Ночное обновление выключено: версии будут только проверяться.');
+    } catch (e) {
+      ui.settingsError = e?.message || 'Настройка не сохранена.';
+    } finally {
+      ui.settingsBusy = ''; renderSettings(true);
+    }
+  }
+
+  function onSettingsChange(event) {
+    const field = event.target?.dataset?.rzSetNightly;
+    if (field) void saveNightly(field, event.target.checked);
+  }
+  function onSettingsClick(event) {
+    const target = event.target.closest('button');
+    if (!target) return;
+    if (target.hasAttribute('data-rz-set-update')) { if (typeof openAppUpdate === 'function') void openAppUpdate(); return; }
+    if (target.hasAttribute('data-rz-set-export')) { if (typeof exportConfig === 'function') void exportConfig(); return; }
+    if (target.hasAttribute('data-rz-doc-report')) { if (typeof downloadDiagnostics === 'function') void downloadDiagnostics(); return; }
+    if (target.hasAttribute('data-rz-set-advanced')) setEnabled(false);
+  }
+
+  window.addEventListener('razvilka:autonomy-state', () => { render(); renderSettings(); });
   window.addEventListener('razvilka:app-update', () => render());
   document.addEventListener('DOMContentLoaded', apply);
   if (document.readyState !== 'loading') apply();
-  setInterval(() => { if (!document.hidden) render(); }, 3000);
+  setInterval(() => { if (!document.hidden) { render(); renderSettings(); } }, 3000);
 })(typeof window !== 'undefined' ? window : globalThis);

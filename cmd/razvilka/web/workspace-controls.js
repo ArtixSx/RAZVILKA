@@ -102,6 +102,11 @@ function renderWorkspaceControls() {
   power.classList.toggle('unknown', stopPending || !ready || control.runtime_state === 'unknown');
   $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? (canStop ? 'Включён · маршруты не подтверждены' : 'Включён · ждёт применения') : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
   $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control.runtime_state === 'unknown' ? 'Примените изменения, чтобы подтвердить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
+  // Simple mode names the switch by what the owner gets: the bypass.
+  if (globalThis.document?.body?.classList?.contains?.('rz-simple') && ready && !workspaceControl.runtimeJob && !workspaceControl.busy && !stopPending) {
+    if (canStop) { $('#projectPowerLabel').textContent = 'Обход включён'; $('#projectPowerHint').textContent = 'Нажмите, чтобы выключить всё'; }
+    else if (control.runtime_state === 'stopped') { $('#projectPowerLabel').textContent = 'Обход выключен'; if (control?.resume_available) $('#projectPowerHint').textContent = 'Нажмите, чтобы включить'; }
+  }
   if (stopPending) {
     $('#projectPowerLabel').textContent = 'Остановка запрошена';
     $('#projectPowerHint').textContent = 'Очистка маршрутов ещё не подтверждена · откройте лог';
@@ -191,6 +196,8 @@ async function toggleWorkspaceRuntime() {
   }
   const generation = workspaceControl.generation;
   const action = control.running || control.can_stop ? 'stop' : 'resume';
+  // One click used to stop every bypass at once; ask first.
+  if (action === 'stop' && typeof globalThis.confirm === 'function' && !globalThis.confirm('Выключить обход для всех сервисов? Сайты будут открываться напрямую, как без RAZVILKA. Включить снова можно этой же кнопкой.')) return;
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
     const intent = { expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' };

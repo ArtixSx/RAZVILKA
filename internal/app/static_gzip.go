@@ -107,7 +107,7 @@ type staticRecorder struct {
 	overflow bool
 }
 
-func (s *staticRecorder) Header() http.Header { return s.header }
+func (s *staticRecorder) Header() http.Header    { return s.header }
 func (s *staticRecorder) WriteHeader(status int) { s.status = status }
 func (s *staticRecorder) Write(p []byte) (int, error) {
 	if s.body.Len()+len(p) > gzipStaticMaxBody {
