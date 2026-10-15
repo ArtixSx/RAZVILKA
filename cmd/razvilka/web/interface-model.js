@@ -214,10 +214,13 @@
     if(blocked){result.actionable=true;result.pendingLabel=result.pendingLabel||blockers[runtime.state];result.pendingDetail=text(runtime.message);}
     const progressing=['checking','applying','searching','pending'].includes(runtime.state)&&managed?.enabled===true;
     const matched=typeof summary.route==='string'&&summary.route!==''&&summary.route===result.route;
+    // The autopilot's own checks are not recorded as TestLab results; its
+    // current confirmation of the applied route is the freshest evidence.
+    if(result.applied&&managed?.enabled===true&&runtime.state==='healthy'&&!changed&&!blocked)return {...result,kind:'good',label:'Работает',detail:text(runtime.message)||'Автопилот подтвердил доступ для проверенного сценария.'};
     if(result.applied&&summary.kind==='good'&&matched)return {...result,kind:'good',label:'Работает',detail:blocked?`Проверка сервиса прошла, но автопилот не завершил применение: ${text(runtime.message)||blockers[runtime.state]}`:'Доступ подтверждён для проверенного сценария. Другие функции приложения могут требовать отдельной проверки.'};
     if(summary.kind==='bad'&&matched)return {...result,kind:'bad',actionable:result.actionable||!progressing,label:'Проверка не пройдена',detail:text(summary.detail)||'Откройте сервис, чтобы посмотреть причину.'};
     if(blocked)return {...result,kind:'warn',label:blockers[runtime.state],detail:text(runtime.message)||'Откройте причину. Остальные сервисы продолжают управляться отдельно.'};
-    if(progressing){const labels={checking:'Проверяется',applying:'Подключение применяется',searching:'Подбирается подключение',pending:result.applied?'Ожидает проверки':'Ожидает настройки'};return {...result,kind:'warn',progress:true,actionable:changed,label:labels[runtime.state],detail:text(runtime.message)||'Дождитесь результата задачи на роутере.'};}
+    if(progressing){const labels={checking:'Проверяется',applying:'Подключение применяется',searching:'Подбирается подключение',pending:result.applied?'Включён · перепроверяется':'Ожидает настройки'};return {...result,kind:'warn',progress:true,actionable:changed,label:labels[runtime.state],detail:text(runtime.message)||'Дождитесь результата задачи на роутере.'};}
     if(!result.applied)return {...result,label:managed?.enabled?'Ожидает настройки':changed||s.enabled?'Ожидает применения':'Подключение не назначено',detail:managed?.enabled?'Сервис добавлен в автопилот. Применение подключения ещё не подтверждено.':'Настройки и применённое подключение показываются отдельно.'};
     return {...result,kind:'warn',actionable:changed,label:'Нужна проверка',detail:matched?text(summary.detail)||'Подключение назначено, но свежего подтверждения доступа нет.':'Результат не подтверждает это подключение. Дождитесь новой проверки.'};
   }
@@ -228,7 +231,9 @@
     return {rows,selected:selected.length,good:selected.filter(s=>s.kind==='good').length,
       excluded:rows.filter(s=>s.excluded).length,attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:rows.filter(s=>s.changed).length};
   }
-  function engineUsage(services, summaries = {}) {
+  // A route counts as verified by a matching TestLab result or by the
+  // autopilot's current confirmation of a service it manages.
+  function engineUsage(services, summaries = {}, managed = {}, runtime = {}) {
     const counts = {};
     for (const service of services || []) {
       const applied = appliedView(service);
@@ -236,7 +241,9 @@
       const id = applied.route.split(':')[0];
       const row = counts[id] ||= {assigned:0, verified:0};
       row.assigned++;
-      if (summaries[service.id]?.kind === 'good' && summaries[service.id]?.route === applied.route) row.verified++;
+      const tested = summaries[service.id]?.kind === 'good' && summaries[service.id]?.route === applied.route;
+      const confirmed = managed?.[service.id]?.enabled === true && runtime?.[service.id]?.state === 'healthy';
+      if (tested || confirmed) row.verified++;
     }
     return counts;
   }

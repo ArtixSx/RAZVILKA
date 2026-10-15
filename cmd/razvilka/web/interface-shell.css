@@ -802,6 +802,10 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-simple-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:8px;text-align:left}
 .rz-simple-toggle span:first-child{display:grid;gap:2px}.rz-simple-toggle small{color:var(--muted);font-size:12px}
 .rz-simple-home{display:grid;gap:16px;max-width:760px;margin:0 auto;padding:4px 0 24px}
+.rz-sh-main{display:grid;gap:16px;min-width:0}
+.rz-sh-engines{min-width:0;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.rz-sh-engines .ui7-engine-summary{grid-template-columns:1fr}
+@media (min-width:1100px){.rz-simple-home.rz-sh-with-engines{max-width:1160px;grid-template-columns:minmax(280px,360px) minmax(0,760px);align-items:start}.rz-sh-with-engines>.rz-sh-status{grid-column:1/-1}.rz-sh-with-engines>.rz-sh-engines{grid-column:1;grid-row:2}.rz-sh-with-engines>.rz-sh-main{grid-column:2;grid-row:2}}
 .rz-sh-status{display:flex;align-items:center;gap:16px;padding:22px 24px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}
 .rz-sh-status>div{flex:1;min-width:0}.rz-sh-status h2{margin:0 0 4px;font-size:22px;line-height:1.25}.rz-sh-status p{margin:0;color:var(--muted);line-height:1.5}
 .rz-sh-badge{flex:none;width:18px;height:18px;border-radius:50%;background:var(--muted)}
@@ -825,3 +829,4 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-add .link-button{justify-self:start;background:none;border:0;padding:4px 0;color:var(--blue);cursor:pointer;text-decoration:underline}
 .rz-sh-error{margin:0;color:var(--red)}.rz-sh-foot{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
 @media (max-width:640px){.rz-sh-status{flex-wrap:wrap;padding:18px}.rz-sh-status h2{font-size:19px}.rz-sh-status .primary{width:100%}.rz-sh-head .primary,.rz-sh-head .secondary{min-height:44px}}
+.rz-sh-note{margin:0;color:var(--muted);font-size:13px}

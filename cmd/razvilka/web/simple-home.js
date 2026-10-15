@@ -73,11 +73,19 @@
       .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id), 'ru')).slice(0, limit);
   }
 
-  root.RazvilkaSimpleHome = Object.freeze({ model, available, bucket, plural });
+  // communityAvailable lists community catalogue entries for the query that
+  // are neither imported yet nor shadowed by a built-in service of that name.
+  function communityAvailable(entries, catalog, limit = 20) {
+    const names = new Set((catalog || []).map(s => String(s?.name || '').toLocaleLowerCase('ru')));
+    return (entries || []).filter(e => e?.id && !e.imported && !names.has(String(e.name || '').toLocaleLowerCase('ru'))).slice(0, limit);
+  }
+
+  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, bucket, plural });
   if (typeof document === 'undefined') return;
 
   const KEY = 'razvilka.simpleMode';
-  const ui = { open: false, query: '', busy: '', error: '', key: '' };
+  const ui = { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null, communityState: '', note: '' };
+  let communityTimer = 0, communitySeq = 0;
   const html = value => (typeof esc === 'function' ? esc(value) : String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const snapshot = () => (typeof consoleSnapshot === 'object' ? consoleSnapshot : null);
   const catalog = () => (typeof state === 'object' && Array.isArray(state?.services) ? state.services : []);
@@ -146,9 +154,64 @@
   function addPanel(m) {
     if (!ui.open) return '';
     const list = available(catalog(), m.managed, ui.query);
-    const rows = list.map(s => `<li><div><b>${html(s.name || s.id)}</b><small>${html(s.category || '')}</small></div><button type="button" class="primary" data-rz-sh-add-id="${html(s.id)}" ${ui.busy ? 'disabled' : ''}>${ui.busy === s.id ? 'Добавляем…' : 'Добавить'}</button></li>`).join('');
-    const empty = catalog().length ? 'Ничего не найдено. Попробуйте другое название или добавьте свой сайт.' : 'Каталог ещё загружается…';
-    return `<div class="rz-sh-add"><label class="rz-sh-search"><span>Какой сервис должен открываться?</span><input type="search" data-rz-sh-query placeholder="Например, YouTube или Discord" value="${html(ui.query)}" autocomplete="off"></label><ul class="rz-sh-catalog">${rows || `<li class="rz-sh-empty">${empty}</li>`}</ul><button type="button" class="link-button" data-rz-sh-custom>Нет в списке? Добавить свой сайт</button></div>`;
+    const button = (attr, id) => `<button type="button" class="primary" ${attr}="${html(id)}" ${ui.busy ? 'disabled' : ''}>${ui.busy === id ? 'Добавляем…' : 'Добавить'}</button>`;
+    const rows = list.map(s => `<li><div><b>${html(s.name || s.id)}</b><small>${html(s.category || '')}</small></div>${button('data-rz-sh-add-id', s.id)}</li>`).join('');
+    // The built-in catalogue is the starter set; the community catalogue
+    // (domain lists published on GitHub) holds the rest.
+    const community = ui.query.trim() ? communityAvailable(ui.community, catalog()) : [];
+    const shared = community.map(e => `<li><div><b>${html(e.name || e.id)}</b><small>${html([e.category, 'каталог сообщества'].filter(Boolean).join(' · '))}</small></div>${button('data-rz-sh-community', e.id)}</li>`).join('');
+    const searching = ui.query.trim() && ui.communityState === 'loading' ? '<li class="rz-sh-empty">Ищем в каталоге сообщества…</li>' : '';
+    const failed = ui.query.trim() && ui.communityState === 'error' ? '<li class="rz-sh-empty">Каталог сообщества сейчас недоступен; повторите поиск позже.</li>' : '';
+    const empty = !catalog().length ? 'Каталог ещё загружается…' : ui.query.trim() && ui.communityState !== 'ready' ? '' : 'Ничего не найдено. Попробуйте другое название или добавьте свой сайт.';
+    const body = rows + shared + searching + failed || (empty ? `<li class="rz-sh-empty">${empty}</li>` : '');
+    return `<div class="rz-sh-add"><label class="rz-sh-search"><span>Какой сервис должен открываться?</span><input type="search" data-rz-sh-query placeholder="Например, YouTube, Netflix или Discord" value="${html(ui.query)}" autocomplete="off"></label><ul class="rz-sh-catalog">${body}</ul>${ui.note ? `<p class="rz-sh-note" role="status">${html(ui.note)}</p>` : ''}<button type="button" class="link-button" data-rz-sh-custom>Нет в списке? Добавить свой сайт</button></div>`;
+  }
+
+  function searchCommunity(query) {
+    clearTimeout(communityTimer);
+    const q = query.trim();
+    if (!q || typeof api !== 'function') { ui.community = []; ui.communityState = ''; return; }
+    if (q === ui.communityQuery && ui.communityState === 'ready') return;
+    ui.communityState = 'loading';
+    const seq = ++communitySeq;
+    communityTimer = setTimeout(async () => {
+      try {
+        const found = await api(`/api/v1/community/services?q=${encodeURIComponent(q)}`, { headers: { 'x-razvilka-read': 'passive' } });
+        if (seq !== communitySeq) return;
+        ui.community = Array.isArray(found) ? found : [];
+        ui.communityQuery = q; ui.communityState = 'ready';
+      } catch (_) {
+        if (seq === communitySeq) { ui.community = []; ui.communityState = 'error'; }
+      }
+      render(true);
+    }, 350);
+  }
+
+  // importCommunity previews the published list, imports exactly that
+  // revision and hands the new service to the autopilot, as the community
+  // dialog of advanced mode does. Overlapping entries never replace the
+  // routes of other services.
+  async function importCommunity(id) {
+    if (typeof api !== 'function' || ui.busy) return;
+    ui.busy = id; ui.error = ''; ui.note = 'Загружаем список доменов сервиса из каталога сообщества…'; render(true);
+    try {
+      const request = typeof workflowRequest === 'function' ? workflowRequest : (path, options) => api(path, options);
+      const preview = await request(`/api/v1/community/services/${encodeURIComponent(id)}/preview`, {}, 50000);
+      if (preview?.import_guard !== 'source-sha256' || !/^[a-f0-9]{64}$/.test(preview?.source_sha256 || '')) throw new Error('Сервер не подтвердил отпечаток списка. Попробуйте ещё раз.');
+      ui.note = 'Сохраняем сервис…'; render(true);
+      const saved = await request(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: (preview.conflicts || []).length > 0, refresh: false, expected_source_sha256: preview.source_sha256 }) }, 50000);
+      if (!saved?.service?.id) throw new Error('Сервис не сохранён.');
+      if (typeof refreshCoreAfterEdit === 'function') await refreshCoreAfterEdit();
+      await interfaceManage(saved.service.id, true);
+      ui.community = ui.community.filter(e => e.id !== id);
+      ui.note = '';
+      if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен. Автопилот проверит и включит его.');
+    } catch (e) {
+      ui.note = '';
+      ui.error = (typeof workflowError === 'function' ? workflowError(e) : e?.message) || 'Сервис не добавлен.';
+    } finally {
+      ui.busy = ''; render(true);
+    }
   }
 
   function render(force = false) {
@@ -157,18 +220,23 @@
     if (!home) return;
     const snap = snapshot();
     const m = model(snap, catalog());
-    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length]);
+    // The advanced home renders the engine summary; simple mode shows the same
+    // block beside the services instead of its own copy of that logic.
+    const engines = document.getElementById('ui7HomeEngines')?.innerHTML || '';
+    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines]);
     if (!force && key === ui.key) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
     ui.key = key;
     const action = m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
     const canAdd = m.phase === 'ready' || m.phase === 'empty';
-    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p></div>${action}</div>`
-      + (canAdd ? `<div class="rz-sh-head"><h3>Мои сервисы</h3><button type="button" class="${ui.open ? 'secondary' : 'primary'}" data-rz-sh-toggle-add aria-expanded="${ui.open}">${ui.open ? 'Готово' : 'Добавить сервис'}</button></div>${addPanel(m)}`
+    const main = (canAdd ? `<div class="rz-sh-head"><h3>Мои сервисы</h3><button type="button" class="${ui.open ? 'secondary' : 'primary'}" data-rz-sh-toggle-add aria-expanded="${ui.open}">${ui.open ? 'Готово' : 'Добавить сервис'}</button></div>${addPanel(m)}`
         + (m.services.length ? `<ul class="rz-sh-list">${m.services.map(serviceRow).join('')}</ul>` : '') : '')
       + (ui.error ? `<p class="rz-sh-error" role="alert">${html(ui.error)}</p>` : '')
       + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
+    home.classList.toggle('rz-sh-with-engines', !!engines);
+    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p></div>${action}</div>`
+      + `<div class="rz-sh-main">${main}</div>` + (engines ? `<aside class="rz-sh-engines" aria-label="Обходы">${engines}</aside>` : '');
     if (focused) {
       const input = home.querySelector('[data-rz-sh-query]');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
@@ -193,6 +261,7 @@
     if (!target) return;
     if (target.hasAttribute('data-rz-sh-toggle-add')) { ui.open = !ui.open; ui.error = ''; render(true); if (ui.open) document.querySelector('[data-rz-sh-query]')?.focus(); return; }
     if (target.dataset.rzShAddId) { void act(target.dataset.rzShAddId, false); return; }
+    if (target.dataset.rzShCommunity) { void importCommunity(target.dataset.rzShCommunity); return; }
     if (target.dataset.rzShRemove) { void act(target.dataset.rzShRemove, true); return; }
     if (target.hasAttribute('data-rz-sh-custom')) {
       const dialog = document.getElementById('a1-addServiceDialog');
@@ -201,7 +270,7 @@
   }
   function onInput(event) {
     if (!event.target.matches('[data-rz-sh-query]')) return;
-    ui.query = event.target.value; render();
+    ui.query = event.target.value; searchCommunity(ui.query); render();
   }
 
   window.addEventListener('razvilka:autonomy-state', () => render());

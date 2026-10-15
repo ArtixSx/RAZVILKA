@@ -142,7 +142,8 @@ function interfaceHomeServicesHTML(members,fresh){
 function renderHomeEngineSummary(summaries,loaded,fresh){
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const currentSummaries=Object.fromEntries(Object.entries(summaries||{}).filter(([id])=>!exclusions[id]));
- const usage=rim.engineUsage(loaded?state.services:[],fresh?currentSummaries:{});
+ const auto=rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled';
+ const usage=rim.engineUsage(loaded?state.services:[],fresh?currentSummaries:{},auto?consoleSnapshot?.services||{}:{},fresh&&auto?consoleSnapshot?.runtime||{}:{});
  const known=state.authenticated===true&&interfaceDataReady('inventory');
  const rows=Object.entries(consoleEngineMeta).filter(([id])=>known||usage[id]);
  interfaceHTML('ui7HomeEngines',`<div class="ui3-section-heading"><h3>Обходы и сервисы</h3><button type="button" class="text-button" data-rz-nav="engines">Управление ${ci('chevron')}</button></div>${!known?'<p class="r5-caption">Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.</p>':''}<div class="ui7-engine-summary">${rows.map(([id,meta])=>{const info=consoleEngineState(id),n=usage[id]||{assigned:0,verified:0};return `<button class="ui7-engine-row" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span><b>${esc(meta.name)}</b><small>${esc(info.label)}</small></span><span class="ui7-engine-count"><b>${loaded?n.assigned:'—'}</b><small>назначено${fresh&&n.assigned?` · ${n.verified} проверено`:''}</small></span>${ci('chevron')}</button>`;}).join('')}</div><p class="r5-caption">Считаются применённые назначения. Запущенный процесс сам по себе не подтверждает доступ.</p>`);

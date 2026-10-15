@@ -49,6 +49,10 @@ assert.deepEqual(Array.from(available(catalog,managed,'игр'),s=>s.id),['roblo
 assert.deepEqual(Array.from(available(catalog,managed,'DIS'),s=>s.id),['discord'],'case-insensitive');
 assert.deepEqual(available(catalog,new Set(),'',1).length,1,'bounded');
 
+const {communityAvailable}=context.RazvilkaSimpleHome;
+const shared=[{id:'ga-netflix',name:'Netflix',category:'Видео'},{id:'ga-telegram',name:'Telegram',imported:true},{id:'ga-youtube',name:'YouTube'}];
+assert.deepEqual(Array.from(communityAvailable(shared,catalog),e=>e.id),['ga-netflix'],'imported and built-in names are not offered twice');
+
 assert.equal(plural(1,'сервис','сервиса','сервисов'),'1 сервис');
 assert.equal(plural(3,'сервис','сервиса','сервисов'),'3 сервиса');
 assert.equal(plural(11,'сервис','сервиса','сервисов'),'11 сервисов');
