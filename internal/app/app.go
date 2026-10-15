@@ -61,7 +61,7 @@ import (
 var (
 	// Builds override provenance through -ldflags. The version default mirrors
 	// canonical VERSION; unknown provenance never claims a verified release build.
-	Version     = "0.19.3"
+	Version     = "0.20.0"
 	BuildCommit = "unknown"
 	BuildTime   = "unknown"
 	BuildDirty  = "unknown"

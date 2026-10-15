@@ -208,6 +208,12 @@ async function api(url, options = {}) {
 	let payload = null;
 	try { payload = text ? JSON.parse(text) : null; } catch (_) { /* plain-text API error */ }
 	const rawError = payload?.error || text || `HTTP ${response.status}`;
+	// A busy or fenced answer still names the running release; the sidebar
+	// must not keep the page's placeholder version meanwhile.
+	if (payload?.name === 'RAZVILKA' && /^[0-9A-Za-z.+-]{1,40}$/.test(payload.version || '') && typeof document !== 'undefined') {
+	  const label = document.getElementById('version');
+	  if (label) label.textContent = `v${payload.version}`;
+	}
 	const error = new Error(friendlyErrorMessage(rawError, response.status));
 	error.technicalMessage = rawError;
 	error.payload = payload || { error: rawError };
