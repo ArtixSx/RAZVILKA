@@ -87,7 +87,7 @@ func TestPanelDoctorNamesTheFirstProblemInPlainGroups(t *testing.T) {
 }
 
 func TestPanelDoctorDoesNotRenewHistoricalWorkerStates(t *testing.T) {
-	for _, state := range []string{"healthy", "applied", "pending", "checking"} {
+	for _, state := range []string{"healthy", "applied", "pending", "checking", "unconfirmed"} {
 		t.Run(state, func(t *testing.T) {
 			a := doctorFixture(t, true, true)
 			a.autonomy.doc.Services = map[string]autonomy.Service{"youtube": {ID: "youtube", Enabled: true}}

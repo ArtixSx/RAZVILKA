@@ -281,7 +281,7 @@ func (a *App) doctorServices() doctorCheck {
 			item.Status = "warn"
 			item.Detail = "Назначение сохранено; нужна свежая проверка доступа. " + r.message
 			waiting++
-		case "", "pending", "checking", "applying", "searching", "scope-pending", "rate-limited":
+		case "", "pending", "checking", "applying", "searching", "scope-pending", "rate-limited", "unconfirmed":
 			item.Status = "warn"
 			waiting++
 		default:
@@ -294,7 +294,7 @@ func (a *App) doctorServices() doctorCheck {
 	case bad > 0:
 		c.Status, c.Detail = "fail", fmt.Sprintf("Не работают: %d из %d. Причина указана у сервиса; автопилот продолжает попытки.", bad, len(rows))
 	case waiting > 0:
-		c.Status, c.Detail = "warn", fmt.Sprintf("Подтверждены %d из %d, остальные проверяются.", good, len(rows))
+		c.Status, c.Detail = "warn", fmt.Sprintf("Подтверждены %d из %d; для остальных нужна свежая проверка.", good, len(rows))
 	default:
 		c.Detail = fmt.Sprintf("Все %d подтверждены автопилотом.", len(rows))
 	}
