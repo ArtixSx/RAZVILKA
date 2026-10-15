@@ -58,6 +58,7 @@ func (r *Runtime) Observe(node, network, verdict string, now time.Time, gap time
 		return false
 	}
 }
+
 // SwitchBudgetAt reports when a switch can be reserved without reserving it:
 // now while the hourly budget has room, otherwise when the oldest switch that
 // fills it ages out.
