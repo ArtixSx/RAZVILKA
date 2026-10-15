@@ -846,7 +846,7 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 body:not(.rz-simple) #rzSimpleSettings{display:none}
 /* Simple mode devices: names and presence only; scope editing, technical
    notes and per-device routes stay in advanced mode. */
-body.rz-simple #contextNavigation,body.rz-simple #listScopeContent,body.rz-simple #view-devices .ui3-workspace-lead,body.rz-simple #view-devices .device-note,body.rz-simple #deviceDraftBar,body.rz-simple .device-card .device-meta,body.rz-simple .device-card .device-policy-preview,body.rz-simple .device-card .device-policy,body.rz-simple .device-addresses code:nth-of-type(n+2),body.rz-simple .device-addresses .device-more-addresses{display:none!important}
+body.rz-simple #contextNavigation,body.rz-simple #interfaceSubnav,body.rz-simple #listScopeContent,body.rz-simple #view-devices .ui3-workspace-lead,body.rz-simple #view-devices .device-note,body.rz-simple #deviceDraftBar,body.rz-simple .device-card .device-meta,body.rz-simple .device-card .device-policy-preview,body.rz-simple .device-card .device-policy,body.rz-simple .device-addresses code:nth-of-type(n+2),body.rz-simple .device-addresses .device-more-addresses{display:none!important}
 body:not(.rz-simple) #rzDevicesScope{display:none}
 .rz-devices-scope{margin:12px 20px 0;color:var(--muted)}
 body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display:none!important}
