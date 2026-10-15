@@ -122,16 +122,25 @@ func wgInactivitySourceArguments(l *Lease, name string, args []string) bool {
 	if slices.Equal(args, []string{"rule", "show"}) {
 		return flags["-N"] && !flags["-j"] && !flags["-details"]
 	}
-	if !flags["-N"] || len(args) != 4 && len(args) != 6 || !slices.Equal(args[:3], []string{"route", "show", "table"}) || flags["-details"] && !flags["-j"] {
+	if len(args) != 4 && len(args) != 6 || len(args) < 4 || !slices.Equal(args[:3], []string{"route", "show", "table"}) || flags["-details"] && (!flags["-j"] || !flags["-N"]) {
 		return false
 	}
 	table, err := strconv.Atoi(args[3])
 	if err != nil || table < 1 || table > 252 || strconv.Itoa(table) != args[3] {
 		return false
 	}
+	endpointTable := false
+	for _, spec := range dataplane.PolicyOwnershipSpecs() {
+		endpointTable = endpointTable || spec.EndpointMark != 0 && table == spec.EndpointTable
+	}
+	// Legacy formatting is confined to dedicated endpoint coordinates. Other
+	// numeric tables retain their original -N ABI and exact JSON requirement.
+	if (!flags["-N"] || len(args) == 6 && !flags["-j"]) && !endpointTable {
+		return false
+	}
 	if len(args) == 6 {
 		prefix, err := netip.ParsePrefix(args[5])
-		return args[4] == "exact" && flags["-j"] && err == nil && prefix.String() == args[5] && prefix == prefix.Masked() && prefix.Bits() == prefix.Addr().BitLen() && !prefix.Addr().Is4In6() && prefix.Addr().Is6() == flags["-6"]
+		return args[4] == "exact" && err == nil && prefix.String() == args[5] && prefix == prefix.Masked() && prefix.Bits() == prefix.Addr().BitLen() && !prefix.Addr().Is4In6() && prefix.Addr().Is6() == flags["-6"]
 	}
 	return true
 }

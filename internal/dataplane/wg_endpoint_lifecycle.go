@@ -166,8 +166,8 @@ type wgEndpointRoute struct {
 	Scope          string          `json:"scope,omitempty"`
 }
 
-// -N is mandatory for table authority and also makes protocol/scope numeric.
-// Normalize only exact enum values, retaining foreign values for rejection.
+// Numeric JSON also makes protocol/scope numeric. Normalize only exact enum
+// values, retaining foreign values for rejection by the tuple matcher.
 func wgEndpointRouteEnum(raw json.RawMessage, names map[uint8]string) (string, error) {
 	if len(raw) == 0 {
 		return "", nil
@@ -307,11 +307,7 @@ func wgEndpointUnrestrictedSource(from, destination string) bool {
 }
 
 func (a *WARPWireGuardAdapter) readWGEndpointWAN(ctx context.Context, e *WGEndpointState) error {
-	data, err := a.run(ctx, a.ip(), e.args("-j", "route", "get", e.address().String(), "mark", "0")...)
-	if err != nil {
-		return errors.New("WireGuard endpoint WAN route inspection failed")
-	}
-	routes, err := parseWGEndpointRoutes(data)
+	routes, err := a.readWGEndpointRoutes(ctx, e.args("-j", "route", "get", e.address().String(), "mark", "0")...)
 	if err != nil {
 		return fmt.Errorf("WireGuard endpoint WAN route inspection is invalid: %w", err)
 	}
@@ -319,6 +315,13 @@ func (a *WARPWireGuardAdapter) readWGEndpointWAN(ctx context.Context, e *WGEndpo
 		return errors.New("WireGuard endpoint WAN route is not unique")
 	}
 	route := routes[0]
+	destination := route.Destination
+	if prefix, err := netip.ParsePrefix(destination); err == nil && prefix.Bits() == prefix.Addr().BitLen() {
+		destination = prefix.Addr().String()
+	}
+	if destination != e.address().String() {
+		return errors.New("WireGuard endpoint WAN route destination changed")
+	}
 	if route.Source == "" {
 		route.Source = route.SelectedSource
 	}
@@ -501,15 +504,7 @@ func (a *WARPWireGuardAdapter) inspectWGEndpoint(ctx context.Context, e *WGEndpo
 			return false, false, errors.New("earlier foreign rule may intercept WireGuard endpoint")
 		}
 	}
-	data, err := a.run(ctx, a.ip(), e.args("-j", "route", "show", "table", strconv.Itoa(e.Table), "exact", e.prefix())...)
-	if err != nil && strings.Contains(string(data), "FIB table does not exist") {
-		data = []byte("[]")
-		err = nil
-	}
-	if err != nil {
-		return false, false, err
-	}
-	routes, err := parseWGEndpointRoutes(data)
+	routes, err := a.readWGEndpointRoutes(ctx, e.args("-j", "route", "show", "table", strconv.Itoa(e.Table), "exact", e.prefix())...)
 	if err != nil {
 		return false, false, err
 	}

@@ -198,10 +198,12 @@ func (r *WGSourceReadReview) runSource(ctx context.Context, retained bool, name 
 	defer func() { i.mu.Lock(); i.open = false; i.mu.Unlock() }()
 	out, err := r.tools.Runner.RunWG(c, i, name, args...)
 	closing := r.sourceCurrent(c, retained)
-	if err != nil || closing != nil {
+	if closing != nil {
 		return nil, errors.Join(err, closing)
 	}
-	return slices.Clone(out), nil
+	// Preserve genuine bounded command diagnostics for endpoint format
+	// negotiation only while the same original owner remains current.
+	return slices.Clone(out), err
 }
 
 // This source only inspects a public identity or a numeric endpoint's main
@@ -221,11 +223,14 @@ func wgSourceReadCommand(a *WARPWireGuardAdapter, name string, args []string) bo
 	if len(args) > 0 && (args[0] == "-4" || args[0] == "-6") {
 		family, args = args[0], args[1:]
 	}
-	if len(args) != 6 || !slices.Equal(args[:3], []string{"-j", "route", "get"}) || args[4] != "mark" || args[5] != "0" {
+	if len(args) > 0 && args[0] == "-j" {
+		args = args[1:]
+	}
+	if len(args) != 5 || !slices.Equal(args[:2], []string{"route", "get"}) || args[3] != "mark" || args[4] != "0" {
 		return false
 	}
-	address, err := netip.ParseAddr(args[3])
-	return err == nil && address.String() == args[3] && address.Is4() == (family == "-4") && publicfetch.PublicAddress(address)
+	address, err := netip.ParseAddr(args[2])
+	return err == nil && address.String() == args[2] && address.Is4() == (family == "-4") && publicfetch.PublicAddress(address)
 }
 
 func (r *WGSourceReadReview) Close() error {

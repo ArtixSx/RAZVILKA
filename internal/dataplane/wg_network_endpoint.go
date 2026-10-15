@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"strconv"
 )
 
 // Static table coordinates are never evidence of an empty or owned table.
@@ -30,11 +31,12 @@ func (a *WARPWireGuardAdapter) inspectWGNetworkTransportTable(ctx context.Contex
 		if proofErr != nil {
 			return proofErr
 		}
-		data, err := a.readWGCompleteNumericTable(ctx, table, family)
-		if err != nil {
-			return err
+		args := []string{"-N"}
+		if family == 6 {
+			args = append(args, "-6")
 		}
-		routes, err := parseWGEndpointRoutes(data)
+		args = append(args, "-j", "route", "show", "table", strconv.Itoa(table))
+		routes, err := a.readWGEndpointRoutes(ctx, args...)
 		if err != nil {
 			return err
 		}

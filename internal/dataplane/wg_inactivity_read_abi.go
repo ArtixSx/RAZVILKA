@@ -58,9 +58,15 @@ func wgInactivityReadArguments(a *WARPWireGuardAdapter, tools WGCommandTools, na
 	}
 	if len(body) == 6 {
 		prefix, err := netip.ParsePrefix(body[5])
-		if body[4] != "exact" || !flags["-j"] || table != spec.EndpointTable || err != nil || prefix.String() != body[5] || prefix != prefix.Masked() || prefix.Bits() != prefix.Addr().BitLen() || prefix.Addr().Is4In6() || prefix.Addr().Is6() != flags["-6"] {
+		if body[4] != "exact" || table != spec.EndpointTable || err != nil || prefix.String() != body[5] || prefix != prefix.Masked() || prefix.Bits() != prefix.Addr().BitLen() || prefix.Addr().Is4In6() || prefix.Addr().Is6() != flags["-6"] {
 			return nil, false
 		}
+	}
+	// Endpoint-table selection is already an explicit numeric ID. Its narrow
+	// route parser validates every text field and checks alias files; do not
+	// reinsert an unsupported formatting flag during that endpoint retry.
+	if table == spec.EndpointTable && !flags["-details"] {
+		return args, true
 	}
 	if !flags["-N"] {
 		args = append([]string{"-N"}, args...)
