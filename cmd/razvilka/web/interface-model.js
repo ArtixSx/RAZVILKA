@@ -207,7 +207,7 @@
     if(managed?.removing)return {...result,kind:'warn',label:'Отключение в очереди',detail:'Отключение ещё не завершено. Действующее подключение может сохраняться.'};
     if(changed){result.pendingLabel='Есть неприменённые изменения';result.actionable=true;}
     if(s.suspended===true&&!result.applied)return {...result,label:'Остановлен',detail:'Настройки сохранены. Включите проект общей кнопкой.'};
-    const blockers={'requires-review':'Нужно восстановление журнала','definition-changed':'Изменился состав сервиса','manual-change':'Есть ручное изменение','checker-unavailable':'Проверка временно недоступна','catalog-unavailable':'Источник подключений недоступен','component-unavailable':'Нужный компонент не готов','unsupported-scenario':'Для этого сценария нет проверки','apply-refused':'Применение не завершено','removal-blocked':'Снятие подключения приостановлено'};
+    const blockers={'requires-review':'Нужно восстановление журнала','definition-changed':'Изменился состав сервиса','manual-change':'Есть ручное изменение','checker-unavailable':'Проверка временно недоступна','catalog-unavailable':'Источник подключений недоступен','component-unavailable':'Нужный компонент не готов','component-stopped':'Нужный компонент не запущен','unsupported-scenario':'Для этого сценария нет проверки','apply-refused':'Применение не завершено','removal-blocked':'Снятие подключения приостановлено'};
     const blocked=managed?.enabled&&Object.hasOwn(blockers,runtime.state);
     // The autopilot's own message names the real blocker (for example, another
     // service whose route prevents the shared transaction).

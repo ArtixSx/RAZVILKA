@@ -112,6 +112,15 @@ func (a *App) nfqws2RouteReady() bool {
 	return false
 }
 
+func (a *App) nfqws2RouteRunning() bool {
+	for _, o := range a.nodeRouteOptions() {
+		if o.ID == "nfqws2" && o.Running {
+			return true
+		}
+	}
+	return false
+}
+
 // returnToNFQWS2Standard replaces an unavailable exact node of an NFQWS2-list
 // service with NFQWS2. The node gives no path at all, so the standard route is
 // applied even when the web check through NFQWS2 is not confirmed yet; later

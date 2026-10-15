@@ -27,6 +27,11 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	if !a.nfqws2RouteReady() {
 		return finish("component-unavailable", "Назначен NFQWS2, но компонент ещё не готов. Другой обход автоматически не назначается.")
 	}
+	if !returning && !a.nfqws2RouteRunning() {
+		// The isolated check sends one request through the running daemon's
+		// queue. A stopped daemon can never confirm it, so say why.
+		return finish("component-stopped", "NFQWS2 установлен, но не запущен, поэтому сервис нельзя проверить. Запустите NFQWS2; автопилот проверит сервис в следующем раунде. Другой обход автоматически не назначается.")
+	}
 	verdict := a.autonomyProbeRoute(ctx, service, "nfqws2", profile)
 	r.CheckedAt = time.Now().UTC()
 	r.Observe("nfqws2", profile, verdict, time.Now(), time.Duration(p.FailureConfirmSeconds)*time.Second)

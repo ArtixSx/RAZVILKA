@@ -341,3 +341,16 @@ func TestAutopilotAsksToConfirmEditedCustomService(t *testing.T) {
 		t.Fatalf("edited service accepted: %+v %v", r, adapter.calls)
 	}
 }
+
+func TestNFQWS2StarterNamesStoppedDaemon(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		a := &App{}
+		a.nodeReviews.options = func() []routecatalog.Option {
+			return []routecatalog.Option{{ID: "nfqws2", Installed: true, Configured: true, Running: running, Selectable: true, Ready: true}}
+		}
+		r := a.runNFQWS2Starter(context.Background(), autonomy.Default(), autonomy.Service{ID: "discord"}, autonomy.Runtime{}, catalog.Service{ID: "discord"}, config.Config{}, "profile")
+		if want := map[bool]string{false: "component-stopped", true: "unconfirmed"}[running]; r.State != want {
+			t.Fatalf("running=%v: %s %q", running, r.State, r.Message)
+		}
+	}
+}
