@@ -80,7 +80,12 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	a.autonomy.mu.Lock()
 	ids := []string{}
 	disabledChanged := false
+	activate := []autonomy.Service{}
 	for id, s := range a.autonomy.doc.Services {
+		if s.Enabled && !s.Removing && !cfg.Services[id].Enabled && handedOverUnassigned(cfg, s) {
+			activate = append(activate, s)
+			continue
+		}
 		if s.Enabled && !s.Removing && !cfg.Services[id].Enabled {
 			// Keep inactive entries out of the probe queue, but do not leave
 			// their last successful runtime presented as current automation.
@@ -117,6 +122,10 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		}
 	}
 	a.autonomy.mu.Unlock()
+	if len(activate) > 0 {
+		a.activateHandedOverServices(ctx, p, activate)
+		return
+	}
 	if chosen == "" {
 		return
 	}
@@ -155,6 +164,46 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	// Refill is passive catalogue work, not route selection. A failed current
 	// node cannot cause repeated fetches if the permitted pool is already full.
 	a.autonomyRefill(ctx, p, spec, state)
+}
+
+// handedOverUnassigned reports a service handed to the autopilot (the
+// first-setup starter set, a catalogue hand-over) whose draft is still the
+// untouched, disabled one it was enrolled with and that was never applied.
+// The list-mode guard checks and routes only enabled services, so such a
+// service must join the active list; a later owner change of the draft is a
+// manual change instead.
+func handedOverUnassigned(cfg config.Config, s autonomy.Service) bool {
+	draft := cfg.Services[s.ID]
+	return !draft.Enabled && !cfg.AppliedServices[s.ID].Enabled && autonomyDraftFingerprint(draft) == s.DraftFingerprint
+}
+
+// activateHandedOverServices enables the drafts of handed-over services with
+// their expected route under the config revision it read, then records the new
+// draft fingerprint on the unchanged autopilot record. Checks start next round.
+func (a *App) activateHandedOverServices(ctx context.Context, p autonomy.Policy, services []autonomy.Service) {
+	sort.Slice(services, func(i, j int) bool { return services[i].ID < services[j].ID })
+	for _, s := range services {
+		cfg := a.Store.Get()
+		if ctx.Err() != nil || cfg.Services[s.ID].Enabled || !handedOverUnassigned(cfg, s) {
+			continue
+		}
+		route := s.ExpectedRoute
+		if route == "" {
+			route = "auto"
+		}
+		if a.Store.UpdateServiceIfRevision(s.ID, config.ServiceState{Enabled: true, Route: route, Sources: append([]string(nil), s.Sources...)}, cfg.Revision) != nil {
+			return
+		}
+		draft := a.Store.Get().Services[s.ID]
+		if _, ok := a.updateAutonomyService(ctx, p, s, func(next *autonomy.Service) { next.DraftFingerprint = autonomyDraftFingerprint(draft) }); !ok {
+			return
+		}
+		a.autonomy.mu.Lock()
+		r := a.autonomy.doc.Runtime[s.ID].Clone()
+		a.autonomy.mu.Unlock()
+		r.State, r.Message = "pending", "Сервис добавлен в активный список. Автопилот проверит и назначит путь."
+		a.autonomyRuntime(s.ID, r)
+	}
 }
 
 func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, now time.Time) autonomy.Runtime {

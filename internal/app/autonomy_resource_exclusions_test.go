@@ -101,6 +101,36 @@ func TestAutonomyResourceNegativeStopsBeforeCheckAndHistory(t *testing.T) {
 	}
 }
 
+// The first-setup starter set and a catalogue hand-over enroll a service whose
+// draft is still disabled; the autopilot assigns its route instead of pausing
+// it as a manual change (owner report on rc.3: nothing happened after setup).
+func TestAutonomyUnassignedServiceIsChecked(t *testing.T) {
+	a, _, _ := autonomousIntegrationFixture(t)
+	state := a.Store.Get().Services["my-independent-site"]
+	state.Enabled = false
+	if err := a.Store.UpdateService("my-independent-site", state); err != nil {
+		t.Fatal(err)
+	}
+	a.autonomy.mu.Lock()
+	s := a.autonomy.doc.Services["my-independent-site"]
+	s.DraftFingerprint = autonomyDraftFingerprint(a.Store.Get().Services["my-independent-site"])
+	a.autonomy.doc.Services["my-independent-site"] = s
+	a.autonomy.mu.Unlock()
+	checks := 0
+	a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		checks++
+		return autofallbackResult(request, false), nil
+	})
+	a.autonomyRound(context.Background(), time.Now())
+	if draft := a.Store.Get().Services["my-independent-site"]; !draft.Enabled || checks != 0 {
+		t.Fatal("handed-over service did not join the active list first", draft, checks)
+	}
+	a.autonomyRound(context.Background(), time.Now())
+	if runtime := autonomyTestState(a); runtime.State == "manual-change" || checks == 0 {
+		t.Fatal("handed-over service was paused instead of checked", runtime.State, runtime.Message, checks)
+	}
+}
+
 func TestAutonomyInactiveServiceIsNotAutomaticallyChecked(t *testing.T) {
 	a, _, adapter := autonomousIntegrationFixture(t)
 	state := a.Store.Get().Services["my-independent-site"]
