@@ -720,6 +720,14 @@ type packetNativeNeighborShape struct {
 	LinkFlags            uint32 `json:"link_flags,omitempty"`
 	LinkLoopbackFlag     bool   `json:"link_loopback_flag,omitempty"`
 	LinkAttachments      string `json:"link_attachments,omitempty"`
+	DestinationBytes     int    `json:"destination_bytes,omitempty"`
+	LLAddressPresent     bool   `json:"lladdr_present,omitempty"`
+	CacheInfoBytes       int    `json:"cacheinfo_bytes,omitempty"`
+	ProbesBytes          int    `json:"probes_bytes,omitempty"`
+	AttributeCount       int    `json:"attribute_count,omitempty"`
+	AttributeKinds       uint32 `json:"attribute_kinds,omitempty"`
+	UnknownAttributeKind bool   `json:"unknown_attribute_kind,omitempty"`
+	AttributeFlags       bool   `json:"attribute_flags,omitempty"`
 }
 type packetNativeNeighborGroup struct {
 	Shape packetNativeNeighborShape `json:"shape"`
@@ -827,16 +835,22 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 				if packetNativeCountNeighborOtherRefusal(err, otherStages) {
 					report.OtherUnclassifiedRefusals++
 				}
-				if !slices.Contains(stages, "kernel.bindings.neighbor.type") {
+				if !slices.Contains(stages, "kernel.bindings.neighbor.type") && !slices.Contains(stages, "kernel.bindings.neighbor.bookkeeping-mac") {
 					continue
 				}
 				stage = "kernel.bindings.neighbor.type"
+				if slices.Contains(stages, "kernel.bindings.neighbor.bookkeeping-mac") {
+					stage = "kernel.bindings.neighbor.bookkeeping-mac"
+				}
 			} else {
 				report.MACRefusals++
 			}
 			shape := packetNativeNeighborClassKey{Shape: packetNativeNeighborClass(family, m, topology, links, intent), Stage: stage}
 			if stage == "kernel.bindings.neighbor.type" {
 				shape.Shape = packetNativeNeighborTypeFacts(shape.Shape, m, links)
+			}
+			if stage == "kernel.bindings.neighbor.bookkeeping-mac" {
+				shape.Shape = packetNativeNeighborBookkeepingFacts(shape.Shape, m, topology, links)
 			}
 			if _, ok := groups[shape]; !ok {
 				order = append(order, shape)
@@ -858,6 +872,47 @@ func packetNativeNeighborClasses(ctx context.Context, topology ipv4LANPacketTopo
 	// duplicate/ownership checks. Shape counts never replace this classification.
 	_, _, refusal := packetNeighborBoundary(ctx, topology, frames)
 	return report, refusal, nil
+}
+
+// Router500 supplies this refusal but no concrete tuple. This additional
+// diagnostic records only finite shape/relations; it never relaxes admission.
+func packetNativeNeighborBookkeepingFacts(s packetNativeNeighborShape, m message, topology ipv4LANPacketTopology, links map[int]Link) packetNativeNeighborShape {
+	s = packetNativeNeighborTypeFacts(s, m, links)
+	if len(m.data) < 12 {
+		return s
+	}
+	a, err := attrs(m.data[12:])
+	if err != nil {
+		return s
+	}
+	s.AttributeCount, s.DestinationBytes, s.CacheInfoBytes, s.ProbesBytes = len(a), len(a[1]), len(a[3]), len(a[4])
+	_, s.LLAddressPresent = a[2]
+	for kind := range a {
+		if kind < 32 {
+			s.AttributeKinds |= 1 << kind
+		} else {
+			s.UnknownAttributeKind = true
+		}
+	}
+	for raw := m.data[12:]; len(raw) != 0; {
+		s.AttributeFlags = s.AttributeFlags || binary.NativeEndian.Uint16(raw[2:4])&0xc000 != 0
+		size := int(binary.NativeEndian.Uint16(raw[:2]))
+		raw = raw[(size+3)&^3:]
+	}
+	if ip, ok := netip.AddrFromSlice(a[1]); ok && ip.Is4() {
+		switch {
+		case ip.IsMulticast():
+			s.AddressClass = "ipv4_multicast"
+		case ip == netip.MustParseAddr("255.255.255.255"):
+			s.AddressClass = "ipv4_limited_broadcast"
+		default:
+			s.AddressClass = "ipv4_other"
+			if broadcast, err := selectedBroadcast(ip, topology.home.Prefixes); err == nil && broadcast {
+				s.AddressClass = "ipv4_home_prefix_endpoint"
+			}
+		}
+	}
+	return s
 }
 
 // Extra closed facts are emitted only for the exact type-refusal group.
@@ -1278,5 +1333,53 @@ func TestIPv4LANPacketNativeHarnessNeighborTypeShapePrivacyAndAggregateBound(t *
 	encoded, _ = json.Marshal(facts)
 	if bytes.Contains(encoded, []byte(privateName)) || bytes.Contains(encoded, []byte(privateAddress)) {
 		t.Fatal("private value escaped loopback facts")
+	}
+}
+
+func TestIPv4LANPacketNativeHarnessBookkeepingShapeRemainsRefusedAndPrivate(t *testing.T) {
+	in, _ := scopeOptionsKernelFixture()
+	intent := IPv4LANPacketIntent{Mode: "lan_except", NewDevices: "inherit", SegmentIDs: []string{"Bridge0"}}
+	topology, err := packetTopologyFromFacts(in, intent)
+	if err != nil {
+		t.Fatal("modeled topology refused")
+	}
+	privateName, privateAddress := "modeled-secret0", "ff02::1234"
+	links := map[int]Link{12: {IfIndex: 12, Interface: privateName, LinkType: 65534}}
+	row := neighborFrame(12, privateAddress, "", 64)
+	row.data[11] = 5
+	row.data = append(row.data, attr(2, nil)...)
+	row.data = append(row.data, attr(3, make([]byte, 16))...)
+	row.data = append(row.data, attr(4, make([]byte, 4))...)
+	frames := map[byte][]message{2: {}, 10: {row}}
+	report, refusal, readErr := packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if readErr != nil || !slices.Contains(DiagnosticStages(refusal), "kernel.bindings.neighbor.bookkeeping-mac") || report.OtherRefusals != 1 || len(report.Groups) != 1 {
+		t.Fatal("diagnostic changed the production refusal or lost its shape")
+	}
+	group := report.Groups[0]
+	s := group.Shape
+	if group.Stage != "kernel.bindings.neighbor.bookkeeping-mac" || s.AddressClass != "ipv6_multicast" || !s.LLAddressPresent || s.LLAddressBytes != 0 || s.LLAddressClass != "empty" || s.DestinationBytes != 16 || s.CacheInfoBytes != 16 || s.ProbesBytes != 4 || s.AttributeCount != 4 || s.AttributeKinds != 30 || s.AttributeFlags || s.UnknownAttributeKind || s.HomeRelation != "unrelated" || s.LinkAttachments != "absent" {
+		t.Fatal("closed bookkeeping shape lost exact relations or attribute lengths")
+	}
+	encoded, encodeErr := json.Marshal(report)
+	if encodeErr != nil {
+		t.Fatal(encodeErr)
+	}
+	for _, private := range []string{privateName, privateAddress, topology.home.ID, topology.home.Interface, topology.home.MAC} {
+		if private != "" && bytes.Contains(encoded, []byte(private)) {
+			t.Fatal("private value escaped bookkeeping shape")
+		}
+	}
+	for length := 1; length <= 18; length++ {
+		if length == 6 {
+			continue
+		} // Six bytes reach the separate tuple-mismatch refusal.
+		m := neighborFrame(12, privateAddress, "", 64)
+		m.data[11] = 5
+		m.data = append(m.data, attr(2, make([]byte, length))...)
+		frames[10] = append(frames[10], m)
+	}
+	report, _, readErr = packetNativeNeighborClasses(context.Background(), topology, links, intent, frames)
+	if readErr != nil || report.GroupCount != 18 || len(report.Groups) != 16 || report.GroupsOmitted != 2 || report.RecordsOmitted != 2 {
+		t.Fatal("bookkeeping groups escaped shared bounds")
 	}
 }
