@@ -118,13 +118,14 @@ stop_process() {
 
   "$DAEMON" -K -p "$PIDFILE" -x "$BINARY" -s TERM >/dev/null 2>&1 || kill "$PID"
   WAIT=0
-  # Canceled HTTP handlers and workers share a 70-second cleanup/rollback budget.
-  while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 75 ]; do
+  # A started phase may need 180s to settle and 180s to roll back.
+  # Keep five seconds beyond the panel's shared 390-second shutdown budget.
+  while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 395 ]; do
     sleep 1
     WAIT=$((WAIT + 1))
   done
   if kill -0 "$PID" 2>/dev/null; then
-    echo "RAZVILKA did not stop after 75 seconds; PID file kept" >&2
+    echo "RAZVILKA did not stop after 395 seconds; PID file kept" >&2
     return 1
   fi
   rm -f "$PIDFILE"
