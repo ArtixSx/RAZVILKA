@@ -161,6 +161,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	subscriptionSchema := flag.Bool("subscription-schema", false, "print the supported private subscription schema and exit")
 	checkDNSState := flag.Bool("check-dns-state", false, "check DNS schema compatibility without changing files and exit")
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
+	registerBootRetirementFlags(flag.CommandLine)
 	flag.Parse()
 	if *nodeHistoryReadVersion {
 		fmt.Println(nodestore.ExactHistoryReadVersion)
@@ -200,7 +201,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", bootRetirementCLIRequested(), *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
 		if enabled {
 			modes++
 		}
@@ -213,6 +214,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if (*retryRollbackPlan == "") != (*retryRollbackDigest == "") || (*closeRollbackPlan == "") != (*closeRollbackDigest == "") {
 		log.Fatal("rollback recovery requires both plan and digest")
+	}
+	if err := bootRetirementCLIFlagError(); err != nil {
+		log.Fatal(err)
 	}
 	if *checkDNSState {
 		if err := dnscontrol.CheckState(*dnsStatePath); err != nil {
@@ -309,7 +313,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	// Older releases could leave per-engine draft directories at 0755. Repair
 	// only the fixed RAZVILKA staging layout before opening recovery targets.
-	if !*checkOnly {
+	if !*checkOnly && !bootRetirementCLIRequested() {
 		if err := engineconfig.NormalizeLegacyStagePermissions(*stagePath); err != nil {
 			log.Fatal("engine staging permission repair: ", err)
 		}
@@ -437,12 +441,31 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		log.Print("private draft boot recovery completed; live profiles and routes were not changed")
 	}
 	loadConfig := config.Load
-	if selfFileState.Pending() {
+	if selfFileState.Pending() || bootRetirementCLIRequested() {
 		loadConfig = config.LoadExisting
 	}
 	store, err := loadConfig(*cfgPath)
 	if err != nil {
 		log.Fatal(err)
+	}
+	// An explicit old-boot retirement holds every private recovery lifetime
+	// lease, but must not create credentials, defaults or unrelated stores.
+	// It never starts workers or serves HTTP, and changes no runtime effects.
+	if bootRetirementCLIRequested() {
+		manager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		if err != nil {
+			log.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := runBootRetirementCLI(ctx, manager, *cfgPath, store)
+		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
+			log.Fatal(encodeErr)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	gate, _, tokenCreated, err := security.LoadOrCreateToken(*tokenPath)
 	if err != nil {
