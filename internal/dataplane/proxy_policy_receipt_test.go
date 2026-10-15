@@ -137,6 +137,18 @@ func TestProxyCandidatePolicyFenceWithoutAdditionReceiptIsSettled(t *testing.T) 
 	if err != nil || receipt.Phase != "removed" {
 		t.Fatal(receipt, err)
 	}
+	// The whole rollback, retried after such a failure, restores the snapshot.
+	r := scopedXrayTestFixture(t)
+	retried := stageScopedFixture(t, r)
+	if err := r.a.beginCandidatePolicy(retried, mustScopedPolicy(t, r.a, retried)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.a.Rollback(ctx, r.plan, retried); err != nil {
+		t.Fatal("rollback of a fence without additions", err)
+	}
+	if err := r.a.Rollback(ctx, r.plan, retried); err != nil {
+		t.Fatal("retried rollback", err)
+	}
 	// Once the addition has written its receipt, the receipt decides as before.
 	g := scopedXrayTestFixture(t)
 	other := stageScopedFixture(t, g)

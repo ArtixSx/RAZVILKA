@@ -84,6 +84,9 @@ func (a *ProxyTunnelAdapter) resumeProxyPolicyRestoration(ctx context.Context, r
 		}
 	}
 	status, err := a.additionStatus(ctx, candidate, additionRoot)
+	if receipt.NoAdditions && candidateAdditionsNeverStarted(root, receipt) {
+		status, err = PolicyAdditionStatus{Removed: true}, nil
+	}
 	expectedReceipt := receipt.Generation
 	if a.isXrayRetirement() {
 		expectedReceipt = receipt.RetirementReceiptID

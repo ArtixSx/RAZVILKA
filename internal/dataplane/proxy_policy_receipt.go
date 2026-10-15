@@ -27,7 +27,11 @@ type proxyPolicyReceipt struct {
 	RestorationGeneration       string `json:"restoration_generation,omitempty"`
 	RetirementSnapshot          string `json:"retirement_snapshot_sha256,omitempty"`
 	RetirementReceiptID         string `json:"retirement_receipt_id,omitempty"`
-	Checksum                    string `json:"receipt_sha256,omitempty"`
+	// NoAdditions records that the candidate was settled without an addition
+	// receipt (candidateAdditionsNeverStarted). Restoration trusts only this
+	// record; a receipt removed later still fences.
+	NoAdditions bool   `json:"no_additions,omitempty"`
+	Checksum    string `json:"receipt_sha256,omitempty"`
 }
 
 func proxyPolicyReceiptPath(root string) string { return filepath.Join(root, "policy-additions.json") }
@@ -176,8 +180,8 @@ func (a *ProxyTunnelAdapter) removeCandidatePolicy(ctx context.Context, root str
 		// removal of the previous policy). Forwarding is removed by the rollback
 		// that follows. On the owner's router this case fenced every failed
 		// sing-box activation with "receipt unavailable: file does not exist".
-		if _, err := os.Lstat(filepath.Join(root, policyAdditionFile)); errors.Is(err, os.ErrNotExist) {
-			receipt.Phase = "removed"
+		if candidateAdditionsNeverStarted(root, receipt) {
+			receipt.Phase, receipt.NoAdditions = "removed", true
 			return writeProxyPolicyReceipt(root, receipt)
 		}
 	}
@@ -197,6 +201,17 @@ func (a *ProxyTunnelAdapter) removeCandidatePolicy(ctx context.Context, root str
 	}
 	receipt.Phase = "removed"
 	return writeProxyPolicyReceipt(root, receipt)
+}
+
+// candidateAdditionsNeverStarted reports a candidate of this transaction root
+// whose addition never wrote its receipt, so it added no RPDB selector. The
+// caller has matched the receipt's boot to the current one.
+func candidateAdditionsNeverStarted(root string, receipt proxyPolicyReceipt) bool {
+	if receipt.Generation != "" || receipt.Boot == "" {
+		return false
+	}
+	_, err := os.Lstat(filepath.Join(root, policyAdditionFile))
+	return errors.Is(err, os.ErrNotExist)
 }
 
 func (a *ProxyTunnelAdapter) verifyCandidateReceipt(ctx context.Context, root string, state PolicyState, active bool) error {
