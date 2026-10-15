@@ -1521,3 +1521,11 @@ Router487: полный lifecycle FAIL2.10s на уведомлениях. До�
 **Router503 lifecycle PASS5.89s**, source `9f8f67ef42bf4add35e92f859590426f3a95180e`, ARM64 observer SHA `a874928c12649e4a52bc52ba2abf2de5fec138074982a0afdb678de2f6e4e08f`. Constructor1569ms, Current1413ms, membership1388ms, retained1369ms; Close/collector Join/control Close подтверждены, opens1, оригинальные intent/facts неизменны. Шесть harness-проверок PASS. Предшествовавший отказ500 исправлен узким сохранением exact чужой ARPHRD_NONE multicast-записи без MAC/client identity; shared full/finite decoder и проверки отрицаний не менялись. Независимый Windows physicalscope PASS3.930s, ARM64 compile и vet. Установленные controller/Xray и исходные namespace по-прежнему неизменны. Это положительный lifecycle наблюдения, не сетевой Apply или проверка фактического трафика.
 
 Общий Linux504 запущен на `9f8f67ef`, отдельный immutable export; его результат ещё ожидается.
+
+### З11: сохранённые устройства — проверки 505/506
+
+Source `175dc74a71c37357f256bd8b920a418be0201e83`, после backend `594dfaab` и frontend `175dc74a`. **Linux506 RC0:** выборочный App race (Devices/saved panel/admission) 2,688 с, vet App; модели UI Devices9, panel-loading46, saved-panel8 PASS. Реальный HTTP backend-тест удерживает исходного exclusive-владельца и recovery fence, проверяет auth/HEAD/методы/чужой Origin и отсутствие обхода admission у live `/devices`. Запрос обслуживается из отдельного atomic снимка даже без Store/Devices manager.
+
+**UI505 PASS14**, browser_errors0; Linux amd64 бинарник SHA256 `6105cc3c7e6441b3f2d038fe6cd7757b876a89bf8536f34908d487766e12f2cd`. Это настоящий браузер и HTTP с изолированной установкой, без перехвата ответов. Сценарий Devices проверяет DTO, отсутствие смешения с живым списком и записи; он не удерживает искусственную занятую операцию. Сервер штатно остановлен командой владельца, `STOPPED exit=143 joined=true`, исходные mountpoint восстановлены. Приватный отчёт: `.review-local/ui505-browser/ui-linux-real-KuuLTs/result.json`.
+
+Linux504 к этому моменту прошёл обычный `go test ./...` (App271,032 с) и выполняет race. Его source предшествует Devices, поэтому новый код проверен отдельно в506/505. Полный итог504 не объявлен успешным заранее.
