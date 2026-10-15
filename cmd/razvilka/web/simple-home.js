@@ -168,6 +168,10 @@
       view.prepend(home);
       home.addEventListener('click', onClick);
       home.addEventListener('input', onInput);
+      home.addEventListener('pointerdown', () => { ui.holding = true; });
+      const release = () => { setTimeout(() => { ui.holding = false; }, 0); };
+      document.addEventListener('pointerup', release, true);
+      document.addEventListener('pointercancel', release, true);
     }
     if (!document.getElementById('rzSimpleToggle')) {
       const nav = document.querySelector('.nav-list');
@@ -290,10 +294,10 @@
     // What the router is busy with replaces the technical availability banner.
     const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
     const activity = admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
-    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version, activity, ui.doctor, ui.report?.checked_at, ui.doctorError]);
-    if (!force && key === ui.key) return;
+    // A press that starts on a button must end on the same element, or the
+    // browser drops the click; never replace the page under a held pointer.
+    if (ui.holding && !force) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
-    ui.key = key;
     const action = m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
     const canAdd = m.phase === 'ready' || m.phase === 'empty';
@@ -304,13 +308,33 @@
       + doctor
       + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
     home.classList.toggle('rz-sh-with-engines', !!engines);
-    const updateRow = notice ? `<div class="rz-sh-update" role="status"><span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button></div>` : '';
-    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p>${activity ? `<small class="rz-sh-activity">Сейчас: ${html(activity)}</small>` : ''}</div>${action}</div>${updateRow}`
-      + `<div class="rz-sh-main">${main}</div>` + (engines ? `<aside class="rz-sh-engines" aria-label="Обходы">${engines}</aside>` : '');
+    const updateRow = notice ? `<span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button>` : '';
+    // Each part is replaced only when its own markup changed, so a changing
+    // engine count never rebuilds the service buttons under the pointer.
+    patch(home, 'status', `<span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p>${activity ? `<small class="rz-sh-activity">Сейчас: ${html(activity)}</small>` : ''}</div>${action}`, `rz-sh-status rz-sh-${m.tone}`, 'div');
+    patch(home, 'update', updateRow, 'rz-sh-update', 'div');
+    patch(home, 'main', main, 'rz-sh-main', 'div');
+    patch(home, 'engines', engines, 'rz-sh-engines', 'aside');
     if (focused) {
       const input = home.querySelector('[data-rz-sh-query]');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     }
+  }
+
+  // patch keeps one child per part in a fixed order and rewrites it only
+  // when its markup or class changed. An empty part is hidden.
+  function patch(home, part, markup, className, tag) {
+    let node = home.querySelector(`:scope > [data-rz-part="${part}"]`);
+    if (!node) {
+      node = document.createElement(tag);
+      node.dataset.rzPart = part;
+      if (part === 'engines') node.setAttribute('aria-label', 'Обходы');
+      if (part === 'update') node.setAttribute('role', 'status');
+      home.append(node);
+    }
+    if (node.className !== className) node.className = className;
+    node.hidden = !markup;
+    if (node.dataset.rzHtml !== markup) { node.innerHTML = markup; node.dataset.rzHtml = markup; }
   }
 
   // simpleEngines keeps the engines in use or installed and folds the rest

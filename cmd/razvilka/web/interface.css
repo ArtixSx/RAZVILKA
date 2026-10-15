@@ -1652,7 +1652,7 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-main{display:grid;gap:16px;min-width:0}
 .rz-sh-engines{min-width:0;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
 .rz-sh-engines .ui7-engine-summary{grid-template-columns:1fr}
-@media (min-width:1100px){.rz-simple-home.rz-sh-with-engines{max-width:1160px;grid-template-columns:minmax(280px,360px) minmax(0,760px);align-items:start}.rz-sh-with-engines>.rz-sh-status{grid-column:1/-1}.rz-sh-with-engines>.rz-sh-engines{grid-column:1;grid-row:2}.rz-sh-with-engines>.rz-sh-main{grid-column:2;grid-row:2}}
+@media (min-width:1100px){.rz-simple-home.rz-sh-with-engines{max-width:1160px;grid-template-columns:minmax(280px,360px) minmax(0,760px);align-items:start}.rz-sh-with-engines>.rz-sh-status{grid-column:1/-1}.rz-sh-with-engines{grid-auto-flow:row dense}.rz-sh-with-engines>.rz-sh-engines{grid-column:1}.rz-sh-with-engines>.rz-sh-main{grid-column:2}}
 .rz-sh-status{display:flex;align-items:center;gap:16px;padding:22px 24px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}
 .rz-sh-status>div{flex:1;min-width:0}.rz-sh-status h2{margin:0 0 4px;font-size:22px;line-height:1.25}.rz-sh-status p{margin:0;color:var(--muted);line-height:1.5}
 .rz-sh-badge{flex:none;width:18px;height:18px;border-radius:50%;background:var(--muted)}
@@ -1677,6 +1677,7 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-error{margin:0;color:var(--red)}.rz-sh-foot{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
 @media (max-width:640px){.rz-sh-status{flex-wrap:wrap;padding:18px}.rz-sh-status h2{font-size:19px}.rz-sh-status .primary{width:100%}.rz-sh-head .primary,.rz-sh-head .secondary{min-height:44px}}
 .rz-sh-note{margin:0;color:var(--muted);font-size:13px}
+.rz-simple-home>[data-rz-part][hidden]{display:none!important}
 .rz-doc-open{justify-self:start}
 .rz-doc{display:grid;gap:10px;padding:16px;border:1px solid var(--line2);border-radius:var(--radius);background:var(--panel)}
 .rz-doc h3{margin:0;font-size:16px}.rz-doc>p{margin:0}
