@@ -13,6 +13,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/defaultconsent"
 	"github.com/ArtixSx/razvilka/internal/physicalscope"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 // BuildManagedNFQWSIPv4LANList is a separate, concrete packet-purpose issuer.
@@ -74,7 +75,7 @@ func BuildManagedNFQWSIPv4LANList(ctx context.Context, input Input, material *NF
 // concrete original owners before and after using this immutable projection.
 func nfqwsIPv4LANPacketInput(input Input, cfg config.Config, ref defaultconsent.Reference, f physicalscope.IPv4LANPacketFacts, serviceID, protocol, family string) error {
 	p := cfg.NetworkPolicy
-	if input.SafeMode || input.managedXraySelectedTCP != nil || input.DNS != nil || input.DomainPolicy != nil || input.SyntheticDNS != nil || input.SuspendDNS || input.DiscardDNS || len(input.RetiringAdapters) != 0 || len(input.EngineConfigDrafts) != 0 || !lanPolicyHash(input.NetworkProfileID) {
+	if input.SafeMode || input.managedXraySelectedTCP != nil || input.DNS != nil || input.DomainPolicy != nil || input.SyntheticDNS != nil || input.SuspendDNS || input.DiscardDNS || len(input.RetiringAdapters) != 0 || len(input.EngineConfigDrafts) != 0 || !systemprobe.ValidWANProfileID(input.NetworkProfileID) {
 		return ErrNFQWSScopedOwner
 	}
 	engineIDs := map[string]bool{}

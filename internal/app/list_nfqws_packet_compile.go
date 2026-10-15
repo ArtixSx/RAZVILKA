@@ -16,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/physicalscope"
+	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
 
 func defaultRoutePacketFactsClone(f physicalscope.IPv4LANPacketFacts) physicalscope.IPv4LANPacketFacts {
@@ -39,7 +40,7 @@ func validateNFQWSPacketSnapshot(cfg config.Config, s NFQWSPacketScopeSnapshot) 
 		return err
 	}
 	f := s.Facts
-	if !reflect.DeepEqual(i, f.Intent) || !defaultRouteScopeReferenceValid(cfg, s.Authority) || s.Authority.ApprovalRevision != i.Revision || s.Authority.PolicyRevision != i.PolicyRevision || f.Control.InstallationID != s.Authority.InstallationID || f.Control.Sequence != s.Authority.Sequence || s.DNSMode != "baseline" || !defaultRouteHash(s.NetworkID) || len(f.ScopeID) != 32 || strings.Trim(f.ScopeID, "0123456789abcdef") != "" || f.Identity.Validate() != nil || f.Identity.Kind != netidentity.ReviewedSingleInitNet {
+	if !reflect.DeepEqual(i, f.Intent) || !defaultRouteScopeReferenceValid(cfg, s.Authority) || s.Authority.ApprovalRevision != i.Revision || s.Authority.PolicyRevision != i.PolicyRevision || f.Control.InstallationID != s.Authority.InstallationID || f.Control.Sequence != s.Authority.Sequence || s.DNSMode != "baseline" || !systemprobe.ValidWANProfileID(s.NetworkID) || len(f.ScopeID) != 32 || strings.Trim(f.ScopeID, "0123456789abcdef") != "" || f.Identity.Validate() != nil || f.Identity.Kind != netidentity.ReviewedSingleInitNet {
 		return dataplane.ErrReviewChanged
 	}
 	h := f.Home

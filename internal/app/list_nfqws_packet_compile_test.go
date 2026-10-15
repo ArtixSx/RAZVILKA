@@ -94,9 +94,12 @@ func TestNFQWSPacketCompilerRefusesUnsupportedAndEmptyPurposes(t *testing.T) {
 			"manual service exclusion": func(i *image) {
 				i.Cfg.NetworkPolicy.Exclusions.Manual = []config.ResourceMatch{{Kind: "service", Value: "listed"}}
 			},
-			"DNS mode":  func(i *image) { i.Snapshot.DNSMode = "scoped" },
-			"safe mode": func(i *image) { i.Cfg.SafeMode = true },
-			"stopped":   func(i *image) { i.Cfg.ServiceControl.Stopped = true },
+			"DNS mode":              func(i *image) { i.Snapshot.DNSMode = "scoped" },
+			"missing WAN":           func(i *image) { i.Snapshot.NetworkID = "" },
+			"hash is not WAN token": func(i *image) { i.Snapshot.NetworkID = strings.Repeat("b", 64) },
+			"unknown WAN":           func(i *image) { i.Snapshot.NetworkID = "network-unknown" },
+			"safe mode":             func(i *image) { i.Cfg.SafeMode = true },
+			"stopped":               func(i *image) { i.Cfg.ServiceControl.Stopped = true },
 		} {
 			t.Run(name, func(t *testing.T) {
 				var i image
@@ -186,4 +189,22 @@ func TestNFQWSPacketSourceOrUnknownExclusionRefusesBeforePhysicalAcquire(t *test
 			})
 		})
 	}
+}
+
+func TestNFQWSPacketActualWANChangeStillPoisonsOriginalBinding(t *testing.T) {
+	a, b, _ := nfqwsPacketFixture(t)
+	listScopeOperation(t, a, func(c context.Context) {
+		compiled := nfqwsPacketCompilation(t, c, a, b)
+		if err := b.BindCompilation(c, compiled); err != nil {
+			t.Fatal(err)
+		}
+		b.network = func(context.Context) (string, error) { return "wan-abcdef123456", nil }
+		if err := b.ScopeCheck(c, compiled.LAN()); err == nil {
+			t.Fatal("a different valid WAN token adopted by original owner")
+		}
+		b.network = func(context.Context) (string, error) { return "wan-123456789abc", nil }
+		if _, err := b.Observe(c); err == nil {
+			t.Fatal("returning WAN revived poisoned forward binding")
+		}
+	})
 }

@@ -31,7 +31,7 @@ func nfqwsPacketInputFixture(t *testing.T) (Input, config.Config, defaultconsent
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := Input{Revision: 4, NetworkProfileID: strings.Repeat("b", 64), LAN: lan, Routes: []Route{{ServiceID: "network-cell", LogicalServiceID: "listed", Selected: "nfqws2", Resolved: "nfqws2", NetworkPolicyRole: "override", NetworkPolicyGeneration: lan.Generation, Ingress: []string{"br0"}, Sources: []string{"192.168.1.0/24"}, CIDRs: []string{"203.0.113.0/25"}}}, Engines: []Engine{{ID: NetworkPolicyAdapterID, Installed: true, Configured: true, Activatable: true}, {ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}}
+	input := Input{Revision: 4, NetworkProfileID: "wan-123456789abc", LAN: lan, Routes: []Route{{ServiceID: "network-cell", LogicalServiceID: "listed", Selected: "nfqws2", Resolved: "nfqws2", NetworkPolicyRole: "override", NetworkPolicyGeneration: lan.Generation, Ingress: []string{"br0"}, Sources: []string{"192.168.1.0/24"}, CIDRs: []string{"203.0.113.0/25"}}}, Engines: []Engine{{ID: NetworkPolicyAdapterID, Installed: true, Configured: true, Activatable: true}, {ID: "nfqws2", Installed: true, Configured: true, Activatable: true}}}
 	if !config.CurrentDefaultRouteScopeConsent(cfg) {
 		t.Fatal("invalid comparison fixture")
 	}
@@ -67,21 +67,23 @@ func TestNFQWSPacketIssuerComparisonRefusesCompositesAndWidening(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, edit := range map[string]func(*image){
-		"domain":               func(i *image) { i.Input.Routes[0].Domains = []string{"example.com"} },
-		"DNS":                  func(i *image) { i.Input.DNS = &ScopedDNSPlan{} },
-		"domain policy":        func(i *image) { i.Input.DomainPolicy = &DomainPolicyRuntimePlan{} },
-		"synthetic DNS":        func(i *image) { i.Input.SyntheticDNS = &SyntheticDNSTransportPlan{} },
-		"suspend DNS":          func(i *image) { i.Input.SuspendDNS = true },
-		"discard DNS":          func(i *image) { i.Input.DiscardDNS = true },
-		"retire other adapter": func(i *image) { i.Input.RetiringAdapters = []string{"wireguard"} },
-		"draft other adapter":  func(i *image) { i.Input.EngineConfigDrafts = []string{"wireguard"} },
-		"other participant":    func(i *image) { i.Input.Engines = append(i.Input.Engines, Engine{ID: "wireguard"}) },
-		"source reference":     func(i *image) { i.Input.Routes[0].SourceRefs = []string{"community:x"} },
-		"safe mode":            func(i *image) { i.Input.SafeMode = true },
-		"missing WAN":          func(i *image) { i.Input.NetworkProfileID = "" },
-		"approval changed":     func(i *image) { i.Ref.ApprovalRevision++ },
-		"sequence changed":     func(i *image) { i.Facts.Control.Sequence++ },
-		"different policy":     func(i *image) { i.Facts.Intent.PolicyRevision++ },
+		"domain":                func(i *image) { i.Input.Routes[0].Domains = []string{"example.com"} },
+		"DNS":                   func(i *image) { i.Input.DNS = &ScopedDNSPlan{} },
+		"domain policy":         func(i *image) { i.Input.DomainPolicy = &DomainPolicyRuntimePlan{} },
+		"synthetic DNS":         func(i *image) { i.Input.SyntheticDNS = &SyntheticDNSTransportPlan{} },
+		"suspend DNS":           func(i *image) { i.Input.SuspendDNS = true },
+		"discard DNS":           func(i *image) { i.Input.DiscardDNS = true },
+		"retire other adapter":  func(i *image) { i.Input.RetiringAdapters = []string{"wireguard"} },
+		"draft other adapter":   func(i *image) { i.Input.EngineConfigDrafts = []string{"wireguard"} },
+		"other participant":     func(i *image) { i.Input.Engines = append(i.Input.Engines, Engine{ID: "wireguard"}) },
+		"source reference":      func(i *image) { i.Input.Routes[0].SourceRefs = []string{"community:x"} },
+		"safe mode":             func(i *image) { i.Input.SafeMode = true },
+		"missing WAN":           func(i *image) { i.Input.NetworkProfileID = "" },
+		"hash is not WAN token": func(i *image) { i.Input.NetworkProfileID = strings.Repeat("b", 64) },
+		"unknown WAN":           func(i *image) { i.Input.NetworkProfileID = "network-unknown" },
+		"approval changed":      func(i *image) { i.Ref.ApprovalRevision++ },
+		"sequence changed":      func(i *image) { i.Facts.Control.Sequence++ },
+		"different policy":      func(i *image) { i.Facts.Intent.PolicyRevision++ },
 		"legacy selected source": func(i *image) {
 			v := i.Cfg.Services["listed"]
 			v.Sources = []string{"192.168.1.40/32"}

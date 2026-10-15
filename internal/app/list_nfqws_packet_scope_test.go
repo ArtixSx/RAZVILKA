@@ -56,6 +56,7 @@ func (m *nfqwsPacketModel) Close() error { m.closed++; return nil }
 func nfqwsPacketFixture(t *testing.T) (*App, *NFQWSPacketScopeBinding, *nfqwsPacketModel) {
 	t.Helper()
 	a, old, physical := listScopeFixture(t, "all", false)
+	physical.network = "wan-123456789abc"
 	if err := old.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func nfqwsPacketCompilation(t *testing.T, c context.Context, a *App, b *NFQWSPac
 	}
 	_, paths, routes, _ := defaultRouteNFQWSComparisonFixture("tcp", "ipv4")
 	routes[0].CIDRs = []string{"203.0.113.0/24"}
-	compiled, err := CompileNFQWSIPv4LANPacketPolicy(a.Store.Get(), s, routes, map[string]DefaultRoutePath{"listed":paths.Paths["listed"]}, time.Now())
+	compiled, err := CompileNFQWSIPv4LANPacketPolicy(a.Store.Get(), s, routes, map[string]DefaultRoutePath{"listed": paths.Paths["listed"]}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
