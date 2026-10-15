@@ -1230,6 +1230,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		discardedDNSPrior = &previous
 	}
 	transactionRoot := filepath.Join(m.StateRoot, "transactions", plan.PlanID)
+	if err := m.retireSettledAttempt(transactionRoot); err != nil {
+		execution.State, execution.Error = "journal-failed", err.Error()
+		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return execution, err
+	}
 	if err := m.prepareExecutionRoot(transactionRoot); err != nil {
 		execution.State, execution.Error = "journal-failed", err.Error()
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)

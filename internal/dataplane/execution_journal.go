@@ -349,3 +349,58 @@ func (m *Manager) prepareExecutionRoot(transactionRoot string) error {
 	}
 	return nil
 }
+
+// retireSettledAttempt moves out what a settled, failed earlier attempt of the
+// same plan left in its transaction root. Plan IDs follow the plan content, so
+// an identical retry (the autopilot's next round) reuses the root, and adapters
+// refuse to stage over the earlier attempt's receipts. Only attempts that ended
+// with every effect undone or never started are moved, to a sibling .retired
+// directory nothing reads; execution.json stays until the new attempt replaces
+// it, so the latest journal keeps a readable record.
+func (m *Manager) retireSettledAttempt(transactionRoot string) error {
+	var previous *Execution
+	exists, err := readOptionalJournal(filepath.Join(transactionRoot, "execution.json"), &previous)
+	if err != nil || !exists || previous == nil {
+		return nil // Unknown content stays for the adapters' own refusal.
+	}
+	switch previous.State {
+	case "rolled-back", "canary-failed", "network-stale", "rejected", "cancelled":
+	default:
+		return nil
+	}
+	entries, err := os.ReadDir(transactionRoot)
+	if err != nil {
+		return executionJournalError(err)
+	}
+	retired := filepath.Join(filepath.Dir(transactionRoot), ".retired", fmt.Sprintf("%s-%d", filepath.Base(transactionRoot), time.Now().UnixNano()))
+	moved := false
+	for _, entry := range entries {
+		if entry.Name() == "execution.json" {
+			continue
+		}
+		if !moved {
+			if err := os.MkdirAll(retired, 0o700); err != nil {
+				return executionJournalError(err)
+			}
+			moved = true
+		}
+		if err := os.Rename(filepath.Join(transactionRoot, entry.Name()), filepath.Join(retired, entry.Name())); err != nil {
+			return executionJournalError(err)
+		}
+	}
+	if !moved {
+		return nil
+	}
+	for _, path := range []string{transactionRoot, retired, filepath.Dir(retired)} {
+		root, err := openJournalDirectory(path)
+		if err != nil {
+			return executionJournalError(err)
+		}
+		err = syncDataplaneJournalDirectory(root)
+		_ = root.Close()
+		if err != nil {
+			return executionJournalError(err)
+		}
+	}
+	return nil
+}
