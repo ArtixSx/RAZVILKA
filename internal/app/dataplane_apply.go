@@ -21,7 +21,7 @@ func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit fu
 	}
 	execution, err := a.Dataplane.Apply(ctx, plan, commit)
 	if execution.State == "rollback-failed" || errors.Is(err, dataplane.ErrExecutionJournal) {
-		a.Operations.Fence()
+		a.Operations.FenceJournal()
 	}
 	return execution, err
 }

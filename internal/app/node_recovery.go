@@ -194,7 +194,7 @@ func (a *App) nodeRecoveryRound(ctx context.Context, now time.Time) {
 				cleanupErr := a.Dataplane.PrepareDNSRecovery(ctx, plan)
 				release()
 				if cleanupErr != nil && !errors.Is(cleanupErr, dataplane.ErrReviewChanged) && !errors.Is(cleanupErr, context.Canceled) {
-					a.Operations.Fence()
+					a.Operations.FenceJournal()
 					a.setNodeRecoveryStatus(nodeRecoveryStatus{State: "requires-review", PlanID: plan.PlanID, Message: "Не удалось подтвердить снятие DNS-перенаправлений. Откройте журнал перед следующим применением."})
 					return
 				}
@@ -333,7 +333,7 @@ func (a *App) recoverAppliedNodes(ctx context.Context, previous dataplane.Plan, 
 	if previous.DNS != nil {
 		if err := a.Dataplane.PrepareDNSRecovery(ctx, previous); err != nil {
 			if !errors.Is(err, dataplane.ErrReviewChanged) && !errors.Is(err, context.Canceled) {
-				a.Operations.Fence()
+				a.Operations.FenceJournal()
 			}
 			return dataplane.Execution{}, err
 		}

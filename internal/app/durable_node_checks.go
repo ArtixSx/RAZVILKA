@@ -393,7 +393,7 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		})
 		for i := range advanced {
 			if items[i].ErrorCode == "node-cleanup-failed" {
-				a.Operations.Fence()
+				a.Operations.FenceJournal()
 				return out, operationgate.ErrRecovery
 			}
 			if screened[i].NodeID != "" {

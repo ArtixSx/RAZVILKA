@@ -98,7 +98,7 @@ func TestApplicationFenceWaitsForRollbackAndProtectsNextCaller(t *testing.T) {
 				if !errors.Is(err, operationgate.ErrRecovery) || !reflect.DeepEqual(calls, adapter.calls) {
 					t.Fatal("fenced caller mutated runtime")
 				}
-				if _, err := a.Operations.Enter(context.Background()); !errors.Is(err, operationgate.ErrRecovery) {
+				if _, err := a.Operations.Enter(context.Background()); !errors.Is(err, operationgate.ErrJournalRecovery) {
 					t.Fatal("fence lost with original lease", err)
 				}
 			} else {

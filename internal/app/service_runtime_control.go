@@ -236,7 +236,7 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 			}
 			if err := a.Dataplane.PrepareDNSRecovery(ctx, current); err != nil {
 				if !errors.Is(err, dataplane.ErrReviewChanged) {
-					a.Operations.Fence()
+					a.Operations.FenceJournal()
 				}
 				return fail("SERVICE_RUNTIME_FAILED", "Не удалось завершить очистку DNS. Откройте журнал; настройки сохранены.")
 			}
