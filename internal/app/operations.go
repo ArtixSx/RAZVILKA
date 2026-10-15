@@ -94,14 +94,14 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				a.strategyLabSnapshot(w, r)
 				return
 			}
-			if r.URL.Path != panelhealth.Path && r.URL.Path != panelSnapshotPath && r.URL.Path != panelInventoryPath && r.URL.Path != panelAutonomyPath && r.URL.Path != panelAuditPath && r.URL.Path != panelDoctorPath && r.URL.Path != "/api/v1/metrics" && r.URL.Path != "/api/v1/connections" {
+			if r.URL.Path != panelhealth.Path && r.URL.Path != panelSnapshotPath && r.URL.Path != panelDeviceBrowsePath && r.URL.Path != panelInventoryPath && r.URL.Path != panelAutonomyPath && r.URL.Path != panelAuditPath && r.URL.Path != panelDoctorPath && r.URL.Path != "/api/v1/metrics" && r.URL.Path != "/api/v1/connections" {
 				writeStrategyCompatibilityRecovery(w, true)
 				return
 			}
 		}
 		// Security.Middleware remains outside this middleware. Only this
 		// memory-only endpoints bypass admission, never runtime Store reads.
-		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAutonomyPath || r.URL.Path == panelAuditPath || r.URL.Path == panelDoctorPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
+		if r.URL.Path == panelhealth.Path || r.URL.Path == panelSnapshotPath || r.URL.Path == panelDeviceBrowsePath || r.URL.Path == panelInventoryPath || r.URL.Path == panelAutonomyPath || r.URL.Path == panelAuditPath || r.URL.Path == panelDoctorPath || r.URL.Path == "/api/v1/metrics" || r.URL.Path == "/api/v1/connections" {
 			// The general security middleware allows diagnostic reads before
 			// account setup. Admission metadata is private even in that state.
 			if a.Security == nil || !a.Security.Authenticated(r) {
@@ -119,6 +119,8 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 				a.panelDoctor(w, r)
 			} else if r.URL.Path == panelSnapshotPath {
 				a.panelSnapshot(w, r)
+			} else if r.URL.Path == panelDeviceBrowsePath {
+				a.panelDeviceBrowse(w, r)
 			} else if r.URL.Path == panelAutonomyPath {
 				a.panelAutonomy(w, r)
 			} else if r.URL.Path == panelInventoryPath {
