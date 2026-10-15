@@ -333,7 +333,7 @@ type RuntimeStatus struct {
 }
 
 func New(stateRoot string) *Manager {
-	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: 45 * time.Second, FreshProfile: observeNetworkProfile}
+	return &Manager{StateRoot: stateRoot, Adapters: map[string]Adapter{}, operationGate: make(chan struct{}, 1), RollbackTimeout: defaultRollbackTimeout, FreshProfile: observeNetworkProfile}
 }
 
 // ConfigureSingBoxNodeRoutes attaches the private registry only after both
@@ -456,11 +456,16 @@ func (m *Manager) endOperation() {
 	}
 }
 
+// A rollback that runs out of time fences every later change, so its budget
+// covers a full policy on a slow router: the Keenetic USB drive needs about
+// half a second per fsync and a sing-box policy records about 60 selectors.
+const defaultRollbackTimeout = 3 * time.Minute
+
 func (m *Manager) rollbackTimeout() time.Duration {
 	if m != nil && m.RollbackTimeout > 0 {
 		return m.RollbackTimeout
 	}
-	return 45 * time.Second
+	return defaultRollbackTimeout
 }
 
 func (m *Manager) Register(adapter Adapter) error {

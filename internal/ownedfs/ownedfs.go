@@ -166,6 +166,18 @@ func (r *Root) MkdirTemp(parent, prefix string) (string, error) {
 }
 
 func (r *Root) WriteAtomic(name string, data []byte, mode os.FileMode) error {
+	return r.writeAtomic(name, data, mode, true)
+}
+
+// WriteAtomicUnsynced replaces name atomically without waiting for the disk.
+// After a crash the file holds either the new or the previous content. Use it
+// only for a record whose loss leaves a more conservative recorded state that
+// a later durable write repeats.
+func (r *Root) WriteAtomicUnsynced(name string, data []byte, mode os.FileMode) error {
+	return r.writeAtomic(name, data, mode, false)
+}
+
+func (r *Root) writeAtomic(name string, data []byte, mode os.FileMode, durable bool) error {
 	if err := r.check(name); err != nil {
 		return err
 	}
@@ -181,8 +193,10 @@ func (r *Root) WriteAtomic(name string, data []byte, mode os.FileMode) error {
 	if _, err := f.Write(data); err != nil {
 		return err
 	}
-	if err := f.Sync(); err != nil {
-		return err
+	if durable {
+		if err := f.Sync(); err != nil {
+			return err
+		}
 	}
 	if err := f.Close(); err != nil {
 		return err

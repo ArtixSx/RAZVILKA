@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
@@ -75,6 +76,8 @@ type policyAdditionSession struct {
 	state    PolicyState
 	doc      policyAdditionDocument
 	options  policyAdditionOptions
+	// unsynced: the file holds a settled state not yet forced to disk.
+	unsynced bool
 }
 
 func policyAdditionRootHash(path string) string {
@@ -261,7 +264,44 @@ func (s *policyAdditionSession) save(ctx context.Context) error {
 	if runtime.GOOS == "linux" && s.root.Sync() != nil {
 		return ErrPolicyAdditionReceipt
 	}
+	s.unsynced = false
 	return ctx.Err()
+}
+
+// saveSettled records a state reached after the kernel confirmed a step
+// ("added" or "removed"). Every save writes the whole document, so the next
+// durable save carries it, and flush forces the last one. A crash before then
+// leaves the previous intent, which recovery already treats as unknown. On a
+// USB drive of a Keenetic each fsync costs about half a second, so halving
+// them keeps a 60-selector policy inside its activation and rollback budgets.
+func (s *policyAdditionSession) saveSettled(ctx context.Context) error {
+	if runtime.GOOS != "linux" || ctx.Value(wgCommonWriterKey{}) != nil && ctx.Value(wgOperationOwnerKey{}) != nil {
+		return s.save(ctx)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.doc.Checksum = policyAdditionChecksum(s.doc)
+	data, err := json.Marshal(s.doc)
+	if err != nil || len(data) > policyAdditionMaxBytes {
+		return ErrPolicyAdditionReceipt
+	}
+	if err := s.root.WriteAtomicUnsynced(policyAdditionFile, data, 0600); err != nil {
+		return ErrPolicyAdditionReceipt
+	}
+	s.unsynced = true
+	return ctx.Err()
+}
+
+// flush makes a settled state durable before the session reports it. It runs
+// even after the caller's context ended: the kernel state already changed.
+func (s *policyAdditionSession) flush(ctx context.Context) error {
+	if !s.unsynced {
+		return nil
+	}
+	flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	return s.save(flushCtx)
 }
 func (s *policyAdditionSession) load(ctx context.Context) error {
 	if err := s.loadDocument(ctx); err != nil {
@@ -379,7 +419,7 @@ func (s *policyAdditionSession) status() PolicyAdditionStatus {
 func applyPolicyWithReceipt(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string) error {
 	return applyPolicyAddition(ctx, runner, ip, state, root, policyAdditionOptions{})
 }
-func applyPolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string, options policyAdditionOptions) error {
+func applyPolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string, options policyAdditionOptions) (result error) {
 	if runner == nil || ip == "" {
 		return ErrPolicyAdditionReceipt
 	}
@@ -388,6 +428,7 @@ func applyPolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, st
 		return err
 	}
 	defer s.close()
+	defer func() { result = errors.Join(result, s.flush(ctx)) }()
 	if err := s.load(ctx); !errors.Is(err, os.ErrNotExist) {
 		if err != nil {
 			return err
@@ -504,7 +545,7 @@ func (r *policyAdditionRunner) add(ctx context.Context, index int, args []string
 		return out, err
 	}
 	s.doc.Steps[index].State = "added"
-	if err := s.save(ctx); err != nil {
+	if err := s.saveSettled(ctx); err != nil {
 		s.doc.Steps[index].State = "intent"
 		r.failure = err
 		return out, err
@@ -534,7 +575,7 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 	}
 	if present == 0 {
 		s.doc.Steps[index].State = "removed"
-		return nil, s.save(ctx)
+		return nil, s.saveSettled(ctx)
 	}
 	s.doc.Steps[index].State = "cleanup-intent"
 	if err := s.save(ctx); err != nil {
@@ -571,7 +612,7 @@ func (r *policyAdditionRunner) remove(ctx context.Context, index int, args []str
 		return out, errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	s.doc.Steps[index].State = "removed"
-	if err := s.save(ctx); err != nil {
+	if err := s.saveSettled(ctx); err != nil {
 		s.doc.Steps[index].State = "cleanup-intent"
 		return out, err
 	}
@@ -649,7 +690,7 @@ func policyAdditionPresence(ctx context.Context, runner NFQWS2Runner, ip string,
 func removePolicyWithReceipt(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string) error {
 	return removePolicyAddition(ctx, runner, ip, state, root, policyAdditionOptions{})
 }
-func removePolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string, options policyAdditionOptions) error {
+func removePolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, state PolicyState, root string, options policyAdditionOptions) (result error) {
 	if runner == nil || ip == "" {
 		return ErrPolicyAdditionReceipt
 	}
@@ -658,6 +699,7 @@ func removePolicyAddition(ctx context.Context, runner NFQWS2Runner, ip string, s
 		return err
 	}
 	defer s.close()
+	defer func() { result = errors.Join(result, s.flush(ctx)) }()
 	if err := s.load(ctx); err != nil {
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
