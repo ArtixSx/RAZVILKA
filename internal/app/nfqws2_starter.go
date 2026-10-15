@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"reflect"
 	"time"
 
@@ -26,6 +28,13 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	}
 	if !a.nfqws2RouteReady() {
 		return finish("component-unavailable", "Назначен NFQWS2, но компонент ещё не готов. Другой обход автоматически не назначается.")
+	}
+	if at := r.SwitchBudgetAt(time.Now(), p.MaxSwitchesPerHour); !returning && !applied.Enabled && at.After(time.Now()) {
+		// Only an apply needs the budget, and a check without one cannot lead
+		// to it. Each check takes a whole round (up to 90 s), so waiting here
+		// leaves the rounds to the other services.
+		r.NextCheck = at
+		return finish("rate-limited", fmt.Sprintf("Лимит применений за час исчерпан. Следующая попытка примерно через %d мин.", max(1, int(math.Ceil(time.Until(at).Minutes())))))
 	}
 	if !returning && !a.nfqws2RouteRunning() {
 		// The isolated check sends one request through the running daemon's

@@ -39,7 +39,10 @@
     const services = Object.entries(snapshot.services || {}).filter(([, s]) => s && !s.removing).map(([id]) => {
       const runtime = snapshot.runtime?.[id] || {};
       const state = runtime.state || 'pending';
-      return { id, name: label[id] || id, state, bucket: bucket(state), short: SHORT[state] || (OK.has(state) ? 'Работает' : 'Проверяется'), detail: String(runtime.message || '').slice(0, 220) };
+      const detail = String(runtime.message || '').slice(0, 220);
+      // A waiting service says when it continues ("…через 12 мин.").
+      const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
+      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || (OK.has(state) ? 'Работает' : 'Проверяется'), detail };
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
     for (const s of services) if (s.bucket === 'ok') s.short = 'Работает';
     const count = kind => services.filter(s => s.bucket === kind).length;
@@ -49,7 +52,7 @@
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };
     const problems = count('problem'), progress = count('progress');
     if (problems) return { ...base, phase: 'ready', tone: 'problem', title: `${plural(problems, 'сервис пока не работает', 'сервиса пока не работают', 'сервисов пока не работают')}`, text: 'Автопилот продолжает попытки. Причина указана у сервиса.' };
-    if (progress) return { ...base, phase: 'ready', tone: 'progress', title: `Настраиваю ${plural(progress, 'сервис', 'сервиса', 'сервисов')}…`, text: 'Автопилот проверяет и включает обход. Обычно это занимает несколько минут.' };
+    if (progress) return { ...base, phase: 'ready', tone: 'progress', title: `Настраиваю ${plural(progress, 'сервис', 'сервиса', 'сервисов')}…`, text: 'Автопилот проверяет сервисы по очереди, по одному за раз, и сам включает обход.' };
     return { ...base, phase: 'ready', tone: 'ok', title: 'Всё работает', text: `${plural(services.length, 'сервис открывается', 'сервиса открываются', 'сервисов открываются')} через проверенный обход.` };
   }
 

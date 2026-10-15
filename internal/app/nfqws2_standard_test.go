@@ -342,6 +342,31 @@ func TestAutopilotAsksToConfirmEditedCustomService(t *testing.T) {
 	}
 }
 
+// Every check of a starter service takes a whole autopilot round. Without an
+// apply budget the check cannot lead anywhere, so it waits for the budget and
+// leaves the rounds to the services still waiting for their first check.
+func TestNFQWS2StarterWaitsForSwitchBudgetWithoutChecking(t *testing.T) {
+	a := &App{}
+	a.nodeReviews.options = func() []routecatalog.Option {
+		return []routecatalog.Option{{ID: "nfqws2", Installed: true, Configured: true, Running: true, Selectable: true, Ready: true}}
+	}
+	p := autonomy.Default()
+	now := time.Now()
+	full := autonomy.Runtime{}
+	for i := 0; i < p.MaxSwitchesPerHour; i++ {
+		full.Switches = append(full.Switches, now.Add(-time.Duration(50-i)*time.Minute))
+	}
+	r := a.runNFQWS2Starter(context.Background(), p, autonomy.Service{ID: "discord"}, full, catalog.Service{ID: "discord"}, config.Config{}, "profile")
+	if r.State != "rate-limited" || !strings.Contains(r.Message, "через") || r.NextCheck.Sub(now) < 9*time.Minute || r.NextCheck.Sub(now) > 11*time.Minute || len(r.Switches) != p.MaxSwitchesPerHour {
+		t.Fatalf("%s %q next in %v switches %d", r.State, r.Message, r.NextCheck.Sub(now), len(r.Switches))
+	}
+	// With room in the budget the check runs (and stays unconfirmed without a prober).
+	full.Switches = full.Switches[1:]
+	if r := a.runNFQWS2Starter(context.Background(), p, autonomy.Service{ID: "discord"}, full, catalog.Service{ID: "discord"}, config.Config{}, "profile"); r.State != "unconfirmed" {
+		t.Fatal(r.State, r.Message)
+	}
+}
+
 func TestNFQWS2StarterNamesStoppedDaemon(t *testing.T) {
 	for _, running := range []bool{false, true} {
 		a := &App{}

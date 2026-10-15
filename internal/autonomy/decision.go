@@ -58,6 +58,26 @@ func (r *Runtime) Observe(node, network, verdict string, now time.Time, gap time
 		return false
 	}
 }
+// SwitchBudgetAt reports when a switch can be reserved without reserving it:
+// now while the hourly budget has room, otherwise when the oldest switch that
+// fills it ages out.
+func (r Runtime) SwitchBudgetAt(now time.Time, limit int) time.Time {
+	if limit < 1 {
+		return now.Add(time.Hour)
+	}
+	recent := []time.Time{}
+	for _, at := range r.Switches {
+		if at.After(now.Add(-time.Hour)) {
+			recent = append(recent, at)
+		}
+	}
+	if len(recent) < limit {
+		return now
+	}
+	slices.SortFunc(recent, func(a, b time.Time) int { return a.Compare(b) })
+	return recent[len(recent)-limit].Add(time.Hour)
+}
+
 func (r *Runtime) ReserveSwitch(now time.Time, limit int) bool {
 	recent := []time.Time{}
 	for _, at := range r.Switches {

@@ -30,6 +30,10 @@ assert.deepEqual(Array.from(bad.services,s=>s.id),['discord','roblox','youtube']
 assert.equal(bad.services[0].short,'Нужный компонент не запущен');
 assert.equal(bad.services[0].name,'Discord');
 
+const waiting=model({...snap({discord:'rate-limited'}),runtime:{discord:{state:'rate-limited',message:'Лимит применений за час исчерпан. Следующая попытка примерно через 12 мин.'}}},catalog);
+assert.equal(waiting.services[0].short,'Следующая попытка примерно через 12 мин');
+assert.equal(model(snap({discord:'rate-limited'}),catalog).services[0].short,'Пауза между попытками');
+
 const removing=model({...snap({youtube:'healthy'}),services:{youtube:{id:'youtube'},discord:{id:'discord',removing:true}}},catalog);
 assert.deepEqual(Array.from(removing.services,s=>s.id),['youtube'],'a service being removed is not listed');
 
