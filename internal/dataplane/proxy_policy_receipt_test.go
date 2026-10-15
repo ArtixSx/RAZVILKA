@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -106,6 +107,47 @@ func TestProxyCandidatePolicyMissingCorruptUnknownReceiptNeverDeletesIntent(t *t
 				t.Fatal("staged intent acquired deletion authority", err, mutated, len(f.processes.startSpecs))
 			}
 		})
+	}
+}
+
+// An activation that failed after its candidate fence but before the addition
+// receipt (a changed review, a failed removal of the previous policy) added
+// no candidate selector; its cleanup must not fence on the missing receipt.
+func TestProxyCandidatePolicyFenceWithoutAdditionReceiptIsSettled(t *testing.T) {
+	f := scopedXrayTestFixture(t)
+	a := f.a
+	ctx := context.Background()
+	root := stageScopedFixture(t, f)
+	state := mustScopedPolicy(t, a, root)
+	if err := a.beginCandidatePolicy(root, state); err != nil {
+		t.Fatal(err)
+	}
+	base := a.Runner
+	a.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if joined := strings.Join(args, " "); strings.Contains(joined, "rule ") && (strings.Contains(joined, " add") || strings.Contains(joined, " del")) {
+			t.Fatal("settled candidate ran a selector command", joined)
+		}
+		return base.Run(ctx, name, args...)
+	})
+	if err := a.removeCandidatePolicy(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+	a.Runner = base
+	receipt, err := a.readCandidatePolicyReceipt(root, state)
+	if err != nil || receipt.Phase != "removed" {
+		t.Fatal(receipt, err)
+	}
+	// Once the addition has written its receipt, the receipt decides as before.
+	g := scopedXrayTestFixture(t)
+	other := stageScopedFixture(t, g)
+	if err := g.a.Activate(ctx, g.plan, other); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, policyAdditionFile), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.a.removeCandidatePolicy(ctx, other); err == nil {
+		t.Fatal("a corrupt addition receipt was settled away")
 	}
 }
 

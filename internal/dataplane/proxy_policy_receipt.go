@@ -168,6 +168,19 @@ func (a *ProxyTunnelAdapter) removeCandidatePolicy(ctx context.Context, root str
 	if err != nil || receipt.Boot != boot || receipt.Phase != "complete" && receipt.Phase != "unknown" {
 		return ErrProxyPolicyUnknown
 	}
+	if receipt.Phase == "unknown" && receipt.Generation == "" {
+		// The candidate fence of this boot precedes forwarding and the addition,
+		// and the addition writes its receipt durably before its first RPDB
+		// command. Without that receipt no candidate selector was added: the
+		// activation failed earlier (for example a changed review or the
+		// removal of the previous policy). Forwarding is removed by the rollback
+		// that follows. On the owner's router this case fenced every failed
+		// sing-box activation with "receipt unavailable: file does not exist".
+		if _, err := os.Lstat(filepath.Join(root, policyAdditionFile)); errors.Is(err, os.ErrNotExist) {
+			receipt.Phase = "removed"
+			return writeProxyPolicyReceipt(root, receipt)
+		}
+	}
 	additionRoot := root
 	if receipt.Generation != "" {
 		additionRoot, err = a.policyGenerationRoot(receipt.Generation)

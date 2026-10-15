@@ -461,6 +461,20 @@ func (m *Manager) endOperation() {
 // half a second per fsync and a sing-box policy records about 60 selectors.
 const defaultRollbackTimeout = 3 * time.Minute
 
+// liveMutationBudget bounds one live phase that no longer follows its
+// caller's cancellation.
+const liveMutationBudget = 3 * time.Minute
+
+// shieldLiveMutation lets a started live phase finish its kernel steps. A
+// cancellation in the middle of a step (an operator click interrupting the
+// autopilot, a page load, a service stop) left its receipt between intent and
+// acknowledgement; such a step is unknown by design, its rollback refuses and
+// the router stays fenced. Cancellation still stops the transaction before
+// this phase, and after it the next phase fails and rolls back normally.
+func shieldLiveMutation(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), liveMutationBudget)
+}
+
 func (m *Manager) rollbackTimeout() time.Duration {
 	if m != nil && m.RollbackTimeout > 0 {
 		return m.RollbackTimeout
@@ -1415,6 +1429,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		previouslyMutated := liveMutation
 		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
 			liveMutation = true
+			if !restoring {
+				var release context.CancelFunc
+				runCtx, release = shieldLiveMutation(runCtx)
+				defer release()
+			}
 		}
 		var err error
 		_, actualNFQ := adapter.(*NFQWS2Adapter)
