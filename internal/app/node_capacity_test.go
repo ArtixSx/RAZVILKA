@@ -122,7 +122,7 @@ func TestPruneExpiredFeedNodesFreesTheCatalogue(t *testing.T) {
 func TestPruneExpiredFeedNodesWaitsForPressureGraceAndInterval(t *testing.T) {
 	a, nodes, now := nodeCapacityFixture(t)
 	ctx := context.Background()
-	importFeedWindows(t, nodes, nodestore.Source{ID: "feed-old", Kind: "community"}, "old", 100, now.Add(-72*time.Hour))
+	importFeedWindows(t, nodes, nodestore.Source{ID: "feed-old", Kind: "community"}, "old", feedUncheckedBudget, now.Add(-72*time.Hour))
 	if removed, err := a.pruneExpiredFeedNodes(ctx, now); err != nil || removed != 0 {
 		t.Fatalf("pruned below pressure: %d %v", removed, err)
 	}
@@ -131,10 +131,21 @@ func TestPruneExpiredFeedNodesWaitsForPressureGraceAndInterval(t *testing.T) {
 	if removed, err := a.pruneExpiredFeedNodes(ctx, now); err != nil || removed != 0 {
 		t.Fatalf("interval not respected: %d %v", removed, err)
 	}
+	// The stale expired window goes; of the 300 recent never-checked
+	// candidates within grace, only the budget stays.
 	later := now.Add(feedPruneInterval)
 	removed, err := a.pruneExpiredFeedNodes(ctx, later)
-	if err != nil || removed != 100 {
+	if err != nil || removed != feedUncheckedBudget+300-feedUncheckedBudget {
 		t.Fatalf("grace not respected: %d %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, later)
+	if err != nil || len(after.Nodes) != feedUncheckedBudget {
+		t.Fatalf("kept %d: %v", len(after.Nodes), err)
+	}
+	for _, n := range after.Nodes {
+		if n.Origins[0].SourceID != "feed-recent" {
+			t.Fatal("a record expired beyond the grace period was kept")
+		}
 	}
 }
 
@@ -164,11 +175,59 @@ func TestPruneFailedFeedCandidatesUnderPressure(t *testing.T) {
 	recordNodeCheck(t, nodes, ids[10], "ERROR", "node-transport-failed", now.Add(-20*time.Minute))
 	recordNodeCheck(t, nodes, ids[11], "ERROR", "node-service-probe-failed", now.Add(-20*time.Minute))
 	removed, err := a.pruneExpiredFeedNodes(ctx, now)
-	if err != nil || removed != 10 {
+	// 10 dead candidates, and of the 388 never-checked ones all but the budget.
+	if err != nil || removed != 10+388-feedUncheckedBudget {
 		t.Fatalf("removed %d: %v", removed, err)
 	}
 	after, err := nodes.Snapshot(ctx, now)
-	if err != nil || len(after.Nodes) != 390 {
+	if err != nil || len(after.Nodes) != 2+feedUncheckedBudget {
 		t.Fatalf("kept %d: %v", len(after.Nodes), err)
+	}
+	for _, id := range ids[10:12] {
+		if !slices.ContainsFunc(after.Nodes, func(n nodestore.Node) bool { return n.ID == id }) {
+			t.Fatal("a checked candidate without a dead verdict was removed")
+		}
+	}
+}
+
+// Below pressure only the never-checked feed queue is bounded: the records a
+// feed sent longest ago go first; checked, manual, disabled and referenced
+// records stay.
+func TestPruneBoundsNeverCheckedFeedCandidates(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	ctx := context.Background()
+	old := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-a", Kind: "community"}, "old", 60, now.Add(-5*time.Hour))
+	recent := importFeedWindows(t, nodes, nodestore.Source{ID: "feed-b", Kind: "subscription"}, "recent", 60, now.Add(-time.Hour))
+	recordNodeCheck(t, nodes, old[0], "ERROR", "node-service-probe-failed", now.Add(-2*time.Hour))
+	if _, err := nodes.SetDisabled(ctx, old[1], true, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "sing-box:" + old[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"}, feedURIs("old0", 4), now, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	// 120 records, 4 kept for their own reasons (checked, disabled, routed,
+	// manual origin), so 116 never-checked candidates compete for the budget.
+	removed, err := a.pruneExpiredFeedNodes(ctx, now)
+	if err != nil || removed != 116-feedUncheckedBudget {
+		t.Fatalf("removed %d: %v", removed, err)
+	}
+	after, err := nodes.Snapshot(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := map[string]bool{}
+	for _, n := range after.Nodes {
+		kept[n.ID] = true
+	}
+	for _, id := range append(slices.Clone(old[:4]), recent...) {
+		if !kept[id] {
+			t.Fatal("a protected or recently sent candidate was removed", id)
+		}
+	}
+	if removed, err = a.pruneExpiredFeedNodes(ctx, now.Add(feedPruneInterval)); err != nil || removed != 0 {
+		t.Fatal("the bounded queue shrank again", removed, err)
 	}
 }

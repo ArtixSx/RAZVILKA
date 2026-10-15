@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/nodestore"
@@ -20,6 +21,14 @@ const (
 	feedPrunePressure = nodestore.MaxNodes * 3 / 4
 	feedPruneGrace    = time.Hour
 	feedPruneInterval = 10 * time.Minute
+	// Two community feeds bring up to 32 candidates each every two hours,
+	// while the autopilot checks about two every five minutes. On the owner's
+	// router 376 of 398 records had never been checked and the catalogue was
+	// heading for FEED_CAPACITY, where newer, possibly working candidates can
+	// no longer be imported. Only this many never-checked feed candidates are
+	// kept; the ones their feeds sent longest ago go first and come back if a
+	// feed sends them again.
+	feedUncheckedBudget = 96
 )
 
 // The caller holds exclusive operation admission, which protects references
@@ -36,23 +45,73 @@ func (a *App) pruneExpiredFeedNodes(ctx context.Context, now time.Time) (int, er
 	a.autonomy.feedPruneAt = now
 	a.autonomy.mu.Unlock()
 	snapshot, err := a.Nodes.Snapshot(ctx, now)
-	if err != nil || len(snapshot.Nodes) < feedPrunePressure {
+	if err != nil {
 		return 0, err
 	}
 	protected, err := a.protectedCleanupNodes(ctx, snapshot)
 	if err != nil {
 		return 0, err
 	}
-	expired, failed := feedPruneCandidates(snapshot, protected, now)
-	ids := append(expired, failed...)
+	var expired, failed []string
+	if len(snapshot.Nodes) >= feedPrunePressure {
+		expired, failed = feedPruneCandidates(snapshot, protected, now)
+	}
+	unchecked := feedUncheckedExcess(snapshot, protected, append(slices.Clone(expired), failed...))
+	ids := append(append(expired, failed...), unchecked...)
 	if len(ids) == 0 {
 		return 0, nil
 	}
 	if _, err := a.Nodes.DeleteBatch(ctx, ids, snapshot.Generation, now); err != nil {
 		return 0, err
 	}
-	log.Printf("node catalogue: removed %d expired and %d failed feed candidates (%d of %d slots were used)", len(expired), len(failed), len(snapshot.Nodes), nodestore.MaxNodes)
+	log.Printf("node catalogue: removed %d expired, %d failed and %d long-unchecked feed candidates (%d of %d slots were used)", len(expired), len(failed), len(unchecked), len(snapshot.Nodes), nodestore.MaxNodes)
 	return len(ids), nil
+}
+
+// feedUncheckedExcess lists never-checked, enabled, unreferenced feed-only
+// records beyond feedUncheckedBudget, those last sent by a feed longest ago
+// first. A record with any check, a manual origin or a reference is kept.
+func feedUncheckedExcess(snapshot nodestore.Snapshot, protected map[string]string, removed []string) []string {
+	kinds := map[string]string{}
+	for _, s := range snapshot.Sources {
+		kinds[s.ID] = s.Kind
+	}
+	type candidate struct {
+		id          string
+		seen, added time.Time
+	}
+	var queue []candidate
+	for _, n := range snapshot.Nodes {
+		if n.Disabled || len(n.Origins) == 0 || protected[n.ID] != "" || slices.Contains(removed, n.ID) || len(n.Health.History) != 0 || !n.Health.CheckedAt.IsZero() {
+			continue
+		}
+		feedOnly, seen := true, time.Time{}
+		for _, o := range n.Origins {
+			if kind := kinds[o.SourceID]; kind != "community" && kind != "subscription" {
+				feedOnly = false
+			}
+			if o.ReceivedAt.After(seen) {
+				seen = o.ReceivedAt
+			}
+		}
+		if feedOnly {
+			queue = append(queue, candidate{n.ID, seen, n.AddedAt})
+		}
+	}
+	if len(queue) <= feedUncheckedBudget {
+		return nil
+	}
+	slices.SortStableFunc(queue, func(a, b candidate) int {
+		if c := a.seen.Compare(b.seen); c != 0 {
+			return c
+		}
+		return a.added.Compare(b.added)
+	})
+	ids := make([]string, 0, len(queue)-feedUncheckedBudget)
+	for _, c := range queue[:len(queue)-feedUncheckedBudget] {
+		ids = append(ids, c.id)
+	}
+	return ids
 }
 
 // feedPruneCandidates lists unreferenced feed-only records that expired more
