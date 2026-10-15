@@ -170,9 +170,9 @@ func (r *Root) WriteAtomic(name string, data []byte, mode os.FileMode) error {
 }
 
 // WriteAtomicUnsynced replaces name atomically without waiting for the disk.
-// After a crash the file holds either the new or the previous content. Use it
-// only for a record whose loss leaves a more conservative recorded state that
-// a later durable write repeats.
+// Atomic replacement is visible to concurrent readers, but crash durability
+// is not guaranteed. Use it only where missing or invalid contents cause a
+// conservative recovery refusal and a later durable write repeats the state.
 func (r *Root) WriteAtomicUnsynced(name string, data []byte, mode os.FileMode) error {
 	return r.writeAtomic(name, data, mode, false)
 }

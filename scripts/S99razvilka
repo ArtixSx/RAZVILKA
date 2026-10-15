@@ -119,13 +119,13 @@ stop_process() {
   "$DAEMON" -K -p "$PIDFILE" -x "$BINARY" -s TERM >/dev/null 2>&1 || kill "$PID"
   WAIT=0
   # A started phase may need 180s to settle and 180s to roll back.
-  # Keep five seconds beyond the panel's shared 390-second shutdown budget.
-  while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 395 ]; do
+  # Include detached receipt flushes and five seconds beyond the 450s panel grace.
+  while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 455 ]; do
     sleep 1
     WAIT=$((WAIT + 1))
   done
   if kill -0 "$PID" 2>/dev/null; then
-    echo "RAZVILKA did not stop after 395 seconds; PID file kept" >&2
+    echo "RAZVILKA did not stop after 455 seconds; PID file kept" >&2
     return 1
   fi
   rm -f "$PIDFILE"

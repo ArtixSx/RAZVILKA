@@ -9,4 +9,5 @@ import "time"
 // This covers the default Manager budgets: a longer RollbackTimeout override
 // needs a matching shutdown grace. Blocking filesystem/kernel calls must also
 // return; context deadlines cannot impose a hard bound on those calls.
-const GracefulShutdownBudget = liveMutationBudget + defaultRollbackTimeout + 30*time.Second
+// Each phase may also finish its receipt flush after its own context expires.
+const GracefulShutdownBudget = liveMutationBudget + defaultRollbackTimeout + 2*policyReceiptFlushBudget + 30*time.Second

@@ -212,6 +212,15 @@ export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,wri
 
 export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRead,recordSharedScope,diagnose}) {
   const nav=async name=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name,name);};
+  await test('simple home is default and advanced mode is an explicit local choice', 'real embedded UI and genuine toggle click', async()=>{
+    assert.equal(await page.locator('body').evaluate(element=>element.classList.contains('rz-simple')),true);
+    assert.equal(await page.locator('#rzSimpleHome').isVisible(),true);
+    const writes=requests.filter(request=>request.method!=='GET').length;
+    await page.locator('#rzSimpleToggle').click();
+    await page.waitForFunction(()=>!document.body.classList.contains('rz-simple'));
+    assert.equal(await page.locator('.nav[data-view="services"]').isVisible(),true);
+    assert.equal(requests.filter(request=>request.method!=='GET').length,writes);
+  });
   await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
     const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
     for(const [path,count] of Object.entries(cold))assert.equal(count,1,'cold boot restarted '+path);

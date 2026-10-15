@@ -47,14 +47,14 @@ kill "$PID"
 
 WAIT=0
 # Match the installed panel: join its live phase and rollback before replacement.
-# The panel's shared graceful shutdown budget is 390 seconds.
-while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 395 ]; do
+# The panel's shared graceful shutdown budget is 450 seconds, including flushes.
+while kill -0 "$PID" 2>/dev/null && [ "$WAIT" -lt 455 ]; do
     sleep 1
     WAIT=$((WAIT + 1))
 done
 
 if kill -0 "$PID" 2>/dev/null; then
-    echo "Candidate did not stop after 395 seconds; PID file kept" >&2
+    echo "Candidate did not stop after 455 seconds; PID file kept" >&2
     exit 1
 fi
 

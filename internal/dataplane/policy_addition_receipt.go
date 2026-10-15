@@ -295,11 +295,13 @@ func (s *policyAdditionSession) saveSettled(ctx context.Context) error {
 
 // flush makes a settled state durable before the session reports it. It runs
 // even after the caller's context ended: the kernel state already changed.
+const policyReceiptFlushBudget = 30 * time.Second
+
 func (s *policyAdditionSession) flush(ctx context.Context) error {
 	if !s.unsynced {
 		return nil
 	}
-	flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), policyReceiptFlushBudget)
 	defer cancel()
 	return s.save(flushCtx)
 }
