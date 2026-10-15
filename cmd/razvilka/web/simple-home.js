@@ -452,6 +452,23 @@
       + `<p class="rz-sh-foot">Остальные параметры (DNS, списки сайтов, стратегии, перенос аккаунтов) — в <button type="button" class="link-button" data-rz-set-advanced>расширенном режиме</button>.</p>`;
   }
 
+  // renderDevicesNote says in one line whom the bypass serves, above the list.
+  function renderDevicesNote() {
+    const grid = document.getElementById('deviceGrid');
+    if (!grid) return;
+    let note = document.getElementById('rzDevicesScope');
+    if (!note) {
+      note = document.createElement('p');
+      note.id = 'rzDevicesScope';
+      note.className = 'rz-devices-scope';
+      grid.before(note);
+    }
+    const p = snapshot()?.policy;
+    const text = !p ? '' : p.all_lan ? 'Обход работает для всех устройств домашней сети. Здесь можно дать устройствам понятные имена.'
+      : `Обход работает только для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}. Здесь можно дать устройствам понятные имена.`;
+    if (note.textContent !== text) note.textContent = text;
+  }
+
   async function saveNightly(field, on) {
     const snap = snapshot();
     if (!snap?.policy?.setup_complete || ui.settingsBusy) return;
@@ -485,9 +502,9 @@
     if (target.hasAttribute('data-rz-set-advanced')) setEnabled(false);
   }
 
-  window.addEventListener('razvilka:autonomy-state', () => { render(); renderSettings(); });
+  window.addEventListener('razvilka:autonomy-state', () => { render(); renderSettings(); renderDevicesNote(); });
   window.addEventListener('razvilka:app-update', () => render());
   document.addEventListener('DOMContentLoaded', apply);
   if (document.readyState !== 'loading') apply();
-  setInterval(() => { if (!document.hidden) { render(); renderSettings(); } }, 3000);
+  setInterval(() => { if (!document.hidden) { render(); renderSettings(); renderDevicesNote(); } }, 3000);
 })(typeof window !== 'undefined' ? window : globalThis);

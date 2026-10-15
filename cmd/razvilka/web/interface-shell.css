@@ -844,6 +844,11 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-doc-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .rz-doc-actions .link-button,.rz-simple-settings .link-button{background:none;border:0;padding:0;color:var(--blue);cursor:pointer;text-decoration:underline;font:inherit}
 body:not(.rz-simple) #rzSimpleSettings{display:none}
+/* Simple mode devices: names and presence only; scope editing, technical
+   notes and per-device routes stay in advanced mode. */
+body.rz-simple #contextNavigation,body.rz-simple #listScopeContent,body.rz-simple #view-devices .ui3-workspace-lead,body.rz-simple #view-devices .device-note,body.rz-simple #deviceDraftBar,body.rz-simple .device-card .device-meta,body.rz-simple .device-card .device-policy-preview,body.rz-simple .device-card .device-policy,body.rz-simple .device-addresses code:nth-of-type(n+2),body.rz-simple .device-addresses .device-more-addresses{display:none!important}
+body:not(.rz-simple) #rzDevicesScope{display:none}
+.rz-devices-scope{margin:12px 20px 0;color:var(--muted)}
 body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display:none!important}
 .rz-simple-settings{display:grid;gap:16px;max-width:760px;margin:0 auto 16px}
 .rz-set-card{display:grid;gap:4px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}

@@ -4006,6 +4006,17 @@ function renderDevices() {
     </article>`;
   }).join('');
   $('#deviceEmpty').style.display = devices.length ? 'none' : 'grid';
+  // An unanswered read is not an empty network: the router may be busy with
+  // the autopilot's checks while the list is read through the shared gate.
+  const phase = state.dataLoad?.devices?.phase;
+  const pending = !(state.devices || []).length && ['busy', 'error', 'loading'].includes(phase);
+  const empty = $('#deviceEmpty');
+  if (empty) {
+    const title = empty.querySelector?.('strong'), text = empty.querySelector?.('span');
+    if (title) title.textContent = pending ? 'Список устройств ещё не получен' : query ? 'Ничего не найдено' : 'Устройства пока не обнаружены';
+    if (text) text.textContent = pending ? 'Роутер сейчас занят проверкой сервисов. Список обновится сам, или нажмите «Найти заново» чуть позже.'
+      : query ? 'Попробуйте другое имя, IP или MAC.' : 'Подключите устройство к кабельной или Wi‑Fi сети и создайте с него трафик, затем нажмите «Найти заново». Офлайн-устройства с сохранёнными именами останутся в списке.';
+  }
   const groups = [...new Set((state.devices || []).map((device) => device.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
   $('#deviceGroupSuggestions').innerHTML = groups.map((group) => `<option value="${esc(group)}"></option>`).join('');
 }
