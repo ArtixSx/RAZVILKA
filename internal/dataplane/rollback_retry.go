@@ -160,6 +160,18 @@ func (m *Manager) reviewFailedRollback(planID, digest string) (failedRollback, b
 	if err != nil || !found || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
 		return failedRollback{}, false
 	}
+	return m.reviewFailedRollbackImages(planID, digest, latest, transaction, plan, previous)
+}
+
+// Pure validation shared with an explicit offline retirement's immutable
+// publication record. It does not locate files or reconstruct effect authority.
+func (m *Manager) reviewFailedRollbackImages(planID, digest string, latest, transaction *Execution, plan, previous Plan) (failedRollback, bool) {
+	if latest == nil || transaction == nil || !reflect.DeepEqual(latest, transaction) || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > maxRecoveryJournalSteps ||
+		plan.SchemaVersion != SchemaVersion || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 ||
+		previous.SchemaVersion != SchemaVersion || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
+		return failedRollback{}, false
+	}
+	root := filepath.Join(m.StateRoot, "transactions", planID)
 	prepared := []Adapter{}
 	seen := map[string]bool{}
 	failedBeforeCommit := false
@@ -206,7 +218,7 @@ func rollbackRecoveryPhase(phase string) (recovery, resumable bool) {
 	switch phase {
 	case "rollback", "verify-rollback":
 		return true, false
-	case "retry-rollback", "retry-verify-rollback", "close-deactivate":
+	case "retry-rollback", "retry-verify-rollback", "close-deactivate", "close-retire-after-boot":
 		return true, true
 	}
 	return false, false
@@ -264,11 +276,18 @@ func boundRecoveryError(text string) string {
 // runFailedRollbackRecovery journals each step before and after it runs and
 // records the outcome. succeed marks the result only when every step and the
 // final guard passed; otherwise the record stays rollback-failed.
-func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failedRollback, guard func(Plan) error, label, failedMessage string, steps func(recoveryStepRunner), succeed func(*Execution, *Plan)) (Execution, error) {
+func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failedRollback, guard func(Plan) error, label, failedMessage string, steps func(recoveryStepRunner), succeed func(*Execution, *Plan), offlineWriter ...*bootRetirementWriter) (Execution, error) {
 	if err := ctx.Err(); err != nil {
 		return Execution{}, err
 	}
 	plan, root := reviewed.plan, reviewed.root
+	writeExecution, recordPlan := m.writeExecution, m.recordLocked
+	if len(offlineWriter) != 0 {
+		if len(offlineWriter) != 1 || offlineWriter[0] == nil || offlineWriter[0].manager != m || offlineWriter[0].transactionPath != root {
+			return Execution{}, ErrBootRetirement
+		}
+		writeExecution, recordPlan = offlineWriter[0].writeExecution, offlineWriter[0].recordPlan
+	}
 	execution := *reviewed.latest
 	execution.Steps = slices.Clone(reviewed.latest.Steps)
 	execution.RollbackVerified = false
@@ -291,7 +310,7 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
-		failure = errors.Join(failure, m.writeExecution(root, execution))
+		failure = errors.Join(failure, writeExecution(root, execution))
 		err := action(recovery, plan, filepath.Join(root, adapter.ID()))
 		execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		execution.Steps[index].State = "passed"
@@ -299,7 +318,7 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 			execution.Steps[index].State = "failed"
 			execution.Steps[index].Detail = err.Error()
 		}
-		failure = errors.Join(failure, err, m.writeExecution(root, execution))
+		failure = errors.Join(failure, err, writeExecution(root, execution))
 	})
 	failure = errors.Join(failure, guard(reviewed.previous))
 	execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -310,10 +329,10 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 		execution.Error += "; " + label + ": " + failure.Error()
 	}
 	execution.Error = boundRecoveryError(execution.Error)
-	if err := errors.Join(m.recordLocked(plan), m.writeExecution(root, execution)); err != nil {
+	if err := errors.Join(recordPlan(plan), writeExecution(root, execution)); err != nil {
 		execution.State, plan.State = "rollback-failed", "rollback-failed"
 		execution.RollbackVerified = false
-		failure = errors.Join(failure, err, m.recordLocked(plan), m.writeExecution(root, execution))
+		failure = errors.Join(failure, err, recordPlan(plan), writeExecution(root, execution))
 	}
 	if failure != nil {
 		return execution, fmt.Errorf("%s: %w", failedMessage, failure)
