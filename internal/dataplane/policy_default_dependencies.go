@@ -14,7 +14,7 @@ var ErrPolicyDefaultReferenced = errors.New("policy table default still has a se
 type numericPolicyReadRunner struct{ base NFQWS2Runner }
 
 func (r numericPolicyReadRunner) Run(ctx context.Context, command string, args ...string) ([]byte, error) {
-	return r.base.Run(ctx, command, append([]string{"-N"}, args...)...)
+	return runIPNumeric(ctx, r.base, command, append([]string{"-N"}, args...)...)
 }
 
 // AssertPolicyDefaultUnreferenced is a read-only negative dependency check,

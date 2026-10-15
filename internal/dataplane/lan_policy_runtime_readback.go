@@ -10,7 +10,13 @@ import (
 )
 
 func (r *LANPolicyRuntime) read(ctx context.Context, tool string, args ...string) (string, error) {
-	out, err := r.Runner.Run(ctx, r.command(tool), args...)
+	run := r.Runner.Run
+	if tool == "ip" {
+		run = func(ctx context.Context, command string, args ...string) ([]byte, error) {
+			return runIPNumeric(ctx, r.Runner, command, args...)
+		}
+	}
+	out, err := run(ctx, r.command(tool), args...)
 	if err != nil || len(out) > 1<<20 || len(strings.Split(string(out), "\n")) > 8192 {
 		return "", errors.Join(ErrLANPolicyRuntime, err)
 	}
