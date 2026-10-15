@@ -848,9 +848,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			exitCode = 1
 		}
 	case <-runtimeContext.Done():
-		// One total grace period fits the init script's 75-second stop budget.
-		// HTTP mutations get time for rollback, not just detached workers.
-		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 70*time.Second)
+		// HTTP requests and all workers share one total grace period for the
+		// already-entered kernel phase, its rollback, and final publication.
+		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), dataplane.GracefulShutdownBudget)
 		defer cancelShutdown()
 		if err := srv.Shutdown(shutdownContext); err != nil {
 			log.Printf("HTTP shutdown: %v", err)
