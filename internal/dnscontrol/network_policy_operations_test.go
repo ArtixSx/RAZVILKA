@@ -303,13 +303,17 @@ func TestNetworkPolicyDNSOperationsConcurrentQuestionsStopAndCloseJoin(t *testin
 						t.Fatal(what)
 					}
 				}
-				slow1, fast, slow2 := connect(), connect(), connect()
+				// TCP accepts have their own short admission. Do not start two
+				// unrelated accepts before asserting that this stalled provider
+				// released its admission; those accepts can legitimately be busy.
+				slow1 := connect()
 				networkDNSOperationsWrite(t, slow1, transport, "slow-one.example.org")
 				wait(entered, "first delayed provider not entered")
 				readRelease, err := gate.Enter(context.Background())
 				if err != nil {
 					t.Fatal("upstream blocked ordinary shared read", err)
 				}
+				fast := connect()
 				networkDNSOperationsWrite(t, fast, transport, "fast.example.org")
 				readRelease()
 				wire, err := networkDNSOperationsRead(fast, transport)
@@ -317,6 +321,7 @@ func TestNetworkPolicyDNSOperationsConcurrentQuestionsStopAndCloseJoin(t *testin
 				if err != nil || answer.Unpack(wire) != nil || !answer.Response || answer.RCode != dnsmessage.RCodeSuccess {
 					t.Fatal("second question blocked by first upstream", err)
 				}
+				slow2 := connect()
 				networkDNSOperationsWrite(t, slow2, transport, "slow-two.example.org")
 				wait(entered, "second delayed provider not entered")
 				if end == "stop" {
