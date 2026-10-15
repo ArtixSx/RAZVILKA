@@ -82,15 +82,19 @@
     try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (_) { /* per-viewer convenience only */ }
     apply();
   }
+  function label() {
+    const on = enabled();
+    const toggle = document.getElementById('rzSimpleToggle');
+    if (!toggle) return;
+    toggle.setAttribute('aria-checked', String(!on));
+    toggle.querySelector('b').textContent = on ? 'Расширенный режим' : 'Простой режим';
+    toggle.querySelector('small').textContent = on ? 'Все разделы и ручные настройки' : 'Только сервисы и устройства';
+  }
   function apply() {
     const on = enabled();
     document.body.classList.toggle('rz-simple', on);
-    const toggle = document.getElementById('rzSimpleToggle');
-    if (toggle) {
-      toggle.setAttribute('aria-checked', String(!on));
-      toggle.querySelector('b').textContent = on ? 'Расширенный режим' : 'Простой режим';
-      toggle.querySelector('small').textContent = on ? 'Все разделы и ручные настройки' : 'Только сервисы и устройства';
-    }
+    ensure();
+    label();
     if (on && typeof state === 'object' && state && !['overview', 'devices', 'settings'].includes(state.currentView)) {
       document.querySelector('[data-main-nav="overview"]')?.click();
     }
@@ -121,6 +125,7 @@
         toggle.innerHTML = '<span><b></b><small></small></span><span aria-hidden="true" class="power-switch"><i></i></span>';
         toggle.addEventListener('click', () => setEnabled(!enabled()));
         nav.after(toggle);
+        label();
       }
     }
     return home;

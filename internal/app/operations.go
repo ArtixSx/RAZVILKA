@@ -340,6 +340,13 @@ func operatorIntent(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return true
 	}
+	// The panel reads the plan passively on every page load. Treating that as
+	// intent cancelled a running autopilot transaction mid-activation, whose
+	// rollback then failed and fenced the router. Only the plan read behind a
+	// click interrupts automation.
+	if r.Header.Get("X-Razvilka-Read") == "passive" {
+		return false
+	}
 	return r.URL.Path == "/api/v1/plan" || strings.HasPrefix(r.URL.Path, "/api/v1/components/") && strings.HasSuffix(r.URL.Path, "/plan")
 }
 

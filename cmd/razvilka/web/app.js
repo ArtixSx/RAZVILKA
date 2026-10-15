@@ -105,7 +105,8 @@ function readPanelResource(url, options = {}) {
     const ticket = entry;
     ticket.promise = Promise.resolve().then(() => {
       if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
-      return api(url, { ...options, signal: ticket.controller.signal });
+      // A passive read never interrupts automation (a page load reads the plan).
+      return api(url, { ...options, headers: { 'x-razvilka-read': 'passive' }, signal: ticket.controller.signal });
     }).then(value => {
       if (panelReads.epoch !== epoch || (state.authGeneration || 0) !== auth || ticket.controller.signal.aborted) throw Object.assign(new Error('Read context changed'), { name: 'AbortError' });
       ticket.finished = true; ticket.receivedAt = Date.now();
