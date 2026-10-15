@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -358,9 +359,55 @@ func (m *Manager) prepareExecutionRoot(transactionRoot string) error {
 // directory nothing reads; execution.json stays until the new attempt replaces
 // it, so the latest journal keeps a readable record.
 func (m *Manager) retireSettledAttempt(transactionRoot string) error {
-	var previous *Execution
-	exists, err := readOptionalJournal(filepath.Join(transactionRoot, "execution.json"), &previous)
-	if err != nil || !exists || previous == nil {
+	id := filepath.Base(transactionRoot)
+	if !validExecutionPlanID(id) || filepath.Clean(transactionRoot) != filepath.Join(m.StateRoot, "transactions", id) {
+		return executionJournalError(errors.New("invalid retirement transaction root"))
+	}
+	// Hold the trusted state directory and each real child before reading a
+	// receipt or moving anything. Path-based renames used to follow symlinked
+	// transactions/.retired directories before the eventual sync rejected them.
+	stateInfo, err := os.Lstat(m.StateRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // The first Apply creates its state tree after retirement.
+	}
+	if err != nil || !stateInfo.IsDir() || stateInfo.Mode()&os.ModeSymlink != 0 {
+		return executionJournalError(errors.Join(errors.New("invalid retirement state root"), err))
+	}
+	state, err := os.OpenRoot(m.StateRoot)
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer state.Close()
+	opened, err := state.Stat(".")
+	if err != nil || !os.SameFile(stateInfo, opened) {
+		return executionJournalError(errors.New("retirement state root changed"))
+	}
+	transactions, err := openRetirementChild(state, "transactions")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer transactions.Close()
+	source, err := openRetirementChild(transactions, id)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer source.Close()
+	info, err := source.Lstat("execution.json")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return executionJournalError(errors.New("invalid retirement execution record"))
+	}
+	data, err := source.ReadFile("execution.json")
+	var previous Execution
+	if err != nil || json.Unmarshal(data, &previous) != nil {
 		return nil // Unknown content stays for the adapters' own refusal.
 	}
 	switch previous.State {
@@ -368,39 +415,99 @@ func (m *Manager) retireSettledAttempt(transactionRoot string) error {
 	default:
 		return nil
 	}
-	entries, err := os.ReadDir(transactionRoot)
+	directory, err := source.Open(".")
 	if err != nil {
 		return executionJournalError(err)
 	}
-	retired := filepath.Join(filepath.Dir(transactionRoot), ".retired", fmt.Sprintf("%s-%d", filepath.Base(transactionRoot), time.Now().UnixNano()))
+	entries, err := directory.ReadDir(-1)
+	_ = directory.Close()
+	if err != nil {
+		return executionJournalError(err)
+	}
+	if err := transactions.Mkdir(".retired", 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return executionJournalError(err)
+	}
+	archive, err := openRetirementChild(transactions, ".retired")
+	if err != nil {
+		return executionJournalError(err)
+	}
+	defer archive.Close()
+	retired := fmt.Sprintf("%s-%d", id, time.Now().UnixNano())
+	var destination *os.Root
 	moved := false
 	for _, entry := range entries {
 		if entry.Name() == "execution.json" {
 			continue
 		}
 		if !moved {
-			if err := os.MkdirAll(retired, 0o700); err != nil {
+			if err := archive.Mkdir(retired, 0o700); err != nil {
 				return executionJournalError(err)
 			}
+			destination, err = openRetirementChild(archive, retired)
+			if err != nil {
+				return executionJournalError(err)
+			}
+			defer destination.Close()
 			moved = true
 		}
-		if err := os.Rename(filepath.Join(transactionRoot, entry.Name()), filepath.Join(retired, entry.Name())); err != nil {
+		if err := errors.Join(checkRetirementChild(state, "transactions", transactions),
+			checkRetirementChild(transactions, id, source),
+			checkRetirementChild(transactions, ".retired", archive),
+			checkRetirementChild(archive, retired, destination)); err != nil {
+			return executionJournalError(err)
+		}
+		// os.Root also confines both sides if a path is replaced after checks.
+		if err := transactions.Rename(filepath.Join(id, entry.Name()), filepath.Join(".retired", retired, entry.Name())); err != nil {
 			return executionJournalError(err)
 		}
 	}
 	if !moved {
 		return nil
 	}
-	for _, path := range []string{transactionRoot, retired, filepath.Dir(retired)} {
-		root, err := openJournalDirectory(path)
-		if err != nil {
-			return executionJournalError(err)
+	if runtime.GOOS != "windows" {
+		for _, root := range []*os.Root{source, destination, archive, transactions} {
+			directory, err := root.Open(".")
+			if err != nil {
+				return executionJournalError(err)
+			}
+			err = directory.Sync()
+			_ = directory.Close()
+			if err != nil {
+				return executionJournalError(err)
+			}
 		}
-		err = syncDataplaneJournalDirectory(root)
-		_ = root.Close()
-		if err != nil {
-			return executionJournalError(err)
-		}
+	}
+	return nil
+}
+
+func openRetirementChild(parent *os.Root, name string) (*os.Root, error) {
+	info, err := parent.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("retirement directory is not a real directory")
+	}
+	child, err := parent.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := child.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		_ = child.Close()
+		return nil, errors.New("retirement directory changed while opening")
+	}
+	return child, nil
+}
+
+func checkRetirementChild(parent *os.Root, name string, held *os.Root) error {
+	current, err := parent.Lstat(name)
+	if err != nil {
+		return err
+	}
+	original, err := held.Stat(".")
+	if err != nil || !current.IsDir() || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(current, original) {
+		return errors.New("retirement directory ownership changed")
 	}
 	return nil
 }
