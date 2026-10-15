@@ -84,6 +84,7 @@ type panelSnapshotState struct {
 	once          sync.Once
 	latest        atomic.Pointer[panelSavedPublication]
 	devices       atomic.Pointer[panelSavedPublication]
+	community     atomic.Pointer[panelSavedPublication]
 	autonomy      atomic.Pointer[panelAutonomyPublication]
 	autonomyWake  chan struct{}
 	inventory     atomic.Pointer[panelInventoryPublication]
@@ -128,6 +129,7 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 		instance := hex.EncodeToString(id[:])
 		a.publishPanelSnapshot(ctx, instance, time.Now())
 		a.publishPanelDeviceBrowse(ctx, instance, time.Now())
+		a.publishPanelCommunityBrowse(ctx, instance, time.Now())
 		// Prepared after boot recovery; this read-only collection still validates
 		// admission generation and does its file reads outside the short lease.
 		a.collectPanelAutonomy(ctx, instance, a.localPanelAutonomy)
@@ -155,6 +157,7 @@ func (a *App) StartPanelSnapshots(ctx context.Context) {
 				}
 				a.publishPanelSnapshot(ctx, instance, time.Now())
 				a.publishPanelDeviceBrowse(ctx, instance, time.Now())
+				a.publishPanelCommunityBrowse(ctx, instance, time.Now())
 			}
 		}()
 	})

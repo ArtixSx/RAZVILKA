@@ -635,6 +635,7 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <div class="community-dialog-body">
 <div class="dialog-head"><div><span class="eyebrow">ГОТОВЫЕ СЕРВИСЫ</span><h3>Каталог сервисов</h3><p>Проверенный список проекта и более 300 сервисов Geo-Aggregator по категориям. Домены и сети уже собраны: посмотрите состав и конфликты, затем добавьте. Доступ проверяется на вашем роутере.</p></div><button class="dialog-close" id="communityCatalogClose" type="button">×</button></div>
 <div class="community-search"><input autocomplete="off" id="communitySearch" placeholder="Netflix, Steam, Signal, Telegram…"/><button class="secondary" id="communitySearchButton" type="button">Найти</button></div>
+<p hidden="" id="communityBrowseNotice" role="status"></p><button class="secondary" hidden="" id="communityBrowseRefresh" type="button">Повторить чтение каталога</button>
 <details class="setup-source"><summary>Свой GitHub-файл, локальный файл или текст</summary>
 <form id="communityOwnForm"><div class="form-grid">
 <label><span>Название</span><input id="communityOwnName" maxlength="120" required placeholder="Мой сервис"/></label>
@@ -664,6 +665,7 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <script src="/app-update-ui.js?v=0.20.0"></script>
 <script src="/panel-snapshot.js?v=0.20.0"></script>
 <script src="/panel-device-browse.js?v=0.20.0"></script>
+<script src="/panel-community-browse.js?v=0.20.0"></script>
 <script src="/app.js?v=0.20.0"></script>
 <script src="/cloudflare-accounts.js?v=0.20.0"></script>
 <script src="/cloudflare-migration.js?v=0.20.0"></script>

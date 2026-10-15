@@ -181,6 +181,7 @@ async function api(url, options = {}) {
   const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
   if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
+  if (mutation && typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
   const headers = new Headers(options.headers || {});
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -228,6 +229,7 @@ async function api(url, options = {}) {
   } finally {
     if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
     if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
+    if (mutation && typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
   }
@@ -4258,23 +4260,38 @@ async function openCommunityCatalog() {
   $('#r4CommunityStatus').textContent='';
   $('#communityCatalogDialog').showModal();
   $('#communitySearch').value = '';
-  await searchCommunityCatalog();
+  await searchCommunityCatalog(true);
   setTimeout(() => $('#communitySearch').focus(), 0);
 }
 
-function closeCommunityCatalog() { $('#communityCatalogDialog').close();workflowState.communitySeq++; }
+function closeCommunityCatalog() {
+  $('#communityCatalogDialog').close();workflowState.communitySeq++;
+  if (typeof communityBrowse !== 'undefined') { communityBrowse.request++; communityBrowse.action++; clearTimeout(communityBrowse.timer); }
+}
 
-async function searchCommunityCatalog() {
+async function searchCommunityCatalog(force = false) {
+  if (!force && typeof communityBrowse !== 'undefined' && communityBrowse.showing) { renderSavedCommunityBrowse(); return; }
   const query=$('#communitySearch').value.trim(),seq=++workflowState.communitySeq,epoch=workflowState.epoch;
+  if (typeof communityBrowseSearchStarted === 'function') {
+    communityBrowseSearchStarted();
+    void loadSavedCommunityBrowse(seq, epoch);
+  }
   $('#communityResults').innerHTML='<div class="community-empty">Читаем поддерживаемый каталог…</div>';
   try{
     const results=await workflowRequest(`/api/v1/community/services?q=${encodeURIComponent(query)}`);
     if(!workflowSession(epoch)||seq!==workflowState.communitySeq||!$('#communityCatalogDialog').open)return;
-    state.community=Array.isArray(results)?results:[];renderCommunityResults();
-  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityResults').innerHTML=`<div class="community-empty error">${esc(workflowError(error))}</div>`;}
+    if (!Array.isArray(results)) throw new Error('Каталог получен не полностью.');
+    state.community=results;
+    if (typeof communityBrowseLiveAccepted === 'function') communityBrowseLiveAccepted();
+    renderCommunityResults();
+  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq){
+    if (typeof communityBrowseUnavailable === 'function') communityBrowseUnavailable(error);
+    else $('#communityResults').innerHTML=`<div class="community-empty error">${esc(workflowError(error))}</div>`;
+  }}
 }
 
 function renderCommunityResults() {
+  if (typeof communityBrowse !== 'undefined' && communityBrowse.showing) { renderSavedCommunityBrowse(); return; }
   $('#communityResults').innerHTML = state.community.map((entry) => `<button class="community-result ${state.communityPreview?.entry?.id === entry.id ? 'active' : ''}" data-community-id="${esc(entry.id)}" type="button">
     <span class="service-badge">${communityEntryIcon(entry)}</span><span><b>${esc(entry.name)}</b><small>${esc(entry.category)} · ${esc(entry.catalog === 'geo-aggregator' ? 'Geo-Aggregator' : accessLabel(entry.access?.status))}</small></span><i class="${entry.imported ? 'imported' : ''}">${entry.imported ? 'ДОБАВЛЕН' : 'PREVIEW'}</i>
   </button>`).join('') || '<div class="community-empty">Ничего не найдено. Можно добавить сервис вручную.</div>';
@@ -4292,17 +4309,24 @@ function accessLabel(status) {
 }
 
 async function previewCommunityService(id, refresh = false) {
+  if (typeof communityBrowseActionsAllowed === 'function' && !communityBrowseActionsAllowed()) return;
+  const browseToken = typeof communityBrowseActionToken === 'function' ? communityBrowseActionToken() : null;
   const seq=++workflowState.communitySeq,epoch=workflowState.epoch;
   state.communityPreview=null;$('#r4CommunityStatus').textContent='';
   $('#communityPreview').innerHTML='<div class="community-empty">Получаем и разбираем доменный список. Это не проверка доступности сервиса…</div>';
   try{
     const preview=await workflowRequest(`/api/v1/community/services/${encodeURIComponent(id)}/preview${refresh?'?refresh=true':''}`,{},50000);
     if(!workflowSession(epoch)||seq!==workflowState.communitySeq||!$('#communityCatalogDialog').open)return;
+    if (typeof communityBrowseActionCurrent === 'function' && !communityBrowseActionCurrent(browseToken)) return;
     state.communityPreview=preview;renderCommunityResults();renderCommunityPreview();
-  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq)$('#communityPreview').innerHTML=`<div class="community-empty error"><p>Список не загружен: ${esc(workflowError(error))}</p><button class="secondary" data-community-refresh="${esc(id)}" type="button">Повторить загрузку</button></div>`;}
+  }catch(error){if(workflowSession(epoch)&&seq===workflowState.communitySeq){
+    if (typeof communityBrowseActionCurrent === 'function' && !communityBrowseActionCurrent(browseToken)) return;
+    $('#communityPreview').innerHTML=`<div class="community-empty error"><p>Список не загружен: ${esc(workflowError(error))}</p><button class="secondary" data-community-refresh="${esc(id)}" type="button">Повторить загрузку</button></div>`;
+  }}
 }
 
 function renderCommunityPreview() {
+  if (typeof communityBrowseActionsAllowed === 'function' && !communityBrowseActionsAllowed()) return;
   const preview = state.communityPreview;
   if (!preview) return;
   const service = preview.service || {};
@@ -4325,6 +4349,8 @@ function renderCommunityPreview() {
 }
 
 async function importCommunityService(id) {
+  if (typeof communityBrowseActionsAllowed === 'function' && !communityBrowseActionsAllowed()) return;
+  const browseToken = typeof communityBrowseActionToken === 'function' ? communityBrowseActionToken() : null;
   const preview=state.communityPreview;if(!preview||preview.entry?.id!==id||workflowState.communityImport)return;
   if(preview.import_guard!=='source-sha256'){$('#r4CommunityStatus').textContent='Сервер не подтвердил защиту импорта. Обновите приложение целиком; показанный список ещё не сохранён.';return;}
   if(!/^[a-f0-9]{64}$/.test(preview.source_sha256||'')){$('#r4CommunityStatus').textContent='Не получен отпечаток показанного источника. Повторите предпросмотр.';return;}
@@ -4335,6 +4361,7 @@ async function importCommunityService(id) {
     if(conflicts.length&&!await askConfirmation('Импортировать пересекающиеся списки?', `${conflicts.length} записей пересекаются с другими сервисами. Их маршруты не будут заменены.`, 'Импортировать'))return;
     if(imported&&!await askConfirmation('Обновить определение сервиса?','Показанные домены заменят предыдущую версию. Настройки маршрута сохраняются.','Обновить'))return;
     if(!workflowSession(epoch)||state.communityPreview!==preview||!$('#communityCatalogDialog').open)return;
+    if (typeof communityBrowseActionCurrent === 'function' && !communityBrowseActionCurrent(browseToken)) return;
     $('#r4CommunityStatus').textContent='Импортируем показанную редакцию списка…';
     $$('[data-community-import],[data-community-refresh]').forEach(b=>b.disabled=true);
     saved=await workflowRequest(`/api/v1/community/services/${encodeURIComponent(id)}/import`,{method:'POST',body:JSON.stringify({allow_conflicts:conflicts.length>0,refresh:false,expected_source_sha256:preview.source_sha256})},50000);
