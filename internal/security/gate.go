@@ -171,6 +171,12 @@ func (g *Gate) Setup(username, password string, requests ...*http.Request) (stri
 	if g.credential != nil {
 		return "", errors.New("administrator account is already configured")
 	}
+	// A previous account's credential file may have been removed while its
+	// remembered-session file survived. Retire those cookies durably before
+	// creating another account; a failed revocation must not create it.
+	if err := g.revokeAllLocked(); err != nil {
+		return "", err
+	}
 	if err := g.writeCredential(record); err != nil {
 		return "", err
 	}
@@ -503,6 +509,10 @@ func (g *Gate) Authenticated(r *http.Request) bool {
 	hash := sha256.Sum256([]byte(cookie.Value))
 	now := g.now()
 	g.mu.Lock()
+	if g.credential == nil {
+		g.mu.Unlock()
+		return false // Only the recovery bearer may authorize initial setup.
+	}
 	session, ok := g.sessions[hash]
 	if ok && now.After(session.ExpiresAt) {
 		delete(g.sessions, hash)

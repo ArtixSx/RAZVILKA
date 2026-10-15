@@ -73,9 +73,16 @@ func TestCredentialSetupDoesNotConfirmAnUnsyncedRename(t *testing.T) {
 	dir, now := t.TempDir(), time.Unix(1_800_000_000, 0)
 	g := rememberedGate(t, dir, now)
 	injected := errors.New("injected credential directory sync failure")
-	g.privateDirSync = func(*ownedfs.Root) error { return injected }
+	calls := 0
+	g.privateDirSync = func(root *ownedfs.Root) error {
+		calls++
+		if calls == 1 {
+			return syncPrivateDirectory(root)
+		} // Retire any old sessions first.
+		return injected
+	}
 	token, err := g.Setup("admin", "correct-horse-battery-staple")
-	if !errors.Is(err, injected) || token != "" || !g.SetupRequired() {
+	if !errors.Is(err, injected) || token != "" || !g.SetupRequired() || calls != 2 {
 		t.Fatalf("setup acknowledged unsynced credentials: token=%t setup=%t err=%v", token != "", g.SetupRequired(), err)
 	}
 	// The rename happened even though durability could not be confirmed.

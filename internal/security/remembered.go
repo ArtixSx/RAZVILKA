@@ -48,6 +48,11 @@ func (g *Gate) ConfigureRememberedSessions(path string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.sessionsPath = path
+	if g.credential == nil {
+		// A cookie from a removed account cannot authorize initial setup or
+		// acquire permission under the next account. Setup retires its file.
+		return nil
+	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

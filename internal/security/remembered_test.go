@@ -110,11 +110,11 @@ func TestInvalidRememberedSessionsFileIsIgnoredAndReplaced(t *testing.T) {
 	if err := gate.ConfigureCredentials(filepath.Join(dir, "admin.credentials.json")); err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.ConfigureRememberedSessions(path); err == nil {
-		t.Fatal("a broken file was accepted")
-	}
 	if _, err := gate.Setup("admin", "correct-horse-battery-staple"); err != nil {
 		t.Fatal(err)
+	}
+	if err := gate.ConfigureRememberedSessions(path); err == nil {
+		t.Fatal("a broken file was accepted")
 	}
 	token, err := gate.LoginRemembered("admin", "correct-horse-battery-staple", true)
 	if err != nil {
