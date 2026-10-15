@@ -116,7 +116,10 @@ export function realHTTPIdentityFacts(value,instance) {
 export function realHTTPPrivateFixture({snapshot,inventory,status,services,nodes,recovery},instance) {
   realHTTPIdentity(snapshot,instance);realHTTPIdentity(inventory,instance);
   realHTTPAssert(inventory.data?.system?.opt_ready===true&&typeof inventory.data.system.kernel==='string'&&inventory.data.system.kernel.length>0,'QA_OPT_INVENTORY_REQUIRED');
-  realHTTPAssert(status?.safe_mode===true&&status.live_active===false&&Number.isSafeInteger(status.revision)&&status.revision>=0,'QA_PRIVATE_SAFE_MODE_REQUIRED');
+  // The disposable clean installation has no recovery fence. Inactivity is
+  // established separately by disabled services, an empty node store and
+  // disabled automation; login never grants permission to change the network.
+  realHTTPAssert(status?.safe_mode===false&&status.live_active===false&&Number.isSafeInteger(status.revision)&&status.revision>=0,'QA_PRIVATE_INACTIVE_REQUIRED');
   realHTTPAssert(Array.isArray(services)&&services.length>0&&services.every(row=>row.enabled===false&&row.applied_state?.enabled===false&&!row.applied_enabled),'QA_DISABLED_SERVICES_REQUIRED');
   realHTTPAssert(Array.isArray(nodes?.nodes)&&nodes.nodes.length===0&&Array.isArray(nodes.groups)&&nodes.groups.length===0,'QA_EMPTY_NODE_STORE_REQUIRED');
   realHTTPAssert(recovery?.recovery_required===false,'QA_RECOVERY_CLEAR_REQUIRED');
@@ -235,7 +238,7 @@ export async function runRealHTTPUI(config) {
     if(config.draftMutations)await runRealHTTPDraftScenarios(shared);
     stage='verify-final-QA-boundary';await checkIdentity();
     const after=await readJSON('/api/v1/status'),afterServices=await readJSON('/api/v1/services'),afterPolicy=await readJSON('/api/v1/autonomy');
-    realHTTPAssert(after.safe_mode===true&&after.live_active===false&&after.revision===status.revision&&after.applied_revision===status.applied_revision,'QA_DATAPLANE_CHANGED');
+    realHTTPAssert(after.safe_mode===status.safe_mode&&after.live_active===false&&after.revision===status.revision&&after.applied_revision===status.applied_revision,'QA_DATAPLANE_CHANGED');
     realHTTPAssert(serviceIntent(afterServices)===serviceIntent(services),'QA_SERVICE_INTENT_CHANGED');
     realHTTPAssert(afterPolicy.policy.enabled===false&&afterPolicy.policy.application.mode==='off'&&afterPolicy.policy.components.mode==='off','QA_AUTOMATION_CHANGED');
     const allowed=request=>request.method==='GET'||config.draftMutations&&request.method==='POST'&&['/api/v1/nodes/import','/api/v1/nodes/delete-batch'].includes(request.path)

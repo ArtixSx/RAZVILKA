@@ -36,18 +36,19 @@ check(()=>assert.deepEqual(realHTTPIdentityFacts({schema:'private',instance_id:'
   {schema_valid:false,instance_matches:false,state:'unknown',dataplane_valid:false,data_age_ms:null,max_age_seconds:null,
     age_valid:false,within_age_limit:false,admission_state:null,admission_exclusive:null,admission_fenced:null}));
 const fixture=()=>({snapshot:structuredClone(envelope),inventory:{...structuredClone(envelope),data:{system:{opt_ready:true,kernel:'6.1-qa'}}},
-  status:{safe_mode:true,live_active:false,revision:1},services:[{enabled:false,applied_state:{enabled:false}}],nodes:{nodes:[],groups:[]},
+  status:{safe_mode:false,live_active:false,revision:1},services:[{enabled:false,applied_state:{enabled:false}}],nodes:{nodes:[],groups:[]},
   autonomy:{policy:{revision:1,check_seconds:120,reserve_seconds:600,setup_complete:true,enabled:false,inherit_new_services:false,application:{mode:'off'},components:{mode:'off'}}},recovery:{recovery_required:false}});
 check(()=>realHTTPFixture(fixture(),instance));
 check(()=>{const value=fixture();value.status.revision=0;value.status.applied_revision=0;realHTTPFixture(value,instance);});
 for(const revision of [-1,1.5,Number.MAX_SAFE_INTEGER+1,undefined]){
-  reject(()=>{const value=fixture();value.status.revision=revision;realHTTPFixture(value,instance);},'QA_PRIVATE_SAFE_MODE_REQUIRED');
+  reject(()=>{const value=fixture();value.status.revision=revision;realHTTPFixture(value,instance);},'QA_PRIVATE_INACTIVE_REQUIRED');
 }
 reject(()=>realHTTPIdentity({...envelope,instance_id:'b'.repeat(32)},instance),'QA_INSTANCE_MISMATCH_OR_STALE');
 reject(()=>realHTTPIdentity({...envelope,data_age_ms:120000},instance),'QA_INSTANCE_MISMATCH_OR_STALE');
 reject(()=>realHTTPIdentity({...envelope,state:'retained'},instance),'QA_INSTANCE_MISMATCH_OR_STALE');
 reject(()=>{const value=fixture();value.inventory.data.system.opt_ready=false;realHTTPFixture(value,instance);},'QA_OPT_INVENTORY_REQUIRED');
-reject(()=>{const value=fixture();value.status.live_active=true;realHTTPFixture(value,instance);},'QA_PRIVATE_SAFE_MODE_REQUIRED');
+reject(()=>{const value=fixture();value.status.live_active=true;realHTTPFixture(value,instance);},'QA_PRIVATE_INACTIVE_REQUIRED');
+reject(()=>{const value=fixture();value.status.safe_mode=true;realHTTPFixture(value,instance);},'QA_PRIVATE_INACTIVE_REQUIRED');
 reject(()=>{const value=fixture();value.services[0].applied_state.enabled=true;realHTTPFixture(value,instance);},'QA_DISABLED_SERVICES_REQUIRED');
 reject(()=>{const value=fixture();value.nodes.nodes.push({});realHTTPFixture(value,instance);},'QA_EMPTY_NODE_STORE_REQUIRED');
 reject(()=>{const value=fixture();value.autonomy.policy.components.mode='install';realHTTPFixture(value,instance);},'QA_AUTOMATION_OFF_REQUIRED');
