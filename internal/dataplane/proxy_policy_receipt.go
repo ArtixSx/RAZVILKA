@@ -232,6 +232,16 @@ func (a *ProxyTunnelAdapter) verifyCandidateReceipt(ctx context.Context, root st
 	if active && receipt.Phase != "complete" || !active && receipt.Phase != "restored" {
 		return ErrProxyPolicyUnknown
 	}
+	if !active && receipt.NoAdditions {
+		boot, err := a.currentBootIdentity()
+		if err != nil || boot != receipt.Boot || !candidateAdditionsNeverStarted(root, receipt) {
+			return ErrProxyPolicyUnknown
+		}
+		// Restoration already consumed the durable no-additions settlement.
+		// Its missing ledger is expected, rather than a missing cleanup ACK.
+		// VerifyRollback still checks the restored runtime and candidate absence.
+		return nil
+	}
 	additionRoot := root
 	if receipt.Generation != "" {
 		additionRoot, err = a.policyGenerationRoot(receipt.Generation)
