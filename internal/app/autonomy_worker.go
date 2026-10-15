@@ -191,7 +191,14 @@ func (a *App) activateHandedOverServices(ctx context.Context, p autonomy.Policy,
 		if route == "" {
 			route = "auto"
 		}
-		if a.Store.UpdateServiceIfRevision(s.ID, config.ServiceState{Enabled: true, Route: route, Sources: append([]string(nil), s.Sources...)}, cfg.Revision) != nil {
+		// Enabling an enrolled draft is not a new profile selection. Retain
+		// its reviewed binding and any other draft fields; route and sources
+		// are the explicit choices recorded in the autopilot consent. Store
+		// normalization keeps the legacy Mode field equal to this route.
+		nextDraft := cfg.Services[s.ID]
+		nextDraft.Enabled, nextDraft.Route = true, route
+		nextDraft.Sources = append([]string(nil), s.Sources...)
+		if a.Store.UpdateServiceIfRevision(s.ID, nextDraft, cfg.Revision) != nil {
 			return
 		}
 		draft := a.Store.Get().Services[s.ID]
