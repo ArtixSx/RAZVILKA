@@ -1106,7 +1106,12 @@ func (a *App) authSessionAction(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": a.Security.RevokeOtherSessions(r)})
+		revoked, err := a.Security.RevokeOtherSessions(r)
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "SESSION_REVOCATION_FAILED", "error": "Не удалось сохранить отзыв сеансов. Повторите действие после проверки хранилища."})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": revoked})
 		return
 	}
 	if r.Method != http.MethodDelete || action == "" {
@@ -1126,7 +1131,10 @@ func (a *App) authLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.Security != nil {
-		a.Security.Logout(r)
+		if err := a.Security.Logout(r); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "code": "SESSION_REVOCATION_FAILED", "error": "Не удалось сохранить выход из сеанса. Повторите действие после проверки хранилища."})
+			return
+		}
 	}
 	security.ClearSessionCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

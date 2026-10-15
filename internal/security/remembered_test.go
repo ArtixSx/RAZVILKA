@@ -123,3 +123,52 @@ func TestInvalidRememberedSessionsFileIsIgnoredAndReplaced(t *testing.T) {
 		t.Fatal("the broken file was not replaced")
 	}
 }
+
+func TestRememberedLogoutAndBatchRevocationReportStorageFailure(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		t.Run(map[bool]string{false: "logout", true: "other-sessions"}[batch], func(t *testing.T) {
+			dir, now := t.TempDir(), time.Unix(1_800_000_000, 0)
+			gate := rememberedGate(t, dir, now)
+			if _, err := gate.Setup("admin", "correct-horse-battery-staple"); err != nil {
+				t.Fatal(err)
+			}
+			token, err := gate.LoginRemembered("admin", "correct-horse-battery-staple", true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			current, err := gate.Login("admin", "correct-horse-battery-staple")
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := gate.sessionsPath
+			// Model unavailable session storage without relying on chmod (which
+			// does not deny writes on Windows). Keep the last durable image.
+			blocker := filepath.Join(dir, "unavailable-storage")
+			if err := os.WriteFile(blocker, []byte("not a directory"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			gate.sessionsPath = filepath.Join(blocker, "admin.sessions.json")
+			if batch {
+				if removed, err := gate.RevokeOtherSessions(sessionRequest(current)); err == nil || removed != 0 {
+					t.Fatalf("failed revocation reported success: removed=%d err=%v", removed, err)
+				}
+			} else if err := gate.Logout(sessionRequest(token)); err == nil {
+				t.Fatal("logout reported success despite unavailable storage")
+			}
+			if !gate.Authenticated(sessionRequest(token)) || !rememberedGate(t, dir, now).Authenticated(sessionRequest(token)) {
+				t.Fatal("failed revocation must retain the same session in memory and on disk")
+			}
+			gate.sessionsPath = path
+			if batch {
+				if removed, err := gate.RevokeOtherSessions(sessionRequest(current)); err != nil || removed != 2 {
+					t.Fatalf("retry: removed=%d err=%v", removed, err)
+				}
+			} else if err := gate.Logout(sessionRequest(token)); err != nil {
+				t.Fatal(err)
+			}
+			if gate.Authenticated(sessionRequest(token)) || rememberedGate(t, dir, now).Authenticated(sessionRequest(token)) {
+				t.Fatal("successful retry did not revoke the session across restart")
+			}
+		})
+	}
+}

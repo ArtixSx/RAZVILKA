@@ -303,8 +303,8 @@ func TestPasswordChangeAndSessionManagement(t *testing.T) {
 	if currentCount != 1 {
 		t.Fatalf("current sessions=%d", currentCount)
 	}
-	if removed := gate.RevokeOtherSessions(current); removed != 1 || len(gate.Sessions(current)) != 1 {
-		t.Fatalf("removed=%d sessions=%d", removed, len(gate.Sessions(current)))
+	if removed, err := gate.RevokeOtherSessions(current); err != nil || removed != 1 || len(gate.Sessions(current)) != 1 {
+		t.Fatalf("removed=%d sessions=%d err=%v", removed, len(gate.Sessions(current)), err)
 	}
 	if _, err := gate.ChangePassword("wrong-password", "new-correct-horse-battery", current); err == nil {
 		t.Fatal("password changed with wrong current password")

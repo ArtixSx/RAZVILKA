@@ -350,7 +350,7 @@ func (g *Gate) RevokeSession(id string) bool {
 	return false
 }
 
-func (g *Gate) RevokeOtherSessions(request *http.Request) int {
+func (g *Gate) RevokeOtherSessions(request *http.Request) (int, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	current := g.sessionHash(request)
@@ -363,32 +363,41 @@ func (g *Gate) RevokeOtherSessions(request *http.Request) int {
 			remembered = remembered || session.Remembered
 		}
 	}
-	if remembered && g.persistRememberedLocked() != nil {
+	var persistErr error
+	if remembered {
+		persistErr = g.persistRememberedLocked()
+	}
+	if persistErr != nil {
 		for hash, session := range removed {
 			g.sessions[hash] = session
 		}
-		return 0
+		return 0, fmt.Errorf("revoke remembered sessions: %w", persistErr)
 	}
-	return len(removed)
+	return len(removed), nil
 }
 
-func (g *Gate) Logout(r *http.Request) {
+func (g *Gate) Logout(r *http.Request) error {
 	if g == nil {
-		return
+		return nil
 	}
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil {
-		return
+		return nil
 	}
 	hash := sha256.Sum256([]byte(cookie.Value))
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	session, ok := g.sessions[hash]
 	delete(g.sessions, hash)
 	if ok && session.Remembered {
-		// The browser drops its cookie; a failed rewrite leaves only a hash.
-		_ = g.persistRememberedLocked()
+		// Keep the browser and in-memory session until durable revocation
+		// succeeds. Otherwise a copied cookie becomes valid again on restart.
+		if err := g.persistRememberedLocked(); err != nil {
+			g.sessions[hash] = session
+			return fmt.Errorf("log out remembered session: %w", err)
+		}
 	}
-	g.mu.Unlock()
+	return nil
 }
 
 func SetSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
