@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -117,6 +118,9 @@ func assertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 			if table, known := knownWGTransportRuleTable(family, line); known && table != state.Table {
 				continue // An understood other-table lookup is not deletion authority.
 			}
+			if firmwarePolicyRule(family, line) {
+				continue // Selects only a table outside RAZVILKA's space.
+			}
 		}
 		if !ok || parsed.table == state.Table {
 			return ErrPolicyDefaultReferenced
@@ -126,6 +130,81 @@ func assertPolicyDefaultUnreferenced(ctx context.Context, runner NFQWS2Runner, i
 		return ErrPolicyDefaultReferenced
 	}
 	return ctx.Err()
+}
+
+var foreignRuleMark = regexp.MustCompile(`^0x[0-9a-f]{1,8}(/0x[0-9a-f]{1,8})?$`)
+
+// Router firmware keeps its own RPDB rules: Keenetic adds fwmark lookups, a
+// fwmark blackhole and oif lookups for its tunnels. Such a rule is understood
+// when every token belongs to this bounded ip-rule grammar with exactly one
+// action, it sits outside RAZVILKA's priorities (50-99 and from 18000) and
+// every table it selects is above 255, where RAZVILKA keeps no table. It then
+// cannot select a RAZVILKA default. Negation, names, RAZVILKA coordinates and
+// any other token stay unknown and retain the default.
+func firmwarePolicyRule(family int, line string) bool {
+	fields := strings.Fields(line)
+	priority, ok := policyLinePriority(line)
+	if !ok || priority >= 50 && priority < 100 || priority >= 18000 || len(fields) < 3 || fields[1] != "from" {
+		return false
+	}
+	seen := map[string]bool{}
+	actions := 0
+	for i := 1; i < len(fields); i += 2 {
+		key := fields[i]
+		if seen[key] {
+			return false
+		}
+		seen[key] = true
+		switch key {
+		case "blackhole", "unreachable", "prohibit":
+			actions++
+			i--
+			continue
+		}
+		if i+1 >= len(fields) {
+			return false
+		}
+		value := fields[i+1]
+		switch key {
+		case "from", "to":
+			if !foreignRuleAddress(family, value, key == "from") {
+				return false
+			}
+		case "fwmark":
+			if !foreignRuleMark.MatchString(value) {
+				return false
+			}
+		case "iif", "oif":
+			if !validPolicyIngress(value) {
+				return false
+			}
+		case "lookup":
+			table, err := strconv.ParseUint(value, 10, 32)
+			if err != nil || strconv.FormatUint(table, 10) != value || table < 256 {
+				return false
+			}
+			actions++
+		default:
+			return false
+		}
+	}
+	return actions == 1
+}
+
+func foreignRuleAddress(family int, value string, allowAll bool) bool {
+	if value == "all" {
+		return allowAll
+	}
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil {
+		address, addrErr := netip.ParseAddr(value)
+		if addrErr != nil {
+			return false
+		}
+		prefix = netip.PrefixFrom(address, address.BitLen())
+	}
+	address := prefix.Addr()
+	return address.Zone() == "" && !address.Is4In6() && address.Is4() == (family == 4) && prefix == prefix.Masked()
 }
 
 // Reuse NET's exact rule parser and published coordinates to understand a

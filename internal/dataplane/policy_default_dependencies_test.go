@@ -114,7 +114,15 @@ func TestPolicyDefaultDependencyUnknownReadbackAndCancellationRefuse(t *testing.
 	state := testEarlyPolicy()
 	for _, line := range []string{
 		"40: from all fwmark 0x1 lookup 203",
-		"40: from all fwmark 0x1 lookup 4096",
+		"40: from all oif nwg0 lookup 203",
+		"40: from all fwmark 0x1 lookup 4096 goto 50",
+		"40: from all fwmark 0x1 blackhole lookup 4096",
+		"40: from all fwmark 0x1 iif br0 iif br1 lookup 4096",
+		"40: from all fwmark 0x1 lookup 4096 suppress_prefixlength 0",
+		"100: from all fwmark 0x1 lookup 210",
+		"60: from all fwmark 0x1 lookup 4096",
+		"18100: from all oif nwg0 lookup 4096",
+		"100: from all fwmark 0xffffaaa lookup 4096 blackhole",
 		"40: from 192.168.1.41 to 149.154.167.99 lookup owned-symbolic",
 		"40: not from 192.168.1.41 to 149.154.167.99 lookup 204",
 		"unrecognized kernel diagnostic",
@@ -134,6 +142,29 @@ func TestPolicyDefaultDependencyUnknownReadbackAndCancellationRefuse(t *testing.
 	bad := networkCleanupRunner(func(context.Context, string, ...string) ([]byte, error) { return nil, errors.New("read failed") })
 	if err := AssertPolicyDefaultUnreferenced(context.Background(), bad, "ip", state, 6); !errors.Is(err, ErrPolicyDefaultReferenced) {
 		t.Fatal("failed read admitted cleanup", err)
+	}
+}
+
+// The RPDB of a Keenetic NC-1812 always holds firmware rules RAZVILKA does not
+// own. They never select table 203, so they must not retain its default.
+func TestPolicyDefaultDependencyUnderstandsKeeneticFirmwareRules(t *testing.T) {
+	state := testEarlyPolicy()
+	for family, rules := range map[int][]string{
+		4: {"100: from all fwmark 0xffffaaa lookup 4096", "101: from all fwmark 0xffffaaa blackhole", "102: from all fwmark 0xffffaab lookup 4097", "1154: from 100.64.181.129 lookup 16386", "1172: from 172.16.88.98 lookup 16395"},
+		6: {"100: from all fwmark 0xffffaac lookup 4096", "1172: from all oif nwg0 lookup 16395", "1174: from fd00:10:58::62 lookup 16395"},
+	} {
+		runner := dependencyFixture()
+		if family == 4 {
+			runner.kernel.foreignIPv4 = rules
+		} else {
+			runner.kernel.foreignIPv6 = rules
+		}
+		if err := AssertPolicyDefaultUnreferenced(context.Background(), runner, "ip", state, family); err != nil {
+			t.Fatal("firmware rules retained the default", family, err)
+		}
+		if len(receiptMutationCalls(runner.calls)) != 0 {
+			t.Fatal("read-only check mutated selectors")
+		}
 	}
 }
 

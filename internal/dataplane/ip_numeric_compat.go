@@ -2,8 +2,14 @@ package dataplane
 
 import (
 	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 )
 
 // iproute2 before 4.17, such as Entware ip-full 4.4 on Keenetic routers
@@ -31,7 +37,7 @@ func runIPNumeric(ctx context.Context, runner ipReadRunner, command string, args
 		return out, err
 	}
 	plain, ok := plainNumericReadback(args)
-	if !ok {
+	if !ok || !reservedTableNamesUnaliased() {
 		return out, err
 	}
 	fallback, fallbackErr := runner.Run(ctx, command, plain...)
@@ -41,23 +47,77 @@ func runIPNumeric(ctx context.Context, runner ipReadRunner, command string, args
 	return numericReservedTables(fallback), nil
 }
 
-// plainNumericReadback drops the single -N of an `ip [-4|-6] -N rule|route
-// show ...` readback. Any other command (for example iptables -N, which
-// creates a chain) is not a readback and is never rewritten.
+// plainNumericReadback drops the single -N of an `ip -N [-4|-6] rule|route
+// show ...` readback (the family option may also precede -N). Any other
+// option, such as -j, which ip 4.4 lacks as well, and any other command (for
+// example iptables -N, which creates a chain) is never rewritten.
 func plainNumericReadback(args []string) ([]string, bool) {
-	index := slices.Index(args, "-N")
-	if index < 0 || slices.Index(args[index+1:], "-N") >= 0 || index+2 >= len(args) {
-		return nil, false
-	}
-	for _, option := range args[:index] {
-		if option != "-4" && option != "-6" {
+	var plain []string
+	numeric, index := 0, 0
+	for ; index < len(args) && strings.HasPrefix(args[index], "-"); index++ {
+		switch args[index] {
+		case "-N":
+			numeric++
+		case "-4", "-6":
+			plain = append(plain, args[index])
+		default:
 			return nil, false
 		}
 	}
-	if object, action := args[index+1], args[index+2]; object != "rule" && object != "route" || action != "show" && action != "list" {
+	if numeric != 1 || index+1 >= len(args) || slices.Contains(args[index:], "-N") {
 		return nil, false
 	}
-	return append(slices.Clone(args[:index]), args[index+1:]...), true
+	if object, action := args[index], args[index+1]; object != "rule" && object != "route" || action != "show" && action != "list" {
+		return nil, false
+	}
+	return append(plain, args[index:]...), true
+}
+
+// rtTablesSources are the rt_tables files and directories of the stock and
+// Entware iproute2 builds.
+var rtTablesSources = []string{"/etc/iproute2", "/opt/etc/iproute2", "/usr/share/iproute2", "/usr/lib/iproute2"}
+
+// reservedTableNamesUnaliased reports that no rt_tables entry gives another
+// table a reserved name. With an entry such as "203 main" a plain readback
+// would print table 203 as main, so the names prove nothing and the fallback
+// is refused. An unreadable source also refuses it.
+func reservedTableNamesUnaliased() bool {
+	var files []string
+	for _, root := range rtTablesSources {
+		files = append(files, filepath.Join(root, "rt_tables"))
+		entries, err := os.ReadDir(filepath.Join(root, "rt_tables.d"))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return false
+		}
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), ".conf") {
+				files = append(files, filepath.Join(root, "rt_tables.d", entry.Name()))
+			}
+		}
+	}
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil || len(data) > 1<<20 {
+			return false
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 || strings.HasPrefix(fields[0], "#") {
+				continue
+			}
+			want, reserved := reservedTableNumber[fields[1]]
+			if !reserved {
+				continue
+			}
+			if number, err := strconv.ParseUint(fields[0], 0, 32); err != nil || strconv.FormatUint(number, 10) != want {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func numericReservedTables(output []byte) []byte {

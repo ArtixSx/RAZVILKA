@@ -20,6 +20,8 @@ type additionDefaultDependencyRunner struct {
 	foreign          policyKernelEntry
 	numericReads     map[int]int
 	afterNumericRead func(int)
+	// A failed numeric read also fails the plain fallback read that follows.
+	fallbackFails bool
 }
 
 func (r *additionDefaultDependencyRunner) arm(family int, kind string, table int) {
@@ -63,14 +65,16 @@ func (r *additionDefaultDependencyRunner) Run(ctx context.Context, command strin
 			r.afterNumericRead(family)
 		}
 	}
+	if read && family == r.family && r.kind == "read-failed" && (numeric || r.fallbackFails) {
+		r.fallbackFails = numeric
+		return nil, errors.New("dependency RPDB read failed")
+	}
 	output, err := r.base.Run(ctx, command, args...)
 	if err != nil || !read || family != r.family {
 		return output, err
 	}
 	if numeric {
 		switch r.kind {
-		case "read-failed":
-			return nil, errors.New("dependency RPDB read failed")
 		case "numeric-unsupported":
 			return []byte("unknown option -N"), errors.New("numeric RPDB read unsupported")
 		case "builtin-alias":
@@ -129,6 +133,9 @@ func TestPolicyAdditionDefaultDependenciesRetainBothFamilies(t *testing.T) {
 		for _, kind := range []string{"foreign", "unknown", "alias", "builtin-alias", "read-failed", "numeric-unsupported"} {
 			t.Run(fmt.Sprintf("IPv%d/%s", family, kind), func(t *testing.T) {
 				state, root, base, options := additionFixture(t)
+				if kind == "numeric-unsupported" {
+					aliasReservedTableName(t, state.Table)
+				}
 				runner := &additionDefaultDependencyRunner{base: base}
 				ctx := context.Background()
 				if err := applyPolicyAddition(ctx, runner, "ip", state, root, options); err != nil {
@@ -156,6 +163,9 @@ func TestPolicyAdditionDefaultDependenciesRecheckAfterDurableIntent(t *testing.T
 		for _, kind := range []string{"foreign", "unknown", "alias", "builtin-alias", "read-failed", "numeric-unsupported"} {
 			t.Run(fmt.Sprintf("IPv%d/%s", family, kind), func(t *testing.T) {
 				state, root, base, options := additionFixture(t)
+				if kind == "numeric-unsupported" {
+					aliasReservedTableName(t, state.Table)
+				}
 				runner := &additionDefaultDependencyRunner{base: base}
 				ctx := context.Background()
 				if err := applyPolicyAddition(ctx, runner, "ip", state, root, options); err != nil {

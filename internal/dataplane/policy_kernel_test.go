@@ -60,6 +60,7 @@ func (r *recordedPolicyFakeRunner) Run(_ context.Context, command string, args .
 type policyKernelFake struct {
 	entries     []policyKernelEntry
 	foreignIPv4 []string
+	foreignIPv6 []string
 	defaults    map[string]string
 }
 
@@ -118,6 +119,8 @@ func (f *policyKernelFake) run(args []string) ([]byte, bool, error) {
 		}
 		if family == 4 {
 			lines = append(lines, f.foreignIPv4...)
+		} else {
+			lines = append(lines, f.foreignIPv6...)
 		}
 		for _, rule := range f.entries {
 			if rule.family == family {

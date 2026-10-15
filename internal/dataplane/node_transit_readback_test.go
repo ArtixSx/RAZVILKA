@@ -71,7 +71,8 @@ func nodeRouterTransitReadbackNoEffects(t *testing.T, runner *nodeTransitTestRun
 		t.Fatal("readback performed a kernel mutation")
 	}
 	for _, call := range runner.calls[callStart:] {
-		if call != "ip -N rule show" && call != "ip -N -6 rule show" {
+		// The plain form is the read-only fallback of an ip without -N.
+		if call != "ip -N rule show" && call != "ip -N -6 rule show" && call != "ip rule show" && call != "ip -6 rule show" {
 			t.Fatal("readback widened its read-only command scope", call)
 		}
 	}
