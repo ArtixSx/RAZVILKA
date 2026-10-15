@@ -1,5 +1,7 @@
 // Reusable actual HTTP/browser scenarios extracted from the Windows gate.
-// All requests use the supplied existing QA instance. No response interception.
+// All HTTP requests use the supplied QA instance. No response interception.
+// The community scenario labels its temporary browser workflow model separately
+// from genuine saved/live GETs; it does not simulate server admission.
 import assert from 'node:assert/strict';
 
 // Only these static checkpoint IDs may enter the public failure report.
@@ -19,10 +21,126 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_ENGINE_CARD_EXPERT_DRAFT','UI_ENGINE_CARD_OTHER_CANCEL','UI_ENGINE_CARD_CHECK_RETURN','UI_ENGINE_CARD_DISCARD_DRAFT',
   'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW',
   'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
-  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND'
+  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND',
+  'UI_COMMUNITY_SAVED_HTTP','UI_COMMUNITY_BUSY_MODEL','UI_COMMUNITY_SEARCH',
+  'UI_COMMUNITY_LATE_PREVIEW_MODEL','UI_COMMUNITY_TTL_MODEL','UI_COMMUNITY_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
+
+// Test-only browser model. Saved and explicitly enabled live-list reads still
+// use their actual HTTP clients. A modeled busy error/pending preview is never
+// a network Response, and every non-GET workflow is refused before transport.
+export function realHTTPInstallCommunityBrowseModel() {
+  if(globalThis.__rzCommunityBrowseQA)throw new Error('Community browser model already installed');
+  const model=globalThis.__rzCommunityBrowseQA={original:workflowRequest,phase:'busy',list_calls:0,preview_calls:0,blocked_non_get:0,resolve:null,preview_settled:false};
+  workflowRequest=async(path,options={},...rest)=>{
+    if(String(options.method||'GET').toUpperCase()!=='GET'){
+      model.blocked_non_get++;throw new Error('Community browser model prohibits non-GET workflows');
+    }
+    if(/^\/api\/v1\/community\/services(?:\?q=[^]*)?$/.test(path)){
+      model.list_calls++;
+      if(model.phase==='busy')throw Object.assign(new Error('Modeled community admission busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});
+      return model.original(path,options,...rest);
+    }
+    if(/^\/api\/v1\/community\/services\/[a-z0-9][a-z0-9-]{0,63}\/preview(?:\?refresh=true)?$/.test(path)){
+      model.preview_calls++;
+      if(model.resolve)throw new Error('Only one modeled preview is allowed');
+      return new Promise(resolve=>{model.resolve=resolve;}).finally(()=>{model.preview_settled=true;});
+    }
+    if(path.startsWith('/api/v1/community/'))throw new Error('Unknown community workflow refused by browser model');
+    return model.original(path,options,...rest);
+  };
+}
+
+async function realHTTPCommunityBrowseScenario({page,requests,test,readJSON,diagnose}) {
+  await test('community saved browse, search and closed late preview with explicit model boundaries',
+    'real saved/live-list HTTP and browser DOM; busy, pending preview and TTL are browser models',async()=>{
+      const start=requests.length;
+      await diagnose('UI_COMMUNITY_SAVED_HTTP',async()=>{
+        const value=await readJSON('/api/v1/panel/community'),identity=await readJSON('/api/v1/panel/snapshot');
+        assert.equal(await page.evaluate(value=>validSavedCommunityBrowse(value),value),true);
+        assert.equal(value.instance_id,identity.instance_id);assert(value.data?.entries?.length>0);
+        for(const entry of value.data.entries)assert.deepEqual(Object.keys(entry).sort(),['category','description','id','name']);
+      });
+      await navTo(page,'services');
+      const disclosures=await page.evaluate(()=>['ui3ServiceExpert','serviceWebsiteDiscovery'].map(id=>({id,open:document.getElementById(id).open})));
+      for(const {id,open} of disclosures)if(!open)await page.locator('#'+id+' > summary').click();
+      await page.evaluate(realHTTPInstallCommunityBrowseModel);
+      try{
+        await diagnose('UI_COMMUNITY_BUSY_MODEL',async()=>{
+          await page.locator('#openCommunityCatalog').click();
+          await page.waitForFunction(()=>document.getElementById('communityCatalogDialog').open&&communityBrowse.showing&&!!communityBrowse.saved);
+          assert.equal(await page.locator('#communityOwnForm').isVisible(),false);
+          const count=await page.locator('#communityResults .community-saved-entry').count();assert(count>0&&count<=1128);
+          assert.equal(await page.locator('#communityResults button,input,select,a,[data-community-id]').count(),0);
+          assert.match(await page.locator('#communityBrowseNotice').textContent(),/Снимок каталога в памяти.*не обновления источника/);
+          assert.equal(await page.evaluate(()=>state.community.some(entry=>Object.keys(entry).sort().join(',')==='category,description,id,name')),false);
+        });
+        await diagnose('UI_COMMUNITY_SEARCH',async()=>{
+          const before=await page.evaluate(()=>__rzCommunityBrowseQA.list_calls),reads=requests.length;
+          const term=await page.evaluate(()=>communityBrowse.saved.value.data.entries[0].name);
+          await page.locator('#communitySearch').fill(term);
+          await page.locator('#communitySearchButton').click();
+          assert(await page.locator('#communityResults .community-saved-entry').count()>0);
+          assert.equal(await page.evaluate(()=>__rzCommunityBrowseQA.list_calls),before);
+          assert.equal(requests.slice(reads).filter(request=>request.path==='/api/v1/community/services').length,0);
+        });
+        await diagnose('UI_COMMUNITY_LATE_PREVIEW_MODEL',async()=>{
+          // This list result is genuine HTTP, never the historical DTO relabeled
+          // as live. Only the subsequent preview promise is held locally.
+          await page.evaluate(()=>{__rzCommunityBrowseQA.phase='live';});
+          await page.locator('#communitySearch').fill('');
+          await page.locator('#communityBrowseRefresh').click();
+          await page.waitForFunction(()=>communityBrowseActionsAllowed()&&document.querySelectorAll('#communityResults [data-community-id]').length>0);
+          await page.locator('#communityResults [data-community-id]').first().click();
+          await page.waitForFunction(()=>typeof __rzCommunityBrowseQA.resolve==='function');
+          await page.evaluate(()=>{__rzCommunityBrowseQA.phase='busy';__rzCommunityBrowseQA.beforeSaved=communityBrowse.saved;});
+          await page.locator('#communitySearchButton').click();
+          await page.waitForFunction(()=>communityBrowse.showing&&!!communityBrowse.saved&&communityBrowse.saved!==__rzCommunityBrowseQA.beforeSaved);
+          await page.locator('#communityCatalogClose').click();
+          await page.waitForFunction(()=>!document.getElementById('communityCatalogDialog').open);
+          const facts=await page.evaluate(async()=>{
+            __rzCommunityBrowseQA.resolve({entry:{id:'qa-late-preview',name:'QA_LATE_PREVIEW_MODEL'},service:{domains:[],cidrs:[]}});
+            for(let i=0;i<8;i++)await Promise.resolve();
+            return {settled:__rzCommunityBrowseQA.preview_settled,preview_absent:state.communityPreview===null,
+              marker_absent:!document.getElementById('communityPreview').textContent.includes('QA_LATE_PREVIEW_MODEL'),
+              dialog_closed:!document.getElementById('communityCatalogDialog').open,
+              actions_blocked:!communityBrowseActionsAllowed(),blocked_non_get:__rzCommunityBrowseQA.blocked_non_get};
+          });
+          assert.deepEqual(facts,{settled:true,preview_absent:true,marker_absent:true,dialog_closed:true,actions_blocked:true,blocked_non_get:0});
+          assert.equal(await page.locator('#communityPreview [data-community-import],#communityPreview [data-community-refresh]').count(),0);
+          await page.evaluate(()=>{__rzCommunityBrowseQA.beforeSaved=communityBrowse.saved;});
+          await page.locator('#openCommunityCatalog').click();
+          await page.waitForFunction(()=>communityBrowse.showing&&!!communityBrowse.saved&&communityBrowse.saved!==__rzCommunityBrowseQA.beforeSaved);
+        });
+        await diagnose('UI_COMMUNITY_TTL_MODEL',async()=>{
+          // Local receipt age only: this does not claim a real server TTL wait.
+          await page.evaluate(()=>{communityBrowse.saved.receivedAt-=900000;renderSavedCommunityBrowse();});
+          assert.equal(await page.locator('#communityResults .community-saved-entry').count(),0);
+          assert.match(await page.locator('#communityBrowseNotice').textContent(),/устарел.*не означает.*удалены/);
+          assert.equal(await page.locator('#communityOwnForm').isVisible(),false);
+        });
+      }finally{
+        await page.evaluate(disclosures=>{
+          const model=globalThis.__rzCommunityBrowseQA;if(!model)return;
+          closeCommunityCatalog();
+          if(model.resolve)model.resolve({entry:{id:'qa-canceled'},service:{}});
+          workflowRequest=model.original;
+          invalidateSavedCommunityBrowse();
+          for(const {id,open} of disclosures)document.getElementById(id).open=open;
+          delete globalThis.__rzCommunityBrowseQA;
+        },disclosures);
+      }
+      await diagnose('UI_COMMUNITY_BOOKEND',async()=>{
+        assert.equal(requests.slice(start).filter(request=>request.method!=='GET').length,0);
+        assert(requests.slice(start).some(request=>request.path==='/api/v1/panel/community'&&request.status===200));
+        assert(requests.slice(start).some(request=>request.path==='/api/v1/community/services'&&request.status===200));
+        await navTo(page,'overview');
+      });
+      return {saved_endpoint:'real HTTP',live_list:'real HTTP',busy:'browser workflow rejection',late_preview:'held browser promise',ttl:'local receipt age',server_admission_held:false,business_writes:0};
+    });
+}
 
 export async function realHTTPAIGroupFacts(page) {
   return await page.evaluate(()=>{
@@ -261,6 +379,7 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
     await navTo(page,'overview');
     return {snapshot_read:true,historical_rows_have_actions:false,business_writes:0,admission_forced:false};
   });
+  await realHTTPCommunityBrowseScenario({page,requests,test,readJSON,diagnose});
   await test('connection REST and stream follow the visible view with single-flight readback','real connection HTTP and SSE lifecycle',async()=>{
     const isConnection=request=>['/api/v1/connections','/api/v1/connections/stream'].includes(request.path);
     const hidden=requests.length;await page.evaluate(async()=>{await refreshConnections();startConnectionStream();});

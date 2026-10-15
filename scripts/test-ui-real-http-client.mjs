@@ -1,7 +1,7 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis} from './ui-real-http-scenarios.mjs';
+import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis,realHTTPInstallCommunityBrowseModel} from './ui-real-http-scenarios.mjs';
 import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPAwaitInventory,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
@@ -342,5 +342,23 @@ for(const state of ['empty','expired','unknown']){
     if(leave==='auth')stale.state.authGeneration++;else if(leave==='view')stale.state.currentView='settings';else stale.panelLoad.generation++;
     stale.complete(stale.initial);await rejection;checks++;
   }
+}
+{
+  const delegated=[],context=vm.createContext({workflowRequest:async(...args)=>{delegated.push(args);return {actual_transport:true};}});
+  vm.runInContext('('+realHTTPInstallCommunityBrowseModel.toString()+')()',context);
+  const model=vm.runInContext('__rzCommunityBrowseQA',context);
+  await assert.rejects(context.workflowRequest('/api/v1/community/services?q=test'),error=>error.status===409&&error.payload.code==='RESTORE_OPERATION_BUSY');checks++;
+  assert.equal(delegated.length,0);checks++;
+  model.phase='live';assert.equal((await context.workflowRequest('/api/v1/community/services?q=test',{readTimeoutMs:3000},12000)).actual_transport,true);
+  assert.deepEqual(delegated[0],['/api/v1/community/services?q=test',{readTimeoutMs:3000},12000]);checks++;
+  for(const path of ['/api/v1/apply','/api/v1/community/services/example/import','/api/v1/community/source-preview']){
+    await assert.rejects(context.workflowRequest(path,{method:'POST'}),/prohibits non-GET/);checks++;
+  }
+  assert.equal(model.blocked_non_get,3);assert.equal(delegated.length,1);checks++;
+  await assert.rejects(context.workflowRequest('/api/v1/community/unknown'),/Unknown community workflow/);checks++;
+  const pending=context.workflowRequest('/api/v1/community/services/example/preview');let settled=false;pending.then(()=>{settled=true;});
+  await Promise.resolve();assert.equal(settled,false);assert.equal(delegated.length,1);checks++;
+  model.resolve({model_only:true});assert.equal((await pending).model_only,true);assert.equal(model.preview_settled,true);checks++;
+  assert.equal((await context.workflowRequest('/api/v1/status')).actual_transport,true);assert.equal(delegated.length,2);checks++;
 }
 console.log('PASS pure real HTTP client checks '+checks);
