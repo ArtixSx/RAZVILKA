@@ -47,6 +47,7 @@ type managedNFQWSListExecution struct {
 	expected                              config.Config
 	catalog                               string
 	scope                                 *ListScopeBinding
+	packetScope                           *NFQWSPacketScopeBinding
 	component                             *components.ManagedNFQWSRuntimeLease
 	source                                *strategylab.SelectedCandidateReview
 	material                              *dataplane.NFQWSActiveMaterial
@@ -116,7 +117,7 @@ func (r *ManagedNFQWSListRuntime) executionFor(ctx context.Context) (*managedNFQ
 		return nil, nil, dataplane.ErrNFQWSScopedOwner
 	}
 	o, ok := ctx.Value(managedNFQWSListOperationKey{}).(*managedNFQWSListOperation)
-	if !ok || o == nil || o.self != o || !o.open.Load() || o.cleanup == nil || o.execution == nil || o.execution.self != o.execution || o.execution.runtime != r {
+	if !ok || o == nil || o.self != o || !o.open.Load() || o.cleanup == nil || o.execution == nil || o.execution.self != o.execution || o.execution.runtime != r || !o.execution.originalScope() {
 		return nil, nil, dataplane.ErrNFQWSScopedOwner
 	}
 	return o.execution, o, nil
@@ -152,7 +153,7 @@ func (e *managedNFQWSListExecution) guard(ctx context.Context) error {
 		if err := r.control.Current(ctx); err != nil {
 			return err
 		}
-		if err := e.scope.ScopeCheck(ctx, e.plan.LAN); err != nil {
+		if err := e.scopeCurrent(ctx, e.plan.LAN); err != nil {
 			return err
 		}
 		if err := e.source.Current(ctx); err != nil {
@@ -170,7 +171,7 @@ func (r *ManagedNFQWSListRuntime) scopeCheck(ctx context.Context, p *dataplane.L
 	if err != nil || !reflect.DeepEqual(p, e.plan.LAN) {
 		return errors.Join(dataplane.ErrReviewChanged, err)
 	}
-	return e.scope.ScopeCheck(ctx, p)
+	return e.scopeCurrent(ctx, p)
 }
 
 func (r *ManagedNFQWSListRuntime) lanApplyGuard(ctx context.Context, p *dataplane.LANPolicyRuntimePlan, _ dataplane.LANPolicyEffect) error {
@@ -190,7 +191,7 @@ func (r *ManagedNFQWSListRuntime) lanCleanupGuard(ctx context.Context, p *datapl
 		if err := r.control.CurrentForCleanup(ctx); err != nil {
 			return err
 		}
-		return e.scope.cleanupScopeCheck(ctx, p)
+		return e.scopeCleanupCurrent(ctx, p)
 	})
 }
 
@@ -219,7 +220,7 @@ func (e *managedNFQWSListExecution) cleanupGuard(ctx context.Context, h *datapla
 			e.terminal, e.terminalObservation = h, observed
 			e.mu.Unlock()
 		}
-		if err := e.scope.cleanupScopeCheck(ctx, e.plan.LAN); err != nil {
+		if err := e.scopeCleanupCurrent(ctx, e.plan.LAN); err != nil {
 			return err
 		}
 		return r.control.CurrentForCleanup(ctx)
@@ -245,6 +246,9 @@ func (e *managedNFQWSListExecution) close() error {
 	}
 	if e.scope != nil {
 		errs = append(errs, e.scope.Close())
+	}
+	if e.packetScope != nil {
+		errs = append(errs, e.packetScope.Close())
 	}
 	return errors.Join(errs...)
 }
@@ -367,7 +371,7 @@ func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, 
 		if !defaultRouteCommittedConfig(before, after, compilation.Policy(), cfg.Services, started, finished) {
 			return undo, dataplane.ErrReviewChanged
 		}
-		if err := e.scope.AcceptCommitted(c, after, started, finished); err != nil {
+		if err := e.scopeAcceptCommitted(c, after, started, finished); err != nil {
 			return undo, err
 		}
 		e.mu.Lock()

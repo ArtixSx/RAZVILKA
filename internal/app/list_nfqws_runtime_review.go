@@ -19,7 +19,15 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	defer func() { err = managedNFQFailureAt(phase, err) }()
 	r, cfg := e.runtime, e.expected
 	phase = "physical-scope"
-	e.scope, err = NewReviewedStockNC1812ListScopeBinding(c, r.app, r.provider)
+	packetPurpose := cfg.NetworkPolicy != nil && cfg.NetworkPolicy.Clients.Mode == "lan_except" && cfg.NetworkPolicy.Clients.NewDevices == "inherit"
+	if packetPurpose {
+		if protocol != "tcp" || family != "ipv4" {
+			return nil, ErrDefaultRouteCapability
+		}
+		e.packetScope, err = NewReviewedStockNC1812NFQWSPacketScopeBinding(c, r.app, r.provider)
+	} else {
+		e.scope, err = NewReviewedStockNC1812ListScopeBinding(c, r.app, r.provider)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +47,13 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		return nil, err
 	}
 	phase = "physical-observe"
-	snapshot, err := e.scope.Observe(c)
+	var snapshot DefaultRouteSnapshot
+	var packetSnapshot NFQWSPacketScopeSnapshot
+	if packetPurpose {
+		packetSnapshot, err = e.packetScope.Observe(c)
+	} else {
+		snapshot, err = e.scope.Observe(c)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +64,7 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		if !state.Enabled {
 			continue
 		}
-		if service.ID != serviceID || state.Route != "nfqws2" || len(service.Domains) != 0 || len(service.SourceRefs) != 0 || len(service.CIDRs) == 0 || service.ProbeURL == "" {
+		if service.ID != serviceID || state.Route != "nfqws2" || len(service.Domains) != 0 || len(service.SourceRefs) != 0 || len(service.CIDRs) == 0 || service.ProbeURL == "" || packetPurpose && len(state.Sources) != 0 {
 			return nil, ErrDefaultRouteCapability
 		}
 		services = append(services, dataplane.Route{ServiceID: service.ID, ServiceName: service.Name, Selected: "nfqws2", Resolved: "nfqws2", CIDRs: append([]string(nil), service.CIDRs...), Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL})
@@ -60,7 +74,11 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		return nil, ErrDefaultRouteCapability
 	}
 	phase = "compile"
-	compilation, err = CompileDefaultRoutePolicy(cfg, snapshot, services, time.Now())
+	if packetPurpose {
+		compilation, err = CompileNFQWSIPv4LANPacketPolicy(cfg, packetSnapshot, services, snapshot.Paths, time.Now())
+	} else {
+		compilation, err = CompileDefaultRoutePolicy(cfg, snapshot, services, time.Now())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +93,12 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		return nil, err
 	}
 	phase = "bind-compilation"
-	if err := e.scope.BindCompilation(c, compilation); err != nil {
+	if packetPurpose {
+		err = e.packetScope.BindCompilation(c, compilation)
+	} else {
+		err = e.scope.BindCompilation(c, compilation)
+	}
+	if err != nil {
 		return nil, err
 	}
 	adapter, ok := r.manager.Adapters["nfqws2"].(*dataplane.NFQWS2Adapter)
@@ -91,7 +114,12 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	}
 	input := (&DefaultRouteExecutor{app: r.app}).input(compilation, cfg)
 	phase = "native-plan"
-	plan, err := dataplane.BuildManagedNFQWSList(c, input, e.material, time.Now())
+	var plan dataplane.Plan
+	if packetPurpose {
+		plan, err = dataplane.BuildManagedNFQWSIPv4LANList(c, input, e.material, e.packetScope.scope, e.packetScope.original, r.app.Store, cfg, time.Now())
+	} else {
+		plan, err = dataplane.BuildManagedNFQWSList(c, input, e.material, time.Now())
+	}
 	if err != nil || !plan.Ready {
 		return nil, errors.Join(ErrDefaultRouteCapability, err)
 	}
@@ -156,7 +184,7 @@ func (r *ManagedNFQWSListRuntime) review(ctx context.Context, serviceID, protoco
 		return plan, review, err
 	}
 	// No command admission is issued and no execution/Store publication occurs.
-	if err := errors.Join(r.control.Current(c), e.source.Current(c), e.component.Check(c), e.scope.ScopeCheck(c, e.plan.LAN), e.material.Current(c)); err != nil {
+	if err := errors.Join(r.control.Current(c), e.source.Current(c), e.component.Check(c), e.scopeCurrent(c, e.plan.LAN), e.material.Current(c)); err != nil {
 		return plan, review, err
 	}
 	if !reflect.DeepEqual(r.app.Store.Get(), e.expected) || applyReviewHash(r.app.catalogSnapshot()) != e.catalog {

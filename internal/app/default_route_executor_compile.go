@@ -84,12 +84,14 @@ type DefaultRouteIngress struct {
 // Overlapping IP rules must select the same resolved path. There is no
 // catch-all: only enabled, reviewed service destinations enter this plan.
 type DefaultRouteCompilation struct {
-	policy   *config.NetworkPolicy
-	snapshot DefaultRouteSnapshot
-	rules    []DefaultRouteRule
-	ingress  []DefaultRouteIngress
-	digest   string
-	lan      *dataplane.LANPolicyRuntimePlan
+	policy         *config.NetworkPolicy
+	snapshot       DefaultRouteSnapshot
+	rules          []DefaultRouteRule
+	ingress        []DefaultRouteIngress
+	digest         string
+	lan            *dataplane.LANPolicyRuntimePlan
+	packet         *NFQWSPacketScopeSnapshot // separate purpose; never a DeviceBinding projection
+	packetServices []dataplane.Route
 }
 
 func (c *DefaultRouteCompilation) Digest() string { return c.digest }

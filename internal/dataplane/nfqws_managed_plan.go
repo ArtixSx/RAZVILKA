@@ -16,22 +16,31 @@ func BuildManagedNFQWSList(ctx context.Context, input Input, material *NFQWSActi
 	if err := material.Current(ctx); err != nil {
 		return Plan{}, err
 	}
+	if err := managedNFQWSHostRoutes(input, material.reference.ServiceID); err != nil {
+		return Plan{}, err
+	}
+	input.managedNFQWS = material
+	return BuildAt(input, now)
+}
+
+// Preserve the original host-only issuer boundary separately from the new
+// concrete packet purpose. This pure check issues no material or permission.
+func managedNFQWSHostRoutes(input Input, serviceID string) error {
 	for _, route := range input.Routes {
-		if route.Resolved != "nfqws2" || route.Selected != "nfqws2" || route.LogicalServiceID != material.reference.ServiceID || len(route.Domains) != 0 || len(route.CIDRs) == 0 || len(route.Sources) != 1 || len(route.Ingress) != 1 || route.NetworkPolicyGeneration != input.LAN.Generation {
-			return Plan{}, ErrNFQWSScopedOwner
+		if route.Resolved != "nfqws2" || route.Selected != "nfqws2" || route.LogicalServiceID != serviceID || len(route.Domains) != 0 || len(route.CIDRs) == 0 || len(route.Sources) != 1 || len(route.Ingress) != 1 || route.NetworkPolicyGeneration != input.LAN.Generation {
+			return ErrNFQWSScopedOwner
 		}
 		if len(route.CIDRs) != 1 {
-			return Plan{}, ErrNFQWSScopedOwner
+			return ErrNFQWSScopedOwner
 		}
 		for _, raw := range []string{route.CIDRs[0], route.Sources[0]} {
 			prefix, err := netip.ParsePrefix(raw)
 			if err != nil || prefix.Bits() != prefix.Addr().BitLen() {
-				return Plan{}, ErrNFQWSScopedOwner
+				return ErrNFQWSScopedOwner
 			}
 		}
 	}
-	input.managedNFQWS = material
-	return BuildAt(input, now)
+	return nil
 }
 
 // A ready scoped plan cannot downgrade the actual typed LAN participant to
