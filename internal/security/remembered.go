@@ -92,7 +92,7 @@ func (g *Gate) persistRememberedLocked() error {
 	if err != nil {
 		return err
 	}
-	return writePrivateFile(g.sessionsPath, append(data, '\n'), ".sessions.tmp-*")
+	return writePrivateFileWithSync(g.sessionsPath, append(data, '\n'), g.privateDirSync)
 }
 
 // dropRememberedOverflowLocked keeps room for one more remembered session by
@@ -121,8 +121,8 @@ func (g *Gate) dropRememberedOverflowLocked() {
 func (g *Gate) revokeAllLocked() error {
 	g.sessions = map[[sha256.Size]byte]sessionRecord{}
 	if err := g.persistRememberedLocked(); err != nil {
-		if removeErr := os.Remove(g.sessionsPath); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
-			return fmt.Errorf("revoke remembered sessions: %w", err)
+		if removeErr := removePrivateFileWithSync(g.sessionsPath, g.privateDirSync); removeErr != nil {
+			return fmt.Errorf("revoke remembered sessions: %w", errors.Join(err, removeErr))
 		}
 	}
 	return nil

@@ -51,6 +51,9 @@ type Gate struct {
 	loginWindow    time.Duration
 	loginLockout   time.Duration
 	loginMax       int
+	// Optional per-instance fault injection for persistence tests. Production
+	// uses the platform directory-sync implementation.
+	privateDirSync privateDirectorySync
 }
 
 type sessionRecord struct {
@@ -168,7 +171,7 @@ func (g *Gate) Setup(username, password string, requests ...*http.Request) (stri
 	if g.credential != nil {
 		return "", errors.New("administrator account is already configured")
 	}
-	if err := writeCredential(g.credentialPath, record); err != nil {
+	if err := g.writeCredential(record); err != nil {
 		return "", err
 	}
 	g.credential = &record
@@ -233,7 +236,7 @@ func (g *Gate) ChangePassword(current, replacement string, request *http.Request
 	record.Salt = base64.RawStdEncoding.EncodeToString(newSalt)
 	record.Iterations = passwordIterations
 	record.PasswordHash = base64.RawStdEncoding.EncodeToString(pbkdf2SHA256([]byte(replacement), newSalt, record.Iterations, 32))
-	if err := writeCredential(g.credentialPath, record); err != nil {
+	if err := g.writeCredential(record); err != nil {
 		return "", err
 	}
 	g.credential = &record
@@ -270,7 +273,7 @@ func (g *Gate) RecoverPassword(username, replacement string, request *http.Reque
 	if g.credential == nil {
 		return "", errors.New("administrator account is not configured")
 	}
-	if err := writeCredential(g.credentialPath, record); err != nil {
+	if err := g.writeCredential(record); err != nil {
 		return "", err
 	}
 	g.credential = &record
@@ -602,44 +605,15 @@ func validateCredentialRecord(record credentialRecord) error {
 	return nil
 }
 
-func writeCredential(path string, record credentialRecord) error {
-	if strings.TrimSpace(path) == "" {
+func (g *Gate) writeCredential(record credentialRecord) error {
+	if strings.TrimSpace(g.credentialPath) == "" {
 		return errors.New("credential path is empty")
 	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writePrivateFile(path, append(data, '\n'), ".credentials.tmp-*")
-}
-
-// writePrivateFile replaces path atomically with an owner-only file.
-func writePrivateFile(path string, data []byte, pattern string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create credential directory: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
-	if err != nil {
-		return fmt.Errorf("create credential transaction: %w", err)
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = tmp.Close(); _ = os.Remove(tmpPath) }()
-	if err := tmp.Chmod(0o600); err != nil {
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("commit credentials: %w", err)
-	}
-	return nil
+	return writePrivateFileWithSync(g.credentialPath, append(data, '\n'), g.privateDirSync)
 }
 
 func writeTokenAtomic(path, token string) error {

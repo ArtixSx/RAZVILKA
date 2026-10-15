@@ -75,9 +75,10 @@ func TestRememberedSessionRevocationAndPasswordChangeLastAcrossRestart(t *testin
 	first, _ := gate.LoginRemembered("admin", "correct-horse-battery-staple", true)
 	second, _ := gate.LoginRemembered("admin", "correct-horse-battery-staple", true)
 	var id string
-	for _, s := range gate.Sessions(sessionRequest(second)) {
-		if !s.Current {
+	for _, s := range gate.Sessions(sessionRequest(first)) {
+		if s.Current {
 			id = s.ID
+			break
 		}
 	}
 	if id == "" || !gate.RevokeSession(id) {
