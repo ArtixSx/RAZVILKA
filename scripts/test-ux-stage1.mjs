@@ -16,7 +16,7 @@ function fixture(){
  const els=new Map(),calls=[],renders=[],timers=new Map();let serial=0,handler;
  const state={currentView:'engineconfig',authenticated:true,status:{},services:[],engineConfigs:[],dataLoad:{},loadIssues:[]};
  const panelLoad={generation:0,request:null,controller:null,retryTimer:null,retryCount:0};
- const $=key=>{if(!els.has(key))els.set(key,{hidden:true,value:'',textContent:'',classList:{toggle(){}}});return els.get(key);};
+ const $=key=>{if(!els.has(key)){const classes=new Set();els.set(key,{hidden:true,value:'',textContent:'',classList:{add(...keys){keys.forEach(k=>classes.add(k));},remove(...keys){keys.forEach(k=>classes.delete(k));},contains:key=>classes.has(key),toggle(key,force){const on=force===undefined?!classes.has(key):!!force;if(on)classes.add(key);else classes.delete(key);return on;}}});}return els.get(key);};
  const ctx={state,panelLoad,panelReads:{epoch:0,entries:new Map()},$,AbortController,Date,console,CustomEvent:class{constructor(type){this.type=type;}},document:{hidden:false,dispatchEvent(){}},
  setTimeout(fn,ms){timers.set(++serial,{fn,ms});return serial;},clearTimeout(id){timers.delete(id);},
  hideAuth(){state.authenticated=true;$('#authScreen').hidden=true;},showAuth(){state.authenticated=false;$('#authScreen').hidden=false;ctx.cancelPanelRefresh();},
@@ -78,11 +78,13 @@ await test('failed-only retries do not reload every successful section',async()=
 });
 await test('navigation is local and survives broken optional renderers',async()=>{
  const f=fixture(),classes=new Map();f.state.engineEditorDirty=true;f.state.engineEditorVersion=42;
+ f.$('#detailsPanel').classList.add('open');
  f.ctx.document={getElementById:id=>id==='view-settings'?{}:null,dispatchEvent(){}};
  f.ctx.CustomEvent=CustomEvent;f.ctx.CSS={escape:s=>s};f.ctx.$$=selector=>selector==='.view'?[{id:'view-settings',classList:{toggle:(_key,on)=>classes.set('settings',on)}}]:[];
  f.ctx.window={matchMedia:()=>({matches:false}),scrollTo(){}};f.ctx.viewMeta={settings:['Настройки','Общие']};f.ctx.renderWorkspaceNavigation=()=>{};
  for(const name of ['consoleViewChanged','renderStatus','renderInterface','renderInterfaceNavigation'])f.ctx[name]=()=>{throw new Error('injected');};
  vm.runInContext(extract('setView'),f.ctx);f.ctx.setView('settings');assert.equal(classes.get('settings'),true);assert.equal(f.state.currentView,'settings');assert.equal(f.state.engineEditorDirty,true);assert.equal(f.state.engineEditorVersion,42);assert.equal(f.calls.length,0);assert.equal(f.$('#pageTitle').textContent,'Настройки');
+ assert.equal(f.$('#detailsPanel').classList.contains('open'),false,'navigation must close the previous workspace inspector');
 });
 function confirmationFixture(){
  const dialog=Object.assign(new EventTarget(),{open:false,returnValue:'',showModal(){this.open=true;},close(value=''){this.returnValue=value;this.open=false;this.dispatchEvent(new Event('close'));}});
