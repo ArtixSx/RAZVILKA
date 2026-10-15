@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +24,12 @@ type gzipStaticItem struct {
 	contentType string
 }
 
-const gzipStaticMaxBody = 4 << 20
+const (
+	gzipStaticMaxBody = 4 << 20
+	// The embedded panel has fewer than 64 assets. Keep a hard limit as well
+	// as canonical file keys so even another handler cannot grow this forever.
+	gzipStaticMaxEntries = 128
+)
 
 func gzipStatic(next http.Handler) http.Handler {
 	cache := &gzipStaticCache{items: map[string]gzipStaticItem{}}
@@ -32,11 +38,19 @@ func gzipStatic(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		key := r.URL.Path
+		// ServeMux cleans the escaped path, whereas FileServer cleans decoded
+		// URL.Path. Encoded slashes can therefore reach this handler as distinct
+		// /nonce/../app.js aliases. Cache the actual canonical file path only.
+		key := path.Clean("/" + r.URL.Path)
 		cache.mu.Lock()
 		item, ok := cache.items[key]
+		full := len(cache.items) >= gzipStaticMaxEntries
 		cache.mu.Unlock()
 		if !ok {
+			if full {
+				next.ServeHTTP(w, r)
+				return
+			}
 			recorder := &staticRecorder{header: http.Header{}, status: http.StatusOK}
 			next.ServeHTTP(recorder, r.Clone(r.Context()))
 			contentType := recorder.header.Get("Content-Type")
@@ -57,7 +71,9 @@ func gzipStatic(next http.Handler) http.Handler {
 			}
 			item = gzipStaticItem{body: compressed.Bytes(), contentType: contentType}
 			cache.mu.Lock()
-			cache.items[key] = item
+			if len(cache.items) < gzipStaticMaxEntries {
+				cache.items[key] = item
+			}
 			cache.mu.Unlock()
 		}
 		h := w.Header()
