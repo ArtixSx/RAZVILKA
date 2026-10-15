@@ -1643,3 +1643,32 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
   .interface-ui .sidebar{height:calc(100dvh - var(--ui3-mobile-nav-height));bottom:var(--ui3-mobile-nav-height);}
 }
 .sd-wg-profile{margin:12px 0;color:var(--muted);font-size:12px;line-height:1.6}.sd-wg-profile p{margin:0 0 8px}.sd-wg-profile summary{cursor:pointer}.sd-wg-profile small{display:block;margin-top:6px;overflow-wrap:anywhere}
+/* Simple mode: services only; advanced sections stay one switch away. */
+body.rz-simple .nav-list [data-main-nav=autopilot],body.rz-simple .nav-list [data-main-nav=services],body.rz-simple .nav-list [data-main-nav=nodes],body.rz-simple .nav-list [data-main-nav=engines],body.rz-simple .nav-list [data-main-nav=activity],body.rz-simple .ui3-mobile-nav [data-mobile-nav=services],body.rz-simple .ui3-mobile-nav [data-mobile-nav=nodes],body.rz-simple #view-overview>:not(#rzSimpleHome){display:none!important}
+body:not(.rz-simple) #rzSimpleHome{display:none}
+.rz-simple-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:8px;text-align:left}
+.rz-simple-toggle span:first-child{display:grid;gap:2px}.rz-simple-toggle small{color:var(--muted);font-size:12px}
+.rz-simple-home{display:grid;gap:16px;max-width:760px;margin:0 auto;padding:4px 0 24px}
+.rz-sh-status{display:flex;align-items:center;gap:16px;padding:22px 24px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow)}
+.rz-sh-status>div{flex:1;min-width:0}.rz-sh-status h2{margin:0 0 4px;font-size:22px;line-height:1.25}.rz-sh-status p{margin:0;color:var(--muted);line-height:1.5}
+.rz-sh-badge{flex:none;width:18px;height:18px;border-radius:50%;background:var(--muted)}
+.rz-sh-ok{background:var(--accent-wash)}.rz-sh-ok .rz-sh-badge{background:var(--green)}
+.rz-sh-progress .rz-sh-badge{background:var(--blue);animation:rz-sh-pulse 1.6s ease-in-out infinite}
+.rz-sh-problem{background:var(--r3-rose-wash)}.rz-sh-problem .rz-sh-badge{background:var(--red)}
+.rz-sh-setup .rz-sh-badge{background:var(--violet)}
+@keyframes rz-sh-pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.rz-sh-progress .rz-sh-badge{animation:none}}
+.rz-sh-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.rz-sh-head h3{margin:0;font-size:18px}
+.rz-sh-list,.rz-sh-catalog{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rz-sh-list li,.rz-sh-catalog li{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.rz-sh-list li>div,.rz-sh-catalog li>div{flex:1;min-width:0;display:grid;gap:2px}
+.rz-sh-list b,.rz-sh-catalog b{overflow-wrap:anywhere}.rz-sh-list small,.rz-sh-catalog small{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.rz-sh-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.rz-sh-service.rz-sh-ok .rz-sh-dot{background:var(--green)}.rz-sh-service.rz-sh-progress .rz-sh-dot{background:var(--blue)}.rz-sh-service.rz-sh-problem .rz-sh-dot{background:var(--red)}
+.rz-sh-service.rz-sh-problem small{color:var(--red)}
+.rz-sh-add{display:grid;gap:10px;padding:16px;border:1px solid var(--line2);border-radius:var(--radius);background:var(--panel2)}
+.rz-sh-search{display:grid;gap:6px}.rz-sh-search span{font-weight:600}.rz-sh-search input{width:100%;min-height:44px;font-size:16px}
+.rz-sh-catalog{max-height:360px;overflow:auto}.rz-sh-empty{color:var(--muted)}
+.rz-sh-add .link-button{justify-self:start;background:none;border:0;padding:4px 0;color:var(--blue);cursor:pointer;text-decoration:underline}
+.rz-sh-error{margin:0;color:var(--red)}.rz-sh-foot{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+@media (max-width:640px){.rz-sh-status{flex-wrap:wrap;padding:18px}.rz-sh-status h2{font-size:19px}.rz-sh-status .primary{width:100%}.rz-sh-head .primary,.rz-sh-head .secondary{min-height:44px}}
