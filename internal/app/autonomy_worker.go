@@ -285,7 +285,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	if current != "" && !isNode {
 		// Only a confirmed failure of the current path may replace an existing
 		// non-proxy route. Unsupported probes are not counted as a failure.
-		verdict := a.autonomyProbeRoute(ctx, service, current, profile)
+		observation := a.autonomyProbeRouteObservation(ctx, service, current, profile)
+		if observation.pause(&r) {
+			return r
+		}
+		verdict := observation.Verdict
 		r.CheckedAt = time.Now().UTC()
 		healthy = verdict == "PASS"
 		replace = r.Observe(current, profile, verdict, time.Now(), time.Duration(p.FailureConfirmSeconds)*time.Second)
@@ -310,7 +314,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			if !ready {
 				continue
 			}
-			if a.autonomyProbeRoute(ctx, service, route, profile) == "PASS" {
+			observation := a.autonomyProbeRouteObservation(ctx, service, route, profile)
+			if observation.pause(&r) {
+				return r
+			}
+			if observation.Verdict == "PASS" {
 				if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
 					return finish("rate-limited", "Лимит применений исчерпан; проверенный обход пока не меняется.")
 				}
@@ -551,8 +559,32 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 }
 
 func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, profile string) string {
+	return a.autonomyProbeRouteObservation(ctx, s, route, profile).Verdict
+}
+
+type autonomyRouteObservation struct {
+	Verdict           string
+	RetryAfterSeconds int
+}
+
+// A rate limit schedules only this service. It breaks failure confirmation,
+// no alternate path is selected and no old positive proof is renewed.
+func (o autonomyRouteObservation) pause(r *autonomy.Runtime) bool {
+	if o.RetryAfterSeconds <= 0 {
+		return false
+	}
+	r.CheckedAt = time.Now().UTC()
+	r.Failures, r.FirstFailure, r.LastFailure = 0, time.Time{}, time.Time{}
+	r.NextCheck = r.CheckedAt.Add(time.Duration(max(30, min(o.RetryAfterSeconds, 30*60))) * time.Second)
+	r.State = "unconfirmed"
+	r.Message = "Сервис ограничил частоту проверок (HTTP 429). Сделана пауза для этого сервиса; маршрут сохранён, доступность пока не подтверждена."
+	return true
+}
+
+func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Service, route, profile string) autonomyRouteObservation {
+	unknown := autonomyRouteObservation{Verdict: "INCONCLUSIVE"}
 	if a.TestLab == nil || a.RouteProber == nil || a.Store == nil {
-		return "INCONCLUSIVE"
+		return unknown
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -563,11 +595,11 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 	store := a.Store
 	cfg := store.Get()
 	if !known || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
-		return "INCONCLUSIVE"
+		return unknown
 	}
 	observed, err := a.freshNetworkProfile(probeCtx)
 	if err != nil || observed != profile {
-		return "INCONCLUSIVE"
+		return unknown
 	}
 	// Autonomy consumes this private verdict in its own round. Keep the batch
 	// unrecorded so a closing refusal cannot leak observations into TestLab
@@ -576,12 +608,12 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 	results := runner.ProbeRoutesUnrecorded(probeCtx, a.catalogSnapshot(), []string{s.ID}, []string{route}, prober)
 	current, err := a.freshNetworkProfile(probeCtx)
 	if err != nil || current != observed || a.TestLab != runner || a.Store != store {
-		return "INCONCLUSIVE"
+		return unknown
 	}
 	for i := range results {
 		r := &results[i]
 		if r.NetworkProfileID != "" && r.NetworkProfileID != observed || r.EvidenceV2 != nil && r.EvidenceV2.NetworkProfile != "" && r.EvidenceV2.NetworkProfile != observed {
-			return "INCONCLUSIVE"
+			return unknown
 		}
 		r.NetworkProfileID = observed
 		if r.EvidenceV2 != nil {
@@ -589,7 +621,7 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 		}
 	}
 	if a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
-		return "INCONCLUSIVE"
+		return unknown
 	}
 	for _, r := range testlab.AggregateScenarios(results) {
 		if r.ServiceID != s.ID || r.Route != route {
@@ -600,15 +632,22 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 		until, untilErr := time.Parse(time.RFC3339, r.EvidenceFreshUntil)
 		fresh := checkedErr == nil && untilErr == nil && !checkedAt.After(time.Now()) && until.After(time.Now())
 		if fresh && r.Status == "pass" && r.RouteConfirmed && string(r.Verdict) == "PASS" {
-			return "PASS"
+			return autonomyRouteObservation{Verdict: "PASS"}
 		}
 		// Only an attributed, current service failure can replace a local route.
 		// Missing process/capability or uncertain route evidence is not a FAIL.
 		if fresh && r.Status == "fail" && (string(r.Verdict) == "BLOCKED" || string(r.Verdict) == "ERROR") && r.RouteConfirmed && r.RouteProofError == "" {
-			return "FAIL"
+			return autonomyRouteObservation{Verdict: "FAIL"}
+		}
+		if fresh && r.Status == "partial" && r.HTTPStatus == 429 && r.ErrorCode == "http-429" && r.Verdict == "PARTIAL" && r.RouteConfirmed && r.RouteProofError == "" {
+			delay := r.RetryAfterSeconds
+			if delay <= 0 {
+				delay = 5 * 60
+			}
+			return autonomyRouteObservation{Verdict: "INCONCLUSIVE", RetryAfterSeconds: max(30, min(delay, 30*60))}
 		}
 	}
-	return "INCONCLUSIVE"
+	return unknown
 }
 
 func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, route string) error {

@@ -19,10 +19,12 @@ import (
 const MaxBodyBytes = 32 * 1024
 
 type Observation struct {
-	RequestedURL           string
-	FinalURL               string
-	RedirectChain          []string
-	HTTPStatus             int
+	RequestedURL  string
+	FinalURL      string
+	RedirectChain []string
+	HTTPStatus    int
+	// Scheduling hint only; it never changes a verdict or grants route proof.
+	RetryAfter             string
 	ContentType            string
 	Body                   []byte
 	BodyTruncated          bool

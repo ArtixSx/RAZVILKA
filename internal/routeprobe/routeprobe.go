@@ -683,7 +683,7 @@ func probeHTTP(ctx context.Context, client *http.Client, service catalog.Service
 	if result.RouteConfirmed {
 		observedRoute = "isolated:" + route
 	}
-	result.EvaluateHTTP(service, probecheck.Observation{RequestedURL: service.ProbeURL, FinalURL: probecheck.FinalURL(response, service.ProbeURL), RedirectChain: redirects, HTTPStatus: response.StatusCode, ContentType: response.Header.Get("Content-Type"), Body: body, BodyTruncated: result.StreamStatus == "sampled", ExpectedRoutePathID: "isolated:" + route, ObservedRoutePathID: observedRoute})
+	result.EvaluateHTTP(service, probecheck.Observation{RequestedURL: service.ProbeURL, FinalURL: probecheck.FinalURL(response, service.ProbeURL), RedirectChain: redirects, HTTPStatus: response.StatusCode, RetryAfter: response.Header.Get("Retry-After"), ContentType: response.Header.Get("Content-Type"), Body: body, BodyTruncated: result.StreamStatus == "sampled", ExpectedRoutePathID: "isolated:" + route, ObservedRoutePathID: observedRoute})
 	return result
 }
 

@@ -41,7 +41,11 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 		// queue. A stopped daemon can never confirm it, so say why.
 		return finish("component-stopped", "NFQWS2 установлен, но не запущен, поэтому сервис нельзя проверить. Запустите NFQWS2; автопилот проверит сервис в следующем раунде. Другой обход автоматически не назначается.")
 	}
-	verdict := a.autonomyProbeRoute(ctx, service, "nfqws2", profile)
+	observation := a.autonomyProbeRouteObservation(ctx, service, "nfqws2", profile)
+	if observation.pause(&r) {
+		return r
+	}
+	verdict := observation.Verdict
 	r.CheckedAt = time.Now().UTC()
 	r.Observe("nfqws2", profile, verdict, time.Now(), time.Duration(p.FailureConfirmSeconds)*time.Second)
 	r.Reserves = nil

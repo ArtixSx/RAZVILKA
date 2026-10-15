@@ -127,7 +127,11 @@ func (a *App) nfqws2RouteRunning() bool {
 // rounds keep NFQWS2 and never switch the service to another node.
 func (a *App) returnToNFQWS2Standard(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, service catalog.Service, cfg config.Config, profile string) autonomy.Runtime {
 	finish := func(state, message string) autonomy.Runtime { r.State, r.Message = state, message; return r }
-	verdict := a.autonomyProbeRoute(ctx, service, "nfqws2", profile)
+	observation := a.autonomyProbeRouteObservation(ctx, service, "nfqws2", profile)
+	if observation.pause(&r) {
+		return r
+	}
+	verdict := observation.Verdict
 	r.CheckedAt = time.Now().UTC()
 	if ctx.Err() != nil || !a.autonomyConsent(p, s) || !reflect.DeepEqual(a.Store.Get(), cfg) {
 		return finish("paused", "Проверка отменена или изменились настройки. Сеть не изменена.")

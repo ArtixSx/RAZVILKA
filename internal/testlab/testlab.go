@@ -31,6 +31,7 @@ type Result struct {
 	NetworkProfileID       string                  `json:"network_profile_id,omitempty"`
 	Status                 string                  `json:"status"` // pass, partial, fail, not-ready, pending
 	HTTPStatus             int                     `json:"http_status,omitempty"`
+	RetryAfterSeconds      int                     `json:"retry_after_seconds,omitempty"`
 	LatencyMS              int64                   `json:"latency_ms,omitempty"`
 	TTFBMS                 int64                   `json:"ttfb_ms,omitempty"`
 	ReadMS                 int64                   `json:"read_ms,omitempty"`
@@ -73,6 +74,10 @@ func (result *Result) EvaluateHTTP(service catalog.Service, observation probeche
 	result.ExpectedRoutePathID = observation.ExpectedRoutePathID
 	result.ObservedRoutePathID = observation.ObservedRoutePathID
 	result.NegativeControlMatched = observation.NegativeControlMatched
+	result.RetryAfterSeconds = 0
+	if observation.HTTPStatus == http.StatusTooManyRequests {
+		result.RetryAfterSeconds = probecheck.RateLimitDelaySeconds(observation.RetryAfter, time.Now())
+	}
 }
 
 // NormalizeEvidence derives the public assurance level from observed facts.
@@ -664,7 +669,7 @@ func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Pro
 		res.Detail = fmt.Sprintf("response stream interrupted after %d bytes: %s", res.BytesRead, short(err.Error()))
 		return res
 	}
-	res.EvaluateHTTP(s, probecheck.Observation{RequestedURL: s.ProbeURL, FinalURL: probecheck.FinalURL(resp, s.ProbeURL), RedirectChain: redirects, HTTPStatus: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body, BodyTruncated: res.StreamStatus == "sampled"})
+	res.EvaluateHTTP(s, probecheck.Observation{RequestedURL: s.ProbeURL, FinalURL: probecheck.FinalURL(resp, s.ProbeURL), RedirectChain: redirects, HTTPStatus: resp.StatusCode, RetryAfter: resp.Header.Get("Retry-After"), ContentType: resp.Header.Get("Content-Type"), Body: body, BodyTruncated: res.StreamStatus == "sampled"})
 	return res
 }
 
@@ -781,6 +786,7 @@ func AggregateScenarios(results []Result) []Result {
 		}
 		if representative != nil {
 			aggregate.HTTPStatus = representative.HTTPStatus
+			aggregate.RetryAfterSeconds = representative.RetryAfterSeconds
 			aggregate.Outcome = representative.Outcome
 			aggregate.Verdict = representative.Verdict
 			aggregate.ErrorCode = representative.ErrorCode

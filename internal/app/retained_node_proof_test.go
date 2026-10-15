@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 func TestAutopilotPlanReprovesRetainedNodeRoute(t *testing.T) {
@@ -29,6 +31,41 @@ func TestAutopilotPlanReprovesRetainedNodeRoute(t *testing.T) {
 	}
 	if len(adapter.calls) != 0 || !reflect.DeepEqual(cfg, a.Store.Get()) {
 		t.Fatal("re-proof changed routes or configuration")
+	}
+}
+
+func TestAutopilotRetainedReproofPreservesBoundedFailureWithoutLiveCalls(t *testing.T) {
+	for _, code := range []string{"node-service-ip-path-failed", "tls-certificate-mismatch", "private-endpoint.example:secret"} {
+		t.Run(code, func(t *testing.T) {
+			a, _, adapter, _, _ := nodeRecoveryFixture(t)
+			calls := 0
+			a.NodeChecker = jobNodeChecker(func(_ context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				calls++
+				r := autofallbackResult(request, false)
+				r.Stage, r.ErrorCode, r.Message = "service_ip", code, "private runtime diagnostic"
+				return r, nil
+			})
+			before := a.Store.Get()
+			for range 2 {
+				_, err := a.buildPlanReprovingRetained(context.Background(), before, recoveryProfile)
+				var dependency *routePlanDependencyError
+				want := code
+				if strings.Contains(code, "secret") {
+					want = "node-check-unconfirmed"
+				}
+				if !errors.As(err, &dependency) || dependency.Cause != "reproof-failed" || dependency.CheckStage != "service_ip" || dependency.CheckCode != want {
+					t.Fatalf("lost actual failure: %#v", err)
+				}
+				response := httptest.NewRecorder()
+				writeNodePlanFailure(response, err)
+				if !strings.Contains(response.Body.String(), `"check_code":"`+want+`"`) || strings.Contains(response.Body.String(), "private") || strings.Contains(response.Body.String(), "secret") {
+					t.Fatal("unbounded or absent diagnostic", response.Body.String())
+				}
+			}
+			if calls != 1 || len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) {
+				t.Fatal("reproof retried or touched live runtime", calls, adapter.calls)
+			}
+		})
 	}
 }
 
