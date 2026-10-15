@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
@@ -15,7 +16,12 @@ func TestListWGPreparationBindsActualListSourceAndOperation(t *testing.T) {
 	f.a.Catalog.Services[0].Name = "Listed fixture"
 	f.a.Catalog.Services[0].Category = "fixture"
 	f.a.Catalog.Services[0].Strategy = []string{"wireguard"}
-	listScopeOperation(t, f.a, func(ctx context.Context) {
+	// This ownership test performs review, preparation, repeated Input reads and
+	// separate post-Close observations in one operation. Each validates durable
+	// control and the actual race-instrumented child executable. A five-second
+	// fixture budget expires during the final observation on the Linux VM; it
+	// is not a production deadline or the behavior asserted by this test.
+	listScopeOperationWithin(t, f.a, 30*time.Second, func(ctx context.Context) {
 		r, err := f.a.ReviewWGListRuntimeSource(ctx, f.scope, "listed")
 		if err != nil {
 			t.Fatal(err)

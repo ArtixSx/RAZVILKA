@@ -77,7 +77,12 @@ func (m *listScopePhysicalModel) acquire(ctx context.Context, selection physical
 
 func listScopeOperation(t *testing.T, a *App, use func(context.Context)) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	listScopeOperationWithin(t, a, 5*time.Second, use)
+}
+
+func listScopeOperationWithin(t *testing.T, a *App, budget time.Duration, use func(context.Context)) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	ctx, release, err := a.Operations.ExclusiveContext(ctx)
 	if err != nil {
