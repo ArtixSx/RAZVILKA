@@ -59,6 +59,11 @@ assert.equal(updateNotice({update_available:true,can_prepare:false,latest_versio
 assert.equal(updateNotice({update_available:false}),null);
 assert.equal(updateNotice({update_available:true,can_prepare:true,latest_version:'<b>'}),null);
 
+const {quietEngine}=context.RazvilkaSimpleHome;
+assert.equal(quietEngine('0','Не установлен'),true);
+assert.equal(quietEngine('0','Процесс запущен'),false,'an installed engine stays visible');
+assert.equal(quietEngine('2','Не установлен'),false,'an assigned engine stays visible');
+
 assert.equal(plural(1,'сервис','сервиса','сервисов'),'1 сервис');
 assert.equal(plural(3,'сервис','сервиса','сервисов'),'3 сервиса');
 assert.equal(plural(11,'сервис','сервиса','сервисов'),'11 сервисов');

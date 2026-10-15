@@ -86,7 +86,13 @@
     return (entries || []).filter(e => e?.id && !e.imported && !names.has(String(e.name || '').toLocaleLowerCase('ru'))).slice(0, limit);
   }
 
-  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, bucket, plural });
+  // quietEngine reports an engine row a simple home leaves out: nothing
+  // assigned and the component is not installed.
+  function quietEngine(assigned, label) {
+    return String(assigned).trim() === '0' && /не установлен/i.test(String(label || ''));
+  }
+
+  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, quietEngine, bucket, plural });
   if (typeof document === 'undefined') return;
 
   const KEY = 'razvilka.simpleMode';
@@ -251,7 +257,7 @@
     const m = model(snap, catalog());
     // The advanced home renders the engine summary; simple mode shows the same
     // block beside the services instead of its own copy of that logic.
-    const engines = document.getElementById('ui7HomeEngines')?.innerHTML || '';
+    const engines = simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '');
     const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
     // What the router is busy with replaces the technical availability banner.
     const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
@@ -275,6 +281,27 @@
       const input = home.querySelector('[data-rz-sh-query]');
       if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     }
+  }
+
+  // simpleEngines keeps the engines in use or installed and folds the rest
+  // into one line; the advanced home keeps the full grid.
+  function simpleEngines(source) {
+    if (!source) return '';
+    const box = document.createElement('div');
+    box.innerHTML = source;
+    let hidden = 0;
+    box.querySelectorAll('.ui7-engine-row').forEach(row => {
+      const assigned = row.querySelector('.ui7-engine-count b')?.textContent || '';
+      const label = row.querySelector('span:nth-child(2) small')?.textContent || '';
+      if (quietEngine(assigned, label)) { row.remove(); hidden++; }
+    });
+    if (hidden) {
+      const more = document.createElement('p');
+      more.className = 'r5-caption rz-sh-engines-more';
+      more.textContent = `Ещё ${plural(hidden, 'способ можно установить', 'способа можно установить', 'способов можно установить')} в расширенном режиме, если понадобится.`;
+      (box.querySelector('.ui7-engine-summary') || box).after(more);
+    }
+    return box.innerHTML;
   }
 
   async function act(id, remove) {
