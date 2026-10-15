@@ -644,7 +644,11 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		generation = snap.Generation
 	}
 	committed := false
-	expires := time.Now().Add(2 * time.Minute)
+	// The guard re-checks revision, network, node permission and a fresh route
+	// proof on every call; the window only bounds the whole application. Two
+	// minutes expired mid-transaction on the owner's router, where replacing
+	// a sing-box policy alone takes about a minute, so it follows the apply budget.
+	expires := time.Now().Add(defaultDataplaneApplyTimeout)
 	guard := func(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
