@@ -53,6 +53,12 @@ const {communityAvailable}=context.RazvilkaSimpleHome;
 const shared=[{id:'ga-netflix',name:'Netflix',category:'Видео'},{id:'ga-telegram',name:'Telegram',imported:true},{id:'ga-youtube',name:'YouTube'}];
 assert.deepEqual(Array.from(communityAvailable(shared,catalog),e=>e.id),['ga-netflix'],'imported and built-in names are not offered twice');
 
+const {updateNotice}=context.RazvilkaSimpleHome;
+assert.equal(updateNotice({update_available:true,can_prepare:true,latest_version:'0.20.1'}).text,'Вышло обновление 0.20.1');
+assert.equal(updateNotice({update_available:true,can_prepare:false,latest_version:'0.20.1'}),null,'an update this router cannot prepare is not offered');
+assert.equal(updateNotice({update_available:false}),null);
+assert.equal(updateNotice({update_available:true,can_prepare:true,latest_version:'<b>'}),null);
+
 assert.equal(plural(1,'сервис','сервиса','сервисов'),'1 сервис');
 assert.equal(plural(3,'сервис','сервиса','сервисов'),'3 сервиса');
 assert.equal(plural(11,'сервис','сервиса','сервисов'),'11 сервисов');

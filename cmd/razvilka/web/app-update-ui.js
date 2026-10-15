@@ -22,8 +22,14 @@ function appUpdateBadge(update) {
 function renderAppVersionStatus() {
   const badge = appUpdateBadge(state.appUpdate);
   const button = $('#appVersionAction'), label = $('#appVersionStatus');
-  if (label) label.textContent = badge.label;
-  if (button) { button.classList.toggle('update', badge.kind === 'update'); button.classList.toggle('current', badge.kind === 'current'); button.title = 'Проверка и обновление RAZVILKA'; }
+  const update = badge.kind === 'update';
+  // A released update reads "v0.20.0 → v0.20.1" beside a pulsing dot.
+  if (label) label.textContent = update ? `→ v${state.appUpdate.latest_version} · обновить` : badge.label;
+  if (button) {
+    button.classList.toggle('update', update); button.classList.toggle('current', badge.kind === 'current');
+    button.title = update ? `Вышло обновление ${state.appUpdate.latest_version}. Нажмите, чтобы открыть.` : 'Проверка и обновление RAZVILKA';
+  }
+  if (typeof window !== 'undefined' && typeof CustomEvent === 'function') window.dispatchEvent(new CustomEvent('razvilka:app-update', { detail: update ? { version: state.appUpdate.latest_version } : null }));
 }
 
 async function refreshAppUpdate(force = false) {

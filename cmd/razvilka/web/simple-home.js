@@ -32,6 +32,12 @@
     return out;
   }
 
+  // updateNotice names a released update the panel already checked for.
+  function updateNotice(update) {
+    if (!update?.update_available || !update.can_prepare || !/^[0-9A-Za-z.+-]{1,40}$/.test(update.latest_version || '')) return null;
+    return { version: update.latest_version, text: `Вышло обновление ${update.latest_version}` };
+  }
+
   // model turns the autopilot snapshot into what the simple home renders.
   function model(snapshot, catalog) {
     if (!snapshot || typeof snapshot !== 'object') return { phase: 'loading', services: [], tone: 'progress', title: 'Загружаем состояние…', text: '' };
@@ -80,7 +86,7 @@
     return (entries || []).filter(e => e?.id && !e.imported && !names.has(String(e.name || '').toLocaleLowerCase('ru'))).slice(0, limit);
   }
 
-  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, bucket, plural });
+  root.RazvilkaSimpleHome = Object.freeze({ model, available, communityAvailable, updateNotice, bucket, plural });
   if (typeof document === 'undefined') return;
 
   const KEY = 'razvilka.simpleMode';
@@ -223,7 +229,8 @@
     // The advanced home renders the engine summary; simple mode shows the same
     // block beside the services instead of its own copy of that logic.
     const engines = document.getElementById('ui7HomeEngines')?.innerHTML || '';
-    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines]);
+    const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
+    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version]);
     if (!force && key === ui.key) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
     ui.key = key;
@@ -235,7 +242,8 @@
       + (ui.error ? `<p class="rz-sh-error" role="alert">${html(ui.error)}</p>` : '')
       + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
     home.classList.toggle('rz-sh-with-engines', !!engines);
-    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p></div>${action}</div>`
+    const updateRow = notice ? `<div class="rz-sh-update" role="status"><span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button></div>` : '';
+    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p></div>${action}</div>${updateRow}`
       + `<div class="rz-sh-main">${main}</div>` + (engines ? `<aside class="rz-sh-engines" aria-label="Обходы">${engines}</aside>` : '');
     if (focused) {
       const input = home.querySelector('[data-rz-sh-query]');
@@ -263,6 +271,7 @@
     if (target.dataset.rzShAddId) { void act(target.dataset.rzShAddId, false); return; }
     if (target.dataset.rzShCommunity) { void importCommunity(target.dataset.rzShCommunity); return; }
     if (target.dataset.rzShRemove) { void act(target.dataset.rzShRemove, true); return; }
+    if (target.hasAttribute('data-rz-sh-update')) { if (typeof openAppUpdate === 'function') void openAppUpdate(); return; }
     if (target.hasAttribute('data-rz-sh-custom')) {
       const dialog = document.getElementById('a1-addServiceDialog');
       if (dialog && !dialog.open) dialog.showModal();
@@ -274,6 +283,7 @@
   }
 
   window.addEventListener('razvilka:autonomy-state', () => render());
+  window.addEventListener('razvilka:app-update', () => render());
   document.addEventListener('DOMContentLoaded', apply);
   if (document.readyState !== 'loading') apply();
   setInterval(() => { if (!document.hidden) render(); }, 3000);
