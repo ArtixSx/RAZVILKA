@@ -1513,3 +1513,11 @@ Router487: полный lifecycle FAIL2.10s на уведомлениях. До�
 - Linux501 (`7bec0fde`) выполняет объединённые проверки offline boot-retirement, реального CLI, auth/gzip и HTTP429. Его итог фиксируется отдельно после завершения.
 
 В этой порции установленные controller/Xray и namespace роутера сохранены; собственные временные стенды не дают полномочий на рабочие маршруты. Нового релиза, очистки GitHub, общего LAN/DNS, часового трафика или чистой установки пока нет.
+
+### Успешные проверки Linux501 и Router503
+
+**Linux501 RC0**, source `7bec0fde176723ee6e7fb96245f68430cb77f138`: Go1.26.5/modules verified; race recovery dataplane25.853s, actual CLI2.514s, весь security125.806s, HTTP429/gzip/reproof App4.571s, probecheck1.131s, routeprobe1.972s, testlab14.186s. Финальный marker `SOURCE_CLAUDE501_FOCUSED_PASSED`. Это выборочная проверка последних изменений, не весь check.sh.
+
+**Router503 lifecycle PASS5.89s**, source `9f8f67ef42bf4add35e92f859590426f3a95180e`, ARM64 observer SHA `a874928c12649e4a52bc52ba2abf2de5fec138074982a0afdb678de2f6e4e08f`. Constructor1569ms, Current1413ms, membership1388ms, retained1369ms; Close/collector Join/control Close подтверждены, opens1, оригинальные intent/facts неизменны. Шесть harness-проверок PASS. Предшествовавший отказ500 исправлен узким сохранением exact чужой ARPHRD_NONE multicast-записи без MAC/client identity; shared full/finite decoder и проверки отрицаний не менялись. Независимый Windows physicalscope PASS3.930s, ARM64 compile и vet. Установленные controller/Xray и исходные namespace по-прежнему неизменны. Это положительный lifecycle наблюдения, не сетевой Apply или проверка фактического трафика.
+
+Общий Linux504 запущен на `9f8f67ef`, отдельный immutable export; его результат ещё ожидается.
