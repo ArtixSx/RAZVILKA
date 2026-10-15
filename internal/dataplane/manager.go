@@ -1377,6 +1377,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	run := func(runCtx context.Context, adapter Adapter, phase string, action func(context.Context, Plan, string) error) error {
 		restoring := phase == "rollback" || phase == "verify-rollback"
+		if !restoring {
+			if err := runCtx.Err(); err != nil {
+				return err
+			}
+		}
 		if xrayPreResource == nil && activeXrayScope == nil && !restoring && adapter.ID() == NetworkPolicyAdapterID &&
 			validPlanID(plan.PlanID) && ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
 			var err error
@@ -1428,12 +1433,19 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		previouslyMutated := liveMutation
 		if phase == "activate" || phase == "deactivate" || phase == "commit-adapter" {
-			liveMutation = true
 			if !restoring {
+				// Journal publication can outlast a cancellation. Admit the phase
+				// using the original context before detaching its kernel work.
+				if err := runCtx.Err(); err != nil {
+					execution.Steps[index].State, execution.Steps[index].Detail = "failed", err.Error()
+					execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+					return errors.Join(err, writeExecution())
+				}
 				var release context.CancelFunc
 				runCtx, release = shieldLiveMutation(runCtx)
 				defer release()
 			}
+			liveMutation = true
 		}
 		var err error
 		_, actualNFQ := adapter.(*NFQWS2Adapter)
