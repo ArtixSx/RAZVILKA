@@ -152,31 +152,54 @@
     return home;
   }
 
+  // icon reuses the panel's brand icons; a service without one gets its initials.
+  function icon(service) {
+    try {
+      if (typeof consoleServiceIcon === 'function') return consoleServiceIcon(service);
+    } catch (_) { /* fall back to initials */ }
+    return html(String(service?.name || '?').slice(0, 2));
+  }
+
+  // routeName names the applied method in the panel's own words.
+  function routeName(id) {
+    const service = catalog().find(s => s.id === id);
+    const route = service?.applied_state?.enabled ? service.applied_state.route : '';
+    if (!route || route === 'auto') return '';
+    try {
+      if (typeof interfaceRouteName === 'function') return interfaceRouteName(route);
+    } catch (_) { /* plain name below */ }
+    return route.split(':')[0];
+  }
+
   function serviceRow(s) {
     const busy = ui.busy === s.id;
-    return `<li class="rz-sh-service rz-sh-${s.bucket}"><span class="rz-sh-dot" aria-hidden="true"></span><div><b>${html(s.name)}</b><small title="${html(s.detail)}">${html(s.short)}</small></div><button type="button" class="secondary" data-rz-sh-remove="${html(s.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Убираем…' : 'Убрать'}</button></li>`;
+    const via = s.bucket === 'ok' ? routeName(s.id) : '';
+    const service = catalog().find(c => c.id === s.id) || { id: s.id, name: s.name };
+    return `<li class="rz-sh-service rz-sh-${s.bucket}"><span class="rz-sh-icon" aria-hidden="true">${icon(service)}<span class="rz-sh-dot"></span></span><div><b>${html(s.name)}</b><small title="${html(s.detail)}">${html(via ? `${s.short} · ${via}` : s.short)}</small></div><button type="button" class="secondary" data-rz-sh-remove="${html(s.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Убираем…' : 'Убрать'}</button></li>`;
   }
 
   function addPanel(m) {
     if (!ui.open) return '';
     const list = available(catalog(), m.managed, ui.query);
     const button = (attr, id) => `<button type="button" class="primary" ${attr}="${html(id)}" ${ui.busy ? 'disabled' : ''}>${ui.busy === id ? 'Добавляем…' : 'Добавить'}</button>`;
-    const rows = list.map(s => `<li><div><b>${html(s.name || s.id)}</b><small>${html(s.category || '')}</small></div>${button('data-rz-sh-add-id', s.id)}</li>`).join('');
+    const rows = list.map(s => `<li><span class="rz-sh-icon" aria-hidden="true">${icon(s)}</span><div><b>${html(s.name || s.id)}</b><small>${html(s.category || '')}</small></div>${button('data-rz-sh-add-id', s.id)}</li>`).join('');
     // The built-in catalogue is the starter set; the community catalogue
     // (domain lists published on GitHub) holds the rest.
-    const community = ui.query.trim() ? communityAvailable(ui.community, catalog()) : [];
-    const shared = community.map(e => `<li><div><b>${html(e.name || e.id)}</b><small>${html([e.category, 'каталог сообщества'].filter(Boolean).join(' · '))}</small></div>${button('data-rz-sh-community', e.id)}</li>`).join('');
-    const searching = ui.query.trim() && ui.communityState === 'loading' ? '<li class="rz-sh-empty">Ищем в каталоге сообщества…</li>' : '';
-    const failed = ui.query.trim() && ui.communityState === 'error' ? '<li class="rz-sh-empty">Каталог сообщества сейчас недоступен; повторите поиск позже.</li>' : '';
-    const empty = !catalog().length ? 'Каталог ещё загружается…' : ui.query.trim() && ui.communityState !== 'ready' ? '' : 'Ничего не найдено. Попробуйте другое название или добавьте свой сайт.';
+    const community = communityAvailable(ui.community, catalog(), 60);
+    const shared = community.map(e => `<li><span class="rz-sh-icon" aria-hidden="true">${icon({ id: String(e.id || '').replace(/^ga-/, ''), name: e.name })}</span><div><b>${html(e.name || e.id)}</b><small>${html([e.category, 'каталог сообщества'].filter(Boolean).join(' · '))}</small></div>${button('data-rz-sh-community', e.id)}</li>`).join('');
+    const searching = ui.communityState === 'loading' ? '<li class="rz-sh-empty">Ищем в каталоге сообщества…</li>' : '';
+    const failed = ui.communityState === 'error' ? '<li class="rz-sh-empty">Каталог сообщества сейчас недоступен; повторите поиск позже.</li>' : '';
+    const empty = !catalog().length ? 'Каталог ещё загружается…' : ui.communityState !== 'ready' ? '' : 'Ничего не найдено. Попробуйте другое название или добавьте свой сайт.';
     const body = rows + shared + searching + failed || (empty ? `<li class="rz-sh-empty">${empty}</li>` : '');
     return `<div class="rz-sh-add"><label class="rz-sh-search"><span>Какой сервис должен открываться?</span><input type="search" data-rz-sh-query placeholder="Например, YouTube, Netflix или Discord" value="${html(ui.query)}" autocomplete="off"></label><ul class="rz-sh-catalog">${body}</ul>${ui.note ? `<p class="rz-sh-note" role="status">${html(ui.note)}</p>` : ''}<button type="button" class="link-button" data-rz-sh-custom>Нет в списке? Добавить свой сайт</button></div>`;
   }
 
+  // An empty query lists the whole community catalogue, so opening "Add a
+  // service" already shows what can be added without typing.
   function searchCommunity(query) {
     clearTimeout(communityTimer);
     const q = query.trim();
-    if (!q || typeof api !== 'function') { ui.community = []; ui.communityState = ''; return; }
+    if (typeof api !== 'function') { ui.community = []; ui.communityState = ''; return; }
     if (q === ui.communityQuery && ui.communityState === 'ready') return;
     ui.communityState = 'loading';
     const seq = ++communitySeq;
@@ -230,7 +253,10 @@
     // block beside the services instead of its own copy of that logic.
     const engines = document.getElementById('ui7HomeEngines')?.innerHTML || '';
     const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
-    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version]);
+    // What the router is busy with replaces the technical availability banner.
+    const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
+    const activity = admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
+    const key = JSON.stringify([m.phase, m.tone, m.title, m.services.map(s => [s.id, s.state, s.short]), ui.open, ui.query, ui.busy, ui.error, catalog().length, engines, notice?.version, activity]);
     if (!force && key === ui.key) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
     ui.key = key;
@@ -243,7 +269,7 @@
       + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
     home.classList.toggle('rz-sh-with-engines', !!engines);
     const updateRow = notice ? `<div class="rz-sh-update" role="status"><span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button></div>` : '';
-    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p></div>${action}</div>${updateRow}`
+    home.innerHTML = `<div class="rz-sh-status rz-sh-${m.tone}"><span class="rz-sh-badge" aria-hidden="true"></span><div><h2>${html(m.title)}</h2><p>${html(m.text)}</p>${activity ? `<small class="rz-sh-activity">Сейчас: ${html(activity)}</small>` : ''}</div>${action}</div>${updateRow}`
       + `<div class="rz-sh-main">${main}</div>` + (engines ? `<aside class="rz-sh-engines" aria-label="Обходы">${engines}</aside>` : '');
     if (focused) {
       const input = home.querySelector('[data-rz-sh-query]');
@@ -267,7 +293,7 @@
   function onClick(event) {
     const target = event.target.closest('button');
     if (!target) return;
-    if (target.hasAttribute('data-rz-sh-toggle-add')) { ui.open = !ui.open; ui.error = ''; render(true); if (ui.open) document.querySelector('[data-rz-sh-query]')?.focus(); return; }
+    if (target.hasAttribute('data-rz-sh-toggle-add')) { ui.open = !ui.open; ui.error = ''; if (ui.open) searchCommunity(ui.query); render(true); if (ui.open) document.querySelector('[data-rz-sh-query]')?.focus(); return; }
     if (target.dataset.rzShAddId) { void act(target.dataset.rzShAddId, false); return; }
     if (target.dataset.rzShCommunity) { void importCommunity(target.dataset.rzShCommunity); return; }
     if (target.dataset.rzShRemove) { void act(target.dataset.rzShRemove, true); return; }

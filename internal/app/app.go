@@ -662,7 +662,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/sources/apply", a.sourceApply)
 	mux.HandleFunc("/api/v1/sources/discard", a.sourceDiscard)
 	mux.HandleFunc("/api/v1/sources/", a.sourceAction)
-	mux.Handle("/", noStoreUI(static))
+	mux.Handle("/", noStoreUI(gzipStatic(static)))
 	return securityHeaders(a.auditMiddleware(a.Security.Middleware(a.operationMiddleware(mux))))
 }
 

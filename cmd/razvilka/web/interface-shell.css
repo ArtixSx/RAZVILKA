@@ -830,6 +830,14 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-error{margin:0;color:var(--red)}.rz-sh-foot{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
 @media (max-width:640px){.rz-sh-status{flex-wrap:wrap;padding:18px}.rz-sh-status h2{font-size:19px}.rz-sh-status .primary{width:100%}.rz-sh-head .primary,.rz-sh-head .secondary{min-height:44px}}
 .rz-sh-note{margin:0;color:var(--muted);font-size:13px}
+/* Simple mode keeps only banners that need the owner: no answer from the
+   router or a journal review. Routine "busy" and "updating" notes are shown
+   as one quiet line in the status card instead. */
+body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailability[data-state=idle],body.rz-simple #notice.review,body.rz-simple .console-autonomy-availability{display:none!important}
+.rz-sh-activity{display:block;margin-top:6px;color:var(--muted);font-size:12px}
+.rz-sh-icon{position:relative;flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--soft);font-weight:700;font-size:12px;overflow:visible}
+.rz-sh-icon svg{width:22px;height:22px}
+.rz-sh-icon .rz-sh-dot{position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border:2px solid var(--panel)}
 .rz-sh-update{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--amber);border-radius:12px;background:var(--panel)}
 .rz-sh-update>span:nth-child(2){flex:1;font-weight:600}
 .rz-sh-with-engines>.rz-sh-update{grid-column:1/-1}
