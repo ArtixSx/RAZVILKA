@@ -739,6 +739,12 @@ func packetDecodeNeighbor(m message, t ipv4LANPacketTopology) (kernelNeighbor, b
 		// Preserve the original link-local address/index for all guards below.
 		n.mac, err = "", nil
 	}
+	if f, ok := err.(*failure); ok && f.stage == "kernel.bindings.neighbor.bookkeeping-mac" && packetOpaqueForeignMulticast(m, n, t) {
+		// Router502 observed empty L2 on unrelated ARPHRD_NONE multicast.
+		// Retain it as an opaque foreign row, not an ignored bookkeeping
+		// record or client/MAC identity. Owned-address and epoch guards remain.
+		err = nil
+	}
 	if err != nil || bookkeeping {
 		return n, bookkeeping, err
 	}
@@ -766,6 +772,38 @@ func packetDecodeNeighbor(m message, t ipv4LANPacketTopology) (kernelNeighbor, b
 		return n, false, at("packet.owned.neighbor.conflict", nil)
 	}
 	return n, ownedMAC || ownedAddress, nil // Proven own infrastructure is negative only.
+}
+
+// Exact observed IPv6 NOARP/RTN_MULTICAST wire shape on a positively known
+// unrelated non-Ethernet link. No selected/member/parent or unknown link may
+// use this exception; the shared full/finite decoder stays unchanged.
+func packetOpaqueForeignMulticast(m message, n kernelNeighbor, t ipv4LANPacketTopology) bool {
+	if (m.kind != 28 && m.kind != 29) || len(m.data) < 12 || m.data[0] != 10 || n.index <= 1 || n.index == t.home.IfIndex || n.kind != 5 || n.state != 64 || n.flags != 0 || n.mac != "" || !n.address.Is6() || !n.address.IsMulticast() {
+		return false
+	}
+	a, err := attrs(m.data[12:])
+	ll, present := a[2]
+	if err != nil || len(a) != 4 || len(a[1]) != 16 || !present || len(ll) != 0 || len(a[3]) != 16 || len(a[4]) != 4 {
+		return false
+	}
+	for raw := m.data[12:]; len(raw) != 0; {
+		if binary.NativeEndian.Uint16(raw[2:4])&0xc000 != 0 {
+			return false
+		}
+		size := int(binary.NativeEndian.Uint16(raw[:2]))
+		raw = raw[(size+3)&^3:]
+	}
+	for _, member := range t.home.Members {
+		if n.index == member.IfIndex || n.index == member.ParentIfIndex || member.Parent.Known && n.index == member.Parent.IfIndex {
+			return false
+		}
+	}
+	for _, link := range t.noneLinks {
+		if link.IfIndex == n.index {
+			return link.LinkType == 65534 && link.Flags&8 == 0 && !link.ForeignParent && link.MasterIfIndex == 0 && link.ParentIfIndex == 0
+		}
+	}
+	return false
 }
 
 // Purpose-specific observed AF10 NOARP shape. Unknown link/attachment facts
