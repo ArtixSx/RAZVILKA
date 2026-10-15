@@ -789,6 +789,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		// after an unfinished or inconsistently recorded network transaction.
 		a.Operations.FenceJournal()
 	}
+	if recoveryErr != nil && recovery.State != "network-stale" && recovery.State != "degraded" && !recovery.Guarded {
+		// An unclassified recovery failure may not have a durable recovery
+		// record. Keep admission closed rather than treating its flag as legacy.
+		a.Operations.FenceJournal()
+	}
 	if recovery.State == "network-stale" {
 		log.Print("dataplane boot recovery requires fresh node checks in the current network")
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "network-stale", Actor: "system", RemoteIP: "local"})
@@ -800,7 +805,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
 	}
 	if !selfRecoveryPending && !componentRecoveryPending {
-		retireSafeMode(store)
+		if err := settleRecoverySafeMode(store, recovery, recoveryErr); err != nil {
+			// A failed safety-state write must not leave workers admitted.
+			a.Operations.FenceJournal()
+			log.Printf("preserve boot recovery protection: %v", err)
+		}
 	}
 	// Publish the initial settings before collectors/automation can take
 	// admission for a long first operation. Recovery above has already finished.
@@ -1230,10 +1239,22 @@ func retryFailedRollbackAtStart(ctx context.Context, manager *dataplane.Manager,
 	}
 }
 
-// retireSafeMode clears a Safe Mode flag left by an older build or by the
-// paired offline restore marker. Safe Mode was removed: Stop, the journal
-// fence and the dataplane boot-loop guard remain the protections, and an
-// unfinished update keeps the flag until its own recovery has settled.
+// settleRecoverySafeMode retains the hidden live-write gate when boot recovery
+// failed. The removed settings toggle must not remove the boot-loop guard's
+// effect on later workers and Apply. Fresh-node-proof recovery remains the
+// existing network-stale path; it does not create or clear a recovery flag.
+func settleRecoverySafeMode(store *config.Store, recovery dataplane.Recovery, recoveryErr error) error {
+	if recovery.Guarded || recoveryErr != nil && recovery.State != "network-stale" {
+		return store.SetSafeMode(true)
+	}
+	if recoveryErr == nil {
+		retireSafeMode(store)
+	}
+	return nil
+}
+
+// retireSafeMode clears a legacy flag only after settled successful recovery.
+// An unfinished update or failed boot recovery keeps its hidden protection.
 func retireSafeMode(store *config.Store) {
 	if !store.Get().SafeMode {
 		return

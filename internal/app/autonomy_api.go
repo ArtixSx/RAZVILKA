@@ -130,8 +130,8 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.ReleaseSafeMode && req.Policy.Enabled {
 			// This is an explicit wizard consent, never an automatic bypass of Safe Mode.
-			if a.Store.SetSafeMode(false) != nil {
-				writeJSON(w, 409, map[string]any{"error": "Политика сохранена, но защитный режим остался включён."})
+			if err := a.clearRetiredSafeMode(); err != nil {
+				a.writeOperationFailure(w, err)
 				return
 			}
 			mode := "auto"

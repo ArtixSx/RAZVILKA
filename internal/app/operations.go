@@ -315,6 +315,10 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 			message = "Предыдущая сетевая транзакция завершилась без подтверждённого отката. Изменения приостановлены до проверки журнала маршрутов; перезапуск этого не исправит. Не удаляйте журнал вручную."
 		}
 	}
+	if errors.Is(err, errDataplaneBootRecovery) {
+		code, status = "DATAPLANE_RECOVERY_REQUIRED", http.StatusServiceUnavailable
+		message = "Восстановление маршрутов после запуска не подтверждено. Автоматические изменения приостановлены до проверки журнала; защитный запрет сохранён."
+	}
 	// Identity is cache-independent. Supervisors can recognize a live but busy
 	// process without reading locked Stores or inventing dataplane health.
 	body := map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,

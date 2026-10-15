@@ -4232,8 +4232,8 @@ func (a *App) safeModeSetting(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusGone, map[string]any{"error": "Безопасный режим удалён. Чтобы приостановить обходы, используйте «Остановить»."})
 		return
 	}
-	if err := a.Store.SetSafeMode(false); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := a.clearRetiredSafeMode(); err != nil {
+		a.writeOperationFailure(w, err)
 		return
 	}
 	cfg := a.Store.Get()

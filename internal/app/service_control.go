@@ -144,6 +144,12 @@ func (a *App) serviceControlView(ctx context.Context) map[string]any {
 	view["resume_available"], view["safe_mode"] = c.Stopped && len(c.SuspendedRoutes) > 0, cfg.SafeMode
 	view["schedule"] = map[string]any{"enabled": c.Schedule.Enabled, "interval_seconds": interval, "service_ids": append([]string{}, c.Schedule.ServiceIDs...), "next_check_at": next}
 	view["notice"] = "Автопилот использует только разрешённые правила сервисов. Ручной режим останавливает автоматическую замену; проверки по таймеру продолжаются."
+	if cfg.SafeMode && a.bootRecoveryPending() != nil {
+		view["recovery_required"], view["code"] = true, "DATAPLANE_RECOVERY_REQUIRED"
+		view["runtime_state"], view["running"] = "recovery-required", false
+		view["can_stop"], view["resume_available"] = false, false
+		view["notice"] = "Восстановление маршрутов после запуска не подтверждено. Сначала завершите проверку журнала; автоматические изменения приостановлены."
+	}
 	return view
 }
 

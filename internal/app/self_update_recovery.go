@@ -30,6 +30,9 @@ func (a *App) selfUpdateFileAuthority(ctx context.Context, revision uint64) erro
 // plan keeps the refusal: Safe Mode then protects running routes from the
 // installer. A changed Safe Mode still changes the revision bound to the job.
 func (a *App) selfUpdateNetworkQuiet() bool {
+	if a.bootRecoveryPending() != nil {
+		return false
+	}
 	if a.Dataplane == nil {
 		return true
 	}

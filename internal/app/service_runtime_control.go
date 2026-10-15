@@ -10,7 +10,45 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+var errDataplaneBootRecovery = errors.Join(operationgate.ErrJournalRecovery, errors.New("dataplane boot recovery requires review"))
+
+// A legacy flag may be retired, but the same hidden gate still protects an
+// unresolved boot recovery. All public paths that clear it share this check.
+func (a *App) clearRetiredSafeMode() error {
+	if a.PendingSelfUpdateRecovery() {
+		return errSelfUpdateRecovery
+	}
+	if a.PendingComponentRecovery() {
+		return errComponentRecovery
+	}
+	if err := a.bootRecoveryPending(); err != nil {
+		return err
+	}
+	return a.Store.SetSafeMode(false)
+}
+
+func (a *App) bootRecoveryPending() error {
+	if a.Dataplane == nil {
+		return nil
+	}
+	status, err := a.Dataplane.Status()
+	if err != nil {
+		return errDataplaneBootRecovery
+	}
+	recovery := status.Recovery
+	if recovery == nil || !recovery.Guarded && recovery.State != "degraded" && recovery.State != "safe-mode" {
+		return nil
+	}
+	// A completed explicit recovery/Stop may publish a new committed plan.
+	// An old recovery record must not turn into a permanent legacy flag.
+	if recovery.PlanID != "" && status.CommittedPlan != nil && status.CommittedPlan.PlanID != recovery.PlanID {
+		return nil
+	}
+	return errDataplaneBootRecovery
+}
 
 // Runtime control uses the existing transaction manager and adapter ownership
 // checks. It never calls system service stop/restart commands.
@@ -127,8 +165,8 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 	if cfg.SafeMode {
 		// Safe Mode was removed. The operator's own Start/Stop clears a flag an
 		// older build or an offline restore left, unless an update still owns it.
-		if a.PendingSelfUpdateRecovery() || a.Store.SetSafeMode(false) != nil {
-			return fail("SERVICE_RUNTIME_SAFE_MODE", "Обновление программы ещё завершается. Повторите действие позже.")
+		if err := a.clearRetiredSafeMode(); err != nil {
+			return fail("DATAPLANE_RECOVERY_REQUIRED", "Восстановление маршрутов не подтверждено. Сначала завершите проверку журнала; защитный запрет изменений сохранён.")
 		}
 		cfg = a.Store.Get()
 	}
