@@ -42,6 +42,7 @@ type Gate struct {
 	tokenHash      [sha256.Size]byte
 	tokenPath      string
 	credentialPath string
+	sessionsPath   string
 	mu             sync.RWMutex
 	credential     *credentialRecord
 	sessions       map[[sha256.Size]byte]sessionRecord
@@ -59,6 +60,7 @@ type sessionRecord struct {
 	LastSeenAt time.Time
 	RemoteIP   string
 	UserAgent  string
+	Remembered bool
 }
 
 type SessionInfo struct {
@@ -170,10 +172,16 @@ func (g *Gate) Setup(username, password string, requests ...*http.Request) (stri
 		return "", err
 	}
 	g.credential = &record
-	return g.newSessionLocked(firstRequest(requests))
+	return g.newSessionLocked(firstRequest(requests), false)
 }
 
 func (g *Gate) Login(username, password string, requests ...*http.Request) (string, error) {
+	return g.LoginRemembered(username, password, false, requests...)
+}
+
+// LoginRemembered is Login with an optional 30-day session that survives
+// restarts of the panel ("Запомнить это устройство").
+func (g *Gate) LoginRemembered(username, password string, remember bool, requests ...*http.Request) (string, error) {
 	if g == nil {
 		return "", errors.New("authentication is disabled")
 	}
@@ -199,7 +207,7 @@ func (g *Gate) Login(username, password string, requests ...*http.Request) (stri
 		return "", errors.New("invalid username or password")
 	}
 	delete(g.loginAttempts, key)
-	return g.newSessionLocked(request)
+	return g.newSessionLocked(request, remember)
 }
 
 func (g *Gate) ChangePassword(current, replacement string, request *http.Request) (string, error) {
@@ -229,8 +237,10 @@ func (g *Gate) ChangePassword(current, replacement string, request *http.Request
 		return "", err
 	}
 	g.credential = &record
-	g.sessions = map[[sha256.Size]byte]sessionRecord{}
-	return g.newSessionLocked(request)
+	if err := g.revokeAllLocked(); err != nil {
+		return "", err
+	}
+	return g.newSessionLocked(request, false)
 }
 
 // RecoverPassword accepts only the recovery bearer key, not an existing UI
@@ -264,8 +274,10 @@ func (g *Gate) RecoverPassword(username, replacement string, request *http.Reque
 		return "", err
 	}
 	g.credential = &record
-	g.sessions = map[[sha256.Size]byte]sessionRecord{}
-	return g.newSessionLocked(request)
+	if err := g.revokeAllLocked(); err != nil {
+		return "", err
+	}
+	return g.newSessionLocked(request, false)
 }
 
 // RotateRecoveryToken reveals a new recovery key once after verifying the
@@ -319,12 +331,19 @@ func (g *Gate) Sessions(request *http.Request) []SessionInfo {
 	return out
 }
 
+// RevokeSession forgets one session. A remembered one is also removed from
+// disk; if that write fails the session is kept and the revocation fails, so
+// it cannot return after a restart.
 func (g *Gate) RevokeSession(id string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for hash, session := range g.sessions {
 		if session.ID == id {
 			delete(g.sessions, hash)
+			if session.Remembered && g.persistRememberedLocked() != nil {
+				g.sessions[hash] = session
+				return false
+			}
 			return true
 		}
 	}
@@ -335,14 +354,22 @@ func (g *Gate) RevokeOtherSessions(request *http.Request) int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	current := g.sessionHash(request)
-	removed := 0
-	for hash := range g.sessions {
+	removed := map[[sha256.Size]byte]sessionRecord{}
+	remembered := false
+	for hash, session := range g.sessions {
 		if hash != current {
 			delete(g.sessions, hash)
-			removed++
+			removed[hash] = session
+			remembered = remembered || session.Remembered
 		}
 	}
-	return removed
+	if remembered && g.persistRememberedLocked() != nil {
+		for hash, session := range removed {
+			g.sessions[hash] = session
+		}
+		return 0
+	}
+	return len(removed)
 }
 
 func (g *Gate) Logout(r *http.Request) {
@@ -355,7 +382,12 @@ func (g *Gate) Logout(r *http.Request) {
 	}
 	hash := sha256.Sum256([]byte(cookie.Value))
 	g.mu.Lock()
+	session, ok := g.sessions[hash]
 	delete(g.sessions, hash)
+	if ok && session.Remembered {
+		// The browser drops its cookie; a failed rewrite leaves only a hash.
+		_ = g.persistRememberedLocked()
+	}
 	g.mu.Unlock()
 }
 
@@ -565,14 +597,19 @@ func writeCredential(path string, record credentialRecord) error {
 	if strings.TrimSpace(path) == "" {
 		return errors.New("credential path is empty")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create credential directory: %w", err)
-	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".credentials.tmp-*")
+	return writePrivateFile(path, append(data, '\n'), ".credentials.tmp-*")
+}
+
+// writePrivateFile replaces path atomically with an owner-only file.
+func writePrivateFile(path string, data []byte, pattern string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create credential directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), pattern)
 	if err != nil {
 		return fmt.Errorf("create credential transaction: %w", err)
 	}
@@ -581,7 +618,7 @@ func writeCredential(path string, record credentialRecord) error {
 	if err := tmp.Chmod(0o600); err != nil {
 		return err
 	}
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
@@ -630,7 +667,7 @@ func writeTokenAtomic(path, token string) error {
 	return nil
 }
 
-func (g *Gate) newSessionLocked(request *http.Request) (string, error) {
+func (g *Gate) newSessionLocked(request *http.Request, remember bool) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generate session: %w", err)
@@ -643,7 +680,18 @@ func (g *Gate) newSessionLocked(request *http.Request) (string, error) {
 			delete(g.sessions, old)
 		}
 	}
-	g.sessions[hash] = sessionRecord{ID: fmt.Sprintf("%x", hash[:8]), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(sessionLifetime), RemoteIP: requestIP(request), UserAgent: boundedUserAgent(request)}
+	lifetime := sessionLifetime
+	if remember {
+		lifetime = rememberedSessionLifetime
+		g.dropRememberedOverflowLocked()
+	}
+	g.sessions[hash] = sessionRecord{ID: fmt.Sprintf("%x", hash[:8]), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(lifetime), RemoteIP: requestIP(request), UserAgent: boundedUserAgent(request), Remembered: remember}
+	if remember {
+		if err := g.persistRememberedLocked(); err != nil {
+			delete(g.sessions, hash)
+			return "", fmt.Errorf("remember session: %w", err)
+		}
+	}
 	return token, nil
 }
 

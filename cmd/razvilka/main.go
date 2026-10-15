@@ -454,6 +454,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err := gate.ConfigureCredentials(*credentialsPath); err != nil {
 		log.Fatalf("administrator credentials: %v", err)
 	}
+	if err := gate.ConfigureRememberedSessions(filepath.Join(filepath.Dir(*credentialsPath), "admin.sessions.json")); err != nil {
+		log.Printf("remembered panel sessions not loaded: %v", err)
+	}
 	cat, err := loadCatalog(*catalogPath)
 	if err != nil {
 		log.Fatal(err)

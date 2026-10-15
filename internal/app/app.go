@@ -976,12 +976,13 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Remember bool   `json:"remember"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	session, err := a.Security.Login(in.Username, in.Password, r)
+	session, err := a.Security.LoginRemembered(in.Username, in.Password, in.Remember, r)
 	if err != nil {
 		if errors.Is(err, security.ErrLoginRateLimited) {
 			w.Header().Set("Retry-After", "60")
@@ -991,7 +992,11 @@ func (a *App) authLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid username or password", http.StatusUnauthorized)
 		return
 	}
-	security.SetSessionCookie(w, r, session)
+	if in.Remember {
+		security.SetRememberedSessionCookie(w, r, session)
+	} else {
+		security.SetSessionCookie(w, r, session)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "username": strings.TrimSpace(in.Username)})
 }
 

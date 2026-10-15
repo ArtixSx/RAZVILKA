@@ -352,7 +352,7 @@ async function submitLogin(event) {
   const action = beginAuthAction(); if (!action) return;
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   try {
-    await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: $('#loginUsername').value.trim(), password: $('#loginPassword').value }) });
+    await api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username: $('#loginUsername').value.trim(), password: $('#loginPassword').value, remember: !!$('#loginRemember')?.checked }) });
     if (!authActionCurrent(action)) return;
     $('#loginPassword').value = ''; hideAuth(); await refreshAll(); if (!authActionCurrent(action) || !state.authenticated) return;
     await showPlan(); if (authActionCurrent(action) && state.authenticated) startConnectionStream();

@@ -50,6 +50,7 @@
 <form class="auth-form" id="loginForm">
 <label><span>Логин</span><input autocomplete="username" id="loginUsername" required=""/></label>
 <label><span>Пароль</span><input autocomplete="current-password" id="loginPassword" required="" type="password"/></label>
+<label class="check-row"><input id="loginRemember" type="checkbox"/><span>Запомнить это устройство на 30 дней</span></label>
 <button class="primary" type="submit">Войти</button>
 </form>
 <details class="recovery-login"><summary>Забыли пароль?</summary><p>Recovery key показывается установщиком и может быть перевыпущен в настройках. Он не является SSH-паролем роутера.</p><div class="recovery-row"><input autocomplete="off" id="recoveryToken" placeholder="Recovery key"/><button class="secondary" id="useRecovery" type="button">Войти временно</button></div><form class="auth-form recovery-reset" id="recoveryResetForm"><label><span>Новый логин</span><input id="recoveryUsername" maxlength="64" minlength="3" required="" value="admin"/></label><label><span>Новый пароль</span><input autocomplete="new-password" id="recoveryPassword" required="" type="password"/></label><label><span>Повторите пароль</span><input autocomplete="new-password" id="recoveryPasswordRepeat" required="" type="password"/></label><button class="primary" type="submit">Сбросить пароль и войти</button></form></details>
