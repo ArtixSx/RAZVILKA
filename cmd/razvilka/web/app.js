@@ -179,7 +179,9 @@ async function api(url, options = {}) {
   const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
   const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  if (typeof nodeBrowseGuardRequest === 'function') nodeBrowseGuardRequest(url, method);
   if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
+  if (mutation && typeof invalidateSavedNodeBrowse === 'function') invalidateSavedNodeBrowse(!url.startsWith('/api/v1/auth/'));
   if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
   if (mutation && typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
   const headers = new Headers(options.headers || {});
@@ -228,6 +230,7 @@ async function api(url, options = {}) {
     throw error;
   } finally {
     if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
+    if (mutation && typeof invalidateSavedNodeBrowse === 'function') invalidateSavedNodeBrowse(!url.startsWith('/api/v1/auth/'));
     if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
     if (mutation && typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
     clearTimeout(timer);
@@ -964,6 +967,7 @@ function panelSectionState(key, phase, error = null) {
   const previous = state.dataLoad[key] || {};
   state.dataLoad[key] = { loaded: previous.loaded === true || phase === 'ready', phase,
     message: error?.message || '', updatedAt: phase === 'ready' ? Date.now() : previous.updatedAt };
+  if (key === 'nodes' && typeof nodeBrowseSectionChanged === 'function') nodeBrowseSectionChanged(phase);
   if (key === 'devices' && typeof deviceBrowseSectionChanged === 'function') deviceBrowseSectionChanged(phase);
 }
 
@@ -1015,6 +1019,7 @@ function renderPanelLoad() {
   };
   if (state.currentView === 'sources') render('panel-sources', renderSources);
   if (state.currentView === 'devices') render('panel-devices', renderDevices);
+  if (state.currentView === 'nodes') render('panel-nodes', renderNodes);
   render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
   render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
   const values = panelViewKeys().map(key => state.dataLoad?.[key]).filter(Boolean);
@@ -1255,6 +1260,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
     hideAuth();
     document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
     if (typeof loadSavedPanelSnapshot === 'function') void loadSavedPanelSnapshot(generation, options);
+    if (panelViewKeys().includes('nodes') && typeof loadSavedNodeBrowse === 'function') void loadSavedNodeBrowse(generation, options);
     if (panelViewKeys().includes('devices') && typeof loadSavedDeviceBrowse === 'function') void loadSavedDeviceBrowse(generation, options);
     // This already has its own single-flight scheduler and auth epoch.
     // Never await it here: a slow job-status endpoint is an isolated failure.
@@ -3599,6 +3605,7 @@ function nodeRecoveryBanner(recovery) {
 }
 
 function renderNodes() {
+  if (typeof renderSavedNodeBrowse === 'function' && renderSavedNodeBrowse()) return;
   renderNodeBrowser();
 }
 
@@ -3618,6 +3625,7 @@ function renderNodeGroups(groups, nodes) {
 }
 
 function openNodeGroup(id = '') {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const nodes = (state.nodes?.nodes || []).filter((node) => !node.disabled);
   if (!nodes.length) return showDetails({ error: 'Сначала добавьте и включите хотя бы один узел.' }, 'Группа не создана');
   const group = (state.nodes?.groups || []).find((item) => item.id === id);
@@ -3636,6 +3644,7 @@ function openNodeGroup(id = '') {
 
 async function saveNodeGroup(event) {
   event.preventDefault();
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const id = $('#nodeGroupID').value;
   const nodeIDs = $$('#nodeGroupMembers input:checked').map((input) => input.value);
   if (!nodeIDs.length) return showDetails({ error: 'Выберите хотя бы один узел.' }, 'Группа не сохранена');
@@ -3651,8 +3660,11 @@ async function saveNodeGroup(event) {
 }
 
 async function deleteNodeGroup(id) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
+  const browseToken = typeof nodeBrowseActionToken === 'function' ? nodeBrowseActionToken() : null;
   const group = (state.nodes?.groups || []).find((item) => item.id === id);
   if (!group || !await askConfirmation('Удалить группу узлов?', 'Сами узлы останутся. Если группа назначена сервису, сначала выберите для него другой маршрут.', 'Удалить')) return;
+  if (typeof nodeBrowseActionCurrent === 'function' && !nodeBrowseActionCurrent(browseToken)) return;
   try {
     await api(`/api/v1/node-groups/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE_NODE_GROUP' }) });
     state.routeOptions = await api('/api/v1/routes/options');
@@ -3664,22 +3676,21 @@ async function refreshNodes() {
   invalidatePanelReads();
   const epoch = panelReads.epoch, auth = state.authGeneration || 0;
   const current = () => state.authenticated && epoch === panelReads.epoch && auth === (state.authGeneration || 0);
+  panelSectionState('nodes', 'loading');
   const button = $('#refreshNodes');
   button.disabled = true;
-  button.textContent = 'Обновление…';
   try {
-    const [nodes, routes] = await Promise.all([readPanelResource('/api/v1/nodes'), readPanelResource('/api/v1/routes/options')]);
+    const nodes = await readPanelResource('/api/v1/nodes');
     if (!current()) return;
-    state.nodes = nodes; state.routeOptions = routes;
-    renderNodes();
+    acceptPanelSection('nodes', nodes, Date.now()); renderNodes();
+    try { const routes = await readPanelResource('/api/v1/routes/options'); if (current()) state.routeOptions = routes; } catch (_) { /* Independent of list validity. */ }
   } catch (error) {
     if (!current()) return;
-    if (error.status === 401) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return; }
-    showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Узлы не обновлены');
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Обновить';
-  }
+    if (error.status === 401 || error.status === 403) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return; }
+    panelSectionState('nodes', panelBusy(error) ? 'busy' : 'error', error);
+    if (typeof loadSavedNodeBrowse === 'function') void loadSavedNodeBrowse(panelLoad.generation);
+    renderNodes();
+  } finally { button.disabled = false; }
 }
 
 function nodeByID(id) {
@@ -3687,6 +3698,7 @@ function nodeByID(id) {
 }
 
 function openNodeEdit(id) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const node = nodeByID(id);
   if (!node) return;
   $('#nodeEditID').value = id;
@@ -3697,6 +3709,7 @@ function openNodeEdit(id) {
 }
 
 function openNodeCheck(id, serviceHint) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const node = nodeByID(id);
   if (!node || node.disabled || node.state === 'expired') return;
   closeNodeCheck();
@@ -3736,6 +3749,7 @@ function closeNodeCheck() {
 
 async function runNodeCheck(event) {
   event.preventDefault();
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const button = $('#nodeCheckRun');
   const id = $('#nodeCheckID').value;
   const serviceID = $('#nodeCheckService').value;
@@ -3769,6 +3783,7 @@ async function runNodeCheck(event) {
 }
 
 async function previewNodeRoute() {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const flow = state.nodeFlow;
   const id = $('#nodeCheckID').value;
   const serviceID = $('#nodeCheckService').value;
@@ -3828,6 +3843,7 @@ function closeNodeRoute() {
 }
 
 async function applyNodeRoute() {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const current = state.nodeRouteReview;
   const review = current?.review;
   if (!current || current.busy || !current.ready || !review?.review_token || Date.now() >= new Date(review.expires_at).getTime()) return;
@@ -3894,6 +3910,7 @@ async function syncNodeFeed(event) {
 
 async function saveNodeAlias(event) {
   event.preventDefault();
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const id = $('#nodeEditID').value;
   try {
     await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ alias: $('#nodeEditAlias').value.trim() }) });
@@ -3903,10 +3920,13 @@ async function saveNodeAlias(event) {
 }
 
 async function toggleNodeDisabled(id, disabled) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
+  const browseToken = typeof nodeBrowseActionToken === 'function' ? nodeBrowseActionToken() : null;
   const node = nodeByID(id);
   const next = !disabled;
   const verb = next ? 'Отключить' : 'Включить';
   if (!node || !await askConfirmation(`${verb} узел?`, next ? 'Узел останется в локальном хранилище, но будущий подбор не сможет его использовать. Рабочие маршруты сейчас не изменятся.' : 'Узел вернётся только в очередь проверки. Он не станет рабочим и не будет назначен сервисам автоматически.', verb)) return;
+  if (typeof nodeBrowseActionCurrent === 'function' && !nodeBrowseActionCurrent(browseToken)) return;
   try {
     await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ disabled: next }) });
     await refreshNodes();
@@ -3920,10 +3940,14 @@ function clearNodeReveal() {
 }
 
 async function revealNode(id) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
+  const browseToken = typeof nodeBrowseActionToken === 'function' ? nodeBrowseActionToken() : null;
   const node = nodeByID(id);
   if (!node || !await askConfirmation('Показать приватную конфигурацию?', 'Она может содержать UUID, пароль и адрес сервера. Показывайте её только на доверенном устройстве; данные не будут записаны в журнал панели.', 'Показать')) return;
+  if (typeof nodeBrowseActionCurrent === 'function' && !nodeBrowseActionCurrent(browseToken)) return;
   try {
     const result = await api(`/api/v1/nodes/${encodeURIComponent(id)}/reveal`, { method: 'POST', body: JSON.stringify({ confirm: 'REVEAL_NODE' }) });
+    if (typeof nodeBrowseActionCurrent === 'function' && !nodeBrowseActionCurrent(browseToken)) return;
     $('#nodeRevealTitle').textContent = nodeDisplayName(node);
     $('#nodeRevealContent').value = JSON.stringify(result.config, null, 2);
     $('#nodeRevealDialog').showModal();
@@ -3944,9 +3968,12 @@ async function copyRevealedNode() {
 }
 
 async function deleteNode(id) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
+  const browseToken = typeof nodeBrowseActionToken === 'function' ? nodeBrowseActionToken() : null;
   if(typeof workflowDelete==='function')return workflowDelete([id],'selected');
   const node = nodeByID(id);
   if (!node || !await askConfirmation('Удалить сохранённый узел?', 'Будут удалены локальная копия и её секрет. Черновик Sing-box и рабочие маршруты не меняются; при повторном импорте узел появится снова.', 'Удалить')) return;
+  if (typeof nodeBrowseActionCurrent === 'function' && !nodeBrowseActionCurrent(browseToken)) return;
   try {
     await api(`/api/v1/nodes/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE_NODE' }) });
     await refreshNodes();
@@ -5327,6 +5354,8 @@ function bindEvents() {
   $('#connectionFilter').addEventListener('input', renderConnections);
   $('#showClosed').addEventListener('change', renderConnections);
   $('#nodeSearch').addEventListener('input', renderNodes);
+  $('#nodeSavedSearch').addEventListener('input', renderNodes);
+  $('#nodeSavedRefresh').addEventListener('click', refreshNodes);
   $('#nodeStateFilter').addEventListener('change', renderNodes);
   $('#refreshNodes').addEventListener('click', refreshNodes);
   $('#nodeOpenImport').addEventListener('click', openQuickNodeImport);

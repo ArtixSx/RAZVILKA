@@ -156,6 +156,7 @@ https://telegram.org" rows="2" spellcheck="false"></textarea><small>До 12 са
 <section class="view" data-console-browser-mode="all" id="view-nodes"><p class="ui3-workspace-lead">Один каталог подключений для всех сервисов. Выберите сервис, чтобы увидеть результаты именно для него.</p><div aria-label="Раздел подключений" class="console-tabs" role="group"><button class="active" data-console-node-tab="browse" type="button"><svg aria-hidden="true" class="ui-icon"><use href="#i-server"></use></svg> Браузер</button><button data-console-node-tab="groups" type="button"><svg aria-hidden="true" class="ui-icon"><use href="#i-layers"></use></svg> Резервные группы</button><button data-view="providers" type="button"><svg aria-hidden="true" class="ui-icon"><use href="#i-link"></use></svg> Добавить источник</button></div>
 <article class="panel full-panel node-workspace">
 <div class="node-workspace-head"><div><h2>Ваши подключения</h2><p>Найдите рабочий сервер и выберите, для каких сервисов его использовать.</p></div><button class="primary" id="nodeOpenImport" type="button">+ Добавить подключение</button></div>
+<section id="nodeSavedBrowse" hidden aria-label="Сохранённый список подключений"><p id="nodeSavedNotice" role="status"></p><div class="community-search"><input id="nodeSavedSearch" aria-label="Поиск в сохранённых подключениях" placeholder="Название или протокол"/><button id="nodeSavedRefresh" class="secondary" type="button">Прочитать список заново</button></div><p><button class="secondary" data-view="services" type="button">Текущие задания и остановка</button></p><div class="node-list" id="nodeSavedList"></div><p id="nodeSavedEmpty"></p></section>
 <div aria-label="Каталог подключений" class="node-tabs" role="tablist">
 <button aria-controls="nodeBrowserContent" aria-selected="true" data-node-tab="all" role="tab" type="button">Каталог</button>
 <button aria-controls="nodeServiceSelectors" aria-selected="false" data-node-tab="services" role="tab" type="button">По сервисам</button>
@@ -665,6 +666,7 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <script src="/app-update-ui.js?v=0.20.0"></script>
 <script src="/panel-snapshot.js?v=0.20.0"></script>
 <script src="/panel-device-browse.js?v=0.20.0"></script>
+<script src="/panel-node-browse.js?v=0.20.0"></script>
 <script src="/panel-community-browse.js?v=0.20.0"></script>
 <script src="/app.js?v=0.20.0"></script>
 <script src="/cloudflare-accounts.js?v=0.20.0"></script>

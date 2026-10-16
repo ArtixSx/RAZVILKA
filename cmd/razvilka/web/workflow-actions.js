@@ -91,6 +91,7 @@ function workflowOpenFetch(preset='',url=''){
 }
 function workflowSourceChanged(){const custom=$('#r4FetchSource').value==='custom';$('#r4PrivateSource').hidden=!custom;$('#r4FetchURL').required=custom;}
 async function workflowFetch(event){
+  const browseToken=typeof nodeBrowseActionToken==='function'?nodeBrowseActionToken():null;
   event.preventDefault();if(workflowState.fetchBusy)return;
   const serviceID=$('#r4FetchService').value,source=$('#r4FetchSource').value,limit=Number($('#r4FetchLimit').value);
   if(!serviceID||!Number.isInteger(limit)||limit<1||limit>64||!$('#r4FetchConsent').checked){$('#r4FetchStatus').textContent='Выберите сервис, от 1 до 64 проверок и подтвердите разрешение.';return;}
@@ -102,6 +103,7 @@ async function workflowFetch(event){
     const status=await workflowRequest('/api/v1/node-checks/current');
     if(status.fetch_and_check!==true)throw new Error('Backend не поддерживает «Загрузить и проверить». Установите проверенную сборку R5. Отдельная загрузка не выдаётся за сетевую проверку.');
     if(['queued','interrupted','running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка. Дождитесь завершения.');
+    if(typeof nodeBrowseActionCurrent==='function'&&!nodeBrowseActionCurrent(browseToken))return;
     const result=await workflowRequest('/api/v1/node-checks',{method:'POST',body:JSON.stringify(body)});
     if(!workflowSession(epoch))return;
     if(!result.job?.id)throw new Error('Роутер не подтвердил создание задачи. Проверьте её состояние перед повтором.');
@@ -112,6 +114,7 @@ async function workflowFetch(event){
   finally{if(seq===workflowState.fetchSeq)workflowState.fetchBusy=false;if(workflowSession(epoch)&&seq===workflowState.fetchSeq){$('#r4FetchSubmit').disabled=false;renderWorkflowControls();}}
 }
 async function workflowDelete(ids,mode='selected'){
+  if(typeof nodeBrowseActionsAllowed==='function'&&!nodeBrowseActionsAllowed())return;
   if(workflowState.deleteBusy)return;
   const isAllVLESS=mode==='all-vless';
   const all=isAllVLESS?workflowAllVLESS().map(n=>n.id):[...new Set(ids)],chosen=isAllVLESS?[]:all.slice(0,64),seq=++workflowState.deleteSeq,epoch=workflowState.epoch;
@@ -134,6 +137,7 @@ async function workflowDelete(ids,mode='selected'){
   finally{if(workflowSession(epoch)){workflowState.deleteBusy=false;renderWorkflowControls();}}
 }
 async function workflowCommitDelete(){
+  if(typeof nodeBrowseActionsAllowed==='function'&&!nodeBrowseActionsAllowed())return;
   const intent=workflowState.deletion;if(!intent||workflowState.deleteBusy)return;
   const epoch=workflowState.epoch;workflowState.deleteBusy=true;$('#r4DeleteCommit').disabled=true;
   $('#r4DeleteStatus').textContent='Повторно проверяем редакцию, использование и результаты перед удалением…';
@@ -198,6 +202,8 @@ function workflowBulkControls(){
   if(hint)hint.textContent='Проверка открывает выбранный веб-сценарий через узел; пинг измеряет только соединение. Для обычной проверки можно выбрать до 64 подключений. Массовые действия для всех VLESS раскрываются отдельно и не применяют маршруты.';
 }
 async function workflowCheckAllVLESS(){
+  const browseToken=typeof nodeBrowseActionToken==='function'?nodeBrowseActionToken():null;
+  if(typeof nodeBrowseActionsAllowed==='function'&&!nodeBrowseActionsAllowed())return;
   if(workflowState.bulkBusy||['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state))return;
   const epoch=workflowState.epoch,serviceID=$('#nodeBrowserService').value;
   if(!serviceID)return;
@@ -220,6 +226,7 @@ async function workflowCheckAllVLESS(){
     const service=(state.services||[]).find(s=>s.id===serviceID);
     const yes=await askConfirmation('Проверить все VLESS?',`${retained?'Показан ранее полученный список. Перед приёмом роутер проверит его актуальность; задание дождётся освобождения сети. ':''}В очереди: ${eligible.length} из ${all.length} VLESS. Сервис: ${service?.name||serviceID} (веб). Все источники и страницы, фильтры не учитываются. Отключённые и истёкшие записи пропускаются. Состав фиксируется при приёме; новые импорты не добавляются. Задание сохранится на роутере. После перезапуска тот же список проверяется заново для текущей сети. Маршруты не изменяются.`,'Проверить все');
     if(!yes||!workflowSession(epoch))return;
+    if(typeof nodeBrowseActionCurrent==='function'&&!nodeBrowseActionCurrent(browseToken))return;
     submitted=true;
     const selection=/^[a-f0-9]{64}$/.test(snapshot.check_catalog_digest||'')?{catalog_digest:snapshot.check_catalog_digest}:{};
     const response=await submitNodeCheckRequest({scope:'all-vless',generation:snapshot.generation,...selection,mode:'service',service_id:serviceID,confirm:'CHECK_ALL_VLESS'});

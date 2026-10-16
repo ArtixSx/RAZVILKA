@@ -85,6 +85,7 @@ type panelSnapshotState struct {
 	latest        atomic.Pointer[panelSavedPublication]
 	devices       atomic.Pointer[panelSavedPublication]
 	community     atomic.Pointer[panelSavedPublication]
+	nodes         atomic.Pointer[panelSavedPublication]
 	autonomy      atomic.Pointer[panelAutonomyPublication]
 	autonomyWake  chan struct{}
 	inventory     atomic.Pointer[panelInventoryPublication]

@@ -66,6 +66,7 @@ func (a *App) nodeList(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	a.capturePanelNodeBrowse(snapshot, time.Now())
 	quarantined, expired, disabled, verified, degraded, stale := 0, 0, 0, 0, 0, 0
 	profile := systemprobe.DetectWANProfile().ID
 	for index := range snapshot.Nodes {

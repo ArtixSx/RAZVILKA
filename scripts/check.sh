@@ -113,6 +113,8 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-panel-snapshot-ui.mjs
   node scripts/test-panel-device-browse-ui.mjs
   node scripts/test-panel-community-browse-ui.mjs
+  node --check cmd/razvilka/web/panel-node-browse.js
+  node scripts/test-panel-node-browse-ui.mjs
   node scripts/test-ux-stage1.mjs
   node scripts/test-bundle-integration.mjs
   node scripts/test-warp-generation-ui.mjs

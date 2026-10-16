@@ -330,6 +330,7 @@ function renderNodeBatchStatus() {
 }
 
 async function startNodeBrowserCheck(mode, explicitIDs) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   if (['queued', 'interrupted', 'running', 'canceling'].includes(nodeBrowser.job?.state)) return;
   const nodes = state.nodes?.nodes || [];
   const selected = explicitIDs || (nodeBrowser.selected.size ? [...nodeBrowser.selected] : nodeBrowser.visible);
@@ -419,7 +420,14 @@ async function pollNodeBrowserChecks() {
         // Failure of catalog metadata must not overwrite an accepted job's
         // progress. Keep prior data for failed parts; expiry still advances.
         ['nodes','routeOptions','nodeFeeds'].forEach((key,index) => {
-          if (reads[index].status === 'fulfilled') state[key] = reads[index].value;
+          if (reads[index].status === 'fulfilled') {
+            if (key === 'nodes' && typeof acceptPanelSection === 'function') acceptPanelSection(key, reads[index].value, Date.now());
+            else state[key] = reads[index].value;
+          } else if (key === 'nodes' && typeof panelSectionState === 'function') {
+            const error = reads[index].reason;
+            panelSectionState(key, typeof panelBusy === 'function' && panelBusy(error) ? 'busy' : 'error', error);
+            if (typeof loadSavedNodeBrowse === 'function' && typeof panelLoad !== 'undefined') void loadSavedNodeBrowse(panelLoad.generation);
+          }
         });
         if (failed.length) {
           const busy = failed.every(row => row.reason?.status === 409 && row.reason?.payload?.code === 'RESTORE_OPERATION_BUSY');
@@ -431,7 +439,13 @@ async function pollNodeBrowserChecks() {
       renderNodes();
     } catch (error) {
       if (!current()) return;
-      if (error.status === 401) { stopNodeBrowserRefresh(true); showAuth({ ...state.status, authenticated: false, auth_required: true }, 'Сессия завершилась. Войдите снова.'); return; }
+      if (error.status === 401 || error.status === 403) { stopNodeBrowserRefresh(true); showAuth({ ...state.status, authenticated: false, auth_required: true }, 'Сессия завершилась. Войдите снова.'); return; }
+      // An ordinary job-status failure cannot revoke a successful node list.
+      // A shared admission fence does make the protected list unavailable.
+      if (typeof panelSectionState === 'function' && (error.status === 409 && error.payload?.code === 'RESTORE_OPERATION_BUSY' || error.status === 503 && ['DATAPLANE_RECOVERY_REQUIRED','PRIVATE_BACKUP_RECOVERY_REQUIRED'].includes(error.payload?.code))) {
+        panelSectionState('nodes', 'busy', error);
+        if (typeof loadSavedNodeBrowse === 'function' && typeof panelLoad !== 'undefined') void loadSavedNodeBrowse(panelLoad.generation);
+      }
       renderNodes(); // Local expiry still advances when the router is busy.
       $('#nodeBatchMessage').textContent = `Не удалось обновить проверку: ${error.message}`;
       delay = 4000;
@@ -620,6 +634,7 @@ function bindNodeBrowser() {
 }
 
 function openQuickNodeImport() {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   $('#nodeQuickImportStatus').textContent = '';
   $('#nodeQuickImportDialog').showModal();
   $('#nodeQuickImportText').focus();
@@ -640,6 +655,7 @@ async function loadQuickNodeFile(event) {
 
 async function importQuickNodes(event) {
   event.preventDefault();
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   if ($('#nodeQuickImportSubmit').disabled) return;
   const profile = $('#nodeQuickImportText').value.trim();
   const epoch = nodeBrowser.epoch;
@@ -675,6 +691,7 @@ function renderNodeAutofallback() {
 }
 
 function openNodeGroupUse(id, serviceHint) {
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const group = (state.nodes?.groups || []).find(item => item.id === id);
   const services = (state.routeOptions || []).find(option => option.id === `sing-box:${id}`)?.services || [];
   if (!group || !services.length) return showDetails({ error: 'Сначала проверьте группу для нужного сервиса.' }, 'Выбор группы');
@@ -687,6 +704,7 @@ function openNodeGroupUse(id, serviceHint) {
 
 async function chooseNodeGroupForService(event) {
   event.preventDefault();
+  if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   if ($('#nodeGroupUseSave').disabled) return;
   const id = $('#nodeGroupUseID').value;
   const service = state.services.find(item => item.id === $('#nodeGroupUseService').value);
