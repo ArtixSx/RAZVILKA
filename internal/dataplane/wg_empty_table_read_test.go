@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -164,6 +166,79 @@ func TestWGEmptyTableStock44IsUsedByFullRepeatedInactiveObserver(t *testing.T) {
 				}
 			} else if err != nil || plainReads != 12 || processReads != 2 {
 				t.Fatal("full observer skipped negotiated table bookends", err, plainReads, processReads)
+			}
+		})
+	}
+}
+
+func TestWGEmptyTableStock44RejectsNumericAliasesAndChangedNameSources(t *testing.T) {
+	previous := rtTablesSources
+	defer func() { rtTablesSources = previous }()
+	for _, mode := range []string{"ordinary-alias", "numeric-alias", "nested-numeric-alias", "malformed", "oversized", "changed-before-retry", "changed-after-retry", "new-file", "same-bytes-replacement", "json-success-drift"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			rtTablesSources = []string{root}
+			path := filepath.Join(root, "rt_tables")
+			data := []byte("255 local\n254 main\n253 default\n207 harmless\n")
+			if mode == "numeric-alias" {
+				data = []byte("207 206\n") // v4.4 resolves this BEFORE strtoul("206").
+			} else if mode == "malformed" {
+				data = []byte("not valid syntax\n")
+			} else if mode == "oversized" {
+				data = []byte(strings.Repeat("#", (64<<10)+1))
+			}
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			directory := filepath.Join(root, "rt_tables.d")
+			if mode == "nested-numeric-alias" {
+				if err := os.Mkdir(directory, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(directory, "conflict.conf"), []byte("207 206\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			a := NewWireGuardAdapter(nil, t.TempDir())
+			a.IP = "ip"
+			calls := 0
+			a.Runner = networkCleanupRunner(func(context.Context, string, ...string) ([]byte, error) {
+				calls++
+				if mode == "changed-before-retry" && calls == 1 || mode == "changed-after-retry" && calls == 2 || mode == "json-success-drift" && calls == 1 {
+					if err := os.WriteFile(path, []byte("208 harmless\n"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if mode == "new-file" && calls == 1 {
+					if err := os.Mkdir(directory, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if mode == "same-bytes-replacement" && calls == 1 {
+					if err := os.Rename(path, path+".old"); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, data, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if mode == "json-success-drift" {
+					return []byte("[]"), nil
+				}
+				if calls == 1 {
+					return []byte("Option \"-N\" is unknown, try \"ip -help\".\n"), errors.New("exit status 255")
+				}
+				return nil, nil
+			})
+			err := a.verifyWGEmptyNumericTable(context.Background(), 206, 4)
+			if (err == nil) != (mode == "ordinary-alias") {
+				t.Fatal("ambiguous/changed numeric selection granted absence", mode, err)
+			}
+			if slices.Contains([]string{"numeric-alias", "nested-numeric-alias", "malformed", "oversized"}, mode) && calls != 0 {
+				t.Fatal("ambiguous name source reached original command")
+			}
+			if slices.Contains([]string{"changed-before-retry", "new-file", "same-bytes-replacement", "json-success-drift"}, mode) && calls != 1 {
+				t.Fatal("changed name source retried", calls)
 			}
 		})
 	}

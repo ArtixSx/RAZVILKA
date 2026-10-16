@@ -19,18 +19,22 @@ func (a *WARPWireGuardAdapter) verifyWGEmptyNumericTable(ctx context.Context, ta
 	if err != nil || table != spec.Table && table != spec.EndpointTable && table != 219 {
 		return errors.Join(err, errWGInactiveUnknown)
 	}
+	names, err := wgEmptyTableNames(ctx, table)
+	if err != nil {
+		return err
+	}
 	data, err := a.readWGCompleteNumericTable(ctx, table, family)
 	if err == nil {
 		rows, parseErr := parseWGEndpointRoutes(data)
 		if parseErr != nil || len(rows) != 0 {
 			return errors.Join(parseErr, errWGInactiveUnknown)
 		}
-		return ctx.Err()
+		return wgEmptyTableNamesCurrent(ctx, table, names)
 	}
 	if !wgEndpointUnknownOption(data, "-N") && !wgEndpointUnknownOption(data, "-j") {
 		return err
 	}
-	if err := ctx.Err(); err != nil {
+	if err := wgEmptyTableNamesCurrent(ctx, table, names); err != nil {
 		return err
 	}
 	args := []string{}
@@ -42,5 +46,5 @@ func (a *WARPWireGuardAdapter) verifyWGEmptyNumericTable(ctx context.Context, ta
 	if err != nil || len(data) != 0 {
 		return errors.Join(err, errWGInactiveUnknown)
 	}
-	return ctx.Err()
+	return wgEmptyTableNamesCurrent(ctx, table, names)
 }
