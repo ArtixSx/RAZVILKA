@@ -366,6 +366,11 @@ func selectedReviewCompatibility(state State, candidate Candidate, selection Sel
 }
 
 func selectedReviewMaterial(review compatibilityReview, d components.NFQWSRuntimeDescriptor) error {
+	// Domain compatibility is separate evidence and cannot authorize the old
+	// CIDR/source issuer even when every component asset is unchanged.
+	if review.Domain != nil {
+		return ErrSelectedCandidateChanged
+	}
 	if d.ReceiptID == "" || d.ManifestSHA256 == "" || len(d.Lua) != 3 || len(d.Blobs) != 2 || review.Binary.Path != d.Executable.Path || review.Binary.SHA256 != d.Executable.SHA256 || len(review.Assets) != 5 {
 		return ErrSelectedCandidateChanged
 	}

@@ -37,6 +37,8 @@ type SupervisedCompatibilityProvider struct {
 	// Written only after successful original completion retirement. Reopening
 	// saved receipt data never manufactures this process-lifetime proof.
 	managedRetiredSession *compatibilitySession
+	// Only the closed domain constructor binds a separate child-state producer.
+	domainMaterial *NFQWSDomainMaterial
 	// Tests use their own fixed helper entry in the Go test executable.
 	// Production always uses the early CORE CLI dispatch shown below.
 	helperPrefix []string
@@ -77,6 +79,13 @@ func compatibilityProtectedReview(statePath string, review compatibilityReview) 
 	for _, file := range append([]compatibilityFileBinding{review.Binary}, review.Assets...) {
 		if err := compatibilityProtectedPath(file.Path, false); err != nil {
 			return err
+		}
+	}
+	if review.Domain != nil {
+		for _, file := range []compatibilityFileBinding{review.Domain.Include, review.Domain.Exclude} {
+			if err := compatibilityProtectedPath(file.Path, false); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -136,7 +145,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	if binary != p.review.Binary.Path {
 		return result, errors.New("compatibility binary differs from owner approval")
 	}
-	phase, err := compatibilityCommandPhase(p.review.BaseArguments, args)
+	phase, err := compatibilityReviewCommandPhase(p.review, args)
 	if err != nil {
 		return result, err
 	}

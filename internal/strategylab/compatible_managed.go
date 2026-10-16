@@ -160,6 +160,14 @@ func (p *SupervisedCompatibilityProvider) managedMaterialCurrent(ctx context.Con
 	if err := invocation.forwardCurrent(ctx); err != nil {
 		return err
 	}
+	if p.review.Domain != nil {
+		if p.domainMaterial == nil {
+			return ErrNFQWSDomainMaterial
+		}
+		if err := p.domainMaterial.forwardCurrent(ctx); err != nil {
+			return err
+		}
+	}
 	ref := p.managedControl.Reference()
 	if ref.InstallationID != p.review.InstallationID || ref.Sequence != p.review.Sequence {
 		return errAdaptiveManagedValidator
@@ -170,7 +178,7 @@ func (p *SupervisedCompatibilityProvider) managedMaterialCurrent(ctx context.Con
 	if err := invocation.runtime.Check(ctx); err != nil {
 		return err
 	}
-	if !compatibilityJSONEqual(invocation.runtime.Descriptor(), p.managedDescriptor) || selectedReviewMaterial(p.review, p.managedDescriptor) != nil {
+	if !compatibilityJSONEqual(invocation.runtime.Descriptor(), p.managedDescriptor) || p.managedReviewMaterial(ctx) != nil {
 		return errAdaptiveManagedValidator
 	}
 	return invocation.forwardCurrent(ctx)
