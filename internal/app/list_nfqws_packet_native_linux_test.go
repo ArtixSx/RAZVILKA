@@ -104,7 +104,7 @@ func TestNFQWSPacketNativeOriginalApplicationBinding(t *testing.T) {
 		}
 		_, comparison, routes, _ := defaultRouteNFQWSComparisonFixture("tcp", "ipv4")
 		routes[0].CIDRs = []string{"1.1.1.1/32"}
-		compiled, err := CompileNFQWSIPv4LANPacketPolicy(before, snapshot, routes, comparison.Paths, time.Now())
+		compiled, err := CompileNFQWSIPv4LANPacketPolicy(before, snapshot, routes, map[string]DefaultRoutePath{"listed": comparison.Paths["listed"]}, time.Now())
 		if err != nil || compiled == nil || compiled.LAN() == nil || len(compiled.Rules()) == 0 {
 			t.Fatal("comparison-only compiler", err)
 		}
