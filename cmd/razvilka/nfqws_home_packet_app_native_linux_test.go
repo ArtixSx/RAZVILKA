@@ -99,6 +99,9 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	if os.Getenv("RAZVILKA_NFQ_HOME_APP") != "stock-nc1812" {
 		t.Skip("coordinator-owned stock ARM64 genuine managed receipt required")
 	}
+	if _, alarm := t.Deadline(); alarm {
+		t.Fatal("stage=preflight code=use_test_timeout_0_to_retain_original_cleanup")
+	}
 	if os.Geteuid() != 0 || runtime.GOARCH != "arm64" {
 		t.Fatal("stage=preflight code=actual_root_arm64_required")
 	}
@@ -145,7 +148,12 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	if config.ValidateListNetworkPolicy(&policy) != nil {
 		t.Fatal("stage=preflight code=invalid_explicit_policy")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// Setup, a production Apply (bounded separately to eight minutes), and
+	// retained Check/Stop must fit in one fixed body window. The old five-minute
+	// whole-test caller canceled real Apply573 while its original rollback was
+	// still running. No production or material deadline is extended here, and
+	// the original retirement keeper remains independent of this body expiry.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	owner := components.New()
 	owner.StateDir = stateRoot
