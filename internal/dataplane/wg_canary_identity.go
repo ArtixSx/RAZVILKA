@@ -3,7 +3,6 @@ package dataplane
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -54,21 +53,12 @@ func (a *WARPWireGuardAdapter) inspectWGProbeIdentity(ctx context.Context, profi
 		return wgCanaryIdentityInspectionError("public identity inspection is unavailable")
 	}
 	// A missing companion CLI must not hide a live interface of that backend.
-	data, err := a.run(ctx, a.ip(), "-j", "-d", "link", "show")
-	if err != nil || len(data) > 1<<20 {
-		return wgCanaryIdentityInspectionError("link inventory is unavailable")
-	}
-	var links []struct {
-		Name     string `json:"ifname"`
-		LinkInfo struct {
-			Kind string `json:"info_kind"`
-		} `json:"linkinfo"`
-	}
-	if json.Unmarshal(data, &links) != nil || links == nil || len(links) > 4096 {
-		return wgCanaryIdentityInspectionError("link inventory is invalid")
+	links, err := a.wgProbeLinks(ctx)
+	if err != nil {
+		return errors.Join(wgCanaryIdentityInspectionError("link inventory is unavailable"), err)
 	}
 	for _, link := range links {
-		if (link.LinkInfo.Kind == "wireguard" || link.LinkInfo.Kind == "amneziawg") && tools[link.LinkInfo.Kind] == "" {
+		if (link.kind == "wireguard" || link.kind == "amneziawg") && tools[link.kind] == "" {
 			return wgCanaryIdentityInspectionError("cannot inspect an existing tunnel backend")
 		}
 	}
@@ -90,7 +80,7 @@ func (a *WARPWireGuardAdapter) inspectWGProbeIdentity(ctx context.Context, profi
 			return err
 		}
 		for _, link := range links {
-			if link.LinkInfo.Kind == kind && !identities[link.Name] {
+			if link.kind == kind && !identities[link.name] {
 				return wgCanaryIdentityInspectionError("public inventory omitted a kernel tunnel")
 			}
 		}

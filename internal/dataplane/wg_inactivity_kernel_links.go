@@ -60,6 +60,22 @@ func (r *WGInactivityRead) readKernelLinks(ctx context.Context) ([]physicalscope
 }
 
 func wgKernelLinksExclude(links []physicalscope.WGKernelLink, interfaces []string) error {
+	if err := wgKernelLinkFactsComplete(links); err != nil {
+		return err
+	}
+	for _, link := range links {
+		for _, name := range interfaces {
+			if link.Name == name {
+				return errWGInactiveUnknown
+			}
+		}
+	}
+	return nil
+}
+
+// Validate detached inventory shape only. This grants neither absence nor
+// identity proof: callers must still check their exact interface/peer facts.
+func wgKernelLinkFactsComplete(links []physicalscope.WGKernelLink) error {
 	if len(links) == 0 || len(links) > 4096 {
 		return errWGInactiveUnknown
 	}
@@ -69,11 +85,6 @@ func wgKernelLinksExclude(links []physicalscope.WGKernelLink, interfaces []strin
 			return errWGInactiveUnknown
 		}
 		names[link.Name], indices[link.Index] = true, true
-		for _, name := range interfaces {
-			if link.Name == name {
-				return errWGInactiveUnknown
-			}
-		}
 	}
 	return nil
 }

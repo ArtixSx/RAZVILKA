@@ -13,15 +13,31 @@ import (
 // It keeps its actual held tool review alive while the existing kernel reader
 // runs under that source's original Provider. No CLI/path/DTO fallback exists.
 func (r *wgInactivityRunner) ReadWGKernelLinks(ctx context.Context, expected netidentity.Identity) ([]physicalscope.WGKernelLink, error) {
-	if r == nil || r.lease == nil || ctx == nil || expected.Validate() != nil || r.engine != "wireguard" && r.engine != "amneziawg" {
+	if r == nil {
 		return nil, at("WG_LINK_SOURCE", nil)
 	}
-	l := r.lease
+	return r.lease.readWGKernelLinks(ctx, r.engine, expected)
+}
+
+// Forward inspection uses the same original held source as actual WG RPCs.
+// The dataplane still requires its original operation owner and peer checks;
+// these detached kernel facts cannot issue an operation or cleanup grant.
+func (r *wgRunner) ReadWGKernelLinks(ctx context.Context, expected netidentity.Identity) ([]physicalscope.WGKernelLink, error) {
+	if r == nil {
+		return nil, at("WG_LINK_SOURCE", nil)
+	}
+	return r.lease.readWGKernelLinks(ctx, r.engine, expected)
+}
+
+func (l *Lease) readWGKernelLinks(ctx context.Context, engine string, expected netidentity.Identity) ([]physicalscope.WGKernelLink, error) {
+	if l == nil || ctx == nil || expected.Validate() != nil || engine != "wireguard" && engine != "amneziawg" {
+		return nil, at("WG_LINK_SOURCE", nil)
+	}
 	if err := l.retain(ctx); err != nil {
 		return nil, err
 	}
 	defer l.retained.Done()
-	if l.provider == nil || expected != l.identity || l.profile.wgEngine != managedListWGProfile && l.profile.wgEngine != r.engine {
+	if l.provider == nil || expected != l.identity || l.profile.wgEngine != managedListWGProfile && l.profile.wgEngine != engine {
 		return nil, at("WG_LINK_SOURCE", nil)
 	}
 	if _, finite := ctx.Deadline(); !finite {
