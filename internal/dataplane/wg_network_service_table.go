@@ -13,6 +13,13 @@ func (a *WARPWireGuardAdapter) wgNetworkServiceTablePresence(ctx context.Context
 	if state.NetworkPolicyGeneration == "" || state.Interface != a.interfaceName() || state.Table != a.table() || family != 4 && family != 6 {
 		return 0, ErrWGNetworkPolicy
 	}
+	if a.wgCommandTools != nil {
+		runner, ok := a.Runner.(wgExecRunner)
+		if !ok || runner.adapter != a {
+			return 0, ErrWGOperationOwner
+		}
+		return runner.readProbeKernelServiceTable(ctx, family) // Bound refusal never falls back to CLI.
+	}
 	data, err := a.readWGCompleteDetailedNumericTable(ctx, state.Table, family)
 	if err != nil {
 		return 0, err

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -92,5 +93,104 @@ func TestWGNetworkServiceKernelRefusalCannotReviveLegacyCLI(t *testing.T) {
 	count, err := a.wgNetworkServiceTablePresence(ctx, state, 4)
 	if err == nil || count != 0 || m.reads.Load() != 1 || m.cli.Load() != 0 || wgProbeCommands(t, marker) != "" {
 		t.Fatalf("bound refusal used legacy CLI: count=%d kernel_reads=%d cli_reads=%d err=%v", count, m.reads.Load(), m.cli.Load(), err)
+	}
+}
+
+func TestWGNetworkServiceKernelOwnerAndClosingFences(t *testing.T) {
+	for _, cut := range []string{"no-owner", "copied-owner", "wrong-adapter", "closed-material", "changed-tools", "closing-change", "cancel-before", "cancel-during", "invalid-count"} {
+		t.Run(cut, func(t *testing.T) {
+			a, owner, ctx, m, marker := wgServiceKernelFixture(t, "wireguard")
+			original := a.wgCommandTools
+			t.Cleanup(func() { a.wgCommandTools = original })
+			switch cut {
+			case "no-owner":
+				ctx = context.WithValue(ctx, wgOperationOwnerKey{}, nil)
+			case "copied-owner":
+				ctx = context.WithValue(ctx, wgOperationOwnerKey{}, &wgOperationOwner{self: owner, material: owner.material, scope: owner.scope, adapter: a})
+			case "wrong-adapter":
+				copy := *a
+				a = &copy
+			case "closed-material":
+				if err := owner.material.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-tools":
+				copy := *original
+				a.wgCommandTools = &copy
+			case "closing-change":
+				m.after = func(context.Context) { copy := *original; a.wgCommandTools = &copy }
+			case "cancel-before", "cancel-during":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				if cut == "cancel-before" {
+					cancel()
+				} else {
+					m.after = func(context.Context) { cancel() }
+				}
+			case "invalid-count":
+				m.count = 2
+			}
+			state := PolicyState{Interface: a.interfaceName(), Table: a.table(), NetworkPolicyGeneration: strings.Repeat("a", 64)}
+			if count, err := a.wgNetworkServiceTablePresence(ctx, state, 4); err == nil || count != 0 {
+				t.Fatal("stale/copied original owner returned a fact")
+			}
+			want := int32(0)
+			if cut == "closing-change" || cut == "cancel-during" || cut == "invalid-count" {
+				want = 1
+			}
+			if m.reads.Load() != want || m.cli.Load() != 0 || wgProbeCommands(t, marker) != "" {
+				t.Fatal("refused owner entered source or revived CLI", cut)
+			}
+			if cut == "closing-change" {
+				a.wgCommandTools = original
+				if n, err := a.wgNetworkServiceTablePresence(ctx, state, 4); err == nil || n != 0 || m.reads.Load() != 1 {
+					t.Fatal("closing revocation revived")
+				}
+			}
+		})
+	}
+}
+
+func TestWGNetworkServiceKernelMissingCapabilityCannotUseLegacyCLI(t *testing.T) {
+	a, _, ctx, _, _, _ := wgNetworkCommandOwnerFixture(t)
+	marker := filepath.Join(t.TempDir(), "commands")
+	t.Setenv("RAZVILKA_WG_COMMAND_CLI_MODEL", "1")
+	t.Setenv("RAZVILKA_WG_COMMAND_TEST_MARKER", marker)
+	state := PolicyState{Interface: a.interfaceName(), Table: a.table(), NetworkPolicyGeneration: strings.Repeat("a", 64)}
+	if n, err := a.wgNetworkServiceTablePresence(ctx, state, 4); err == nil || n != 0 || wgProbeCommands(t, marker) != "" {
+		t.Fatal("unissued capability used CLI")
+	}
+}
+
+func TestWGNetworkServiceKernelMaterialCloseJoinsRead(t *testing.T) {
+	a, owner, ctx, m, _ := wgServiceKernelFixture(t, "wireguard")
+	entered, finish := make(chan struct{}), make(chan struct{})
+	m.after = func(context.Context) { close(entered); <-finish }
+	state := PolicyState{Interface: a.interfaceName(), Table: a.table(), NetworkPolicyGeneration: strings.Repeat("a", 64)}
+	read := make(chan error, 1)
+	go func() { _, err := a.wgNetworkServiceTablePresence(ctx, state, 4); read <- err }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("read not entered")
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- owner.material.Close() }()
+	select {
+	case <-closed:
+		close(finish)
+		t.Fatal("Close escaped original read barrier")
+	case <-time.After(30 * time.Millisecond):
+	}
+	close(finish)
+	if err := <-read; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-closed; err != nil {
+		t.Fatal(err)
+	}
+	if n, err := a.wgNetworkServiceTablePresence(ctx, state, 4); err == nil || n != 0 || m.reads.Load() != 1 {
+		t.Fatal("closed material returned presence")
 	}
 }
