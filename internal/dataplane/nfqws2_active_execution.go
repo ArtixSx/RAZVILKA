@@ -146,6 +146,10 @@ func nfqws2ActiveExecutionFor(ctx context.Context, a *NFQWS2Adapter, p Plan, roo
 // Every intent field, including required evidence and typed routes, is exact.
 func nfqws2ActiveSamePlan(expected, actual Plan) bool {
 	actual = cloneExecutionResourcePlan(actual)
+	// Manager clears Ready when publishing rollback, then reuses this SAME
+	// intent for retained retries. Readiness is a result, never an owner/proof
+	// grant; every original participant and phase guard remains mandatory.
+	actual.Ready = expected.Ready
 	actual.State, actual.ObservedEvidence, actual.Note, actual.EvidenceNote = expected.State, expected.ObservedEvidence, expected.Note, expected.EvidenceNote
 	if len(actual.RouteEvidence) != len(expected.RouteEvidence) {
 		return false
