@@ -87,6 +87,13 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	if parent == nil {
 		return result, errors.New("compatibility context is required")
 	}
+	ctx := parent
+	managedPhaseBudget := managedCompatibilityForward(parent) != nil && managedCompatibilityRun(parent, p)
+	if managedPhaseBudget {
+		var cancel context.CancelFunc
+		ctx, cancel = compatibilityPhaseContext(parent, p)
+		defer cancel()
+	}
 	phaseTiming := "lua-init"
 	if len(args) > 0 && args[0] == "--dry-run" {
 		phaseTiming = "dry-run"
@@ -94,8 +101,8 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	totalTiming := managedTiming(parent, "provider-run", phaseTiming)
 	defer func() { totalTiming(err) }()
 	if p.managedControl != nil {
-		materialTiming := managedTiming(parent, "phase-material", phaseTiming)
-		materialErr := p.managedMaterialCurrent(parent)
+		materialTiming := managedTiming(ctx, "phase-material", phaseTiming)
+		materialErr := p.managedMaterialCurrent(ctx)
 		materialTiming(materialErr)
 		if err := materialErr; err != nil {
 			return result, err
@@ -123,7 +130,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 		}
 		p.mu.Unlock()
 	}()
-	if err := parent.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	if binary != p.review.Binary.Path {
@@ -140,15 +147,18 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	if total > 32768 {
 		return result, errors.New("compatibility command exceeds the supervision byte bound")
 	}
-	ctx, cancel := compatibilityPhaseContext(parent, p)
-	defer cancel()
-	protectedTiming := managedTiming(parent, "protected-paths", phaseTiming)
+	if !managedPhaseBudget {
+		var cancel context.CancelFunc
+		ctx, cancel = compatibilityPhaseContext(parent, p)
+		defer cancel()
+	}
+	protectedTiming := managedTiming(ctx, "protected-paths", phaseTiming)
 	protectedErr := compatibilityProtectedReview(p.manager.Path, p.review)
 	protectedTiming(protectedErr)
 	if err := protectedErr; err != nil {
 		return result, err
 	}
-	filesTiming := managedTiming(parent, "phase-file-hashes", phaseTiming)
+	filesTiming := managedTiming(ctx, "phase-file-hashes", phaseTiming)
 	filesErr := compatibilityFilesUnchanged(p.review)
 	filesTiming(filesErr)
 	if err := filesErr; err != nil {
@@ -187,7 +197,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	} else {
 		session.LuaInit = invocation
 	}
-	intentTiming := managedTiming(parent, "phase-intent-cas", phaseTiming)
+	intentTiming := managedTiming(ctx, "phase-intent-cas", phaseTiming)
 	p.manager.mu.Lock()
 	if !p.manager.nativeRunning {
 		p.manager.mu.Unlock()
@@ -214,7 +224,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	// After intent, failure is retained unknown unless this exact helper
 	// publishes and the parent acknowledges an ECHILD terminal receipt.
 	result.Quiescent = false
-	launchTiming := managedTiming(parent, "helper-start-wait", phaseTiming)
+	launchTiming := managedTiming(ctx, "helper-start-wait", phaseTiming)
 	helper, launchErr := compatibilityLaunchSupervisor(ctx, p.manager.Path, p.review, id, p.helperPrefix)
 	launchTiming(launchErr)
 	if managedPhase != nil {

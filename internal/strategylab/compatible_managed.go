@@ -87,6 +87,8 @@ func (m *Manager) ValidateManagedCandidate(ctx context.Context, candidateID stri
 	if m == nil || runtime == nil || selectedReviewContext(ctx) != nil {
 		return Candidate{}, nil, errors.Join(errAdaptiveManagedValidator, selectedReviewContext(ctx))
 	}
+	ctx, cancelForward := context.WithTimeout(ctx, managedCompatibilityForwardTimeout)
+	defer cancelForward()
 	foundation, err := newManagerAdaptiveFoundation(m)
 	if err != nil {
 		return Candidate{}, nil, err
@@ -113,14 +115,17 @@ func (m *Manager) ValidateManagedCandidate(ctx context.Context, candidateID stri
 	invocation := &managedCompatibilityInvocation{manager: m, provider: p, runtime: runtime, binding: binding, timing: &managedCompatibilityTiming{started: time.Now()}}
 	invocation.cleanup = cleanup
 	ctx = context.WithValue(ctx, managedCompatibilityContextKey{}, invocation)
+	invocation.forward = ctx
 	p.mu.Lock()
 	if !p.running && p.managedInvocation == nil {
 		p.managedTiming = invocation.timing
 	}
 	p.mu.Unlock()
-	preflightTiming := invocation.timing.begin(ctx, "admission-material", "admission")
-	preflightErr := p.managedMaterialCurrent(ctx)
+	admissionCtx, finishAdmission := context.WithTimeout(ctx, managedCompatibilityAdmissionTimeout)
+	preflightTiming := invocation.timing.begin(admissionCtx, "admission-material", "admission")
+	preflightErr := p.managedMaterialCurrent(admissionCtx)
 	preflightTiming(preflightErr)
+	finishAdmission()
 	if preflightErr != nil {
 		return Candidate{}, nil, preflightErr
 	}
@@ -152,6 +157,9 @@ func (p *SupervisedCompatibilityProvider) managedMaterialCurrent(ctx context.Con
 	if !ok || invocation == nil || invocation.manager != p.manager || invocation.provider != p || invocation.runtime == nil || invocation.binding.manager != p.manager || !p.managedControl.MatchesControlRoot(p.review.ControlPath) {
 		return errAdaptiveManagedValidator
 	}
+	if err := invocation.forwardCurrent(ctx); err != nil {
+		return err
+	}
 	ref := p.managedControl.Reference()
 	if ref.InstallationID != p.review.InstallationID || ref.Sequence != p.review.Sequence {
 		return errAdaptiveManagedValidator
@@ -165,7 +173,7 @@ func (p *SupervisedCompatibilityProvider) managedMaterialCurrent(ctx context.Con
 	if !compatibilityJSONEqual(invocation.runtime.Descriptor(), p.managedDescriptor) || selectedReviewMaterial(p.review, p.managedDescriptor) != nil {
 		return errAdaptiveManagedValidator
 	}
-	return nil
+	return invocation.forwardCurrent(ctx)
 }
 
 func managedCompatibilityRun(ctx context.Context, p *SupervisedCompatibilityProvider) bool {

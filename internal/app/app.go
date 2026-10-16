@@ -1263,7 +1263,11 @@ func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, evidence)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	timeout := 10 * time.Second
+	if a.Components != nil {
+		timeout = strategylab.ManagedCompatibilityRequestTimeout
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 	ctx, release, err := a.privateExclusiveOperation(ctx)
 	if err != nil {

@@ -91,7 +91,9 @@ func (a *App) validateStrategyCandidate(w http.ResponseWriter, ctx context.Conte
 		writeJSON(w, http.StatusOK, candidate)
 		return
 	}
-	lease, err := a.Components.AcquireCurrentManagedNFQWSRuntime(ctx)
+	acquireCtx, finishAcquire := context.WithTimeout(ctx, strategylab.ManagedCompatibilityAcquisitionTimeout)
+	lease, err := a.Components.AcquireCurrentManagedNFQWSRuntime(acquireCtx)
+	finishAcquire() // The concrete lease retains no acquisition context.
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"ok": false, "code": "MANAGED_NFQWS_SOURCE_UNAVAILABLE",

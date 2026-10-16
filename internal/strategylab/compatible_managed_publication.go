@@ -20,7 +20,9 @@ type managedCompatibilityRefusal struct {
 // revokes validation and clears only this producer's finalizing record. It
 // never awards compatibility or writes over a third image.
 func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Context, candidate Candidate, p *SupervisedCompatibilityProvider, i *managedCompatibilityInvocation) (resultErr error) {
-	endTiming := i.beginTiming(parent, "guarded-publication", "publication")
+	ctx, cancel := compatibilityPublicationContext(parent, compatibilityActiveInvocation(m.state.CompatibilitySession))
+	defer cancel()
+	endTiming := i.beginTiming(ctx, "guarded-publication", "publication")
 	defer func() { endTiming(resultErr) }()
 	current, exists := m.state.Candidates[candidate.ID]
 	bound := candidate
@@ -35,12 +37,9 @@ func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Con
 		return errors.Join(ErrCompatibilityQuiescenceUnknown, copyErr)
 	}
 	before := compatibilityImageCopy(m.image)
-	if err := m.prepareCompatibilityPublicationLocked(parent, candidate.Validation); err != nil {
+	if err := m.prepareCompatibilityPublicationLocked(ctx, candidate.Validation); err != nil {
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, restorejournal.Image{}, candidate, err)
 	}
-	active := compatibilityActiveInvocation(m.state.CompatibilitySession)
-	ctx, cancel := compatibilityPublicationContext(parent, active)
-	defer cancel()
 	next, err := compatibilityStateCopy(beforeState)
 	if err != nil {
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, restorejournal.Image{}, candidate, err)

@@ -111,3 +111,54 @@ func TestManagedCompatibilityBudgetCannotGrantMaterialAuthority(t *testing.T) {
 		t.Fatal("context reserve bypassed actual publication admission", err)
 	}
 }
+
+func TestManagedCompatibilityBudgetCannotRenewExpiredOrCopiedOriginal(t *testing.T) {
+	for _, mode := range []string{"cancelled", "deadline", "copied"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, _, cancel := compatibilityBudgetModel(t)
+			defer cancel()
+			i := managedCompatibilityForward(ctx)
+			if i == nil {
+				t.Fatal("missing context model")
+			}
+			// A fresh caller cannot replace the original invocation deadline.
+			fresh, endFresh := context.WithTimeout(context.Background(), time.Minute)
+			defer endFresh()
+			fresh = context.WithValue(fresh, managedCompatibilityContextKey{}, i)
+			active := &compatibilityInvocation{Command: compatibilityCommand{Deadline: time.Now().Add(-time.Second)}}
+			switch mode {
+			case "cancelled":
+				cancel()
+			case "deadline":
+				expired, endExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				defer endExpired()
+				i.forward = context.WithValue(expired, managedCompatibilityContextKey{}, i)
+			case "copied":
+				copy := *i
+				fresh = context.WithValue(fresh, managedCompatibilityContextKey{}, &copy)
+			}
+			if compatibilityPublicationTimeCurrent(fresh, active) {
+				t.Fatal("fresh caller/copy renewed the original forward authority")
+			}
+		})
+	}
+}
+
+func TestManagedCompatibilityBudgetKeepsEarlierOriginalDeadline(t *testing.T) {
+	ctx, p, cancel := compatibilityBudgetModel(t)
+	defer cancel()
+	short, finish := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer finish()
+	want, _ := short.Deadline()
+	validation, endValidation := compatibilityValidatorContext(short, CompatibleValidator{Provider: p})
+	defer endValidation()
+	phase, endPhase := compatibilityPhaseContext(validation, p)
+	defer endPhase()
+	publication, endPublication := compatibilityPublicationContext(validation, &compatibilityInvocation{})
+	defer endPublication()
+	for _, bounded := range []context.Context{validation, phase, publication} {
+		if actual, ok := bounded.Deadline(); !ok || actual != want {
+			t.Fatal("managed phase extended an earlier original deadline", actual, want)
+		}
+	}
+}

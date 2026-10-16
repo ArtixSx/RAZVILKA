@@ -101,6 +101,11 @@ func (m *Manager) preparePublishedCompatibilityResultLocked(ctx context.Context,
 	if err := compatibilityControlCurrent(ctx, compatibilityActiveInvocation(m.state.CompatibilitySession).Command.Review); err != nil {
 		return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
 	}
+	if i := managedCompatibilityForward(ctx); i != nil {
+		if err := i.provider.managedMaterialCurrent(ctx); err != nil {
+			return errors.Join(ErrCompatibilityQuiescenceUnknown, err)
+		}
+	}
 	if ctx.Err() != nil {
 		return errors.Join(ErrCompatibilityQuiescenceUnknown, ctx.Err())
 	}
