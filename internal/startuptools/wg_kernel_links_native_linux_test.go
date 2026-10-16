@@ -90,7 +90,8 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	}
 	l, root := wgKernelLinkHeldSourceFixture(t)
 	r := &wgInactivityRunner{lease: l, engine: "wireguard"}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	// Two independently bounded observations exercise both original wrappers.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if err := l.Check(ctx, l.identity); err != nil {
 		t.Fatal("private held metadata fixture incomplete", err)
@@ -98,6 +99,10 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	links, err := r.ReadWGKernelLinks(ctx, l.identity)
 	if err != nil || len(links) == 0 {
 		t.Fatal("original retained source refused actual kernel dump", err)
+	}
+	forward := &wgRunner{lease: l, engine: "wireguard"}
+	if rows, err := forward.ReadWGKernelLinks(ctx, l.identity); err != nil || len(rows) == 0 {
+		t.Fatal("original forward source refused actual kernel dump", err)
 	}
 	if _, err := os.Lstat(filepath.Join(root, "started")); !os.IsNotExist(err) {
 		t.Fatal("kernel observer executed the modeled route/effect CLI")
@@ -107,5 +112,8 @@ func TestNativeWGKernelLinkOriginalHeldSource(t *testing.T) {
 	}
 	if rows, err := r.ReadWGKernelLinks(ctx, l.identity); err == nil || len(rows) != 0 {
 		t.Fatal("changed held source retained observation authority")
+	}
+	if rows, err := forward.ReadWGKernelLinks(ctx, l.identity); err == nil || len(rows) != 0 {
+		t.Fatal("changed held forward source retained observation authority")
 	}
 }

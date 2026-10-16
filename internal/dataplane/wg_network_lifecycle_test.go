@@ -60,7 +60,7 @@ func wgNetworkCommandOwnerFixture(t *testing.T) (*WARPWireGuardAdapter, *wgOpera
 	return wgNetworkCommandOwnerForPlan(t, a, plan)
 }
 
-func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Plan) (*WARPWireGuardAdapter, *wgOperationOwner, context.Context, context.CancelFunc, func(), string) {
+func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Plan, configure ...func(*WGCommandTools)) (*WARPWireGuardAdapter, *wgOperationOwner, context.Context, context.CancelFunc, func(), string) {
 	t.Helper()
 	// These fixtures inherit this test binary as their actual child. Keep all
 	// race checks and the genuine Wait, but omit the race runtime's artificial
@@ -77,6 +77,9 @@ func wgNetworkCommandOwnerForPlan(t *testing.T, a *WARPWireGuardAdapter, plan Pl
 	}
 	model := &wgCommandProcessModel{review: strings.Repeat("a", 64)}
 	tools := WGCommandTools{EngineID: a.ID(), WG: program, AWG: program, IP: program, IPTables: program, IP6Tables: program, ReviewSHA256: model.review, Identity: netidentity.Identity{Version: 1, Kind: netidentity.ProcNetInode, BootID: "12345678-1234-1234-1234-123456789abc", Inode: 123}, Provider: netidentity.NewProcProvider(), Runner: model}
+	for _, setup := range configure {
+		setup(&tools)
+	}
 	if err := a.BindWGCommandTools(tools); err != nil {
 		t.Fatal(err)
 	}

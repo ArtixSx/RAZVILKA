@@ -26,3 +26,21 @@ func TestWGKernelLinkSourceRefusesUnissuedWrongEngineScopeAndLifetime(t *testing
 		t.Fatal("closed lease revived kernel observation")
 	}
 }
+
+func TestWGKernelLinkForwardSourceRefusesUnissuedWrongEngineScopeAndLifetime(t *testing.T) {
+	id := netidentity.Identity{Version: 1, Kind: netidentity.ProcNetInode, BootID: "12345678-1234-1234-1234-123456789abc", Inode: 7}
+	c, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for _, r := range []*wgRunner{nil, {}, {lease: unitLease(t), engine: "foreign"}, {lease: unitLease(t), engine: "wireguard"}} {
+		if links, err := r.ReadWGKernelLinks(c, id); err == nil || len(links) != 0 {
+			t.Fatal("unissued forward source produced kernel inventory")
+		}
+	}
+	r := &wgRunner{lease: unitLease(t), engine: "wireguard"}
+	if err := r.lease.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if links, err := r.ReadWGKernelLinks(c, id); err == nil || len(links) != 0 {
+		t.Fatal("closed forward lease revived kernel observation")
+	}
+}
