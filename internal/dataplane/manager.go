@@ -1647,7 +1647,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				}
 			}
 		}
-		if !liveMutation && consumersVerified && gateVerified && rollbackErr == nil {
+		if !liveMutation && directCycle.rollback == nil && directCycle.verify == nil && consumersVerified && gateVerified && rollbackErr == nil {
 			if original, ok := gate.(*NetworkPolicyAdapter); ok {
 				var completionErr error
 				noEffectNFQCompletion, completionErr = original.preEffectNFQCompletion(rollbackCtx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
@@ -1714,13 +1714,6 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return cause
 	}
 	retryNFQRollback = func(parent context.Context) error {
-		for _, adapter := range prepared {
-			if original, ok := adapter.(*NetworkPolicyAdapter); ok && original.directPreparationUnknown(parent, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID)) {
-				// The SAME owner stays retained; repeating a compensation that
-				// can never settle would only rewrite the journal.
-				return executionJournalError(ErrPolicyAdditionUnknown)
-			}
-		}
 		rollbackParent = parent
 		_ = rollback(ErrNFQWSScopedOwner)
 		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {

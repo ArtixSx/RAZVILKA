@@ -3,6 +3,8 @@ package dataplane
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,13 +17,15 @@ import (
 )
 
 // Writer states of one original metadata file. Only the witness's own
-// retained write moves a state forward; a decoded file or a missing path never
-// does. "unknown" is terminal for this witness: the SAME pending owner stays
-// retained and no other path may settle it.
+// retained write or unlink moves a state forward; a decoded file or a missing
+// path never does. "unknown" means a rename/unlink ran and its result could
+// not be identified: the metadata-only path then declines, and only the
+// unchanged strict path (with its physical boundary) may settle that owner.
 const (
 	directWriterNone     = ""
 	directWriterWritten  = "written"
 	directWriterUnknown  = "unknown"
+	directWriterUnsynced = "unsynced" // preparation "removed" published; directory sync not yet confirmed
 	directWriterUnlinked = "unlinked" // owner.json unlinked; directory sync not yet confirmed
 	directWriterRemoved  = "removed"
 )
@@ -54,13 +58,13 @@ type nfqwsHeldImage struct {
 
 // nfqwsDirectPreparationWitness is the original writer of exactly this NFQ
 // direct participant's LAN metadata: candidate.json (Stage), owner.json and
-// the schema 3 preparation (Activate). It exists only after the original empty
-// Snapshot writer, whose held roots anchor it. It can retire that metadata
-// only after NFQ provably never received a seal, resource, prepared process or
-// binding, and only after fresh independent absence of NFQ, every other
-// consumer and owned RPDB rules. It supplies no Start, effect, deletion of a
-// COMMON receipt, physical-scope bypass for ordinary cleanup, RollbackVerified
-// or boot survival.
+// the schema 3 preparation with its lock (Activate). It exists only after the
+// original empty Snapshot writer, whose held roots anchor it. It can retire
+// that metadata only while NFQ provably never received a seal, resource,
+// prepared process or binding, and only after fresh independent absence of
+// NFQ, every other consumer and owned RPDB rules. It supplies no Start,
+// effect, deletion of a COMMON receipt, physical-scope bypass for ordinary
+// cleanup, RollbackVerified or boot survival.
 type nfqwsDirectPreparationWitness struct {
 	self      *nfqwsDirectPreparationWitness
 	mu        sync.Mutex
@@ -76,11 +80,14 @@ type nfqwsDirectPreparationWitness struct {
 	candidate nfqwsHeldImage
 	owner     nfqwsHeldImage
 	prep      nfqwsHeldImage
-	// Writer states. lockAttempted records that the original preparation
-	// session ran; lockInfo is the inode it actually held, when it opened.
+	// Writer states. lockAttempted: the original preparation session ran.
+	// lockInfo: the lock it created (the path was absent before it opened).
+	// lockUnknown: a failed session left a lock file this writer cannot name.
 	ownerState, prepState string
 	lockAttempted         bool
+	lockUnknown           bool
 	lockInfo              os.FileInfo
+	heldLock              *os.File // This writer's own lock, held only during its own retirement write.
 	// Production fixes these to the SAME original participant's full
 	// independent negative read and typed owner checks. Package tests model
 	// only these source/kernel leaves, as for nfqwsPreEffectLANReview.
@@ -140,10 +147,7 @@ func (e *nfqws2ActiveExecution) captureDirectPreparation(ctx context.Context, ro
 	if err != nil || len(data) > 1<<20 {
 		return true, errors.Join(err, ErrLANPolicyRuntime)
 	}
-	if err := w.faultAt("candidate-write"); err != nil {
-		return true, err
-	}
-	w.candidate, err = retainedWrite(w.dir, "candidate.json", data)
+	w.candidate, _, err = retainedWrite(w.dir, "candidate.json", data)
 	if err != nil {
 		return true, err
 	}
@@ -165,16 +169,16 @@ func (e *nfqws2ActiveExecution) captureDirectPreparation(ctx context.Context, ro
 	return true, nil
 }
 
-func retainedWrite(root *ownedfs.Root, name string, data []byte) (nfqwsHeldImage, error) {
-	file, err := root.WriteAtomicRetained(name, data, 0600)
+func retainedWrite(root *ownedfs.Root, name string, data []byte) (nfqwsHeldImage, bool, error) {
+	file, attempted, err := root.WriteAtomicRetainedAttempted(name, data, 0600)
 	if err != nil {
-		return nfqwsHeldImage{}, err
+		return nfqwsHeldImage{}, attempted, err
 	}
 	info, err := file.Stat()
 	if err != nil {
-		return nfqwsHeldImage{}, errors.Join(err, file.Close())
+		return nfqwsHeldImage{}, attempted, errors.Join(err, file.Close())
 	}
-	return nfqwsHeldImage{file: file, info: info, image: append([]byte(nil), data...)}, nil
+	return nfqwsHeldImage{file: file, info: info, image: append([]byte(nil), data...)}, attempted, nil
 }
 
 // Serialize publication with Material.Close, as retainPreEffectLAN does.
@@ -203,6 +207,25 @@ func (e *nfqws2ActiveExecution) closeDirectPreparation() error {
 	return w.close()
 }
 
+// pendingDirectPreparationOwners returns the witness's fixed owner leaf when
+// the original writer is still open. Production fixes that leaf to
+// e.cleanupCurrent; the never-activated Snapshot witness cannot describe a
+// directory that already holds this writer's candidate.json.
+func (e *nfqws2ActiveExecution) pendingDirectPreparationOwners() func(context.Context) error {
+	e.mu.Lock()
+	w := e.directPreparation
+	e.mu.Unlock()
+	if w == nil {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.self != w || w.closed || w.execution != e || w.owners == nil {
+		return nil
+	}
+	return w.owners
+}
+
 // directPreparationWriter returns the original witness for Activate's owner
 // and preparation writers. Its absence keeps the existing writers.
 func (a *NetworkPolicyAdapter) directPreparationWriter(ctx context.Context, p Plan, root string) (*nfqwsDirectPreparationWitness, error) {
@@ -218,7 +241,7 @@ func (a *NetworkPolicyAdapter) directPreparationWriter(ctx context.Context, p Pl
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.self != w || w.closed || w.execution != e || w.root != root || w.ownerState != directWriterNone || w.prepState != directWriterNone || w.lockAttempted {
+	if w.self != w || w.closed || w.execution != e || w.root != root || w.ownerState != directWriterNone || w.prepState != directWriterNone || w.lockAttempted || w.ownerDir != nil {
 		return nil, ErrNFQWSScopedOwner
 	}
 	return w, nil
@@ -255,14 +278,21 @@ func (w *nfqwsDirectPreparationWitness) writeOwner(state *networkPolicyGateState
 	if !anchored || err != nil || !os.SameFile(info, w.ownerInfo) {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	// Any failure from here on may or may not have published a file this
-	// writer no longer holds. That result is unknown, never absence.
-	w.ownerState = directWriterUnknown
+	if _, err := w.ownerDir.Stat("owner.json"); !errors.Is(err, os.ErrNotExist) {
+		return errors.Join(ErrNetworkPolicyReplacement, err) // Never overwrite another owner.
+	}
 	if err := w.faultAt("owner-write"); err != nil {
+		w.ownerState = directWriterUnknown
 		return err
 	}
-	w.owner, err = retainedWrite(w.ownerDir, "owner.json", data)
+	var attempted bool
+	w.owner, attempted, err = retainedWrite(w.ownerDir, "owner.json", data)
 	if err != nil {
+		// Before its rename this writer published nothing. After it, the
+		// destination is a result this writer cannot identify.
+		if attempted {
+			w.ownerState = directWriterUnknown
+		}
 		return err
 	}
 	// The exact staged inode is published and held. A failed directory sync
@@ -291,30 +321,54 @@ func lanDirectPreparationWriter(ctx context.Context, root string) (*nfqwsDirectP
 	return w, nil
 }
 
-// openedSession records the lock the original preparation session holds. A
-// session on any other directory inode is refused before anything is written.
+// beginSession requires that no lock exists yet: the original Snapshot proved
+// this directory empty, so a present lock is not this writer's.
+func (w *nfqwsDirectPreparationWitness) beginSession() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.self != w || w.closed || w.lockAttempted {
+		return ErrPolicyAdditionReceipt
+	}
+	if _, err := w.dir.Stat(policyAdditionLock); !errors.Is(err, os.ErrNotExist) {
+		return errors.Join(ErrPolicyAdditionReceipt, err)
+	}
+	w.lockAttempted = true
+	return nil
+}
+
+// sessionFailed classifies a session that never opened: nothing was created,
+// or a lock file this writer cannot identify now exists.
+func (w *nfqwsDirectPreparationWitness) sessionFailed() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, err := w.dir.Stat(policyAdditionLock); errors.Is(err, os.ErrNotExist) {
+		w.lockAttempted = false
+		return
+	}
+	w.lockUnknown = true
+}
+
+// openedSession records the lock the original preparation session created
+// and holds. A session on any other directory inode is refused before
+// anything is written.
 func (w *nfqwsDirectPreparationWitness) openedSession(s *policyAdditionSession) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.self != w || w.closed || s == nil || s.root == nil || s.lock == nil || s.path != w.root {
+	if w.self != w || w.closed || !w.lockAttempted || s == nil || s.root == nil || s.lock == nil || s.path != w.root {
 		return ErrPolicyAdditionReceipt
 	}
 	info, err := s.root.RootInfo()
 	if err != nil || !os.SameFile(info, w.dirInfo) {
+		w.lockUnknown = true
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
 	lock, err := s.lock.Stat()
 	if err != nil {
+		w.lockUnknown = true
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
 	w.lockInfo = lock
 	return nil
-}
-
-func (w *nfqwsDirectPreparationWitness) beginSession() {
-	w.mu.Lock()
-	w.lockAttempted = true
-	w.mu.Unlock()
 }
 
 // savePreparation replaces policyAdditionSession.save for the original schema
@@ -333,12 +387,16 @@ func (w *nfqwsDirectPreparationWitness) savePreparation(ctx context.Context, s *
 	if w.self != w || w.closed || w.prepState != directWriterNone || w.lockInfo == nil {
 		return ErrPolicyAdditionReceipt
 	}
-	w.prepState = directWriterUnknown
 	if err := w.faultAt("preparation-write"); err != nil {
+		w.prepState = directWriterUnknown
 		return err
 	}
-	w.prep, err = retainedWrite(s.root, policyAdditionFile, data)
+	var attempted bool
+	w.prep, attempted, err = retainedWrite(s.root, policyAdditionFile, data)
 	if err != nil {
+		if attempted {
+			w.prepState = directWriterUnknown
+		}
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
 	w.prepState = directWriterWritten
@@ -352,9 +410,42 @@ func (w *nfqwsDirectPreparationWitness) savePreparation(ctx context.Context, s *
 	return ctx.Err()
 }
 
+// neverSealed is the NFQ side of eligibility. Every activation receipt is
+// checked explicitly, not only the seal that causally precedes them. It never
+// reads or widens neverActivatedLAN. Lock order: material.mu, e.mu, then the
+// adapter mutex; none is held while the caller takes w.mu.
+func (e *nfqws2ActiveExecution) neverSealed(w *nfqwsDirectPreparationWitness) (lanActivationAttempted, ok bool) {
+	e.material.mu.Lock()
+	e.mu.Lock()
+	ok = w != nil && w.self == w && w.execution == e && e.directPreparation == w && w.review != nil && w.review == e.preEffectLAN &&
+		e.retired && !e.started && !e.launchInvoked && e.activationSeal == nil &&
+		e.resource == nil && e.prepared == nil && e.binding == nil && e.preparationErr == nil &&
+		e.selection != nil && e.selection == e.comparisonSelection &&
+		!e.material.closed && e.material.executionBound && e.material.execution == e && e.material.issuedSelection == nil
+	lanActivationAttempted = e.lanActivationAttempted
+	e.mu.Unlock()
+	e.material.mu.Unlock()
+	if !ok {
+		return lanActivationAttempted, false
+	}
+	nfqws2ActiveAdapterMu.Lock()
+	ok = e.material.adapter.activeExecution == nil && e.material.adapter.activeProcess == nil
+	nfqws2ActiveAdapterMu.Unlock()
+	return lanActivationAttempted, ok
+}
+
+// Caller holds w.mu. Unknown results decline this path entirely. Before LAN
+// Activate no LAN writer may have run at all.
+func (w *nfqwsDirectPreparationWitness) statesEligible(lanActivationAttempted bool) bool {
+	if w.self != w || w.closed || w.lockUnknown || w.ownerState == directWriterUnknown || w.prepState == directWriterUnknown {
+		return false
+	}
+	return lanActivationAttempted || w.ownerState == directWriterNone && w.prepState == directWriterNone && !w.lockAttempted && w.ownerDir == nil
+}
+
 // directPreparationParticipant selects the metadata-only retirement. Anything
-// short of the exact original never-sealed participant returns handled=false,
-// so the ordinary strict path runs unchanged with its own checks.
+// short of the exact original never-sealed participant with known writer
+// results returns handled=false, so the ordinary strict path runs unchanged.
 func (a *NetworkPolicyAdapter) directPreparationParticipant(ctx context.Context, p Plan, root string) (*nfqwsDirectPreparationWitness, *directPreparationCycle, bool) {
 	cycle, ok := ctx.Value(directPreparationCycleKey{}).(*directPreparationCycle)
 	if !ok || cycle == nil || cycle.self != cycle {
@@ -367,26 +458,17 @@ func (a *NetworkPolicyAdapter) directPreparationParticipant(ctx context.Context,
 	if !present || err != nil || e == nil {
 		return nil, nil, false
 	}
-	e.material.mu.Lock()
 	e.mu.Lock()
 	w := e.directPreparation
-	// Every activation receipt is checked explicitly, not only the seal that
-	// causally precedes them. LAN Activate WAS attempted: this is not, and does
-	// not widen, the never-activated witness.
-	eligible := w != nil && w.self == w && w.execution == e && w.review != nil && w.review == e.preEffectLAN &&
-		e.lanActivationAttempted && e.retired && !e.started && !e.launchInvoked && e.activationSeal == nil &&
-		e.resource == nil && e.prepared == nil && e.binding == nil && e.preparationErr == nil &&
-		e.selection != nil && e.selection == e.comparisonSelection &&
-		!e.material.closed && e.material.executionBound && e.material.execution == e && e.material.issuedSelection == nil
 	e.mu.Unlock()
-	e.material.mu.Unlock()
-	if !eligible {
+	attempted, ok := e.neverSealed(w)
+	if !ok || w.root != root {
 		return nil, nil, false
 	}
-	nfqws2ActiveAdapterMu.Lock()
-	idle := e.material.adapter.activeExecution == nil && e.material.adapter.activeProcess == nil
-	nfqws2ActiveAdapterMu.Unlock()
-	if !idle {
+	w.mu.Lock()
+	eligible := w.statesEligible(attempted)
+	w.mu.Unlock()
+	if !eligible {
 		return nil, nil, false
 	}
 	return w, cycle, true
@@ -417,18 +499,15 @@ func (a *NetworkPolicyAdapter) retireDirectPreparation(ctx context.Context, p Pl
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if err := w.known(); err != nil {
-		return true, err
-	}
 	e := w.execution
 	return true, e.cleanup.WithCurrent(ctx, func() error {
 		if err := w.prove(ctx, expected); err != nil {
 			return err
 		}
-		if err := w.retirePreparation(ctx, want.LAN); err != nil {
+		if err := w.retirePreparation(ctx, want.LAN, expected); err != nil {
 			return err
 		}
-		if err := w.retireOwner(); err != nil {
+		if err := w.retireOwner(ctx, expected); err != nil {
 			return err
 		}
 		if err := w.current(ctx, expected); err != nil {
@@ -439,7 +518,7 @@ func (a *NetworkPolicyAdapter) retireDirectPreparation(ctx context.Context, p Pl
 }
 
 // verifyDirectPreparationRetired repeats the complete fresh proof after this
-// witness itself removed both files. It never reuses a previous observation.
+// witness itself retired every file. It never reuses a previous observation.
 func (a *NetworkPolicyAdapter) verifyDirectPreparationRetired(ctx context.Context, p Plan, root string) (bool, error) {
 	w, cycle, handled := a.directPreparationParticipant(ctx, p, root)
 	if !handled {
@@ -465,25 +544,6 @@ func (a *NetworkPolicyAdapter) verifyDirectPreparationRetired(ctx context.Contex
 	return true, w.execution.cleanup.WithCurrent(ctx, func() error {
 		return w.prove(ctx, expected)
 	})
-}
-
-// directPreparationUnknown reports a terminal unknown writer result of the
-// SAME original witness, so a retry neither repeats nor republishes a
-// compensation that can never settle it. It grants nothing.
-func (a *NetworkPolicyAdapter) directPreparationUnknown(ctx context.Context, p Plan, root string) bool {
-	e, present, err := a.preEffectNFQParticipant(ctx, p, root)
-	if !present || err != nil || e == nil {
-		return false
-	}
-	e.mu.Lock()
-	w := e.directPreparation
-	e.mu.Unlock()
-	if w == nil {
-		return false
-	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.self == w && w.execution == e && (w.ownerState == directWriterUnknown || w.prepState == directWriterUnknown)
 }
 
 // directPreparationCompletion is called by the SAME Manager compensation
@@ -527,33 +587,11 @@ func (a *NetworkPolicyAdapter) directPreparationCompletion(ctx context.Context, 
 }
 
 // Caller holds w.mu.
-func (w *nfqwsDirectPreparationWitness) known() error {
-	if w.self != w || w.closed || w.observe == nil || w.owners == nil || w.dir == nil || w.candidate.file == nil {
+func (w *nfqwsDirectPreparationWitness) retired() error {
+	if w.self != w || w.closed || w.observe == nil || w.owners == nil {
 		return ErrNFQWSScopedOwner
 	}
-	switch w.ownerState {
-	case directWriterNone, directWriterWritten, directWriterUnlinked, directWriterRemoved:
-	default:
-		return ErrPolicyAdditionUnknown
-	}
-	switch w.prepState {
-	case directWriterNone, directWriterWritten, directWriterRemoved:
-	default:
-		return ErrPolicyAdditionUnknown
-	}
-	// The preparation can only have been written after this owner.
-	if w.prepState != directWriterNone && w.ownerState == directWriterNone {
-		return ErrPolicyAdditionUnknown
-	}
-	return nil
-}
-
-// Caller holds w.mu.
-func (w *nfqwsDirectPreparationWitness) retired() error {
-	if err := w.known(); err != nil {
-		return err
-	}
-	if w.ownerState != directWriterNone && w.ownerState != directWriterRemoved || w.prepState == directWriterWritten {
+	if w.ownerState != directWriterNone && w.ownerState != directWriterRemoved || w.prepState != directWriterNone && w.prepState != directWriterRemoved {
 		return ErrNFQWSScopedOwner
 	}
 	return nil
@@ -564,6 +602,9 @@ func (w *nfqwsDirectPreparationWitness) retired() error {
 func (w *nfqwsDirectPreparationWitness) prove(ctx context.Context, expected []byte) error {
 	e := w.execution
 	lan := CloneLANPolicyRuntime(e.plan.LAN)
+	if w.observe == nil || w.owners == nil || e.gateInventoryCheck == nil {
+		return ErrNFQWSScopedOwner
+	}
 	for _, check := range []func(context.Context) error{
 		e.material.control.CurrentForCleanup,
 		func(c context.Context) error { return w.current(c, expected) },
@@ -577,9 +618,6 @@ func (w *nfqwsDirectPreparationWitness) prove(ctx context.Context, expected []by
 		w.owners,
 		e.material.control.CurrentForCleanup,
 	} {
-		if check == nil {
-			return ErrNFQWSScopedOwner
-		}
 		if err := check(ctx); err != nil {
 			return err
 		}
@@ -587,12 +625,25 @@ func (w *nfqwsDirectPreparationWitness) prove(ctx context.Context, expected []by
 	return ctx.Err()
 }
 
-// current compares every original held root and file image with the paths
-// and refuses any other entry in the transaction directory. Caller holds w.mu.
+// current re-checks eligibility and compares every original held root, file
+// image and lock with the paths, refusing any other entry in the transaction
+// directory. Caller holds w.mu (never taken under the locks neverSealed uses).
 func (w *nfqwsDirectPreparationWitness) current(ctx context.Context, expected []byte) error {
 	e := w.execution
 	r := w.review
-	if w.self != w || w.closed || ctx == nil || ctx.Err() != nil || e == nil || r == nil || w.dir == nil {
+	if w.self != w || w.closed || ctx == nil || ctx.Err() != nil || e == nil || r == nil || w.dir == nil || w.candidate.file == nil {
+		return ErrNFQWSScopedOwner
+	}
+	if _, present, err := e.gate.preEffectNFQParticipant(ctx, e.plan, w.root); !present || err != nil {
+		return errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	attempted, ok := e.neverSealed(w)
+	if !ok || !w.statesEligible(attempted) {
+		return ErrNFQWSScopedOwner
+	}
+	// The live adapter binding and tools must still be the frozen originals.
+	if e.lan != e.gate.Binding || e.lan == nil || e.lan.Runtime != e.runtime || e.runtime == nil ||
+		e.runtime.IP != e.runtimeFrozen.IP || e.runtime.IPTables != e.runtimeFrozen.IPTables || e.runtime.IP6Tables != e.runtimeFrozen.IP6Tables {
 		return ErrNFQWSScopedOwner
 	}
 	if err := e.runtimeFrozen.checkTools(ctx, e.plan.LAN); err != nil {
@@ -633,7 +684,7 @@ func (w *nfqwsDirectPreparationWitness) current(ctx context.Context, expected []
 		return err
 	}
 	switch w.prepState {
-	case directWriterWritten, directWriterRemoved:
+	case directWriterWritten, directWriterUnsynced, directWriterRemoved:
 		if err := w.prep.current(w.dir, policyAdditionFile); err != nil {
 			return err
 		}
@@ -642,7 +693,10 @@ func (w *nfqwsDirectPreparationWitness) current(ctx context.Context, expected []
 			return ErrNFQWSScopedOwner
 		}
 	default:
-		return ErrPolicyAdditionUnknown
+		return ErrNFQWSScopedOwner
+	}
+	if err := w.lockCurrent(); err != nil {
+		return err
 	}
 	if err := w.ownerCurrent(r, expected); err != nil {
 		return err
@@ -659,8 +713,9 @@ func (w *nfqwsDirectPreparationWitness) ownerCurrent(r *nfqwsPreEffectLANReview,
 	relative := filepath.Join(NetworkPolicyAdapterID, "owner.json")
 	if w.ownerDir == nil {
 		// The owner writer never opened its directory, so it never wrote.
+		// Any owner present is another owner, never this preparation's.
 		if w.ownerState != directWriterNone {
-			return ErrPolicyAdditionUnknown
+			return ErrNFQWSScopedOwner
 		}
 		if _, err := r.manager.Stat(relative); !errors.Is(err, os.ErrNotExist) {
 			return ErrNFQWSScopedOwner
@@ -691,7 +746,7 @@ func (w *nfqwsDirectPreparationWitness) ownerCurrent(r *nfqwsPreEffectLANReview,
 		}
 		return nil
 	default:
-		return ErrPolicyAdditionUnknown
+		return ErrNFQWSScopedOwner
 	}
 }
 
@@ -710,18 +765,72 @@ func (w *nfqwsDirectPreparationWitness) listingCurrent() error {
 				return ErrNFQWSScopedOwner
 			}
 		case policyAdditionLock:
-			if !w.lockAttempted {
-				return ErrNFQWSScopedOwner
-			}
-			info, err := w.dir.Stat(policyAdditionLock)
-			if err != nil || !validCloudflareScanLockFile(info) || info.Size() > int64(len(policyAdditionMarker)) || w.lockInfo != nil && !os.SameFile(w.lockInfo, info) {
-				return errors.Join(ErrNFQWSScopedOwner, err)
+			if w.lockInfo == nil {
+				return ErrNFQWSScopedOwner // Never this writer's own lock.
 			}
 		default:
 			return ErrNFQWSScopedOwner
 		}
 	}
 	return nil
+}
+
+// lockCurrent requires exactly this writer's own lock while it created one,
+// and proves that no other session holds it. It opens without O_CREATE.
+func (w *nfqwsDirectPreparationWitness) lockCurrent() error {
+	if w.lockInfo == nil {
+		if _, err := w.dir.Stat(policyAdditionLock); !errors.Is(err, os.ErrNotExist) {
+			return ErrNFQWSScopedOwner
+		}
+		return nil
+	}
+	if w.heldLock != nil {
+		// Taken by this writer's own retirement write: compare, never relock.
+		held, err := w.heldLock.Stat()
+		path, pathErr := w.dir.Stat(policyAdditionLock)
+		if err != nil || pathErr != nil || !os.SameFile(w.lockInfo, held) || !os.SameFile(w.lockInfo, path) {
+			return errors.Join(ErrNFQWSScopedOwner, err, pathErr)
+		}
+		return nil
+	}
+	file, err := w.openOwnLock()
+	if err != nil {
+		return err
+	}
+	unlockCloudflareScanFile(file)
+	return file.Close()
+}
+
+func (w *nfqwsDirectPreparationWitness) openOwnLock() (*os.File, error) {
+	info, err := w.dir.Stat(policyAdditionLock)
+	if err != nil || !validCloudflareScanLockFile(info) || info.Size() != int64(len(policyAdditionMarker)) || !os.SameFile(w.lockInfo, info) {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	file, err := openNFQWS2LockFile(w.dir, policyAdditionLock, false)
+	if err != nil {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			file.Close()
+		}
+	}()
+	held, err := file.Stat()
+	if err != nil || !validCloudflareScanLockFile(held) || !os.SameFile(w.lockInfo, held) {
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	if err := lockCloudflareScanFile(file); err != nil {
+		return nil, errors.Join(ErrPolicyAdditionBusy, err)
+	}
+	data := make([]byte, len(policyAdditionMarker)+1)
+	n, err := file.ReadAt(data, 0)
+	if err != io.EOF || string(data[:n]) != policyAdditionMarker {
+		unlockCloudflareScanFile(file)
+		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	keep = true
+	return file, nil
 }
 
 // Read the retained descriptor, then compare the path again. A pathname open
@@ -746,28 +855,36 @@ func (h nfqwsHeldImage) current(root *ownedfs.Root, name string) error {
 	return nil
 }
 
-// retirePreparation publishes "removed" through the original anchored
-// session and lock, replacing the held image only with this writer's own new
-// staged inode. Caller holds w.mu, after prove.
-func (w *nfqwsDirectPreparationWitness) retirePreparation(ctx context.Context, lan *LANPolicyRuntimePlan) error {
-	if w.prepState != directWriterWritten {
+// retirePreparation publishes "removed" under this writer's own existing lock
+// (never creating one), replacing the held image only with its own new staged
+// inode, and makes that durable before the owner may go. Caller holds w.mu,
+// after prove.
+func (w *nfqwsDirectPreparationWitness) retirePreparation(ctx context.Context, lan *LANPolicyRuntimePlan, expected []byte) error {
+	switch w.prepState {
+	case directWriterNone, directWriterRemoved:
 		return nil
+	case directWriterUnsynced:
+		return w.syncPreparation()
+	case directWriterWritten:
+	default:
+		return ErrNFQWSScopedOwner
 	}
-	s, err := openPolicyAdditionRootSession(ctx, w.root, w.execution.lan.options)
+	lock, err := w.openOwnLock()
 	if err != nil {
 		return err
 	}
-	defer s.close()
-	info, err := s.root.RootInfo()
-	if err != nil || !os.SameFile(info, w.dirInfo) {
-		return errors.Join(ErrNFQWSScopedOwner, err)
-	}
-	lock, err := s.lock.Stat()
-	if err != nil || w.lockInfo == nil || !os.SameFile(lock, w.lockInfo) {
-		return errors.Join(ErrNFQWSScopedOwner, err)
-	}
-	if err := w.prep.current(w.dir, policyAdditionFile); err != nil {
+	w.heldLock = lock
+	defer func() {
+		w.heldLock = nil
+		unlockCloudflareScanFile(lock)
+		lock.Close()
+	}()
+	if err := w.current(ctx, expected); err != nil {
 		return err
+	}
+	s := &policyAdditionSession{root: w.dir, path: w.root, options: w.execution.lan.options}
+	if s.options.boot == nil {
+		s.options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
 	// The held image is the authority; the strict decoder only confirms that
 	// this exact image is the original never-promoted active preparation.
@@ -790,24 +907,32 @@ func (w *nfqwsDirectPreparationWitness) retirePreparation(ctx context.Context, l
 	if err := w.faultAt("preparation-remove"); err != nil {
 		return w.preparationAfterFailure(old, err)
 	}
-	next, err := retainedWrite(s.root, policyAdditionFile, data)
+	next, _, err := retainedWrite(w.dir, policyAdditionFile, data)
 	if err != nil {
 		return w.preparationAfterFailure(old, err)
 	}
 	w.prep = next
-	w.prepState = directWriterRemoved
+	w.prepState = directWriterUnsynced
 	_ = old.file.Close()
+	return w.syncPreparation()
+}
+
+func (w *nfqwsDirectPreparationWitness) syncPreparation() error {
 	if err := w.faultAt("preparation-remove-sync"); err != nil {
 		return err
 	}
-	if runtime.GOOS == "linux" && s.root.Sync() != nil {
-		return ErrPolicyAdditionReceipt
+	if runtime.GOOS == "linux" {
+		if err := w.dir.Sync(); err != nil {
+			return errors.Join(ErrPolicyAdditionReceipt, err)
+		}
 	}
-	return ctx.Err()
+	w.prepState = directWriterRemoved
+	return nil
 }
 
-// A failed rename leaves the SAME original inode and image at the path, which
-// stays retryable. Anything else is an unknown result for this witness.
+// The SAME original inode and image still at the path means the rename did
+// not take effect and stays retryable. Anything else is an unknown result,
+// which declines this path from the next cycle on.
 func (w *nfqwsDirectPreparationWitness) preparationAfterFailure(old nfqwsHeldImage, cause error) error {
 	if old.current(w.dir, policyAdditionFile) != nil {
 		w.prepState = directWriterUnknown
@@ -816,34 +941,57 @@ func (w *nfqwsDirectPreparationWitness) preparationAfterFailure(old nfqwsHeldIma
 	return cause
 }
 
-// retireOwner removes exactly the held owner.json. Caller holds w.mu, after
-// the preparation reached "removed" (or was never written).
-func (w *nfqwsDirectPreparationWitness) retireOwner() error {
+// retireOwner unlinks exactly the held owner.json: it moves the path to a
+// private name, compares that entry with the held inode, and only then
+// unlinks it, so a swapped file is never removed. Caller holds w.mu, after the
+// preparation reached "removed" (or was never written).
+func (w *nfqwsDirectPreparationWitness) retireOwner(ctx context.Context, expected []byte) error {
+	if w.prepState != directWriterNone && w.prepState != directWriterRemoved {
+		return ErrNFQWSScopedOwner
+	}
 	switch w.ownerState {
 	case directWriterNone, directWriterRemoved:
 		return nil
-	case directWriterWritten:
-		if w.prepState == directWriterWritten {
-			return ErrPolicyAdditionUnknown
-		}
-		if err := w.owner.current(w.ownerDir, "owner.json"); err != nil {
-			return err
-		}
-		if err := w.faultAt("owner-remove"); err != nil {
-			return w.ownerAfterFailure(err)
-		}
-		if err := w.ownerDir.Remove("owner.json"); err != nil {
-			return w.ownerAfterFailure(err)
-		}
-		w.ownerState = directWriterUnlinked
 	case directWriterUnlinked:
+		return w.syncOwner()
+	case directWriterWritten:
 	default:
-		return ErrPolicyAdditionUnknown
+		return ErrNFQWSScopedOwner
 	}
-	if _, err := w.ownerDir.Stat("owner.json"); !errors.Is(err, os.ErrNotExist) {
+	if err := w.current(ctx, expected); err != nil {
+		return err
+	}
+	var nonce [8]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return err
+	}
+	retiring := ".retiring-owner-" + hex.EncodeToString(nonce[:])
+	if err := w.faultAt("owner-remove"); err != nil {
+		return w.ownerAfterFailure(err)
+	}
+	if err := w.ownerDir.Rename("owner.json", retiring); err != nil {
+		return w.ownerAfterFailure(err)
+	}
+	moved, err := w.ownerDir.Stat(retiring)
+	if err != nil || !os.SameFile(moved, w.owner.info) {
+		// Not this writer's inode: put it back untouched and decline.
 		w.ownerState = directWriterUnknown
-		return errors.Join(ErrPolicyAdditionUnknown, err)
+		return errors.Join(ErrPolicyAdditionUnknown, err, w.ownerDir.Rename(retiring, "owner.json"))
 	}
+	if err := w.ownerDir.Remove(retiring); err != nil {
+		if back := w.ownerDir.Rename(retiring, "owner.json"); back != nil || w.owner.current(w.ownerDir, "owner.json") != nil {
+			w.ownerState = directWriterUnknown
+			return errors.Join(ErrPolicyAdditionUnknown, err, back)
+		}
+		return err
+	}
+	w.ownerState = directWriterUnlinked
+	_ = w.owner.file.Close()
+	w.owner = nfqwsHeldImage{}
+	return w.syncOwner()
+}
+
+func (w *nfqwsDirectPreparationWitness) syncOwner() error {
 	if err := w.faultAt("owner-remove-sync"); err != nil {
 		return err
 	}
@@ -851,18 +999,12 @@ func (w *nfqwsDirectPreparationWitness) retireOwner() error {
 		return err
 	}
 	w.ownerState = directWriterRemoved
-	_ = w.owner.file.Close()
-	w.owner = nfqwsHeldImage{}
 	return nil
 }
 
 func (w *nfqwsDirectPreparationWitness) ownerAfterFailure(cause error) error {
 	if w.owner.current(w.ownerDir, "owner.json") == nil {
 		return cause // Still the SAME held inode and image: retryable.
-	}
-	if _, err := w.ownerDir.Stat("owner.json"); errors.Is(err, os.ErrNotExist) {
-		w.ownerState = directWriterUnlinked
-		return cause
 	}
 	w.ownerState = directWriterUnknown
 	return errors.Join(ErrPolicyAdditionUnknown, cause)

@@ -362,6 +362,13 @@ func (a *NetworkPolicyAdapter) preEffectNFQCompletion(ctx context.Context, p Pla
 // never-effect witness. Its fixed production leaf is e.cleanupCurrent; all
 // other executions retain the ordinary strict effects cleanup path.
 func (e *nfqws2ActiveExecution) pendingCleanupCurrent(ctx context.Context) error {
+	if e != nil {
+		// After Stage the original metadata writer owns this directory's
+		// description; its fixed production leaf is e.cleanupCurrent.
+		if owners := e.pendingDirectPreparationOwners(); owners != nil {
+			return owners(ctx)
+		}
+	}
 	if e != nil && e.gate != nil && e.material != nil {
 		root := filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID, NetworkPolicyAdapterID)
 		if handled, err := e.gate.inspectPreEffectNFQAbsence(ctx, e.plan, root, false); handled {

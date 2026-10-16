@@ -217,8 +217,14 @@ func TestNFQWSDirectPreparationWriterStates(t *testing.T) {
 	}
 }
 
-// An unknown writer result keeps the SAME witness and refuses every retry.
-func TestNFQWSDirectPreparationUnknownWriteKeepsOriginalRefusal(t *testing.T) {
+func cycleOf(ctx context.Context) *directPreparationCycle {
+	c, _ := ctx.Value(directPreparationCycleKey{}).(*directPreparationCycle)
+	return c
+}
+
+// An unknown writer result keeps the SAME witness and declines the
+// metadata-only path: only the unchanged strict path may settle that owner.
+func TestNFQWSDirectPreparationUnknownWriteDeclinesToStrictPath(t *testing.T) {
 	for _, point := range []string{"owner-write", "preparation-write"} {
 		t.Run(point, func(t *testing.T) {
 			f := newPreEffectLANFixture(t)
@@ -234,15 +240,16 @@ func TestNFQWSDirectPreparationUnknownWriteKeepsOriginalRefusal(t *testing.T) {
 			}
 			f.refuseNFQBeforeSeal(t)
 			for i := 0; i < 2; i++ {
-				if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); !errors.Is(err, ErrPolicyAdditionUnknown) {
-					t.Fatal("unknown writer result settled", point, err)
+				cleanup := f.model.cleanup
+				if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.model.cleanup == cleanup || cycleOf(f.ctx).rollback != nil {
+					t.Fatal("unknown writer result left the strict path", point, err)
 				}
-				if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+				if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil || cycleOf(f.ctx).verify != nil {
 					t.Fatal("unknown writer result verified", point)
 				}
 			}
-			if f.e.directPreparation != w || f.reads != 0 || f.model.cleanup != 0 {
-				t.Fatal("unknown result replaced the witness or reached an observer", f.reads, f.model.cleanup)
+			if f.e.directPreparation != w || f.reads != 0 {
+				t.Fatal("unknown result replaced the witness or reached the metadata-only proof", f.reads)
 			}
 		})
 	}
@@ -305,10 +312,10 @@ func TestNFQWSDirectPreparationNeedsExactNeverSealedParticipant(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil {
-				t.Fatal("non-original participant retired without its physical boundary", cut)
+			if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || cycleOf(f.ctx).rollback != nil {
+				t.Fatal("non-original participant was handled or retired without its physical boundary", cut, err)
 			}
-			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil || cycleOf(f.ctx).verify != nil {
 				t.Fatal("non-original participant verified", cut)
 			}
 			if f.reads != 0 {
@@ -391,7 +398,7 @@ func TestNFQWSDirectPreparationRefusesChangedOriginalFiles(t *testing.T) {
 // No transition happens before the complete fresh proof passes, and the SAME
 // witness completes once the refusing observation is clean again.
 func TestNFQWSDirectPreparationProofPrecedesEveryTransition(t *testing.T) {
-	for _, cut := range []string{"read-open", "owners", "retire", "inventory", "rpdb", "tool", "control", "cancel-after-read", "owner-after-read", "receipt-after-read", "foreign-after-read"} {
+	for _, cut := range []string{"read-open", "owners", "retire", "inventory", "gate-inventory", "rpdb", "tool", "lock-held", "control", "cancel-after-read", "owner-after-read", "receipt-after-read", "foreign-after-read"} {
 		t.Run(cut, func(t *testing.T) {
 			f := newPreEffectLANFixture(t)
 			w := f.activateLANThenRefuseNFQ(t)
@@ -402,9 +409,19 @@ func TestNFQWSDirectPreparationProofPrecedesEveryTransition(t *testing.T) {
 				f.model.rpdb = "73: from all lookup 254\n"
 				restore = func() { f.model.rpdb = "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n" }
 			case "tool":
-				original := f.e.runtimeFrozen.IPTables
-				f.e.runtimeFrozen.IPTables = ""
-				restore = func() { f.e.runtimeFrozen.IPTables = original }
+				original := f.e.runtime.IPTables
+				f.e.runtime.IPTables = "/other/iptables"
+				restore = func() { f.e.runtime.IPTables = original }
+			case "gate-inventory":
+				original := f.e.gateInventoryCheck
+				f.e.gateInventoryCheck = func(context.Context) error { return ErrBackendInventoryUnknown }
+				restore = func() { f.e.gateInventoryCheck = original }
+			case "lock-held":
+				other, err := openPolicyAdditionRootSession(f.ctx, f.root, f.e.lan.options)
+				if err != nil {
+					t.Fatal("foreign session", err)
+				}
+				restore = other.close
 			case "control":
 				_ = f.e.material.control.Close()
 			case "cancel-after-read":
@@ -433,6 +450,10 @@ func TestNFQWSDirectPreparationProofPrecedesEveryTransition(t *testing.T) {
 			if err := f.e.gate.Rollback(cycleContext(ctx), f.e.plan, f.root); err == nil {
 				t.Fatal("unsettled consumer/kernel/source observation retired the preparation", cut)
 			}
+			if cut == "lock-held" {
+				restore() // The state reader itself needs the lock.
+				restore = func() {}
+			}
 			requireDirectPreparationActive(t, f, cut)
 			if w.ownerState != directWriterWritten || w.prepState != directWriterWritten || f.model.cleanup != 0 {
 				t.Fatal("refused proof moved a writer state or used the strict guard", cut, w.ownerState, w.prepState)
@@ -456,7 +477,7 @@ func TestNFQWSDirectPreparationProofPrecedesEveryTransition(t *testing.T) {
 // Transition failures keep the SAME witness. A failed rename stays
 // retryable; a result that cannot be identified becomes unknown.
 func TestNFQWSDirectPreparationTransitionFailures(t *testing.T) {
-	for _, point := range []string{"preparation-remove", "preparation-remove-sync", "owner-remove", "owner-remove-sync", "preparation-replaced", "owner-replaced"} {
+	for _, point := range []string{"preparation-remove", "preparation-remove-sync", "owner-remove", "owner-remove-sync", "preparation-replaced", "owner-replaced", "owner-swapped"} {
 		t.Run(point, func(t *testing.T) {
 			f := newPreEffectLANFixture(t)
 			w := f.activateLANThenRefuseNFQ(t)
@@ -469,11 +490,17 @@ func TestNFQWSDirectPreparationTransitionFailures(t *testing.T) {
 						t.Error(err)
 					}
 					return errors.New("modeled rename with unknown result")
-				case point == "owner-replaced" && p == "owner-remove":
+					case point == "owner-replaced" && p == "owner-remove":
 					if err := replaceHeldFile(f.e.gate.ownerPath(), nil); err != nil {
 						t.Error(err)
 					}
 					return errors.New("modeled unlink with unknown result")
+				case point == "owner-swapped" && p == "owner-remove":
+					// Swapped after the last bookend: the private move must
+					// detect a foreign inode and put it back untouched.
+					if err := replaceHeldFile(f.e.gate.ownerPath(), nil); err != nil {
+						t.Error(err)
+					}
 				}
 				return nil
 			}
@@ -484,10 +511,16 @@ func TestNFQWSDirectPreparationTransitionFailures(t *testing.T) {
 				t.Fatal("incomplete transition verified", point)
 			}
 			w.fault = nil
+			cleanup := f.model.cleanup
 			err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root)
-			if strings.HasSuffix(point, "-replaced") {
-				if !errors.Is(err, ErrPolicyAdditionUnknown) || f.e.directPreparation != w {
-					t.Fatal("unidentified transition result settled", point, err)
+			if strings.HasSuffix(point, "-replaced") || point == "owner-swapped" {
+				// An unidentified result declines to the strict path, which
+				// cannot settle it without its physical boundary.
+				if err == nil || cycleOf(f.ctx).rollback != nil || f.model.cleanup == cleanup || f.e.directPreparation != w {
+					t.Fatal("unidentified transition result left the strict path", point, err)
+				}
+				if _, statErr := os.Stat(f.e.gate.ownerPath()); statErr != nil {
+					t.Fatal("unidentified owner.json was removed", point, statErr)
 				}
 				return
 			}
@@ -531,11 +564,12 @@ func TestNFQWSDirectPreparationOnlyAfterOriginalEmptySnapshot(t *testing.T) {
 // actual Manager compensation, journal publications and pending owner run.
 type directPreparationConsumer struct {
 	*fakeAdapter
-	f      *preEffectLANFixture
-	t      *testing.T
-	sealed bool
-	proof  bool
-	fault  string
+	f            *preEffectLANFixture
+	t            *testing.T
+	sealed       bool
+	proof        bool
+	failValidate bool
+	fault        func(f *preEffectLANFixture, point string) error
 }
 
 func (a *directPreparationConsumer) Snapshot(context.Context, Plan, string) error { return nil }
@@ -545,13 +579,8 @@ func (a *directPreparationConsumer) Stage(context.Context, Plan, string) error {
 	if w == nil {
 		return ErrNFQWSScopedOwner
 	}
-	if a.fault != "" {
-		w.fault = func(point string) error {
-			if point == a.fault {
-				return errors.New("modeled crash-boundary write error")
-			}
-			return nil
-		}
+	if a.fault != nil {
+		w.fault = func(point string) error { return a.fault(a.f, point) }
 	}
 	w.owners = func(c context.Context) error {
 		if c.Value(nfqws2ActiveExecutionKey{}) != a.f.e || !a.f.e.retired {
@@ -568,7 +597,14 @@ func (a *directPreparationConsumer) Stage(context.Context, Plan, string) error {
 	}
 	return nil
 }
-func (a *directPreparationConsumer) Validate(context.Context, Plan, string) error { return nil }
+func (a *directPreparationConsumer) Validate(context.Context, Plan, string) error {
+	if a.failValidate {
+		// The boundary is lost after Stage, before LAN Activate.
+		a.f.physical = errors.New("modeled notifications.route.tracked")
+		return a.f.physical
+	}
+	return nil
+}
 func (a *directPreparationConsumer) Activate(context.Context, Plan, string) error {
 	a.f.e.mu.Lock()
 	a.f.e.activationAttempted = true
@@ -589,19 +625,14 @@ func (a *directPreparationConsumer) VerifyRollback(ctx context.Context, _ Plan, 
 
 func directPreparationManager(t *testing.T, sealed bool, refuse string) (*preEffectLANFixture, Execution, error) {
 	t.Helper()
-	return directPreparationManagerRun(t, sealed, refuse, "")
+	return directPreparationManagerRun(t, &directPreparationConsumer{sealed: sealed}, refuse)
 }
 
-func directPreparationManagerWithFault(t *testing.T, fault string) (*preEffectLANFixture, Execution, error) {
-	t.Helper()
-	return directPreparationManagerRun(t, false, "", fault)
-}
-
-func directPreparationManagerRun(t *testing.T, sealed bool, refuse, fault string) (*preEffectLANFixture, Execution, error) {
+func directPreparationManagerRun(t *testing.T, a *directPreparationConsumer, refuse string) (*preEffectLANFixture, Execution, error) {
 	t.Helper()
 	f := newPreEffectLANFixture(t)
 	m := f.e.material.manager
-	a := &directPreparationConsumer{fakeAdapter: &fakeAdapter{id: "nfqws2"}, f: f, t: t, sealed: sealed, proof: true, fault: fault}
+	a.fakeAdapter, a.f, a.t, a.proof = &fakeAdapter{id: "nfqws2"}, f, t, true
 	m.Adapters["nfqws2"] = a
 	f.e.plan.Adapters = []string{NetworkPolicyAdapterID, "nfqws2"}
 	f.e.plan.NetworkProfileID = executionNetwork
@@ -658,8 +689,8 @@ func TestNFQWSDirectPreparationPendingOwnerCompletesOnRetry(t *testing.T) {
 	}
 	requireDirectPreparationActive(t, f, "first-cycle")
 	f.refuse = ""
-	if err := m.pendingNFQ.join(f.ctx); err != nil {
-		t.Fatal("SAME pending owner could not complete its own metadata", err)
+	if err := m.JoinPendingManagedNFQWS(f.ctx); err != nil || m.HasPendingManagedNFQWS() {
+		t.Fatal("SAME pending owner could not complete its own metadata through the public Join", err)
 	}
 	if owner, status := directPreparationState(t, f); owner || !status.Removed {
 		t.Fatal("pending completion left the original owner/preparation", owner, status)
@@ -676,7 +707,7 @@ func TestNFQWSDirectPreparationSealedParticipantKeepsStrictCompensation(t *testi
 	if f.reads != 0 || f.model.cleanup == 0 {
 		t.Fatal("sealed participant reached the metadata-only proof", f.reads, f.model.cleanup)
 	}
-	if err := m.pendingNFQ.join(f.ctx); err == nil {
+	if err := m.JoinPendingManagedNFQWS(f.ctx); err == nil || !m.HasPendingManagedNFQWS() {
 		t.Fatal("sealed participant completed without its physical boundary")
 	}
 	requireDirectPreparationActive(t, f, "sealed")
@@ -727,26 +758,255 @@ func TestNFQWSDirectPreparationRetiresWithCommandBeforeSeal(t *testing.T) {
 	}
 }
 
-// An unknown writer result keeps the SAME pending owner and a retry neither
-// reruns the compensation nor rewrites any journal.
-func TestNFQWSDirectPreparationPendingUnknownDoesNotRepublish(t *testing.T) {
-	f, result, err := directPreparationManagerWithFault(t, "owner-write")
+// A transition result this writer cannot identify keeps the SAME pending
+// owner; every retry declines to the strict path and retires nothing.
+func TestNFQWSDirectPreparationPendingUnknownKeepsSameOwner(t *testing.T) {
+	a := &directPreparationConsumer{fault: func(f *preEffectLANFixture, point string) error {
+		if point != "preparation-remove" {
+			return nil
+		}
+		if err := replaceHeldFile(filepath.Join(f.root, policyAdditionFile), nil); err != nil {
+			return err
+		}
+		return errors.New("modeled rename with unknown result")
+	}}
+	f, result, err := directPreparationManagerRun(t, a, "")
 	m := f.e.material.manager
 	if err == nil || result.State != "rollback-failed" || result.RollbackVerified || !m.HasPendingManagedNFQWS() {
-		t.Fatal("unknown owner write was not retained", result.State, err)
+		t.Fatal("unknown transition was not retained", result.State, err)
 	}
-	latest := filepath.Join(f.e.material.managerRoot, "latest-execution.json")
-	before, readErr := os.ReadFile(latest)
-	if readErr != nil {
-		t.Fatal(readErr)
-	}
+	reads := f.reads
 	for i := 0; i < 2; i++ {
-		if err := m.pendingNFQ.join(f.ctx); !errors.Is(err, ErrPolicyAdditionUnknown) {
-			t.Fatal("unknown writer result settled or reran", err)
+		if err := m.JoinPendingManagedNFQWS(f.ctx); err == nil || !m.HasPendingManagedNFQWS() {
+			t.Fatal("unknown transition settled", err)
 		}
 	}
-	after, readErr := os.ReadFile(latest)
-	if readErr != nil || string(after) != string(before) || !m.HasPendingManagedNFQWS() {
-		t.Fatal("retry of an unknown result rewrote the journal or released the owner")
+	if f.reads != reads {
+		t.Fatal("unknown transition re-entered the metadata-only proof")
 	}
+	if _, err := os.Stat(f.e.gate.ownerPath()); err != nil {
+		t.Fatal("owner retired after an unknown preparation result", err)
+	}
+}
+
+// The production witness leaves are exactly the participant's own cleanup
+// and full NFQ absence readers; the fixture's incomplete NI/source leaves
+// therefore refuse, and nothing is retired.
+func TestNFQWSDirectPreparationProductionLeavesAreTheOriginalReaders(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, false)
+	if err := f.e.gate.Stage(f.ctx, f.e.plan, f.root); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.e.gate.Activate(f.ctx, f.e.plan, f.root); err != nil {
+		t.Fatal(err)
+	}
+	f.refuseNFQBeforeSeal(t)
+	w := f.e.directPreparation
+	if err := f.e.cleanupCurrent(f.ctx); err == nil {
+		t.Fatal("fixture unexpectedly completes the original owners")
+	}
+	if err := w.owners(f.ctx); err == nil {
+		t.Fatal("production owner leaf is not the original cleanup reader")
+	}
+	if err := w.observe(f.ctx); err == nil {
+		t.Fatal("production observe leaf is not the original NFQ absence reader")
+	}
+	if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil {
+		t.Fatal("incomplete original readers retired the preparation")
+	}
+	requireDirectPreparationActive(t, f, "production-leaves")
+}
+
+// Same inode, same size, different bytes: the held image comparison refuses.
+func TestNFQWSDirectPreparationRefusesInPlaceEdits(t *testing.T) {
+	for _, cut := range []string{"owner", "preparation", "candidate"} {
+		t.Run(cut, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.activateLANThenRefuseNFQ(t)
+			path := map[string]string{"owner": f.e.gate.ownerPath(), "preparation": filepath.Join(f.root, policyAdditionFile), "candidate": filepath.Join(f.root, "candidate.json")}[cut]
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := os.OpenFile(path, os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := file.WriteAt([]byte{' '}, info.Size()-2); err != nil {
+				t.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
+				t.Fatal("same-inode edit was retired", cut, err)
+			}
+			if _, err := os.Stat(f.e.gate.ownerPath()); err != nil {
+				t.Fatal("owner removed after a refused proof", cut, err)
+			}
+		})
+	}
+}
+
+// An owner that appears after Stage is never this preparation's owner.
+func TestNFQWSDirectPreparationRefusesPriorOwner(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	w := f.stageDirectPreparation(t)
+	other, err := f.e.gate.gateFor(f.e.plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other.PlanID = "dp-fedcba9876543210"
+	if err := writeNetworkPolicyGate(f.e.gate.ownerPath(), other); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(f.e.gate.ownerPath())
+	if err := f.e.gate.Activate(f.ctx, f.e.plan, f.root); err == nil {
+		t.Fatal("Activate replaced a prior owner")
+	}
+	if w.ownerState != directWriterNone || w.ownerDir != nil {
+		t.Fatal("prior owner was attributed to the original writer", w.ownerState)
+	}
+	f.refuseNFQBeforeSeal(t)
+	if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
+		t.Fatal("prior owner was retired or ignored", err)
+	}
+	if after, _ := os.ReadFile(f.e.gate.ownerPath()); string(after) != string(before) {
+		t.Fatal("prior owner changed")
+	}
+}
+
+// Only the lock this writer created is accepted; a foreign lock refuses even
+// after its holder released it.
+func TestNFQWSDirectPreparationRefusesForeignLock(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	w := f.stageDirectPreparation(t)
+	other, err := openPolicyAdditionRootSession(f.ctx, f.root, f.e.lan.options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.e.gate.Activate(f.ctx, f.e.plan, f.root); err == nil {
+		t.Fatal("preparation session adopted a foreign lock")
+	}
+	if w.lockAttempted || w.lockInfo != nil || w.ownerState != directWriterWritten {
+		t.Fatal("foreign lock was attributed to the original writer", w.lockAttempted, w.ownerState)
+	}
+	f.refuseNFQBeforeSeal(t)
+	for _, release := range []bool{false, true} {
+		if release {
+			other.close()
+		}
+		if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
+			t.Fatal("foreign lock accepted", release, err)
+		}
+		if _, err := os.Stat(f.e.gate.ownerPath()); err != nil {
+			t.Fatal("owner retired beside a foreign lock", err)
+		}
+	}
+}
+
+// A missing original lock refuses and is never recreated by retirement.
+func TestNFQWSDirectPreparationRefusesMissingLock(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.activateLANThenRefuseNFQ(t)
+	lock := filepath.Join(f.root, policyAdditionLock)
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
+			t.Fatal("missing original lock accepted", err)
+		}
+		if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("retirement recreated a lock", err)
+		}
+	}
+	requireDirectPreparationActive(t, f, "missing-lock")
+}
+
+// A later cycle can verify only after its own handled Rollback.
+func TestNFQWSDirectPreparationVerifyNeedsItsOwnCycleRollback(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.activateLANThenRefuseNFQ(t)
+	if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if ok, err := f.e.gate.VerifyRollback(f.nextCycle(), f.e.plan, f.root); ok || err == nil {
+		t.Fatal("verification without its cycle's Rollback accepted")
+	}
+}
+
+// The physical boundary can also be lost after Stage and before LAN Activate
+// (Validate, Canary or the Manager's network check). Only candidate.json was
+// published; the never-activated Snapshot witness refuses that extra entry.
+func TestNFQWSDirectPreparationRetiresAfterStageBeforeLANActivate(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.stageDirectPreparation(t)
+	f.physical = errors.New("modeled notifications.route.tracked")
+	f.e.retired = true
+	if !f.e.neverActivatedLAN() {
+		t.Fatal("phase model is not before LAN Activate")
+	}
+	if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err != nil {
+		t.Fatal("post-Stage refusal cannot complete without its physical boundary", err)
+	}
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); err != nil || !ok {
+		t.Fatal("post-Stage refusal not verified", ok, err)
+	}
+	if owner, status := directPreparationState(t, f); owner || status != (PolicyAdditionStatus{}) {
+		t.Fatal("post-Stage retirement left LAN metadata", owner, status)
+	}
+	if f.model.cleanup != 0 || f.reads != 2 {
+		t.Fatal("post-Stage retirement used the physical guard or skipped a proof", f.model.cleanup, f.reads)
+	}
+}
+
+func TestNFQWSDirectPreparationPostStageRefusesForeignEntries(t *testing.T) {
+	for _, cut := range []string{"owner", "preparation", "lock"} {
+		t.Run(cut, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.stageDirectPreparation(t)
+			switch cut {
+			case "owner":
+				state, _ := f.e.gate.gateFor(f.e.plan)
+				if err := writeNetworkPolicyGate(f.e.gate.ownerPath(), state); err != nil {
+					t.Fatal(err)
+				}
+			case "preparation":
+				if err := os.WriteFile(filepath.Join(f.root, policyAdditionFile), []byte("{}"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "lock":
+				if err := os.WriteFile(filepath.Join(f.root, policyAdditionLock), []byte(policyAdditionMarker), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.physical = errors.New("modeled notifications.route.tracked")
+			f.e.retired = true
+			if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
+				t.Fatal("foreign post-Stage entry retired", cut, err)
+			}
+		})
+	}
+}
+
+func TestNFQWSDirectPreparationManagerSettlesPostStageRefusal(t *testing.T) {
+	f, result, err := directPreparationManagerRun(t, &directPreparationConsumer{failValidate: true}, "")
+	m := f.e.material.manager
+	if err == nil || result.State != "rolled-back" || result.RollbackVerified || m.HasPendingManagedNFQWS() {
+		t.Fatal("post-Stage refusal did not settle", result.State, err)
+	}
+	for _, step := range result.Steps {
+		if step.Phase == "activate" {
+			t.Fatal("post-Stage model crossed into Activate", step)
+		}
+	}
+	if f.model.cleanup != 0 || f.reads != 2 {
+		t.Fatal("post-Stage compensation used the physical guard or skipped a proof", f.model.cleanup, f.reads)
+	}
+	readPreEffectTerminal(t, f)
 }

@@ -79,10 +79,15 @@ func (b *LANPolicyReceiptBinding) applyDirect(ctx context.Context, p *LANPolicyR
 		return err
 	}
 	if writer != nil {
-		writer.beginSession()
+		if err := writer.beginSession(); err != nil {
+			return err
+		}
 	}
 	s, err := openPolicyAdditionRootSession(ctx, root, b.options)
 	if err != nil {
+		if writer != nil {
+			writer.sessionFailed()
+		}
 		return err
 	}
 	defer s.close()

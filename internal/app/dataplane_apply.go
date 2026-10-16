@@ -8,10 +8,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
-// Callers retain their existing exclusive admission until this returns. Every
-// application path, including background repair and Stop, uses the same fence:
-// an unconfirmed rollback cannot be followed by another admitted mutation.
-// A fence never releases the current lease or interrupts rollback cleanup.
 // dataplaneExecutionMutated reports whether any adapter step that can change
 // the network was attempted. Rollback without readback after it is unproven.
 func dataplaneExecutionMutated(execution dataplane.Execution) bool {
@@ -23,6 +19,10 @@ func dataplaneExecutionMutated(execution dataplane.Execution) bool {
 	return false
 }
 
+// Callers retain their existing exclusive admission until this returns. Every
+// application path, including background repair and Stop, uses the same fence:
+// an unconfirmed rollback cannot be followed by another admitted mutation.
+// A fence never releases the current lease or interrupts rollback cleanup.
 func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit func() (func() error, error)) (dataplane.Execution, error) {
 	if a.Operations.Snapshot().Fenced {
 		return dataplane.Execution{}, operationgate.ErrRecovery
