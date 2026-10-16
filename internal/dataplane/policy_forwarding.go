@@ -542,6 +542,29 @@ func (a *ProxyTunnelAdapter) installForwarding(ctx context.Context, state Policy
 }
 
 func (a *ProxyTunnelAdapter) verifyForwarding(ctx context.Context, state PolicyState) error {
+	if err := a.verifyForwardingIntent(ctx, state); err != nil {
+		return err
+	}
+	lease, exists, err := a.readForwardingLease()
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("proxy forwarding ownership is not committed to this policy")
+	}
+	return a.verifyForwardingTables(ctx, state, lease)
+}
+
+// Same kernel/ingress checks with an already decoded ownership lease. The
+// original retained reader uses bounded held-root IO instead of reopening it.
+func (a *ProxyTunnelAdapter) verifyForwardingLease(ctx context.Context, state PolicyState, lease proxyForwardingLease) error {
+	if err := a.verifyForwardingIntent(ctx, state); err != nil {
+		return err
+	}
+	return a.verifyForwardingTables(ctx, state, lease)
+}
+
+func (a *ProxyTunnelAdapter) verifyForwardingIntent(ctx context.Context, state PolicyState) error {
 	if err := a.validateForwarding(state, state.Forwarding); err != nil {
 		return err
 	}
@@ -552,11 +575,11 @@ func (a *ProxyTunnelAdapter) verifyForwarding(ctx context.Context, state PolicyS
 	if !reflect.DeepEqual(current, state.Forwarding) {
 		return errors.New("proxy client ingress changed since installation")
 	}
-	lease, exists, err := a.readForwardingLease()
-	if err != nil {
-		return err
-	}
-	if !exists || !reflect.DeepEqual(lease.Policy.Forwarding, state.Forwarding) {
+	return nil
+}
+
+func (a *ProxyTunnelAdapter) verifyForwardingTables(ctx context.Context, state PolicyState, lease proxyForwardingLease) error {
+	if !reflect.DeepEqual(lease.Policy.Forwarding, state.Forwarding) {
 		return errors.New("proxy forwarding ownership is not committed to this policy")
 	}
 	for _, table := range proxyFirewallTables(state) {

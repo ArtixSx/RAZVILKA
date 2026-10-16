@@ -309,6 +309,11 @@ func (s *policyAdditionSession) load(ctx context.Context) error {
 	if err := s.loadDocument(ctx); err != nil {
 		return err
 	}
+	return s.validatePolicyDocument(ctx)
+}
+
+// Pure comparison with the policy/owner already bound by this session.
+func (s *policyAdditionSession) validatePolicyDocument(ctx context.Context) error {
 	wanted, err := policyAdditionExpected(s.state)
 	if err != nil {
 		return err
@@ -342,6 +347,11 @@ func (s *policyAdditionSession) loadDocument(ctx context.Context) error {
 	if err != nil {
 		return ErrPolicyAdditionReceipt
 	}
+	return s.decodeDocument(ctx, data)
+}
+
+// Pure decoder; retained observation supplies its own nonblocking held read.
+func (s *policyAdditionSession) decodeDocument(ctx context.Context, data []byte) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if d.Decode(&s.doc) != nil || d.Decode(new(any)) != io.EOF {

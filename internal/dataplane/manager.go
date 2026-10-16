@@ -66,6 +66,8 @@ type Manager struct {
 	replacementXray    *xraySelectedTCPReplacement
 	retainedWGMu       sync.Mutex
 	retainedWG         *retainedWGExecution
+	retainedSingMu     sync.Mutex
+	retainedSing       *RetainedSingReview // Read-only preparation, never a delta/skip grant.
 }
 
 type Adapter interface {
@@ -633,6 +635,7 @@ func (m *Manager) Record(plan Plan) error {
 }
 
 func (m *Manager) recordLocked(plan Plan) error {
+	m.revokeRetainedSingReview()
 	m.journalMu.Lock()
 	defer m.journalMu.Unlock()
 	data, err := json.MarshalIndent(plan, "", "  ")
@@ -826,6 +829,7 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		return Recovery{State: "cancelled", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: time.Now().UTC().Format(time.RFC3339Nano)}, err
 	}
 	defer m.endOperation()
+	m.revokeRetainedSingReview()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
 	if settled, err := m.settleCommittedPublication(); err != nil {
 		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "journal", State: "failed", Detail: "The interrupted commit could not be completed in the journal."})
@@ -1010,6 +1014,7 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		return nil, err
 	}
 	defer m.endOperation()
+	m.revokeRetainedSingReview()
 	plan, exists, err := m.committedLocked()
 	if err != nil {
 		return nil, err
@@ -1106,6 +1111,7 @@ func (m *Manager) Deactivate(ctx context.Context) (Deactivation, error) {
 		return Deactivation{State: "cancelled", StartedAt: now, FinishedAt: now}, err
 	}
 	defer m.endOperation()
+	m.revokeRetainedSingReview()
 	report := Deactivation{State: "deactivated", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []DeactivationStep{}}
 	m.registryMu.RLock()
 	ids := make([]string, 0, len(m.Adapters))
@@ -1172,6 +1178,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	defer m.endOperation()
+	m.revokeRetainedSingReview()
 	pair, pairErr := m.xrayReplacementFor(ctx, plan)
 	if pairErr != nil {
 		if m.pendingUnenteredXrayReplacement(ctx, plan) {
@@ -1743,6 +1750,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				return rollback(err)
 			}
 		}
+		m.finishRetainedSingRequest(ctx, plan, execution)
 		return nil
 	}
 
