@@ -34,6 +34,7 @@ type SupervisedCompatibilityProvider struct {
 	managedControl    *operationgate.ControlEpochReview
 	managedDescriptor components.NFQWSRuntimeDescriptor
 	managedInvocation *managedCompatibilityInvocation
+	managedTiming     *managedCompatibilityTiming
 	// Written only after successful original completion retirement. Reopening
 	// saved receipt data never manufactures this process-lifetime proof.
 	managedRetiredSession *compatibilitySession
@@ -87,8 +88,17 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	if parent == nil {
 		return result, errors.New("compatibility context is required")
 	}
+	phaseTiming := "lua-init"
+	if len(args) > 0 && args[0] == "--dry-run" {
+		phaseTiming = "dry-run"
+	}
+	totalTiming := managedTiming(parent, "provider-run", phaseTiming)
+	defer func() { totalTiming(err) }()
 	if p.managedControl != nil {
-		if err := p.managedMaterialCurrent(parent); err != nil {
+		materialTiming := managedTiming(parent, "phase-material", phaseTiming)
+		materialErr := p.managedMaterialCurrent(parent)
+		materialTiming(materialErr)
+		if err := materialErr; err != nil {
 			return result, err
 		}
 	}
@@ -133,10 +143,16 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	}
 	ctx, cancel := context.WithTimeout(parent, ProbeTimeout)
 	defer cancel()
-	if err := compatibilityProtectedReview(p.manager.Path, p.review); err != nil {
+	protectedTiming := managedTiming(parent, "protected-paths", phaseTiming)
+	protectedErr := compatibilityProtectedReview(p.manager.Path, p.review)
+	protectedTiming(protectedErr)
+	if err := protectedErr; err != nil {
 		return result, err
 	}
-	if err := compatibilityFilesUnchanged(p.review); err != nil {
+	filesTiming := managedTiming(parent, "phase-file-hashes", phaseTiming)
+	filesErr := compatibilityFilesUnchanged(p.review)
+	filesTiming(filesErr)
+	if err := filesErr; err != nil {
 		return result, err
 	}
 	if err := compatibilityControlCurrent(ctx, p.review); err != nil {
@@ -172,9 +188,11 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	} else {
 		session.LuaInit = invocation
 	}
+	intentTiming := managedTiming(parent, "phase-intent-cas", phaseTiming)
 	p.manager.mu.Lock()
 	if !p.manager.nativeRunning {
 		p.manager.mu.Unlock()
+		intentTiming(errors.New("admission"))
 		return result, errors.New("compatibility provider requires Manager validation admission")
 	}
 	managed := managedInvocation(parent, p)
@@ -186,6 +204,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 		err = p.manager.beginCompatibilitySessionLocked(ctx, session)
 	}
 	p.manager.mu.Unlock()
+	intentTiming(err)
 	if err != nil {
 		if managedPhase != nil {
 			result.Quiescent = false
@@ -196,9 +215,14 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	// After intent, failure is retained unknown unless this exact helper
 	// publishes and the parent acknowledges an ECHILD terminal receipt.
 	result.Quiescent = false
+	launchTiming := managedTiming(parent, "helper-start-wait", phaseTiming)
 	helper, launchErr := compatibilityLaunchSupervisor(ctx, p.manager.Path, p.review, id, p.helperPrefix)
+	launchTiming(launchErr)
 	if managedPhase != nil {
-		return p.completeManagedPhase(managed, managedPhase, launchErr)
+		ackTiming := managedTiming(parent, "phase-completion-ack", phaseTiming)
+		completion, completionErr := p.completeManagedPhase(managed, managedPhase, launchErr)
+		ackTiming(completionErr)
+		return completion, completionErr
 	}
 	if launchErr != nil {
 		err = launchErr
@@ -255,7 +279,9 @@ func compatibilityControlCurrent(ctx context.Context, review compatibilityReview
 // this point leaves durable unknown, even if ACK fsync eventually completes.
 // This is only a precondition check. The guarded publisher retains the marker
 // in memory until its exact candidate image has been confirmed on disk.
-func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, validation Validation) error {
+func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, validation Validation) (resultErr error) {
+	endTiming := managedTiming(ctx, "publication-guard", "publication")
+	defer func() { endTiming(resultErr) }()
 	if validation.QuiescenceUnknown || !m.state.CompatibilityFinalizing || ctx.Err() != nil || m.compatibilityRetainedUnknownLocked() || m.writeBlocked || !m.nativeRunning || m.state.CompatibilitySession == nil || compatibilitySessionUnknown(*m.state.CompatibilitySession) {
 		return ErrCompatibilityQuiescenceUnknown
 	}

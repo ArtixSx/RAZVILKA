@@ -233,6 +233,7 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	managedLife, stopManagedLife := context.WithCancel(context.Background())
 	var list *app.ManagedNFQWSListRuntime
 	attempted, joined := false, false
+	compatibilityHTTPMS := int64(-1)
 	closeManaged := func(cleanup context.Context) error {
 		if joined {
 			publishProgress()
@@ -267,6 +268,18 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 		stopManagedLife()
 		progress.Cleanup, progress.CleanupStage = "joined", "joined"
 		publishProgress()
+		// All original closes above succeeded. Diagnostic output cannot delay
+		// native retirement, consume its deadline or replace its result.
+		timing, timingErr := json.Marshal(struct {
+			Kind   string                                         `json:"kind"`
+			HTTPMS int64                                          `json:"http_ms"`
+			Timing strategylab.ManagedCompatibilityTimingSnapshot `json:"timing"`
+		}{"managed-compatibility-timing", compatibilityHTTPMS, strategy.ManagedCompatibilityTimings()})
+		if timingErr != nil {
+			t.Error("stage=compatibility_timing code=diagnostic_encoding_refused")
+		} else {
+			t.Logf("%s", timing)
+		}
 		return nil
 	}
 	defer func() {
@@ -287,6 +300,10 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	server.Client().CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	call := func(stage, method, path string, body any, want int, out any) {
 		t.Helper()
+		if stage == "native_compatibility" {
+			started := time.Now()
+			defer func() { compatibilityHTTPMS = time.Since(started).Milliseconds() }()
+		}
 		progress.LastStage = stage // Internal constant labels, never HTTP data.
 		publishProgress()
 		var payload []byte

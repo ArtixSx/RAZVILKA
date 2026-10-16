@@ -19,7 +19,9 @@ type managedCompatibilityRefusal struct {
 // Caller holds Manager.mu. A settled Stop/cancel/source-publication refusal
 // revokes validation and clears only this producer's finalizing record. It
 // never awards compatibility or writes over a third image.
-func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Context, candidate Candidate, p *SupervisedCompatibilityProvider, i *managedCompatibilityInvocation) error {
+func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Context, candidate Candidate, p *SupervisedCompatibilityProvider, i *managedCompatibilityInvocation) (resultErr error) {
+	endTiming := i.beginTiming(parent, "guarded-publication", "publication")
+	defer func() { endTiming(resultErr) }()
 	current, exists := m.state.Candidates[candidate.ID]
 	bound := candidate
 	bound.Validation = current.Validation
@@ -53,6 +55,7 @@ func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Con
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, after, candidate, err)
 	}
 	defer target.Close()
+	casTiming := i.beginTiming(ctx, "publication-cas", "publication")
 	writeErr := target.CompareAndSwapWithRenameAdmission(ctx, before, after,
 		func(original context.Context, rename func() error) error {
 			if original != ctx {
@@ -65,6 +68,7 @@ func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Con
 			}
 			return m.prepareCompatibilityPublicationLocked(ctx, candidate.Validation)
 		})
+	casTiming(writeErr)
 	if writeErr != nil {
 		if errors.Is(writeErr, ownedfs.ErrStagedCleanup) {
 			// An unretired stage is still physically uncertain even if bytes match.

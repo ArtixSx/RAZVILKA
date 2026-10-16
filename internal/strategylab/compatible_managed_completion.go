@@ -86,7 +86,9 @@ func (i *managedCompatibilityInvocation) preparePhaseLocked(session compatibilit
 	return p, nil
 }
 
-func (i *managedCompatibilityInvocation) cleanupCurrent(ctx context.Context) error {
+func (i *managedCompatibilityInvocation) cleanupCurrent(ctx context.Context) (resultErr error) {
+	endTiming := i.beginTiming(ctx, "cleanup-owner-current", "cleanup")
+	defer func() { endTiming(resultErr) }()
 	if i == nil || i.cleanup == nil || i.manager == nil || i.provider == nil || i.provider.manager != i.manager || i.runtime == nil || i.binding.manager != i.manager {
 		return ErrCompatibilityQuiescenceUnknown
 	}
@@ -98,14 +100,20 @@ func (i *managedCompatibilityInvocation) cleanupCurrent(ctx context.Context) err
 		return err
 	}
 	if !i.runtimeClosed {
-		if err := i.runtime.Check(ctx); err != nil {
-			return err
+		runtimeTiming := i.beginTiming(ctx, "cleanup-runtime-check", "cleanup")
+		runtimeErr := i.runtime.Check(ctx)
+		runtimeTiming(runtimeErr)
+		if runtimeErr != nil {
+			return runtimeErr
 		}
 		if !compatibilityJSONEqual(i.runtime.Descriptor(), p.managedDescriptor) || selectedReviewMaterial(p.review, p.managedDescriptor) != nil {
 			return errAdaptiveManagedValidator
 		}
 	}
-	return errors.Join(compatibilityProtectedReview(i.manager.Path, p.review), compatibilityFilesUnchanged(p.review), selectedReviewContext(ctx))
+	filesTiming := i.beginTiming(ctx, "cleanup-paths-file-hashes", "cleanup")
+	filesErr := errors.Join(compatibilityProtectedReview(i.manager.Path, p.review), compatibilityFilesUnchanged(p.review), selectedReviewContext(ctx))
+	filesTiming(filesErr)
+	return filesErr
 }
 
 func (i *managedCompatibilityInvocation) withCleanup(use func(context.Context) error) error {
@@ -269,7 +277,7 @@ func (i *managedCompatibilityInvocation) finish() error {
 // synchronous completion, terminal/ACK or no-start rollback, source readback
 // and original cleanup-owner bookends. A timeout/copy/receipt cannot release it.
 // App releases its original admission only after this succeeds once.
-func (r *ManagedCompatibilityCompletion) RetireKnown(ctx context.Context) error {
+func (r *ManagedCompatibilityCompletion) RetireKnown(ctx context.Context) (resultErr error) {
 	if r == nil || r.self != r || selectedReviewContext(ctx) != nil {
 		return ErrCompatibilityQuiescenceUnknown
 	}
@@ -279,6 +287,8 @@ func (r *ManagedCompatibilityCompletion) RetireKnown(ctx context.Context) error 
 	if r.retired || i == nil || !i.finished || i.stageUnknown {
 		return ErrCompatibilityQuiescenceUnknown
 	}
+	retireTiming := i.beginTiming(ctx, "completion-retire", "cleanup")
+	defer func() { retireTiming(resultErr) }()
 	if !i.settled {
 		if err := i.recoverOriginal(ctx); err != nil {
 			return err

@@ -56,6 +56,7 @@ type managedCompatibilityInvocation struct {
 	runtimeClosed bool
 	stageUnknown  bool
 	refusal       *managedCompatibilityRefusal
+	timing        *managedCompatibilityTiming
 }
 
 // ManagedCompatibilityCompletion is issued only by this actual synchronous
@@ -108,11 +109,19 @@ func (m *Manager) ValidateManagedCandidate(ctx context.Context, candidateID stri
 	if err != nil {
 		return Candidate{}, nil, err
 	}
-	invocation := &managedCompatibilityInvocation{manager: m, provider: p, runtime: runtime, binding: binding}
+	invocation := &managedCompatibilityInvocation{manager: m, provider: p, runtime: runtime, binding: binding, timing: &managedCompatibilityTiming{started: time.Now()}}
 	invocation.cleanup = cleanup
 	ctx = context.WithValue(ctx, managedCompatibilityContextKey{}, invocation)
-	if err := p.managedMaterialCurrent(ctx); err != nil {
-		return Candidate{}, nil, err
+	p.mu.Lock()
+	if !p.running && p.managedInvocation == nil {
+		p.managedTiming = invocation.timing
+	}
+	p.mu.Unlock()
+	preflightTiming := invocation.timing.begin(ctx, "admission-material", "admission")
+	preflightErr := p.managedMaterialCurrent(ctx)
+	preflightTiming(preflightErr)
+	if preflightErr != nil {
+		return Candidate{}, nil, preflightErr
 	}
 	p.mu.Lock()
 	if p.managedInvocation != nil || p.running || p.unknown {
@@ -120,11 +129,16 @@ func (m *Manager) ValidateManagedCandidate(ctx context.Context, candidateID stri
 		return Candidate{}, nil, errCompatibilityBusy
 	}
 	p.managedInvocation = invocation
+	p.managedTiming = invocation.timing
 	p.mu.Unlock()
 	completion := &ManagedCompatibilityCompletion{invocation: invocation}
 	completion.self = completion
+	validationTiming := invocation.timing.begin(ctx, "validate-bound", "validation")
 	candidate, err = foundation.validateBound(ctx, binding)
+	validationTiming(err)
+	finishTiming := invocation.timing.begin(ctx, "invocation-finish", "cleanup")
 	settleErr := invocation.finish()
+	finishTiming(settleErr)
 	return candidate, completion, errors.Join(err, settleErr)
 }
 
