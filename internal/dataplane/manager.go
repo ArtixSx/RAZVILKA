@@ -1263,6 +1263,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, err
 	}
 	var activeNFQScope, activeXrayScope, activeWGScope *executionResourceScope
+	var pendingNFQClaim *nfqwsPendingScopeClaim
 	var xrayPreResource *xraySelectedTCPPreResource
 	if pair != nil {
 		var attachErr error
@@ -1349,12 +1350,19 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				result.RollbackVerified = false
 			}
 		}
-		if (activeNFQScope == nil || !activeNFQScope.retained) && result.State == "rollback-failed" && retryNFQRollback != nil {
-			if err := m.retainPendingNFQWS(ctx, activeNFQScope, retryNFQRollback); err == nil {
+		if (activeNFQScope == nil || !activeNFQScope.retained) && result.State == "rollback-failed" && retryNFQRollback != nil && ctx.Value(nfqws2ActiveExecutionKey{}) != nil {
+			if err := m.retainPendingNFQWS(ctx, activeNFQScope, retryNFQRollback, pendingNFQClaim); err == nil {
 				// Returned data never aliases the private retained original owner.
 				result.Resources = cloneExecutionResources(result.Resources)
 				result.Steps = slices.Clone(result.Steps)
 				return
+			} else {
+				resultErr = errors.Join(resultErr, err)
+				if m.HasPendingManagedNFQWS() {
+					result.Resources = cloneExecutionResources(result.Resources)
+					result.Steps = slices.Clone(result.Steps)
+					return // Unknown original cleanup is fenced, never silently closed.
+				}
 			}
 		}
 		if activeNFQScope != nil && !activeNFQScope.retained {
@@ -1476,7 +1484,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		} else if actualNFQ && plan.LAN != nil && (phase == "activate" || phase == "health" || phase == "commit-adapter" || restoring) {
 			if activeNFQScope == nil && !restoring {
-				activeNFQScope, err = m.newExecutionResourceScope(ctx, plan, adapter.ID(), &execution, transactionRoot)
+				activeNFQScope, pendingNFQClaim, err = m.newNFQWSExecutionResourceScope(ctx, plan, adapter.ID(), &execution, transactionRoot)
 			}
 			if err == nil && activeNFQScope != nil {
 				err = action(activeNFQScope.contextWith(runCtx), cloneExecutionResourcePlan(activeNFQScope.plan), adapterRoot)
