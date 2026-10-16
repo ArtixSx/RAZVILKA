@@ -23,13 +23,24 @@ type NFQWSRuntimeDescriptor struct {
 // Complete generations are never modified/pruned by any provider API. These
 // invariants do not authorize an arbitrary root-euid writer or runtime launch.
 type ManagedNFQWSRuntimeLease struct {
-	self       *ManagedNFQWSRuntimeLease
+	self   *ManagedNFQWSRuntimeLease
+	owner  *managedNFQWSRuntimeOwner
+	closed bool // Protected by owner.mu.
+}
+
+// One original exclusive writer, never a second Acquire or a shared flock.
+// Only registered lifecycle leases may use or release its immutable runtime.
+type managedNFQWSRuntimeOwner struct {
 	manager    *Manager
 	tx         *updateTransaction
 	receipt    ManagedNFQWSBundleReceipt
 	descriptor NFQWSRuntimeDescriptor
 	mu         sync.Mutex
+	source     *ManagedNFQWSRuntimeLease
+	validation *ManagedNFQWSRuntimeLease
 }
+
+var ErrManagedNFQWSValidationPending = errors.New("managed NFQWS validation lease remains open")
 
 func (m *Manager) AcquireManagedNFQWSRuntime(ctx context.Context, receiptID string) (*ManagedNFQWSRuntimeLease, error) {
 	if m == nil || ctx == nil {
@@ -83,70 +94,124 @@ func (m *Manager) AcquireManagedNFQWSRuntime(ctx context.Context, receiptID stri
 		}
 	}
 	keep = true
-	lease := &ManagedNFQWSRuntimeLease{manager: m, tx: tx, receipt: *receipt, descriptor: d}
+	owner := &managedNFQWSRuntimeOwner{manager: m, tx: tx, receipt: *receipt, descriptor: d}
+	lease := &ManagedNFQWSRuntimeLease{owner: owner}
 	lease.self = lease
+	owner.source = lease
 	return lease, nil
 }
 
 func (l *ManagedNFQWSRuntimeLease) Descriptor() NFQWSRuntimeDescriptor {
-	if l == nil || l.self != l {
+	if l == nil || l.self != l || l.owner == nil {
 		return NFQWSRuntimeDescriptor{}
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.tx == nil {
+	o := l.owner
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.current(l) {
 		return NFQWSRuntimeDescriptor{}
 	}
-	d := l.descriptor
+	d := o.descriptor
 	d.Lua = append([]NFQWSRuntimeAsset(nil), d.Lua...)
 	d.Blobs = append([]NFQWSRuntimeBlob(nil), d.Blobs...)
 	d.AllowedFeatures = append([]string(nil), d.AllowedFeatures...)
 	return d
 }
 
-func (l *ManagedNFQWSRuntimeLease) check(ctx context.Context) error {
-	if l.tx == nil {
+// Caller holds o.mu. Membership, rather than copied descriptor/receipt fields,
+// binds every lifecycle action to the actual owner-issued lease.
+func (o *managedNFQWSRuntimeOwner) current(l *ManagedNFQWSRuntimeLease) bool {
+	return o != nil && o.tx != nil && l != nil && l.self == l && l.owner == o && !l.closed &&
+		(o.source == l || o.validation == l)
+}
+
+func (o *managedNFQWSRuntimeOwner) check(ctx context.Context) error {
+	if o.tx == nil || ctx == nil || ctx.Err() != nil {
+		if ctx != nil {
+			return errors.Join(ErrManagedNFQWSBundle, ctx.Err())
+		}
 		return ErrManagedNFQWSBundle
 	}
-	if err := l.tx.requireIdle(); err != nil {
+	if err := o.tx.requireIdle(); err != nil {
 		return err
 	}
-	root, err := l.manager.managedNFQWSInventory(false)
+	root, err := o.manager.managedNFQWSInventory(false)
 	if err != nil {
 		return err
 	}
 	r, _, err := readManagedNFQWSReceipt(root)
 	root.Close()
-	if err != nil || r == nil || *r != l.receipt {
+	if err != nil || r == nil || *r != o.receipt {
 		return errors.Join(ErrManagedNFQWSBundle, err)
 	}
-	_, err = l.manager.verifyManagedNFQWSTerminal(ctx, l.receipt)
+	_, err = o.manager.verifyManagedNFQWSTerminal(ctx, o.receipt)
 	return err
 }
 
 func (l *ManagedNFQWSRuntimeLease) Check(ctx context.Context) error {
-	if l == nil || l.self != l || ctx == nil {
+	if l == nil || l.self != l || l.owner == nil || ctx == nil {
 		return ErrManagedNFQWSBundle
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.check(ctx)
+	o := l.owner
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.current(l) {
+		return ErrManagedNFQWSBundle
+	}
+	return o.check(ctx)
+}
+
+// ForkValidation issues one distinct compatibility lifecycle under this exact
+// original component writer. It conveys immutable runtime access only; native
+// invocation, packet/effect and installation authority remain separate.
+func (l *ManagedNFQWSRuntimeLease) ForkValidation(ctx context.Context) (*ManagedNFQWSRuntimeLease, error) {
+	if l == nil || l.self != l || l.owner == nil || ctx == nil {
+		return nil, ErrManagedNFQWSBundle
+	}
+	o := l.owner
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.current(l) || o.source != l {
+		return nil, ErrManagedNFQWSBundle
+	}
+	if o.validation != nil {
+		return nil, errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSValidationPending)
+	}
+	if err := o.check(ctx); err != nil {
+		return nil, err
+	}
+	child := &ManagedNFQWSRuntimeLease{owner: o}
+	child.self = child
+	o.validation = child
+	return child, nil
 }
 
 func (l *ManagedNFQWSRuntimeLease) Close() error {
 	if l == nil {
 		return nil
 	}
-	if l.self != l {
+	if l.self != l || l.owner == nil {
 		return ErrManagedNFQWSBundle
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.tx == nil {
+	o := l.owner
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if l.closed {
 		return nil
 	}
-	err := l.check(context.Background())
-	l.tx.close()
-	l.tx = nil
+	if !o.current(l) {
+		return ErrManagedNFQWSBundle
+	}
+	if o.source == l && o.validation != nil {
+		return errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSValidationPending)
+	}
+	err := o.check(context.Background())
+	l.closed = true
+	if o.validation == l {
+		o.validation = nil
+	} else {
+		o.tx.close()
+		o.tx = nil
+	}
 	return err
 }

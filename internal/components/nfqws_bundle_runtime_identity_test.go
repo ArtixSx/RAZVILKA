@@ -19,7 +19,7 @@ func TestManagedNFQWSRuntimeCopyCannotUseOrReleaseOriginalWriter(t *testing.T) {
 	defer lease.Close()
 	// Clone every capability-bearing field without copying sync.Mutex. The
 	// ordinary public value-copy carries this same original self pointer.
-	copy := &ManagedNFQWSRuntimeLease{self: lease.self, manager: lease.manager, tx: lease.tx, receipt: lease.receipt, descriptor: lease.descriptor}
+	copy := &ManagedNFQWSRuntimeLease{self: lease.self, owner: lease.owner}
 	for _, invalid := range []*ManagedNFQWSRuntimeLease{{}, copy} {
 		if invalid.Descriptor().ReceiptID != "" || !errors.Is(invalid.Check(context.Background()), ErrManagedNFQWSBundle) || !errors.Is(invalid.Close(), ErrManagedNFQWSBundle) {
 			t.Fatal("copied/zero runtime retained source or writer authority")
