@@ -95,7 +95,8 @@ func newPreEffectLANFixture(t *testing.T) *preEffectLANFixture {
 	material.self = material
 	selection := &NFQWSScopedSelection{prepared: material, plan: cloneExecutionResourcePlan(p)}
 	selection.self = selection
-	material.issuedSelection = selection
+	// BindExecution retains this comparison selection in execution.selection.
+	// issuedSelection is produced later by prepareActivation, not by binding.
 	e := &nfqws2ActiveExecution{material: material, selection: selection, plan: p, spec: spec, cleanup: cleanup, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
 	e.self = e
 	material.execution = e
@@ -117,6 +118,17 @@ func (f *preEffectLANFixture) snapshot(t *testing.T, modelSource bool) {
 	}
 	if modelSource {
 		f.modelSource()
+	}
+}
+
+func TestNFQWSPreEffectSnapshotBeforeActivationSelectionIsIssued(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	if f.e.material.issuedSelection != nil || f.e.activationSeal != nil {
+		t.Fatal("fixture manufactured a future activation receipt")
+	}
+	f.snapshot(t, false)
+	if f.e.material.issuedSelection != nil || f.e.activationSeal != nil || !f.e.neverActivatedLAN() {
+		t.Fatal("Snapshot produced activation authority")
 	}
 }
 
