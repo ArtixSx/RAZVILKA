@@ -116,22 +116,26 @@ func (f *preEffectLANFixture) snapshot(t *testing.T, modelSource bool) {
 		t.Fatal("Snapshot did not retain its authored empty image")
 	}
 	if modelSource {
-		f.e.preEffectLAN.owners = func(c context.Context) error {
-			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() {
-				return ErrNFQWSScopedOwner
-			}
-			return f.e.material.control.CurrentForCleanup(c)
+		f.modelSource()
+	}
+}
+
+func (f *preEffectLANFixture) modelSource() {
+	f.e.preEffectLAN.owners = func(c context.Context) error {
+		if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() {
+			return ErrNFQWSScopedOwner
 		}
-		f.e.preEffectLAN.observe = func(c context.Context) error {
-			f.reads++
-			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() || f.refuse == "read-open" || f.refuse == "read-close" {
-				return ErrNFQWSScopedOwner
-			}
-			if f.afterRead != nil {
-				f.afterRead()
-			}
-			return f.e.material.control.CurrentForCleanup(c)
+		return f.e.material.control.CurrentForCleanup(c)
+	}
+	f.e.preEffectLAN.observe = func(c context.Context) error {
+		f.reads++
+		if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() || f.refuse == "read-open" || f.refuse == "read-close" {
+			return ErrNFQWSScopedOwner
 		}
+		if f.afterRead != nil {
+			f.afterRead()
+		}
+		return f.e.material.control.CurrentForCleanup(c)
 	}
 }
 
@@ -145,7 +149,8 @@ func (f *preEffectLANFixture) fenceBeforeStage(t *testing.T) {
 		t.Fatal("forward fence silently passed")
 	}
 	// Models preceding NFQ Rollback+VerifyRollback successful negative reads;
-	// production still independently repeats e.verifyRollback in BOTH bookends.
+	// production still performs its full fresh e.verifyRollback in independent
+	// LAN VerifyRollback; a no-op Rollback never supplies verification authority.
 	f.e.retired = true
 }
 
