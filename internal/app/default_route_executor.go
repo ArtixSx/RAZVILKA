@@ -356,14 +356,8 @@ func (e *DefaultRouteExecutor) Execute(ctx context.Context, r *DefaultRouteRevie
 	})
 	// The manager reports missing rollback proof separately from errors in
 	// restoration. Neither grants permission to try another default candidate.
-	if err != nil && execution.State == "rolled-back" && !execution.RollbackVerified {
-		mutated := false
-		for _, step := range execution.Steps {
-			mutated = mutated || step.Phase == "activate" || step.Phase == "deactivate" || step.Phase == "commit-adapter"
-		}
-		if mutated {
-			e.app.Operations.FenceJournal()
-		}
+	if err != nil && execution.State == "rolled-back" && !execution.RollbackVerified && dataplaneExecutionMutated(execution) {
+		e.app.Operations.FenceJournal()
 	}
 	if errors.Is(err, dataplane.ErrExecutionJournal) {
 		e.app.Operations.FenceJournal()

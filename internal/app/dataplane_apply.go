@@ -12,6 +12,17 @@ import (
 // application path, including background repair and Stop, uses the same fence:
 // an unconfirmed rollback cannot be followed by another admitted mutation.
 // A fence never releases the current lease or interrupts rollback cleanup.
+// dataplaneExecutionMutated reports whether any adapter step that can change
+// the network was attempted. Rollback without readback after it is unproven.
+func dataplaneExecutionMutated(execution dataplane.Execution) bool {
+	for _, step := range execution.Steps {
+		if step.Phase == "activate" || step.Phase == "deactivate" || step.Phase == "commit-adapter" {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *App) applyDataplane(ctx context.Context, plan dataplane.Plan, commit func() (func() error, error)) (dataplane.Execution, error) {
 	if a.Operations.Snapshot().Fenced {
 		return dataplane.Execution{}, operationgate.ErrRecovery
