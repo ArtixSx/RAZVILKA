@@ -1524,7 +1524,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return errors.Join(err, journalErr, writeExecution())
 	}
 	rollbackParent := ctx
+	// Private completion of this SAME original never-effect NFQ participant.
+	// It is reset per compensation cycle and is never a mutation receipt.
+	var noEffectNFQCompletion *nfqwsPreEffectLANReview
 	rollback := func(cause error) error {
+		noEffectNFQCompletion = nil
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(rollbackParent), m.rollbackTimeout())
 		defer cancelRollback()
 		execution.Error = cause.Error()
@@ -1586,6 +1590,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		rollbackErr = errors.Join(rollbackErr, resourceErr)
 		verified = verified && resourceErr == nil
 		consumersVerified = consumersVerified && resourceErr == nil
+		gateVerified := false
 		if gate != nil {
 			if liveMutation && !consumersVerified {
 				// A successful rollback call alone cannot authorize removing the
@@ -1606,8 +1611,16 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 						return errors.Join(err, c.Err())
 					})
 					rollbackErr = errors.Join(rollbackErr, err)
+					gateVerified = confirmed && err == nil
 					verified = verified && confirmed && err == nil && rollbackErr == nil
 				}
+			}
+		}
+		if !liveMutation && consumersVerified && gateVerified && rollbackErr == nil {
+			if original, ok := gate.(*NetworkPolicyAdapter); ok {
+				var completionErr error
+				noEffectNFQCompletion, completionErr = original.preEffectNFQCompletion(rollbackCtx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+				rollbackErr = errors.Join(rollbackErr, completionErr)
 			}
 		}
 		execution.RollbackVerified = verified
@@ -1628,6 +1641,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		finalErr := errors.Join(executionJournalError(m.recordLocked(plan)), writeExecution())
 		if finalErr != nil {
+			noEffectNFQCompletion = nil
 			execution.RollbackVerified = false
 			rollbackErr = errors.Join(rollbackErr, finalErr)
 			execution.State, plan.State = "rollback-failed", "rollback-failed"
@@ -1645,7 +1659,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	retryNFQRollback = func(parent context.Context) error {
 		rollbackParent = parent
 		_ = rollback(ErrNFQWSScopedOwner)
-		if execution.State != "rolled-back" || !execution.RollbackVerified {
+		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil {
 			return executionJournalError(ErrNFQWSScopedOwner)
 		}
 		return nil

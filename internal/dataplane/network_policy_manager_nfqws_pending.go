@@ -62,7 +62,7 @@ func (m *Manager) JoinPendingManagedNFQWS(ctx context.Context) error {
 	if o.scope != nil {
 		ctx = o.scope.contextWith(ctx)
 	}
-	if err := o.execution.cleanupCurrent(ctx); err != nil {
+	if err := o.execution.pendingCleanupCurrent(ctx); err != nil {
 		return err
 	}
 	if err := o.join(ctx); err != nil {

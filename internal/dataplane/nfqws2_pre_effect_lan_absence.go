@@ -38,6 +38,9 @@ func (a *NetworkPolicyAdapter) preEffectNFQParticipant(ctx context.Context, p Pl
 		return nil, false, nil
 	}
 	e, ok := ctx.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution)
+	if ok && e != nil && e.self == e && e.material != nil && e.material.self == e.material && e.gate == a && root == filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID, NetworkPolicyAdapterID) && e.plan.LAN != nil && e.plan.LAN.Mode != LANPolicyNFQWSDirectMode {
+		return nil, false, nil // Other original LAN modes retain their existing path.
+	}
 	if !ok || a == nil || a.check() != nil || e == nil || e.self != e || e.gateInventoryCheck == nil || e.lanFrozen.RetireCheck == nil || e.material == nil || e.material.self != e.material || e.gate != a || e.gate.Binding != e.lan || e.lan.Runtime != e.runtime || e.material.manager == nil || e.material.managerRoot != e.material.manager.StateRoot || e.material.adapter == nil || e.material.control == nil || e.cleanup == nil || e.plan.LAN == nil || e.plan.LAN.Mode != LANPolicyNFQWSDirectMode || !nfqws2ActiveSamePlan(e.plan, p) || root != filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID, NetworkPolicyAdapterID) {
 		return nil, true, ErrNFQWSScopedOwner
 	}
@@ -228,7 +231,7 @@ func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p
 	e.mu.Lock()
 	r, retired := e.preEffectLAN, e.retired
 	e.mu.Unlock()
-	if r == nil {
+	if r == nil || !e.neverActivatedLAN() {
 		return false, nil
 	} // Ordinary strict effects cleanup remains unchanged.
 	r.mu.Lock()
@@ -286,6 +289,39 @@ func (e *nfqws2ActiveExecution) closePreEffectLAN() error {
 		return nil
 	}
 	return r.close()
+}
+
+// Called only by the SAME Manager compensation after ALL consumer/resource/
+// gate verifiers passed, before its final journal publications. The returned
+// private writer identity is cycle-local; a failed publication discards it.
+// It cannot set RollbackVerified, authorize a fresh operation or survive boot.
+func (a *NetworkPolicyAdapter) preEffectNFQCompletion(ctx context.Context, p Plan, root string) (*nfqwsPreEffectLANReview, error) {
+	if handled, err := a.inspectPreEffectNFQAbsence(ctx, p, root, false); !handled || err != nil {
+		return nil, err
+	}
+	e, _, err := a.preEffectNFQParticipant(ctx, p, root)
+	if err != nil {
+		return nil, err
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.retired || e.preEffectLAN == nil {
+		return nil, ErrNFQWSScopedOwner
+	}
+	return e.preEffectLAN, nil
+}
+
+// This entry check supplies only the original cleanup bookend for an exact
+// never-effect witness. Its fixed production leaf is e.cleanupCurrent; all
+// other executions retain the ordinary strict effects cleanup path.
+func (e *nfqws2ActiveExecution) pendingCleanupCurrent(ctx context.Context) error {
+	if e != nil && e.gate != nil && e.material != nil {
+		root := filepath.Join(e.material.managerRoot, "transactions", e.plan.PlanID, NetworkPolicyAdapterID)
+		if handled, err := e.gate.inspectPreEffectNFQAbsence(ctx, e.plan, root, false); handled {
+			return err
+		}
+	}
+	return e.cleanupCurrent(ctx)
 }
 func (r *nfqwsPreEffectLANReview) close() error {
 	r.mu.Lock()
