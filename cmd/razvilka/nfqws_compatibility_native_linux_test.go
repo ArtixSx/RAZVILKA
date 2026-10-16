@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
 		os.Exit(code)
 	}
-	if len(os.Args) > 1 && os.Args[1] == "nfqws-compatibility-supervisor" {
+	if len(os.Args) > 1 && (os.Args[1] == "nfqws-compatibility-supervisor" || os.Args[1] == "nfqws-managed-process-supervisor") {
 		handled, code := runCommand(os.Args[1:])
 		if !handled {
 			code = 2
