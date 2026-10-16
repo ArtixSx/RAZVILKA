@@ -73,7 +73,7 @@ async function realHTTPCommunityBrowseScenario({page,requests,test,readJSON,diag
           await page.waitForFunction(()=>document.getElementById('communityCatalogDialog').open&&communityBrowse.showing&&!!communityBrowse.saved);
           assert.equal(await page.locator('#communityOwnForm').isVisible(),false);
           const count=await page.locator('#communityResults .community-saved-entry').count();assert(count>0&&count<=1128);
-          assert.equal(await page.locator('#communityResults button,input,select,a,[data-community-id]').count(),0);
+          assert.equal(await page.locator('#communityResults :is(button,input,select,a,[data-community-id])').count(),0);
           assert.match(await page.locator('#communityBrowseNotice').textContent(),/Снимок каталога в памяти.*не обновления источника/);
           assert.equal(await page.evaluate(()=>state.community.some(entry=>Object.keys(entry).sort().join(',')==='category,description,id,name')),false);
         });
@@ -109,7 +109,7 @@ async function realHTTPCommunityBrowseScenario({page,requests,test,readJSON,diag
               actions_blocked:!communityBrowseActionsAllowed(),blocked_non_get:__rzCommunityBrowseQA.blocked_non_get};
           });
           assert.deepEqual(facts,{settled:true,preview_absent:true,marker_absent:true,dialog_closed:true,actions_blocked:true,blocked_non_get:0});
-          assert.equal(await page.locator('#communityPreview [data-community-import],#communityPreview [data-community-refresh]').count(),0);
+          assert.equal(await page.locator('#communityPreview :is([data-community-import],[data-community-refresh])').count(),0);
           await page.evaluate(()=>{__rzCommunityBrowseQA.beforeSaved=communityBrowse.saved;});
           await page.locator('#openCommunityCatalog').click();
           await page.waitForFunction(()=>communityBrowse.showing&&!!communityBrowse.saved&&communityBrowse.saved!==__rzCommunityBrowseQA.beforeSaved);
