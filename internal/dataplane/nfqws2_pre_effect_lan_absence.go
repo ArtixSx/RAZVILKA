@@ -217,9 +217,8 @@ func (r *nfqwsPreEffectLANReview) current(ctx context.Context) error {
 	if err != nil || !os.SameFile(r.fileInfo, info) {
 		return ErrNFQWSScopedOwner
 	}
-	data, err := r.dir.ReadLimited("snapshot.json", 1<<20)
-	if err != nil || !bytes.Equal(data, r.image) {
-		return ErrNFQWSScopedOwner
+	if err := r.snapshotImageCurrent(); err != nil {
+		return err
 	}
 	// Only the authored empty snapshot is allowed before Stage. Unknown files,
 	// candidate/receipt/lock or a promoted destination cannot become absence.
@@ -235,19 +234,40 @@ func (r *nfqwsPreEffectLANReview) current(ctx context.Context) error {
 }
 
 func (r *nfqwsPreEffectLANReview) onlySnapshot(authored bool) error {
-	dir, err := r.manager.OpenFile(r.relative, os.O_RDONLY, 0)
+	entries, err := r.dir.ReadDir(3)
 	if err != nil {
-		return err
+		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	entries, readErr := dir.ReadDir(3)
-	closeErr := dir.Close()
-	if readErr != nil && !errors.Is(readErr, io.EOF) || closeErr != nil {
-		return errors.Join(ErrNFQWSScopedOwner, readErr, closeErr)
+	info, err := r.manager.Stat(r.relative)
+	if err != nil || !os.SameFile(r.dirInfo, info) {
+		return ErrNFQWSScopedOwner
 	}
 	if !authored && len(entries) == 0 || authored && len(entries) == 1 && entries[0].Name() == "snapshot.json" {
 		return nil
 	}
 	return ErrNFQWSScopedOwner
+}
+
+// Read the already retained regular file, then compare its path again. A
+// pathname stat followed by a new O_RDONLY open can block on a replaced FIFO.
+func (r *nfqwsPreEffectLANReview) snapshotImageCurrent() error {
+	if r == nil || r.file == nil || r.fileInfo == nil || r.dir == nil || len(r.image) == 0 || len(r.image) > 1<<20 {
+		return ErrNFQWSScopedOwner
+	}
+	data := make([]byte, len(r.image)+1)
+	n, err := r.file.ReadAt(data, 0)
+	if err != io.EOF || n != len(r.image) || !bytes.Equal(data[:n], r.image) {
+		return ErrNFQWSScopedOwner
+	}
+	held, err := r.file.Stat()
+	if err != nil || !held.Mode().IsRegular() || held.Size() != int64(len(r.image)) || !os.SameFile(r.fileInfo, held) {
+		return ErrNFQWSScopedOwner
+	}
+	current, err := r.dir.Stat("snapshot.json")
+	if err != nil || !current.Mode().IsRegular() || current.Size() != int64(len(r.image)) || runtime.GOOS != "windows" && current.Mode().Perm() != 0600 || !os.SameFile(r.fileInfo, current) {
+		return ErrNFQWSScopedOwner
+	}
+	return nil
 }
 
 func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p Plan, root string, verify bool) (bool, error) {
