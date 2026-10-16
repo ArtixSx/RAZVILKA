@@ -61,6 +61,7 @@ type Manager struct {
 	retainedNFQMu      sync.Mutex
 	retainedNFQ        *retainedNFQWSExecution
 	pendingNFQ         *pendingNFQWSExecution
+	wgPreEffectChecks  *NetworkPolicyChecks // Frozen trusted startup association; registryMu.
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
 	replacementXray    *xraySelectedTCPReplacement
@@ -1524,11 +1525,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return errors.Join(err, journalErr, writeExecution())
 	}
 	rollbackParent := ctx
-	// Private completion of this SAME original never-effect NFQ participant.
+	// Private completion of this SAME original never-effect participant.
 	// It is reset per compensation cycle and is never a mutation receipt.
 	var noEffectNFQCompletion *nfqwsPreEffectLANReview
+	var noEffectWGCompletion *wgPreEffectSnapshot
 	rollback := func(cause error) error {
 		noEffectNFQCompletion = nil
+		noEffectWGCompletion = nil
+		if activeWGScope != nil {
+			activeWGScope.mu.Lock()
+			activeWGScope.wgCleanupJoined = false
+			activeWGScope.mu.Unlock()
+		}
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(rollbackParent), m.rollbackTimeout())
 		defer cancelRollback()
 		execution.Error = cause.Error()
@@ -1559,6 +1567,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		verified := liveMutation && len(prepared) > 0 && rollbackErr == nil
 		consumersVerified := rollbackErr == nil
+		wgConsumerVerified := false
 		// Readback must follow the complete reverse restoration, including
 		// desired-state undo. Never reuse the failed candidate's review guard.
 		for _, adapter := range prepared {
@@ -1566,7 +1575,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				continue
 			}
 			verifier, ok := adapter.(RollbackVerifier)
-			if !ok {
+			wg, wgOriginal := adapter.(*WARPWireGuardAdapter)
+			wgOriginal = wgOriginal && activeWGScope != nil && activeWGScope.adapterOwner == wg
+			if !ok && !wgOriginal {
 				verified = false
 				consumersVerified = false
 				continue
@@ -1574,7 +1585,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			var confirmed bool
 			err := run(rollbackCtx, adapter, "verify-rollback", func(c context.Context, p Plan, root string) error {
 				var err error
-				confirmed, err = verifier.VerifyRollback(c, p, root)
+				if ok {
+					confirmed, err = verifier.VerifyRollback(c, p, root)
+				} else {
+					confirmed, err = m.verifyOriginalWGPreEffect(c, p, wg, activeWGScope)
+				}
 				return errors.Join(err, c.Err())
 			})
 			if err != nil {
@@ -1582,6 +1597,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 			verified = verified && confirmed && err == nil
 			consumersVerified = consumersVerified && confirmed && err == nil
+			if wgOriginal {
+				wgConsumerVerified = confirmed && err == nil
+			}
 		}
 		// Original resource owners must first get their bounded rollback and
 		// independent readback opportunity. Pending metadata cannot itself
@@ -1624,9 +1642,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 		execution.RollbackVerified = verified
-		if activeWGScope != nil && consumersVerified && rollbackErr == nil {
+		if activeWGScope != nil && wgConsumerVerified && consumersVerified && gateVerified && rollbackErr == nil {
+			if !liveMutation && gateVerified {
+				var completionErr error
+				noEffectWGCompletion, completionErr = m.preEffectWGCompletion(rollbackCtx, plan, activeWGScope)
+				rollbackErr = errors.Join(rollbackErr, completionErr)
+			}
 			activeWGScope.mu.Lock()
-			activeWGScope.wgCleanupJoined = true
+			activeWGScope.wgCleanupJoined = rollbackErr == nil
 			activeWGScope.mu.Unlock()
 		}
 		plan.Ready = false
@@ -1642,6 +1665,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		finalErr := errors.Join(executionJournalError(m.recordLocked(plan)), writeExecution())
 		if finalErr != nil {
 			noEffectNFQCompletion = nil
+			noEffectWGCompletion = nil
+			if activeWGScope != nil {
+				activeWGScope.mu.Lock()
+				activeWGScope.wgCleanupJoined = false
+				activeWGScope.mu.Unlock()
+			}
 			execution.RollbackVerified = false
 			rollbackErr = errors.Join(rollbackErr, finalErr)
 			execution.State, plan.State = "rollback-failed", "rollback-failed"
@@ -1675,7 +1704,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	retryWGRollback = func(parent context.Context) error {
 		rollbackParent = parent
 		_ = rollback(ErrWGOperationOwner)
-		if execution.State != "rolled-back" || !execution.RollbackVerified {
+		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectWGCompletion == nil {
 			return executionJournalError(ErrWGOperationOwner)
 		}
 		return nil

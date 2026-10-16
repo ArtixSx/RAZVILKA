@@ -77,7 +77,13 @@ func (c *NetworkPolicyChecks) BindManagedWGInactivitySources(ctx context.Context
 	if err := c.current(ctx); err != nil {
 		return err
 	}
+	c.manager.registryMu.Lock()
+	defer c.manager.registryMu.Unlock()
+	if c.manager.registryGeneration != c.generation || c.manager.wgPreEffectChecks != nil {
+		return ErrNetworkPolicyConsumers
+	}
 	c.wgInactivity = frozen
+	c.manager.wgPreEffectChecks = c
 	return nil
 }
 

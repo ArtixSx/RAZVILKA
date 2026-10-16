@@ -56,6 +56,9 @@ type executionResourceScope struct {
 	wgRecords               *wgExecutionRecords
 	retainedWGOwner         *retainedWGExecution
 	wgCleanupJoined         bool // Actual complete rollback or native retirement only.
+	wgSnapshot              *wgPreEffectSnapshot
+	wgStageAttempted        bool
+	wgActivateAttempted     bool
 }
 
 type executionTransitResource struct {
@@ -505,6 +508,9 @@ func (s *executionResourceScope) close() error {
 	}
 	if s.wgRecords != nil {
 		err = errors.Join(err, s.wgRecords.close())
+	}
+	if s.wgSnapshot != nil {
+		err = errors.Join(err, s.wgSnapshot.close())
 	}
 	if s.wgOwner != nil {
 		err = errors.Join(err, s.wgOwner.closeCommon())

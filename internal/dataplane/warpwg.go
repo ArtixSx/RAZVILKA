@@ -201,10 +201,16 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root str
 	if err := checkWGNamedReviewContext(ctx); err != nil {
 		return err
 	}
+	if handled, err := a.writeOriginalWGSnapshot(ctx, plan, root, snapshot, data); handled {
+		return err
+	}
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
 }
 
 func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string) (retErr error) {
+	if err := a.markOriginalWGPhase(ctx, plan, root, false); err != nil {
+		return err
+	}
 	ctx, retErr = a.namedProfileReviewContext(ctx, plan.Routes)
 	if retErr != nil {
 		return retErr
@@ -625,6 +631,9 @@ func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source n
 }
 
 func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root string) (retErr error) {
+	if err := a.markOriginalWGPhase(ctx, plan, root, true); err != nil {
+		return err
+	}
 	ctx, retErr = a.namedProfileReviewContext(ctx, plan.Routes)
 	if retErr != nil {
 		return retErr
@@ -1121,8 +1130,11 @@ func (a *WARPWireGuardAdapter) Commit(ctx context.Context, plan Plan, root strin
 	return a.publishWGPolicyGeneration(ctx, state, ref)
 }
 
-func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, _ Plan, root string) error {
+func (a *WARPWireGuardAdapter) Rollback(ctx context.Context, plan Plan, root string) error {
 	ctx = wgNamedCleanupContext(ctx)
+	if handled, err := a.rollbackOriginalWGPreEffect(ctx, plan, root); handled {
+		return err
+	}
 	snapshot, err := readWarpWGSnapshot(root)
 	if err != nil {
 		return err
