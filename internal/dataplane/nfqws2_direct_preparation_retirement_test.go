@@ -877,8 +877,9 @@ func TestNFQWSDirectPreparationRefusesPriorOwner(t *testing.T) {
 	}
 }
 
-// Only the lock this writer created is accepted; a foreign lock refuses even
-// after its holder released it.
+// Only the lock this writer created is accepted. A foreign lock declines the
+// metadata-only path for good; the strict path settles it only with its
+// physical boundary.
 func TestNFQWSDirectPreparationRefusesForeignLock(t *testing.T) {
 	f := newPreEffectLANFixture(t)
 	w := f.stageDirectPreparation(t)
@@ -889,20 +890,28 @@ func TestNFQWSDirectPreparationRefusesForeignLock(t *testing.T) {
 	if err := f.e.gate.Activate(f.ctx, f.e.plan, f.root); err == nil {
 		t.Fatal("preparation session adopted a foreign lock")
 	}
-	if w.lockAttempted || w.lockInfo != nil || w.ownerState != directWriterWritten {
-		t.Fatal("foreign lock was attributed to the original writer", w.lockAttempted, w.ownerState)
+	if w.lockAttempted || w.lockInfo != nil || !w.lockUnknown || w.ownerState != directWriterWritten {
+		t.Fatal("foreign lock was attributed to the original writer", w.lockAttempted, w.lockUnknown, w.ownerState)
 	}
 	f.refuseNFQBeforeSeal(t)
 	for _, release := range []bool{false, true} {
 		if release {
 			other.close()
 		}
-		if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 {
-			t.Fatal("foreign lock accepted", release, err)
+		if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err == nil || f.reads != 0 || cycleOf(f.ctx).rollback != nil {
+			t.Fatal("foreign lock accepted or handled", release, err)
 		}
 		if _, err := os.Stat(f.e.gate.ownerPath()); err != nil {
 			t.Fatal("owner retired beside a foreign lock", err)
 		}
+	}
+	// With its physical boundary intact the unchanged strict path settles it.
+	f.physical = nil
+	if err := f.e.gate.Rollback(f.nextCycle(), f.e.plan, f.root); err != nil || cycleOf(f.ctx).rollback != nil {
+		t.Fatal("strict path could not settle a foreign-lock owner", err)
+	}
+	if _, err := os.Stat(f.e.gate.ownerPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("strict path left the owner", err)
 	}
 }
 
@@ -920,6 +929,10 @@ func TestNFQWSDirectPreparationRefusesMissingLock(t *testing.T) {
 		}
 		if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("retirement recreated a lock", err)
+		}
+		// The first refusal names the lost identity; later cycles decline.
+		if handled := cycleOf(f.ctx).rollback != nil; handled != (i == 0) {
+			t.Fatal("missing lock did not decline to the strict path", i, handled)
 		}
 	}
 	requireDirectPreparationActive(t, f, "missing-lock")

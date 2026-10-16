@@ -59,3 +59,32 @@ func TestRenameStaysBelowRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLinkNeverReplacesAndStaysBelowRoot(t *testing.T) {
+	dir := t.TempDir()
+	root, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	for name, data := range map[string]string{"a": "a", "b": "b"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := root.Link("a", "b"); err == nil {
+		t.Fatal("link replaced an existing destination")
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "b")); string(data) != "b" {
+		t.Fatal("existing destination changed")
+	}
+	if err := root.Link("a", "../c"); err == nil {
+		t.Fatal("link escaped its root")
+	}
+	if err := root.Link("a", "c"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "c")); string(data) != "a" {
+		t.Fatal("link target")
+	}
+}

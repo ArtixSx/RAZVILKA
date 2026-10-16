@@ -87,7 +87,11 @@ type nfqwsDirectPreparationWitness struct {
 	lockAttempted         bool
 	lockUnknown           bool
 	lockInfo              os.FileInfo
-	heldLock              *os.File // This writer's own lock, held only during its own retirement write.
+	// lockFile is a second, never-flocked descriptor of the lock this writer
+	// created. Holding it keeps the inode from being reused for a recreated
+	// lock; it is flocked only for a probe or this writer's own retirement.
+	lockFile *os.File
+	lockHeld bool
 	// Production fixes these to the SAME original participant's full
 	// independent negative read and typed owner checks. Package tests model
 	// only these source/kernel leaves, as for nfqwsPreEffectLANReview.
@@ -330,6 +334,8 @@ func (w *nfqwsDirectPreparationWitness) beginSession() error {
 		return ErrPolicyAdditionReceipt
 	}
 	if _, err := w.dir.Stat(policyAdditionLock); !errors.Is(err, os.ErrNotExist) {
+		// Not this writer's lock: only the strict path may settle this owner.
+		w.lockUnknown = true
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
 	w.lockAttempted = true
@@ -363,11 +369,22 @@ func (w *nfqwsDirectPreparationWitness) openedSession(s *policyAdditionSession) 
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
 	lock, err := s.lock.Stat()
+	if err != nil || !s.created {
+		// An adopted lock is never this writer's own.
+		w.lockUnknown = true
+		return errors.Join(ErrPolicyAdditionReceipt, err)
+	}
+	file, err := openNFQWS2LockFile(w.dir, policyAdditionLock, false)
 	if err != nil {
 		w.lockUnknown = true
 		return errors.Join(ErrPolicyAdditionReceipt, err)
 	}
-	w.lockInfo = lock
+	held, err := file.Stat()
+	if err != nil || !os.SameFile(held, lock) {
+		w.lockUnknown = true
+		return errors.Join(ErrPolicyAdditionReceipt, err, file.Close())
+	}
+	w.lockInfo, w.lockFile = lock, file
 	return nil
 }
 
@@ -776,7 +793,8 @@ func (w *nfqwsDirectPreparationWitness) listingCurrent() error {
 }
 
 // lockCurrent requires exactly this writer's own lock while it created one,
-// and proves that no other session holds it. It opens without O_CREATE.
+// and proves that no other session holds it. It never opens or creates a lock
+// by name. An identity this writer can no longer name declines this path.
 func (w *nfqwsDirectPreparationWitness) lockCurrent() error {
 	if w.lockInfo == nil {
 		if _, err := w.dir.Stat(policyAdditionLock); !errors.Is(err, os.ErrNotExist) {
@@ -784,53 +802,59 @@ func (w *nfqwsDirectPreparationWitness) lockCurrent() error {
 		}
 		return nil
 	}
-	if w.heldLock != nil {
-		// Taken by this writer's own retirement write: compare, never relock.
-		held, err := w.heldLock.Stat()
-		path, pathErr := w.dir.Stat(policyAdditionLock)
-		if err != nil || pathErr != nil || !os.SameFile(w.lockInfo, held) || !os.SameFile(w.lockInfo, path) {
-			return errors.Join(ErrNFQWSScopedOwner, err, pathErr)
-		}
-		return nil
+	if w.lockHeld {
+		return w.lockIdentity() // Taken by this writer's own retirement write.
 	}
-	file, err := w.openOwnLock()
-	if err != nil {
+	if err := w.takeOwnLock(); err != nil {
 		return err
 	}
-	unlockCloudflareScanFile(file)
-	return file.Close()
+	w.releaseOwnLock()
+	return nil
 }
 
-func (w *nfqwsDirectPreparationWitness) openOwnLock() (*os.File, error) {
-	info, err := w.dir.Stat(policyAdditionLock)
-	if err != nil || !validCloudflareScanLockFile(info) || info.Size() != int64(len(policyAdditionMarker)) || !os.SameFile(w.lockInfo, info) {
-		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+func (w *nfqwsDirectPreparationWitness) lockIdentity() error {
+	if w.lockFile == nil {
+		w.lockUnknown = true
+		return ErrNFQWSScopedOwner
 	}
-	file, err := openNFQWS2LockFile(w.dir, policyAdditionLock, false)
-	if err != nil {
-		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	held, err := w.lockFile.Stat()
+	path, pathErr := w.dir.Stat(policyAdditionLock)
+	if err != nil || pathErr != nil || !validCloudflareScanLockFile(path) || path.Size() != int64(len(policyAdditionMarker)) || !os.SameFile(w.lockInfo, held) || !os.SameFile(held, path) {
+		w.lockUnknown = true
+		return errors.Join(ErrNFQWSScopedOwner, err, pathErr)
 	}
-	keep := false
-	defer func() {
-		if !keep {
-			file.Close()
-		}
-	}()
-	held, err := file.Stat()
-	if err != nil || !validCloudflareScanLockFile(held) || !os.SameFile(w.lockInfo, held) {
-		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+	return nil
+}
+
+// takeOwnLock flocks the held descriptor without blocking. Busy is a
+// transient refusal; a changed identity or marker declines this path.
+func (w *nfqwsDirectPreparationWitness) takeOwnLock() error {
+	if err := w.lockIdentity(); err != nil {
+		return err
 	}
-	if err := lockCloudflareScanFile(file); err != nil {
-		return nil, errors.Join(ErrPolicyAdditionBusy, err)
+	if err := lockCloudflareScanFile(w.lockFile); err != nil {
+		return errors.Join(ErrPolicyAdditionBusy, err)
 	}
 	data := make([]byte, len(policyAdditionMarker)+1)
-	n, err := file.ReadAt(data, 0)
+	n, err := w.lockFile.ReadAt(data, 0)
 	if err != io.EOF || string(data[:n]) != policyAdditionMarker {
-		unlockCloudflareScanFile(file)
-		return nil, errors.Join(ErrNFQWSScopedOwner, err)
+		unlockCloudflareScanFile(w.lockFile)
+		w.lockUnknown = true
+		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	keep = true
-	return file, nil
+	if err := w.lockIdentity(); err != nil {
+		unlockCloudflareScanFile(w.lockFile)
+		return err
+	}
+	w.lockHeld = true
+	return nil
+}
+
+func (w *nfqwsDirectPreparationWitness) releaseOwnLock() {
+	if w.lockHeld {
+		unlockCloudflareScanFile(w.lockFile)
+		w.lockHeld = false
+	}
 }
 
 // Read the retained descriptor, then compare the path again. A pathname open
@@ -869,16 +893,10 @@ func (w *nfqwsDirectPreparationWitness) retirePreparation(ctx context.Context, l
 	default:
 		return ErrNFQWSScopedOwner
 	}
-	lock, err := w.openOwnLock()
-	if err != nil {
+	if err := w.takeOwnLock(); err != nil {
 		return err
 	}
-	w.heldLock = lock
-	defer func() {
-		w.heldLock = nil
-		unlockCloudflareScanFile(lock)
-		lock.Close()
-	}()
+	defer w.releaseOwnLock()
 	if err := w.current(ctx, expected); err != nil {
 		return err
 	}
@@ -974,16 +992,11 @@ func (w *nfqwsDirectPreparationWitness) retireOwner(ctx context.Context, expecte
 	}
 	moved, err := w.ownerDir.Stat(retiring)
 	if err != nil || !os.SameFile(moved, w.owner.info) {
-		// Not this writer's inode: put it back untouched and decline.
-		w.ownerState = directWriterUnknown
-		return errors.Join(ErrPolicyAdditionUnknown, err, w.ownerDir.Rename(retiring, "owner.json"))
+		// Unidentified or not this writer's inode: put it back untouched.
+		return w.ownerPutBack(retiring, err)
 	}
 	if err := w.ownerDir.Remove(retiring); err != nil {
-		if back := w.ownerDir.Rename(retiring, "owner.json"); back != nil || w.owner.current(w.ownerDir, "owner.json") != nil {
-			w.ownerState = directWriterUnknown
-			return errors.Join(ErrPolicyAdditionUnknown, err, back)
-		}
-		return err
+		return w.ownerPutBack(retiring, err)
 	}
 	w.ownerState = directWriterUnlinked
 	_ = w.owner.file.Close()
@@ -1002,6 +1015,21 @@ func (w *nfqwsDirectPreparationWitness) syncOwner() error {
 	return nil
 }
 
+// ownerPutBack restores a moved entry without ever replacing a newer
+// owner.json, and makes that durable. Only this writer's own held inode and
+// image back at the path stays retryable; anything else declines this path.
+func (w *nfqwsDirectPreparationWitness) ownerPutBack(retiring string, cause error) error {
+	back := w.ownerDir.Link(retiring, "owner.json")
+	if back == nil {
+		back = errors.Join(w.ownerDir.Remove(retiring), syncDataplaneJournalDirectory(w.ownerDir))
+	}
+	if back == nil && w.owner.current(w.ownerDir, "owner.json") == nil {
+		return errors.Join(ErrNFQWSScopedOwner, cause)
+	}
+	w.ownerState = directWriterUnknown
+	return errors.Join(ErrPolicyAdditionUnknown, cause, back)
+}
+
 func (w *nfqwsDirectPreparationWitness) ownerAfterFailure(cause error) error {
 	if w.owner.current(w.ownerDir, "owner.json") == nil {
 		return cause // Still the SAME held inode and image: retryable.
@@ -1018,10 +1046,14 @@ func (w *nfqwsDirectPreparationWitness) close() error {
 	}
 	w.closed = true
 	var err error
+	w.releaseOwnLock()
 	for _, h := range []nfqwsHeldImage{w.candidate, w.owner, w.prep} {
 		if h.file != nil {
 			err = errors.Join(err, h.file.Close())
 		}
+	}
+	if w.lockFile != nil {
+		err = errors.Join(err, w.lockFile.Close())
 	}
 	for _, root := range []*ownedfs.Root{w.dir, w.ownerDir} {
 		if root != nil {
