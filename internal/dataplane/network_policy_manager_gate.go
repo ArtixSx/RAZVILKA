@@ -172,6 +172,16 @@ func (a *NetworkPolicyAdapter) Stage(ctx context.Context, p Plan, root string) e
 	if err := a.Binding.Runtime.Preflight(ctx, state.LAN); err != nil {
 		return preflightRefusalError{err}
 	}
+	if e, present, err := a.preEffectNFQParticipant(ctx, p, root); present {
+		if err != nil {
+			return err
+		}
+		// The original direct participant's metadata writer retains every
+		// file it publishes from here on; see nfqwsDirectPreparationWitness.
+		if captured, err := e.captureDirectPreparation(ctx, root, state); captured {
+			return err
+		}
+	}
 	return writeNetworkPolicyGate(filepath.Join(root, "candidate.json"), state)
 }
 
@@ -220,6 +230,16 @@ func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string
 		if pairErr != nil || pair == nil || !reflect.DeepEqual(prior, pair.gateBefore) || pair.priorStructural(ctx) != nil {
 			return preflightRefusalError{errors.Join(ErrNetworkPolicyReplacement, pairErr)}
 		}
+	}
+	writer, err := a.directPreparationWriter(ctx, p, root)
+	if err != nil {
+		return err
+	}
+	if writer != nil {
+		if err := writer.writeOwner(state); err != nil {
+			return err
+		}
+		return a.Binding.Apply(context.WithValue(ctx, lanDirectPreparationWitnessKey{}, writer), state.LAN, root)
 	}
 	// Retain typed intent before receipt/effect creation. A crash can no longer
 	// turn a missing manifest into permission to ignore a pending generation.
@@ -337,6 +357,9 @@ func (a *NetworkPolicyAdapter) inspectAbsent(ctx context.Context, lan *LANPolicy
 
 func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string) error {
 	ctx = networkPolicyConsumerContext(ctx, p)
+	if handled, err := a.retireDirectPreparation(ctx, p, root); handled {
+		return err
+	}
 	want, err := a.gateFor(p)
 	if err != nil {
 		return err
@@ -398,6 +421,9 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 
 func (a *NetworkPolicyAdapter) VerifyRollback(ctx context.Context, p Plan, root string) (bool, error) {
 	ctx = networkPolicyConsumerContext(ctx, p)
+	if handled, err := a.verifyDirectPreparationRetired(ctx, p, root); handled {
+		return err == nil, err
+	}
 	state, err := a.gateFor(p)
 	if err != nil {
 		return false, err

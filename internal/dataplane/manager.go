@@ -1537,9 +1537,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	// It is reset per compensation cycle and is never a mutation receipt.
 	var noEffectNFQCompletion *nfqwsPreEffectLANReview
 	var noEffectWGCompletion *wgPreEffectSnapshot
+	// Same contract for an original never-sealed NFQ participant whose LAN
+	// Activate already published its own metadata-only preparation.
+	var noEffectLANPreparation *nfqwsDirectPreparationWitness
 	rollback := func(cause error) error {
 		noEffectNFQCompletion = nil
 		noEffectWGCompletion = nil
+		noEffectLANPreparation = nil
 		if activeWGScope != nil {
 			activeWGScope.mu.Lock()
 			activeWGScope.wgCleanupJoined = false
@@ -1547,6 +1551,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(rollbackParent), m.rollbackTimeout())
 		defer cancelRollback()
+		rollbackCtx, directCycle := withDirectPreparationCycle(rollbackCtx)
 		execution.Error = cause.Error()
 		plan.ObservedEvidence = evidence.None
 		for index := range plan.RouteEvidence {
@@ -1649,6 +1654,20 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				rollbackErr = errors.Join(rollbackErr, completionErr)
 			}
 		}
+		if directCycle.rollback != nil || directCycle.verify != nil {
+			// This cycle's gate ran the metadata-only retirement. It never
+			// reads back the physical LAN boundary, so it never publishes
+			// RollbackVerified, and it completes only before any commit.
+			verified = false
+			original, ok := gate.(*NetworkPolicyAdapter)
+			if !ok || undoCommit != nil || commitPublicationAttempted || activeXrayScope != nil || activeWGScope != nil {
+				rollbackErr = errors.Join(rollbackErr, ErrNFQWSScopedOwner)
+			} else if consumersVerified && gateVerified && rollbackErr == nil {
+				var completionErr error
+				noEffectLANPreparation, completionErr = original.directPreparationCompletion(rollbackCtx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID), directCycle)
+				rollbackErr = errors.Join(rollbackErr, completionErr)
+			}
+		}
 		execution.RollbackVerified = verified
 		if activeWGScope != nil && wgConsumerVerified && consumersVerified && gateVerified && rollbackErr == nil {
 			if !liveMutation && gateVerified {
@@ -1674,6 +1693,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if finalErr != nil {
 			noEffectNFQCompletion = nil
 			noEffectWGCompletion = nil
+			noEffectLANPreparation = nil
 			if activeWGScope != nil {
 				activeWGScope.mu.Lock()
 				activeWGScope.wgCleanupJoined = false
@@ -1694,9 +1714,16 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return cause
 	}
 	retryNFQRollback = func(parent context.Context) error {
+		for _, adapter := range prepared {
+			if original, ok := adapter.(*NetworkPolicyAdapter); ok && original.directPreparationUnknown(parent, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID)) {
+				// The SAME owner stays retained; repeating a compensation that
+				// can never settle would only rewrite the journal.
+				return executionJournalError(ErrPolicyAdditionUnknown)
+			}
+		}
 		rollbackParent = parent
 		_ = rollback(ErrNFQWSScopedOwner)
-		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil {
+		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {
 			return executionJournalError(ErrNFQWSScopedOwner)
 		}
 		return nil

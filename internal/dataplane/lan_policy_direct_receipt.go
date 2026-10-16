@@ -35,6 +35,15 @@ func loadLANDirectPreparation(ctx context.Context, s *policyAdditionSession, p *
 	if err := s.loadDocument(ctx); err != nil {
 		return err
 	}
+	return validateLANDirectPreparation(ctx, s, p)
+}
+
+// Pure comparison of an already decoded document with the original compiler,
+// anchored root and boot. It grants nothing by itself.
+func validateLANDirectPreparation(ctx context.Context, s *policyAdditionSession, p *LANPolicyRuntimePlan) error {
+	if ValidateLANPolicyRuntime(p) != nil || !lanPolicyDirectMode(p.Mode) {
+		return ErrPolicyAdditionReceipt
+	}
 	if s.doc.Schema != lanDirectPreparationSchema || s.doc.Generation != p.Generation || s.doc.PolicyHash != p.Digest || s.doc.EffectsHash != "" || len(s.doc.Steps) != 0 || !nfqws2ManagedHex(s.doc.ID, 32) || s.doc.RootHash != policyAdditionRootHash(s.path) {
 		return ErrPolicyAdditionReceipt
 	}
@@ -62,14 +71,26 @@ func lanDirectPreparationStatus(s *policyAdditionSession) PolicyAdditionStatus {
 }
 
 func (b *LANPolicyReceiptBinding) applyDirect(ctx context.Context, p *LANPolicyRuntimePlan, root string) error {
+	writer, err := lanDirectPreparationWriter(ctx, root)
+	if err != nil {
+		return err
+	}
 	if err := b.directGuard(ctx, p, false); err != nil {
 		return err
+	}
+	if writer != nil {
+		writer.beginSession()
 	}
 	s, err := openPolicyAdditionRootSession(ctx, root, b.options)
 	if err != nil {
 		return err
 	}
 	defer s.close()
+	if writer != nil {
+		if err := writer.openedSession(s); err != nil {
+			return err
+		}
+	}
 	if err := loadLANDirectPreparation(ctx, s, p); !errors.Is(err, os.ErrNotExist) {
 		if err != nil {
 			return err
@@ -91,7 +112,12 @@ func (b *LANPolicyReceiptBinding) applyDirect(ctx context.Context, p *LANPolicyR
 		return err
 	}
 	s.doc = policyAdditionDocument{Schema: lanDirectPreparationSchema, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: p.Generation, PolicyHash: p.Digest, RootHash: policyAdditionRootHash(root), Phase: "active"}
-	if err := s.save(ctx); err != nil {
+	if writer != nil {
+		err = writer.savePreparation(ctx, s)
+	} else {
+		err = s.save(ctx)
+	}
+	if err != nil {
 		return err
 	}
 	if err := loadLANDirectPreparation(ctx, s, p); err != nil {

@@ -137,6 +137,9 @@ func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (*n
 	// Closing the superseded comparison reader does not close the actual
 	// selected source/component. App retains those through known retirement.
 	_ = prepared.Close()
+	// An issued seal permanently excludes the metadata-only retirement; its
+	// writer's held images would only go stale under later promotion.
+	_ = e.closeDirectPreparation()
 	return seal, nil
 }
 
