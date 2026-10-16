@@ -106,7 +106,7 @@ func (i *managedCompatibilityInvocation) cleanupCurrent(ctx context.Context) (re
 		if runtimeErr != nil {
 			return runtimeErr
 		}
-		if !compatibilityJSONEqual(i.runtime.Descriptor(), p.managedDescriptor) || selectedReviewMaterial(p.review, p.managedDescriptor) != nil {
+		if !compatibilityJSONEqual(i.runtime.Descriptor(), p.managedDescriptor) || p.managedReviewMaterial(ctx) != nil {
 			return errAdaptiveManagedValidator
 		}
 	}

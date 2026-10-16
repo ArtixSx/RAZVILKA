@@ -86,5 +86,8 @@ func compatibilityFilesUnchanged(review compatibilityReview) error {
 			return errors.New("reviewed compatibility asset bytes changed")
 		}
 	}
+	if review.Domain != nil {
+		return compatibilityDomainFilesCurrent(*review.Domain)
+	}
 	return nil
 }

@@ -21,6 +21,7 @@ type CompatibleValidator struct {
 	TrustedAssets bool
 	Timeout       time.Duration
 	Provider      CompatibilityProvider
+	domain        *compatibilityDomainReview // Closed CORE producer only; never caller arguments.
 }
 
 // InstalledBaseArguments snapshots the local data without evaluating shell.
@@ -125,10 +126,16 @@ func (v CompatibleValidator) Validate(parent context.Context, arguments []string
 	// dry-run. Test intercept=0 support before permitting Lua initialization.
 	args := append([]string{"--dry-run", "--intercept=0"}, base...)
 	args = append(args, arguments...)
+	if v.domain != nil {
+		args = append(args, nfqDomainArguments(v.domain.Include.Path, v.domain.Exclude.Path)...)
+	}
 	completion, err := run(args)
 	if err == nil && ctx.Err() == nil {
 		args = append([]string{"--intercept=0"}, base...)
 		args = append(args, arguments...)
+		if v.domain != nil {
+			args = append(args, nfqDomainArguments(v.domain.Include.Path, v.domain.Exclude.Path)...)
+		}
 		args = append(args, "--lua-init="+assertions)
 		completion, err = run(args)
 	}

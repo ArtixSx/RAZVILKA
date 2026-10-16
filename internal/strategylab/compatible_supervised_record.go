@@ -39,6 +39,7 @@ type compatibilityReview struct {
 	ControlPath    string                     `json:"control_path"`
 	InstallationID string                     `json:"installation_id"`
 	Sequence       uint64                     `json:"sequence"`
+	Domain         *compatibilityDomainReview `json:"domain_material,omitempty"`
 }
 
 type compatibilityCommand struct {
@@ -170,7 +171,7 @@ func validateCompatibilityInvocation(invocation compatibilityInvocation, session
 			return errors.New("compatibility command has an invalid or oversized argument")
 		}
 	}
-	actualPhase, err := compatibilityCommandPhase(command.Review.BaseArguments, command.Args)
+	actualPhase, err := compatibilityReviewCommandPhase(command.Review, command.Args)
 	if err != nil || actualPhase != phase {
 		return errors.New("compatibility command does not match its closed phase grammar")
 	}
@@ -220,6 +221,12 @@ func validateCompatibilityInvocation(invocation compatibilityInvocation, session
 }
 
 func validateCompatibilityReview(review compatibilityReview) error {
+	if review.Domain != nil && validateCompatibilityDomain(*review.Domain) != nil {
+		return ErrNFQWSDomainMaterial
+	}
+	if review.Domain != nil && len(review.Assets)+2 > compatibilityMaxFiles {
+		return ErrNFQWSDomainMaterial
+	}
 	if !compatibilityHex(review.InstallationID, 32) || review.Sequence == 0 || !compatibilityCleanPath(review.ControlPath) {
 		return errors.New("invalid compatibility installation or control binding")
 	}
@@ -257,7 +264,8 @@ func validateCompatibilityReview(review compatibilityReview) error {
 }
 
 func compatibilityReviewsEqual(a, b compatibilityReview) bool {
-	return a.Binary == b.Binary && slices.Equal(a.Assets, b.Assets) && slices.Equal(a.BaseArguments, b.BaseArguments) && a.ControlPath == b.ControlPath && a.InstallationID == b.InstallationID && a.Sequence == b.Sequence
+	domainEqual := a.Domain == nil && b.Domain == nil || a.Domain != nil && b.Domain != nil && *a.Domain == *b.Domain
+	return domainEqual && a.Binary == b.Binary && slices.Equal(a.Assets, b.Assets) && slices.Equal(a.BaseArguments, b.BaseArguments) && a.ControlPath == b.ControlPath && a.InstallationID == b.InstallationID && a.Sequence == b.Sequence
 }
 
 func compatibilityReceiptTerminal(receipt compatibilityReceipt) bool {
