@@ -1,6 +1,6 @@
 // Reusable actual HTTP/browser scenarios extracted from the Windows gate.
 // All HTTP requests use the supplied QA instance. No response interception.
-// The community scenario labels its temporary browser workflow model separately
+// Saved browse scenarios label their temporary browser transport models separately
 // from genuine saved/live GETs; it does not simulate server admission.
 import assert from 'node:assert/strict';
 
@@ -23,7 +23,9 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
   'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND',
   'UI_COMMUNITY_SAVED_HTTP','UI_COMMUNITY_BUSY_MODEL','UI_COMMUNITY_SEARCH',
-  'UI_COMMUNITY_LATE_PREVIEW_MODEL','UI_COMMUNITY_TTL_MODEL','UI_COMMUNITY_BOOKEND'
+  'UI_COMMUNITY_LATE_PREVIEW_MODEL','UI_COMMUNITY_TTL_MODEL','UI_COMMUNITY_BOOKEND',
+  'UI_NODE_SAVED_HTTP','UI_NODE_SAVED_BUSY_MODEL','UI_NODE_SAVED_SEARCH','UI_NODE_SAVED_OFFLINE_MODEL',
+  'UI_NODE_SAVED_LIVE_RETRY','UI_NODE_SAVED_LATE_MODEL','UI_NODE_SAVED_TTL_MODEL','UI_NODE_SAVED_BOOKEND'
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
@@ -51,6 +53,149 @@ export function realHTTPInstallCommunityBrowseModel() {
     if(path.startsWith('/api/v1/community/'))throw new Error('Unknown community workflow refused by browser model');
     return model.original(path,options,...rest);
   };
+}
+
+// Browser transport model, not HTTP admission fault injection. The only saved
+// body delayed here is first obtained through the original genuine HTTP client;
+// resolve() cannot supply or replace its bytes. Never delegate a business write.
+export function realHTTPInstallNodeBrowseModel() {
+  if(globalThis.__rzNodeBrowseQA)throw new Error('Node browse model already installed');
+  const model=globalThis.__rzNodeBrowseQA={original:api,phase:'busy',list_calls:0,saved_calls:0,blocked_non_get:0,hold_saved:false,resolve:null,saved_settled:false};
+  api=async(path,options={},...rest)=>{
+    if(String(options.method||'GET').toUpperCase()!=='GET'){
+      model.blocked_non_get++;throw new Error('Node browser model prohibits non-GET requests');
+    }
+    if(path==='/api/v1/nodes'){
+      model.list_calls++;
+      if(model.phase==='busy')throw Object.assign(new Error('Modeled node list busy'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});
+      if(model.phase==='offline')throw new TypeError('Modeled node list transport unavailable');
+    }else if(path.startsWith('/api/v1/nodes'))throw new Error('Unknown node read refused by browser model');
+    if(path==='/api/v1/panel/nodes'){
+      model.saved_calls++;
+      const hold=model.hold_saved,value=await model.original(path,options,...rest);
+      if(hold){
+        if(model.resolve)throw new Error('Only one held memory response is allowed');
+        return new Promise(resolve=>{model.resolve=()=>resolve(value);}).finally(()=>{model.saved_settled=true;});
+      }
+      return value;
+    }
+    if(path.startsWith('/api/v1/panel/nodes'))throw new Error('Unknown saved node read refused by browser model');
+    return model.original(path,options,...rest);
+  };
+}
+
+async function realHTTPNodeBrowseScenario({page,requests,test,readJSON,diagnose}) {
+  await test('saved nodes use genuine HTTP and readonly DOM with modeled busy/offline/late/TTL',
+    'genuine admitted /nodes and memory /panel/nodes GETs; busy/offline are browser rejections, late is a held genuine DTO, TTL is local receipt aging; server_admission_held=false; business_writes=0',async()=>{
+      const start=requests.length;
+      await navTo(page,'nodes');
+      await page.waitForFunction(()=>!panelLoad.request&&!nodeBrowser.polling&&!nodeActivity.pending);
+      await diagnose('UI_NODE_SAVED_HTTP',async()=>{
+        // The preceding draft-only scenario created these inert fixture nodes.
+        // No saved DTO or synthetic node is promoted into a live catalogue.
+        const live=await readJSON('/api/v1/nodes'),saved=await readJSON('/api/v1/panel/nodes'),identity=await readJSON('/api/v1/panel/snapshot');
+        assert(live.available===true&&live.nodes.length>0);
+        assert.equal(await page.evaluate(value=>validSavedNodeBrowse(value),saved),true);
+        assert.equal(saved.instance_id,identity.instance_id);assert.equal(saved.state,'retained');
+        assert.deepEqual(saved.data.nodes.map(row=>row.id).sort(),live.nodes.map(row=>row.id).sort());
+        for(const row of saved.data.nodes)assert.deepEqual(Object.keys(row).sort(),['id','name','protocol','transport']);
+        assert.equal(await page.locator('#nodeOpenImport').isVisible(),true);
+      });
+      const prior=await page.evaluate(()=>{
+        const prior={viewActive:nodeBrowser.viewActive};
+        cancelPanelRefresh();stopNodeBrowserRefresh();nodeBrowser.viewActive=false;
+        return prior;
+      });
+      await page.evaluate(realHTTPInstallNodeBrowseModel);
+      try{
+        await diagnose('UI_NODE_SAVED_BUSY_MODEL',async()=>{
+          await page.evaluate(()=>{__rzNodeBrowseQA.live=state.nodes;});
+          await page.locator('#refreshNodes').click();
+          await page.waitForFunction(()=>nodeBrowse.showing&&!!nodeBrowse.saved);
+          assert.equal(await page.evaluate(()=>state.nodes===__rzNodeBrowseQA.live),true);
+          assert.equal(await page.locator('#nodeSavedBrowse').isVisible(),true);
+          assert.equal(await page.locator('#nodeOpenImport').isVisible(),false);
+          assert.equal(await page.locator('#nodeBrowserContent').isVisible(),false);
+          assert(await page.locator('#nodeSavedList article').count()>0);
+          assert.equal(await page.locator('#nodeSavedList :is(button,input,select,a,[data-node-card],[data-node-select],[data-node-edit],[data-node-check])').count(),0);
+          assert.match(await page.locator('#nodeSavedNotice').textContent(),/последний успешный список получен.*Только просмотр.*не проверена/);
+          assert.equal(await page.locator('#nodeSavedBrowse [data-view="services"]').isVisible(),true);
+        });
+        await diagnose('UI_NODE_SAVED_SEARCH',async()=>{
+          const before=await page.evaluate(()=>__rzNodeBrowseQA.list_calls),network=requests.length;
+          const term=await page.evaluate(()=>nodeBrowse.saved.value.data.nodes[0].name);
+          await page.locator('#nodeSavedSearch').fill(term);
+          assert(await page.locator('#nodeSavedList article').count()>0);
+          await page.locator('#nodeSavedSearch').fill('QA_NO_SAVED_NODE_MATCH');
+          assert.equal(await page.locator('#nodeSavedList article').count(),0);
+          assert.match(await page.locator('#nodeSavedEmpty').textContent(),/совпадений нет/);
+          assert.equal(await page.evaluate(()=>__rzNodeBrowseQA.list_calls),before);
+          assert.equal(requests.slice(network).filter(row=>row.path==='/api/v1/nodes').length,0);
+          await page.locator('#nodeSavedSearch').fill('');
+        });
+        await diagnose('UI_NODE_SAVED_OFFLINE_MODEL',async()=>{
+          const before=await page.evaluate(()=>{__rzNodeBrowseQA.phase='offline';return __rzNodeBrowseQA.list_calls;});
+          await page.locator('#nodeSavedRefresh').click();
+          await page.waitForFunction(before=>__rzNodeBrowseQA.list_calls>before&&state.dataLoad.nodes?.phase==='error'&&nodeBrowse.showing&&!!nodeBrowse.saved,before);
+          assert(await page.locator('#nodeSavedList article').count()>0);
+          assert.equal(await page.locator('#nodeOpenImport').isVisible(),false);
+        });
+        await diagnose('UI_NODE_SAVED_LIVE_RETRY',async()=>{
+          const network=requests.length;
+          await page.evaluate(()=>{__rzNodeBrowseQA.phase='live';});
+          await page.locator('#nodeSavedRefresh').click();
+          await page.waitForFunction(()=>state.dataLoad.nodes?.phase==='ready'&&!nodeBrowse.blocked&&!nodeBrowse.showing&&!document.getElementById('refreshNodes').disabled);
+          assert.equal(await page.locator('#nodeSavedBrowse').isVisible(),false);
+          assert.equal(await page.locator('#nodeOpenImport').isVisible(),true);
+          assert(await page.locator('#nodeList [data-node-card]').count()>0);
+          assert(requests.slice(network).some(row=>row.method==='GET'&&row.path==='/api/v1/nodes'&&row.status===200));
+        });
+        await diagnose('UI_NODE_SAVED_LATE_MODEL',async()=>{
+          await page.evaluate(()=>{__rzNodeBrowseQA.phase='busy';});
+          await page.locator('#refreshNodes').click();
+          await page.waitForFunction(()=>nodeBrowse.showing&&!!nodeBrowse.saved);
+          // Hold an additional genuine memory response after its HTTP body has
+          // arrived. A later genuine live list must retain its own UI authority.
+          await page.evaluate(()=>{__rzNodeBrowseQA.hold_saved=true;__rzNodeBrowseQA.pending=loadSavedNodeBrowse(panelLoad.generation);});
+          await page.waitForFunction(()=>typeof __rzNodeBrowseQA.resolve==='function');
+          await page.evaluate(()=>{__rzNodeBrowseQA.hold_saved=false;__rzNodeBrowseQA.phase='live';});
+          await page.locator('#nodeSavedRefresh').click();
+          await page.waitForFunction(()=>state.dataLoad.nodes?.phase==='ready'&&!nodeBrowse.blocked&&!nodeBrowse.showing&&!document.getElementById('refreshNodes').disabled);
+          const card=page.locator('#nodeList [data-node-card]').first();
+          await card.locator('details > summary').click();await card.locator('[data-node-edit]').click();
+          await page.locator('#nodeEditAlias').fill('QA retained browse draft');
+          const facts=await page.evaluate(async()=>{
+            __rzNodeBrowseQA.resolve();await __rzNodeBrowseQA.pending;
+            return {settled:__rzNodeBrowseQA.saved_settled,live:nodeBrowseActionsAllowed(),historical_hidden:document.getElementById('nodeSavedBrowse').hidden,
+              editor_open:document.getElementById('nodeEditDialog').open,draft_retained:document.getElementById('nodeEditAlias').value==='QA retained browse draft',blocked_non_get:__rzNodeBrowseQA.blocked_non_get};
+          });
+          assert.deepEqual(facts,{settled:true,live:true,historical_hidden:true,editor_open:true,draft_retained:true,blocked_non_get:0});
+          await page.locator('#nodeEditCancel').click();
+        });
+        await diagnose('UI_NODE_SAVED_TTL_MODEL',async()=>{
+          await page.evaluate(()=>{__rzNodeBrowseQA.phase='busy';__rzNodeBrowseQA.beforeSaved=nodeBrowse.saved;});
+          await page.locator('#refreshNodes').click();
+          await page.waitForFunction(()=>nodeBrowse.showing&&!!nodeBrowse.saved&&nodeBrowse.saved!==__rzNodeBrowseQA.beforeSaved);
+          await page.evaluate(()=>{nodeBrowse.saved.receivedAt-=900000;renderNodes();});
+          assert.equal(await page.locator('#nodeSavedList article').count(),0);
+          assert.match(await page.locator('#nodeSavedNotice').textContent(),/недоступен.*не означает.*удалены/);
+          assert.equal(await page.locator('#nodeOpenImport').isVisible(),false);
+        });
+      }finally{
+        await page.evaluate(async prior=>{
+          const model=globalThis.__rzNodeBrowseQA;if(!model)return;
+          cancelPanelRefresh();
+          if(model.resolve){model.resolve();await model.pending?.catch(()=>{});}
+          api=model.original;nodeBrowser.viewActive=prior.viewActive;
+          invalidateSavedNodeBrowse();delete globalThis.__rzNodeBrowseQA;
+        },prior);
+      }
+      await diagnose('UI_NODE_SAVED_BOOKEND',async()=>{
+        assert.equal(requests.slice(start).filter(row=>row.method!=='GET').length,0);
+        assert(requests.slice(start).some(row=>row.path==='/api/v1/panel/nodes'&&row.status===200));
+        await navTo(page,'overview');
+      });
+    });
 }
 
 async function realHTTPCommunityBrowseScenario({page,requests,test,readJSON,diagnose}) {
@@ -280,6 +425,8 @@ export async function runRealHTTPDraftScenarios({page,requests,test,readJSON,wri
     await diagnose('UI_NODE_REMAINING_SHADOWSOCKS',()=>assert.equal(remaining.nodes.filter(node=>String(node.protocol).trim().toLowerCase()==='shadowsocks').length,1));
     await page.locator('#nodeSearch').fill('');await navTo(page,'overview');
   });
+
+  await realHTTPNodeBrowseScenario({page,requests,test,readJSON,diagnose});
 
   const original=await diagnose('UI_POLICY_EDITOR_READY',async()=>{
     await navTo(page,'autopilot');await page.waitForFunction(()=>!document.getElementById('autoQuickSave').disabled);

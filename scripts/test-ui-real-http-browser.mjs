@@ -181,7 +181,7 @@ export async function runRealHTTPUI(config) {
   };
   const test=async(name,boundary,action)=>{
     stage=name;await action();realHTTPAssert(report.browser_errors===0,'BROWSER_ERROR');
-    const index=report.steps.length+1;report.steps.push({scenario:name,status:'passed'});console.log('PASS scenario '+index);
+    const index=report.steps.length+1;report.steps.push({scenario:name,boundary,status:'passed'});console.log('PASS scenario '+index);
   };
   try {
     browser=await chromium.launch({executablePath:config.chrome,headless:true});

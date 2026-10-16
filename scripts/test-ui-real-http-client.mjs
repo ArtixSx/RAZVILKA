@@ -1,7 +1,7 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis,realHTTPInstallCommunityBrowseModel} from './ui-real-http-scenarios.mjs';
+import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis,realHTTPInstallCommunityBrowseModel,realHTTPInstallNodeBrowseModel} from './ui-real-http-scenarios.mjs';
 import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPAwaitInventory,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
@@ -83,7 +83,9 @@ for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRA
   'UI_ENGINE_CARD_EXPERT_DRAFT','UI_ENGINE_CARD_OTHER_CANCEL','UI_ENGINE_CARD_CHECK_RETURN','UI_ENGINE_CARD_DISCARD_DRAFT',
   'UI_ENGINE_CARD_MOBILE_LAYOUT','UI_ENGINE_CARD_RETURN_OVERVIEW',
   'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
-  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND']){
+  'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND',
+  'UI_NODE_SAVED_HTTP','UI_NODE_SAVED_BUSY_MODEL','UI_NODE_SAVED_SEARCH','UI_NODE_SAVED_OFFLINE_MODEL',
+  'UI_NODE_SAVED_LIVE_RETRY','UI_NODE_SAVED_LATE_MODEL','UI_NODE_SAVED_TTL_MODEL','UI_NODE_SAVED_BOOKEND']){
   try{
     await realHTTPDiagnosis(id,()=>assert.equal('private catalog id','private candidate material'));
     assert.fail('expected private assertion failure');
@@ -360,5 +362,29 @@ for(const state of ['empty','expired','unknown']){
   await Promise.resolve();assert.equal(settled,false);assert.equal(delegated.length,1);checks++;
   model.resolve({model_only:true});assert.equal((await pending).model_only,true);assert.equal(model.preview_settled,true);checks++;
   assert.equal((await context.workflowRequest('/api/v1/status')).actual_transport,true);assert.equal(delegated.length,2);checks++;
+}
+{
+  const delegated=[],actual={actual_transport:true,revision:7};
+  const context=vm.createContext({api:async(...args)=>{delegated.push(args);return actual;}});
+  vm.runInContext('('+realHTTPInstallNodeBrowseModel.toString()+')()',context);
+  const model=vm.runInContext('__rzNodeBrowseQA',context);
+  await assert.rejects(context.api('/api/v1/nodes'),error=>error.status===409&&error.payload.code==='RESTORE_OPERATION_BUSY');checks++;
+  model.phase='offline';await assert.rejects(context.api('/api/v1/nodes'),error=>error.name==='TypeError');checks++;
+  assert.equal(delegated.length,0);checks++;
+  model.phase='live';assert.equal(await context.api('/api/v1/nodes',{readTimeoutMs:3000},12000),actual);checks++;
+  assert.deepEqual(delegated[0],['/api/v1/nodes',{readTimeoutMs:3000},12000]);checks++;
+  for(const path of ['/api/v1/apply','/api/v1/nodes/example/reveal','/api/v1/nodes/import','/api/v1/node-checks']){
+    await assert.rejects(context.api(path,{method:'POST'}),/prohibits non-GET/);checks++;
+  }
+  assert.equal(model.blocked_non_get,4);assert.equal(delegated.length,1);checks++;
+  for(const path of ['/api/v1/nodes/unknown','/api/v1/nodes?alias=1','/api/v1/panel/nodes/']){
+    await assert.rejects(context.api(path),/Unknown .* read refused/);checks++;
+  }
+  assert.equal(await context.api('/api/v1/panel/nodes'),actual);assert.equal(delegated.length,2);checks++;
+  model.hold_saved=true;
+  const pending=context.api('/api/v1/panel/nodes');let settled=false;pending.then(()=>{settled=true;});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(typeof model.resolve,'function');assert.equal(delegated.length,3);checks++;
+  model.resolve({forged_body:true});assert.equal(await pending,actual,'held body was substituted instead of delayed');assert.equal(model.saved_settled,true);checks++;
+  assert.equal(await context.api('/api/v1/status'),actual);assert.equal(delegated.length,4);checks++;
 }
 console.log('PASS pure real HTTP client checks '+checks);
