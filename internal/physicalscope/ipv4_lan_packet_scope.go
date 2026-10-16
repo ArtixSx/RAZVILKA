@@ -1026,6 +1026,9 @@ func (s *fenceCollectorState) checkPurposeNotifications(frames []message) error 
 			if m.flags != 0 {
 				return at("packet.notifications.neighbor.flags", nil)
 			}
+			if packetHomeFDBRefresh(m, t) {
+				continue // FDB learning is neither an IP binding nor membership B.
+			}
 			n, bookkeeping, err := packetDecodeNeighbor(m, t)
 			if err != nil {
 				return err
