@@ -116,9 +116,15 @@ func (f *preEffectLANFixture) snapshot(t *testing.T, modelSource bool) {
 		t.Fatal("Snapshot did not retain its authored empty image")
 	}
 	if modelSource {
+		f.e.preEffectLAN.owners = func(c context.Context) error {
+			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() {
+				return ErrNFQWSScopedOwner
+			}
+			return f.e.material.control.CurrentForCleanup(c)
+		}
 		f.e.preEffectLAN.observe = func(c context.Context) error {
 			f.reads++
-			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() || f.refuse == "read-open" || f.refuse == "read-close" && f.reads%2 == 0 {
+			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() || f.refuse == "read-open" || f.refuse == "read-close" {
 				return ErrNFQWSScopedOwner
 			}
 			if f.afterRead != nil {
@@ -159,7 +165,7 @@ func TestNFQWSPreEffectLANRetiresAfterSnapshotBeforeStageAndRetries(t *testing.T
 			t.Fatal("fresh negative retirement", ok, err)
 		}
 	}
-	if f.reads != 8 || f.retires != 4 || f.model.rpdbReads != 8 || f.model.cleanup != 0 || f.inventories < 8 {
+	if f.reads != 2 || f.retires != 2 || f.model.rpdbReads != 4 || f.model.cleanup != 0 || f.inventories < 4 {
 		t.Fatal("missing independent negative read or borrowed cleanup", f.reads, f.retires, f.inventories, f.model)
 	}
 	if err := f.e.gate.Stage(f.ctx, f.e.plan, f.root); err == nil {
@@ -180,8 +186,24 @@ func TestNFQWSPreEffectLANRequiresOriginalSourceBeyondSnapshot(t *testing.T) {
 	}
 }
 
+func TestNFQWSPreEffectLANNoOpRollbackDoesNotVerifyAbsence(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	f.fenceBeforeStage(t)
+	f.refuse = "read-open"
+	if err := f.e.gate.Rollback(f.ctx, f.e.plan, f.root); err != nil {
+		t.Fatal("identity-only no-op", err)
+	}
+	if f.reads != 0 || f.retires != 0 || f.model.rpdbReads != 0 {
+		t.Fatal("no-op unexpectedly claimed full verification")
+	}
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+		t.Fatal("successful no-op was reused as verification")
+	}
+}
+
 func TestNFQWSPreEffectLANRefusesUnknownOrAttemptedEffects(t *testing.T) {
-	for _, kind := range []string{"candidate", "preparation", "promoted", "owner", "snapshot-bytes", "snapshot-inode", "closed", "selection", "not-retired", "resource", "prepared", "seal", "nfq-activate", "lan-activate", "journal-unknown", "read-open", "read-close", "retire", "inventory", "rpdb", "owner-after-read", "receipt-after-read", "cancel-after-read", "DTO", "copy", "digest"} {
+	for _, kind := range []string{"candidate", "preparation", "promoted", "owner", "snapshot-bytes", "snapshot-inode", "closed", "control", "selection", "material-binding", "review-copy", "not-retired", "resource", "prepared", "seal", "nfq-activate", "lan-activate", "journal-unknown", "read-open", "read-close", "retire", "inventory", "rpdb", "owner-after-read", "receipt-after-read", "cancel-after-read", "DTO", "copy", "digest"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newPreEffectLANFixture(t)
 			f.snapshot(t, true)
@@ -222,6 +244,15 @@ func TestNFQWSPreEffectLANRefusesUnknownOrAttemptedEffects(t *testing.T) {
 				}
 			case "closed":
 				_ = f.e.material.Close()
+			case "control":
+				_ = f.e.material.control.Close()
+			case "material-binding":
+				f.e.material.execution = nil
+				t.Cleanup(func() { f.e.material.execution = f.e })
+			case "review-copy":
+				original := f.e.preEffectLAN
+				f.e.preEffectLAN = &nfqwsPreEffectLANReview{self: original, execution: f.e}
+				t.Cleanup(func() { _ = original.close() })
 			case "selection":
 				_ = f.e.selection.Close()
 			case "not-retired":
@@ -297,5 +328,96 @@ func TestNFQWSPreEffectLANMissingSnapshotOrPriorNeverIssuesReview(t *testing.T) 
 				t.Fatal("cold absence bypassed strict cleanup")
 			}
 		})
+	}
+}
+
+func TestNFQWSPreEffectLANRetainedRootsRefuseReplacement(t *testing.T) {
+	for _, kind := range []string{"manager", "transaction", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.snapshot(t, true)
+			f.fenceBeforeStage(t)
+			target := f.root
+			if kind == "manager" {
+				target = f.e.material.managerRoot
+			}
+			moved := target + "-original"
+			if err := os.Rename(target, moved); err != nil {
+				t.Skip("platform cannot rename held root", err)
+			}
+			if kind == "symlink" {
+				if err := os.Symlink(moved, target); err != nil {
+					if restoreErr := os.Rename(moved, target); restoreErr != nil {
+						t.Fatal(restoreErr)
+					}
+					t.Skip("platform cannot create symlink", err)
+				}
+			} else {
+				if err := os.MkdirAll(f.root, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(f.root, "snapshot.json"), f.e.preEffectLAN.image, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+				t.Fatal("replacement inherited original retirement")
+			}
+			if f.reads != 0 {
+				t.Fatal("replacement reached source observations")
+			}
+		})
+	}
+}
+
+func TestNFQWSPreEffectLANCloseJoinsOriginalObservation(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	f.fenceBeforeStage(t)
+	entered, leave := make(chan struct{}), make(chan struct{})
+	f.e.preEffectLAN.observe = func(context.Context) error { close(entered); <-leave; return ErrNFQWSScopedOwner }
+	readDone := make(chan struct{})
+	go func() { defer close(readDone); _, _ = f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root) }()
+	select {
+	case <-entered:
+	case <-f.ctx.Done():
+		t.Fatal("original observation did not enter")
+	}
+	closeStarted, closeDone := make(chan struct{}), make(chan struct{})
+	go func() { close(closeStarted); _ = f.e.material.Close(); close(closeDone) }()
+	<-closeStarted
+	select {
+	case <-closeDone:
+		t.Fatal("Close released retained files during observation")
+	case <-time.After(30 * time.Millisecond):
+	}
+	close(leave)
+	select {
+	case <-closeDone:
+	case <-f.ctx.Done():
+		t.Fatal("Close did not join observation")
+	}
+	<-readDone
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+		t.Fatal("closed material revived retirement")
+	}
+}
+
+func TestNFQWSPreEffectLANClosePreventsLateCapturePublication(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	r := f.e.preEffectLAN
+	// Exact intermediate disk/descriptor image after successful r.current,
+	// before capture's final publication. Close must prevent a late install.
+	if err := r.current(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.e.preEffectLAN = nil
+	defer r.close()
+	if err := f.e.material.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.e.retainPreEffectLAN(r); err == nil || f.e.preEffectLAN != nil {
+		t.Fatal("completed Close lost late private descriptors", err)
 	}
 }
