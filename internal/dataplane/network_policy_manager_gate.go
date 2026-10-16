@@ -356,6 +356,9 @@ func (a *NetworkPolicyAdapter) Rollback(ctx context.Context, p Plan, root string
 		if pair != nil {
 			return ErrReviewChanged
 		}
+		if handled, err := a.inspectPreEffectNFQAbsence(ctx, p, root, false); handled {
+			return err
+		}
 		return a.inspectAbsent(ctx, want.LAN)
 	}
 	want.Promoted = current.Promoted
@@ -409,6 +412,9 @@ func (a *NetworkPolicyAdapter) VerifyRollback(ctx context.Context, p Plan, root 
 	}
 	if err != nil || owner != nil {
 		return false, errors.Join(err, ErrLANPolicyRuntime)
+	}
+	if handled, err := a.inspectPreEffectNFQAbsence(ctx, p, root, true); handled {
+		return err == nil, err
 	}
 	err = a.inspectAbsent(ctx, state.LAN)
 	return err == nil, err

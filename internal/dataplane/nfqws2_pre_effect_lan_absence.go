@@ -30,6 +30,7 @@ type nfqwsPreEffectLANReview struct {
 	// Production fixes this to SAME original participant's full independent
 	// negative read. Package tests model only this source/kernel I/O leaf.
 	observe func(context.Context) error
+	owners  func(context.Context) error
 }
 
 func (a *NetworkPolicyAdapter) preEffectNFQParticipant(ctx context.Context, p Plan, root string) (*nfqws2ActiveExecution, bool, error) {
@@ -119,8 +120,25 @@ func (e *nfqws2ActiveExecution) capturePreEffectLAN(ctx context.Context, root st
 		}
 		return e.cleanupCurrent(c)
 	}
+	r.owners = e.cleanupCurrent
 	if err := r.current(ctx); err != nil {
 		return err
+	}
+	if err := e.retainPreEffectLAN(r); err != nil {
+		return err
+	}
+	keep = true
+	return nil
+}
+
+// Serialize final publication with Material.Close. Close either sees this
+// original review and joins it, or prevents its publication and the caller
+// closes its still-private descriptors. No material lock is held across I/O.
+func (e *nfqws2ActiveExecution) retainPreEffectLAN(r *nfqwsPreEffectLANReview) error {
+	e.material.mu.Lock()
+	defer e.material.mu.Unlock()
+	if e.material.closed || !e.material.executionBound || e.material.execution != e || r == nil || r.self != r || r.execution != e {
+		return ErrNFQWSScopedOwner
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -128,13 +146,12 @@ func (e *nfqws2ActiveExecution) capturePreEffectLAN(ctx context.Context, root st
 		return ErrNFQWSScopedOwner
 	}
 	e.preEffectLAN = r
-	keep = true
 	return nil
 }
 
 // Caller retains r.mu through every read and closing bookend; Close joins it.
 func (r *nfqwsPreEffectLANReview) current(ctx context.Context) error {
-	if r == nil || r.self != r || r.closed || ctx == nil || ctx.Err() != nil || r.execution == nil || r.manager == nil || r.dir == nil || r.file == nil || r.observe == nil {
+	if r == nil || r.self != r || r.closed || ctx == nil || ctx.Err() != nil || r.execution == nil || r.manager == nil || r.dir == nil || r.file == nil || r.observe == nil || r.owners == nil {
 		return ErrNFQWSScopedOwner
 	}
 	e := r.execution
@@ -203,7 +220,7 @@ func (r *nfqwsPreEffectLANReview) onlySnapshot(authored bool) error {
 	return ErrNFQWSScopedOwner
 }
 
-func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p Plan, root string) (bool, error) {
+func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p Plan, root string, verify bool) (bool, error) {
 	e, present, err := a.preEffectNFQParticipant(ctx, p, root)
 	if !present || err != nil {
 		return present, err
@@ -226,6 +243,18 @@ func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p
 		if err := r.current(ctx); err != nil {
 			return err
 		}
+		if err := r.owners(ctx); err != nil {
+			return err
+		}
+		if err := r.current(ctx); err != nil {
+			return err
+		}
+		// This exact Rollback has no effect or receipt to undo. A successful
+		// no-op is not verification: only the separate VerifyRollback below
+		// performs complete fresh consumer/kernel absence observations.
+		if !verify {
+			return e.material.control.CurrentForCleanup(ctx)
+		}
 		if err := r.observe(ctx); err != nil {
 			return err
 		}
@@ -241,7 +270,7 @@ func (a *NetworkPolicyAdapter) inspectPreEffectNFQAbsence(ctx context.Context, p
 		if err := e.runtimeFrozen.inspectDirectRPDB(ctx); err != nil {
 			return err
 		}
-		if err := r.observe(ctx); err != nil {
+		if err := r.owners(ctx); err != nil {
 			return err
 		}
 		return errors.Join(r.current(ctx), e.material.control.CurrentForCleanup(ctx))
