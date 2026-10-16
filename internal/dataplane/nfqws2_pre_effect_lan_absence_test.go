@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 type preEffectLANFixture struct {
@@ -190,6 +191,10 @@ func TestNFQWSPreEffectIssuedSelectionReachesStrictCleanupWithoutNoEffectGrant(t
 			f.snapshot(t, true)
 			f.modelIssuedSelection(t, consumed)
 			f.e.retired = true
+			originalSnapshot := f.e.preEffectLAN
+			if err := f.e.gate.Snapshot(f.ctx, f.e.plan, f.root); err == nil || f.e.preEffectLAN != originalSnapshot {
+				t.Fatal("issued selection acquired or replaced a no-effect Snapshot")
+			}
 			if f.e.selection.prepared != nil || !reflect.DeepEqual(f.e.selection.plan, Plan{}) {
 				t.Fatal("phase model manufactured comparison-only fields")
 			}
@@ -225,6 +230,62 @@ func TestNFQWSPreEffectIssuedPendingCleanupPreservesStrictCancellation(t *testin
 	}
 	if f.reads != 0 {
 		t.Fatal("pending issued cleanup called no-effect observer")
+	}
+}
+
+func TestNFQWSPreEffectIssuedSelectionRejectsCopiesAndMissingClaims(t *testing.T) {
+	for _, cut := range []string{"copied-selection", "closed-selection", "different-source", "different-reference", "selection-spec", "execution-spec", "seal-spec", "copied-seal", "foreign-seal-execution", "foreign-seal-selection", "missing-issued", "missing-seal", "missing-comparison", "comparison-as-issued", "prepared-claim", "missing-execution-binding"} {
+		t.Run(cut, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.snapshot(t, true)
+			f.modelIssuedSelection(t, true)
+			f.e.retired = true
+			selection, seal := f.e.selection, f.e.activationSeal
+			switch cut {
+			case "copied-selection":
+				copy := &NFQWSScopedSelection{self: selection, source: selection.source, reference: selection.reference, spec: selection.spec.Clone()}
+				f.e.selection = copy
+			case "closed-selection":
+				if err := selection.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "different-source":
+				selection.source = &strategylab.SelectedCandidateReview{}
+			case "different-reference":
+				selection.reference.CandidateID = "different"
+			case "selection-spec":
+				selection.spec.Queue++
+			case "execution-spec":
+				f.e.spec.Queue++
+			case "seal-spec":
+				seal.spec.Queue++
+			case "copied-seal":
+				copy := &nfqws2ActiveActivationSeal{self: seal, execution: f.e, selection: selection, spec: seal.spec.Clone()}
+				f.e.activationSeal = copy
+			case "foreign-seal-execution":
+				seal.execution = &nfqws2ActiveExecution{}
+			case "foreign-seal-selection":
+				seal.selection = f.e.comparisonSelection
+			case "missing-issued":
+				f.e.material.issuedSelection = nil
+			case "missing-seal":
+				f.e.activationSeal = nil
+			case "missing-comparison":
+				f.e.comparisonSelection = nil
+			case "comparison-as-issued":
+				f.e.comparisonSelection = selection
+			case "prepared-claim":
+				selection.prepared = f.e.material
+			case "missing-execution-binding":
+				f.e.material.executionBound = false
+			}
+			if handled, err := f.e.gate.inspectPreEffectNFQAbsence(f.ctx, f.e.plan, f.root, false); !handled || err == nil {
+				t.Fatal("invalid original issued tuple fell through to strict cleanup", cut, handled, err)
+			}
+			if f.reads != 0 || f.model.cleanup != 0 || f.retires != 0 || f.model.rpdbReads != 0 {
+				t.Fatal("invalid tuple reached no-effect or strict kernel observers", cut)
+			}
+		})
 	}
 }
 

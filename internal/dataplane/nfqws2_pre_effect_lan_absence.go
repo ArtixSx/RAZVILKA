@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sync"
 
@@ -50,8 +51,17 @@ func (a *NetworkPolicyAdapter) preEffectNFQParticipant(ctx context.Context, p Pl
 	// BindExecution holds a comparison reader before prepareActivation issues
 	// a different sealed selection. Requiring that later receipt at Snapshot
 	// rejects the genuine original participant before it can ever activate.
-	selectionBound := selection != nil && selection == e.comparisonSelection && e.material.issuedSelection == nil && seal == nil ||
-		selection != nil && e.material.issuedSelection == selection && seal != nil && seal.self == seal && seal.execution == e && seal.selection == selection
+	comparison := selection != nil && selection == e.comparisonSelection && e.material.issuedSelection == nil && seal == nil
+	issued := e.comparisonSelection != nil && selection != nil && selection != e.comparisonSelection && e.material.issuedSelection == selection && seal != nil && seal.self == seal && seal.execution == e && seal.selection == selection
+	selectionBound := comparison || issued
+	source, reference := e.material.source, e.material.reference
+	var issuedSpec NFQWSScopedSpec
+	if issued {
+		// The seal's spec is immutable after publication under e.mu. Do not
+		// require consumption or a live activation deadline for strict cleanup.
+		issuedSpec = seal.spec.Clone()
+		selectionBound = reflect.DeepEqual(e.spec, issuedSpec)
+	}
 	original := !e.material.closed && e.material.executionBound && e.material.execution == e && selectionBound
 	e.mu.Unlock()
 	e.material.mu.Unlock()
@@ -59,7 +69,16 @@ func (a *NetworkPolicyAdapter) preEffectNFQParticipant(ctx context.Context, p Pl
 		return nil, true, ErrNFQWSScopedOwner
 	}
 	selection.mu.Lock()
-	original = selection.self == selection && !selection.closed && selection.prepared == e.material && selection.source == e.material.source && nfqws2ActiveSamePlan(e.plan, selection.plan)
+	original = selection.self == selection && !selection.closed && selection.source == source
+	if comparison {
+		original = original && selection.prepared == e.material && nfqws2ActiveSamePlan(e.plan, selection.plan)
+	} else {
+		// The actual issued constructor has no comparison material/plan.
+		// Its original source/reference/spec and issued seal tuple bind it.
+		// neverActivatedLAN remains false, so this only reaches ordinary strict
+		// cleanup; the authored empty Snapshot supplies no absence grant here.
+		original = original && selection.prepared == nil && reflect.DeepEqual(selection.reference, reference) && reflect.DeepEqual(selection.spec, issuedSpec)
+	}
 	selection.mu.Unlock()
 	if !original {
 		return nil, true, ErrNFQWSScopedOwner
