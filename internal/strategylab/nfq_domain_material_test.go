@@ -9,9 +9,28 @@ import (
 	"testing"
 )
 
+// Go's nested test directories can be 0755 on Linux. Domain material requires
+// a private parent, including protected ancestry when the native leaf checks it.
+func nfqDomainPrivateTestDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	path, err := os.MkdirTemp("", "razvilka-nfq-domain-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(path); err != nil {
+			t.Error(err)
+		}
+	})
+	return path
+}
+
 // Real private files, no process/lease/source or native compatibility claim.
 func TestNFQDomainFilesMaterializeExactSetsAndCommand(t *testing.T) {
-	f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example", "api.video.example", "video.example"}, []string{"private.video.example"})
+	f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example", "api.video.example", "video.example"}, []string{"private.video.example"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +63,14 @@ func TestNFQDomainFilesMaterializeExactSetsAndCommand(t *testing.T) {
 
 func TestNFQDomainFilesRefuseEmptyUnknownAndUnboundedNames(t *testing.T) {
 	for _, include := range [][]string{nil, {""}, {"*.example"}, {"^exact.example"}, {"https://video.example/"}, {"VIDEO.example"}, {"127.0.0.1"}, {"video.example\nother.example"}, {strings.Repeat("x", 254) + ".example"}, slices.Repeat([]string{"video.example"}, 257)} {
-		if f, err := newNFQDomainFiles(t.TempDir(), include, nil); err == nil || f != nil {
+		if f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), include, nil); err == nil || f != nil {
 			t.Fatal("unsupported include accepted", include)
 		}
 	}
-	if f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, []string{"example"}); err == nil || f != nil {
+	if f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, []string{"example"}); err == nil || f != nil {
 		t.Fatal("TLD exclusion accepted")
 	}
-	if f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, []string{"video.example"}); err == nil || f != nil {
+	if f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, []string{"video.example"}); err == nil || f != nil {
 		t.Fatal("empty effective positive accepted")
 	}
 }
@@ -59,7 +78,7 @@ func TestNFQDomainFilesRefuseEmptyUnknownAndUnboundedNames(t *testing.T) {
 func TestNFQDomainFilesRefuseChangedReplacedAndUnknownFiles(t *testing.T) {
 	for _, change := range []string{"bytes", "inode", "extra", "closed"} {
 		t.Run(change, func(t *testing.T) {
-			f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, nil)
+			f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +120,7 @@ func TestNFQDomainFilesRefuseChangedReplacedAndUnknownFiles(t *testing.T) {
 }
 
 func TestNFQDomainFilesRefuseOtherProfilesAndTraffic(t *testing.T) {
-	f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, nil)
+	f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +133,7 @@ func TestNFQDomainFilesRefuseOtherProfilesAndTraffic(t *testing.T) {
 }
 
 func TestNFQDomainFilesCopyCannotCloseOriginalDescriptors(t *testing.T) {
-	f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, nil)
+	f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

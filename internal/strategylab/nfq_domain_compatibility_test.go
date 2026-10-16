@@ -16,7 +16,7 @@ import (
 
 func nfqDomainReviewFixture(t *testing.T) (*nfqDomainFiles, compatibilityReview, []string) {
 	t.Helper()
-	f, err := newNFQDomainFiles(t.TempDir(), []string{"video.example"}, []string{"private.video.example"})
+	f, err := newNFQDomainFiles(nfqDomainPrivateTestDir(t), []string{"video.example"}, []string{"private.video.example"})
 	if err != nil {
 		t.Fatal(err)
 	}
