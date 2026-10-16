@@ -22,17 +22,19 @@ type protectedNode struct {
 	info       os.FileInfo
 }
 type protectedImage struct {
-	file  *os.File
-	nodes []protectedNode
-	info  os.FileInfo
-	hash  [32]byte
+	file        *os.File
+	nodes       []protectedNode
+	info        os.FileInfo
+	hash        [32]byte
+	immutableFS *syscall.Statfs_t
 }
 type systemImages struct {
-	files []*protectedImage
-	bytes int64
-	seen  map[string]bool
-	cache map[string]*protectedImage
-	edges int
+	files          []*protectedImage
+	bytes          int64
+	seen           map[string]bool
+	cache          map[string]*protectedImage
+	edges          int
+	readFilesystem func(*os.File) (syscall.Statfs_t, error) // Private OS leaf; production uses held Fstatfs.
 }
 
 func (s *systemImages) close() {
@@ -172,12 +174,22 @@ func (s *systemImages) open(ctx context.Context, path string, executable bool) (
 		_ = f.Close()
 		return nil, ErrUnknown
 	}
+	beforeFS, beforeFSErr := s.filesystem(f)
 	hash, err := imageHash(ctx, f, info.Size())
 	if err != nil {
 		_ = f.Close()
 		return nil, err
 	}
+	after, afterErr := f.Stat()
+	if afterErr != nil || !sameProtectedImage(info, after) || !nodesUnchanged(nodes) {
+		_ = f.Close()
+		return nil, ErrUnknown
+	}
 	image := &protectedImage{file: f, info: info, nodes: nodes, hash: hash}
+	afterFS, afterFSErr := s.filesystem(f)
+	if beforeFSErr == nil && afterFSErr == nil && beforeFS == afterFS && immutableImageFilesystem(beforeFS) {
+		image.immutableFS = &beforeFS
+	}
 	s.files = append(s.files, image)
 	s.cache[resolved] = image
 	return image, nil
@@ -255,15 +267,56 @@ func (s *systemImages) dependencies(ctx context.Context, image *protectedImage) 
 func (s *systemImages) unchanged(ctx context.Context) bool {
 	for _, image := range s.files {
 		info, err := image.file.Stat()
-		if err != nil || !os.SameFile(info, image.info) || info.Mode() != image.info.Mode() || info.Size() != image.info.Size() || info.ModTime() != image.info.ModTime() || !nodesUnchanged(image.nodes) {
+		if err != nil || !sameProtectedImage(image.info, info) || !nodesUnchanged(image.nodes) {
 			return false
 		}
-		hash, err := imageHash(ctx, image.file, info.Size())
-		if err != nil || hash != image.hash {
+		if image.immutableFS != nil {
+			if !s.sameImmutableFilesystem(image) {
+				return false
+			}
+		} else {
+			hash, err := imageHash(ctx, image.file, info.Size())
+			if err != nil || hash != image.hash {
+				return false
+			}
+		}
+		closing, err := image.file.Stat()
+		if err != nil || !sameProtectedImage(image.info, closing) || !nodesUnchanged(image.nodes) || image.immutableFS != nil && !s.sameImmutableFilesystem(image) {
 			return false
 		}
 	}
 	return ctx.Err() == nil
+}
+
+func sameProtectedImage(before, after os.FileInfo) bool {
+	if before == nil || after == nil || !after.Mode().IsRegular() || !os.SameFile(before, after) || before.Mode() != after.Mode() || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+		return false
+	}
+	b, bok := before.Sys().(*syscall.Stat_t)
+	a, aok := after.Sys().(*syscall.Stat_t)
+	return bok && aok && a.Uid == 0 && a.Uid == b.Uid && a.Gid == b.Gid && a.Ctim == b.Ctim
+}
+
+// SquashFS is inherently read-only (docs.kernel.org/filesystems/squashfs.html).
+// A read-only flag on an otherwise writable filesystem is NOT this evidence.
+// The initial full hash is still computed; only this SAME held image session
+// may avoid redundant content reads while exact path/inode/FS bookends hold.
+func immutableImageFilesystem(fs syscall.Statfs_t) bool {
+	return fs.Type == 0x73717368 && fs.Flags&1 != 0
+}
+
+func (s *systemImages) filesystem(file *os.File) (syscall.Statfs_t, error) {
+	if s.readFilesystem != nil {
+		return s.readFilesystem(file)
+	}
+	var fs syscall.Statfs_t
+	err := syscall.Fstatfs(int(file.Fd()), &fs)
+	return fs, err
+}
+
+func (s *systemImages) sameImmutableFilesystem(image *protectedImage) bool {
+	fs, err := s.filesystem(image.file)
+	return err == nil && image.immutableFS != nil && fs == *image.immutableFS && immutableImageFilesystem(fs)
 }
 
 type cappedOutput struct {
