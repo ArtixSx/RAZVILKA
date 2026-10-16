@@ -164,7 +164,7 @@ func TestManagedCompatibilityBudgetKeepsEarlierOriginalDeadline(t *testing.T) {
 }
 
 func TestManagedCompatibilityBudgetMissingActiveRefusesWithoutPanic(t *testing.T) {
-	for _, mode := range []string{"missing", "invalid", "copied-context"} {
+	for _, mode := range []string{"missing", "invalid", "original-context", "copied-context"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, p, cancel := compatibilityBudgetModel(t)
 			defer cancel()
@@ -179,10 +179,17 @@ func TestManagedCompatibilityBudgetMissingActiveRefusesWithoutPanic(t *testing.T
 				copy := *i
 				ctx = context.WithValue(ctx, managedCompatibilityContextKey{}, &copy)
 			}
+			bounded, finish := compatibilityPublicationContext(ctx, nil)
+			defer finish()
+			if bounded.Err() == nil || compatibilityPublicationTimeCurrent(ctx, nil) {
+				t.Fatal("missing active command received publication time")
+			}
+			candidate := Candidate{ID: "saved"}
+			p.manager.state.Candidates = map[string]Candidate{candidate.ID: candidate}
 			// This is the actual managed publisher entry, before its ordinary
-			// guard rejects an absent candidate/session or a copied invocation.
+			// guard rejects an absent session or a copied invocation.
 			p.manager.mu.Lock()
-			err := p.manager.publishManagedCompatibilityValidationLocked(ctx, Candidate{ID: "absent"}, p, i)
+			err := p.manager.publishManagedCompatibilityValidationLocked(ctx, candidate, p, i)
 			p.manager.mu.Unlock()
 			if !errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
 				t.Fatal("missing active session did not refuse", err)

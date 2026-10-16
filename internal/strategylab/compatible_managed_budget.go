@@ -58,6 +58,11 @@ func compatibilityPhaseContext(parent context.Context, p *SupervisedCompatibilit
 }
 
 func compatibilityPublicationContext(parent context.Context, active *compatibilityInvocation) (context.Context, context.CancelFunc) {
+	if active == nil {
+		ctx, cancel := context.WithCancel(parent)
+		cancel()
+		return ctx, cancel
+	}
 	if managedCompatibilityForward(parent) != nil {
 		return context.WithTimeout(parent, managedCompatibilityPublicationTimeout)
 	}
@@ -65,6 +70,9 @@ func compatibilityPublicationContext(parent context.Context, active *compatibili
 }
 
 func compatibilityPublicationTimeCurrent(ctx context.Context, active *compatibilityInvocation) bool {
+	if active == nil {
+		return false
+	}
 	if i := managedCompatibilityForward(ctx); i != nil {
 		return i.forwardCurrent(ctx) == nil
 	}
