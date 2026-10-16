@@ -13,25 +13,26 @@ import (
 )
 
 func xrayAutoFailureRuntimeMatches(r autonomy.Runtime, first, second nodestore.CheckRecord, node, network string, gap time.Duration) bool {
-	return r.Failures >= 2 && r.FailureNode == node && r.Network == network && r.LastFailure.Sub(r.FirstFailure) >= gap
+	return !first.CheckedAt.IsZero() && !second.CheckedAt.IsZero() && second.CheckedAt.Sub(first.CheckedAt) >= gap &&
+		r.Failures >= 2 && r.FailureNode == node && r.Network == network && r.LastFailure.Sub(r.FirstFailure) >= gap &&
+		!r.FirstFailure.Before(first.CheckedAt) && r.FirstFailure.Before(second.CheckedAt) && !r.LastFailure.Before(second.CheckedAt)
 }
 
 func xrayAutoSetFailureTrace(trace *xrayAutoFetchChronology, first, second nodestore.CheckRecord) bool {
-	if trace.FailureA1.IsZero() {
-		trace.FailureA1 = first.CheckedAt
+	if first.CheckedAt.IsZero() || second.CheckedAt.IsZero() || second.CheckedAt.Before(first.CheckedAt) {
+		return false
 	}
-	if trace.FailureA2.IsZero() && !second.CheckedAt.IsZero() {
-		trace.FailureA2 = second.CheckedAt
-		return true
-	}
-	return false
+	changed := trace.FailureA1 != first.CheckedAt || trace.FailureA2 != second.CheckedAt
+	trace.FailureA1, trace.FailureA2 = first.CheckedAt, second.CheckedAt
+	return changed
 }
 
-func xrayAutoJoinOwnedRuntime(ctx context.Context, closeManaged, closeDNS, verifyInactive func(context.Context) error) error {
+// Each original Close performs its own retained-owner readback before closing
+// its sources. A later unbound global observer cannot reuse those closed sources
+// or reconstruct their authority. Existing live routes first join public Stop;
+// Root's independent external before/after inventory remains separate evidence.
+func xrayAutoJoinOwnedRuntime(ctx context.Context, closeManaged, closeDNS func(context.Context) error) error {
 	if err := closeManaged(ctx); err != nil {
-		return err
-	}
-	if err := verifyInactive(ctx); err != nil {
 		return err
 	}
 	return closeDNS(ctx)
@@ -85,9 +86,14 @@ func xrayAutoFailurePair(node nodestore.Node, service, network string, after tim
 		}
 		if first.CheckedAt.IsZero() {
 			first = r
-		} else if r.CheckedAt.Sub(first.CheckedAt) >= gap {
-			second = r
-			break
+		} else {
+			previous := first.CheckedAt
+			if !second.CheckedAt.IsZero() {
+				previous = second.CheckedAt
+			}
+			if r.CheckedAt.Sub(previous) >= gap {
+				second = r
+			}
 		}
 	}
 	return first, second
@@ -259,7 +265,32 @@ func TestXrayAutoFetchRetirementNeedsOriginalCloseNotClosedSourceRead(t *testing
 		}
 		return nil
 	}
-	if err := xrayAutoJoinOwnedRuntime(context.Background(), closeManaged, closeDNS, closedSource); err != nil {
+	if err := xrayAutoJoinOwnedRuntime(context.Background(), closeManaged, closeDNS); err != nil {
 		t.Fatal("owned joins required a post-Close reconstructed observer", err)
+	}
+	if closedSource(context.Background()) == nil {
+		t.Fatal("model did not close the source; test did not exercise refusal")
+	}
+}
+
+func TestXrayAutoFetchRetirementPreservesOriginalCloseFailures(t *testing.T) {
+	for _, failing := range []string{"managed", "dns"} {
+		want := errors.New("original close refused")
+		calls := []string{}
+		close := func(name string) func(context.Context) error {
+			return func(context.Context) error {
+				calls = append(calls, name)
+				if name == failing {
+					return want
+				}
+				return nil
+			}
+		}
+		if err := xrayAutoJoinOwnedRuntime(context.Background(), close("managed"), close("dns")); !errors.Is(err, want) {
+			t.Fatal("original close refusal was discarded", failing, err)
+		}
+		if len(calls) != 1 && failing == "managed" || len(calls) != 2 && failing == "dns" {
+			t.Fatal("retirement ran past an unconfirmed owner", calls)
+		}
 	}
 }

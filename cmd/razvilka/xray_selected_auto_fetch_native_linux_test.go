@@ -355,7 +355,7 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 		if err := dispatch.Recover(cleanup); err != nil {
 			return err
 		}
-		if err := xrayAutoJoinOwnedRuntime(cleanup, closeManaged, manager.CloseScopedDNS, func(ctx context.Context) error { return verifySelfUpdateRuntimeInactive(ctx, manager) }); err != nil {
+		if err := xrayAutoJoinOwnedRuntime(cleanup, closeManaged, manager.CloseScopedDNS); err != nil {
 			return err
 		}
 		joined = true
