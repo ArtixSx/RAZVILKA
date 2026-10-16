@@ -129,6 +129,30 @@ func (r *Root) Remove(name string) error {
 	return r.fs.Remove(name)
 }
 
+// Rename moves one entry strictly below this root; neither name may cross a
+// symlink. It grants nothing beyond the caller's own anchored root.
+func (r *Root) Rename(oldname, newname string) error {
+	if err := r.check(oldname); err != nil {
+		return err
+	}
+	if err := r.check(newname); err != nil {
+		return err
+	}
+	return r.fs.Rename(oldname, newname)
+}
+
+// Link adds newname for oldname strictly below this root. Unlike Rename it
+// never replaces an existing destination.
+func (r *Root) Link(oldname, newname string) error {
+	if err := r.check(oldname); err != nil {
+		return err
+	}
+	if err := r.check(newname); err != nil {
+		return err
+	}
+	return r.fs.Link(oldname, newname)
+}
+
 func (r *Root) RemoveAll(name string) error {
 	if err := r.check(name); err != nil {
 		return err

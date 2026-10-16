@@ -385,6 +385,11 @@ func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, 
 			r.pending = e
 			ownedOperation, keep = false, true
 			r.app.Operations.FenceJournal()
+		} else if result.State == "rolled-back" && !result.RollbackVerified && dataplaneExecutionMutated(result) {
+			// Same rule as the default-route executor: a completed rollback
+			// of a mutation without its readback (for example the metadata-only
+			// LAN preparation retirement) admits no further Apply.
+			r.app.Operations.FenceJournal()
 		}
 		return result, resultErr
 	}

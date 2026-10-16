@@ -8,6 +8,17 @@ import (
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
+// dataplaneExecutionMutated reports whether any adapter step that can change
+// the network was attempted. Rollback without readback after it is unproven.
+func dataplaneExecutionMutated(execution dataplane.Execution) bool {
+	for _, step := range execution.Steps {
+		if step.Phase == "activate" || step.Phase == "deactivate" || step.Phase == "commit-adapter" {
+			return true
+		}
+	}
+	return false
+}
+
 // Callers retain their existing exclusive admission until this returns. Every
 // application path, including background repair and Stop, uses the same fence:
 // an unconfirmed rollback cannot be followed by another admitted mutation.

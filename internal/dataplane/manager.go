@@ -1537,9 +1537,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	// It is reset per compensation cycle and is never a mutation receipt.
 	var noEffectNFQCompletion *nfqwsPreEffectLANReview
 	var noEffectWGCompletion *wgPreEffectSnapshot
+	// Same contract for an original never-sealed NFQ participant whose LAN
+	// Activate already published its own metadata-only preparation.
+	var noEffectLANPreparation *nfqwsDirectPreparationWitness
+	var rejectedDirectPreparation *nfqws2ActiveExecution
 	rollback := func(cause error) error {
 		noEffectNFQCompletion = nil
 		noEffectWGCompletion = nil
+		noEffectLANPreparation = nil
 		if activeWGScope != nil {
 			activeWGScope.mu.Lock()
 			activeWGScope.wgCleanupJoined = false
@@ -1547,6 +1552,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		rollbackCtx, cancelRollback := context.WithTimeout(context.WithoutCancel(rollbackParent), m.rollbackTimeout())
 		defer cancelRollback()
+		rollbackCtx, directCycle := withDirectPreparationCycle(rollbackCtx)
 		execution.Error = cause.Error()
 		plan.ObservedEvidence = evidence.None
 		for index := range plan.RouteEvidence {
@@ -1554,12 +1560,21 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		execution.State = "rolling-back"
 		rollbackErr := writeExecution()
+		if rejectedDirectPreparation != nil {
+			e := rejectedDirectPreparation
+			rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, e.material.adapter, "rollback", func(c context.Context, _ Plan, _ string) error {
+				return e.retireBeforeLAN(c, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+			}))
+		}
 		var gate Adapter
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
 			if adapter.ID() == NetworkPolicyAdapterID {
 				gate = adapter
 				continue
+			}
+			if rejectedDirectPreparation != nil {
+				continue // Never call a live adapter to settle rejected Stage metadata.
 			}
 			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil {
 				rollbackErr = errors.Join(rollbackErr, err)
@@ -1579,6 +1594,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		// Readback must follow the complete reverse restoration, including
 		// desired-state undo. Never reuse the failed candidate's review guard.
 		for _, adapter := range prepared {
+			if rejectedDirectPreparation != nil {
+				continue
+			}
 			if adapter.ID() == NetworkPolicyAdapterID {
 				continue
 			}
@@ -1618,13 +1636,23 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		consumersVerified = consumersVerified && resourceErr == nil
 		gateVerified := false
 		if gate != nil {
-			if liveMutation && !consumersVerified {
+			if (liveMutation || rejectedDirectPreparation != nil) && !consumersVerified {
 				// A successful rollback call alone cannot authorize removing the
 				// physical negative boundary beneath an unknown consumer.
 				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", func(context.Context, Plan, string) error { return ErrNetworkPolicyConsumers }))
 				verified = false
 			} else {
-				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", gate.Rollback))
+				gateRollback := gate.Rollback
+				if rejectedDirectPreparation != nil {
+					gateRollback = func(c context.Context, p Plan, root string) error {
+						handled, err := rejectedDirectPreparation.gate.retireDirectPreparation(c, p, root)
+						if !handled {
+							return ErrNFQWSScopedOwner
+						}
+						return err
+					}
+				}
+				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", gateRollback))
 				verifier, ok := gate.(RollbackVerifier)
 				if !ok {
 					rollbackErr = errors.Join(rollbackErr, ErrNetworkPolicyConsumers)
@@ -1633,7 +1661,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 					var confirmed bool
 					err := run(rollbackCtx, gate, "verify-rollback", func(c context.Context, p Plan, root string) error {
 						var err error
-						confirmed, err = verifier.VerifyRollback(c, p, root)
+						if rejectedDirectPreparation != nil {
+							confirmed, err = rejectedDirectPreparation.gate.verifyDirectPreparationRetired(c, p, root)
+							if !confirmed {
+								err = errors.Join(err, ErrNFQWSScopedOwner)
+							}
+						} else {
+							confirmed, err = verifier.VerifyRollback(c, p, root)
+						}
 						return errors.Join(err, c.Err())
 					})
 					rollbackErr = errors.Join(rollbackErr, err)
@@ -1642,10 +1677,24 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				}
 			}
 		}
-		if !liveMutation && consumersVerified && gateVerified && rollbackErr == nil {
+		if !liveMutation && directCycle.rollback == nil && directCycle.verify == nil && consumersVerified && gateVerified && rollbackErr == nil {
 			if original, ok := gate.(*NetworkPolicyAdapter); ok {
 				var completionErr error
 				noEffectNFQCompletion, completionErr = original.preEffectNFQCompletion(rollbackCtx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+				rollbackErr = errors.Join(rollbackErr, completionErr)
+			}
+		}
+		if directCycle.rollback != nil || directCycle.verify != nil {
+			// This cycle's gate ran the metadata-only retirement. It never
+			// reads back the physical LAN boundary, so it never publishes
+			// RollbackVerified, and it completes only before any commit.
+			verified = false
+			original, ok := gate.(*NetworkPolicyAdapter)
+			if !ok || undoCommit != nil || commitPublicationAttempted || activeXrayScope != nil || activeWGScope != nil {
+				rollbackErr = errors.Join(rollbackErr, ErrNFQWSScopedOwner)
+			} else if consumersVerified && gateVerified && rollbackErr == nil {
+				var completionErr error
+				noEffectLANPreparation, completionErr = original.directPreparationCompletion(rollbackCtx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID), directCycle)
 				rollbackErr = errors.Join(rollbackErr, completionErr)
 			}
 		}
@@ -1674,6 +1723,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if finalErr != nil {
 			noEffectNFQCompletion = nil
 			noEffectWGCompletion = nil
+			noEffectLANPreparation = nil
 			if activeWGScope != nil {
 				activeWGScope.mu.Lock()
 				activeWGScope.wgCleanupJoined = false
@@ -1696,7 +1746,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	retryNFQRollback = func(parent context.Context) error {
 		rollbackParent = parent
 		_ = rollback(ErrNFQWSScopedOwner)
-		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil {
+		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {
 			return executionJournalError(ErrNFQWSScopedOwner)
 		}
 		return nil
@@ -1741,8 +1791,26 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
 	}
+	settleRejectedDirectPreparation := func(cause error) (bool, error) {
+		if liveMutation || undoCommit != nil || commitPublicationAttempted || activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil || validateExecutionResources(execution, true) != nil {
+			return false, nil
+		}
+		for _, adapter := range prepared {
+			if gate, ok := adapter.(*NetworkPolicyAdapter); ok {
+				e := gate.preActivationDirectPreparation(ctx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+				if e != nil {
+					rejectedDirectPreparation = e
+					return true, rollback(cause)
+				}
+			}
+		}
+		return false, nil
+	}
 	fail := func(cause error) error {
 		if !liveMutation {
+			if handled, err := settleRejectedDirectPreparation(cause); handled {
+				return err
+			}
 			if errors.Is(cause, ErrNetworkChanged) {
 				return rejectNetwork(cause)
 			}
@@ -1760,7 +1828,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return rollback(cause)
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	finishCommit := func() error {
 		execution.State = "committing"
@@ -1811,11 +1880,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			liveMutation = true
 			undoCommit, err = commit()
 			if err != nil {
-				return execution, rollback(err)
+				failure := rollback(err)
+				return execution, failure
 			}
 		}
 		if err := m.checkPlanNetwork(ctx, plan); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 		plan.State = "committed"
 		err := finishCommit()
@@ -1826,10 +1897,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	for _, id := range plan.RetiringAdapters {
 		adapter, ok := m.adapter(id)
 		if !ok {
-			return execution, rollback(fmt.Errorf("retiring adapter %s is not registered", id))
+			failure := rollback(fmt.Errorf("retiring adapter %s is not registered", id))
+			return execution, failure
 		}
 		if _, ok := adapter.(RuntimeDeactivator); !ok {
-			return execution, rollback(fmt.Errorf("retiring adapter %s cannot be safely deactivated", id))
+			failure := rollback(fmt.Errorf("retiring adapter %s cannot be safely deactivated", id))
+			return execution, failure
 		}
 		retiringAdapters = append(retiringAdapters, adapter)
 	}
@@ -1837,7 +1910,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	for _, id := range plan.Adapters {
 		adapter, ok := m.adapter(id)
 		if !ok {
-			return execution, rollback(fmt.Errorf("adapter %s is not registered", id))
+			failure := rollback(fmt.Errorf("adapter %s is not registered", id))
+			return execution, failure
 		}
 		adapters = append(adapters, adapter)
 	}
@@ -1852,11 +1926,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}); ok && slices.Contains(plan.RetiringAdapters, adapter.ID()) {
 			previous, exists, err := m.committedLocked()
 			if err != nil || !exists {
-				return execution, fail(errors.Join(err, ErrReviewChanged))
+				failure := fail(errors.Join(err, ErrReviewChanged))
+				return execution, failure
 			}
 			if previous.SuspendDNS && plan.DiscardDNS {
 				if discardedDNSPrior == nil {
-					return execution, fail(ErrReviewChanged)
+					failure := fail(ErrReviewChanged)
+					return execution, failure
 				}
 				previous = *discardedDNSPrior
 			}
@@ -1865,7 +1941,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 		if err := run(ctx, adapter, "snapshot", snapshot); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 		prepared = append(prepared, adapter)
 	}
@@ -1878,7 +1955,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	} {
 		for _, adapter := range adapters {
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
@@ -1892,21 +1970,28 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			return canary.Canary(runCtx, routePlan, root)
 		}); err != nil {
 			if validateExecutionResources(execution, true) != nil {
-				return execution, rollback(err)
+				failure := rollback(err)
+				return execution, failure
 			}
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
-			if errors.Is(err, ErrNetworkChanged) {
-				return execution, rejectNetwork(err)
+			if handled, failure := settleRejectedDirectPreparation(err); handled {
+				return execution, failure
 			}
-			return execution, rejectCanary(err)
+			if errors.Is(err, ErrNetworkChanged) {
+				failure := rejectNetwork(err)
+				return execution, failure
+			}
+			failure := rejectCanary(err)
+			return execution, failure
 		}
 	}
 	for _, adapter := range adapters {
 		if adapter.ID() == NetworkPolicyAdapterID {
 			if err := run(ctx, adapter, "activate", adapter.Activate); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
@@ -1915,7 +2000,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if err := run(ctx, adapter, "deactivate", func(runCtx context.Context, _ Plan, _ string) error {
 			return deactivator.Deactivate(runCtx)
 		}); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	for _, phase := range []struct {
@@ -1931,26 +2017,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				continue
 			}
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	for _, adapter := range retiringAdapters {
 		if committer, ok := adapter.(RetirementCommitter); ok {
 			if err := run(ctx, adapter, "commit-adapter", committer.CommitRetirement); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
 	if activeNFQScope != nil {
 		if commit == nil {
-			return execution, fail(ErrNFQWSScopedOwner)
+			failure := fail(ErrNFQWSScopedOwner)
+			return execution, failure
 		}
 		if err := activeNFQScope.beginNFQWSTransfer(ctx); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	if commit != nil {
@@ -1958,15 +2049,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		liveMutation = true
 		undoCommit, err = commit()
 		if err != nil {
-			return execution, rollback(fmt.Errorf("commit desired state: %w", err))
+			failure := rollback(fmt.Errorf("commit desired state: %w", err))
+			return execution, failure
 		}
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	if activeNFQScope != nil {
 		if err := activeNFQScope.commitNFQWSTransfer(ctx); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	plan.State = "committed"
@@ -2008,7 +2102,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	plan.Note = "Dataplane adapters activated, health-checked and committed."
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	err := finishCommit()
 	return execution, err

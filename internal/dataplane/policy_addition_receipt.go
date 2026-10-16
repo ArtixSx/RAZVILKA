@@ -78,6 +78,8 @@ type policyAdditionSession struct {
 	options  policyAdditionOptions
 	// unsynced: the file holds a settled state not yet forced to disk.
 	unsynced bool
+	// created: this session's exclusive create made the lock file.
+	created bool
 }
 
 func policyAdditionRootHash(path string) string {
@@ -169,7 +171,7 @@ func openPolicyAdditionRootSession(ctx context.Context, path string, options pol
 	if err != nil {
 		return nil, ErrPolicyAdditionReceipt
 	}
-	unlock, lock, err := lockPolicyAdditionRoot(root)
+	unlock, lock, created, err := lockPolicyAdditionRoot(root)
 	if err != nil {
 		root.Close()
 		return nil, err
@@ -177,17 +179,17 @@ func openPolicyAdditionRootSession(ctx context.Context, path string, options pol
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &policyAdditionSession{root: root, lock: lock, unlocked: unlock, path: path, options: options}, nil
+	return &policyAdditionSession{root: root, lock: lock, unlocked: unlock, path: path, options: options, created: created}, nil
 }
 
-func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, error) {
+func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, bool, error) {
 	file, err := openNFQWS2LockFile(root, policyAdditionLock, true)
 	created := err == nil
 	if errors.Is(err, os.ErrExist) {
 		file, err = openNFQWS2LockFile(root, policyAdditionLock, false)
 	}
 	if err != nil {
-		return nil, nil, ErrPolicyAdditionReceipt
+		return nil, nil, false, ErrPolicyAdditionReceipt
 	}
 	keep := false
 	defer func() {
@@ -197,33 +199,33 @@ func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, error) {
 	}()
 	info, err := file.Stat()
 	if err != nil || !validCloudflareScanLockFile(info) {
-		return nil, nil, ErrPolicyAdditionReceipt
+		return nil, nil, false, ErrPolicyAdditionReceipt
 	}
 	if err := lockCloudflareScanFile(file); err != nil {
-		return nil, nil, ErrPolicyAdditionBusy
+		return nil, nil, false, ErrPolicyAdditionBusy
 	}
 	current, err := root.Stat(policyAdditionLock)
 	if err != nil || !os.SameFile(info, current) {
-		return nil, nil, ErrPolicyAdditionReceipt
+		return nil, nil, false, ErrPolicyAdditionReceipt
 	}
 	if created {
 		if info.Size() != 0 {
-			return nil, nil, ErrPolicyAdditionReceipt
+			return nil, nil, false, ErrPolicyAdditionReceipt
 		}
 		if n, err := file.WriteString(policyAdditionMarker); err != nil || n != len(policyAdditionMarker) || file.Sync() != nil {
-			return nil, nil, ErrPolicyAdditionReceipt
+			return nil, nil, false, ErrPolicyAdditionReceipt
 		}
 		if runtime.GOOS == "linux" && root.Sync() != nil {
-			return nil, nil, ErrPolicyAdditionReceipt
+			return nil, nil, false, ErrPolicyAdditionReceipt
 		}
 	} else {
 		data, err := io.ReadAll(io.LimitReader(file, int64(len(policyAdditionMarker)+1)))
 		if err != nil || string(data) != policyAdditionMarker {
-			return nil, nil, ErrPolicyAdditionReceipt
+			return nil, nil, false, ErrPolicyAdditionReceipt
 		}
 	}
 	keep = true
-	return func() { unlockCloudflareScanFile(file); file.Close() }, file, nil
+	return func() { unlockCloudflareScanFile(file); file.Close() }, file, created, nil
 }
 
 func (s *policyAdditionSession) close() { s.unlocked(); s.root.Close() }

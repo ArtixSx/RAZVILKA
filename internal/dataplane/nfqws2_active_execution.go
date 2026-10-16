@@ -46,6 +46,7 @@ type nfqws2ActiveExecution struct {
 	activationSeal         *nfqws2ActiveActivationSeal
 	lanActivationAttempted bool
 	preEffectLAN           *nfqwsPreEffectLANReview
+	directPreparation      *nfqwsDirectPreparationWitness
 }
 
 type nfqws2ActiveExecutionKey struct{}
