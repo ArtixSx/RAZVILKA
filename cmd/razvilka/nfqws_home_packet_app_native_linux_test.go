@@ -36,6 +36,42 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
+// Diagnostic observations only: the detached runner owns the actual exit file.
+// A pending record never authorizes cleanup or confirms process termination.
+type nfqHomeNativeProgress struct {
+	Schema         int    `json:"schema"`
+	OwnerPID       int    `json:"owner_pid"`
+	UpdatedAt      string `json:"updated_at"`
+	LastStage      string `json:"last_stage"`
+	CleanupStage   string `json:"cleanup_stage"`
+	Cleanup        string `json:"cleanup"`
+	Attempts       uint64 `json:"attempts"`
+	TestBodyFailed bool   `json:"test_body_failed"`
+}
+
+func writeNFQHomeNativeProgress(root *os.Root, progress nfqHomeNativeProgress) error {
+	data, err := json.Marshal(progress)
+	if err != nil {
+		return err
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return err
+	}
+	name := ".native-retirement-progress-" + hex.EncodeToString(nonce[:])
+	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	defer root.Remove(name)
+	_, writeErr := f.Write(data)
+	closeErr := f.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
+		return err
+	}
+	return root.Rename(name, "native-retirement-progress.json")
+}
+
 // Root-only optional stock ARM64 harness, never run by ordinary tests.
 // Existing genuine managed receipt is mandatory; an opkg installation, copied
 // descriptor/receipt, saved COMPATIBLE flag or fake source cannot replace it.
@@ -179,34 +215,65 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	// Keep the original managed lifetime independent of HTTP/context expiry.
 	// Even a constructor failure must join its actual recorded startup attempt;
 	// a nil handle is never substituted for proof of known inactive ownership.
+	progressRoot, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal("stage=native_progress code=private_progress_root_refused")
+	}
+	defer progressRoot.Close()
+	progress := nfqHomeNativeProgress{Schema: 1, OwnerPID: os.Getpid(), LastStage: "managed_startup", Cleanup: "pending", CleanupStage: "not_started"}
+	publishProgress := func() {
+		progress.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		progress.TestBodyFailed = t.Failed()
+		if writeNFQHomeNativeProgress(progressRoot, progress) != nil {
+			// Diagnostics must never abort the SAME owner's cleanup attempt.
+			t.Error("stage=native_progress code=private_progress_write_refused")
+		}
+	}
+	publishProgress()
 	managedLife, stopManagedLife := context.WithCancel(context.Background())
 	var list *app.ManagedNFQWSListRuntime
 	attempted, joined := false, false
 	closeManaged := func(cleanup context.Context) error {
 		if joined {
+			publishProgress()
 			return nil
 		}
+		progress.Attempts++
+		progress.CleanupStage = "compatibility_join"
+		publishProgress()
 		if err := a.WaitManagedStrategyCompatibility(cleanup); err != nil {
 			return err
 		}
 		if list != nil {
+			progress.CleanupStage = "runtime_join"
+			publishProgress()
 			if err := list.Close(cleanup); err != nil {
 				return err
 			}
 		}
 		if attempted {
+			progress.CleanupStage = "startup_join"
+			publishProgress()
 			if err := a.CloseManagedListStartup(cleanup); err != nil {
 				return err
 			}
 		}
+		progress.CleanupStage = "control_close"
+		publishProgress()
 		if err := a.CloseManagedNFQControl(); err != nil {
 			return err
 		}
 		joined = true
 		stopManagedLife()
+		progress.Cleanup, progress.CleanupStage = "joined", "joined"
+		publishProgress()
 		return nil
 	}
-	defer retainManagedListRetirement(closeManaged)
+	defer func() {
+		publishProgress() // Capture Fatalf/Goexit before entering retained retries.
+		retainManagedListRetirement(closeManaged)
+		publishProgress()
+	}()
 	if _, err = configureManagedNFQCompatibility(ctx, a); err != nil {
 		t.Fatal("stage=source code=original_installed_compatibility_provider_refused")
 	}
@@ -220,6 +287,8 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	server.Client().CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	call := func(stage, method, path string, body any, want int, out any) {
 		t.Helper()
+		progress.LastStage = stage // Internal constant labels, never HTTP data.
+		publishProgress()
 		var payload []byte
 		if body != nil {
 			var err error
