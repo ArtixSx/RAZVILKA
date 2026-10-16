@@ -1,0 +1,301 @@
+package dataplane
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+)
+
+type preEffectLANFixture struct {
+	e                           *nfqws2ActiveExecution
+	ctx                         context.Context
+	root                        string
+	model                       *networkPolicyDirectAbsenceModel
+	reads, retires, inventories int
+	refuse                      string
+	afterRead                   func()
+	physical                    error
+}
+
+// Actual original Gate/control, registered adapters, Snapshot writer, retained
+// file/directory inodes and typed NI brackets. Only NI/kernel/source leaves are
+// explicit models. No public factory, native process or packet permission is
+// claimed. The original production observer is separately tested to refuse
+// this deliberately incomplete source model.
+func newPreEffectLANFixture(t *testing.T) *preEffectLANFixture {
+	t.Helper()
+	f := &preEffectLANFixture{model: &networkPolicyDirectAbsenceModel{rpdb: "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n"}}
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	t.Cleanup(cancel)
+	var admission operationgate.Gate
+	ctx, release, err := admission.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(release)
+	controlRoot := filepath.Join(t.TempDir(), "control")
+	if _, err := operationgate.InitializeSelfUpdateControl(ctx, controlRoot); err != nil {
+		t.Fatal(err)
+	}
+	control, err := admission.ReviewControlEpoch(ctx, controlRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = control.Close() })
+	cleanup, err := control.ReviewExclusiveCleanup(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, lm, _ := lanDirectReceiptFixture(t)
+	b.Runtime.Runner = f.model
+	b.Runtime.ScopeCheck = func(context.Context, *LANPolicyRuntimePlan) error { return f.physical }
+	b.ApplyGuard = func(context.Context, *LANPolicyRuntimePlan, LANPolicyEffect) error { return f.physical }
+	b.CleanupGuard = func(context.Context, *LANPolicyRuntimePlan, LANPolicyEffect) error {
+		f.model.cleanup++
+		return f.physical
+	}
+	b.RetireCheck = func(c context.Context, p *LANPolicyRuntimePlan) error {
+		f.retires++
+		if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !reflect.DeepEqual(p, lm.plan) || f.refuse == "retire" {
+			return ErrNetworkPolicyConsumers
+		}
+		return c.Err()
+	}
+	identity, _ := networkPolicyIdentityFixture()
+	identity.mode = LANPolicyNFQWSDirectMode
+	gate, err := newNetworkPolicyIdentityAdapter(NetworkPolicyAssemblyOptions{Mode: LANPolicyNFQWSDirectMode, Binding: b, InventoryCheck: func(c context.Context, got netidentity.Identity, p *LANPolicyRuntimePlan) error {
+		f.inventories++
+		if got != identity.value || c.Value(nfqws2ActiveExecutionKey{}) != f.e || f.refuse == "inventory" {
+			return ErrBackendInventoryUnknown
+		}
+		return c.Err()
+	}}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(privateScopedXrayFixtureDir(t))
+	a := NewNFQWS2Adapter()
+	a.Runner = &nfqwsFakeRunner{}
+	for _, adapter := range []Adapter{gate, a} {
+		if err := m.Register(adapter); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, spec, _ := nfqwsScopedFixture(t)
+	p.PlanID, p.LAN = "dp-0123456789abcdef", lm.plan
+	p.Routes[0].NetworkPolicyRole = "override"
+	material := &NFQWSActiveMaterial{manager: m, managerRoot: m.StateRoot, adapter: a, control: control, executionBound: true}
+	material.self = material
+	selection := &NFQWSScopedSelection{prepared: material, plan: cloneExecutionResourcePlan(p)}
+	selection.self = selection
+	material.issuedSelection = selection
+	e := &nfqws2ActiveExecution{material: material, selection: selection, plan: p, spec: spec, cleanup: cleanup, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
+	e.self = e
+	material.execution = e
+	f.e, f.ctx, f.root = e, context.WithValue(ctx, nfqws2ActiveExecutionKey{}, e), filepath.Join(m.StateRoot, "transactions", p.PlanID, NetworkPolicyAdapterID)
+	if err := os.MkdirAll(f.root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = material.Close() })
+	return f
+}
+
+func (f *preEffectLANFixture) snapshot(t *testing.T, modelSource bool) {
+	t.Helper()
+	if err := f.e.gate.Snapshot(f.ctx, f.e.plan, f.root); err != nil {
+		t.Fatal("original Snapshot", err)
+	}
+	if f.e.preEffectLAN == nil {
+		t.Fatal("Snapshot did not retain its authored empty image")
+	}
+	if modelSource {
+		f.e.preEffectLAN.observe = func(c context.Context) error {
+			f.reads++
+			if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() || f.refuse == "read-open" || f.refuse == "read-close" && f.reads%2 == 0 {
+				return ErrNFQWSScopedOwner
+			}
+			if f.afterRead != nil {
+				f.afterRead()
+			}
+			return f.e.material.control.CurrentForCleanup(c)
+		}
+	}
+}
+
+func (f *preEffectLANFixture) fenceBeforeStage(t *testing.T) {
+	t.Helper()
+	f.physical = errors.New("modeled original physical packet fence revoked")
+	f.e.material.manager.FreshProfile = func(context.Context) (string, error) { return "", f.physical }
+	// Same Manager read barrier used before entering Stage. No Stage, Activate,
+	// candidate/preparation receipt or native invocation has run.
+	if err := f.e.material.manager.checkPlanNetwork(f.ctx, f.e.plan); err == nil {
+		t.Fatal("forward fence silently passed")
+	}
+	// Models preceding NFQ Rollback+VerifyRollback successful negative reads;
+	// production still independently repeats e.verifyRollback in BOTH bookends.
+	f.e.retired = true
+}
+
+func TestNFQWSPreEffectLANRetiresAfterSnapshotBeforeStageAndRetries(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	f.fenceBeforeStage(t)
+	for i := 0; i < 2; i++ {
+		p := f.e.plan
+		if i > 0 {
+			p = nfqwsRetryResult(p)
+		} // Partial prior rollback already retired NFQ.
+		if err := f.e.gate.Rollback(f.ctx, p, f.root); err != nil {
+			t.Fatal("never-entered LAN borrowed revoked positive scope", err)
+		}
+		if ok, err := f.e.gate.VerifyRollback(f.ctx, p, f.root); err != nil || !ok {
+			t.Fatal("fresh negative retirement", ok, err)
+		}
+	}
+	if f.reads != 8 || f.retires != 4 || f.model.rpdbReads != 8 || f.model.cleanup != 0 || f.inventories < 8 {
+		t.Fatal("missing independent negative read or borrowed cleanup", f.reads, f.retires, f.inventories, f.model)
+	}
+	if err := f.e.gate.Stage(f.ctx, f.e.plan, f.root); err == nil {
+		t.Fatal("absence revived forward authority")
+	}
+	entries, err := os.ReadDir(f.root)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "snapshot.json" {
+		t.Fatal("retirement wrote metadata/effects", entries, err)
+	}
+}
+
+func TestNFQWSPreEffectLANRequiresOriginalSourceBeyondSnapshot(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, false)
+	f.fenceBeforeStage(t)
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+		t.Fatal("authored snapshot manufactured source/kernel owners")
+	}
+}
+
+func TestNFQWSPreEffectLANRefusesUnknownOrAttemptedEffects(t *testing.T) {
+	for _, kind := range []string{"candidate", "preparation", "promoted", "owner", "snapshot-bytes", "snapshot-inode", "closed", "selection", "not-retired", "resource", "prepared", "seal", "nfq-activate", "lan-activate", "journal-unknown", "read-open", "read-close", "retire", "inventory", "rpdb", "owner-after-read", "receipt-after-read", "cancel-after-read", "DTO", "copy", "digest"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.snapshot(t, true)
+			f.fenceBeforeStage(t)
+			write := func(path string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte("unknown"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, p := f.ctx, cloneExecutionResourcePlan(f.e.plan)
+			switch kind {
+			case "candidate":
+				write(filepath.Join(f.root, "candidate.json"))
+			case "preparation":
+				write(filepath.Join(f.root, policyAdditionFile))
+			case "promoted":
+				write(filepath.Join(f.e.gate.StateRoot, "receipts", p.PlanID, policyAdditionFile))
+			case "owner":
+				state, _ := f.e.gate.gateFor(p)
+				if err := writeNetworkPolicyGate(f.e.gate.ownerPath(), state); err != nil {
+					t.Fatal(err)
+				}
+			case "snapshot-bytes":
+				write(filepath.Join(f.root, "snapshot.json"))
+			case "snapshot-inode":
+				if err := os.Rename(filepath.Join(f.root, "snapshot.json"), filepath.Join(f.root, "old.json")); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(f.root, "snapshot.json"), f.e.preEffectLAN.image, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(filepath.Join(f.root, "old.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "closed":
+				_ = f.e.material.Close()
+			case "selection":
+				_ = f.e.selection.Close()
+			case "not-retired":
+				f.e.retired = false
+			case "resource":
+				f.e.resource = &NFQWSExecutionResource{}
+			case "prepared":
+				f.e.prepared = &NFQWSPreparedHandle{}
+			case "seal":
+				f.e.activationSeal = &nfqws2ActiveActivationSeal{}
+			case "nfq-activate":
+				f.e.activationAttempted = true
+			case "lan-activate":
+				if err := f.e.gate.Activate(ctx, p, f.root); err == nil {
+					t.Fatal("revoked forward Activate passed")
+				}
+				if !f.e.lanActivationAttempted {
+					t.Fatal("Activate attempt lost")
+				}
+			case "journal-unknown":
+				f.e.preparationErr = ErrExecutionJournal
+			case "rpdb":
+				f.model.rpdb = "73: from all lookup 254\n"
+			case "owner-after-read":
+				f.afterRead = func() { write(f.e.gate.ownerPath()) }
+			case "receipt-after-read":
+				f.afterRead = func() { write(filepath.Join(f.root, policyAdditionFile)) }
+			case "cancel-after-read":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				f.afterRead = cancel
+			case "DTO":
+				ctx = context.WithValue(ctx, nfqws2ActiveExecutionKey{}, p)
+			case "copy":
+				copy := &nfqws2ActiveExecution{self: f.e, material: f.e.material}
+				ctx = context.WithValue(ctx, nfqws2ActiveExecutionKey{}, copy)
+			case "digest":
+				p.Digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			default:
+				f.refuse = kind
+			}
+			if ok, err := f.e.gate.VerifyRollback(ctx, p, f.root); ok || err == nil {
+				t.Fatal("unknown/effect was certified absent", kind)
+			}
+		})
+	}
+}
+
+func TestNFQWSPreEffectLANMissingSnapshotOrPriorNeverIssuesReview(t *testing.T) {
+	for _, kind := range []string{"missing", "prior", "existing-empty-snapshot"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			switch kind {
+			case "prior":
+				state, _ := f.e.gate.gateFor(f.e.plan)
+				if err := writeNetworkPolicyGate(f.e.gate.ownerPath(), state); err != nil {
+					t.Fatal(err)
+				}
+			case "existing-empty-snapshot":
+				if err := writeNetworkPolicyGate(filepath.Join(f.root, "snapshot.json"), networkPolicyGateSnapshot{}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind != "missing" && f.e.gate.Snapshot(f.ctx, f.e.plan, f.root) == nil {
+				t.Fatal("prior/decoded empty file became writer witness")
+			}
+			f.fenceBeforeStage(t)
+			if f.e.preEffectLAN != nil {
+				t.Fatal("missing original issuance")
+			}
+			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+				t.Fatal("cold absence bypassed strict cleanup")
+			}
+		})
+	}
+}
