@@ -97,7 +97,7 @@ func newPreEffectLANFixture(t *testing.T) *preEffectLANFixture {
 	selection.self = selection
 	// BindExecution retains this comparison selection in execution.selection.
 	// issuedSelection is produced later by prepareActivation, not by binding.
-	e := &nfqws2ActiveExecution{material: material, selection: selection, plan: p, spec: spec, cleanup: cleanup, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
+	e := &nfqws2ActiveExecution{material: material, selection: selection, comparisonSelection: selection, plan: p, spec: spec, cleanup: cleanup, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
 	e.self = e
 	material.execution = e
 	f.e, f.ctx, f.root = e, context.WithValue(ctx, nfqws2ActiveExecutionKey{}, e), filepath.Join(m.StateRoot, "transactions", p.PlanID, NetworkPolicyAdapterID)
@@ -129,6 +129,37 @@ func TestNFQWSPreEffectSnapshotBeforeActivationSelectionIsIssued(t *testing.T) {
 	f.snapshot(t, false)
 	if f.e.material.issuedSelection != nil || f.e.activationSeal != nil || !f.e.neverActivatedLAN() {
 		t.Fatal("Snapshot produced activation authority")
+	}
+}
+
+func TestNFQWSPreEffectSnapshotRejectsInvalidSelectionTransition(t *testing.T) {
+	for _, kind := range []string{"missing-comparison", "replaced-comparison", "premature-issued", "seal-without-issued", "issued-with-foreign-seal"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			switch kind {
+			case "missing-comparison":
+				f.e.comparisonSelection = nil
+			case "replaced-comparison":
+				copy := &NFQWSScopedSelection{prepared: f.e.material, source: f.e.selection.source, plan: cloneExecutionResourcePlan(f.e.plan)}
+				copy.self = copy
+				f.e.selection = copy
+			case "premature-issued":
+				f.e.material.issuedSelection = f.e.selection
+			case "seal-without-issued":
+				f.e.activationSeal = &nfqws2ActiveActivationSeal{}
+			case "issued-with-foreign-seal":
+				f.e.material.issuedSelection = f.e.selection
+				seal := &nfqws2ActiveActivationSeal{selection: f.e.selection}
+				seal.self = seal
+				f.e.activationSeal = seal
+			}
+			if err := f.e.gate.Snapshot(f.ctx, f.e.plan, f.root); err == nil || f.e.preEffectLAN != nil {
+				t.Fatal("invalid comparison/activation transition produced an original Snapshot")
+			}
+			if _, err := os.Stat(filepath.Join(f.root, "snapshot.json")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("invalid participant wrote snapshot", err)
+			}
+		})
 	}
 }
 

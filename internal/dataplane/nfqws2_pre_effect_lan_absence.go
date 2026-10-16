@@ -45,14 +45,22 @@ func (a *NetworkPolicyAdapter) preEffectNFQParticipant(ctx context.Context, p Pl
 		return nil, true, ErrNFQWSScopedOwner
 	}
 	e.material.mu.Lock()
-	original := !e.material.closed && e.material.executionBound && e.material.execution == e && e.selection != nil && e.material.issuedSelection == e.selection
+	e.mu.Lock()
+	selection, seal := e.selection, e.activationSeal
+	// BindExecution holds a comparison reader before prepareActivation issues
+	// a different sealed selection. Requiring that later receipt at Snapshot
+	// rejects the genuine original participant before it can ever activate.
+	selectionBound := selection != nil && selection == e.comparisonSelection && e.material.issuedSelection == nil && seal == nil ||
+		selection != nil && e.material.issuedSelection == selection && seal != nil && seal.self == seal && seal.execution == e && seal.selection == selection
+	original := !e.material.closed && e.material.executionBound && e.material.execution == e && selectionBound
+	e.mu.Unlock()
 	e.material.mu.Unlock()
 	if !original {
 		return nil, true, ErrNFQWSScopedOwner
 	}
-	e.selection.mu.Lock()
-	original = e.selection.self == e.selection && !e.selection.closed && e.selection.prepared == e.material && e.selection.source == e.material.source && nfqws2ActiveSamePlan(e.plan, e.selection.plan)
-	e.selection.mu.Unlock()
+	selection.mu.Lock()
+	original = selection.self == selection && !selection.closed && selection.prepared == e.material && selection.source == e.material.source && nfqws2ActiveSamePlan(e.plan, selection.plan)
+	selection.mu.Unlock()
 	if !original {
 		return nil, true, ErrNFQWSScopedOwner
 	}

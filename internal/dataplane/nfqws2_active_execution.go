@@ -20,6 +20,7 @@ type nfqws2ActiveExecution struct {
 	mu                     sync.Mutex
 	material               *NFQWSActiveMaterial
 	selection              *NFQWSScopedSelection
+	comparisonSelection    *NFQWSScopedSelection // Original BindExecution reader, before activation issuance.
 	plan                   Plan
 	spec                   NFQWSScopedSpec
 	panel                  context.Context
@@ -101,7 +102,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 	if err := r.currentLocked(ctx); err != nil {
 		return nil, err
 	}
-	e := &nfqws2ActiveExecution{material: r, selection: selection, plan: cloneExecutionResourcePlan(expected), spec: spec.Clone(), panel: panel, cleanup: cleanup, committedGuard: committed, cleanupGuard: cleanupGuard,
+	e := &nfqws2ActiveExecution{material: r, selection: selection, comparisonSelection: selection, plan: cloneExecutionResourcePlan(expected), spec: spec.Clone(), panel: panel, cleanup: cleanup, committedGuard: committed, cleanupGuard: cleanupGuard,
 		inventory: *inventory, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, identity: gate.identity, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
 	e.self = e
 	e.lanFrozen.Runtime = &e.runtimeFrozen
