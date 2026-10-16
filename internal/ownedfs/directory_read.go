@@ -2,6 +2,7 @@ package ownedfs
 
 import (
 	"errors"
+	"io"
 	"os"
 )
 
@@ -17,5 +18,8 @@ func (r *Root) ReadDir(limit int) ([]os.DirEntry, error) {
 		return nil, err
 	}
 	entries, readErr := f.ReadDir(limit)
+	if readErr == io.EOF {
+		readErr = nil // Normal end must not mask a simultaneous Close error.
+	}
 	return entries, errors.Join(readErr, f.Close())
 }
