@@ -49,7 +49,11 @@ import (
 
 // Compile-only until Root accepts the immutable CORE replacement composition.
 // Root alone runs this opt-in ARM64 test in a private MOUNT namespace sharing
-// the actual NETWORK namespace. Require -test.timeout=40m or longer. The target
+// the actual NETWORK namespace. Require -test.timeout=0: the body has its own
+// finite 35m context, while an uncertain original retirement must retain its
+// owners instead of being killed by Go's process-wide alarm. Root's detached
+// waiter records actual exit only after real retirement and process exit.
+// The target
 // is 30 real minutes from original scheduled bootstrap LastAttemptAt, never a
 // substituted clock, due date or forced worker round. Input names are exactly
 // xrayAutoFetchParseInput's RAZVILKA_NATIVE_XRAY_AUTO_* contract.
@@ -69,9 +73,8 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 	if os.Geteuid() != 0 || runtime.GOARCH != "arm64" {
 		t.Fatal("stage=native_environment code=root_arm64_required")
 	}
-	outer, ok := t.Deadline()
-	if !ok || time.Until(outer) < 39*time.Minute {
-		t.Fatal("stage=inputs code=explicit_40m_outer_timeout_required")
+	if _, alarm := t.Deadline(); alarm {
+		t.Fatal("stage=inputs code=use_test_timeout_0_to_retain_original_cleanup")
 	}
 	autoIn, err := xrayAutoFetchParseInput(os.Getenv)
 	if err != nil {
