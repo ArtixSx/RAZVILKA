@@ -4,6 +4,7 @@ package netidentity
 
 import (
 	"context"
+	"errors"
 	"os"
 	"runtime"
 	"strconv"
@@ -12,6 +13,9 @@ import (
 	"testing"
 	"time"
 )
+
+var errNativeImageCounterRead = errors.New("native image counter read unavailable")
+var errNativeImageCounterParse = errors.New("native image counter field unavailable")
 
 // Root-only fact collection from the SAME production ndmc/loader/dependency
 // opener and bounded ELF decoder. This does NOT execute ndmc, issue identity,
@@ -68,19 +72,35 @@ func nativeImageReadChars() (uint64, error) {
 	var buf [4096]byte
 	n, err := f.Read(buf[:])
 	if err != nil || n == len(buf) {
-		return 0, ErrUnknown
+		return 0, errors.Join(errNativeImageCounterRead, err)
 	}
 	for _, line := range strings.Split(string(buf[:n]), "\n") {
 		if strings.HasPrefix(line, "rchar: ") {
 			return strconv.ParseUint(strings.TrimSpace(strings.TrimPrefix(line, "rchar:")), 10, 64)
 		}
 	}
-	return 0, ErrUnknown
+	return 0, errNativeImageCounterParse
 }
 
-// Semantic RED on the actual retained immutable chain, not a mocked hash.
-// Root can run this before/after the optimization. Initial full hashing and
-// dependency discovery happen before the measured pair of closing checks.
+func nativeImageCounterStage(err error) string {
+	switch {
+	case errors.Is(err, syscall.ENOENT):
+		return "counter_open_missing"
+	case errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
+		return "counter_open_permission"
+	case errors.Is(err, errNativeImageCounterRead):
+		return "counter_read"
+	case errors.Is(err, errNativeImageCounterParse):
+		return "counter_parse"
+	default:
+		return "counter_open_or_numeric"
+	}
+}
+
+// Read budget on the actual retained immutable chain, not a mocked hash.
+// A kernel without /proc/self/io cannot provide this measurement: report SKIP,
+// never PASS or a semantic RED. Root separately retains actual CPU profiles.
+// Initial hashing/discovery precede the measured pair of closing checks.
 func TestNativeReviewedStockImmutableImageReadBudget(t *testing.T) {
 	if os.Getenv("RAZVILKA_NETIDENTITY_IMMUTABLE_READ_BUDGET") != "1" {
 		t.Skip("Root-only actual immutable image read budget")
@@ -108,11 +128,23 @@ func TestNativeReviewedStockImmutableImageReadBudget(t *testing.T) {
 		}
 	}
 	before, err := nativeImageReadChars()
-	if err != nil || !images.unchanged(ctx) || !images.unchanged(ctx) {
-		t.Fatal("stage=bookends code=original_chain_unconfirmed")
+	if errors.Is(err, syscall.ENOENT) {
+		t.Skip("stage=counter_before code=kernel_counter_absent measurement=unavailable capability=ungranted")
+	}
+	if err != nil {
+		t.Fatalf("stage=counter_before code=%s capability=ungranted", nativeImageCounterStage(err))
+	}
+	if !images.unchanged(ctx) {
+		t.Fatal("stage=bookend_first code=original_chain_unconfirmed capability=ungranted")
+	}
+	if !images.unchanged(ctx) {
+		t.Fatal("stage=bookend_second code=original_chain_unconfirmed capability=ungranted")
 	}
 	after, err := nativeImageReadChars()
-	if err != nil || after < before || ctx.Err() != nil {
+	if err != nil {
+		t.Fatalf("stage=counter_after code=%s capability=ungranted", nativeImageCounterStage(err))
+	}
+	if after < before || ctx.Err() != nil {
 		t.Fatal("stage=read_budget code=kernel_counter_unconfirmed")
 	}
 	t.Logf("stage=read_budget image_bytes=%d closing_read_chars=%d executable_commands=0 capability=ungranted", images.bytes, after-before)
