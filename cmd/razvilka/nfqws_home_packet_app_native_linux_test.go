@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -139,6 +140,12 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal("stage=app code=private_dns_owner_unavailable")
 	}
+	// Main registers the same concrete DNS participant separately from the
+	// ordinary adapter factory. Startup needs its inactivity owner even though
+	// this CIDR-only fixture never requests a DNS plan or listener.
+	if err := registerScopedDNS(manager, dns); err != nil {
+		t.Fatal("stage=app code=ordinary_scoped_dns_registration_refused")
+	}
 	files, err := productionSelfUpdateFiles()
 	if err != nil {
 		t.Fatal("stage=app code=original_control_configuration_refused")
@@ -206,7 +213,7 @@ func TestManagedNFQInstalledHomePacketAppHTTP(t *testing.T) {
 	attempted = true
 	list, err = configureManagedNFQList(managedLife, a)
 	if err != nil || list == nil {
-		t.Fatalf("stage=runtime code=ordinary_stock_constructor_refused boundary=%s", app.ManagedListStartupFailureStage(err))
+		t.Fatalf("stage=runtime code=ordinary_stock_constructor_refused boundary=%s inactivity_binding=%s nfq_inactivity=%s backend_unknown=%t cancelled=%t deadline=%t", app.ManagedListStartupFailureStage(err), dataplane.RuntimeInactivityBindingStage(err), dataplane.NFQWSRuntimeInactiveStage(err), errors.Is(err, dataplane.ErrBackendInventoryUnknown), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded))
 	}
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
