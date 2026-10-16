@@ -82,7 +82,7 @@ ECH inner-domain, HTTP/2 coalescing и другие encrypted origins не да�
 
 ## Read-only проверка first-install без TOOLS/ACTIVATE
 
-Проверен `cmd/razvilka/nfqws_bundle_install_native_linux_test.go`, `TestManagedNFQBundleFirstInstallAppHTTP`. Для этой границы root задаёт только `RAZVILKA_NATIVE_MANAGED_INSTALL_APP=1` и новый пустой canonical private `RAZVILKA_NATIVE_MANAGED_INSTALL_APP_ROOT`; `RAZVILKA_NATIVE_MANAGED_INSTALL_TOOLS` и `RAZVILKA_NATIVE_MANAGED_INSTALL_ACTIVATE` должны отсутствовать. Тест использует `components.New()` с фиксированным production state, а не `RAZVILKA_COMPONENT_STATE` override.
+Проверен `cmd/razvilka/nfqws_bundle_install_native_linux_test.go`, `TestManagedNFQBundleFirstInstallAppHTTP`. Для этой границы root задаёт `RAZVILKA_NATIVE_MANAGED_INSTALL_APP=1` и новый пустой canonical private `RAZVILKA_NATIVE_MANAGED_INSTALL_APP_ROOT`; `RAZVILKA_NATIVE_MANAGED_INSTALL_TOOLS` и `RAZVILKA_NATIVE_MANAGED_INSTALL_ACTIVATE` должны отсутствовать. Эти flags **не обеспечивают допустимое deployment identity**: ниже зафиксирован настоящий отказ Router515. Тест использует `components.New()` с фиксированным production state, а не `RAZVILKA_COMPONENT_STATE` override.
 
 В таком режиме fixture не создаёт Dataplane, default consent или managed list runtime, не вызывает Start/Apply/Stop, не меняет firewall/routes, не запускает opkg или package hooks. Из parent archive выбираются только шесть проверенных binary/Lua/blob members; stock NFQWS executable/init/config/PID и legacy sing files не заменяются. Поэтому работающий stock NFQWS на queue300 и sing не являются конфликтом queue ownership для этого режима.
 
@@ -101,3 +101,21 @@ ECH inner-domain, HTTP/2 coalescing и другие encrypted origins не да�
 `productionSelfUpdateFiles()` также читает реальные `/opt` deployment identity, self-update/self-update-files и retained controllers. `ComponentHistoryAdmission.CheckWrite(3)` проверяет полный retained fleet; несовместимый/нечитаемый controller или pending/corrupt component/self-update journal — настоящий отказ, обходить его fixture не должен. Проверка может запускать retained controller с закрытым read-version flag. Общий component writer исключает одновременную запись другого updater; долговременный runtime lease также может дать busy/refusal. Self-update/Stop может отозвать control между этапами. Сам факт существования stock queue300 не предоставляет и не отнимает эти полномочия.
 
 При cancelled/failed compatibility сохраняются private source и genuine component journals/receipt для диагностики и штатного recovery. Fixture не доказывает отсутствие всех процессов в parent namespace и не превращает COMPATIBLE в service health. Кодовый аудит подтверждает отсутствие предусмотренных конфликтующих queue/firewall/stock writes; реальную неизменность stock PID/queue/routes/sing root проверяет отдельными before/after наблюдениями.
+
+## Router515: identity refusal и правильный владелец установки
+
+По результату root Router515 first-install fixture получил `MANAGED_NFQWS_RETAINED_CONTROLLER_BLOCKED` до публикации payload/receipt. Причина не в несовместимом manifest и не в production installer: `ComponentHistoryAdmission.CheckWrite` использует `checkNodeHistoryControllerIdentity`, который требует root/Linux, фиксированный `/opt/bin/razvilka` и `os.SameFile(os.Stat("/proc/self/exe"), os.Stat("/opt/bin/razvilka"))`. Отдельный test-runner под `/opt/root/...` не является установленным контроллером. По наблюдениям root receipt не появился; установленный controller/config/stock остались прежними. Это корректный отказ неподдержанного acceptance layout, не production bug.
+
+Bind test binary на `/opt/bin/razvilka` только внутри private mount namespace удовлетворит локальное сравнение inode, но проверит namespace-local тестовый controller. Он не доказывает deployment identity, restart recovery или совместимость полного production lifecycle в исходной namespace. Публиковать из такой подмены shared receipt и объявлять production PASS нельзя. Изолированная проверка на отдельном disposable component/control state имеет другую, явно ограниченную границу.
+
+Предпочтительный путь — authenticated API **реально работающего установленного владельца**. Managed-bundle endpoints и тот же reviewed manifest уже были в базе `562f2a14`; проверка исходников не заменяет фактический запрос установленному binary. Root выполнил настоящий GET `/api/v1/components/nfqws2/managed-bundle/plan` у rc.26: HTTP200, `ready=true`, revision47, ARM64 `keenetic-payload-1.3.1`. Полученный manifest digest:
+
+```text
+c0dc2aaf435e6f88369b9a08712c8bb1d7ea93123e8069854920c25024a3c9df
+```
+
+Автор независимо вычислил этот же digest реальным локальным Go вызовом `ReviewedManagedNFQWSManifest("arm64").Digest()` из текущего production source `delivery-review`; совпадение точное. Helper размещён только в ignored `.review-local/manifest515-check`, production исходники не менялись.
+
+Далее root может использовать обычный POST `/api/v1/components/nfqws2/managed-bundle/install` со свежей фактической `expected_revision`, snapshot и original control. GET `ready=true` ещё не доказывает source inactivity: POST отдельно требует `Executor=nil`, отсутствие running/unknown/finalizing и допустимый точный source/validator. Существующую историю не очищать, Executor не подменять. Отказ source/history/control остаётся отказом; receipt/COMPATIBLE не выдумываются. Успех установки требует отдельного GET installed/current lease и проверки настоящего terminal journal, но ещё не означает NFQ Apply или доступность сервиса.
+
+Новый production deployment только ради receipt сейчас не нужен, раз штатный endpoint установленного владельца доступен. Если он откажет, нельзя автоматически переходить к замене controller: обычный startup до HTTP выполняет private recovery, node/USQUE recovery, retry failed rollback и `Manager.Recover`. Последний может восстанавливать network-independent NFQ, отзывать DNS или деактивировать boot-loop plan. Старые retained journals требуют отдельной root-проверки; SafeMode не является read-only startup switch. Explicit boot-retirement CLI ограничен sing-box без DNS/LAN/NFQ и не закрывает произвольную старую историю.
