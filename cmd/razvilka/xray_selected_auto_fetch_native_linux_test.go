@@ -35,7 +35,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/evidence"
-	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
@@ -678,18 +677,7 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 		if len(snapshot.Nodes) != 2 || matched[2] != "" {
 			t.Fatal("stage=exhaustion code=c_admitted_before_publication")
 		}
-		for _, node := range snapshot.Nodes {
-			if node.ID == ids[0] {
-				failure1, failure2 = xrayAutoFailurePair(node, service.ID, network, trace.FaultA, time.Duration(p.FailureConfirmSeconds)*time.Second)
-			}
-			if node.ID == ids[1] {
-				for _, record := range node.Health.History {
-					if xrayAutoTerminalFailure(record, service.ID, network, trace.FaultA) && (failureB.CheckedAt.IsZero() || record.CheckedAt.Before(failureB.CheckedAt)) {
-						failureB = record
-					}
-				}
-			}
-		}
+		failure1, failure2, failureB = xrayAutoFailureHistory(snapshot.Nodes, [2]string{ids[0], ids[1]}, service.ID, network, trace.FaultA, time.Duration(p.FailureConfirmSeconds)*time.Second, time.Now())
 		if !failure1.CheckedAt.IsZero() && trace.FailureA1.IsZero() {
 			trace.FailureA1 = failure1.CheckedAt
 			publish("failure_a1")
@@ -987,36 +975,6 @@ func xrayAutoSnapshot(ctx context.Context, a *app.App, nodes *nodestore.Store, m
 
 func xrayAutoOrigin(node nodestore.Node, source string, now time.Time) bool {
 	return !node.Disabled && len(node.Origins) == 1 && node.Origins[0].SourceID == source && !node.Origins[0].ReceivedAt.After(now) && node.Origins[0].ExpiresAt.After(now)
-}
-
-func xrayAutoTerminalFailure(record nodestore.CheckRecord, service, network string, after time.Time) bool {
-	if record.ServiceID != service || record.NetworkProfile != network || !strings.HasPrefix(record.RoutePathID, "xray:node-") || record.CheckedAt.Before(after) || record.CheckedAt.After(time.Now()) || !record.ExpiresAt.After(time.Now()) || record.DirectLeak {
-		return false
-	}
-	return nodequality.ServiceFailure(record.Verdict, record.TestLevel, record.Stage, record.ErrorCode, record.DirectLeak) || record.State == "unavailable" && record.Verdict == "ERROR" && record.HTTPStatus == 0 && record.EgressIP == "" && (record.TestLevel == "transport" && record.Stage == "transport" && record.ErrorCode == "node-transport-failed" || record.TestLevel == "protocol" && record.Stage == "egress" && record.ErrorCode == "node-egress-failed")
-}
-
-func xrayAutoFailurePair(node nodestore.Node, service, network string, after time.Time, gap time.Duration) (nodestore.CheckRecord, nodestore.CheckRecord) {
-	var first, second nodestore.CheckRecord
-	// Histories are newest first. An intervening ambiguous/PASS observation
-	// breaks the quorum; runtime's actual Observe bookend is checked separately.
-	for i := len(node.Health.History) - 1; i >= 0; i-- {
-		r := node.Health.History[i]
-		if r.CheckedAt.Before(after) {
-			continue
-		}
-		if !xrayAutoTerminalFailure(r, service, network, after) {
-			first, second = nodestore.CheckRecord{}, nodestore.CheckRecord{}
-			continue
-		}
-		if first.CheckedAt.IsZero() {
-			first = r
-		} else if r.CheckedAt.Sub(first.CheckedAt) >= gap {
-			second = r
-			break
-		}
-	}
-	return first, second
 }
 
 func xrayAutoFinitePlan(plan dataplane.Plan, route string, service catalog.Service, source string) bool {
