@@ -407,7 +407,9 @@ func TestNFQWSDirectPreparationProofPrecedesEveryTransition(t *testing.T) {
 			switch cut {
 			case "rpdb":
 				f.model.rpdb = "73: from all lookup 254\n"
-				restore = func() { f.model.rpdb = "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n" }
+				restore = func() {
+					f.model.rpdb = "0: from all lookup 255\n32766: from all lookup 254\n32767: from all lookup 253\n"
+				}
 			case "tool":
 				original := f.e.runtime.IPTables
 				f.e.runtime.IPTables = "/other/iptables"
@@ -490,7 +492,7 @@ func TestNFQWSDirectPreparationTransitionFailures(t *testing.T) {
 						t.Error(err)
 					}
 					return errors.New("modeled rename with unknown result")
-					case point == "owner-replaced" && p == "owner-remove":
+				case point == "owner-replaced" && p == "owner-remove":
 					if err := replaceHeldFile(f.e.gate.ownerPath(), nil); err != nil {
 						t.Error(err)
 					}
@@ -569,6 +571,11 @@ type directPreparationConsumer struct {
 	sealed       bool
 	proof        bool
 	failValidate bool
+	refusal      error
+	failCanary   bool
+	between      bool
+	cancel       context.CancelFunc
+	rollbacks    int
 	fault        func(f *preEffectLANFixture, point string) error
 }
 
@@ -598,10 +605,28 @@ func (a *directPreparationConsumer) Stage(context.Context, Plan, string) error {
 	return nil
 }
 func (a *directPreparationConsumer) Validate(context.Context, Plan, string) error {
+	if a.cancel != nil && !a.failCanary {
+		a.cancel()
+	}
 	if a.failValidate {
 		// The boundary is lost after Stage, before LAN Activate.
-		a.f.physical = errors.New("modeled notifications.route.tracked")
+		a.f.physical = a.refusal
+		if a.f.physical == nil {
+			a.f.physical = ErrNetworkChanged
+		}
 		return a.f.physical
+	}
+	if a.between {
+		a.f.physical = a.refusal
+	}
+	return nil
+}
+func (a *directPreparationConsumer) Canary(context.Context, RoutePlan, string) error {
+	if a.failCanary {
+		if a.cancel != nil {
+			a.cancel()
+		}
+		return a.refusal
 	}
 	return nil
 }
@@ -612,10 +637,11 @@ func (a *directPreparationConsumer) Activate(context.Context, Plan, string) erro
 	if a.sealed {
 		a.f.modelIssuedSelection(a.t, false)
 	}
-	a.f.physical = errors.New("modeled notifications.route.tracked")
+	a.f.physical = ErrNetworkChanged
 	return preflightRefusalError{a.f.physical}
 }
 func (a *directPreparationConsumer) Rollback(context.Context, Plan, string) error {
+	a.rollbacks++
 	a.f.e.retired = true
 	return nil
 }
@@ -644,7 +670,18 @@ func directPreparationManagerRun(t *testing.T, a *directPreparationConsumer, ref
 		t.Fatal(err)
 	}
 	m.FreshProfile = func(context.Context) (string, error) { return executionNetwork, nil }
-	f.ctx = WithReviewGuard(f.ctx, func(context.Context) error { return nil })
+	if a.refusal == context.Canceled {
+		var cancel context.CancelFunc
+		f.ctx, cancel = context.WithCancel(f.ctx)
+		a.cancel = cancel
+		defer cancel()
+	}
+	f.ctx = WithReviewGuard(f.ctx, func(context.Context) error {
+		if a.between {
+			return f.physical
+		}
+		return nil
+	})
 	f.refuse = refuse
 	result, err := m.Apply(f.ctx, f.e.plan, nil)
 	return f, result, err
@@ -1007,6 +1044,22 @@ func TestNFQWSDirectPreparationPostStageRefusesForeignEntries(t *testing.T) {
 	}
 }
 
+func TestNFQWSDirectPreparationBeforeLANRetainsOriginalOwnerChecks(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, false)
+	if err := f.e.gate.Stage(f.ctx, f.e.plan, f.root); err != nil {
+		t.Fatal(err)
+	}
+	// No modeled witness leaves: the incomplete source/registry must fail the
+	// same original typed owner check, even though a genuine Stage writer exists.
+	if err := f.e.retireBeforeLAN(f.ctx, f.e.plan, f.root); err == nil || !f.e.retired {
+		t.Fatal("incomplete original owner acquired completion or reopened forward", err)
+	}
+	if f.reads != 0 || f.model.cleanup != 0 {
+		t.Fatal("failed ownership reached network cleanup")
+	}
+}
+
 func TestNFQWSDirectPreparationManagerSettlesPostStageRefusal(t *testing.T) {
 	f, result, err := directPreparationManagerRun(t, &directPreparationConsumer{failValidate: true}, "")
 	m := f.e.material.manager
@@ -1022,4 +1075,83 @@ func TestNFQWSDirectPreparationManagerSettlesPostStageRefusal(t *testing.T) {
 		t.Fatal("post-Stage compensation used the physical guard or skipped a proof", f.model.cleanup, f.reads)
 	}
 	readPreEffectTerminal(t, f)
+}
+
+func TestNFQWSDirectPreparationRejectedStageSelection(t *testing.T) {
+	for _, cut := range []string{"original", "missing-witness", "copied-witness", "replacement", "LAN-attempted", "NFQ-attempted", "seal", "resource", "prepared", "binding", "started", "launched", "closed"} {
+		t.Run(cut, func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.stageDirectPreparation(t)
+			original := f.e.directPreparation
+			defer func() { f.e.directPreparation = original; original.closed = false }()
+			switch cut {
+			case "missing-witness":
+				f.e.directPreparation = nil
+			case "copied-witness":
+				f.e.directPreparation = &nfqwsDirectPreparationWitness{self: original, execution: f.e}
+			case "replacement":
+				f.ctx = context.WithValue(f.ctx, xraySelectedTCPReplacementKey{}, &xraySelectedTCPReplacement{})
+			case "NFQ-attempted":
+				f.e.activationAttempted = true
+			case "LAN-attempted":
+				f.e.lanActivationAttempted = true
+			case "seal":
+				f.e.activationSeal = &nfqws2ActiveActivationSeal{}
+			case "resource":
+				f.e.resource = &NFQWSExecutionResource{}
+			case "prepared":
+				f.e.prepared = &NFQWSPreparedHandle{}
+			case "binding":
+				f.e.binding = &NFQWSScopedBinding{}
+			case "started":
+				f.e.started = true
+			case "launched":
+				f.e.launchInvoked = true
+			case "closed":
+				f.e.directPreparation.closed = true
+			}
+			got := f.e.gate.preActivationDirectPreparation(f.ctx, f.e.plan, f.root)
+			if (got == f.e) != (cut == "original") {
+				t.Fatalf("selection %s: %p", cut, got)
+			}
+			if f.e.retired || f.reads != 0 || f.model.cleanup != 0 {
+				t.Fatal("selection retired an owner or ran cleanup")
+			}
+		})
+	}
+}
+
+func TestNFQWSDirectPreparationManagerTypedRejections(t *testing.T) {
+	for _, phase := range []string{"validate", "canary", "between"} {
+		for _, cause := range []error{ErrNetworkChanged, ErrReviewChanged, preflightRefusalError{ErrNetworkChanged}, context.Canceled, context.DeadlineExceeded} {
+			t.Run(phase+"/"+cause.Error(), func(t *testing.T) {
+				a := &directPreparationConsumer{refusal: cause, failValidate: phase == "validate", failCanary: phase == "canary", between: phase == "between"}
+				f, result, err := directPreparationManagerRun(t, a, "")
+				if err == nil || result.State != "rolled-back" || result.RollbackVerified || f.e.material.manager.HasPendingManagedNFQWS() || a.rollbacks != 0 {
+					t.Fatal("rejected Stage did not settle solely its original metadata", result.State, result.RollbackVerified, a.rollbacks, err)
+				}
+				for _, step := range result.Steps {
+					if step.Phase == "activate" {
+						t.Fatal("rejection reached Activate", step)
+					}
+				}
+				if f.model.cleanup != 0 || f.reads != 2 {
+					t.Fatal("physical cleanup or missing fresh proof", f.model.cleanup, f.reads)
+				}
+				readPreEffectTerminal(t, f)
+			})
+		}
+	}
+}
+
+func TestNFQWSDirectPreparationRejectedStageUnknownRemainsPending(t *testing.T) {
+	a := &directPreparationConsumer{failValidate: true, refusal: ErrNetworkChanged}
+	f, result, err := directPreparationManagerRun(t, a, "read-open")
+	if err == nil || result.State != "rollback-failed" || result.RollbackVerified || !f.e.material.manager.HasPendingManagedNFQWS() || a.rollbacks != 0 {
+		t.Fatal("unknown original absence became harmless rejection", result.State, a.rollbacks, err)
+	}
+	f.refuse = ""
+	if err := f.e.material.manager.JoinPendingManagedNFQWS(f.ctx); err != nil {
+		t.Fatal("same original owner could not retry", err)
+	}
 }

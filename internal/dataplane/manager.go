@@ -1540,6 +1540,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	// Same contract for an original never-sealed NFQ participant whose LAN
 	// Activate already published its own metadata-only preparation.
 	var noEffectLANPreparation *nfqwsDirectPreparationWitness
+	var rejectedDirectPreparation *nfqws2ActiveExecution
 	rollback := func(cause error) error {
 		noEffectNFQCompletion = nil
 		noEffectWGCompletion = nil
@@ -1559,12 +1560,21 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		execution.State = "rolling-back"
 		rollbackErr := writeExecution()
+		if rejectedDirectPreparation != nil {
+			e := rejectedDirectPreparation
+			rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, e.material.adapter, "rollback", func(c context.Context, _ Plan, _ string) error {
+				return e.retireBeforeLAN(c, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+			}))
+		}
 		var gate Adapter
 		for i := len(prepared) - 1; i >= 0; i-- {
 			adapter := prepared[i]
 			if adapter.ID() == NetworkPolicyAdapterID {
 				gate = adapter
 				continue
+			}
+			if rejectedDirectPreparation != nil {
+				continue // Never call a live adapter to settle rejected Stage metadata.
 			}
 			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil {
 				rollbackErr = errors.Join(rollbackErr, err)
@@ -1584,6 +1594,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		// Readback must follow the complete reverse restoration, including
 		// desired-state undo. Never reuse the failed candidate's review guard.
 		for _, adapter := range prepared {
+			if rejectedDirectPreparation != nil {
+				continue
+			}
 			if adapter.ID() == NetworkPolicyAdapterID {
 				continue
 			}
@@ -1623,13 +1636,23 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		consumersVerified = consumersVerified && resourceErr == nil
 		gateVerified := false
 		if gate != nil {
-			if liveMutation && !consumersVerified {
+			if (liveMutation || rejectedDirectPreparation != nil) && !consumersVerified {
 				// A successful rollback call alone cannot authorize removing the
 				// physical negative boundary beneath an unknown consumer.
 				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", func(context.Context, Plan, string) error { return ErrNetworkPolicyConsumers }))
 				verified = false
 			} else {
-				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", gate.Rollback))
+				gateRollback := gate.Rollback
+				if rejectedDirectPreparation != nil {
+					gateRollback = func(c context.Context, p Plan, root string) error {
+						handled, err := rejectedDirectPreparation.gate.retireDirectPreparation(c, p, root)
+						if !handled {
+							return ErrNFQWSScopedOwner
+						}
+						return err
+					}
+				}
+				rollbackErr = errors.Join(rollbackErr, run(rollbackCtx, gate, "rollback", gateRollback))
 				verifier, ok := gate.(RollbackVerifier)
 				if !ok {
 					rollbackErr = errors.Join(rollbackErr, ErrNetworkPolicyConsumers)
@@ -1638,7 +1661,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 					var confirmed bool
 					err := run(rollbackCtx, gate, "verify-rollback", func(c context.Context, p Plan, root string) error {
 						var err error
-						confirmed, err = verifier.VerifyRollback(c, p, root)
+						if rejectedDirectPreparation != nil {
+							confirmed, err = rejectedDirectPreparation.gate.verifyDirectPreparationRetired(c, p, root)
+							if !confirmed {
+								err = errors.Join(err, ErrNFQWSScopedOwner)
+							}
+						} else {
+							confirmed, err = verifier.VerifyRollback(c, p, root)
+						}
 						return errors.Join(err, c.Err())
 					})
 					rollbackErr = errors.Join(rollbackErr, err)
@@ -1761,8 +1791,26 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
 	}
+	settleRejectedDirectPreparation := func(cause error) (bool, error) {
+		if liveMutation || undoCommit != nil || commitPublicationAttempted || activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil || validateExecutionResources(execution, true) != nil {
+			return false, nil
+		}
+		for _, adapter := range prepared {
+			if gate, ok := adapter.(*NetworkPolicyAdapter); ok {
+				e := gate.preActivationDirectPreparation(ctx, plan, filepath.Join(transactionRoot, NetworkPolicyAdapterID))
+				if e != nil {
+					rejectedDirectPreparation = e
+					return true, rollback(cause)
+				}
+			}
+		}
+		return false, nil
+	}
 	fail := func(cause error) error {
 		if !liveMutation {
+			if handled, err := settleRejectedDirectPreparation(cause); handled {
+				return err
+			}
 			if errors.Is(cause, ErrNetworkChanged) {
 				return rejectNetwork(cause)
 			}
@@ -1928,6 +1976,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
+			if handled, failure := settleRejectedDirectPreparation(err); handled {
+				return execution, failure
+			}
 			if errors.Is(err, ErrNetworkChanged) {
 				failure := rejectNetwork(err)
 				return execution, failure

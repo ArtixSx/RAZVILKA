@@ -432,10 +432,14 @@ func (w *nfqwsDirectPreparationWitness) savePreparation(ctx context.Context, s *
 // reads or widens neverActivatedLAN. Lock order: material.mu, e.mu, then the
 // adapter mutex; none is held while the caller takes w.mu.
 func (e *nfqws2ActiveExecution) neverSealed(w *nfqwsDirectPreparationWitness) (lanActivationAttempted, ok bool) {
+	return e.neverSealedState(w, true)
+}
+
+func (e *nfqws2ActiveExecution) neverSealedState(w *nfqwsDirectPreparationWitness, requireRetired bool) (lanActivationAttempted, ok bool) {
 	e.material.mu.Lock()
 	e.mu.Lock()
 	ok = w != nil && w.self == w && w.execution == e && e.directPreparation == w && w.review != nil && w.review == e.preEffectLAN &&
-		e.retired && !e.started && !e.launchInvoked && e.activationSeal == nil &&
+		(!requireRetired || e.retired) && !e.started && !e.launchInvoked && e.activationSeal == nil &&
 		e.resource == nil && e.prepared == nil && e.binding == nil && e.preparationErr == nil &&
 		e.selection != nil && e.selection == e.comparisonSelection &&
 		!e.material.closed && e.material.executionBound && e.material.execution == e && e.material.issuedSelection == nil
@@ -449,6 +453,61 @@ func (e *nfqws2ActiveExecution) neverSealed(w *nfqwsDirectPreparationWitness) (l
 	ok = e.material.adapter.activeExecution == nil && e.material.adapter.activeProcess == nil
 	nfqws2ActiveAdapterMu.Unlock()
 	return lanActivationAttempted, ok
+}
+
+// preActivationDirectPreparation selects only the original Stage writer before
+// LAN Activate. Selection conveys no absence or cleanup evidence: only the
+// original writer's full fresh proof can complete this compensation.
+func (a *NetworkPolicyAdapter) preActivationDirectPreparation(ctx context.Context, p Plan, root string) *nfqws2ActiveExecution {
+	if pair, err := a.replacement(ctx, p); pair != nil || err != nil {
+		return nil
+	}
+	e, present, err := a.preEffectNFQParticipant(ctx, p, root)
+	if !present || err != nil || e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	w, activationAttempted := e.directPreparation, e.activationAttempted
+	e.mu.Unlock()
+	attempted, ok := e.neverSealedState(w, false)
+	if !ok || attempted || activationAttempted || w.root != root {
+		return nil
+	}
+	w.mu.Lock()
+	eligible := w.statesEligible(false)
+	w.mu.Unlock()
+	if !eligible {
+		return nil
+	}
+	return e
+}
+
+// retireBeforeLAN irreversibly closes this original comparison participant's
+// forward path. It has no process/resource/effect to undo. This is NOT absence
+// evidence: the same writer must still prove fresh consumer and RPDB absence
+// with file bookends in retireDirectPreparation and again in its verifier.
+func (e *nfqws2ActiveExecution) retireBeforeLAN(ctx context.Context, p Plan, root string) error {
+	if e == nil || e.gate == nil || e.gate.preActivationDirectPreparation(ctx, p, root) != e {
+		return ErrNFQWSScopedOwner
+	}
+	e.mu.Lock()
+	w := e.directPreparation
+	e.retired = true // Like rollback: a failed cleanup never reopens forward use.
+	e.mu.Unlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.owners == nil {
+		return ErrNFQWSScopedOwner
+	}
+	return e.cleanup.WithCurrent(ctx, func() error {
+		if err := e.material.control.CurrentForCleanup(ctx); err != nil {
+			return err
+		}
+		if err := w.owners(ctx); err != nil {
+			return err
+		}
+		return e.material.control.CurrentForCleanup(ctx)
+	})
 }
 
 // Caller holds w.mu. Unknown results decline this path entirely. Before LAN
