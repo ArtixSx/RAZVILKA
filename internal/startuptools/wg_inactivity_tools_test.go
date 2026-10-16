@@ -65,6 +65,8 @@ func TestWGInactivityStartupIndependentABIRejectsEffectsAndFallback(t *testing.T
 		{l.profile.ipAlias, []string{"-N", "-details", "-j", "route", "show", "table", "206"}},
 		{l.profile.ipAlias, []string{"-N", "-j", "route", "show", "table", "205", "exact", "1.1.1.1/32"}},
 		{l.profile.ipAlias, []string{"route", "show", "table", "213"}},
+		{l.profile.ipAlias, []string{"route", "show", "table", "206"}},
+		{l.profile.ipAlias, []string{"-6", "route", "show", "table", "219"}},
 		{l.profile.ipAlias, []string{"route", "show", "table", "213", "exact", "1.1.1.1/32"}},
 	} {
 		if !wgInactivitySourceArguments(l, test.name, test.args) {
@@ -87,7 +89,8 @@ func TestWGInactivityStartupIndependentABIRejectsEffectsAndFallback(t *testing.T
 		{l.profile.ipAlias, []string{"-N", "route", "show", "table", "all"}},
 		{l.profile.ipAlias, []string{"-N", "route", "show", "table", "254"}},
 		{l.profile.ipAlias, []string{"-N", "route", "show", "table", "0206"}},
-		{l.profile.ipAlias, []string{"route", "show", "table", "206"}},
+		{l.profile.ipAlias, []string{"route", "show", "table", "207"}},
+		{l.profile.ipAlias, []string{"route", "show", "table", "206", "exact", "1.1.1.1/32"}},
 		{l.profile.ipAlias, []string{"-N", "route", "show", "table", "206", "exact", "1.1.1.1/32"}},
 		{l.profile.ipAlias, []string{"-N", "-details", "route", "show", "table", "206"}},
 		{l.profile.ipAlias, []string{"-N", "-j", "route", "show", "table", "205", "exact", "1.1.1.0/24"}},

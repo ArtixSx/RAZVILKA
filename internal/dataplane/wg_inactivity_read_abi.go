@@ -68,6 +68,11 @@ func wgInactivityReadArguments(a *WARPWireGuardAdapter, tools WGCommandTools, na
 	if table == spec.EndpointTable && !flags["-details"] {
 		return args, true
 	}
+	// Exact full-table text is used only to confirm emptiness after a genuine
+	// unsupported-format response. No route attributes become positive proof.
+	if len(body) == 4 && !flags["-N"] && !flags["-j"] && !flags["-details"] {
+		return args, true
+	}
 	if !flags["-N"] {
 		args = append([]string{"-N"}, args...)
 	}

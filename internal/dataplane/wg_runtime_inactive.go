@@ -100,13 +100,8 @@ func (a *WARPWireGuardAdapter) verifyRuntimeInactive(ctx context.Context, proces
 				if err := AssertPolicyDefaultUnreferenced(ctx, a.Runner, a.ip(), PolicyState{Table: table}, family); err != nil {
 					return err
 				}
-				data, err := a.readWGCompleteNumericTable(ctx, table, family)
-				if err != nil {
+				if err := a.verifyWGEmptyNumericTable(ctx, table, family); err != nil {
 					return err
-				}
-				rows, err := parseWGEndpointRoutes(data)
-				if err != nil || len(rows) != 0 {
-					return errors.Join(err, errWGInactiveUnknown)
 				}
 			}
 		}
@@ -153,6 +148,11 @@ func (a *WARPWireGuardAdapter) readWGNumericTable(ctx context.Context, table, fa
 	}
 	if err == nil {
 		return data, nil
+	}
+	// Preserve only the exact format diagnostic for the separate negative
+	// empty-table reader. Detailed positive proof never negotiates text.
+	if !details && (wgEndpointUnknownOption(data, "-N") || wgEndpointUnknownOption(data, "-j")) {
+		return data, err
 	}
 	message := strings.TrimSpace(string(data))
 	if strings.HasPrefix(message, "[]\n") {

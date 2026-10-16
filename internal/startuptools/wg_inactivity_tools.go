@@ -130,11 +130,20 @@ func wgInactivitySourceArguments(l *Lease, name string, args []string) bool {
 		return false
 	}
 	endpointTable := false
+	negativeTable := table == 219
 	for _, spec := range dataplane.PolicyOwnershipSpecs() {
 		endpointTable = endpointTable || spec.EndpointMark != 0 && table == spec.EndpointTable
+		negativeTable = negativeTable || spec.EndpointMark != 0 && (table == spec.Table || table == spec.EndpointTable)
 	}
-	// Legacy formatting is confined to dedicated endpoint coordinates. Other
-	// numeric tables retain their original -N ABI and exact JSON requirement.
+	// The original negative reader may retry a complete fixed numeric table
+	// without unsupported formatting. Only empty successful text is consumed;
+	// this does not add positive route parsing or any effect vocabulary.
+	if len(args) == 4 && !flags["-N"] && !flags["-j"] && !flags["-details"] && negativeTable {
+		return true
+	}
+	// Apart from the complete negative read above, legacy formatting is
+	// confined to dedicated endpoint coordinates. Other formatted table reads
+	// retain their original -N ABI and exact JSON requirement.
 	if (!flags["-N"] || len(args) == 6 && !flags["-j"]) && !endpointTable {
 		return false
 	}
