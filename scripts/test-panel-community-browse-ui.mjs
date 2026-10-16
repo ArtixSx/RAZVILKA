@@ -51,6 +51,18 @@ await test('late memory response never replaces successful live search or its ac
   assert.match(f.$('#communityResults').innerHTML,/Fresh live/);assert.doesNotMatch(f.$('#communityResults').innerHTML,/Saved/);assert.equal(f.$('#communityBrowseNotice').hidden,true);
 });
 
+await test('native click event filters saved rows and only literal true forces a live retry',async()=>{
+  const f=fixture();await f.context.searchCommunityCatalog(true);
+  const listCalls=()=>f.calls.filter(call=>call.path.startsWith('/api/v1/community/services?')).length;
+  const before=listCalls();f.$('#communitySearch').value='no match';
+  // addEventListener passes this truthy Event as the handler's first argument.
+  await f.context.searchCommunityCatalog(new Event('click'));
+  assert.equal(listCalls(),before,'click event accidentally forced live catalog admission');
+  assert.match(f.$('#communityResults').innerHTML,/Ничего не найдено/);
+  await f.context.searchCommunityCatalog(true);
+  assert.equal(listCalls(),before+1,'explicit read retry stopped requesting a live list');
+});
+
 await test('saved transition fences pending preview and delayed import confirmation after live returns',async()=>{
   const f=fixture();f.context.communityBrowseLiveAccepted();const pending=deferred();f.live(()=>pending.promise);
   const previewing=f.context.previewCommunityService('old-live');await f.context.loadSavedCommunityBrowse(f.workflowState.communitySeq,1);

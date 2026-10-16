@@ -4270,7 +4270,7 @@ function closeCommunityCatalog() {
 }
 
 async function searchCommunityCatalog(force = false) {
-  if (!force && typeof communityBrowse !== 'undefined' && communityBrowse.showing) { renderSavedCommunityBrowse(); return; }
+  if (force !== true && typeof communityBrowse !== 'undefined' && communityBrowse.showing) { renderSavedCommunityBrowse(); return; }
   const query=$('#communitySearch').value.trim(),seq=++workflowState.communitySeq,epoch=workflowState.epoch;
   if (typeof communityBrowseSearchStarted === 'function') {
     communityBrowseSearchStarted();
