@@ -9,6 +9,7 @@ export const realHTTPDiagnosticIDs=Object.freeze([
   'UI_NODE_IMPORT','UI_NODE_IMPORT_READBACK','UI_NODE_GROUP','UI_NODE_FILTER','UI_NODE_CHECK_CANCEL',
   'UI_NODE_DELETE_PREVIEW','UI_NODE_DELETE_COMMIT','UI_NODE_DELETE_SINGLE_COMMIT','UI_NODE_FINAL_REFRESH',
   'UI_NODE_REMAINING_TOTAL','UI_NODE_REMAINING_GROUP','UI_NODE_RETAINED_MEMBER','UI_NODE_REMAINING_VLESS','UI_NODE_REMAINING_SHADOWSOCKS',
+  'UI_NODE_COLD_COUNTS','UI_NODE_ENTRY_COUNTS','UI_NODE_REFRESH_READY','UI_NODE_REFRESH_COUNTS',
   'UI_POLICY_EDITOR_READY','UI_POLICY_DUPLICATE_SAVE_RECEIPT','UI_POLICY_DUPLICATE_SAVE_UI_READBACK',
   'UI_POLICY_DUPLICATE_SAVE_REQUEST_COUNT','UI_POLICY_DUPLICATE_SAVE_API_READBACK',
   'UI_POLICY_CAS_SECOND_WRITER','UI_POLICY_CAS_STALE_EDITOR_READY','UI_POLICY_CAS_RECEIPT','UI_POLICY_CAS_DRAFT_RETAINED',
@@ -29,6 +30,18 @@ export const realHTTPDiagnosticIDs=Object.freeze([
 ]);
 
 const navTo=async(page,name)=>{await page.locator('.nav[data-view="'+name+'"]').click();await page.waitForFunction(name=>state.currentView===name&&!panelLoad.request,name);};
+
+// A settled initial request may be an actual 409. Measure an explicit refresh
+// only once its genuine live controls are visible and automatic recovery has
+// settled; otherwise Playwright's click wait counts recovery GETs as the click.
+export function realHTTPNodeRefreshReady() {
+  const button=document.getElementById('refreshNodes'),rect=button?.getBoundingClientRect();
+  return state.authenticated===true&&state.currentView==='nodes'&&state.nodes?.available===true
+    &&['nodes','routeOptions','nodeFeeds'].every(key=>state.dataLoad?.[key]?.phase==='ready')
+    &&!nodeBrowse.showing&&!nodeBrowse.blocked&&!panelLoad.request&&!panelLoad.retryTimer
+    &&!nodeBrowser.polling&&!nodeActivity.pending&&!!button&&!button.disabled&&!button.closest('[hidden],[inert]')
+    &&!!rect&&rect.width>0&&rect.height>0&&getComputedStyle(button).visibility==='visible';
+}
 
 // Test-only browser model. Saved and explicitly enabled live-list reads still
 // use their actual HTTP clients. A modeled busy error/pending preview is never
@@ -488,14 +501,15 @@ export async function runRealHTTPReadScenarios({page,requests,test,readJSON,uiRe
   });
   await test('cold boot and Nodes observers share reads without caching explicit refresh', 'real HTTP read lifecycle', async()=>{
     const cold=Object.fromEntries(['/api/v1/auth/status','/api/v1/status','/api/v1/panel/inventory','/api/v1/services','/api/v1/metrics'].map(path=>[path,requests.filter(request=>request.path===path).length]));
-    for(const [path,count] of Object.entries(cold))assert.equal(count,1,'cold boot restarted '+path);
+    await diagnose('UI_NODE_COLD_COUNTS',()=>{for(const [path,count] of Object.entries(cold))assert.equal(count,1,'cold boot restarted '+path);});
     const start=requests.length;await page.evaluate(()=>setView('nodes'));
     await page.waitForFunction(()=>!panelLoad.request&&!nodeBrowser.polling&&!nodeActivity.pending);
     const paths=['/api/v1/nodes','/api/v1/routes/options','/api/v1/node-feeds'];
     const entered=Object.fromEntries(paths.map(path=>[path,requests.slice(start).filter(request=>request.path===path).length]));
-    for(const [path,count] of Object.entries(entered))assert.equal(count,1,'Nodes duplicated '+path);
+    await diagnose('UI_NODE_ENTRY_COUNTS',()=>{for(const [path,count] of Object.entries(entered))assert.equal(count,1,'Nodes duplicated '+path);});
+    await diagnose('UI_NODE_REFRESH_READY',()=>page.waitForFunction(realHTTPNodeRefreshReady));
     const explicit=requests.length;await page.locator('#refreshNodes').click();await page.waitForFunction(()=>!document.getElementById('refreshNodes').disabled);
-    for(const path of paths.slice(0,2))assert.equal(requests.slice(explicit).filter(request=>request.path===path).length,1,'explicit refresh reused '+path);
+    await diagnose('UI_NODE_REFRESH_COUNTS',()=>{for(const path of paths.slice(0,2))assert.equal(requests.slice(explicit).filter(request=>request.path===path).length,1,'explicit refresh reused '+path);});
     await nav('overview');await page.waitForFunction(()=>!panelLoad.request);
     return {cold_reads:cold,nodes_reads:entered,explicit_refresh:'fresh GET'};
   });

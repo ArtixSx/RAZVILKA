@@ -1,7 +1,7 @@
 // Pure client admission/privacy checks. No HTTP, browser, VM or evidence fixture.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis,realHTTPInstallCommunityBrowseModel,realHTTPInstallNodeBrowseModel} from './ui-real-http-scenarios.mjs';
+import {realHTTPEnginePanelRead,realHTTPAIGroupFacts,realHTTPAIGroupDiagnosis,realHTTPInstallCommunityBrowseModel,realHTTPInstallNodeBrowseModel,realHTTPNodeRefreshReady} from './ui-real-http-scenarios.mjs';
 import {realHTTPSettings,realHTTPFixture,realHTTPIdentity,realHTTPIdentityFacts,realHTTPAwaitIdentity,realHTTPAwaitInventory,realHTTPCode,realHTTPFailure,realHTTPAssert,realHTTPDiagnosis,realHTTPUIReadAllowed,realHTTPSharedScopeFacts} from './test-ui-real-http-browser.mjs';
 
 const instance='a'.repeat(32),env={RAZVILKA_QA_UI_FIXTURE:'disposable-linux',RAZVILKA_QA_UI_URL:'http://127.0.0.1:19001/',
@@ -85,7 +85,8 @@ for(const id of ['UI_STRATEGY_LOCAL_FIXTURE','UI_STRATEGY_LOCAL_EDITOR','UI_STRA
   'UI_AI_GROUP_NAVIGATION','UI_AI_GROUP_CATALOG','UI_AI_GROUP_OPEN','UI_AI_GROUP_READBACK',
   'UI_AI_GROUP_SEARCH','UI_AI_GROUP_CLOSE','UI_AI_GROUP_BOOKEND',
   'UI_NODE_SAVED_HTTP','UI_NODE_SAVED_BUSY_MODEL','UI_NODE_SAVED_SEARCH','UI_NODE_SAVED_OFFLINE_MODEL',
-  'UI_NODE_SAVED_LIVE_RETRY','UI_NODE_SAVED_LATE_MODEL','UI_NODE_SAVED_TTL_MODEL','UI_NODE_SAVED_BOOKEND']){
+  'UI_NODE_SAVED_LIVE_RETRY','UI_NODE_SAVED_LATE_MODEL','UI_NODE_SAVED_TTL_MODEL','UI_NODE_SAVED_BOOKEND',
+  'UI_NODE_COLD_COUNTS','UI_NODE_ENTRY_COUNTS','UI_NODE_REFRESH_READY','UI_NODE_REFRESH_COUNTS']){
   try{
     await realHTTPDiagnosis(id,()=>assert.equal('private catalog id','private candidate material'));
     assert.fail('expected private assertion failure');
@@ -386,5 +387,29 @@ for(const state of ['empty','expired','unknown']){
   await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(typeof model.resolve,'function');assert.equal(delegated.length,3);checks++;
   model.resolve({forged_body:true});assert.equal(await pending,actual,'held body was substituted instead of delayed');assert.equal(model.saved_settled,true);checks++;
   assert.equal(await context.api('/api/v1/status'),actual);assert.equal(delegated.length,4);checks++;
+}
+{
+  const fixture=()=>{
+    const button={disabled:false,hidden:false,inert:false,width:32,height:32,visibility:'visible',closest(){return this.hidden||this.inert?{}:null;},getBoundingClientRect(){return {width:this.width,height:this.height};}};
+    const context=vm.createContext({state:{authenticated:true,currentView:'nodes',nodes:{available:true},dataLoad:Object.fromEntries(['nodes','routeOptions','nodeFeeds'].map(key=>[key,{phase:'ready'}]))},
+      nodeBrowse:{showing:false,blocked:false},panelLoad:{request:null,retryTimer:null},nodeBrowser:{polling:null},nodeActivity:{pending:null},
+      document:{getElementById:id=>id==='refreshNodes'?button:null},getComputedStyle:element=>({visibility:element.visibility})});
+    const ready=()=>vm.runInContext('('+realHTTPNodeRefreshReady.toString()+')()',context);
+    return {context,button,ready};
+  };
+  // UI534: settled 409 -> hidden control -> automatic successful reads -> click.
+  // The measurement must begin after those recovery reads, preserving an exact
+  // one-new-GET assertion for each URL requested by the actual explicit click.
+  const f=fixture(),attempts=['initial-409'];f.context.state.dataLoad.nodes.phase='busy';f.context.nodeBrowse.showing=true;f.button.hidden=true;
+  assert.equal(f.ready(),false);checks++;
+  attempts.push('automatic-recovery-200');f.context.state.dataLoad.nodes.phase='ready';f.context.nodeBrowse.showing=false;f.button.hidden=false;
+  assert.equal(f.ready(),true);const baseline=attempts.length;attempts.push('actual-explicit-click-200');assert.equal(attempts.slice(baseline).length,1);checks++;
+  for(const change of [value=>value.context.state.authenticated=false,value=>value.context.state.currentView='services',value=>value.context.state.nodes.available=false,
+    value=>value.context.state.dataLoad.nodes.phase='loading',value=>value.context.state.dataLoad.routeOptions.phase='busy',value=>value.context.state.dataLoad.nodeFeeds.phase='error',
+    value=>value.context.nodeBrowse.blocked=true,value=>value.context.nodeBrowse.showing=true,value=>value.context.panelLoad.request={},value=>value.context.panelLoad.retryTimer=1,
+    value=>value.context.nodeBrowser.polling={},value=>value.context.nodeActivity.pending={},value=>value.button.disabled=true,value=>value.button.inert=true,
+    value=>value.button.width=0,value=>value.button.height=0,value=>value.button.visibility='hidden']){
+    const refused=fixture();change(refused);assert.equal(refused.ready(),false);checks++;
+  }
 }
 console.log('PASS pure real HTTP client checks '+checks);
