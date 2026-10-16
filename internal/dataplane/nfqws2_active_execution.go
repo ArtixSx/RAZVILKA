@@ -16,32 +16,35 @@ import (
 // The existing Manager supplies its sole resource and both execution records.
 // It owns no separate ledger and accepts no process factory or caller argv.
 type nfqws2ActiveExecution struct {
-	self                *nfqws2ActiveExecution
-	mu                  sync.Mutex
-	material            *NFQWSActiveMaterial
-	selection           *NFQWSScopedSelection
-	plan                Plan
-	spec                NFQWSScopedSpec
-	panel               context.Context
-	cleanup             *operationgate.ExclusiveCleanupReview
-	committedGuard      NFQWSActiveGuard
-	cleanupGuard        NFQWSActiveGuard
-	inventory           BackendInventory
-	gate                *NetworkPolicyAdapter
-	lan                 *LANPolicyReceiptBinding
-	runtime             *LANPolicyRuntime
-	runtimeFrozen       LANPolicyRuntime
-	lanFrozen           LANPolicyReceiptBinding
-	identity            *networkPolicyIdentity
-	resource            *NFQWSExecutionResource
-	binding             *NFQWSScopedBinding
-	prepared            *NFQWSPreparedHandle
-	started             bool
-	launchInvoked       bool
-	preparationErr      error
-	retired             bool
-	activationAttempted bool
-	activationSeal      *nfqws2ActiveActivationSeal
+	self                   *nfqws2ActiveExecution
+	mu                     sync.Mutex
+	material               *NFQWSActiveMaterial
+	selection              *NFQWSScopedSelection
+	plan                   Plan
+	spec                   NFQWSScopedSpec
+	panel                  context.Context
+	cleanup                *operationgate.ExclusiveCleanupReview
+	committedGuard         NFQWSActiveGuard
+	cleanupGuard           NFQWSActiveGuard
+	inventory              BackendInventory
+	gate                   *NetworkPolicyAdapter
+	lan                    *LANPolicyReceiptBinding
+	runtime                *LANPolicyRuntime
+	runtimeFrozen          LANPolicyRuntime
+	lanFrozen              LANPolicyReceiptBinding
+	gateInventoryCheck     func(context.Context) error
+	identity               *networkPolicyIdentity
+	resource               *NFQWSExecutionResource
+	binding                *NFQWSScopedBinding
+	prepared               *NFQWSPreparedHandle
+	started                bool
+	launchInvoked          bool
+	preparationErr         error
+	retired                bool
+	activationAttempted    bool
+	activationSeal         *nfqws2ActiveActivationSeal
+	lanActivationAttempted bool
+	preEffectLAN           *nfqwsPreEffectLANReview
 }
 
 type nfqws2ActiveExecutionKey struct{}
@@ -99,7 +102,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 		return nil, err
 	}
 	e := &nfqws2ActiveExecution{material: r, selection: selection, plan: cloneExecutionResourcePlan(expected), spec: spec.Clone(), panel: panel, cleanup: cleanup, committedGuard: committed, cleanupGuard: cleanupGuard,
-		inventory: *inventory, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, identity: gate.identity, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding}
+		inventory: *inventory, gate: gate, lan: gate.Binding, runtime: gate.Binding.Runtime, identity: gate.identity, runtimeFrozen: *gate.Binding.Runtime, lanFrozen: *gate.Binding, gateInventoryCheck: gate.InventoryCheck}
 	e.self = e
 	e.lanFrozen.Runtime = &e.runtimeFrozen
 	nfqws2ActiveAdapterMu.Lock()
@@ -109,6 +112,7 @@ func (r *NFQWSActiveMaterial) BindExecution(ctx, panel context.Context, expected
 		return nil, ErrNFQWSScopedOwner
 	}
 	r.executionBound = true
+	r.execution = e
 	return context.WithValue(ctx, nfqws2ActiveExecutionKey{}, e), nil
 }
 

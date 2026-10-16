@@ -37,6 +37,7 @@ type NFQWSActiveMaterial struct {
 	command            nfqws2ActiveProcessCommand
 	queue              uint16
 	executionBound     bool
+	execution          *nfqws2ActiveExecution
 	issuedSelection    *NFQWSScopedSelection
 }
 
@@ -216,10 +217,16 @@ func (r *NFQWSActiveMaterial) Close() error {
 		return ErrNFQWSScopedOwner
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.closed = true
-	if r.issuedSelection != nil {
-		return r.issuedSelection.Close()
+	e := r.execution
+	selection := r.issuedSelection
+	r.mu.Unlock()
+	var err error
+	if selection != nil {
+		err = selection.Close()
 	}
-	return nil
+	if e != nil {
+		err = errors.Join(err, e.closePreEffectLAN())
+	}
+	return err
 }

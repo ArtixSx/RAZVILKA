@@ -151,6 +151,12 @@ func (a *NetworkPolicyAdapter) Snapshot(ctx context.Context, p Plan, root string
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if e, present, err := a.preEffectNFQParticipant(ctx, p, root); present {
+		if err != nil {
+			return err
+		}
+		return e.capturePreEffectLAN(ctx, root)
+	}
 	return writeNetworkPolicyGate(filepath.Join(root, "snapshot.json"), networkPolicyGateSnapshot{})
 }
 
@@ -183,6 +189,14 @@ func (a *NetworkPolicyAdapter) Validate(ctx context.Context, p Plan, root string
 }
 
 func (a *NetworkPolicyAdapter) Activate(ctx context.Context, p Plan, root string) error {
+	if e, present, err := a.preEffectNFQParticipant(ctx, p, root); present {
+		if err != nil {
+			return err
+		}
+		e.mu.Lock()
+		e.lanActivationAttempted = true
+		e.mu.Unlock()
+	}
 	ctx = networkPolicyConsumerContext(ctx, p)
 	state, err := a.gateFor(p)
 	if err != nil {
