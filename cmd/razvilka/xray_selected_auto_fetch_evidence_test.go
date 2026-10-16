@@ -16,9 +16,17 @@ func xrayAutoFailureHistory(nodes []nodestore.Node, ids [2]string, service, netw
 		if node.ID == ids[0] {
 			first, second = xrayAutoFailurePair(node, service, network, fault, gap, now)
 		}
+	}
+	if second.CheckedAt.IsZero() {
+		return
+	}
+	// A healthy-current round may already have checked B before A's second
+	// failure. Recompute from this snapshot after establishing the A quorum;
+	// neither node ordering nor a prior poll's earliest B can hide a later check.
+	for _, node := range nodes {
 		if node.ID == ids[1] {
 			for _, record := range node.Health.History {
-				if xrayAutoTerminalFailure(record, service, network, fault, now) && (failureB.CheckedAt.IsZero() || record.CheckedAt.Before(failureB.CheckedAt)) {
+				if record.RoutePathID == "xray:"+node.ID && xrayAutoTerminalFailure(record, service, network, second.CheckedAt, now) && (failureB.CheckedAt.IsZero() || record.CheckedAt.Before(failureB.CheckedAt)) {
 					failureB = record
 				}
 			}
@@ -43,7 +51,7 @@ func xrayAutoFailurePair(node nodestore.Node, service, network string, after tim
 		if r.CheckedAt.Before(after) {
 			continue
 		}
-		if !xrayAutoTerminalFailure(r, service, network, after, now) {
+		if r.RoutePathID != "xray:"+node.ID || !xrayAutoTerminalFailure(r, service, network, after, now) {
 			first, second = nodestore.CheckRecord{}, nodestore.CheckRecord{}
 			continue
 		}
@@ -116,6 +124,40 @@ func TestXrayAutoFetchFailureHistoryNeverUsesOldOrAmbiguousB(t *testing.T) {
 			_, _, b := xrayAutoFailureHistory(nodes, [2]string{"node-a", "node-b"}, "qa", "original-network", fault, 20*time.Second, now)
 			if !b.CheckedAt.IsZero() {
 				t.Fatal("missing post-quorum exact terminal B was accepted", b.ProbeID)
+			}
+		})
+	}
+}
+
+func TestXrayAutoFetchFailureHistoryKeepsTerminalKindsAndBreaksAmbiguousAQuorum(t *testing.T) {
+	for _, kind := range []string{"transport", "protocol", "service"} {
+		t.Run(kind, func(t *testing.T) {
+			nodes, fault, now := xrayAutoHistoryModel()
+			r := &nodes[1].Health.History[0]
+			if kind == "protocol" {
+				r.TestLevel, r.Stage, r.ErrorCode = "protocol", "egress", "node-egress-failed"
+			} else if kind == "service" {
+				r.TestLevel, r.Stage, r.Verdict, r.ErrorCode, r.HTTPStatus = "service", "service", "BLOCKED", "http-403", 403
+			}
+			_, _, b := xrayAutoFailureHistory(nodes, [2]string{"node-a", "node-b"}, "qa", "original-network", fault, 20*time.Second, now)
+			if b.ProbeID != "b-after" {
+				t.Fatal("fresh definite B failure was lost", b.ProbeID)
+			}
+		})
+	}
+	for _, verdict := range []string{"PASS", "INCONCLUSIVE", "PARTIAL"} {
+		t.Run("intervening-a-"+verdict, func(t *testing.T) {
+			nodes, fault, now := xrayAutoHistoryModel()
+			middle := nodes[0].Health.History[0]
+			middle.CheckedAt = fault.Add(25 * time.Second)
+			middle.Verdict, middle.TestLevel, middle.Stage, middle.ErrorCode = verdict, "service", "service", ""
+			if verdict == "PARTIAL" {
+				middle.HTTPStatus, middle.ErrorCode = 429, "http-429"
+			}
+			nodes[0].Health.History = []nodestore.CheckRecord{nodes[0].Health.History[0], middle, nodes[0].Health.History[1]}
+			_, second, b := xrayAutoFailureHistory(nodes, [2]string{"node-a", "node-b"}, "qa", "original-network", fault, 20*time.Second, now)
+			if !second.CheckedAt.IsZero() || !b.CheckedAt.IsZero() {
+				t.Fatal("ambiguous/PASS A contributed to the quorum")
 			}
 		})
 	}
