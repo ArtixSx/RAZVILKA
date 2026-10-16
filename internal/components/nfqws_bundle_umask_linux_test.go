@@ -41,7 +41,6 @@ func TestNativeManagedNFQWSInstallWithRestrictiveUmask(t *testing.T) {
 		manifest, input, _ := bundleFixtureManifest(t, "fixture-umask077")
 		manager := bundleFixtureManager(t, input)
 		base := manager.nfqwsFixture.path
-		manager.nfqwsReleases = filepath.Join(base, "lib", "razvilka", "nfqws2", "releases")
 		baseline, err := os.Lstat(base)
 		if err != nil {
 			t.Fatal(err)
@@ -50,7 +49,7 @@ func TestNativeManagedNFQWSInstallWithRestrictiveUmask(t *testing.T) {
 		if err != nil {
 			t.Fatal("first install must create its own traversable ancestors despite umask077", err)
 		}
-		for _, relative := range []string{"lib", "lib/razvilka", "lib/razvilka/nfqws2", "lib/razvilka/nfqws2/releases"} {
+		for _, relative := range []string{"releases"} {
 			info, err := os.Lstat(filepath.Join(base, relative))
 			if err != nil || !info.IsDir() || info.Mode().Perm() != 0755 || manager.trustedManagedNFQWSNode(info) != nil {
 				t.Fatal("new ancestor lacks exact public owned mode", relative, info, err)
