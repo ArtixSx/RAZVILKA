@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -141,7 +140,7 @@ func (p *SupervisedCompatibilityProvider) Run(parent context.Context, binary str
 	if total > 32768 {
 		return result, errors.New("compatibility command exceeds the supervision byte bound")
 	}
-	ctx, cancel := context.WithTimeout(parent, ProbeTimeout)
+	ctx, cancel := compatibilityPhaseContext(parent, p)
 	defer cancel()
 	protectedTiming := managedTiming(parent, "protected-paths", phaseTiming)
 	protectedErr := compatibilityProtectedReview(p.manager.Path, p.review)
@@ -307,7 +306,7 @@ func (m *Manager) prepareCompatibilityPublicationLocked(ctx context.Context, val
 		return ErrCompatibilityQuiescenceUnknown
 	}
 	active := compatibilityActiveInvocation(m.state.CompatibilitySession)
-	if !time.Now().Before(active.Command.Deadline) {
+	if !compatibilityPublicationTimeCurrent(ctx, active) {
 		return ErrCompatibilityQuiescenceUnknown
 	}
 	offset, end := 1+len(active.Command.Review.BaseArguments), len(active.Command.Args)

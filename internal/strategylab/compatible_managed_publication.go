@@ -39,7 +39,7 @@ func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Con
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, restorejournal.Image{}, candidate, err)
 	}
 	active := compatibilityActiveInvocation(m.state.CompatibilitySession)
-	ctx, cancel := context.WithDeadline(parent, active.Command.Deadline)
+	ctx, cancel := compatibilityPublicationContext(parent, active)
 	defer cancel()
 	next, err := compatibilityStateCopy(beforeState)
 	if err != nil {

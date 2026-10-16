@@ -57,6 +57,7 @@ type managedCompatibilityInvocation struct {
 	stageUnknown  bool
 	refusal       *managedCompatibilityRefusal
 	timing        *managedCompatibilityTiming
+	forward       context.Context
 }
 
 // ManagedCompatibilityCompletion is issued only by this actual synchronous

@@ -72,11 +72,7 @@ func (v CompatibleValidator) Validate(parent context.Context, arguments []string
 		result.Code = "SUPERVISION_REQUIRED"
 		return result
 	}
-	timeout := v.Timeout
-	if timeout <= 0 || timeout > ProbeTimeout {
-		timeout = 8 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(parent, timeout)
+	ctx, cancel := compatibilityValidatorContext(parent, v)
 	defer cancel()
 	run := func(args []string) (CompatibilityCompletion, error) {
 		// The concrete managed owner must join Run synchronously. A timeout of

@@ -33,7 +33,7 @@ func (m *Manager) publishCompatibilityValidationLocked(parent context.Context, c
 		return err
 	}
 	active := compatibilityActiveInvocation(m.state.CompatibilitySession)
-	ctx, cancel := context.WithDeadline(parent, active.Command.Deadline)
+	ctx, cancel := compatibilityPublicationContext(parent, active)
 	defer cancel()
 	beforeState, before := m.state, m.image
 	next := m.state
@@ -95,7 +95,7 @@ func (m *Manager) preparePublishedCompatibilityResultLocked(ctx context.Context,
 	if ctx.Err() != nil || validation.QuiescenceUnknown || m.compatibilityRetainedUnknownLocked() || m.state.CompatibilitySession == nil {
 		return errors.Join(ErrCompatibilityQuiescenceUnknown, ctx.Err())
 	}
-	if !time.Now().Before(compatibilityActiveInvocation(m.state.CompatibilitySession).Command.Deadline) {
+	if !compatibilityPublicationTimeCurrent(ctx, compatibilityActiveInvocation(m.state.CompatibilitySession)) {
 		return ErrCompatibilityQuiescenceUnknown
 	}
 	if err := compatibilityControlCurrent(ctx, compatibilityActiveInvocation(m.state.CompatibilitySession).Command.Review); err != nil {
