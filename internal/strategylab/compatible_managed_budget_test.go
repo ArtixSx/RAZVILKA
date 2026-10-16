@@ -162,3 +162,31 @@ func TestManagedCompatibilityBudgetKeepsEarlierOriginalDeadline(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedCompatibilityBudgetMissingActiveRefusesWithoutPanic(t *testing.T) {
+	for _, mode := range []string{"missing", "invalid", "copied-context"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, p, cancel := compatibilityBudgetModel(t)
+			defer cancel()
+			i := managedCompatibilityForward(ctx)
+			switch mode {
+			case "missing":
+				ctx = context.Background()
+			case "invalid":
+				p.manager.state.CompatibilitySession = &compatibilitySession{Active: "lua-init"}
+				ctx = context.Background()
+			case "copied-context":
+				copy := *i
+				ctx = context.WithValue(ctx, managedCompatibilityContextKey{}, &copy)
+			}
+			// This is the actual managed publisher entry, before its ordinary
+			// guard rejects an absent candidate/session or a copied invocation.
+			p.manager.mu.Lock()
+			err := p.manager.publishManagedCompatibilityValidationLocked(ctx, Candidate{ID: "absent"}, p, i)
+			p.manager.mu.Unlock()
+			if !errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+				t.Fatal("missing active session did not refuse", err)
+			}
+		})
+	}
+}
