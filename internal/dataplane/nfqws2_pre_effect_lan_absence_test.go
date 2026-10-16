@@ -163,6 +163,71 @@ func TestNFQWSPreEffectSnapshotRejectsInvalidSelectionTransition(t *testing.T) {
 	}
 }
 
+// Explicit phase model, not a native issuance or a reconstructed authority.
+// ReviewNFQWSScopedSelection's real constructor leaves prepared=nil/plan zero;
+// only reviewNFQWSScopedPreparedSelection fills those comparison-only fields.
+// Keep that exact distinction while the fixture's source/NI leaves remain its
+// deliberately incomplete models. No Current/Start permission is claimed.
+func (f *preEffectLANFixture) modelIssuedSelection(t *testing.T, consumed bool) {
+	t.Helper()
+	old := f.e.selection
+	selection := &NFQWSScopedSelection{source: old.source, reference: old.reference, spec: f.e.spec.Clone()}
+	selection.self = selection
+	seal := &nfqws2ActiveActivationSeal{execution: f.e, selection: selection, spec: selection.spec.Clone(), consumed: consumed}
+	seal.self = seal
+	f.e.material.issuedSelection = selection
+	f.e.selection, f.e.activationSeal = selection, seal
+	f.e.activationAttempted, f.e.lanActivationAttempted = true, true
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNFQWSPreEffectIssuedSelectionReachesStrictCleanupWithoutNoEffectGrant(t *testing.T) {
+	for _, consumed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "issued-before-consume", true: "consumed"}[consumed], func(t *testing.T) {
+			f := newPreEffectLANFixture(t)
+			f.snapshot(t, true)
+			f.modelIssuedSelection(t, consumed)
+			f.e.retired = true
+			if f.e.selection.prepared != nil || !reflect.DeepEqual(f.e.selection.plan, Plan{}) {
+				t.Fatal("phase model manufactured comparison-only fields")
+			}
+			if handled, err := f.e.gate.inspectPreEffectNFQAbsence(f.ctx, f.e.plan, f.root, false); handled || err != nil {
+				t.Fatal("actual issued shape blocked strict fallback", handled, err)
+			}
+			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); err != nil || !ok {
+				t.Fatal("issued phase blocked ordinary strict cleanup", err)
+			}
+			if f.reads != 0 || f.model.cleanup != 2 || f.retires != 1 || f.model.rpdbReads != 2 {
+				t.Fatal("issued phase borrowed no-effect proof", f.reads, f.model.cleanup, f.retires, f.model.rpdbReads)
+			}
+			f.physical = ErrReviewChanged
+			if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+				t.Fatal("issued phase waived strict physical scope")
+			}
+		})
+	}
+}
+
+func TestNFQWSPreEffectIssuedPendingCleanupPreservesStrictCancellation(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	f.modelIssuedSelection(t, true)
+	ctx, cancel := context.WithCancel(f.ctx)
+	cancel()
+	ordinary := f.e.cleanupCurrent(ctx)
+	if !errors.Is(ordinary, context.Canceled) {
+		t.Fatal("fixture did not reach original canceled cleanup", ordinary)
+	}
+	if pending := f.e.pendingCleanupCurrent(ctx); !errors.Is(pending, context.Canceled) {
+		t.Fatal("pending issued cleanup was intercepted before strict fallback", pending)
+	}
+	if f.reads != 0 {
+		t.Fatal("pending issued cleanup called no-effect observer")
+	}
+}
+
 func (f *preEffectLANFixture) modelSource() {
 	f.e.preEffectLAN.owners = func(c context.Context) error {
 		if c.Value(nfqws2ActiveExecutionKey{}) != f.e || !f.e.retired || !f.e.neverActivatedLAN() {
