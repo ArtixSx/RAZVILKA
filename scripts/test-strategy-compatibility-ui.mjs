@@ -33,7 +33,7 @@ await check('partial legacy result is not counted or offered as a Lua-compatible
 await check('explicit false fences an old probe click before confirmation or POST',async()=>{const f=fixture();await f.c.probeStrategyCandidate('candidate-1');assert.equal(f.calls.length,0);assert.match(f.details[0].title,/Изолированный тест недоступен/);});
 await check('explicit true preserves an existing separate probe affordance without executing it',()=>{const f=fixture(full,{temporary_scoped_firewall_probe:true});f.c.renderStrategyLab();assert.match(f.$('#strategyCandidates').innerHTML,/data-strategy-probe/);assert.equal(f.calls.length,0);assert.equal(f.$('#strategyTarget').disabled,false);});
 await check('an older response without the availability field preserves the existing display',()=>{const f=fixture(full,{});f.c.renderStrategyLab();assert.match(f.$('#strategyCandidates').innerHTML,/data-strategy-probe/);assert.equal(f.calls.length,0);});
-await check('Validate uses the same one POST then saved-state GET, with no new body/grant/probe',async()=>{const f=fixture();await f.c.validateStrategyCandidate('candidate-1');assert.equal(f.details.at(-1).title,'Последняя проверка совместимости пройдена');assert.deepEqual(f.calls,[{path:'/api/v1/strategy-lab/candidates/candidate-1/validate',method:'POST'},{path:'/api/v1/strategy-lab'}]);assert.equal(f.details.at(-1).value,f.state.strategyLab.candidates[0].validation);assert.match(f.$('#detailsSubtitle').textContent,/Последняя проверка:.*2020/);assert.match(f.$('#detailsSubtitle').textContent,/Повторите проверку перед применением/);assert.match(f.$('#detailsSubtitle').textContent,/Проверка соединения и применение выполняются отдельно/);});
+await check('Validate uses the same one POST then saved-state GET, with no new body/grant/probe',async()=>{const f=fixture();await f.c.validateStrategyCandidate('candidate-1');assert.equal(f.details.at(-1).title,'Последняя проверка совместимости пройдена');assert.equal(f.calls.length,2);const {signal,...post}=f.calls[0];assert.deepEqual(post,{path:'/api/v1/strategy-lab/candidates/candidate-1/validate',method:'POST'});assert.equal(signal.aborted,false);assert.deepEqual(f.calls[1],{path:'/api/v1/strategy-lab',cache:'no-store'});assert.equal(f.details.at(-1).value,f.state.strategyLab.candidates[0].validation);assert.match(f.$('#detailsSubtitle').textContent,/Последняя проверка:.*2020/);assert.match(f.$('#detailsSubtitle').textContent,/Повторите проверку перед применением/);assert.match(f.$('#detailsSubtitle').textContent,/Проверка соединения и применение выполняются отдельно/);});
 await check('saved historical timestamp wins over a newer POST receipt',async()=>{const f=fixture();f.setHandler(async(_,opts)=>opts.method==='POST'?{id:'candidate-1',validation:{...full,checked_at:'2030-01-02T03:04:05Z'}}:f.state.strategyLab);await f.c.validateStrategyCandidate('candidate-1');assert.equal(f.details.at(-1).title,'Последняя проверка совместимости пройдена');assert.match(f.$('#detailsSubtitle').textContent,/2020/);assert.doesNotMatch(f.$('#detailsSubtitle').textContent,/2030/);});
 await check('saved rejection wins over an optimistic POST receipt',async()=>{const f=fixture();f.setHandler(async(_,opts)=>opts.method==='POST'?{id:'candidate-1',validation:full}:{pools:[],candidates:[{id:'candidate-1',validation:{ok:false,native:false,code:'COMPATIBILITY_REJECTED'}}],safety:{temporary_scoped_firewall_probe:false}});await f.c.validateStrategyCandidate('candidate-1');assert.match(f.details.at(-1).title,/не подтверждена/);assert.equal(f.details.at(-1).value.ok,false);});
 await check('missing saved candidate cannot borrow compatibility from POST',async()=>{const f=fixture();f.setHandler(async(_,opts)=>opts.method==='POST'?{id:'candidate-1',validation:full}:{pools:[],candidates:[],safety:{temporary_scoped_firewall_probe:false}});await f.c.validateStrategyCandidate('candidate-1');assert.match(f.details.at(-1).title,/не подтверждена/);assert.match(f.details.at(-1).value.error,/Сохранённый результат/);});
@@ -56,4 +56,97 @@ await check('manual completion after authentication changes cannot publish a sav
 await check('late manual readback after leaving the laboratory does not reopen details in another view',async()=>{const f=fixture(),saved={...f.state.strategyLab,selections:[savedManual()]};f.setHandler(async(_,opts)=>{if(opts.method==='POST')return savedManual();f.state.currentView='engines';return saved;});await f.c.updateStrategyMemory(manualButton(),false,true);assert.equal(f.calls.length,2);assert.equal(f.state.strategyLab,saved);assert.equal(f.details.length,0);assert.equal(f.state.strategySelectionAction,null);});
 await check('manual tuple follows the chosen protocol and IP family without inheriting TCP IPv4',async()=>{const f=fixture();f.state.strategyLab.pools[0].protocol='quic';f.$('#strategyFamily').value='ipv6';const saved={...f.state.strategyLab,selections:[savedManual({protocol:'quic',ip_family:'ipv6'})]};f.setHandler(async(_,opts)=>opts.method==='POST'?savedManual():saved);await f.c.updateStrategyMemory(manualButton(),false,true);assert.deepEqual(JSON.parse(f.calls[0].body),{mode:'manual',service_id:'youtube',protocol:'quic',ip_family:'ipv6',candidate_id:'candidate-1'});assert.equal(f.details.at(-1).title,'Ручной выбор сохранён');});
 await check('existing evidence selection and reset retain their original separate request contracts',async()=>{for(const reset of [false,true]){const f=fixture();await f.c.updateStrategyMemory({dataset:{strategySelect:'candidate-1',service:'youtube',protocol:'tcp',family:'ipv4'}},reset);assert.equal(f.calls.length,2);assert.deepEqual(JSON.parse(f.calls[0].body),{action:reset?'reset':'select',service_id:'youtube',protocol:'tcp',ip_family:'ipv4',candidate_id:'candidate-1',frozen:false});assert.equal(f.calls[1].path,'/api/v1/strategy-lab');assert.equal(f.details.length,0);}});
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+await check('compatibility validation stays single-flight through POST and canonical readback', async () => {
+  const f = fixture(), post = deferred(), readback = deferred();
+  f.setHandler(async (_, options) => options.method === 'POST' ? post.promise : readback.promise);
+  const pending = f.c.validateStrategyCandidate('candidate-1');
+  assert.equal(f.calls.length, 1);
+  assert.match(f.$('#strategyCandidates').innerHTML, /data-strategy-validate="candidate-1" disabled aria-busy="true">Проверка совместимости…/);
+  assert.match(f.$('#strategyCandidates').innerHTML, /role="status">Проверяем NFQWS2 и Lua/);
+  f.c.renderStrategyLab(); // Ordinary panel refresh must preserve pending UI.
+  await f.c.validateStrategyCandidate('candidate-2');
+  assert.equal(f.calls.length, 1);
+  post.resolve({ validation: full });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.calls.length, 2);
+  assert.match(f.$('#strategyCandidates').innerHTML, /aria-busy="true">Чтение результата…/);
+  assert.match(f.$('#strategyCandidates').innerHTML, /Получаем сохранённый результат/);
+  await f.c.validateStrategyCandidate('candidate-1');
+  assert.equal(f.calls.length, 2);
+  readback.resolve(f.state.strategyLab);
+  await pending;
+  assert.equal(f.state.strategyValidationAction, null);
+  assert.doesNotMatch(f.$('#strategyCandidates').innerHTML, /aria-busy|role="status"/);
+  assert.match(f.$('#strategyCandidates').innerHTML, /data-strategy-validate="candidate-1">Проверить совместимость/);
+});
+await check('compatibility delivery deadline aborts once, stays unconfirmed and releases pending UI', async () => {
+  const f = fixture();
+  let expire, cleared = false;
+  f.c.setTimeout = (callback, delay) => { assert.equal(delay, 65000); expire = callback; return 1; };
+  f.c.clearTimeout = () => { cleared = true; };
+  f.setHandler(async (_, options) => new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true })));
+  const pending = f.c.validateStrategyCandidate('candidate-1');
+  expire();
+  await pending;
+  assert.equal(f.calls.length, 1); // No mutation replay or optimistic readback.
+  assert.equal(f.calls[0].signal.aborted, true);
+  assert.equal(f.state.strategyValidationAction, null);
+  assert.equal(cleared, true);
+  assert.match(f.details.at(-1).value.error, /Результат не подтверждён/);
+  assert.match(f.details.at(-1).title, /не подтверждена/);
+  assert.doesNotMatch(f.$('#strategyCandidates').innerHTML, /aria-busy/);
+});
+await check('compatibility server refusals release buttons without retry or unauthorized readback', async () => {
+  for (const status of [401, 403, 409, 503]) {
+    const f = fixture();
+    f.setHandler(async () => { throw Object.assign(new Error('Проверка отклонена'), { status, payload: { code: 'ORIGINAL_REFUSAL' } }); });
+    await f.c.validateStrategyCandidate('candidate-1');
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.state.strategyValidationAction, null);
+    assert.equal(f.details.at(-1).value.response.code, 'ORIGINAL_REFUSAL');
+    assert.doesNotMatch(f.$('#strategyCandidates').innerHTML, /aria-busy/);
+  }
+});
+await check('late compatibility completion cannot publish across authentication or navigation', async () => {
+  for (const duringRead of [false, true]) {
+    const f = fixture(), before = f.state.strategyLab;
+    f.setHandler(async (_, options) => {
+      if (options.method === 'POST') { if (!duringRead) f.state.authGeneration++; return {}; }
+      f.state.authGeneration++;
+      return { candidates: [] };
+    });
+    await f.c.validateStrategyCandidate('candidate-1');
+    assert.equal(f.calls.length, duringRead ? 2 : 1);
+    assert.equal(f.state.strategyLab, before);
+    assert.equal(f.details.length, 0);
+    assert.equal(f.state.strategyValidationAction, null);
+  }
+  const f = fixture();
+  f.setHandler(async (_, options) => { if (options.method === 'POST') return {}; f.state.currentView = 'engines'; return f.state.strategyLab; });
+  await f.c.validateStrategyCandidate('candidate-1');
+  assert.equal(f.details.length, 0);
+  assert.equal(f.state.strategyValidationAction, null);
+});
+await check('an old compatibility action cannot clear a newer authenticated action', async () => {
+  const f = fixture(), oldPost = deferred(), newPost = deferred();
+  let posts = 0;
+  f.setHandler(async (_, options) => options.method === 'POST' ? (++posts === 1 ? oldPost.promise : newPost.promise) : f.state.strategyLab);
+  const old = f.c.validateStrategyCandidate('candidate-1');
+  f.state.authGeneration++;
+  const next = f.c.validateStrategyCandidate('candidate-1'), newAction = f.state.strategyValidationAction;
+  oldPost.resolve({});
+  await old;
+  assert.equal(f.state.strategyValidationAction, newAction);
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.details.length, 0);
+  newPost.resolve({});
+  await next;
+  assert.equal(f.calls.length, 3);
+  assert.equal(f.state.strategyValidationAction, null);
+});
 console.log(JSON.stringify({suite:'strategy-compatibility-ui',mode:'production-functions-no-native',passed}));

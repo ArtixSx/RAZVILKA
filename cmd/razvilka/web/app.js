@@ -1835,6 +1835,8 @@ function renderStrategyLab() {
   const candidates = lab.candidates || [];
   const summaries = lab.summaries || [];
   const selections = lab.selections || [];
+  const validationAction = state.strategyValidationAction;
+  const validationPending = validationAction?.auth === (state.authGeneration || 0);
   const migration = state.z2kPreview || {};
 	const budget = lab.safety?.probe_budget || {};
 	const probeUnavailable = lab.safety?.temporary_scoped_firewall_probe === false;
@@ -1868,12 +1870,15 @@ function renderStrategyLab() {
     const validation = candidate.validation || {};
 		const pool = pools.find((item) => item.id === candidate.pool_id);
     const compatibility = strategyCompatibilityView(validation);
+		const validating = validationPending && validationAction.id === candidate.id;
+		const validationLabel = validating ? validationAction.phase === 'readback' ? 'Чтение результата…' : 'Проверка совместимости…' : 'Проверить совместимость';
+		const validationProgress = validating ? `<small role="status">${validationAction.phase === 'readback' ? 'Получаем сохранённый результат.' : 'Проверяем NFQWS2 и Lua.'} Рабочий маршрут не меняется.</small>` : '';
 		const manual = strategyManualSelectionInput(candidate.id);
 		const choose = `<button class="secondary" type="button" data-strategy-manual="${esc(candidate.id)}" ${!manual.body || state.strategySelectionAction ? 'disabled' : ''} title="${esc(manual.reason)}">Выбрать вручную</button>`;
 		const probe = compatibility.compatible && !probeUnavailable
 			? ['tcp', 'quic'].includes(pool?.protocol) ? `<button class="primary" data-strategy-probe="${esc(candidate.id)}">${pool?.protocol === 'quic' ? 'Тест HTTP/3' : 'Тест маршрута'}</button>` : '<button class="secondary" disabled title="Для голосового UDP нужен сервисный handshake">UDP сервиса</button>'
 			: '';
-    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small><small>${esc(compatibility.checkedAt)}</small></div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(compatibility.title)}. ${esc(compatibility.note)} ${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}">Проверить совместимость</button>${choose}${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
+    return `<div class="strategy-candidate"><div><b>${esc(candidate.name)}</b><small>${esc(candidate.pool_id)} · ${esc(candidate.origin || 'вручную')}</small><small>${esc(compatibility.checkedAt)}</small>${validationProgress}</div><code>${esc(candidate.arguments)}</code><span class="strategy-validation ${compatibility.tone}" title="${esc(compatibility.title)}. ${esc(compatibility.note)} ${esc(validation.output || '')}">${compatibility.label}</span><div class="strategy-candidate-actions"><button class="secondary" data-strategy-validate="${esc(candidate.id)}"${validationPending ? ' disabled' : ''}${validating ? ' aria-busy="true"' : ''}>${validationLabel}</button>${choose}${probe}<button class="danger" data-strategy-delete="${esc(candidate.id)}">Удалить</button></div></div>`;
   }).join('') || '<div class="strategy-empty">Добавьте кандидата вручную или позже импортируйте совместимые данные. Ничего не применяется автоматически.</div>';
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
@@ -1977,16 +1982,41 @@ async function addStrategyCandidate(event) {
 }
 
 async function validateStrategyCandidate(id) {
+  const auth = state.authGeneration || 0;
+  if (state.strategyValidationAction?.auth === auth) return;
+  const controller = new AbortController();
+  const action = state.strategyValidationAction = { id, auth, phase: 'validate' };
+  const current = () => state.strategyValidationAction === action && action.auth === (state.authGeneration || 0);
+  const present = () => current() && state.currentView === 'strategylab';
+  // Managed forward work has 41s plus the existing 5s finish and retirement
+  // budgets. This delivery bound never retries a mutation or claims cleanup.
+  const timer = setTimeout(() => controller.abort(), 65000);
   try {
-    await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/validate`, { method: 'POST' });
-    state.strategyLab = await api('/api/v1/strategy-lab');
     renderStrategyLab();
+    await api(`/api/v1/strategy-lab/candidates/${encodeURIComponent(id)}/validate`, { method: 'POST', signal: controller.signal });
+    clearTimeout(timer);
+    if (!current()) return;
+    action.phase = 'readback';
+    renderStrategyLab();
+    const savedState = await api('/api/v1/strategy-lab', { cache: 'no-store' });
+    if (!current()) return;
+    state.strategyLab = savedState;
+    renderStrategyLab();
+    if (!present()) return;
     const saved = state.strategyLab?.candidates?.find(candidate => candidate.id === id);
     if (!saved) return showDetails({ error: 'Сохранённый результат проверки не найден. Обновите список.' }, 'Совместимость с NFQWS2 не подтверждена');
     const compatibility = strategyCompatibilityView(saved.validation);
     showDetails(saved.validation, compatibility.title);
     $('#detailsSubtitle').textContent = `${compatibility.checkedAt}. ${compatibility.note}`;
-  } catch (error) { showDetails({ error: error.message }, 'Совместимость с NFQWS2 не подтверждена'); }
+  } catch (error) {
+    if (present()) showDetails({ error: controller.signal.aborted ? 'Ответ на проверку задержался. Результат не подтверждён; обновите список перед повторной проверкой.' : error.message, response: error.payload }, 'Совместимость с NFQWS2 не подтверждена');
+  } finally {
+    clearTimeout(timer);
+    if (state.strategyValidationAction === action) {
+      state.strategyValidationAction = null;
+      if (action.auth === (state.authGeneration || 0)) renderStrategyLab();
+    }
+  }
 }
 
 async function probeStrategyCandidate(id) {
