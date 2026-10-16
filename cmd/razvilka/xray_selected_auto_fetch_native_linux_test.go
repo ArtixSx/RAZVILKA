@@ -355,13 +355,7 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 		if err := dispatch.Recover(cleanup); err != nil {
 			return err
 		}
-		if err := closeManaged(cleanup); err != nil {
-			return err
-		}
-		if err := verifySelfUpdateRuntimeInactive(cleanup, manager); err != nil {
-			return err
-		}
-		if err := manager.CloseScopedDNS(cleanup); err != nil {
+		if err := xrayAutoJoinOwnedRuntime(cleanup, closeManaged, manager.CloseScopedDNS, func(ctx context.Context) error { return verifySelfUpdateRuntimeInactive(ctx, manager) }); err != nil {
 			return err
 		}
 		joined = true
@@ -682,8 +676,7 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 			trace.FailureA1 = failure1.CheckedAt
 			publish("failure_a1")
 		}
-		if !failure2.CheckedAt.IsZero() && trace.FailureA2.IsZero() {
-			trace.FailureA2 = failure2.CheckedAt
+		if xrayAutoSetFailureTrace(&trace, failure1, failure2) {
 			publish("failure_a2")
 		}
 		if failure2.CheckedAt.IsZero() || failureB.CheckedAt.IsZero() || failureB.CheckedAt.Before(failure2.CheckedAt) {
@@ -700,7 +693,7 @@ func TestXraySelectedAutoFetchNativeHTTP(t *testing.T) {
 		if r.Search == nil || !r.Search.Exhausted || r.Search.Halted || r.Search.Cursor != len(r.Search.Ordered) || !slices.Contains(r.Search.Ordered, ids[1]) {
 			return false
 		}
-		if r.Failures < 2 || r.FailureNode != ids[0] || r.Network != network || r.LastFailure.Sub(r.FirstFailure) < time.Duration(p.FailureConfirmSeconds)*time.Second {
+		if !xrayAutoFailureRuntimeMatches(r, failure1, failure2, ids[0], network, time.Duration(p.FailureConfirmSeconds)*time.Second) {
 			return false
 		}
 		if len(r.Reserves) != 0 || store.Get().AppliedServices[service.ID].Route != routeA {

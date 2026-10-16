@@ -1,13 +1,41 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
+
+func xrayAutoFailureRuntimeMatches(r autonomy.Runtime, first, second nodestore.CheckRecord, node, network string, gap time.Duration) bool {
+	return r.Failures >= 2 && r.FailureNode == node && r.Network == network && r.LastFailure.Sub(r.FirstFailure) >= gap
+}
+
+func xrayAutoSetFailureTrace(trace *xrayAutoFetchChronology, first, second nodestore.CheckRecord) bool {
+	if trace.FailureA1.IsZero() {
+		trace.FailureA1 = first.CheckedAt
+	}
+	if trace.FailureA2.IsZero() && !second.CheckedAt.IsZero() {
+		trace.FailureA2 = second.CheckedAt
+		return true
+	}
+	return false
+}
+
+func xrayAutoJoinOwnedRuntime(ctx context.Context, closeManaged, closeDNS, verifyInactive func(context.Context) error) error {
+	if err := closeManaged(ctx); err != nil {
+		return err
+	}
+	if err := verifyInactive(ctx); err != nil {
+		return err
+	}
+	return closeDNS(ctx)
+}
 
 // Read-only selection from actual producer histories. The portable tests below
 // model those histories only; they do not issue checks or native authority.
@@ -160,5 +188,78 @@ func TestXrayAutoFetchFailureHistoryKeepsTerminalKindsAndBreaksAmbiguousAQuorum(
 				t.Fatal("ambiguous/PASS A contributed to the quorum")
 			}
 		})
+	}
+}
+
+func TestXrayAutoFetchFailureHistoryDiscardsCompletedPairBeforeLaterBreaker(t *testing.T) {
+	for _, verdict := range []string{"PARTIAL", "PASS", "INCONCLUSIVE"} {
+		for _, newB := range []bool{false, true} {
+			nodes, fault, now := xrayAutoHistoryModel()
+			oldFirst, oldSecond := nodes[0].Health.History[1], nodes[0].Health.History[0]
+			breaker, first, second := oldSecond, oldSecond, oldSecond
+			breaker.CheckedAt, breaker.Verdict, breaker.TestLevel, breaker.Stage, breaker.ErrorCode = fault.Add(55*time.Second), verdict, "service", "service", ""
+			if verdict == "PARTIAL" {
+				breaker.HTTPStatus, breaker.ErrorCode = 429, "http-429"
+			}
+			first.ProbeID, first.CheckedAt = "new-a1", fault.Add(70*time.Second)
+			second.ProbeID, second.CheckedAt = "new-a2", fault.Add(100*time.Second)
+			nodes[0].Health.History = []nodestore.CheckRecord{second, first, breaker, oldSecond, oldFirst}
+			if newB {
+				fresh := nodes[1].Health.History[0]
+				fresh.ProbeID, fresh.CheckedAt = "new-b", fault.Add(110*time.Second)
+				nodes[1].Health.History = append([]nodestore.CheckRecord{fresh}, nodes[1].Health.History...)
+			}
+			a1, a2, b := xrayAutoFailureHistory(nodes, [2]string{"node-a", "node-b"}, "qa", "original-network", fault, 20*time.Second, now)
+			if a1.ProbeID != "new-a1" || a2.ProbeID != "new-a2" || newB && b.ProbeID != "new-b" || !newB && !b.CheckedAt.IsZero() {
+				t.Fatal("old completed quorum survived a later breaker", verdict, newB, a1.ProbeID, a2.ProbeID, b.ProbeID)
+			}
+			trace := xrayAutoFetchChronology{FailureA1: oldFirst.CheckedAt, FailureA2: oldSecond.CheckedAt}
+			if !xrayAutoSetFailureTrace(&trace, first, second) || trace.FailureA1 != first.CheckedAt || trace.FailureA2 != second.CheckedAt {
+				t.Fatal("trace latched a different historical pair")
+			}
+		}
+	}
+}
+
+func TestXrayAutoFetchFailureRuntimeUsesSameObservedPair(t *testing.T) {
+	nodes, _, _ := xrayAutoHistoryModel()
+	first, second := nodes[0].Health.History[1], nodes[0].Health.History[0]
+	r := autonomy.Runtime{FailureNode: "node-a", Network: "original-network", Failures: 2, FirstFailure: first.CheckedAt.Add(time.Millisecond), LastFailure: second.CheckedAt.Add(time.Millisecond)}
+	if !xrayAutoFailureRuntimeMatches(r, first, second, "node-a", "original-network", 20*time.Second) {
+		t.Fatal("actual Observe-after-history timestamps refused")
+	}
+	for _, kind := range []string{"old-runtime", "old-record-pair", "last-before-record"} {
+		bad := r
+		if kind == "old-runtime" {
+			bad.FirstFailure = first.CheckedAt.Add(-time.Minute)
+		} else if kind == "old-record-pair" {
+			bad.FirstFailure = second.CheckedAt.Add(time.Minute)
+			bad.LastFailure = bad.FirstFailure.Add(30 * time.Second)
+		} else {
+			bad.LastFailure = second.CheckedAt.Add(-time.Millisecond)
+		}
+		if xrayAutoFailureRuntimeMatches(bad, first, second, "node-a", "original-network", 20*time.Second) {
+			t.Fatal("runtime interval borrowed a different record pair", kind)
+		}
+	}
+}
+
+func TestXrayAutoFetchRetirementNeedsOriginalCloseNotClosedSourceRead(t *testing.T) {
+	closed := false
+	closeManaged := func(context.Context) error { closed = true; return nil }
+	closeDNS := func(context.Context) error {
+		if !closed {
+			return errors.New("managed owner not joined")
+		}
+		return nil
+	}
+	closedSource := func(context.Context) error {
+		if closed {
+			return errors.New("original source closed")
+		}
+		return nil
+	}
+	if err := xrayAutoJoinOwnedRuntime(context.Background(), closeManaged, closeDNS, closedSource); err != nil {
+		t.Fatal("owned joins required a post-Close reconstructed observer", err)
 	}
 }
