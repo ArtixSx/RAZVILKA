@@ -1787,7 +1787,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return rollback(cause)
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	finishCommit := func() error {
 		execution.State = "committing"
@@ -1838,11 +1839,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			liveMutation = true
 			undoCommit, err = commit()
 			if err != nil {
-				return execution, rollback(err)
+				failure := rollback(err)
+				return execution, failure
 			}
 		}
 		if err := m.checkPlanNetwork(ctx, plan); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 		plan.State = "committed"
 		err := finishCommit()
@@ -1853,10 +1856,12 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	for _, id := range plan.RetiringAdapters {
 		adapter, ok := m.adapter(id)
 		if !ok {
-			return execution, rollback(fmt.Errorf("retiring adapter %s is not registered", id))
+			failure := rollback(fmt.Errorf("retiring adapter %s is not registered", id))
+			return execution, failure
 		}
 		if _, ok := adapter.(RuntimeDeactivator); !ok {
-			return execution, rollback(fmt.Errorf("retiring adapter %s cannot be safely deactivated", id))
+			failure := rollback(fmt.Errorf("retiring adapter %s cannot be safely deactivated", id))
+			return execution, failure
 		}
 		retiringAdapters = append(retiringAdapters, adapter)
 	}
@@ -1864,7 +1869,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	for _, id := range plan.Adapters {
 		adapter, ok := m.adapter(id)
 		if !ok {
-			return execution, rollback(fmt.Errorf("adapter %s is not registered", id))
+			failure := rollback(fmt.Errorf("adapter %s is not registered", id))
+			return execution, failure
 		}
 		adapters = append(adapters, adapter)
 	}
@@ -1879,11 +1885,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}); ok && slices.Contains(plan.RetiringAdapters, adapter.ID()) {
 			previous, exists, err := m.committedLocked()
 			if err != nil || !exists {
-				return execution, fail(errors.Join(err, ErrReviewChanged))
+				failure := fail(errors.Join(err, ErrReviewChanged))
+				return execution, failure
 			}
 			if previous.SuspendDNS && plan.DiscardDNS {
 				if discardedDNSPrior == nil {
-					return execution, fail(ErrReviewChanged)
+					failure := fail(ErrReviewChanged)
+					return execution, failure
 				}
 				previous = *discardedDNSPrior
 			}
@@ -1892,7 +1900,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 		}
 		if err := run(ctx, adapter, "snapshot", snapshot); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 		prepared = append(prepared, adapter)
 	}
@@ -1905,7 +1914,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	} {
 		for _, adapter := range adapters {
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
@@ -1919,21 +1929,25 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			return canary.Canary(runCtx, routePlan, root)
 		}); err != nil {
 			if validateExecutionResources(execution, true) != nil {
-				return execution, rollback(err)
+				failure := rollback(err)
+				return execution, failure
 			}
 			// CanaryAdapter owns and removes only its isolated candidate. Calling
 			// the live Rollback method here could unnecessarily interrupt the
 			// still-working process even though Activate has not started.
 			if errors.Is(err, ErrNetworkChanged) {
-				return execution, rejectNetwork(err)
+				failure := rejectNetwork(err)
+				return execution, failure
 			}
-			return execution, rejectCanary(err)
+			failure := rejectCanary(err)
+			return execution, failure
 		}
 	}
 	for _, adapter := range adapters {
 		if adapter.ID() == NetworkPolicyAdapterID {
 			if err := run(ctx, adapter, "activate", adapter.Activate); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
@@ -1942,7 +1956,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		if err := run(ctx, adapter, "deactivate", func(runCtx context.Context, _ Plan, _ string) error {
 			return deactivator.Deactivate(runCtx)
 		}); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	for _, phase := range []struct {
@@ -1958,26 +1973,31 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				continue
 			}
 			if err := run(ctx, adapter, phase.name, phase.call(adapter)); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	for _, adapter := range retiringAdapters {
 		if committer, ok := adapter.(RetirementCommitter); ok {
 			if err := run(ctx, adapter, "commit-adapter", committer.CommitRetirement); err != nil {
-				return execution, fail(err)
+				failure := fail(err)
+				return execution, failure
 			}
 		}
 	}
 	if activeNFQScope != nil {
 		if commit == nil {
-			return execution, fail(ErrNFQWSScopedOwner)
+			failure := fail(ErrNFQWSScopedOwner)
+			return execution, failure
 		}
 		if err := activeNFQScope.beginNFQWSTransfer(ctx); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	if commit != nil {
@@ -1985,15 +2005,18 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		liveMutation = true
 		undoCommit, err = commit()
 		if err != nil {
-			return execution, rollback(fmt.Errorf("commit desired state: %w", err))
+			failure := rollback(fmt.Errorf("commit desired state: %w", err))
+			return execution, failure
 		}
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	if activeNFQScope != nil {
 		if err := activeNFQScope.commitNFQWSTransfer(ctx); err != nil {
-			return execution, fail(err)
+			failure := fail(err)
+			return execution, failure
 		}
 	}
 	plan.State = "committed"
@@ -2035,7 +2058,8 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	plan.Note = "Dataplane adapters activated, health-checked and committed."
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
-		return execution, fail(err)
+		failure := fail(err)
+		return execution, failure
 	}
 	err := finishCommit()
 	return execution, err
