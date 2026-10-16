@@ -207,6 +207,43 @@ func TestNFQWSPreEffectLANNoOpRollbackDoesNotVerifyAbsence(t *testing.T) {
 	}
 }
 
+func TestNFQWSPreEffectLANWitnessDoesNotReplaceStrictEffectsCleanup(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	f.snapshot(t, true)
+	f.e.retired, f.e.activationAttempted = true, true
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); err != nil || !ok {
+		t.Fatal("old snapshot blocked ordinary strict effects cleanup", err)
+	}
+	if f.reads != 0 || f.model.cleanup != 2 || f.retires != 1 || f.model.rpdbReads != 2 {
+		t.Fatal("effects path borrowed no-effect verification", f.reads, f.model.cleanup, f.retires, f.model.rpdbReads)
+	}
+	f.physical = ErrReviewChanged
+	if ok, err := f.e.gate.VerifyRollback(f.ctx, f.e.plan, f.root); ok || err == nil {
+		t.Fatal("effects cleanup waived strict retained scope")
+	}
+}
+
+func TestNFQWSPreEffectLANOtherOriginalModesKeepSnapshotPath(t *testing.T) {
+	f := newPreEffectLANFixture(t)
+	p := cloneExecutionResourcePlan(f.e.plan)
+	var err error
+	p.LAN, err = CompileLANPolicyRuntime(p.LAN.Generation, p.LAN.Ingress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.e.plan = p
+	f.e.selection.plan = cloneExecutionResourcePlan(p)
+	// Preserve existing shared-LAN behavior; this purpose cannot issue a
+	// never-effect witness for any other mode, even with an original context.
+	f.e.gate.identity.mode = ""
+	if err := f.e.gate.Snapshot(f.ctx, p, f.root); err != nil {
+		t.Fatal("unrelated original mode was intercepted", err)
+	}
+	if f.e.preEffectLAN != nil {
+		t.Fatal("other mode acquired no-effect witness")
+	}
+}
+
 func TestNFQWSPreEffectLANRefusesUnknownOrAttemptedEffects(t *testing.T) {
 	for _, kind := range []string{"candidate", "preparation", "promoted", "owner", "snapshot-bytes", "snapshot-inode", "closed", "control", "selection", "material-binding", "review-copy", "not-retired", "resource", "prepared", "seal", "nfq-activate", "lan-activate", "journal-unknown", "read-open", "read-close", "retire", "inventory", "rpdb", "owner-after-read", "receipt-after-read", "cancel-after-read", "DTO", "copy", "digest"} {
 		t.Run(kind, func(t *testing.T) {
