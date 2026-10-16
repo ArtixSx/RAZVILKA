@@ -176,6 +176,13 @@ func (a *WARPWireGuardAdapter) readWGNumericTable(ctx context.Context, table, fa
 }
 
 func (a *WARPWireGuardAdapter) verifyWGInactiveLinks(ctx context.Context, interfaces []string) error {
+	if source, ok := a.Runner.(*WGInactivityRead); ok && source.kernelLinksAvailable() {
+		links, err := source.readKernelLinks(ctx)
+		if err != nil {
+			return err // An original kernel-source refusal cannot fall back to CLI.
+		}
+		return errors.Join(wgKernelLinksExclude(links, interfaces), ctx.Err())
+	}
 	data, err := a.run(ctx, a.ip(), "-j", "link", "show")
 	if err != nil || len(data) > 1<<20 {
 		return errors.Join(err, errWGInactiveUnknown)
