@@ -139,25 +139,13 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 	if err := baseRoot.Check(relative); err != nil {
 		return "", nil, err
 	}
+	var prepared *os.Root
 	if create {
-		if err := baseRoot.MkdirAll(relative, 0755); err != nil {
+		prepared, err = m.createManagedNFQWSPublicPath(baseRoot, canonicalBase, relative)
+		if err != nil {
 			return "", nil, err
 		}
-		// Persist every possibly new ancestor entry, including the mount base.
-		for parent := filepath.Dir(relative); parent != "."; parent = filepath.Dir(parent) {
-			r, err := ownedfs.Open(filepath.Join(canonicalBase, parent))
-			if err != nil {
-				return "", nil, err
-			}
-			err = syncUpdateDirectory(r)
-			r.Close()
-			if err != nil {
-				return "", nil, err
-			}
-		}
-		if err := syncUpdateDirectory(baseRoot); err != nil {
-			return "", nil, err
-		}
+		defer prepared.Close()
 	}
 	path := filepath.Join(canonicalBase, relative)
 	// /opt may be the reviewed Entware mount symlink. The owned releases root
@@ -172,6 +160,13 @@ func (m *Manager) managedNFQWSRoot(create bool) (string, *ownedfs.Root, error) {
 		return "", nil, err
 	}
 	info, err := os.Stat(canonical)
+	if err == nil && prepared != nil {
+		pinned, pinErr := prepared.Stat(".")
+		if pinErr != nil || !os.SameFile(info, pinned) {
+			root.Close()
+			return "", nil, errors.Join(ErrManagedNFQWSBundle, pinErr)
+		}
+	}
 	opened, openErr := os.OpenRoot(path)
 	if err != nil || openErr != nil {
 		root.Close()
