@@ -170,6 +170,10 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			if err == dataplane.ErrExactNodeUnsupported && c.Err() == nil && check.ErrorCode != "node-cleanup-failed" {
 				return nodestore.SearchCheck{Outcome: nodestore.SearchUnsupported}, nil
 			}
+			if err == nil && (autonomyRouteObservation{RetryAfterSeconds: nodeServiceRateLimitSeconds(check, time.Now())}).pause(&r) {
+				checkState, checkMessage = r.State, r.Message
+				return nodestore.SearchCheck{}, nodestore.ErrSearchInconclusive
+			}
 			if state, message := autonomyReserveCheckStop(c, check, err); state != "" {
 				checkState, checkMessage = state, message
 				if err == nil {

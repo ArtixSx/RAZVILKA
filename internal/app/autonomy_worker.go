@@ -370,6 +370,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			r.State = "origin-expired"
 		} else {
 			check, err := a.checkAutonomyCurrentNode(ctx, p, s, cfg, engine, currentNode, service, profile)
+			if err == nil && (autonomyRouteObservation{RetryAfterSeconds: nodeServiceRateLimitSeconds(check, time.Now())}).pause(&r) {
+				return r
+			}
 			verdict := "INCONCLUSIVE"
 			if err == nil {
 				verdict = autonomyNodeObservation(check, time.Now())
@@ -507,12 +510,17 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	needRefresh := !time.Now().Before(r.ReserveCheckedAt.Add(time.Duration(p.ReserveSeconds) * time.Second))
 	shortlist, next := autonomy.CandidateBatch(ids, currentNode, r.Cursor, p.CandidatesPerRound)
 	if refillBeforeApply(healthy, replace, len(ready), p.ReserveTarget, needRefresh) {
+		previousCursor := r.Cursor
 		r.Cursor = next
 		for _, id := range shortlist {
 			if ctx.Err() != nil {
 				break
 			}
 			check, err := a.checkAutonomyReserveForEngine(ctx, p, s, cfg, engine, id, service, profile)
+			if err == nil && (autonomyRouteObservation{RetryAfterSeconds: nodeServiceRateLimitSeconds(check, time.Now())}).pause(&r) {
+				r.Cursor = previousCursor
+				return r
+			}
 			if state, message := autonomyReserveCheckStop(ctx, check, err); state != "" {
 				return finish(state, message)
 			}
@@ -577,7 +585,7 @@ func (o autonomyRouteObservation) pause(r *autonomy.Runtime) bool {
 	r.Failures, r.FirstFailure, r.LastFailure = 0, time.Time{}, time.Time{}
 	r.NextCheck = r.CheckedAt.Add(time.Duration(max(30, min(o.RetryAfterSeconds, 30*60))) * time.Second)
 	r.State = "unconfirmed"
-	r.Message = "Сервис ограничил частоту проверок (HTTP 429). Сделана пауза для этого сервиса; маршрут сохранён, доступность пока не подтверждена."
+	r.Message = nodeServiceRateLimitMessage
 	return true
 }
 

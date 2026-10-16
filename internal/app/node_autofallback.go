@@ -492,6 +492,9 @@ func (a *App) runNodeAutofallback(ctx context.Context, now time.Time, previous d
 			// the ordinary transaction too, even when replacement is unnecessary.
 			return a.applyNodeAutofallback(ctx, now, intent, entry, false)
 		}
+		if paused, ok := pauseNodeAutofallbackRateLimit(entry, result, checked); ok {
+			return paused
+		}
 		if !nodeAutofallbackDefiniteFailure(result) {
 			entry.status.State, entry.status.Message, entry.status.Failures = "unknown", "Проверка не дала достоверного результата. Повторим без переключения.", 0
 			if result.Stage == "cleanup" {
@@ -559,6 +562,9 @@ func (a *App) runNodeAutofallback(ctx context.Context, now time.Time, previous d
 			entry.cursor = 0
 			return a.applyNodeAutofallback(ctx, now, intent, entry, true)
 		}
+		if paused, ok := pauseNodeAutofallbackRateLimit(entry, result, checked); ok {
+			return paused
+		}
 		if result.Stage == "cleanup" {
 			return nodeAutofallbackFailure(entry, errNodeRecoveryReview, "")
 		}
@@ -570,6 +576,9 @@ func (a *App) runNodeAutofallback(ctx context.Context, now time.Time, previous d
 }
 
 func nodeAutofallbackDefiniteFailure(result dataplane.NodeCheckResult) bool {
+	if nodeServiceRateLimitSeconds(result, time.Now()) > 0 {
+		return false
+	}
 	if result.Available || result.Verdict == evidence.VerdictInconclusive || result.Verdict == evidence.VerdictPass || result.Verdict == "" {
 		return false
 	}
