@@ -1,0 +1,14 @@
+//go:build linux
+
+package main
+
+import (
+	"os"
+
+	"golang.org/x/sys/unix"
+)
+
+func qaObservedOpenFlags() int { return os.O_RDONLY | unix.O_NONBLOCK | unix.O_NOFOLLOW }
+func qaOpenObserved(path string) (*os.File, error) {
+	return os.OpenFile(path, qaObservedOpenFlags(), 0)
+}

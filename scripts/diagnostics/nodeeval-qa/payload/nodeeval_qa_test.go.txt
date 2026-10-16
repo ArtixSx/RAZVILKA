@@ -1,0 +1,266 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+)
+
+type qaOpaqueError struct{}
+
+func (*qaOpaqueError) Error() string { panic("QA must never format raw errors") }
+
+type qaProcessesFixture struct {
+	starts, stops, running int
+	failure                error
+	ctx                    context.Context
+	spec                   dataplane.ProcessSpec
+}
+
+func (p *qaProcessesFixture) Start(context.Context, dataplane.ProcessSpec) error {
+	p.starts++
+	return p.failure
+}
+func (p *qaProcessesFixture) Stop(ctx context.Context, s dataplane.ProcessSpec) error {
+	p.stops++
+	p.ctx = ctx
+	p.spec = s
+	return p.failure
+}
+func (p *qaProcessesFixture) Running(dataplane.ProcessSpec) bool { p.running++; return false }
+
+type qaExactFixture struct {
+	stop               func(context.Context) error
+	checks, recoveries int
+}
+
+func (*qaExactFixture) EngineID() string { return "xray" }
+func (c *qaExactFixture) Check(ctx context.Context, _ dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+	c.checks++
+	_ = c.stop(ctx)
+	return dataplane.NodeCheckResult{Stage: "cleanup", ErrorCode: "node-cleanup-failed"}, nil
+}
+func (c *qaExactFixture) Recover(ctx context.Context) error { c.recoveries++; return c.stop(ctx) }
+
+func TestQAStopForwardsExactlyOnceWithOriginalContextSpecAndOpaqueError(t *testing.T) {
+	w, _ := isolatedFixture(t)
+	var output bytes.Buffer
+	q := newQACapture(w, json.NewEncoder(&output))
+	failure := &qaOpaqueError{}
+	p := &qaProcessesFixture{failure: failure}
+	wrapped := &qaProcessController{base: p, capture: q}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	s := dataplane.ProcessSpec{ID: "node-check-xray", Binary: "/private/xray", Dir: filepath.Join(w.path, "checker"), PIDPath: filepath.Join(w.path, "checker", "engine.pid"), MatchArg: filepath.Join(w.path, "checker", "engine.json"), LogPath: filepath.Join(w.path, "checker", "engine.log"), Args: []string{"run", "-config", "private-password"}}
+	if wrapped.Start(ctx, s) != failure || wrapped.Running(s) {
+		t.Fatal("start/running forwarding changed")
+	}
+	if wrapped.Stop(ctx, s) != failure || p.starts != 1 || p.running != 1 || p.stops != 1 || p.ctx != ctx || p.spec.PIDPath != s.PIDPath {
+		t.Fatal("Stop retried, context/spec changed or error swallowed")
+	}
+	if output.Len() != 0 || !q.flush() {
+		t.Fatal("diagnostic I/O happened before original cleanup finished")
+	}
+	if strings.Contains(output.String(), "private-password") || strings.Contains(output.String(), "/private/xray") || strings.Contains(output.String(), w.path) {
+		t.Fatal("private process material escaped")
+	}
+	var events []qaEvent
+	for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+		var e qaEvent
+		if json.Unmarshal(line, &e) != nil {
+			t.Fatal("invalid diagnostic")
+		}
+		events = append(events, e)
+	}
+	if len(events) != 3 || events[0].When != "begin" || events[1].When != "end" || events[1].ErrorClass != "unclassified" || events[1].Success || events[0].CallIndex != 1 || events[1].CallIndex != 1 || events[2].Kind != "qa-diagnostics" || !events[2].Success {
+		t.Fatal("raw error formatted or completion invented", events)
+	}
+}
+
+func TestQAStopCallIndexSeparatesCheckCleanupFromBoundedRecovery(t *testing.T) {
+	w, _ := isolatedFixture(t)
+	var output bytes.Buffer
+	q := newQACapture(w, json.NewEncoder(&output))
+	p := &qaProcessesFixture{}
+	wrapped := &qaProcessController{base: p, capture: q}
+	s := dataplane.ProcessSpec{PIDPath: filepath.Join(w.path, "checker", "engine.pid")}
+	base := &qaExactFixture{stop: func(ctx context.Context) error { return wrapped.Stop(ctx, s) }}
+	c := &qaExactChecker{base: base, capture: q}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	result, err := c.Check(ctx, dataplane.NodeCheckRequest{})
+	if err != nil || result.Stage != "cleanup" || result.ErrorCode != "node-cleanup-failed" || recoverOnce(ctx, c) != nil || base.checks != 1 || base.recoveries != 1 || p.stops != 2 {
+		t.Fatal("original acknowledgement or call counts changed")
+	}
+	if output.Len() != 0 || !q.flush() {
+		t.Fatal("diagnostics published inside original Check/Recover")
+	}
+	var ends []qaEvent
+	var recovered bool
+	for _, line := range bytes.Split(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+		var e qaEvent
+		if json.Unmarshal(line, &e) != nil {
+			t.Fatal("invalid diagnostic")
+		}
+		if e.Kind == "qa-stop" && e.When == "end" {
+			ends = append(ends, e)
+		}
+		if e.Kind == "qa-recovery" {
+			recovered = e.Success && e.Phase == "recovery" && e.RecoveryCall == 1
+		}
+	}
+	if len(ends) != 2 || ends[0].Phase != "check-cleanup" || ends[0].CheckCall != 1 || ends[0].RecoveryCall != 0 || ends[0].CallIndex != 1 || ends[1].Phase != "recovery" || ends[1].RecoveryCall != 1 || ends[1].CallIndex != 2 || !recovered {
+		t.Fatal("cleanup and recovery evidence confused", ends)
+	}
+}
+
+func TestQAClassificationNeverFormatsUnknownPathsOperationsOrErrors(t *testing.T) {
+	s := dataplane.ProcessSpec{Dir: "/qa", PIDPath: "/qa/engine.pid", MatchArg: "/qa/engine.json", LogPath: "/qa/engine.log"}
+	for _, test := range []struct {
+		err             error
+		class, op, role string
+	}{
+		{nil, "none", "", ""},
+		{context.Canceled, "canceled", "", ""},
+		{context.DeadlineExceeded, "deadline", "", ""},
+		{syscall.ESRCH, "process-exited", "", ""},
+		{&os.PathError{Op: "open", Path: s.PIDPath, Err: syscall.EACCES}, "permission", "open", "pid"},
+		{&os.PathError{Op: "private-secret-operation", Path: "private-secret-endpoint", Err: &qaOpaqueError{}}, "unclassified", "unknown", "unknown"},
+		{&os.SyscallError{Syscall: "private-secret-syscall", Err: syscall.EIO}, "io", "unknown", ""},
+		{errors.Join(&qaOpaqueError{}, context.Canceled), "canceled", "", ""},
+	} {
+		class, op, role := qaErrorClass(test.err, s)
+		if class != test.class || op != test.op || role != test.role {
+			t.Fatal("unbounded error classification", class, op, role)
+		}
+	}
+}
+
+func TestQASnapshotsRespectOriginalWorkspaceAndBoundedPIDData(t *testing.T) {
+	w, _ := isolatedFixture(t)
+	q := newQACapture(w, json.NewEncoder(&bytes.Buffer{}))
+	s := dataplane.ProcessSpec{PIDPath: filepath.Join(w.path, "engine.pid")}
+	if err := os.WriteFile(s.PIDPath, bytes.Repeat([]byte("private-secret"), 20), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if o := q.observe(s, 0); o.PID != 0 || o.ProcState != "not-observed" || o.PIDFile != "unavailable" {
+		t.Fatal("oversized PID became process authority", o)
+	}
+	s.PIDPath = filepath.Join(filepath.Dir(w.path), "outside.pid")
+	if o := q.observe(s, 0); o.PID != 0 || o.PIDFile != "unavailable" {
+		t.Fatal("snapshot escaped workspace", o)
+	}
+	other, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.info = other
+	if o := q.observe(s, 0); o.PIDFile != "workspace-unconfirmed" {
+		t.Fatal("different directory identity used", o)
+	}
+	stat := []byte("123 (private-secret ) name) Z " + strings.Repeat("0 ", 18) + "123")
+	if qaProcState(stat) != "Z" || qaProcState([]byte("private-secret")) != "invalid" {
+		t.Fatal("private comm parsed as diagnostic state")
+	}
+}
+
+type qaFailedWriter struct{}
+
+func (qaFailedWriter) Write([]byte) (int, error) { return 0, errors.New("private-output-failed") }
+
+func TestQAStopDiagnosticWriteFailureCannotRetryOrChangeOriginalReturn(t *testing.T) {
+	w, _ := isolatedFixture(t)
+	failure := &qaOpaqueError{}
+	p := &qaProcessesFixture{failure: failure}
+	wrapped := &qaProcessController{base: p, capture: newQACapture(w, json.NewEncoder(qaFailedWriter{}))}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	s := dataplane.ProcessSpec{PIDPath: filepath.Join(w.path, "engine.pid")}
+	if wrapped.Stop(ctx, s) != failure || p.stops != 1 || p.ctx != ctx {
+		t.Fatal("diagnostic write changed Stop authority")
+	}
+	if wrapped.capture.flush() {
+		t.Fatal("failed output became complete diagnostics")
+	}
+}
+
+type qaBlockedWriter struct{ entered, release chan struct{} }
+
+func (w *qaBlockedWriter) Write(p []byte) (int, error) {
+	select {
+	case w.entered <- struct{}{}:
+	default:
+	}
+	<-w.release
+	return len(p), nil
+}
+
+func TestQAStopBlockedWriterCannotDelayOriginalStopOrKeepCaptureLock(t *testing.T) {
+	w, _ := isolatedFixture(t)
+	writer := &qaBlockedWriter{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	q := newQACapture(w, json.NewEncoder(writer))
+	p := &qaProcessesFixture{}
+	wrapped := &qaProcessController{base: p, capture: q}
+	s := dataplane.ProcessSpec{PIDPath: filepath.Join(w.path, "engine.pid")}
+	stopped := make(chan error, 1)
+	go func() { stopped <- wrapped.Stop(context.Background(), s) }()
+	select {
+	case err := <-stopped:
+		if err != nil || p.stops != 1 {
+			t.Fatal("real Stop changed")
+		}
+	case <-time.After(time.Second):
+		close(writer.release)
+		t.Fatal("writer delayed actual Stop")
+	}
+	done := make(chan bool, 1)
+	go func() { done <- q.flush() }()
+	select {
+	case <-writer.entered:
+	case <-time.After(time.Second):
+		close(writer.release)
+		t.Fatal("fixture writer never blocked")
+	}
+	// Even a mistaken late cleanup call must not wait on the diagnostic
+	// writer or share a lock with it. No publisher goroutine exists in runtime;
+	// only this test deliberately flushes concurrently.
+	go func() { stopped <- wrapped.Stop(context.Background(), s) }()
+	select {
+	case err := <-stopped:
+		if err != nil || p.stops != 2 {
+			t.Fatal("late Stop changed")
+		}
+	case <-time.After(time.Second):
+		close(writer.release)
+		t.Fatal("flush held cleanup capture lock")
+	}
+	close(writer.release)
+	select {
+	case complete := <-done:
+		if complete {
+			t.Fatal("late dropped events became complete diagnostics")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("test publisher did not join")
+	}
+}
+
+func TestQAStopCaptureIsBoundedAndOverflowCannotClaimCompleteDiagnostics(t *testing.T) {
+	var output bytes.Buffer
+	q := newQACapture(nil, json.NewEncoder(&output))
+	for range 2048 {
+		q.emit(qaEvent{Kind: "qa-stop"})
+	}
+	if len(q.events) != 1024 || q.dropped != 1024 || output.Len() != 0 || q.flush() {
+		t.Fatal("capture is unbounded or overflow claimed complete")
+	}
+}

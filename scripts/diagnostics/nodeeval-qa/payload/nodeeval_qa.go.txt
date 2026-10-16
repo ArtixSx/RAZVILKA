@@ -1,0 +1,378 @@
+// Virtual QA payload only; never compiled into the ordinary production CLI.
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dataplane"
+)
+
+type qaObservation struct {
+	PIDFile    string `json:"pid_file"`
+	PID        int    `json:"pid,omitempty"`
+	ProcState  string `json:"proc_state"`
+	ArgsMatch  bool   `json:"args_match"`
+	ExeMatch   bool   `json:"exe_match"`
+	ExeDeleted bool   `json:"exe_deleted"`
+}
+
+// Every string below comes from a local allowlist. No raw errors, process
+// arguments, executable links, configs, receipts or logs enter these DTOs.
+type qaEvent struct {
+	Kind         string         `json:"kind"`
+	When         string         `json:"when,omitempty"`
+	Phase        string         `json:"phase"`
+	CallIndex    int            `json:"call_index,omitempty"`
+	CheckCall    int            `json:"check_call,omitempty"`
+	RecoveryCall int            `json:"recovery_call,omitempty"`
+	Deadline     string         `json:"deadline,omitempty"`
+	ElapsedMS    int64          `json:"elapsed_ms,omitempty"`
+	ErrorClass   string         `json:"error_class,omitempty"`
+	Operation    string         `json:"operation,omitempty"`
+	PathRole     string         `json:"path_role,omitempty"`
+	Success      bool           `json:"success"`
+	Observation  *qaObservation `json:"observation,omitempty"`
+}
+
+type qaCapture struct {
+	mu                        sync.Mutex
+	w                         *workspace
+	out                       *json.Encoder
+	phase                     string
+	stops, checks, recoveries int
+	events                    []qaEvent
+	dropped                   int
+	closed                    bool
+}
+
+func newQACapture(w *workspace, out *json.Encoder) *qaCapture {
+	return &qaCapture{w: w, out: out, phase: "idle", events: make([]qaEvent, 0, 1024)}
+}
+
+func (q *qaCapture) phaseEnter(phase string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.phase = phase
+	if phase == "check-cleanup" {
+		q.checks++
+	} else if phase == "recovery" {
+		q.recoveries++
+	}
+}
+
+func (q *qaCapture) emit(e qaEvent) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	e.Phase, e.CheckCall, e.RecoveryCall = q.phase, q.checks, q.recoveries
+	// Stop and Recover must perform no diagnostic I/O: even a blocking
+	// stdout reader cannot delay the real cleanup. This invocation is bounded
+	// to128 checks; overflow is dropped and prevents QA completion evidence.
+	if q.closed || len(q.events) == cap(q.events) {
+		q.dropped++
+		return
+	}
+	q.events = append(q.events, e)
+}
+
+// Called once after the original evaluate returned, including its actual
+// bounded Recover. No goroutine or writer ever retains a cleanup owner. A
+// missing/false qa-diagnostics row makes diagnostics incomplete, independently
+// of the unchanged production CLI summary/return. Flush holds no capture lock.
+func (q *qaCapture) flush() bool {
+	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		return false
+	}
+	q.closed = true
+	events := q.events
+	q.events = nil
+	q.mu.Unlock()
+	for _, e := range events {
+		if q.out.Encode(e) != nil {
+			return false
+		}
+	}
+	q.mu.Lock()
+	complete := q.dropped == 0
+	q.mu.Unlock()
+	if q.out.Encode(qaEvent{Kind: "qa-diagnostics", Phase: "complete", Success: complete}) != nil {
+		return false
+	}
+	return complete
+}
+
+func (q *qaCapture) phaseLeave() {
+	q.mu.Lock()
+	q.phase = "idle"
+	q.mu.Unlock()
+}
+
+type qaExactChecker struct {
+	base    exactChecker
+	capture *qaCapture
+}
+
+func (c *qaExactChecker) EngineID() string { return c.base.EngineID() }
+func (c *qaExactChecker) Check(ctx context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+	c.capture.phaseEnter("check-cleanup")
+	defer c.capture.phaseLeave()
+	return c.base.Check(ctx, r)
+}
+func (c *qaExactChecker) Recover(ctx context.Context) error {
+	c.capture.phaseEnter("recovery")
+	defer c.capture.phaseLeave()
+	err := c.base.Recover(ctx)
+	class, op, role := qaErrorClass(err, dataplane.ProcessSpec{})
+	c.capture.emit(qaEvent{Kind: "qa-recovery", ErrorClass: class, Operation: op, PathRole: role, Success: err == nil})
+	return err
+}
+
+type qaProcessController struct {
+	base    dataplane.ProcessController
+	capture *qaCapture
+}
+
+func (p *qaProcessController) Start(ctx context.Context, s dataplane.ProcessSpec) error {
+	return p.base.Start(ctx, s)
+}
+func (p *qaProcessController) Running(s dataplane.ProcessSpec) bool { return p.base.Running(s) }
+func (p *qaProcessController) Stop(ctx context.Context, s dataplane.ProcessSpec) error {
+	p.capture.mu.Lock()
+	p.capture.stops++
+	call := p.capture.stops
+	p.capture.mu.Unlock()
+	before := p.capture.observe(s, 0)
+	p.capture.emit(qaEvent{Kind: "qa-stop", When: "begin", CallIndex: call, Deadline: qaDeadline(ctx), Observation: &before})
+	started := time.Now()
+	err := p.base.Stop(ctx, s) // Exactly one real Stop with the original context/spec.
+	elapsed := time.Since(started)
+	class, op, role := qaErrorClass(err, s)
+	after := p.capture.observe(s, before.PID)
+	p.capture.emit(qaEvent{Kind: "qa-stop", When: "end", CallIndex: call, Deadline: qaDeadline(ctx), ElapsedMS: min(elapsed.Milliseconds(), 60000), ErrorClass: class, Operation: op, PathRole: role, Success: err == nil, Observation: &after})
+	return err // Never turn unknown ownership/cleanup into success.
+}
+
+func qaDeadline(ctx context.Context) string {
+	if ctx == nil {
+		return "missing-context"
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return "canceled"
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "expired"
+	}
+	end, ok := ctx.Deadline()
+	if !ok {
+		return "unbounded"
+	}
+	d := time.Until(end)
+	switch {
+	case d <= 0:
+		return "expired"
+	case d <= time.Second:
+		return "under-1s"
+	case d <= 4*time.Second:
+		return "1-4s"
+	case d <= 8*time.Second:
+		return "4-8s"
+	default:
+		return "over-8s"
+	}
+}
+
+func qaErrorClass(err error, s dataplane.ProcessSpec) (class, op, role string) {
+	if err == nil {
+		return "none", "", ""
+	}
+	class = "unclassified"
+	switch {
+	case errors.Is(err, context.Canceled):
+		class = "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		class = "deadline"
+	case errors.Is(err, os.ErrProcessDone), errors.Is(err, syscall.ESRCH):
+		class = "process-exited"
+	case errors.Is(err, os.ErrNotExist):
+		class = "not-exist"
+	case errors.Is(err, os.ErrPermission), errors.Is(err, syscall.EPERM), errors.Is(err, syscall.EACCES):
+		class = "permission"
+	case errors.Is(err, os.ErrClosed):
+		class = "closed"
+	default:
+		var errno syscall.Errno
+		if errors.As(err, &errno) {
+			switch errno {
+			case syscall.EBUSY:
+				class = "busy"
+			case syscall.EIO:
+				class = "io"
+			case syscall.ENOSPC:
+				class = "no-space"
+			case syscall.EROFS:
+				class = "read-only"
+			case syscall.ENOTDIR:
+				class = "not-directory"
+			case syscall.ENOTEMPTY:
+				class = "not-empty"
+			case syscall.EINVAL:
+				class = "invalid"
+			case syscall.EBADF:
+				class = "bad-descriptor"
+			case syscall.ETIMEDOUT:
+				class = "timeout"
+			default:
+				class = "other-errno"
+			}
+		}
+	}
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		op = qaOperation(pe.Op)
+		role = "unknown"
+		if pe.Path != "" {
+			switch pe.Path {
+			case s.Dir:
+				role = "session-directory"
+			case s.PIDPath:
+				role = "pid"
+			case s.PIDPath + ".identity.json":
+				if s.PIDPath != "" {
+					role = "receipt"
+				}
+			case s.MatchArg:
+				role = "config"
+			case s.LogPath:
+				role = "log"
+			}
+		}
+	} else {
+		var se *os.SyscallError
+		if errors.As(err, &se) {
+			op = qaOperation(se.Syscall)
+		}
+	}
+	return
+}
+
+func qaOperation(op string) string {
+	switch op {
+	case "open", "read", "stat", "lstat", "remove", "unlink", "unlinkat", "chmod", "rename", "fork/exec", "kill", "signal", "wait", "waitid", "wait4":
+		return op
+	default:
+		return "unknown"
+	}
+}
+
+func qaReadLimited(path string, n int64) ([]byte, error) {
+	f, err := qaOpenObserved(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, errors.New("bounded QA observation unavailable")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, n+1))
+	if err != nil || int64(len(data)) > n {
+		return nil, errors.New("bounded QA observation unavailable")
+	}
+	return data, nil
+}
+
+func (q *qaCapture) observe(s dataplane.ProcessSpec, knownPID int) qaObservation {
+	o := qaObservation{PIDFile: "unavailable", ProcState: "not-observed"}
+	if q.w == nil || !samePrivateDirectory(q.w.path, q.w.info) {
+		o.PIDFile = "workspace-unconfirmed"
+		return o
+	}
+	rel, err := filepath.Rel(q.w.path, s.PIDPath)
+	if err != nil || !filepath.IsLocal(rel) || rel == "." {
+		return o
+	}
+	// Nonblocking open is required before fstat: a replaced FIFO must never
+	// delay the real Stop while this disposable diagnostic observes its PID.
+	f, err := q.w.root.OpenFile(rel, qaObservedOpenFlags(), 0)
+	var data []byte
+	if err == nil {
+		info, statErr := f.Stat()
+		if statErr != nil || !info.Mode().IsRegular() {
+			err = errors.New("bounded QA observation unavailable")
+		} else {
+			data, err = io.ReadAll(io.LimitReader(f, 65))
+			if len(data) > 64 {
+				err = errors.New("bounded QA observation unavailable")
+			}
+		}
+		_ = f.Close()
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		o.PIDFile = "absent"
+	} else if err == nil {
+		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+		if parseErr != nil || pid <= 1 {
+			o.PIDFile = "invalid"
+		} else {
+			o.PIDFile = "valid"
+			o.PID = pid
+		}
+	}
+	clear(data)
+	if o.PID == 0 {
+		o.PID = knownPID
+	}
+	if o.PID <= 1 {
+		return o
+	}
+	proc := filepath.Join("/proc", strconv.Itoa(o.PID))
+	stat, err := qaReadLimited(filepath.Join(proc, "stat"), 4096)
+	if errors.Is(err, os.ErrNotExist) {
+		o.ProcState = "absent"
+	} else if err != nil {
+		o.ProcState = "unavailable"
+	} else {
+		o.ProcState = qaProcState(stat)
+	}
+	clear(stat)
+	args, err := qaReadLimited(filepath.Join(proc, "cmdline"), 16384)
+	if err == nil {
+		o.ArgsMatch = bytes.Equal(args, []byte(strings.Join(append([]string{s.Binary}, s.Args...), "\x00")+"\x00"))
+	}
+	clear(args)
+	exe, err := os.Readlink(filepath.Join(proc, "exe"))
+	if err == nil {
+		o.ExeMatch = exe == s.Binary
+		o.ExeDeleted = strings.HasSuffix(exe, " (deleted)")
+	}
+	return o
+}
+
+func qaProcState(stat []byte) string {
+	end := bytes.LastIndexByte(stat, ')')
+	if end < 0 {
+		return "invalid"
+	}
+	fields := bytes.Fields(stat[end+1:])
+	if len(fields) < 20 || len(fields[0]) != 1 {
+		return "invalid"
+	}
+	switch string(fields[0]) {
+	case "R", "S", "D", "Z", "T", "t", "X", "x", "K", "W", "P", "I":
+		return string(fields[0])
+	default:
+		return "unknown"
+	}
+}

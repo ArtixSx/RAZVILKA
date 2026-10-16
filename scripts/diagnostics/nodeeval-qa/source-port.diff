@@ -1,0 +1,96 @@
+diff --git a/cmd/nodeeval/main.go b/cmd/nodeeval/main.go
+index 7f19138b..aa2b407a 100644
+--- a/cmd/nodeeval/main.go
++++ b/cmd/nodeeval/main.go
+@@ -173,0 +174,2 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
++		} else if err != nil && result.ErrorCode == "" {
++			entry.Code = safeCheckerError(err)
+diff --git a/internal/dataplane/nodecheck.go b/internal/dataplane/nodecheck.go
+index a31d8f79..ec63b2fc 100644
+--- a/internal/dataplane/nodecheck.go
++++ b/internal/dataplane/nodecheck.go
+@@ -210,0 +211,18 @@ func (c *ExactNodeChecker) finishResult(result *NodeCheckResult) {
++// A resource observation can stop because its caller was canceled, even when
++// no resource guard is installed. Preserve that cause; an actual guard refusal
++// remains a resource denial even if it wraps its own deadline error.
++func refuseNodeResourceObservationResult(result *NodeCheckResult, err error) {
++	if errors.Is(err, ErrNodeResourceDenied) || !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
++		RefuseNodeResourceResult(result)
++		return
++	}
++	result.Available, result.Verdict, result.EgressIP = false, evidence.VerdictInconclusive, ""
++	result.Evidence.Verdict, result.Evidence.Outcome, result.Evidence.EgressIP = evidence.VerdictInconclusive, evidence.OutcomeUnknown, ""
++	if errors.Is(err, context.DeadlineExceeded) {
++		result.Stage, result.ErrorCode, result.Message = "deadline", "node-check-deadline", "Истекло общее время проверки. Изменение WAN этим не доказано."
++	} else {
++		result.Stage, result.ErrorCode, result.Message = "canceled", "node-check-canceled", "Проверка отменена; положительный результат не используется."
++	}
++	result.Evidence.ErrorCode = result.ErrorCode
++}
++
+@@ -220,0 +239,3 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
++	if err := checkNodeResource(ctx, endpoint.Host, netip.Addr{}); err != nil {
++		return endpoint, false
++	}
+@@ -228,0 +250,5 @@ func (c *ExactNodeChecker) transportStages(ctx context.Context, request NodeChec
++	for _, address := range addresses {
++		if err := checkNodeResource(ctx, endpoint.Host, address); err != nil {
++			return endpoint, false
++		}
++	}
+@@ -266,0 +293,4 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
++	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
++		refuseNodeResourceObservationResult(&result, err)
++		return result, false, err
++	}
+@@ -267,0 +298,4 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
++	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
++		refuseNodeResourceObservationResult(&result, err)
++		return result, false, err
++	}
+@@ -300,0 +335,12 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++	defer func() {
++		if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
++			if result.Stage != "cleanup" {
++				refuseNodeResourceObservationResult(&result, err)
++			}
++			finish()
++			resultErr = errors.Join(resultErr, err)
++		}
++	}()
++	if err := checkNodeResource(ctx, "www.cloudflare.com", netip.Addr{}); err != nil {
++		return result, err
++	}
+@@ -332,0 +379,3 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
++		return result, err
++	}
+@@ -357,0 +407,3 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
++		return result, err
++	}
+@@ -392,0 +445,3 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++	if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
++		return result, err
++	}
+@@ -448,0 +504,3 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++	if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, netip.Addr{}); err != nil {
++		return result, err
++	}
+@@ -478,0 +537,3 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
++			if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, address); err != nil {
++				return result, err
++			}
+@@ -919,0 +981,12 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
++	if err = checkNodeResourceURL(ctx, probe.URL, pinned); err != nil {
++		return evidence.ProbeEvidence{}, err
++	}
++	if guard, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard); guard != nil && !pinned.IsValid() {
++		// An App candidate cannot delegate opaque service DNS to SOCKS: its
++		// actual destination must pass the same negative boundary first.
++		addresses, resolveErr := resolveNodeServiceIPv4(ctx, probe.URL, c.resolve)
++		if resolveErr != nil {
++			return evidence.ProbeEvidence{}, resolveErr
++		}
++		pinned = addresses[0]
++	}
