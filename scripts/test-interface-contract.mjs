@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 const read=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 const root='cmd/razvilka/web/',html=read(root+'index.html');
 const version=read('VERSION').trim();
@@ -32,4 +33,23 @@ test('native inspector accessible name',()=>assert.match(html,/<dialog[^>]*aria-
 test('retry fenced across authentication epochs',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration\)/));
 test('mutation timeout',()=>assert.match(read(root+'interface.js'),/setTimeout\(\(\)=>controller\.abort\(\),20000\)/));
 test('side drawer always clears on session end',()=>assert.match(read(root+'interface.js'),/interfaceRequests\.clear\(\);interfaceCloseInspector\(\);consoleSnapshot=null/));
+test('visible explanations omit obsolete implementation labels',()=>{
+ assert.doesNotMatch(html,/ДИАГНОСТИКА · DC1|В A1 автоматический цикл|backend R4|в облако в DC1/);
+ assert.doesNotMatch(read(root+'console-autonomy.js'),/пресеты будут сохранены backend|backend A1|работают с rc\.2/);
+ assert.match(html,/Правильный адрес ещё не доказывает работу сайта/);
+ assert.match(html,/Авторизация, звонки, IPv6 и медиапотоки не выдаются за подтверждённые/);
+});
+test('palette uses navigation labels and retains old query aliases with exact destinations',()=>{
+ const input={value:''},results={innerHTML:''};
+ const context=vm.createContext({state:{services:[]},consoleEngineMeta:{},consolePaletteItems:[],consolePaletteIndex:0,
+  viewMeta:{connections:['Соединения','Сетевой трафик'],sources:['Источники','Списки доменов'],providers:['Каталог ссылок','Подписки на подключения']},
+  document:{getElementById:id=>ids.includes(id)?{}:null},$:id=>id==='#consoleSearchInput'?input:results,ci:()=>'',esc:String});
+ vm.runInContext(read(root+'interface-model.js'),context);
+ const fn=read(root+'console.js').match(/function consolePalette\([^]*?\n}\n/);assert.ok(fn);
+ vm.runInContext(fn[0],context);
+ for(const [query,view,label] of [['Соединения','connections','Трафик'],['Трафик','connections','Трафик'],['Источники','sources','Списки сайтов'],['Источники','providers','Источники'],['Каталог ссылок','providers','Источники']]){
+  input.value=query;context.consolePalette();
+  const result=context.consolePaletteItems.find(item=>item.view===view);assert.ok(result,query+' '+view);assert.equal(result.label,label);
+ }
+});
 console.log(JSON.stringify({suite:'interface-contract',passed:count}));

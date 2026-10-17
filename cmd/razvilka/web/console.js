@@ -61,7 +61,7 @@ function consoleEngineUpdateState(info){
 }
 function consoleEngineVersionLabel(info){
  const update=consoleEngineUpdateState(info);
- return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:info.version;
+ return info.installedVersion?`${info.installedVersion}${update.kind==='update'?` → ${info.availableVersion}`:''}`:!info.installed&&info.version===info.label?'':info.version;
 }
 function consoleNavigate(name,engine){
  if(engine){void openEngineConfiguration(engine).then(opened=>{if(!opened)return;renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
@@ -92,8 +92,9 @@ function consoleRouteHash(){
 }
 function renderConsoleEngine(){
  const id=state.selectedEngine,meta=consoleEngineMeta[id]||consoleEngineMeta.nfqws2,info=consoleEngineState(id);
+ const version=!info.installed&&info.version===info.label?'':info.version;
  viewMeta.engineconfig=[meta.name,meta.subtitle];
- $('#consoleEngineBanner').innerHTML=`<span class="engine-emblem ${meta.tone}">${ci(meta.icon)}</span><div class="engine-banner-copy"><div class="eyebrow">НАСТРОЙКА КОМПОНЕНТА</div><h2>${esc(meta.name)}</h2><p>${esc(meta.description)}</p><div class="engine-banner-tags"><span class="pill ${info.tone}">${esc(info.label)}</span><span class="mono">${esc(info.version)}</span></div></div><div class="engine-banner-actions"><button type="button" class="secondary" data-console-engine-action="${esc(id)}">${ci(meta.icon)}${esc(meta.action)}</button><button type="button" class="text-button" data-console-navigate="engines">Установка и обновление ${ci('chevron')}</button></div>`;
+ $('#consoleEngineBanner').innerHTML=`<span class="engine-emblem ${meta.tone}">${ci(meta.icon)}</span><div class="engine-banner-copy"><div class="eyebrow">НАСТРОЙКА КОМПОНЕНТА</div><h2>${esc(meta.name)}</h2><p>${esc(meta.description)}</p><div class="engine-banner-tags"><span class="pill ${info.tone}">${esc(info.label)}</span>${version?`<span class="mono">${esc(version)}</span>`:''}</div></div><div class="engine-banner-actions"><button type="button" class="secondary" data-console-engine-action="${esc(id)}">${ci(meta.icon)}${esc(meta.action)}</button><button type="button" class="text-button" data-console-navigate="engines">Установка и обновление ${ci('chevron')}</button></div>`;
  if(state.currentView==='engineconfig'){consoleText('pageTitle',meta.name);consoleText('pageSubtitle',meta.subtitle);$$('.nav[data-console-engine]').forEach(e=>e.classList.toggle('active',e.dataset.consoleEngine===id));}
 }
 function renderConsole(){
@@ -129,10 +130,10 @@ function consoleFilterAudit(){const q=($('#consoleAuditSearch')?.value||'').toLo
 function consoleDownload(name,data,type='application/json'){const url=URL.createObjectURL(new Blob([data],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 function consolePalette(){
  const q=$('#consoleSearchInput').value.toLowerCase().trim();
- const pages=Object.entries(viewMeta).filter(([key])=>document.getElementById('view-'+key)&&key!=='engineconfig').map(([id,m])=>({label:m[0],detail:m[1],icon:'grid',view:id}));
+ const pages=Object.entries(viewMeta).filter(([key])=>document.getElementById('view-'+key)&&key!=='engineconfig').map(([id,m])=>({label:globalThis.RazvilkaInterfaceModel?.navigation(id)?.pageTitle||m[0],aliases:m[0],detail:m[1],icon:'grid',view:id}));
  const engines=Object.entries(consoleEngineMeta).map(([id,m])=>({label:m.name,detail:m.subtitle,engine:id,icon:m.icon}));
  const services=state.services.map(s=>({label:s.name,detail:'Сервис · '+(s.domains||[]).slice(0,2).join(', '),service:s.name,view:'services',icon:'link'}));
- consolePaletteItems=[...pages,...engines,...services].filter(x=>!q||(x.label+' '+x.detail).toLowerCase().includes(q)).slice(0,18);consolePaletteIndex=0;
+ consolePaletteItems=[...pages,...engines,...services].filter(x=>!q||(x.label+' '+x.detail+' '+(x.aliases||'')).toLowerCase().includes(q)).slice(0,18);consolePaletteIndex=0;
  $('#consoleSearchResults').innerHTML=consolePaletteItems.length?consolePaletteItems.map((x,i)=>`<button type="button" data-console-result="${i}" class="search-result ${i===0?'selected':''}">${ci(x.icon)}<span><b>${esc(x.label)}</b><small>${esc(x.detail)}</small></span>${ci('chevron')}</button>`).join(''):'<div class="empty-inline">Ничего не найдено. Попробуйте название сервиса или раздела.</div>';
 }
 function consoleChooseResult(index){const x=consolePaletteItems[index];if(!x)return;$('#consoleSearchDialog').close();consoleNavigate(x.view||'engineconfig',x.engine);if(x.service){if(typeof interfaceState!=='undefined'){interfaceState.query=x.service;interfaceState.filter='all';interfaceState.category='';$('#ui3ServiceSearch').value=x.service;}$('#serviceSearch').value=x.service;window.RazvilkaConsoleFilters.service='all';renderServices();}}
@@ -168,7 +169,7 @@ document.addEventListener('click',async e=>{
  }catch(error){showNotice('error',error.message);}
 });
 window.addEventListener('razvilka:autonomy-state',e=>{consoleAutonomyAvailability(true); consoleSnapshot=e.detail;consoleAutonomyError='';renderConsole();});
-window.addEventListener('razvilka:autonomy-error',e=>{if(e.detail.retained&&consoleSnapshot){consoleAutonomyError='';renderConsole();return;}consoleAutonomyAvailability(false,e.detail.status===404?'Этот backend не содержит A1. Подключения и ручные настройки доступны; автономный мастер требует сборки A1.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleSnapshot=null;renderConsole();});
+window.addEventListener('razvilka:autonomy-error',e=>{if(e.detail.retained&&consoleSnapshot){consoleAutonomyError='';renderConsole();return;}consoleAutonomyAvailability(false,e.detail.status===404?'Автопилот недоступен в установленной версии. Обновите приложение; подключения и ручные настройки остаются доступны.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleSnapshot=null;renderConsole();});
 window.addEventListener('hashchange',consoleRouteHash);
 renderConsole();
 

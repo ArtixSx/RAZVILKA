@@ -252,4 +252,20 @@ await apiContext.api('/api/v1/components?refresh=true',{readTimeoutMs:9999999});
 await apiContext.api('/api/v1/components/usque/remove',{method:'POST',readTimeoutMs:110000});
 assert.deepEqual(timers,[110000,20000,110000], 'only explicit bounded reads may wait longer; mutations must not gain read timeout');
 assert.ok(transport.every(call=>!Object.hasOwn(call.options,'readTimeoutMs')),'internal timeout option leaked into fetch');
+// A confirmed absence is one readiness fact, not a second version badge.
+const banner = { innerHTML: '' };
+Object.assign(model, { $: () => banner, $$: () => [], viewMeta: {}, consoleText() {} });
+vm.runInContext(slice(consoleCode, 'function renderConsoleEngine(', 'function renderConsole(){'), model);
+Object.assign(state, { selectedEngine:'usque', currentView:'engineconfig', engineConfigs:[], services:[], engines:[], inventoryObservation:undefined,
+  components:[{...base, installed:false, installed_version:'', available_version:'', update_available:false}] });
+model.renderConsoleEngine();
+assert.equal((banner.innerHTML.match(/Не установлен/g)||[]).length,1);
+assert.equal((card().match(/Не установлен/g)||[]).length,1);
+state.components[0] = {...state.components[0], available_version:'1.0.3'};
+model.renderConsoleEngine();
+assert.match(banner.innerHTML,/Доступна 1\.0\.3/);
+state.components[0] = {...state.components[0], installed:true, available_version:''};
+model.renderConsoleEngine();
+assert.match(banner.innerHTML,/Версия не определена/);
+assert.match(card(),/Версия не определена/);
 console.log('PASS component cards: truthful runtime unknown/stopped states, versions/inventory/update errors, protected actions, reviewed removal, single-flight refresh and auth fences');
