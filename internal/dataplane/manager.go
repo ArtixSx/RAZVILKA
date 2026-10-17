@@ -844,6 +844,21 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return recovery, errors.Join(err, cleanupErr, executionJournalError(m.writeRecoveryLocked(recovery)))
 	}
+	// Explicit post-reboot retirement preserves the old committed plan as
+	// history. Never replay that plan (including network-independent NFQ) after
+	// its metadata has been archived. Text in Error/Note is not recognition.
+	if retired, planID, proofErr := m.completedBootRetirement(); retired || proofErr != nil {
+		recovery.PlanID = planID
+		recovery.State = "fresh-plan-required"
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "journal", State: "retired-after-boot", Detail: "The previous runtime was retired offline. Review and apply a fresh plan; historical service access is not verified."})
+		if proofErr != nil {
+			recovery.State, recovery.Guarded = "journal-recovery-required", true
+			recovery.Steps[len(recovery.Steps)-1].State = "failed"
+			recovery.Steps[len(recovery.Steps)-1].Detail = "Post-reboot retirement proof is missing or changed; preserve the original history."
+		}
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return recovery, errors.Join(executionJournalError(proofErr), executionJournalError(m.writeRecoveryLocked(recovery)))
+	}
 	plan, exists, err := m.committedLocked()
 	if err != nil {
 		recovery.State, recovery.Guarded = "journal-recovery-required", true
@@ -1016,6 +1031,9 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	}
 	defer m.endOperation()
 	m.revokeRetainedSingReview()
+	if retired, _, proofErr := m.completedBootRetirement(); retired || proofErr != nil {
+		return map[string]bool{}, executionJournalError(proofErr)
+	}
 	plan, exists, err := m.committedLocked()
 	if err != nil {
 		return nil, err
