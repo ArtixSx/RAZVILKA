@@ -67,6 +67,16 @@ func (a *WARPWireGuardAdapter) readWGEndpointRoutes(ctx context.Context, origina
 		// confirms emptiness. Never turn an arbitrary error into an empty FIB.
 		absent := fmt.Sprintf("Error: ipv%d: FIB table does not exist.", family)
 		message := strings.TrimSpace(string(data))
+		if slices.Contains(args, "-j") {
+			// iproute2 may write an empty JSON array before or after its
+			// missing-table diagnostic. This permits only independent text
+			// confirmation, never an absence grant from the JSON error alone.
+			if first, rest, ok := strings.Cut(message, "\n"); ok && strings.TrimSpace(first) == "[]" {
+				message = strings.TrimSpace(rest)
+			} else if last := strings.LastIndex(message, "\n"); last >= 0 && strings.TrimSpace(message[last+1:]) == "[]" {
+				message = strings.TrimSpace(message[:last])
+			}
+		}
 		if !get && (message == absent || message == absent+"\nDump terminated") {
 			if confirmingAbsent && !slices.Contains(args, "-j") {
 				return []wgEndpointRoute{}, nil

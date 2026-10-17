@@ -271,6 +271,61 @@ func TestWGEndpointIP44EmptyTableAndConfirmedFIBAbsence(t *testing.T) {
 	}
 }
 
+func TestWGEndpointMissingTableJSONRequiresIndependentTextConfirmation(t *testing.T) {
+	for _, tc := range []struct {
+		name, first, second     string
+		family6, plain, allowed bool
+		calls                   int
+	}{
+		{"ipv4", "[]\nError: ipv4: FIB table does not exist.\nDump terminated\n", "Error: ipv4: FIB table does not exist.\nDump terminated", false, false, true, 2},
+		{"ipv4-suffix", "Error: ipv4: FIB table does not exist.\nDump terminated\n[]\n", "Error: ipv4: FIB table does not exist.\nDump terminated", false, false, true, 2},
+		{"ipv6-suffix", "Error: ipv6: FIB table does not exist.\nDump terminated\n[]\n", "", true, false, true, 2},
+		{"ipv6", "[]\nError: ipv6: FIB table does not exist.\nDump terminated", "", true, false, true, 2},
+		{"whitespace", " \t[]\r\nError: ipv4: FIB table does not exist.\r\n", "", false, false, true, 2},
+		{"permission", "[]\nRTNETLINK answers: Operation not permitted", "", false, false, false, 1},
+		{"wrong-family", "[]\nError: ipv6: FIB table does not exist.", "", false, false, false, 1},
+		{"nonempty-json", "[{}]\nError: ipv4: FIB table does not exist.", "", false, false, false, 1},
+		{"extra-json", "[]\n[]\nError: ipv4: FIB table does not exist.", "", false, false, false, 1},
+		{"both-edges", "[]\nError: ipv4: FIB table does not exist.\n[]", "", false, false, false, 1},
+		{"nonempty-suffix", "Error: ipv4: FIB table does not exist.\n[{}]", "", false, false, false, 1},
+		{"extra-diagnostic", "[]\nError: ipv4: FIB table does not exist.\npermission denied", "", false, false, false, 1},
+		{"nul", "[]\x00\nError: ipv4: FIB table does not exist.", "", false, false, false, 1},
+		{"plain-json-prefix", "[]\nError: ipv4: FIB table does not exist.", "", false, true, false, 1},
+		{"confirmation-fails", "[]\nError: ipv4: FIB table does not exist.", "permission denied", false, false, false, 2},
+		{"confirmation-json-refused", "[]\nError: ipv4: FIB table does not exist.", "[]\nError: ipv4: FIB table does not exist.", false, false, false, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _, _, _ := wgEndpointFixture(t)
+			calls := 0
+			a.Runner = networkCleanupRunner(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+				calls++
+				if calls == 1 {
+					return []byte(tc.first), errors.New("exit status 2")
+				}
+				if strings.Contains(strings.Join(args, " "), "-j") {
+					t.Fatal("confirmation retained JSON instead of fresh text observation")
+				}
+				if tc.second == "" {
+					return nil, nil
+				}
+				return []byte(tc.second), errors.New("exit status 2")
+			})
+			args := []string{"-N"}
+			if tc.family6 {
+				args = append(args, "-6")
+			}
+			if !tc.plain {
+				args = append(args, "-j")
+			}
+			args = append(args, "route", "show", "table", "213")
+			rows, err := a.readWGEndpointRoutes(context.Background(), args...)
+			if (err == nil) != tc.allowed || tc.allowed && len(rows) != 0 || calls != tc.calls {
+				t.Fatalf("allowed=%t rows=%d err=%v calls=%d want=%d", tc.allowed, len(rows), err, calls, tc.calls)
+			}
+		})
+	}
+}
+
 func TestWGEndpointIP44WANRefusalRetainsOriginalPin(t *testing.T) {
 	for _, text := range []string{
 		"1.1.1.2 via 192.0.2.1 dev eth3 src 192.0.2.2\n    cache",
