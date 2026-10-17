@@ -20,29 +20,51 @@ import (
 )
 
 func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context, c nfqws2ActiveProcessCommand, prefix []string, admission nfqws2ActiveProcessAdmission) (prepared *NFQWSPreparedHandle, err error) {
-	defer nfqws2ActivePublicError("StartPrepared", &err)
-	if a == nil || panel == nil || panel.Err() != nil || !admission.valid(c) {
+	stage := "StartPrepared.admission"
+	defer func() { nfqws2ActivePublicError(stage, &err) }()
+	unused := false
+	defer func() {
+		if unused && err != nil && prepared == nil && admission.execution != nil {
+			e := admission.execution
+			e.mu.Lock()
+			if e.self == e && e.material != nil && e.material.adapter == a && e.launchInvoked && e.prepared == nil && nfqws2ActiveCommandDigest(e.material.command) == nfqws2ActiveCommandDigest(c) {
+				e.noLaunch = &nfqws2ActiveNoLaunch{execution: e, command: nfqws2ActiveCommandDigest(c)}
+			}
+			e.mu.Unlock()
+		}
+	}()
+	if a == nil || !admission.valid(c) {
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	unused = true
+	stage = "StartPrepared.panel-lifetime"
+	if panel == nil || panel.Err() != nil {
+		return nil, ErrNFQWSManagedProcessUnknown
+	}
+	stage = "StartPrepared.activation-context"
 	activation, cancel, err := nfqws2ActiveActivationContext(request, c)
 	if err != nil {
 		return nil, err
 	}
+	stage = "StartPrepared.network-identity"
 	identity, identityErr := admission.Provider.Observe(activation)
 	if identityErr != nil || identity != c.NetworkIdentity {
 		cancel()
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	stage = "StartPrepared.adapter-owner"
 	owner, err := a.owner()
 	if err != nil || c.StateRoot != a.StateRoot || c.Owner != owner {
 		cancel()
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	stage = "StartPrepared.parent-files-control"
 	parent, err := components.ReadNFQWSSupervisionIdentity()
 	if err != nil || parent != c.Parent || nfqws2ManagedFilesCurrent(c.fileShape()) != nil || nfqws2ManagedControlCurrent(activation, c.fileShape()) != nil {
 		cancel()
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	stage = "StartPrepared.executable"
 	program, err := os.Executable()
 	if err != nil || nfqws2ManagedProtected(program, false) != nil {
 		cancel()
@@ -55,6 +77,7 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		cancel()
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	stage = "StartPrepared.state-root"
 	root, err := os.Lstat(a.StateRoot)
 	if err != nil || !root.IsDir() || root.Mode().Perm()&0o077 != 0 {
 		cancel()
@@ -62,10 +85,15 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	}
 	c = c.clone()
 	admission.Spec = admission.Spec.Clone()
+	// BeforeStart may mutate the original resource. Later failures require the
+	// full owner lifecycle; this producer completion cannot cover them.
+	unused = false
+	stage = "StartPrepared.before-start"
 	if err = admission.BeforeStart(activation, admission.Binding); err != nil {
 		cancel()
 		return nil, err
 	}
+	stage = "StartPrepared.intent"
 	target, err := restorejournal.OpenFileTarget(path)
 	if err != nil {
 		cancel()
@@ -85,6 +113,7 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		cancel()
 		return nil, err
 	}
+	stage = "StartPrepared.transport"
 	channel, endpoint, err := nfqws2ActiveSocketPair(c.ActivationDeadline)
 	if err != nil {
 		cancel()
@@ -187,6 +216,7 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		o.mu.Unlock()
 		return nil
 	}}
+	stage = "StartPrepared.native-launch"
 	err = once.invoke(func(begin func() error) error { return admission.WithStart(activation, admission.Binding, begin) })
 	if err != nil {
 		return nil, err

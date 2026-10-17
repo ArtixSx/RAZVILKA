@@ -32,8 +32,9 @@ func nfqws2UnlaunchedJournalsCurrent(s *executionResourceScope) error {
 	return nil
 }
 
-// This proof exists only before the actual native producer has ever been
-// invoked. Missing prepared/PID/receipt alone is never an unused permission.
+// This observation is usable only before producer invocation or after its
+// typed definite-no-launch completion. Missing prepared/PID/receipt alone is
+// never an unused permission.
 func (e *nfqws2ActiveExecution) observeUnlaunched(ctx context.Context) error {
 	if err := e.cleanupCurrent(ctx); err != nil {
 		return err
@@ -74,7 +75,7 @@ func (e *nfqws2ActiveExecution) settleUnlaunched(ctx context.Context, observe fu
 		return ErrNFQWSScopedOwner
 	}
 	e.mu.Lock()
-	valid := e.started && !e.launchInvoked && !e.retired && e.prepared == nil && e.preparationErr != nil && !errors.Is(e.preparationErr, ErrExecutionJournal)
+	valid := e.started && e.unusedLaunch() && !e.retired && e.prepared == nil && e.preparationErr != nil && !errors.Is(e.preparationErr, ErrExecutionJournal)
 	e.mu.Unlock()
 	if !valid {
 		return ErrNFQWSScopedOwner
@@ -89,7 +90,7 @@ func (e *nfqws2ActiveExecution) settleUnlaunched(ctx context.Context, observe fu
 			}
 			e.mu.Lock()
 			defer e.mu.Unlock()
-			if e.launchInvoked || e.retired || e.prepared != nil {
+			if !e.unusedLaunch() || e.retired || e.prepared != nil {
 				return ErrNFQWSScopedOwner
 			}
 			nfqws2ActiveAdapterMu.Lock()
@@ -118,7 +119,7 @@ func (e *nfqws2ActiveExecution) settleUnlaunched(ctx context.Context, observe fu
 		}
 		check := func() (int, error) {
 			e.mu.Lock()
-			unused := e.started && !e.launchInvoked && !e.retired && e.prepared == nil
+			unused := e.started && e.unusedLaunch() && !e.retired && e.prepared == nil
 			e.mu.Unlock()
 			if !unused || r.beforeUsed || r.startReady || r.startUsed || r.startACK || r.preparedUsed || r.transferUsed || r.preparedOwner != nil || r.finalOwner != nil || r.scope.failure != nil ||
 				r.scope.manager != e.material.manager || r.scope.adapterOwner != e.material.adapter || r.scope.plan.PlanID != e.plan.PlanID || r.scope.plan.Digest != e.plan.Digest {

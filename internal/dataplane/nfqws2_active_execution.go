@@ -40,6 +40,7 @@ type nfqws2ActiveExecution struct {
 	prepared               *NFQWSPreparedHandle
 	started                bool
 	launchInvoked          bool
+	noLaunch               *nfqws2ActiveNoLaunch
 	preparationErr         error
 	retired                bool
 	activationAttempted    bool
@@ -189,7 +190,7 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 	seal := e.activationSeal
 	e.mu.Unlock()
 	if started && (seal == nil || seal.current(e) != nil) {
-		return ErrNFQWSScopedOwner
+		return nfqws2ActiveFailure("execution.activation-seal", ErrNFQWSScopedOwner)
 	}
 	nfqws2ActiveAdapterMu.Lock()
 	associated := e.material.adapter.activeExecution == e || (!started || retired) && e.material.adapter.activeExecution == nil && e.material.adapter.activeProcess == nil
@@ -514,6 +515,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		e.prepared = p
 	}
 	original := e.prepared
+	if startErr != nil && e.producerUnlaunched() {
+		e.preparationErr = startErr
+	}
 	e.mu.Unlock()
 	if startErr != nil || p == nil || p != original {
 		return errors.Join(ErrNFQWSScopedOwner, startErr)
@@ -545,9 +549,9 @@ func (e *nfqws2ActiveExecution) health(ctx context.Context) error {
 
 func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
 	e.mu.Lock()
-	started, invoked, retired, p := e.started, e.launchInvoked, e.retired, e.prepared
+	started, unused, retired, p := e.started, e.unusedLaunch(), e.retired, e.prepared
 	e.mu.Unlock()
-	if started && !invoked && !retired {
+	if started && unused && !retired {
 		return e.settleUnlaunched(ctx, e.observeUnlaunched)
 	}
 	if err := e.cleanupCurrent(ctx); err != nil {
@@ -629,7 +633,7 @@ func (e *nfqws2ActiveExecution) verifyRollback(ctx context.Context) (bool, error
 		return false, err
 	}
 	e.mu.Lock()
-	retired, invoked, prepared := e.retired, e.launchInvoked, e.prepared
+	retired, invoked, prepared := e.retired, !e.unusedLaunch(), e.prepared
 	e.mu.Unlock()
 	if !retired {
 		return false, ErrNFQWSScopedOwner

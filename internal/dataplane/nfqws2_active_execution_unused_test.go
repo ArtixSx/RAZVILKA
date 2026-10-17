@@ -175,6 +175,39 @@ func TestNFQWSUnlaunchedKnownRefusalClosesOriginalReservationInBothRecords(t *te
 	}
 }
 
+func TestNFQWSProducerCompletionClosesOnlyOriginalUnusedReservation(t *testing.T) {
+	for _, kind := range []string{"original", "missing", "different-execution", "different-command", "physical-unknown"} {
+		t.Run(kind, func(t *testing.T) {
+			e, ctx := nfqwsUnlaunchedFixture(t)
+			e.launchInvoked = true
+			e.noLaunch = &nfqws2ActiveNoLaunch{execution: e, command: nfqws2ActiveCommandDigest(e.material.command)}
+			switch kind {
+			case "missing":
+				e.noLaunch = nil
+			case "different-execution":
+				e.noLaunch.execution = &nfqws2ActiveExecution{}
+			case "different-command":
+				e.noLaunch.command = "different"
+			}
+			reads := 0
+			err := e.settleUnlaunched(ctx, func(context.Context) error {
+				reads++
+				if kind == "physical-unknown" {
+					return ErrNFQWSScopedOwner
+				}
+				return nil
+			})
+			if kind == "original" {
+				if err != nil || !e.retired || !e.launchInvoked || reads != 2 || e.resource.scope.execution.Resources[0].Phase != "removed" {
+					t.Fatalf("original completion: %v reads=%d", err, reads)
+				}
+			} else if err == nil || e.retired || e.material.adapter.activeExecution != e {
+				t.Fatalf("unknown completion released owner: %v", err)
+			}
+		})
+	}
+}
+
 func TestNFQWSUnlaunchedUnknownNeverReleasesOrRepairsReservation(t *testing.T) {
 	for _, name := range []string{"journal-error", "native-invoked", "sticky-writer", "receipt", "lock", "divergent-record", "unknown-json-field", "duplicate-json-field", "unknown-absence"} {
 		t.Run(name, func(t *testing.T) {
