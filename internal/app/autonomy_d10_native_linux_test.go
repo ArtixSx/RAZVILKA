@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +44,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
 const d10NativeService = "my-independent-site"
@@ -110,7 +112,7 @@ func TestD10NativeAppManagerRollbackFreshC(t *testing.T) {
 		t.Fatal("private diagnostic directory", d10NativeErrorClass(err))
 	}
 	t.Log("private redacted failure artifacts:", artifacts)
-	for _, scenario := range []string{"sing-box", "failure-exit"} {
+	for _, scenario := range []string{"sing-box", "source-refill", "failure-exit"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			if err := os.Chmod(root, 0700); err != nil {
@@ -799,7 +801,7 @@ func d10NativeProductionExactDispatcher(root string, processes *d10NativeProcess
 
 func d10NativeChild(t *testing.T) {
 	root, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ROOT"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
-	if os.Geteuid() != 0 || !filepath.IsAbs(root) || (scenario != "sing-box" && scenario != "failure-exit") {
+	if os.Geteuid() != 0 || !filepath.IsAbs(root) || (scenario != "sing-box" && scenario != "source-refill" && scenario != "failure-exit") {
 		t.Fatal("invalid owned native child")
 	}
 	for _, name := range []string{"net", "mnt", "pid"} {
@@ -1136,6 +1138,14 @@ func d10NativeChild(t *testing.T) {
 	p.DefaultSources, p.SourceIDs, p.PreferredRoutes = []string{"192.168.1.50/32"}, []string{"manual"}, nil
 	p.ReserveTarget, p.CandidatesPerRound, p.FailureConfirmSeconds = 2, 3, 10
 	p.Application.Mode, p.Components.Mode = "off", "off"
+	var feed *d10NativeFeed
+	if scenario == "source-refill" {
+		feed = d10NativeStartFeed(t, ctx, a, root, orderedPorts)
+		// All three nodes also have a manual origin from topology setup. Only
+		// the actual downloaded source is consented in this scenario: C cannot
+		// become eligible until the managed fetch imports its source origin.
+		p.SourceIDs = []string{feed.sourceID}
+	}
 	w := httptest.NewRecorder()
 	a.autonomyAPI(w, autonomyRequest("PUT", "/api/v1/autonomy", map[string]any{"expected_revision": 0, "policy": p, "confirm": "SAVE_AUTONOMY", "release_safe_mode": true}))
 	if w.Code != 200 {
@@ -1160,6 +1170,10 @@ func d10NativeChild(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Error("intentional D10 fixture failure after real A commit; parent requires completed cleanup and exit 1")
+		return
+	}
+	if scenario == "source-refill" {
+		d10NativeRunSourceRefill(t, ctx, a, root, feed, ids, checks, processes, runner)
 		return
 	}
 	base := store.Get()
@@ -1320,6 +1334,212 @@ func d10NativeChild(t *testing.T) {
 		t.Fatal("C transaction did not commit", err)
 	}
 	t.Log("genuine SG exact/canary B PASS -> real live HTTP403 -> production rollback+read-only VerifyRollback A -> fresh exact C -> ordinary App/Manager commit; cleanup readback follows")
+}
+
+type d10NativeFeed struct {
+	sourceID     string
+	initialJobID string
+	clock        atomic.Int64
+	requests     atomic.Int64
+	publishC     atomic.Bool
+	cPort        int
+}
+
+// Only the HTTPS dial destination/trust and provider cooldown clock are fixture
+// dependencies. Bytes traverse real verified TLS/HTTP and the production saved
+// source worker/importer. No exact-check outcome or transaction is replaced.
+func d10NativeStartFeed(t *testing.T, ctx context.Context, a *App, root string, ports []int) *d10NativeFeed {
+	t.Helper()
+	f := &d10NativeFeed{cPort: ports[2]}
+	// Keep both synthetic provider times in the real past. Newly imported
+	// origins must remain usable by the unchanged real-time freshness checks.
+	f.clock.Store(time.Now().UTC().Add(-time.Hour).UnixNano())
+	profile := func(port int) string {
+		return fmt.Sprintf("vless://123e4567-e89b-12d3-a456-426614174000@93.184.216.11:%d?security=tls&sni=front.example", port)
+	}
+	client := d10TLSFeedClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/approved" || r.Host != "feed.example.test" || r.TLS == nil || r.TLS.ServerName != "feed.example.test" {
+			t.Error("native source request escaped its approved TLS identity")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		f.requests.Add(1)
+		w.Header().Set("Content-Type", "text/plain")
+		if f.publishC.Load() {
+			w.Header().Set("ETag", `"native-c"`)
+			_, _ = fmt.Fprintln(w, profile(ports[2]))
+			return
+		}
+		w.Header().Set("ETag", `"native-ab"`)
+		_, _ = fmt.Fprintln(w, profile(ports[0])+"\n"+profile(ports[1]))
+	}))
+	feeds, err := providerfeed.OpenWithDependencies(a.Nodes, filepath.Join(root, "native-feeds"), client, func() time.Time { return time.Unix(0, f.clock.Load()).UTC() })
+	if err != nil {
+		t.Fatal("native saved source open", d10NativeErrorClass(err))
+	}
+	a.NodeFeeds = feeds
+	source, err := feeds.Save(ctx, "", providerfeed.SaveRequest{Request: providerfeed.Request{URL: "https://feed.example.test/approved", Limit: 32}, Enabled: true})
+	if err != nil {
+		t.Fatal("native source consent setup", d10NativeErrorClass(err))
+	}
+	f.sourceID = source.SourceID
+	worker, stop := context.WithCancel(ctx)
+	a.StartNodeFeeds(worker)
+	t.Cleanup(func() {
+		stop()
+		join, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := a.WaitNodeFeeds(join); err != nil {
+			t.Error("native source worker did not join", d10NativeErrorClass(err))
+		}
+		if err := feeds.Close(); err != nil {
+			t.Error("native source owner close", d10NativeErrorClass(err))
+		}
+	})
+	// Initial import is setup. Recovery below never manually queues a source,
+	// checks a node or calls Apply: it invokes only the existing AUTO round.
+	queued, err := feeds.QueueSync(source.SourceID)
+	if err != nil {
+		t.Fatal("initial native source queue", d10NativeErrorClass(err))
+	}
+	job := d10WaitFeedJob(t, feeds, queued.ID)
+	if job.Status != "completed" || job.Result == nil || len(job.Result.NodeIDs) != 2 || f.requests.Load() != 1 {
+		t.Fatal("initial real source bytes did not import A/B", job.Status)
+	}
+	f.initialJobID = queued.ID
+	return f
+}
+
+func d10NativeRunSourceRefill(t *testing.T, ctx context.Context, a *App, root string, feed *d10NativeFeed, ids []string, checks *d10NativeChecks, processes *d10NativeProcesses, runner *d10NativeRunner) {
+	t.Helper()
+	base := a.Store.Get()
+	planA, exists, err := a.Dataplane.Committed()
+	if err != nil || !exists {
+		t.Fatal("native source A committed journal missing")
+	}
+	// This changes actual owned HTTPS service behavior through A and B. The
+	// remote VLESS processes still run, so rejection is genuine service HTTP403.
+	for _, marker := range []string{"block-a", "block-b"} {
+		if err := os.WriteFile(filepath.Join(root, marker), []byte("owned service rejects\n"), 0600); err != nil {
+			t.Fatal("native source peer failure setup", d10NativeErrorClass(err))
+		}
+	}
+	d10NativeDue(a)
+	a.autonomyRound(ctx, time.Now())
+	if r := autonomyTestState(a); r.Failures != 1 || !reflect.DeepEqual(a.Store.Get(), base) {
+		t.Fatal("native source first rejection bypassed quorum", r.State)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case <-time.After(11 * time.Second):
+	}
+	d10NativeDue(a)
+	a.autonomyRound(ctx, time.Now())
+	exhausted := autonomyTestState(a)
+	if exhausted.Search == nil || !exhausted.Search.Exhausted || exhausted.Search.Cursor != 2 || exhausted.Search.Halted || !reflect.DeepEqual(a.Store.Get(), base) || feed.requests.Load() != 1 {
+		d10NativeApplyDiagnostic(t, a, checks, processes, runner)
+		t.Fatal("native source snapshot not exhausted before download", exhausted.State)
+	}
+	current, _, _ := a.Dataplane.Committed()
+	if !reflect.DeepEqual(current, planA) || slices.Contains(checks.ids, ids[2]) {
+		t.Fatal("unconsented C checked or old committed path changed before refill")
+	}
+	// Only the provider's scheduling clock advances. Quorum/proof/expiry and
+	// transaction clocks remain real; no cached/synthetic check is introduced.
+	feed.publishC.Store(true)
+	feed.clock.Add(int64(16 * time.Minute))
+	d10NativeDue(a)
+	a.autonomyRound(ctx, time.Now())
+	jobID := ""
+	until := time.Now().Add(10 * time.Second)
+	for jobID == "" && time.Now().Before(until) && ctx.Err() == nil {
+		for _, source := range a.NodeFeeds.List() {
+			if source.SourceID == feed.sourceID && source.JobID != feed.initialJobID {
+				jobID = source.JobID
+			}
+		}
+		if jobID == "" {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if jobID == "" {
+		t.Fatal("AUTO exhaustion did not queue the production source worker")
+	}
+	job := d10WaitFeedJob(t, a.NodeFeeds, jobID)
+	if job.Status != "completed" || job.Result == nil || !slices.Contains(job.Result.NodeIDs, ids[2]) || feed.requests.Load() != 2 {
+		t.Fatal("automatic real HTTPS refill did not import C", job.Status)
+	}
+	cObserved, haltedObserved := false, false
+	checks.before = func(c context.Context, req dataplane.NodeCheckRequest) error {
+		if req.NodeID != ids[2] {
+			return nil
+		}
+		if feed.requests.Load() != 2 || !reflect.DeepEqual(a.Store.Get(), base) {
+			return errors.New("fresh C check did not follow passive source import")
+		}
+		cObserved = true
+		return nil
+	}
+	processes.afterStart = func(spec dataplane.ProcessSpec) error {
+		if spec.ID != "sing-box-engine" {
+			return nil
+		}
+		raw, err := os.ReadFile(spec.MatchArg)
+		if err != nil {
+			return err
+		}
+		defer clear(raw)
+		var doc struct {
+			Outbounds []struct {
+				Type string `json:"type"`
+				Port int    `json:"server_port"`
+			} `json:"outbounds"`
+		}
+		if json.Unmarshal(raw, &doc) != nil {
+			return errors.New("actual source-refill runtime config unreadable")
+		}
+		for _, out := range doc.Outbounds {
+			if out.Type == "vless" && out.Port == feed.cPort {
+				r := autonomyTestState(a)
+				if !cObserved || r.Search == nil || !r.Search.Halted {
+					return errors.New("C activation preceded fresh exact check and durable halted intent")
+				}
+				if err := a.autonomyDiskCurrent(ctx); err != nil {
+					return err
+				}
+				haltedObserved = true
+			}
+		}
+		return nil
+	}
+	d10NativeDue(a)
+	a.autonomyRound(ctx, time.Now())
+	final := autonomyTestState(a)
+	status, err := a.Dataplane.Status()
+	if !cObserved || !haltedObserved || final.State != "applied" || final.Search == nil || final.Search.Halted || selectedRoute(a.Store.Get().AppliedServices[d10NativeService]) != "sing-box:"+ids[2] || err != nil || status.Execution == nil || status.Execution.State != "committed" {
+		d10NativeApplyDiagnostic(t, a, checks, processes, runner)
+		t.Fatal("automatic native source/exact/Apply chain incomplete", final.State)
+	}
+	last := checks.results[len(checks.results)-1]
+	if !last.Available || last.EgressIP != "93.184.216.15" || last.DirectControl != "measured" || !sameNodeRecoveryStrings(a.Store.Get().AppliedServices[d10NativeService].Sources, base.AppliedServices[d10NativeService].Sources) {
+		t.Fatal("native downloaded C lacks genuine exact service/scope proof")
+	}
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil || !exists || committed.PlanID == planA.PlanID || a.observeCommittedRuntime(ctx, committed) != nil || feed.requests.Load() != 2 {
+		t.Fatal("downloaded C commit lacks present owned runtime or performed extra source fetches")
+	}
+	for id, expected := range base.Services {
+		if id != d10NativeService && !reflect.DeepEqual(a.Store.Get().Services[id], expected) {
+			t.Fatal("source-refill changed a foreign draft")
+		}
+	}
+	for id, expected := range base.AppliedServices {
+		if id != d10NativeService && !reflect.DeepEqual(a.Store.Get().AppliedServices[id], expected) {
+			t.Fatal("source-refill changed a foreign applied service")
+		}
+	}
+	t.Log("native source/refill PASS: actual A commit -> real A/B service rejection -> durable exhaustion -> automatic verified HTTPS import -> fresh production C exact -> durable halted intent -> ordinary Manager commit; fixture HTTPS dial/trust and provider cooldown clock only; real cleanup follows")
 }
 
 // Advance only the scheduler eligibility; checks, quorum timestamps and expiry
