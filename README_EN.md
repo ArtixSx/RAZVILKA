@@ -18,6 +18,10 @@ schedules run on the router without an open browser.
 [Install](#install) · [Documentation](docs/README.md) · [Русский](README.md) ·
 [News and support](https://t.me/RAZVILKA_UI)
 
+The banner is project artwork, not a screenshot of a running panel. Screenshots
+of the clean 0.20.0 installation will follow verification; unfinished tests are
+not presented as completed results.
+
 ## Features
 
 | Panel section | Purpose |
@@ -94,7 +98,7 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
 RAZVILKA_VERSION=v0.20.0 sh /opt/tmp/razvilka-setup.sh
 ```
 
@@ -155,7 +159,7 @@ Check the installed version and panel state:
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
 sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
@@ -167,9 +171,23 @@ the installer refuses. Do not delete that directory by hand.
 
 ## Further reading
 
+- [Upcoming 0.20.0 release notes (RU)](docs/RELEASE_0.20.0_RU.md).
+
 - [Installation, manual updates, removal and rollback (RU)](docs/INSTALL_RU.md).
 - [Current status and verified results (RU)](docs/CURRENT_STATUS_RU.md).
 - [Repository files explained (RU)](docs/FILES_RU.md).
 - [Roadmap (RU)](docs/ROADMAP.md) · [Changelog](CHANGELOG.md).
 - [Contributing and bug reports (RU)](CONTRIBUTING.md).
 - [Security (RU)](SECURITY.md) · [Third-party components](THIRD_PARTY.md) · [MIT license](LICENSE).
+
+## Recommendations and support
+
+Start with one service and one connection, then test access from the intended
+home device. Saved settings, an applied route and verified service access are
+different facts; a retained snapshot does not establish current availability.
+Keep the panel on your trusted LAN, store the recovery key separately and make
+a backup before changes. Preserve recovery journals; do not run a global
+`opkg upgrade` just to update the panel.
+
+News, questions and contributions: [RAZVILKA on Telegram](https://t.me/RAZVILKA_UI).
+[Donate](https://dalink.to/artixsx).

@@ -62,11 +62,14 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
 RAZVILKA_VERSION=v0.20.0 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Скрипт сначала полностью скачивается; он запускается только при успешной загрузке.
+Команда закрепляет bootstrap и архив на одном выпуске `v0.20.0`; до публикации
+этого тега загрузка ожидаемо завершится ошибкой. Не подменяйте номер на тестовый
+кандидат без отдельной инструкции и сохранённой копии текущего состояния.
 Далее установщик проверяет инструменты, получает стабильный архив из GitHub Releases,
 сверяет SHA256 и вызывает установщик из этого архива. Само приложение устанавливается
 без автоматического запуска всех движков обхода.
@@ -162,6 +165,9 @@ Bootstrap и ручная установка из архива предназн�
 «This controller requires the journaled self update workflow…») и ничего не изменит:
 прямая замена программы обошла бы журнал обновления и его откат.
 Старые инструкции кандидатов в `docs/archive` не относятся к текущему выпуску.
+Штатный процесс реализован, но окончательная production-приёмка update/rollback
+фиксируется отдельно в [статусе](CURRENT_STATUS_RU.md). Не заменяйте бинарник
+вручную, чтобы обойти сообщение о незавершённом восстановлении.
 
 ## Ручная установка из архива
 
@@ -184,7 +190,7 @@ sh scripts/upgrade-entware.sh --apply
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh &&
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
 sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
