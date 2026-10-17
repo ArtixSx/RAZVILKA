@@ -2013,17 +2013,32 @@ func d10NativeBackendTopology(t *testing.T, ctx context.Context) (string, func()
 			clear(out)
 			closeErr = err
 			deleted := err == nil
-			links, err := net.Interfaces()
-			readable := err == nil
-			if err != nil {
-				closeErr = errors.Join(closeErr, err)
-			}
-			survived := false
-			for _, link := range links {
-				if link.Name == "wan-r" {
-					survived = true
-					closeErr = errors.Join(closeErr, errors.New("owned backend veth survived namespace removal"))
+			// Namespace deletion drops the named reference synchronously, while
+			// the kernel can finish veth teardown shortly afterwards. Require
+			// actual absence within the same bounded cleanup context.
+			readable, survived := false, true
+			for {
+				links, readErr := net.Interfaces()
+				readable, survived = readErr == nil, false
+				if readErr != nil {
+					closeErr = errors.Join(closeErr, readErr)
+					break
 				}
+				for _, link := range links {
+					if link.Name == "wan-r" {
+						survived = true
+					}
+				}
+				if !survived || !deleted || cleanup.Err() != nil {
+					break
+				}
+				select {
+				case <-cleanup.Done():
+				case <-time.After(10 * time.Millisecond):
+				}
+			}
+			if survived {
+				closeErr = errors.Join(closeErr, errors.New("owned backend veth survived namespace removal"))
 			}
 			if closeErr != nil {
 				t.Logf("owned namespace cleanup flags: delete-succeeded=%t interfaces-readable=%t veth-survived=%t", deleted, readable, survived)
