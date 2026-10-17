@@ -157,11 +157,11 @@ func (m *Manager) reviewFailedRollbackMode(planID, digest string, offlineStop bo
 		return failedRollback{}, false
 	}
 	plan, found, err := m.latestLocked()
-	if err != nil || !found || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 {
+	if err != nil || !found || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 && !offlineStop {
 		return failedRollback{}, false
 	}
 	previous, found, err := m.committedLocked()
-	if err != nil || !found || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
+	if err != nil || !found || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) && !(offlineStop && mixedStopRetirementPlans(plan, previous)) {
 		return failedRollback{}, false
 	}
 	return m.reviewFailedRollbackImagesMode(planID, digest, latest, transaction, plan, previous, offlineStop)
@@ -174,13 +174,18 @@ func (m *Manager) reviewFailedRollbackImages(planID, digest string, latest, tran
 }
 
 func (m *Manager) reviewFailedRollbackImagesMode(planID, digest string, latest, transaction *Execution, plan, previous Plan, offlineStop bool) (failedRollback, bool) {
+	retiringStop := offlineStop && mixedStopRetirementPlans(plan, previous)
 	if latest == nil || transaction == nil || !reflect.DeepEqual(latest, transaction) || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > maxRecoveryJournalSteps ||
-		plan.SchemaVersion != SchemaVersion || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 ||
-		previous.SchemaVersion != SchemaVersion || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
+		plan.SchemaVersion != SchemaVersion || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 && !retiringStop ||
+		previous.SchemaVersion != SchemaVersion || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) && !retiringStop {
 		return failedRollback{}, false
 	}
 	root := filepath.Join(m.StateRoot, "transactions", planID)
 	prepared := []Adapter{}
+	participants := plan.Adapters
+	if retiringStop {
+		participants = plan.RetiringAdapters
+	}
 	seen := map[string]bool{}
 	failedBeforeCommit := false
 	for _, step := range latest.Steps {
@@ -198,14 +203,14 @@ func (m *Manager) reviewFailedRollbackImagesMode(planID, digest string, latest, 
 		}
 		if step.Phase == "snapshot" {
 			adapter, exists := m.adapter(step.Adapter)
-			if !exists || seen[step.Adapter] || !slices.Contains([]string{"nfqws2", "sing-box"}, step.Adapter) || !slices.Contains(plan.Adapters, step.Adapter) || step.State != "passed" {
+			if !exists || seen[step.Adapter] || !slices.Contains([]string{"nfqws2", "sing-box"}, step.Adapter) || !slices.Contains(participants, step.Adapter) || step.State != "passed" {
 				return failedRollback{}, false
 			}
 			seen[step.Adapter] = true
 			prepared = append(prepared, adapter)
 		}
 		if step.State == "failed" {
-			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) && !(offlineStop && step.Phase == "deactivate") {
+			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) && !(retiringStop && step.Phase == "deactivate") {
 				return failedRollback{}, false
 			}
 			failedBeforeCommit = true
@@ -213,7 +218,7 @@ func (m *Manager) reviewFailedRollbackImagesMode(planID, digest string, latest, 
 			return failedRollback{}, false
 		}
 	}
-	if !failedBeforeCommit || len(prepared) == 0 || len(prepared) != len(plan.Adapters) {
+	if !failedBeforeCommit || len(prepared) == 0 || len(prepared) != len(participants) {
 		return failedRollback{}, false
 	}
 	return failedRollback{latest: latest, root: root, plan: plan, previous: previous, prepared: prepared}, true

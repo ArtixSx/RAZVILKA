@@ -3,6 +3,7 @@ package dataplane
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -15,11 +16,15 @@ import (
 // This lane never retries a command. It closes only the legacy two-adapter
 // Stop whose original Deactivate failed, after independently observing both
 // runtimes absent. Ordinary rollback/close eligibility remains unchanged.
-func mixedStopRetirementHistory(r failedRollback) bool {
+func mixedStopRetirementPlans(plan, previous Plan) bool {
 	validPlan := func(p Plan) bool {
-		return slices.Equal(p.Adapters, []string{"nfqws2", "sing-box"}) && p.LAN == nil && p.DNS == nil && p.DomainPolicy == nil && p.SyntheticDNS == nil && !p.SuspendDNS && !p.DiscardDNS && len(p.RetiringAdapters) == 0
+		return p.LAN == nil && p.DNS == nil && p.DomainPolicy == nil && p.SyntheticDNS == nil && !p.SuspendDNS && !p.DiscardDNS
 	}
-	if r.latest == nil || !validPlan(r.plan) || !validPlan(r.previous) || len(r.latest.Resources) != 0 || r.latest.ResourcePlanID != "" {
+	return validPlan(plan) && validPlan(previous) && len(plan.Adapters) == 0 && len(plan.Routes) == 0 && plan.RouteCount == 0 && slices.Equal(plan.RetiringAdapters, []string{"nfqws2", "sing-box"}) && slices.Equal(plan.RetiringAdapters, previous.Adapters) && len(previous.RetiringAdapters) == 0
+}
+
+func mixedStopRetirementHistory(r failedRollback) bool {
+	if r.latest == nil || !mixedStopRetirementPlans(r.plan, r.previous) || len(r.latest.Resources) != 0 || r.latest.ResourcePlanID != "" {
 		return false
 	}
 	var forward []ExecutionStep
@@ -47,7 +52,8 @@ func mixedStopRetirementEvidence(r failedRollback) []string {
 }
 
 func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manifest bootRetirementManifest) error {
-	refuse := func() error { return ErrBootRetirement }
+	stage := "manifest"
+	refuse := func() error { return fmt.Errorf("%w: mixed Stop metadata %s", ErrBootRetirement, stage) }
 	if manifest.Schema != 2 || !mixedStopRetirementHistory(r) || !kernelBootIDPattern.MatchString(manifest.OldBoot) || manifest.OldBoot == manifest.CurrentBoot || !kernelBootIDPattern.MatchString(manifest.CurrentBoot) || len(manifest.Files) == 0 || len(manifest.Files) > 512 || len(manifest.Evidence) != 8 || !boundedBootRetirement(manifest) {
 		return refuse()
 	}
@@ -64,6 +70,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 	decode := func(name string, target any) bool { return json.Unmarshal(manifest.Evidence[name], target) == nil }
 	root := filepath.Join("transactions", r.plan.PlanID)
 	prior := filepath.Join("transactions", r.previous.PlanID)
+	stage = "history-images"
 	if !decode("latest-execution.json", &original) || !decode(filepath.Join(root, "execution.json"), &transaction) || !reflect.DeepEqual(original, transaction) ||
 		!decode("latest-plan.json", &failed) || !decode("latest-committed-plan.json", &committed) || !reflect.DeepEqual(committed, r.previous) ||
 		!decode(filepath.Join(root, "sing-box", "snapshot.json"), &snapshot) || !decode(filepath.Join(root, "nfqws2", "snapshot.json"), &nfqSnapshot) ||
@@ -74,6 +81,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 	// Recheck the original images with the same narrow history reviewer. Later
 	// recovery steps may have been appended, but the forward prefix is immutable.
 	originalHistory := r
+	stage = "original-history"
 	originalHistory.latest, originalHistory.plan, originalHistory.previous = &original, failed, committed
 	if !mixedStopRetirementHistory(originalHistory) || original.State != "rollback-failed" || original.PlanID != r.plan.PlanID || original.Digest != r.plan.Digest || failed.PlanID != r.plan.PlanID || failed.Digest != r.plan.Digest || failed.State != "rollback-failed" {
 		return refuse()
@@ -87,16 +95,19 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 		}
 		return out
 	}
+	stage = "snapshot"
 	if !reflect.DeepEqual(forward(original), forward(*r.latest)) || snapshot.EngineID != "sing-box" || !kernelBootIDPattern.MatchString(snapshot.BootID) || !snapshot.PolicyExists || !snapshot.PolicyTracked || snapshot.PolicyBinding == nil || snapshot.ConfigDraft || a.checkSnapshotSidecar(snapshot) != nil || nfqSnapshot.ConfigDraft {
 		return refuse()
 	}
 	var policy proxyPolicyJournal
 	var binding proxyPolicyBinding
+	stage = "bound-policy"
 	if json.Unmarshal(manifest.Files[filepath.Join("sing-box", "policy.json")], &policy) != nil || policy.AdditionReceiptVersion != 1 || json.Unmarshal(manifest.Files[filepath.Join("sing-box", "policy-generation.json")], &binding) != nil ||
 		binding.Schema != 1 || binding.Engine != "sing-box" || binding.Phase != "active" || binding.Digest != proxyPolicyDigest(policy.PolicyState) || !reflect.DeepEqual(binding, *snapshot.PolicyBinding) || !reflect.DeepEqual(policy.PolicyState, snapshot.Policy) {
 		return refuse()
 	}
 	state := policy.PolicyState
+	stage = "policy-coordinates"
 	if state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || state.NetworkPolicyGeneration != "" || state.NetworkDefault || state.WireGuardEndpoint != nil {
 		return refuse()
 	}
@@ -107,6 +118,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 	unsigned.Checksum = ""
 	raw, _ := json.Marshal(unsigned)
 	canonical, _ := json.Marshal(receipt)
+	stage = "committed-receipt"
 	if receipt.Schema != 1 || receipt.Engine != "sing-box" || receipt.Boot != manifest.OldBoot || receipt.Phase != "complete" || receipt.Generation != binding.Generation || receipt.Generation != binding.ReceiptID || receipt.Digest != binding.Digest || receipt.NoAdditions || receipt.RestorationGeneration != "" || receipt.RetirementSnapshot != "" || receipt.RetirementReceiptID != "" || receipt.Checksum != routeidentity.Hash(raw) || !bytes.Equal(canonical, manifest.Evidence[filepath.Join(prior, "sing-box", "policy-additions.json")]) {
 		return refuse()
 	}
@@ -117,6 +129,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 	}
 	boundSeen := false
 	for name, raw := range manifest.Files {
+		stage = "file-shape"
 		if allowed[name] {
 			continue
 		}
@@ -129,6 +142,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 			return refuse()
 		}
 		if parts[3] == policyAdditionFile {
+			stage = "generation-receipt-bound"
 			var expected *PolicyState
 			if parts[2] == binding.Generation {
 				expected = &state
@@ -138,6 +152,7 @@ func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manife
 			// do not mint a cleanup grant or claim that their commands completed.
 			valid := validateBootRetirementReceipt(raw, path, manifest.OldBoot, expected, false) == nil
 			if expected == nil {
+				stage = "generation-receipt-orphan"
 				valid = validUnknownBootRetirementReceipt(raw, manifest.OldBoot, a)
 			}
 			if !valid || !bytes.Equal(manifest.Files[filepath.Join(filepath.Dir(name), policyAdditionLock)], []byte(policyAdditionMarker)) {
@@ -182,8 +197,16 @@ func validUnknownBootRetirementReceipt(raw []byte, boot string, a *ProxyTunnelAd
 // effect in an orphan image must fall within the interface/table and complete
 // priority ranges read by observeBootRetirementKernel, including shared slots.
 func retiredProxyStepCoveredByAbsence(step policyAdditionStep, a *ProxyTunnelAdapter) bool {
-	owner, _, err := a.inactiveCoordinates()
-	if err != nil {
+	// This is pure metadata coverage, not an observation or readiness check.
+	// Do not resolve tools or inspect this machine's runtime here: the actual
+	// independent observer authenticates those sources separately on every use.
+	var owner PolicyOwnershipSpec
+	for _, spec := range PolicyOwnershipSpecs() {
+		if spec.Adapter == "sing-box" {
+			owner = spec
+		}
+	}
+	if a == nil || a.ID() != owner.Adapter || a.Interface != owner.Interface || a.Table != owner.Table || a.Priority != owner.PriorityBase {
 		return false
 	}
 	args := step.Add

@@ -30,7 +30,10 @@ func newMixedStopRetirementFixture(t *testing.T) *bootRetirementFixture {
 	if err := f.m.Record(previous); err != nil {
 		t.Fatal(err)
 	}
-	f.plan.Adapters = previous.Adapters
+	f.plan.Adapters = nil
+	f.plan.RetiringAdapters = append([]string{}, previous.Adapters...)
+	f.plan.Routes = nil
+	f.plan.RouteCount = 0
 	if err := f.m.Record(f.plan); err != nil {
 		t.Fatal(err)
 	}
@@ -156,6 +159,43 @@ func TestMixedStopBootRetirementRefusesWithoutNFQAbsence(t *testing.T) {
 			}
 			if f.processes.calls != 0 {
 				t.Fatal("refusal invoked runtime mutation")
+			}
+		})
+	}
+}
+
+func TestMixedStopBootRetirementExactRetiringParticipantsOnly(t *testing.T) {
+	for _, mode := range []string{"foreign-retiring", "reordered-retiring", "nonempty-active", "nonempty-routes", "previous-retiring"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newMixedStopRetirementFixture(t)
+			switch mode {
+			case "foreign-retiring":
+				f.plan.RetiringAdapters = []string{"nfqws2", "xray"}
+			case "reordered-retiring":
+				f.plan.RetiringAdapters = []string{"sing-box", "nfqws2"}
+			case "nonempty-active":
+				f.plan.Adapters = []string{"nfqws2", "sing-box"}
+			case "nonempty-routes":
+				f.plan.Routes = []Route{{ServiceID: "unexpected", Resolved: "direct"}}
+				f.plan.RouteCount = 1
+			case "previous-retiring":
+				previous, _, _ := f.m.committedLocked()
+				previous.RetiringAdapters = []string{"sing-box"}
+				if err := f.m.Record(previous); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := f.m.Record(f.plan); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := f.m.reviewFailedRollbackMode(f.plan.PlanID, f.plan.Digest, true); ok {
+				t.Fatal("nonexact Stop participants accepted")
+			}
+			if _, ok := f.m.reviewFailedRollback(f.plan.PlanID, f.plan.Digest); ok {
+				t.Fatal("ordinary reviewer relaxed")
+			}
+			if result, err := runMixedStopFixture(f, func(context.Context) error { return nil }, nil); err == nil || result.State == "rolled-back" {
+				t.Fatal("invalid Stop shape retired", result.State, err)
 			}
 		})
 	}
@@ -325,9 +365,48 @@ func TestMixedStopBootRetirementRetainedArchive(t *testing.T) {
 	}
 	manifest.OldBoot = doc.Boot
 	if err := validateMixedStopRetirement(proxy, reviewed, manifest); err != nil {
+		for name, raw := range manifest.Files {
+			if !strings.HasSuffix(name, "/"+policyAdditionFile) || strings.Contains(name, "/"+binding.Generation+"/") {
+				continue
+			}
+			if validUnknownBootRetirementReceipt(raw, manifest.OldBoot, proxy) {
+				continue
+			}
+			var orphan policyAdditionDocument
+			_ = json.Unmarshal(raw, &orphan)
+			canonical, _ := json.Marshal(orphan)
+			covered := 0
+			for _, step := range orphan.Steps {
+				if retiredProxyStepCoveredByAbsence(step, proxy) {
+					covered++
+				}
+			}
+			t.Logf("archive orphan diagnostic: schema=%d boot_match=%t checksum=%t canonical=%t covered=%d/%d", orphan.Schema, orphan.Boot == manifest.OldBoot, orphan.Checksum == policyAdditionChecksum(orphan), bytes.Equal(raw, canonical), covered, len(orphan.Steps))
+			break
+		}
 		t.Fatal("archived metadata eligibility refused", err)
 	}
 	t.Logf("private archive metadata eligible: evidence=%d files=%d; no runtime absence or live action proved", len(manifest.Evidence), len(manifest.Files))
+}
+
+func TestRetiredProxyStepCoverageIsMetadataOnlyAndCannotProveReadiness(t *testing.T) {
+	f := newMixedStopRetirementFixture(t)
+	raw, err := os.ReadFile(filepath.Join(f.a.StateRoot, "policy-generations", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", policyAdditionFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc policyAdditionDocument
+	if json.Unmarshal(raw, &doc) != nil {
+		t.Fatal("fixture receipt")
+	}
+	f.a.Runner = nil
+	f.a.Processes = nil
+	if !retiredProxyStepCoveredByAbsence(doc.Steps[0], f.a) {
+		t.Fatal("pure coverage depends on local runtime source availability")
+	}
+	if _, err := runMixedStopFixture(f, func(context.Context) error { return nil }, nil); err == nil {
+		t.Fatal("metadata coverage substituted for actual runtime source")
+	}
 }
 
 func TestMixedStopBootRetirementNFQInventoryMutationKeepsFence(t *testing.T) {

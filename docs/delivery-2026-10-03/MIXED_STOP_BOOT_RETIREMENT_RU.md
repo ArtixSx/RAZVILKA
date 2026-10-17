@@ -1,8 +1,10 @@
 # Explicit offline retirement legacy mixed Stop
 
 Операция `-retire-rollback-after-boot-plan` + `-retire-rollback-after-boot-digest`
-получила отдельный узкий путь для legacy Stop: adapters ровно
-`nfqws2,sing-box`, без LAN/DNS/domain/synthetic/WG и execution resources.
+получила отдельный узкий путь для legacy Stop: failed plan имеет пустые
+`Adapters`, `Routes` и `RouteCount=0`; `RetiringAdapters` ровно
+`nfqws2,sing-box`, совпадает с active `Adapters` предыдущего committed плана,
+у которого нет retiring adapters. Без LAN/DNS/domain/synthetic/WG и execution resources.
 Исходный forward prefix: два успешных snapshot, успешный NFQ deactivate,
 отказ sing-box deactivate. Обычные retry/close не получают этот допуск.
 

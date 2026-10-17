@@ -462,7 +462,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		// absence sources as ordinary runtime inspection. Its assembly has fixed
 		// production coordinates; never silently inspect a different private root.
 		var closeSources func() error
-		if plan, found, readErr := manager.Latest(); readErr == nil && found && slices.Contains(plan.Adapters, "nfqws2") {
+		if plan, found, readErr := manager.Latest(); readErr == nil && found && (slices.Contains(plan.Adapters, "nfqws2") || slices.Equal(plan.RetiringAdapters, []string{"nfqws2", "sing-box"})) {
 			if *cfgPath != selfUpdateDefaultPath("/opt/etc/razvilka/config.json") || *dataplaneStatePath != selfUpdateDefaultPath(installpath.State+"/dataplane") {
 				log.Fatal("mixed post-reboot retirement requires the fixed production roots")
 			}
