@@ -681,24 +681,30 @@ func (w *nfqwsDirectPreparationWitness) prove(ctx context.Context, expected []by
 	if w.observe == nil || w.owners == nil || e.gateInventoryCheck == nil {
 		return ErrNFQWSScopedOwner
 	}
-	for _, check := range []func(context.Context) error{
-		e.material.control.CurrentForCleanup,
-		func(c context.Context) error { return w.current(c, expected) },
-		w.owners,
-		w.observe,
-		func(c context.Context) error { return w.current(c, expected) },
-		func(c context.Context) error { return e.lanFrozen.RetireCheck(c, CloneLANPolicyRuntime(lan)) },
-		e.gateInventoryCheck,
-		e.runtimeFrozen.inspectDirectRPDB,
-		func(c context.Context) error { return w.current(c, expected) },
-		w.owners,
-		e.material.control.CurrentForCleanup,
+	for _, check := range []struct {
+		stage string
+		run   func(context.Context) error
+	}{
+		{"control-open", e.material.control.CurrentForCleanup},
+		{"metadata-open", func(c context.Context) error { return w.current(c, expected) }},
+		{"owners-open", w.owners},
+		{"nfq-absence", w.observe},
+		{"metadata-after-nfq", func(c context.Context) error { return w.current(c, expected) }},
+		{"consumer-retire-check", func(c context.Context) error { return e.lanFrozen.RetireCheck(c, CloneLANPolicyRuntime(lan)) }},
+		{"backend-inventory", e.gateInventoryCheck},
+		{"rpdb-absence", e.runtimeFrozen.inspectDirectRPDB},
+		{"metadata-close", func(c context.Context) error { return w.current(c, expected) }},
+		{"owners-close", w.owners},
+		{"control-close", e.material.control.CurrentForCleanup},
 	} {
-		if err := check(ctx); err != nil {
-			return err
+		if err := check.run(ctx); err != nil {
+			return &nfqwsDirectRetirementDiagnostic{stage: check.stage, cause: err}
 		}
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return &nfqwsDirectRetirementDiagnostic{stage: "proof-close", cause: err}
+	}
+	return nil
 }
 
 // current re-checks eligibility and compares every original held root, file
