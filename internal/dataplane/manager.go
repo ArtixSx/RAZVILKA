@@ -315,11 +315,14 @@ type Execution struct {
 }
 
 type PolicyRefresh struct {
-	State     string          `json:"state,omitempty"`
-	PlanID    string          `json:"plan_id,omitempty"`
-	CheckedAt string          `json:"checked_at,omitempty"`
-	Changed   map[string]bool `json:"changed,omitempty"`
-	Error     string          `json:"error,omitempty"`
+	FailureStage   string          `json:"failure_stage,omitempty"`
+	FailureCause   string          `json:"failure_cause,omitempty"`
+	FailureAdapter string          `json:"failure_adapter,omitempty"`
+	State          string          `json:"state,omitempty"`
+	PlanID         string          `json:"plan_id,omitempty"`
+	CheckedAt      string          `json:"checked_at,omitempty"`
+	Changed        map[string]bool `json:"changed,omitempty"`
+	Error          string          `json:"error,omitempty"`
 }
 
 // RuntimeStatus is a non-blocking view of the atomic dataplane journals. It
@@ -1043,6 +1046,7 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	}
 	changed := map[string]bool{}
 	var firstErr error
+	var failureStage, failureAdapter string
 	writeRefresh := func() error {
 		state := "checked"
 		if firstErr != nil {
@@ -1064,6 +1068,9 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		}
 		report := PolicyRefresh{PlanID: plan.PlanID, State: state, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano), Changed: changed}
 		if firstErr != nil {
+			report.FailureStage = failureStage
+			report.FailureAdapter = failureAdapter
+			report.FailureCause = policyRefreshFailureCause(firstErr)
 			report.Error = "Address refresh did not complete; inspect the owned runtime and retry. Existing configuration was not declared healthy."
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")
@@ -1071,17 +1078,20 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		firstErr = err
+		failureStage, failureAdapter = "network-before", ""
 		return changed, errors.Join(err, writeRefresh())
 	}
 	for _, id := range plan.Adapters {
 		if err := m.checkPlanNetwork(ctx, plan); err != nil {
 			firstErr = err
+			failureStage, failureAdapter = "network-before-adapter", policyRefreshAdapterCode(id)
 			break
 		}
 		adapter, ok := m.adapter(id)
 		if !ok {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("refresh %s policy: adapter is not registered", id)
+				failureStage, failureAdapter = "adapter-lookup", policyRefreshAdapterCode(id)
 			}
 			continue
 		}
@@ -1100,10 +1110,12 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 		if err != nil {
 			if errors.Is(err, ErrNetworkChanged) {
 				firstErr = err
+				failureStage, failureAdapter = "adapter-refresh", policyRefreshAdapterCode(id)
 				break
 			}
 			if firstErr == nil {
 				firstErr = fmt.Errorf("refresh %s policy: %w", id, err)
+				failureStage, failureAdapter = "adapter-refresh", policyRefreshAdapterCode(id)
 			}
 			continue
 		}
@@ -1111,11 +1123,48 @@ func (m *Manager) RefreshCommitted(ctx context.Context) (map[string]bool, error)
 	}
 	if err := m.checkPlanNetwork(ctx, plan); err != nil {
 		firstErr = err
+		failureStage, failureAdapter = "network-after", ""
 	}
 	if err := writeRefresh(); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return changed, firstErr
+}
+
+// Diagnostic codes deliberately never incorporate error text or arbitrary adapter IDs.
+func policyRefreshAdapterCode(id string) string {
+	switch id {
+	case "sing-box", "xray", "usque", "warp-wg", "wireguard", "amneziawg", "nfqws2", "dns-scoped", "lan-policy":
+		return id
+	default:
+		return "unknown"
+	}
+}
+
+func policyRefreshFailureCause(err error) string {
+	for _, category := range []struct {
+		err  error
+		code string
+	}{
+		{context.DeadlineExceeded, "deadline"},
+		{context.Canceled, "canceled"},
+		{ErrNetworkChanged, "network-changed"},
+		{ErrReviewChanged, "review-changed"},
+		{ErrDNSRefreshIncomplete, "dns-incomplete"},
+		{ErrPolicyAdditionUnknown, "policy-settlement-unknown"},
+		{ErrProxyPolicyUnknown, "proxy-policy-unknown"},
+		{ErrRuntimeInactivity, "runtime-inactivity-unconfirmed"},
+		{ErrProxyRuntimeInactive, "proxy-inactivity-unconfirmed"},
+		{ErrPolicyDefaultReferenced, "policy-default-referenced"},
+		{ErrNodeEndpointChanged, "endpoint-changed"},
+		{ErrWGEndpointChanged, "endpoint-changed"},
+		{ErrExecutionJournal, "journal-unavailable"},
+	} {
+		if errors.Is(err, category.err) {
+			return category.code
+		}
+	}
+	return "unknown"
 }
 
 // Deactivate removes only runtime objects explicitly owned by registered
