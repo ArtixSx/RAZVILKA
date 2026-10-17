@@ -2,7 +2,6 @@ package dataplane
 
 import (
 	"context"
-	"errors"
 	"strings"
 )
 
@@ -14,26 +13,32 @@ func observeBootRetirement(parent context.Context, a *ProxyTunnelAdapter, proof 
 	defer cancel()
 	owner, transit, err := a.inactiveCoordinates()
 	if err != nil {
-		return err
+		return bootProxyRetirementAt("proxy-coordinates", err)
 	}
 	for pass := 0; pass < 2; pass++ {
 		if err := proxyInactiveProc(ctx, proof, a); err != nil {
-			return err
+			return bootProxyRetirementAt("proxy-processes", err)
 		}
 		interfaces, err := proof.interfaces()
-		if err != nil || len(interfaces) == 0 || len(interfaces) > 4096 {
-			return ErrProxyRuntimeInactive
+		if err != nil {
+			return bootProxyRetirementAt("proxy-interfaces", err)
+		}
+		if len(interfaces) == 0 || len(interfaces) > 4096 {
+			return bootProxyRetirementAt("proxy-interface-inventory", nil)
 		}
 		seen, loopback := map[string]bool{}, false
 		for _, device := range interfaces {
-			if device.Index < 1 || device.Name == "" || seen[device.Name] || device.Name == a.Interface {
-				return ErrProxyRuntimeInactive
+			if device.Index < 1 || device.Name == "" || seen[device.Name] {
+				return bootProxyRetirementAt("proxy-interface-inventory", nil)
+			}
+			if device.Name == a.Interface {
+				return bootProxyRetirementAt("proxy-interface-present", nil)
 			}
 			seen[device.Name] = true
 			loopback = loopback || device.Name == "lo"
 		}
 		if !loopback {
-			return ErrProxyRuntimeInactive
+			return bootProxyRetirementAt("proxy-loopback", nil)
 		}
 		if pass == 0 {
 			if err := observeBootRetirementKernel(ctx, a, owner, transit); err != nil {
@@ -41,7 +46,10 @@ func observeBootRetirement(parent context.Context, a *ProxyTunnelAdapter, proof 
 			}
 		}
 	}
-	return ctx.Err()
+	if ctx.Err() != nil {
+		return bootProxyRetirementAt("proxy-context", ctx.Err())
+	}
+	return nil
 }
 
 func observeBootRetirementKernel(ctx context.Context, a *ProxyTunnelAdapter, owner PolicyOwnershipSpec, transit int) error {
@@ -49,11 +57,11 @@ func observeBootRetirementKernel(ctx context.Context, a *ProxyTunnelAdapter, own
 	numeric := numericPolicyReadRunner{base: runner}
 	for _, family := range []int{4, 6} {
 		if err := AssertPolicyDefaultUnreferenced(ctx, runner, a.ip(), PolicyState{Table: a.Table}, family); err != nil {
-			return err
+			return bootProxyRetirementAt("proxy-default-references", err)
 		}
 		lines, err := readPolicyRules(ctx, numeric, a.ip(), family)
 		if err != nil {
-			return err
+			return bootProxyRetirementAt("proxy-rules-read", err)
 		}
 		local, main, seen := false, false, map[int]bool{}
 		for _, raw := range lines {
@@ -62,9 +70,12 @@ func observeBootRetirementKernel(ctx context.Context, a *ProxyTunnelAdapter, own
 				continue
 			}
 			priority, ok := policyLinePriority(line)
-			if !ok || seen[priority] || priority >= owner.PriorityBase && priority <= owner.PriorityEnd ||
+			if !ok || seen[priority] {
+				return bootProxyRetirementAt("proxy-rules-inventory", nil)
+			}
+			if priority >= owner.PriorityBase && priority <= owner.PriorityEnd ||
 				priority >= owner.SharedPriorityBase && priority <= owner.SharedPriorityEnd || priority == transit {
-				return ErrProxyRuntimeInactive
+				return bootProxyRetirementAt("proxy-rules-owned", nil)
 			}
 			seen[priority] = true
 			switch line {
@@ -76,30 +87,39 @@ func observeBootRetirementKernel(ctx context.Context, a *ProxyTunnelAdapter, own
 			default:
 				if parsed, ok := parseKernelPolicyRule(family, line); ok {
 					if parsed.table == a.Table {
-						return ErrProxyRuntimeInactive
+						return bootProxyRetirementAt("proxy-rules-owned", nil)
 					}
 				} else if table, known := knownWGTransportRuleTable(family, line); known && table != a.Table {
 					continue
 				} else if !firmwarePolicyRule(family, line) {
-					return ErrProxyRuntimeInactive
+					return bootProxyRetirementAt("proxy-rules-unrecognized", nil)
 				}
 			}
 		}
 		if !local || !main {
-			return ErrProxyRuntimeInactive
+			return bootProxyRetirementAt("proxy-rules-required", nil)
 		}
 		routes, err := readPolicyTable(ctx, numeric, a.ip(), PolicyState{Table: a.Table}, family)
-		if err != nil || strings.TrimSpace(string(routes)) != "" {
-			return errors.Join(ErrProxyRuntimeInactive, err)
+		if err != nil {
+			return bootProxyRetirementAt("proxy-table-read", err)
+		}
+		if strings.TrimSpace(string(routes)) != "" {
+			return bootProxyRetirementAt("proxy-table-present", nil)
 		}
 	}
 	for _, v6 := range []bool{false, true} {
 		for _, pair := range [][2]string{{"filter", "FORWARD"}, {"nat", "POSTROUTING"}} {
 			snapshot, err := a.firewallSnapshot(ctx, proxyFirewallTable{v6: v6, table: pair[0], parent: pair[1], chain: a.forwardingChain()})
-			if err != nil || snapshot.declared || len(snapshot.own) != 0 || len(snapshot.references) != 0 {
-				return errors.Join(ErrProxyRuntimeInactive, err)
+			if err != nil {
+				return bootProxyRetirementAt("proxy-firewall-read", err)
+			}
+			if snapshot.declared || len(snapshot.own) != 0 || len(snapshot.references) != 0 {
+				return bootProxyRetirementAt("proxy-firewall-present", nil)
 			}
 		}
 	}
-	return ctx.Err()
+	if ctx.Err() != nil {
+		return bootProxyRetirementAt("proxy-context", ctx.Err())
+	}
+	return nil
 }

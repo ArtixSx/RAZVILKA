@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -35,19 +36,19 @@ func bootRetirementCLIFlagError() error {
 // private-recovery lifetime lease remains held and before starting workers/API.
 func runBootRetirementCLI(ctx context.Context, manager *dataplane.Manager, cfgPath string, store *config.Store) (dataplane.Execution, error) {
 	if !bootRetirementCLIRequested() || bootRetirementCLIFlagError() != nil {
-		return dataplane.Execution{}, dataplane.ErrBootRetirement
+		return dataplane.Execution{}, fmt.Errorf("%w; stage=cli-flags", dataplane.ErrBootRetirement)
 	}
 	baseline, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return dataplane.Execution{}, errors.New("post-reboot retirement settings unavailable")
+		return dataplane.Execution{}, fmt.Errorf("%w; stage=cli-settings-read", dataplane.ErrBootRetirement)
 	}
 	guard, err := rollbackRecoveryGuard(cfgPath, store)
 	if err != nil {
-		return dataplane.Execution{}, errors.New("post-reboot retirement settings unavailable")
+		return dataplane.Execution{}, fmt.Errorf("%w; stage=cli-settings-guard", dataplane.ErrBootRetirement)
 	}
 	current, err := os.ReadFile(cfgPath)
 	if err != nil || !bytes.Equal(current, baseline) {
-		return dataplane.Execution{}, errors.New("post-reboot retirement settings changed")
+		return dataplane.Execution{}, fmt.Errorf("%w; stage=cli-settings-changed", dataplane.ErrBootRetirement)
 	}
 	return manager.RetireFailedRollbackAfterBoot(ctx, *retireRollbackBootPlan, *retireRollbackBootDigest, routeidentity.Hash(baseline), guard)
 }

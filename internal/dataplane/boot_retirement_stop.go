@@ -3,7 +3,6 @@ package dataplane
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -53,7 +52,7 @@ func mixedStopRetirementEvidence(r failedRollback) []string {
 
 func validateMixedStopRetirement(a *ProxyTunnelAdapter, r failedRollback, manifest bootRetirementManifest) error {
 	stage := "manifest"
-	refuse := func() error { return fmt.Errorf("%w: mixed Stop metadata %s", ErrBootRetirement, stage) }
+	refuse := func() error { return bootRetirementAt("metadata-"+stage, nil) }
 	if manifest.Schema != 2 || !mixedStopRetirementHistory(r) || !kernelBootIDPattern.MatchString(manifest.OldBoot) || manifest.OldBoot == manifest.CurrentBoot || !kernelBootIDPattern.MatchString(manifest.CurrentBoot) || len(manifest.Files) == 0 || len(manifest.Files) > 512 || len(manifest.Evidence) != 8 || !boundedBootRetirement(manifest) {
 		return refuse()
 	}

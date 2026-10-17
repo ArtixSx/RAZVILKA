@@ -1,8 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 func TestBootRetirementFlagsRegisterOnFreshCommandLine(t *testing.T) {
@@ -15,6 +22,30 @@ func TestBootRetirementFlagsRegisterOnFreshCommandLine(t *testing.T) {
 	}
 	if *retireRollbackBootPlan != "dp-1111111111111111" || *retireRollbackBootDigest != "digest" || !bootRetirementCLIRequested() {
 		t.Fatal("fresh flag set lost explicit recovery request")
+	}
+}
+
+func TestBootRetirementCLIDiagnosticsKeepPrivatePathsOutAndPreserveFenceIdentity(t *testing.T) {
+	oldPlan, oldDigest := *retireRollbackBootPlan, *retireRollbackBootDigest
+	defer func() { *retireRollbackBootPlan, *retireRollbackBootDigest = oldPlan, oldDigest }()
+	*retireRollbackBootPlan, *retireRollbackBootDigest = "", ""
+	_, err := runBootRetirementCLI(context.Background(), nil, "", nil)
+	if !errors.Is(err, dataplane.ErrBootRetirement) || !strings.Contains(err.Error(), "stage=cli-flags") {
+		t.Fatal("CLI flag refusal lost stage/fence", err)
+	}
+	*retireRollbackBootPlan = "dp-1111111111111111"
+	*retireRollbackBootDigest = strings.Repeat("a", 64)
+	path := filepath.Join(t.TempDir(), "private-token-config")
+	_, err = runBootRetirementCLI(context.Background(), nil, path, nil)
+	if !errors.Is(err, dataplane.ErrBootRetirement) || !strings.Contains(err.Error(), "stage=cli-settings-read") || strings.Contains(err.Error(), "private-token") {
+		t.Fatal("CLI read diagnostic unsafe", err)
+	}
+	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = runBootRetirementCLI(context.Background(), nil, path, nil)
+	if !errors.Is(err, dataplane.ErrBootRetirement) || dataplane.BootRetirementStage(err) != "inputs" {
+		t.Fatal("CLI lost dataplane diagnostic", err)
 	}
 }
 

@@ -48,7 +48,8 @@ func (m *Manager) RetireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 }
 
 func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, digest, settingsSHA256 string, guard func(Plan) error, options bootRetirementOptions) (Execution, error) {
-	refuse := func() (Execution, error) { return Execution{}, ErrBootRetirement }
+	stage := "inputs"
+	refuse := func() (Execution, error) { return Execution{}, bootRetirementAt(stage, nil) }
 	if m == nil || guard == nil || !validPlanID(planID) || !validPlanDigest(digest) || !validPlanDigest(settingsSHA256) {
 		return refuse()
 	}
@@ -56,16 +57,27 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	if options.proof != nil {
 		proof, err = *options.proof, nil
 	}
+	stage = "platform"
 	if err != nil || proof.interfaces == nil || proof.readlink == nil {
 		return refuse()
 	}
 	if err := m.beginOperation(ctx); err != nil {
-		return Execution{}, err
+		return Execution{}, bootRetirementAt("operation", err)
 	}
 	defer m.endOperation()
-	if m.retainedNFQOwner() != nil || m.retainedXrayOwner() != nil || m.retainedWGOwner() != nil || m.HasPendingManagedNFQWS() {
-		return refuse()
+	if m.retainedNFQOwner() != nil {
+		return Execution{}, bootRetirementAt("retained-nfq-owner", nil)
 	}
+	if m.retainedXrayOwner() != nil {
+		return Execution{}, bootRetirementAt("retained-xray-owner", nil)
+	}
+	if m.retainedWGOwner() != nil {
+		return Execution{}, bootRetirementAt("retained-wg-owner", nil)
+	}
+	if m.HasPendingManagedNFQWS() {
+		return Execution{}, bootRetirementAt("pending-managed-nfq", nil)
+	}
+	stage = "state-root"
 	state, err := openBootRetirementRoot(m.StateRoot)
 	if err != nil {
 		return refuse()
@@ -73,18 +85,24 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	defer state.Close()
 	archive := filepath.Join("boot-retirements", planID+"-"+digest)
 	manifest, exists, err := readBootRetirementManifest(state, archive)
+	stage = "manifest-read"
 	if err != nil {
 		return refuse()
 	}
 	pending, err := readBootPublication(state, archive)
-	if err != nil || pending != nil && !exists {
+	stage = "publication-read"
+	if err != nil {
 		return refuse()
+	}
+	if pending != nil && !exists {
+		return Execution{}, bootRetirementAt("publication-without-manifest", nil)
 	}
 	reviewed, ok := m.reviewFailedRollbackMode(planID, digest, true)
 	if pending != nil {
 		reviewed, ok = m.reviewBootPublication(state, manifest, pending)
 	}
 	mixedStop := ok && mixedStopRetirementHistory(reviewed)
+	stage = "history-shape"
 	if ok && !mixedStop {
 		for _, step := range reviewed.latest.Steps {
 			if step.Phase == "deactivate" && step.State == "failed" {
@@ -92,14 +110,24 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 			}
 		}
 	}
-	if !ok || (!mixedStop && (!bootRetirementPlan(reviewed.plan) || !bootRetirementPlan(reviewed.previous))) || len(reviewed.latest.Resources) != 0 || reviewed.latest.ResourcePlanID != "" {
+	if !ok {
+		return Execution{}, bootRetirementAt("history-review", nil)
+	}
+	if !mixedStop && (!bootRetirementPlan(reviewed.plan) || !bootRetirementPlan(reviewed.previous)) {
 		return refuse()
+	}
+	if len(reviewed.latest.Resources) != 0 || reviewed.latest.ResourcePlanID != "" {
+		return Execution{}, bootRetirementAt("history-resources", nil)
 	}
 	a, ok := m.adapter("sing-box")
 	proxy, actual := a.(*ProxyTunnelAdapter)
 	if !ok || !actual || proxy.ID() != "sing-box" || proxy.scopedXray || proxy.xrayPlanDispatch || proxy.xrayOperation ||
-		proxy.StateRoot != filepath.Join(m.StateRoot, "sing-box") || guard(reviewed.previous) != nil {
+		proxy.StateRoot != filepath.Join(m.StateRoot, "sing-box") {
+		stage = "proxy-adapter"
 		return refuse()
+	}
+	if guard(reviewed.previous) != nil {
+		return Execution{}, bootRetirementAt("settings-guard", nil)
 	}
 	observe := func(c context.Context) error {
 		if err := observeBootRetirement(c, proxy, proof); err != nil {
@@ -107,45 +135,102 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		}
 		if mixedStop {
 			if options.nfqAbsent != nil {
-				return options.nfqAbsent(c)
+				if err := options.nfqAbsent(c); err != nil {
+					return bootRetirementAt("nfq-absence", err)
+				}
+				return nil
 			}
 			nfq, valid := m.Adapters["nfqws2"].(*NFQWS2Adapter)
 			if !valid || nfq == nil {
-				return ErrBootRetirement
+				return bootRetirementAt("nfq-source", nil)
 			}
-			return nfq.VerifyRuntimeInactive(c)
+			if err := nfq.VerifyRuntimeInactive(c); err != nil {
+				switch NFQWSRuntimeInactiveStage(err) {
+				case "source":
+					return bootRetirementAt("nfq-source", err)
+				case "processes":
+					return bootRetirementAt("nfq-processes", err)
+				case "files", "files.closure", "closure":
+					return bootRetirementAt("nfq-files", err)
+				case "kernel":
+					return bootRetirementAt("nfq-kernel", err)
+				case "identity":
+					return bootRetirementAt("nfq-identity", err)
+				case "participants":
+					return bootRetirementAt("nfq-participants", err)
+				default:
+					return bootRetirementAt("nfq-absence", err)
+				}
+			}
+			return nil
 		}
-		return c.Err()
+		if c.Err() != nil {
+			return bootRetirementAt("proxy-context", c.Err())
+		}
+		return nil
 	}
 	writer, err := newBootRetirementWriter(m, state, planID)
+	stage = "writer-roots"
 	if err != nil {
 		return refuse()
 	}
 	defer writer.close()
 	writer.context = ctx
 	boot, err := proxy.currentBootIdentity()
+	stage = "current-boot"
 	if err != nil || !kernelBootIDPattern.MatchString(boot) {
 		return refuse()
 	}
 	if !exists {
 		manifest, err = collectBootRetirement(state, proxy, reviewed, settingsSHA256, boot)
+		stage = "manifest-collect"
 		if err != nil {
 			return refuse()
 		}
 	}
-	if manifest.PlanID != planID || manifest.Digest != digest || manifest.SettingsSHA256 != settingsSHA256 ||
-		manifest.OldBoot == boot || !kernelBootIDPattern.MatchString(manifest.CurrentBoot) || validateBootRetirement(proxy, reviewed, manifest) != nil ||
-		verifyBootRetirementFiles(state, archive, manifest, exists) != nil ||
-		verifyBootRetirementEvidence(state, manifest) != nil ||
-		observe(ctx) != nil || guard(reviewed.previous) != nil {
-		return refuse()
+	if manifest.PlanID != planID || manifest.Digest != digest || manifest.SettingsSHA256 != settingsSHA256 {
+		return Execution{}, bootRetirementAt("manifest-identity", nil)
+	}
+	if manifest.OldBoot == boot {
+		return Execution{}, bootRetirementAt("old-boot", nil)
+	}
+	if !kernelBootIDPattern.MatchString(manifest.CurrentBoot) {
+		return Execution{}, bootRetirementAt("manifest-current-boot", nil)
+	}
+	if err := validateBootRetirement(proxy, reviewed, manifest); err != nil {
+		if BootRetirementStage(err) != "" {
+			return Execution{}, err
+		}
+		return Execution{}, bootRetirementAt("metadata-validation", err)
+	}
+	if err := verifyBootRetirementFiles(state, archive, manifest, exists); err != nil {
+		return Execution{}, bootRetirementAt("runtime-files", err)
+	}
+	if err := verifyBootRetirementEvidence(state, manifest); err != nil {
+		return Execution{}, bootRetirementAt("evidence", err)
+	}
+	if err := observe(ctx); err != nil {
+		return Execution{}, err
+	}
+	if guard(reviewed.previous) != nil {
+		return Execution{}, bootRetirementAt("settings-guard", nil)
 	}
 	// Absence inspection is a slow external boundary. Close every immutable
 	// evidence/file image again before publishing even the archival intent.
-	if errors.Join(ctx.Err(), writer.current(), verifyBootRetirementEvidence(state, manifest), verifyBootRetirementFiles(state, archive, manifest, exists)) != nil {
-		return refuse()
+	if ctx.Err() != nil {
+		return Execution{}, bootRetirementAt("closing-context", ctx.Err())
+	}
+	if err := writer.current(); err != nil {
+		return Execution{}, bootRetirementAt("closing-writer", err)
+	}
+	if err := verifyBootRetirementEvidence(state, manifest); err != nil {
+		return Execution{}, bootRetirementAt("closing-evidence", err)
+	}
+	if err := verifyBootRetirementFiles(state, archive, manifest, exists); err != nil {
+		return Execution{}, bootRetirementAt("closing-files", err)
 	}
 	unlock, err := lockBootRetirementReceipts(state, archive, manifest)
+	stage = "receipt-locks"
 	if err != nil {
 		return refuse()
 	}
@@ -154,17 +239,19 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	// Refusals above leave all original journals and runtime metadata untouched.
 	if !exists {
 		if err := writeBootRetirementManifest(state, m.StateRoot, archive, manifest); err != nil {
-			return Execution{}, errors.Join(ErrBootRetirement, err)
+			return Execution{}, bootRetirementAt("manifest-write", err)
 		}
 	}
 	manifest.Checksum = bootRetirementChecksum(manifest)
 	manifestBytes, _ := json.Marshal(manifest)
 	checkManifest, closeManifest, err := pinBootRetirementFile(state, filepath.Join(archive, "manifest.json"), manifestBytes)
+	stage = "manifest-pin"
 	if err != nil {
 		return refuse()
 	}
 	defer closeManifest()
 	checkWitness, closeWitness, err := publishBootRetirementWitness(state, archive, manifest, boot)
+	stage = "witness-publication"
 	if err != nil {
 		return refuse()
 	}
@@ -185,7 +272,7 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	}
 	if pending != nil {
 		if err := writer.finishPublication(pending); err != nil {
-			return Execution{}, errors.Join(ErrBootRetirement, err)
+			return Execution{}, bootRetirementAt("publication-resume", err)
 		}
 	}
 	started := time.Now().UTC()
