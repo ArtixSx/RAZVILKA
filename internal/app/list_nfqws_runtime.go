@@ -498,7 +498,7 @@ func (r *ManagedNFQWSListRuntime) Stop(ctx context.Context) error {
 	}
 	// Detach only the admitted Stop intent, retain its original typed cleanup
 	// review and finite bound through native Wait and COMMON settlement.
-	stopCtx, finishStop := context.WithTimeout(context.WithoutCancel(c), 15*time.Second)
+	stopCtx, finishStop := context.WithTimeout(context.WithoutCancel(c), managedNFQCleanupBudget)
 	defer finishStop()
 	c = stopCtx
 	if r.active == nil {
@@ -555,22 +555,17 @@ func (r *ManagedNFQWSListRuntime) joinPending(ctx context.Context) error {
 	if ctx == nil || ctx.Err() != nil || e == nil || e.pendingContext == nil || e.pendingRelease == nil || e.pendingCloseOperation == nil {
 		return dataplane.ErrNFQWSScopedOwner
 	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
+	c, cancel, err := managedNFQCleanupContext(ctx, e.pendingContext)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	original, op, err := r.executionFor(c)
+	if err != nil || original != e {
 		return dataplane.ErrNFQWSScopedOwner
 	}
-	bound := time.Until(deadline)
-	if bound > 15*time.Second {
-		bound = 15 * time.Second
-	}
-	c, cancel := context.WithTimeout(context.WithoutCancel(e.pendingContext), bound)
-	defer cancel()
 	if e.pendingStop {
 		if !e.retirementKnown {
-			_, op, err := r.executionFor(c)
-			if err != nil {
-				return err
-			}
 			if err := r.manager.StopRetainedManagedNFQWS(c, op.cleanup); err != nil {
 				return err
 			}
