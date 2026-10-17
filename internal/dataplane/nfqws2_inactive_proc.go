@@ -76,11 +76,8 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 				return ErrNFQWSManagedProcessUnknown
 			}
 		} else {
-			if cmd[len(cmd)-1] != 0 {
-				return ErrNFQWSManagedProcessUnknown
-			}
-			args := strings.Split(string(cmd[:len(cmd)-1]), "\x00")
-			if len(args) == 0 || len(args) > 256 || args[0] == "" {
+			args, valid := inactiveProcArguments(cmd)
+			if !valid {
 				return ErrNFQWSManagedProcessUnknown
 			}
 			executable, err := proof.readlink(filepath.Join(path, "exe"))
