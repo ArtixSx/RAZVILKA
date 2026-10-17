@@ -12,8 +12,9 @@ import (
 )
 
 func TestLegacyProxySharedDomainAddressRefusedBeforeCapture(t *testing.T) {
-	// These two unrelated domains actually shared this public address during
-	// the reported incident. DNS-derived membership cannot identify a flow.
+	// Synthetic domain fixtures illustrate the observed incident pattern:
+	// unrelated services sharing one public IP. This is not historical DNS
+	// evidence for the particular domain below.
 	shared := netip.MustParseAddr("8.6.112.1")
 	plan := Plan{Routes: []Route{{ServiceID: "telegram", Resolved: "sing-box:node-public", Domains: []string{"telegram.org"}, Sources: []string{"192.0.2.40/32"}}}}
 	resolver := func(context.Context, string) ([]netip.Addr, error) { return []netip.Addr{shared}, nil }
@@ -96,6 +97,28 @@ func TestLegacyProxyDomainPlanHasPreflightBlocker(t *testing.T) {
 			if found != domains || domains && plan.Ready {
 				t.Fatalf("engine=%s domains=%v ready=%v blocker=%v", engine, domains, plan.Ready, found)
 			}
+		}
+	}
+}
+
+func TestLegacyProxyDomainBlockerCannotBeWaivedByTypedMaterialPointer(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		route := Route{Resolved: "xray:node-fixture", Domains: []string{"service.example"}}
+		if mixed {
+			route.CIDRs = []string{"8.6.112.1/32"}
+		}
+		plan, err := Build(Input{Routes: []Route{route}, managedXraySelectedTCP: new(XrayOperationMaterial)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, blocker := range plan.Blockers {
+			if blocker.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED" {
+				found = true
+			}
+		}
+		if !found || plan.Ready {
+			t.Fatal("domain/mixed intent bypassed domain blocker")
 		}
 	}
 }
