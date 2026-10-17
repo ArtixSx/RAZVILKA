@@ -12,6 +12,17 @@ test('8 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav=
 test('21 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,21));
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
+test('first-run scope radios cannot inherit full-width text fields',()=>{
+  assert.match(html,/<input[^>]*name="quick-scope"[^>]*type="radio"/);
+  for(const file of ['console-autonomy.css','interface-compat.css','interface.css']){
+    const css=read(root+file);
+    assert.doesNotMatch(css,/\.console-ui \.autonomy-zone input:not\(\[type=checkbox\]\),/);
+    assert.match(css,/\.console-ui \.autonomy-zone input:not\(\[type=checkbox\]\):not\(\[type=radio\]\)/);
+    assert.match(css,/\.console-ui \.autonomy-zone input\[type=radio\]\{[^}]*min-height:16px;[^}]*flex:0 0 16px/);
+    assert.match(css,/#a1-quickStart \.check-row>span\{min-width:0;overflow-wrap:anywhere\}/);
+    assert.match(css,/#a1-quickStart \.form-footer\{[^}]*flex-wrap:wrap/);
+  }
+});
 for(const m of html.matchAll(/<script[^>]+src="([^"]+)"/g))test('current asset cache '+m[1],()=>{const asset=new URL(m[1],'https://razvilka.invalid');assert.equal(asset.searchParams.get('v'),version);assert.ok(read(root+asset.pathname.replace(/^\//,'')).length>0);});
 for(const f of ['index.html','interface.js','interface-model.js','console-autonomy.js','console.js','awg-workspace.js','dns-service-lab.js'])test('no preview transport in '+f,()=>assert.doesNotMatch(read(root+f),/__demoData|__demoRequests|window\.fetch\s*=/));
 test('no external stylesheet/font',()=>assert.doesNotMatch(html,/(?:href|src)="https?:\/\/[^" ]+\.(?:woff2?|ttf|css|js)/));
