@@ -140,4 +140,38 @@ assert.equal(dialog.returnValue, '');
 dialog.closeListener(); // Native Escape closes without changing returnValue.
 assert.equal(await cancelled, false);
 
-console.log('PASS project log: readable issues/events, honest request outcomes, ordering/bounds, escaping, drawer integration and confirmation reuse');
+const auditElements = new Map();
+const auditState = { audit: null, dataLoad: {} }, downloads = [], notices = [];
+const auditContext = vm.createContext({ state: auditState, esc, Date, JSON,
+  $: id => { if (!auditElements.has(id)) auditElements.set(id, { innerHTML: '', disabled: false }); return auditElements.get(id); },
+  renderProjectAuditRow: event => `<p>${esc(event.path)}</p>`,
+  consoleDownload: (...args) => downloads.push(args), showNotice: (...args) => notices.push(args),
+});
+for (const name of ['auditReadState', 'renderAudit']) {
+  const fn = app.match(new RegExp(`function ${name}\\([^]*?\\n}\\n`));
+  assert.ok(fn, name); vm.runInContext(fn[0], auditContext);
+}
+const exportFn = read('cmd/razvilka/web/console.js').match(/function exportConsoleAudit\([^]*?\n}\n/);
+assert.ok(exportFn); vm.runInContext(exportFn[0], auditContext);
+for (const phase of [undefined, 'loading', 'busy', 'error']) {
+  auditState.dataLoad.audit = phase ? { phase, loaded: phase !== 'loading' } : undefined;
+  auditContext.renderAudit(); auditContext.exportConsoleAudit();
+  assert.equal(auditElements.get('#consoleExportAudit').disabled, true);
+  assert.match(auditElements.get('#auditRows').innerHTML, /data-panel-refresh/);
+  assert.doesNotMatch(auditElements.get('#auditRows').innerHTML, /Действий пока нет/);
+  assert.equal(downloads.length, 0, 'unavailable observation exported a fabricated empty journal');
+}
+auditState.audit = { available: false, last_error: '<read failed>', events: [{ path: '/retained' }] };
+auditState.dataLoad.audit = { phase: 'ready', loaded: true };
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.match(auditElements.get('#auditRows').innerHTML, /&lt;read failed&gt;[^]*\/retained/);
+assert.equal(downloads.length, 0);
+auditState.audit = { available: true, events: [] };
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.equal(auditElements.get('#consoleExportAudit').disabled, false);
+assert.match(auditElements.get('#auditRows').innerHTML, /Действий пока нет/);
+assert.deepEqual(JSON.parse(downloads[0][1]).events, []);
+auditState.audit.events = [{ path: '/actual' }];
+auditContext.renderAudit(); auditContext.exportConsoleAudit();
+assert.equal(JSON.parse(downloads[1][1]).events[0].path, '/actual');
+console.log('PASS project log: readable issues/events, honest request outcomes, ordering/bounds, escaping, drawer integration, confirmation reuse and valid export');

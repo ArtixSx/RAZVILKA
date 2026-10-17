@@ -1794,11 +1794,24 @@ function renderEngineLab() {
   }
 }
 
+function auditReadState() {
+  const load = state.dataLoad?.audit;
+  const ready = load?.loaded === true && load.phase === 'ready' && state.audit?.available !== false && Array.isArray(state.audit?.events);
+  const message = state.audit?.available === false && state.audit?.last_error ? state.audit.last_error
+    : load?.phase === 'error' || load?.phase === 'busy' ? 'Журнал сейчас недоступен. Последние полученные записи сохранены.'
+    : load?.phase === 'loading' ? 'Загружаем журнал…' : 'Журнал ещё не получен.';
+  return { ready, message };
+}
+
 function renderAudit() {
   const target = $('#auditRows');
   if (!target) return;
-  const events = state.audit?.events || [];
-  target.innerHTML = events.map(renderProjectAuditRow).join('') || `<div class="community-empty">${state.audit?.available === false && state.audit?.last_error ? esc(state.audit.last_error) : 'Действий пока нет.'}</div>`;
+  const read = auditReadState();
+  const events = Array.isArray(state.audit?.events) ? state.audit.events : [];
+  const button = $('#consoleExportAudit');
+  if (button) button.disabled = !read.ready;
+  const notice = read.ready ? '' : `<div class="community-empty" role="status">${esc(read.message)} <button class="text-button" type="button" data-panel-refresh>Повторить чтение</button></div>`;
+  target.innerHTML = notice + (events.map(renderProjectAuditRow).join('') || (read.ready ? '<div class="community-empty">Действий пока нет.</div>' : ''));
 }
 
 function strategyCompatibilityView(validation = {}) {
@@ -2535,7 +2548,7 @@ async function checkWarpCanary() {
     const message = /handshake was not confirmed/i.test(raw)
       ? 'Провайдер не пропустил WARP WireGuard ни на UDP 2408, 500, 1701 или 4500. Профиль сохранён как черновик, рабочие маршруты не изменены. Используйте WARP · MASQUE либо другой установленный обход.'
       : /canary probe.*deadline|context deadline|timeout/i.test(raw)
-        ? `WARP-туннель поднялся, но ${service?.name || serviceID} через него не ответил вовремя. Такой профиль не следует применять для этого сервиса.`
+        ? `Проверка WARP не завершилась вовремя. Работа туннеля и доступность ${service?.name || serviceID} не подтверждены. Такой профиль не следует применять по этому результату.`
         : 'Безопасная проверка не пройдена. Профиль оставлен черновиком, рабочие маршруты не изменены.';
     showNotice('error', 'WARP не прошёл безопасную проверку', message, { ...payload, technical: raw || error.technicalMessage || '' });
   } finally {

@@ -222,4 +222,20 @@ assert.match(context.engineVersionHTML({ id: 'unknown', installed: true }), /В�
   assert.equal((await context.readServiceControl()).config_revision, 21, 'finished read was reused');
   assert.equal(calls.length, before + 2);
 }
+// Stop remains actionable for an unconfirmed runtime in simple mode, without
+// presenting that cleanup authority as successful bypass operation.
+context.document.body = { classList: { contains: name => name === 'rz-simple' } };
+Object.assign(context.control, { authenticated: true, busy: false, readBusy: false, runtimeJob: null, stopReceipt: null });
+state.serviceControl = { ...snapshot, config_revision: 30, runtime_state: 'unknown', running: false, can_stop: true };
+context.renderWorkspaceControls();
+assert.match($('#projectPowerLabel').textContent, /не подтверждена/);
+assert.equal($('#projectPower').disabled, false);
+assert.match($('#projectPower').attributes['aria-label'], /Остановить/);
+assert.equal($('#projectPower').attributes['aria-checked'], 'true');
+state.serviceControl = { ...state.serviceControl, runtime_state: 'running', running: true };
+context.renderWorkspaceControls();
+assert.equal($('#projectPowerLabel').textContent, 'Обход включён');
+state.serviceControl = { ...state.serviceControl, runtime_state: 'stopped', running: false, can_stop: false, resume_available: true };
+context.renderWorkspaceControls();
+assert.equal($('#projectPowerLabel').textContent, 'Обход выключен');
 console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed');

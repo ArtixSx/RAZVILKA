@@ -104,7 +104,8 @@ function renderWorkspaceControls() {
   $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control.runtime_state === 'unknown' ? 'Примените изменения, чтобы подтвердить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
   // Simple mode names the switch by what the owner gets: the bypass.
   if (globalThis.document?.body?.classList?.contains?.('rz-simple') && ready && !workspaceControl.runtimeJob && !workspaceControl.busy && !stopPending) {
-    if (canStop) { $('#projectPowerLabel').textContent = 'Обход включён'; $('#projectPowerHint').textContent = 'Нажмите, чтобы выключить всё'; }
+    if (running) { $('#projectPowerLabel').textContent = 'Обход включён'; $('#projectPowerHint').textContent = 'Нажмите, чтобы выключить всё'; }
+    else if (canStop) { $('#projectPowerLabel').textContent = 'Работа обхода не подтверждена'; $('#projectPowerHint').textContent = 'Можно остановить маршруты · откройте лог'; }
     else if (control.runtime_state === 'stopped') { $('#projectPowerLabel').textContent = 'Обход выключен'; if (control?.resume_available) $('#projectPowerHint').textContent = 'Нажмите, чтобы включить'; }
   }
   if (stopPending) {

@@ -148,7 +148,12 @@ $('#consoleSearchInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.pr
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();consoleOpenPalette();}if(e.key==='Escape'&&document.body.classList.contains('console-menu-open'))$('#consoleCloseMenu').click();});
 $('#consoleHelp').addEventListener('click',()=>$('#consoleHelpDialog').showModal());
 $('#consoleAuditSearch').addEventListener('input',consoleFilterAudit);
-$('#consoleExportAudit').addEventListener('click',()=>consoleDownload('razvilka-activity.json',JSON.stringify({exported_at:new Date().toISOString(),events:state.audit?.events||[]},null,2)));
+function exportConsoleAudit(){
+ const read=auditReadState();
+ if(!read.ready){showNotice('review','Журнал недоступен',read.message);return;}
+ consoleDownload('razvilka-activity.json',JSON.stringify({exported_at:new Date().toISOString(),events:state.audit.events},null,2));
+}
+$('#consoleExportAudit').addEventListener('click',exportConsoleAudit);
 document.addEventListener('click',async e=>{
  const close=e.target.closest('[data-console-close]');if(close){document.getElementById(close.dataset.consoleClose)?.close();return;}
  const b=e.target.closest('[data-console-engine],[data-console-navigate],[data-console-add],[data-console-service-filter],[data-console-feed],[data-console-node-tab],[data-console-engine-action]');if(!b||b.disabled)return;

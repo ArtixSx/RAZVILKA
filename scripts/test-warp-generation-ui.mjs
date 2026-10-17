@@ -47,4 +47,19 @@ state.warp.registration_state = 'local-state-invalid';
 context.renderWarpManager();
 assert.equal($('#warpGenerate').disabled, true);
 assert.equal($('#warpRotate').disabled, true);
-console.log('WARP native generation and offline recovery UI gates: PASS');
+const canaryFunction = source.match(/async function checkWarpCanary\([^]*?\n}\n/);
+assert.ok(canaryFunction);
+vm.runInContext(canaryFunction[0], context);
+state.services = [{ id: 'owned-service', name: 'Сервис' }];
+$('#warpCanaryService').value = 'owned-service';
+context.renderWarpManager = () => {};
+for (const raw of ['context deadline exceeded', 'canary probe deadline exceeded', 'request timeout before admission']) {
+  const notices = [];
+  context.api = async () => { throw Object.assign(new Error(raw), { status: 503, payload: { error: raw } }); };
+  context.showNotice = (...args) => notices.push(args);
+  await context.checkWarpCanary();
+  assert.equal(notices.length, 1);
+  assert.match(notices[0][2], /не подтверждены/);
+  assert.doesNotMatch(notices[0][2], /туннель поднялся|туннель.*работает/i);
+}
+console.log('WARP native generation, offline recovery and unproven timeout UI gates: PASS');
