@@ -1345,6 +1345,38 @@ type d10NativeFeed struct {
 	cPort        int
 }
 
+type d10NativeFeedTransport struct {
+	t    *testing.T
+	next http.RoundTripper
+}
+
+func (d d10NativeFeedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	response, err := d.next.RoundTrip(req)
+	if err != nil {
+		// The only URL/credentials here are the owned public-format fixture.
+		// Retain existing redaction even for these synthetic diagnostics.
+		d.t.Log("owned source HTTPS transport:", d10NativeRedact(err.Error()))
+	}
+	return response, err
+}
+
+func d10NativeFeedDiagnostic(t *testing.T, f *d10NativeFeed, job providerfeed.Job) {
+	t.Helper()
+	t.Logf("native source job: status=%s code=%s requests=%d", job.Status, job.ErrorCode, f.requests.Load())
+	if r := job.Result; r != nil {
+		t.Logf("native source result: status=%s imported=%d accepted=%d rejected=%d cursor=%d nodes=%d", r.Status, r.Imported, r.AcceptedEntries, r.Rejected, r.Cursor, len(r.NodeIDs))
+		if r.Fetch != nil {
+			t.Logf("native source fetch: HTTP=%d bytes=%d bodyClosed=%t freshBody=%t", r.Fetch.HTTPStatus, r.Fetch.BodyBytes, r.Fetch.BodyClosed, r.Fetch.FreshBody)
+		}
+		for i, issue := range r.Issues {
+			if i == 4 {
+				break
+			}
+			t.Log("owned source parse issue:", d10NativeRedact(fmt.Sprint(issue)))
+		}
+	}
+}
+
 // Only the HTTPS dial destination/trust and provider cooldown clock are fixture
 // dependencies. Bytes traverse real verified TLS/HTTP and the production saved
 // source worker/importer. No exact-check outcome or transaction is replaced.
@@ -1373,6 +1405,7 @@ func d10NativeStartFeed(t *testing.T, ctx context.Context, a *App, root string, 
 		w.Header().Set("ETag", `"native-ab"`)
 		_, _ = fmt.Fprintln(w, profile(ports[0])+"\n"+profile(ports[1]))
 	}))
+	client.Transport = d10NativeFeedTransport{t: t, next: client.Transport}
 	feedRoot := filepath.Join(root, "native-feeds")
 	if err := os.Mkdir(feedRoot, 0700); err != nil {
 		t.Fatal("native saved source private directory", d10NativeErrorClass(err))
@@ -1408,7 +1441,8 @@ func d10NativeStartFeed(t *testing.T, ctx context.Context, a *App, root string, 
 	}
 	job := d10WaitFeedJob(t, feeds, queued.ID)
 	if job.Status != "completed" || job.Result == nil || len(job.Result.NodeIDs) != 2 || f.requests.Load() != 1 {
-		t.Fatal("initial real source bytes did not import A/B", job.Status)
+		d10NativeFeedDiagnostic(t, f, job)
+		t.Fatal("initial real source bytes did not import A/B", job.Status, job.ErrorCode)
 	}
 	f.initialJobID = queued.ID
 	return f
@@ -1472,7 +1506,8 @@ func d10NativeRunSourceRefill(t *testing.T, ctx context.Context, a *App, root st
 	}
 	job := d10WaitFeedJob(t, a.NodeFeeds, jobID)
 	if job.Status != "completed" || job.Result == nil || !slices.Contains(job.Result.NodeIDs, ids[2]) || feed.requests.Load() != 2 {
-		t.Fatal("automatic real HTTPS refill did not import C", job.Status)
+		d10NativeFeedDiagnostic(t, feed, job)
+		t.Fatal("automatic real HTTPS refill did not import C", job.Status, job.ErrorCode)
 	}
 	cObserved, haltedObserved := false, false
 	checks.before = func(c context.Context, req dataplane.NodeCheckRequest) error {
