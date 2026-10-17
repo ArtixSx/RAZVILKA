@@ -337,50 +337,99 @@ func (b *cappedOutput) Write(raw []byte) (int, error) {
 // The sole command is fixed read-only NDMC metadata. No inherited loader,
 // shell, Entware library path, PATH lookup, caller argv or cached report.
 func readBuild(ctx context.Context) (buildTuple, error) {
+	before, _, err := readBuildCommands(ctx, false)
+	return before, err
+}
+
+// Only the two consecutive metadata reads in one identity observation share
+// these held images. The session closes before any caller callback runs.
+func readBuildPair(ctx context.Context) (buildTuple, buildTuple, error) {
+	return readBuildCommands(ctx, true)
+}
+
+func readBuildCommands(ctx context.Context, paired bool) (buildTuple, buildTuple, error) {
 	var zero buildTuple
 	if ctx == nil || ctx.Err() != nil {
-		return zero, ErrUnknown
+		return zero, zero, ErrUnknown
 	}
 	leaf, cancel, err := operationContext(ctx)
 	if err != nil {
-		return zero, err
+		return zero, zero, err
 	}
 	defer cancel()
 	ctx = leaf
 	release, machine, ok := kernelTuple()
 	if !ok || release != nc1812Profile().KernelRelease || machine != nc1812Profile().Machine {
-		return zero, ErrUnknown
+		return zero, zero, ErrUnknown
 	}
 	if _, err := os.Lstat("/etc/ld.so.preload"); !errors.Is(err, os.ErrNotExist) {
-		return zero, ErrUnknown
+		return zero, zero, ErrUnknown
 	}
 	_, preloadNodes, err := protectedPath("/etc")
 	if err != nil {
-		return zero, ErrUnknown
+		return zero, zero, ErrUnknown
 	}
 	s := &systemImages{seen: map[string]bool{}}
-	defer s.close()
 	image, err := s.open(ctx, "/bin/ndmc", true)
-	if err != nil || s.dependencies(ctx, image) != nil || !s.unchanged(ctx) {
-		return zero, ErrUnknown
+	if err != nil || s.dependencies(ctx, image) != nil {
+		s.close()
+		return zero, zero, ErrUnknown
 	}
-	stdout, stderr := &cappedOutput{limit: 8192}, &cappedOutput{limit: 1024}
-	cmd := exec.CommandContext(ctx, "/proc/self/fd/3", "-c", "show version")
-	cmd.Args[0] = "/bin/ndmc"
-	cmd.ExtraFiles = []*os.File{image.file}
-	cmd.Env = []string{"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "LD_LIBRARY_PATH=/lib:/usr/lib", "LANG=C", "LC_ALL=C"}
-	cmd.Dir = "/"
-	cmd.Stdout, cmd.Stderr = stdout, stderr
-	cmd.WaitDelay = 50 * time.Millisecond
-	if cmd.Run() != nil || stdout.exceeded || stderr.exceeded || len(stderr.data) != 0 || ctx.Err() != nil || !s.unchanged(ctx) {
-		return zero, ErrUnknown
+	read := func() (buildTuple, error) {
+		// Writable images are rehashed before AND after EACH command, exactly
+		// as in the single-command path. Immutable images still require all
+		// original path/inode/filesystem bookends on every check.
+		currentRelease, currentMachine, currentKernel := kernelTuple()
+		if !currentKernel || currentRelease != release || currentMachine != machine || !nodesUnchanged(preloadNodes) {
+			return zero, ErrUnknown
+		}
+		if _, err := os.Lstat("/etc/ld.so.preload"); !errors.Is(err, os.ErrNotExist) {
+			return zero, ErrUnknown
+		}
+		stdout, stderr := &cappedOutput{limit: 8192}, &cappedOutput{limit: 1024}
+		cmd := exec.CommandContext(ctx, "/proc/self/fd/3", "-c", "show version")
+		cmd.Args[0] = "/bin/ndmc"
+		cmd.ExtraFiles = []*os.File{image.file}
+		cmd.Env = []string{"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "LD_LIBRARY_PATH=/lib:/usr/lib", "LANG=C", "LC_ALL=C"}
+		cmd.Dir = "/"
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		cmd.WaitDelay = 50 * time.Millisecond
+		if cmd.Run() != nil || stdout.exceeded || stderr.exceeded || len(stderr.data) != 0 || ctx.Err() != nil {
+			return zero, ErrUnknown
+		}
+		if _, err := os.Lstat("/etc/ld.so.preload"); !errors.Is(err, os.ErrNotExist) || !nodesUnchanged(preloadNodes) {
+			return zero, ErrUnknown
+		}
+		afterRelease, afterMachine, ok := kernelTuple()
+		if !ok || afterRelease != release || afterMachine != machine {
+			return zero, ErrUnknown
+		}
+		return parseBuild(stdout.data)
 	}
-	if _, err := os.Lstat("/etc/ld.so.preload"); !errors.Is(err, os.ErrNotExist) || !nodesUnchanged(preloadNodes) {
-		return zero, ErrUnknown
+	return readHeldBuildCommands(ctx, s, paired, read)
+}
+
+// The paired reader never escapes this synchronous image session. Even a
+// failed command or closing check closes every original descriptor.
+func readHeldBuildCommands(ctx context.Context, s *systemImages, paired bool, read func() (buildTuple, error)) (buildTuple, buildTuple, error) {
+	defer s.close()
+	var values [2]buildTuple
+	count := 1
+	if paired {
+		count = 2
 	}
-	afterRelease, afterMachine, ok := kernelTuple()
-	if !ok || afterRelease != release || afterMachine != machine {
-		return zero, ErrUnknown
+	for i := 0; i < count; i++ {
+		if !s.unchanged(ctx) {
+			return buildTuple{}, buildTuple{}, ErrUnknown
+		}
+		value, err := read()
+		if err != nil {
+			return buildTuple{}, buildTuple{}, err
+		}
+		if !s.unchanged(ctx) {
+			return buildTuple{}, buildTuple{}, ErrUnknown
+		}
+		values[i] = value
 	}
-	return parseBuild(stdout.data)
+	return values[0], values[1], nil
 }

@@ -29,6 +29,7 @@ func validObservation(net bool) observation {
 }
 func modelProvider(net bool, profile bool) *Provider {
 	p := NewProcProvider()
+	p.buildPair = nil // This fixture explicitly models the individual metadata reads.
 	p.read = func(context.Context) (observation, error) { return validObservation(net), nil }
 	p.build = func(context.Context) (buildTuple, error) { return nc1812Profile().Build, nil }
 	if profile {

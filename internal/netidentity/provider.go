@@ -10,15 +10,16 @@ import (
 // Provider has no caller-supplied runner, path, profile ID or observation cache.
 // Its zero value cannot issue an observation.
 type Provider struct {
-	valid   bool
-	profile *reviewedProfile
-	read    func(context.Context) (observation, error)
-	build   func(context.Context) (buildTuple, error)
+	valid     bool
+	profile   *reviewedProfile
+	read      func(context.Context) (observation, error)
+	build     func(context.Context) (buildTuple, error)
+	buildPair func(context.Context) (buildTuple, buildTuple, error)
 }
 
 // NewProcProvider permits only the actual process-and-thread inode path.
 func NewProcProvider() *Provider {
-	return &Provider{valid: true, read: readObservation, build: readBuild}
+	return &Provider{valid: true, read: readObservation, build: readBuild, buildPair: readBuildPair}
 }
 
 // NewReviewedStockNC1812Provider is the explicit trusted startup factory for
@@ -95,12 +96,11 @@ func (p *Provider) observeLocked(ctx context.Context) (Identity, error) {
 		if o.KernelRelease != p.profile.KernelRelease || o.Machine != p.profile.Machine {
 			return Identity{}, ErrUnknown
 		}
-		before, err := p.build(ctx)
+		before, after, err := p.buildPairLocked(ctx)
 		if err != nil || before != p.profile.Build {
 			return Identity{}, errors.Join(ErrUnknown, err)
 		}
-		after, err := p.build(ctx)
-		if err != nil || after != before {
+		if after != before {
 			return Identity{}, errors.Join(ErrUnknown, err)
 		}
 		closing, err := p.read(ctx)
@@ -116,6 +116,18 @@ func (p *Provider) observeLocked(ctx context.Context) (Identity, error) {
 		return Identity{}, errors.Join(ErrUnknown, err)
 	}
 	return identity, nil
+}
+
+func (p *Provider) buildPairLocked(ctx context.Context) (buildTuple, buildTuple, error) {
+	if p.buildPair != nil {
+		return p.buildPair(ctx)
+	}
+	before, err := p.build(ctx)
+	if err != nil {
+		return buildTuple{}, buildTuple{}, err
+	}
+	after, err := p.build(ctx)
+	return before, after, err
 }
 
 // WithCurrent brackets the existing caller operation on the same OS thread.
