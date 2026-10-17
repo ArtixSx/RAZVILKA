@@ -76,7 +76,7 @@ func (m *Manager) reviewBootPublication(root *os.Root, manifest bootRetirementMa
 	if json.Unmarshal(manifest.Evidence["latest-execution.json"], &original) != nil || json.Unmarshal(manifest.Evidence[transaction], &originalTransaction) != nil || json.Unmarshal(manifest.Evidence["latest-plan.json"], &originalPlan) != nil || json.Unmarshal(manifest.Evidence["latest-committed-plan.json"], &previous) != nil {
 		return failedRollback{}, false
 	}
-	if _, ok := m.reviewFailedRollbackImages(manifest.PlanID, manifest.Digest, &original, &originalTransaction, originalPlan, previous); !ok {
+	if _, ok := m.reviewFailedRollbackImagesMode(manifest.PlanID, manifest.Digest, &original, &originalTransaction, originalPlan, previous, manifest.Schema == 2); !ok {
 		return failedRollback{}, false
 	}
 	forward := func(e Execution) []ExecutionStep {
@@ -105,7 +105,7 @@ func (m *Manager) reviewBootPublication(root *os.Root, manifest bootRetirementMa
 				return failedRollback{}, false
 			}
 			execution.State = "rollback-failed"
-			if _, ok := m.reviewFailedRollbackImages(manifest.PlanID, manifest.Digest, &execution, &execution, plan, previous); !ok {
+			if _, ok := m.reviewFailedRollbackImagesMode(manifest.PlanID, manifest.Digest, &execution, &execution, plan, previous, manifest.Schema == 2); !ok {
 				return failedRollback{}, false
 			}
 		}
@@ -121,7 +121,7 @@ func (m *Manager) reviewBootPublication(root *os.Root, manifest bootRetirementMa
 		return failedRollback{}, false
 	}
 	desired.State, plan.State = "rollback-failed", "rollback-failed"
-	return m.reviewFailedRollbackImages(manifest.PlanID, manifest.Digest, &desired, &desired, plan, previous)
+	return m.reviewFailedRollbackImagesMode(manifest.PlanID, manifest.Digest, &desired, &desired, plan, previous, manifest.Schema == 2)
 }
 
 func (w *bootRetirementWriter) publish(updates map[string][]byte) error {

@@ -142,6 +142,10 @@ type failedRollback struct {
 // reviewFailedRollback validates the journals while the caller holds the
 // dataplane operation. Any doubt refuses.
 func (m *Manager) reviewFailedRollback(planID, digest string) (failedRollback, bool) {
+	return m.reviewFailedRollbackMode(planID, digest, false)
+}
+
+func (m *Manager) reviewFailedRollbackMode(planID, digest string, offlineStop bool) (failedRollback, bool) {
 	var latest, transaction *Execution
 	found, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
 	if err != nil || !found || latest == nil || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > maxRecoveryJournalSteps {
@@ -160,12 +164,16 @@ func (m *Manager) reviewFailedRollback(planID, digest string) (failedRollback, b
 	if err != nil || !found || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
 		return failedRollback{}, false
 	}
-	return m.reviewFailedRollbackImages(planID, digest, latest, transaction, plan, previous)
+	return m.reviewFailedRollbackImagesMode(planID, digest, latest, transaction, plan, previous, offlineStop)
 }
 
 // Pure validation shared with an explicit offline retirement's immutable
 // publication record. It does not locate files or reconstruct effect authority.
 func (m *Manager) reviewFailedRollbackImages(planID, digest string, latest, transaction *Execution, plan, previous Plan) (failedRollback, bool) {
+	return m.reviewFailedRollbackImagesMode(planID, digest, latest, transaction, plan, previous, false)
+}
+
+func (m *Manager) reviewFailedRollbackImagesMode(planID, digest string, latest, transaction *Execution, plan, previous Plan, offlineStop bool) (failedRollback, bool) {
 	if latest == nil || transaction == nil || !reflect.DeepEqual(latest, transaction) || latest.State != "rollback-failed" || latest.PlanID != planID || latest.Digest != digest || latest.FinishedAt == "" || len(latest.Steps) > maxRecoveryJournalSteps ||
 		plan.SchemaVersion != SchemaVersion || plan.PlanID != planID || plan.Digest != digest || plan.State != "rollback-failed" || plan.DNS != nil || plan.SuspendDNS || len(plan.RetiringAdapters) > 0 ||
 		previous.SchemaVersion != SchemaVersion || previous.State != "committed" || previous.PlanID == planID || previous.DNS != nil || !slices.Equal(plan.Adapters, previous.Adapters) {
@@ -197,7 +205,7 @@ func (m *Manager) reviewFailedRollbackImages(planID, digest string, latest, tran
 			prepared = append(prepared, adapter)
 		}
 		if step.State == "failed" {
-			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) {
+			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) && !(offlineStop && step.Phase == "deactivate") {
 				return failedRollback{}, false
 			}
 			failedBeforeCommit = true

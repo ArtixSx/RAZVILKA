@@ -458,7 +458,23 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		// Mixed legacy Stop retirement requires the same concrete admitted NFQ
+		// absence sources as ordinary runtime inspection. Its assembly has fixed
+		// production coordinates; never silently inspect a different private root.
+		var closeSources func() error
+		if plan, found, readErr := manager.Latest(); readErr == nil && found && slices.Contains(plan.Adapters, "nfqws2") {
+			if *cfgPath != selfUpdateDefaultPath("/opt/etc/razvilka/config.json") || *dataplaneStatePath != selfUpdateDefaultPath(installpath.State+"/dataplane") {
+				log.Fatal("mixed post-reboot retirement requires the fixed production roots")
+			}
+			manager, closeSources, err = selfUpdateRuntimeManagerBound(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 		result, err := runBootRetirementCLI(ctx, manager, *cfgPath, store)
+		if closeSources != nil {
+			err = errors.Join(err, closeSources())
+		}
 		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
 			log.Fatal(encodeErr)
 		}

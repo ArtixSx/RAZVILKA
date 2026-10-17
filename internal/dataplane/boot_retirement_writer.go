@@ -174,6 +174,9 @@ func publishBootRetirementWitness(root *os.Root, archive string, manifest bootRe
 		Schema                                            int
 		ManifestSHA256, SettingsSHA256, Boot, Observation string
 	}{1, bootRetirementChecksum(manifest), manifest.SettingsSHA256, boot, "bracketed-proc-interface-kernel-absence-v1"}
+	if manifest.Schema == 2 {
+		witness.Observation = "bracketed-proxy-and-nfq-absence-v1"
+	}
 	raw, _ := json.Marshal(witness)
 	name := filepath.Join(archive, "observations", boot+".json")
 	current, err := bootRetirementRead(root, name)

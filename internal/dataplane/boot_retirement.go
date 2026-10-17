@@ -33,8 +33,9 @@ type bootRetirementManifest struct {
 }
 
 type bootRetirementOptions struct {
-	proof *proxyInactiveProof // Package-private fixture seam; production uses Linux.
-	fault func(string) error
+	proof     *proxyInactiveProof // Package-private fixture seam; production uses Linux.
+	fault     func(string) error
+	nfqAbsent func(context.Context) error // Private complete-source fixture seam only.
 }
 
 // RetireFailedRollbackAfterBoot is an explicit offline operation. The caller
@@ -79,11 +80,19 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	if err != nil || pending != nil && !exists {
 		return refuse()
 	}
-	reviewed, ok := m.reviewFailedRollback(planID, digest)
+	reviewed, ok := m.reviewFailedRollbackMode(planID, digest, true)
 	if pending != nil {
 		reviewed, ok = m.reviewBootPublication(state, manifest, pending)
 	}
-	if !ok || !bootRetirementPlan(reviewed.plan) || !bootRetirementPlan(reviewed.previous) || len(reviewed.latest.Resources) != 0 || reviewed.latest.ResourcePlanID != "" {
+	mixedStop := ok && mixedStopRetirementHistory(reviewed)
+	if ok && !mixedStop {
+		for _, step := range reviewed.latest.Steps {
+			if step.Phase == "deactivate" && step.State == "failed" {
+				return refuse()
+			}
+		}
+	}
+	if !ok || (!mixedStop && (!bootRetirementPlan(reviewed.plan) || !bootRetirementPlan(reviewed.previous))) || len(reviewed.latest.Resources) != 0 || reviewed.latest.ResourcePlanID != "" {
 		return refuse()
 	}
 	a, ok := m.adapter("sing-box")
@@ -91,6 +100,22 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	if !ok || !actual || proxy.ID() != "sing-box" || proxy.scopedXray || proxy.xrayPlanDispatch || proxy.xrayOperation ||
 		proxy.StateRoot != filepath.Join(m.StateRoot, "sing-box") || guard(reviewed.previous) != nil {
 		return refuse()
+	}
+	observe := func(c context.Context) error {
+		if err := observeBootRetirement(c, proxy, proof); err != nil {
+			return err
+		}
+		if mixedStop {
+			if options.nfqAbsent != nil {
+				return options.nfqAbsent(c)
+			}
+			nfq, valid := m.Adapters["nfqws2"].(*NFQWS2Adapter)
+			if !valid || nfq == nil {
+				return ErrBootRetirement
+			}
+			return nfq.VerifyRuntimeInactive(c)
+		}
+		return c.Err()
 	}
 	writer, err := newBootRetirementWriter(m, state, planID)
 	if err != nil {
@@ -111,7 +136,7 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		manifest.OldBoot == boot || !kernelBootIDPattern.MatchString(manifest.CurrentBoot) || validateBootRetirement(proxy, reviewed, manifest) != nil ||
 		verifyBootRetirementFiles(state, archive, manifest, exists) != nil ||
 		verifyBootRetirementEvidence(state, manifest) != nil ||
-		observeBootRetirement(ctx, proxy, proof) != nil || guard(reviewed.previous) != nil {
+		observe(ctx) != nil || guard(reviewed.previous) != nil {
 		return refuse()
 	}
 	unlock, err := lockBootRetirementReceipts(state, archive, manifest)
@@ -145,7 +170,7 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		}
 		return errors.Join(checkManifest(), checkWitness(), verifyBootRetirementEvidence(state, manifest))
 	}
-	writer.observe = func() error { return observeBootRetirement(ctx, proxy, proof) }
+	writer.observe = func() error { return observe(ctx) }
 	writer.archive, writer.manifest, writer.pending, writer.fault = archive, manifest, pending, options.fault
 	if options.fault != nil && !exists {
 		if err := options.fault("manifest-published"); err != nil {
@@ -171,7 +196,7 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 				if err := verifyBootRetirementEvidence(state, manifest); err != nil {
 					return fmt.Errorf("inspect original evidence: %w", err)
 				}
-				if err := observeBootRetirement(c, proxy, proof); err != nil {
+				if err := observe(c); err != nil {
 					return fmt.Errorf("inspect runtime absence: %w", err)
 				}
 				return nil
@@ -201,6 +226,11 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		})
 	}, func(execution *Execution, plan *Plan) {
 		execution.RollbackVerified = false
+		if mixedStop {
+			execution.Error += "; retired-after-boot: old proxy metadata archived with independent fresh proxy and NFQ absence; original rollback remains unverified"
+			plan.Note = "retired-after-boot: explicit offline metadata retirement; original rollback and previous service remain unverified. Apply and verify a fresh plan before claiming service access."
+			return
+		}
 		execution.Error += "; old-boot proxy metadata archived after negative runtime inspection; no rollback acknowledgement or service verification"
 		plan.Note = "Closed by explicit post-reboot metadata retirement. Runtime absence is not a rollback receipt; apply and verify a fresh plan before claiming service access."
 	}, writer)
@@ -294,7 +324,7 @@ func readBootRetirementManifest(root *os.Root, archive string) (bootRetirementMa
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&manifest) != nil || decoder.Decode(new(any)) != io.EOF || manifest.Schema != 1 || manifest.Checksum != bootRetirementChecksum(manifest) {
+	if decoder.Decode(&manifest) != nil || decoder.Decode(new(any)) != io.EOF || (manifest.Schema != 1 && manifest.Schema != 2) || manifest.Checksum != bootRetirementChecksum(manifest) {
 		return manifest, true, ErrBootRetirement
 	}
 	canonical, _ := json.Marshal(manifest)
@@ -315,7 +345,12 @@ func bootRetirementRuntimePaths(a *ProxyTunnelAdapter) []string {
 func collectBootRetirement(root *os.Root, a *ProxyTunnelAdapter, reviewed failedRollback, settingsHash, boot string) (bootRetirementManifest, error) {
 	manifest := bootRetirementManifest{Schema: 1, PlanID: reviewed.plan.PlanID, Digest: reviewed.plan.Digest, SettingsSHA256: settingsHash, CurrentBoot: boot, Evidence: map[string][]byte{}, Files: map[string][]byte{}}
 	transaction := filepath.Join("transactions", reviewed.plan.PlanID)
-	for _, path := range []string{"latest-execution.json", "latest-plan.json", "latest-committed-plan.json", filepath.Join(transaction, "execution.json"), filepath.Join(transaction, "sing-box", "snapshot.json"), filepath.Join(transaction, "sing-box", "policy.staged.json"), filepath.Join(transaction, "sing-box", filepath.Base(proxyPolicyReceiptPath(""))), filepath.Join(transaction, "sing-box", policyAdditionFile)} {
+	evidence := []string{"latest-execution.json", "latest-plan.json", "latest-committed-plan.json", filepath.Join(transaction, "execution.json"), filepath.Join(transaction, "sing-box", "snapshot.json"), filepath.Join(transaction, "sing-box", "policy.staged.json"), filepath.Join(transaction, "sing-box", filepath.Base(proxyPolicyReceiptPath(""))), filepath.Join(transaction, "sing-box", policyAdditionFile)}
+	if mixedStopRetirementHistory(reviewed) {
+		manifest.Schema = 2
+		evidence = mixedStopRetirementEvidence(reviewed)
+	}
+	for _, path := range evidence {
 		raw, err := bootRetirementRead(root, path)
 		if err != nil {
 			return manifest, err
@@ -394,10 +429,21 @@ func collectBootRetirement(root *os.Root, a *ProxyTunnelAdapter, reviewed failed
 			}
 		}
 	}
+	if manifest.Schema == 2 {
+		var binding proxyPolicyBinding
+		var doc policyAdditionDocument
+		if json.Unmarshal(manifest.Files[filepath.Join("sing-box", "policy-generation.json")], &binding) != nil || json.Unmarshal(manifest.Files[filepath.Join("sing-box", "policy-generations", binding.Generation, policyAdditionFile)], &doc) != nil {
+			return manifest, ErrBootRetirement
+		}
+		manifest.OldBoot = doc.Boot
+	}
 	return manifest, nil
 }
 
 func validateBootRetirement(a *ProxyTunnelAdapter, reviewed failedRollback, manifest bootRetirementManifest) error {
+	if manifest.Schema == 2 {
+		return validateMixedStopRetirement(a, reviewed, manifest)
+	}
 	if manifest.Schema != 1 || !kernelBootIDPattern.MatchString(manifest.OldBoot) || manifest.OldBoot == manifest.CurrentBoot || len(manifest.Files) == 0 || len(manifest.Files) > 512 || len(manifest.Evidence) != 8 || !boundedBootRetirement(manifest) {
 		return ErrBootRetirement
 	}
@@ -761,7 +807,10 @@ func lockBootRetirementReceipts(root *os.Root, archive string, manifest bootReti
 			file.Close()
 		}
 	}
-	names := []string{filepath.Join("transactions", manifest.PlanID, "sing-box", policyAdditionLock)}
+	var names []string
+	if manifest.Schema == 1 {
+		names = append(names, filepath.Join("transactions", manifest.PlanID, "sing-box", policyAdditionLock))
+	}
 	for name := range manifest.Files {
 		if filepath.Base(name) == policyAdditionLock {
 			names = append(names, name)
