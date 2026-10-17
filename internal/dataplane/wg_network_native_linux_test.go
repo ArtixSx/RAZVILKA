@@ -168,6 +168,11 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := Plan{Routes: []Route{{Resolved: resolved, WireGuardProfileRevision: revision, ServiceName: "native", CIDRs: []string{"0.0.0.0/0", "::/0"}, Sources: []string{"192.168.77.0/24", "fd01:77::/64"}, Ingress: []string{"br-net"}, NetworkPolicyGeneration: strings.Repeat("a", 64), NetworkPolicyRole: "default", ProbeURL: "http://network.native.test/"}}}
+	if a.ID() == "amneziawg" {
+		// The fixture staged this exact profile above. Carry the existing
+		// explicit draft review into Snapshot; never manufacture a live file.
+		plan.EngineDrafts = []string{a.ID() + "/main"}
+	}
 	plan.LAN, err = CompileLANPolicyRuntime(plan.Routes[0].NetworkPolicyGeneration, []LANPolicyIngress{{SegmentID: "native", Interface: "br-net", Sources: plan.Routes[0].Sources, Membership: "all", ExcludedMACs: []string{"02:00:00:00:00:02"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -178,6 +183,23 @@ func TestWGNativeNetworkReceipt(t *testing.T) {
 	}
 	wgNetworkNativeDNS(t, "127.0.0.1:0")
 	ctx := wgNetworkNativeContext(a, plan)
+	if a.ID() == "amneziawg" {
+		unreviewed := plan
+		unreviewed.EngineDrafts = nil
+		transaction := filepath.Join(root, "unreviewed-draft")
+		if err := a.Snapshot(ctx, unreviewed, transaction); err != nil {
+			t.Fatal("unreviewed native draft snapshot", err)
+		}
+		if err := a.Stage(ctx, unreviewed, transaction); err == nil || !strings.Contains(err.Error(), "profile is missing") {
+			t.Fatal("unreviewed native draft was not rejected before activation", err)
+		}
+		if _, err := os.Stat(a.RuntimeConfigPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("unreviewed draft created a runtime config")
+		}
+		if _, err := net.InterfaceByName(a.interfaceName()); err == nil {
+			t.Fatal("unreviewed draft created a runtime interface")
+		}
+	}
 	apply := func(label string) {
 		transaction := filepath.Join(root, label)
 		previousFault := a.policyReceiptOptions.fault
