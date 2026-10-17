@@ -375,3 +375,74 @@ func TestMixedStopBootRetirementManifestDurableBeforePublicationAndWriteFailureK
 		t.Fatal("write failure cleared fence")
 	}
 }
+
+func TestMixedStopBootRetirementPublicationRefusesTargetMutationDuringAbsence(t *testing.T) {
+	for _, mode := range []string{"different-bytes", "same-bytes-new-inode"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newMixedStopRetirementFixture(t)
+			target := filepath.Join(f.root, "execution.json")
+			original, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			foreign := []byte("foreign publication image")
+			if mode == "same-bytes-new-inode" {
+				foreign = original
+			}
+			calls := 0
+			result, err := runMixedStopFixture(f, func(context.Context) error {
+				calls++
+				if calls == 2 {
+					if mode == "different-bytes" {
+						inactiveWrite(t, target, foreign)
+					} else {
+						replacement := target + ".replacement"
+						inactiveWrite(t, replacement, foreign)
+						root, err := os.OpenRoot(f.root)
+						if err != nil {
+							t.Fatal(err)
+						}
+						err = root.Rename(filepath.Base(replacement), filepath.Base(target))
+						_ = root.Close()
+						if err != nil {
+							t.Fatal("replace held target", err)
+						}
+					}
+				}
+				return nil
+			}, nil)
+			if err == nil || result.State == "rolled-back" || calls < 2 {
+				t.Fatal("mutation across absence accepted", result.State, calls, err)
+			}
+			got, readErr := os.ReadFile(target)
+			if readErr != nil || !bytes.Equal(got, foreign) {
+				t.Fatal("foreign target overwritten", readErr)
+			}
+			if f.m.CheckExecutionRecovery(context.Background()) == nil {
+				t.Fatal("mutation cleared recovery fence")
+			}
+		})
+	}
+}
+
+func TestMixedStopBootRetirementCommittedExecutionMutationDuringAbsenceRefusesBeforeArchive(t *testing.T) {
+	f := newMixedStopRetirementFixture(t)
+	previous, _, _ := f.m.committedLocked()
+	target := filepath.Join(f.m.StateRoot, "transactions", previous.PlanID, "execution.json")
+	foreign := []byte("changed committed provenance")
+	result, err := runMixedStopFixture(f, func(context.Context) error { inactiveWrite(t, target, foreign); return nil }, nil)
+	if err == nil || result.State == "rolled-back" {
+		t.Fatal("immutable committed execution drift accepted", result.State, err)
+	}
+	archive := filepath.Join(f.m.StateRoot, "boot-retirements", f.plan.PlanID+"-"+f.plan.Digest, "manifest.json")
+	if _, err := os.Stat(archive); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("stale provenance published manifest", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || !bytes.Equal(got, foreign) {
+		t.Fatal("committed provenance overwritten", err)
+	}
+	if f.m.CheckExecutionRecovery(context.Background()) == nil {
+		t.Fatal("provenance drift cleared recovery fence")
+	}
+}

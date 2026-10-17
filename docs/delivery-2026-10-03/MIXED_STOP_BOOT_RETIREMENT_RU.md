@@ -30,6 +30,11 @@ Original Evidence и Files включены точными bytes в immutable ma
 до witness и любых journal publications. Источники повторно читаются до/после
 архивирования и перед каждой записью журнала. Сбой оставляет fence и resumable
 publication; нельзя трактовать частичное архивирование как завершение.
+Target journal image закрепляется inode+bytes до долгой absence проверки;
+closing CAS повторяется после неё и после staging fsync прямо перед rename.
+CAS отказ блокирует дальнейшие записи этого live writer. Immutable provenance
+исключает только три exact mutable publication paths текущего плана;
+execution предыдущего committed плана всегда проверяется как evidence.
 
 Итог использует существующий совместимый state `rolled-back`, но всегда
 `RollbackVerified=false` и отдельный marker `retired-after-boot` в error/note.

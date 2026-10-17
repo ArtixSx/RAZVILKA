@@ -122,6 +122,7 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		return refuse()
 	}
 	defer writer.close()
+	writer.context = ctx
 	boot, err := proxy.currentBootIdentity()
 	if err != nil || !kernelBootIDPattern.MatchString(boot) {
 		return refuse()
@@ -137,6 +138,11 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 		verifyBootRetirementFiles(state, archive, manifest, exists) != nil ||
 		verifyBootRetirementEvidence(state, manifest) != nil ||
 		observe(ctx) != nil || guard(reviewed.previous) != nil {
+		return refuse()
+	}
+	// Absence inspection is a slow external boundary. Close every immutable
+	// evidence/file image again before publishing even the archival intent.
+	if errors.Join(ctx.Err(), writer.current(), verifyBootRetirementEvidence(state, manifest), verifyBootRetirementFiles(state, archive, manifest, exists)) != nil {
 		return refuse()
 	}
 	unlock, err := lockBootRetirementReceipts(state, archive, manifest)
@@ -165,10 +171,10 @@ func (m *Manager) retireFailedRollbackAfterBoot(ctx context.Context, planID, dig
 	defer closeWitness()
 	writer.provenance = func() error {
 		current, err := proxy.currentBootIdentity()
-		if err != nil || current != boot || guard(reviewed.previous) != nil {
+		if ctx.Err() != nil || err != nil || current != boot || guard(reviewed.previous) != nil {
 			return ErrBootRetirement
 		}
-		return errors.Join(checkManifest(), checkWitness(), verifyBootRetirementEvidence(state, manifest))
+		return errors.Join(checkManifest(), checkWitness(), verifyBootRetirementEvidence(state, manifest), ctx.Err())
 	}
 	writer.observe = func() error { return observe(ctx) }
 	writer.archive, writer.manifest, writer.pending, writer.fault = archive, manifest, pending, options.fault
@@ -855,7 +861,7 @@ func lockBootRetirementReceipts(root *os.Root, archive string, manifest bootReti
 
 func verifyBootRetirementEvidence(root *os.Root, manifest bootRetirementManifest) error {
 	for name, expected := range manifest.Evidence {
-		if filepath.Base(name) == "execution.json" || name == "latest-execution.json" || name == "latest-plan.json" {
+		if slices.Contains(bootPublicationPaths(manifest.PlanID), name) {
 			continue
 		}
 		actual, err := bootRetirementRead(root, name)

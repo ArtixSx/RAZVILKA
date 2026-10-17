@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,8 @@ type bootRetirementWriter struct {
 	pending                                 *bootRetirementPublication
 	fault                                   func(string) error
 	observe                                 func() error
+	publicationFailure                      error // A failed CAS poisons this live writer until explicit recovery reconstructs it.
+	context                                 context.Context
 }
 
 func newBootRetirementWriter(m *Manager, state *os.Root, id string) (*bootRetirementWriter, error) {
@@ -59,6 +62,9 @@ func (w *bootRetirementWriter) close() {
 }
 
 func (w *bootRetirementWriter) current() error {
+	if w.publicationFailure != nil {
+		return errors.Join(ErrBootRetirement, w.publicationFailure)
+	}
 	path, err := os.Lstat(w.manager.StateRoot)
 	if err != nil {
 		return ErrBootRetirement
@@ -103,8 +109,11 @@ func (w *bootRetirementWriter) recordPlan(plan Plan) error {
 	return w.publish(map[string][]byte{"latest-plan.json": raw})
 }
 
-func writeBootRetirementAtomic(root *os.Root, name string, data []byte) error {
+func writeBootRetirementAtomic(root *os.Root, name string, data []byte, beforeRename ...func() error) error {
 	if !filepath.IsLocal(name) || filepath.Clean(name) == "." {
+		return ErrBootRetirement
+	}
+	if len(beforeRename) > 1 || len(beforeRename) == 1 && beforeRename[0] == nil {
 		return ErrBootRetirement
 	}
 	var nonce [16]byte
@@ -125,6 +134,13 @@ func writeBootRetirementAtomic(root *os.Root, name string, data []byte) error {
 	}
 	if err := file.Close(); err != nil {
 		return err
+	}
+	// Staging/fsync may be slow on the router's storage. Close the caller's
+	// exact held-image CAS after that boundary, immediately before rename.
+	if len(beforeRename) == 1 {
+		if err := beforeRename[0](); err != nil {
+			return err
+		}
 	}
 	if err := root.Rename(temporary, name); err != nil {
 		return err
@@ -156,6 +172,10 @@ func pinBootRetirementFile(root *os.Root, name string, expected []byte) (func() 
 		}
 		raw, err := bootRetirementRead(root, name)
 		if err != nil || !bytes.Equal(raw, expected) {
+			return ErrBootRetirement
+		}
+		closing, err := root.Lstat(name)
+		if err != nil || !os.SameFile(info, closing) {
 			return ErrBootRetirement
 		}
 		return nil

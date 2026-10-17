@@ -170,7 +170,15 @@ func (w *bootRetirementWriter) publish(updates map[string][]byte) error {
 	return w.finishPublication(p)
 }
 
-func (w *bootRetirementWriter) finishPublication(p *bootRetirementPublication) error {
+func (w *bootRetirementWriter) finishPublication(p *bootRetirementPublication) (result error) {
+	// runFailedRollbackRecovery still records later failures after an action
+	// error. A failed exact-image CAS must never let those later writes adopt
+	// the replacement target within this same operation.
+	defer func() {
+		if result != nil {
+			w.publicationFailure = result
+		}
+	}()
 	for _, path := range bootPublicationPaths(p.PlanID) {
 		if err := errors.Join(w.current(), verifyBootPublicationCurrent(w.state, p)); err != nil {
 			return err
@@ -182,14 +190,29 @@ func (w *bootRetirementWriter) finishPublication(p *bootRetirementPublication) e
 		if bytes.Equal(current, p.After[path]) {
 			continue
 		}
+		checkTarget, closeTarget, err := pinBootRetirementFile(w.state, path, current)
+		if err != nil {
+			return err
+		}
+		defer closeTarget()
 		if w.observe == nil || w.observe() != nil {
 			return ErrBootRetirement
+		}
+		checkPublication := func() error {
+			err := errors.Join(w.current(), verifyBootPublicationCurrent(w.state, p), checkTarget())
+			if w.context != nil {
+				err = errors.Join(err, w.context.Err())
+			}
+			return err
+		}
+		if err := checkPublication(); err != nil {
+			return err
 		}
 		root, name := w.state, path
 		if path == filepath.Join("transactions", p.PlanID, "execution.json") {
 			root, name = w.transaction, "execution.json"
 		}
-		if err := writeBootRetirementAtomic(root, name, p.After[path]); err != nil {
+		if err := writeBootRetirementAtomic(root, name, p.After[path], checkPublication); err != nil {
 			return err
 		}
 		if w.fault != nil {
