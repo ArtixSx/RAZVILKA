@@ -194,6 +194,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
     focus(){}
     matches(){return false;}
     querySelector(selector){const part=/data-rz-part="([^"]+)"/.exec(selector);return part?this.children.find(c=>c.dataset.rzPart===part[1])||null:null;}
+    querySelectorAll(){return [];}
   }
   const overview=new Element('view-overview'),wizard=new Element('view-onboard');
   for(const id of ['view-autopilot','view-nodes','pageTitle','pageSubtitle','consoleMenuBackdrop','consoleMenu'])new Element(id);
@@ -240,5 +241,42 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   assert(body.classList.contains('rz-simple'),'simple mode remains enabled');
   assert.equal(modeChanges,0,'navigation does not toggle advanced mode');
   assert.equal(writes,0,'navigation never saves or applies configuration');
+
+  // The periodic inventory reader updates state without rendering the hidden
+  // advanced home. A later simple-mode tick must render from those new facts,
+  // rather than repeatedly copying the previous "уточняется" HTML forever.
+  const engineSource=new Element('ui7HomeEngines');
+  engineSource.innerHTML='<p>Состояние уточняется</p>';
+  state.authenticated=true;
+  state.dataLoad={services:{loaded:true,phase:'ready'}};
+  routerContext.interfaceDataReady=key=>state.dataLoad[key]?.loaded===true;
+  routerContext.panelSectionState=(key,phase)=>{state.dataLoad[key]={loaded:true,phase};};
+  for(const [source,name] of [[appSource,'inventoryObservationStale'],[appSource,'acceptPanelInventory'],[consoleSource,'consoleEngineState']]){
+    const fn=source.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'));
+    assert(fn,name);vm.runInContext(fn[0],routerContext);
+  }
+  let summaryRenders=0;
+  routerContext.renderHomeEngineSummary=()=>{
+    summaryRenders++;
+    engineSource.innerHTML=['installed','running','absent','unknown'].map(id=>`<p>${id}: ${routerContext.consoleEngineState(id).label}</p>`).join('');
+  };
+  const inventory=(retained=false)=>({schema:1,dataplane:'not-checked',state:retained?'retained':'available',revision:1,instance_id:'a'.repeat(32),data_age_ms:0,max_age_seconds:300,observed_at:new Date().toISOString(),data:{components:[{id:'installed',installed:true},{id:'running',installed:true,running:true},{id:'absent',installed:false}],engines:[],system:{}}});
+  await Promise.resolve().then(()=>routerContext.acceptPanelInventory(inventory(),Date.now()));
+  routerContext.testSimpleActions.render(true);
+  const enginePart=home.children.find(e=>e.dataset.rzPart==='engines');
+  assert(summaryRenders>0,'simple tick refreshes shared summary after async inventory arrival');
+  assert.match(enginePart.innerHTML,/installed: Установлен/);
+  assert.match(enginePart.innerHTML,/running: Процесс запущен/);
+  assert.match(enginePart.innerHTML,/absent: Не установлен/);
+  assert.match(enginePart.innerHTML,/unknown: Нет данных об установке/,'missing data never means not installed');
+  await Promise.resolve().then(()=>routerContext.acceptPanelInventory(inventory(true),Date.now()));
+  routerContext.testSimpleActions.render(true);
+  assert.doesNotMatch(enginePart.innerHTML,/Процесс запущен|installed: Установлен/,'retained inventory cannot appear fresh');
+  assert.match(enginePart.innerHTML,/Состояние уточняется/);
+  state.inventoryObservation.retained=false;
+  state.inventoryObservation.ageMS=61000;
+  routerContext.testSimpleActions.render(true);
+  assert.doesNotMatch(enginePart.innerHTML,/Процесс запущен/,'expired inventory cannot appear fresh');
+  assert.equal(writes,0,'inventory rendering never saves or applies configuration');
 }
 console.log('simple home: ok');

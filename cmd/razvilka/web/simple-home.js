@@ -300,11 +300,20 @@
     const home = ensure();
     if (!home) return;
     const snap = snapshot();
+    const summaries = typeof interfaceSummaries === 'function' ? interfaceSummaries() : {};
     // Reuse the shared TTL/revision-aware result; runtime history alone does
     // not carry the current network, route and configuration proof.
-    const m = model(snap, catalog(), typeof interfaceSummaries === 'function' ? interfaceSummaries() : {}, typeof interfaceRecoveryRequired === 'function' && interfaceRecoveryRequired());
+    const m = model(snap, catalog(), summaries, typeof interfaceRecoveryRequired === 'function' && interfaceRecoveryRequired());
     // The advanced home renders the engine summary; simple mode shows the same
-    // block beside the services instead of its own copy of that logic.
+    // block beside the services instead of its own copy of that logic. Periodic
+    // inventory reads update state without rendering the hidden advanced home;
+    // regenerate its summary so this copy cannot retain old runtime labels.
+    if (typeof renderHomeEngineSummary === 'function' && typeof interfaceDataReady === 'function' && typeof state === 'object') {
+      const ready = state.authenticated === true && !(typeof interfaceState === 'object' && interfaceState.authRevoked);
+      const loaded = ready && interfaceDataReady('services');
+      const fresh = loaded && !['error', 'busy'].includes(state.dataLoad?.services?.phase);
+      renderHomeEngineSummary(summaries, loaded, fresh);
+    }
     const engines = simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '');
     const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
     // What the router is busy with replaces the technical availability banner.
