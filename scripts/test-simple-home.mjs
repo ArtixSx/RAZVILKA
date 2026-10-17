@@ -180,4 +180,65 @@ assert.equal(plural(22,'сервис','сервиса','сервисов'),'22 �
 
 const html=read('cmd/razvilka/web/index.html');
 assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'loaded after interface.js');
+
+// Execute the real generated button's delegated handler and the real shared
+// router. Static app.js [data-view] bindings cannot cover a later DOM insertion.
+{
+  const elements=[];
+  class Element {
+    constructor(id=''){this.id=id;this.dataset={};this.children=[];this.events=new Map();this.innerHTML='';this.textContent='';this.hidden=false;this.className='';const classes=new Set();this.classList={contains:v=>classes.has(v),add:v=>classes.add(v),remove:v=>classes.delete(v),toggle:(v,on)=>on?classes.add(v):classes.delete(v)};elements.push(this);}
+    addEventListener(type,fn){this.events.set(type,fn);}
+    append(child){this.children.push(child);}
+    prepend(child){this.children.unshift(child);}
+    setAttribute(){}
+    focus(){}
+    matches(){return false;}
+    querySelector(selector){const part=/data-rz-part="([^"]+)"/.exec(selector);return part?this.children.find(c=>c.dataset.rzPart===part[1])||null:null;}
+  }
+  const overview=new Element('view-overview'),wizard=new Element('view-onboard');
+  for(const id of ['view-autopilot','view-nodes','pageTitle','pageSubtitle','consoleMenuBackdrop','consoleMenu'])new Element(id);
+  const events=new Map(),windowEvents=new Map(),body=new Element('body');
+  const document={body,readyState:'loading',activeElement:new Element(),hidden:false,getElementById:id=>elements.find(e=>e.id===id)||null,createElement:()=>new Element(),querySelector:()=>null,addEventListener:(type,fn)=>events.set(type,fn),dispatchEvent:()=>{}};
+  const state={currentView:'overview',status:{},services:[]};
+  let writes=0,modeChanges=0;
+  const location={hash:'#/overview'};
+  const routerContext={document,state,consoleSnapshot:{policy:{setup_complete:false,enabled:true},services:{},runtime:{}},location,
+    history:{replaceState:(_a,_b,hash)=>{location.hash=hash;}},localStorage:{getItem:()=>null,setItem:()=>{modeChanges++;}},
+    CustomEvent:class{constructor(type,init){this.type=type;this.detail=init.detail;}},CSS:{escape:v=>v},
+    viewMeta:{overview:['Главная',''],onboard:['Первичная настройка','']},
+    $:selector=>document.getElementById(selector.slice(1)),$$:selector=>selector==='.view'?elements.filter(e=>e.id.startsWith('view-')):[],
+    consoleDrawerInert(){},renderWorkspaceNavigation(){},refreshPanelView(){},
+    fetch:()=>{writes++;throw new Error('Navigation must not write');},api:()=>{writes++;throw new Error('Navigation must not write');},
+    setInterval(){},setTimeout(){},scrollTo(){},matchMedia:()=>({matches:false}),
+    addEventListener:(type,fn)=>windowEvents.set(type,fn),
+  };
+  routerContext.window=routerContext;
+  vm.createContext(routerContext);
+  const appSource=read('cmd/razvilka/web/app.js'),consoleSource=read('cmd/razvilka/web/console.js');
+  for(const [source,name] of [[appSource,'setView'],[consoleSource,'consoleViewChanged']]){
+    const fn=source.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'));
+    assert(fn,name);vm.runInContext(fn[0],routerContext);
+  }
+  const simpleSource=read('cmd/razvilka/web/simple-home.js');
+  // Test-only access to closure actions; production source exports no test hook.
+  vm.runInContext(simpleSource.replace('  window.addEventListener(\'razvilka:autonomy-state\'', '  root.testSimpleActions={render,apply};\n  window.addEventListener(\'razvilka:autonomy-state\''),routerContext);
+  routerContext.testSimpleActions.render();
+  const home=document.getElementById('rzSimpleHome');
+  assert(home&&overview.children.includes(home),'real home was inserted dynamically');
+  const status=home.children.find(e=>e.dataset.rzPart==='status');
+  const rendered=status.innerHTML.match(/<button\b[^>]*data-view="([^"]+)"[^>]*>([^<]+)<\/button>/);
+  assert(rendered,'setup action was rendered');
+  assert.equal(rendered[2],'Начать настройку');
+  const button={dataset:{view:rendered[1]},hasAttribute:()=>false};
+  home.events.get('click')({target:{closest:()=>button}});
+  assert.equal(state.currentView,'onboard','setup click opens existing wizard workspace');
+  assert.equal(location.hash,'#/onboard','shared router updates URL');
+  assert(wizard.classList.contains('active'),'wizard is visible');
+  assert(!overview.classList.contains('active'),'home is no longer active');
+  routerContext.testSimpleActions.apply();
+  assert.equal(state.currentView,'onboard','reapplying simple mode does not redirect wizard');
+  assert(body.classList.contains('rz-simple'),'simple mode remains enabled');
+  assert.equal(modeChanges,0,'navigation does not toggle advanced mode');
+  assert.equal(writes,0,'navigation never saves or applies configuration');
+}
 console.log('simple home: ok');

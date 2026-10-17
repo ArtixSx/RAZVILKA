@@ -160,7 +160,7 @@
     document.body.classList.toggle('rz-simple', on);
     ensure();
     label();
-    if (on && typeof state === 'object' && state && !['overview', 'devices', 'settings'].includes(state.currentView)) {
+    if (on && typeof state === 'object' && state && !['overview', 'devices', 'settings', 'onboard'].includes(state.currentView)) {
       document.querySelector('[data-main-nav="overview"]')?.click();
     }
     render(true);
@@ -314,7 +314,7 @@
     // browser drops the click; never replace the page under a held pointer.
     if (ui.holding && !force) return;
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
-    const action = m.phase === 'recovery' ? '<button type="button" class="primary" data-view="diagnostics">Открыть восстановление</button>' : m.phase === 'setup' ? '<button type="button" class="primary" data-view="autopilot">Начать настройку</button>'
+    const action = m.phase === 'recovery' ? '<button type="button" class="primary" data-view="diagnostics">Открыть восстановление</button>' : m.phase === 'setup' ? '<button type="button" class="primary" data-view="onboard">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
     const canAdd = m.phase === 'ready' || m.phase === 'empty';
     const doctor = doctorCard();
@@ -411,6 +411,9 @@
   function onClick(event) {
     const target = event.target.closest('button');
     if (!target) return;
+    // These buttons are rendered after app.js binds its static navigation.
+    // Delegate locally so opening a workspace never submits setup or Apply.
+    if (target.dataset.view && typeof setView === 'function') { setView(target.dataset.view); return; }
     if (target.hasAttribute('data-rz-sh-toggle-add')) { ui.open = !ui.open; ui.error = ''; if (ui.open) searchCommunity(ui.query); render(true); if (ui.open) document.querySelector('[data-rz-sh-query]')?.focus(); return; }
     if (target.dataset.rzShAddId) { void act(target.dataset.rzShAddId, false); return; }
     if (target.dataset.rzShCommunity) { void importCommunity(target.dataset.rzShCommunity); return; }
