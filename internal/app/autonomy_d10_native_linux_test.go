@@ -930,9 +930,15 @@ func d10NativeChild(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = nodes.Close() })
 	ports := map[string]int{}
+	importedAt, importTTL := time.Now(), time.Hour
+	if scenario == "source-refill" {
+		// The saved-source clock starts one hour in the past. Seed earlier
+		// manual origins so real Import's monotonic AddedAt guard remains valid.
+		importedAt, importTTL = importedAt.Add(-2*time.Hour), 3*time.Hour
+	}
 	for port := 10443; port < 10446; port++ {
 		snapshot, err := nodes.Import(ctx, nodestore.Source{ID: "manual", Kind: "manual"},
-			fmt.Sprintf("vless://123e4567-e89b-12d3-a456-426614174000@93.184.216.11:%d?security=tls&sni=front.example", port), time.Now(), time.Hour, false)
+			fmt.Sprintf("vless://123e4567-e89b-12d3-a456-426614174000@93.184.216.11:%d?security=tls&sni=front.example", port), importedAt, importTTL, false)
 		if err != nil {
 			t.Fatal(err)
 		}
