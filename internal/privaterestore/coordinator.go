@@ -20,6 +20,40 @@ import (
 
 var ErrRuntimeStarted = errors.New("private offline restore is unavailable after runtime handover")
 
+// Keep the recovery fence and typed causes while exposing only closed stages.
+// Target errors may contain private paths or images and must not be logged.
+type openRecoveryFailure struct {
+	stage string
+	cause error
+}
+
+func (e *openRecoveryFailure) Error() string {
+	return restorejournal.ErrRecovery.Error() + " (" + e.stage + ")"
+}
+func (e *openRecoveryFailure) Unwrap() []error {
+	return []error{restorejournal.ErrRecovery, e.cause}
+}
+func openingRecoveryError(cause error, closeFailed bool) error {
+	stage := "journal-recover-required"
+	switch {
+	case errors.Is(cause, restorejournal.ErrInvalid):
+		stage = "journal-recover-invalid"
+	case errors.Is(cause, context.DeadlineExceeded):
+		stage = "journal-recover-deadline"
+	case errors.Is(cause, context.Canceled):
+		stage = "journal-recover-canceled"
+	case errors.Is(cause, restorejournal.ErrUnavailable):
+		stage = "journal-recover-unavailable"
+	case errors.Is(cause, restorejournal.ErrBusy):
+		stage = "journal-recover-busy"
+	case errors.Is(cause, restorejournal.ErrAborted):
+		stage = "journal-recover-aborted"
+	case closeFailed:
+		stage = "target-close-required"
+	}
+	return &openRecoveryFailure{stage: stage, cause: cause}
+}
+
 type managedTarget interface {
 	restorejournal.Target
 	Close() error
@@ -144,7 +178,10 @@ func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outc
 	closeErr := c.releaseTargets()
 	if err != nil || closeErr != nil || out == restorejournal.Blocked {
 		_ = c.journal.Close()
-		return nil, restorejournal.Blocked, restorejournal.ErrRecovery
+		// Recover deliberately returns a recovery fence when its context has
+		// expired, including an empty journal. Preserve that diagnostic fact;
+		// a subsequent normal retry still reopens and validates the journal.
+		return nil, restorejournal.Blocked, openingRecoveryError(errors.Join(err, ctx.Err()), closeErr != nil)
 	}
 	return c, out, nil
 }
