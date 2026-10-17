@@ -344,6 +344,18 @@ func (a *ProxyTunnelAdapter) Snapshot(ctx context.Context, plan Plan, root strin
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
 }
 
+// ErrProxyDomainAuthority refuses DNS-derived IP capture without an original per-flow domain executor.
+var ErrProxyDomainAuthority = errors.New("proxy-domain-flow-authority-required")
+
+func (a *ProxyTunnelAdapter) requireLegacyIPPolicyAuthority(plan Plan) error {
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) == a.ID() && len(route.Domains) != 0 {
+			return ErrProxyDomainAuthority
+		}
+	}
+	return nil
+}
+
 func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) error {
 	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
 		if err != nil {
@@ -357,6 +369,12 @@ func (a *ProxyTunnelAdapter) Stage(ctx context.Context, plan Plan, root string) 
 			return err
 		}
 		return view.Stage(ctx, frozen, root)
+	}
+	// A resolved domain address can be shared by unrelated services. This
+	// legacy TUN forwards every selected IP flow to SOCKS; it cannot grant
+	// per-connection domain authority, including for mixed domain/CIDR lists.
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return err
 	}
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
@@ -774,6 +792,9 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 		}
 		return view.Activate(ctx, frozen, root)
 	}
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return preflightRefusalError{err}
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	var selectedUSQUE usqueTransport
 	if a.ID() == "usque" {
@@ -1178,6 +1199,9 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 			return false, err
 		}
 		return view.RefreshPolicy(ctx, frozen)
+	}
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return false, err
 	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	if a.ID() == "usque" {
