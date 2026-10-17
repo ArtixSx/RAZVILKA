@@ -479,5 +479,14 @@ await test('mutation uses caller cancellation without read timeout or automatic 
  vm.createContext(context);vm.runInContext(extract('api'),context);
  await context.api('/api/v1/apply',{method:'POST',signal:controller.signal});assert.equal(observed,controller.signal);assert.equal(timers,0);assert.equal(calls,1);
 });
+await test('activity initial failed journal read renders unavailable and retry instead of empty success', async()=>{
+ const f=fixture();f.state.currentView='activity';f.context.esc=String;f.context.renderProjectAuditRow=()=>'';
+ vm.runInContext(['auditReadState','renderAudit'].map(extract).join('\n'),f.context);
+ f.handler(url=>url.startsWith('/api/v1/audit/')?Promise.reject(new Error('journal read failed')):f.normal(url));
+ await f.context.refreshAll();
+ assert.equal(f.$('#consoleExportAudit').disabled,true);
+ assert.match(f.$('#auditRows').innerHTML,/недоступен[^]*data-panel-refresh/);
+ assert.doesNotMatch(f.$('#auditRows').innerHTML,/Действий пока нет/);
+});
 console.log(JSON.stringify({status:'passed',tests:count}));
 await import('./test-source-offline-ui.mjs');

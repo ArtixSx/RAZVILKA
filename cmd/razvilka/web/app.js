@@ -1020,6 +1020,7 @@ function renderPanelLoad() {
   if (state.currentView === 'sources') render('panel-sources', renderSources);
   if (state.currentView === 'devices') render('panel-devices', renderDevices);
   if (state.currentView === 'nodes') render('panel-nodes', renderNodes);
+  if (state.currentView === 'activity') render('panel-audit', renderAudit);
   render('panel-snapshot', () => { if (typeof renderSavedPanelSnapshot === 'function') renderSavedPanelSnapshot(); });
   render('panel-settings-mode', () => { if (typeof renderSettingsMode === 'function') renderSettingsMode(); });
   const values = panelViewKeys().map(key => state.dataLoad?.[key]).filter(Boolean);
