@@ -499,7 +499,7 @@ func d10NativePrivateFailure(t *testing.T, status dataplane.RuntimeStatus) {
 	}
 	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
 	info, err := os.Lstat(dir)
-	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "source-refill" && scenario != "failure-exit") {
 		t.Error("private diagnostic destination refused")
 		return
 	}
@@ -563,7 +563,7 @@ func d10NativeRedact(value string) string {
 func d10NativePrivateLog(path, label string) error {
 	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
 	info, err := os.Lstat(dir)
-	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "source-refill" && scenario != "failure-exit") {
 		return errors.New("private diagnostic destination refused")
 	}
 	f, err := os.Open(path)
@@ -613,7 +613,7 @@ func d10NativePrivateLog(path, label string) error {
 func d10NativePrivateReceipt(label string, retained []string) error {
 	dir, scenario := os.Getenv("RAZVILKA_D10_NATIVE_ARTIFACTS"), os.Getenv("RAZVILKA_D10_NATIVE_CHILD")
 	info, err := os.Lstat(dir)
-	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "failure-exit") {
+	if !filepath.IsAbs(dir) || err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || (scenario != "sing-box" && scenario != "source-refill" && scenario != "failure-exit") {
 		return errors.New("private diagnostic destination refused")
 	}
 	payload, err := json.MarshalIndent(struct {
@@ -1373,7 +1373,11 @@ func d10NativeStartFeed(t *testing.T, ctx context.Context, a *App, root string, 
 		w.Header().Set("ETag", `"native-ab"`)
 		_, _ = fmt.Fprintln(w, profile(ports[0])+"\n"+profile(ports[1]))
 	}))
-	feeds, err := providerfeed.OpenWithDependencies(a.Nodes, filepath.Join(root, "native-feeds"), client, func() time.Time { return time.Unix(0, f.clock.Load()).UTC() })
+	feedRoot := filepath.Join(root, "native-feeds")
+	if err := os.Mkdir(feedRoot, 0700); err != nil {
+		t.Fatal("native saved source private directory", d10NativeErrorClass(err))
+	}
+	feeds, err := providerfeed.OpenWithDependencies(a.Nodes, feedRoot, client, func() time.Time { return time.Unix(0, f.clock.Load()).UTC() })
 	if err != nil {
 		t.Fatal("native saved source open", d10NativeErrorClass(err))
 	}
