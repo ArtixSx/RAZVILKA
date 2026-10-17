@@ -43,16 +43,26 @@ func configureManagedWGList(parent context.Context, a *app.App) (*app.ManagedWGL
 // alive. The init script reports a timed-out stop and keeps its PID file; it does
 // not turn that timeout into a cleanup confirmation.
 func retainManagedListRetirement(closeAttempt func(context.Context) error) {
+	retainManagedListRetirementWithWait(closeAttempt, time.Sleep)
+}
+
+// A cleanup attempt includes every retained runtime and the final startup and
+// control owners. Complete fresh kernel inventories can exceed the activation
+// handshake's 15s; these independent cleanup budgets grant no forward admission.
+// Increase only after a failed attempt, while retaining the same original owner.
+func retainManagedListRetirementWithWait(closeAttempt func(context.Context) error, wait func(time.Duration)) {
 	retryDelay := time.Second
+	attemptBudget := 90 * time.Second
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), attemptBudget)
 		err := closeAttempt(ctx)
 		cancel()
 		if err == nil {
 			return
 		}
 		log.Print("Managed list retirement remains unconfirmed; retaining original owners for another cleanup attempt")
-		time.Sleep(retryDelay)
+		wait(retryDelay)
+		attemptBudget = 120 * time.Second
 		if retryDelay < 15*time.Second {
 			retryDelay *= 2
 			if retryDelay > 15*time.Second {
