@@ -100,7 +100,7 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 	run("-n", server, "addr", "add", "93.184.216.14/30", "dev", "server0")
 	run("-n", client, "route", "add", "default", "via", "192.0.2.1")
 	run("-n", server, "route", "add", "192.0.2.0/24", "via", "93.184.216.13")
-	for _, key := range []string{"net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf.lan0.rp_filter=0", "net.ipv4.conf.wan0.rp_filter=0"} {
+	for _, key := range []string{"net.ipv4.ip_forward=1", "net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf.lan0.rp_filter=0", "net.ipv4.conf.wan0.rp_filter=0"} {
 		run("netns", "exec", router, "sysctl", "-q", "-w", key)
 	}
 	// A foreign-looking source policy is required: main deliberately blackholes
@@ -203,8 +203,10 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	// Capture the complete rule and route images before adding owned return PBR.
 	rulesBefore := run("ip", "-4", "rule", "show")
 	routesBefore := run("ip", "-4", "route", "show", "table", "all")
-	run("iptables", "-t", "nat", "-S")
-	run("iptables", "-t", "mangle", "-S")
+	// Pre-existing foreign-looking chains make table preservation observable
+	// even with iptables-nft, which otherwise creates tables on first rule.
+	run("iptables", "-t", "nat", "-N", "FOREIGN_BASELINE_NAT")
+	run("iptables", "-t", "mangle", "-N", "FOREIGN_BASELINE_MANGLE")
 	structuralFirewall := func(raw []byte) []byte {
 		lines := []string{}
 		for _, line := range strings.Split(string(raw), "\n") {
@@ -248,7 +250,7 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		run("ip", "rule", "del", "pref", "110", "fwmark", "0x451/0xffffffff", "table", "452")
 		run("ip", "route", "del", "local", "192.0.2.2/32", "dev", "lo", "table", "452")
 		if !bytes.Equal(rulesBefore, run("ip", "-4", "rule", "show")) || !bytes.Equal(routesBefore, run("ip", "-4", "route", "show", "table", "all")) || !bytes.Equal(filterBefore, structuralFirewall(run("iptables-save"))) {
-			t.Error("owned cleanup changed foreign routing/firewall")
+			t.Errorf("owned cleanup changed foreign routing/firewall: rules before=%s after=%s routes before=%s after=%s firewall before=%s after=%s", rulesBefore, run("ip", "-4", "rule", "show"), routesBefore, run("ip", "-4", "route", "show", "table", "all"), filterBefore, structuralFirewall(run("iptables-save")))
 		}
 	}()
 	binary, err := os.Executable()
@@ -312,11 +314,25 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		t.Fatal("original capture observation refused", observed, err)
 	}
 	// Actual neighbor read supplies MAC/iif bookends, not a supplied flow DTO.
-	neighBefore := run("ip", "-j", "neigh", "show", "to", observed.Source.Addr().String(), "dev", "lan0")
-	var neighbors []struct{ Dst, Dev, Lladdr string }
-	if json.Unmarshal(neighBefore, &neighbors) != nil || len(neighbors) != 1 || neighbors[0].Dev != "lan0" || neighbors[0].Lladdr == "" {
-		t.Fatal("original LAN neighbor unavailable")
+	type neighbor struct{ Dst, Dev, Lladdr string }
+	readOriginalNeighbor := func() neighbor {
+		raw := run("ip", "-j", "neigh", "show")
+		var rows []neighbor
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			t.Fatal("neighbor inventory invalid")
+		}
+		var matched []neighbor
+		for _, row := range rows {
+			if row.Dst == observed.Source.Addr().String() && row.Dev == "lan0" {
+				matched = append(matched, row)
+			}
+		}
+		if len(matched) != 1 || matched[0].Lladdr == "" {
+			t.Fatal("original LAN neighbor unavailable")
+		}
+		return matched[0]
 	}
+	neighborBefore := readOriginalNeighbor()
 	ct := run("conntrack", "-L", "-p", "tcp", "--orig-src", observed.Source.Addr().String(), "--orig-dst", observed.OriginalDestination.Addr().String(), "--sport", fmt.Sprint(observed.Source.Port()), "--dport", "8080", "-o", "extended")
 	if !bytes.Contains(ct, []byte("mark=0")) || !bytes.Contains(ct, []byte("ESTABLISHED")) {
 		t.Fatal("original conntrack scope unavailable")
@@ -361,9 +377,7 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		t.Fatal("server failed", err, serverErr.String())
 	}
 	serverDone = true
-	neighAfter := run("ip", "-j", "neigh", "show", "to", observed.Source.Addr().String(), "dev", "lan0")
-	var closing []struct{ Dst, Dev, Lladdr string }
-	if json.Unmarshal(neighAfter, &closing) != nil || len(closing) != 1 || closing[0].Dst != neighbors[0].Dst || closing[0].Dev != neighbors[0].Dev || closing[0].Lladdr != neighbors[0].Lladdr {
+	if readOriginalNeighbor() != neighborBefore {
 		t.Fatal("original LAN identity changed")
 	}
 	fmt.Println("PUBLIC_TCP_SOURCE_PBR_ONLY_OK: actual original-destination capture; source IP and source-only PBR preserved; NOT production/domain/Xray admission")
