@@ -385,6 +385,20 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			adapterSet[adapter] = true
 		}
 	}
+	// DNS identifies candidate destinations, not applications on a shared IP.
+	for _, adapter := range []string{"sing-box", "xray", "usque"} {
+		if adapter == "xray" && input.managedXraySelectedTCP != nil {
+			continue // Original typed compiler validation remains mandatory below.
+		}
+		for _, route := range input.Routes {
+			if adapterID(route.Resolved) == adapter && len(route.Domains) != 0 {
+				plan.Blockers = append(plan.Blockers, Blocker{Code: "DOMAIN_FLOW_AUTHORITY_REQUIRED", Adapter: adapter,
+					Message:    "Доменный маршрут требует проверки каждого соединения.",
+					Resolution: "Общий IP может принадлежать другим сервисам. Нужен проверенный доменный runtime; одного DNS-ответа недостаточно."})
+				break
+			}
+		}
+	}
 	for adapter := range adapterSet {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}

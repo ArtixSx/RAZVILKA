@@ -331,6 +331,8 @@ func TestNodeProxyMaterializesOnlyThePlanNetwork(t *testing.T) {
 			}
 			transaction := filepath.Join(root, "transaction")
 			plan := networkExecutionPlan()
+			plan.Routes[0].Domains = nil
+			plan.Routes[0].CIDRs = []string{"149.154.160.0/20"}
 			plan.Routes[0].Sources = []string{"192.168.1.25/32"}
 			if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 				t.Fatal(err)

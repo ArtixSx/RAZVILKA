@@ -111,7 +111,7 @@ func TestBuildBlocksEngineDraftWithoutMatchingServiceRoute(t *testing.T) {
 func TestBuildPlacesSupportedCanaryBeforeActivation(t *testing.T) {
 	plan, err := BuildAt(Input{
 		Revision: 4,
-		Routes:   []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}},
+		Routes:   []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", CIDRs: []string{"149.154.160.0/20"}, ProbeURL: "https://telegram.org/"}},
 		Engines:  []Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}},
 		Host:     HostState{IPCommand: true, TUN: true, SingBox: true},
 	}, time.Unix(100, 0).UTC())

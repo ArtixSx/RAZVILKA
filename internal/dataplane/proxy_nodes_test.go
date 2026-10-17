@@ -130,7 +130,7 @@ func scopedXrayTestFixture(t *testing.T) *scopedXrayFixture {
 	a.NodeTUNProbe = func(_ context.Context, r NodeTUNRequest) (NodeTUNObservation, error) {
 		return NodeTUNObservation{RuntimeID: r.RuntimeID, SelectedSource: netip.MustParseAddr("192.168.1.25"), ControlSource: netip.MustParseAddr("192.168.1.26"), SelectedEgress: netip.MustParseAddr("9.9.9.9"), ControlEgress: netip.MustParseAddr("1.0.0.1"), ServiceAccepted: true}, nil
 	}
-	f.plan = Plan{NetworkProfileID: executionNetwork, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "xray:" + id, Resolved: "xray:" + id, Domains: []string{"telegram.org"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://telegram.org/"}}}
+	f.plan = Plan{NetworkProfileID: executionNetwork, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "xray:" + id, Resolved: "xray:" + id, CIDRs: []string{"149.154.160.0/20"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://telegram.org/"}}}
 	return f
 }
 

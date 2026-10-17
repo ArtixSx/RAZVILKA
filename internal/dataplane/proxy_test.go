@@ -381,7 +381,7 @@ func TestProxyAdapterStagesActivatesHealthAndRollsBack(t *testing.T) {
 		return nil
 	}
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", Domains: []string{"example.com"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://example.com"}}}
+	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceName: "Example", Resolved: "sing-box", CIDRs: []string{"93.184.216.34/32"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://example.com"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestProxyCanaryFailureCleansCandidateAndLeavesRuntimeUntouched(t *testing.T
 	adapter.SOCKSProbe = func(context.Context, string) error { return nil }
 	adapter.CanaryProbe = func(context.Context, string, string) error { return fmt.Errorf("forced service failure") }
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"sing-box/main"}, Routes: []Route{{ServiceID: "telegram", ServiceName: "Telegram", Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, CIDRs: []string{"149.154.160.0/20"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
