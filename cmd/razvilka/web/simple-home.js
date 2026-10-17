@@ -70,7 +70,8 @@
     if (snapshot.blocked || snapshot.safe_mode) return { ...base, phase: 'recovery', tone: 'problem', title: 'Нужно восстановление', text: 'После сбоя изменения приостановлены. Проверьте восстановление; работа обхода пока не подтверждена.' };
     if (retained) return { ...base, phase: 'ready', tone: 'progress', title: 'Нет свежих данных автопилота', text: 'Показаны последние настройки. Текущее состояние обновляется; работа сервисов пока не подтверждена.' };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства — дальше автопилот всё сделает сам.' };
-    if (snapshot.stopped || policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
+    if (snapshot.stopped) return { ...base, phase: 'off', tone: 'problem', title: 'Проект остановлен', text: 'Маршруты остановлены. Для включения используйте общий переключатель проекта. Настройки автопилота не снимают эту остановку.' };
+    if (policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };
     const problems = count('problem'), progress = count('progress');
     if (problems) return { ...base, phase: 'ready', tone: 'problem', title: `${plural(problems, 'сервис пока не работает', 'сервиса пока не работают', 'сервисов пока не работают')}`, text: 'Автопилот продолжает попытки. Причина указана у сервиса.' };

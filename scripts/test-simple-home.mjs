@@ -18,6 +18,20 @@ assert.doesNotMatch(refused.title+refused.text,/Загружаем|выключ�
 assert.equal(model(snap({youtube:'healthy'},{applied_services:{youtube:{enabled:true,route:'nfqws2'}}}),catalog,{youtube:{kind:'good',route:'nfqws2'}},true).phase,'recovery','known refusal takes precedence over retained healthy state');
 assert.equal(model({policy:{setup_complete:false}},catalog).phase,'setup');
 assert.equal(model(snap({},{stopped:true}),catalog).phase,'off');
+const stoppedSnapshot=snap({youtube:'healthy'},{stopped:true});
+const stoppedBefore=JSON.stringify(stoppedSnapshot);
+const stoppedHome=model(stoppedSnapshot,catalog);
+assert.equal(stoppedHome.title,'Проект остановлен');
+assert.match(stoppedHome.text,/общий переключатель проекта/);
+assert.doesNotMatch(stoppedHome.text,/Включите автопилот в настройках/);
+assert.equal(JSON.stringify(stoppedSnapshot),stoppedBefore,'presentation changed Stop or autonomy intent');
+const pausedSnapshot=snap({},{policy:{setup_complete:true,enabled:false},stopped:false});
+assert.equal(model(pausedSnapshot,catalog).title,'Автопилот выключен');
+assert.match(model(pausedSnapshot,catalog).text,/Включите автопилот в настройках/);
+assert.equal(model({...pausedSnapshot,stopped:true},catalog).title,'Проект остановлен','policy pause obscured explicit project Stop');
+const shellHTML=read('cmd/razvilka/web/index.html');
+assert.doesNotMatch(shellHTML,/планировщика rc\.2/);
+assert.match(shellHTML,/Расписание работает на роутере/);
 assert.equal(model(snap({}),catalog).phase,'empty');
 
 const applied={youtube:{enabled:true,route:'nfqws2'},discord:{enabled:true,route:'nfqws2'}};

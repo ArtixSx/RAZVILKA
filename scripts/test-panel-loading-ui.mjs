@@ -488,5 +488,19 @@ await test('activity initial failed journal read renders unavailable and retry i
  assert.match(f.$('#auditRows').innerHTML,/недоступен[^]*data-panel-refresh/);
  assert.doesNotMatch(f.$('#auditRows').innerHTML,/Действий пока нет/);
 });
+await test('busy release metadata updates sidebar and footer together without admitting foreign or invalid version text',async()=>{
+ const labels=new Map(['version','footerVersion'].map(id=>[id,{textContent:'v0.20.0'}]));
+ let payload={name:'RAZVILKA',version:'0.20.0-rc.35',error:'busy'};
+ const context={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
+ document:{getElementById:id=>labels.get(id)},setTimeout:()=>1,clearTimeout(){},
+ fetch:async()=>({ok:false,status:503,text:async()=>JSON.stringify(payload)})};
+ vm.createContext(context);vm.runInContext(extract('api')+'\n'+extract('friendlyErrorMessage'),context);
+ await assert.rejects(context.api('/api/v1/status'),error=>error.status===503);
+ for(const label of labels.values())assert.equal(label.textContent,'v0.20.0-rc.35');
+ for(const bad of [{name:'OTHER',version:'0.21.0'},{name:'RAZVILKA',version:'<script>'}]){
+  payload={...bad,error:'busy'};await assert.rejects(context.api('/api/v1/status'));
+  for(const label of labels.values())assert.equal(label.textContent,'v0.20.0-rc.35');
+ }
+});
 console.log(JSON.stringify({status:'passed',tests:count}));
 await import('./test-source-offline-ui.mjs');
