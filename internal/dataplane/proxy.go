@@ -1075,6 +1075,9 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 		}
 		return view.Reconcile(ctx, frozen)
 	}
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return err
+	}
 	plan = a.freezeUSQUEHealthPlan(plan)
 	var selectedUSQUE usqueTransport
 	if a.ID() == "usque" {

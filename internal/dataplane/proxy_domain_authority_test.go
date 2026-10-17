@@ -49,6 +49,9 @@ func TestLegacyProxySharedDomainAddressRefusedBeforeCapture(t *testing.T) {
 		if err := a.Activate(context.Background(), candidate, root); !errors.Is(err, ErrProxyDomainAuthority) {
 			t.Fatalf("activation accepted domain capture: %v", err)
 		}
+		if err := a.Reconcile(context.Background(), candidate); !errors.Is(err, ErrProxyDomainAuthority) {
+			t.Fatalf("reconciliation restored domain capture: %v", err)
+		}
 		if _, err := os.Stat(root); !os.IsNotExist(err) {
 			t.Fatal("refused stage wrote artifacts")
 		}
