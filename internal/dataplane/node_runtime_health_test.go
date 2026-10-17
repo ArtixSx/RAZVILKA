@@ -107,6 +107,8 @@ func TestCommittedNodeHealthUsesRefreshedLivePolicyInsteadOfStagedSnapshot(t *te
 	// draft is part of this transaction, so Commit cannot touch global config.
 	setup := plan
 	setup.Routes = append([]Route(nil), plan.Routes...)
+	setup.Routes[0].Domains = nil
+	setup.Routes[0].CIDRs = []string{"8.8.8.8/32"}
 	setup.Routes[0].Sources = []string{"192.168.1.25/32"}
 	root := filepath.Join(m.StateRoot, "transactions", plan.PlanID, "sing-box")
 	for _, step := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Activate, a.Health, a.Commit} {
@@ -114,14 +116,20 @@ func TestCommittedNodeHealthUsesRefreshedLivePolicyInsteadOfStagedSnapshot(t *te
 			t.Fatal(err)
 		}
 	}
-	plan.Routes[0].Sources = setup.Routes[0].Sources
+	plan.Routes[0] = setup.Routes[0]
 	if err := m.Record(plan); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Register(a); err != nil {
 		t.Fatal(err)
 	}
+	// Model an explicitly reviewed CIDR update. DNS-derived expansion is
+	// refused by the legacy adapter and cannot grant this change.
 	destination = "8.8.4.4"
+	plan.Routes[0].CIDRs = []string{"8.8.4.4/32"}
+	if err := m.Record(plan); err != nil {
+		t.Fatal(err)
+	}
 	if changed, err := a.RefreshPolicy(context.Background(), plan); err != nil || !changed {
 		t.Fatalf("fixture policy did not refresh: %v %v", changed, err)
 	}

@@ -322,6 +322,8 @@ func TestScopedXHTTPConsumerRAWMaterializerCannotRevokeAuthorityBeforeDNS(t *tes
 		for _, mode := range []string{"revoke", "cancel-with-nil-guard"} {
 			t.Run(strconv.Itoa(pass)+"/"+mode, func(t *testing.T) {
 				a, plan, _, versions, resolutions := nodeXHTTPFixture(t, "tls", false)
+				// Exercise endpoint DNS/version fencing with explicit IP authority.
+				plan.Routes[0].Domains = nil
 				materialize, calls, revoked := a.NodeRoutes, 0, false
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
@@ -349,7 +351,7 @@ func TestScopedXHTTPConsumerRAWMaterializerCannotRevokeAuthorityBeforeDNS(t *tes
 				if mode == "cancel-with-nil-guard" {
 					wantErr = context.Canceled
 				}
-				if err := a.Stage(ctx, plan, root); !errors.Is(err, wantErr) || calls != pass || *versions != 0 || *resolutions != pass-1 {
+				if err := a.Stage(ctx, plan, root); !errors.Is(err, wantErr) || calls != pass || *versions != 0 || *resolutions != 0 {
 					t.Fatal("RAW callback lost caller authority before the next DNS boundary", err, calls, *versions, *resolutions)
 				}
 				entries, err := os.ReadDir(root)
@@ -363,6 +365,7 @@ func TestScopedXHTTPConsumerRAWMaterializerCannotRevokeAuthorityBeforeDNS(t *tes
 
 func TestScopedXHTTPConsumerDoesNotClearProducerBuffersAndBoundsBeforeCopy(t *testing.T) {
 	a, plan, outbound, _, _ := nodeXHTTPFixture(t, "tls", true)
+	// Exercise endpoint DNS/version fencing with explicit IP authority.
 	plan.Routes[0].Domains = nil
 	intent, err := a.nodeIntentRequests(plan.Routes)
 	if err != nil {
@@ -444,6 +447,8 @@ func TestScopedXHTTPConsumerStageRechecksAfterDNSBeforeFirstWrite(t *testing.T) 
 	for _, mode := range []string{"late-version", "revoked-before-version", "initial-success-revokes", "late-success-revokes", "initial-guard-cancels", "closing-guard-cancels"} {
 		t.Run(mode, func(t *testing.T) {
 			a, plan, _, versions, resolutions := nodeXHTTPFixture(t, "tls", true)
+			// Exercise endpoint DNS/version fencing with explicit IP authority.
+			plan.Routes[0].Domains = nil
 			processes := a.Processes.(*proxyFakeProcesses)
 			base := &proxyFakeRunner{processes: processes, iface: a.Interface}
 			mutations := 0
@@ -489,11 +494,11 @@ func TestScopedXHTTPConsumerStageRechecksAfterDNSBeforeFirstWrite(t *testing.T) 
 			wantErr, wantVersions, wantDNS := ErrReviewChanged, 1, 0
 			switch mode {
 			case "late-version":
-				wantErr, wantVersions, wantDNS = ErrExactNodeUnsupported, 3, 4
+				wantErr, wantVersions, wantDNS = ErrExactNodeUnsupported, 3, 2
 			case "revoked-before-version":
 				wantVersions = 0
 			case "late-success-revokes":
-				wantVersions, wantDNS = 3, 4
+				wantVersions, wantDNS = 3, 2
 			case "initial-guard-cancels":
 				wantErr, wantVersions = context.Canceled, 0
 			case "closing-guard-cancels":

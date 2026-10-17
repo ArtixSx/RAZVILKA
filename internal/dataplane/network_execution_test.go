@@ -437,6 +437,8 @@ func TestCanceledNodePolicyRefreshRestoresWithIndependentContext(t *testing.T) {
 				return baseRunner.Run(runCtx, name, args...)
 			})
 			plan := networkExecutionPlan()
+			plan.Routes[0].Domains = nil
+			plan.Routes[0].CIDRs = []string{"203.0.113.9/32"}
 			plan.Routes[0].Sources = []string{"192.168.1.25/32"}
 			updated, err := adapter.RefreshPolicy(ctx, plan)
 			if updated || !errors.Is(err, context.Canceled) || !restoreAttempted || errors.Is(err, rollbackFailure) != failRollback {
@@ -473,6 +475,8 @@ func TestCanceledNodePolicyRefreshInsideAddRetainsUnknownIntent(t *testing.T) {
 		return base.Run(runCtx, name, args...)
 	})
 	plan := networkExecutionPlan()
+	plan.Routes[0].Domains = nil
+	plan.Routes[0].CIDRs = []string{"203.0.113.9/32"}
 	plan.Routes[0].Sources = []string{"192.168.1.25/32"}
 	updated, err := adapter.RefreshPolicy(ctx, plan)
 	if updated || !errors.Is(err, ErrProxyPolicyUnknown) || !errors.Is(err, context.Canceled) || lateMutation {
@@ -548,6 +552,8 @@ func TestCanceledNodeRecoveryCleansOnlyRuntimeItRestarted(t *testing.T) {
 				}
 			}
 			plan := networkExecutionPlan()
+			plan.Routes[0].Domains = nil
+			plan.Routes[0].CIDRs = []string{"203.0.113.9/32"}
 			plan.State, plan.Adapters = "committed", []string{"sing-box", "nfqws2"}
 			if err := manager.Record(plan); err != nil {
 				t.Fatal(err)
