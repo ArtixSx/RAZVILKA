@@ -179,10 +179,7 @@ func (r *NFQWSActiveMaterial) currentLocked(ctx context.Context) error {
 	if registered != r.adapter || generation != r.registryGeneration || r.source == nil || r.runtime == nil || r.provider == nil {
 		return ErrNFQWSScopedOwner
 	}
-	if err := r.source.ManagedOwnersCurrent(ctx, r.runtime, r.control); err != nil {
-		return errors.Join(ErrNFQWSScopedOwner, err)
-	}
-	reference, err := r.source.Reference(ctx)
+	reference, err := r.source.ManagedReference(ctx, r.runtime, r.control)
 	if err != nil || !reflect.DeepEqual(reference, r.reference) || !reflect.DeepEqual(r.runtime.Descriptor(), r.descriptor) {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}

@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 var ErrSelectedCandidateTraffic = errors.New("saved strategy has no unambiguous supported traffic coverage for its selected protocol and family")
@@ -32,41 +35,71 @@ type SelectedCandidateTraffic struct {
 }
 
 func (r *SelectedCandidateReview) Reference(ctx context.Context) (SelectedCandidateReference, error) {
+	return r.reference(ctx, nil)
+}
+
+// ManagedReference compares the original managed owners and builds the detached
+// reference within one fresh WithCurrent bracket. The result grants no ongoing
+// permission; callers must retain their closing observation after other reads.
+func (r *SelectedCandidateReview) ManagedReference(ctx context.Context, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) (SelectedCandidateReference, error) {
+	if runtime == nil || control == nil {
+		return SelectedCandidateReference{}, ErrSelectedCandidateChanged
+	}
+	return r.reference(ctx, func() error {
+		if r.runtime != runtime || r.provider == nil || r.provider.managedControl != control {
+			return ErrSelectedCandidateChanged
+		}
+		return nil
+	})
+}
+
+func (r *SelectedCandidateReview) reference(ctx context.Context, owners func() error) (SelectedCandidateReference, error) {
 	var reference SelectedCandidateReference
 	err := r.WithCurrent(ctx, func() error {
-		// WithCurrent already owns the original handle and Manager read lock.
-		// Do not call Current/Candidate/Selection recursively here.
-		arguments, err := parseArguments(r.binding.candidate.Arguments)
-		if err != nil {
-			return err
+		if owners != nil {
+			if err := owners(); err != nil {
+				return err
+			}
 		}
-		traffic, err := selectedCandidateTraffic(r.selection, arguments)
-		if err != nil {
-			return err
-		}
-		selection := r.selection
-		sourceHash := sha256.Sum256(r.image.Data)
-		reference = SelectedCandidateReference{ServiceID: selection.ServiceID, Protocol: selection.Protocol, IPFamily: selection.IPFamily,
-			CandidateID: r.binding.candidate.ID, Incarnation: r.binding.candidate.Incarnation,
-			ReceiptID: r.descriptor.ReceiptID, ManifestSHA256: r.descriptor.ManifestSHA256,
-			SourceDigest: hex.EncodeToString(sourceHash[:]), Arguments: slices.Clone(arguments), Traffic: traffic}
-		var failures []error
-		for _, item := range []struct {
-			value any
-			to    *string
-		}{{selection, &reference.SelectionDigest}, {r.binding.manager.state.CompatibilitySession, &reference.CompatibilityDigest},
-			{struct{ Material, Runtime any }{r.review, r.descriptor}, &reference.MaterialDigest},
-			{arguments, &reference.ArgumentsDigest}, {traffic, &reference.TrafficDigest}} {
-			value, err := selectedReferenceDigest(item.value)
-			*item.to = value
-			failures = append(failures, err)
-		}
-		return errors.Join(failures...)
+		var err error
+		reference, err = r.referenceLocked()
+		return err
 	})
 	if err != nil {
 		return SelectedCandidateReference{}, err
 	}
 	return reference, nil
+}
+
+// Called only inside the original source observation with its handle and
+// Manager read locks held. This pure construction performs no new observation.
+func (r *SelectedCandidateReview) referenceLocked() (SelectedCandidateReference, error) {
+	arguments, err := parseArguments(r.binding.candidate.Arguments)
+	if err != nil {
+		return SelectedCandidateReference{}, err
+	}
+	traffic, err := selectedCandidateTraffic(r.selection, arguments)
+	if err != nil {
+		return SelectedCandidateReference{}, err
+	}
+	selection := r.selection
+	sourceHash := sha256.Sum256(r.image.Data)
+	reference := SelectedCandidateReference{ServiceID: selection.ServiceID, Protocol: selection.Protocol, IPFamily: selection.IPFamily,
+		CandidateID: r.binding.candidate.ID, Incarnation: r.binding.candidate.Incarnation,
+		ReceiptID: r.descriptor.ReceiptID, ManifestSHA256: r.descriptor.ManifestSHA256,
+		SourceDigest: hex.EncodeToString(sourceHash[:]), Arguments: slices.Clone(arguments), Traffic: traffic}
+	var failures []error
+	for _, item := range []struct {
+		value any
+		to    *string
+	}{{selection, &reference.SelectionDigest}, {r.binding.manager.state.CompatibilitySession, &reference.CompatibilityDigest},
+		{struct{ Material, Runtime any }{r.review, r.descriptor}, &reference.MaterialDigest},
+		{arguments, &reference.ArgumentsDigest}, {traffic, &reference.TrafficDigest}} {
+		value, err := selectedReferenceDigest(item.value)
+		*item.to = value
+		failures = append(failures, err)
+	}
+	return reference, errors.Join(failures...)
 }
 
 func selectedReferenceDigest(value any) (string, error) {
