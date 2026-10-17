@@ -1,6 +1,6 @@
 # Security model
 
-RAZVILKA runs locally on a router and may control privileged networking objects. Safe Mode is enabled by default, but an administrator can explicitly enable transactional Active Apply.
+RAZVILKA runs locally on a router and may control privileged networking objects. A clean installation starts with no selected or applied services. Network changes require explicit configuration and authorization; recovery Safe Mode blocks changes when a previous operation cannot be confirmed.
 
 ## Control plane
 
@@ -28,7 +28,7 @@ RAZVILKA runs locally on a router and may control privileged networking objects.
 - Public profile export rejects known secret files/content. Private backup uses AES-256-GCM, PBKDF2-HMAC-SHA256, random salt/nonce and an authenticated SHA-256-sealed payload.
 - Diagnostic export omits credentials, config contents, device identity, source scopes, history and public IP data.
 - Release CI publishes checksums and GitHub/Sigstore artifact attestations. `usque-keenetic` is installed through its fixed opkg feed; the external `wgcf` binary requires the checksum shipped in the same official upstream release.
-- Release and component checks can run on the schedule explicitly enabled by the administrator. Unattended installation of the application and components is not implemented; checking or preparing an update does not activate it.
+- Release and component checks, preparation and installation are separate schedule modes explicitly enabled by the administrator. Automatic installation is implemented with admission checks, retained journals and rollback; target-router acceptance remains tracked in CURRENT_STATUS_RU.md. Checking or preparing an update alone does not activate it. The built-in downloader checks the official release's SHA-256 manifest; it does not verify Sigstore attestations.
 
 ## Remaining `1.0.0` gate
 
