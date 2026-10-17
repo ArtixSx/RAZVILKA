@@ -49,12 +49,16 @@ function communityBrowseSearchStarted() {
 }
 
 function communityBrowseLiveAccepted() {
+  const wasShowingSaved = communityBrowse.showing;
   communityBrowse.live = true;
   communityBrowse.showing = false;
   clearTimeout(communityBrowse.timer);
   communityBrowseSetControls(false);
   $('#communityBrowseNotice').hidden = true;
   $('#communityBrowseRefresh').hidden = true;
+  // Only replace the empty historical placeholder. A selected preview belongs
+  // to its existing request/action generation and must survive list refreshes.
+  if (wasShowingSaved && !state.communityPreview) $('#communityPreview').innerHTML = '<div class="community-empty">Выберите сервис. Загрузим его домены и покажем изменения до импорта.</div>';
 }
 
 function invalidateSavedCommunityBrowse(mutation = false) {

@@ -51,6 +51,38 @@ await test('late memory response never replaces successful live search or its ac
   assert.match(f.$('#communityResults').innerHTML,/Fresh live/);assert.doesNotMatch(f.$('#communityResults').innerHTML,/Saved/);assert.equal(f.$('#communityBrowseNotice').hidden,true);
 });
 
+await test('accepted live catalog replaces only the empty retained preview notice',async()=>{
+  const f=fixture(),pending=deferred();f.live(()=>pending.promise);
+  const searching=f.context.searchCommunityCatalog(true);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.runtime().showing,true);
+  assert.match(f.$('#communityPreview').textContent,/Сохранённые определения/);
+  pending.resolve([{id:'telegram',name:'Telegram',category:'Messaging'}]);await searching;
+  assert.equal(f.context.communityBrowseActionsAllowed(),true);
+  assert.match(f.$('#communityPreview').innerHTML,/Выберите сервис/);
+  assert.doesNotMatch(f.$('#communityPreview').innerHTML,/Сохранённые определения/);
+  assert.match(f.$('#communityResults').innerHTML,/ПРОСМОТР/);
+  assert.doesNotMatch(f.$('#communityResults').innerHTML,/PREVIEW/);
+  // Searching the now-live list preserves the ready empty-state message.
+  f.$('#communitySearch').value='Telegram';f.live(async()=>[{id:'telegram',name:'Telegram'}]);
+  await f.context.searchCommunityCatalog(true);
+  assert.match(f.$('#communityPreview').innerHTML,/Выберите сервис/);
+  assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+
+await test('live list refresh and late retained metadata preserve a user-selected preview',async()=>{
+  const f=fixture();await f.context.searchCommunityCatalog(true);
+  const selected={entry:{id:'telegram'},service:{domains:['telegram.org']}};
+  f.state.communityPreview=selected;f.$('#communityPreview').innerHTML='<div>Selected Telegram details</div>';
+  f.live(async()=>[{id:'telegram',name:'Telegram'}]);await f.context.searchCommunityCatalog(true);
+  assert.equal(f.state.communityPreview,selected);
+  assert.equal(f.$('#communityPreview').innerHTML,'<div>Selected Telegram details</div>');
+  // A retained response arriving after live acceptance is presentation-only.
+  f.memory(async()=>f.envelope(2));await f.context.loadSavedCommunityBrowse(f.workflowState.communitySeq,1);
+  assert.equal(f.state.communityPreview,selected);
+  assert.equal(f.$('#communityPreview').innerHTML,'<div>Selected Telegram details</div>');
+});
+
 await test('native click event filters saved rows and only literal true forces a live retry',async()=>{
   const f=fixture();await f.context.searchCommunityCatalog(true);
   const listCalls=()=>f.calls.filter(call=>call.path.startsWith('/api/v1/community/services?')).length;

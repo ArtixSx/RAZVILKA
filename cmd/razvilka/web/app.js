@@ -4366,7 +4366,7 @@ async function searchCommunityCatalog(force = false) {
 function renderCommunityResults() {
   if (typeof communityBrowse !== 'undefined' && communityBrowse.showing) { renderSavedCommunityBrowse(); return; }
   $('#communityResults').innerHTML = state.community.map((entry) => `<button class="community-result ${state.communityPreview?.entry?.id === entry.id ? 'active' : ''}" data-community-id="${esc(entry.id)}" type="button">
-    <span class="service-badge">${communityEntryIcon(entry)}</span><span><b>${esc(entry.name)}</b><small>${esc(entry.category)} · ${esc(entry.catalog === 'geo-aggregator' ? 'Geo-Aggregator' : accessLabel(entry.access?.status))}</small></span><i class="${entry.imported ? 'imported' : ''}">${entry.imported ? 'ДОБАВЛЕН' : 'PREVIEW'}</i>
+    <span class="service-badge">${communityEntryIcon(entry)}</span><span><b>${esc(entry.name)}</b><small>${esc(entry.category)} · ${esc(entry.catalog === 'geo-aggregator' ? 'Geo-Aggregator' : accessLabel(entry.access?.status))}</small></span><i class="${entry.imported ? 'imported' : ''}">${entry.imported ? 'ДОБАВЛЕН' : 'ПРОСМОТР'}</i>
   </button>`).join('') || '<div class="community-empty">Ничего не найдено. Можно добавить сервис вручную.</div>';
 }
 
