@@ -27,7 +27,10 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		if unused && err != nil && prepared == nil && admission.execution != nil {
 			e := admission.execution
 			e.mu.Lock()
-			if e.self == e && e.material != nil && e.material.adapter == a && e.launchInvoked && e.prepared == nil && nfqws2ActiveCommandDigest(e.material.command) == nfqws2ActiveCommandDigest(c) {
+			nfqws2ActiveAdapterMu.Lock()
+			original := a.activeExecution == e && a.activeProcess == nil
+			nfqws2ActiveAdapterMu.Unlock()
+			if original && e.self == e && e.material != nil && e.material.adapter == a && e.launchInvoked && e.prepared == nil && nfqws2ActiveCommandDigest(e.material.command) == nfqws2ActiveCommandDigest(c) {
 				e.noLaunch = &nfqws2ActiveNoLaunch{execution: e, command: nfqws2ActiveCommandDigest(c)}
 			}
 			e.mu.Unlock()
