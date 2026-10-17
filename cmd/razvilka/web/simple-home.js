@@ -43,6 +43,7 @@
     if (recoveryRequired) return { phase: 'recovery', services: [], tone: 'problem', title: 'Нужно восстановление', text: 'Панель отвечает. Чтение состояния и изменения приостановлены до проверки журнала. Работа обходов пока не подтверждена.' };
     if (!snapshot || typeof snapshot !== 'object') return { phase: 'loading', services: [], tone: 'progress', title: 'Загружаем состояние…', text: '' };
     const policy = snapshot.policy || {};
+    const retained = snapshot.observation?.state === 'retained';
     const label = names(catalog, snapshot);
     const services = Object.entries(snapshot.services || {}).filter(([, s]) => s && !s.removing).map(([id, spec]) => {
       const runtime = snapshot.runtime?.[id] || {};
@@ -55,6 +56,7 @@
       const proof = summaries[id];
       const matched = applied?.enabled === true && proof?.route && proof.route === (applied.route || applied.mode);
       if (matched && proof.kind === 'bad') return { id, name: label[id] || id, state, bucket: 'problem', short: 'Проверка не пройдена', detail: proof.detail || detail };
+      if (retained) return { id, name: label[id] || id, state, bucket: 'progress', short: 'Сохранённые настройки · нужна свежая проверка', detail: 'Показаны последние настройки. Текущее состояние автопилота ещё не подтверждено.' };
       if (HISTORICAL.has(state)) {
         const verified = matched && proof.kind === 'good';
         return { id, name: label[id] || id, state, bucket: verified ? 'ok' : 'progress', short: verified ? 'Работает' : applied?.enabled ? 'Включён · нужна свежая проверка' : 'Ожидает применения', detail: verified ? proof.detail || detail : detail };
@@ -66,6 +68,7 @@
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
     if (snapshot.blocked || snapshot.safe_mode) return { ...base, phase: 'recovery', tone: 'problem', title: 'Нужно восстановление', text: 'После сбоя изменения приостановлены. Проверьте восстановление; работа обхода пока не подтверждена.' };
+    if (retained) return { ...base, phase: 'ready', tone: 'progress', title: 'Нет свежих данных автопилота', text: 'Показаны последние настройки. Текущее состояние обновляется; работа сервисов пока не подтверждена.' };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства — дальше автопилот всё сделает сам.' };
     if (snapshot.stopped || policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };

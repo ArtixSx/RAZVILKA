@@ -38,6 +38,21 @@ assert.deepEqual(Array.from(bad.services,s=>s.id),['discord','roblox','youtube']
 assert.equal(bad.services[0].short,'Нужный компонент не запущен');
 assert.equal(bad.services[0].name,'Discord');
 
+// Retained runtime labels are saved history: neither a current failure nor
+// an assertion that the autopilot is still actively retrying.
+for(const oldState of ['component-unavailable','component-stopped','apply-refused','healthy','checking']){
+  const retained=model(snap({youtube:oldState},{observation:{state:'retained'},applied_services:applied}),catalog,proofs);
+  assert.equal(retained.title,'Нет свежих данных автопилота',oldState);
+  assert.equal(retained.services[0].bucket,'progress',oldState);
+  assert.match(retained.services[0].short,/Сохранённые настройки/);
+  assert.doesNotMatch(retained.title+retained.text+retained.services[0].short,/не работает|продолжает попытки|Работает|Включается|Проверяется/);
+}
+const retainedBad=model(snap({youtube:'healthy'},{observation:{state:'retained'},applied_services:applied}),catalog,{youtube:{kind:'bad',route:'nfqws2',detail:'fresh failed proof'}});
+assert.equal(retainedBad.services[0].short,'Проверка не пройдена','independent matched bad proof remains visible');
+assert.equal(retainedBad.services[0].detail,'fresh failed proof');
+assert.equal(model(snap({youtube:'component-unavailable'}),catalog).title,'1 сервис пока не работает','fresh snapshot behavior is unchanged');
+assert.equal(model(snap({youtube:'healthy'},{observation:{state:'retained'},safe_mode:true}),catalog).phase,'recovery','recovery takes precedence over retained presentation');
+
 const waiting=model({...snap({discord:'rate-limited'}),runtime:{discord:{state:'rate-limited',message:'Лимит применений за час исчерпан. Следующая попытка примерно через 12 мин.'}}},catalog);
 assert.equal(waiting.services[0].short,'Следующая попытка примерно через 12 мин');
 assert.equal(model(snap({discord:'rate-limited'}),catalog).services[0].short,'Пауза между попытками');
