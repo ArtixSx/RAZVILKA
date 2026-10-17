@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const checkout=path.resolve(__dirname,'..');
 const model=require(path.join(checkout,'cmd/razvilka/web/interface-model.js'));
 const full=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/interface.js'),'utf8');
-const names=["interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
+const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
 const source=names.map(name=>{const f=full.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n}\\n'));assert(f,'Missing production function: '+name);return f[0];}).join('\n');
 const results=[];async function test(name,fn){await fn();results.push({name,status:'passed'});console.log('PASS',name);}
 const service={id:'youtube',name:'YouTube',category:'Видео',enabled:true,applied_state:{enabled:true,route:'nfqws2',sources:['192.168.1.20']}};
@@ -21,6 +21,30 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('known recovery refusal replaces loading without inventing inventory or statistics',()=>{
+ const {c,state,$,calls}=fixture();
+ c.consoleSnapshot=null;c.consoleAutonomyError='DATAPLANE_RECOVERY_REQUIRED';
+ state.services=[];state.dataLoad={services:{loaded:false,phase:'error'},inventory:{loaded:false,phase:'error'}};
+ state.panelAvailability={kind:'responding',admission:{state:'recovery-required'}};
+ assert.equal(c.interfaceRecoveryRequired(),true);
+ c.renderInterfaceHome({});
+ assert.match($('#r42AutoPanel').innerHTML,/Нужно восстановление/);
+ assert.match($('#r42AutoPanel').innerHTML,/data-rz-nav="diagnostics"/);
+ assert.match($('#ui7HomeEngines').innerHTML,/недоступны до проверки журнала/);
+ assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/ещё загружаются/);
+ assert.equal($('#ui3HomeCount').textContent,'—');
+ assert.match($('#ui3Resources').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#ui3Resources').innerHTML,/0%/);
+ assert.doesNotMatch($('#r42AutoPanel').innerHTML,/выключен|Нет связи/);
+ assert.deepEqual(calls,[],'render must not start recovery or service mutations');
+ state.panelAvailability={kind:'unreachable',admission:{state:'recovery-required'}};
+ assert.equal(c.interfaceRecoveryRequired(),false,'unreachable must not manufacture a current recovery refusal');
+ state.panelAvailability={kind:'responding',admission:{state:'idle'}};
+ c.renderInterfaceHome({});assert.doesNotMatch($('#r42AutoPanel').innerHTML,/Нужно восстановление/);
+ state.panelAvailability={kind:'responding',admission:{state:'recovery-required'}};
+ state.authenticated=false;assert.equal(c.interfaceRecoveryRequired(),false);
+ state.authenticated=true;c.interfaceState.authRevoked=true;assert.equal(c.interfaceRecoveryRequired(),false);
+});
 await test('primary destinations have eight unique owners',()=>{assert.equal(Object.keys(model.taskSections).length,8);const all=Object.values(model.taskSections).flatMap(s=>s.children.map(x=>x[0]));assert.equal(all.length,new Set(all).size);assert.equal(model.navigation('engines').owner,'engines');});
 await test('healthy and changed remains healthy with a separate actionable change',()=>{const h=model.humanService({...service,dirty:true},good);assert.equal(h.kind,'good');assert(h.actionable);assert.match(h.pendingLabel,/изменения/);assert.equal(model.filterServices([service],{scope:'attention'},{youtube:h}).length,1);});
 await test('routine missing proof does not become manual intervention',()=>{const h=model.humanService(service,{kind:'unknown',route:'nfqws2'});assert.notEqual(h.kind,'good');assert.equal(h.actionable,false);});

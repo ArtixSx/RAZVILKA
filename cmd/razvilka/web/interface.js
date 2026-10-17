@@ -86,6 +86,9 @@ function interfaceGroupHTML(g,summaries,location){
 function interfaceCards(services,summaries,where){return rim.groupServices(services,interfaceServices(),summaries).map(g=>g.grouped?interfaceGroupHTML(g,summaries,where):g.members.map(s=>interfaceServiceCard(s,summaries)).join('')).join('');}
 function interfaceEmpty(title,body,action=''){return `<div class="ui3-empty">${ci('grid')}<h3>${esc(title)}</h3><p>${esc(body)}</p>${action}</div>`;}
 function interfaceDataReady(key){return !state.dataLoad || state.dataLoad[key]?.loaded===true;}
+function interfaceRecoveryRequired(){
+ return !interfaceState.authRevoked&&state.authenticated===true&&state.panelAvailability?.kind==='responding'&&state.panelAvailability.admission?.state==='recovery-required';
+}
 function interfaceLoadMessage(key){
  const load=state.dataLoad?.[key];
  return load?.phase==='busy'?'Настройки временно заняты. Повторим чтение автоматически.'
@@ -108,7 +111,8 @@ function renderInterfaceNavigation(view=state.currentView||'overview'){
 }
 
 function interfaceHomeAuto(ready){
- const known=ready&&!consoleAutonomyError,auto=rim.humanAuto(consoleSnapshot,state.status,known),p=known?consoleSnapshot?.policy:null;
+ const recovery=interfaceRecoveryRequired();
+ const known=ready&&!consoleAutonomyError,auto=recovery?{state:'recovery',title:'Нужно восстановление',detail:'Панель отвечает. Чтение состояния и изменения приостановлены до проверки журнала. Работа обходов пока не подтверждена.',action:'Открыть диагностику',target:'diagnostics',tone:'warn'}:rim.humanAuto(consoleSnapshot,state.status,known),p=known?consoleSnapshot?.policy:null;
  const enabled=auto.state==='enabled';
  const entries=enabled?Object.entries(consoleSnapshot.runtime||{}).filter(([id])=>consoleSnapshot.services?.[id]?.enabled):[];
  const active=entries.find(([,r])=>['checking','applying','searching'].includes(r.state));
@@ -145,8 +149,9 @@ function renderHomeEngineSummary(summaries,loaded,fresh){
  const auto=rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled';
  const usage=rim.engineUsage(loaded?state.services:[],fresh?currentSummaries:{},auto?consoleSnapshot?.services||{}:{},fresh&&auto?consoleSnapshot?.runtime||{}:{});
  const known=state.authenticated===true&&interfaceDataReady('inventory');
+ const unavailable=interfaceRecoveryRequired()?'Сведения о компонентах недоступны до проверки журнала. Их состояние пока неизвестно.':'Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.';
  const rows=Object.entries(consoleEngineMeta).filter(([id])=>known||usage[id]);
- interfaceHTML('ui7HomeEngines',`<div class="ui3-section-heading"><h3>Обходы и сервисы</h3><button type="button" class="text-button" data-rz-nav="engines">Управление ${ci('chevron')}</button></div>${!known?'<p class="r5-caption">Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.</p>':''}<div class="ui7-engine-summary">${rows.map(([id,meta])=>{const info=consoleEngineState(id),n=usage[id]||{assigned:0,verified:0};return `<button class="ui7-engine-row" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span><b>${esc(meta.name)}</b><small>${esc(info.label)}</small></span><span class="ui7-engine-count"><b>${loaded?n.assigned:'—'}</b><small>назначено${fresh&&n.assigned?` · ${n.verified} проверено`:''}</small></span>${ci('chevron')}</button>`;}).join('')}</div><p class="r5-caption">Считаются применённые назначения. Запущенный процесс сам по себе не подтверждает доступ.</p>`);
+ interfaceHTML('ui7HomeEngines',`<div class="ui3-section-heading"><h3>Обходы и сервисы</h3><button type="button" class="text-button" data-rz-nav="engines">Управление ${ci('chevron')}</button></div>${!known?`<p class="r5-caption">${unavailable}</p>`:''}<div class="ui7-engine-summary">${rows.map(([id,meta])=>{const info=consoleEngineState(id),n=usage[id]||{assigned:0,verified:0};return `<button class="ui7-engine-row" type="button" data-console-engine="${esc(id)}"><span class="engine-mini-icon ${meta.tone}">${ci(meta.icon)}</span><span><b>${esc(meta.name)}</b><small>${esc(info.label)}</small></span><span class="ui7-engine-count"><b>${loaded?n.assigned:'—'}</b><small>назначено${fresh&&n.assigned?` · ${n.verified} проверено`:''}</small></span>${ci('chevron')}</button>`;}).join('')}</div><p class="r5-caption">Считаются применённые назначения. Запущенный процесс сам по себе не подтверждает доступ.</p>`);
 }
 
 function renderInterfaceHome(summaries){
@@ -557,6 +562,7 @@ function interfaceReturnInspectorFocus(){
 $('#ui3ServiceDialog').addEventListener('close',interfaceReturnInspectorFocus);
 document.addEventListener('razvilka:auth-required',()=>{invalidateEngineProgress();interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
 document.addEventListener('razvilka:auth-restored',()=>{interfaceState.authRevoked=false;renderInterfaceHome(interfaceSummaries());});
+document.addEventListener('razvilka:panel-availability',()=>{if((state.currentView||'overview')==='overview')renderInterfaceHome(interfaceSummaries());});
 document.addEventListener('click',interfaceTaskAction);
 function interfaceSafeRender(key, callback){
  state.uiRenderIssues ||= {};

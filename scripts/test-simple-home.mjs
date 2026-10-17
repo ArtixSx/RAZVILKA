@@ -10,6 +10,12 @@ const catalog=[{id:'youtube',name:'YouTube',category:'Видео'},{id:'discord'
 const snap=(runtime,extra={})=>({policy:{setup_complete:true,enabled:true,revision:3},services:Object.fromEntries(Object.keys(runtime).map(id=>[id,{id,enabled:true}])),runtime:Object.fromEntries(Object.entries(runtime).map(([id,state])=>[id,{state,message:'detail '+id}])),...extra});
 
 assert.equal(model(null,catalog).phase,'loading');
+const refused=model(null,catalog,{},true);
+assert.equal(refused.phase,'recovery');
+assert.equal(refused.title,'Нужно восстановление');
+assert.match(refused.text,/Панель отвечает/);
+assert.doesNotMatch(refused.title+refused.text,/Загружаем|выключен|Добавьте первый/);
+assert.equal(model(snap({youtube:'healthy'},{applied_services:{youtube:{enabled:true,route:'nfqws2'}}}),catalog,{youtube:{kind:'good',route:'nfqws2'}},true).phase,'recovery','known refusal takes precedence over retained healthy state');
 assert.equal(model({policy:{setup_complete:false}},catalog).phase,'setup');
 assert.equal(model(snap({},{stopped:true}),catalog).phase,'off');
 assert.equal(model(snap({}),catalog).phase,'empty');

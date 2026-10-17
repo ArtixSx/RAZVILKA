@@ -39,7 +39,8 @@
   }
 
   // model turns the autopilot snapshot into what the simple home renders.
-  function model(snapshot, catalog, summaries = {}) {
+  function model(snapshot, catalog, summaries = {}, recoveryRequired = false) {
+    if (recoveryRequired) return { phase: 'recovery', services: [], tone: 'problem', title: 'Нужно восстановление', text: 'Панель отвечает. Чтение состояния и изменения приостановлены до проверки журнала. Работа обходов пока не подтверждена.' };
     if (!snapshot || typeof snapshot !== 'object') return { phase: 'loading', services: [], tone: 'progress', title: 'Загружаем состояние…', text: '' };
     const policy = snapshot.policy || {};
     const label = names(catalog, snapshot);
@@ -298,7 +299,7 @@
     const snap = snapshot();
     // Reuse the shared TTL/revision-aware result; runtime history alone does
     // not carry the current network, route and configuration proof.
-    const m = model(snap, catalog(), typeof interfaceSummaries === 'function' ? interfaceSummaries() : {});
+    const m = model(snap, catalog(), typeof interfaceSummaries === 'function' ? interfaceSummaries() : {}, typeof interfaceRecoveryRequired === 'function' && interfaceRecoveryRequired());
     // The advanced home renders the engine summary; simple mode shows the same
     // block beside the services instead of its own copy of that logic.
     const engines = simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '');
@@ -516,6 +517,7 @@
 
   window.addEventListener('razvilka:autonomy-state', () => { render(); renderSettings(); renderDevicesNote(); });
   window.addEventListener('razvilka:app-update', () => render());
+  document.addEventListener('razvilka:panel-availability', () => render());
   document.addEventListener('DOMContentLoaded', apply);
   if (document.readyState !== 'loading') apply();
   setInterval(() => { if (!document.hidden) { render(); renderSettings(); renderDevicesNote(); } }, 3000);

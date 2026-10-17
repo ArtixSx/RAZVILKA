@@ -108,6 +108,7 @@
   const visible = () => state.authenticated === true && !document.hidden;
   const render = (value) => {
     state.panelAvailability = visible() ? value : null;
+    document.dispatchEvent(new Event('razvilka:panel-availability'));
     if (!needsAttention(value) || !visible()) { if (panel) panel.hidden = true; return; }
     if (!panel) {
       const notice = document.getElementById('notice');
