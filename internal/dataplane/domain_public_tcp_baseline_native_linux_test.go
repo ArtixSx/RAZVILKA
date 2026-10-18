@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -121,6 +122,34 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 		t.Fatalf("experimental baseline refused/failed: %v: %s", err, out)
 	}
 	t.Log(strings.TrimSpace(string(out)))
+	for _, unsupported := range []struct {
+		name     string
+		selector []string
+	}{
+		{"mark", []string{"fwmark", "0x123"}},
+		{"source-port", []string{"ipproto", "tcp", "sport", "12345"}},
+		{"ingress", []string{"iif", "lan0"}},
+	} {
+		t.Run("refuse-"+unsupported.name, func(t *testing.T) {
+			rule := append([]string{"-n", router, "rule", "add", "pref", "115"}, unsupported.selector...)
+			rule = append(rule, "table", "451")
+			run(rule...)
+			defer func() { rule[3] = "del"; run(rule...) }()
+			beforeRules := run("-n", router, "rule", "show")
+			beforeRoutes := run("-n", router, "route", "show", "table", "all")
+			beforeFirewall := run("netns", "exec", router, "iptables-save")
+			refused := exec.CommandContext(ctx, "ip", "netns", "exec", router, binary, "-test.run=^TestPublicTCPBaselineNativeChild$", "-test.count=1", "-test.timeout=5s")
+			refused.Env = append(os.Environ(), "RAZVILKA_PUBLIC_TCP_ROLE=router", "RAZVILKA_PUBLIC_TCP_CLIENT_NS="+client, "RAZVILKA_PUBLIC_TCP_SERVER_NS="+server)
+			output, err := refused.CombinedOutput()
+			if err != nil || !bytes.Contains(output, []byte("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")) {
+				t.Fatalf("unsupported policy not refused: %v: %s", err, output)
+			}
+			if !bytes.Equal(beforeRules, run("-n", router, "rule", "show")) || !bytes.Equal(beforeRoutes, run("-n", router, "route", "show", "table", "all")) || !bytes.Equal(beforeFirewall, run("netns", "exec", router, "iptables-save")) {
+				t.Fatal("unsupported admission mutated kernel policy")
+			}
+		})
+	}
+
 }
 
 func TestPublicTCPBaselineNativeChild(t *testing.T) {
@@ -203,6 +232,13 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	// Capture the complete rule and route images before adding owned return PBR.
 	rulesBefore := run("ip", "-4", "rule", "show")
 	routesBefore := run("ip", "-4", "route", "show", "table", "all")
+	// Unknown policy selectors are unsupported, not a reason to use router direct.
+	for _, word := range []string{"fwmark", "sport", "dport", "ipproto", " iif ", " oif ", " uidrange ", " l3mdev"} {
+		if bytes.Contains(rulesBefore, []byte(word)) {
+			fmt.Println("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")
+			return
+		}
+	}
 	// Pre-existing foreign-looking chains make table preservation observable
 	// even with iptables-nft, which otherwise creates tables on first rule.
 	run("iptables", "-t", "nat", "-N", "FOREIGN_BASELINE_NAT")
@@ -222,12 +258,6 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	if !names.MatchString(clientNS) || !names.MatchString(serverNS) {
 		t.Fatal("invalid owned namespaces")
 	}
-	// Unknown policy selectors are unsupported, not a reason to use router direct.
-	for _, word := range []string{"fwmark", "sport", "dport", "ipproto", " iif ", " oif ", " uidrange ", " l3mdev"} {
-		if bytes.Contains(rulesBefore, []byte(word)) {
-			t.Fatal("unsupported baseline PBR selector")
-		}
-	}
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero, Port: 18081})
 	if err != nil {
 		t.Fatal(err)
@@ -243,6 +273,14 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	run("ip", "rule", "add", "pref", "110", "fwmark", "0x451/0xffffffff", "table", "452")
 	run("ip", "route", "add", "local", "192.0.2.2/32", "dev", "lo", "table", "452")
 	defer func() {
+		// Original listener/accepted flow descriptors close before selector retirement.
+		_ = listener.Close()
+		if late, err := listener.AcceptTCP(); !errors.Is(err, net.ErrClosed) {
+			if late != nil {
+				_ = late.Close()
+			}
+			t.Error("original listener close not confirmed")
+		}
 		capture[4] = "-D"
 		divert[4] = "-D"
 		run("iptables", capture...)
