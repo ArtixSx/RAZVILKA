@@ -167,7 +167,8 @@
     }
     const observed=recovery.data,t=observed.transaction,model=summary(observed,recovery.receipt);
     if (!model.actions.includes(action) || !permissionFor(observed)) return;
-    const ticket={epoch:recovery.epoch,transaction:t.transaction_id,sent:false};recovery.action=ticket;render();
+    const ticket={epoch:recovery.epoch,transaction:t.transaction_id,sent:false,controller:new AbortController(),timedOut:false};recovery.action=ticket;render();
+    let deadline=null;
     const current=()=>ticket.epoch===recovery.epoch && recovery.action===ticket && state.authenticated;
     try {
       const managed=t.schema_version===3;
@@ -177,7 +178,11 @@
       if(recovery.data!==observed || !fresh() || !permissionFor(observed))throw new Error('Журнал или разрешения изменились. Прочитайте состояние перед действием.');
       recovery.unknownWrite=true;
       ticket.sent=true;
-      const result=await api('/api/v1/components/recovery',{method:'POST',body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})});
+      // The server allows six minutes. A lost response must release the UI
+      // into uncertain read-only recovery, never replay the mutation.
+      deadline=setTimeout(()=>{ticket.timedOut=true;ticket.controller.abort();},370000);
+      const result=await waitRead(ticket,api('/api/v1/components/recovery',{method:'POST',signal:ticket.controller.signal,body:JSON.stringify({transaction_id:t.transaction_id,component:t.component,action,expected_revision:observed.revision,confirm:'REPAIR_COMPONENT_TRANSACTION'})}));
+      clearTimeout(deadline);deadline=null;
       if(!current())return;
       const acknowledged=managed?result?.ok===true && typeof result.installed_idle==='boolean' && typeof result.compatibility_ready==='boolean' && result.working_routes_changed===false && (result.recovery_required===undefined || result.recovery_required===false):result?.recovery_required===false;
       if(!acknowledged)throw new Error('Сервер ещё не подтвердил завершение восстановления. Прочитайте состояние; запись не повторяется.');
@@ -194,9 +199,10 @@
       showNotice('review',summary(recovery.data,recovery.receipt).label,'Итог прочитан из журнала. Доступ каждого сервиса проверяется отдельно.');
     } catch(error) {
       if(!current())return;
-      recovery.error=error.message;recovery.received=0;
+      recovery.error=ticket.timedOut?'Ответ о восстановлении не получен за отведённое время. Исход неизвестен; прочитайте журнал. Повторная запись не отправлялась.':error.message;recovery.received=0;
+      if(ticket.timedOut)recovery.autoBlocked=true;
       if(error.status===401)showAuth({...state.status,authenticated:false},error.message);
-    } finally {if(recovery.action===ticket){recovery.action=null;render();}}
+    } finally {clearTimeout(deadline);if(recovery.action===ticket){recovery.action=null;render();}}
   }
   root.componentRecoveryFence=fence;
   root.componentRecoverySummary=id=>{
@@ -211,10 +217,10 @@
     if(event.target.closest?.('[data-component-recovery-read]'))void read(true);
     const button=event.target.closest?.('[data-component-repair]');if(button && !button.disabled)void repair(button.dataset.componentRepair);
   });
-  document.addEventListener('razvilka:auth-required',()=>{recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;recovery.data=null;recovery.received=0;recovery.error='';recovery.unknownWrite=false;recovery.receipt=null;recovery.autoBlocked=false;paint();});
+  document.addEventListener('razvilka:auth-required',()=>{recovery.epoch++;recovery.read?.controller.abort();recovery.action?.controller.abort();recovery.read=null;recovery.action=null;recovery.data=null;recovery.received=0;recovery.error='';recovery.unknownWrite=false;recovery.receipt=null;recovery.autoBlocked=false;paint();});
   document.addEventListener('razvilka:view-change',event=>{
     if(!views.has(event.detail) || recovery.action && event.detail!==state.currentView){
-      const sent=recovery.action?.sent;recovery.epoch++;recovery.read?.controller.abort();recovery.read=null;recovery.action=null;
+      const sent=recovery.action?.sent;recovery.epoch++;recovery.read?.controller.abort();recovery.action?.controller.abort();recovery.read=null;recovery.action=null;
       if(sent){recovery.unknownWrite=true;recovery.received=0;recovery.error='Результат действия ещё не прочитан. Можно обновить состояние без повторной записи.';}
     }
     if(views.has(event.detail)){

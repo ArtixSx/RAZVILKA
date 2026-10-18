@@ -300,4 +300,45 @@ await test('repair POST busy still never retries or automatically reads a journa
   const f=fixture();await f.ready();f.clickRepair();await flush();f.requests[1].reject(busyRead());await f.tick(30000);
   assert.equal(f.requests.length,2);assert.equal(f.requests.filter(request=>request.options.method==='POST').length,1);assert.equal(f.timerCount(),0);assert.equal(f.ctx.componentRecoveryFence(),true);
 });
+await test('repair deadline releases busy into unknown read-only state without replay',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];assert.equal(post.options.signal.aborted,false);
+ await f.tick(369999);assert.equal(post.options.signal.aborted,false);
+ await f.tick(1);assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ assert.match(f.panel.innerHTML,/Исход неизвестен/);
+ assert.doesNotMatch(f.panel.innerHTML,/data-component-recovery-read[^>]*disabled/);
+ f.clickRepair();f.panelRefresh();await flush();assert.equal(f.requests.length,2);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.requests.length,2);assert.equal(f.ctx.componentRecoveryFence(),true);
+ f.clickRead();await flush();assert.equal(f.requests[2].options.method,undefined);
+ f.requests[2].resolve(snapshot('accepted',false));await flush();
+ assert.equal(f.ctx.componentRecoveryFence(),false);
+ assert.equal(f.requests.filter(r=>r.options.method==='POST').length,1);
+});
+
+await test('repair completion before deadline clears timer and still reads journal',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];post.resolve({recovery_required:false,live_accepted:true});await flush();
+ f.requests[2].resolve(snapshot('accepted',false));await flush();
+ assert.equal(f.timerCount(),0);assert.equal(post.options.signal.aborted,false);
+ await f.tick(370000);assert.equal(post.options.signal.aborted,false);
+});
+
+await test('repair auth cancellation aborts transport and ignores late success',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];f.revoke();await flush();
+ assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.requests.length,2);assert.equal(f.notices.length,0);
+});
+
+await test('leaving recovery cancels repair wait but preserves unknown outcome',async()=>{
+ const f=fixture();await f.ready();f.clickRepair();await flush();
+ const post=f.requests[1];f.view('overview');await flush();
+ assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ post.resolve({recovery_required:false,live_accepted:true});await flush();
+ assert.equal(f.notices.length,0);assert.equal(f.requests.length,2);
+ assert.equal(f.ctx.componentRecoveryFence(),true);
+});
+
 console.log(JSON.stringify({suite:'component-recovery',tests:total}));
