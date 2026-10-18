@@ -114,7 +114,7 @@
   const $=id=>document.getElementById('a1-'+id);
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,presentationFresh=false,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
-  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0;
+  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0,wizardEdit=0;
   let consentReviewFingerprint = '';
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
@@ -274,14 +274,14 @@
     if (activeTab==='services' || activeTab==='overview') renderServices();
     if (activeTab==='setup' || !editingPolicy) {fillWizard();renderStarterReview();}
   }
-  async function refresh(force=false, live=force) {
+  async function refresh(force=false, live=force, discardEdit=wizardEdit) {
     // Let the core discover setup/login first. A protected read's early 401
     // must not cancel /auth/status and replace initial setup with login.
     if (state.authenticated !== true) return false;
     const generation=authGeneration;
     // A read that began before a write cannot serve as its readback. Wait for
     // the admitted read, then request a new snapshot without overlapping it.
-    if(loading){if(!force&&!live)return false;const pending=refreshRequest;await pending;if(generation!==authGeneration)return false;return refreshRequest&&refreshRequest!==pending?refreshRequest:refresh(force,live);}
+    if(loading){if(!force&&!live)return false;const pending=refreshRequest;await pending;if(generation!==authGeneration)return false;return refreshRequest&&refreshRequest!==pending?refreshRequest:refresh(force,live,discardEdit);}
     loading=true;
     const request=(async()=>{
     try {
@@ -294,7 +294,7 @@
       if(live && snapshot?.observation)next.observation={...snapshot.observation,state:'available',observed_at:next.server_time};
       snapshot=next;presentationFresh=next.observation?.state!=='retained';window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
       if(!presentationFresh)window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{retained:true,message:'Показаны последние настройки. Состояние обновляется.'}}));
-      if(force) dirty=false;
+      if(force&&discardEdit===wizardEdit) dirty=false;
       $('authRequired').hidden=true;$('workspace').hidden=false;render();return true;
     } catch(e) {
       if(generation!==authGeneration||e.name==='AuthGenerationChanged')return false;
@@ -351,14 +351,14 @@
       $('scopeMode').value=all?'all':'selected';$('scopeAddresses').value=devices.join('\n');$('scopeAddressesLabel').hidden=all;
       $('autonomyEnabled').checked=true;$('inheritNew').checked=true;
       $$('input[name="source"]').forEach(el=>{el.checked=$('quickSources').checked;});
-      dirty=true;renderReview();$('confirmConsent').checked=true;
+      dirty=true;wizardEdit++;renderReview();$('confirmConsent').checked=true;
       $('quickStartButton').disabled=true;
       await saveWizard({preventDefault(){}},error);
     }catch(e){reportError(e,error);}finally{$('quickStartButton').disabled=false;}
   }
   async function saveWizard(event,errorTarget) {
     event.preventDefault();if(saving) return;
-    const generation=authGeneration;
+    const generation=authGeneration,discardEdit=wizardEdit;
     try {
       if(!presentationFresh)throw new Error('Сначала обновите состояние автопилота. Несохранённые поля оставлены.');
       const p=validatePolicy(policyFromForm());
@@ -368,7 +368,7 @@
       if(policyConsentRequired(editingPolicy,p,releaseRequested)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:releaseRequested&&$('confirmConsent').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
-      requireGeneration(generation);const refreshed=await refresh(true);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
+      requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,errorTarget||$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
@@ -405,7 +405,7 @@
     }
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
-  $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
+  $('wizardForm').addEventListener('input',()=>{dirty=true;wizardEdit++;});$('wizardForm').addEventListener('change',()=>{dirty=true;wizardEdit++;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
   $('wizardForm').addEventListener('submit',event=>saveWizard(event));
   $('quickStartButton').addEventListener('click',()=>void runQuickStart());
   $('quickAdvanced').addEventListener('click',()=>{quickAdvanced=true;renderQuickStart();setStep(0);});

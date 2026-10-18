@@ -361,4 +361,46 @@ await test('editing while source save is pending preserves dirty form after succ
  assert.equal(f.requests.length,count,'success must not clear newer dirty edits and reload');
 });
 
+await test('wizard explicit discard does not discard edits made during its read',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
+ f.e('checkInterval').value='600';f.e('wizardForm').events.get('input')({});
+ f.click('reloadButton');const i=f.requests.length-1;
+ f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.respond(i,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,'777');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+});
+
+await test('wizard discard waits for pending poll without consuming newer edits',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');
+ f.click('reloadButton');f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.respond(1,200,snapshot());await flush();
+ f.respond(2,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,'777');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+});
+
+await test('wizard ordinary confirmed discard loads the new revision',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
+ f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
+ f.click('reloadButton');f.respond(f.requests.length-1,200,snapshot(2));await flush();
+ assert.equal(f.e('checkInterval').value,300);assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
+});
+
+await test('wizard save readback preserves edits made while PUT was pending',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ f.e('confirmConsent').checked=true;
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const i=f.requests.length-1;assert.equal(f.requests[i].options.method,'PUT',f.e('wizardError').textContent);
+ f.e('checkInterval').value='240';f.e('wizardForm').events.get('input')({});
+ f.respond(i,200,{ok:true});await flush();
+ const next=snapshot(2);next.policy.check_seconds=180;f.respond(i+1,200,next);await saving;
+ assert.equal(f.e('checkInterval').value,'240');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+});
+
 console.log(JSON.stringify({status:'passed',tests:passed}));
