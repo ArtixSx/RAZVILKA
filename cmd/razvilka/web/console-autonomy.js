@@ -105,7 +105,7 @@
     try{return `${date.toLocaleString('ru-RU',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} (${zone})`;}catch{return date.toISOString();}
   }
   function sourceCard(s,zone='UTC') {
-    return `<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.saved===true&&s.enabled?'':'neutral'}">${s.saved===true?(s.enabled?'Таймер включён':'Таймер выключен'):'Разовое получение · не сохранено'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(sourceDate(s.last_attempt_at,zone))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(sourceDate(s.last_success_at,zone))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(sourceDate(s.next_refresh_at,zone))}</dd><dt>Последний результат</dt><dd>${escapeHTML(sourceStatusLabel(s.status))} · ${Number(s.imported||0)} записей</dd></dl>${s.saved===true?`<form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form>`:`<p class="subtle">Источник использован разово. Подписка и расписание не сохранены.</p><button class="button small" type="button" data-feed-add>Добавить постоянную подписку</button>`}</article>`;
+    return `<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.saved===true&&s.enabled?'':'neutral'}">${s.saved===true?(s.enabled?'Таймер включён':'Таймер выключен'):'Разовое получение · не сохранено'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(sourceDate(s.last_attempt_at,zone))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(sourceDate(s.last_success_at,zone))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(sourceDate(s.next_refresh_at,zone))}</dd><dt>Последний результат</dt><dd>${escapeHTML(sourceStatusLabel(s.status))} · ${Number(s.imported||0)} записей</dd></dl>${s.saved===true?`<form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form>`:`<p class="subtle">Источник использован разово. Подписка и расписание не сохранены.</p><button class="button small" type="button" data-feed-add="${escapeHTML(s.source_id)}">Добавить постоянную подписку</button>`}</article>`;
   }
   const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
   if(typeof module==='object'&&module.exports) module.exports=model;
@@ -114,7 +114,7 @@
   const $=id=>document.getElementById('a1-'+id);
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,presentationFresh=false,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
-  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null;
+  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0;
   let consentReviewFingerprint = '';
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
@@ -309,7 +309,7 @@
   async function readSources() {
     if (state.authenticated !== true) return;
     const generation=authGeneration;
-    try {const next=await api('/api/v1/node-feeds');if(generation!==authGeneration)return;feeds=next;if(sourceDirty)return;renderSources();} catch(e){if(generation===authGeneration)reportError(e);}
+    try {const ticket=++sourceRead,edit=sourceEdit;const next=await api('/api/v1/node-feeds');if(generation!==authGeneration||ticket!==sourceRead||edit!==sourceEdit||sourceDirty)return;feeds=next;renderSources();} catch(e){if(generation===authGeneration)reportError(e);}
   }
   function renderSources() {
     const list=feeds?.sources||[];
@@ -385,7 +385,24 @@
       requireGeneration(generation);
       notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh(false,true);
     })().catch(e=>reportError(e));
-    if(event.target.closest('[data-feed-add]')){$('subscriptionForm').scrollIntoView({block:'center'});$('subscriptionName').focus();return;}
+    const add=event.target.closest('[data-feed-add]');if(add){
+      const source=feeds?.sources?.find(s=>s.source_id===add.dataset.feedAdd);
+      if(!source||source.saved===true)return;
+      const preset=feeds.presets?.find(p=>source.source_id===`feed-${p.id}`);
+      if(preset){
+        setView('providers');
+        const field=document.getElementById('nodeFeedPreset');
+        field.value=preset.id;field.dispatchEvent(new Event('change',{bubbles:true}));
+        document.getElementById('nodeSubscriptions').hidden=false;
+        document.getElementById('nodeSubscriptions').scrollIntoView({block:'center'});
+        document.getElementById('nodeFeedSync').focus();
+      }else{
+        $('subscriptionName').value=source.name||source.source_id;
+        notify('Добавьте полный HTTPS-адрес этого разового источника. Скрытый адрес не восстанавливается из публичных данных; сохранение требует вашей команды.');
+        $('subscriptionForm').scrollIntoView({block:'center'});$('subscriptionURL').focus();
+      }
+      return;
+    }
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
   $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
@@ -396,8 +413,8 @@
   $('openOptionalCatalog')?.addEventListener('click',()=>{if(typeof openCommunityCatalog==='function')openCommunityCatalog();});
   document.getElementById('communityCatalogDialog')?.addEventListener('close',()=>void refresh());
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
-  $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;void refresh(true);if(activeTab==='sources')void readSources();}});
-  $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;void readSources();}});
+  $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;sourceEdit++;void refresh(true);if(activeTab==='sources')void readSources();}});
+  $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;sourceEdit++;void readSources();}});
   $('pauseButton').addEventListener('click',()=>{if(!snapshot?.policy?.setup_complete){tab('setup');setStep(0);return;}void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh(false,true);requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Общий ручной режим и остановка сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e));});
   $('serviceSearch').addEventListener('input',()=>{if(snapshot)renderServices();});
   $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>reportError(e));});
@@ -410,13 +427,14 @@
     if(!snapshot.services[created.id]) await enroll(created.id);
     requireGeneration(generation);$('addServiceDialog').close();$('addServiceForm').reset();if(typeof refreshCoreAfterEdit==='function')await refreshCoreAfterEdit();requireGeneration(generation);notify('Сервис добавлен. Начнётся реальная проверка, а не демонстрационный PASS.');await refresh(false,true);
   })().catch(e=>reportError(e,$('addServiceError'))).finally(()=>{if(generation===authGeneration)adding=false;});});
-  $('sourcesList').addEventListener('input',()=>{sourceDirty=true;});
+  $('sourcesList').addEventListener('input',()=>{sourceDirty=true;sourceEdit++;});
   $('sourcesList').addEventListener('submit',event=>{const form=event.target.closest('[data-feed-form]');if(!form)return;event.preventDefault();void(async()=>{
     const generation=authGeneration;
     const source=feeds.sources.find(s=>s.source_id===form.dataset.feedForm);if(!source||source.saved!==true)throw new Error('Источник не сохранён или изменился; обновите список.');
+    const edit=sourceEdit;
     await api(`/api/v1/node-feeds/${encodeURIComponent(source.source_id)}`,'PUT',{revision:source.revision,confirm:'UPDATE_NODE_FEED',enabled:form.elements.enabled.value==='true',refresh_interval_minutes:Number(form.elements.interval.value),accept_partial:!!source.accept_partial,limit:source.limit||32});
     requireGeneration(generation);
-    sourceDirty=false;notify('Интервал подписки сохранён. Применённые узлы не заменялись.');await readSources();
+    notify('Интервал подписки сохранён. Применённые узлы не заменялись.');if(edit!==sourceEdit)return;sourceDirty=false;await readSources();
   })().catch(e=>reportError(e));});
   $('subscriptionForm').addEventListener('submit',event=>{event.preventDefault();void(async()=>{
     const generation=authGeneration;

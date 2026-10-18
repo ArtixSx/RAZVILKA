@@ -3738,18 +3738,46 @@ function openNodeGroup(id = '') {
 async function saveNodeGroup(event) {
   event.preventDefault();
   if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
+  const auth = state.authGeneration || 0;
+  if (state.nodeGroupSave?.auth === auth) return;
   const id = $('#nodeGroupID').value;
-  const nodeIDs = $$('#nodeGroupMembers input:checked').map((input) => input.value);
-  if (!nodeIDs.length) return showDetails({ error: 'Выберите хотя бы один узел.' }, 'Группа не сохранена');
-  if (nodeIDs.length > 32) return showDetails({ error: 'В группе может быть до 32 подключений.' }, 'Группа не сохранена');
+  const nodeIDs = $$('#nodeGroupMembers input:checked').map(input => input.value);
+  if (!nodeIDs.length || nodeIDs.length > 32) return showDetails({error:'Выберите от 1 до 32 подключений.'}, 'Группа не сохранена');
   const preferred = nodeIDs.includes($('#nodeGroupPreferred').value) ? $('#nodeGroupPreferred').value : nodeIDs[0];
-  const body = { name: $('#nodeGroupName').value.trim(), mode: $('#nodeGroupMode').value, node_ids: nodeIDs, preferred_node_id: preferred, hold_down_seconds: Number($('#nodeGroupHold').value), confirm: id ? 'UPDATE_NODE_GROUP' : 'CREATE_NODE_GROUP' };
+  const body = {name:$('#nodeGroupName').value.trim(), mode:$('#nodeGroupMode').value, node_ids:nodeIDs, preferred_node_id:preferred, hold_down_seconds:Number($('#nodeGroupHold').value), confirm:id?'UPDATE_NODE_GROUP':'CREATE_NODE_GROUP'};
+  const action = state.nodeGroupSave = {auth};
+  const current = () => state.nodeGroupSave === action && auth === (state.authGeneration || 0);
+  let written = false;
   try {
-    await api(id ? `/api/v1/node-groups/${encodeURIComponent(id)}` : '/api/v1/node-groups', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    if (state.nodeGroupUnknown?.auth === auth) {
+      if (!await askConfirmation('Результат предыдущего сохранения неизвестен', 'Сначала проверьте список групп. Повторная отправка может создать дубликат. Вы проверили список и хотите отправить ещё раз?', 'Отправить повторно')) return;
+      if (!current()) return;
+    }
+    const result = await api(id ? `/api/v1/node-groups/${encodeURIComponent(id)}` : '/api/v1/node-groups', {method:id?'PUT':'POST', body:JSON.stringify(body)});
+    if (!current()) return;
+    written = true;
+    state.nodeGroupUnknown = null;
+    // A successful create must never become a second create after readback failure.
+    if (!id && result?.group?.id) $('#nodeGroupID').value = result.group.id;
     $('#nodeGroupDialog').close();
-    state.routeOptions = await api('/api/v1/routes/options');
+    const options = await api('/api/v1/routes/options');
+    if (!current()) return;
+    state.routeOptions = options;
     await refreshNodes();
-  } catch (error) { showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Группа не сохранена'); }
+  } catch (error) {
+    if (!current()) return;
+    if (written) {
+      showDetails({error:'Группа сохранена, но список не обновлён. Обновите список перед следующим действием.'}, 'Группа сохранена');
+    } else if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) {
+      state.nodeGroupUnknown = null;
+      showDetails({error:error.message}, 'Группа не сохранена');
+    } else {
+      state.nodeGroupUnknown = {auth};
+      showDetails({error:'Ответ о сохранении не получен. Группа могла быть сохранена. Проверьте список групп перед повторной отправкой.'}, 'Результат сохранения неизвестен');
+    }
+  } finally {
+    if (current()) state.nodeGroupSave = null;
+  }
 }
 
 async function deleteNodeGroup(id) {

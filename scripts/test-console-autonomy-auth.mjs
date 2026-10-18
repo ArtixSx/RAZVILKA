@@ -41,6 +41,7 @@ function fixture(authenticated=true,staticInputs=[]){
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
   delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
+  clickTarget:target=>document.dispatchEvent({type:'click',target}),
   click(id){element('a1-'+id).events.get('click')({preventDefault(){}});},
   runRetry(){const entry=[...timeouts.entries()].find(([,value])=>value.ms===1500);assert.ok(entry,'retry timer missing');timeouts.delete(entry[0]);entry[1].fn();}
  };
@@ -281,6 +282,83 @@ await test('logout fences a late read started by the general refresh button',asy
  f.event('razvilka:auth-required');f.respond(1,200,snapshot(2));await flush();
  assert.equal(f.e('workspace').hidden,true);
  assert.equal(f.published.filter(x=>x.type==='razvilka:autonomy-state').length,1);
+});
+
+await test('dirty source form keeps rendered revision across a newer source read',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ let reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ const saved={source_id:'feed-example',saved:true,revision:1,enabled:true,refresh_interval_minutes:60};
+ f.respond(reads.at(-1).i,200,{sources:[saved]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ f.e('sourcesList').events.get('input')({});
+ f.event('razvilka:view-change','subscription-settings');
+ reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ f.respond(reads.at(-1).i,200,{sources:[{...saved,revision:2,enabled:false}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+ const form={dataset:{feedForm:'feed-example'},elements:{enabled:{value:'true'},interval:{value:'90'}}};
+ f.e('sourcesList').events.get('submit')({preventDefault(){},target:{closest:()=>form}});
+ const write=f.requests.at(-1);assert.equal(write.options.method,'PUT');
+ assert.equal(JSON.parse(write.options.body).revision,1,'new server revision must not authorize old form');
+ assert.equal(JSON.parse(write.options.body).refresh_interval_minutes,90);
+ f.respond(f.requests.length-1,409,{error:'Источник изменился'});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+});
+
+await test('older source reload cannot replace a newer response or later edits',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ f.event('razvilka:view-change','subscription-settings');
+ let reads=f.requests.map((r,i)=>({r,i})).filter(x=>x.r.path==='/api/v1/node-feeds');
+ f.respond(reads.at(-1).i,200,{sources:[{source_id:'newer',saved:true,revision:2}]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ f.respond(reads.at(-2).i,200,{sources:[{source_id:'older',saved:true,revision:1}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+ f.click('reloadSources');
+ f.e('sourcesList').events.get('input')({});
+ f.respond(f.requests.length-1,200,{sources:[{source_id:'after-edit',saved:true,revision:3}]});await flush();
+ assert.equal(f.e('sourcesList').innerHTML,html);
+});
+
+await test('one-off preset opens existing save form without fetching or writing',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const index=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(index,200,{presets:[{id:'example'}],sources:[{source_id:'feed-example',saved:false}]});await flush();
+ let changed=0;f.coreElement('nodeFeedPreset').dispatchEvent=()=>changed++;
+ f.coreElement('nodeSubscriptions').scrollIntoView=()=>{};
+ const before=f.requests.length;
+ f.clickTarget({closest:selector=>selector==='[data-feed-add]'?{dataset:{feedAdd:'feed-example'}}:selector==='[data-autonomy]'?{}:null});
+ assert.equal(f.coreElement('nodeFeedPreset').value,'example');assert.equal(changed,1);
+ assert.equal(f.coreElement('nodeSubscriptions').hidden,false);assert.equal(f.requests.length,before);
+});
+
+await test('custom one-off keeps source context without reconstructing secret URL',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const index=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(index,200,{presets:[],sources:[{source_id:'custom-source',name:'My source',saved:false,url:'https://redacted.example/'}]});await flush();
+ f.e('subscriptionForm').scrollIntoView=()=>{};
+ const before=f.requests.length;
+ f.clickTarget({closest:selector=>selector==='[data-feed-add]'?{dataset:{feedAdd:'custom-source'}}:selector==='[data-autonomy]'?{}:null});
+ assert.equal(f.e('subscriptionName').value,'My source');assert.equal(f.e('subscriptionURL').value,'');
+ assert.equal(f.requests.length,before);assert.match(f.e('notice').textContent,/полный HTTPS/);
+});
+
+await test('editing while source save is pending preserves dirty form after success',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','subscription-settings');
+ const i=f.requests.findIndex(r=>r.path==='/api/v1/node-feeds');
+ f.respond(i,200,{sources:[{source_id:'feed-example',saved:true,revision:1}]});await flush();
+ const html=f.e('sourcesList').innerHTML;
+ const form={dataset:{feedForm:'feed-example'},elements:{enabled:{value:'true'},interval:{value:'90'}}};
+ f.e('sourcesList').events.get('input')({});
+ f.e('sourcesList').events.get('submit')({preventDefault(){},target:{closest:()=>form}});
+ const count=f.requests.length;
+ form.elements.interval.value='120';f.e('sourcesList').events.get('input')({});
+ f.respond(count-1,200,{ok:true});await flush();
+ assert.equal(form.elements.interval.value,'120');assert.equal(f.e('sourcesList').innerHTML,html);
+ assert.equal(f.requests.length,count,'success must not clear newer dirty edits and reload');
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));
