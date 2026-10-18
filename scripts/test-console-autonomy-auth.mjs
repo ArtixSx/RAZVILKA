@@ -29,14 +29,14 @@ function fixture(authenticated=true,staticInputs=[]){
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
  const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
- const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(){},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
+ const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
   showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
   fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
  };
  vm.runInNewContext(source,context);
  vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
- return {requests,timeouts,published,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
+ return {requests,timeouts,published,contextView:()=>context.state.currentView,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
@@ -401,6 +401,22 @@ await test('wizard save readback preserves edits made while PUT was pending',asy
  f.respond(i,200,{ok:true});await flush();
  const next=snapshot(2);next.policy.check_seconds=180;f.respond(i+1,200,next);await saving;
  assert.equal(f.e('checkInterval').value,'240');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
+ assert.equal(f.contextView(),'onboard');assert.match(f.e('notice').textContent,/Новые изменения ещё не сохранены/);
+});
+
+await test('wizard ordinary successful save returns to overview with saved revision',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
+ f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');f.e('confirmConsent').checked=true;
+ const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
+ const i=f.requests.length-1;assert.equal(f.requests[i].options.method,'PUT');
+ f.respond(i,200,{ok:true});await flush();
+ const next=snapshot(2);next.policy.check_seconds=180;f.respond(i+1,200,next);await saving;
+ assert.equal(f.contextView(),'autopilot');assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
+ assert.match(f.e('notice').textContent,/Настройки сохранены на роутере/);
+ assert.doesNotMatch(f.e('notice').textContent,/Новые изменения/);
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));

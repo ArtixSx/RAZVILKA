@@ -368,7 +368,7 @@
       if(policyConsentRequired(editingPolicy,p,releaseRequested)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:releaseRequested&&$('confirmConsent').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
-      requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
+      requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');if(discardEdit!==wizardEdit){notify('Отправленные настройки сохранены. Новые изменения ещё не сохранены.');tab('setup');return;}notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
     } catch(e) { reportError(e,errorTarget||$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
