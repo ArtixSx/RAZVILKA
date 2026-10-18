@@ -14,6 +14,8 @@ func TestLocalizedCountryLabelsRespectTransportAndNetworkBoundaries(t *testing.T
 		"Sweden Poland": "", "🇸🇪 Poland [WS]": "", "Sweden | sni=poland.example": "SE",
 		"CF": "", "[CF] [TLS]": "", "Cloudflare CF": "", "🇨🇫 CF": "CF", "Central African Republic [WS]": "CF",
 		"Центрально-Африканская Республика": "CF", "RU SNI": "", "RU-SNI [TCP]": "", "RU_SNI NL": "NL", "🇷🇺 RU SNI": "RU",
+		".𖥔 ݁ ˖ִ🛸༄˖°. | [BL]": "", "BL": "", "[bl]": "", "🇫🇮 Finland, Helsinki | [BL]": "FI",
+		"🇫🇷 France, Paris | 🌐 | [BL]": "FR", "NL [WL]": "NL", "🇧🇱 BL": "BL", "St. Barthélemy": "BL", "Сен-Бартелеми": "BL",
 	} {
 		if got := inferCountry(label); got != want {
 			t.Errorf("country label %q: got %q, want %q", label, got, want)

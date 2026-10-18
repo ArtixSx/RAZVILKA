@@ -54,6 +54,14 @@ context.browser.job = {mode:'service',scope:'all-vless',state:'completed',total:
 context.renderNodeBatchStatus();
 assert.match($('#nodeBatchMessage').textContent,/В прежней сети: 21 \(устарели\)/);
 assert.match($('#nodeBatchMessage').textContent,/подходят: 2/);
+context.browser.job = {mode:'service',state:'completed',total:2,completed:2,passed:0,inconclusive:2,message:'Маршруты не изменены.',results:[{error_code:'node-runtime-unavailable',message:'Движок недоступен <проверка>'}]};
+context.renderNodeBatchStatus();
+assert.match($('#nodeBatchMessage').textContent,/подходят: 0.*не подтверждены: 2.*Маршруты не изменены.*Первый отказ: Движок недоступен <проверка>/);
+assert.equal($('#nodeBatchMessage').innerHTML,'','diagnostic reason must remain plain text');
+context.browser.job.state='failed';context.browser.job.message='Очистка не подтверждена.';
+context.renderNodeBatchStatus();
+assert.match($('#nodeBatchMessage').textContent,/Очистка не подтверждена/);
+assert.doesNotMatch($('#nodeBatchMessage').textContent,/Первый отказ/,'an earlier node result obscured the final job failure');
 for (const [mode, label] of [['tcp','TCP'],['service-check','Проверка сервисов'],['service-select','Подбор подключений']]) {
   context.browser.job = {mode,state:'completed',total:1,completed:1};
   context.renderNodeBatchStatus();

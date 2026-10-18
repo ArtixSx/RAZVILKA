@@ -324,9 +324,10 @@ function renderNodeBatchStatus() {
     : job.mode === 'service-select' ? ' · Подбор подключений'
     : '';
   const summary=job.result_state==='not-retained'?' · Подробные результаты прежнего запуска не сохранены. Для оценки доступности нужна новая проверка.'
-    :job.scope==='all-vless'?` · Весь VLESS-каталог · подходят: ${job.passed||0} · отказ: ${job.failed||0} · не подтверждены: ${job.inconclusive||0} · пропущено: ${job.skipped||0} · осталось: ${Math.max(0,(job.total||0)-(job.completed||0))}`:'';
+    :job.mode==='service'?` · ${job.scope==='all-vless'?'Весь VLESS-каталог · ':''}подходят: ${job.passed||0} · отказ: ${job.failed||0} · не подтверждены: ${job.inconclusive||0} · пропущено: ${job.skipped||0} · осталось: ${Math.max(0,(job.total||0)-(job.completed||0))}`:'';
   const historical=job.earlier_network_completed>0?` · В прежней сети: ${job.earlier_network_completed} (устарели); оценки выше относятся к текущей сети`:'';
-  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${summary}${historical}${job.message ? ` · ${job.message}` : ''}`;
+  const reason=job.state==='completed'&&job.mode==='service'&&job.result_state!=='not-retained'&&!job.earlier_network_completed?(job.results||[]).find(row=>row.error_code&&row.message)?.message:'';
+  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${summary}${historical}${job.message ? ` · ${job.message}` : ''}${reason?` · Первый отказ: ${reason}`:''}`;
 }
 
 async function startNodeBrowserCheck(mode, explicitIDs) {

@@ -20,6 +20,7 @@ var countryNames = map[string]string{
 
 var countryTransportMarker = regexp.MustCompile(`(?i)[\[(](tcp|ws|websocket|grpc|http|http2|h2|xhttp|ss|vless|vmess|trojan|reality|tls|hy2|hysteria2|tuic)[\])]`)
 var countrySNICategory = regexp.MustCompile(`(?i)\bRU[ _-]*SNI\b`)
+var countryListCategory = regexp.MustCompile(`(?i)\[(BL|WL)\]`)
 
 var countryNameTokens, maxCountryNameWords = buildCountryNameTokens()
 
@@ -52,6 +53,7 @@ func buildCountryNameTokens() (map[string]string, int) {
 func countryDisplayLabel(label string) string {
 	label = countryTransportMarker.ReplaceAllString(label, " ")
 	label = countrySNICategory.ReplaceAllString(label, " ")
+	label = countryListCategory.ReplaceAllString(label, " ")
 	parts := strings.FieldsFunc(label, func(r rune) bool { return unicode.IsSpace(r) || r == '|' || r == ',' })
 	kept := make([]string, 0, len(parts))
 	skipNext := false
@@ -129,9 +131,9 @@ func inferCountry(label string) string {
 			continue
 		}
 		token := tokens[index]
-		// Public subscriptions commonly use bare CF for Cloudflare. Require
-		// its explicit flag or full country name instead of guessing geography.
-		if len(token) == 2 && token != "CF" && token == strings.ToUpper(token) && !add(token) {
+		// Public subscriptions use CF for Cloudflare and BL for blacklists.
+		// Require their explicit flag or country name instead of guessing.
+		if len(token) == 2 && token != "CF" && token != "BL" && token == strings.ToUpper(token) && !add(token) {
 			return ""
 		}
 		index++
