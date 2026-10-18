@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -303,7 +302,7 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	// Return packets for the transparent socket need their own exact owned
 	// mark/local route. No mark is applied to the outbound baseline socket.
 	divert := []string{"-w", "1", "-t", "mangle", "-A", "PREROUTING", "-i", "wan0", "-s", "93.184.216.14/32", "-d", "192.0.2.2/32", "-p", "tcp", "-m", "socket", "--transparent", "--nowildcard", "-m", "comment", "--comment", "rz-public-baseline-return", "-j", "MARK", "--set-mark", "0x451"}
-	run("iptables", divert...)
+	divertInstalled := false
 	run("ip", "rule", "add", "pref", "110", "fwmark", "0x451/0xffffffff", "table", "452")
 	run("ip", "route", "add", "local", "192.0.2.2/32", "dev", "lo", "table", "452")
 	defer func() {
@@ -318,7 +317,9 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		capture[4] = "-D"
 		divert[4] = "-D"
 		run("iptables", capture...)
-		run("iptables", divert...)
+		if divertInstalled {
+			run("iptables", divert...)
+		}
 		run("ip", "rule", "del", "pref", "110", "fwmark", "0x451/0xffffffff", "table", "452")
 		run("ip", "route", "del", "local", "192.0.2.2/32", "dev", "lo", "table", "452")
 		if !bytes.Equal(rulesBefore, run("ip", "-4", "rule", "show")) || !bytes.Equal(routesBefore, run("ip", "-4", "route", "show", "table", "all")) || !bytes.Equal(filterBefore, publicTCPStructuralFirewall(run("iptables-save"))) {
@@ -425,18 +426,41 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	if !bytes.Contains(route, []byte("table 451")) || !bytes.Contains(route, []byte("dev wan0")) {
 		t.Fatal("source PBR did not select original route")
 	}
-	dialer := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.IP(observed.Source.Addr().AsSlice())}, Control: func(_, _ string, raw syscall.RawConn) error {
-		var optionErr error
-		err := raw.Control(func(fd uintptr) { optionErr = unix.SetsockoptInt(int(fd), unix.SOL_IP, unix.IP_TRANSPARENT, 1) })
-		if err != nil {
-			return err
-		}
-		return optionErr
-	}}
+	prepared, err := preparePublicTCPBaselineSocket(ctx, accepted)
+	if err != nil {
+		t.Fatal("actual original-source socket preparation refused", err)
+	}
+	defer prepared.close()
+	copied := &publicTCPBaselineSocket{self: prepared, fd: prepared.fd}
+	if copied.close() == nil || prepared.current(ctx) != nil {
+		t.Fatal("copied descriptor retired original socket")
+	}
+	canceled, cancelDescriptor := context.WithCancel(ctx)
+	cancelDescriptor()
+	if !errors.Is(prepared.current(canceled), context.Canceled) {
+		t.Fatal("descriptor lost original cancellation")
+	}
+	if prepared.current(context.Background()) == nil {
+		t.Fatal("unbounded descriptor use accepted")
+	}
+	if err := unix.SetsockoptInt(prepared.fd, unix.SOL_SOCKET, unix.SO_MARK, 1); err != nil {
+		t.Fatal(err)
+	}
+	if prepared.current(ctx) == nil {
+		t.Fatal("foreign outbound mark accepted")
+	}
+	if err := unix.SetsockoptInt(prepared.fd, unix.SOL_SOCKET, unix.SO_MARK, 0); err != nil || prepared.current(ctx) != nil {
+		t.Fatal("original unmarked descriptor not restored")
+	}
+	// Install the exact REAL allocated return port before the first Connect.
+	divert = append(append(append([]string(nil), divert[:14]...), "--sport", fmt.Sprint(observed.OriginalDestination.Port()), "--dport", fmt.Sprint(prepared.source.Port())), divert[14:]...)
+	run("iptables", divert...)
+	divertInstalled = true
+	baseline := func(c context.Context) (net.Conn, error) { return publicTCPConnectPreparedExperiment(c, prepared) }
 	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
-		publicTCPDomainXrayCaptured(t, ctx, accepted, observed, neighborBefore.Lladdr, func() bool { return readOriginalNeighbor() == neighborBefore }, &dialer)
+		publicTCPDomainXrayCaptured(t, ctx, accepted, observed, neighborBefore.Lladdr, func() bool { return readOriginalNeighbor() == neighborBefore }, baseline)
 	} else {
-		upstream, err := dialer.DialContext(ctx, "tcp4", observed.OriginalDestination.String())
+		upstream, err := baseline(ctx)
 		if err != nil {
 			t.Fatal("source-preserving baseline dial failed", err)
 		}
@@ -530,4 +554,58 @@ func TestPublicTCPSourceOnlyPolicyClosedGrammar(t *testing.T) {
 	if publicTCPSourceOnlyPolicy(base, []byte("93.184.216.14 tos 0x10 dev wan0 table 451")) {
 		t.Fatal("route TOS accepted without original TOS authority")
 	}
+}
+
+// Test-only actual Connect consumer. Production must obtain an original
+// COMMON one-shot admission and exact return-lease readback before this leaf.
+func publicTCPConnectPreparedExperiment(ctx context.Context, prepared *publicTCPBaselineSocket) (net.Conn, error) {
+	if err := prepared.current(ctx); err != nil {
+		return nil, err
+	}
+	prepared.mu.Lock()
+	defer prepared.mu.Unlock()
+	if _, err := unix.Getpeername(prepared.fd); err == nil {
+		return nil, errPublicTCPBaselineSocket
+	}
+	target := prepared.captured.OriginalDestination
+	err := unix.Connect(prepared.fd, &unix.SockaddrInet4{Addr: target.Addr().As4(), Port: int(target.Port())})
+	if err != nil && err != unix.EINPROGRESS {
+		return nil, err
+	}
+	for err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		polls := []unix.PollFd{{Fd: int32(prepared.fd), Events: unix.POLLOUT}}
+		n, pollErr := unix.Poll(polls, 50)
+		if pollErr == unix.EINTR {
+			continue
+		}
+		if pollErr != nil {
+			return nil, pollErr
+		}
+		if n == 0 {
+			continue
+		}
+		value, optionErr := unix.GetsockoptInt(prepared.fd, unix.SOL_SOCKET, unix.SO_ERROR)
+		if optionErr != nil {
+			return nil, optionErr
+		}
+		if value != 0 {
+			return nil, unix.Errno(value)
+		}
+		err = nil
+	}
+	peer, err := unix.Getpeername(prepared.fd)
+	address, ok := peer.(*unix.SockaddrInet4)
+	if err != nil || !ok || address.Addr != target.Addr().As4() || address.Port != int(target.Port()) {
+		return nil, errPublicTCPBaselineSocket
+	}
+	duplicate, err := unix.Dup(prepared.fd)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(duplicate), "owned-prepared-baseline-experiment")
+	defer file.Close()
+	return net.FileConn(file)
 }

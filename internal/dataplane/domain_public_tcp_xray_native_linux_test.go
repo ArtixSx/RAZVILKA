@@ -169,7 +169,7 @@ func publicTCPDomainXrayClient(t *testing.T) {
 	}
 }
 
-func publicTCPDomainXrayCaptured(t *testing.T, ctx context.Context, accepted *net.TCPConn, socket DomainPolicyTCPSocket, mac string, currentLAN func() bool, baseline *net.Dialer) {
+func publicTCPDomainXrayCaptured(t *testing.T, ctx context.Context, accepted *net.TCPConn, socket DomainPolicyTCPSocket, mac string, currentLAN func() bool, baseline func(context.Context) (net.Conn, error)) {
 	t.Helper()
 	p := publicTCPDomainXrayProcess(t, map[string]any{
 		"log":       map[string]any{"loglevel": "warning"},
@@ -230,7 +230,7 @@ func publicTCPDomainXrayCaptured(t *testing.T, ctx context.Context, accepted *ne
 			if _, err := check(c, f); err != nil {
 				return nil, err
 			}
-			return baseline.DialContext(c, "tcp4", socket.OriginalDestination.String())
+			return baseline(c)
 		},
 	}
 	decision, err := policy.HandleTCP(ctx, accepted, flow, runtime)
