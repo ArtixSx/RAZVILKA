@@ -47,7 +47,13 @@
     const seconds=Math.ceil((Math.min(...entries.map(f=>Date.parse(f.until)))-now)/1000);
     return `Отложено подключений: ${entries.length}. Сервис вернул HTTP 403/451; новая проверка возможна через ${Math.ceil(seconds/60)} мин.`;
   }
-  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,candidateCooldownText};
+  function maintenanceModeText(mode, components=false) {
+    if(mode==='off') return 'Выключено';
+    if(mode==='install') return components?'Обновление пакетов; подтверждение результата в журнале':'Установка с откатом; при сбое нужна проверка журнала';
+    if(mode==='prepare'&&!components) return 'Подготовка, без установки';
+    return components?'Проверка каталога':'Проверка версии';
+  }
+  const model={maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,candidateCooldownText};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -125,7 +131,7 @@
   }
   function renderReview() {
     if(!editingPolicy) return;const p=policyFromForm();
-    const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='install'?'Устанавливает сама, с откатом':p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · ${p.components.mode==='install'?'Обновляет сама, с проверкой и откатом':'Проверка каталога'}`],['Часовой пояс',p.timezone]];
+    const rows=[['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${maintenanceModeText(p.application.mode)}`],['Движки',`${windowText(p.components)} · ${maintenanceModeText(p.components.mode,true)}`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
   function serviceName(id) { return (snapshot?.catalog_services||[]).find(s=>s.id===id)?.name||id; }
@@ -159,7 +165,7 @@
     $('managedCount').textContent=items.length;
     $('healthyCount').textContent=runtimes.filter(([id,r])=>snapshot.services[id]?.enabled&&['healthy','applied'].includes(r.state)).length;
     $('reserveTarget').textContent=p.reserve_target;$('sourceCount').textContent=p.source_ids.length;
-    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='install'?'Установка сама, с откатом':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
+    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${maintenanceModeText(w.mode,name==='Движки')} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
     $('connectionLabel').textContent=`Состояние роутера · ${formatDate(snapshot.server_time)}`;
     renderServices();fillWizard();

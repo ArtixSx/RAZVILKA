@@ -89,7 +89,13 @@
     if(value?.schema!==1 || !/^[a-f0-9]{32}$/.test(value.instance_id||'') || !Number.isSafeInteger(value.revision) || value.revision<1 || value.dataplane!=='not-checked' || !['available','retained'].includes(value.state) || !Number.isFinite(value.data_age_ms) || value.data_age_ms<0 || value.data_age_ms>=120000 || value.state==='available'&&value.data_age_ms>=15000 || !value.data?.policy || !Number.isFinite(Date.parse(value.observed_at))) throw new Error('Состояние автопилота обновляется. Последние настройки сохранены; дождитесь свежего снимка.');
     return {...value.data,observation:{state:value.state,instance_id:value.instance_id,revision:value.revision,observed_at:value.observed_at,data_age_ms:value.data_age_ms}};
   }
-  const model={validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
+  function maintenanceModeText(mode, components=false) {
+    if(mode==='off') return 'Выключено';
+    if(mode==='install') return components?'Обновление пакетов; подтверждение результата в журнале':'Установка с откатом; при сбое нужна проверка журнала';
+    if(mode==='prepare'&&!components) return 'Подготовка, без установки';
+    return components?'Проверка каталога':'Проверка версии';
+  }
+  const model={maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -205,7 +211,7 @@
     const consentLabel = $('confirmConsent').closest('label');
     if (consentLabel) consentLabel.hidden = !consentNeeded;
     if (!consentNeeded) $('confirmConsent').checked = false;
-    const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${p.application.mode==='install'?'Устанавливает сама, с откатом':p.application.mode==='prepare'?'Подготовка, не установка':'Проверка'}`],['Движки',`${windowText(p.components)} · ${p.components.mode==='install'?'Обновляет сама, с проверкой и откатом':'Проверка каталога'}`],['Часовой пояс',p.timezone]];
+    const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${maintenanceModeText(p.application.mode)}`],['Движки',`${windowText(p.components)} · ${maintenanceModeText(p.components.mode,true)}`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');
   }
   function serviceName(id) { return (snapshot?.catalog_services||[]).find(s=>s.id===id)?.name||id; }
@@ -249,7 +255,7 @@
     $('managedCount').textContent=items.length;
     $('healthyCount').textContent=!presentationFresh?'—':Object.entries(snapshot.services||{}).filter(([id,s])=>s.enabled&&serviceProof(id)?.kind==='good').length;
     $('reserveTarget').textContent=p.reserve_target;$('sourceCount').textContent=p.source_ids.length;
-    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${w.mode==='off'?'Выключено':w.mode==='install'?'Установка сама, с откатом':w.mode==='prepare'?'Подготовка, без установки':'Проверка обновлений'} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
+    $('windowSummary').innerHTML=[['RAZVILKA',p.application,snapshot.next_application_window],['Движки',p.components,snapshot.next_components_window]].map(([name,w,next])=>`<div class="window-row"><span class="window-icon">◷</span><div><b>${name}</b><small>${maintenanceModeText(w.mode,name==='Движки')} · ${escapeHTML(p.timezone)}</small><small>Ближайшее окно: ${escapeHTML(formatDate(next))}</small></div><time>${escapeHTML(windowText(w))}</time></div>`).join('');
     $('maintenanceMessage').textContent=snapshot.maintenance_message||'Фактический результат появится после обслуживания на роутере.';
     $('connectionLabel').textContent=`${presentationFresh?'Состояние роутера':'Последние настройки'} · ${formatDate(snapshot.server_time)}`;
     // Never rebuild hidden editors on every observation.

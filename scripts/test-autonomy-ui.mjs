@@ -23,6 +23,15 @@ test('deduplicates user selection',()=>assert.deepEqual(splitValues('a,b; a\n c'
 test('strict minutes',()=>assert.equal(minutes('02:55'),175));
 test('invalid minute',()=>assert.equal(minutes('24:00'),-1));
 for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {maintenanceModeText}=require('../cmd/razvilka/web/'+file);
+ test(`${file} describes component installation as requiring acceptance`,()=>{
+  assert.match(maintenanceModeText('install',true),/подтверждение результата в журнале/);
+  assert.doesNotMatch(maintenanceModeText('install',true),/сама|автоматический откат/);
+  assert.match(maintenanceModeText('install'),/при сбое.*журнала/);
+  assert.equal(maintenanceModeText('off',true),'Выключено');
+  assert.equal(maintenanceModeText('check',true),'Проверка каталога');
+  assert.equal(maintenanceModeText('prepare'),'Подготовка, без установки');
+ });
  const {candidateCooldownText}=require('../cmd/razvilka/web/'+file);
  const now=Date.parse('2026-09-27T01:00:00Z');
  const failure={code:'http-403',observed_at:new Date(now-60000).toISOString(),until:new Date(now+240000).toISOString()};

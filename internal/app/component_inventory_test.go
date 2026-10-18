@@ -62,6 +62,43 @@ func TestComponentRuntimeUnknownVersionAndExternalOwnerRemainHonest(t *testing.T
 	}
 }
 
+func TestRunningComponentUpdateOfferMatchesManagedPlanWithoutGrantingOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name, source                                string
+		managed, offered, installed, external, want bool
+	}{
+		{"owned-managed", "opkg", true, true, true, false, true},
+		{"catalog-refused", "opkg", true, false, true, false, false},
+		{"plain-update", "opkg", false, true, true, false, false},
+		{"unmanaged-runtime", "runtime", true, true, true, false, false},
+		{"missing-package", "", true, true, false, false, false},
+		{"foreign-owner", "opkg", true, true, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			views := []components.View{{Spec: components.Spec{ID: "xray", Provider: "opkg"}, Installed: tc.installed, InstalledVersionSource: tc.source, ManagedUpdate: tc.managed, CanUpdate: tc.offered, CanInstall: true, CanRemove: true}}
+			runtimes := []engine.Status{{ID: "xray", Installed: true, Running: true, External: tc.external}}
+			mergeComponentRuntimes(views, runtimes)
+			if views[0].CanUpdate != tc.want || views[0].CanInstall || views[0].CanRemove || views[0].LifecycleBlockReason == "" {
+				t.Fatal("running inventory offer is inconsistent", views[0])
+			}
+			if tc.want {
+				plan := components.Plan{Component: "xray", Action: "update", Installed: true, Ready: true}
+				enrichComponentRuntimePlan(&plan, runtimes)
+				if !plan.Ready {
+					t.Fatal("managed runtime plan refused the offered update", plan)
+				}
+				// Historical metadata cannot preserve this offer for a scoped
+				// owner: its independent original-owner observation still wins.
+				a, _ := newColdManagedComponentFixture(t, dataplane.LANPolicyXraySelectedTCPMode)
+				a.mergeManagedComponentRuntimeObservation(context.Background(), views)
+				if views[0].CanUpdate || views[0].Running || views[0].RuntimeObservation != "unknown" {
+					t.Fatal("legacy update offer bypassed scoped owner fence", views[0])
+				}
+			}
+		})
+	}
+}
+
 func TestComponentPlansRejectUnmanagedRuntimeAndDependency(t *testing.T) {
 	for _, action := range []string{"install", "update", "remove"} {
 		p := components.Plan{Component: "xray", Action: action, Ready: true}

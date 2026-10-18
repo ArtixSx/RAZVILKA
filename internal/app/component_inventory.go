@@ -42,8 +42,17 @@ func mergeComponentRuntimes(views []components.View, runtimes []engine.Status) {
 				}
 			}
 			if runtime.Running {
-				view.CanInstall, view.CanUpdate, view.CanRemove = false, false, false
-				view.LifecycleBlockReason = "Обход сейчас запущен. Сначала переключите его сервисы и примените изменения."
+				// Preserve only an existing managed package update offer. The
+				// POST plan and candidate check still decide authority; scoped
+				// owners are fenced separately by their original observation.
+				view.CanUpdate = view.CanUpdate && view.Installed && view.InstalledVersionSource == "opkg" &&
+					view.ManagedUpdate && components.ManagedUpdateSupported(view.ID) && !runtime.External
+				view.CanInstall, view.CanRemove = false, false
+				if view.CanUpdate {
+					view.LifecycleBlockReason = "Обновление требует отдельной проверки и подтверждения результата в журнале. Удаление работающего обхода недоступно."
+				} else {
+					view.LifecycleBlockReason = "Обход сейчас запущен. Сначала переключите его сервисы и примените изменения."
+				}
 			}
 			break
 		}
