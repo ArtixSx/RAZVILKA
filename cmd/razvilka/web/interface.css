@@ -1722,3 +1722,5 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .app-version-action.update::before{content:"";display:inline-block}
 .app-version-action.update small{font-weight:700}
 @media (prefers-reduced-motion:reduce){.rz-sh-update-dot,.app-version-action.update::before{animation:none}}
+.interface-ui #listScopeContent>.panel{padding:22px;min-width:0}
+.interface-ui #listScopeContent>.panel>.panel-title{margin:-22px -22px 18px}

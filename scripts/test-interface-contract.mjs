@@ -17,6 +17,11 @@ test('quick setup does not announce a working connection before checking',()=>{
 });
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
+test('home scope body has an inset while its header retains full card width',()=>{
+  const css=read(root+'interface-shell.css');
+  assert.match(css,/#listScopeContent>\.panel\{padding:22px;min-width:0\}/);
+  assert.match(css,/#listScopeContent>\.panel>\.panel-title\{margin:-22px -22px 18px\}/);
+});
 test('first-run scope radios cannot inherit full-width text fields',()=>{
   assert.match(html,/<input[^>]*name="quick-scope"[^>]*type="radio"/);
   for(const file of ['console-autonomy.css','interface-compat.css','interface.css']){
