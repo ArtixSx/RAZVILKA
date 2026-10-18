@@ -29,14 +29,14 @@ function fixture(authenticated=true,staticInputs=[]){
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
  const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
- const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
+ const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
   showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
   fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
  };
  vm.runInNewContext(source,context);
  vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
- return {requests,timeouts,published,contextView:()=>context.state.currentView,e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
+ return {requests,timeouts,published,contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
@@ -314,7 +314,7 @@ await test('older source reload cannot replace a newer response or later edits',
  const html=f.e('sourcesList').innerHTML;
  f.respond(reads.at(-2).i,200,{sources:[{source_id:'older',saved:true,revision:1}]});await flush();
  assert.equal(f.e('sourcesList').innerHTML,html);
- f.click('reloadSources');
+ f.click('reloadSources');await flush();
  f.e('sourcesList').events.get('input')({});
  f.respond(f.requests.length-1,200,{sources:[{source_id:'after-edit',saved:true,revision:3}]});await flush();
  assert.equal(f.e('sourcesList').innerHTML,html);
@@ -365,7 +365,7 @@ await test('wizard explicit discard does not discard edits made during its read'
  const f=fixture();f.respond(0,200,snapshot());await flush();
  f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
  f.e('checkInterval').value='600';f.e('wizardForm').events.get('input')({});
- f.click('reloadButton');const i=f.requests.length-1;
+ f.click('reloadButton');await flush();const i=f.requests.length-1;
  f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
  f.respond(i,200,snapshot(2));await flush();
  assert.equal(f.e('checkInterval').value,'777');assert.equal(f.e('revisionLabel').textContent,'Редакция 1');
@@ -384,7 +384,7 @@ await test('wizard ordinary confirmed discard loads the new revision',async()=>{
  const f=fixture();f.respond(0,200,snapshot());await flush();
  f.event('razvilka:view-change','onboard');f.respond(1,200,snapshot());await flush();
  f.e('checkInterval').value='777';f.e('wizardForm').events.get('input')({});
- f.click('reloadButton');f.respond(f.requests.length-1,200,snapshot(2));await flush();
+ f.click('reloadButton');await flush();f.respond(f.requests.length-1,200,snapshot(2));await flush();
  assert.equal(f.e('checkInterval').value,300);assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
 });
 
@@ -417,6 +417,47 @@ await test('wizard ordinary successful save returns to overview with saved revis
  assert.equal(f.contextView(),'autopilot');assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
  assert.match(f.e('notice').textContent,/Настройки сохранены на роутере/);
  assert.doesNotMatch(f.e('notice').textContent,/Новые изменения/);
+});
+
+for(const button of ['reloadButton','reloadSources']){
+ await test(button+' asynchronous cancel preserves dirty fields and sends no read',async()=>{
+  const f=fixture();f.respond(0,200,snapshot());await flush();
+  f.e('checkInterval').value='777';
+  (button==='reloadButton'?f.e('wizardForm'):f.e('sourcesList')).events.get('input')({});
+  const pending=deferred();f.confirmWith(()=>pending.promise);const before=f.requests.length;
+  f.click(button);assert.equal(f.requests.length,before);pending.resolve(false);await flush();
+  assert.equal(f.requests.length,before);assert.equal(f.e('checkInterval').value,'777');
+ });
+ for(const change of ['logout','view','new-edit'])await test(button+' rejects late consent after '+change,async()=>{
+  const f=fixture();f.respond(0,200,snapshot());await flush();
+  const edited=button==='reloadButton'?f.e('wizardForm'):f.e('sourcesList');edited.events.get('input')({});
+  const pending=deferred();f.confirmWith(()=>pending.promise);f.click(button);
+  if(change==='logout')f.event('razvilka:auth-required');
+  else if(change==='view')f.event('razvilka:view-change','managed');
+  else {f.e('checkInterval').value='777';edited.events.get('input')({});}
+  const before=f.requests.length;pending.resolve(true);await flush();
+  assert.equal(f.requests.length,before,'late consent started a read');
+  if(change==='new-edit')assert.equal(f.e('checkInterval').value,'777');
+ });
+}
+for(const outcome of ['cancel','logout','view','revision','accept'])await test('remove service async consent '+outcome,async()=>{
+ const f=fixture(),initial=snapshot();initial.catalog_services=[{id:'telegram',name:'Telegram',custom:true}];
+ f.respond(0,200,initial);await flush();const pending=deferred();f.confirmWith(()=>pending.promise);
+ f.clickTarget({closest:selector=>selector==='[data-autonomy]'?{}:selector==='[data-remove]'?{dataset:{remove:'telegram'}}:null});
+ const before=f.requests.length;
+ if(outcome==='logout')f.event('razvilka:auth-required');
+ if(outcome==='view')f.event('razvilka:view-change','managed');
+ if(outcome==='revision'){
+  f.event('razvilka:panel-refresh');const next=snapshot(2);next.catalog_services=initial.catalog_services;
+  f.respond(f.requests.length-1,200,next);await flush();
+ }
+ pending.resolve(outcome!=='cancel');await flush();
+ const writes=f.requests.filter(r=>r.options.method==='DELETE');
+ assert.equal(writes.length,outcome==='accept'?1:0);
+ if(outcome==='accept'){
+  const body=JSON.parse(writes[0].options.body);assert.equal(body.expected_revision,1);assert.equal(body.delete_definition,true);
+ }
+ if(outcome==='cancel')assert.equal(f.requests.length,before);
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));

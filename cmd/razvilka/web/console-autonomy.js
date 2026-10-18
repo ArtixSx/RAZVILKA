@@ -114,7 +114,7 @@
   const $=id=>document.getElementById('a1-'+id);
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
   let snapshot=null,presentationFresh=false,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
-  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0,wizardEdit=0;
+  let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0,wizardEdit=0,viewEpoch=0;
   let consentReviewFingerprint = '';
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
@@ -379,10 +379,14 @@
     if(event.target.closest('[data-close-dialog]'))$('addServiceDialog').close();
     const action=event.target.closest('[data-manage]');if(action) void enroll(action.dataset.manage,action.dataset.enable==='true').catch(e=>reportError(e));
     const remove=event.target.closest('[data-remove]');if(remove) void (async()=>{
-      const generation=authGeneration,id=remove.dataset.remove,custom=snapshot.catalog_services.some(s=>s.id===id&&s.custom);
-      if(!confirm(`Убрать «${serviceName(id)}»? Сначала будут сняты его маршруты. ${custom?'Пользовательская запись удалится после успешного снятия.':'Остальные сервисы останутся без изменений.'}`)) return;
-      await api(`/api/v1/autonomy/services/${encodeURIComponent(id)}`,'DELETE',{expected_revision:snapshot.policy.revision,confirm:'REMOVE_SERVICE',delete_definition:custom});
+      const generation=authGeneration,view=viewEpoch,edit=wizardEdit,source=sourceEdit,id=remove.dataset.remove,revision=snapshot.policy.revision,definition=JSON.stringify(snapshot.catalog_services.find(s=>s.id===id)),custom=snapshot.catalog_services.some(s=>s.id===id&&s.custom);
+      if(!await askConfirmation(`Убрать «${serviceName(id)}»?`,`Сначала будут сняты его маршруты. ${custom?'Пользовательская запись удалится после успешного снятия.':'Остальные сервисы останутся без изменений.'}`,'Убрать сервис')) return;
       requireGeneration(generation);
+      if(view!==viewEpoch || edit!==wizardEdit || source!==sourceEdit)return;
+      if(!presentationFresh || snapshot?.policy.revision!==revision || JSON.stringify(snapshot.catalog_services.find(s=>s.id===id))!==definition)throw new Error('Сервис или настройки изменились. Обновите состояние и подтвердите удаление снова.');
+      await api(`/api/v1/autonomy/services/${encodeURIComponent(id)}`,'DELETE',{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:custom});
+      requireGeneration(generation);
+      if(view!==viewEpoch)return;
       notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh(false,true);
     })().catch(e=>reportError(e));
     const add=event.target.closest('[data-feed-add]');if(add){
@@ -413,8 +417,22 @@
   $('openOptionalCatalog')?.addEventListener('click',()=>{if(typeof openCommunityCatalog==='function')openCommunityCatalog();});
   document.getElementById('communityCatalogDialog')?.addEventListener('close',()=>void refresh());
   $('backStep').addEventListener('click',()=>setStep(step-1));$('nextStep').addEventListener('click',()=>setStep(step+1));
-  $('reloadButton').addEventListener('click',()=>{if(!dirty||confirm('Заменить несохранённые поля актуальными настройками роутера?')){sourceDirty=false;sourceEdit++;void refresh(true);if(activeTab==='sources')void readSources();}});
-  $('reloadSources').addEventListener('click',()=>{if(!sourceDirty||confirm('Сбросить несохранённые интервалы подписок?')){sourceDirty=false;sourceEdit++;void readSources();}});
+  $('reloadButton').addEventListener('click',()=>void(async()=>{
+    const generation=authGeneration,view=viewEpoch,edit=wizardEdit,source=sourceEdit;
+    if((dirty||sourceDirty)&&!await askConfirmation('Обновить настройки?','Заменить несохранённые поля актуальными настройками роутера?','Обновить'))return;
+    requireGeneration(generation);
+    if(view!==viewEpoch)return;
+    if(edit!==wizardEdit||source!==sourceEdit){notify('Появились новые правки. Подтвердите обновление ещё раз.',true);return;}
+    sourceDirty=false;sourceEdit++;void refresh(true);if(activeTab==='sources')void readSources();
+  })().catch(e=>reportError(e)));
+  $('reloadSources').addEventListener('click',()=>void(async()=>{
+    const generation=authGeneration,view=viewEpoch,edit=sourceEdit;
+    if(sourceDirty&&!await askConfirmation('Обновить подписки?','Сбросить несохранённые интервалы подписок?','Обновить'))return;
+    requireGeneration(generation);
+    if(view!==viewEpoch)return;
+    if(edit!==sourceEdit){notify('Появились новые правки. Подтвердите обновление ещё раз.',true);return;}
+    sourceDirty=false;sourceEdit++;void readSources();
+  })().catch(e=>reportError(e)));
   $('pauseButton').addEventListener('click',()=>{if(!snapshot?.policy?.setup_complete){tab('setup');setStep(0);return;}void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh(false,true);requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Общий ручной режим и остановка сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e));});
   $('serviceSearch').addEventListener('input',()=>{if(snapshot)renderServices();});
   $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>reportError(e));});
@@ -444,7 +462,7 @@
     requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
   })().catch(e=>reportError(e));});
-  document.addEventListener('razvilka:view-change',event=>{const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
+  document.addEventListener('razvilka:view-change',event=>{viewEpoch++;const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
   // Explicit refresh works in background tabs too. Read only the protected
   // publication, coalesce with an in-flight read and keep unfinished form edits.
   document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});

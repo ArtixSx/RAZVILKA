@@ -198,7 +198,7 @@ async function toggleWorkspaceRuntime() {
   const generation = workspaceControl.generation;
   const action = control.running || control.can_stop ? 'stop' : 'resume';
   // One click used to stop every bypass at once; ask first.
-  if (action === 'stop' && typeof globalThis.confirm === 'function' && !globalThis.confirm('Выключить обход для всех сервисов? Сайты будут открываться напрямую, как без RAZVILKA. Включить снова можно этой же кнопкой.')) return;
+  if (action === 'stop' && typeof globalThis.confirm === 'function' && !globalThis.confirm('Выключить обход для всех сервисов? Вернётся обычная маршрутизация роутера. Включить снова можно этой же кнопкой.')) return;
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
     const intent = { expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' };
