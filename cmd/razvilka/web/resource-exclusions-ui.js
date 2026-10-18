@@ -53,7 +53,7 @@ function renderResourceExclusions() {
   const absent=!snapshot?'<p>Читаем сохранённые исключения ресурсов…</p>':snapshot.storageState==='inactive'?'<p>Исключения можно сохранить заранее. Они сохранятся при настройке области домашней сети. Обход и разрешения этим действием не включаются.</p>':!snapshot.scopeConfigured?'<p>Область домашней сети ещё не сохранена. Редактор исключений недоступен.</p>':'';
   const stale=snapshot&&!ready?'<p role="status">Новые данные не получены. Показан последний список; сохранение недоступно.</p>':'';
   const pending=e.pending?'<p role="status">Сохраняем список и сверяем ответ…</p>':'';
-  const conflict=e.conflict?'<p role="status">Настройки изменились после начала редактирования. Черновик сохранён. Обновите список и загрузите сохранённые записи перед новым изменением.</p>':'';
+  const conflict=e.conflict?'<p role="status">Настройки изменились после начала редактирования. Введённые записи остались в форме. Обновите список и загрузите сохранённые записи перед новым изменением.</p>':'';
   const unknown=e.unknown?'<p role="status">Результат сохранения не подтверждён. Обновите список для сверки. Повторное сохранение в этом окне заблокировано.</p>':'';
   const russian=snapshot?.view.russian;
   const clients=snapshot?.effective.clients;
@@ -113,11 +113,11 @@ async function saveResourceExclusions() {
   } catch(error) {
     if(!current())return;
     const code=error.payload?.code||'';
-    if(receipt){e.unknown=true;e.message='Сервер принял список, но независимое чтение не подтвердило результат. Черновик сохранён.';}
-    else if(error.status===409){e.conflict=true;e.message='Список не сохранён: настройки изменились. Черновик сохранён.';}
+    if(receipt){e.unknown=true;e.message='Сервер принял список, но независимое чтение не подтвердило результат. Введённые записи остались в форме.';}
+    else if(error.status===409){e.conflict=true;e.message='Список не сохранён: настройки изменились. Введённые записи остались в форме.';}
     else if(code==='NETWORK_POLICY_SCOPE_REQUIRED'){e.message='Сначала должна быть сохранена область домашней сети. Список не изменён.';}
     else if(code==='NETWORK_POLICY_LIST_REQUIRED'){e.message='Редактирование доступно только для режима выбранных ресурсов. Список не изменён.';}
-    else if([400,403].includes(error.status)){e.message=code==='NETWORK_POLICY_EXCLUSIONS_INVALID'?'Проверьте записи и разрешение обновлений каталога. Черновик сохранён.':error.message||'Список не сохранён.';}
+    else if([400,403].includes(error.status)){e.message=code==='NETWORK_POLICY_EXCLUSIONS_INVALID'?'Изменения не сохранены. Проверьте формат записей и разрешение обновлений каталога. Введённые записи остались в форме.':error.message||'Список не сохранён.';}
     else {e.unknown=true;e.message=error.message||'Результат сохранения не подтверждён.';}
   } finally {
     if(current()){e.pending=null;renderResourceExclusions();if(typeof renderInterface==='function')renderInterface();}

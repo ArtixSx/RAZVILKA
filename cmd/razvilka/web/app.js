@@ -243,6 +243,21 @@ async function api(url, options = {}) {
 function friendlyErrorMessage(value, status = 0) {
   const text = String(value || '').trim();
   const lower = text.toLowerCase();
+  const known = {
+    'file is missing; import or create a draft first': 'Файла конфигурации ещё нет. Создайте настройки или импортируйте профиль, затем повторите проверку.',
+    'invalid json': 'Не удалось прочитать JSON. Проверьте кавычки, запятые и скобки в конфигурации.',
+    'shell config is empty': 'Конфигурация пуста. Заполните настройки или импортируйте файл.',
+    'missing [interface] section': 'В профиле отсутствует раздел [Interface]. Импортируйте полный профиль подключения.',
+    'config is not a regular file': 'Конфигурация не является обычным файлом. Проверьте файл перед импортом.',
+    'config is too large': 'Файл конфигурации превышает допустимый размер.',
+    'no staged config to apply': 'Нет подготовленного черновика. Сначала сохраните настройки.',
+    'list has no data entries': 'Список пуст. Добавьте домены или импортируйте заполненный список.',
+    'cidr list has no data entries': 'Список IP-адресов и сетей пуст. Добавьте записи перед проверкой.',
+    'invalid url': 'Ссылка некорректна. Проверьте адрес и его формат.',
+    'invalid provider feed request': 'Не удалось принять источник. Проверьте HTTPS-ссылку и параметры подписки.',
+    'provider feed format is invalid or unsupported': 'Формат подписки не поддерживается или содержимое повреждено.',
+  };
+  if (Object.hasOwn(known, lower)) return known[lower];
   if (lower.includes('administrator login is required')) return 'Сессия завершилась. Войдите снова.';
   if (lower === 'password must not be empty') return 'Введите пароль.';
   if (lower === 'password must not exceed 256 bytes') return 'Пароль слишком длинный: максимум 256 байт в UTF-8.';
@@ -751,9 +766,15 @@ function renderGenericDetails(value) {
     const sections = { inventory: 'Компоненты', services: 'Сервисы', engineConfigs: 'Настройки обходов', nodes: 'Подключения', dns: 'DNS', status: 'Состояние проекта' };
     return `<div class="detail-hero warn"><span>Загрузка данных</span><h4>${busy ? 'Ожидаем свежие сведения' : 'Часть данных не загрузилась'}</h4><p>Последние полученные данные сохранены. Состояние подключения проверяется отдельно.</p></div><div class="detail-section">${value.issues.map(issue => `<div class="detail-note"><b>${esc(sections[issue.section] || issue.section || 'Раздел панели')}</b><p>${esc(issue.message || 'Повторите чтение данных.')}</p></div>`).join('')}</div>${technicalDetails(value)}`;
   }
-  const headline = value.error || value.message || value.note || (value.ok === false ? 'Действие не выполнено' : 'Операция завершена');
-  const primitive = Object.entries(value).filter(([, item]) => item == null || ['string', 'number', 'boolean'].includes(typeof item)).slice(0, 10);
-  return `<div class="detail-hero ${value.error || value.ok === false ? 'fail' : 'pass'}"><span>${value.error ? 'Ошибка' : 'Результат'}</span><h4>${esc(headline)}</h4></div>${primitive.length ? `<dl class="detail-kv">${primitive.map(([key, item]) => `<div><dt>${esc(key.replaceAll('_', ' '))}</dt><dd>${esc(typeof item === 'boolean' ? (item ? 'да' : 'нет') : item)}</dd></div>`).join('')}</dl>` : ''}${technicalDetails(value)}`;
+  const messages = {
+    'Profile was imported into draft only. Validate engine drafts and review the route plan before Apply.':'Профиль импортирован только в черновик. Проверьте файлы обходов и план маршрутов перед применением. Работающие маршруты не изменены.',
+    'Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.':'Приватные данные расшифрованы в памяти и импортированы только в черновик. Данные входа, ключ восстановления и работающие маршруты не изменены.',
+  };
+  const readable = item => typeof item === 'string' && Object.hasOwn(messages, item) ? messages[item] : item;
+  const headline = value.error ? friendlyErrorMessage(value.error) : readable(value.message || value.note) || (value.ok === false ? 'Действие не выполнено' : 'Операция завершена');
+  const labels = { profile:'Профиль',services:'Сервисов',custom_services:'Своих сервисов',engine_files:'Файлов обходов',sensitive_omitted:'Пропущено секретных файлов',contains_secrets:'Содержит секреты',ok:'Успешно',name:'Название',status:'Состояние',message:'Сообщение',note:'Примечание',draft_only:'Только черновик',custom_services_staged:'Свои сервисы в черновике',engine_files_staged:'Файлы обходов в черновике',services_staged:'Сервисы в черновике',custom_services_merged:'Объединено своих сервисов',service_policies_reviewed:'Проверено правил сервисов',devices_merged:'Объединено устройств',nodes_merged:'Объединено подключений',node_groups_merged:'Объединено групп',native_enrollment_retained:'Регистрация сохранена' };
+  const primitive = Object.entries(value).filter(([key, item]) => Object.hasOwn(labels, key) && (item == null || ['string', 'number', 'boolean'].includes(typeof item))).slice(0, 10);
+  return `<div class="detail-hero ${value.error || value.ok === false ? 'fail' : 'pass'}"><span>${value.error ? 'Ошибка' : 'Результат'}</span><h4>${esc(headline)}</h4></div>${primitive.length ? `<dl class="detail-kv">${primitive.map(([key, item]) => `<div><dt>${esc(labels[key])}</dt><dd>${esc(typeof item === 'boolean' ? (item ? 'да' : 'нет') : readable(item))}</dd></div>`).join('')}</dl>` : ''}${technicalDetails(value)}`;
 }
 
 function renderServiceListsDetails(value) {
@@ -2287,6 +2308,21 @@ function engineStatusText(engine) {
   return ['НЕ УСТАНОВЛЕН', ''];
 }
 
+function engineValidationPresentation(validation, engine) {
+  const raw = String(validation.output || '').trim();
+  const missing = raw === 'file is missing; import or create a draft first';
+  const summary = raw === 'basic validation passed'
+    ? 'Базовая проверка формата пройдена. Работа обхода и доступ к сервисам ещё не проверены.'
+    : validation.ok === true
+      ? 'Проверка конфигурации завершена. Доступ к сервисам проверяется отдельно.'
+      : friendlyErrorMessage(raw);
+  const native = validation.native === true
+    ? validation.ok === true ? 'Проверка пройдена' : 'Проверка не пройдена'
+    : engine.installed === false ? 'Недоступна: обход не установлен'
+      : missing ? 'Не запускалась: нет файла' : validation.ok === true ? 'Не выполнялась · только базовая проверка' : 'Не запускалась';
+  return { summary, native };
+}
+
 function renderEngineControl() {
   if (typeof renderWireGuardProfiles === 'function') renderWireGuardProfiles();
   if (!state.engineConfigs.length) {
@@ -2336,7 +2372,7 @@ function renderEngineControl() {
   $('#engineFilesTable').innerHTML = (engine.files || []).map((f) => `<div class="engine-file-row ${f.id === state.selectedEngineFile ? 'active' : ''}" data-engine-file-row="${esc(f.id)}"><div><b>${esc(f.name)}</b><small>${esc(f.description || '')}</small></div><div class="engine-file-meta"><span>${esc(f.syntax)}</span><span>${f.exists ? formatBytes(f.size) : 'нет рабочего файла'}</span>${f.staged ? '<span class="draft-count">ЕСТЬ ИЗМЕНЕНИЯ</span>' : ''}${f.sensitive ? '<span class="secret-tag">СЕКРЕТНЫЙ</span>' : ''}</div><code>${esc(f.path || '—')}</code></div>`).join('');
   $$('[data-engine-file-row]').forEach((row) => row.addEventListener('click', () => selectEngineFile(row.dataset.engineFileRow)));
 
-  $('#engineCheckRunning').textContent = engine.running ? 'да' : engine.installed ? 'установлен, но остановлен' : 'нет';
+  $('#engineCheckRunning').textContent = engine.running ? 'Процесс запущен' : engine.installed ? 'Запуск не подтверждён' : 'Компонент не установлен';
   $('#engineCheckApply').textContent = state.status.safe_mode ? 'Safe Mode: изменения запрещены' : 'Проверка не применяет маршрут';
 
   const loadedSame = state.engineLoaded && state.engineLoaded.engine_id === engine.id && state.engineLoaded.file_id === file?.id;
@@ -2378,16 +2414,20 @@ function renderEngineControl() {
   if (state.engineReadError && !state.engineIntent) $('#engineEditorMessage').textContent = state.engineReadError + ' Нажмите «Перечитать», чтобы повторить.';
 
   const v = state.engineValidation;
+  const technical = $('#engineCheckTechnical');
   if (v && v.engine_id === engine.id && v.file_id === file.id) {
+    const presentation = engineValidationPresentation(v, engine);
     $('#engineCheckBasic').textContent = v.ok ? 'ПРОЙДЕНА' : 'ОШИБКА';
     $('#engineCheckBasic').className = v.ok ? 'probe-ok' : 'probe-no';
-    $('#engineCheckNative').textContent = v.native ? 'да' : 'нет / только базовая';
-    $('#engineCheckOutput').textContent = v.output || '—';
+    $('#engineCheckNative').textContent = presentation.native;
+    $('#engineCheckOutput').textContent = presentation.summary;
+    if (technical) { technical.hidden = !v.output; technical.innerHTML = v.output ? technicalDetails(v) : ''; }
   } else {
     $('#engineCheckBasic').textContent = 'не запускалась';
     $('#engineCheckBasic').className = '';
     $('#engineCheckNative').textContent = '—';
     $('#engineCheckOutput').textContent = 'Здесь появится результат проверки выбранного файла. Нажмите «Проверить конфигурацию».';
+    if (technical) { technical.hidden = true; technical.innerHTML = ''; }
   }
   updateEngineEditorActions();
   if(typeof renderWorkflowControls==='function')renderWorkflowControls();
@@ -2895,7 +2935,7 @@ async function validateEngineFile() {
     if (typeof engineProgressFormat === 'function') engineProgressFormat(progress, validation);
     renderEngineControl();
     switchEngineTab('check');
-  } catch (error) { if (engineIntentCurrent(intent)) { if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID); showDetails({ error: error.message }, 'Ошибка проверки конфигурации'); } }
+  } catch (error) { if (engineIntentCurrent(intent)) { if (typeof invalidateEngineProgress === 'function') invalidateEngineProgress(intent.engineID); showDetails({ error: error.message, technical: error.technicalMessage || '' }, 'Ошибка проверки конфигурации'); } }
   finally { finishEngineIntent(intent); }
 }
 
