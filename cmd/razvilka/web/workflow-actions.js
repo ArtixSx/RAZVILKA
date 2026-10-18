@@ -13,7 +13,7 @@ async function workflowRequest(path, options={}, milliseconds=25000){
 }
 function workflowError(error){
   if(error.name==='AbortError')return 'Ожидание остановлено. Результат записи не подтверждён; обновите состояние перед повтором.';
-  if(error.status===404||error.status===501)return 'Этот backend ещё не содержит необходимую операцию. Обновите backend; отсутствие операции не подменяется успехом.';
+  if(error.status===404||error.status===501)return 'В установленной версии эта операция недоступна. Обновите RAZVILKA и повторите.';
   return error.message || 'Не удалось выполнить действие.';
 }
 function workflowServiceOptions(id,preferred=''){
@@ -30,7 +30,7 @@ function renderWorkflowControls(){
   const running=['queued','interrupted','running','canceling'].includes(nodeBrowser.job?.state);
   const job=nodeBrowser.job;
   if($('#r4JobResults')){
-    $('#r4JobResults').innerHTML=job?.mode==='service'?(job.results||[]).slice(-8).map(r=>`<div><b>${esc(nodeByID(r.node_id)?.name||'Узел · '+String(r.node_id||'').slice(-8))}</b><span>${esc(r.verdict||'Нет результата')}</span><small>${esc(r.message||'Проверка не завершена.')}</small></div>`).join(''):'';
+    $('#r4JobResults').innerHTML=job?.mode==='service'?(job.results||[]).slice(-8).map(r=>`<div><b>${esc(nodeByID(r.node_id)?.name||'Узел · '+String(r.node_id||'').slice(-8))}</b><span>${esc(probeStatusLabel(r))}</span><small>${esc(r.message||'Проверка не завершена.')}</small></div>`).join(''):'';
   }
   $('#r4DeleteSelected').disabled=workflowState.deleteBusy||running||nodeBrowser.selected.size===0;
   $('#r4DeleteSelected').textContent=`Удалить выбранные${nodeBrowser.selected.size?' · '+nodeBrowser.selected.size:''}`;
@@ -122,7 +122,7 @@ async function workflowDelete(ids,mode='selected'){
   if(mode==='selected'&&all.length>64){interfaceToast('За один раз удаляется до 64 узлов. Сократите выбор.');return;}
   const request=isAllVLESS?{generation:state.nodes?.generation,mode,preview:true,confirm:'DELETE_ALL_VLESS'}:{node_ids:chosen,generation:state.nodes?.generation,mode,service_id:$('#nodeBrowserService').value,network_profile:state.nodes?.network_profile||'',preview:true,confirm:'DELETE_NODES'};
   workflowState.deletion=null;workflowState.deleteBusy=true;$('#r4DeleteCommit').disabled=true;
-  $('#r4DeleteSummary').textContent=isAllVLESS?'Предпросмотр ВСЕХ VLESS во всём каталоге. Фильтры и страницы не ограничивают удаление. Проверяем маршруты, группы и резерв.':`Сверяем ссылки на ${chosen.length} узлов${all.length>64?' из '+all.length+' (первая партия)':''}. Проверяем маршруты, группы, закрепления и резерв.`;
+  $('#r4DeleteSummary').textContent=isAllVLESS?'Предпросмотр ВСЕХ VLESS во всём каталоге. Фильтры и страницы не ограничивают удаление. Проверяем маршруты, группы и резерв.':`Выбрано записей: ${chosen.length}${all.length>64?' из '+all.length+' (первая партия)':''}. Проверяем маршруты, группы, закрепления и резерв.`;
   $('#r4DeleteItems').replaceChildren();$('#r4DeleteStatus').textContent='';$('#r4DeleteDialog').showModal();renderWorkflowControls();
   try{
     const result=await workflowRequest('/api/v1/nodes/delete-batch',{method:'POST',body:JSON.stringify(request)});
@@ -132,7 +132,7 @@ async function workflowDelete(ids,mode='selected'){
     workflowState.deletion={request,result,seq};
     $('#r4DeleteSummary').textContent=`${isAllVLESS?'Все VLESS, все источники и страницы. ':''}Можно удалить: ${result.candidates.length}. Сохраняем: ${result.skipped.length}.${!isAllVLESS&&all.length>64?' Обработаны первые 64 записи текущей выборки.':''}${isAllVLESS?' Другие протоколы не затрагиваются. Подписки могут загрузить удалённые ссылки снова.':''}`;
     $('#r4DeleteItems').innerHTML=[...result.candidates.map(n=>({...n,allowed:true})),...result.skipped].map(n=>`<div class="r4-delete-row"><span class="ui3-status ${n.allowed?'warn':'unknown'}">${n.allowed?'Удаление':'Сохранить'}</span><div><b>${esc(n.name||'Узел')}</b><small>${esc(n.reason||'Локальная запись не используется.')}</small></div></div>`).join('');
-    $('#r4DeleteCommit').textContent='Удалить '+result.candidates.length+' узлов';$('#r4DeleteCommit').disabled=!result.candidates.length;
+    $('#r4DeleteCommit').textContent='Удалить выбранные ('+result.candidates.length+')';$('#r4DeleteCommit').disabled=!result.candidates.length;
   }catch(error){if(workflowSession(epoch)&&seq===workflowState.deleteSeq)$('#r4DeleteStatus').textContent=workflowError(error);}
   finally{if(workflowSession(epoch)){workflowState.deleteBusy=false;renderWorkflowControls();}}
 }
