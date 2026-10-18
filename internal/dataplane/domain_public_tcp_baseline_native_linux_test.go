@@ -26,7 +26,7 @@ import (
 )
 
 const publicTCPBaselineNative = "RAZVILKA_PUBLIC_TCP_BASELINE_NATIVE"
-const publicTCPBaselineTarget = "93.184.216.14:8080"
+const publicTCPBaselineTarget = "93.184.216.14:80"
 
 // EXPERIMENT ONLY. This is a kernel feasibility test, not a production grant,
 // Manager admission, domain/Xray acceptance or firmware-equivalence proof.
@@ -101,6 +101,10 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 	run("-n", server, "addr", "add", "93.184.216.14/30", "dev", "server0")
 	run("-n", client, "route", "add", "default", "via", "192.0.2.1")
 	run("-n", server, "route", "add", "192.0.2.0/24", "via", "93.184.216.13")
+	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+		run("-n", server, "addr", "add", "93.184.216.11/32", "dev", "lo")
+		run("-n", router, "route", "add", "93.184.216.11/32", "via", "93.184.216.14")
+	}
 	for _, key := range []string{"net.ipv4.ip_forward=1", "net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf.lan0.rp_filter=0", "net.ipv4.conf.wan0.rp_filter=0"} {
 		run("netns", "exec", router, "sysctl", "-q", "-w", key)
 	}
@@ -118,7 +122,11 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 	child := exec.CommandContext(ctx, "ip", "netns", "exec", router, binary, "-test.run=^TestPublicTCPBaselineNativeChild$", "-test.count=1", "-test.timeout=22s")
 	child.Env = append(os.Environ(), "RAZVILKA_PUBLIC_TCP_ROLE=router", "RAZVILKA_PUBLIC_TCP_CLIENT_NS="+client, "RAZVILKA_PUBLIC_TCP_SERVER_NS="+server)
 	out, err := child.CombinedOutput()
-	if err != nil || !bytes.Contains(out, []byte("PUBLIC_TCP_SOURCE_PBR_ONLY_OK")) {
+	marker := "PUBLIC_TCP_SOURCE_PBR_ONLY_OK"
+	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+		marker = "PUBLIC_TCP_DOMAIN_XRAY_ONLY_OK"
+	}
+	if err != nil || !bytes.Contains(out, []byte(marker)) {
 		t.Fatalf("experimental baseline refused/failed: %v: %s", err, out)
 	}
 	t.Log(strings.TrimSpace(string(out)))
@@ -137,14 +145,14 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 			defer func() { rule[3] = "del"; run(rule...) }()
 			beforeRules := run("-n", router, "rule", "show")
 			beforeRoutes := run("-n", router, "route", "show", "table", "all")
-			beforeFirewall := run("netns", "exec", router, "iptables-save")
+			beforeFirewall := publicTCPStructuralFirewall(run("netns", "exec", router, "iptables-save"))
 			refused := exec.CommandContext(ctx, "ip", "netns", "exec", router, binary, "-test.run=^TestPublicTCPBaselineNativeChild$", "-test.count=1", "-test.timeout=5s")
 			refused.Env = append(os.Environ(), "RAZVILKA_PUBLIC_TCP_ROLE=router", "RAZVILKA_PUBLIC_TCP_CLIENT_NS="+client, "RAZVILKA_PUBLIC_TCP_SERVER_NS="+server)
 			output, err := refused.CombinedOutput()
 			if err != nil || !bytes.Contains(output, []byte("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")) {
 				t.Fatalf("unsupported policy not refused: %v: %s", err, output)
 			}
-			if !bytes.Equal(beforeRules, run("-n", router, "rule", "show")) || !bytes.Equal(beforeRoutes, run("-n", router, "route", "show", "table", "all")) || !bytes.Equal(beforeFirewall, run("netns", "exec", router, "iptables-save")) {
+			if !bytes.Equal(beforeRules, run("-n", router, "rule", "show")) || !bytes.Equal(beforeRoutes, run("-n", router, "route", "show", "table", "all")) || !bytes.Equal(beforeFirewall, publicTCPStructuralFirewall(run("netns", "exec", router, "iptables-save"))) {
 				t.Fatal("unsupported admission mutated kernel policy")
 			}
 		})
@@ -167,6 +175,10 @@ func TestPublicTCPBaselineNativeChild(t *testing.T) {
 	}
 	switch role {
 	case "server":
+		if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+			publicTCPDomainXrayServer(t)
+			return
+		}
 		l, err := net.ListenTCP("tcp4", net.TCPAddrFromAddrPort(netip.MustParseAddrPort(publicTCPBaselineTarget)))
 		if err != nil {
 			t.Fatal(err)
@@ -193,6 +205,10 @@ func TestPublicTCPBaselineNativeChild(t *testing.T) {
 			t.Fatal(err)
 		}
 	case "client":
+		if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+			publicTCPDomainXrayClient(t)
+			return
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 		defer cancel()
 		c, err := (&net.Dialer{}).DialContext(ctx, "tcp4", publicTCPBaselineTarget)
@@ -243,16 +259,7 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	// even with iptables-nft, which otherwise creates tables on first rule.
 	run("iptables", "-t", "nat", "-N", "FOREIGN_BASELINE_NAT")
 	run("iptables", "-t", "mangle", "-N", "FOREIGN_BASELINE_MANGLE")
-	structuralFirewall := func(raw []byte) []byte {
-		lines := []string{}
-		for _, line := range strings.Split(string(raw), "\n") {
-			if !strings.HasPrefix(line, "#") {
-				lines = append(lines, line)
-			}
-		}
-		return regexp.MustCompile(`\[[0-9]+:[0-9]+\]`).ReplaceAll([]byte(strings.Join(lines, "\n")), []byte("[0:0]"))
-	}
-	filterBefore := structuralFirewall(run("iptables-save"))
+	filterBefore := publicTCPStructuralFirewall(run("iptables-save"))
 	clientNS, serverNS := os.Getenv("RAZVILKA_PUBLIC_TCP_CLIENT_NS"), os.Getenv("RAZVILKA_PUBLIC_TCP_SERVER_NS")
 	names := regexp.MustCompile(`^rzpb[0-9a-f]{12}[cs]$`)
 	if !names.MatchString(clientNS) || !names.MatchString(serverNS) {
@@ -264,7 +271,7 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	}
 	defer listener.Close()
 	_ = listener.SetDeadline(time.Now().Add(12 * time.Second))
-	capture := []string{"-w", "1", "-t", "nat", "-A", "PREROUTING", "-i", "lan0", "-s", "192.0.2.2/32", "-d", "93.184.216.14/32", "-p", "tcp", "--dport", "8080", "-m", "comment", "--comment", "rz-public-baseline-experiment", "-j", "REDIRECT", "--to-ports", "18081"}
+	capture := []string{"-w", "1", "-t", "nat", "-A", "PREROUTING", "-i", "lan0", "-s", "192.0.2.2/32", "-d", "93.184.216.14/32", "-p", "tcp", "--dport", "80", "-m", "comment", "--comment", "rz-public-baseline-experiment", "-j", "REDIRECT", "--to-ports", "18081"}
 	run("iptables", capture...)
 	// Return packets for the transparent socket need their own exact owned
 	// mark/local route. No mark is applied to the outbound baseline socket.
@@ -287,8 +294,8 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		run("iptables", divert...)
 		run("ip", "rule", "del", "pref", "110", "fwmark", "0x451/0xffffffff", "table", "452")
 		run("ip", "route", "del", "local", "192.0.2.2/32", "dev", "lo", "table", "452")
-		if !bytes.Equal(rulesBefore, run("ip", "-4", "rule", "show")) || !bytes.Equal(routesBefore, run("ip", "-4", "route", "show", "table", "all")) || !bytes.Equal(filterBefore, structuralFirewall(run("iptables-save"))) {
-			t.Errorf("owned cleanup changed foreign routing/firewall: rules before=%s after=%s routes before=%s after=%s firewall before=%s after=%s", rulesBefore, run("ip", "-4", "rule", "show"), routesBefore, run("ip", "-4", "route", "show", "table", "all"), filterBefore, structuralFirewall(run("iptables-save")))
+		if !bytes.Equal(rulesBefore, run("ip", "-4", "rule", "show")) || !bytes.Equal(routesBefore, run("ip", "-4", "route", "show", "table", "all")) || !bytes.Equal(filterBefore, publicTCPStructuralFirewall(run("iptables-save"))) {
+			t.Errorf("owned cleanup changed foreign routing/firewall: rules before=%s after=%s routes before=%s after=%s firewall before=%s after=%s", rulesBefore, run("ip", "-4", "rule", "show"), routesBefore, run("ip", "-4", "route", "show", "table", "all"), filterBefore, publicTCPStructuralFirewall(run("iptables-save")))
 		}
 	}()
 	binary, err := os.Executable()
@@ -371,9 +378,21 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		return matched[0]
 	}
 	neighborBefore := readOriginalNeighbor()
-	ct := run("conntrack", "-L", "-p", "tcp", "--orig-src", observed.Source.Addr().String(), "--orig-dst", observed.OriginalDestination.Addr().String(), "--sport", fmt.Sprint(observed.Source.Port()), "--dport", "8080", "-o", "extended")
-	if !bytes.Contains(ct, []byte("mark=0")) || !bytes.Contains(ct, []byte("ESTABLISHED")) {
-		t.Fatal("original conntrack scope unavailable")
+	ct := run("conntrack", "-L", "-p", "tcp", "--orig-src", observed.Source.Addr().String(), "--orig-dst", observed.OriginalDestination.Addr().String(), "--sport", fmt.Sprint(observed.Source.Port()), "--dport", "80", "-o", "extended")
+	raw, err := accepted.SyscallConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tcpInfo *unix.TCPInfo
+	var tcpErr error
+	if err = raw.Control(func(fd uintptr) { tcpInfo, tcpErr = unix.GetsockoptTCPInfo(int(fd), unix.SOL_TCP, unix.TCP_INFO) }); err != nil || tcpErr != nil || tcpInfo == nil {
+		t.Fatal("original accepted TCP state unavailable")
+	}
+	// A client may have sent FIN after its complete request. Accept that
+	// active half-close only when both conntrack and the original FD agree.
+	stateMatches := bytes.Contains(ct, []byte("ESTABLISHED")) && tcpInfo.State == 1 /* Linux TCP_ESTABLISHED */ || bytes.Contains(ct, []byte("FIN_WAIT")) && tcpInfo.State == 8 /* Linux TCP_CLOSE_WAIT */
+	if bytes.Count(ct, []byte("mark=")) != 1 || !bytes.Contains(ct, []byte("mark=0 ")) || !stateMatches {
+		t.Fatalf("original conntrack/FD state unavailable: state=%d observation=%s", tcpInfo.State, ct)
 	}
 	route := run("ip", "-4", "route", "get", observed.OriginalDestination.Addr().String(), "from", observed.Source.Addr().String(), "iif", "lan0")
 	if !bytes.Contains(route, []byte("table 451")) || !bytes.Contains(route, []byte("dev wan0")) {
@@ -387,25 +406,29 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 		}
 		return optionErr
 	}}
-	upstream, err := dialer.DialContext(ctx, "tcp4", observed.OriginalDestination.String())
-	if err != nil {
-		t.Fatal("source-preserving baseline dial failed", err)
-	}
-	defer upstream.Close()
-	_ = upstream.SetDeadline(time.Now().Add(6 * time.Second))
-	line, err := bufio.NewReader(accepted).ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = io.WriteString(upstream, line); err != nil {
-		t.Fatal(err)
-	}
-	response, err := bufio.NewReader(upstream).ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = io.WriteString(accepted, response); err != nil {
-		t.Fatal(err)
+	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+		publicTCPDomainXrayCaptured(t, ctx, accepted, observed, neighborBefore.Lladdr, func() bool { return readOriginalNeighbor() == neighborBefore }, &dialer)
+	} else {
+		upstream, err := dialer.DialContext(ctx, "tcp4", observed.OriginalDestination.String())
+		if err != nil {
+			t.Fatal("source-preserving baseline dial failed", err)
+		}
+		defer upstream.Close()
+		_ = upstream.SetDeadline(time.Now().Add(6 * time.Second))
+		line, err := bufio.NewReader(accepted).ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = io.WriteString(upstream, line); err != nil {
+			t.Fatal(err)
+		}
+		response, err := bufio.NewReader(upstream).ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = io.WriteString(accepted, response); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = client.Wait(); err != nil {
 		t.Fatal("client failed", err, clientOut.String())
@@ -418,5 +441,19 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	if readOriginalNeighbor() != neighborBefore {
 		t.Fatal("original LAN identity changed")
 	}
-	fmt.Println("PUBLIC_TCP_SOURCE_PBR_ONLY_OK: actual original-destination capture; source IP and source-only PBR preserved; NOT production/domain/Xray admission")
+	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN") == "1" {
+		fmt.Println("PUBLIC_TCP_DOMAIN_XRAY_ONLY_OK: actual captured payload; selected Xray vs unlisted/excluded/opaque original-source baseline; NOT Manager/firmware admission")
+	} else {
+		fmt.Println("PUBLIC_TCP_SOURCE_PBR_ONLY_OK: actual original-destination capture; source IP and source-only PBR preserved; NOT production/domain/Xray admission")
+	}
+}
+
+func publicTCPStructuralFirewall(raw []byte) []byte {
+	lines := []string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, "#") {
+			lines = append(lines, line)
+		}
+	}
+	return regexp.MustCompile(`\[[0-9]+:[0-9]+\]`).ReplaceAll([]byte(strings.Join(lines, "\n")), []byte("[0:0]"))
 }
