@@ -1807,11 +1807,18 @@ function renderMetrics() {
 function renderEngineLab() {
   const report = state.engineLab || {};
   const conflicts = report.conflicts || [];
+  const labels = { installed: 'Установка', configured: 'Настройки', running: 'Процесс', 'ip-command': 'Утилита ip', tun: 'TUN', nfqueue: 'NFQUEUE', firewall: 'Firewall', config: 'Файл настроек', 'config-validation': 'Проверка настроек', 'external-owner': 'Внешнее управление' };
+  const outcomes = { pass: 'да', 'not-ready': 'нет', fail: 'ошибка', warn: 'требует внимания' };
+  const modes = { 'wan-bound-unconfirmed': 'Проверка через WAN: привязка не подтверждена', 'local-socks': 'Проверка через локальный SOCKS', 'source-address-bound': 'Привязка к исходному IP-адресу', 'local-socks-or-tun': 'Проверка через локальный SOCKS или TUN', 'external-nfqueue-owner': 'NFQUEUE под внешним управлением' };
   $('#engineLabSummary').innerHTML = `<div class="engine-lab-kpi ${report.ready_for_isolated_probes ? 'pass' : 'warn'}"><strong>${report.ready_for_isolated_probes ? 'ГОТОВО' : 'ТРЕБУЕТ ВНИМАНИЯ'}</strong><span>изолированные проверки</span></div><div class="engine-lab-kpi ${conflicts.length ? 'warn' : 'pass'}"><strong>${conflicts.length}</strong><span>конфликтов ресурсов</span></div><div class="engine-lab-kpi"><strong>${(report.engines || []).filter((engine) => engine.installed).length}</strong><span>обходов установлено</span></div><div class="engine-lab-kpi"><strong>${report.generated_at ? timeAgo(report.generated_at) : '—'}</strong><span>последняя проверка</span></div>`;
   $('#engineLabRows').innerHTML = (report.engines || []).map((engine) => {
-    const checks = (engine.checks || []).map((check) => `<span class="lab-check ${esc(check.status)}" title="${esc(check.detail)}"><i></i>${esc(check.id)}</span>`).join('');
+    const checks = (engine.checks || []).map((check) => {
+      const outcome = check.id === 'running' ? check.status === 'pass' ? 'обнаружен' : check.status === 'not-ready' ? 'не обнаружен' : outcomes[check.status] || 'не подтверждено' : outcomes[check.status] || 'не подтверждено';
+      const detail = check.id === 'running' ? 'Наблюдение процесса не подтверждает управление RAZVILKA, применение маршрута или доступ к сервисам.' : check.detail;
+      return `<span class="lab-check ${esc(check.status)}" title="${esc(detail)}"><i></i>${esc(labels[check.id] || check.id)}: ${esc(outcome)}</span>`;
+    }).join('');
     const resources = (engine.resources || []).map((resource) => `${resource.kind}:${resource.value}`).join(' · ') || 'ресурсы не объявлены';
-    return `<div class="engine-lab-row ${engine.external ? 'external' : ''}"><div><b>${esc(engine.name || engine.id)}${engine.external ? '<span class="external-owner-tag">ВНЕШНЕЕ УПРАВЛЕНИЕ</span>' : ''}</b><small>${esc(engine.version_number || engine.version || 'версия не определена')} · ${esc(engine.schema_level || '—')}</small></div><div class="lab-checks">${checks}</div><div><span class="probe-mode">${esc(engine.probe_mode || '—')}</span><small>${esc(resources)}</small></div></div>`;
+    return `<div class="engine-lab-row ${engine.external ? 'external' : ''}"><div><b>${esc(engine.name || engine.id)}${engine.external ? '<span class="external-owner-tag">ВНЕШНЕЕ УПРАВЛЕНИЕ</span>' : ''}</b><small>${esc(engine.version_number || engine.version || 'версия не определена')} · ${esc(engine.schema_level || '—')}</small></div><div class="lab-checks">${checks}</div><div><span class="probe-mode" title="${esc(engine.probe_mode || '')}">${esc(modes[engine.probe_mode] || engine.probe_mode || '—')}</span><small>${esc(resources)}</small></div></div>`;
   }).join('');
   if (conflicts.length) {
     $('#engineLabRows').insertAdjacentHTML('beforeend', `<div class="engine-conflicts"><b>Блокирующие конфликты</b>${conflicts.map((conflict) => `<span>${esc(conflict.kind)} <code>${esc(conflict.value)}</code>: ${esc((conflict.engines || []).join(', '))}${conflict.system_use ? ` · занято системой: ${esc(conflict.system_use)}` : ''}</span>`).join('')}</div>`);
@@ -5106,12 +5113,14 @@ async function inspectDomain() {
   $('#domainInspectorResult').innerHTML = '<div class="community-empty">Поиск точного домена, суффикса и CIDR во всех каталогах…</div>';
   try {
     const result = await api(`/api/v1/diagnostics/domain?q=${encodeURIComponent(query)}`);
+    const note = result.note === 'This is a catalog and desired-state explanation. A live route is confirmed only by isolated route evidence or a dataplane adapter.'
+      ? 'Здесь показаны правила каталога и выбранные настройки. Фактический маршрут подтверждается только изолированной проверкой маршрута или адаптером применения.' : result.note;
     const matches = result.matches || [];
     if (!matches.length) {
       $('#domainInspectorResult').innerHTML = `<div class="community-empty">Для <b>${esc(result.normalized)}</b> правило не найдено. Добавьте сервис вручную или через Community-каталог.</div>`;
       return;
     }
-    $('#domainInspectorResult').innerHTML = `<div class="domain-inspector-summary ${result.conflict ? 'conflict' : ''}"><div><span>Проверенный адрес</span><b>${esc(result.normalized)}</b></div><div><span>Совпадений</span><b>${matches.length}</b></div><div><span>Конфликт</span><b>${result.conflict ? 'ДА — проверьте приоритет' : 'нет'}</b></div><div><span>Фактический маршрут</span><b>${result.live_route_confirmed ? 'подтверждён' : 'не подтверждён'}</b></div></div><div class="domain-match-list">${matches.map((match, index) => `<div class="domain-match ${index === 0 ? 'candidate' : ''}"><span class="service-badge">${index + 1}</span><div><b>${esc(match.service_name)}</b><small>${esc(match.service_id)} · правило <code>${esc(match.matched_rule)}</code>${match.custom ? ' · пользовательский' : ''}</small></div><div><span>${match.enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}</span><b>${esc(match.selected_route)} → ${esc(match.resolved_route)}</b><small>применён: ${match.applied_enabled ? esc(match.applied_route) : 'выключен'}</small></div></div>`).join('')}</div><small class="domain-note">${esc(result.note)}</small>`;
+    $('#domainInspectorResult').innerHTML = `<div class="domain-inspector-summary ${result.conflict ? 'conflict' : ''}"><div><span>Проверенный адрес</span><b>${esc(result.normalized)}</b></div><div><span>Совпадений</span><b>${matches.length}</b></div><div><span>Конфликт</span><b>${result.conflict ? 'ДА — проверьте приоритет' : 'нет'}</b></div><div><span>Фактический маршрут</span><b>${result.live_route_confirmed ? 'подтверждён' : 'не подтверждён'}</b></div></div><div class="domain-match-list">${matches.map((match, index) => `<div class="domain-match ${index === 0 ? 'candidate' : ''}"><span class="service-badge">${index + 1}</span><div><b>${esc(match.service_name)}</b><small>${esc(match.service_id)} · правило <code>${esc(match.matched_rule)}</code>${match.custom ? ' · пользовательский' : ''}</small></div><div><span>${match.enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}</span><b>${esc(match.selected_route)} → ${esc(match.resolved_route)}</b><small>применён: ${match.applied_enabled ? esc(match.applied_route) : 'выключен'}</small></div></div>`).join('')}</div><small class="domain-note">${esc(note)}</small>`;
   } catch (error) { $('#domainInspectorResult').innerHTML = `<div class="community-empty error">${esc(error.message)}</div>`; }
   finally { button.disabled = false; button.textContent = 'Разобрать'; }
 }
