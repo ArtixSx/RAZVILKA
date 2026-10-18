@@ -27,6 +27,7 @@ type publicTCPBaselineSocket struct {
 	source   netip.AddrPort
 	captured DomainPolicyTCPSocket
 	accepted *net.TCPConn
+	issuer   context.Context
 	closed   bool
 }
 
@@ -67,7 +68,7 @@ func preparePublicTCPBaselineSocket(ctx context.Context, accepted *net.TCPConn) 
 	if !ok || address.Port < 1024 || address.Port == int(captured.Source.Port()) || address.Addr != captured.Source.Addr().As4() {
 		return nil, errPublicTCPBaselineSocket
 	}
-	prepared := &publicTCPBaselineSocket{fd: fd, source: netip.AddrPortFrom(netip.AddrFrom4(address.Addr), uint16(address.Port)), captured: captured, accepted: accepted}
+	prepared := &publicTCPBaselineSocket{fd: fd, source: netip.AddrPortFrom(netip.AddrFrom4(address.Addr), uint16(address.Port)), captured: captured, accepted: accepted, issuer: ctx}
 	prepared.self = prepared
 	if err = unix.Fstat(fd, &prepared.stat); err != nil || prepared.stat.Mode&unix.S_IFMT != unix.S_IFSOCK || prepared.stat.Ino == 0 {
 		return nil, errors.Join(errPublicTCPBaselineSocket, err)
@@ -78,7 +79,7 @@ func preparePublicTCPBaselineSocket(ctx context.Context, accepted *net.TCPConn) 
 	return prepared, nil
 }
 func (s *publicTCPBaselineSocket) current(ctx context.Context) error {
-	if s == nil || s.self != s || ctx == nil {
+	if s == nil || s.self != s || ctx == nil || s.issuer == nil {
 		return errPublicTCPBaselineSocket
 	}
 	if err := ctx.Err(); err != nil {
@@ -86,6 +87,9 @@ func (s *publicTCPBaselineSocket) current(ctx context.Context) error {
 	}
 	if _, finite := ctx.Deadline(); !finite {
 		return errPublicTCPBaselineSocket
+	}
+	if err := s.issuer.Err(); err != nil {
+		return errors.Join(errPublicTCPBaselineSocket, err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -108,6 +112,14 @@ func (s *publicTCPBaselineSocket) current(ctx context.Context) error {
 	if !ok || bound.Addr != s.source.Addr().As4() || bound.Port != int(s.source.Port()) {
 		return errPublicTCPBaselineSocket
 	}
+	flags, err := unix.FcntlInt(uintptr(s.fd), unix.F_GETFD, 0)
+	if err != nil || flags&unix.FD_CLOEXEC == 0 {
+		return errors.Join(errPublicTCPBaselineSocket, err)
+	}
+	status, err := unix.FcntlInt(uintptr(s.fd), unix.F_GETFL, 0)
+	if err != nil || status&unix.O_NONBLOCK == 0 {
+		return errors.Join(errPublicTCPBaselineSocket, err)
+	}
 	peer, peerErr := unix.Getpeername(s.fd)
 	if peerErr == nil {
 		remote, ok := peer.(*unix.SockaddrInet4)
@@ -123,6 +135,9 @@ func (s *publicTCPBaselineSocket) current(ctx context.Context) error {
 	}
 	mark, err := unix.GetsockoptInt(s.fd, unix.SOL_SOCKET, unix.SO_MARK)
 	if err != nil || mark != 0 {
+		return errors.Join(errPublicTCPBaselineSocket, err)
+	}
+	if err := s.issuer.Err(); err != nil {
 		return errors.Join(errPublicTCPBaselineSocket, err)
 	}
 	return ctx.Err()

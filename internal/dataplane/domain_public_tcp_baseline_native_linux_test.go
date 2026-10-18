@@ -426,6 +426,20 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	if !bytes.Contains(route, []byte("table 451")) || !bytes.Contains(route, []byte("dev wan0")) {
 		t.Fatal("source PBR did not select original route")
 	}
+	issuer, cancelIssuer := context.WithCancel(ctx)
+	retired, err := preparePublicTCPBaselineSocket(issuer, accepted)
+	if err != nil {
+		cancelIssuer()
+		t.Fatal(err)
+	}
+	cancelIssuer()
+	if !errors.Is(retired.current(ctx), context.Canceled) {
+		_ = retired.close()
+		t.Fatal("fresh context resurrected canceled issuing lifetime")
+	}
+	if err := retired.close(); err != nil {
+		t.Fatal("canceled issuer prevented descriptor close", err)
+	}
 	prepared, err := preparePublicTCPBaselineSocket(ctx, accepted)
 	if err != nil {
 		t.Fatal("actual original-source socket preparation refused", err)
@@ -451,6 +465,15 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	}
 	if err := unix.SetsockoptInt(prepared.fd, unix.SOL_SOCKET, unix.SO_MARK, 0); err != nil || prepared.current(ctx) != nil {
 		t.Fatal("original unmarked descriptor not restored")
+	}
+	if _, err := unix.FcntlInt(uintptr(prepared.fd), unix.F_SETFD, 0); err != nil {
+		t.Fatal(err)
+	}
+	if prepared.current(ctx) == nil {
+		t.Fatal("inheritable baseline descriptor accepted")
+	}
+	if _, err := unix.FcntlInt(uintptr(prepared.fd), unix.F_SETFD, unix.FD_CLOEXEC); err != nil || prepared.current(ctx) != nil {
+		t.Fatal("original close-on-exec descriptor not restored")
 	}
 	// Install the exact REAL allocated return port before the first Connect.
 	divert = append(append(append([]string(nil), divert[:14]...), "--sport", fmt.Sprint(observed.OriginalDestination.Port()), "--dport", fmt.Sprint(prepared.source.Port())), divert[14:]...)
@@ -601,7 +624,7 @@ func publicTCPConnectPreparedExperiment(ctx context.Context, prepared *publicTCP
 	if err != nil || !ok || address.Addr != target.Addr().As4() || address.Port != int(target.Port()) {
 		return nil, errPublicTCPBaselineSocket
 	}
-	duplicate, err := unix.Dup(prepared.fd)
+	duplicate, err := unix.FcntlInt(uintptr(prepared.fd), unix.F_DUPFD_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
