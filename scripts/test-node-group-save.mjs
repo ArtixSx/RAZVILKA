@@ -8,13 +8,13 @@ function fixture(){
  const fields={nodeGroupID:{value:''},nodeGroupPreferred:{value:'node1'},nodeGroupName:{value:'Group'},nodeGroupMode:{value:'manual'},nodeGroupHold:{value:'1800'},nodeGroupDialog:{close(){this.closed=true;}}};
  const submit={disabled:false,textContent:'Сохранить группу'};
  fields.nodeGroupForm={querySelector:()=>submit};
- const writes=[],reads=[],messages=[];let confirmations=0,accept=false;
- const context={state:{authGeneration:1},$:id=>fields[id.slice(1)],$$:()=>[{value:'node1'}],nodeBrowseActionsAllowed:()=>true,
+ const writes=[],reads=[],messages=[],timers=new Map();let confirmations=0,accept=false,timerID=0;
+ const context={AbortController,setTimeout(fn,ms){const id=++timerID;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),state:{authGeneration:1},$:id=>fields[id.slice(1)],$$:()=>[{value:'node1'}],nodeBrowseActionsAllowed:()=>true,
   showDetails:(body,title)=>messages.push({body,title}),refreshNodes:async()=>{},
   askConfirmation:async()=>{confirmations++;return accept;},
   api:async(url,options)=>{const request={url,options,...deferred()};(options?writes:reads).push(request);return request.promise;}};
- vm.createContext(context);vm.runInContext(fn,context);
- return {context,fields,submit,writes,reads,messages,confirmations:()=>confirmations,accept:()=>{accept=true;},save:()=>context.saveNodeGroup({preventDefault(){}})};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function apiDataMutation('),source.indexOf('async function api(url,'))+fn,context);
+ return {context,fields,submit,writes,reads,messages,deadline:()=>{const [id,t]=[...timers].find(([,t])=>t.ms===20000);timers.delete(id);t.fn();},confirmations:()=>confirmations,accept:()=>{accept=true;},save:()=>context.saveNodeGroup({preventDefault(){}})};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 {
@@ -56,7 +56,7 @@ console.log('PASS group save: single flight, known success/readback failure, unk
  assert.equal(f.fields.nodeGroupID.value,'');
  assert.equal(f.messages.at(-1).title,'Сохранение группы');
  assert.equal(f.submit.disabled,true);
- f.writes[0].resolve({group:{id:'original-result'}});await tick();f.reads[0].resolve({});await pending;
+ f.writes[0].resolve({group:{id:'group-original-result'}});await tick();f.reads[0].resolve({});await pending;
  assert.equal(f.submit.disabled,false);assert.equal(f.context.state.nodeGroupSave,null);
  // A new authenticated editor may open while an old-session request completes.
  const old=f.save();f.context.state.authGeneration++;
@@ -71,3 +71,13 @@ console.log('PASS group save: single flight, known success/readback failure, unk
  assert.equal(f.submit.disabled,false);assert.equal(f.submit.textContent,'Сохранить группу');
 }
 console.log('PASS group editor pending close/reopen guard and feedback restoration across auth changes');
+
+{
+ const f=fixture(),pending=f.save();f.deadline();await pending;
+ assert.equal(f.writes[0].options.signal.aborted,true);assert.equal(f.context.state.nodeGroupSave,null);
+ assert.equal(f.submit.disabled,false);assert.equal(f.messages.at(-1).title,'Результат сохранения неизвестен');
+ assert.equal(f.context.state.nodeGroupUnknown.auth,1);
+ f.writes[0].resolve({group:{id:'group-late'}});await tick();assert.equal(f.fields.nodeGroupID.value,'');
+ await f.save();assert.equal(f.writes.length,1,'unknown create cannot silently repeat');
+}
+console.log('PASS actual group deadline releases editor, ignores late create ACK and refuses blind retry');

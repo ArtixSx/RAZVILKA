@@ -41,7 +41,7 @@ const nodeMeasurementModel = (() => {
 // END NODE MEASUREMENT MODEL
 
 // Passive browser state never grants permission to change a route.
-const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], measurements: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, polling: null, authRequired: false, ordinals: new Map() };
+const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], measurements: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, feedWrite:null, feedUnknown:false, feedEdit:0, polling: null, authRequired: false, ordinals: new Map() };
 
 function nodeBrowserActive() {
   return !nodeBrowser.authRequired && (nodeBrowser.viewActive ?? ['nodes','providers'].includes(state.currentView)) && $('#authScreen').hidden && !document.hidden;
@@ -55,6 +55,9 @@ function scheduleNodeBrowserRefresh(delay = 15000) {
 
 function stopNodeBrowserRefresh(clearSession = false) {
   nodeBrowser.epoch++;
+  const write=nodeBrowser.feedWrite;
+  if(write){nodeBrowser.feedWrite=null;state.nodeFeedBusy=false;if(write.sent)nodeBrowser.feedUnknown=true;write.controller.abort();}
+  if(clearSession)state.nodeGroupSave?.controller?.abort();
   clearTimeout(nodeBrowser.timer);
   nodeBrowser.timer = null;
   for (const timer of nodeBrowser.feedTimers.values()) clearTimeout(timer);
@@ -475,6 +478,29 @@ function renderNodeSubscriptions() {
   }).join('') || '<p>Сохранённых подписок пока нет.</p>';
 }
 
+async function nodeFeedDataWrite(path,options) {
+  if(nodeBrowser.feedWrite)throw new Error('Изменение подписки ещё выполняется.');
+  const ticket={epoch:nodeBrowser.epoch,controller:new AbortController(),sent:false};
+  nodeBrowser.feedWrite=ticket;state.nodeFeedBusy=true;renderNodeSubscriptions();
+  const current=()=>nodeBrowser.feedWrite===ticket && ticket.epoch===nodeBrowser.epoch && nodeBrowserActive();
+  try {
+    if(nodeBrowser.feedUnknown){
+      if(!await askConfirmation('Результат предыдущего действия неизвестен','Проверьте список подписок и задач. Повторная отправка может повторить получение. Вы проверили состояние и хотите отправить запрос ещё раз?','Отправить повторно'))throw new Error('Повторная отправка отменена. Прочитайте список подписок.');
+    }
+    if(!current())throw Object.assign(new Error('Контекст подписки изменился.'),{name:'AuthGenerationChanged'});
+    ticket.sent=true;
+    const result=await apiDataMutation(path,{...options,signal:ticket.controller.signal});
+    if(!current())throw Object.assign(new Error('Контекст подписки изменился.'),{name:'AuthGenerationChanged'});
+    nodeBrowser.feedUnknown=false;
+    return result;
+  } catch(error){
+    if(current() && error.writeMayHaveSucceeded)nodeBrowser.feedUnknown=true;
+    throw error;
+  } finally {
+    if(nodeBrowser.feedWrite===ticket){nodeBrowser.feedWrite=null;state.nodeFeedBusy=false;if(nodeBrowserActive())renderNodeSubscriptions();}
+  }
+}
+
 async function saveNodeSubscription(event) {
   event?.preventDefault();
   if (state.nodeFeedBusy) return;
@@ -485,22 +511,23 @@ async function saveNodeSubscription(event) {
   const interval = Number($('#nodeFeedInterval').value);
   const body = { name: $('#nodeFeedName').value.trim(), limit, accept_partial: $('#nodeFeedPartial').checked, enabled: interval > 0, refresh_interval_minutes: interval || 360, confirm: 'SAVE_NODE_FEED' };
   if (preset === 'custom') { body.url = $('#nodeFeedURL').value.trim(); body.format = $('#nodeFeedFormat').value; } else body.preset_id = preset;
-  state.nodeFeedBusy = true; renderNodeSubscriptions();
+  const edit=nodeBrowser.feedEdit, name=$('#nodeFeedName').value, url=$('#nodeFeedURL').value;
   try {
-    const response = await api('/api/v1/node-feeds', { method: 'POST', body: JSON.stringify(body) });
+    const response = await nodeFeedDataWrite('/api/v1/node-feeds', { method: 'POST', body: JSON.stringify(body) });
     if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
-    $('#nodeFeedURL').value = ''; $('#nodeFeedName').value = '';
-    $('#nodeFeedStatus').textContent = 'Подписка сохранена. Получаем подключения…';
+    const unchanged=edit===nodeBrowser.feedEdit && name===$('#nodeFeedName').value && url===$('#nodeFeedURL').value;
+    if(unchanged){$('#nodeFeedURL').value = ''; $('#nodeFeedName').value = '';}
+    $('#nodeFeedStatus').textContent = unchanged?'Подписка сохранена. Получаем подключения…':'Отправленная подписка сохранена. Новые поля ещё не сохранены.';
     await refreshNodeSubscription(response.source.source_id);
   } catch (error) { if (epoch === nodeBrowser.epoch && nodeBrowserActive()) $('#nodeFeedStatus').textContent = error.message; }
-  finally { state.nodeFeedBusy = false; if (epoch === nodeBrowser.epoch && nodeBrowserActive()) renderNodes(); }
+  finally { if (epoch === nodeBrowser.epoch && nodeBrowserActive()) renderNodes(); }
 }
 
 async function refreshNodeSubscription(id) {
   if (!nodeBrowserActive()) return;
   const epoch = nodeBrowser.epoch;
   try {
-    const response = await api(`/api/v1/node-feeds/${encodeURIComponent(id)}/sync`, { method: 'POST', body: '{}' });
+    const response = await nodeFeedDataWrite(`/api/v1/node-feeds/${encodeURIComponent(id)}/sync`, { method: 'POST', body: '{}' });
     if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
     const jobID = response.job?.id;
     if (jobID) await pollNodeFeedJob(jobID);
@@ -536,7 +563,7 @@ async function changeNodeSubscription(id, remove) {
   if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
   try {
     const body = remove ? { revision: source.revision, confirm: 'DELETE_NODE_FEED' } : { revision: source.revision, name: source.name, enabled: !source.enabled, refresh_interval_minutes: source.refresh_interval_minutes || 360, limit: source.limit || 64, accept_partial: Boolean(source.accept_partial), confirm: 'UPDATE_NODE_FEED' };
-    const result = await api(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: remove ? 'DELETE' : 'PUT', body: JSON.stringify(body) });
+    const result = await (remove?api:nodeFeedDataWrite)(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: remove ? 'DELETE' : 'PUT', body: JSON.stringify(body) });
     if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
     if (remove) document.dispatchEvent(new CustomEvent('razvilka:source-consent-changed'));
     const feeds = await api('/api/v1/node-feeds');
@@ -562,7 +589,7 @@ async function acceptNodeSubscriptionPartial(id) {
   if (!await askConfirmation('Сохранить поддерживаемые подключения?', 'Часть записей этого источника не поддерживается. RAZVILKA пропустит их и сохранит остальные. Проверка доступа и выбор маршрута выполняются отдельно.', 'Разрешить')) return;
   if (epoch !== nodeBrowser.epoch || !nodeBrowserActive()) return;
   try {
-    await api(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ revision: source.revision, name: source.name, enabled: source.enabled, refresh_interval_minutes: source.refresh_interval_minutes || 360, limit: source.limit || 64, accept_partial: true, confirm: 'UPDATE_NODE_FEED' }) });
+    await nodeFeedDataWrite(`/api/v1/node-feeds/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ revision: source.revision, name: source.name, enabled: source.enabled, refresh_interval_minutes: source.refresh_interval_minutes || 360, limit: source.limit || 64, accept_partial: true, confirm: 'UPDATE_NODE_FEED' }) });
     if (epoch === nodeBrowser.epoch && nodeBrowserActive()) await refreshNodeSubscription(id);
   } catch (error) { if (epoch === nodeBrowser.epoch && nodeBrowserActive()) $('#nodeFeedStatus').textContent = error.message; }
 }

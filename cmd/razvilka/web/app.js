@@ -175,6 +175,38 @@ try {
   state.serviceMode = 'lite';
 }
 
+// Fast local data writes only. Never apply this deadline to routing/install.
+async function apiDataMutation(path, options = {}) {
+  const method=String(options.method||'POST').toUpperCase();
+  const allowed=method==='POST' && ['/api/v1/node-groups','/api/v1/node-feeds','/api/v1/nodes/import'].includes(path)
+    || ['PUT','DELETE'].includes(method) && /^\/api\/v1\/node-groups\/group-[a-zA-Z0-9_-]{1,128}$/.test(path)
+    || method==='PUT' && /^\/api\/v1\/node-feeds\/feed-[a-zA-Z0-9_-]{1,128}$/.test(path)
+    || method==='POST' && /^\/api\/v1\/node-feeds\/feed-[a-zA-Z0-9_-]{1,128}\/sync$/.test(path);
+  if(!allowed)throw new Error('Этот запрос не относится к быстрым изменениям данных.');
+  if(options.signal?.aborted)throw Object.assign(new Error('Запрос отменён до отправки.'),{name:'AbortError',writeMayHaveSucceeded:false});
+  const controller=new AbortController(),auth=state.authGeneration||0;
+  let timer=null,abort;
+  try {
+    return await new Promise((resolve,reject)=>{
+      let settled=false;
+      const done=(error,value)=>{
+        if(settled)return;settled=true;
+        if(error)reject(error);else if(auth!==(state.authGeneration||0))reject(Object.assign(new Error('Сессия изменилась.'),{name:'AuthGenerationChanged'}));else resolve(value);
+      };
+      abort=()=>{
+        controller.abort();
+        done(Object.assign(new Error('Ответ не получен. Изменение могло быть сохранено. Прочитайте список перед повторной отправкой.'),{code:'WRITE_OUTCOME_UNKNOWN',writeMayHaveSucceeded:true}));
+      };
+      options.signal?.addEventListener('abort',abort,{once:true});
+      timer=setTimeout(abort,20000);
+      Promise.resolve(api(path,{method,body:options.body,signal:controller.signal})).then(value=>done(null,value),error=>{
+        if(!Number.isInteger(error.status)||error.status>=500)error=Object.assign(new Error('Результат изменения неизвестен. Прочитайте список перед повторной отправкой.'),{code:'WRITE_OUTCOME_UNKNOWN',writeMayHaveSucceeded:true});
+        done(error);
+      });
+    });
+  } finally {clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
+}
+
 async function api(url, options = {}) {
   const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
@@ -3754,7 +3786,7 @@ async function saveNodeGroup(event) {
   const submit = $('#nodeGroupForm').querySelector('[type=submit]');
   const submitLabel = submit.textContent;
   submit.disabled = true;submit.textContent = 'Сохраняется…';
-  const action = state.nodeGroupSave = {auth};
+  const action = state.nodeGroupSave = {auth,controller:new AbortController()};
   const current = () => state.nodeGroupSave === action && auth === (state.authGeneration || 0);
   let written = false;
   try {
@@ -3762,7 +3794,7 @@ async function saveNodeGroup(event) {
       if (!await askConfirmation('Результат предыдущего сохранения неизвестен', 'Сначала проверьте список групп. Повторная отправка может создать дубликат. Вы проверили список и хотите отправить ещё раз?', 'Отправить повторно')) return;
       if (!current()) return;
     }
-    const result = await api(id ? `/api/v1/node-groups/${encodeURIComponent(id)}` : '/api/v1/node-groups', {method:id?'PUT':'POST', body:JSON.stringify(body)});
+    const result = await apiDataMutation(id ? `/api/v1/node-groups/${encodeURIComponent(id)}` : '/api/v1/node-groups', {method:id?'PUT':'POST', body:JSON.stringify(body),signal:action.controller.signal});
     if (!current()) return;
     written = true;
     state.nodeGroupUnknown = null;
@@ -5524,6 +5556,7 @@ function bindEvents() {
   $('#nodeRouteCancel').addEventListener('click', closeNodeRoute);
   $('#nodeRouteDialog').addEventListener('cancel', (event) => { event.preventDefault(); closeNodeRoute(); });
   $('#nodeFeedPreset').addEventListener('change', () => { $('#nodeFeedCustom').hidden = $('#nodeFeedPreset').value !== 'custom'; });
+  $('#nodeFeedForm').addEventListener('input',()=>{nodeBrowser.feedEdit++;});
   $('#nodeFeedForm').addEventListener('submit', syncNodeFeed);
   $('#nodeFeedCancel').addEventListener('click', () => state.nodeFeedController?.abort());
   $('#nodeRevealClose').addEventListener('click', clearNodeReveal);

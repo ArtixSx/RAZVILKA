@@ -36,6 +36,8 @@ const context = vm.createContext({ state, $, $$: selector => domQueries.get(sele
   setTimeout: callback => { scheduled = callback; return 1; }, clearTimeout() {},
   nodeByID: id => state.nodes.nodes.find(node => node.id === id),
 });
+context.AbortController=AbortController;
+context.apiDataMutation=(path,options)=>context.api(path,options);
 vm.runInContext(source + '\nthis.browser = nodeBrowser; this.renderNodes = renderNodeBrowser; this.renderNodeFeeds = renderNodeSubscriptions;', context);
 const node = (id, health = {}) => ({ id, name: `Узел ${id.replace('node-', '')}`, protocol: 'VLESS', transport: 'tcp', tls: true, state: 'quarantined', origins: [{ source_id: 'feed' }], health });
 state.nodes.nodes = [node('node-aaaaaa'), node('node-bbbbbb', { history: [fresh('telegram')] })];
@@ -341,7 +343,7 @@ console.log('Node browser filtering, proof expiry, transport labels, focus, poll
 
 // Real read transport + a fulfilled catalog response held by sibling reads.
 // Invalidation at individual settlement cannot fence the later aggregate.
-const appSource=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
+const appSource=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8').replaceAll('\r\n','\n');
 const appFunction=name=>appSource.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`))[0];
 context.panelReads={epoch:0,entries:new Map()};context.AbortController=AbortController;context.Headers=Headers;context.ADMIN_TOKEN_KEY='fixture';
 context.fetch=async(url,options)=>{calls.push({url,options});const value=await handler(url,options);return {ok:true,status:200,json:async()=>value};};
