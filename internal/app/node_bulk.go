@@ -143,11 +143,12 @@ func (a *App) checkAllVLESS(w http.ResponseWriter, r *http.Request, q nodeCheckJ
 	a.nodeChecks.nextID++
 	id := a.nodeChecks.nextID
 	a.nodeChecks.job = &nodeCheckJob{ID: id, Scope: allVLESSScope, Matched: matched, Mode: "service", ServiceID: service.ID, State: "running", Phase: "waiting", Total: len(ids), Skipped: matched - len(ids), StartedAt: time.Now().UTC(), Message: "Очередь всего VLESS-каталога создана. Маршруты не применяются.", Results: []nodeCheckItem{}}
+	source := a.legacyManualCandidateSource(ctx, service)
 	done := make(chan struct{})
 	a.nodeChecks.done = done
 	a.nodeChecks.cancel = cancel
 	a.nodeChecks.mu.Unlock()
-	go a.runAllVLESS(ctx, cancel, done, id, ids, service, profile)
+	go a.runAllVLESS(ctx, cancel, done, id, ids, service, profile, source)
 	writeJSON(w, 202, a.nodeCheckSnapshot())
 }
 
@@ -203,21 +204,26 @@ func (a *App) bulkRecoveryDueLocked(now time.Time) bool {
 	return false
 }
 func (a *App) bulkAdmission(ctx context.Context) (func(), error) {
+	_, release, err := a.bulkAdmissionContext(ctx)
+	return release, err
+}
+
+func (a *App) bulkAdmissionContext(ctx context.Context) (context.Context, func(), error) {
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !a.bulkRecoveryDue(time.Now()) {
-			release, err := a.Operations.Exclusive(ctx)
+			owned, release, err := a.Operations.ExclusiveContext(ctx)
 			if err == nil {
-				return release, nil
+				return owned, release, nil
 			}
 			if !errors.Is(err, operationgate.ErrBusy) {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 		if err := a.bulkWait(ctx, time.Second); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 }
@@ -231,20 +237,24 @@ func (a *App) bulkMessage(id uint64, phase, message string) {
 	}
 }
 
-func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done chan struct{}, jobID uint64, ids []string, service catalog.Service, profile string) {
+func (a *App) runAllVLESS(ctx context.Context, cancel context.CancelFunc, done chan struct{}, jobID uint64, ids []string, service catalog.Service, profile string, source *legacyManualCandidateSource) {
 	defer close(done)
 	defer cancel()
-	a.runServiceNodeQueue(ctx, jobID, ids, service, profile, true)
+	a.runServiceNodeQueue(ctx, jobID, ids, service, profile, true, source)
 }
 
 // Both selected nodes and the full catalogue share the same recovery priority
 // and cleanup boundary. Each iteration owns its admission until cleanup ends.
-func (a *App) runServiceNodeQueue(ctx context.Context, jobID uint64, ids []string, service catalog.Service, profile string, vlessOnly bool) {
+func (a *App) runServiceNodeQueue(ctx context.Context, jobID uint64, ids []string, service catalog.Service, profile string, vlessOnly bool, source *legacyManualCandidateSource) {
 	code, message := "", "Проверка подключений завершена. Маршруты не применялись."
 	definition := applyReviewHash(service)
+	if err := source.freeze(a, ids); err != nil {
+		code, message = "BULK_SETTINGS_CHANGED", "Изменились настройки, разрешения или определение сервиса. Запустите новую проверку."
+		ids = nil
+	}
 	for index, id := range ids {
 		a.bulkMessage(jobID, "waiting", "Ожидаем ресурс роутера. Восстановление маршрутов имеет приоритет между узлами.")
-		release, err := a.bulkAdmission(ctx)
+		owned, release, err := a.bulkAdmissionContext(ctx)
 		if err != nil {
 			code, message = "BULK_ADMISSION_STOPPED", "Проверка остановлена: ресурс или восстановление недоступны."
 			break
@@ -255,6 +265,12 @@ func (a *App) runServiceNodeQueue(ctx context.Context, jobID uint64, ids []strin
 		stopCode, stopMessage := "", ""
 		func() {
 			defer release()
+			checkCtx, retire, err := a.legacyManualCandidateContext(owned, source, service, id)
+			if err != nil {
+				stopCode, stopMessage = "BULK_SETTINGS_CHANGED", "Изменились настройки, разрешения или определение сервиса. Запустите новую проверку."
+				return
+			}
+			defer retire()
 			if !a.nodeCheckDefinitionCurrent(service.ID, definition) {
 				stopCode, stopMessage = "BULK_SERVICE_CHANGED", "Состав сервиса изменился. Запустите новую проверку."
 				return
@@ -286,7 +302,7 @@ func (a *App) runServiceNodeQueue(ctx context.Context, jobID uint64, ids []strin
 				return
 			}
 			a.bulkMessage(jobID, "checking", "Проверяем подключение: протокол, точный выход и выбранный сервис.")
-			item = a.runNodeCheckItem(ctx, "service", id, service, profile, nil)
+			item = a.runNodeCheckItem(checkCtx, "service", id, service, profile, nil)
 			if item.ErrorCode == "node-cleanup-failed" {
 				// A failed cleanup takes precedence over canceled/stale proof.
 				// Preserve it so the user sees why further checks are blocked.

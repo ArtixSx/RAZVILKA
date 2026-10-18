@@ -316,6 +316,7 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	a.nodeChecks.nextID++
 	id := a.nodeChecks.nextID
 	a.nodeChecks.job = &nodeCheckJob{ID: id, Mode: request.Mode, ServiceID: request.ServiceID, State: "running", Total: total, Phase: phase, StartedAt: time.Now().UTC(), Message: message, Results: []nodeCheckItem{}}
+	source := a.legacyManualCandidateSource(ctx, service)
 	a.nodeChecks.cancel = cancel
 	done := make(chan struct{})
 	a.nodeChecks.done = done
@@ -325,11 +326,11 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	a.nodeChecks.mu.Unlock()
 	retained = true
-	go a.runNodeChecks(ctx, cancel, done, release, id, request, service, pinger)
+	go a.runNodeChecks(ctx, cancel, done, release, id, request, service, pinger, source)
 	writeJSON(w, http.StatusAccepted, a.nodeCheckSnapshot())
 }
 
-func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done chan struct{}, release func(), id uint64, request nodeCheckJobRequest, service catalog.Service, pinger dataplane.NodePinger) {
+func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done chan struct{}, release func(), id uint64, request nodeCheckJobRequest, service catalog.Service, pinger dataplane.NodePinger, source *legacyManualCandidateSource) {
 	defer close(done)
 	held := true
 	defer func() {
@@ -359,7 +360,7 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 		// Release preparation admission before entering the shared fair queue.
 		release()
 		held = false
-		a.runServiceNodeQueue(ctx, id, request.NodeIDs, service, profile, false)
+		a.runServiceNodeQueue(ctx, id, request.NodeIDs, service, profile, false, source)
 		return
 	}
 	if err == nil {

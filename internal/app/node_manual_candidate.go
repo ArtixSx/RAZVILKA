@@ -16,7 +16,7 @@ import (
 type manualNodeCandidateKey struct{}
 
 // Original per-step diagnostic intent, never activation or client authority.
-// Only the accepted durable node-check worker issues it under its own lease.
+// Accepted manual workers issue it only under their own original lease.
 type manualNodeCandidate struct {
 	self     *manualNodeCandidate
 	mu       sync.Mutex
@@ -27,6 +27,7 @@ type manualNodeCandidate struct {
 	service  catalog.Service
 	nodes    []string
 	lifetime context.Context
+	source   *legacyManualCandidateSource
 }
 
 func (a *App) manualNodeCandidateContext(ctx context.Context, request serviceControlJobRequest, cfg config.Config, service catalog.Service) (context.Context, func(), error) {
@@ -39,7 +40,11 @@ func (a *App) manualNodeCandidateContext(ctx context.Context, request serviceCon
 	if err := a.Operations.WithExclusiveContext(ctx, func() error { return ctx.Err() }); err != nil {
 		return nil, nil, errors.Join(dataplane.ErrNodeResourceDenied, err)
 	}
-	intent := &manualNodeCandidate{active: true, app: a, store: a.Store, config: cfg, service: defaultRouteCloneCatalogService(service), nodes: slices.Clone(request.NodeIDs), lifetime: ctx}
+	return a.issueManualNodeCandidate(ctx, cfg, service, request.NodeIDs, nil)
+}
+
+func (a *App) issueManualNodeCandidate(ctx context.Context, cfg config.Config, service catalog.Service, nodes []string, source *legacyManualCandidateSource) (context.Context, func(), error) {
+	intent := &manualNodeCandidate{active: true, app: a, store: a.Store, config: cfg, service: defaultRouteCloneCatalogService(service), nodes: slices.Clone(nodes), lifetime: ctx, source: source}
 	intent.self = intent
 	return context.WithValue(ctx, manualNodeCandidateKey{}, intent), func() {
 		intent.mu.Lock()
@@ -67,6 +72,11 @@ func (a *App) nodeCandidateResourceAdmission(ctx context.Context, expected confi
 	}
 	if err := a.Operations.WithExclusiveContext(intent.lifetime, func() error { return ctx.Err() }); err != nil {
 		return errors.Join(dataplane.ErrNodeResourceDenied, err)
+	}
+	if intent.source != nil {
+		if err := intent.source.current(a); err != nil {
+			return err
+		}
 	}
 	// The same full config/disk image and every service/domain/address negative
 	// still close before DNS, runtime effects and recording. Enabled is not
