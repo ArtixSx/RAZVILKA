@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -113,6 +114,24 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 	run("-n", router, "rule", "add", "pref", "120", "from", "192.0.2.2/32", "table", "451")
 	run("-n", router, "route", "add", "table", "451", "93.184.216.14/32", "dev", "wan0")
 	run("-n", router, "route", "add", "blackhole", "93.184.216.14/32")
+	// Link-up starts kernel IPv6 DAD asynchronously. Finish that real topology
+	// initialization before comparing ALL foreign routes; never discard drift.
+	for _, ns := range []string{router, client, server} {
+		deadline := time.Now().Add(4 * time.Second)
+		for {
+			addresses := run("-n", ns, "-6", "-j", "address", "show")
+			if bytes.Contains(addresses, []byte("dadfailed")) {
+				t.Fatal("owned topology DAD failed")
+			}
+			if !bytes.Contains(addresses, []byte("tentative")) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("owned topology DAD remains pending")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -133,14 +152,20 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 	for _, unsupported := range []struct {
 		name     string
 		selector []string
+		route    bool
 	}{
-		{"mark", []string{"fwmark", "0x123"}},
-		{"source-port", []string{"ipproto", "tcp", "sport", "12345"}},
-		{"ingress", []string{"iif", "lan0"}},
+		{"mark", []string{"fwmark", "0x123"}, false},
+		{"source-port", []string{"ipproto", "tcp", "sport", "12345"}, false},
+		{"ingress", []string{"iif", "lan0"}, false},
+		{"tos", []string{"tos", "0x10"}, false},
+		{"route-tos", nil, true},
 	} {
 		t.Run("refuse-"+unsupported.name, func(t *testing.T) {
 			rule := append([]string{"-n", router, "rule", "add", "pref", "115"}, unsupported.selector...)
 			rule = append(rule, "table", "451")
+			if unsupported.route {
+				rule = []string{"-n", router, "route", "add", "table", "451", "93.184.216.14/32", "tos", "0x10", "dev", "wan0"}
+			}
 			run(rule...)
 			defer func() { rule[3] = "del"; run(rule...) }()
 			beforeRules := run("-n", router, "rule", "show")
@@ -152,8 +177,11 @@ func TestPublicTCPBaselineNative(t *testing.T) {
 			if err != nil || !bytes.Contains(output, []byte("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")) {
 				t.Fatalf("unsupported policy not refused: %v: %s", err, output)
 			}
-			if !bytes.Equal(beforeRules, run("-n", router, "rule", "show")) || !bytes.Equal(beforeRoutes, run("-n", router, "route", "show", "table", "all")) || !bytes.Equal(beforeFirewall, publicTCPStructuralFirewall(run("netns", "exec", router, "iptables-save"))) {
-				t.Fatal("unsupported admission mutated kernel policy")
+			afterRules := run("-n", router, "rule", "show")
+			afterRoutes := run("-n", router, "route", "show", "table", "all")
+			afterFirewall := publicTCPStructuralFirewall(run("netns", "exec", router, "iptables-save"))
+			if !bytes.Equal(beforeRules, afterRules) || !bytes.Equal(beforeRoutes, afterRoutes) || !bytes.Equal(beforeFirewall, afterFirewall) {
+				t.Fatalf("unsupported admission changed kernel policy: rules before=%s after=%s routes before=%s after=%s firewall before=%s after=%s", beforeRules, afterRules, beforeRoutes, afterRoutes, beforeFirewall, afterFirewall)
 			}
 		})
 	}
@@ -248,12 +276,11 @@ func publicTCPBaselineRouterExperiment(t *testing.T) {
 	// Capture the complete rule and route images before adding owned return PBR.
 	rulesBefore := run("ip", "-4", "rule", "show")
 	routesBefore := run("ip", "-4", "route", "show", "table", "all")
-	// Unknown policy selectors are unsupported, not a reason to use router direct.
-	for _, word := range []string{"fwmark", "sport", "dport", "ipproto", " iif ", " oif ", " uidrange ", " l3mdev"} {
-		if bytes.Contains(rulesBefore, []byte(word)) {
-			fmt.Println("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")
-			return
-		}
+	// This prototype admits only a closed source-only RPDB grammar. TOS,
+	// marks, ports, interfaces, goto and every unknown selector refuse.
+	if !publicTCPSourceOnlyPolicy(rulesBefore, routesBefore) {
+		fmt.Println("PUBLIC_TCP_UNSUPPORTED_PBR_REFUSED")
+		return
 	}
 	// Pre-existing foreign-looking chains make table preservation observable
 	// even with iptables-nft, which otherwise creates tables on first rule.
@@ -456,4 +483,51 @@ func publicTCPStructuralFirewall(raw []byte) []byte {
 		}
 	}
 	return regexp.MustCompile(`\[[0-9]+:[0-9]+\]`).ReplaceAll([]byte(strings.Join(lines, "\n")), []byte("[0:0]"))
+}
+
+func publicTCPSourceOnlyPolicy(rules, routes []byte) bool {
+	for _, line := range strings.Split(strings.TrimSpace(string(rules)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 5 || !strings.HasSuffix(fields[0], ":") || fields[1] != "from" || fields[3] != "lookup" {
+			return false
+		}
+		if _, err := strconv.ParseUint(strings.TrimSuffix(fields[0], ":"), 10, 32); err != nil {
+			return false
+		}
+		if fields[2] != "all" {
+			if prefix, err := netip.ParsePrefix(fields[2]); err != nil || !prefix.Addr().Is4() {
+				if address, err := netip.ParseAddr(fields[2]); err != nil || !address.Is4() {
+					return false
+				}
+			}
+		}
+		switch fields[4] {
+		case "local", "main", "default":
+		default:
+			if table, err := strconv.ParseUint(fields[4], 10, 32); err != nil || table == 0 {
+				return false
+			}
+		}
+	}
+	for _, field := range strings.Fields(string(routes)) {
+		if field == "tos" || field == "dsfield" {
+			return false
+		}
+	}
+	return len(strings.TrimSpace(string(rules))) != 0
+}
+
+func TestPublicTCPSourceOnlyPolicyClosedGrammar(t *testing.T) {
+	base := []byte("0: from all lookup local\n120: from 192.0.2.2 lookup 451\n32766: from all lookup main\n32767: from all lookup default\n")
+	if !publicTCPSourceOnlyPolicy(base, nil) {
+		t.Fatal("source-only fixture rejected")
+	}
+	for _, selector := range []string{"tos 0x10", "fwmark 1", "iif lan0", "ipproto tcp sport 12345", "uidrange 1-2", "not", "suppress_prefixlength 0"} {
+		if publicTCPSourceOnlyPolicy(append(append([]byte(nil), base...), []byte("115: from all "+selector+" lookup 451\n")...), nil) {
+			t.Fatalf("unknown selector accepted: %s", selector)
+		}
+	}
+	if publicTCPSourceOnlyPolicy(base, []byte("93.184.216.14 tos 0x10 dev wan0 table 451")) {
+		t.Fatal("route TOS accepted without original TOS authority")
+	}
 }

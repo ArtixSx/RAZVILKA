@@ -162,8 +162,10 @@ func publicTCPDomainXrayClient(t *testing.T) {
 	if err != nil || response != fmt.Sprintf("observed-source=%s digest=%x\n", publicTCPDomainExpectedSource(), sha256.Sum256(payload)) {
 		t.Fatal("original client received wrong flow", err, response)
 	}
-	if err = c.CloseWrite(); err != nil {
-		t.Fatal(err)
+	if os.Getenv("RAZVILKA_PUBLIC_TCP_DOMAIN_CASE") != "half-closed" {
+		if err = c.CloseWrite(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
