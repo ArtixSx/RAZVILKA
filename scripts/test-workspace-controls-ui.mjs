@@ -84,12 +84,31 @@ assert(calls.some(call => call.path === '/api/v1/audit/current?limit=40'), 'log 
 assert.equal(details.at(-1)[0].detail_kind, 'project-log');
 assert.equal(details.at(-1)[0].load_issues[0].section, 'sources');
 assert.equal(details.at(-1)[0].audit.events[0].outcome, 'failed');
+const latestNodeJob = { id: 809, mode: 'service', state: 'completed', completed: 32, total: 32, passed: 0 };
+request = async path => path.includes('/node-checks/') ? { job: latestNodeJob } : path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] };
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].node_job, latestNodeJob, 'latest legacy check was not read');
+assert.equal(calls.at(-1).path, '/api/v1/node-checks/current');
+assert.equal(calls.at(-1).options, undefined, 'project log mutated node checks');
+request = async path => { if (path.includes('/node-checks/')) throw new Error('private transport detail'); return path.includes('/audit') ? { available: true, events: [] } : { durable_jobs: [] }; };
+await context.openWorkspaceLog();
+assert.match(details.at(-1)[0].node_job_error, /Не удалось прочитать/);
+assert.equal(details.at(-1)[0].node_job, null, 'failed read replayed old job as fresh');
+assert.doesNotMatch(details.at(-1)[0].node_job_error, /private transport detail/);
 request = path => path.includes('/audit') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ durable_jobs: [] });
 const lateLog = context.openWorkspaceLog();
 const detailCount = details.length;
 events.get('razvilka:auth-required')();
 release({ events: [{ path: '/private' }] }); await lateLog;
 assert.equal(details.length, detailCount, 'late log opened after logout');
+
+events.get('razvilka:auth-restored')();
+request = path => path.includes('/node-checks/') ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ available: true, events: [], durable_jobs: [] });
+const lateChecksLog = context.openWorkspaceLog();
+const beforeLateChecks = details.length;
+events.get('razvilka:auth-required')();
+release({ job: latestNodeJob }); await lateChecksLog;
+assert.equal(details.length, beforeLateChecks, 'late node-check read reopened private log after logout');
 
 events.get('razvilka:auth-restored')();
 context.acceptWorkspaceControl({ ...snapshot, config_revision: 20, running: true, runtime_state: 'running', can_stop: true });

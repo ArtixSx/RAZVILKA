@@ -64,6 +64,26 @@ function projectLogEventResult(event) {
   return { label: 'Результат не указан', tone: 'not-ready', detail: 'Данных для вывода об успешном завершении нет.' };
 }
 
+function renderProjectNodeCheck(job, error) {
+  const heading = '<section class="detail-section"><h4>Последняя проверка подключений</h4>';
+  if (error) return `${heading}<p>${esc(error)}</p></section>`;
+  if (!job || typeof job !== 'object' || Array.isArray(job)) return `${heading}<p>Проверка подключений ещё не запускалась.</p></section>`;
+  const number = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : '—';
+  const mode = ({ tcp: 'TCP-пинг', service: 'Проверка подключения к сервису', 'service-node-check': 'Проверка подключений', 'service-check': 'Проверка сервисов', 'service-select': 'Подбор подключений' })[job.mode] || 'Режим не указан';
+  const status = ({ queued: 'В очереди', running: 'Выполняется', interrupted: 'Проверяем после перезапуска', canceling: 'Останавливается', completed: 'Проверка завершена', canceled: 'Проверка остановлена', failed: 'Проверка не завершена' })[job.state] || 'Результат не подтверждён';
+  const historical = job.result_state === 'not-retained' || job.earlier_network_completed > 0;
+  const timestamp = Date.parse(job.finished_at || job.started_at || '');
+  const time = Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString('ru-RU') : 'Время не указано';
+  const rows = Array.isArray(job.results) ? job.results.filter(row => row && typeof row === 'object' && !Array.isArray(row)) : [];
+  const failure = rows.find(row => row.error_code && row.message);
+  const verdicts = { PASS: 'Проверка пройдена', FAIL: 'Проверка не пройдена', BLOCKED: 'Проверка заблокирована', MISROUTED: 'Не тот маршрут', ERROR: 'Ошибка проверки' };
+  const levels = { service: 'проверка сервиса', tcp: 'TCP', 'tcp-connect': 'TCP' };
+  // Only public typed results are summarized; endpoint/configuration fields
+  // and node labels/IDs are never copied into the visible project log.
+  const reason = failure ? `${verdicts[failure.verdict] || 'Отказ проверки'}${levels[failure.test_level] ? ` · ${levels[failure.test_level]}` : ''}: ${failure.message}` : '';
+  return `${heading}<article class="route-result-card status-${job.state === 'failed' ? 'fail' : 'partial'}"><div class="route-result-head"><strong>${esc(mode)}</strong><span>${esc(status)}</span></div><small>${esc(time)}</small><p>${job.scope === 'all-vless' ? 'Весь VLESS-каталог · ' : ''}${job.phase === 'fetching' ? 'Получаем источник · ' : ''}Обработано: ${number(job.completed)} / ${number(job.total)}</p><p>Пройдены: ${number(job.passed)} · Отказ: ${number(job.failed)} · Не подтверждены: ${number(job.inconclusive)} · Пропущены: ${number(job.skipped)}</p>${job.message ? `<p>${esc(job.message)}</p>` : ''}${historical ? '<p>Результаты прежнего запуска или сети не подтверждают текущую доступность. Нужна новая проверка.</p>' : ''}${reason ? `<p>Первый отказ${historical ? ' прежней проверки' : ' этой проверки'}: ${esc(reason)}</p>` : ''}<p class="detail-footnote">Это результат указанной проверки, а не подтверждение, что обход сейчас работает.</p></article></section>`;
+}
+
 function renderProjectLogDetails(value) {
   const data = value && typeof value === 'object' ? value : {};
   const records = items => Array.isArray(items) ? items.filter(item => item && typeof item === 'object' && !Array.isArray(item)) : [];
@@ -101,11 +121,11 @@ function renderProjectLogDetails(value) {
   }).join('');
   const jobs = records(data.jobs ?? control.durable_jobs).slice(-12).reverse();
   const jobHTML = jobs.length ? `<section class="detail-section"><h4>Задания на роутере</h4><p class="detail-footnote">Завершение действия показано отдельно от ответа на запрос. Оно не заменяет проверку доступности сервиса.</p>${jobs.map(job => {
-    const name = ({ 'service-stop': 'Остановка проекта', 'service-resume': 'Включение проекта', 'service-check': 'Проверка сервисов', 'service-select': 'Подбор подключения', 'service-dns-compare': 'Проверка DNS и сайта', 'service-node-apply': 'Применение подключения' })[job.mode] || 'Задание';
+    const name = ({ 'service-stop': 'Остановка проекта', 'service-resume': 'Включение проекта', 'service-check': 'Проверка сервисов', 'service-select': 'Подбор подключения', 'service-dns-compare': 'Проверка DNS и сайта', 'service-node-apply': 'Применение подключения', 'node-check': 'Проверка подключений', 'service-node-check': 'Проверка подключений' })[job.mode] || 'Действие проекта';
     const status = ({ queued: 'В очереди', running: 'Выполняется', canceling: 'Завершаем очистку', interrupted: 'Проверяем после перезапуска', completed: 'Завершено', failed: 'Не выполнено', canceled: 'Отменено' })[job.state] || 'Нет подтверждения';
     const timestamp = Date.parse(job.finished_at || job.started_at || '');
     const time = Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString('ru-RU') : 'Время не указано';
     return `<article class="route-result-card status-${job.state === 'failed' ? 'fail' : job.state === 'completed' ? 'pass' : 'partial'}"><div class="route-result-head"><strong>${esc(name)}</strong><span>${esc(status)}</span></div><small>${esc(time)}</small><p>${esc(job.message || '')}</p></article>`;
   }).join('')}</section>` : '';
-  return `<div class="detail-hero${uniqueProblems.length || failures ? ' warn' : ''}"><span>Лог проекта</span><h4>${esc(headline)}</h4><p>${esc(summary)}</p></div><section class="detail-section"><h4>Текущее состояние</h4><dl class="detail-kv"><div><dt>Обходы</dt><dd>${esc(runtime)}</dd></div><div><dt>Управление</dt><dd>${esc(mode)}</dd></div><div><dt>Применение</dt><dd>${esc(safeMode)}</dd></div></dl></section>${issueHTML}${jobHTML}<section class="detail-section"><h4>Последние действия (${events.length})</h4><p class="detail-footnote">Результат запроса не доказывает доступность сервиса. Для задач, принятых в работу, итог смотрите в соответствующем разделе панели.</p><div class="route-result-list">${eventHTML || `<div class="detail-empty">${audit.available === true ? 'Записанных действий пока нет.' : 'История действий недоступна.'}</div>`}</div>${allEvents.length > events.length ? '<p class="detail-footnote">Показаны 40 последних записей.</p>' : ''}</section>${technicalDetails(data)}`;
+  return `<div class="detail-hero${uniqueProblems.length || failures ? ' warn' : ''}"><span>Лог проекта</span><h4>${esc(headline)}</h4><p>${esc(summary)}</p></div><section class="detail-section"><h4>Текущее состояние</h4><dl class="detail-kv"><div><dt>Обходы</dt><dd>${esc(runtime)}</dd></div><div><dt>Управление</dt><dd>${esc(mode)}</dd></div><div><dt>Применение</dt><dd>${esc(safeMode)}</dd></div></dl></section>${issueHTML}${renderProjectNodeCheck(data.node_job, data.node_job_error)}${jobHTML}<section class="detail-section"><h4>Последние действия (${events.length})</h4><p class="detail-footnote">Результат запроса не доказывает доступность сервиса. Для задач, принятых в работу, итог смотрите в соответствующем разделе панели.</p><div class="route-result-list">${eventHTML || `<div class="detail-empty">${audit.available === true ? 'Записанных действий пока нет.' : 'История действий недоступна.'}</div>`}</div>${allEvents.length > events.length ? '<p class="detail-footnote">Показаны 40 последних записей.</p>' : ''}</section>${technicalDetails(data)}`;
 }

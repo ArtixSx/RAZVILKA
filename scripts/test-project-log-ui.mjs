@@ -99,6 +99,24 @@ assert.doesNotMatch(out, /<img|Invalid Date/);
 out = visible({ ...healthy, jobs: Array.from({ length: 64 }, () => ({ mode: 'service-stop', state: 'completed', message: 'done' })) });
 assert.equal((out.match(/<article /g) || []).length, 12, 'job history is bounded');
 
+const latestCheck = { mode: 'service', scope: 'all-vless', state: 'completed', completed: 3, total: 3, passed: 0, failed: 2, inconclusive: 1, skipped: 0, results: [{ verdict: 'FAIL', test_level: 'service', error_code: 'TIMEOUT', message: '<unavailable>' }], uri: 'vless://must-not-be-shown', label: 'private-label' };
+out = visible({ ...healthy, node_job: latestCheck, jobs: [{ mode: 'service-node-check', state: 'completed' }] });
+assert.match(out, /Последняя проверка подключений[\s\S]*Проверка подключения к сервису[\s\S]*Обработано: 3 \/ 3/);
+assert.match(out, /Пройдены: 0 · Отказ: 2 · Не подтверждены: 1/);
+assert.match(out, /Первый отказ этой проверки: Проверка не пройдена · проверка сервиса: &lt;unavailable&gt;/);
+assert.match(out, /не подтверждение, что обход сейчас работает/);
+assert.doesNotMatch(out, /vless:|private-label|<unavailable>|<strong>Задание<\/strong>/);
+assert.doesNotMatch(context.renderProjectNodeCheck(latestCheck, ''), /status-pass/);
+out = visible({ ...healthy, node_job: { ...latestCheck, earlier_network_completed: 3 } });
+assert.match(out, /Результаты прежнего запуска или сети/);
+assert.match(out, /Первый отказ прежней проверки/);
+assert.doesNotMatch(out, /Первый отказ этой проверки/);
+assert.match(visible({ ...healthy, node_job: null }), /ещё не запускалась/);
+out = visible({ ...healthy, node_job_error: '<read failed>' });
+assert.match(out, /&lt;read failed&gt;/);
+assert.doesNotMatch(out, /ещё не запускалась|<read failed>/);
+out = visible({ ...healthy, node_job: { mode: 'tcp', state: 'running', completed: -1, total: '2', results: [null, []] } });
+assert.match(out, /TCP-пинг[\s\S]*Выполняется[\s\S]*Обработано: — \/ —/);
 const slice = (start, end) => {
   const from = app.indexOf(start), to = app.indexOf(end, from + start.length);
   assert.ok(from >= 0 && to > from);
