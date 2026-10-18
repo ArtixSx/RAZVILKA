@@ -511,7 +511,7 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 		if a.Store != owner || !reflect.DeepEqual(definitions, a.catalogSnapshot()) {
 			return dataplane.ErrNodeResourceDenied
 		}
-		return a.nodeResourceAdmission(checkCtx, cfg, service, host, address)
+		return a.nodeCandidateResourceAdmission(checkCtx, cfg, service, id, host, address)
 	}
 	if err := resourceGuard(ctx, "", netip.Addr{}); err != nil {
 		return result, nodestore.Snapshot{}, err

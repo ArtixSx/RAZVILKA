@@ -28,8 +28,12 @@ func nodeCheckFailureCode(err error) string {
 		return "node-network-changed"
 	case errors.Is(err, dataplane.ErrExactNodeBusy):
 		return "node-check-busy"
+	case errors.Is(err, dataplane.ErrNodeResourceDenied):
+		return "node-resource-refused"
 	case errors.Is(err, dataplane.ErrExactNodeRuntime):
 		return "node-runtime-unavailable"
+	case errors.Is(err, dataplane.ErrExactNodeUnsupported):
+		return "node-runtime-unsupported"
 	case errors.Is(err, dataplane.ErrExactNodeUnavailable):
 		return "node-checker-unavailable"
 	case errors.Is(err, nodestore.ErrDisabled), errors.Is(err, nodestore.ErrNotFound):

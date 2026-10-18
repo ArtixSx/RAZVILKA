@@ -231,7 +231,7 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	if !validDurableNodeCheck(r) || r.durableCursor < 0 || r.durableCursor >= len(r.NodeIDs) || a.Store == nil || a.Nodes == nil {
 		return out, errServiceControlRequest
 	}
-	release, err := a.Operations.Exclusive(ctx)
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
 	if err != nil {
 		return out, err
 	}
@@ -265,6 +265,15 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		return out, dataplane.ErrExactNodeNetworkChanged
 	}
 	checkCtx, cancel := context.WithCancel(ctx)
+	if r.NodeCheckMode == "service" {
+		var retire func()
+		checkCtx, retire, err = a.manualNodeCandidateContext(checkCtx, r, cfg, services[0])
+		if err != nil {
+			cancel()
+			return out, err
+		}
+		defer retire()
+	}
 	done = make(chan struct{})
 	a.nodeChecks.mu.Lock()
 	if a.nodeChecks.closed || a.nodeChecks.root == nil || a.nodeChecks.root.Err() != nil || ctx.Err() != nil {

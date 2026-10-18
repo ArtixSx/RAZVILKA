@@ -504,8 +504,14 @@ func nodeCheckFailureMessage(err error) string {
 		return "Сеть изменилась. Повторите проверку."
 	case errors.Is(err, dataplane.ErrExactNodeBusy):
 		return "Узел пропущен: выполняется другая точная проверка."
+	case errors.Is(err, dataplane.ErrNodeResourceDenied):
+		return "Разрешение на эту проверку не подтверждено. Проверьте исключения сервиса и обновите параметры проверки. Маршруты не включались."
 	case errors.Is(err, dataplane.ErrExactNodeRuntime):
-		return "Для проверки сервиса нужен компонент Sing-box."
+		return "Движок выбранного режима проверки недоступен. Проверьте установку компонента и журнал его запуска."
+	case errors.Is(err, dataplane.ErrExactNodeUnsupported):
+		return "Выбранный движок не поддерживает этот профиль подключения. Проверьте совместимость профиля и режима проверки."
+	case errors.Is(err, dataplane.ErrExactNodeUnavailable):
+		return "Модуль точной проверки недоступен. Проверьте компоненты и журнал запуска RAZVILKA."
 	case errors.Is(err, nodestore.ErrDisabled), errors.Is(err, nodestore.ErrNotFound):
 		return "Узел отключён, удалён или срок его действия истёк."
 	default:

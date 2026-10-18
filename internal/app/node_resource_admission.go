@@ -21,6 +21,15 @@ func (a *App) nodeResourceAdmission(ctx context.Context, expected config.Config,
 	if a.Store == nil || !expected.Services[service.ID].Enabled {
 		return dataplane.ErrNodeResourceDenied
 	}
+	return a.nodeResourceExclusionAdmission(ctx, expected, service, host, address)
+}
+
+// Negatives are shared by autonomous checks and an original, explicitly
+// admitted manual candidate check. This leaf issues no positive permission.
+func (a *App) nodeResourceExclusionAdmission(ctx context.Context, expected config.Config, service catalog.Service, host string, address netip.Addr) error {
+	if a.Store == nil {
+		return dataplane.ErrNodeResourceDenied
+	}
 	definitions := a.catalogSnapshot()
 	found := false
 	for _, actual := range definitions.Services {
