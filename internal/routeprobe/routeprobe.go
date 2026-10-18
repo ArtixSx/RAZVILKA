@@ -93,7 +93,7 @@ func (m *Manager) Probe(ctx context.Context, service catalog.Service, route stri
 	case "nfqws2":
 		return m.probeNFQWS(ctx, service)
 	default:
-		err = errors.New("route has no isolated probe adapter")
+		err = errors.New("Для этого обхода пока нет отдельного проверочного подключения")
 	}
 	if err != nil {
 		result.Detail = err.Error()
@@ -415,7 +415,7 @@ func (m *Manager) engineStatus(route string) (engine.Status, bool) {
 func (m *Manager) directClient(rawURL string) (*http.Client, string, bool, error) {
 	system := m.System()
 	if system.WANInterface == "" {
-		return nil, "", false, errors.New("WAN interface was not detected")
+		return nil, "", false, errors.New("Не удалось определить интерфейс подключения к интернету")
 	}
 	if system.RouteContamination {
 		return nil, "", false, fmt.Errorf("DIRECT isolation refused while external tunnels are present: %s", strings.Join(system.ExternalTunnels, ", "))
@@ -484,7 +484,7 @@ func (m *Manager) socksEndpoint(route string) (string, string, string, error) {
 			return endpoint, "", "", nil
 		}
 	}
-	return "", "", "", errors.New("no loopback SOCKS inbound found in the active configuration")
+	return "", "", "", errors.New("В действующей конфигурации не найден локальный SOCKS-вход для проверки")
 }
 
 func (m *Manager) usqueNativeClient(rawURL string) (*http.Client, string, bool, error) {
@@ -555,11 +555,11 @@ func (m *Manager) managedSOCKSEndpoint(route string) string {
 
 func (m *Manager) interfaceClient(route, rawURL string) (*http.Client, string, bool, error) {
 	if m.Configs == nil {
-		return nil, "", false, errors.New("configuration manager is unavailable")
+		return nil, "", false, errors.New("Настройки обхода недоступны. Проверьте журнал запуска RAZVILKA")
 	}
 	content, err := m.Configs.ReadExpert(route, "main")
 	if err != nil || content.Content == "" {
-		return nil, "", false, errors.New("tunnel profile is missing")
+		return nil, "", false, errors.New("Профиль туннеля не найден. Импортируйте или создайте профиль, затем повторите проверку")
 	}
 	ip, err := profileAddress(content.Content)
 	if err != nil {
@@ -966,7 +966,7 @@ func profileAddress(content string) (net.IP, error) {
 			}
 		}
 	}
-	return nil, errors.New("profile has no IPv4 Address")
+	return nil, errors.New("В профиле туннеля не указан IPv4-адрес интерфейса")
 }
 
 func interfaceForIP(ip net.IP) (string, error) {
