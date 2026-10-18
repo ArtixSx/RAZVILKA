@@ -95,7 +95,19 @@
     if(mode==='prepare'&&!components) return 'Подготовка, без установки';
     return components?'Проверка каталога':'Проверка версии';
   }
-  const model={maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
+  function sourceStatusLabel(status) {
+    const labels={saved:'Сохранено',fetching:'Получение',synced:'Получено',needs_acceptance:'Нужно подтвердить частичный результат',capacity:'Достигнут предел записей',failed:'Получение не удалось',interrupted:'Получение прервано',queued:'В очереди',running:'Выполняется',completed:'Завершено',canceled:'Отменено'};
+    return Object.hasOwn(labels,status)?labels[status]:status?'Неизвестный результат':'Ожидается';
+  }
+  function sourceDate(value,zone='UTC') {
+    const date=new Date(value);
+    if(!Number.isFinite(date.getTime())||date.getFullYear()<2000)return 'Ещё нет';
+    try{return `${date.toLocaleString('ru-RU',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} (${zone})`;}catch{return date.toISOString();}
+  }
+  function sourceCard(s,zone='UTC') {
+    return `<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.saved===true&&s.enabled?'':'neutral'}">${s.saved===true?(s.enabled?'Таймер включён':'Таймер выключен'):'Разовое получение · не сохранено'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(sourceDate(s.last_attempt_at,zone))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(sourceDate(s.last_success_at,zone))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(sourceDate(s.next_refresh_at,zone))}</dd><dt>Последний результат</dt><dd>${escapeHTML(sourceStatusLabel(s.status))} · ${Number(s.imported||0)} записей</dd></dl>${s.saved===true?`<form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form>`:`<p class="subtle">Источник использован разово. Подписка и расписание не сохранены.</p><button class="button small" type="button" data-feed-add>Добавить постоянную подписку</button>`}</article>`;
+  }
+  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -301,7 +313,7 @@
   }
   function renderSources() {
     const list=feeds?.sources||[];
-    $('sourcesList').innerHTML=list.map(s=>`<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.enabled?'':'neutral'}">${s.enabled?'Таймер включён':'Таймер выключен'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(formatDate(s.last_attempt_at))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(formatDate(s.last_success_at))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(formatDate(s.next_refresh_at))}</dd><dt>Последний результат</dt><dd>${escapeHTML(s.status||'Ожидается')} · ${Number(s.imported||0)} записей</dd></dl><form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form></article>`).join('')||'<section class="panel empty"><strong>Подписки пока не сохранены</strong>Выбранные в мастере источники сохраняются при завершении настройки. Здесь также можно добавить собственную подписку.</section>';
+    $('sourcesList').innerHTML=list.map(s=>sourceCard(s,snapshot?.policy.timezone||'UTC')).join('')||'<section class="panel empty"><strong>Подписки пока не сохранены</strong>Выбранные в мастере источники сохраняются при завершении настройки. Здесь также можно добавить собственную подписку.</section>';
   }
   async function enroll(id,enabled=true) {
     const generation=authGeneration;
@@ -373,6 +385,7 @@
       requireGeneration(generation);
       notify('Удаление поставлено в очередь. Оно не считается завершённым до снятия маршрута.');await refresh(false,true);
     })().catch(e=>reportError(e));
+    if(event.target.closest('[data-feed-add]')){$('subscriptionForm').scrollIntoView({block:'center'});$('subscriptionName').focus();return;}
     const sync=event.target.closest('[data-feed-sync]');if(sync) void (async()=>{const generation=authGeneration;await api(`/api/v1/node-feeds/${encodeURIComponent(sync.dataset.feedSync)}/sync`,'POST',{});requireGeneration(generation);notify('Запрос получения поставлен в очередь. Рабочие маршруты не менялись.');await readSources();})().catch(e=>reportError(e));
   });
   $('wizardForm').addEventListener('input',()=>{dirty=true;});$('wizardForm').addEventListener('change',()=>{dirty=true;$('scopeAddressesLabel').hidden=$('scopeMode').value==='all';if(step===3)renderReview();});
@@ -400,7 +413,7 @@
   $('sourcesList').addEventListener('input',()=>{sourceDirty=true;});
   $('sourcesList').addEventListener('submit',event=>{const form=event.target.closest('[data-feed-form]');if(!form)return;event.preventDefault();void(async()=>{
     const generation=authGeneration;
-    const source=feeds.sources.find(s=>s.source_id===form.dataset.feedForm);if(!source)throw new Error('Источник изменился; обновите список.');
+    const source=feeds.sources.find(s=>s.source_id===form.dataset.feedForm);if(!source||source.saved!==true)throw new Error('Источник не сохранён или изменился; обновите список.');
     await api(`/api/v1/node-feeds/${encodeURIComponent(source.source_id)}`,'PUT',{revision:source.revision,confirm:'UPDATE_NODE_FEED',enabled:form.elements.enabled.value==='true',refresh_interval_minutes:Number(form.elements.interval.value),accept_partial:!!source.accept_partial,limit:source.limit||32});
     requireGeneration(generation);
     sourceDirty=false;notify('Интервал подписки сохранён. Применённые узлы не заменялись.');await readSources();
