@@ -17,6 +17,8 @@ assert.match(refused.text,/Панель отвечает/);
 assert.doesNotMatch(refused.title+refused.text,/Загружаем|выключен|Добавьте первый/);
 assert.equal(model(snap({youtube:'healthy'},{applied_services:{youtube:{enabled:true,route:'nfqws2'}}}),catalog,{youtube:{kind:'good',route:'nfqws2'}},true).phase,'recovery','known refusal takes precedence over retained healthy state');
 assert.equal(model({policy:{setup_complete:false}},catalog).phase,'setup');
+assert.match(model({policy:{setup_complete:false}},catalog).text,/Автопилот проверит доступные способы подключения/);
+assert.doesNotMatch(model({policy:{setup_complete:false}},catalog).text,/всё сделает сам/);
 assert.equal(model(snap({},{stopped:true}),catalog).phase,'off');
 const stoppedSnapshot=snap({youtube:'healthy'},{stopped:true});
 const stoppedBefore=JSON.stringify(stoppedSnapshot);

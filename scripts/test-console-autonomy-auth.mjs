@@ -167,8 +167,12 @@ await test('before first setup the hero action opens the wizard without writing'
 await test('quick start saves a whole-network policy through the shared consent path',async()=>{
  // The protocol boxes are static wizard markup that fillWizard checks.
  const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();initial.policy.setup_complete=false;initial.policy.enabled=false;initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
+ initial.starter={eligible:true,items:[{id:'youtube',name:'YouTube'},{id:'discord',name:'Discord'}]};
  f.respond(0,200,initial);await flush();
  assert.equal(f.e('quickStart').hidden,false);assert.equal(f.e('wizardLayout').hidden,true);
+ assert.match(f.e('quickStarter').textContent,/Для автоматического подбора выбраны: YouTube, Discord/);
+ assert.match(f.e('quickStarter').textContent,/Подключение включится после проверки/);
+ assert.doesNotMatch(f.e('quickStarter').textContent,/Сразу подключаются/);
  const before=f.requests.length;f.click('quickStartButton');await flush();
  assert.equal(f.requests.length,before,'without consent nothing is sent');assert.match(f.e('quickError').textContent,/Отметьте разрешение/);
  f.e('quickConsent').checked=true;f.click('quickStartButton');await flush();

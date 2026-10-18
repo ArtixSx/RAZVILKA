@@ -11,6 +11,10 @@ const baseline=JSON.parse(read('scripts/fixtures/interface-ui2-ids.json'));
 test('all inherited controls retain IDs',()=>assert.deepEqual(baseline.filter(id=>!ids.includes(id)),[]));
 test('8 primary destinations',()=>assert.equal([...html.matchAll(/data-main-nav="/g)].length,8));
 test('21 retained views',()=>assert.equal(ids.filter(id=>id.startsWith('view-')).length,21));
+test('quick setup does not announce a working connection before checking',()=>{
+  assert.match(html,/<h2>Быстрая настройка автопилота<\/h2>/);
+  assert.doesNotMatch(html,/Три вопроса — и автопилот работает/);
+});
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
 test('first-run scope radios cannot inherit full-width text fields',()=>{

@@ -320,7 +320,7 @@
     $('quickDevices').innerHTML=devices.length?devices.map(d=>`<label><input type="checkbox" name="quick-device" value="${escapeHTML(d.ip)}" ${selected.has(d.ip)?'checked':''}><span>${escapeHTML(d.label||d.ip)}<small>${escapeHTML(d.label?d.ip:'')}</small></span></label>`).join(''):'<p>Устройства ещё не найдены. Откройте раздел «Устройства» или выберите всю домашнюю сеть.</p>';
     $('quickDevices').hidden=$$('input[name="quick-scope"]:checked')[0]?.value!=='selected';
     const starter=snapshot.starter?.eligible?(snapshot.starter.items||[]).map(s=>s.name):[];
-    $('quickStarter').textContent=(starter.length?`Сразу подключаются: ${starter.join(', ')}. `:'')+'Остальной интернет работает как обычно. Остановить можно в любой момент.';
+    $('quickStarter').textContent=(starter.length?`Для автоматического подбора выбраны: ${starter.join(', ')}. `:'')+'Подключение включится после проверки. Остальной интернет работает как обычно. Остановить можно в любой момент.';
   }
   async function runQuickStart(){
     const error=$('quickError');error.textContent='';
