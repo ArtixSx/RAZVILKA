@@ -1058,7 +1058,6 @@ html[data-theme=dark] .interface-ui .autonomy-zone .wizard-steps button.active i
 .interface-ui .node-browser-content { min-width:0; }
 .interface-ui .node-card, .interface-ui .provider-card, .interface-ui .device-card { min-width:0; }
 .interface-ui .node-card-head { flex-wrap:nowrap; }
-.interface-ui #nodePublicCatalogs { grid-template-columns:repeat(var(--r41-columns),minmax(0,1fr)); align-items:start; }
 .interface-ui .node-public-catalogs > .node-feed-intro { grid-column:1/-1; }
 .interface-ui .node-batch-controls { flex-wrap:wrap; gap:10px; }
 .interface-ui .node-batch-controls > * { min-width:0; }

@@ -52,6 +52,8 @@ if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/theme.js
   node scripts/test-theme.mjs
   node scripts/test-console-autonomy-auth.mjs
+  node scripts/test-console-sources.mjs
+  node scripts/test-console-providers.mjs
   node scripts/test-auth-resume-ui.mjs
   node scripts/test-auth-actions-ui.mjs
   node scripts/test-connection-session-ui.mjs

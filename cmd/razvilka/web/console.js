@@ -78,7 +78,7 @@ function consoleViewChanged(name){
  if(location.hash!==hash){try{history.replaceState(null,'',hash);}catch{}}
  $$('.nav[data-console-engine]').forEach(el=>el.classList.toggle('active',el.dataset.consoleEngine===engine));
  $('#view-nodes').setAttribute('data-console-browser-mode',typeof nodeBrowser!=='undefined'?nodeBrowser.tab:'all');
- if(name==='providers'){ $('#nodeSubscriptions').hidden=false;$('#nodePublicCatalogs').hidden=false; }
+ if(name==='providers'){ $('#nodeSubscriptions').hidden=false; }
  if(name==='engineconfig')renderConsoleEngine();
  if(name==='activity')setTimeout(consoleFilterAudit,0);
 }
@@ -102,7 +102,7 @@ function renderConsole(){
  consoleText('consoleServiceCount',enabled.length);
  // Legacy overview remains only for compatible event bindings. Do not rebuild
  // hidden ribbons, history and provider forms for each independent GET.
- if(state.currentView==='providers'){renderConsoleProviders();$('#nodeSubscriptions').hidden=false;$('#nodePublicCatalogs').hidden=false;}
+ if(state.currentView==='providers'){renderConsoleProviders();$('#nodeSubscriptions').hidden=false;}
  if(state.currentView==='updates')renderConsoleUpdates();
  if(state.currentView==='engineconfig')renderConsoleEngine();
  if(state.currentView==='activity')consoleFilterAudit();
@@ -116,10 +116,15 @@ function renderConsoleProviders(){
   {name:'Kort0881',tag:'VLESS · каталог РФ',text:'Выборка публичных подключений. Расположение и доступность проверяются отдельно.',url:'https://github.com/kort0881/vpn-vless-configs-russia',key:'kort',icon:'route',tone:'mint'},
   {name:'VLESS Key Checker',tag:'Каталог подключений',text:'Результат издателя — подсказка. Нужна точная проверка выбранного сервиса.',url:'https://tiagorrg.github.io/vless-checker/',key:'tiagorrg',icon:'shield',tone:'blue'},
   {name:'igareck',tag:'VLESS Reality · белые списки',text:'Подписки VLESS Reality. Доступность и задержка каждого узла проверяются на вашем подключении.',url:'https://github.com/igareck/vpn-configs-for-russia',key:'igareck-reality',icon:'wifi',tone:'blue'},
+  {name:'igareck · VLESS для России',tag:'VLESS · список подключений',text:'Публичные узлы для проверки в вашей сети. Подходящие подключения выбираются по результатам теста.',url:'https://github.com/igareck/vpn-configs-for-russia',key:'igareck-black',icon:'wifi',tone:'blue'},
  {name:'Epodonios',tag:'Пакет Sub1',text:'Небольшой пакет вместо загрузки всей коллекции. Каждый узел требует локальной проверки.',url:'https://github.com/Epodonios/v2ray-configs',feedURL:'https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Sub1.txt',key:'epodonios',icon:'server',tone:'rose'},
  {name:'Личная подписка',tag:'Ваш источник',text:'Приватный HTTPS-адрес сохраняется на роутере. Новые ссылки не включают маршрут сами.',key:'own',icon:'lock',tone:'amber'}
  ];
- $('#consoleProviderCards').innerHTML=entries.map(x=>{const preset=presets.find(p=>p.id.includes(x.key));return `<article class="provider-feature"><div class="provider-brand"><span class="engine-mini-icon ${x.tone}">${ci(x.icon)}</span><span class="pill">${esc(x.tag)}</span></div><h3>${esc(x.name)}</h3><p>${esc(x.text)}</p><div class="provider-links"><button class="primary" type="button" data-r4-fetch="${esc(preset?.id||'custom')}" data-r4-url="${esc(x.feedURL||'')}">${x.key==='own'?'Моя подписка и проверка':'Загрузить и проверить'}</button><button type="button" class="text-button" data-console-feed="${esc(preset?.id||'custom')}" data-console-feed-url="${esc(x.feedURL||'')}">${x.key==='own'?'Добавить URL':'Настроить подписку'} ${ci('plus')}</button>${x.url?`<a target="_blank" rel="noopener noreferrer" href="${esc(x.url)}" aria-label="Сайт ${esc(x.name)}">Сайт ${ci('chevron')}</a>`:''}</div></article>`;}).join('');
+ const cards=presets.map(preset=>({
+  ...(entries.find(entry=>entry.key!=='own'&&preset.id.includes(entry.key))||{tag:'Публичный каталог',text:'Получите список и проверьте подключения на своём роутере.',icon:'server',tone:'mint'}),
+  name:preset.name,presetID:preset.id
+ })).concat(entries.filter(entry=>entry.feedURL||entry.key==='own'));
+ $('#consoleProviderCards').innerHTML=cards.map(x=>`<article class="provider-feature"><div class="provider-brand"><span class="engine-mini-icon ${x.tone}">${ci(x.icon)}</span><span class="pill">${esc(x.tag)}</span></div><h3>${esc(x.name)}</h3><p>${esc(x.text)}</p><div class="provider-links"><button class="primary" type="button" data-r4-fetch="${esc(x.presetID||'custom')}" data-r4-url="${esc(x.feedURL||'')}">${x.key==='own'?'Моя подписка и проверка':'Загрузить и проверить'}</button><button type="button" class="text-button" data-console-feed="${esc(x.presetID||'custom')}" data-console-feed-url="${esc(x.feedURL||'')}">${x.key==='own'?'Добавить URL':'Настроить подписку'} ${ci('plus')}</button>${x.url?`<a target="_blank" rel="noopener noreferrer" href="${esc(x.url)}" aria-label="Сайт ${esc(x.name)}">Сайт ${ci('chevron')}</a>`:''}</div></article>`).join('');
 }
 function renderConsoleUpdates(){
  $('#consoleUpdateEngines').innerHTML=Object.entries(consoleEngineMeta).map(([id,m])=>{const e=consoleEngineState(id);return `<div class="console-update-engine"><span class="engine-mini-icon ${m.tone}">${ci(m.icon)}</span><div><b>${esc(m.name)}</b><small>${esc(e.version)}</small></div><button type="button" class="text-button" data-console-navigate="engines">Управлять ${ci('chevron')}</button></div>`;}).join('');

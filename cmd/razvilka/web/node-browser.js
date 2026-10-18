@@ -223,7 +223,6 @@ function renderNodeBrowser() {
   $('#nodeTruthBanner').hidden = payload.available !== false && !banner;
   $('#nodeTruthBanner').querySelector('div').innerHTML = payload.available === false ? '<b>Подключения пока недоступны</b><span>Откройте диагностику хранилища.</span>' : banner;
   $('#nodeSubscriptions').hidden = state.currentView !== 'providers';
-  $('#nodePublicCatalogs').hidden = state.currentView !== 'providers';
   $('#nodeGroupsPanel').hidden = nodeBrowser.tab !== 'groups';
   $('#nodeServiceSelectors').hidden = nodeBrowser.tab !== 'services';
   $('#nodeBrowserContent').hidden = ['subscriptions', 'groups', 'services'].includes(nodeBrowser.tab);
@@ -231,7 +230,6 @@ function renderNodeBrowser() {
   if (typeof renderNodeServices === 'function') renderNodeServices();
   renderNodeGroups(payload.groups || [], nodes);
   renderNodeAutofallback();
-  renderNodeCatalogs();
   renderNodeBrowserFilters(nodes);
   const filtered = nodeFilteredList();
   const pageCount = Math.max(1, Math.ceil(filtered.length / nodeBrowser.pageSize));
@@ -290,11 +288,6 @@ function setNodeBrowserTab(tab) {
   nodeBrowser.tab = tab; nodeBrowser.page = 0; nodeBrowser.source = ''; nodeBrowser.country = '';
   renderNodes();
   if (tab === 'groups') refreshNodeAutofallback();
-}
-
-function renderNodeCatalogs() {
-  const presets = state.nodeFeeds?.presets || [];
-  $('#nodePublicCatalogs').innerHTML = presets.map(preset => `<article class="node-catalog-card"><h3>${esc(preset.name)}</h3><p>Публичные подключения. Проверка доступности выполняется на вашем роутере.</p><button class="secondary" type="button" data-node-catalog="${esc(preset.id)}">Добавить каталог</button></article>`).join('');
 }
 
 function renderNodeBatchStatus() {
@@ -625,7 +618,6 @@ function bindNodeBrowser() {
   $('#nodePingSelected').addEventListener('click', () => startNodeBrowserCheck('tcp'));
   $('#nodeCheckSelected').addEventListener('click', () => startNodeBrowserCheck('service'));
   $('#nodeBatchCancel').addEventListener('click', cancelNodeBrowserCheck);
-  $('#nodePublicCatalogs').addEventListener('click', event => { const button = event.target.closest('[data-node-catalog]'); if (button) { setNodeBrowserTab('subscriptions'); $('#nodeFeedPreset').value = button.dataset.nodeCatalog; $('#nodeFeedInterval').value = String((state.nodeFeeds?.presets || []).find(preset => preset.id === button.dataset.nodeCatalog)?.default_refresh_interval_minutes || 360); $('#nodeFeedCustom').hidden = true; $('#nodeFeedPartial').checked = true; $('#nodeFeedName').value = ''; $('#nodeFeedSync').focus(); } });
   $('#nodeFeedPreset').addEventListener('change', event => { if (event.target.value !== 'custom') $('#nodeFeedInterval').value = String((state.nodeFeeds?.presets || []).find(preset => preset.id === event.target.value)?.default_refresh_interval_minutes || 360); });
   $('#nodeFeedSources').addEventListener('click', event => { const show = event.target.closest('[data-feed-show]'); const accept = event.target.closest('[data-feed-accept]'); const cancel = event.target.closest('[data-feed-cancel]'); const refresh = event.target.closest('[data-feed-refresh]'); const toggle = event.target.closest('[data-feed-toggle]'); const remove = event.target.closest('[data-feed-delete]'); if (show) { setNodeBrowserTab('all'); nodeBrowser.source = show.dataset.feedShow; nodeBrowser.selected.clear(); $('#nodeSearch').value = ''; $('#nodeStateFilter').value = ''; renderNodes(); $('#nodeBrowserService').focus(); } else if (accept) acceptNodeSubscriptionPartial(accept.dataset.feedAccept); else if (cancel) cancelNodeSubscriptionJob(cancel.dataset.feedCancel); else if (refresh) refreshNodeSubscription(refresh.dataset.feedRefresh); else if (toggle) changeNodeSubscription(toggle.dataset.feedToggle, false); else if (remove) changeNodeSubscription(remove.dataset.feedDelete, true); });
   document.addEventListener('razvilka:view-change', event => { renderWorkspaceNavigation(event.detail); nodeBrowser.viewActive = ['nodes','providers'].includes(event.detail); if (nodeBrowser.viewActive) pollNodeBrowserChecks(); else stopNodeBrowserRefresh(); });
