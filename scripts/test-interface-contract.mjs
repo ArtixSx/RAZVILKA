@@ -22,6 +22,18 @@ test('home scope body has an inset while its header retains full card width',()=
   assert.match(css,/#listScopeContent>\.panel\{padding:22px;min-width:0\}/);
   assert.match(css,/#listScopeContent>\.panel>\.panel-title\{margin:-22px -22px 18px\}/);
 });
+test('quick start spacing is scoped to visible setup and preserves responsive consent controls',()=>{
+  const css=read(root+'interface-shell.css');
+  const scope='.interface-ui .autonomy-zone #a1-quickStart:not([hidden])';
+  assert.ok(css.includes(scope+'{padding:12px}'));
+  assert.ok(css.includes(scope+'>fieldset>.check-row{margin:0;padding:10px;min-width:0}'));
+  assert.ok(css.includes(scope+'>fieldset:first-of-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}'));
+  assert.ok(css.includes('@media(max-width:800px){'+scope+'>fieldset:first-of-type{grid-template-columns:minmax(0,1fr)}}'));
+  assert.ok(css.includes(scope+' #a1-quickDevices{grid-column:1/-1}'));
+  assert.ok(css.includes(scope+'>.form-footer{display:flex;flex-wrap:wrap;gap:12px}'));
+  const rules=css.slice(css.indexOf(scope));
+  assert.doesNotMatch(rules,/font-size|position:sticky|display:none/);
+});
 test('first-run scope radios cannot inherit full-width text fields',()=>{
   assert.match(html,/<input[^>]*name="quick-scope"[^>]*type="radio"/);
   for(const file of ['console-autonomy.css','interface-compat.css','interface.css']){

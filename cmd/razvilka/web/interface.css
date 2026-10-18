@@ -1724,3 +1724,10 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 @media (prefers-reduced-motion:reduce){.rz-sh-update-dot,.app-version-action.update::before{animation:none}}
 .interface-ui #listScopeContent>.panel{padding:22px;min-width:0}
 .interface-ui #listScopeContent>.panel>.panel-title{margin:-22px -22px 18px}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden]){padding:12px}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>fieldset{margin:12px 0 0;padding:10px;min-width:0}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>fieldset>.check-row{margin:0;padding:10px;min-width:0}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>fieldset:first-of-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden]) #a1-quickDevices{grid-column:1/-1}
+.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>.form-footer{display:flex;flex-wrap:wrap;gap:12px}
+@media(max-width:800px){.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>fieldset:first-of-type{grid-template-columns:minmax(0,1fr)}}
