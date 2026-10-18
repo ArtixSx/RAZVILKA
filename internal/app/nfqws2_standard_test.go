@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	routecatalog "github.com/ArtixSx/razvilka/internal/routes"
+	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
 func starterService(t *testing.T, id string) catalog.Service {
@@ -27,9 +30,48 @@ func starterService(t *testing.T, id string) catalog.Service {
 	return catalog.Service{}
 }
 
-// The autopilot first assigns an exact node to Discord (an NFQWS2-list
-// service), as it did on the owner's router, with real stores, plan compiler
-// and transaction manager; only adapters and the node checker are fakes.
+// Only the definition-refresh test models present runtime. A generic
+// transaction receipt alone cannot issue this observation, even in tests.
+type nfqDefinitionRuntimeModel struct {
+	*serviceRuntimeAdapter
+	active, committed bool
+}
+
+func (m *nfqDefinitionRuntimeModel) Activate(ctx context.Context, p dataplane.Plan, root string) error {
+	if err := m.serviceRuntimeAdapter.Activate(ctx, p, root); err != nil {
+		return err
+	}
+	m.active, m.committed = true, false
+	return nil
+}
+func (m *nfqDefinitionRuntimeModel) Commit(ctx context.Context, p dataplane.Plan, root string) error {
+	if !m.active {
+		return errors.New("NFQ runtime model was not activated")
+	}
+	if err := m.serviceRuntimeAdapter.Commit(ctx, p, root); err != nil {
+		return err
+	}
+	m.committed = true
+	return nil
+}
+func (m *nfqDefinitionRuntimeModel) Deactivate(ctx context.Context) error {
+	m.active, m.committed = false, false
+	return m.serviceRuntimeAdapter.Deactivate(ctx)
+}
+func (m *nfqDefinitionRuntimeModel) Rollback(ctx context.Context, p dataplane.Plan, root string) error {
+	m.active, m.committed = false, false
+	return m.serviceRuntimeAdapter.Rollback(ctx, p, root)
+}
+func (m *nfqDefinitionRuntimeModel) ObserveOwnedRuntime(ctx context.Context) error {
+	if !m.active || !m.committed {
+		return errors.New("NFQ runtime model is not active and committed")
+	}
+	return ctx.Err()
+}
+
+// The incumbent proxy covers explicit CIDRs only. After its real transaction,
+// the complete NFQ definition is separately reviewed through enrollment. Only
+// adapters and the node checker are modeled; this is not router evidence.
 func nfqws2StandardFixture(t *testing.T, service catalog.Service) (*App, string, *nodeApplyAdapter) {
 	return nfqws2StandardScopedFixture(t, service, nil)
 }
@@ -37,7 +79,9 @@ func nfqws2StandardFixture(t *testing.T, service catalog.Service) (*App, string,
 func nfqws2StandardScopedFixture(t *testing.T, service catalog.Service, devices []string) (*App, string, *nodeApplyAdapter) {
 	t.Helper()
 	a, _, adapter := nodeApplyFixture(t)
-	a.Catalog.Services = []catalog.Service{service}
+	initial := defaultRouteCloneCatalogService(service)
+	initial.Domains, initial.CIDRs = nil, []string{"93.184.216.34/32"}
+	a.Catalog.Services = []catalog.Service{initial}
 	// Candidate selection now requires the actual active user list. Enabling
 	// the autonomy policy alone cannot activate a catalog/library service.
 	if err := a.Store.UpdateService(service.ID, config.ServiceState{Enabled: true, Route: "auto", Sources: devices}); err != nil {
@@ -93,6 +137,24 @@ func nfqws2StandardScopedFixture(t *testing.T, service catalog.Service, devices 
 		t.Fatalf("fixture node not applied: %q %+v", route, standardRuntime(a, service.ID))
 	}
 	adapter.calls = nil
+	previous, found, err := a.Dataplane.Committed()
+	if err != nil || !found || len(previous.Routes) != 1 || len(previous.Routes[0].Domains) != 0 || len(previous.Routes[0].CIDRs) != 1 {
+		t.Fatal("initial incumbent is not an explicit CIDR-only plan", err)
+	}
+	// The original complete domain contract is restored before any NFQ test.
+	// Enrollment freezes this changed definition without mutating that older
+	// CIDR-only runtime or manufacturing domain coverage for the proxy.
+	a.Catalog.Services[0] = defaultRouteCloneCatalogService(service)
+	before := a.Store.Get()
+	w = httptest.NewRecorder()
+	a.autonomyEnroll(w, autonomyRequest("POST", "/api/v1/autonomy/services", map[string]any{
+		"service_id": service.ID, "enabled": true, "use_defaults": true,
+		"expected_revision": a.autonomyPolicy().Revision, "confirm": "MANAGE_SERVICE",
+	}))
+	current, _, err := a.Dataplane.Committed()
+	if w.Code != 200 || err != nil || !reflect.DeepEqual(previous, current) || !reflect.DeepEqual(before, a.Store.Get()) || len(adapter.calls) != 0 || !reflect.DeepEqual(a.Catalog.Services[0], service) {
+		t.Fatal("new definition review changed incumbent or NFQ domain contract", w.Code, err)
+	}
 	return a, node, adapter
 }
 
@@ -224,23 +286,36 @@ func TestAutopilotDeviceScopeDoesNotReturnToNFQWS2(t *testing.T) {
 }
 
 // A RAZVILKA update extends the reviewed list (as 0.18.19 did for Discord).
-// The autopilot accepts the shipped definition and applies the same proven
-// node to it instead of stopping with "definition changed".
+// The autopilot accepts the shipped definition and applies its reviewed NFQ
+// route. A generic proxy cannot acquire the updated domain list.
 func TestAutopilotAdoptsReviewedDefinitionUpdate(t *testing.T) {
 	updated := starterService(t, "discord")
 	previous := updated
 	previous.Domains = append([]string(nil), updated.Domains[:len(updated.Domains)-3]...)
 	a, node, adapter := nfqws2StandardFixture(t, previous)
+	nfqRuntime := &nfqDefinitionRuntimeModel{serviceRuntimeAdapter: &serviceRuntimeAdapter{nodeApplyAdapter: adapter, name: "nfqws2"}}
+	if nfqRuntime.ObserveOwnedRuntime(context.Background()) == nil {
+		t.Fatal("unactivated NFQ model invented runtime presence")
+	}
+	a.Dataplane.Adapters["nfqws2"] = nfqRuntime
+	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	a.Catalog.Services = []catalog.Service{updated}
+	a.TestLab = testlab.NewRunner()
+	a.RouteProber = confirmedRouteProber{} // same explicitly modeled probe as other App transactions
 	standardDue(a, "discord")
 	a.autonomyRound(context.Background(), time.Now())
 	r := standardRuntime(a, "discord")
 	committed, _, err := a.Dataplane.Committed()
-	if err != nil || r.State != "applied" || !strings.Contains(r.Message, "Состав сервиса обновился") || !slices.Contains(adapter.calls, "commit") {
+	a.autonomy.mu.Lock()
+	definition := a.autonomy.doc.Services["discord"].Definition
+	a.autonomy.mu.Unlock()
+	if err != nil || r.State != "applied" || !strings.Contains(r.Message, "NFQWS2") || definition != autonomyDefinition(updated) || !slices.Contains(adapter.calls, "commit") {
 		t.Fatalf("reviewed update not applied: %+v calls=%v err=%v", r, adapter.calls, err)
 	}
-	if !committedServiceCurrent(committed, a.catalogSnapshot().Services[0]) || selectedRoute(a.Store.Get().AppliedServices["discord"]) != "sing-box:"+node {
-		t.Fatalf("route not refreshed with the same node: %+v", committed.Routes)
+	if !committedServiceCurrent(committed, a.catalogSnapshot().Services[0]) || selectedRoute(a.Store.Get().AppliedServices["discord"]) != "nfqws2" {
+		t.Fatalf("reviewed full domain definition not refreshed through NFQ: %+v", committed.Routes)
 	}
 	adapter.calls = nil
 	standardDue(a, "discord")
@@ -306,11 +381,12 @@ func communityTelegram(cidrs []string, fetched string) catalog.Service {
 		Provenance: &catalog.Provenance{Provider: "V2Fly + Loyalsoldier GeoIP", EntryID: "telegram-networks", URL: "https://github.com/Loyalsoldier/geoip", SHA256: strings.Repeat("ab", 32), FetchedAt: fetched}}
 }
 
-// A refresh from the community catalogue (as the owner did on the router)
-// must not stop the autopilot: the same node is applied to the new networks.
+// An explicit CIDR-only community refresh keeps the same node on the new
+// networks. Domain or mixed definitions require separate flow authority.
 func TestAutopilotAdoptsCommunityRefresh(t *testing.T) {
 	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
 	updated := communityTelegram([]string{"149.154.160.0/20", "91.108.4.0/22"}, "2026-09-29T20:27:57Z")
+	previous.Domains, updated.Domains = nil, nil
 	updated.Provenance.SHA256 = strings.Repeat("cd", 32)
 	a, node, adapter := nfqws2StandardFixture(t, previous)
 	a.Catalog.Services = []catalog.Service{updated}
@@ -323,6 +399,34 @@ func TestAutopilotAdoptsCommunityRefresh(t *testing.T) {
 	}
 	if !committedServiceCurrent(committed, updated) || selectedRoute(a.Store.Get().AppliedServices[updated.ID]) != "sing-box:"+node {
 		t.Fatalf("route not refreshed with the same node: %+v", committed.Routes)
+	}
+}
+
+func TestAutopilotCommunityDomainRefreshCannotActivateGenericProxy(t *testing.T) {
+	previous := communityTelegram([]string{"149.154.160.0/20"}, "2026-09-29T13:00:00Z")
+	previous.Domains = nil
+	updated := communityTelegram([]string{"149.154.160.0/20", "91.108.4.0/22"}, "2026-09-29T20:27:57Z")
+	updated.Provenance.SHA256 = strings.Repeat("cd", 32)
+	a, _, adapter := nfqws2StandardFixture(t, previous)
+	incumbent, _, err := a.Dataplane.Committed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := a.Store.Get()
+	a.Catalog.Services = []catalog.Service{updated}
+	standardDue(a, updated.ID)
+	a.autonomyRound(context.Background(), time.Now())
+	current, _, err := a.Dataplane.Committed()
+	if err != nil || standardRuntime(a, updated.ID).State != "apply-refused" || len(adapter.calls) != 0 || !reflect.DeepEqual(incumbent, current) || !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("community metadata granted generic domain effects", standardRuntime(a, updated.ID), adapter.calls, err)
+	}
+	plan, err := a.buildDataplanePlanForScope(a.Store.Get(), a.nodeRouteOptions(), changeScopeServices, "")
+	blocked := false
+	for _, issue := range plan.Blockers {
+		blocked = blocked || issue.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED"
+	}
+	if err != nil || plan.Ready || !blocked {
+		t.Fatal("mixed community domain plan was not fenced", err, plan.State)
 	}
 }
 
