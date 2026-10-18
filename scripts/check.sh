@@ -1,5 +1,8 @@
 #!/bin/sh
 set -eu
+# Go's numbered test directories inherit the shell mask. Ownership tests need
+# their fixture parents to reject group/other writes, just like production.
+umask 022
 cd "$(dirname "$0")/.."
 unformatted="$(gofmt -l cmd internal)"
 if [ -n "$unformatted" ]; then
@@ -100,6 +103,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-node-route-ui.mjs
   node scripts/test-node-browser-ui.mjs
   node scripts/test-node-group-save.mjs
+  node scripts/test-data-mutation-ui.mjs
   node scripts/test-node-bulk-ui.mjs
   node --check cmd/razvilka/web/setup-workflows.js
   node scripts/test-setup-repair.mjs
