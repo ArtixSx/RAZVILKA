@@ -672,7 +672,7 @@ async function importQuickNodes(event) {
     if (epoch !== nodeBrowser.epoch || !$('#nodeQuickImportDialog').open || $('#nodeQuickImportText').value.trim() !== profile) return;
     $('#nodeQuickImportText').value = '';
     $('#nodeQuickImportFile').value = '';
-    $('#nodeQuickImportStatus').textContent = `Добавлено подключений: ${Number(result.accepted_nodes || 0)}. Теперь можно проверить доступ.`;
+    $('#nodeQuickImportStatus').textContent = `Принято подключений: ${Number(result.accepted_nodes || 0)}. Всего в каталоге: ${Number(result.total_nodes || 0)}. Повторные ссылки не создают дубликаты. Теперь можно проверить доступ.`;
     setNodeBrowserTab('all');
     $('#nodeSearch').value = ''; $('#nodeStateFilter').value = ''; nodeBrowser.selected.clear();
     await refreshNodes();
