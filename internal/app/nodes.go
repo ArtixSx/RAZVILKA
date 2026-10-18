@@ -686,10 +686,15 @@ func (a *App) nodeImport(w http.ResponseWriter, r *http.Request) {
 		writeNodeError(w, err)
 		return
 	}
+	countryErr := a.NodeFeeds.RecordManualImportCountries(r.Context(), request.Profile)
+	note := "Принятые узлы сохранены локально и ожидают проверки. Sing-box и маршруты не изменены."
+	if countryErr != nil {
+		note += " Отметку страны сохранить не удалось; принятые узлы сохранены."
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "accepted_nodes": parsed.Preview.NodeCount, "total_nodes": len(snapshot.Nodes), "generation": snapshot.Generation,
 		"working_routes_changed": false,
-		"note":                   "Принятые узлы сохранены локально и ожидают проверки. Sing-box и маршруты не изменены.",
+		"note":                   note,
 	})
 }
 
