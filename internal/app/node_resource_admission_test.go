@@ -116,13 +116,15 @@ func TestNodeResourceAdmissionClosesRealExclusionRevisionBeforeRecord(t *testing
 }
 
 func TestNodeResourceAdmissionClosesInPlaceDefinitionAndStoreReplacement(t *testing.T) {
-	for _, change := range []string{"definition", "owner"} {
+	for _, change := range []string{"definition", "definition-in-place", "owner"} {
 		t.Run(change, func(t *testing.T) {
 			a, id, _ := nodeApplyFixture(t)
 			before, _ := a.Nodes.Snapshot(context.Background(), time.Now())
 			a.NodeChecker = jobNodeChecker(func(_ context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
 				if change == "definition" {
-					a.Catalog.Services[0].Domains[0] = "changed.example"
+					a.Catalog.Services[0].Domains = []string{"changed.example"}
+				} else if change == "definition-in-place" {
+					a.Catalog.Services[0].CIDRs[0] = "9.9.9.0/24"
 				} else {
 					raw, _ := json.Marshal(a.Store.Get())
 					path := filepath.Join(t.TempDir(), "config.json")

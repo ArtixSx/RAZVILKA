@@ -311,11 +311,13 @@ func TestNodeAutofallbackOtherAppliedServiceMustKeepExactProof(t *testing.T) {
 	for _, retainedHealthy := range []bool{false, true} {
 		t.Run(fmt.Sprint(retainedHealthy), func(t *testing.T) {
 			a, currentID, group, adapter, previous := nodeAutofallbackFixture(t, 1)
+			a.Catalog.Services[1].Domains = nil
+			a.Catalog.Services[1].CIDRs = []string{"142.250.0.0/16"}
 			_ = a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "sing-box:" + group.ID, Sources: previous.Routes[0].Sources})
 			_ = a.Store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "sing-box:" + currentID, Sources: []string{"192.168.1.42/32"}})
 			_ = a.Store.ApplyDraft()
 			previous.Revision = a.Store.Get().AppliedRevision
-			other := dataplane.Route{ServiceID: "youtube", ServiceName: "YouTube", Selected: "sing-box:" + currentID, Resolved: "sing-box:" + currentID, Domains: []string{"youtube.com"}, ProbeURL: "https://youtube.com/", Sources: []string{"192.168.1.42/32"}}
+			other := dataplane.Route{ServiceID: "youtube", ServiceName: "YouTube", Selected: "sing-box:" + currentID, Resolved: "sing-box:" + currentID, CIDRs: []string{"142.250.0.0/16"}, ProbeURL: "https://youtube.com/", Sources: []string{"192.168.1.42/32"}}
 			previous.Routes = append(previous.Routes, other)
 			_ = a.Dataplane.Record(previous)
 			a.NodeChecker = jobNodeChecker(func(ctx context.Context, request dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {

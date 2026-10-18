@@ -62,6 +62,8 @@ func (a *nodeApplyAdapter) Rollback(ctx context.Context, _ dataplane.Plan, _ str
 	return a.phase("rollback")
 }
 
+// Transaction/CAS model: explicit CIDR routing only. The probe hostname is
+// an isolated diagnostic target, never authority to capture domain traffic.
 func nodeApplyFixture(t *testing.T) (*App, string, *nodeApplyAdapter) {
 	t.Helper()
 	root := t.TempDir()
@@ -101,7 +103,7 @@ func nodeApplyFixture(t *testing.T) (*App, string, *nodeApplyAdapter) {
 	if err = store.UpdateService("youtube", config.ServiceState{Enabled: true, Route: "usque"}); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{Nodes: nodes, Store: store, FreshProfile: stableNodeProfile, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "Messaging", Strategy: []string{"sing-box"}, Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}, {ID: "youtube", Name: "YouTube", Category: "Video", Strategy: []string{"usque"}, Domains: []string{"youtube.com"}, ProbeURL: "https://youtube.com/"}}}}
+	a := &App{Nodes: nodes, Store: store, FreshProfile: stableNodeProfile, Dataplane: dataplane.New(filepath.Join(root, "dataplane")), Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Telegram", Category: "Messaging", Strategy: []string{"sing-box"}, CIDRs: []string{"149.154.160.0/20"}, ProbeURL: "https://telegram.org/"}, {ID: "youtube", Name: "YouTube", Category: "Video", Strategy: []string{"usque"}, Domains: []string{"youtube.com"}, ProbeURL: "https://youtube.com/"}}}}
 	a.Dataplane.FreshProfile = stableNodeProfile
 	a.DataplaneHost = func() dataplane.HostState { return dataplane.HostState{IPCommand: true, TUN: true, SingBox: true} }
 	a.nodeReviews.options = func() []routecatalog.Option {

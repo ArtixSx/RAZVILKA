@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -22,10 +24,47 @@ func rateLimitedRoute(ctx context.Context, s catalog.Service, route string) test
 	return r
 }
 
+// Incumbent coverage is explicit IP only. The later domain definition is
+// separately confirmed through the actual enrollment API for NFQ evaluation;
+// no historical proxy plan is promoted into domain capture authority.
+func nfqws2HTTP429IncumbentCIDRFixture(t *testing.T) (*App, string, *nodeApplyAdapter) {
+	t.Helper()
+	domainService := starterService(t, "speedtest")
+	initial := defaultRouteCloneCatalogService(domainService)
+	initial.Domains, initial.CIDRs = nil, []string{"93.184.216.34/32"}
+	a, node, adapter := nfqws2StandardFixture(t, initial)
+	previous, found, err := a.Dataplane.Committed()
+	if err != nil || !found || len(previous.Routes) != 1 || len(previous.Routes[0].Domains) != 0 || len(previous.Routes[0].CIDRs) != 1 {
+		t.Fatal("incumbent is not an explicit CIDR-only committed plan", err)
+	}
+	a.Catalog.Services[0] = domainService
+	before := a.Store.Get()
+	w := httptest.NewRecorder()
+	a.autonomyEnroll(w, autonomyRequest("POST", "/api/v1/autonomy/services", map[string]any{
+		"service_id": domainService.ID, "enabled": true, "use_defaults": true,
+		"expected_revision": a.autonomyPolicy().Revision, "confirm": "MANAGE_SERVICE",
+	}))
+	current, _, readErr := a.Dataplane.Committed()
+	if w.Code != 200 || readErr != nil || !reflect.DeepEqual(previous, current) || !reflect.DeepEqual(before, a.Store.Get()) || len(adapter.calls) != 0 {
+		t.Fatal("explicit new definition review changed incumbent coverage", w.Code, readErr)
+	}
+	// The newly reviewed domain definition still cannot be applied through the
+	// generic proxy. Only the later NFQ candidate probe is under test below.
+	plan, err := a.buildDataplanePlanForScope(a.Store.Get(), a.nodeRouteOptions(), changeScopeServices, "")
+	blocked := false
+	for _, issue := range plan.Blockers {
+		blocked = blocked || issue.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED"
+	}
+	if err != nil || plan.Ready || !blocked {
+		t.Fatal("definition review granted generic domain capture", err, plan.State)
+	}
+	return a, node, adapter
+}
+
 // Real coordinator, stores and compilation; only the prober and OS adapter
 // are modeled. An explicit return used to enter Apply despite a partial probe.
 func TestAutonomyHTTP429DefersReturnWithoutApplyBudgetOrRetry(t *testing.T) {
-	a, node, adapter := nfqws2StandardFixture(t, starterService(t, "speedtest"))
+	a, node, adapter := nfqws2HTTP429IncumbentCIDRFixture(t)
 	a.TestLab = testlab.NewRunner()
 	if _, err := a.Nodes.SetDisabled(context.Background(), node, true, time.Now()); err != nil {
 		t.Fatal(err)
@@ -44,7 +83,7 @@ func TestAutonomyHTTP429DefersReturnWithoutApplyBudgetOrRetry(t *testing.T) {
 	if r.State != "unconfirmed" || !strings.Contains(r.Message, "429") || r.NextCheck.Sub(start) < 119*time.Second || r.NextCheck.Sub(start) > 125*time.Second {
 		t.Fatalf("no service cooldown: %+v", r)
 	}
-	if calls != 1 || len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) || !reflect.DeepEqual(switches, r.Switches) {
+	if calls != 1 || len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) || !slices.Equal(switches, r.Switches) {
 		t.Fatalf("429 retried or consumed Apply: probes=%d adapters=%v switches=%v", calls, adapter.calls, r.Switches)
 	}
 	a.autonomyRound(context.Background(), time.Now())

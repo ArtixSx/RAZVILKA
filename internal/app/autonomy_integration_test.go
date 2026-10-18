@@ -23,7 +23,7 @@ import (
 func autonomousIntegrationFixture(t *testing.T) (*App, []string, *nodeApplyAdapter) {
 	t.Helper()
 	a, _, adapter := nodeApplyFixture(t)
-	a.Catalog.Services = append(a.Catalog.Services, catalog.Service{ID: "my-independent-site", Name: "My service", Domains: []string{"example.org"}, ProbeURL: "https://example.org/"})
+	a.Catalog.Services = append(a.Catalog.Services, catalog.Service{ID: "my-independent-site", Name: "My service", CIDRs: []string{"93.184.216.34/32"}, ProbeURL: "https://example.org/"})
 	snapshot, err := a.Nodes.Import(context.Background(), nodestore.Source{ID: "manual", Kind: "manual"}, "vless://123e4567-e89b-12d3-a456-426614174001@reserve.example:443?security=tls", time.Now(), time.Hour, false)
 	if err != nil {
 		t.Fatal(err)

@@ -231,7 +231,7 @@ func TestGenericReviewGuardsNonNodeTransactionPhasesAndOwnDraftCommit(t *testing
 			if _, err := a.EngineConfigs.Stage("sing-box", "main", `{"log":{"level":"info"}}`); err != nil {
 				t.Fatal(err)
 			}
-			plan, err := dataplane.Build(dataplane.Input{NetworkProfileID: "wan-0123456789ab", Revision: a.Store.Get().Revision, Routes: []dataplane.Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "sing-box", Resolved: "sing-box", Domains: []string{"telegram.org"}}}, EngineConfigDrafts: []string{"sing-box/main"}, Engines: []dataplane.Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{TUN: true, IPCommand: true, SingBox: true}})
+			plan, err := dataplane.Build(dataplane.Input{NetworkProfileID: "wan-0123456789ab", Revision: a.Store.Get().Revision, Routes: []dataplane.Route{{ServiceID: "telegram", ServiceName: "Telegram", Selected: "sing-box", Resolved: "sing-box", CIDRs: []string{"149.154.160.0/20"}}}, EngineConfigDrafts: []string{"sing-box/main"}, Engines: []dataplane.Engine{{ID: "sing-box", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{TUN: true, IPCommand: true, SingBox: true}})
 			if err != nil || !plan.Ready {
 				t.Fatalf("fixture: %v %+v", err, plan.Blockers)
 			}
