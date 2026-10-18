@@ -76,7 +76,7 @@ function renderProjectNodeCheck(job, error) {
   const time = Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString('ru-RU') : 'Время не указано';
   const rows = Array.isArray(job.results) ? job.results.filter(row => row && typeof row === 'object' && !Array.isArray(row)) : [];
   const failure = rows.find(row => row.error_code && row.message);
-  const verdicts = { PASS: 'Проверка пройдена', FAIL: 'Проверка не пройдена', BLOCKED: 'Проверка заблокирована', MISROUTED: 'Не тот маршрут', ERROR: 'Ошибка проверки' };
+  const verdicts = { PASS: 'Проверка пройдена', FAIL: 'Проверка не пройдена', BLOCKED: 'Проверка заблокирована', MISROUTED: 'Не тот маршрут', ERROR: 'Ошибка проверки', INCONCLUSIVE: 'Не удалось проверить' };
   const levels = { service: 'проверка сервиса', tcp: 'TCP', 'tcp-connect': 'TCP' };
   // Only public typed results are summarized; endpoint/configuration fields
   // and node labels/IDs are never copied into the visible project log.

@@ -72,7 +72,7 @@ async function workflowRunProbe(){
     const result=await workflowRequest('/api/v1/testlab/routes',{method:'POST',controller,body:JSON.stringify({services:[serviceID],routes:[engine]})},100000);
     if(!workflowSession(epoch))return;
     const rows=(result.results||[]).filter(r=>r.service_id===serviceID&&[engine,'direct'].includes(r.route));
-    if(!rows.length)throw new Error('Backend не вернул результаты выбранного теста. Успех не подтверждён.');
+    if(!rows.length)throw new Error('Роутер не вернул результаты выбранного теста. Успех не подтверждён.');
     if(progress){await refreshEngineConfigs();if(!workflowSession(epoch))return;}
     if(typeof engineProgressProbe==='function')engineProgressProbe(progress,result,serviceID);
     workflowState.lastProbe={...test,rows,message:'Проверка завершена. Результаты относятся к указанному веб-сценарию и моменту теста. Маршрут не применялся.'};
@@ -101,7 +101,7 @@ async function workflowFetch(event){
   const epoch=workflowState.epoch,seq=++workflowState.fetchSeq;workflowState.fetchBusy=true;$('#r4FetchSubmit').disabled=true;$('#r4FetchStatus').textContent='Проверяем возможность запуска…';
   try{
     const status=await workflowRequest('/api/v1/node-checks/current');
-    if(status.fetch_and_check!==true)throw new Error('Backend не поддерживает «Загрузить и проверить». Установите проверенную сборку R5. Отдельная загрузка не выдаётся за сетевую проверку.');
+    if(status.fetch_and_check!==true)throw new Error('Установленная версия не поддерживает «Загрузить и проверить». Обновите RAZVILKA. Полученные ранее ссылки можно проверить отдельно.');
     if(['queued','interrupted','running','canceling'].includes(status.job?.state))throw new Error('На роутере уже выполняется проверка. Дождитесь завершения.');
     if(typeof nodeBrowseActionCurrent==='function'&&!nodeBrowseActionCurrent(browseToken))return;
     const result=await workflowRequest('/api/v1/node-checks',{method:'POST',body:JSON.stringify(body)});
@@ -109,7 +109,7 @@ async function workflowFetch(event){
     if(!result.job?.id)throw new Error('Роутер не подтвердил создание задачи. Проверьте её состояние перед повтором.');
     nodeBrowser.job=result.job;nodeBrowser.selected.clear();nodeBrowser.source='';nodeBrowser.page=0;
     $('#r4FetchURL').value='';$('#r4FetchDialog').close();setView('nodes');setNodeBrowserTab('all');$('#nodeBrowserService').value=serviceID;renderNodes();
-    interfaceToast('Задача принята роутером. Получение и проверки продолжатся при закрытой странице. Apply не запускался.');scheduleNodeBrowserRefresh(500);
+    interfaceToast('Задача принята роутером. Загрузка и проверка продолжатся при закрытой странице. Маршруты не меняются.');scheduleNodeBrowserRefresh(500);
   }catch(error){if(workflowSession(epoch))$('#r4FetchStatus').textContent=workflowError(error);}
   finally{if(seq===workflowState.fetchSeq)workflowState.fetchBusy=false;if(workflowSession(epoch)&&seq===workflowState.fetchSeq){$('#r4FetchSubmit').disabled=false;renderWorkflowControls();}}
 }
