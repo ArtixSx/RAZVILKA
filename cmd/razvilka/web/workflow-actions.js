@@ -41,7 +41,7 @@ function renderWorkflowControls(){
   $('#r4Validate').disabled=!!state.engineIntent||!engine||!selectedEngineFile()||!!workflowState.probe;
   $('#r4ProbeCancel').hidden=!workflowState.probe;$('#r4ProbeCancel').disabled=!!workflowState.probe?.controller.signal.aborted;
   $('#r4ProbeService').disabled=!!workflowState.probe;
-  const scope=engine?.id==='nfqws2'?'Временное правило только для одного тестового потока в активную очередь NFQWS2. Очистка — после теста. Рабочие списки не меняются.':'Тест через поддержанный изолированный SOCKS-путь или привязку к интерфейсу. Если такой путь недоступен, backend вернёт отказ, а не обычную прямую проверку.';
+  const scope=engine?.id==='nfqws2'?'Временное правило только для одного тестового подключения через NFQWS2. После проверки правило удаляется. Рабочие списки не меняются.':'Проверяется подключение именно через выбранный обход. Если отдельный тестовый путь недоступен, появится причина отказа. Обычное прямое подключение не считается успешной проверкой обхода.';
   $('#r4ProbeScope').textContent=(state.engineEditorDirty?'Есть несохранённый черновик: тест ниже использует установленную конфигурацию, не эти правки. ':'')+scope;
   if(!workflowState.probe&&!workflowState.lastProbe)$('#r4ProbeStatus').textContent=engine?.installed?'Выберите сервис. Запрос выполняется на роутере. Отдельно проверяются прямой путь и выбранный обход.':'Сначала установите и настройте компонент. Проверка сайтов не имитируется отсутствующим движком.';
   if(!workflowState.probe&&workflowState.lastProbe && workflowState.lastProbe.engine!==engine?.id){$('#r4ProbeResults').replaceChildren();$('#r4ProbeStatus').textContent='Для этого обхода тест ещё не запускался.';}
