@@ -3718,6 +3718,10 @@ function renderNodeGroups(groups, nodes) {
 }
 
 function openNodeGroup(id = '') {
+  if (state.nodeGroupSave?.auth === (state.authGeneration || 0)) {
+    showDetails({error:'Сохранение группы ещё выполняется. Дождитесь результата перед открытием другого редактора.'}, 'Сохранение группы');
+    return;
+  }
   if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const nodes = (state.nodes?.nodes || []).filter((node) => !node.disabled);
   if (!nodes.length) return showDetails({ error: 'Сначала добавьте и включите хотя бы один узел.' }, 'Группа не создана');
@@ -3732,6 +3736,8 @@ function openNodeGroup(id = '') {
   $('#nodeGroupHold').value = String(group?.hold_down_seconds || 1800);
   $('#nodeGroupMembers').innerHTML = nodes.map((node) => `<label><input type="checkbox" value="${esc(node.id)}" ${selected.has(node.id) ? 'checked' : ''}><span>${esc(nodeDisplayName(node))} · ${esc(node.protocol || '')}</span></label>`).join('');
   $('#nodeGroupPreferred').innerHTML = nodes.map((node) => `<option value="${esc(node.id)}" ${node.id === (group?.preferred_node_id || [...selected][0]) ? 'selected' : ''}>${esc(nodeDisplayName(node))}</option>`).join('');
+  const submit = $('#nodeGroupForm').querySelector('[type=submit]');
+  submit.disabled = false;submit.textContent = 'Сохранить группу';
   $('#nodeGroupDialog').showModal();
 }
 
@@ -3745,6 +3751,9 @@ async function saveNodeGroup(event) {
   if (!nodeIDs.length || nodeIDs.length > 32) return showDetails({error:'Выберите от 1 до 32 подключений.'}, 'Группа не сохранена');
   const preferred = nodeIDs.includes($('#nodeGroupPreferred').value) ? $('#nodeGroupPreferred').value : nodeIDs[0];
   const body = {name:$('#nodeGroupName').value.trim(), mode:$('#nodeGroupMode').value, node_ids:nodeIDs, preferred_node_id:preferred, hold_down_seconds:Number($('#nodeGroupHold').value), confirm:id?'UPDATE_NODE_GROUP':'CREATE_NODE_GROUP'};
+  const submit = $('#nodeGroupForm').querySelector('[type=submit]');
+  const submitLabel = submit.textContent;
+  submit.disabled = true;submit.textContent = 'Сохраняется…';
   const action = state.nodeGroupSave = {auth};
   const current = () => state.nodeGroupSave === action && auth === (state.authGeneration || 0);
   let written = false;
@@ -3776,7 +3785,10 @@ async function saveNodeGroup(event) {
       showDetails({error:'Ответ о сохранении не получен. Группа могла быть сохранена. Проверьте список групп перед повторной отправкой.'}, 'Результат сохранения неизвестен');
     }
   } finally {
-    if (current()) state.nodeGroupSave = null;
+    if (current()) {
+      state.nodeGroupSave = null;
+      submit.disabled = false;submit.textContent = submitLabel;
+    }
   }
 }
 
