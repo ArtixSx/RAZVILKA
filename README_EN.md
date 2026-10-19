@@ -165,9 +165,23 @@ sh /opt/tmp/razvilka-setup.sh --uninstall
 
 This removes the panel, its startup service and its own active routes. Settings,
 connections and backups are retained. Entware and separately installed engines
-remain. Reinstalling over the retained data is not yet supported by the installer:
-the update control journal (`/opt/razvilka/state/self-update-stop`) is retained and
-the installer refuses. Do not delete that directory by hand.
+remain. A plain reinstall over the retained data is refused: the update control
+journal (`/opt/razvilka/state/self-update-stop`) is retained. Do not delete it by hand.
+
+To reinstall **from scratch**, uninstall with `--purge`:
+
+```sh
+sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+```
+
+After the normal removal, every RAZVILKA data folder is **moved** (never deleted)
+to `/opt/razvilka-removed-<date>` (root only), so the next install is clean.
+
+### From 0.19.3 or older
+
+0.20.0 installs only on a clean base and refuses an older installation. Remove
+the old version with its own uninstaller, set its data aside, then install 0.20.0 —
+see [the migration steps (Russian)](docs/INSTALL_RU.md#переход-с-0193-и-более-ранних-версий).
 
 ## Further reading
 
