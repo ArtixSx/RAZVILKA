@@ -155,6 +155,36 @@ func TestCanonicalVersionIsConsistent(t *testing.T) {
 	}
 }
 
+// The full gate (race tests included) outgrew 20 minutes. The release bundle
+// must not ship internal delivery logs, research notes or lab diagnostics,
+// which describe the owner's test network, and the uploaded binary manifest
+// must verify flat downloads while the archive keeps its dist/ paths.
+func TestReleaseWorkflowLimitsAndBundleContents(t *testing.T) {
+	root := repositoryRoot(t)
+	limitPattern := regexp.MustCompile(`(?m)^[\t ]*timeout-minutes:[\t ]*([0-9]+)[\t ]*$`)
+	for _, name := range []string{".github/workflows/ci.yml", ".github/workflows/release.yml"} {
+		limits := limitPattern.FindAllStringSubmatch(readFile(t, root, name), -1)
+		if len(limits) != 1 || limits[0][1] != "60" {
+			t.Errorf("%s job limits = %v, want exactly one timeout-minutes: 60", name, limits)
+		}
+	}
+	release := readFile(t, root, ".github/workflows/release.yml")
+	for _, required := range []string{
+		`rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/scripts/diagnostics"`,
+		`const internalMaterial = /^(?:docs\/(?:delivery|research|implementation)-|scripts\/diagnostics(?:\/|$))/i;`,
+		`(cd dist && sha256sum razvilka-linux-amd64 razvilka-linux-arm64 razvilka-linux-mips razvilka-linux-mipsle) > SHA256SUMS`,
+		`sed 's#^\([0-9a-f]\{64\}\) \([ *]\)#\1 \2dist/#' SHA256SUMS | cmp -s - dist/SHA256SUMS`,
+		`(cd dist && sha256sum -c ../SHA256SUMS)`,
+	} {
+		if !strings.Contains(release, required) {
+			t.Errorf("release workflow is missing bundle/manifest guard %q", required)
+		}
+	}
+	if strings.Contains(release, "dist/SHA256SUMS \\\n") || strings.Contains(release, "dist/SHA256SUMS\n            RAZVILKA-") {
+		t.Error("release workflow still uploads or attests the dist/-relative manifest instead of the flat SHA256SUMS")
+	}
+}
+
 // The raw bootstrap fetched from a release tag must install, remove and roll
 // back that same release by default, never whatever GitHub marks as latest.
 func TestBootstrapDefaultsToItsOwnReleaseTag(t *testing.T) {

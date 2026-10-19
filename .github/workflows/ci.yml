@@ -14,7 +14,10 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The full gate runs Go tests twice (normal and race), about 100 UI tests,
+    # four cross-builds and the Entware transaction. On the Linux test VM the
+    # updatecheck/app race and app normal runs alone took over 20 minutes.
+    timeout-minutes: 60
     env:
       GOTOOLCHAIN: local
       # Intermediate router work uses AArch64; release/default checks keep all targets.
