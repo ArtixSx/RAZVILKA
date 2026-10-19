@@ -305,6 +305,10 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			if ctx.Err() != nil {
 				return finish("paused", "Подбор отменён.")
 			}
+			// Not even probed: the plan would refuse this route for the service.
+			if !routeEligibleForService(service, route) {
+				continue
+			}
 			ready := false
 			for _, o := range a.nodeRouteOptions() {
 				if o.ID == route && o.Ready {
@@ -333,6 +337,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 			}
 		}
 	}
+	// No node can carry a domain service. Only the NFQWS2-list return below
+	// still needs the node snapshot for a service applied to a node earlier.
+	if autonomyDomainService(service) && !(isNode && nfqws2StandardScope(service, s)) {
+		return a.finishAutonomyDomainService(ctx, p, s, r, cfg, profile, current, healthy)
+	}
 	if a.Nodes == nil {
 		return finish("checker-unavailable", "Точная проверка подключений недоступна.")
 	}
@@ -345,6 +354,9 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	}
 	if isNode && nfqws2StandardScope(service, s) && !nodeRecoveryNodePresent(snapshot, currentNode, time.Now()) && a.nfqws2RouteReady() {
 		return a.returnToNFQWS2Standard(ctx, p, s, r, service, cfg, profile)
+	}
+	if autonomyDomainService(service) {
+		return a.finishAutonomyDomainService(ctx, p, s, r, cfg, profile, current, healthy)
 	}
 	eligible := map[string]nodestore.Node{}
 	ids := []string{}

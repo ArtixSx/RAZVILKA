@@ -5284,7 +5284,7 @@ func (a *App) resolveAutoWithOptions(s catalog.Service, order []string, options 
 		return fallback
 	}
 	suggested := a.SmartRoute.Suggest(s.ID, fallback)
-	if routecatalog.ReadyWithOptions(suggested, options) {
+	if routecatalog.ReadyWithOptions(suggested, options) && routeEligibleForService(s, suggested) {
 		return suggested
 	}
 	return fallback
@@ -5296,6 +5296,11 @@ func plannedEngineWithOptions(s catalog.Service, order []string, options []route
 	candidates = append(candidates, order...)
 	for _, candidate := range candidates {
 		if candidate == "auto" {
+			continue
+		}
+		// AUTO never resolves a domain service to a route the plan refuses
+		// (DOMAIN_FLOW_AUTHORITY_REQUIRED); that would block the whole Apply.
+		if !routeEligibleForService(s, candidate) {
 			continue
 		}
 		if routecatalog.ReadyWithOptions(candidate, options) {

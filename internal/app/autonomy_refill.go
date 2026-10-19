@@ -25,6 +25,10 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 	if !ok || s.Removing || s.ExpectedRoute == "nfqws2" && catalog.IsNFQWS2Starter(service) {
 		return
 	}
+	// No downloaded node could ever carry a domain service.
+	if autonomyDomainService(service) {
+		return
+	}
 	if a.autonomyResourceGuard(ctx, p, s, cfg, service) != nil {
 		return
 	}

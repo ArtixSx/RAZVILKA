@@ -208,7 +208,13 @@ func (a *App) nodeAutofallbackRound(ctx context.Context, now time.Time) {
 		if !found || entry.status.GroupID != group.ID {
 			entry = nodeAutofallbackEntry{status: nodeAutofallbackService{ServiceID: route.ServiceID, GroupID: group.ID, NodeID: strings.TrimPrefix(route.Resolved, "sing-box:"), State: "pending", Message: "Ожидает проверки применённого узла."}}
 		}
-		if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
+		if len(route.Domains) != 0 {
+			// A route committed by an older release. Any reserve of this group
+			// would need the DNS-derived capture the plan now refuses, so no
+			// node is checked and no switch is attempted.
+			entry.status.State, entry.status.Healthy = autonomyStateDomainRouteUnavailable, false
+			entry.status.Message = "Сервис задан доменами: замена узла VPN или прокси не выполняется, общий IP может принадлежать чужим сайтам. Выберите NFQWS2 или выключите сервис."
+		} else if cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
 			entry.status.State, entry.status.Message, entry.status.Healthy = "paused", "Безопасный режим включён. Автозамена приостановлена.", false
 			if !cfg.SafeMode && cfg.ServiceControl.Stopped {
 				entry.status.Message = "Маршруты проекта остановлены. Автозамена приостановлена."

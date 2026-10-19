@@ -417,7 +417,7 @@ func TestAutopilotCommunityDomainRefreshCannotActivateGenericProxy(t *testing.T)
 	standardDue(a, updated.ID)
 	a.autonomyRound(context.Background(), time.Now())
 	current, _, err := a.Dataplane.Committed()
-	if err != nil || standardRuntime(a, updated.ID).State != "apply-refused" || len(adapter.calls) != 0 || !reflect.DeepEqual(incumbent, current) || !reflect.DeepEqual(before, a.Store.Get()) {
+	if err != nil || standardRuntime(a, updated.ID).State != autonomyStateDomainRouteUnavailable || len(adapter.calls) != 0 || !reflect.DeepEqual(incumbent, current) || !reflect.DeepEqual(before, a.Store.Get()) {
 		t.Fatal("community metadata granted generic domain effects", standardRuntime(a, updated.ID), adapter.calls, err)
 	}
 	plan, err := a.buildDataplanePlanForScope(a.Store.Get(), a.nodeRouteOptions(), changeScopeServices, "")
