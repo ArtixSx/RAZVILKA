@@ -54,6 +54,20 @@ assert.deepEqual(Array.from(bad.services,s=>s.id),['discord','roblox','youtube']
 assert.equal(bad.services[0].short,'Нужный компонент не запущен');
 assert.equal(bad.services[0].name,'Discord');
 
+// A capability refusal is terminal for the current settings: it is labelled,
+// never presented as a retry, and the headline promises no further attempts.
+const limited=model(snap({youtube:'capability-refused',discord:'excluded'}),catalog);
+assert.equal(limited.tone,'problem');
+assert.equal(limited.services.find(s=>s.id==='youtube').short,'Недоступно в текущем режиме');
+assert.equal(limited.services.find(s=>s.id==='discord').short,'Не разрешён списком или исключениями');
+assert.doesNotMatch(limited.text+limited.services.map(s=>s.short).join(' '),/повторит|продолжает попытки|Проверяется/);
+assert.match(limited.text,/не может включить их сам/);
+const mixed=model(snap({youtube:'capability-refused',discord:'apply-refused'}),catalog);
+assert.match(mixed.text,/нужно ваше решение/);
+assert.doesNotMatch(mixed.text,/^Автопилот продолжает попытки/);
+assert.equal(model(snap({discord:'apply-refused'}),catalog).text,'Автопилот продолжает попытки. Причина указана у сервиса.','retryable failures keep their wording');
+assert.doesNotMatch(read('cmd/razvilka/web/simple-home.js'),/Автопилот проверит и включит его/,'adding a service does not promise that it will be enabled');
+
 // Retained runtime labels are saved history: neither a current failure nor
 // an assertion that the autopilot is still actively retrying.
 for(const oldState of ['component-unavailable','component-stopped','apply-refused','healthy','checking']){

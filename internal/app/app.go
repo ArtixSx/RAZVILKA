@@ -3464,6 +3464,12 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := a.Store.Get()
+	// A known list-mode limit is named before any managed lane reads or
+	// admits anything; the lanes keep their own refusals for the rest.
+	if refusal := a.listModeCapabilityRefusal(cfg, scope); refusal != nil {
+		writeCapabilityRefusal(w, refusal)
+		return
+	}
 	if a.managedWGPlanHTTP(w, r, cfg, scope) {
 		return
 	}
@@ -3497,6 +3503,11 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 			writeNodePlanFailure(w, err)
 			return
 		}
+		var refusal *capabilityRefusal
+		if errors.As(err, &refusal) {
+			writeCapabilityRefusal(w, refusal)
+			return
+		}
 		if errors.Is(err, dataplane.ErrExactNodeNetworkChanged) {
 			http.Error(w, "Сеть изменилась или не определена. Повторите проверку узла и откройте новый план.", http.StatusConflict)
 			return
@@ -3524,7 +3535,7 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":      cfg.SafeMode,
 		"scope":          scope,
-		"note":           "Development build: page-scoped drafts, explicit unavailable routes and persistent component-install verification. Safe Mode remains the default.",
+		"note":           "План построен по сохранённым настройкам. Рабочая сеть меняется только после подтверждения применения; если проверка не пройдёт, применение откатывается.",
 		"routes":         rows,
 		"transaction":    transaction,
 		"review":         review.review,
@@ -3577,6 +3588,10 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := a.Store.Get()
+	if refusal := a.listModeCapabilityRefusal(cfg, scope); refusal != nil {
+		writeCapabilityRefusal(w, refusal)
+		return
+	}
 	if a.managedWGApplyHTTP(w, r, cfg, scope, reviewRequest) {
 		return
 	}
@@ -3588,6 +3603,13 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 	}
 	transaction, err := a.buildDataplanePlanForRequest(cfg, a.routeOptionsSnapshot(), scope, engineID, r)
 	if err != nil {
+		// Decided from the saved configuration before any Stage: a reviewed
+		// request cannot pass it either, so name the limit, not a changed review.
+		var refusal *capabilityRefusal
+		if errors.As(err, &refusal) {
+			writeCapabilityRefusal(w, refusal)
+			return
+		}
 		if reviewRequest.Revision != nil {
 			writeApplyReviewChanged(w)
 			return
@@ -3851,7 +3873,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	// by legacy adapters before the unified scope/DNS executor is integrated.
 	// An empty inactive list carries no negative and does not close this path.
 	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil || config.InactiveResourceNegatives(cfg) {
-		return dataplane.Plan{}, errors.New("NETWORK_POLICY_EXECUTOR_REQUIRED: единые исключения LAN требуют совместного исполнителя маршрутов и DNS; прежний путь сохранён")
+		return dataplane.Plan{}, legacyExecutorRefusal(cfg)
 	}
 	cfg = configForChangeScope(cfg, scope)
 	networkProfile := ""

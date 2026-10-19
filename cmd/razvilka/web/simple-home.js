@@ -8,11 +8,15 @@
   const HISTORICAL = new Set(['healthy', 'applied']);
   const RECHECK = new Set(['pending', 'checking']);
   const PROGRESS = new Set(['pending', 'checking', 'applying', 'searching', 'scope-pending', 'removal-pending', 'rate-limited']);
+  // States the autopilot cannot leave on its own: the owner has to change the
+  // mode, a list, the service or the journal first. They are not retried.
+  const WAITS_FOR_OWNER = new Set(['capability-refused', 'excluded', 'manual-change', 'definition-changed', 'unsupported-scenario', 'requires-review']);
   const SHORT = {
     pending: 'Ждёт проверки', checking: 'Проверяется', applying: 'Включается', searching: 'Подбирается способ обхода',
     'scope-pending': 'Применяется к устройствам', 'removal-pending': 'Убирается', 'rate-limited': 'Пауза между попытками',
     'component-stopped': 'Нужный компонент не запущен', 'component-unavailable': 'Нужный компонент не готов',
     'apply-refused': 'Не удалось включить, автопилот повторит', unconfirmed: 'Проверка не дала ответа, автопилот повторит',
+    'capability-refused': 'Недоступно в текущем режиме', excluded: 'Не разрешён списком или исключениями',
     'requires-review': 'Нужна проверка журнала', 'manual-change': 'Изменён вручную', paused: 'На паузе',
     'network-unknown': 'Сеть не определена', 'checker-unavailable': 'Проверка временно недоступна',
     'catalog-unavailable': 'Источник подключений недоступен', 'definition-changed': 'Состав сервиса изменился',
@@ -49,7 +53,7 @@
       const runtime = snapshot.runtime?.[id] || {};
       const state = runtime.state || 'pending';
       const detail = String(runtime.message || '').slice(0, 220);
-      if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', short: 'Автоподбор на паузе', detail };
+      if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', short: 'Автоподбор на паузе', detail, owner: true };
       // A waiting service says when it continues ("…через 12 мин.").
       const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
       const applied = snapshot.applied_services?.[id];
@@ -63,7 +67,7 @@
       }
       // Retain the applied assignment during recheck without claiming access.
       if (RECHECK.has(state) && applied?.enabled) return { id, name: label[id] || id, state, bucket: 'progress', short: 'Включён · перепроверяется', detail };
-      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || 'Проверяется', detail };
+      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || 'Проверяется', detail, owner: WAITS_FOR_OWNER.has(state) };
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
@@ -74,7 +78,12 @@
     if (policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };
     const problems = count('problem'), progress = count('progress');
-    if (problems) return { ...base, phase: 'ready', tone: 'problem', title: `${plural(problems, 'сервис пока не работает', 'сервиса пока не работают', 'сервисов пока не работают')}`, text: 'Автопилот продолжает попытки. Причина указана у сервиса.' };
+    // Never promise a retry for a service that waits for the owner.
+    const waiting = services.filter(s => s.bucket === 'problem' && s.owner).length;
+    const problemText = !waiting ? 'Автопилот продолжает попытки. Причина указана у сервиса.'
+      : waiting === problems ? 'Автопилот не может включить их сам. Причина и что сделать указаны у сервиса.'
+      : 'Часть сервисов автопилот повторит сам, для остальных нужно ваше решение. Причина указана у сервиса.';
+    if (problems) return { ...base, phase: 'ready', tone: 'problem', title: `${plural(problems, 'сервис пока не работает', 'сервиса пока не работают', 'сервисов пока не работают')}`, text: problemText };
     if (progress) return { ...base, phase: 'ready', tone: 'progress', title: `Настраиваю ${plural(progress, 'сервис', 'сервиса', 'сервисов')}…`, text: 'Автопилот проверяет сервисы по очереди, по одному за раз, и сам включает обход.' };
     return { ...base, phase: 'ready', tone: 'ok', title: 'Всё работает', text: `${plural(services.length, 'сервис открывается', 'сервиса открываются', 'сервисов открываются')} через проверенный обход.` };
   }
@@ -287,7 +296,7 @@
       await interfaceManage(saved.service.id, true);
       ui.community = ui.community.filter(e => e.id !== id);
       ui.note = '';
-      if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен. Автопилот проверит и включит его.');
+      if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
     } catch (e) {
       ui.note = '';
       ui.error = (typeof workflowError === 'function' ? workflowError(e) : e?.message) || 'Сервис не добавлен.';
@@ -410,7 +419,7 @@
     ui.busy = id; ui.error = ''; render(true);
     try {
       await interfaceManage(id, true, remove);
-      if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен. Автопилот проверит и включит его.');
+      if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
     } catch (e) {
       ui.error = e?.message || 'Действие не выполнено.';
     } finally {

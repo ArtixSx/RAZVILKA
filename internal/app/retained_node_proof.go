@@ -134,7 +134,11 @@ func (a *App) reproveRetainedNode(ctx context.Context, dependency *routePlanDepe
 
 // Nothing was activated when another service's route blocked the plan, so the
 // switch reservation is returned and the runtime names the blocking service.
+// A capability limit or an unready plan likewise started nothing.
 func autonomyRouteDependency(err error, r *autonomy.Runtime) (string, string, bool) {
+	if state, message, blocked := autonomyNotStarted(err, r); blocked {
+		return state, message, true
+	}
 	var dependency *routePlanDependencyError
 	if !errors.As(err, &dependency) {
 		return "", "", false

@@ -168,8 +168,11 @@ func TestAutonomyInactiveServiceIsNotAutomaticallyChecked(t *testing.T) {
 }
 
 func TestAutonomyClosingNegativeDoesNotRecordCandidateFailure(t *testing.T) {
+	// No autopilot route is wired for a lan_except list policy, so such a round
+	// ends before any node check (TestAutonomyRoundNamesCapabilityLimitWithoutChecks).
+	// The closing negative here is the inactive document that the same resource
+	// guard and policy comparison observe.
 	a, ids, adapter := autonomousIntegrationFixture(t)
-	autonomyExclusionSetup(t, a, autonomyExclusionPolicy())
 	before, err := a.Nodes.Snapshot(context.Background(), time.Now())
 	if err != nil {
 		t.Fatal(err)

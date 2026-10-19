@@ -301,6 +301,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		}
 	}
 	if current == "" {
+		// A limit of the saved mode is named before any probe or node check
+		// when no route this round could apply is open.
+		if refusal := a.autonomyUnappliedRefusal(cfg, p, s, engine); refusal != nil {
+			return autonomyCapabilityRefused(refusal, &r)
+		}
 		for _, route := range p.PreferredRoutes {
 			if ctx.Err() != nil {
 				return finish("paused", "Подбор отменён.")
@@ -324,10 +329,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 				}
 				a.autonomyRuntime(s.ID, r)
 				if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, route); err != nil {
-					if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
-						return finish(state, message)
-					}
-					return finish("apply-refused", "Применение локального обхода не подтверждено; выполнена защита/откат.")
+					return finish(autonomyLegacyApplyRefused(err, &r, "Применение локального обхода не подтверждено; выполнена защита/откат."))
 				}
 				return finish("applied", "Подходящий обход применён через общую транзакцию.")
 			}
@@ -670,6 +672,9 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	if err := a.autonomyResourceGuard(ctx, p, s, base, service); err != nil {
 		return err
 	}
+	if refusal := a.autonomyCapabilityRefusal(base, s.ID, route); refusal != nil {
+		return refusal
+	}
 	if base.NetworkPolicy != nil && strings.HasPrefix(route, "xray:node-") {
 		if err := a.applyManagedAutonomyXray(ctx, p, s, base, profile, route); err != nil {
 			return err
@@ -686,8 +691,12 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 	if errors.As(err, &dependency) {
 		return dependency
 	}
+	var refusal *capabilityRefusal
+	if errors.As(err, &refusal) {
+		return refusal
+	}
 	if err != nil || !plan.Ready {
-		return errors.New("autonomous plan not ready")
+		return errAutonomyPlanNotReady
 	}
 	generation := uint64(0)
 	if a.Nodes != nil {
