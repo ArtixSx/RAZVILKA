@@ -8,6 +8,7 @@ umask 077
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 sh "$ROOT/scripts/test-entware-path-safety.sh"
 sh "$ROOT/scripts/test-installer-architecture.sh"
+sh "$ROOT/scripts/test-legacy-layout-guard.sh"
 UPGRADE="$ROOT/scripts/upgrade-entware.sh"
 ROLLBACK="$ROOT/scripts/rollback-entware.sh"
 UNINSTALL="$ROOT/scripts/uninstall-entware.sh"
@@ -386,6 +387,39 @@ test_snapshot_pruning
 prepare_root "$PRIMARY"
 prepare_root "$CONFLICT"
 prepare_root "$REMOVAL"
+
+# The actual installer and Main never adopt a <=0.19 layout: a retained old
+# state directory, or an installed controller without the 0.20 reader ABI,
+# refuses dry-run and apply before Stop, snapshot or any installation write.
+PRE020_REFUSAL='Pre-0.20 RAZVILKA installation found; 0.20 installs only on a clean base; installation unchanged'
+LEGACY_STATE="$TEST_ROOT/legacy-state"
+LEGACY_CONTROLLER="$TEST_ROOT/legacy-controller"
+prepare_root "$LEGACY_STATE"
+mkdir -p "$LEGACY_STATE/var/lib/razvilka"
+printf '%s\n' legacy-settings >"$LEGACY_STATE/var/lib/razvilka/state-marker"
+prepare_root "$LEGACY_CONTROLLER"
+mkdir -p "$LEGACY_CONTROLLER/bin"
+cat >"$LEGACY_CONTROLLER/bin/razvilka" <<'LEGACY_MAIN'
+#!/bin/sh
+# Go flag ABI of a <=0.19 controller; any other entrypoint is a test failure.
+[ "$#" -eq 1 ] && [ "$1" = -self-update-read-version ] || exit 98
+printf 'flag provided but not defined: -self-update-read-version\nUsage of razvilka:\n' >&2
+exit 2
+LEGACY_MAIN
+chmod 755 "$LEGACY_CONTROLLER/bin/razvilka"
+for LEGACY_BASE in "$LEGACY_STATE" "$LEGACY_CONTROLLER"; do
+  installation_image "$LEGACY_BASE" "$TEST_ROOT/legacy-before"
+  for LEGACY_MODE in --dry-run --apply; do
+    assert_refused "pre020${LEGACY_MODE}-${LEGACY_BASE##*/}" "$LEGACY_BASE" "$PRE020_REFUSAL" \
+      "$UPGRADE" "$LEGACY_MODE" --without-components
+    installation_image "$LEGACY_BASE" "$TEST_ROOT/legacy-after"
+    cmp -s "$TEST_ROOT/legacy-before" "$TEST_ROOT/legacy-after" || {
+      echo "Pre-0.20 refusal changed the legacy installation: $LEGACY_BASE $LEGACY_MODE" >&2
+      diff -u "$TEST_ROOT/legacy-before" "$TEST_ROOT/legacy-after" >&2 || true
+      exit 1
+    }
+  done
+done
 
 # Actual installer preflight/ordinary Main must not repair legacy permissions.
 mkdir -p "$PRIMARY/razvilka/state/staging/sing-box"
