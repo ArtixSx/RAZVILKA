@@ -84,8 +84,10 @@ for ACTION in install uninstall rollback; do
   cat >"$TEST_ROOT/source/$RELEASE_DIR/scripts/$ACTION-entware.sh" <<'HELPER'
 #!/bin/sh
 # RAZVILKA_UNINSTALL_PRESERVES_DATA=1
+# RAZVILKA_UNINSTALL_PURGE_MOVES_DATA=1
 printf '%s\n' "${0##*/}:$*" >"$CASE_ROOT/helper-called"
 printf '%s\n' "${RAZVILKA_ARCH:-}" >"$CASE_ROOT/helper-architecture"
+printf '%s\n' "$0" >"$CASE_ROOT/helper-path"
 HELPER
 done
 cat >"$TEST_ROOT/essential/opkg" <<'OPKG'
@@ -121,7 +123,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   case "$CASE_NAME" in install-default-cache|private-owner|private-writable)
     [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ] || continue ;;
@@ -167,6 +169,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   if [ "$CASE_NAME" = old-uninstall ]; then
     printf '#!/bin/sh\nprintf old-rollback >"$CASE_ROOT/helper-called"\n' >"$CASE_ROOT/source/$RELEASE_DIR/scripts/uninstall-entware.sh"
   fi
+  if [ "$CASE_NAME" = purge-old-release ]; then
+    # Safe removal exists, but this release cannot move data aside.
+    printf '#!/bin/sh\n# RAZVILKA_UNINSTALL_PRESERVES_DATA=1\nprintf old-purge >"$CASE_ROOT/helper-called"\n' >"$CASE_ROOT/source/$RELEASE_DIR/scripts/uninstall-entware.sh"
+  fi
   if [ "$CASE_NAME" = multiple-roots ]; then mkdir "$CASE_ROOT/source/RAZVILKA-extra"; fi
   # A pinned release must contain exactly its own top directory. Only an
   # explicit installation from "latest" has no version to compare.
@@ -188,6 +194,10 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   case "$CASE_NAME" in
     latest-uninstall) set -- --uninstall ;;
     latest-rollback) set -- --rollback ;;
+    uninstall-purge|purge-old-release) set -- --uninstall --purge ;;
+    purge-default-tmp) set -- --purge --uninstall; RUN_TMP='' ;;
+    purge-without-uninstall) set -- --purge ;;
+    purge-rollback) set -- --rollback --purge ;;
   esac
   if [ "$CASE_NAME" = traversal ] || [ "$CASE_NAME" = traversal-warning ]; then
     # A fixed gzip/tar fixture containing ../RAZVILKA-fixture/traversal.
@@ -218,11 +228,23 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$RUN_TMP" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
     RAZVILKA_VERSION="$VERSION_OVERRIDE" "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback)
+    install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
-      case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
-      [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
+      EXPECTED_ARGS=""
+      case "$CASE_NAME" in
+        uninstall|rollback) EXPECTED="$CASE_NAME" ;;
+        uninstall-purge|purge-default-tmp) EXPECTED=uninstall; EXPECTED_ARGS=--purge ;;
+      esac
+      [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:$EXPECTED_ARGS" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
+      if [ "$CASE_NAME" = purge-default-tmp ]; then
+        # Purge moves /opt/razvilka aside; its release must run from outside.
+        case "$(cat "$CASE_ROOT/helper-path")" in
+          "$BASE/tmp/razvilka-install."*) ;;
+          *) echo "Purge release was not extracted into Entware tmp" >&2; cat "$CASE_ROOT/helper-path" >&2; exit 1 ;;
+        esac
+        [ ! -e "$BASE/razvilka" ] || { echo "Purge bootstrap created the private tree it moves" >&2; exit 1; }
+      fi
       [ "$(cat "$CASE_ROOT/helper-architecture")" = "$ARCH_OVERRIDE" ] || { echo "Architecture override was lost before the release helper" >&2; exit 1; }
       awk -v base="$EXPECTED_DOWNLOAD" 'index($NF, base) != 1 {bad=1} END {exit bad || NR != 2}' "$CASE_ROOT/downloads" || {
         echo "Bootstrap fetched another release than requested: $CASE_NAME" >&2; cat "$CASE_ROOT/downloads" >&2; exit 1;
@@ -266,7 +288,12 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
             echo "Archive of another release was accepted or refused elsewhere" >&2; cat "$CASE_ROOT/output" >&2; exit 1;
           }
           ;;
-        latest-uninstall|latest-rollback|invalid-version)
+        purge-old-release)
+          [ "$CODE" = 15 ] && grep -q '^This release has no purge option' "$CASE_ROOT/output" || {
+            echo "Release without purge support was started" >&2; cat "$CASE_ROOT/output" >&2; exit 1;
+          }
+          ;;
+        latest-uninstall|latest-rollback|invalid-version|purge-without-uninstall|purge-rollback)
           [ "$CODE" = 2 ] && [ ! -e "$CASE_ROOT/downloads" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || {
             echo "Unpinned or invalid release reached Entware or a download: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1;
           }

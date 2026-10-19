@@ -532,8 +532,37 @@ REMOVAL_BACKUP="$(cat "$REMOVAL/razvilka/state/current-backup")"
 grep -q '^RAZ_BINARY_PRESENT=0$' "$REMOVAL_BACKUP/manifest" || { echo "Uninstall fixture was not a fresh installation" >&2; exit 1; }
 assert_uninstall_preserves_data "$REMOVAL"
 
-[ "$(wc -l <"$RAZVILKA_TEST_CLEAN_CONTROL_LOG")" -eq 3 ] || {
-  echo "Temp transaction lost the three exact modeled clean-control calls" >&2; exit 1;
+# Retained data (config and control ledger) refuses a raw reinstall. Explicit
+# purge moves every RAZVILKA folder aside, so the actual installer performs a
+# genuinely clean installation again: new control epoch and fresh snapshot.
+# Purge proves process absence with host-wide pidof and never kills; a foreign
+# razvilka on the test host makes this block an explicit, printed skip.
+PURGE_REINSTALLS=0
+if [ -z "$(pidof razvilka 2>/dev/null || true)" ]; then
+  RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$UNINSTALL" --purge >/dev/null
+  assert_absent "$REMOVAL/etc/razvilka"
+  assert_absent "$REMOVAL/razvilka"
+  set -- "$REMOVAL"/razvilka-removed-*
+  [ "$#" -eq 1 ] && [ -f "$1/etc-razvilka/config.json" ] && [ -f "$1/etc-razvilka/admin.token" ] &&
+    [ -f "$1/razvilka/state/current-backup" ] && [ "$(ls -ld "$1" | awk '{print $1}')" = drwx------ ] || {
+    echo "Purge did not move the retained data into one private folder" >&2; exit 1;
+  }
+  [ "$(cat "$REMOVAL/var/lib/other-app.conf")" = keep-other-app ] || { echo "Purge changed foreign Entware data" >&2; exit 1; }
+  RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" RAZVILKA_HEALTH_RETRIES=5 "$UPGRADE" --apply --without-components >/dev/null
+  RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$REMOVAL/etc/init.d/S99razvilka" status >/dev/null
+  assert_native_metadata "$REMOVAL"
+  REMOVAL_BACKUP="$(cat "$REMOVAL/razvilka/state/current-backup")"
+  grep -q '^RAZ_BINARY_PRESENT=0$' "$REMOVAL_BACKUP/manifest" && grep -q '^CONFIG_PRESENT=0$' "$REMOVAL_BACKUP/manifest" &&
+    grep -q '^TOKEN_PRESENT=0$' "$REMOVAL_BACKUP/manifest" || { echo "Reinstall after purge was not a clean installation" >&2; exit 1; }
+  RAZVILKA_BASE="$REMOVAL" RAZVILKA_PORT="$PORT" "$UNINSTALL" >/dev/null
+  assert_absent "$REMOVAL/bin/razvilka"
+  PURGE_REINSTALLS=1
+else
+  echo "SKIP purge reinstall: a razvilka process outside this test runs on the host"
+fi
+
+[ "$(wc -l <"$RAZVILKA_TEST_CLEAN_CONTROL_LOG")" -eq $((3 + PURGE_REINSTALLS)) ] || {
+  echo "Temp transaction lost the exact modeled clean-control calls" >&2; exit 1;
 }
 for MODEL_BASE in "$PRIMARY" "$CONFLICT" "$REMOVAL"; do
   assert_absent "$MODEL_BASE/razvilka/state/self-update-stop"

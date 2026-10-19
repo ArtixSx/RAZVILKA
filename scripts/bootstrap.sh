@@ -24,6 +24,7 @@ RELEASE_TAG=v0.20.0
 VERSION="${RAZVILKA_VERSION:-$RELEASE_TAG}"
 FROM_ARTEM=0
 WITH_COMPONENTS=0
+PURGE=0
 ACTION=install
 
 if [ -t 1 ]; then
@@ -49,11 +50,13 @@ for ARG in "$@"; do
       ACTION="${ARG#--}"
       ;;
     --from-artem-flow) FROM_ARTEM=1 ;;
+    --purge) PURGE=1 ;;
     --with-components|--starter-pack) WITH_COMPONENTS=1 ;;
     --without-components) WITH_COMPONENTS=0 ;; # legacy compatibility; UI-only is now the default
     -h|--help)
-      echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall | --rollback"
+      echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall [--purge] | --rollback"
       echo "Default: install/update the panel. --uninstall removes panel/owned routes and keeps data."
+      echo "--uninstall --purge then moves all RAZVILKA data to /opt/razvilka-removed-<UTC> for a clean reinstall."
       echo "--rollback explicitly restores the last pre-update snapshot."
       echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (default: $RELEASE_TAG; latest only for installation)"
       echo "Architecture override: RAZVILKA_ARCH=arm64|mips|mipsle (mipsel is also accepted)"
@@ -64,6 +67,7 @@ for ARG in "$@"; do
   esac
 done
 [ "$ACTION" = install ] || { [ "$FROM_ARTEM" -eq 0 ] && [ "$WITH_COMPONENTS" -eq 0 ]; } || { echo "Component/migration options apply only to installation" >&2; exit 2; }
+[ "$PURGE" -eq 0 ] || [ "$ACTION" = uninstall ] || { echo "--purge applies only to --uninstall" >&2; exit 2; }
 # Validate the release before Entware or the network is touched. The tag is
 # part of the download URL and of the archive directory checked below.
 if [ "$VERSION" = latest ]; then
@@ -170,9 +174,18 @@ check_private_cache() {
   done
 }
 check_private_cache
-TMP_ROOT="${TMPDIR:-$BASE/razvilka/cache}"
+if [ -n "${TMPDIR:-}" ]; then
+  TMP_ROOT="$TMPDIR"
+elif [ "$PURGE" -eq 1 ]; then
+  # Purge moves /opt/razvilka aside, private cache included. Extract into
+  # Entware's own temporary folder so neither the running helper nor this
+  # cleanup refers to the moved tree.
+  TMP_ROOT="$BASE/tmp"
+else
+  TMP_ROOT="$BASE/razvilka/cache"
+fi
 mkdir -p "$TMP_ROOT"
-[ -n "${TMPDIR:-}" ] || check_private_cache
+[ -n "${TMPDIR:-}" ] || [ "$PURGE" -eq 1 ] || check_private_cache
 TMP_ROOT="$(CDPATH= cd -- "$TMP_ROOT" && pwd -P)"
 WORKDIR="$(mktemp -d "$TMP_ROOT/razvilka-install.XXXXXX")"
 cleanup() {
@@ -239,6 +252,10 @@ tar -xzf "$BUNDLE" -C "$WORKDIR"
 HELPER="$WORKDIR/$RELEASE_NAME/scripts/$ACTION-entware.sh"
 [ -f "$HELPER" ] && [ ! -L "$HELPER" ] || { echo "Release helper is missing: $ACTION" >&2; exit 15; }
 if [ "$ACTION" = uninstall ]; then
+  if [ "$PURGE" -eq 1 ] && ! grep -q '^# RAZVILKA_UNINSTALL_PURGE_MOVES_DATA=1$' "$HELPER"; then
+    echo "This release has no purge option. Select a current release; no uninstall was started." >&2
+    exit 15
+  fi
   grep -q '^# RAZVILKA_UNINSTALL_PRESERVES_DATA=1$' "$HELPER" || {
     echo "This release predates safe panel removal. Select a current release; no uninstall was started." >&2
     exit 15
@@ -247,10 +264,16 @@ fi
 
 case "$ACTION" in
   install) step '5/5' 'Устанавливаю панель со снимком и автоматическим возвратом при ошибке…' ;;
-  uninstall) step '5/5' 'Удаляю панель и её маршруты; настройки и подключения сохраняются…' ;;
+  uninstall)
+    if [ "$PURGE" -eq 1 ]; then
+      step '5/5' 'Удаляю панель и её маршруты, затем переношу все данные RAZVILKA в отдельную папку…'
+    else
+      step '5/5' 'Удаляю панель и её маршруты; настройки и подключения сохраняются…'
+    fi ;;
   rollback) step '5/5' 'Возвращаю явно выбранный предыдущий снимок…' ;;
 esac
 set --
 if [ "$FROM_ARTEM" -eq 1 ]; then set -- "$@" --from-artem-flow; fi
 if [ "$WITH_COMPONENTS" -eq 1 ]; then set -- "$@" --with-components; fi
+if [ "$PURGE" -eq 1 ]; then set -- "$@" --purge; fi
 sh "$HELPER" "$@"
