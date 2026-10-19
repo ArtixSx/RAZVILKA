@@ -207,7 +207,27 @@ func (a *WARPWireGuardAdapter) Snapshot(ctx context.Context, plan Plan, root str
 	return writeAtomic(filepath.Join(root, "snapshot.json"), data, 0o600)
 }
 
+// ErrWGDomainAuthority refuses DNS-derived IP capture through a WireGuard-family
+// tunnel. Like the legacy proxy TUN, the tunnel takes every flow to a resolved
+// address and cannot tell the selected site from another one sharing it.
+var ErrWGDomainAuthority = errors.New("wireguard-domain-flow-authority-required")
+
+// Only intake paths check it. Deactivate, Commit and Rollback must still be
+// able to stop or restore runtime that an older release already installed.
+func (a *WARPWireGuardAdapter) requireLegacyIPPolicyAuthority(plan Plan) error {
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) == a.ID() && len(route.Domains) != 0 {
+			return ErrWGDomainAuthority
+		}
+	}
+	return nil
+}
+
 func (a *WARPWireGuardAdapter) Stage(ctx context.Context, plan Plan, root string) (retErr error) {
+	// Refuse before the phase marker, DNS, profile or transaction writes.
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return err
+	}
 	if err := a.markOriginalWGPhase(ctx, plan, root, false); err != nil {
 		return err
 	}
@@ -631,6 +651,10 @@ func (a *WARPWireGuardAdapter) cleanupCanaryPolicy(ctx context.Context, source n
 }
 
 func (a *WARPWireGuardAdapter) Activate(ctx context.Context, plan Plan, root string) (retErr error) {
+	// A read-only plan check before any live effect, as in the proxy adapter.
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return preflightRefusalError{err}
+	}
 	if err := a.markOriginalWGPhase(ctx, plan, root, true); err != nil {
 		return err
 	}
@@ -796,6 +820,10 @@ func (a *WARPWireGuardAdapter) healthState(ctx context.Context, plan Plan, state
 }
 
 func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr error) {
+	// A committed domain plan from an older release is never re-installed.
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return err
+	}
 	ctx, retErr = a.namedProfileReviewContext(ctx, plan.Routes)
 	if retErr != nil {
 		return retErr
@@ -922,6 +950,10 @@ func (a *WARPWireGuardAdapter) Reconcile(ctx context.Context, plan Plan) (retErr
 }
 
 func (a *WARPWireGuardAdapter) RefreshPolicy(ctx context.Context, plan Plan) (changed bool, retErr error) {
+	// Re-resolving domains would widen the capture to new shared addresses.
+	if err := a.requireLegacyIPPolicyAuthority(plan); err != nil {
+		return false, err
+	}
 	ctx, retErr = a.namedProfileReviewContext(ctx, plan.Routes)
 	if retErr != nil {
 		return false, retErr

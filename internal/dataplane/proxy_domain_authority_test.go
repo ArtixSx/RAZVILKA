@@ -7,8 +7,11 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 func TestLegacyProxySharedDomainAddressRefusedBeforeCapture(t *testing.T) {
@@ -78,7 +81,9 @@ func TestLegacyProxyExplicitCIDRAuthorityIsSeparate(t *testing.T) {
 }
 
 func TestLegacyProxyDomainPlanHasPreflightBlocker(t *testing.T) {
-	for _, engine := range []string{"sing-box", "xray", "usque"} {
+	// The WireGuard family turns the same DNS answers into the same /32 capture
+	// as the proxy TUN; a named profile is still the wireguard adapter.
+	for _, engine := range []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard", "wireguard:home"} {
 		for _, domains := range []bool{false, true} {
 			route := Route{ServiceID: "telegram", Resolved: engine, CIDRs: []string{"149.154.160.0/20"}}
 			if domains {
@@ -90,13 +95,48 @@ func TestLegacyProxyDomainPlanHasPreflightBlocker(t *testing.T) {
 			}
 			found := false
 			for _, blocker := range plan.Blockers {
-				if blocker.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED" && blocker.Adapter == engine {
+				if blocker.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED" && blocker.Adapter == adapterID(engine) {
 					found = true
 				}
 			}
-			if found != domains || domains && plan.Ready {
+			if found != domains || domains && plan.Ready || DomainFlowAuthority(engine) {
 				t.Fatalf("engine=%s domains=%v ready=%v blocker=%v", engine, domains, plan.Ready, found)
 			}
+		}
+	}
+	// Per-connection hostname matching and no capture at all keep domains.
+	for _, engine := range []string{"nfqws2", "direct"} {
+		plan, err := Build(Input{Routes: []Route{{ServiceID: "youtube", Resolved: engine, Domains: []string{"youtube.com"}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, blocker := range plan.Blockers {
+			if blocker.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED" {
+				t.Fatalf("%s domain route was fenced", engine)
+			}
+		}
+		if !DomainFlowAuthority(engine) {
+			t.Fatalf("%s lost domain authority", engine)
+		}
+	}
+}
+
+// One answer for Build, the WireGuard/proxy adapters and the autopilot: every
+// adapter except NFQWS2 and direct is an IP-policy executor, and an unknown
+// route has no authority at all.
+func TestDomainFlowAuthorityCoversEveryIPPolicyAdapter(t *testing.T) {
+	for _, id := range append(routekind.PreferredIDs(), "direct") {
+		ipPolicy := slices.Contains(domainCaptureAdapters, id)
+		if adapterID(id) != id || DomainFlowAuthority(id) == ipPolicy {
+			t.Fatalf("%s: ip-policy=%v authority=%v", id, ipPolicy, DomainFlowAuthority(id))
+		}
+	}
+	if len(domainCaptureAdapters) != routekind.PreferredCount-1 {
+		t.Fatal("an IP-policy adapter is missing from the domain blocker", domainCaptureAdapters)
+	}
+	for _, route := range []string{"", "auto", "mihomo", "direct-x", "nfqws2-x"} {
+		if DomainFlowAuthority(route) {
+			t.Fatalf("unknown route %q gained domain authority", route)
 		}
 	}
 }
