@@ -16,9 +16,15 @@ PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
 export PATH
 export RAZVILKA_BASE="$BASE"
 REPOSITORY="${RAZVILKA_REPOSITORY:-ArtixSx/RAZVILKA}"
-VERSION="${RAZVILKA_VERSION:-latest}"
+# This file is fetched from a release tag, so by default it installs, removes
+# and rolls back exactly that release. "latest" floats between generations
+# with different layouts and is accepted only as an explicit installation.
+# scripts/test-bootstrap.sh and internal/projectmeta keep this equal to VERSION.
+RELEASE_TAG=v0.20.0
+VERSION="${RAZVILKA_VERSION:-$RELEASE_TAG}"
 FROM_ARTEM=0
 WITH_COMPONENTS=0
+PURGE=0
 ACTION=install
 
 if [ -t 1 ]; then
@@ -44,13 +50,15 @@ for ARG in "$@"; do
       ACTION="${ARG#--}"
       ;;
     --from-artem-flow) FROM_ARTEM=1 ;;
+    --purge) PURGE=1 ;;
     --with-components|--starter-pack) WITH_COMPONENTS=1 ;;
     --without-components) WITH_COMPONENTS=0 ;; # legacy compatibility; UI-only is now the default
     -h|--help)
-      echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall | --rollback"
+      echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall [--purge] | --rollback"
       echo "Default: install/update the panel. --uninstall removes panel/owned routes and keeps data."
+      echo "--uninstall --purge then moves all RAZVILKA data to /opt/razvilka-removed-<UTC> for a clean reinstall."
       echo "--rollback explicitly restores the last pre-update snapshot."
-      echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (or latest)"
+      echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (default: $RELEASE_TAG; latest only for installation)"
       echo "Architecture override: RAZVILKA_ARCH=arm64|mips|mipsle (mipsel is also accepted)"
       echo "Example: RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh"
       exit 0
@@ -59,6 +67,23 @@ for ARG in "$@"; do
   esac
 done
 [ "$ACTION" = install ] || { [ "$FROM_ARTEM" -eq 0 ] && [ "$WITH_COMPONENTS" -eq 0 ]; } || { echo "Component/migration options apply only to installation" >&2; exit 2; }
+[ "$PURGE" -eq 0 ] || [ "$ACTION" = uninstall ] || { echo "--purge applies only to --uninstall" >&2; exit 2; }
+# Validate the release before Entware or the network is touched. The tag is
+# part of the download URL and of the archive directory checked below.
+if [ "$VERSION" = latest ]; then
+  [ "$ACTION" = install ] || {
+    echo "--$ACTION must use the release of the installed version; latest is not accepted" >&2
+    echo "Укажите версию установленной панели (/opt/bin/razvilka -version): RAZVILKA_VERSION=v<версия> sh $0 --$ACTION" >&2
+    exit 2
+  }
+else
+  case "$VERSION" in v*) : ;; *) VERSION="v$VERSION" ;; esac
+  case "$VERSION" in
+    v[0-9]*[!0-9A-Za-z.+-]*|*..*) echo "Invalid RAZVILKA_VERSION: use v<release-tag>, for example $RELEASE_TAG" >&2; exit 2 ;;
+    v[0-9]*) : ;;
+    *) echo "Invalid RAZVILKA_VERSION: use v<release-tag>, for example $RELEASE_TAG" >&2; exit 2 ;;
+  esac
+fi
 
 step '1/5' 'Проверяю Entware и системные инструменты…'
 [ "$(id -u)" = 0 ] || { echo "Run this command as the Entware administrator (root)." >&2; exit 10; }
@@ -134,7 +159,6 @@ echo 'Точную архитектуру сборки, включая MIPS/MIPS
 if [ "$VERSION" = latest ]; then
   DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/latest/download"
 else
-  case "$VERSION" in v*) : ;; *) VERSION="v$VERSION" ;; esac
   DOWNLOAD_BASE="https://github.com/$REPOSITORY/releases/download/$VERSION"
 fi
 
@@ -150,9 +174,18 @@ check_private_cache() {
   done
 }
 check_private_cache
-TMP_ROOT="${TMPDIR:-$BASE/razvilka/cache}"
+if [ -n "${TMPDIR:-}" ]; then
+  TMP_ROOT="$TMPDIR"
+elif [ "$PURGE" -eq 1 ]; then
+  # Purge moves /opt/razvilka aside, private cache included. Extract into
+  # Entware's own temporary folder so neither the running helper nor this
+  # cleanup refers to the moved tree.
+  TMP_ROOT="$BASE/tmp"
+else
+  TMP_ROOT="$BASE/razvilka/cache"
+fi
 mkdir -p "$TMP_ROOT"
-[ -n "${TMPDIR:-}" ] || check_private_cache
+[ -n "${TMPDIR:-}" ] || [ "$PURGE" -eq 1 ] || check_private_cache
 TMP_ROOT="$(CDPATH= cd -- "$TMP_ROOT" && pwd -P)"
 WORKDIR="$(mktemp -d "$TMP_ROOT/razvilka-install.XXXXXX")"
 cleanup() {
@@ -208,10 +241,21 @@ if ! tar -tvzf "$BUNDLE" >"$WORKDIR/archive.types" 2>"$WORKDIR/archive.types.err
   exit 16
 fi
 awk 'substr($0,1,1) != "-" && substr($0,1,1) != "d" {bad=1} END {exit bad}' "$WORKDIR/archive.types" || { echo "Release archive contains links or special files" >&2; exit 16; }
+# The checksum sidecar comes from the same place as the archive, so it proves
+# integrity only. A pinned release must also be the requested one: its single
+# top directory is RAZVILKA-<tag without v>, never another generation.
+if [ "$VERSION" != latest ] && [ "$RELEASE_NAME" != "RAZVILKA-${VERSION#v}" ]; then
+  echo "Release archive version does not match the requested release: $RELEASE_NAME, expected RAZVILKA-${VERSION#v}" >&2
+  exit 16
+fi
 tar -xzf "$BUNDLE" -C "$WORKDIR"
 HELPER="$WORKDIR/$RELEASE_NAME/scripts/$ACTION-entware.sh"
 [ -f "$HELPER" ] && [ ! -L "$HELPER" ] || { echo "Release helper is missing: $ACTION" >&2; exit 15; }
 if [ "$ACTION" = uninstall ]; then
+  if [ "$PURGE" -eq 1 ] && ! grep -q '^# RAZVILKA_UNINSTALL_PURGE_MOVES_DATA=1$' "$HELPER"; then
+    echo "This release has no purge option. Select a current release; no uninstall was started." >&2
+    exit 15
+  fi
   grep -q '^# RAZVILKA_UNINSTALL_PRESERVES_DATA=1$' "$HELPER" || {
     echo "This release predates safe panel removal. Select a current release; no uninstall was started." >&2
     exit 15
@@ -220,10 +264,16 @@ fi
 
 case "$ACTION" in
   install) step '5/5' 'Устанавливаю панель со снимком и автоматическим возвратом при ошибке…' ;;
-  uninstall) step '5/5' 'Удаляю панель и её маршруты; настройки и подключения сохраняются…' ;;
+  uninstall)
+    if [ "$PURGE" -eq 1 ]; then
+      step '5/5' 'Удаляю панель и её маршруты, затем переношу все данные RAZVILKA в отдельную папку…'
+    else
+      step '5/5' 'Удаляю панель и её маршруты; настройки и подключения сохраняются…'
+    fi ;;
   rollback) step '5/5' 'Возвращаю явно выбранный предыдущий снимок…' ;;
 esac
 set --
 if [ "$FROM_ARTEM" -eq 1 ]; then set -- "$@" --from-artem-flow; fi
 if [ "$WITH_COMPONENTS" -eq 1 ]; then set -- "$@" --with-components; fi
+if [ "$PURGE" -eq 1 ]; then set -- "$@" --purge; fi
 sh "$HELPER" "$@"

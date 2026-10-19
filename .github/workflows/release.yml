@@ -13,7 +13,10 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The full gate runs Go tests twice (normal and race), about 100 UI tests,
+    # four cross-builds and the Entware transaction. On the Linux test VM the
+    # updatecheck/app race and app normal runs alone took over 20 minutes.
+    timeout-minutes: 60
     env:
       GOTOOLCHAIN: local
     steps:
@@ -41,6 +44,13 @@ jobs:
             echo "Release tag $GITHUB_REF_NAME does not match canonical VERSION $SOURCE_VERSION" >&2
             exit 1
           fi
+          # The raw bootstrap at this tag installs, removes and rolls back its
+          # RELEASE_TAG by default. A stable tag must name itself; a candidate
+          # tag is installed only with an explicit RAZVILKA_VERSION pin.
+          if [[ "$RELEASE_VERSION" == "$SOURCE_BASE" ]] && ! grep -qx "RELEASE_TAG=$GITHUB_REF_NAME" scripts/bootstrap.sh; then
+            echo "scripts/bootstrap.sh does not default to $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           export RAZVILKA_VERSION="$RELEASE_VERSION"
           export RAZVILKA_COMMIT="$GITHUB_SHA"
           export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -62,6 +72,10 @@ jobs:
           cp -a \
             VERSION README.md README_RU.md README_EN.md LAB.md CHANGELOG.md LICENSE SECURITY.md THIRD_PARTY.md \
             configs docs dist scripts "$STAGE"/
+          # Internal delivery logs, research notes and lab diagnostics stay in
+          # Git only: they describe the owner's test network and devices and
+          # are not needed to install or run RAZVILKA on a router.
+          rm -rf "$STAGE"/docs/delivery-* "$STAGE"/docs/research-* "$STAGE"/docs/implementation-* "$STAGE/scripts/diagnostics"
           test -x "$STAGE/scripts/install-entware.sh"
           test -x "$STAGE/scripts/upgrade-entware.sh"
           test -x "$STAGE/scripts/rollback-entware.sh"
@@ -80,6 +94,7 @@ jobs:
           const root = path.resolve(process.argv[2]);
           const privateDirectories = new Set(['.hil', '.git', '.ssh', '__pycache__', 'nodes-private', 'native-enrollment', 'configs/local']);
           const privateName = /(?:\.(?:private|secret)(?:\.|$)|\.(?:token|key|pem|p12|pfx|log|pid|bak|pyc)$|^\.env(?:\.|$)|^admin\.credentials\.json$|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$))/i;
+          const internalMaterial = /^(?:docs\/(?:delivery|research|implementation)-|scripts\/diagnostics(?:\/|$))/i;
           function visit(directory) {
             for (const item of fs.readdirSync(directory, {withFileTypes: true})) {
               const filename = path.join(directory, item.name);
@@ -89,6 +104,9 @@ jobs:
                   privateDirectories.has(item.name.toLowerCase()) || privateDirectories.has(relative.toLowerCase()) ||
                   privateName.test(item.name)) {
                 throw new Error('Refusing unsafe/private release entry: ' + relative);
+              }
+              if (internalMaterial.test(relative)) {
+                throw new Error('Refusing internal delivery/research/diagnostic release entry: ' + relative);
               }
               if (stat.isDirectory()) visit(filename);
             }
@@ -100,6 +118,14 @@ jobs:
           cp "RAZVILKA-${VERSION}-entware.tar.gz" RAZVILKA-entware.tar.gz
           sha256sum RAZVILKA-entware.tar.gz > RAZVILKA-entware.tar.gz.sha256
           sha256sum "RAZVILKA-${VERSION}-entware.tar.gz" "RAZVILKA-${VERSION}-entware.zip" > "RAZVILKA-${VERSION}.SHA256SUMS"
+          # The uploaded binary manifest sits next to flat downloads, so it uses
+          # bare names; the archive keeps dist/SHA256SUMS with dist/ paths for
+          # the installer and self-update. Both must list identical digests.
+          (cd dist && sha256sum razvilka-linux-amd64 razvilka-linux-arm64 razvilka-linux-mips razvilka-linux-mipsle) > SHA256SUMS
+          sed 's#^\([0-9a-f]\{64\}\) \([ *]\)#\1 \2dist/#' SHA256SUMS | cmp -s - dist/SHA256SUMS || {
+            echo "Flat binary manifest differs from dist/SHA256SUMS" >&2; exit 1;
+          }
+          (cd dist && sha256sum -c ../SHA256SUMS)
 
       - name: Attest release provenance
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
@@ -109,7 +135,7 @@ jobs:
             dist/razvilka-linux-arm64
             dist/razvilka-linux-mips
             dist/razvilka-linux-mipsle
-            dist/SHA256SUMS
+            SHA256SUMS
             RAZVILKA-*-entware.tar.gz
             RAZVILKA-*-entware.zip
             RAZVILKA-*.SHA256SUMS
@@ -140,7 +166,7 @@ jobs:
             dist/razvilka-linux-arm64 \
             dist/razvilka-linux-mips \
             dist/razvilka-linux-mipsle \
-            dist/SHA256SUMS \
+            SHA256SUMS \
             "RAZVILKA-${VERSION}-entware.tar.gz" \
             "RAZVILKA-${VERSION}-entware.zip" \
             "RAZVILKA-${VERSION}.SHA256SUMS" \

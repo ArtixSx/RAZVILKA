@@ -280,6 +280,33 @@ require_target_self_update_compatibility() {
   esac
 }
 
+# 0.20 is a clean base: it neither reads nor migrates the <=0.19 layout, whose
+# routes, journals and snapshots live in $BASE/var/lib/razvilka. A 0.19 updater
+# runs this bundle's dry-run before its own apply, so refuse in BOTH modes and
+# before any candidate reads retained state. A controller without the 0.20
+# reader ABI is that old generation even after its state directory was moved.
+refuse_pre020_installation() {
+  echo "Pre-0.20 RAZVILKA installation found; 0.20 installs only on a clean base; installation unchanged" >&2
+  echo "  found: $1" >&2
+  echo "Найдена установка RAZVILKA до 0.20. Версия 0.20 ставится только начисто, без переноса старых данных." >&2
+  echo "Порядок перехода: docs/INSTALL_RU.md, раздел «Переход с 0.19.3 и более ранних версий»." >&2
+  return 1
+}
+
+require_no_pre020_installation() {
+  # Any object at the old state name is evidence; never follow or inspect it.
+  if [ -e "$BASE/var/lib/razvilka" ] || [ -L "$BASE/var/lib/razvilka" ]; then
+    refuse_pre020_installation "$BASE/var/lib/razvilka" || return 1
+  fi
+  if [ -e "$BINDIR/razvilka" ] || [ -L "$BINDIR/razvilka" ]; then
+    # Bounded and read-only; an unidentifiable controller refuses as unknown.
+    PRE020_READER="$(probe_self_update_metadata "$BINDIR/razvilka" -self-update-read-version)" || return 1
+    if [ "$PRE020_READER" = unsupported ]; then
+      refuse_pre020_installation "$BINDIR/razvilka" || return 1
+    fi
+  fi
+}
+
 require_legacy_file_protocol_free() {
   for SELF_PROTOCOL_PATH in "$STATEDIR/self-update/current.json" "$STATEDIR/self-update-files/current.json" "$STATEDIR/self-update-stop"; do
     if [ -e "$SELF_PROTOCOL_PATH" ] || [ -L "$SELF_PROTOCOL_PATH" ]; then
@@ -387,6 +414,7 @@ require_native_enrollment_schema() {
     [ "$NATIVE_SCHEMA" = 1 ] || { echo "Target binary has an incompatible native WARP schema; installation unchanged" >&2; return 1; }
   fi
 }
+require_no_pre020_installation
 require_target_self_update_compatibility "$BIN_SOURCE"
 require_native_enrollment_schema "$BIN_SOURCE"
 require_node_history_compatibility "$BIN_SOURCE"
