@@ -41,6 +41,13 @@ jobs:
             echo "Release tag $GITHUB_REF_NAME does not match canonical VERSION $SOURCE_VERSION" >&2
             exit 1
           fi
+          # The raw bootstrap at this tag installs, removes and rolls back its
+          # RELEASE_TAG by default. A stable tag must name itself; a candidate
+          # tag is installed only with an explicit RAZVILKA_VERSION pin.
+          if [[ "$RELEASE_VERSION" == "$SOURCE_BASE" ]] && ! grep -qx "RELEASE_TAG=$GITHUB_REF_NAME" scripts/bootstrap.sh; then
+            echo "scripts/bootstrap.sh does not default to $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           export RAZVILKA_VERSION="$RELEASE_VERSION"
           export RAZVILKA_COMMIT="$GITHUB_SHA"
           export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

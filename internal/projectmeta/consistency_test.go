@@ -155,6 +155,24 @@ func TestCanonicalVersionIsConsistent(t *testing.T) {
 	}
 }
 
+// The raw bootstrap fetched from a release tag must install, remove and roll
+// back that same release by default, never whatever GitHub marks as latest.
+func TestBootstrapDefaultsToItsOwnReleaseTag(t *testing.T) {
+	root := repositoryRoot(t)
+	version := strings.TrimSuffix(strings.TrimSpace(readFile(t, root, "VERSION")), "-dev")
+	bootstrap := readFile(t, root, "scripts/bootstrap.sh")
+	defaults := regexp.MustCompile(`(?m)^RELEASE_TAG=(\S+)$`).FindAllStringSubmatch(bootstrap, -1)
+	if len(defaults) != 1 || defaults[0][1] != "v"+version {
+		t.Fatalf("bootstrap default release = %v, want exactly one RELEASE_TAG=v%s", defaults, version)
+	}
+	if !strings.Contains(bootstrap, `VERSION="${RAZVILKA_VERSION:-$RELEASE_TAG}"`) {
+		t.Error("bootstrap does not default RAZVILKA_VERSION to its own release tag")
+	}
+	if !strings.Contains(readFile(t, root, ".github/workflows/release.yml"), `grep -qx "RELEASE_TAG=$GITHUB_REF_NAME" scripts/bootstrap.sh`) {
+		t.Error("release workflow does not refuse a stable tag whose bootstrap defaults to another release")
+	}
+}
+
 func TestCurrentDocumentationLocalLinksExist(t *testing.T) {
 	root := repositoryRoot(t)
 	current := []string{

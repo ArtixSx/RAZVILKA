@@ -15,7 +15,12 @@ HOST_SH="$(command -v sh)"
 REAL_CP="$(command -v cp)"
 REAL_MKDIR="$(command -v mkdir)"
 export REAL_CP REAL_MKDIR
-mkdir -p "$TEST_ROOT/essential" "$TEST_ROOT/providers" "$TEST_ROOT/source/RAZVILKA-fixture/scripts"
+# The bootstrap published with a tag must fetch exactly that release by default.
+RELEASE_VERSION="$(tr -d '\r\n' <"$ROOT/VERSION")"
+RELEASE_VERSION="${RELEASE_VERSION%-dev}"
+RELEASE_TAG="v$RELEASE_VERSION"
+RELEASE_DIR="RAZVILKA-$RELEASE_VERSION"
+mkdir -p "$TEST_ROOT/essential" "$TEST_ROOT/providers" "$TEST_ROOT/source/$RELEASE_DIR/scripts"
 for TOOL in cat chmod cp mkdir rm mv uname sh ls; do
   REAL_TOOL="$(command -v "$TOOL")"
   printf '#!/bin/sh\nexec "%s" "$@"\n' "$REAL_TOOL" >"$TEST_ROOT/essential/$TOOL"
@@ -76,7 +81,7 @@ esac
 CURL
 chmod 700 "$TEST_ROOT/providers/"*
 for ACTION in install uninstall rollback; do
-  cat >"$TEST_ROOT/source/RAZVILKA-fixture/scripts/$ACTION-entware.sh" <<'HELPER'
+  cat >"$TEST_ROOT/source/$RELEASE_DIR/scripts/$ACTION-entware.sh" <<'HELPER'
 #!/bin/sh
 # RAZVILKA_UNINSTALL_PRESERVES_DATA=1
 printf '%s\n' "${0##*/}:$*" >"$CASE_ROOT/helper-called"
@@ -116,7 +121,7 @@ done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
 
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   case "$CASE_NAME" in install-default-cache|private-owner|private-writable)
     [ "$NATIVE_LINKS" -eq 1 ] && [ "$(id -u)" = 0 ] || continue ;;
@@ -160,9 +165,30 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   esac
   cp -R "$TEST_ROOT/source" "$CASE_ROOT/source"
   if [ "$CASE_NAME" = old-uninstall ]; then
-    printf '#!/bin/sh\nprintf old-rollback >"$CASE_ROOT/helper-called"\n' >"$CASE_ROOT/source/RAZVILKA-fixture/scripts/uninstall-entware.sh"
+    printf '#!/bin/sh\nprintf old-rollback >"$CASE_ROOT/helper-called"\n' >"$CASE_ROOT/source/$RELEASE_DIR/scripts/uninstall-entware.sh"
   fi
   if [ "$CASE_NAME" = multiple-roots ]; then mkdir "$CASE_ROOT/source/RAZVILKA-extra"; fi
+  # A pinned release must contain exactly its own top directory. Only an
+  # explicit installation from "latest" has no version to compare.
+  VERSION_OVERRIDE=""
+  EXPECTED_DOWNLOAD="https://github.com/ArtixSx/RAZVILKA/releases/download/$RELEASE_TAG/"
+  case "$CASE_NAME" in
+    install-latest|wrong-root) mv "$CASE_ROOT/source/$RELEASE_DIR" "$CASE_ROOT/source/RAZVILKA-9.9.9" ;;
+    install-pinned) mv "$CASE_ROOT/source/$RELEASE_DIR" "$CASE_ROOT/source/RAZVILKA-0.20.0-rc.7" ;;
+  esac
+  case "$CASE_NAME" in
+    install-latest|latest-uninstall|latest-rollback)
+      VERSION_OVERRIDE=latest
+      EXPECTED_DOWNLOAD=https://github.com/ArtixSx/RAZVILKA/releases/latest/download/ ;;
+    install-pinned)
+      VERSION_OVERRIDE=0.20.0-rc.7
+      EXPECTED_DOWNLOAD=https://github.com/ArtixSx/RAZVILKA/releases/download/v0.20.0-rc.7/ ;;
+    invalid-version) VERSION_OVERRIDE='v1.0/../../x' ;;
+  esac
+  case "$CASE_NAME" in
+    latest-uninstall) set -- --uninstall ;;
+    latest-rollback) set -- --rollback ;;
+  esac
   if [ "$CASE_NAME" = traversal ] || [ "$CASE_NAME" = traversal-warning ]; then
     # A fixed gzip/tar fixture containing ../RAZVILKA-fixture/traversal.
     # BusyBox tar has no GNU --transform option; retain the same unsafe path.
@@ -190,7 +216,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
   ARCH_OVERRIDE=""
   [ "$CASE_NAME" != install-explicit-mipsel ] || ARCH_OVERRIDE=mipsle
   PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" TMPDIR="$RUN_TMP" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
-    "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
+    RAZVILKA_VERSION="$VERSION_OVERRIDE" "$HOST_SH" "$ROOT/scripts/bootstrap.sh" "$@" >"$CASE_ROOT/output" 2>&1 || CODE=$?
   case "$CASE_NAME" in
     install-*|symlink-base|missing-dependencies|incompatible-timeout|https-bootstrap|uninstall|rollback)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
@@ -198,6 +224,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       case "$CASE_NAME" in uninstall|rollback) EXPECTED="$CASE_NAME" ;; esac
       [ "$(cat "$CASE_ROOT/helper-called")" = "$EXPECTED-entware.sh:" ] || { echo "Wrong helper/action: $CASE_NAME" >&2; exit 1; }
       [ "$(cat "$CASE_ROOT/helper-architecture")" = "$ARCH_OVERRIDE" ] || { echo "Architecture override was lost before the release helper" >&2; exit 1; }
+      awk -v base="$EXPECTED_DOWNLOAD" 'index($NF, base) != 1 {bad=1} END {exit bad || NR != 2}' "$CASE_ROOT/downloads" || {
+        echo "Bootstrap fetched another release than requested: $CASE_NAME" >&2; cat "$CASE_ROOT/downloads" >&2; exit 1;
+      }
       if [ "$CASE_NAME" = install-default-cache ]; then
         [ -d "$BASE/razvilka/cache" ] && [ -z "$(find "$BASE/razvilka/cache" -mindepth 1 -print)" ] &&
           [ "$(ls -nd "$BASE/razvilka" | awk '{print $1,$3}')" = 'drwx------ 0' ] || { echo "Bootstrap default cache is not private/root-owned/clean" >&2; exit 1; }
@@ -231,6 +260,16 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
           ;;
         traversal|traversal-warning|list-failed|types-warning)
           [ "$CODE" = 16 ] || { echo "Fixture did not reach the archive listing refusal: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
+          ;;
+        wrong-root)
+          [ "$CODE" = 16 ] && grep -q '^Release archive version does not match the requested release' "$CASE_ROOT/output" || {
+            echo "Archive of another release was accepted or refused elsewhere" >&2; cat "$CASE_ROOT/output" >&2; exit 1;
+          }
+          ;;
+        latest-uninstall|latest-rollback|invalid-version)
+          [ "$CODE" = 2 ] && [ ! -e "$CASE_ROOT/downloads" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || {
+            echo "Unpinned or invalid release reached Entware or a download: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1;
+          }
           ;;
       esac
       ;;
