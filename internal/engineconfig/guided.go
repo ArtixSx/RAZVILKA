@@ -172,14 +172,16 @@ func (m *Manager) rawLocked(engineID, fileID string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	// Apply's RAZVILKA block in nfqws2.conf is not the owner's: the guided,
+	// mode and repair editors read and stage the owner's part only.
 	if image.Exists {
-		return image.Data, "staged", nil
+		return withoutManagedBlock(image.Data), "staged", nil
 	}
 	if !fileExists(path) {
 		return nil, "missing", os.ErrNotExist
 	}
 	b, err := readLimited(path)
-	return b, source, err
+	return withoutManagedBlock(b), source, err
 }
 
 func guidedFields(engineID, fileID string) []GuidedField {

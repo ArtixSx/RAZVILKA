@@ -170,9 +170,6 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 	if len(config) == 0 {
 		return errors.New("NFQWS2 configuration is empty")
 	}
-	if err := writeAtomic(filepath.Join(root, "nfqws2.conf.staged"), config, 0o600); err != nil {
-		return err
-	}
 	lists := nfqws2PlanLists(plan, a.ID())
 	for index, values := range lists {
 		for _, value := range values {
@@ -198,11 +195,14 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 			return preflightRefusalError{err}
 		}
 	}
-	// Exclusions are enforced by nfqws2 itself, before its own selection.
-	// A configuration that does not read the exclude lists would silently
-	// bypass an excluded site, so it is refused instead.
-	if err := a.requireExclusionLists(config, lists, merged[0]); err != nil {
+	// Exclusions reach every nfqws2 profile through the configuration's own
+	// managed block; without that the owner's configuration is unchanged.
+	staged, err := a.exclusionConfig(config, lists)
+	if err != nil {
 		return preflightRefusalError{err}
+	}
+	if err := writeAtomic(filepath.Join(root, "nfqws2.conf.staged"), staged, 0o600); err != nil {
+		return err
 	}
 	for index := range lists {
 		if err := writeAtomic(filepath.Join(root, nfqws2ListStages[index]), merged[index], 0o600); err != nil {
@@ -269,65 +269,91 @@ func nfqws2PlanLists(plan Plan, id string) [4][]string {
 	return lists
 }
 
-// ErrSiteExclusionsUnread marks a configuration whose effective nfqws2
-// arguments would not honour the saved "sites without bypass".
+// ErrSiteExclusionsUnread marks a configuration in which the saved "sites
+// without bypass" cannot be applied to every nfqws2 profile.
 var ErrSiteExclusionsUnread = errors.New("NFQWS2_SITE_EXCLUSIONS_UNREAD")
 
-// requireExclusionLists confirms from the effective arguments (the last
-// assignment, with $NAME references expanded) that nfqws2 honours every
-// exclusion. Anything it cannot resolve is refused, never assumed.
-func (a *NFQWS2Adapter) requireExclusionLists(config []byte, lists [4][]string, userList []byte) error {
+// exclusionConfig renders the owner's nfqws2.conf with this instance's managed
+// block. The stock init sources the file and composes one profile per
+// variable (custom, UDP, the IP list and the hostlist pair), and nfqws2 lists
+// filter only their own profile. Like z2k, which adds its whitelist to every
+// profile, the block extends each profile variable the owner set: hostname
+// profiles get both exclude lists, the UDP profile the address list. Empty
+// variables stay empty, so no profile appears that the owner did not set up.
+// With nothing to exclude the owner's configuration is returned unchanged.
+func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byte, error) {
+	owner, err := a.owner()
+	if err != nil {
+		return nil, err
+	}
+	block, err := nfqws2Block(config)
+	if err != nil {
+		return nil, err
+	}
+	if len(block) != 0 && !strings.Contains(string(block), "\n# RAZVILKA INSTANCE "+owner+"\n") {
+		return nil, errors.New("NFQWS2 configuration block is not owned by this instance")
+	}
+	ownerPart, _, err := removeManagedBlock(string(config))
+	if err != nil {
+		return nil, err
+	}
 	if len(lists[2])+len(lists[3]) == 0 {
-		return nil
+		return []byte(ownerPart), nil
 	}
 	paths := a.ownedListPaths()
-	args, err := engineconfig.ParseNFQWSListArguments(config)
+	for _, path := range paths[2:] {
+		if !nfqws2ShellWord(path) {
+			return nil, fmt.Errorf("%w: путь списка исключений %q нельзя передать nfqws2", ErrSiteExclusionsUnread, path)
+		}
+	}
+	host, udp := []string{}, []string{}
+	if len(lists[2]) != 0 {
+		host = append(host, "--hostlist-exclude="+paths[2])
+	}
+	if len(lists[3]) != 0 {
+		host = append(host, "--ipset-exclude="+paths[3])
+		udp = append(udp, "--ipset-exclude="+paths[3])
+	}
+	custom, err := engineconfig.NFQWSCustomProfiles([]byte(ownerPart))
 	if err != nil {
-		return fmt.Errorf("%w: не удалось разобрать аргументы nfqws2.conf, поэтому «Сайты без обхода» не применены; верните стандартные строки NFQWS_EXTRA_ARGS и NFQWS_ARGS_IPSET", ErrSiteExclusionsUnread)
+		return nil, fmt.Errorf("%w: NFQWS_ARGS_CUSTOM в nfqws2.conf нельзя прочитать без запуска shell, поэтому «Сайты без обхода» не применены; уберите из него подстановки или очистите «Сайты без обхода»", ErrSiteExclusionsUnread)
 	}
-	if len(lists[2]) != 0 && !slices.Contains(args.Extra, "--hostlist-exclude="+paths[2]) {
-		// $MODE_LIST processes user.list hosts only: an excluded name is
-		// already left alone unless user.list selects it, its parent or a
-		// subdomain of it.
-		hostlists := []string{}
-		for _, arg := range args.Extra {
-			if strings.HasPrefix(arg, "--hostlist") || strings.HasPrefix(arg, "--ipset") {
-				hostlists = append(hostlists, arg)
-			}
-		}
-		if !slices.Equal(hostlists, []string{"--hostlist=" + paths[0]}) {
-			return fmt.Errorf("%w: NFQWS2 не читает список исключений сайтов (exclude.list); выберите режим AUTO или «весь трафик» либо очистите «Сайты без обхода»", ErrSiteExclusionsUnread)
-		}
-		if overlap := nfqws2HostOverlap(lists[2], userList); len(overlap) != 0 {
-			return fmt.Errorf("%w: в режиме «только user.list» NFQWS2 не читает исключения, а user.list выбирает исключённые сайты: %s; уберите их из user.list, выберите режим AUTO или уберите их из «Сайтов без обхода»", ErrSiteExclusionsUnread, strings.Join(overlap, ", "))
-		}
+	options := strings.Join(host, " ")
+	lines := []string{"# RAZVILKA INSTANCE " + owner, "# «Сайты без обхода» в каждом профиле nfqws2; блок снимается при остановке RAZVILKA.",
+		`NFQWS_EXTRA_ARGS="$NFQWS_EXTRA_ARGS ` + options + `"`,
+		`if [ -n "$NFQWS_ARGS_IPSET" ]; then NFQWS_ARGS_IPSET="$NFQWS_ARGS_IPSET ` + options + `"; fi`}
+	if len(udp) != 0 {
+		lines = append(lines, `if [ -n "$NFQWS_ARGS_UDP" ]; then NFQWS_ARGS_UDP="$NFQWS_ARGS_UDP `+strings.Join(udp, " ")+`"; fi`)
 	}
-	if len(lists[3]) != 0 && !slices.Contains(args.IPSet, "--ipset-exclude="+paths[3]) {
-		return fmt.Errorf("%w: NFQWS2 не читает список исключённых адресов (--ipset-exclude); верните стандартную строку NFQWS_ARGS_IPSET в nfqws2.conf либо уберите адреса из «Сайтов без обхода»", ErrSiteExclusionsUnread)
+	if len(custom) != 0 {
+		profiles := make([]string, 0, len(custom))
+		for _, profile := range custom {
+			profiles = append(profiles, strings.Join(append(slices.Clone(profile), host...), " "))
+		}
+		lines = append(lines, `NFQWS_ARGS_CUSTOM="`+nfqws2DoubleQuoted(strings.Join(profiles, " --new "))+`"`)
 	}
-	return nil
+	merged, err := replaceManagedBlock(ownerPart, lines)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(merged), nil
 }
 
-// nfqws2HostOverlap lists excluded names that a host list selects: the same
-// name, a parent of it or a subdomain of it (nfqws2 matches subdomains).
-func nfqws2HostOverlap(excluded []string, list []byte) []string {
-	selected := map[string]bool{}
-	for _, line := range strings.Split(string(list), "\n") {
-		line = strings.ToLower(strings.TrimSpace(line))
-		if line != "" && !strings.HasPrefix(line, "#") {
-			selected[strings.TrimPrefix(strings.TrimSuffix(line, "."), "*.")] = true
+// nfqws2ShellWord admits a path that needs no quoting inside a shell word.
+func nfqws2ShellWord(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, c := range value {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && !strings.ContainsRune("/._-:", c) && c != filepath.Separator {
+			return false
 		}
 	}
-	overlap := []string{}
-	for _, name := range excluded {
-		for host := range selected {
-			if host == name || strings.HasSuffix(host, "."+name) || strings.HasSuffix(name, "."+host) {
-				overlap = append(overlap, name)
-				break
-			}
-		}
-	}
-	return sortedUnique(overlap)
+	return true
+}
+
+func nfqws2DoubleQuoted(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "$", `\$`, "`", "\\`").Replace(value)
 }
 
 func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) error {
@@ -467,7 +493,7 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 		probe = defaultNFQWS2Probe
 	}
 	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != a.ID() || route.ProbeURL == "" {
+		if adapterID(route.Resolved) != a.ID() || route.ProbeURL == "" || plan.SiteExclusions.coversRoute(route) {
 			continue
 		}
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
@@ -545,6 +571,24 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 		mode os.FileMode
 	}
 	var writes []write
+	config, configExists, err := nfqws2Read(a.ConfigPath)
+	if err != nil {
+		return false, err
+	}
+	configHash := nfqws2Hash(config)
+	if configExists && lease.ConfigOwner != "" && configHash == lease.ConfigOwner {
+		// An interrupted cleanup removed the block this lease records.
+		rendered, err := a.exclusionConfig(config, lists)
+		if err != nil || nfqws2Hash(rendered) != lease.ConfigHash {
+			return false, errors.New("the NFQWS2 configuration block of the committed plan cannot be proven; review is required")
+		}
+		mode := os.FileMode(0o644)
+		if info, statErr := os.Stat(a.ConfigPath); statErr == nil {
+			mode = info.Mode().Perm()
+		}
+		writes = append(writes, write{a.ConfigPath, rendered, mode})
+		configHash = lease.ConfigHash
+	}
 	for index, values := range lists {
 		path := a.ownedListPaths()[index]
 		data, exists, err := nfqws2Read(path)
@@ -568,8 +612,9 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	if len(writes) == 0 {
 		return false, nil
 	}
-	if err := a.verifyOwnedRuntime(lease, false); err != nil {
-		return false, err
+	init, _, err := nfqws2Read(a.InitPath)
+	if err != nil || configHash != lease.ConfigHash || nfqws2Hash(init) != lease.InitHash {
+		return false, errors.New("NFQWS2 runtime changed outside its ownership manifest")
 	}
 	for _, w := range writes {
 		if err := writeAtomic(w.path, w.data, w.mode); err != nil {
@@ -616,6 +661,27 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 	removals := []removal{}
 	// Validate every shared resource before the first write. Keep the lease
 	// until reload succeeds so interrupted cleanup can safely be retried.
+	config, configExists, err := nfqws2Read(a.ConfigPath)
+	if err != nil {
+		return err
+	}
+	if block, blockErr := nfqws2Block(config); blockErr != nil {
+		return blockErr
+	} else if configExists && len(block) != 0 {
+		owner, err := a.owner()
+		if err != nil || !strings.Contains(string(block), "\n# RAZVILKA INSTANCE "+owner+"\n") {
+			return errors.New("NFQWS2 configuration block is not owned by this instance")
+		}
+		cleaned, _, err := removeManagedBlock(string(config))
+		if err != nil {
+			return err
+		}
+		mode := os.FileMode(0o644)
+		if info, statErr := os.Stat(a.ConfigPath); statErr == nil {
+			mode = info.Mode().Perm()
+		}
+		removals = append(removals, removal{a.ConfigPath, []byte(cleaned), mode})
+	}
 	for index, path := range a.ownedListPaths() {
 		data, exists, err := nfqws2Read(path)
 		if err != nil {

@@ -42,4 +42,17 @@ func TestNFQWS2InactivityAcceptsForeignOwnedBlockFreeLists(t *testing.T) {
 	if _, err := nfqws2ReadInactiveFiles(context.Background(), f.a, f.proof); err == nil {
 		t.Fatal("a list holding a RAZVILKA block passed the inactivity proof")
 	}
+	// The exclusion block of the configuration is RAZVILKA's runtime too.
+	if err := os.WriteFile(lists[2], []byte("stock.example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nfqws2ReadInactiveFiles(context.Background(), f.a, f.proof); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.a.ConfigPath, []byte("# fixture\n"+managedBegin+"\nNFQWS_EXTRA_ARGS=\"$NFQWS_EXTRA_ARGS\"\n"+managedEnd+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := nfqws2ReadInactiveFiles(context.Background(), f.a, f.proof); err == nil {
+		t.Fatal("a configuration holding a RAZVILKA block passed the inactivity proof")
+	}
 }

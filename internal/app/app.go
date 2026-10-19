@@ -3688,12 +3688,12 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices) }
 		case changeScopeDevices:
 			commit = func() (func() error, error) { return a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices) }
-		case changeScopeEngine:
+		case changeScopeEngine, changeScopeExclusions:
 			commit = nil
 		default:
 			commit = a.Store.ApplyDraftWithRollback
 		}
-		if review != nil && scope != changeScopeEngine {
+		if review != nil && !scope.appliedOnly() {
 			commit = func() (func() error, error) { return review.commit(a, applyContext, scope) }
 		}
 		execution, applyErr := a.applyDataplane(applyContext, transaction, commit)
@@ -3712,7 +3712,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var applyErr error
-	if review != nil && scope != changeScopeEngine {
+	if review != nil && !scope.appliedOnly() {
 		_, applyErr = review.commit(a, r.Context(), scope)
 	} else {
 		switch scope {
@@ -3720,7 +3720,7 @@ func (a *App) apply(w http.ResponseWriter, r *http.Request) {
 			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeServices)
 		case changeScopeDevices:
 			_, applyErr = a.Store.ApplyDraftScopeWithRollback(config.DraftScopeDevices)
-		case changeScopeEngine:
+		case changeScopeEngine, changeScopeExclusions:
 			// Engine drafts are committed by their adapter. A no-op engine plan has
 			// no configuration authority to claim here.
 		default:
@@ -3848,7 +3848,16 @@ const (
 	changeScopeServices changeScope = "services"
 	changeScopeDevices  changeScope = "devices"
 	changeScopeEngine   changeScope = "engine"
+	// changeScopeExclusions re-applies the applied services with the saved
+	// "sites without bypass": no Store draft and no engine draft is involved.
+	changeScopeExclusions changeScope = "exclusions"
 )
+
+// appliedOnly scopes build from the applied services and commit nothing in
+// Store, so their plan carries the applied revision.
+func (s changeScope) appliedOnly() bool {
+	return s == changeScopeEngine || s == changeScopeExclusions
+}
 
 func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 	raw := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("scope")))
@@ -3856,7 +3865,7 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 		raw = string(changeScopeAll)
 	}
 	scope := changeScope(raw)
-	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeServices && scope != changeScopeDevices && scope != changeScopeEngine {
+	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeServices && scope != changeScopeDevices && scope != changeScopeEngine && scope != changeScopeExclusions {
 		return "", "", fmt.Errorf("unknown change scope %q", raw)
 	}
 	engineID := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("engine")))
@@ -3909,6 +3918,12 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	siteExclusions, err := a.legacySiteExclusions(cfg)
 	if err != nil {
 		return dataplane.Plan{}, err
+	}
+	// A plan of the applied services belongs to the applied revision; a newer
+	// unapplied draft must not make the committed plan look ahead of it.
+	planRevision := cfg.Revision
+	if scope.appliedOnly() {
+		planRevision = cfg.AppliedRevision
 	}
 	cfg = configForChangeScope(cfg, scope)
 	networkProfile := ""
@@ -4077,7 +4092,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 			}
 		}
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return used[id] })
-	case changeScopeDevices, changeScopeNode:
+	case changeScopeDevices, changeScopeNode, changeScopeExclusions:
 		drafts = nil
 	case changeScopeEngine:
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return id == engineID })
@@ -4085,14 +4100,14 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	// Exact registry routes materialize their own private runtime configuration.
 	// Applying a service or routing choice grants no authority to install or
 	// discard an unrelated editor draft for that engine.
-	if len(nodeScopedEngines) > 0 && scope != changeScopeEngine {
+	if len(nodeScopedEngines) > 0 && scope != changeScopeEngine && scope != changeScopeExclusions {
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return !nodeScopedEngines[id] })
 	}
 	host := dataplane.DiscoverHost()
 	if a.DataplaneHost != nil {
 		host = a.DataplaneHost()
 	}
-	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, SiteExclusions: siteExclusions, Host: host}
+	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: planRevision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, SiteExclusions: siteExclusions, Host: host}
 	if err := a.composeScopedDNSContext(ctx, cfg, previousDNSPlan, &input, dnsChange); err != nil {
 		return dataplane.Plan{}, err
 	}
@@ -4136,7 +4151,7 @@ func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
 			services[id] = state
 		}
 		cfg.Services = services
-	case changeScopeEngine:
+	case changeScopeEngine, changeScopeExclusions:
 		cfg.Services = clone(cfg.AppliedServices)
 	}
 	return cfg
@@ -4185,6 +4200,8 @@ func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {
 		return a.Store.DirtyScope(config.DraftScopeDevices)
 	case changeScopeEngine:
 		return len(filterEngineConfigRefs(a.stagedEngineConfigRefs(), func(id string) bool { return id == engineID })) > 0
+	case changeScopeExclusions:
+		return a.siteExclusionsPending(a.Store.Get())
 	default:
 		return a.pendingChanges()
 	}
@@ -4196,6 +4213,9 @@ func (a *App) discard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scope, engineID, scopeErr := changeScopeFromRequest(r)
+	if scopeErr == nil && scope == changeScopeExclusions {
+		scopeErr = errors.New("saved exclusions are changed in their own editor")
+	}
 	if scopeErr != nil {
 		http.Error(w, scopeErr.Error(), http.StatusBadRequest)
 		return

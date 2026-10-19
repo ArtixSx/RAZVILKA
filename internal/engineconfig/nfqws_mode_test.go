@@ -37,23 +37,29 @@ func TestNFQWSModeIsDraftOnlyAndRequiresExactReviewAndDiscoveryConsent(t *testin
 	}
 }
 
-func TestParseNFQWSListArgumentsFollowsTheShell(t *testing.T) {
-	base := "MODE_LIST=\"--hostlist=/l/user.list\"\nMODE_ALL=\"--hostlist-exclude=/l/exclude.list\"\nMODE_AUTO=\"$MODE_LIST --hostlist-auto=/l/auto.list $MODE_ALL\"\nNFQWS_ARGS_IPSET=\"--ipset=/l/ipset.list --ipset-exclude=/l/ipset_exclude.list\"\n"
-	for _, c := range []struct {
-		extra, mode string
-		want        []string
-		ok          bool
-	}{
-		{`NFQWS_EXTRA_ARGS="$MODE_AUTO"`, "auto", []string{"--hostlist=/l/user.list", "--hostlist-auto=/l/auto.list", "--hostlist-exclude=/l/exclude.list"}, true},
-		{`export NFQWS_EXTRA_ARGS="$MODE_LIST" # only mine`, "user-list", []string{"--hostlist=/l/user.list"}, true},
-		// A repeated assignment is ambiguous to the reader: refused.
-		{"NFQWS_EXTRA_ARGS=\"$MODE_AUTO\"\nNFQWS_EXTRA_ARGS=\"$MODE_LIST\"", "", nil, false},
-		{`NFQWS_EXTRA_ARGS="$UNKNOWN"`, "", nil, false},
-		{"NFQWS_EXTRA_ARGS=\"`cat /tmp/x`\"", "", nil, false},
-	} {
-		got, err := ParseNFQWSListArguments([]byte(base + c.extra + "\n"))
-		if (err == nil) != c.ok || c.ok && (got.Mode != c.mode || strings.Join(got.Extra, " ") != strings.Join(c.want, " ") || strings.Join(got.IPSet, " ") != "--ipset=/l/ipset.list --ipset-exclude=/l/ipset_exclude.list") {
-			t.Fatalf("%s: %+v %v", c.extra, got, err)
+func TestNFQWSCustomProfilesAreLiteralAndIgnoreTheManagedBlock(t *testing.T) {
+	raw := "NFQWS_ARGS_CUSTOM=\"--filter-udp=50000 --filter-l7=discord --lua-desync=fake --new --filter-tcp=5222 --lua-desync=multisplit\"\nNFQWS_EXTRA_ARGS=\"$MODE_AUTO\"\n" +
+		ManagedListBegin + "\nNFQWS_EXTRA_ARGS=\"$NFQWS_EXTRA_ARGS --hostlist-exclude=/x\"\n" + ManagedListEnd + "\n"
+	got, err := NFQWSCustomProfiles([]byte(raw))
+	if err != nil || len(got) != 2 || strings.Join(got[0], " ") != "--filter-udp=50000 --filter-l7=discord --lua-desync=fake" || strings.Join(got[1], " ") != "--filter-tcp=5222 --lua-desync=multisplit" {
+		t.Fatalf("%q %v", got, err)
+	}
+	if got, err := NFQWSCustomProfiles([]byte("NFQWS_ARGS_CUSTOM=\"\"\n")); err != nil || len(got) != 0 {
+		t.Fatalf("empty custom: %q %v", got, err)
+	}
+	for _, unresolved := range []string{"NFQWS_ARGS_CUSTOM=\"$OTHER\"\n", "NFQWS_ARGS_CUSTOM=\"`cat /tmp/x`\"\n", "NFQWS_ARGS_CUSTOM='$LITERAL'\n"} {
+		if _, err := NFQWSCustomProfiles([]byte(unresolved)); err == nil {
+			t.Fatalf("%q was read without running the shell", unresolved)
 		}
+	}
+}
+
+// While apply's managed block is in the live file, the owner's assignments
+// still read and edit as before.
+func TestGuidedReaderIgnoresManagedBlock(t *testing.T) {
+	raw := "NFQWS_EXTRA_ARGS=\"$MODE_AUTO\"\n" + ManagedListBegin + "\nNFQWS_EXTRA_ARGS=\"$NFQWS_EXTRA_ARGS --hostlist-exclude=/x\"\nif [ -n \"$A\" ]; then A=\"$A b\"; fi\n" + ManagedListEnd + "\n"
+	fields, err := parseShellAssignments(string(withoutManagedBlock([]byte(raw))))
+	if err != nil || fields["NFQWS_EXTRA_ARGS"] != "$MODE_AUTO" {
+		t.Fatalf("%v %v", fields, err)
 	}
 }

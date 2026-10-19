@@ -77,6 +77,14 @@
 | `/opt/razvilka/candidate/{state,run,cache,log}` | Отдельные рабочие каталоги тестового кандидата; его настройки — `/opt/etc/razvilka-candidate` |
 | `/opt/razvilka/state-offline-recovery` | Отдельный архив восстановления состояния |
 
+Пока обход NFQWS2 включён, RAZVILKA держит в файлах пакета nfqws2-keenetic
+по одному блоку между строками `# BEGIN RAZVILKA MANAGED` и
+`# END RAZVILKA MANAGED`: в `/opt/etc/nfqws2/lists/user.list`, `ipset.list`,
+`exclude.list`, `ipset_exclude.list`, а при сохранённых «Сайтах без обхода» —
+и в конце `/opt/etc/nfqws2/nfqws2.conf` (добавляет списки исключений в каждый
+профиль nfqws2). Строки вне блоков — ваши, их панель не меняет. При остановке
+обхода и при удалении RAZVILKA блоки снимаются.
+
 Приватный корень `/opt/razvilka` и его рабочие каталоги создаются от `root`
 с правами `0700`. Общий `/opt/var` остаётся за Entware.
 Настройки, рабочее состояние и копии — пользовательские данные, они не относятся

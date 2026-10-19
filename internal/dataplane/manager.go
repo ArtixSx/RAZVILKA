@@ -139,7 +139,7 @@ func (m *Manager) CheckComponentLive(ctx context.Context, expected Plan, compone
 		// health without an exact-node probe currently skips service traffic.
 		probe := false
 		for _, route := range expected.Routes {
-			if adapterID(route.Resolved) != id {
+			if adapterID(route.Resolved) != id || expected.SiteExclusions.coversRoute(route) {
 				continue
 			}
 			if route.ProbeURL == "" {
@@ -2140,6 +2140,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	for index := range plan.RouteEvidence {
 		proof := &plan.RouteEvidence[index]
 		route := routeInputs[proof.ServiceID+"|"+proof.Route]
+		if plan.SiteExclusions.coversRoute(route) {
+			// Intentionally not bypassed: nothing to prove, nothing to credit.
+			proof.Observed, proof.Source, proof.Note = evidence.None, "", siteExclusionEvidenceNote
+			continue
+		}
 		switch {
 		case AdapterID(proof.Route) == "direct":
 			directPending = true

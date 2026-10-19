@@ -366,6 +366,10 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	if len(input.Routes) > 0 {
 		plan.RequiredEvidence = evidence.Service
 		for _, route := range input.Routes {
+			if input.SiteExclusions.coversRoute(route) {
+				plan.RouteEvidence = append(plan.RouteEvidence, RouteEvidence{ServiceID: route.ServiceID, Route: route.Resolved, Required: evidence.None, Observed: evidence.None, Note: siteExclusionEvidenceNote})
+				continue
+			}
 			plan.RouteEvidence = append(plan.RouteEvidence, RouteEvidence{ServiceID: route.ServiceID, Route: route.Resolved, Required: evidence.Service, Observed: evidence.None, Note: "Ожидается изолированный health-check уже активированного маршрута."})
 		}
 	}

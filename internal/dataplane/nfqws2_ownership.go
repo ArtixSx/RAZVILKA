@@ -29,14 +29,17 @@ type nfqws2ListLease struct {
 // The durable intent precedes every global write. Both current and prior block
 // hashes allow cleanup after a partial activation, but only for this instance.
 type nfqws2Lease struct {
-	Version     int                `json:"version"`
-	StateRoot   string             `json:"state_root"`
-	Owner       string             `json:"owner"`
-	Transaction string             `json:"transaction"`
-	ConfigPath  string             `json:"config_path"`
-	InitPath    string             `json:"init_path"`
-	ConfigHash  string             `json:"config_hash"`
-	PriorConfig string             `json:"prior_config_hash,omitempty"`
+	Version     int    `json:"version"`
+	StateRoot   string `json:"state_root"`
+	Owner       string `json:"owner"`
+	Transaction string `json:"transaction"`
+	ConfigPath  string `json:"config_path"`
+	InitPath    string `json:"init_path"`
+	ConfigHash  string `json:"config_hash"`
+	PriorConfig string `json:"prior_config_hash,omitempty"`
+	// ConfigOwner is the installed configuration without this instance's
+	// block: an interrupted cleanup may already have removed only the block.
+	ConfigOwner string             `json:"config_owner_hash,omitempty"`
 	InitHash    string             `json:"init_hash"`
 	Lists       [4]nfqws2ListLease `json:"lists"`
 }
@@ -162,9 +165,9 @@ func (a *NFQWS2Adapter) readLease() (*nfqws2Lease, error) {
 			}
 		}
 	}
-	for index, value := range []string{lease.ConfigHash, lease.InitHash, lease.PriorConfig} {
+	for index, value := range []string{lease.ConfigHash, lease.InitHash, lease.PriorConfig, lease.ConfigOwner} {
 		decoded, err := hex.DecodeString(value)
-		if index == 2 && value == "" {
+		if index >= 2 && value == "" {
 			continue
 		}
 		if err != nil || len(decoded) != sha256.Size || hex.EncodeToString(decoded) != value {
@@ -258,7 +261,7 @@ func (a *NFQWS2Adapter) verifyOwnedRuntime(lease *nfqws2Lease, partial bool) err
 		return err
 	}
 	hash := nfqws2Hash(config)
-	if hash != lease.ConfigHash && (!partial || hash != lease.PriorConfig) {
+	if hash != lease.ConfigHash && (!partial || hash != lease.PriorConfig && (lease.ConfigOwner == "" || hash != lease.ConfigOwner)) {
 		return errors.New("NFQWS2 configuration changed outside its ownership manifest")
 	}
 	init, _, err := nfqws2Read(a.InitPath)
@@ -325,6 +328,15 @@ func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
 		return errors.New("NFQWS2 init is unavailable")
 	}
 	lease.ConfigHash, lease.PriorConfig, lease.InitHash = nfqws2Hash(stagedConfig), nfqws2Hash(snapshot.Config), nfqws2Hash(init)
+	if block, err := nfqws2Block(stagedConfig); err != nil {
+		return errors.New("NFQWS2 staged configuration is invalid")
+	} else if len(block) != 0 {
+		ownerPart, _, err := removeManagedBlock(string(stagedConfig))
+		if err != nil || !strings.Contains(string(block), "\n# RAZVILKA INSTANCE "+owner+"\n") {
+			return errors.New("NFQWS2 staged configuration is invalid")
+		}
+		lease.ConfigOwner = nfqws2Hash([]byte(ownerPart))
+	}
 	before, existed := nfqws2SnapshotResources(snapshot)
 	for index, path := range a.globalResources() {
 		current, exists, err := nfqws2Read(path)

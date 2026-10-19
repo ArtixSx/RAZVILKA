@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -30,6 +31,8 @@ type SiteExclusions struct {
 
 const maxSiteExclusions = 4096
 
+const siteExclusionEvidenceNote = "Сервис или проверяемый сайт в «Сайтах без обхода»: NFQWS2 его не обрабатывает, доступ через обход не проверяется."
+
 // ExcludedDomains and ExcludedCIDRs are everything NFQWS2 must not process.
 func (s *SiteExclusions) ExcludedDomains() []string {
 	if s == nil {
@@ -47,6 +50,29 @@ func (s *SiteExclusions) ExcludedCIDRs() []string {
 
 func (s *SiteExclusions) excludesService(id string) bool {
 	return s != nil && slices.Contains(s.Services, id)
+}
+
+// coversRoute reports a route whose service, or the site its probe checks,
+// is excluded: NFQWS2 leaves that traffic alone, so the bypass is neither
+// probed through it nor credited with it.
+func (s *SiteExclusions) coversRoute(route Route) bool {
+	if s == nil {
+		return false
+	}
+	if s.excludesService(route.ServiceID) {
+		return true
+	}
+	parsed, err := url.Parse(strings.TrimSpace(route.ProbeURL))
+	if err != nil || parsed.Hostname() == "" {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	for _, name := range s.ExcludedDomains() {
+		if host == name || strings.HasSuffix(host, "."+name) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateSiteExclusions(s *SiteExclusions) error {
