@@ -905,6 +905,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	}
 	dnsPending := a.DNS != nil && a.DNS.Dirty()
 	sourcesPending := a.Sources != nil && a.Sources.Dirty()
+	exclusionsPending := a.siteExclusionsPending(cfg)
 	build := CurrentBuildInfo()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": "RAZVILKA", "version": Version, "process_id": os.Getpid(), "safe_mode": cfg.SafeMode,
@@ -917,17 +918,18 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"sources_ready": readySources, "sources_total": sourceCount, "sources_catalog_total": sourceCatalogCount,
 		"sources_downloadable": sourceDownloadable, "sources_reference": sourceReferences,
 		"active_connections": activeConnections, "engine_config_drafts": configDrafts,
-		"routing_pending_changes":  a.Store.Dirty(),
-		"services_pending_changes": a.Store.DirtyScope(config.DraftScopeServices),
-		"devices_pending_changes":  a.Store.DirtyScope(config.DraftScopeDevices),
-		"dns_pending_changes":      dnsPending,
-		"sources_pending_changes":  sourcesPending,
-		"engine_pending_changes":   configDrafts > 0,
-		"dataplane_state":          dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
+		"routing_pending_changes":    a.Store.Dirty(),
+		"services_pending_changes":   a.Store.DirtyScope(config.DraftScopeServices),
+		"devices_pending_changes":    a.Store.DirtyScope(config.DraftScopeDevices),
+		"dns_pending_changes":        dnsPending,
+		"sources_pending_changes":    sourcesPending,
+		"engine_pending_changes":     configDrafts > 0,
+		"exclusions_pending_changes": exclusionsPending,
+		"dataplane_state":            dataplaneState, "dataplane_recovery_state": dataplaneRecoveryState, "dataplane_adapters": dataplaneAdapters, "dataplane_error": dataplaneError, "live_active": liveActive,
 		"last_apply_failure":     lastApplyFailure,
 		"node_recovery":          nodeRecovery,
 		"highest_evidence_level": highestEvidence, "evidence_counts": evidenceCounts,
-		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending || sourcesPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
+		"pending_changes": a.Store.Dirty() || configDrafts > 0 || dnsPending || sourcesPending || exclusionsPending, "revision": cfg.Revision, "applied_revision": cfg.AppliedRevision, "last_applied_at": cfg.LastAppliedAt,
 	})
 }
 
@@ -4143,7 +4145,7 @@ func (a *App) stagedEngineConfigRefs() []string {
 }
 
 func (a *App) pendingChanges() bool {
-	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty()) || (a.Sources != nil && a.Sources.Dirty())
+	return a.Store.Dirty() || len(a.stagedEngineConfigRefs()) > 0 || (a.DNS != nil && a.DNS.Dirty()) || (a.Sources != nil && a.Sources.Dirty()) || a.siteExclusionsPending(a.Store.Get())
 }
 
 func (a *App) scopePendingChanges(scope changeScope, engineID string) bool {

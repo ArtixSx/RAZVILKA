@@ -95,3 +95,28 @@ func TestInactiveExclusionsReachLegacyPlan(t *testing.T) {
 		t.Fatal("plan with other site exclusions was accepted for replay")
 	}
 }
+
+// A saved whole-network list that no committed plan carries is a pending
+// change, so the panel offers Apply; a stopped project and the home-network
+// mode keep their own state.
+func TestSiteExclusionsPendingUntilCommitted(t *testing.T) {
+	a := &App{}
+	cfg := config.Default()
+	if a.siteExclusionsPending(cfg) {
+		t.Fatal("an absent list is pending")
+	}
+	cfg.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "suffix", Value: "example.com"}}}
+	if !a.siteExclusionsPending(cfg) {
+		t.Fatal("an unapplied list is not pending")
+	}
+	stopped := cfg
+	stopped.ServiceControl.Stopped = true
+	if a.siteExclusionsPending(stopped) {
+		t.Fatal("a stopped project reports the list as pending")
+	}
+	listMode := config.Default()
+	listMode.NetworkPolicy = &config.NetworkPolicy{Schema: 1}
+	if a.siteExclusionsPending(listMode) {
+		t.Fatal("the home-network mode reports a whole-network list")
+	}
+}

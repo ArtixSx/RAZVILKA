@@ -1716,7 +1716,7 @@ function openPendingChanges() {
     return;
   }
   setView(view);
-  const target = $({ devices: '#deviceDraftBar', sources: '#sourceDraftBar', dns: '#view-dns', engineconfig: '#view-engineconfig' }[view]);
+  const target = $({ devices: '#deviceDraftBar', sources: '#sourceDraftBar', dns: '#view-dns', engineconfig: '#view-engineconfig', exclusions: '#resourceExclusionsContent' }[view]);
   target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
@@ -1754,6 +1754,7 @@ function pendingChangeViews(status) {
   if (status.sources_pending_changes) views.push('sources');
   if (status.dns_pending_changes) views.push('dns');
   if (status.engine_pending_changes || Number(status.engine_config_drafts || 0) > 0) views.push('engineconfig');
+  if (status.exclusions_pending_changes) views.push('exclusions');
   return views;
 }
 

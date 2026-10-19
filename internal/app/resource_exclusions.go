@@ -159,6 +159,12 @@ func (a *App) writeResourceExclusions(w http.ResponseWriter, cfg config.Config) 
 	})
 }
 
+// siteExclusionsPending reports a saved whole-network list that the committed
+// plan does not carry yet. A stopped project applies nothing, so it waits.
+func (a *App) siteExclusionsPending(cfg config.Config) bool {
+	return cfg.NetworkPolicy == nil && cfg.AppliedNetworkPolicy == nil && !cfg.ServiceControl.Stopped && !a.committedHonoursSiteExclusions(cfg)
+}
+
 // In the whole-network mode the saved list is applied through the committed
 // plan. Nothing committed matches only an empty list.
 func (a *App) committedHonoursSiteExclusions(cfg config.Config) bool {
