@@ -66,7 +66,10 @@ func TestCloseRollbackSettingsIgnoreOnlySafeMode(t *testing.T) {
 	}
 }
 
-func TestLegacyRollbackRefusesCurrentListIntentAndInactiveExclusions(t *testing.T) {
+// A current home-network intent closes the legacy rollback comparison. Saved
+// whole-network site exclusions do not: a rollback returns the last applied
+// state, and the saved list stays a pending change.
+func TestLegacyRollbackRefusesCurrentListIntentButNotSavedSiteExclusions(t *testing.T) {
 	previous := dataplane.Plan{Revision: 4, Routes: []dataplane.Route{{ServiceID: "discord", Selected: "sing-box:private", Sources: []string{"192.168.1.40/32"}}}}
 	for _, target := range []config.ResourceMatch{{Kind: "service", Value: "discord"}, {Kind: "exact", Value: "discord.com"}, {Kind: "ip", Value: "203.0.113.40"}, {Kind: "cidr", Value: "203.0.113.0/24"}} {
 		for _, storage := range []string{"inactive", "configured"} {
@@ -80,6 +83,12 @@ func TestLegacyRollbackRefusesCurrentListIntentAndInactiveExclusions(t *testing.
 					cfg.InactiveResourceExclusions = exclusions
 				} else {
 					cfg.NetworkPolicy = &config.NetworkPolicy{Schema: 2, Revision: 1, Clients: config.ClientScope{Mode: "lan_except", SegmentIDs: []string{"home"}, NewDevices: "inherit"}, Traffic: config.TrafficSelection{Mode: "selected_services", Unavailable: "retain"}, Exclusions: exclusions}
+				}
+				if storage == "inactive" {
+					if !rollbackAppliedSettingsMatch(cfg, previous) || !closeRollbackSettingsMatch(cfg, previous) {
+						t.Fatal("saved site exclusions closed the return to the last applied state")
+					}
+					return
 				}
 				if rollbackAppliedSettingsMatch(cfg, previous) {
 					t.Fatal("legacy service comparison authorized current unsupported list intent")
