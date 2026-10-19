@@ -3849,7 +3849,8 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	}
 	// The versioned LAN intent is preserved, but must not be silently ignored
 	// by legacy adapters before the unified scope/DNS executor is integrated.
-	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil || cfg.InactiveResourceExclusions != nil {
+	// An empty inactive list carries no negative and does not close this path.
+	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil || config.InactiveResourceNegatives(cfg) {
 		return dataplane.Plan{}, errors.New("NETWORK_POLICY_EXECUTOR_REQUIRED: единые исключения LAN требуют совместного исполнителя маршрутов и DNS; прежний путь сохранён")
 	}
 	cfg = configForChangeScope(cfg, scope)

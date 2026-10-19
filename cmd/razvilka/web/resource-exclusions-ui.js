@@ -100,7 +100,10 @@ async function saveResourceExclusions() {
   try {
     const result=await interfaceRequest(resourceExclusionsPath,{method:'POST',body:JSON.stringify(body)});if(!current())return;
     receipt=window.RazvilkaInterfaceModel.resourceExclusionSnapshot(result,state.services||[]);
-    if(!receipt || receipt.revision<=base.revision || receipt.exclusion_revision<=base.exclusion_revision
+    // A cleared inactive list returns to the absent document (revision 0) so
+    // it no longer closes ordinary Apply; the config revision still advances.
+    const clearedInactive=!base.scopeConfigured&&body.manual.length===0&&receipt?.storageState==='inactive'&&receipt.exclusion_revision===0&&receipt.view.manual.length===0;
+    if(!receipt || receipt.revision<=base.revision || !clearedInactive&&receipt.exclusion_revision<=base.exclusion_revision
       || receipt.storageState!==base.storageState || receipt.scopeConfigured!==base.scopeConfigured
       || (base.scopeConfigured?receipt.policy_revision<=base.policy_revision:receipt.policy_revision!==0))throw new Error('Ответ сохранения не подтверждён.');
     // A separate uncached GET verifies stored data; no mutation is replayed.
@@ -109,7 +112,7 @@ async function saveResourceExclusions() {
     const read=window.RazvilkaInterfaceModel.resourceExclusionSnapshot(value,state.services||[]);
     if(!read||!resourceExclusionsReceiptMatches(receipt,read))throw new Error('Сохранённый список ещё не подтверждён независимым чтением.');
     acceptPanelSection('resourceExclusions',value,Date.now());
-    resourceExclusionsReset(read);e.unknown=false;e.message=read.storageState==='inactive'?'Ручные исключения сохранены до настройки области сети. Обход не включён.':'Исключения сохранены. Применение маршрутов ещё не подтверждено.';
+    resourceExclusionsReset(read);e.unknown=false;e.message=clearedInactive?'Список очищен. Обычное применение обхода им больше не блокируется.':read.storageState==='inactive'?'Ручные исключения сохранены до настройки области сети. Обход не включён.':'Исключения сохранены. Применение маршрутов ещё не подтверждено.';
   } catch(error) {
     if(!current())return;
     const code=error.payload?.code||'';

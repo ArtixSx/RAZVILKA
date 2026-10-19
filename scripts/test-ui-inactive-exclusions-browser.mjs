@@ -190,16 +190,16 @@ export async function runInactiveExclusionsUI(config) {
       assert.deepEqual(await readUIBase(),base);assert.equal(matchImage(await page.evaluate(()=>resourceExclusionsEditor.draft)),matchImage(localDraft));assert.equal(await page.locator('#resourceExclusionsContent [data-resource-save]').isEnabled(),false);assert.equal(browserRequests.slice(start).filter(r=>r.method!=='GET').length,0);
       await bookend(expected,secondManual);await page.locator('#resourceExclusionsContent [data-resource-reset]').click();await waitSaved();assert.equal(matchImage(await page.evaluate(()=>resourceExclusionsEditor.draft)),matchImage(secondManual));
     });
-    await step('explicit manual clear retains inactive storage and verifies after reload',async()=>{
+    await step('explicit manual clear returns to the absent inactive document and verifies after reload',async()=>{
       const draftStart=browserRequests.length;while(await page.locator('#resourceExclusionsContent [data-resource-remove]').count())await page.locator('#resourceExclusionsContent [data-resource-remove]').first().click();assert.equal(browserRequests.slice(draftStart).filter(r=>r.method!=='GET').length,0);
-      const before=expected,start=browserRequests.length;expected=inactiveReceipt(await uiSave(before,[]),[]);await waitSaved();assert.equal(expected.revision,before.revision+1);assert.equal(expected.exclusion_revision,before.exclusion_revision+1);
+      const before=expected,start=browserRequests.length;expected=inactiveReceipt(await uiSave(before,[]),[]);await waitSaved();assert.equal(expected.revision,before.revision+1);assert.equal(expected.exclusion_revision,0);assert.equal(expected.resource_exclusions,null,'an emptied list must not keep the document that closes ordinary Apply');
       assert.equal(browserRequests.slice(start).filter(r=>r.method==='POST'&&r.path===pathExclusions).length,1);assert(browserRequests.slice(start).some(r=>r.method==='GET'&&r.path===pathExclusions));await bookend(expected,[]);
       await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>state.authenticated&&!panelLoad.request);await enterExclusions();assert.equal(await page.evaluate(()=>resourceExclusionsEditor.draft.length),0);assert.equal(await page.locator('#resourceRussianEnabled').isEnabled(),false);assert.equal(await page.locator('#resourceRussianAuto').isEnabled(),false);await bookend(expected,[]);
     });
     stage='final-boundary';await identity();realHTTPAssert(report.browser_errors===0&&report.blocked_requests===0,'BROWSER_BOUNDARY_FAILED');
     realHTTPAssert(browserRequests.every(row=>row.method==='GET'||row.method==='POST'&&row.path===pathExclusions),'UNDECLARED_BROWSER_MUTATION');
     realHTTPAssert(browserRequests.filter(row=>row.method==='POST').length===2,'INACTIVE_UI_POST_COUNT_CHANGED');
-    realHTTPAssert(expected.revision===initial.exclusions.revision+3&&expected.exclusion_revision===initial.exclusions.exclusion_revision+3,'INACTIVE_REVISION_ADVANCE_CHANGED');
+    realHTTPAssert(expected.revision===initial.exclusions.revision+3&&expected.exclusion_revision===0,'INACTIVE_REVISION_ADVANCE_CHANGED');
     report.final={policy_revision:0,config_revision:expected.revision,exclusion_revision:expected.exclusion_revision,manual_count:0,
       scope_unchanged:true,consent_unchanged:true,applied_unchanged:true,live_unchanged:true,ru_disabled:true,ui_posts:2,second_writer_posts:2};report.status='passed';
   }catch(error){report.status='failed';report.failure=realHTTPFailure(error,stage);}

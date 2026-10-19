@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -202,6 +203,43 @@ func TestResourceExclusionsFreshInstallReadOnlyAndNoInventedScope(t *testing.T) 
 		if json.Unmarshal(data, &result) != nil || result.ScopeConfigured || result.StorageState != "inactive" || result.PolicyRevision != 0 || result.ExclusionRevision != 1 || result.LiveApplied {
 			t.Fatal("inactive state misrepresented", string(data))
 		}
+	}
+}
+
+// Saving a site without bypass before any scope closes legacy Apply; clearing
+// the list over the same HTTP API must open it again instead of trapping it.
+func TestInactiveExclusionsActualHTTPClearReopensLegacyApply(t *testing.T) {
+	a, _ := defaultConsentHTTPFixture(t)
+	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
+	defer server.Close()
+	patch := exclusionPatch(a)
+	patch["manual"] = []config.ResourceMatch{{Kind: "suffix", Value: "example.com"}}
+	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
+		t.Fatal("inactive manual storage failed", status, string(data))
+	}
+	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); status < 400 || !bytes.Contains(data, []byte("NETWORK_POLICY_EXECUTOR_REQUIRED")) {
+		t.Fatal("stored negative did not close legacy Apply", status, string(data))
+	}
+	saved := a.Store.Get()
+	patch = exclusionPatch(a)
+	patch["manual"] = []config.ResourceMatch{}
+	status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL)
+	var result struct {
+		Revision          uint64          `json:"revision"`
+		ExclusionRevision uint64          `json:"exclusion_revision"`
+		StorageState      string          `json:"storage_state"`
+		Exclusions        json.RawMessage `json:"resource_exclusions"`
+		LiveApplied       bool            `json:"live_applied"`
+	}
+	if status != 200 || json.Unmarshal(data, &result) != nil || result.Revision != saved.Revision+1 || result.ExclusionRevision != 0 || result.StorageState != "inactive" || string(result.Exclusions) != "null" || result.LiveApplied {
+		t.Fatal("clear receipt", status, string(data))
+	}
+	after := a.Store.Get()
+	if after.InactiveResourceExclusions != nil || after.NetworkPolicy != nil || after.DefaultRouteConsent != nil || !reflect.DeepEqual(after.Services, saved.Services) || !reflect.DeepEqual(after.AppliedServices, saved.AppliedServices) {
+		t.Fatal("clear kept the blocking document or changed positive intent", after.InactiveResourceExclusions)
+	}
+	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); bytes.Contains(data, []byte("NETWORK_POLICY_EXECUTOR_REQUIRED")) {
+		t.Fatal("cleared list still closes legacy Apply", status, string(data))
 	}
 }
 
