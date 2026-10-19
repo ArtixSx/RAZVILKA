@@ -268,23 +268,24 @@ func (a *NFQWS2Adapter) verifyOwnedRuntime(lease *nfqws2Lease, partial bool) err
 	return nil
 }
 
-// A reviewed engine-editor draft replaces the owner's part of the list; the
+// mergeOwnedList renders a list with this instance's managed block. A
+// reviewed engine-editor draft replaces the owner's part of the list; the
 // live file still proves this instance owns the managed block it rewrites.
-func (a *NFQWS2Adapter) stageOwnedList(index int, stage string, values []string, draft []byte, hasDraft bool) error {
+func (a *NFQWS2Adapter) mergeOwnedList(index int, values []string, draft []byte, hasDraft bool) ([]byte, error) {
 	owner, err := a.owner()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	current, _, err := nfqws2Read(a.ownedListPaths()[index])
 	if err != nil {
-		return err
+		return nil, err
 	}
 	lease, err := a.readLease()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := a.checkListOwnership(lease, index, current, true); err != nil {
-		return err
+		return nil, err
 	}
 	base := string(current)
 	if hasDraft {
@@ -292,9 +293,9 @@ func (a *NFQWS2Adapter) stageOwnedList(index int, stage string, values []string,
 	}
 	merged, err := replaceManagedBlock(base, append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return writeAtomic(stage, []byte(merged), 0o600)
+	return []byte(merged), nil
 }
 
 func (a *NFQWS2Adapter) prepareActivationLease(root string) error {

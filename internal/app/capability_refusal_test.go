@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -169,5 +170,20 @@ func TestListModePlatformProfileRefusalUsesStartupStage(t *testing.T) {
 	a.managedListPolicyMu.Unlock()
 	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); strings.Contains(string(data), "PLATFORM_PROFILE_UNSUPPORTED") {
 		t.Fatalf("non-identity startup failure was reported as an unsupported platform: %d %s", status, data)
+	}
+}
+
+// A configuration that would ignore "sites without bypass" is a named limit,
+// not a node or transport failure, and its Russian text stays valid UTF-8.
+func TestSiteExclusionsUnreadIsNamedNotACanaryFailure(t *testing.T) {
+	message := "stage nfqws2: NFQWS2_SITE_EXCLUSIONS_UNREAD: NFQWS2 не читает список исключений сайтов (exclude.list); выберите режим AUTO или «весь трафик» либо очистите «Сайты без обхода»"
+	got := classifyApplyExecutionFailure(message, "canary-failed")
+	if got.Code != "NFQWS2_SITE_EXCLUSIONS_UNREAD" || got.Retryable || !strings.HasPrefix(got.Message, "NFQWS2 не читает") || !strings.HasPrefix(got.Resolution, "Выберите режим AUTO") {
+		t.Fatalf("unexpected advice: %+v", got)
+	}
+	for _, text := range []string{got.Title, got.Message, got.Resolution} {
+		if !utf8.ValidString(text) || strings.Contains(text, "NFQWS2_SITE_EXCLUSIONS_UNREAD") {
+			t.Fatalf("advice text is not clean Russian: %q", text)
+		}
 	}
 }

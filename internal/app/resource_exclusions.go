@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
@@ -155,28 +156,62 @@ func (a *App) writeResourceExclusions(w http.ResponseWriter, cfg config.Config) 
 		"scope_configured": cfg.NetworkPolicy != nil, "storage_state": storageState,
 		"applied_revision": cfg.AppliedRevision, "applied_effective": applied,
 		"desired_matches_applied": desiredMatchesApplied,
-		"live_applied":            false,
+		"site_exclusions_pending": a.siteExclusionsPending(cfg), "project_stopped": cfg.ServiceControl.Stopped,
+		"live_applied": false,
 	})
 }
 
+// legacySiteExclusions is the saved whole-network list with each excluded
+// service's catalog names and networks frozen into the plan. The service keeps
+// its route; NFQWS2 leaves its traffic alone and a VPN route of it is refused.
+func (a *App) legacySiteExclusions(cfg config.Config) (*dataplane.SiteExclusions, error) {
+	sites, err := dataplane.LegacySiteExclusions(cfg)
+	if err != nil || sites == nil || len(sites.Services) == 0 {
+		return sites, err
+	}
+	for _, service := range a.catalogSnapshot().Services {
+		if slices.Contains(sites.Services, service.ID) {
+			sites.ServiceDomains = append(sites.ServiceDomains, service.Domains...)
+			sites.ServiceCIDRs = append(sites.ServiceCIDRs, service.CIDRs...)
+		}
+	}
+	return sites, nil
+}
+
 // siteExclusionsPending reports a saved whole-network list that the committed
-// plan does not carry yet. A stopped project applies nothing, so it waits.
+// plan does not carry yet and that would change what runs. A stopped project
+// applies nothing, so its list waits for Start.
 func (a *App) siteExclusionsPending(cfg config.Config) bool {
-	return cfg.NetworkPolicy == nil && cfg.AppliedNetworkPolicy == nil && !cfg.ServiceControl.Stopped && !a.committedHonoursSiteExclusions(cfg)
+	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil || cfg.ServiceControl.Stopped {
+		return false
+	}
+	plan, ok := a.committedLegacyPlan()
+	if !ok || dataplane.PlanHonoursLegacyExclusions(cfg, plan) {
+		return false
+	}
+	sites, err := a.legacySiteExclusions(cfg)
+	return err != nil || dataplane.SiteExclusionsAffectRoutes(sites, plan.Routes) || dataplane.SiteExclusionsAffectRoutes(plan.SiteExclusions, plan.Routes)
+}
+
+// committedLegacyPlan is the committed plan, or an empty one before the first
+// Apply. ok is false when the journal cannot be read.
+func (a *App) committedLegacyPlan() (dataplane.Plan, bool) {
+	if a.Dataplane == nil {
+		return dataplane.Plan{}, true
+	}
+	committed, exists, err := a.Dataplane.Committed()
+	if err != nil {
+		return dataplane.Plan{}, false
+	}
+	if exists && committed.State == "committed" {
+		return committed, true
+	}
+	return dataplane.Plan{}, true
 }
 
 // In the whole-network mode the saved list is applied through the committed
 // plan. Nothing committed matches only an empty list.
 func (a *App) committedHonoursSiteExclusions(cfg config.Config) bool {
-	plan := dataplane.Plan{}
-	if a.Dataplane != nil {
-		committed, exists, err := a.Dataplane.Committed()
-		if err != nil {
-			return false
-		}
-		if exists && committed.State == "committed" {
-			plan = committed
-		}
-	}
-	return dataplane.PlanHonoursLegacyExclusions(cfg, plan)
+	plan, ok := a.committedLegacyPlan()
+	return ok && dataplane.PlanHonoursLegacyExclusions(cfg, plan)
 }

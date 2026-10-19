@@ -60,7 +60,7 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 		}
 		return ErrNFQWSManagedProcessUnknown
 	}
-	read := func(path string, private bool) ([]byte, bool, error) {
+	readWith := func(path string, private bool, protected func(os.FileInfo, bool, bool) bool) ([]byte, bool, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -72,7 +72,7 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 			images[path] = nfqws2InactiveImage{}
 			return nil, false, nil
 		}
-		if err != nil || !platform.protected(before, false, private) {
+		if err != nil || !protected(before, false, private) {
 			return nil, false, ErrNFQWSManagedProcessUnknown
 		}
 		file, err := os.Open(path)
@@ -86,12 +86,22 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(file, (8<<20)+1))
 		after, statErr := os.Lstat(path)
-		if readErr != nil || statErr != nil || len(raw) > 8<<20 || ctx.Err() != nil || !platform.protected(after, false, private) || !os.SameFile(opened, after) ||
+		if readErr != nil || statErr != nil || len(raw) > 8<<20 || ctx.Err() != nil || !protected(after, false, private) || !os.SameFile(opened, after) ||
 			after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || after.Mode() != before.Mode() || int64(len(raw)) != before.Size() {
 			return nil, false, ErrNFQWSManagedProcessUnknown
 		}
 		images[path] = nfqws2InactiveImage{info: after, digest: sha256.Sum256(raw)}
 		return raw, true, nil
+	}
+	read := func(path string, private bool) ([]byte, bool, error) {
+		return readWith(path, private, platform.protected)
+	}
+	// RAZVILKA writes a list only as root and only while it holds a block
+	// there. A block-free stock list proves nothing of ours runs, whoever owns
+	// the file (the package installs them as its own user).
+	listProtected := platform.protected
+	if platform.foreignList != nil {
+		listProtected = func(info os.FileInfo, directory, _ bool) bool { return !directory && platform.foreignList(info) }
 	}
 	if err := anchor(a.StateRoot, true); err != nil {
 		return nil, err
@@ -139,16 +149,19 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 		}
 	}
 	lists := a.ownedListPaths()
-	for _, path := range []string{a.ConfigPath, a.InitPath, lists[0], lists[1], lists[2], lists[3]} {
-		raw, _, err := read(path, false)
+	for _, path := range []string{a.ConfigPath, a.InitPath} {
+		if _, _, err := read(path, false); err != nil {
+			return nil, err
+		}
+	}
+	for _, path := range lists {
+		raw, _, err := readWith(path, false, listProtected)
 		if err != nil {
 			return nil, err
 		}
-		if path != a.ConfigPath && path != a.InitPath {
-			block, err := nfqws2Block(raw)
-			if err != nil || len(block) != 0 {
-				return nil, ErrNFQWSManagedProcessUnknown
-			}
+		block, err := nfqws2Block(raw)
+		if err != nil || len(block) != 0 {
+			return nil, ErrNFQWSManagedProcessUnknown
 		}
 	}
 	return images, ctx.Err()

@@ -152,3 +152,81 @@ func (m *Manager) StageNFQWSMode(ctx context.Context, mode, review string, allow
 	}
 	return nfqwsModeView(updated, "staged")
 }
+
+// NFQWSListArguments are the hostlist and ipset arguments nfqws2 starts with,
+// read from nfqws2.conf without running it: $NAME references expand from the
+// file's own assignments, as the init script's shell would. What the
+// assignment reader refuses (${NAME}, repeated names) is unresolved. Mode
+// uses the panel's names (user-list, auto, all, custom).
+type NFQWSListArguments struct {
+	Mode  string
+	Extra []string
+	IPSet []string
+}
+
+var ErrNFQWSArgumentsUnresolved = errors.New("NFQWS2 list arguments cannot be resolved")
+
+func ParseNFQWSListArguments(raw []byte) (NFQWSListArguments, error) {
+	fields, err := parseShellAssignments(string(raw))
+	if err != nil {
+		return NFQWSListArguments{}, ErrNFQWSArgumentsUnresolved
+	}
+	v := NFQWSListArguments{Mode: "custom"}
+	switch fields["NFQWS_EXTRA_ARGS"] {
+	case "$MODE_LIST", "${MODE_LIST}":
+		v.Mode = "user-list"
+	case "$MODE_AUTO", "${MODE_AUTO}":
+		v.Mode = "auto"
+	case "$MODE_ALL", "${MODE_ALL}":
+		v.Mode = "all"
+	}
+	extra, ok := expandShellReferences(fields["NFQWS_EXTRA_ARGS"], fields, 0)
+	if !ok {
+		return NFQWSListArguments{}, ErrNFQWSArgumentsUnresolved
+	}
+	ipset, ok := expandShellReferences(fields["NFQWS_ARGS_IPSET"], fields, 0)
+	if !ok {
+		return NFQWSListArguments{}, ErrNFQWSArgumentsUnresolved
+	}
+	v.Extra, v.IPSet = strings.Fields(extra), strings.Fields(ipset)
+	return v, nil
+}
+
+// expandShellReferences refuses anything but plain references to names the
+// file assigns: command substitution, defaults, unknown or recursive names.
+func expandShellReferences(value string, fields map[string]string, depth int) (string, bool) {
+	if depth > 8 || strings.Contains(value, "`") || strings.Contains(value, `\$`) {
+		return "", false
+	}
+	var out strings.Builder
+	for i := 0; i < len(value); i++ {
+		if value[i] != '$' {
+			out.WriteByte(value[i])
+			continue
+		}
+		name, next := "", i+1
+		if next < len(value) && value[next] == '{' {
+			end := strings.IndexByte(value[next:], '}')
+			if end < 0 {
+				return "", false
+			}
+			name, i = value[next+1:next+end], next+end
+		} else {
+			end := next
+			for end < len(value) && shellNameChar(value[end]) {
+				end++
+			}
+			name, i = value[next:end], end-1
+		}
+		referenced, known := fields[name]
+		if !shellName(name) || !known {
+			return "", false
+		}
+		expanded, ok := expandShellReferences(referenced, fields, depth+1)
+		if !ok {
+			return "", false
+		}
+		out.WriteString(expanded)
+	}
+	return out.String(), true
+}

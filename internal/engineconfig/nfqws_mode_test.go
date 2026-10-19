@@ -36,3 +36,24 @@ func TestNFQWSModeIsDraftOnlyAndRequiresExactReviewAndDiscoveryConsent(t *testin
 		t.Fatal("stale accepted", e)
 	}
 }
+
+func TestParseNFQWSListArgumentsFollowsTheShell(t *testing.T) {
+	base := "MODE_LIST=\"--hostlist=/l/user.list\"\nMODE_ALL=\"--hostlist-exclude=/l/exclude.list\"\nMODE_AUTO=\"$MODE_LIST --hostlist-auto=/l/auto.list $MODE_ALL\"\nNFQWS_ARGS_IPSET=\"--ipset=/l/ipset.list --ipset-exclude=/l/ipset_exclude.list\"\n"
+	for _, c := range []struct {
+		extra, mode string
+		want        []string
+		ok          bool
+	}{
+		{`NFQWS_EXTRA_ARGS="$MODE_AUTO"`, "auto", []string{"--hostlist=/l/user.list", "--hostlist-auto=/l/auto.list", "--hostlist-exclude=/l/exclude.list"}, true},
+		{`export NFQWS_EXTRA_ARGS="$MODE_LIST" # only mine`, "user-list", []string{"--hostlist=/l/user.list"}, true},
+		// A repeated assignment is ambiguous to the reader: refused.
+		{"NFQWS_EXTRA_ARGS=\"$MODE_AUTO\"\nNFQWS_EXTRA_ARGS=\"$MODE_LIST\"", "", nil, false},
+		{`NFQWS_EXTRA_ARGS="$UNKNOWN"`, "", nil, false},
+		{"NFQWS_EXTRA_ARGS=\"`cat /tmp/x`\"", "", nil, false},
+	} {
+		got, err := ParseNFQWSListArguments([]byte(base + c.extra + "\n"))
+		if (err == nil) != c.ok || c.ok && (got.Mode != c.mode || strings.Join(got.Extra, " ") != strings.Join(c.want, " ") || strings.Join(got.IPSet, " ") != "--ipset=/l/ipset.list --ipset-exclude=/l/ipset_exclude.list") {
+			t.Fatalf("%s: %+v %v", c.extra, got, err)
+		}
+	}
+}

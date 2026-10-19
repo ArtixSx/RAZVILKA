@@ -52,8 +52,11 @@ type nfqws2InactivePlatform struct {
 	selfPID   int
 	readlink  func(string) (string, error)
 	protected func(info os.FileInfo, directory, private bool) bool
-	queues    func(context.Context) ([]nfqwsScopedQueue, error)
-	sockets   func(context.Context) (string, error)
+	// foreignList admits a stock list file of any owner that nobody else can
+	// write; the reader still requires it to hold no RAZVILKA block.
+	foreignList func(info os.FileInfo) bool
+	queues      func(context.Context) ([]nfqwsScopedQueue, error)
+	sockets     func(context.Context) (string, error)
 }
 
 // NFQWSRuntimeInactiveSource has no caller-supplied snapshot, predicate,

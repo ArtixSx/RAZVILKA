@@ -411,6 +411,11 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 			Message:    "Исключённый адрес входит в IP-диапазоны сервиса с обходом через VPN или прокси: " + strings.Join(conflicts, ", ") + ".",
 			Resolution: "Уберите этот адрес из «Сайтов без обхода» или выключите обход сервиса."})
 	}
+	if routed := siteExclusionRoutedServices(input.SiteExclusions, input.Routes); len(routed) != 0 {
+		plan.Blockers = append(plan.Blockers, Blocker{Code: "SITE_EXCLUSION_SERVICE_ROUTED",
+			Message:    "Сервис есть в «Сайтах без обхода», но назначен через VPN или прокси: " + strings.Join(routed, ", ") + ".",
+			Resolution: "Уберите сервис из «Сайтов без обхода», выключите его или выберите для него NFQWS2."})
+	}
 	for adapter := range adapterSet {
 		plan.Adapters = append(plan.Adapters, adapter)
 	}

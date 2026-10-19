@@ -19,6 +19,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/auditlog"
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -3752,6 +3754,22 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 		DraftPreserved: true, Retryable: true,
 	}
 	lower := strings.ToLower(message)
+	if strings.Contains(lower, "nfqws2_site_exclusions_unread") {
+		// A configuration limit, decided before any change: the detail after
+		// the marker names what to change.
+		detail := message[strings.Index(lower, "nfqws2_site_exclusions_unread")+len("nfqws2_site_exclusions_unread"):]
+		detail = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(detail), ":"))
+		advice.Resolution = "Измените режим NFQWS2 или «Сайты без обхода» и повторите применение."
+		if end := strings.Index(detail, "; "); end > 0 {
+			advice.Resolution = upperFirst(detail[end+2:]) + "."
+			detail = detail[:end]
+		}
+		advice.Code = "NFQWS2_SITE_EXCLUSIONS_UNREAD"
+		advice.Title = "NFQWS2 не учтёт «Сайты без обхода»"
+		advice.Message = upperFirst(detail) + ". Рабочий маршрут не менялся, черновик сохранён."
+		advice.Retryable = false
+		return advice
+	}
 	if strings.Contains(lower, "warp wireguard handshake was not confirmed") || strings.Contains(lower, "warp handshake was not confirmed") {
 		advice.Code = "WARP_WIREGUARD_HANDSHAKE"
 		advice.Title = "WARP WireGuard не подключился"
@@ -3781,6 +3799,14 @@ func classifyApplyFailure(message string) applyFailureAdvice {
 	return advice
 }
 
+func upperFirst(s string) string {
+	r, size := utf8.DecodeRuneInString(s)
+	if r == utf8.RuneError {
+		return s
+	}
+	return string(unicode.ToUpper(r)) + s[size:]
+}
+
 func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
 	advice := classifyApplyFailure(message)
 	if state == "network-stale" {
@@ -3791,7 +3817,8 @@ func classifyApplyExecutionFailure(message, state string) applyFailureAdvice {
 		advice.DraftPreserved, advice.Retryable = true, true
 		return advice
 	}
-	if state != "canary-failed" {
+	// A configuration limit is not a failed probe: retrying cannot help.
+	if state != "canary-failed" || advice.Code == "NFQWS2_SITE_EXCLUSIONS_UNREAD" {
 		return advice
 	}
 	if advice.Code != "DATAPLANE_APPLY_FAILED" && advice.Code != "DATAPLANE_OPERATION_CANCELLED" {
@@ -3876,10 +3903,10 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil {
 		return dataplane.Plan{}, legacyExecutorRefusal(cfg)
 	}
-	// Saved "sites without bypass" are enforced by NFQWS2 in this mode, and an
-	// excluded service gets no route at all. Exclusions follow the saved list
-	// in every scope: they only ever narrow the bypass.
-	siteExclusions, excludedServices, err := dataplane.LegacySiteExclusions(cfg)
+	// Saved "sites without bypass" are enforced by NFQWS2 in this mode.
+	// Exclusions follow the saved list in every scope: they only ever narrow
+	// the bypass.
+	siteExclusions, err := a.legacySiteExclusions(cfg)
 	if err != nil {
 		return dataplane.Plan{}, err
 	}
@@ -3909,7 +3936,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	appliedAdapters := map[string]bool{}
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.Services[service.ID]
-		if state.Enabled && !excludedServices[service.ID] {
+		if state.Enabled {
 			selected := selectedRoute(state)
 			nodeEngine, nodeTarget, nodeRoute := routekind.ParseNodeRoute(selected)
 			if routekind.HasNodeRoutePrefix(selected) && (!nodeRoute || !routecatalog.ValidForServiceWithOptions(selected, service.ID, options)) {

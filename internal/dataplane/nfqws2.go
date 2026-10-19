@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -187,19 +188,25 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 			}
 		}
 	}
-	// Exclusions are enforced by nfqws2 itself, before its own selection.
-	// A configuration that does not read the exclude lists would silently
-	// bypass an excluded site, so it is refused instead.
-	if err := a.requireExclusionLists(config, lists); err != nil {
-		return preflightRefusalError{err}
-	}
+	var merged [4][]byte
 	for index, values := range lists {
 		base := []byte(nil)
 		if snapshot.ListDraft[index] {
 			base = snapshot.StagedLists[index]
 		}
-		if err := a.stageOwnedList(index, filepath.Join(root, nfqws2ListStages[index]), values, base, snapshot.ListDraft[index]); err != nil {
+		if merged[index], err = a.mergeOwnedList(index, values, base, snapshot.ListDraft[index]); err != nil {
 			return preflightRefusalError{err}
+		}
+	}
+	// Exclusions are enforced by nfqws2 itself, before its own selection.
+	// A configuration that does not read the exclude lists would silently
+	// bypass an excluded site, so it is refused instead.
+	if err := a.requireExclusionLists(config, lists, merged[0]); err != nil {
+		return preflightRefusalError{err}
+	}
+	for index := range lists {
+		if err := writeAtomic(filepath.Join(root, nfqws2ListStages[index]), merged[index], 0o600); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -238,41 +245,89 @@ func (s nfqws2Snapshot) ownedList(index int) ([]byte, bool) {
 	}
 }
 
-// nfqws2PlanLists returns the four managed blocks of a plan. Exclusions are
-// written only while this adapter carries at least one route.
+// nfqws2PlanLists returns the four managed blocks of a plan, in lease order.
+// An excluded service keeps its route but leaves the selection lists, and
+// exclusions are written while this adapter carries any route at all.
 func nfqws2PlanLists(plan Plan, id string) [4][]string {
-	domains, cidrs := nfqws2PlanValues(plan, id)
-	lists := [4][]string{domains, cidrs, {}, {}}
-	if len(domains)+len(cidrs) != 0 && plan.SiteExclusions != nil {
-		lists[2] = sortedUnique(plan.SiteExclusions.Domains)
-		lists[3] = sortedUnique(plan.SiteExclusions.CIDRs)
+	domains, cidrs, routed := []string{}, []string{}, false
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != id {
+			continue
+		}
+		routed = true
+		if plan.SiteExclusions.excludesService(route.ServiceID) {
+			continue
+		}
+		domains = append(domains, route.Domains...)
+		cidrs = append(cidrs, route.CIDRs...)
+	}
+	lists := [4][]string{sortedUnique(domains), sortedUnique(cidrs), {}, {}}
+	if routed && plan.SiteExclusions != nil {
+		lists[2] = plan.SiteExclusions.ExcludedDomains()
+		lists[3] = plan.SiteExclusions.ExcludedCIDRs()
 	}
 	return lists
 }
 
-// requireExclusionLists confirms the effective nfqws2 arguments read both
-// exclude lists whenever there is something to exclude.
-func (a *NFQWS2Adapter) requireExclusionLists(config []byte, lists [4][]string) error {
-	text, paths := string(config), a.ownedListPaths()
-	if len(lists[2]) != 0 && (!strings.Contains(text, "--hostlist-exclude="+paths[2]) || nfqws2ListOnlyMode(text)) {
-		return errors.New("NFQWS2 не читает список исключений сайтов (режим $MODE_LIST); выберите режим $MODE_AUTO или $MODE_ALL в nfqws2.conf либо очистите «Сайты без обхода»")
+// ErrSiteExclusionsUnread marks a configuration whose effective nfqws2
+// arguments would not honour the saved "sites without bypass".
+var ErrSiteExclusionsUnread = errors.New("NFQWS2_SITE_EXCLUSIONS_UNREAD")
+
+// requireExclusionLists confirms from the effective arguments (the last
+// assignment, with $NAME references expanded) that nfqws2 honours every
+// exclusion. Anything it cannot resolve is refused, never assumed.
+func (a *NFQWS2Adapter) requireExclusionLists(config []byte, lists [4][]string, userList []byte) error {
+	if len(lists[2])+len(lists[3]) == 0 {
+		return nil
 	}
-	if len(lists[3]) != 0 && !strings.Contains(text, "--ipset-exclude="+paths[3]) {
-		return errors.New("NFQWS2 не читает список исключённых адресов (--ipset-exclude); верните стандартную строку NFQWS_ARGS_IPSET в nfqws2.conf либо очистите исключённые адреса")
+	paths := a.ownedListPaths()
+	args, err := engineconfig.ParseNFQWSListArguments(config)
+	if err != nil {
+		return fmt.Errorf("%w: не удалось разобрать аргументы nfqws2.conf, поэтому «Сайты без обхода» не применены; верните стандартные строки NFQWS_EXTRA_ARGS и NFQWS_ARGS_IPSET", ErrSiteExclusionsUnread)
+	}
+	if len(lists[2]) != 0 && !slices.Contains(args.Extra, "--hostlist-exclude="+paths[2]) {
+		// $MODE_LIST processes user.list hosts only: an excluded name is
+		// already left alone unless user.list selects it, its parent or a
+		// subdomain of it.
+		hostlists := []string{}
+		for _, arg := range args.Extra {
+			if strings.HasPrefix(arg, "--hostlist") || strings.HasPrefix(arg, "--ipset") {
+				hostlists = append(hostlists, arg)
+			}
+		}
+		if !slices.Equal(hostlists, []string{"--hostlist=" + paths[0]}) {
+			return fmt.Errorf("%w: NFQWS2 не читает список исключений сайтов (exclude.list); выберите режим AUTO или «весь трафик» либо очистите «Сайты без обхода»", ErrSiteExclusionsUnread)
+		}
+		if overlap := nfqws2HostOverlap(lists[2], userList); len(overlap) != 0 {
+			return fmt.Errorf("%w: в режиме «только user.list» NFQWS2 не читает исключения, а user.list выбирает исключённые сайты: %s; уберите их из user.list, выберите режим AUTO или уберите их из «Сайтов без обхода»", ErrSiteExclusionsUnread, strings.Join(overlap, ", "))
+		}
+	}
+	if len(lists[3]) != 0 && !slices.Contains(args.IPSet, "--ipset-exclude="+paths[3]) {
+		return fmt.Errorf("%w: NFQWS2 не читает список исключённых адресов (--ipset-exclude); верните стандартную строку NFQWS_ARGS_IPSET в nfqws2.conf либо уберите адреса из «Сайтов без обхода»", ErrSiteExclusionsUnread)
 	}
 	return nil
 }
 
-// The stock configuration selects its mode with one assignment line.
-func nfqws2ListOnlyMode(config string) bool {
-	for _, line := range strings.Split(config, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "NFQWS_EXTRA_ARGS=") {
-			value := strings.Trim(strings.TrimPrefix(line, "NFQWS_EXTRA_ARGS="), "\"'")
-			return strings.TrimSpace(value) == "$MODE_LIST"
+// nfqws2HostOverlap lists excluded names that a host list selects: the same
+// name, a parent of it or a subdomain of it (nfqws2 matches subdomains).
+func nfqws2HostOverlap(excluded []string, list []byte) []string {
+	selected := map[string]bool{}
+	for _, line := range strings.Split(string(list), "\n") {
+		line = strings.ToLower(strings.TrimSpace(line))
+		if line != "" && !strings.HasPrefix(line, "#") {
+			selected[strings.TrimPrefix(strings.TrimSuffix(line, "."), "*.")] = true
 		}
 	}
-	return false
+	overlap := []string{}
+	for _, name := range excluded {
+		for host := range selected {
+			if host == name || strings.HasSuffix(host, "."+name) || strings.HasSuffix(name, "."+host) {
+				overlap = append(overlap, name)
+				break
+			}
+		}
+	}
+	return sortedUnique(overlap)
 }
 
 func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) error {
@@ -451,20 +506,6 @@ func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
 		}
 	}
 	return a.Health(ctx, plan, "")
-}
-
-// nfqws2PlanValues are the domains and networks of the adapter's routes, as
-// Stage writes them into the managed blocks.
-func nfqws2PlanValues(plan Plan, id string) ([]string, []string) {
-	domains, cidrs := []string{}, []string{}
-	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != id {
-			continue
-		}
-		domains = append(domains, route.Domains...)
-		cidrs = append(cidrs, route.CIDRs...)
-	}
-	return sortedUnique(domains), sortedUnique(cidrs)
 }
 
 // leaseBlockRestoration renders a list without its managed block back with
@@ -669,6 +710,14 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 	if snapshot.ConfigDraft && a.Configs != nil {
 		if _, err := a.Configs.Stage(a.ID(), "main", string(snapshot.StagedConfig)); err != nil {
 			return fmt.Errorf("restore NFQWS2 config draft: %w", err)
+		}
+	}
+	// Commit settles the list drafts; a later rollback gives them back.
+	for index, used := range snapshot.ListDraft {
+		if used && a.Configs != nil {
+			if _, err := a.Configs.Stage(a.ID(), nfqws2ListFileIDs[index], string(snapshot.StagedLists[index])); err != nil {
+				return fmt.Errorf("restore NFQWS2 list draft: %w", err)
+			}
 		}
 	}
 	if err := a.writeLease(snapshot.Lease); err != nil {

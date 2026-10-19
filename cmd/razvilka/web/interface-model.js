@@ -80,7 +80,7 @@
     for (const tld of desired.broad_tlds) legacy.push({kind:'tld',value:tld,label:'.'+tld,typeLabel:'Явное правило зоны',origin:'legacy',originLabel:'Ранее сохранённое исключение',reason:'Явно выбранная зона прежней политики',deviceIDs:[],activeIntent:true});
     return {revision:value.revision,policy_revision:value.policy_revision,exclusion_revision:value.exclusion_revision,applied_revision:value.applied_revision,
       scopeConfigured,storageState,manualEditable:scopeConfigured||storageState==='inactive',
-      russian_enabled:value.russian_enabled,russian_auto_update_allowed:value.russian_auto_update_allowed,desired_matches_applied:value.desired_matches_applied,live_applied:false,
+      russian_enabled:value.russian_enabled,russian_auto_update_allowed:value.russian_auto_update_allowed,desired_matches_applied:value.desired_matches_applied,site_exclusions_pending:value.site_exclusions_pending===true,project_stopped:value.project_stopped===true,live_applied:false,
       view, effective:desired,applied_effective:applied,legacy};
   }
   function resourceServiceExclusions(snapshot) {

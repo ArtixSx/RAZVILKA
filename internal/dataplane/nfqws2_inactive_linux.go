@@ -22,6 +22,9 @@ func nfqws2InactiveSystemPlatform() (nfqws2InactivePlatform, error) {
 			stat, ok := info.Sys().(*syscall.Stat_t)
 			return ok && (stat.Uid == 0 || stat.Uid == uint32(os.Geteuid()))
 		},
+		foreignList: func(info os.FileInfo) bool {
+			return info != nil && info.Mode()&os.ModeSymlink == 0 && info.Mode().IsRegular() && info.Mode().Perm()&0022 == 0
+		},
 		queues: func(ctx context.Context) ([]nfqwsScopedQueue, error) {
 			raw, err := backendInventoryThreadProc(ctx, backendThreadQueues)
 			if err != nil {

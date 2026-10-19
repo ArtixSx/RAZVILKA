@@ -166,7 +166,7 @@ export async function runInactiveExclusionsUI(config) {
       assert.equal(await page.locator('#resourceExclusionKind').isEnabled(),true);assert.equal(await page.locator('#resourceRussianEnabled').isEnabled(),false);assert.equal(await page.locator('#resourceRussianAuto').isEnabled(),false);
       await page.locator('.nav[data-view="services"]').click();await page.waitForFunction(()=>state.currentView==='services'&&!panelLoad.request&&state.dataLoad.resourceExclusions?.phase==='ready');
       assert.equal(await page.locator('#resourceBypassTab').textContent(),'Обходить');assert.equal(await page.locator('#resourceExcludedTab').isVisible(),true);await page.locator('#resourceExcludedTab').click();
-      assert.match(await page.locator('#ui3ServiceCatalog').textContent(),/Сохранение списка не включает обход/);assert.equal(browserRequests.slice(start).filter(r=>r.method!=='GET').length,0);
+      assert.match(await page.locator('#ui3ServiceCatalog').textContent(),/список действует после применения/);assert.equal(browserRequests.slice(start).filter(r=>r.method!=='GET').length,0);
       await enterExclusions();await bookend(expected,[]);
     });
     const manual=[{kind:'service',value:services[0].id},{kind:'exact',value:'ui-inactive.example'}];
