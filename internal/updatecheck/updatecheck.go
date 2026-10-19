@@ -30,7 +30,6 @@ type Result struct {
 	ReleaseURL       string `json:"release_url,omitempty"`
 	PublishedAt      string `json:"published_at,omitempty"`
 	CheckedAt        string `json:"checked_at"`
-	InstallCommand   string `json:"install_command"`
 	VerifyCommand    string `json:"verify_command"`
 	Error            string `json:"error,omitempty"`
 	ReleaseTag       string `json:"release_tag,omitempty"`
@@ -100,7 +99,7 @@ func (m *Manager) CheckChannel(parent context.Context, refresh bool, channel str
 	if !refresh && !m.cachedAt.IsZero() && time.Since(m.cachedAt) < m.ttl() {
 		return m.cached
 	}
-	result := Result{Channel: channel, InstalledVersion: m.Current, State: "check-failed", CheckedAt: time.Now().UTC().Format(time.RFC3339), InstallCommand: installCommand(), VerifyCommand: verifyCommand()}
+	result := Result{Channel: channel, InstalledVersion: m.Current, State: "check-failed", CheckedAt: time.Now().UTC().Format(time.RFC3339), VerifyCommand: verifyCommand()}
 	if err := m.check(parent, &result); err != nil {
 		result.Error = "Не удалось подтвердить каталог обновлений. Повторите проверку позже."
 		result.MetadataStale = m.lastGood.ReleaseTag != ""
@@ -209,10 +208,6 @@ func (m *Manager) check(parent context.Context, result *Result) error {
 		}
 	}
 	return nil
-}
-
-func installCommand() string {
-	return "curl -fsSL https://raw.githubusercontent.com/ArtixSx/RAZVILKA/main/scripts/bootstrap.sh | sh"
 }
 
 func verifyCommand() string {
