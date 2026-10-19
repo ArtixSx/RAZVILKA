@@ -36,7 +36,7 @@ func ownWireGuardFixture(t *testing.T, profile string) (*WARPWireGuardAdapter, *
 		}
 		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
 	}
-	plan := Plan{EngineDrafts: []string{"wireguard/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "wireguard", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"wireguard/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "wireguard", CIDRs: []string{"198.51.100.20/32"}, ProbeURL: "https://telegram.org/"}}}
 	return adapter, runner, plan, filepath.Join(root, "transaction")
 }
 

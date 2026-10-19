@@ -164,7 +164,7 @@ func TestWARPCanaryDoesNotDeleteInterfaceWhenStartOwnershipIsUncertain(t *testin
 		return []netip.Addr{netip.MustParseAddr("198.51.100.20")}, nil
 	}
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", CIDRs: []string{"198.51.100.20/32"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestWARPCanaryUsesTemporarySourcePolicyAndCleansIt(t *testing.T) {
 		return nil
 	}
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", CIDRs: []string{"198.51.100.20/32"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner(t *testing.T) 
 	}
 	adapter.HealthProbe = func(context.Context, string) error { return nil }
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", Domains: []string{"telegram.org"}, ProbeURL: "https://telegram.org/"}}}
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Telegram", Resolved: "warp-wg", CIDRs: []string{"198.51.100.20/32"}, ProbeURL: "https://telegram.org/"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestWARPAdapterActivatesHealthChecksAndRollsBack(t *testing.T) {
 	}
 	adapter.HealthProbe = func(context.Context, string) error { return nil }
 	transaction := filepath.Join(root, "transaction")
-	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Example", Resolved: "warp-wg", Domains: []string{"example.com"}, ProbeURL: "https://example.com"}}}
+	plan := Plan{EngineDrafts: []string{"warp-wg/main"}, Routes: []Route{{ServiceName: "Example", Resolved: "warp-wg", CIDRs: []string{"198.51.100.20/32"}, ProbeURL: "https://example.com"}}}
 	if err := adapter.Snapshot(context.Background(), plan, transaction); err != nil {
 		t.Fatal(err)
 	}

@@ -386,7 +386,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		}
 	}
 	// DNS identifies candidate destinations, not applications on a shared IP.
-	for _, adapter := range []string{"sing-box", "xray", "usque"} {
+	// The proxy TUN and the WireGuard family alike would capture every site
+	// behind a resolved address, so each such adapter gets one blocker.
+	for _, adapter := range domainCaptureAdapters {
 		for _, route := range input.Routes {
 			if adapterID(route.Resolved) == adapter && len(route.Domains) != 0 {
 				plan.Blockers = append(plan.Blockers, Blocker{Code: "DOMAIN_FLOW_AUTHORITY_REQUIRED", Adapter: adapter,
@@ -764,6 +766,23 @@ func adapterID(route string) string {
 // AdapterID returns the runtime adapter represented by a public route value.
 // Profile suffixes such as sing-box:home map to their base adapter.
 func AdapterID(route string) string { return adapterID(route) }
+
+// These adapters route by destination IP. A route that carries domains would
+// make one DNS answer the capture authority for every site on that address.
+var domainCaptureAdapters = []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard"}
+
+// DomainFlowAuthority reports whether the executor of a public route value may
+// carry a service's domain list. NFQWS2 decides each connection by its own
+// hostname and direct captures nothing. Every other route, including an
+// unknown one, has no such authority: Build refuses it for a domain service.
+func DomainFlowAuthority(route string) bool {
+	switch adapterID(route) {
+	case "nfqws2", "direct":
+		return true
+	default:
+		return false
+	}
+}
 
 func canonicalize(input *Input) {
 	input.LAN = CloneLANPolicyRuntime(input.LAN)
