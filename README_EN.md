@@ -2,157 +2,140 @@
   <img src="docs/assets/razvilka-banner.png" alt="RAZVILKA — router connection management" width="960">
 </p>
 
-# RAZVILKA
+<h3 align="center">The services you choose, through the right connection — on the router itself</h3>
 
-> Documentation for the upcoming **0.20.0**: a clean installation and subsequent
-> updates to **0.20+** releases. End-to-end list and exclusions acceptance and the
-> one-hour Telegram over VLESS check remain incomplete. [Current status (RU)](docs/CURRENT_STATUS_RU.md).
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#update">Update</a> ·
+  <a href="#uninstall">Uninstall</a> ·
+  <a href="#recommendations">Recommendations</a> ·
+  <a href="docs/INSTALL_RU.md">Detailed guide (RU)</a> ·
+  <a href="README.md">Русский</a>
+</p>
 
-**Choose which services use which connection, directly on your router.**
+RAZVILKA is a local web panel for **Keenetic and Netcraze routers with Entware**.
+You pick services and devices; the panel chooses and checks how to reach them:
+NFQWS2, VLESS, WireGuard/AmneziaWG or WARP. It runs on the router itself and
+keeps working on schedule with the browser closed.
 
-A local web panel for **Keenetic and Netcraze with Entware**. Manage services,
-devices, NFQWS2, WARP and VPN connections in one place. The panel and saved
-schedules run on the router without an open browser.
+> [!NOTE]
+> **0.20.0** is a clean new base. What has and has not been verified on a real
+> router is listed in the [current status (RU)](docs/CURRENT_STATUS_RU.md).
+> The install commands work once the `v0.20.0` tag is published in
+> [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
-[Published releases](https://github.com/ArtixSx/RAZVILKA/releases) ·
-[Install](#install) · [Documentation](docs/README.md) · [Русский](README.md) ·
-[News and support](https://t.me/RAZVILKA_UI)
+## How it works
 
-The banner is project artwork, not a screenshot of a running panel. Screenshots
-of the clean 0.20.0 installation will follow verification; unfinished tests are
-not presented as completed results.
+<p align="center">
+  <img src="docs/assets/razvilka-how-it-works.svg" alt="Traffic to enabled services takes the bypass; everything else uses the router's ordinary route" width="960">
+</p>
 
-## Features
+- **Bypass only what you enabled.** Other sites and apps, excluded devices and
+  an empty list keep the router's ordinary route, including your own VPN.
+- **Exclusions always win.** An excluded device or site is never bypassed —
+  not manually, not by the autopilot, not during recovery.
+- **No capture of unrelated sites.** Services defined by domain names use only
+  a method that checks the site name in every connection (NFQWS2). IP routing
+  through a VPN or proxy is disabled for them: one IP can host unrelated sites.
 
-| Panel section | Purpose |
+## What it does
+
+| | |
 | --- | --- |
-| Home and Autopilot | View network state and choose services, devices and permitted connections |
-| Services | Assign a route to a site or application, check access and apply changes |
-| Connections | Import VLESS and other profiles, refresh subscriptions, select nodes by country and check results, and open bypass settings |
-| Devices | Choose the home network and excluded devices, or limit bypass to individual devices when needed |
-| Events and settings | Review errors, install and update components, manage access and backups |
+| 🧭 **Autopilot** | Checks the chosen services, picks a working path, keeps a reserve and recovers after failures — within the limits you set |
+| 🧩 **Services** | Ready-made catalog and your own services; groups; access checks from the router |
+| 🔌 **Connections** | VLESS/Xray, WireGuard, AmneziaWG, WARP; subscriptions with node checks by country and result |
+| 🛡️ **DPI bypass** | NFQWS2 with strategies, compatibility checks and selection |
+| 📱 **Devices** | Home network and device selection, exclusions |
+| 🧾 **Log and diagnostics** | Clear error causes, a support report, backups |
+| 🔄 **Updates** | Manual and nightly, with a settings snapshot and automatic rollback |
 
-Autopilot operates within your settings. Access depends on the node, provider
-and router capabilities; a running process alone does not establish a working
-connection. [Verified results and limitations (RU)](docs/CURRENT_STATUS_RU.md).
+"Configured", "route applied" and "service reachable" are shown separately:
+a running process alone does not prove that the bypass works.
 
-## How traffic is selected
+## Recommendations
 
-For 0.20.0, the approved policy is **bypass only for the active list** of services,
-domains and supported IP/CIDR rules in selected home networks. The list can cover
-an entire selected network without assigning every service to every device.
-For example, enabled YouTube applies to that network while an excluded TV keeps
-its ordinary route. An excluded site also keeps its ordinary route even when
-it belongs to an enabled service. This is the intended behavior; end-to-end
-router verification of the shared network mode remains incomplete.
-
-- Device exclusions, manual resource exclusions and the accepted Russian resource
-  list take priority over positive rules and a pinned connection.
-- An empty list and traffic without a match use the router's ordinary policy.
-- Downloading a catalog or updating its definitions does not activate bypass.
-
-Applying a plan depends on the engine, firmware and selected scope.
-[Full list and exclusions contract (RU)](docs/delivery-2026-10-03/LIST_MODE_CORRECTION_RU.md).
+- **Router.** Keenetic or Netcraze with a USB drive and [Entware](docs/INSTALL_RU.md#подготовка-entware).
+  Best verified on **Netcraze Ultra (NC-1812), ARM64**. MIPS and MIPSel builds
+  are published but have not been tested on physical MIPS routers.
+- **Storage.** At least 1 GB free; a dedicated USB stick or SSD is better.
+- **Router DNS must work** before installation: catalogs, subscriptions and
+  checks rely on it. A DNS failure looks like an unreachable service.
+- **One DPI bypass at a time.** Do not run z2k or a second nfqws2 next to
+  RAZVILKA: two handlers of the same queue break connections.
+- **Start small.** One service and one connection; test from the device you
+  need, then add the rest.
+- **Telegram goes through a VPN or proxy.** Add "Telegram · через VPN или прокси"
+  from the catalog (Telegram's own networks only) and choose a VLESS node for it.
+  Services defined by domains (YouTube, Discord and others) use NFQWS2.
+- **Banks and government sites go to "Сайты без обхода".** If a site works
+  without the bypass but worse with it, add it under "Исключения → Сайты без
+  обхода" and press "Применить".
+- **Security.** Do not expose the panel port `8787` to the Internet. Keep the
+  recovery key away from the router. Do not run a general `opkg upgrade` for
+  the panel's sake.
 
 ## Install
 
-These instructions cover a **clean installation of 0.20.0** on Entware without
-an existing RAZVILKA installation. Migration from 0.19.3 is outside this scope.
-The installation command below requires the published `v0.20.0` tag in
-[Releases](https://github.com/ArtixSx/RAZVILKA/releases); this version cannot be
-installed before that release is published.
+<p align="center">
+  <img src="docs/assets/razvilka-install-steps.svg" alt="Three steps: Entware, one command, the panel on port 8787" width="960">
+</p>
 
-### 1. Prepare Entware
+**1. Prepare Entware.** You need `/opt`, SSH access to the Entware shell as
+`root`, and HTTPS download tools:
 
-Install **Entware**, mount `/opt`, and connect to its shell over SSH as `root`.
-[Entware preparation (RU)](docs/INSTALL_RU.md#подготовка-entware).
-The firmware's `(config)>` prompt is a different console; use the Entware shell
-for the commands below.
+```sh
+opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
+```
 
-| Platform | Entware installer | RAZVILKA binary |
+| Router architecture | Entware package | RAZVILKA build |
 | --- | --- | --- |
 | AArch64 / ARM64 | [aarch64-k3.10](https://bin.entware.net/aarch64-k3.10/installer/aarch64-installer.tar.gz) | `arm64` |
 | MIPS | [mipssf-k3.4](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) | `mips`, soft-float |
 | MIPSel | [mipselsf-k3.4](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) | `mipsle`, soft-float |
 
-> The three architectures are build targets. Current managed LIST startup is
-> tied to the reviewed stock NC-1812 profile; other ARM64, MIPS and MIPSel targets
-> are refused for this mode. [Runtime support matrix (RU)](docs/RUNTIME_SUPPORT_RU.md).
-
-Check that Entware is available:
-
-```sh
-export PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:$PATH
-test -d /opt && command -v opkg
-```
-
-If no path to `opkg` appears, finish setting up Entware. Then prepare HTTPS downloads:
-
-```sh
-export PATH=/opt/sbin:/opt/bin:/opt/usr/sbin:/opt/usr/bin:$PATH
-opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
-```
-
-### 2. Download and run the installer
+**2. Install RAZVILKA with one command:**
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0 sh /opt/tmp/razvilka-setup.sh
+sh /opt/tmp/razvilka-setup.sh
 ```
 
-The script runs only after a successful download. It adds missing basic tools,
-selects the architecture, checks the selected release checksums and starts the panel.
-Install the required bypass components separately.
+The installer detects the architecture, downloads release `v0.20.0`, verifies
+SHA-256 and starts the service. Bypass components are installed later from the panel.
 
-Settings and connections for 0.20+ are stored in `/opt/etc/razvilka`; working
-data is stored in `/opt/razvilka/{state,run,cache,log}`. Update snapshots are
-stored in `/opt/razvilka/state/update-backups`.
+**3. Open the panel** at **http://192.168.1.1:8787** (or your router's address
+with port `8787`; the exact link is printed by the installer). Sign in with the
+issued key, set a password, store the recovery key and follow the wizard:
+devices → services → bypass methods.
 
-### 3. Open the panel and configure a connection
+Where things live: settings — `/opt/etc/razvilka`, runtime data —
+`/opt/razvilka/{state,run,cache,log}`, update snapshots —
+`/opt/razvilka/state/update-backups`.
 
-Open **[http://192.168.1.1:8787](http://192.168.1.1:8787)**, or your router's LAN
-address on port `8787`. The installer prints the actual address.
+## Update
 
-1. Use the first-run key or setup link to create your login and password.
-   Keep the recovery key somewhere safe.
-2. Use the Autopilot wizard to choose services and devices, or configure them manually.
-3. Install the required component through component settings and add VLESS or another
-   profile in the connections section.
-4. Check the selected connection for the service, review the plan and apply it
-   after enabling routes. Nothing is applied before this review and your confirmation.
-   A node check from the router and access from the selected client device are checked separately.
+An installed 0.20+ updates **from the panel only**: "Обновления" →
+"Проверить версию" → "Установить", or automatically at night on the chosen
+schedule. The panel downloads the release from GitHub, verifies checksums and
+architecture, saves a settings snapshot and restores the previous version on failure.
 
-## Subsequent updates to 0.20+ releases
-
-An installed 0.20+ release updates from the panel: «Обновления» (Updates) → check
-the version → install the selected release, or automatically on schedule. The panel
-downloads the verified release from GitHub, keeps settings, creates a snapshot and
-returns the previous version on failure.
-
-Bootstrap and the manual archive installer are for new installations. On an
-installed 0.20+ release the installer refuses ("Use matching self update recovery…"
-or "This controller requires the journaled self update workflow…") and changes
-nothing: a raw binary replacement would bypass the update journal and its rollback.
-
-Scheduled update settings are located separately under «Обновления»
-(Updates) → «Окна обслуживания» (Maintenance windows) → «Изменить расписание»
-(Change schedule). The interface distinguishes checking, preparing and installing
-application updates automatically. Scheduled automatic installation is implemented.
-End-to-end installation and rollback acceptance on the target Entware system for
-0.20.0 (D11) remains incomplete; readiness is recorded in [current status (RU)](docs/CURRENT_STATUS_RU.md).
-
-Wait for the check result and retain the printed snapshot path. If the route is
-not confirmed after the update, inspect the installation result and diagnostics;
-a working panel does not establish that its bypass has recovered.
-
-Check the installed version and panel state:
+The installer refuses to run over a working 0.20+ and changes nothing, so an
+update never bypasses its own journal and rollback. To check the version:
 
 ```sh
 /opt/bin/razvilka -version
 /opt/etc/init.d/S99razvilka status
 ```
+
+### Moving from 0.19.3 and older
+
+0.20.0 is installed **from scratch**, without migrating old settings. The
+installer refuses when it finds an old installation. Remove the old version with
+its own uninstaller, then install 0.20.0 —
+[step by step (RU)](docs/INSTALL_RU.md#переход-с-0193-и-более-ранних-версий).
 
 ## Uninstall
 
@@ -163,45 +146,49 @@ curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
 sh /opt/tmp/razvilka-setup.sh --uninstall
 ```
 
-This removes the panel, its startup service and its own active routes. Settings,
-connections and backups are retained. Entware and separately installed engines
-remain. A plain reinstall over the retained data is refused: the update control
-journal (`/opt/razvilka/state/self-update-stop`) is retained. Do not delete it by hand.
+This removes the panel, its autostart and its own routes. Settings,
+connections and backups are **kept**. A plain install over them is refused:
+the installer sees the previous installation's journal.
 
-To reinstall **from scratch**, uninstall with `--purge`:
+To reinstall RAZVILKA **from scratch** afterwards, uninstall with data move:
 
 ```sh
 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
-After the normal removal, every RAZVILKA data folder is **moved** (never deleted)
-to `/opt/razvilka-removed-<date>` (root only), so the next install is clean.
+`--purge` **moves** (does not erase) all RAZVILKA data to
+`/opt/razvilka-removed-<date>`, readable by `root` only. Entware, third-party
+programs and installed bypass packages are not touched.
 
-### From 0.19.3 or older
+## Supported routers
 
-0.20.0 installs only on a clean base and refuses an older installation. Remove
-the old version with its own uninstaller, set its data aside, then install 0.20.0 —
-see [the migration steps (Russian)](docs/INSTALL_RU.md#переход-с-0193-и-более-ранних-версий).
+| | Status |
+| --- | --- |
+| Netcraze Ultra (NC-1812), ARM64, firmware 5.01.C.6.0-1 | main test router |
+| Other Keenetic / Netcraze ARM64 with Entware | panel and the main whole-network mode; the experimental "Домашняя сеть" mode is NC-1812 only for now |
+| MIPS / MIPSel | built, not tested on hardware |
 
-## Further reading
+More — [support matrix (RU)](docs/RUNTIME_SUPPORT_RU.md).
 
-- [Upcoming 0.20.0 release notes (RU)](docs/RELEASE_0.20.0_RU.md).
+## Security and privacy
 
-- [Installation, manual updates, removal and rollback (RU)](docs/INSTALL_RU.md).
-- [Current status and verified results (RU)](docs/CURRENT_STATUS_RU.md).
-- [Repository files explained (RU)](docs/FILES_RU.md).
-- [Roadmap (RU)](docs/ROADMAP.md) · [Changelog](CHANGELOG.md).
-- [Contributing and bug reports (RU)](CONTRIBUTING.md).
-- [Security (RU)](SECURITY.md) · [Third-party components](THIRD_PARTY.md) · [MIT license](LICENSE).
+The panel works only inside your network and is password-protected. Updates are
+downloaded over HTTPS with SHA-256 and architecture checks; releases carry GitHub
+build attestations. Keys, passwords and node links never appear in logs or reports.
+More — [SECURITY](SECURITY.md).
 
-## Recommendations and support
+## Documentation
 
-Start with one service and one connection, then test access from the intended
-home device. Saved settings, an applied route and verified service access are
-different facts; a retained snapshot does not establish current availability.
-Keep the panel on your trusted LAN, store the recovery key separately and make
-a backup before changes. Preserve recovery journals; do not run a global
-`opkg upgrade` just to update the panel.
+- [Install, update, uninstall and rollback (RU)](docs/INSTALL_RU.md)
+- [Current status and verification results (RU)](docs/CURRENT_STATUS_RU.md)
+- [0.20.0 release notes (RU)](docs/releases/0.20.0.md) · [Changelog](CHANGELOG.md)
+- [Roadmap](docs/ROADMAP.md) · [Two DPI engines idea (RU)](docs/DUAL_DPI_ARCHITECTURE_RU.md)
+- [Files and folders (RU)](docs/FILES_RU.md) · [Third-party components](THIRD_PARTY.md)
+- [Contributing](CONTRIBUTING.md)
 
-News, questions and contributions: [RAZVILKA on Telegram](https://t.me/RAZVILKA_UI).
-[Donate](https://dalink.to/artixsx).
+## Support the project
+
+News, questions and ideas — on Telegram **[@RAZVILKA_UI](https://t.me/RAZVILKA_UI)**.
+If RAZVILKA helps you — **[support the project](https://dalink.to/artixsx)**.
+
+<p align="center"><sub>MIT · RAZVILKA ("razvilka" means "fork in the road"): every service gets its own path.</sub></p>
