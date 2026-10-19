@@ -22,6 +22,10 @@ func usquePlanFixture(t *testing.T, selected string) (*App, config.Config, []rou
 	a.Catalog.Services[0].Category = "Messaging"
 	a.Catalog.Services[0].ProbeURL = "https://telegram.org/"
 	a.Catalog.Services[0].Strategy = []string{"usque"}
+	// A VPN or proxy route carries only an IP-defined service: domains of a
+	// service could share addresses with foreign sites (DOMAIN_FLOW authority).
+	a.Catalog.Services[0].Domains = nil
+	a.Catalog.Services[0].CIDRs = []string{"149.154.160.0/20"}
 	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: selected, Sources: []string{"192.168.1.40/32"}}); err != nil {
 		t.Fatal(err)
 	}
