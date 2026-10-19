@@ -245,18 +245,20 @@ sh scripts/rollback-entware.sh /opt/razvilka/state/update-backups/<снимок>
 (`/opt/var/lib/razvilka` или программу без журнала обновлений 0.20).
 
 1. Узнайте версию: `/opt/bin/razvilka -version`.
-2. Удалите её **деинсталлятором той же версии** — только он знает, где
-   записаны её маршруты (подставьте свою версию вместо `v0.19.3`):
+2. Удалите её деинсталлятором 0.19.3 — он берётся из git-тега и использует
+   уже установленную программу, поэтому старые выпуски в Releases не нужны.
+   Только он знает, где записаны маршруты старой версии:
 
    ```sh
    mkdir -p /opt/tmp &&
-   curl -fsSL --retry 2 -o /opt/tmp/razvilka-old.sh      https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.19.3/scripts/bootstrap.sh &&
-   RAZVILKA_VERSION=v0.19.3 sh /opt/tmp/razvilka-old.sh --uninstall
+   curl -fsSL --retry 2 -o /opt/tmp/razvilka-old-uninstall.sh \
+     https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.19.3/scripts/uninstall-entware.sh &&
+   sh /opt/tmp/razvilka-old-uninstall.sh
    ```
 
-   Команда использует опубликованный выпуск этой версии. Если его уже нет
-   в Releases, напишите в [Telegram](https://t.me/RAZVILKA_UI) — не удаляйте
-   программу вручную: её маршруты останутся без владельца.
+   Он останавливает панель, убирает её маршруты и удаляет программу, сохраняя
+   данные. Если он сообщит об ошибке, не удаляйте программу вручную — её маршруты
+   останутся без владельца; напишите в [Telegram](https://t.me/RAZVILKA_UI).
 3. Отложите старые данные (они не нужны 0.20 и мешают чистой установке):
 
    ```sh
