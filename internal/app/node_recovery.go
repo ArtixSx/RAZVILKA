@@ -385,10 +385,14 @@ func (a *App) nodeRecoveryIntent(ctx context.Context, previous dataplane.Plan, p
 	if intent.config.SafeMode || intent.config.ServiceControl.Stopped {
 		return intent, recoveryBlock("settings-changed", "")
 	}
-	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil || intent.config.InactiveResourceExclusions != nil {
+	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil {
 		// This legacy reapply copies old positive routes. It cannot consume the
-		// unified negative policy or revive an old scope beneath new exclusions.
+		// unified negative policy.
 		return intent, recoveryBlock("unsupported-plan", "")
+	}
+	if !dataplane.PlanHonoursLegacyExclusions(intent.config, previous) {
+		// Nor revive old routes beneath site exclusions saved after them.
+		return intent, recoveryBlock("scope-changed", "")
 	}
 	if previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop || previous.Revision != intent.config.AppliedRevision {
 		return intent, recoveryBlock("scope-changed", "")
@@ -615,7 +619,7 @@ func (a *App) nodeRecoveryReviewMessage(status nodeRecoveryStatus) string {
 }
 
 func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, error) {
-	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil || intent.config.InactiveResourceExclusions != nil {
+	if intent.config.NetworkPolicy != nil || intent.config.AppliedNetworkPolicy != nil || !dataplane.PlanHonoursLegacyExclusions(intent.config, intent.plan) {
 		return dataplane.Plan{}, recoveryBlock("unsupported-plan", "")
 	}
 	var engines []dataplane.Engine
@@ -641,5 +645,5 @@ func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, 
 	// Copy exact applied targets; do not resolve AUTO/group or load any draft.
 	routes := append([]dataplane.Route(nil), intent.plan.Routes...)
 	return dataplane.Build(dataplane.Input{DNS: intent.plan.DNS, NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
-		Routes: routes, Engines: engines, ResourceConflicts: conflicts, Host: host})
+		Routes: routes, Engines: engines, ResourceConflicts: conflicts, SiteExclusions: intent.plan.SiteExclusions, Host: host})
 }

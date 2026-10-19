@@ -253,9 +253,11 @@ func TestFileConfigInactiveExclusionsPreservedBeforeEffect(t *testing.T) {
 				if err != nil || calls != 1 {
 					t.Fatal("exact inactive document refused for data-only rollback", err, calls)
 				}
+				// Whole-network site exclusions travel in the committed plan the
+				// restored version applies, so they no longer close its start.
 				calls = 0
-				if err = a.EffectAdmission(context.Background(), r.ID, "start/live", "command-child-start-rollback-panel", func() error { calls++; return nil }); !errors.Is(err, ErrReviewChanged) || calls != 0 {
-					t.Fatal("inactive document granted legacy forward start", err, calls)
+				if err = a.EffectAdmission(context.Background(), r.ID, "start/live", "command-child-start-rollback-panel", func() error { calls++; return nil }); err != nil || calls != 1 {
+					t.Fatal("exact inactive document refused a live start", err, calls)
 				}
 			} else if !errors.Is(err, ErrReviewChanged) || calls != 0 {
 				t.Fatal("changed inactive document reached a file effect", err, calls)

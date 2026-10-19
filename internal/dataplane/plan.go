@@ -83,6 +83,7 @@ type Input struct {
 	LAN                    *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
 	DNS                    *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
 	DomainPolicy           *DomainPolicyRuntimePlan   `json:"domain_policy,omitempty"`
+	SiteExclusions         *SiteExclusions            `json:"site_exclusions,omitempty"`
 	SyntheticDNS           *SyntheticDNSTransportPlan `json:"synthetic_dns,omitempty"`
 	SuspendDNS             bool                       `json:"suspend_dns,omitempty"`
 	DiscardDNS             bool                       `json:"discard_dns,omitempty"`
@@ -152,6 +153,7 @@ type Plan struct {
 	LAN               *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
 	DNS               *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
 	DomainPolicy      *DomainPolicyRuntimePlan   `json:"domain_policy,omitempty"`
+	SiteExclusions    *SiteExclusions            `json:"site_exclusions,omitempty"`
 	SyntheticDNS      *SyntheticDNSTransportPlan `json:"synthetic_dns,omitempty"`
 	SuspendDNS        bool                       `json:"suspend_dns,omitempty"`
 	DiscardDNS        bool                       `json:"discard_dns,omitempty"`
@@ -309,6 +311,9 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	if now.IsZero() {
 		return Plan{}, errors.New("plan time is required")
 	}
+	if err := validateSiteExclusions(input.SiteExclusions); err != nil {
+		return Plan{}, err
+	}
 	canonicalize(&input)
 	encoded, err := json.Marshal(input)
 	if err != nil {
@@ -320,6 +325,7 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		LAN:               input.LAN,
 		DNS:               input.DNS,
 		DomainPolicy:      input.DomainPolicy,
+		SiteExclusions:    input.SiteExclusions,
 		SyntheticDNS:      input.SyntheticDNS,
 		SuspendDNS:        input.SuspendDNS,
 		DiscardDNS:        input.DiscardDNS,
@@ -397,6 +403,13 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 				break
 			}
 		}
+	}
+	// An address route cannot honour a name exclusion, and must never carry an
+	// excluded address. Exclusions are stronger than any bypass selection.
+	if conflicts := siteExclusionConflicts(input.SiteExclusions, input.Routes); len(conflicts) != 0 {
+		plan.Blockers = append(plan.Blockers, Blocker{Code: "SITE_EXCLUSION_CONFLICT",
+			Message:    "Исключённый адрес входит в IP-диапазоны сервиса с обходом через VPN или прокси: " + strings.Join(conflicts, ", ") + ".",
+			Resolution: "Уберите этот адрес из «Сайтов без обхода» или выключите обход сервиса."})
 	}
 	for adapter := range adapterSet {
 		plan.Adapters = append(plan.Adapters, adapter)
@@ -785,6 +798,7 @@ func DomainFlowAuthority(route string) bool {
 }
 
 func canonicalize(input *Input) {
+	input.SiteExclusions = canonicalSiteExclusions(input.SiteExclusions)
 	input.LAN = CloneLANPolicyRuntime(input.LAN)
 	input.DomainPolicy = CloneDomainPolicyRuntimePlan(input.DomainPolicy)
 	input.SyntheticDNS = CloneSyntheticDNSTransportPlan(input.SyntheticDNS)

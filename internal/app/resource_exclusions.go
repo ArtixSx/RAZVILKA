@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 const resourceExclusionsPath = "/api/v1/networkpolicy/exclusions"
@@ -143,13 +144,33 @@ func (a *App) writeResourceExclusions(w http.ResponseWriter, cfg config.Config) 
 	if cfg.NetworkPolicy != nil {
 		storageState = "configured"
 	}
+	desiredMatchesApplied := reflect.DeepEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)
+	if cfg.NetworkPolicy == nil && cfg.AppliedNetworkPolicy == nil {
+		desiredMatchesApplied = a.committedHonoursSiteExclusions(cfg)
+	}
 	writeJSON(w, 200, map[string]any{
 		"ok": true, "revision": cfg.Revision, "policy_revision": effective.PolicyRevision,
 		"exclusion_revision": effective.Revision, "resource_exclusions": exclusions,
 		"russian_enabled": russianEnabled, "russian_auto_update_allowed": russianAutoUpdateAllowed, "effective": effective,
 		"scope_configured": cfg.NetworkPolicy != nil, "storage_state": storageState,
 		"applied_revision": cfg.AppliedRevision, "applied_effective": applied,
-		"desired_matches_applied": cfg.InactiveResourceExclusions == nil && reflect.DeepEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy),
+		"desired_matches_applied": desiredMatchesApplied,
 		"live_applied":            false,
 	})
+}
+
+// In the whole-network mode the saved list is applied through the committed
+// plan. Nothing committed matches only an empty list.
+func (a *App) committedHonoursSiteExclusions(cfg config.Config) bool {
+	plan := dataplane.Plan{}
+	if a.Dataplane != nil {
+		committed, exists, err := a.Dataplane.Committed()
+		if err != nil {
+			return false
+		}
+		if exists && committed.State == "committed" {
+			plan = committed
+		}
+	}
+	return dataplane.PlanHonoursLegacyExclusions(cfg, plan)
 }

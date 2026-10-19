@@ -46,9 +46,6 @@ func TestAutonomyStarterCapabilityRefusalPrecedesChecksAndBudget(t *testing.T) {
 		mutate  func(*config.Config)
 		want    string
 	}{
-		{"inactive-negative", starter, func(c *config.Config) {
-			c.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "suffix", Value: "unrelated.example"}}}
-		}, "Очистите список «Сайты без обхода»"},
 		{"list-domain-service", starter, func(c *config.Config) { c.NetworkPolicy = autonomyExclusionPolicy() }, "задан доменами"},
 		{"list-cidr-service", custom, func(c *config.Config) { c.NetworkPolicy = autonomyExclusionPolicy() }, "узел Xray"},
 	} {
@@ -84,6 +81,12 @@ func TestAutonomyStarterCapabilityRefusalPrecedesChecksAndBudget(t *testing.T) {
 	}
 	if refusal := a.autonomyCapabilityRefusal(config.Default(), "youtube", "sing-box"); refusal != nil {
 		t.Fatalf("an open legacy path was refused: %+v", refusal)
+	}
+	// Whole-network site exclusions are enforced by NFQWS2 and close nothing.
+	inactive := config.Default()
+	inactive.InactiveResourceExclusions = &config.ResourceExclusions{Schema: 1, Revision: 1, Manual: []config.ResourceMatch{{Kind: "suffix", Value: "unrelated.example"}}}
+	if refusal := a.autonomyCapabilityRefusal(inactive, "youtube", "nfqws2"); refusal != nil {
+		t.Fatalf("site exclusions closed the legacy path: %+v", refusal)
 	}
 }
 
@@ -127,7 +130,8 @@ func TestAutonomyApplyRefusedBeforeStageReturnsSwitch(t *testing.T) {
 
 // Real coordinator, Store and node registry: a saved mode that no autopilot
 // route can carry ends the round before any node check or Apply, and later
-// rounds stay quiet until the owner changes it.
+// rounds stay quiet until the owner changes it. Saved whole-network site
+// exclusions are not such a mode.
 func TestAutonomyRoundNamesCapabilityLimitWithoutChecks(t *testing.T) {
 	for _, mode := range []string{"inactive-negative", "list-lan-except"} {
 		t.Run(mode, func(t *testing.T) {
@@ -145,6 +149,16 @@ func TestAutonomyRoundNamesCapabilityLimitWithoutChecks(t *testing.T) {
 				checks++
 				return autofallbackResult(request, true), nil
 			})
+			if mode == "inactive-negative" {
+				// Whole-network site exclusions are enforced by NFQWS2: an
+				// unrelated entry leaves the autopilot working normally.
+				autonomyTestDue(a, false)
+				a.autonomyRound(context.Background(), time.Now())
+				if r := autonomyTestState(a); checks == 0 || r.State == "capability-refused" {
+					t.Fatalf("site exclusions stopped the autopilot: checks=%d %+v", checks, r)
+				}
+				return
+			}
 			before := a.Store.Get()
 			switches := slices.Clone(autonomyTestState(a).Switches)
 			for round := 0; round < 2; round++ {
@@ -152,27 +166,10 @@ func TestAutonomyRoundNamesCapabilityLimitWithoutChecks(t *testing.T) {
 				a.autonomyRound(context.Background(), time.Now())
 				r := autonomyTestState(a)
 				// The fixture also keeps YouTube enabled through USQUE.
-				want := "Сайты без обхода"
-				if mode == "list-lan-except" {
-					want = "один сервис"
-				}
-				requireTerminalCapabilityMessage(t, r, want)
+				requireTerminalCapabilityMessage(t, r, "один сервис")
 				if checks != 0 || len(adapter.calls) != 0 || !reflect.DeepEqual(before, a.Store.Get()) || !slices.Equal(switches, r.Switches) {
 					t.Fatalf("round %d checked, applied or spent budget: checks=%d calls=%v", round, checks, adapter.calls)
 				}
-			}
-			if mode != "inactive-negative" {
-				return
-			}
-			// Clearing the list is the owner's change: the next round works normally.
-			clear := []config.ResourceMatch{}
-			if _, err := a.Store.UpdateResourceExclusions(context.Background(), a.Store.Get(), &clear, nil); err != nil {
-				t.Fatal(err)
-			}
-			autonomyTestDue(a, false)
-			a.autonomyRound(context.Background(), time.Now())
-			if r := autonomyTestState(a); checks == 0 || r.State == "capability-refused" {
-				t.Fatalf("cleared list did not resume the autopilot: checks=%d %+v", checks, r)
 			}
 		})
 	}

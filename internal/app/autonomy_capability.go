@@ -20,7 +20,7 @@ var errAutonomyPlanNotReady = errors.New("autonomous plan not ready")
 // autopilot, for selected devices and one bypassed CIDR-only service.
 func (a *App) autonomyCapabilityRefusal(cfg config.Config, serviceID, route string) *capabilityRefusal {
 	if cfg.NetworkPolicy == nil {
-		if cfg.AppliedNetworkPolicy == nil && !config.InactiveResourceNegatives(cfg) {
+		if cfg.AppliedNetworkPolicy == nil {
 			return nil
 		}
 		return legacyExecutorRefusal(cfg)

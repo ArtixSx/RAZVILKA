@@ -75,18 +75,15 @@ func requireCapabilityRefusal(t *testing.T, a *App, server *httptest.Server, cod
 	return first
 }
 
-func TestLegacyExecutorRefusalIsTypedConflictNotServerError(t *testing.T) {
-	a, _ := defaultConsentHTTPFixture(t)
-	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
-	defer server.Close()
-	patch := exclusionPatch(a)
-	patch["manual"] = []config.ResourceMatch{{Kind: "suffix", Value: "example.com"}}
-	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
-		t.Fatal(status, string(data))
-	}
-	got := requireCapabilityRefusal(t, a, server, "NETWORK_POLICY_EXECUTOR_REQUIRED", "")
-	if !strings.Contains(got.Error, "Сайты без обхода") || !strings.Contains(got.Resolution, "Очистите") {
-		t.Fatalf("inactive-list refusal does not say what to do: %+v", got)
+// A policy applied in the home-network mode closes the legacy builder with a
+// typed refusal that says what to change.
+func TestLegacyExecutorRefusalNamesListMode(t *testing.T) {
+	cfg := config.Default()
+	cfg.AppliedNetworkPolicy = &config.NetworkPolicy{Schema: 1}
+	_, err := (&App{}).buildDataplanePlanForScope(cfg, nil, changeScopeAll, "")
+	var got *capabilityRefusal
+	if !errors.As(err, &got) || got.Code != capabilityExecutorRequired || !strings.Contains(got.Message, "Домашняя сеть") || !strings.Contains(got.Resolution, "общий переключатель") {
+		t.Fatalf("list-mode refusal does not say what to do: %v", err)
 	}
 }
 

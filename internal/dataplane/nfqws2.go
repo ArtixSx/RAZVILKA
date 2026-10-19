@@ -39,6 +39,8 @@ type NFQWS2Adapter struct {
 	ConfigPath           string
 	UserListPath         string
 	IPSetListPath        string
+	ExcludeListPath      string // Stock hostlist-exclude list: owner's sites without bypass.
+	IPSetExcludeListPath string // Stock ipset-exclude list: owner's addresses without bypass.
 	InitPath             string
 	IPTablesSave         string
 	Runner               NFQWS2Runner
@@ -57,11 +59,18 @@ type nfqws2Snapshot struct {
 	UserList         []byte       `json:"user_list,omitempty"`
 	IPSetListExisted bool         `json:"ipset_list_existed"`
 	IPSetList        []byte       `json:"ipset_list,omitempty"`
+	ExcludeExisted   bool         `json:"exclude_list_existed"`
+	ExcludeList      []byte       `json:"exclude_list,omitempty"`
+	IPSetExclExisted bool         `json:"ipset_exclude_list_existed"`
+	IPSetExcludeList []byte       `json:"ipset_exclude_list,omitempty"`
 	WasRunning       bool         `json:"was_running"`
 	ConfigExisted    bool         `json:"config_existed"`
 	Config           []byte       `json:"config,omitempty"`
 	ConfigDraft      bool         `json:"config_draft"`
 	StagedConfig     []byte       `json:"staged_config,omitempty"`
+	// Owner's part of each managed list from the engine editor, in lease order.
+	ListDraft   [4]bool   `json:"list_draft"`
+	StagedLists [4][]byte `json:"staged_lists,omitempty"`
 }
 
 func NewNFQWS2Adapter() *NFQWS2Adapter {
@@ -100,10 +109,30 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) er
 			snapshot.ConfigDraft = true
 			snapshot.StagedConfig = []byte(content.Content)
 		}
+		for index, fileID := range nfqws2ListFileIDs {
+			if !planUsesEngineDraft(plan, a.ID(), fileID) {
+				continue
+			}
+			content, readErr := a.Configs.ReadExpert(a.ID(), fileID)
+			if readErr != nil {
+				return fmt.Errorf("read NFQWS2 list draft: %w", readErr)
+			}
+			if content.Source == "staged" {
+				snapshot.ListDraft[index], snapshot.StagedLists[index] = true, []byte(content.Content)
+			}
+		}
 	}
 	snapshot.UserList, snapshot.UserListExisted, err = nfqws2Read(a.UserListPath)
 	if err != nil {
 		return fmt.Errorf("snapshot NFQWS2 user list: %w", err)
+	}
+	snapshot.ExcludeList, snapshot.ExcludeExisted, err = nfqws2Read(a.ownedListPaths()[2])
+	if err != nil {
+		return fmt.Errorf("snapshot NFQWS2 exclude list: %w", err)
+	}
+	snapshot.IPSetExcludeList, snapshot.IPSetExclExisted, err = nfqws2Read(a.ownedListPaths()[3])
+	if err != nil {
+		return fmt.Errorf("snapshot NFQWS2 ipset exclude list: %w", err)
 	}
 	snapshot.IPSetList, snapshot.IPSetListExisted, err = nfqws2Read(a.IPSetListPath)
 	if err != nil {
@@ -143,36 +172,107 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 	if err := writeAtomic(filepath.Join(root, "nfqws2.conf.staged"), config, 0o600); err != nil {
 		return err
 	}
-	domains := []string{}
-	cidrs := []string{}
-	for _, route := range plan.Routes {
-		if adapterID(route.Resolved) != a.ID() {
-			continue
-		}
-		domains = append(domains, route.Domains...)
-		cidrs = append(cidrs, route.CIDRs...)
-	}
-	domains = sortedUnique(domains)
-	cidrs = sortedUnique(cidrs)
-	for _, domain := range domains {
-		if !validManagedDomain(domain) {
-			return fmt.Errorf("invalid NFQWS2 domain %q", domain)
-		}
-	}
-	for _, cidr := range cidrs {
-		if _, err := netip.ParsePrefix(cidr); err != nil {
-			if _, addrErr := netip.ParseAddr(cidr); addrErr != nil {
-				return fmt.Errorf("invalid NFQWS2 CIDR %q", cidr)
+	lists := nfqws2PlanLists(plan, a.ID())
+	for index, values := range lists {
+		for _, value := range values {
+			if index%2 == 0 && !validManagedDomain(value) {
+				return fmt.Errorf("invalid NFQWS2 domain %q", value)
+			}
+			if index%2 == 1 {
+				if _, err := netip.ParsePrefix(value); err != nil {
+					if _, addrErr := netip.ParseAddr(value); addrErr != nil {
+						return fmt.Errorf("invalid NFQWS2 CIDR %q", value)
+					}
+				}
 			}
 		}
 	}
-	if err := a.stageOwnedList(0, filepath.Join(root, "user.list.staged"), domains); err != nil {
+	// Exclusions are enforced by nfqws2 itself, before its own selection.
+	// A configuration that does not read the exclude lists would silently
+	// bypass an excluded site, so it is refused instead.
+	if err := a.requireExclusionLists(config, lists); err != nil {
 		return preflightRefusalError{err}
 	}
-	if err := a.stageOwnedList(1, filepath.Join(root, "ipset.list.staged"), cidrs); err != nil {
-		return preflightRefusalError{err}
+	for index, values := range lists {
+		base := []byte(nil)
+		if snapshot.ListDraft[index] {
+			base = snapshot.StagedLists[index]
+		}
+		if err := a.stageOwnedList(index, filepath.Join(root, nfqws2ListStages[index]), values, base, snapshot.ListDraft[index]); err != nil {
+			return preflightRefusalError{err}
+		}
 	}
 	return nil
+}
+
+// The stock lists RAZVILKA keeps one managed block in, in lease order:
+// selected domains, selected addresses, excluded domains, excluded addresses.
+var nfqws2ListStages = [4]string{"user.list.staged", "ipset.list.staged", "exclude.list.staged", "ipset_exclude.list.staged"}
+
+// The engine editor's files that hold the owner's part of the same lists.
+var nfqws2ListFileIDs = [4]string{"user-list", "ipset-list", "exclude-list", "ipset-exclude"}
+
+func (a *NFQWS2Adapter) ownedListPaths() [4]string {
+	// The stock package keeps every list in one directory; an adapter that
+	// names only its selection lists finds the exclude lists beside them.
+	exclude, ipsetExclude := a.ExcludeListPath, a.IPSetExcludeListPath
+	if exclude == "" && a.UserListPath != "" {
+		exclude = filepath.Join(filepath.Dir(a.UserListPath), "exclude.list")
+	}
+	if ipsetExclude == "" && a.IPSetListPath != "" {
+		ipsetExclude = filepath.Join(filepath.Dir(a.IPSetListPath), "ipset_exclude.list")
+	}
+	return [4]string{a.UserListPath, a.IPSetListPath, exclude, ipsetExclude}
+}
+
+func (s nfqws2Snapshot) ownedList(index int) ([]byte, bool) {
+	switch index {
+	case 0:
+		return s.UserList, s.UserListExisted
+	case 1:
+		return s.IPSetList, s.IPSetListExisted
+	case 2:
+		return s.ExcludeList, s.ExcludeExisted
+	default:
+		return s.IPSetExcludeList, s.IPSetExclExisted
+	}
+}
+
+// nfqws2PlanLists returns the four managed blocks of a plan. Exclusions are
+// written only while this adapter carries at least one route.
+func nfqws2PlanLists(plan Plan, id string) [4][]string {
+	domains, cidrs := nfqws2PlanValues(plan, id)
+	lists := [4][]string{domains, cidrs, {}, {}}
+	if len(domains)+len(cidrs) != 0 && plan.SiteExclusions != nil {
+		lists[2] = sortedUnique(plan.SiteExclusions.Domains)
+		lists[3] = sortedUnique(plan.SiteExclusions.CIDRs)
+	}
+	return lists
+}
+
+// requireExclusionLists confirms the effective nfqws2 arguments read both
+// exclude lists whenever there is something to exclude.
+func (a *NFQWS2Adapter) requireExclusionLists(config []byte, lists [4][]string) error {
+	text, paths := string(config), a.ownedListPaths()
+	if len(lists[2]) != 0 && (!strings.Contains(text, "--hostlist-exclude="+paths[2]) || nfqws2ListOnlyMode(text)) {
+		return errors.New("NFQWS2 не читает список исключений сайтов (режим $MODE_LIST); выберите режим $MODE_AUTO или $MODE_ALL в nfqws2.conf либо очистите «Сайты без обхода»")
+	}
+	if len(lists[3]) != 0 && !strings.Contains(text, "--ipset-exclude="+paths[3]) {
+		return errors.New("NFQWS2 не читает список исключённых адресов (--ipset-exclude); верните стандартную строку NFQWS_ARGS_IPSET в nfqws2.conf либо очистите исключённые адреса")
+	}
+	return nil
+}
+
+// The stock configuration selects its mode with one assignment line.
+func nfqws2ListOnlyMode(config string) bool {
+	for _, line := range strings.Split(config, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "NFQWS_EXTRA_ARGS=") {
+			value := strings.Trim(strings.TrimPrefix(line, "NFQWS_EXTRA_ARGS="), "\"'")
+			return strings.TrimSpace(value) == "$MODE_LIST"
+		}
+	}
+	return false
 }
 
 func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) error {
@@ -182,7 +282,11 @@ func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) er
 		}
 		return e.prepare(ctx)
 	}
-	for _, path := range []string{a.InitPath, filepath.Join(root, "nfqws2.conf.staged"), filepath.Join(root, "user.list.staged"), filepath.Join(root, "ipset.list.staged")} {
+	required := []string{a.InitPath, filepath.Join(root, "nfqws2.conf.staged")}
+	for _, stage := range nfqws2ListStages {
+		required = append(required, filepath.Join(root, stage))
+	}
+	for _, path := range required {
 		if !regularFile(path) {
 			return fmt.Errorf("required NFQWS2 file is missing: %s", path)
 		}
@@ -192,7 +296,8 @@ func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) er
 			return fmt.Errorf("NFQWS2 native config validation failed: %s", validation.Output)
 		}
 	}
-	for _, path := range []string{filepath.Join(root, "user.list.staged"), filepath.Join(root, "ipset.list.staged")} {
+	for _, stage := range nfqws2ListStages {
+		path := filepath.Join(root, stage)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -228,11 +333,10 @@ func (a *NFQWS2Adapter) Activate(ctx context.Context, plan Plan, root string) er
 	// nfqws2 drops privileges to `nobody` before it opens host/ipset files.
 	// Keeping these generated lists at 0600 makes the init script print
 	// "Started" while the daemon exits immediately with EACCES.
-	if err := installStagedMode(filepath.Join(root, "user.list.staged"), a.UserListPath, 0o644); err != nil {
-		return fmt.Errorf("activate NFQWS2 user list: %w", err)
-	}
-	if err := installStagedMode(filepath.Join(root, "ipset.list.staged"), a.IPSetListPath, 0o644); err != nil {
-		return fmt.Errorf("activate NFQWS2 ipset list: %w", err)
+	for index, path := range a.ownedListPaths() {
+		if err := installStagedMode(filepath.Join(root, nfqws2ListStages[index]), path, 0o644); err != nil {
+			return fmt.Errorf("activate NFQWS2 list %s: %w", filepath.Base(path), err)
+		}
 	}
 	output, err := a.run(ctx, a.InitPath, "restart")
 	if err != nil {
@@ -264,6 +368,13 @@ func (a *NFQWS2Adapter) Commit(ctx context.Context, plan Plan, root string) erro
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return err
+	}
+	for index, used := range snapshot.ListDraft {
+		if used {
+			if err := a.Configs.Discard(a.ID(), nfqws2ListFileIDs[index]); err != nil {
+				return err
+			}
+		}
 	}
 	if snapshot.ConfigDraft {
 		return a.Configs.Discard(a.ID(), "main")
@@ -386,15 +497,15 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	domains, cidrs := nfqws2PlanValues(plan, a.ID())
+	lists := nfqws2PlanLists(plan, a.ID())
 	type write struct {
 		path string
 		data []byte
 		mode os.FileMode
 	}
 	var writes []write
-	for index, values := range [][]string{domains, cidrs} {
-		path := []string{a.UserListPath, a.IPSetListPath}[index]
+	for index, values := range lists {
+		path := a.ownedListPaths()[index]
 		data, exists, err := nfqws2Read(path)
 		if err != nil {
 			return false, err
@@ -464,7 +575,7 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 	removals := []removal{}
 	// Validate every shared resource before the first write. Keep the lease
 	// until reload succeeds so interrupted cleanup can safely be retried.
-	for index, path := range []string{a.UserListPath, a.IPSetListPath} {
+	for index, path := range a.ownedListPaths() {
 		data, exists, err := nfqws2Read(path)
 		if err != nil {
 			return err
@@ -538,11 +649,11 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 	if err := restoreOptional(a.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
 		return err
 	}
-	if err := restoreOptionalMode(a.UserListPath, snapshot.UserList, snapshot.UserListExisted, 0o644); err != nil {
-		return err
-	}
-	if err := restoreOptionalMode(a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, 0o644); err != nil {
-		return err
+	for index, path := range a.ownedListPaths() {
+		data, existed := snapshot.ownedList(index)
+		if err := restoreOptionalMode(path, data, existed, 0o644); err != nil {
+			return err
+		}
 	}
 	action := "stop"
 	if snapshot.WasRunning {

@@ -38,7 +38,7 @@ type nfqws2Lease struct {
 	ConfigHash  string             `json:"config_hash"`
 	PriorConfig string             `json:"prior_config_hash,omitempty"`
 	InitHash    string             `json:"init_hash"`
-	Lists       [2]nfqws2ListLease `json:"lists"`
+	Lists       [4]nfqws2ListLease `json:"lists"`
 }
 
 func (a *NFQWS2Adapter) bindStateRoot(root string) error {
@@ -143,8 +143,13 @@ func (a *NFQWS2Adapter) readLease() (*nfqws2Lease, error) {
 	}
 	owner, err := a.owner()
 	if err != nil || lease.Version != 1 || lease.Owner != owner || lease.StateRoot != a.StateRoot || !filepath.IsAbs(lease.Transaction) ||
-		lease.ConfigPath != a.ConfigPath || lease.InitPath != a.InitPath || lease.Lists[0].Path != a.UserListPath || lease.Lists[1].Path != a.IPSetListPath {
+		lease.ConfigPath != a.ConfigPath || lease.InitPath != a.InitPath {
 		return nil, errors.New("NFQWS2 ownership manifest belongs to another instance or resource")
+	}
+	for index, path := range a.ownedListPaths() {
+		if lease.Lists[index].Path != path {
+			return nil, errors.New("NFQWS2 ownership manifest belongs to another instance or resource")
+		}
 	}
 	for _, list := range lease.Lists {
 		for index, value := range []string{list.BlockHash, list.PreviousHash} {
@@ -232,7 +237,7 @@ func (a *NFQWS2Adapter) verifyOwnedLists(partial bool) (*nfqws2Lease, error) {
 			return nil, err
 		}
 	}
-	for index, path := range []string{a.UserListPath, a.IPSetListPath} {
+	for index, path := range a.ownedListPaths() {
 		data, _, err := nfqws2Read(path)
 		if err != nil {
 			return nil, err
@@ -263,13 +268,14 @@ func (a *NFQWS2Adapter) verifyOwnedRuntime(lease *nfqws2Lease, partial bool) err
 	return nil
 }
 
-func (a *NFQWS2Adapter) stageOwnedList(index int, stage string, values []string) error {
+// A reviewed engine-editor draft replaces the owner's part of the list; the
+// live file still proves this instance owns the managed block it rewrites.
+func (a *NFQWS2Adapter) stageOwnedList(index int, stage string, values []string, draft []byte, hasDraft bool) error {
 	owner, err := a.owner()
 	if err != nil {
 		return err
 	}
-	paths := []string{a.UserListPath, a.IPSetListPath}
-	current, _, err := nfqws2Read(paths[index])
+	current, _, err := nfqws2Read(a.ownedListPaths()[index])
 	if err != nil {
 		return err
 	}
@@ -280,7 +286,11 @@ func (a *NFQWS2Adapter) stageOwnedList(index int, stage string, values []string)
 	if err := a.checkListOwnership(lease, index, current, true); err != nil {
 		return err
 	}
-	merged, err := replaceManagedBlock(string(current), append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
+	base := string(current)
+	if hasDraft {
+		base = string(draft)
+	}
+	merged, err := replaceManagedBlock(base, append([]string{"# RAZVILKA INSTANCE " + owner}, values...))
 	if err != nil {
 		return err
 	}
@@ -314,9 +324,8 @@ func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
 		return errors.New("NFQWS2 init is unavailable")
 	}
 	lease.ConfigHash, lease.PriorConfig, lease.InitHash = nfqws2Hash(stagedConfig), nfqws2Hash(snapshot.Config), nfqws2Hash(init)
-	before := [][]byte{snapshot.Config, snapshot.UserList, snapshot.IPSetList}
-	existed := []bool{snapshot.ConfigExisted, snapshot.UserListExisted, snapshot.IPSetListExisted}
-	for index, path := range []string{a.ConfigPath, a.UserListPath, a.IPSetListPath} {
+	before, existed := nfqws2SnapshotResources(snapshot)
+	for index, path := range a.globalResources() {
 		current, exists, err := nfqws2Read(path)
 		if err != nil || exists != existed[index] || !bytes.Equal(current, before[index]) {
 			return errors.New("NFQWS2 global resource changed after its snapshot")
@@ -327,7 +336,7 @@ func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
 		if err := a.checkListOwnership(prior, index-1, current, true); err != nil {
 			return err
 		}
-		stageName := []string{"user.list.staged", "ipset.list.staged"}[index-1]
+		stageName := nfqws2ListStages[index-1]
 		staged, exists, err := nfqws2Read(filepath.Join(root, stageName))
 		block, blockErr := nfqws2Block(staged)
 		if err != nil || !exists || blockErr != nil || !strings.Contains(string(block), "\n# RAZVILKA INSTANCE "+owner+"\n") {
@@ -354,18 +363,36 @@ func (a *NFQWS2Adapter) mayRollback(root string, snapshot nfqws2Snapshot) (bool,
 	if err := a.verifyOwnedRuntime(lease, true); err != nil {
 		return false, err
 	}
-	before := [][]byte{snapshot.Config, snapshot.UserList, snapshot.IPSetList}
-	existed := []bool{snapshot.ConfigExisted, snapshot.UserListExisted, snapshot.IPSetListExisted}
-	for index, path := range []string{a.ConfigPath, a.UserListPath, a.IPSetListPath} {
+	before, existed := nfqws2SnapshotResources(snapshot)
+	for index, path := range a.globalResources() {
 		current, exists, err := nfqws2Read(path)
 		if err != nil {
 			return false, err
 		}
-		stageName := []string{"nfqws2.conf.staged", "user.list.staged", "ipset.list.staged"}[index]
+		stageName := "nfqws2.conf.staged"
+		if index > 0 {
+			stageName = nfqws2ListStages[index-1]
+		}
 		staged, _, err := nfqws2Read(filepath.Join(root, stageName))
 		if err != nil || !(exists == existed[index] && bytes.Equal(current, before[index])) && !(exists && bytes.Equal(current, staged)) {
 			return false, errors.New("NFQWS2 rollback resource is no longer owned")
 		}
 	}
 	return true, nil
+}
+
+// globalResources are the configuration and the four owned lists, in the
+// order of nfqws2SnapshotResources.
+func (a *NFQWS2Adapter) globalResources() []string {
+	lists := a.ownedListPaths()
+	return []string{a.ConfigPath, lists[0], lists[1], lists[2], lists[3]}
+}
+
+func nfqws2SnapshotResources(snapshot nfqws2Snapshot) ([][]byte, []bool) {
+	data, existed := [][]byte{snapshot.Config}, []bool{snapshot.ConfigExisted}
+	for index := 0; index < 4; index++ {
+		list, ok := snapshot.ownedList(index)
+		data, existed = append(data, list), append(existed, ok)
+	}
+	return data, existed
 }

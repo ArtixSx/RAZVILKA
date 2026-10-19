@@ -15,7 +15,8 @@ const nfqws2LockMarker = "RAZVILKA shared NFQWS2 resource lock v1\n"
 // Locks are tied to shared resource paths, not the instance StateRoot. Keep
 // each marker inode permanently: unlinking it permits a second concurrent lock.
 func (a *NFQWS2Adapter) lockResources() (func(), error) {
-	paths := []string{a.ConfigPath, a.InitPath, a.UserListPath, a.IPSetListPath}
+	lists := a.ownedListPaths()
+	paths := []string{a.ConfigPath, a.InitPath, lists[0], lists[1], lists[2], lists[3]}
 	sort.Strings(paths)
 	unlocks := []func(){}
 	release := func() {

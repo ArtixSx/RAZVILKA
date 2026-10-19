@@ -3871,9 +3871,15 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	}
 	// The versioned LAN intent is preserved, but must not be silently ignored
 	// by legacy adapters before the unified scope/DNS executor is integrated.
-	// An empty inactive list carries no negative and does not close this path.
-	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil || config.InactiveResourceNegatives(cfg) {
+	if cfg.NetworkPolicy != nil || cfg.AppliedNetworkPolicy != nil {
 		return dataplane.Plan{}, legacyExecutorRefusal(cfg)
+	}
+	// Saved "sites without bypass" are enforced by NFQWS2 in this mode, and an
+	// excluded service gets no route at all. Exclusions follow the saved list
+	// in every scope: they only ever narrow the bypass.
+	siteExclusions, excludedServices, err := dataplane.LegacySiteExclusions(cfg)
+	if err != nil {
+		return dataplane.Plan{}, err
 	}
 	cfg = configForChangeScope(cfg, scope)
 	networkProfile := ""
@@ -3901,7 +3907,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	appliedAdapters := map[string]bool{}
 	for _, service := range a.catalogSnapshot().Services {
 		state := cfg.Services[service.ID]
-		if state.Enabled {
+		if state.Enabled && !excludedServices[service.ID] {
 			selected := selectedRoute(state)
 			nodeEngine, nodeTarget, nodeRoute := routekind.ParseNodeRoute(selected)
 			if routekind.HasNodeRoutePrefix(selected) && (!nodeRoute || !routecatalog.ValidForServiceWithOptions(selected, service.ID, options)) {
@@ -4057,7 +4063,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	if a.DataplaneHost != nil {
 		host = a.DataplaneHost()
 	}
-	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, Host: host}
+	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: cfg.Revision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, SiteExclusions: siteExclusions, Host: host}
 	if err := a.composeScopedDNSContext(ctx, cfg, previousDNSPlan, &input, dnsChange); err != nil {
 		return dataplane.Plan{}, err
 	}

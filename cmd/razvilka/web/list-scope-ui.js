@@ -158,7 +158,7 @@ function renderListScope() {
   const e=listScopeEditor,r=listScopeCurrent(),catalog=state.homeScope,c=e.draft;
   const available=!!listScopeOptionsCurrent();
   const editable=listScopeCanEdit(),disabled=editable?'':'disabled';
-  const html=`<article class="panel full-panel"><div class="panel-title"><div><h2>Домашняя сеть</h2><p>Общая область для выбранного списка сервисов. Остальной трафик сохраняет обычную политику роутера.</p></div></div>
+  const html=`<article class="panel full-panel"><div class="panel-title"><div><h2>Домашняя сеть <span class="tag">экспериментально</span></h2><p>Общая область для выбранного списка сервисов. Остальной трафик сохраняет обычную политику роутера.</p><p class="r5-caption">Экспериментальный режим: пока один сервис с IP-диапазонами и только на Netcraze Ultra (NC-1812). Основной режим — вся сеть: сервисы через NFQWS2, Telegram — через VPN или прокси по его IP-сетям.</p></div></div>
     ${!r?'<p role="status">Область ещё не получена. Последний черновик сохранён; редактирование недоступно.</p>':''}
     ${!available?`<p role="status">Домашние сегменты не подтверждены свежим чтением. ${esc(catalog?.code || '')} Сохранённые ID видимы; область нельзя расширить по одному имени сети.</p>`:catalog?.state==='partial'?'<p role="status">Наблюдение неполное. Для нового выбора доступны только подтверждённые варианты.</p>':''}
     <button class="secondary" type="button" data-scope-refresh ${e.optionsRead||e.pending?'disabled':''}>${e.optionsRead?'Обновляем…':'Обновить устройства и сети'}</button>${catalog?.observed_at?`<p class="r5-caption">Последнее наблюдение: ${esc(catalog.observed_at)}. Оно не подтверждает работающий маршрут.</p>`:''}

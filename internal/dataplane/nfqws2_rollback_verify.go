@@ -33,7 +33,7 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 	if err != nil || !reflect.DeepEqual(lease, snapshot.Lease) {
 		return false, errors.New("NFQWS2 rollback ownership differs from its snapshot")
 	}
-	domains, cidrs := nfqws2PlanValues(plan, a.ID())
+	lists := nfqws2PlanLists(plan, a.ID())
 	owner, ownerErr := a.owner()
 	for index, file := range []struct {
 		path   string
@@ -42,8 +42,10 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 		values []string
 	}{
 		{a.ConfigPath, snapshot.Config, snapshot.ConfigExisted, nil},
-		{a.UserListPath, snapshot.UserList, snapshot.UserListExisted, domains},
-		{a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, cidrs},
+		{a.UserListPath, snapshot.UserList, snapshot.UserListExisted, lists[0]},
+		{a.IPSetListPath, snapshot.IPSetList, snapshot.IPSetListExisted, lists[1]},
+		{a.ownedListPaths()[2], snapshot.ExcludeList, snapshot.ExcludeExisted, lists[2]},
+		{a.ownedListPaths()[3], snapshot.IPSetExcludeList, snapshot.IPSetExclExisted, lists[3]},
 	} {
 		data, exists, err := nfqws2Read(file.path)
 		if err != nil || exists != file.exists {

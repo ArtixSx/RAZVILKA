@@ -838,7 +838,9 @@ func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, 
 	if err := a.configExclusionsCurrent(ctx, review, data); err != nil {
 		return err
 	}
-	if action == "start/live" && (cfg.InactiveResourceExclusions != nil || config.ValidateListNetworkPolicy(cfg.NetworkPolicy) != nil || config.ValidateListNetworkPolicy(cfg.AppliedNetworkPolicy) != nil || !filePolicyExclusionsEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)) {
+	// Saved whole-network site exclusions travel inside the committed plan the
+	// new version restores, so they no longer close a live start.
+	if action == "start/live" && (config.ValidateListNetworkPolicy(cfg.NetworkPolicy) != nil || config.ValidateListNetworkPolicy(cfg.AppliedNetworkPolicy) != nil || !filePolicyExclusionsEqual(cfg.NetworkPolicy, cfg.AppliedNetworkPolicy)) {
 		return ErrReviewChanged
 	}
 	return a.checkStop(ctx, id, action)

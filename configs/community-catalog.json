@@ -60,6 +60,20 @@
       "access": {"region":"RU","status":"partial","note":"Доступ и отдельные функции могут ограничиваться; домены и сети нужны для раздельной проверки.","evidence_url":"https://core.telegram.org/resources/cidr.txt","verified_at":"2026-08-14"}
     },
     {
+      "id": "telegram-ip",
+      "name": "Telegram · через VPN или прокси",
+      "aliases": ["telegram", "телеграм", "tg", "vless", "vpn", "cidr"],
+      "category": "Мессенджеры",
+      "icon": "TG",
+      "description": "Только официальные IP-сети Telegram, без доменов. Такой сервис можно вести через VLESS, WireGuard или WARP: чужие сайты в обход не попадают",
+      "probe_url": "https://telegram.org/",
+      "cidrs_url": "https://core.telegram.org/resources/cidr.txt",
+      "provider": "Telegram",
+      "source_page": "https://core.telegram.org/resources/cidr.txt",
+      "license": "Публичный список сетей Telegram",
+      "access": {"region":"RU","status":"partial","note":"Доступ и отдельные функции могут ограничиваться; для пути через VPN или прокси используются только сети Telegram.","evidence_url":"https://core.telegram.org/resources/cidr.txt","verified_at":"2026-10-19"}
+    },
+    {
       "id": "pinterest",
       "name": "Pinterest",
       "aliases": ["pinterest", "пинтерест", "pin"],

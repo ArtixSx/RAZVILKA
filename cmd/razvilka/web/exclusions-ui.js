@@ -10,8 +10,14 @@ function exclusionDomain(value) {
   return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}$/.test(domain) ? domain : '';
 }
 
-function exclusionLines(content) {
-  return String(content || '').split(/\r?\n/).map((line) => line.trim().toLowerCase()).filter((line) => line && !line.startsWith('#'));
+// The RAZVILKA managed block carries «Сайты без обхода» of the main editor;
+// NFQWS2 apply rewrites it, so this editor shows and stages only the owner's lines.
+function exclusionOwnerPart(content) {
+  return String(content || '').replace(/# BEGIN RAZVILKA MANAGED[\s\S]*?# END RAZVILKA MANAGED\r?\n?/, '');
+}
+
+function exclusionLines(content, withManaged = false) {
+  return String(withManaged ? content || '' : exclusionOwnerPart(content)).split(/\r?\n/).map((line) => line.trim().toLowerCase()).filter((line) => line && !line.startsWith('#'));
 }
 
 // Every host list of NFQWS2 also matches subdomains.
@@ -61,7 +67,7 @@ function renderExclusionSites() {
 }
 
 function renderExclusionAuto() {
-  const view = exclusionsView, entries = new Set(exclusionLines(view.exclude?.content));
+  const view = exclusionsView, entries = new Set(exclusionLines(view.exclude?.content, true));
   const found = exclusionLines(view.auto?.content).filter((domain) => !exclusionCovered(domain, entries));
   return `<div class="exclusion-head"><h3>Найдено автоматически</h3><span class="tag">${found.length}</span></div>
     <p class="exclusion-lead">Режим AUTO NFQWS2 сам добавляет сайты, которые не открылись без обхода. Иногда сюда попадают и лишние: если сайт работает без обхода или с ним ломается, нажмите «Не обходить».</p>
@@ -118,13 +124,13 @@ function stageExcludeList(lines) {
 function addExcludedSite(value) {
   const domain = exclusionDomain(value);
   if (!domain) { exclusionsView.message = 'Укажите адрес сайта, например bank.example.'; renderExclusions(); return; }
-  const raw = String(exclusionsView.exclude?.content || '').split(/\r?\n/).filter((line, index, all) => line.trim() || index < all.length - 1);
+  const raw = exclusionOwnerPart(exclusionsView.exclude?.content).split(/\r?\n/).filter((line, index, all) => line.trim() || index < all.length - 1);
   if (exclusionLines(raw.join('\n')).includes(domain)) { exclusionsView.message = `${domain} уже в исключениях.`; renderExclusions(); return; }
   void exclusionOperation(`${domain} добавлен в исключения. Нажмите «Проверить и применить».`, () => stageExcludeList([...raw, domain]));
 }
 
 function removeExcludedSite(domain) {
-  const raw = String(exclusionsView.exclude?.content || '').split(/\r?\n/);
+  const raw = exclusionOwnerPart(exclusionsView.exclude?.content).split(/\r?\n/);
   const kept = raw.filter((line) => line.trim().toLowerCase() !== domain);
   while (kept.length && !kept.at(-1).trim()) kept.pop();
   void exclusionOperation(`${domain} убран из исключений. Нажмите «Проверить и применить».`, () => stageExcludeList(kept));

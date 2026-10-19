@@ -139,11 +139,13 @@ func (r *NFQWSRuntimeInactiveSource) coordinates() bool {
 	a, original := r.adapter, &r.startup
 	if filepath.Base(original.StateRoot) != "nfqws2" || a.StateRoot != original.StateRoot || a.ConfigPath != original.ConfigPath ||
 		a.InitPath != original.InitPath || a.UserListPath != original.UserListPath || a.IPSetListPath != original.IPSetListPath || a.Configs != original.Configs ||
+		a.ExcludeListPath != original.ExcludeListPath || a.IPSetExcludeListPath != original.IPSetExcludeListPath ||
 		!sameNetworkPolicyDependency(a.Runner, original.Runner) {
 		return false
 	}
 	seen := map[string]bool{}
-	for _, path := range []string{original.StateRoot, original.ConfigPath, original.InitPath, original.UserListPath, original.IPSetListPath} {
+	lists := original.ownedListPaths()
+	for _, path := range []string{original.StateRoot, original.ConfigPath, original.InitPath, lists[0], lists[1], lists[2], lists[3]} {
 		if !nfqws2ManagedPath(path) || path == filepath.VolumeName(path)+string(filepath.Separator) || seen[path] {
 			return false
 		}

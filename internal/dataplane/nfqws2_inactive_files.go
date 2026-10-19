@@ -138,12 +138,13 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 			return nil, err
 		}
 	}
-	for _, path := range []string{a.ConfigPath, a.InitPath, a.UserListPath, a.IPSetListPath} {
+	lists := a.ownedListPaths()
+	for _, path := range []string{a.ConfigPath, a.InitPath, lists[0], lists[1], lists[2], lists[3]} {
 		raw, _, err := read(path, false)
 		if err != nil {
 			return nil, err
 		}
-		if path == a.UserListPath || path == a.IPSetListPath {
+		if path != a.ConfigPath && path != a.InitPath {
 			block, err := nfqws2Block(raw)
 			if err != nil || len(block) != 0 {
 				return nil, ErrNFQWSManagedProcessUnknown

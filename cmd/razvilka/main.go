@@ -1197,11 +1197,11 @@ func registerScopedDNS(manager *dataplane.Manager, dns *dnscontrol.Manager) erro
 }
 
 func rollbackAppliedSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
-	// This legacy comparison has no retained list/client/negative owner. A
-	// desired policy or inactive exclusions must be reviewed by the actual list
-	// executor before any restoration; matching old service settings cannot
-	// authorize replay through a newly excluded resource or device.
-	if cfg.ServiceControl.Stopped || cfg.SafeMode || cfg.AppliedRevision != previous.Revision || cfg.AppliedNetworkPolicy != nil || cfg.NetworkPolicy != nil || cfg.InactiveResourceExclusions != nil {
+	// This legacy comparison has no retained list/client owner. A desired
+	// policy must be reviewed by the actual list executor before any
+	// restoration; matching old service settings cannot authorize replay
+	// through a newly excluded site, address or service.
+	if cfg.ServiceControl.Stopped || cfg.SafeMode || cfg.AppliedRevision != previous.Revision || cfg.AppliedNetworkPolicy != nil || cfg.NetworkPolicy != nil || !dataplane.PlanHonoursLegacyExclusions(cfg, previous) {
 		return false
 	}
 	seen := map[string]bool{}

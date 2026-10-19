@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -128,7 +129,8 @@ func nfqws2InactiveProcessArgument(arg string, a *NFQWS2Adapter) bool {
 	if !inline {
 		value = arg
 	}
-	return value == a.StateRoot || value == a.ConfigPath || value == a.UserListPath || value == a.IPSetListPath || value == a.InitPath
+	lists := a.ownedListPaths()
+	return value == a.StateRoot || value == a.ConfigPath || value == a.InitPath || slices.Contains(lists[:], value)
 }
 
 func nfqws2InactiveNetlinkTable(text string) error {

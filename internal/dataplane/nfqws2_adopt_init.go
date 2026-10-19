@@ -51,7 +51,7 @@ func (a *NFQWS2Adapter) AdoptPackageInit(packageList string) (previous, adopted 
 	if nfqws2Hash(config) != lease.ConfigHash {
 		return "", "", errors.New("NFQWS2 configuration changed outside its ownership manifest; only a package init change can be adopted")
 	}
-	for index, path := range []string{a.UserListPath, a.IPSetListPath} {
+	for index, path := range a.ownedListPaths() {
 		data, _, err := nfqws2Read(path)
 		if err != nil {
 			return "", "", err

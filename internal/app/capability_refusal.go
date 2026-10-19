@@ -42,15 +42,10 @@ func writeCapabilityRefusal(w http.ResponseWriter, refusal *capabilityRefusal) {
 	})
 }
 
-// The legacy builder stays closed while a list policy or a stored negative
-// exists. Only the saved configuration is read, so this refusal still
-// precedes every catalog, detector and journal read of the builder.
-func legacyExecutorRefusal(cfg config.Config) *capabilityRefusal {
-	if cfg.NetworkPolicy == nil && cfg.AppliedNetworkPolicy == nil {
-		return &capabilityRefusal{Code: capabilityExecutorRequired, Title: "Мешает список «Сайты без обхода»",
-			Message:    "Сохранён список «Сайты без обхода», а исключения сайтов работают только в режиме «Домашняя сеть». Обычное применение остановлено, чтобы они не были молча проигнорированы.",
-			Resolution: "Очистите список «Сайты без обхода» — тогда обычное применение снова доступно."}
-	}
+// The legacy builder stays closed while a list policy exists. Only the saved
+// configuration is read, so this refusal still precedes every catalog,
+// detector and journal read of the builder.
+func legacyExecutorRefusal(config.Config) *capabilityRefusal {
 	return &capabilityRefusal{Code: capabilityExecutorRequired, Title: "Недоступно в режиме «Домашняя сеть»",
 		Message:    "В режиме «Домашняя сеть» применяется только один сервис с IP-диапазонами (CIDR) через NFQWS2, узел Xray или WireGuard/AmneziaWG; этот выбор так не применяется.",
 		Resolution: "Оставьте один такой сервис и выберите для него NFQWS2, узел Xray или WireGuard. Чтобы выключить обход, используйте общий переключатель проекта."}

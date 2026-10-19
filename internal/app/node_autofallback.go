@@ -358,7 +358,7 @@ func (a *App) guardNodeAutofallback(ctx context.Context, intent nodeAutofallback
 func (a *App) newNodeAutofallbackIntent(ctx context.Context, previous dataplane.Plan, profile string, group nodestore.NodeGroup, serviceID string) (nodeAutofallbackIntent, error) {
 	base := nodeRecoveryIntent{config: a.Store.Get(), plan: previous, profile: profile}
 	intent := nodeAutofallbackIntent{base: base, group: group, routeIndex: -1}
-	if a.Nodes == nil || a.NodeChecker == nil || base.config.SafeMode || base.config.NetworkPolicy != nil || base.config.AppliedNetworkPolicy != nil || base.config.InactiveResourceExclusions != nil || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop ||
+	if a.Nodes == nil || a.NodeChecker == nil || base.config.SafeMode || base.config.NetworkPolicy != nil || base.config.AppliedNetworkPolicy != nil || !dataplane.PlanHonoursLegacyExclusions(base.config, previous) || previous.State != "committed" || !previous.Ready || previous.SafeMode || previous.Noop ||
 		previous.Revision != base.config.AppliedRevision || len(previous.Routes) == 0 || len(previous.Routes) > maxNodeRecoveryRoutes || len(previous.Adapters) != 1 || previous.Adapters[0] != "sing-box" {
 		return intent, errNodeRecoveryReview
 	}

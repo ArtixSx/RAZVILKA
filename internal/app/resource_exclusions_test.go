@@ -206,9 +206,9 @@ func TestResourceExclusionsFreshInstallReadOnlyAndNoInventedScope(t *testing.T) 
 	}
 }
 
-// Saving a site without bypass before any scope closes legacy Apply; clearing
-// the list over the same HTTP API must open it again instead of trapping it.
-func TestInactiveExclusionsActualHTTPClearReopensLegacyApply(t *testing.T) {
+// A site without bypass saved before any scope reaches the whole-network plan
+// for NFQWS2; clearing the list over the same HTTP API removes it again.
+func TestInactiveExclusionsActualHTTPReachAndLeaveLegacyPlan(t *testing.T) {
 	a, _ := defaultConsentHTTPFixture(t)
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
@@ -217,8 +217,8 @@ func TestInactiveExclusionsActualHTTPClearReopensLegacyApply(t *testing.T) {
 	if status, data := componentHTTP(t, server, "POST", resourceExclusionsPath, patch, componentRecoveryToken, server.URL); status != 200 {
 		t.Fatal("inactive manual storage failed", status, string(data))
 	}
-	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); status < 400 || !bytes.Contains(data, []byte("NETWORK_POLICY_EXECUTOR_REQUIRED")) {
-		t.Fatal("stored negative did not close legacy Apply", status, string(data))
+	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); status != 200 || !bytes.Contains(data, []byte(`"site_exclusions":{"domains":["example.com"]}`)) {
+		t.Fatal("stored negative did not reach the legacy plan", status, string(data))
 	}
 	saved := a.Store.Get()
 	patch = exclusionPatch(a)
@@ -236,10 +236,10 @@ func TestInactiveExclusionsActualHTTPClearReopensLegacyApply(t *testing.T) {
 	}
 	after := a.Store.Get()
 	if after.InactiveResourceExclusions != nil || after.NetworkPolicy != nil || after.DefaultRouteConsent != nil || !reflect.DeepEqual(after.Services, saved.Services) || !reflect.DeepEqual(after.AppliedServices, saved.AppliedServices) {
-		t.Fatal("clear kept the blocking document or changed positive intent", after.InactiveResourceExclusions)
+		t.Fatal("clear kept the document or changed positive intent", after.InactiveResourceExclusions)
 	}
-	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); bytes.Contains(data, []byte("NETWORK_POLICY_EXECUTOR_REQUIRED")) {
-		t.Fatal("cleared list still closes legacy Apply", status, string(data))
+	if status, data := componentHTTP(t, server, "GET", "/api/v1/plan", nil, componentRecoveryToken, server.URL); status != 200 || bytes.Contains(data, []byte("site_exclusions")) {
+		t.Fatal("cleared list still reaches the legacy plan", status, string(data))
 	}
 }
 
