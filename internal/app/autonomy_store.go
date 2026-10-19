@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
@@ -193,7 +194,11 @@ func (a *App) autonomyRuntime(id string, entry autonomy.Runtime) {
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
 	if _, ok := a.autonomy.doc.Services[id]; ok {
-		a.autonomy.doc.Runtime[id] = entry.Clone()
+		entry = entry.Clone()
+		// The journal refuses a longer message, and a refused write blocks
+		// the whole autopilot until restart. A shown text is never worth that.
+		entry.Message = boundedAutonomyMessage(entry.Message)
+		a.autonomy.doc.Runtime[id] = entry
 		_ = a.persistAutonomyLocked(context.Background())
 	}
 }
@@ -224,4 +229,20 @@ func (a *App) autonomyOwnsService(id string) bool {
 	}
 	_, ok := a.autonomy.doc.Services[id]
 	return a.autonomy.loaded && a.autonomy.doc.Policy.SetupComplete && ok
+}
+
+// autonomyMessageLimit is the journal's byte bound for one runtime message.
+const autonomyMessageLimit = 512
+
+// boundedAutonomyMessage keeps whole UTF-8 characters within the limit.
+func boundedAutonomyMessage(message string) string {
+	if len(message) <= autonomyMessageLimit {
+		return message
+	}
+	const ellipsis = "…"
+	cut := autonomyMessageLimit - len(ellipsis)
+	for cut > 0 && !utf8.RuneStart(message[cut]) {
+		cut--
+	}
+	return message[:cut] + ellipsis
 }

@@ -142,10 +142,7 @@ func (a *App) returnToNFQWS2Standard(ctx context.Context, p autonomy.Policy, s a
 	r.State, r.Message = "applying", "Узел сервиса недоступен. Возвращаем штатный NFQWS2."
 	a.autonomyRuntime(s.ID, r)
 	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
-		if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
-			return finish(state, message)
-		}
-		return finish("apply-refused", "Возврат на NFQWS2 не подтверждён после применения. Использована штатная защита и откат.")
+		return finish(autonomyLegacyApplyRefused(err, &r, "Возврат на NFQWS2 не подтверждён после применения. Использована штатная защита и откат."))
 	}
 	r.Failures, r.FirstFailure, r.LastFailure = 0, time.Time{}, time.Time{}
 	r.Reserves = nil

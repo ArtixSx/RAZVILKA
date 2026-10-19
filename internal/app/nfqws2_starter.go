@@ -26,6 +26,13 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	if returning && !nfqws2StandardDraft(service, s, cfg.Services[s.ID]) {
 		return finish("manual-change", "У сервиса уже назначен другой маршрут. Базовый набор его не заменяет.")
 	}
+	if returning || !applied.Enabled {
+		// Every path below ends in Apply. A limit of the saved mode is named
+		// before any component check, budget or probe, and it is not retried.
+		if refusal := a.autonomyCapabilityRefusal(cfg, s.ID, "nfqws2"); refusal != nil {
+			return autonomyCapabilityRefused(refusal, &r)
+		}
+	}
 	if !a.nfqws2RouteReady() {
 		return finish("component-unavailable", "Назначен NFQWS2, но компонент ещё не готов. Другой обход автоматически не назначается.")
 	}
@@ -76,10 +83,7 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 	}
 	a.autonomyRuntime(s.ID, r)
 	if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
-		if state, message, blocked := autonomyRouteDependency(err, &r); blocked {
-			return finish(state, message)
-		}
-		return finish("apply-refused", "NFQWS2 не удалось подтвердить после применения. Использована штатная защита и откат.")
+		return finish(autonomyLegacyApplyRefused(err, &r, "NFQWS2 не удалось подтвердить после применения. Использована штатная защита и откат."))
 	}
 	if returning {
 		if verdict != "PASS" {

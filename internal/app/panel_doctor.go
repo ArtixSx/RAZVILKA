@@ -266,7 +266,7 @@ func (a *App) doctorServices() doctorCheck {
 		return c
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].id < rows[j].id })
-	good, waiting, bad := 0, 0, 0
+	good, waiting, bad, terminal := 0, 0, 0, 0
 	for _, r := range rows {
 		name := names[r.id]
 		if name == "" {
@@ -284,6 +284,11 @@ func (a *App) doctorServices() doctorCheck {
 		case "", "pending", "checking", "applying", "searching", "scope-pending", "rate-limited", "unconfirmed":
 			item.Status = "warn"
 			waiting++
+		case "capability-refused":
+			// A limit of the saved mode: the autopilot does not retry it.
+			item.Status = "fail"
+			bad++
+			terminal++
 		default:
 			item.Status = "fail"
 			bad++
@@ -291,6 +296,10 @@ func (a *App) doctorServices() doctorCheck {
 		c.Items = append(c.Items, item)
 	}
 	switch {
+	case bad > 0 && terminal == bad:
+		c.Status, c.Detail = "fail", fmt.Sprintf("Не работают: %d из %d. Автопилот не может включить их в текущем режиме; что сделать, указано у сервиса.", bad, len(rows))
+	case bad > 0 && terminal > 0:
+		c.Status, c.Detail = "fail", fmt.Sprintf("Не работают: %d из %d. Причина указана у сервиса; часть из них ждёт изменения настроек.", bad, len(rows))
 	case bad > 0:
 		c.Status, c.Detail = "fail", fmt.Sprintf("Не работают: %d из %d. Причина указана у сервиса; автопилот продолжает попытки.", bad, len(rows))
 	case waiting > 0:

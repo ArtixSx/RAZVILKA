@@ -318,6 +318,62 @@ func TestActualStoreExclusionObservationBookendsFullConfigAndDisk(t *testing.T) 
 	}
 }
 
+// Clearing the inactive "sites without bypass" list must return to the absent
+// document a fresh install has: every legacy path refuses while it exists.
+func TestInactiveExclusionsClearedListReturnsToAbsentDocument(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := s.Get()
+	clear := []ResourceMatch{}
+	// An empty save before any entry must not create the blocking document.
+	empty, err := s.UpdateResourceExclusions(context.Background(), fresh, &clear, nil)
+	if err != nil || empty.InactiveResourceExclusions != nil || empty.Revision != fresh.Revision+1 || InactiveResourceNegatives(empty) {
+		t.Fatal("empty save created an inactive document", empty.InactiveResourceExclusions, err)
+	}
+	manual := []ResourceMatch{{Kind: "suffix", Value: "example.com"}}
+	saved, err := s.UpdateResourceExclusions(context.Background(), empty, &manual, nil)
+	if err != nil || saved.InactiveResourceExclusions == nil || saved.InactiveResourceExclusions.Revision != 1 || !InactiveResourceNegatives(saved) {
+		t.Fatal("inactive entry not stored", err)
+	}
+	cleared, err := s.UpdateResourceExclusions(context.Background(), saved, &clear, nil)
+	if err != nil || cleared.InactiveResourceExclusions != nil || cleared.Revision != saved.Revision+1 || cleared.NetworkPolicy != nil || cleared.DefaultRouteConsent != nil || InactiveResourceNegatives(cleared) {
+		t.Fatal("cleared list kept the blocking document or invented scope", cleared.InactiveResourceExclusions, err)
+	}
+	if !reflect.DeepEqual(cleared.Services, saved.Services) || !reflect.DeepEqual(cleared.AppliedServices, saved.AppliedServices) || cleared.AppliedRevision != saved.AppliedRevision {
+		t.Fatal("clearing negatives changed positive intent")
+	}
+	loaded, err := LoadExisting(path)
+	if err != nil || !reflect.DeepEqual(loaded.Get(), cleared) {
+		t.Fatal("reload lost the cleared state", err)
+	}
+	// The stale editor that read the stored entry is still fenced.
+	if _, err := s.UpdateResourceExclusions(context.Background(), saved, &manual, nil); !errors.Is(err, ErrRevisionChanged) {
+		t.Fatal("stale editor accepted after clear", err)
+	}
+	again, err := s.UpdateResourceExclusions(context.Background(), cleared, &manual, nil)
+	if err != nil || again.InactiveResourceExclusions == nil || again.InactiveResourceExclusions.Revision != 1 || again.Revision != cleared.Revision+1 {
+		t.Fatal("new entry after clear not stored", err)
+	}
+	for _, c := range []struct {
+		doc  *ResourceExclusions
+		want bool
+	}{
+		{nil, false},
+		{&ResourceExclusions{Schema: 1, Revision: 4, Manual: []ResourceMatch{}}, false},
+		{&ResourceExclusions{Schema: 1, Revision: 4}, false},
+		{&ResourceExclusions{Schema: 1, Revision: 4, Manual: manual}, true},
+		{&ResourceExclusions{Schema: 1, Revision: 4, RussianSnapshot: ruSnapshot(1)}, true},
+		{&ResourceExclusions{Schema: 2, Revision: 4}, true},
+	} {
+		if got := InactiveResourceNegatives(Config{InactiveResourceExclusions: c.doc}); got != c.want {
+			t.Fatalf("negatives(%+v)=%v", c.doc, got)
+		}
+	}
+}
+
 func TestInactiveExclusionsPersistenceStrictSingleSlotAndFirstExplicitScope(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	s, err := Load(path)

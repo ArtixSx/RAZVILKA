@@ -211,6 +211,15 @@ func ValidateResourceExclusionStorage(cfg Config) error {
 	return ValidateResourceExclusions(cfg.InactiveResourceExclusions)
 }
 
+// InactiveResourceNegatives reports whether the saved inactive document still
+// carries a negative entry. An empty document (left by an earlier release when
+// the owner cleared the list) has nothing to honour; a document of another
+// schema is treated as carrying negatives.
+func InactiveResourceNegatives(cfg Config) bool {
+	d := cfg.InactiveResourceExclusions
+	return d != nil && (d.Schema != 1 || len(d.Manual) != 0 || d.RussianSnapshot != nil)
+}
+
 // NetworkPolicyWithRetainedExclusions losslessly carries an inactive document
 // into the first explicit real policy. It issues no scope or path permission;
 // the caller still validates real clients, selected services and source owners.
@@ -496,6 +505,14 @@ func (s *Store) UpdateResourceExclusionsPatch(ctx context.Context, expected Conf
 		entries, err := NormalizeResourceMatches(*manual)
 		if err != nil || len(entries) > 512 || next.InactiveResourceExclusions.Revision >= ^uint64(0)-1 {
 			return Config{}, ErrResourceExclusions
+		}
+		// A cleared inactive list holds no negative at all. Keeping the empty
+		// document would close every legacy path for good (each refuses while
+		// it exists), so the list returns to the absent fresh-install state.
+		// The whole-config revision still advances and fences stale editors.
+		if len(entries) == 0 && next.InactiveResourceExclusions.RussianSnapshot == nil {
+			next.InactiveResourceExclusions = nil
+			return s.commitResourceExclusions(ctx, expected, next)
 		}
 		next.InactiveResourceExclusions.Manual = entries
 		next.InactiveResourceExclusions.Revision++

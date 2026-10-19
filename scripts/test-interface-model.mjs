@@ -51,4 +51,10 @@ check('custom AI form',()=>assert.equal(a.websiteDefinition('My model','model.ex
 check('custom form default',()=>assert.equal(a.websiteDefinition('Work','work.example.org').category,'other'));
 check('custom bad category rejected',()=>assert.throws(()=>a.websiteDefinition('Work','work.example.org','arbitrary')));
 check('custom does not add shared route',()=>assert.deepEqual(a.websiteDefinition('My model','model.example.org','AI').strategy,['auto']));
+check('capability refusal and exclusion are named with the autopilot message',()=>{
+  for(const [state,label] of [['capability-refused','Недоступно в текущем режиме'],['excluded','Не разрешён списком или исключениями']]){
+    const view=m.humanService(service('one'),{},{enabled:true},{state,message:'Причина и что сделать.'});
+    assert.equal(view.label,label);assert.equal(view.kind,'warn');assert.equal(view.detail,'Причина и что сделать.');assert.equal(view.actionable,true);
+  }
+});
 console.log(JSON.stringify({suite:'interface-model',passed:count}));

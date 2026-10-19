@@ -50,4 +50,12 @@ for(const file of ['autonomy-ui.js','console-autonomy.js']) {
  }
  test('every local route can be chosen before node selection',()=>{for(const id of all)assert.equal(html.split(`name="preferred" type="checkbox" value="${id}"`).length-1,1,id);});
 }
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {stateLabels}=require('../cmd/razvilka/web/'+file);
+ test(`${file} labels every autopilot runtime state`,()=>{
+  for(const state of ['pending','checking','applying','healthy','applied','searching','unconfirmed','paused','manual-change','network-unknown','apply-refused','capability-refused','excluded','component-unavailable','component-stopped','rate-limited','requires-review','scope-pending','origin-expired','definition-changed','unsupported-scenario','checker-unavailable','catalog-unavailable','removal-pending','removal-blocked','removed'])
+   assert.ok(typeof stateLabels[state]==='string'&&stateLabels[state]&&stateLabels[state]!==state,state);
+  assert.doesNotMatch(stateLabels['capability-refused'],/повтор/);
+ });
+}
 console.log(`AUTONOMY_UI_PURE_TESTS=${count}`);
