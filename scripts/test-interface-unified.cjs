@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const checkout=path.resolve(__dirname,'..');
 const model=require(path.join(checkout,'cmd/razvilka/web/interface-model.js'));
 const full=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/interface.js'),'utf8');
-const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
+const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "refreshHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
 const source=names.map(name=>{const f=full.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n}\\n'));assert(f,'Missing production function: '+name);return f[0];}).join('\n');
 const results=[];async function test(name,fn){await fn();results.push({name,status:'passed'});console.log('PASS',name);}
 const service={id:'youtube',name:'YouTube',category:'Видео',enabled:true,applied_state:{enabled:true,route:'nfqws2',sources:['192.168.1.20']}};
@@ -21,6 +21,13 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('metadata summary refresh replaces unknown inventory without redrawing the home form',()=>{
+ const {c,state,$}=fixture();
+ c.refreshHomeEngineSummary();assert.match($('#ui7HomeEngines').innerHTML,/ещё загружаются/);
+ state.dataLoad.inventory={loaded:true,phase:'ready'};c.consoleEngineState=()=>({label:'Установлен'});
+ c.renderInterfaceHome=()=>{throw Error('must not redraw full home');};c.refreshHomeEngineSummary();
+ assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/ещё загружаются/);assert.match($('#ui7HomeEngines').innerHTML,/Установлен/);
+});
 await test('known recovery refusal replaces loading without inventing inventory or statistics',()=>{
  const {c,state,$,calls}=fixture();
  c.consoleSnapshot=null;c.consoleAutonomyError='DATAPLANE_RECOVERY_REQUIRED';

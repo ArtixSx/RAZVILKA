@@ -120,7 +120,17 @@
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
   function reportError(e,element=null) { if(e.name==='AuthGenerationChanged'||e.authGeneration!==undefined&&e.authGeneration!==authGeneration)return;if(element)element.textContent=e.message;else notify(e.message,true); }
   function nextAuthGeneration() { authGeneration++;for(const controller of requests)controller.abort();loading=false;saving=false;adding=false; }
-  function notify(message,error=false) { $('notice').textContent=message; $('notice').className=`notice${error?' error':''}`; $('notice').hidden=!message; }
+  let noticeTimer=null,noticeTransient=false;
+  function dismissNotice() { clearTimeout(noticeTimer);noticeTimer=null;noticeTransient=false;$('notice').hidden=true; }
+  root.dismissTransientAutonomyNotice=()=>{if(noticeTransient)dismissNotice();};
+  function notify(message,error=false) {
+    dismissNotice();
+    const notice=$('notice');notice.textContent=message;notice.className=`notice${error?' error':''}`;notice.hidden=!message;
+    if(!message)return;
+    const close=document.createElement('button');close.type='button';close.className='notice-close';close.setAttribute('aria-label','Закрыть');close.textContent='×';close.addEventListener('click',dismissNotice);notice.appendChild(close);
+    noticeTransient=!error;
+    if(noticeTransient)noticeTimer=setTimeout(dismissNotice,6500);
+  }
   function formatDate(value,zone) { const n=new Date(value); if(!Number.isFinite(n.getTime())||n.getFullYear()<2000) return 'Ещё нет'; try {return n.toLocaleString('ru-RU',{timeZone:zone||snapshot?.policy.timezone||'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});} catch {return n.toISOString();} }
   async function api(path,method='GET',body,attempt=0,requestGeneration=authGeneration) {
     requireGeneration(requestGeneration);
@@ -152,6 +162,7 @@
     } finally {clearTimeout(timer);requests.delete(controller);if(mutation&&typeof root.invalidatePanelReads==='function')root.invalidatePanelReads();}
   }
   function tab(name) {
+    if(noticeTransient)dismissNotice();
     const map={overview:'autopilot',services:'managed',sources:'subscription-settings',setup:'onboard'};
     activeTab=Object.hasOwn(map,name)?name:'overview';
     setView(map[activeTab]);

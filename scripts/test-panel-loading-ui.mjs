@@ -269,12 +269,12 @@ await test('general refresh requests protected auxiliary data only after authent
 });
 
 await test('inventory heartbeat shares a flight, fences logout and never redraws editable forms',async()=>{
- const f=fixture();f.state.authenticated=true;
+ const f=fixture();f.state.authenticated=true;f.state.currentView='overview';f.context.refreshHomeEngineSummary=()=>f.renders.push('homeEngineSummary');
  const pending=deferred();f.handler(()=>pending.promise);
  const first=f.context.refreshPanelInventory(),second=f.context.refreshPanelInventory();
  assert.equal(first,second);await flush();assert.equal(f.calls.length,1);
  pending.resolve(f.normal('/api/v1/panel/inventory'));assert.equal(await first,true);
- assert(f.renders.includes('renderComponents'));assert(!f.renders.includes('renderEngineControl'));assert(!f.renders.includes('renderDNS'));
+ assert(f.renders.includes('homeEngineSummary'),'inventory completion must update overview component status');assert(f.renders.includes('renderComponents'));assert(!f.renders.includes('renderEngineControl'));assert(!f.renders.includes('renderDNS'));
  const late=deferred();f.handler(()=>late.promise);const request=f.context.refreshPanelInventory();await flush();
  f.state.authenticated=false;f.context.cancelPanelInventoryRefresh();f.state.components=[];
  const value=f.normal('/api/v1/panel/inventory');value.data.components=[{id:'private',installed:true}];late.resolve(value);

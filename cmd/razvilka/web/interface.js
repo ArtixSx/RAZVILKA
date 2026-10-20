@@ -143,6 +143,12 @@ function interfaceHomeServicesHTML(members,fresh){
  return `${heading}${tally.length?`<div class="r5-home-tally">${tally.map(([n,label,k])=>`<span data-kind="${k}"><b>${n}</b> ${label(n)}</span>`).join('')}</div>`:''}<div class="r5-home-services">${shown.map(row).join('')}</div>${hidden>0?`<button type="button" class="text-button r5-home-more" data-r42-services="selected">Ещё ${hidden} ${works(hidden)} ${ci('chevron')}</button>`:''}`;
 }
 
+function refreshHomeEngineSummary(){
+ const loaded=state.authenticated===true&&!interfaceState.authRevoked&&interfaceDataReady('services');
+ const fresh=loaded&&!['error','busy'].includes(state.dataLoad?.services?.phase);
+ renderHomeEngineSummary(interfaceSummaries(),loaded,fresh);
+}
+
 function renderHomeEngineSummary(summaries,loaded,fresh){
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const currentSummaries=Object.fromEntries(Object.entries(summaries||{}).filter(([id])=>!exclusions[id]));

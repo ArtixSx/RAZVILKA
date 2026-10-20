@@ -35,6 +35,14 @@ function fixture(){
   return {c,state,$,calls,notices,timers,auth,handler(fn){handler=fn;},review(fn){review=fn;},refresh(fn){refresh=fn;},
     async advance(ms){now+=ms;for(const [id,timer] of [...timers])if(timer.at<=now){timers.delete(id);timer.fn();}await flush();}};
 }
+{
+ const f=fixture();vm.runInContext(extract('reviewApplyPlan'),f.c);
+ const pending=f.c.reviewApplyPlan({change_summary:{scope:'exclusions',network_change:true,working_change:true},transaction:{ready:true}});
+ assert.match(f.$('#applyReviewTitle').textContent,/исключений ресурсов/);
+ assert.match(f.$('#applyReviewContent').innerHTML,/Изменения сетевой конфигурации по плану/);
+ assert.doesNotMatch(f.$('#applyReviewContent').innerHTML,/новых сетевых изменений/);
+ f.$('#applyReviewDialog').close('');await pending;
+}
 const posts=f=>f.calls.filter(call=>call.options.method==='POST');
 const successful=f=>f.notices.filter(notice=>notice[0]==='success');
 let passed=0;async function test(name,run){await run();passed++;console.log('PASS '+name);}

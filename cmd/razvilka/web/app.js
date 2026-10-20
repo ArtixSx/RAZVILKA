@@ -535,7 +535,7 @@ function reviewApplyPlan(preview) {
   const services = summary.services || [];
   const devices = summary.devices || [];
   const blockers = (tx.blockers || []).filter((item) => item.code !== 'SAFE_MODE');
-  const scopeNames = { all: 'общих изменений', routing: 'маршрутов и политик', services: 'маршрутов сервисов', devices: 'областей устройств', engine: 'конфигурации обхода' };
+  const scopeNames = { all: 'общих изменений', routing: 'маршрутов и политик', services: 'маршрутов сервисов', devices: 'областей устройств', engine: 'конфигурации обхода', exclusions: 'исключений ресурсов' };
   $('#applyReviewTitle').textContent = `Проверка ${scopeNames[summary.scope] || 'изменений'}`;
   $('#applyReviewSubtitle').textContent = summary.working_change
     ? 'После подтверждения рабочая сеть изменится только по этому плану.'
@@ -546,6 +546,8 @@ function reviewApplyPlan(preview) {
     : 'Сетевые правила не изменятся.';
   const includedHTML = included.length
     ? included.map((item) => `<div><b>${Number(item.count) || 0}</b><span>${esc(item.label)}</span></div>`).join('')
+    : summary.network_change
+    ? '<div><span>Изменения сетевой конфигурации по плану</span></div>'
     : '<div class="empty"><b>0</b><span>новых сетевых изменений</span></div>';
   const servicesHTML = services.slice(0, 8).map((item) => `<div class="apply-review-change"><b>${esc(item.name)}</b><span>${esc(applyStateText(item.before_enabled, item.before_route))}</span><i>→</i><strong>${esc(applyStateText(item.after_enabled, item.after_route))}</strong></div>`).join('');
   const devicesHTML = devices.slice(0, 8).map((item) => `<div class="apply-review-change"><b>${esc(item.name)}</b><span>${Number(item.before_count) ? `${Number(item.before_count)} адресов` : 'вся сеть'}</span><i>→</i><strong>${Number(item.after_count) ? `${Number(item.after_count)} адресов` : 'вся сеть'}</strong></div>`).join('');
@@ -613,7 +615,11 @@ function setView(name) {
   if (typeof name !== 'string' || !document.getElementById(`view-${name}`)) name = 'overview';
   // Details belong to their original workspace. A fixed drawer must not
   // cover controls after the user has navigated to another page.
-  if (state.currentView !== name) $('#detailsPanel')?.classList.remove('open');
+  if (state.currentView !== name) {
+    $('#detailsPanel')?.classList.remove('open');
+    if (state.noticeTransient) hideNotice();
+    if (typeof window.dismissTransientAutonomyNotice === 'function') window.dismissTransientAutonomyNotice();
+  }
   // Navigation is local. A broken status/engine widget must not strand the
   // user on its page, submit a write, or silently discard an editor's draft.
   state.uiRenderIssues ||= {};
@@ -860,6 +866,7 @@ function showDetails(value, title = 'Детали') {
 }
 
 function showNotice(kind, title, message, details = null, settings = false, action = null) {
+  clearTimeout(state.noticeTimer);
   const notice = $('#notice');
   notice.hidden = false;
   notice.className = `notice ${kind || 'success'}`;
@@ -867,6 +874,7 @@ function showNotice(kind, title, message, details = null, settings = false, acti
   $('#noticeText').textContent = message;
   state.noticeDetails = details;
   state.noticeAction = typeof action?.run === 'function' ? action : null;
+  state.noticeTransient = ['success', 'info'].includes(kind || 'success') && details == null && !settings && !state.noticeAction;
   $('#noticeDetails').hidden = details == null;
   $('#noticeSettings').hidden = !settings;
   const button = $('#noticeAction');
@@ -874,9 +882,13 @@ function showNotice(kind, title, message, details = null, settings = false, acti
     button.hidden = !state.noticeAction;
     button.textContent = state.noticeAction?.label || '';
   }
+  if (state.noticeTransient) state.noticeTimer = setTimeout(hideNotice, 6500);
 }
 
 function hideNotice() {
+  clearTimeout(state.noticeTimer);
+  state.noticeTimer = null;
+  state.noticeTransient = false;
   $('#notice').hidden = true;
   state.noticeDetails = null;
   state.noticeAction = null;
@@ -1204,6 +1216,7 @@ function refreshPanelInventory() {
         // Metadata-only renderers: periodic observation must not redraw forms
         // or lose a partially edited profile/service/DNS field.
         try { renderComponents(); renderEngines(); renderSystem(); if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines(); } catch (_) { /* Independent from polling lifetime. */ }
+        try { if (state.currentView === 'overview' && typeof refreshHomeEngineSummary === 'function') refreshHomeEngineSummary(); } catch (_) { /* Independent metadata widget. */ }
         refreshPanelLoadNotice();
       }
       if (inventoryRead === ticket) inventoryRead = null;
@@ -1545,6 +1558,7 @@ async function refreshComponents(refresh = true) {
       if (workflowSession(epoch)) {
         button.disabled = false; button.textContent = 'Проверить обновления';
         renderComponents(); renderEngineControl();
+        if (state.currentView === 'overview' && typeof refreshHomeEngineSummary === 'function') refreshHomeEngineSummary();
         if (typeof renderConsole === 'function') renderConsole();
         if (typeof renderInterfaceEngines === 'function') renderInterfaceEngines();
       }

@@ -142,7 +142,7 @@ function fixture() {
   const calls=[], notices=[], details=[];
   const refreshButton={disabled:false,textContent:''};
   const component={...base};
-  const current={components:[component], engines:[], engineConfigs:[], dataLoad:{}};
+  const current={components:[component], engines:[], engineConfigs:[], dataLoad:{},currentView:'overview',homeSummaryRenders:0};
   const workflowState={epoch:1};
   let responder=async path=>path.includes('/plan?')?{ready:true,steps:[]}:
     path.startsWith('/api/v1/components/')?{ok:true}:
@@ -155,7 +155,7 @@ function fixture() {
     api:async(path,options={})=>{calls.push({path,options});return responder(path,options);},
     askConfirmation:(...args)=>confirmation(...args),
     showNotice:(...args)=>notices.push(args),showDetails:(...args)=>details.push(args),
-    renderComponents(){},renderEngineControl(){},renderEngines(){},renderConsole(){},renderInterfaceEngines(){},
+    refreshHomeEngineSummary(){current.homeSummaryRenders++;},renderComponents(){},renderEngineControl(){},renderEngines(){},renderConsole(){},renderInterfaceEngines(){},
   });
   vm.runInContext(lifecycleCode,ctx);
   return {ctx,state:current,calls,notices,details,workflowState,refreshButton,setResponder:fn=>responder=fn,setConfirmation:fn=>confirmation=fn};
@@ -216,6 +216,7 @@ assert.equal(f.calls.length,1,'double refresh must share one catalog request');
 assert.equal(f.calls[0].options.readTimeoutMs,110000);
 finishRefresh([{...base,available_version:'1.0.4'}]); await Promise.all([refresh,duplicate]);
 assert.equal(f.state.components[0].available_version,'1.0.4');
+assert.equal(f.state.homeSummaryRenders,1,'explicit refresh updates home component status');
 assert.equal(f.state.componentRefreshRequest,null);
 
 f=fixture(); const old=f.state.components;
