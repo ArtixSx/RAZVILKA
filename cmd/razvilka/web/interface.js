@@ -509,18 +509,25 @@ async function interfaceRequest(path, options={}){
  finally{clearTimeout(timer);interfaceRequests.delete(controller);}
 }
 async function interfaceManage(id,enabled,remove=false){
+ if(interfaceState.authRevoked||state.authenticated!==true||interfaceState.manageRequest)return;
+ const epoch=interfaceState.authEpoch,operation=interfaceState.manageRequest={epoch};
+ try {
  const snapshot=consoleSnapshot;if(!snapshot?.policy?.setup_complete)throw new Error('Сначала завершите первоначальную настройку.');
  const old=snapshot.services?.[id],service=state.services.find(s=>s.id===id),revision=snapshot.policy.revision;
  if(remove && !old)throw new Error('Сервис уже не находится под автономным управлением.');
- if(remove){if(!confirm(`Убрать «${service?.name||id}»? Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится.':''}`))return;}
+ if(remove){
+  const view=state.currentView,inspector=interfaceState.inspector,definition=JSON.stringify(service),managed=JSON.stringify(old);
+  if(!await askConfirmation(`Убрать «${service?.name||id}»?`,`Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится.':''}`,'Убрать сервис'))return;
+  if(epoch!==interfaceState.authEpoch||interfaceState.authRevoked||state.authenticated!==true)return;
+  if(view!==state.currentView||inspector!==interfaceState.inspector||consoleSnapshot?.policy?.revision!==revision||JSON.stringify(consoleSnapshot?.services?.[id])!==managed||JSON.stringify(state.services.find(s=>s.id===id))!==definition)throw new Error('Сервис или настройки изменились. Откройте новый просмотр и подтвердите удаление снова.');
+ }
  const request=remove?{method:'DELETE',body:{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:false}}:{method:'POST',body:{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:revision,confirm:'MANAGE_SERVICE'}};
- const epoch=interfaceState.authEpoch;
  await interfaceRequest(remove?`/api/v1/autonomy/services/${encodeURIComponent(id)}`:'/api/v1/autonomy/services',{...request,body:JSON.stringify(request.body)});
  if(epoch!==interfaceState.authEpoch)throw new Error('Сессия изменилась. Войдите снова.');
  const fresh=await interfaceRequest('/api/v1/autonomy');if(epoch!==interfaceState.authEpoch)return;
  window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:fresh}));await refreshCoreAfterEdit();
  if(epoch!==interfaceState.authEpoch)return;
- if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceOpenService(id);consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');}
+ if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceOpenService(id);consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');} } finally {if(interfaceState.manageRequest===operation)interfaceState.manageRequest=null;}
 }
 function interfaceToast(text){consoleText('ui3Toast',text);$('#ui3Toast').hidden=false;clearTimeout(interfaceState.toastTimer);interfaceState.toastTimer=setTimeout(()=>$('#ui3Toast').hidden=true,5500);}
 function interfaceResetFilters(){
@@ -556,8 +563,8 @@ document.addEventListener('click',event=>{
   if(action==='configure'){interfaceCloseInspector();setView('services');$('#ui3ServiceExpert').open=true;$('#serviceSearch').value=state.services.find(s=>s.id===id)?.name||'';window.RazvilkaConsoleFilters.service='all';serviceDashboard.expanded.add(id);renderServices();$('#ui3ServiceExpert').scrollIntoView({block:'start',behavior:'smooth'});return;}
   if(action==='setup'){interfaceCloseInspector();setView('onboard');return;}
   if(action==='check'){void interfaceCheckService(id);return;}
-  interfaceState.busy=true;b.disabled=true;
-  void interfaceManage(id,action==='manage'||action==='confirm-definition',action==='remove').catch(e=>consoleText('ui3InspectorMessage',e.message)).finally(()=>{interfaceState.busy=false;if(b.isConnected)b.disabled=false;});
+  const epoch=interfaceState.authEpoch;interfaceState.busy=true;b.disabled=true;
+  void interfaceManage(id,action==='manage'||action==='confirm-definition',action==='remove').catch(e=>{if(epoch===interfaceState.authEpoch)consoleText('ui3InspectorMessage',e.message);}).finally(()=>{if(epoch===interfaceState.authEpoch){interfaceState.busy=false;if(b.isConnected)b.disabled=false;}});
  }
 });
 $('#ui3ServiceSearch').addEventListener('input',e=>{interfaceState.query=e.target.value;renderInterfaceServices(interfaceSummaries());});
@@ -570,7 +577,7 @@ function interfaceReturnInspectorFocus(){
  target?.focus({preventScroll:true});
 }
 $('#ui3ServiceDialog').addEventListener('close',interfaceReturnInspectorFocus);
-document.addEventListener('razvilka:auth-required',()=>{invalidateEngineProgress();interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
+document.addEventListener('razvilka:auth-required',()=>{invalidateEngineProgress();interfaceState.authRevoked=true;interfaceState.authEpoch++;interfaceState.busy=false;interfaceState.manageRequest=null;for(const c of interfaceRequests)c.abort();interfaceRequests.clear();interfaceCloseInspector();consoleSnapshot=null;interfaceHTML('ui3InspectorContent','');renderInterfaceHome({});});
 document.addEventListener('razvilka:auth-restored',()=>{interfaceState.authRevoked=false;renderInterfaceHome(interfaceSummaries());});
 document.addEventListener('razvilka:panel-availability',()=>{if((state.currentView||'overview')==='overview')renderInterfaceHome(interfaceSummaries());});
 document.addEventListener('click',interfaceTaskAction);
