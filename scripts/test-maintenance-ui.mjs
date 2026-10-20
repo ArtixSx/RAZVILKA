@@ -58,4 +58,45 @@ check('NFQWS setup clears expired-session notices after successful login without
   assert.equal(JSON.parse(last.options.body).confirm,'STAGE_DISCORD_REPAIR');
  });
 }
+// Execute the served schedule renderer rather than duplicating its mode selection.
+const consoleCode=fs.readFileSync('cmd/razvilka/web/console.js','utf8');
+const scheduleRenderer=consoleCode.match(/function renderConsoleUpdates\(\)\{[\s\S]*?\r?\n\}/)[0];
+function scheduleHTML(policy){
+ const elements={};const context={consoleSnapshot:{policy},consoleEngineMeta:{},consoleAutonomyError:'',esc:String,ci:()=>'', $:id=>elements[id]??={innerHTML:''}};
+ vm.runInNewContext(scheduleRenderer+';renderConsoleUpdates();',context);
+ return elements['#consoleUpdateSchedule'].innerHTML;
+}
+const schedulePolicy={enabled:true,timezone:'Europe/Moscow',update_channel:'stable',application:{mode:'install',start:'03:00',end:'04:00'},components:{mode:'install',start:'04:00',end:'05:00'}};
+check('schedule identifies preview and stable channels',()=>{
+ assert.match(scheduleHTML({...schedulePolicy,update_channel:'preview'}),/Предварительные и стабильные/);
+ assert.doesNotMatch(scheduleHTML(schedulePolicy),/Предварительные/);
+ assert.match(scheduleHTML(schedulePolicy),/Стабильные/);
+});
+check('paused schedule preserves windows and permissions without promising active installs',()=>{
+ const policy=structuredClone({...schedulePolicy,enabled:false}),before=JSON.stringify(policy),html=scheduleHTML(policy);
+ assert.equal((html.match(/Автоматика на паузе/g)||[]).length,2);
+ assert.match(html,/Сохранённый режим/);assert.match(html,/03:00–04:00/);assert.match(html,/04:00–05:00/);
+ assert.doesNotMatch(html,/ставится сама|Обновляются сами/);assert.equal(JSON.stringify(policy),before);
+});
+check('off schedule never describes checking or installation as active',()=>{
+ const html=scheduleHTML({...schedulePolicy,application:{mode:'off'},components:{mode:'off'}});
+ assert.equal((html.match(/Автоматические проверки и установка отключены/g)||[]).length,2);
+ assert.doesNotMatch(html,/Проверка доступности|Проверка версии|Установка с откатом|подтверждение результата/);
+});
+check('install schedule qualifies rollback and component acceptance',()=>{
+ const html=scheduleHTML(schedulePolicy);
+ assert.match(html,/при проверенном сбое/);assert.match(html,/неподтверждённом исходе проверьте журнал/);
+ assert.match(html,/Обновление пакетов; подтверждение результата в журнале/);
+ assert.doesNotMatch(html,/с проверкой на маршрутах|при сбое возвращается прежняя/);
+});
+check('check and prepare modes cannot promise installation',()=>{
+ for(const mode of ['check','prepare']){
+  const html=scheduleHTML({...schedulePolicy,application:{...schedulePolicy.application,mode},components:{...schedulePolicy.components,mode:'check'}});
+  assert.doesNotMatch(html,/Установка с откатом|Обновление пакетов/);
+  assert.match(html,/без (?:автоматической )?установки/i);
+ }
+});
+check('missing policy keeps setup action and unavailable explanation',()=>{
+ const html=scheduleHTML(null);assert.match(html,/Настройте окно обслуживания/);assert.match(html,/data-console-navigate="onboard"/);
+});
 console.log(JSON.stringify({suite:'maintenance-ui',passed:n}));
