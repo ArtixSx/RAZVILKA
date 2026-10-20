@@ -58,6 +58,30 @@ test('destructive action and Apply dialogs announce their actual title and expla
  }
 });
 
+test('every served static dialog has a name without referencing raw details or secret inputs',()=>{
+ for(const match of html.matchAll(/<dialog\b[^>]*>/g)){
+  const tag=match[0],id=/\bid="([^"]+)"/.exec(tag)?.[1];
+  assert.ok(/(?:aria-label|aria-labelledby)="[^"]+"/.test(tag),'unnamed dialog '+id);
+  for(const attr of ['aria-labelledby','aria-describedby']){
+   const references=new RegExp(attr+'="([^"]+)"').exec(tag)?.[1]?.split(/\s+/)||[];
+   for(const target of references){
+    if(target==='ui3InspectorTitle'){assert.match(read(root+'interface.js'),/<h2 id="ui3InspectorTitle"/);continue;}
+    assert.equal(html.split(`id="${target}"`).length-1,1,'nonunique name target '+target);
+    const element=new RegExp('<([a-z0-9]+)\\b[^>]*id="'+target+'"[^>]*>','i').exec(html);
+    assert.ok(element);assert.ok(!['textarea','input','pre','code'].includes(element[1]),'dialog announces secret/raw field');
+   }
+  }
+ }
+});
+
+test('dynamically created app update dialog is named and reused',()=>{
+ const source=read(root+'app-update-ui.js'),fn=source.match(/function ensureAppUpdateDialog\([^]*?\n}\n/);assert.ok(fn);
+ let current=null;const attrs={};
+ const dialog={setAttribute:(key,value)=>attrs[key]=value,querySelector:()=>({addEventListener(){}}),addEventListener(){}};
+ const context=vm.createContext({$:()=>current,document:{createElement:()=>dialog,body:{appendChild:value=>{current=value;}}},closeAppUpdate(){},refreshAppUpdate(){},prepareAppUpdate(){},cancelAppUpdatePreparation(){},installAppUpdate(){}});
+ vm.runInContext(fn[0],context);assert.equal(context.ensureAppUpdateDialog(),dialog);assert.equal(attrs['aria-label'],'Обновление приложения');assert.equal(context.ensureAppUpdateDialog(),dialog);
+});
+
 test('native inspector accessible name',()=>assert.match(html,/<dialog[^>]*aria-labelledby="ui3InspectorTitle"[^>]*id="ui3ServiceDialog"|<dialog[^>]*id="ui3ServiceDialog"[^>]*aria-labelledby="ui3InspectorTitle"/));
 test('retry fenced across authentication epochs',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration\)/));
 test('mutation timeout',()=>assert.match(read(root+'interface.js'),/setTimeout\(\(\)=>controller\.abort\(\),20000\)/));

@@ -80,7 +80,7 @@ function renderAppUpdatePanel() {
 function ensureAppUpdateDialog() {
   let dialog = $('#appUpdateDialog');
   if (dialog) return dialog;
-  dialog = document.createElement('dialog'); dialog.id = 'appUpdateDialog'; dialog.className = 'form-dialog';
+  dialog = document.createElement('dialog'); dialog.id = 'appUpdateDialog'; dialog.className = 'form-dialog'; dialog.setAttribute('aria-label','Обновление приложения');
   dialog.innerHTML = '<div class="auth-form"><div class="dialog-head"><div><h2>Обновление приложения</h2><p>Официальный выбранный канал RAZVILKA</p></div><button class="dialog-close" type="button" data-update-close aria-label="Закрыть">×</button></div><div data-update-summary></div><p data-update-progress role="status" aria-live="polite"></p><div data-update-proof></div><div class="dialog-actions"><button class="secondary" type="button" data-update-refresh>Проверить снова</button><button class="secondary" type="button" data-update-cancel hidden>Остановить загрузку</button><button class="primary" type="button" data-update-prepare>Подготовить обновление</button><button class="primary" type="button" data-update-apply hidden>Установить и перезапустить</button></div></div>';
   document.body.appendChild(dialog);
   dialog.querySelector('[data-update-close]').addEventListener('click', closeAppUpdate);
