@@ -37,8 +37,11 @@ func parseWindow(ctx context.Context, data []byte, format string, limit, cursor 
 	if cursor < 0 || cursor > MaxEntries || limit < 1 || limit > MaxCandidates {
 		return batch{}, ErrRequest
 	}
-	if len(data) > MaxBytes || !utf8.Valid(data) || strings.ContainsRune(string(data), '\x00') {
+	if len(data) > MaxBytes {
 		return batch{}, ErrSize
+	}
+	if !utf8.Valid(data) || strings.ContainsRune(string(data), '\x00') {
+		return batch{}, ErrFormat
 	}
 	if format == "profile" {
 		if parsed, handled, err := parseJSONFeedWindow(ctx, data, limit, cursor); handled {

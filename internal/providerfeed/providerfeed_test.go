@@ -308,6 +308,39 @@ func TestParsersBoundSelectDeduplicateAndIgnoreUpstreamHealth(t *testing.T) {
 	}
 }
 
+func TestParseWindowDistinguishesMalformedTextFromSizeLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+		want error
+		code string
+	}{
+		{"nul", []byte(goodURI + "\n\x00" + goodURI), ErrFormat, "FEED_FORMAT"},
+		{"invalid_utf8", append([]byte(goodURI+"\n"), 0xff), ErrFormat, "FEED_FORMAT"},
+		{"oversize", []byte(strings.Repeat("x", MaxBytes+1)), ErrSize, "FEED_LIMIT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Even a valid first URI cannot yield a partial importable batch.
+			b, err := parseWindow(context.Background(), tc.data, "uri-lines", 32, 0)
+			if !errors.Is(err, tc.want) || ErrorCode(err) != tc.code {
+				t.Fatalf("wrong closed error: %v / %s", err, ErrorCode(err))
+			}
+			if b.raw != "" || b.accepted != 0 || b.rejected != 0 || b.total != 0 || len(b.materials) != 0 || b.snapshotEntries != 0 || b.nextCursor != 0 {
+				t.Fatal("invalid document produced an importable or advancing batch")
+			}
+			m, _, storePath := testManager(t)
+			setResponse(m, 200, string(tc.data), nil)
+			result, syncErr := m.Sync(context.Background(), Request{PresetID: "kort0881-ru-sni"})
+			if !errors.Is(syncErr, tc.want) || ErrorCode(syncErr) != tc.code || result.Imported != 0 {
+				t.Fatal("invalid feed escaped the import boundary")
+			}
+			if _, statErr := os.Stat(storePath); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatal("invalid feed wrote the node store")
+			}
+		})
+	}
+}
+
 func TestStoreFailureDoesNotAdvertiseSuccessOrRememberValidators(t *testing.T) {
 	m, store, _ := testManager(t)
 	_ = store.Close()
