@@ -78,6 +78,25 @@ require_installation_paths() {
 }
 require_installation_paths
 
+# The native clean-control admission retains these ancestors and requires a
+# protected installation owner. Refuse before snapshots or replacement, rather
+# than discover a foreign Entware parent after installing a journaled binary.
+# Never repair ownership of shared Entware directories implicitly.
+require_control_ancestors() {
+  for CONTROL_DIR in "$BASE" "$BINDIR" "$BASE/etc" "$APPDIR"; do
+    [ -d "$CONTROL_DIR" ] || continue
+    CONTROL_OWNER="$(LC_ALL=C ls -nd -- "$CONTROL_DIR" | awk '
+      NR == 1 && $3 ~ /^[0-9]+$/ && substr($1,1,1) == "d" && substr($1,6,1) != "w" && substr($1,9,1) != "w" { print $3; ok=1 }
+      END { if (NR != 1 || !ok) exit 1 }
+    ')" && [ "$CONTROL_OWNER" = "$(id -u)" ] || {
+      echo "Unsafe control installation owner or permissions: $CONTROL_DIR; installation unchanged" >&2
+      echo "Have the Entware administrator review this directory's ownership and permissions before retrying; shared directories were not changed." >&2
+      return 1
+    }
+  done
+}
+require_control_ancestors
+
 ARCH_RAW="$(uname -m)"
 ARCH_REQUEST="${RAZVILKA_ARCH:-$ARCH_RAW}"
 case "$ARCH_REQUEST" in
@@ -513,6 +532,7 @@ require_node_history_compatibility "$BIN_SOURCE"
 
 require_legacy_file_protocol_free
 require_installation_paths
+require_control_ancestors
 mkdir -p "$APPDIR" "$CACHEDIR" "$STATEDIR" "$LOGDIR" "$BINDIR" "$INITDIR" "$BACKUPROOT"
 
 # The candidate understands the newest journal format. Settle any interrupted
@@ -679,6 +699,7 @@ stage 2 "Устанавливаем проверенные файлы с без�
 require_target_self_update_compatibility "$BIN_SOURCE"
 require_legacy_file_protocol_free
 require_installation_paths
+require_control_ancestors
 install_atomic() {
   SRC="$1"
   DST="$2"

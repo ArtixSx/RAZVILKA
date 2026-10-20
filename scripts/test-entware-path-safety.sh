@@ -51,6 +51,29 @@ done
 
 # Real Unix metadata only: Windows ACL emulation cannot prove UID or chmod.
 if [ "$NATIVE_LINKS" -eq 1 ]; then
+  # Fresh install used to accept a UID-1001 Entware base/etc, replace the
+  # binary, then fail native clean-control admission and automatic rollback.
+  # Exercise the real entry before any release/binary dependency is needed.
+  for RELATIVE in . bin etc etc/razvilka; do
+    for KIND in writable foreign-owner; do
+      [ "$KIND" != foreign-owner ] || [ "$(id -u)" = 0 ] || continue
+      CASE_ROOT="$TEST_ROOT/control-$KIND-$(printf '%s' "$RELATIVE" | tr '/.' '__')"
+      BASE="$CASE_ROOT/opt"
+      mkdir -p "$BASE/$RELATIVE"
+      printf retained >"$BASE/$RELATIVE/other-app.conf"
+      if [ "$KIND" = foreign-owner ]; then chown 1001 "$BASE/$RELATIVE"; else chmod 777 "$BASE/$RELATIVE"; fi
+      BEFORE="$(ls -nd "$BASE/$RELATIVE")"
+      CODE=0
+      RAZVILKA_BASE="$BASE" sh "$ROOT/scripts/upgrade-entware.sh" --apply >"$CASE_ROOT/output" 2>&1 || CODE=$?
+      [ "$CODE" != 0 ] && grep -q '^Unsafe control installation owner or permissions:' "$CASE_ROOT/output" || {
+        echo "Unsafe control ancestor reached installation: $RELATIVE $KIND" >&2; exit 1;
+      }
+      [ "$(cat "$BASE/$RELATIVE/other-app.conf")" = retained ] && [ "$(ls -nd "$BASE/$RELATIVE")" = "$BEFORE" ] &&
+        [ ! -e "$BASE/bin/razvilka" ] && [ ! -e "$BASE/razvilka" ] || {
+        echo "Control ancestor refusal changed installation or ownership" >&2; exit 1;
+      }
+    done
+  done
   for SCRIPT in upgrade-entware.sh rollback-entware.sh uninstall-entware.sh S99razvilka; do
     for RELATIVE in razvilka razvilka/run razvilka/state; do
       for KIND in writable foreign-owner; do
