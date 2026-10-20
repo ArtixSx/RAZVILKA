@@ -81,18 +81,18 @@ check('paused schedule preserves windows and permissions without promising activ
 check('off schedule never describes checking or installation as active',()=>{
  const html=scheduleHTML({...schedulePolicy,application:{mode:'off'},components:{mode:'off'}});
  assert.equal((html.match(/Автоматические проверки и установка отключены/g)||[]).length,2);
- assert.doesNotMatch(html,/Проверка доступности|Проверка версии|Установка с откатом|подтверждение результата/);
+ assert.doesNotMatch(html,/Проверка доступности|Проверка версии|Автоматическая установка|подтверждение результата/);
 });
 check('install schedule qualifies rollback and component acceptance',()=>{
  const html=scheduleHTML(schedulePolicy);
- assert.match(html,/при проверенном сбое/);assert.match(html,/неподтверждённом исходе проверьте журнал/);
+ assert.match(html,/При подтверждённой ошибке возвращается прежняя версия/);assert.match(html,/Если результат неизвестен, откройте журнал/);
  assert.match(html,/Обновление пакетов; подтверждение результата в журнале/);
  assert.doesNotMatch(html,/с проверкой на маршрутах|при сбое возвращается прежняя/);
 });
 check('check and prepare modes cannot promise installation',()=>{
  for(const mode of ['check','prepare']){
   const html=scheduleHTML({...schedulePolicy,application:{...schedulePolicy.application,mode},components:{...schedulePolicy.components,mode:'check'}});
-  assert.doesNotMatch(html,/Установка с откатом|Обновление пакетов/);
+  assert.doesNotMatch(html,/Автоматическая установка|Обновление пакетов/);
   assert.match(html,/без (?:автоматической )?установки/i);
  }
 });
