@@ -1764,3 +1764,8 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .interface-ui .route-result-head{flex-wrap:wrap;}
 .interface-ui .route-result-head>strong{display:inline-flex;align-items:baseline;flex-wrap:wrap;column-gap:8px;row-gap:4px;min-width:0;}
 .interface-ui .route-result-head>strong>small{color:var(--muted);font-size:11px;font-weight:400;}
+
+/* Keep the authentication checkbox beside its text; text fields stay stacked. */
+.interface-ui #loginForm>label.check-row{display:flex;align-items:center;gap:10px;}
+.interface-ui #loginRemember{flex:0 0 18px;width:18px;height:18px;min-width:18px;margin:0;padding:0;}
+.interface-ui #loginForm>label.check-row>span{font-size:12px;line-height:1.5;}

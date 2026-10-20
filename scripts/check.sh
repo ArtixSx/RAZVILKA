@@ -116,6 +116,9 @@ if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/extension-lab.js
   node scripts/test-extension-lab.mjs
   node scripts/test-workspace-controls-ui.mjs
+  node scripts/test-interface-manage-ui.mjs
+  node scripts/test-notice-lifecycle.mjs
+  node scripts/test-autonomy-controls-ui.mjs
   node scripts/test-service-dashboard-ui.mjs
   node scripts/test-engine-intent-ui.mjs
   node scripts/test-node-activity-ui.mjs
