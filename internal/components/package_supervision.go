@@ -88,7 +88,9 @@ func (tx *updateTransaction) runPackage(ctx context.Context, action string, args
 	if err := tx.fault("before:supervision:intent"); err != nil {
 		return nil, err
 	}
-	out, err := runner.runSupervised(runCtx, tx.manager.Opkg, args, record, root, path)
+	out, err := tx.manager.withPackageParents(args, func() ([]byte, error) {
+		return runner.runSupervised(runCtx, tx.manager.Opkg, args, record, root, path)
+	})
 	if faultErr := tx.fault("after:supervision:result"); faultErr != nil {
 		return out, errors.Join(err, faultErr)
 	}

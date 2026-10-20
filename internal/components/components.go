@@ -560,7 +560,7 @@ func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
 	if len(args) > 0 && args[0] == "update" {
 		m.availableAt = time.Time{} // package lists change; re-read the catalog
 	}
-	out, err := m.Runner.Run(ctx, m.Opkg, args...)
+	out, err := m.withPackageParents(args, func() ([]byte, error) { return m.Runner.Run(ctx, m.Opkg, args...) })
 	if ctx.Err() == context.DeadlineExceeded {
 		return out, fmt.Errorf("timed out after %s", timeout)
 	}
