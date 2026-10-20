@@ -36,6 +36,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-ui-icons.mjs
   node scripts/test-pending-changes-ui.mjs
   node scripts/test-interface-contract.mjs
+  node scripts/test-console-route-hash.mjs
   node scripts/test-interface-home.mjs
   node scripts/test-simple-home.mjs
   node scripts/test-autopilot-settings.mjs

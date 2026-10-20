@@ -83,9 +83,13 @@ function consoleViewChanged(name){
  if(name==='activity')setTimeout(consoleFilterAudit,0);
 }
 function consoleInitialSetup(){consoleRouteHash();}
+// A malformed escape in a typed or pasted link is not a route: fall back to
+// the default view instead of throwing URIError.
+function consoleRouteSegment(value){try{return decodeURIComponent(value||'');}catch{return '';}}
 function consoleRouteHash(){
  const path=location.hash.replace(/^#\/?/,'').split('/');
- if(path[0]==='engine'&&consoleEngineMeta[decodeURIComponent(path[1]||'')]){consoleNavigate('engineconfig',decodeURIComponent(path[1]));return;}
+ const engine=path[0]==='engine'?consoleRouteSegment(path[1]):'';
+ if(engine&&consoleEngineMeta[engine]){consoleNavigate('engineconfig',engine);return;}
  if(path[0]&&document.getElementById(`view-${path[0]}`))setView(path[0]);
  else if(!consoleInitialized)setView('overview');
  consoleInitialized=true;
