@@ -880,3 +880,27 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .interface-ui .autonomy-zone #a1-quickStart:not([hidden]) #a1-quickDevices{grid-column:1/-1}
 .interface-ui .autonomy-zone #a1-quickStart:not([hidden])>.form-footer{display:flex;flex-wrap:wrap;gap:12px}
 @media(max-width:800px){.interface-ui .autonomy-zone #a1-quickStart:not([hidden])>fieldset:first-of-type{grid-template-columns:minmax(0,1fr)}}
+
+/* Network scope uses the same stacked fields and quiet grouped choices as
+   the other settings cards. Keep checkbox rows distinct from field labels. */
+.interface-ui #listScopeContent .full-panel{padding:20px;min-width:0;}
+.interface-ui #listScopeContent h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.interface-ui #listScopeContent h3{margin:24px 0 14px;font-size:16px;}
+.interface-ui #listScopeContent p{max-width:82ch;line-height:1.7;margin:10px 0;overflow-wrap:anywhere;}
+.interface-ui #listScopeContent .panel-title{margin-bottom:16px;}
+.interface-ui #listScopeContent article>label{display:grid;gap:8px;max-width:580px;margin:18px 0;font-size:13px;font-weight:500;}
+.interface-ui #listScopeContent article>label :is(select,input){width:100%;min-width:0;box-sizing:border-box;}
+.interface-ui #listScopeContent fieldset{min-width:0;margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);}
+.interface-ui #listScopeContent legend{padding:0 6px;font-size:13px;font-weight:600;color:var(--text);}
+.interface-ui #listScopeContent .check-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:10px;}
+.interface-ui #listScopeContent .check-list>label{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:13px;}
+.interface-ui #listScopeContent .check-list input{flex:none;margin:3px 0 0;}
+.interface-ui #listScopeContent .check-list span{min-width:0;overflow-wrap:anywhere;}
+.interface-ui #listScopeContent .check-list small{display:block;margin-top:4px;color:var(--muted);font-size:11px;line-height:1.5;}
+.interface-ui #listScopeContent .dialog-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line);}
+@media(max-width:600px){
+ .interface-ui #listScopeContent .full-panel{padding:16px;}
+ .interface-ui #listScopeContent fieldset{padding:12px;}
+ .interface-ui #listScopeContent .check-list{grid-template-columns:minmax(0,1fr);}
+ .interface-ui #listScopeContent .dialog-actions>*{flex:1 1 100%;}
+}
