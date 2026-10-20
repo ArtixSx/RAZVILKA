@@ -50,6 +50,8 @@ function clearReview(){review=null;el('dnsScopedReview').replaceChildren();contr
 function controls(){
  const view=state.dns?.scoped,busy=!!active||!!job,available=!!view?.available;
  el('dnsScopedFields').disabled=busy||!available;
+ el('dnsScopedService').disabled=busy||!available||!view.candidates?.length;
+ el('dnsScopedProfile').disabled=busy||!available||!view.profile_ids?.length;
  el('dnsScopedPreview').disabled=busy||!available||!view.candidates?.length||!view.profile_ids?.length;
  el('dnsScopedRemove').disabled=busy||!available||!['configured','stopped'].includes(view.state)||!view.service_id;
  el('dnsScopedConfirm').hidden=!review;el('dnsScopedConfirm').disabled=busy||!review;
@@ -64,9 +66,9 @@ function render(){
   if(review){clearReview();el('dnsScopedStatus').textContent='Состояние изменилось. Повторите просмотр перед применением.';}
   lastView=signature;
   const selected=el('dnsScopedService').value,profile=el('dnsScopedProfile').value;
-  el('dnsScopedService').innerHTML=(view?.candidates||[]).map(c=>`<option value="${escape(c.service_id)}">${escape(names[c.service_id]||c.service_id)} · ${escape(c.client)}</option>`).join('');
+  el('dnsScopedService').innerHTML=(view?.candidates||[]).map(c=>`<option value="${escape(c.service_id)}">${escape(names[c.service_id]||c.service_id)} · ${escape(c.client)}</option>`).join('')||'<option value="">Нет подходящих сервисов</option>';
   if(view?.candidates?.some(c=>c.service_id===selected))el('dnsScopedService').value=selected;
-  el('dnsScopedProfile').innerHTML=(view?.profile_ids||[]).map(id=>`<option value="${escape(id)}">${escape(names[id]||id)}</option>`).join('');
+  el('dnsScopedProfile').innerHTML=(view?.profile_ids||[]).map(id=>`<option value="${escape(id)}">${escape(names[id]||id)}</option>`).join('')||'<option value="">Нет доступных DNS-профилей</option>';
   if(view?.profile_ids?.includes(profile))el('dnsScopedProfile').value=profile;
   if(!el('dnsScopedListener').value)el('dnsScopedListener').value=view?.listener||'';
   if(!el('dnsScopedIngress').value)el('dnsScopedIngress').value=view?.ingress||'';

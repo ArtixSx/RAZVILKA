@@ -83,4 +83,12 @@ for(const outcome of ['complete','lost-response','logout','cancel']){
  assert.equal(f.e('dnsScopedConfirm').hidden,true,'other tab pending operation invalidates review');
  console.log('PASS late history vs new active job');tests++;
 }
+{
+ const f=fixture();f.c.state.dns.scoped.candidates=[];f.c.state.dns.scoped.profile_ids=[];f.c.renderDNS();
+ assert.match(f.e('dnsScopedService').innerHTML,/Нет подходящих сервисов/);assert.equal(f.e('dnsScopedService').disabled,true);
+ assert.match(f.e('dnsScopedProfile').innerHTML,/Нет доступных DNS-профилей/);assert.equal(f.e('dnsScopedProfile').disabled,true);
+ assert.match(f.e('dnsScopedEligibility').textContent,/прямое подключение и одно устройство/);assert.equal(f.e('dnsScopedPreview').disabled,true);
+ f.c.state.dns.scoped=structuredClone(view);f.c.renderDNS();assert.equal(f.e('dnsScopedService').disabled,false);assert.equal(f.e('dnsScopedProfile').disabled,false);assert.doesNotMatch(f.e('dnsScopedService').innerHTML,/Нет подходящих сервисов/);
+ console.log('PASS empty DNS choices explain eligibility and recover on fresh candidates');tests++;
+}
 console.log(`${tests} scoped DNS checks passed`);
