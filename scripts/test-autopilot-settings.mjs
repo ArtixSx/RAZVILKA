@@ -6,6 +6,13 @@ const c={};vm.createContext(c);vm.runInContext(src,c);const model=c.RazvilkaQuic
 const policy={schema:1,revision:12,setup_complete:true,enabled:true,check_seconds:300,reserve_seconds:1800,reserve_target:3,candidates_per_round:2,source_ids:['private-source'],protocols:['vless'],preferred_routes:['xray'],default_sources:['192.168.1.20'],all_lan:false,application:{mode:'prepare'},components:{mode:'check'}};
 const inputs={check_seconds:'120',reserve_seconds:'1200',reserve_target:'4',candidates_per_round:'1'};
 let total=0;function test(n,f){f();total++;console.log('PASS '+n);}
+test('quick policy interval is a minimum and queue delay is explicit',()=>{
+ const html=fs.readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
+ const form=html.match(/<form id="autoQuickForm">[\s\S]*?<\/form>/)[0];
+ assert.match(form,/Минимальный интервал проверок, сек<input id="autoQuickCheck"/);
+ assert.match(form,/Сервисы проверяются по очереди/);assert.match(form,/долгие проверки увеличивают ожидание/);
+ assert.doesNotMatch(form,/Проверять сервисы каждые/);
+});
 async function asyncTest(n,f){await f();total++;console.log('PASS '+n);}
 
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
