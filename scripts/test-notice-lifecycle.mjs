@@ -17,4 +17,9 @@ const ctx=vm.createContext({state,$:id=>{if(!elements.has(id))elements.set(id,{h
 vm.runInContext(app.slice(app.indexOf('function showNotice('),app.indexOf('function onboardingDone(')),ctx);
 ctx.showNotice('success','Готово','Сохранено');assert.equal(timers.size,1);ctx.showNotice('error','Ошибка','Повторите',{},false,{label:'Повторить',run(){}});assert.equal(timers.size,0);assert.ok(state.noticeAction);ctx.hideNotice();assert.equal(elements.get('#notice').hidden,true);assert.equal(state.noticeAction,null);
 assert.match(app,/noticeClose'\).addEventListener\('click', hideNotice\)/);
+ctx.showNotice('review','Проверить результат','Применение не подтверждено',{error:'timeout'},true);
+assert.equal(elements.get('#notice').className,'notice review');
+ctx.showNotice('review','Сведения обновляются','Повторим чтение',{detail_kind:'panel-load'});
+assert.equal(elements.get('#notice').className,'notice review panel-load');
+const css=read('interface-shell.css');assert.match(css,/body\.rz-simple #notice\.review\.panel-load[,\{]/);assert.doesNotMatch(css,/body\.rz-simple #notice\.review[,\{]/,'simple mode must not hide actionable review failures');
 console.log('PASS transient notices expire; errors persist with manual dismissal; replacement cancels stale timers');

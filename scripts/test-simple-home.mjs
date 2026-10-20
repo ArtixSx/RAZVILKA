@@ -328,3 +328,17 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   assert.equal(writes,0,'inventory rendering never saves or applies configuration');
 }
 console.log('simple home: ok');
+
+// The mode switch names the active mode and describes what clicking does.
+{
+ const source=read('cmd/razvilka/web/simple-home.js');
+ const label=source.match(/  function label\(\) \{[^]*?\n  }/)[0];
+ for(const on of [true,false]){
+  const title={},hint={},attributes={};
+  const toggle={setAttribute:(key,value)=>attributes[key]=value,querySelector:selector=>selector==='b'?title:hint};
+  vm.runInNewContext(label+';label();',{enabled:()=>on,document:{getElementById:()=>toggle}});
+  assert.equal(title.textContent,on?'Простой режим':'Расширенный режим');
+  assert.equal(attributes['aria-checked'],String(!on));
+  assert.match(hint.textContent,on?/Включить все разделы/:/Перейти к сервисам/);
+ }
+}

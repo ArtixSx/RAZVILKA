@@ -782,7 +782,7 @@ html[data-theme=dark]{--bg:#0c121b;--panel:#141f2b;--panel2:#192635;--sidebar:#1
 .interface-ui .ui3-engine-next button{font-size:11px;padding:8px;min-height:40px;flex-shrink:0;}
 .ui3-engine-flow-details{margin-bottom:10px;font-size:12px;color:var(--muted);}.ui3-engine-flow-details summary{cursor:pointer;}
 .interface-ui .ui3-engine-card{padding:16px;}.ui3-engine-card-heading{margin-bottom:10px;}
-.interface-ui .ui3-engine-card>p{margin:10px 0;}.ui3-engine-meta{padding:9px 0;}
+.interface-ui .ui3-engine-card>p{margin:10px 0;flex:0 0 auto;}.ui3-engine-meta{padding:9px 0;}
 .interface-ui .ui3-engine-workflow button{font-size:11px;padding:8px;min-height:40px;}
 .ui3-engine-maintenance{font-size:12px;color:var(--muted);}.ui3-engine-maintenance summary{cursor:pointer;}.ui3-engine-maintenance .ui3-engine-actions{margin-top:12px;}
 .node-bulk-scope{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:12px;}
@@ -859,7 +859,7 @@ body.rz-simple #view-settings>:not(#rzSimpleSettings):not(.account-grid){display
 /* Simple mode keeps only banners that need the owner: no answer from the
    router or a journal review. Routine "busy" and "updating" notes are shown
    as one quiet line in the status card instead. */
-body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailability[data-state=idle],body.rz-simple #notice.review,body.rz-simple .console-autonomy-availability{display:none!important}
+body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailability[data-state=idle],body.rz-simple #notice.review.panel-load,body.rz-simple .console-autonomy-availability{display:none!important}
 .rz-sh-activity{display:block;margin-top:6px;color:var(--muted);font-size:12px}
 .rz-sh-icon{position:relative;flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--soft);font-weight:700;font-size:12px;overflow:visible}
 .rz-sh-icon svg{width:22px;height:22px}

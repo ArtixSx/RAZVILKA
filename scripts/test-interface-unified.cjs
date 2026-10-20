@@ -21,6 +21,13 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('sidebar count updates outside home and first setup opens the wizard directly',()=>{
+ const {c,state,$}=fixture();state.currentView='onboard';
+ state.services=[{...service},{...service,id:'discord'},{...service,id:'telegram'}];
+ c.renderInterfaceNavigation();assert.equal($('#ui3NavCount').textContent,'3');
+ state.services=[];c.renderInterfaceNavigation();assert.equal($('#ui3NavCount').textContent,'0');
+ const first=model.humanAuto({policy:{setup_complete:false}},{});assert.equal(first.target,'onboard');
+});
 await test('metadata summary refresh replaces unknown inventory without redrawing the home form',()=>{
  const {c,state,$}=fixture();
  c.refreshHomeEngineSummary();assert.match($('#ui7HomeEngines').innerHTML,/ещё загружаются/);

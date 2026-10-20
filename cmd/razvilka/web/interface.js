@@ -97,6 +97,10 @@ function interfaceLoadMessage(key){
 }
 function renderInterfaceNavigation(view=state.currentView||'overview'){
  const nav=rim.navigation(view),group=interfaceSections[nav.owner];
+ const loaded=!interfaceState.authRevoked&&state.authenticated===true&&interfaceDataReady('services');
+ const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
+ const counts=rim.humanCounts(loaded?state.services||[]:[],{},consoleSnapshot?.services||{},{},false,exclusions);
+ consoleText('ui3NavCount',loaded?counts.selected:'—');
  $$('[data-main-nav]').forEach(e=>{const on=e.dataset.mainNav===nav.owner;e.classList.toggle('active',on);on?e.setAttribute('aria-current','page'):e.removeAttribute('aria-current');});
  $$('[data-mobile-nav]').forEach(e=>{const owner=rim.navigation(e.dataset.mobileNav).owner;const on=owner===nav.owner;e.classList.toggle('active',on);on?e.setAttribute('aria-current','page'):e.removeAttribute('aria-current');});
  consoleText('ui3Breadcrumb',nav.owner==='overview'?'Главная':nav.title);
@@ -168,7 +172,7 @@ function renderInterfaceHome(summaries){
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusions);
  const resourceListKnown=typeof resourceExclusionsSupported==='function'&&resourceExclusionsSupported();
- consoleText('ui3HomeCount',loaded?counts.selected:'—');consoleText('ui3NavCount',loaded?counts.selected:'—');
+ consoleText('ui3HomeCount',loaded?counts.selected:'—');
  interfaceHomeAuto(ready);
  renderHomeEngineSummary(summaries,loaded,fresh);
  interfaceHTML('ui3HealthBanner',`<div class="r5-counts"><div><strong>${loaded?counts.selected:'—'}</strong><span>${resourceListKnown?'В сохранённом списке обхода':'Добавлено сервисов'}</span></div><div><strong>${fresh?counts.good:'—'}</strong><span>Работают по проверке</span></div><div><strong>${fresh?counts.unconfirmed:'—'}</strong><span>Без подтверждения</span></div></div><p class="r5-caption">${resourceListKnown?`Без обхода: ${Object.keys(exclusions).length} сервисов. Считаются сохранённые записи, применение исключений ещё не подтверждено. `:''}${!loaded?'Получаем сведения о сервисах.':!fresh?'Показан последний список. Свежая доступность пока неизвестна.':counts.selected?'Проверяется конкретный сценарий, а не все функции приложения.':counts.excluded?'Сохранённые сервисы находятся в исключениях.':'Сервисы пока не добавлены. Начните с настройки автопилота.'}</p>`);

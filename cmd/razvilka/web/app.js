@@ -869,7 +869,7 @@ function showNotice(kind, title, message, details = null, settings = false, acti
   clearTimeout(state.noticeTimer);
   const notice = $('#notice');
   notice.hidden = false;
-  notice.className = `notice ${kind || 'success'}`;
+  notice.className = `notice ${kind || 'success'}${details?.detail_kind === 'panel-load' ? ' panel-load' : ''}`;
   $('#noticeTitle').textContent = title;
   $('#noticeText').textContent = message;
   state.noticeDetails = details;
