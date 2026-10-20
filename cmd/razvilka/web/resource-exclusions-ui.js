@@ -25,7 +25,11 @@ function acceptResourceExclusions(value) {
   if (state.resourceExclusions && snapshot.revision < state.resourceExclusions.revision) throw new Error('Получен прежний список исключений. Обновите состояние.');
   state.resourceExclusions=snapshot;
   const e=resourceExclusionsEditor;
-  if (!e.dirty && !e.pending && !e.unknown) resourceExclusionsReset(snapshot);
+  if (!e.dirty && !e.pending && !e.unknown) {
+    const savedApplyHint=e.base?.site_exclusions_pending===true && [resourceExclusionsSavedMessage(e.base,false),resourceExclusionsSavedMessage(e.base,true)].includes(e.message);
+    resourceExclusionsReset(snapshot);
+    if(savedApplyHint&&snapshot.site_exclusions_pending!==true&&snapshot.desired_matches_applied===true)e.message='';
+  }
   else if (e.base && ['revision','policy_revision','exclusion_revision'].some(k=>snapshot[k]!==e.base[k])) e.conflict=true;
 }
 function resourceExclusionsRows(snapshot) {

@@ -43,6 +43,11 @@ function fixture(){
  assert.doesNotMatch(f.$('#applyReviewContent').innerHTML,/новых сетевых изменений/);
  f.$('#applyReviewDialog').close('');await pending;
 }
+{
+ const f=fixture();const receipt={...committed(),note:'Dataplane activated, health-checked and committed.'};
+ f.handler((_path,options)=>options.method==='POST'?receipt:preview());await f.c.applyDraft();
+ const success=f.notices.find(item=>item[0]==='success');assert.ok(success);assert.equal(success[2],'Применение подтверждено. Доступ к сервисам проверяется отдельно.');assert.equal(success[3].note,receipt.note);
+}
 const posts=f=>f.calls.filter(call=>call.options.method==='POST');
 const successful=f=>f.notices.filter(notice=>notice[0]==='success');
 let passed=0;async function test(name,run){await run();passed++;console.log('PASS '+name);}

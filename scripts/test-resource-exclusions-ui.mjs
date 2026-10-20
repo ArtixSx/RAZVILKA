@@ -90,4 +90,11 @@ await check('Apply stays disabled during local request or observed global write 
  }
  f.state.panelAvailability=null;f.events.get('razvilka:panel-availability')();assert.doesNotMatch(f.root.innerHTML,/data-resource-apply disabled/);
 });
+await check('confirmed applied snapshot clears only obsolete saved Apply instruction',()=>{
+ const pending=inactive({revision:1,exclusion:1,entries:manual});pending.site_exclusions_pending=true;
+ const f=fixture(pending);f.e.message=f.c.resourceExclusionsSavedMessage(f.e.base,false);
+ const applied=structuredClone(pending);applied.site_exclusions_pending=false;applied.desired_matches_applied=true;applied.applied_effective=structuredClone(applied.effective);
+ f.c.acceptResourceExclusions(applied);assert.equal(f.e.message,'');f.c.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Нажмите «Применить исключения»/);
+ const draft=fixture(pending);draft.e.dirty=true;draft.e.message='Запись добавлена в черновик.';draft.c.acceptResourceExclusions(applied);assert.equal(draft.e.message,'Запись добавлена в черновик.');assert.equal(draft.e.dirty,true);
+});
 console.log(JSON.stringify({suite:'resource-exclusions-ui',passed:checks}));

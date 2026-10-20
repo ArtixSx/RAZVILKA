@@ -4983,7 +4983,7 @@ async function applyDraft(scope = 'all', engineID = '', options = {}) {
     if (result.safe_mode === true && result.reviewed === true && result.live_applied !== true) {
       showNotice('review', 'План проверен — рабочие маршруты не изменены', 'Изменения подготовлены. Чтобы включить их, разрешите применение в настройках и повторите проверку.', result, true);
     } else if (result.live_applied === true && !result.scope_pending_changes) {
-      showNotice('success', 'Настройки применены', result.note || 'Применение подтверждено. Доступ к сервисам проверяется отдельно.', result);
+      showNotice('success', 'Настройки применены', 'Применение подтверждено. Доступ к сервисам проверяется отдельно.', result);
     } else if (result.scope_pending_changes) {
       showNotice('review', 'Часть изменений ещё ждёт применения', 'Проверьте, что для каждого изменённого обхода выбран хотя бы один сервис.', result, true);
     } else if (result.pending_changes) {
