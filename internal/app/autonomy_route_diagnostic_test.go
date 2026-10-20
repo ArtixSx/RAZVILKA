@@ -22,6 +22,8 @@ func TestAutonomyRouteRefusalHasBoundedDiagnosticWithoutPublishingEvidence(t *te
 		{"stale", "result-not-fresh"},
 		{"foreign-detail", "route-proof-unconfirmed"},
 		{"nfq-graph", "nfq-rules-changed"},
+		{"nfq-source", "nfq-source-changed"},
+		{"nfq-policy", "nfq-policy-changed"},
 	} {
 		t.Run(tc.scenario, func(t *testing.T) {
 			a, _, adapter := autonomousIntegrationFixture(t)
@@ -48,9 +50,9 @@ func TestAutonomyRouteRefusalHasBoundedDiagnosticWithoutPublishingEvidence(t *te
 					a.autonomy.mu.Unlock()
 				}
 				switch tc.scenario {
-				case "nfq-graph":
+				case "nfq-graph", "nfq-source", "nfq-policy":
 					result.RouteConfirmed = false
-					result.RouteProofError = "nfq-rules-changed"
+					result.RouteProofError = tc.reason
 				case "unproved", "foreign-detail":
 					result.RouteConfirmed = false
 					result.RouteProofError = private
