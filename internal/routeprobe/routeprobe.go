@@ -217,14 +217,14 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	}
 	jumpCreated = true
 
-	client := pinnedHTTPSClient(address, port, m.timeout())
+	client := pinnedHTTPSClientFrom(address, stockBefore.source, port, m.timeout())
 	result = probeHTTP(ctx, client, service, "nfqws2", "isolated NFQUEUE request awaiting exact-chain counter", false)
 	counterOutput, counterErr := runSystemCommand(ctx, iptablesBinary, "-t", "mangle", "-L", chain, "-v", "-n", "-x")
 	packets := parseScopedNFQueuePackets(counterOutput)
 	if stockBefore.passive {
 		packets = parseScopedReturnPackets(counterOutput)
 	}
-	stockAfter, stockErr := readStockProbePath(ctx, address, queueNumber, chain, port)
+	stockAfter, stockErr := readStockProbePathForSource(ctx, address, queueNumber, chain, port, stockBefore.source)
 	queueStillActive := kernelQueueActive(queueNumber)
 	currentQueue, currentProcess, processErr := activeNFQWSQueue()
 	proofRefusal := nfqwsProofRefusal(stockBefore, stockAfter, packets, counterErr, stockErr, processErr, queueStillActive, queueNumber, currentQueue, processEvidence, currentProcess)
@@ -397,7 +397,11 @@ func commandError(output string, err error) string {
 }
 
 func pinnedHTTPSClient(address netip.Addr, sourcePort int, timeout time.Duration) *http.Client {
-	dialer := &net.Dialer{Timeout: 6 * time.Second, KeepAlive: -1, LocalAddr: &net.TCPAddr{IP: net.IPv4zero, Port: sourcePort}}
+	return pinnedHTTPSClientFrom(address, netip.IPv4Unspecified(), sourcePort, timeout)
+}
+
+func pinnedHTTPSClientFrom(address, source netip.Addr, sourcePort int, timeout time.Duration) *http.Client {
+	dialer := pinnedTCPDialer(source, sourcePort)
 	transport := &http.Transport{
 		Proxy: nil, ForceAttemptHTTP2: true, DisableKeepAlives: true,
 		TLSHandshakeTimeout: 7 * time.Second, ResponseHeaderTimeout: 8 * time.Second,
@@ -408,6 +412,10 @@ func pinnedHTTPSClient(address netip.Addr, sourcePort int, timeout time.Duration
 	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
+}
+
+func pinnedTCPDialer(source netip.Addr, port int) *net.Dialer {
+	return &net.Dialer{Timeout: 6 * time.Second, KeepAlive: -1, LocalAddr: &net.TCPAddr{IP: net.IP(source.AsSlice()), Port: port}}
 }
 
 func parseScopedNFQueuePackets(output string) uint64 {

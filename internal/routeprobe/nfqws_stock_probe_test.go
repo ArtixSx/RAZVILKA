@@ -1,11 +1,94 @@
 package routeprobe
 
 import (
+	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestStockProbePinsSourceWithoutDiscardingRouteTable(t *testing.T) {
+	address := netip.MustParseAddr("162.159.136.232")
+	initial, err := parseStockProbeRoute("162.159.136.232 via 100.64.128.1 dev eth3 table 4096 src 100.64.181.129\n cache", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boundText := "162.159.136.232 from 100.64.181.129 via 100.64.128.1 dev eth3 table 16386\n cache"
+	bound, err := parseStockProbeRoute(boundText, address)
+	if err != nil || !sameStockProbeForwarding(initial, bound) {
+		t.Fatal("equivalent initial/source-bound forwarding refused", err)
+	}
+	before, err := inspectStockProbePath(stockProbeFixture, boundText, address, 300, "RZRP12345678", 41234)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, from, to string }{
+		{"gateway", "via 100.64.128.1", "via 100.64.128.2"},
+		{"device", "dev eth3", "dev eth4"},
+		{"source", "from 100.64.181.129", "from 100.64.181.130"},
+		{"table", "table 16386", "table 16387"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			after, err := inspectStockProbePath(stockProbeFixture, strings.Replace(boundText, tc.from, tc.to, 1), address, 300, "RZRP12345678", 41234)
+			if err == nil && stockProbeSamePath(before, after) {
+				t.Fatal("changed bound route accepted")
+			}
+			changed, err := parseStockProbeRoute(strings.Replace(boundText, tc.from, tc.to, 1), address)
+			if tc.name != "table" && err == nil && sameStockProbeForwarding(initial, changed) {
+				t.Fatal("initial/source-bound forwarding mismatch accepted")
+			}
+		})
+	}
+	for _, raw := range []string{boundText + " expires 20sec", strings.Replace(boundText, "table 16386", "table 16386 mtu 1200", 1), strings.Replace(boundText, "from 100.64.181.129", "from 127.0.0.1", 1)} {
+		if _, err := parseStockProbeRoute(raw, address); err == nil {
+			t.Fatal("unknown cache annotation or unsafe source accepted")
+		}
+	}
+	after := before
+	before.policy = "reviewed-rpdb-and-fib"
+	after.policy = "changed"
+	if stockProbeSamePath(before, after) {
+		t.Fatal("RPDB/FIB change accepted")
+	}
+}
+
+func TestPinnedNFQDialerUsesActualSelectedLocalAddress(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	peer := make(chan net.Addr, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			peer <- conn.RemoteAddr()
+			conn.Close()
+		}
+	}()
+	source := netip.MustParseAddr("127.0.0.2")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := pinnedTCPDialer(source, 0).DialContext(ctx, "tcp4", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if got := conn.LocalAddr().(*net.TCPAddr).IP.String(); got != source.String() {
+		t.Fatal("socket used another source", got)
+	}
+	select {
+	case got := <-peer:
+		if got.(*net.TCPAddr).IP.String() != source.String() {
+			t.Fatal("peer saw another source", got)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+}
 
 func TestNFQProofDiagnosticsRetainEveryExistingProofRequirement(t *testing.T) {
 	type observation struct {
@@ -32,6 +115,8 @@ func TestNFQProofDiagnosticsRetainEveryExistingProofRequirement(t *testing.T) {
 		{"graph", "nfq-rules-changed", func(o *observation) { o.after.graph = "different" }},
 		{"route", "nfq-route-changed", func(o *observation) { o.after.route = "different" }},
 		{"stock-counter", "nfq-stock-counter-not-advanced", func(o *observation) { o.after.packets = o.before.packets }},
+		{"source-identity", "nfq-source-changed", func(o *observation) { o.after.source = netip.MustParseAddr("100.64.181.129") }},
+		{"policy", "nfq-policy-changed", func(o *observation) { o.after.policy = "different" }},
 		{"active-nonstock", "", func(o *observation) {
 			o.before.passive = false
 			o.after.passive = false

@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,10 +24,20 @@ type stockProbePath struct {
 	route   string
 	packets uint64
 	iface   string
+	source  netip.Addr
+	policy  string
 }
 
 // Read whole bounded rules, never the shortened diagnostic-command output.
 func readStockProbePath(ctx context.Context, address netip.Addr, queue int, own string, port int) (stockProbePath, error) {
+	return readStockProbePathForSource(ctx, address, queue, own, port, netip.Addr{})
+}
+
+func readStockProbePathForSource(ctx context.Context, address netip.Addr, queue int, own string, port int, source netip.Addr) (stockProbePath, error) {
+	// This limits observation work, never extends the original caller's
+	// admission. The HTTPS client's existing network/TLS budgets are unchanged.
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
 	save := findSystemBinary([]string{"/opt/sbin/iptables-save", "/opt/bin/iptables-save", "/usr/sbin/iptables-save", "iptables-save"})
 	ip := findSystemBinary([]string{"/opt/sbin/ip", "/opt/bin/ip", "/sbin/ip", "ip"})
 	if save == "" || ip == "" {
@@ -35,11 +47,175 @@ func readStockProbePath(ctx context.Context, address netip.Addr, queue int, own 
 	if err != nil {
 		return stockProbePath{}, errStockProbePath
 	}
-	route, err := commandrun.Output(ctx, 4*time.Second, 4096, ip, "-4", "route", "get", address.String())
+	args := []string{"-4", "route", "get", address.String()}
+	if source.IsValid() {
+		args = append(args, "from", source.String())
+	}
+	route, err := commandrun.Output(ctx, 4*time.Second, 4096, ip, args...)
 	if err != nil {
 		return stockProbePath{}, errStockProbePath
 	}
-	return inspectStockProbePath(string(rules), string(route), address, queue, own, port)
+	initial, err := parseStockProbeRoute(string(route), address)
+	if err != nil {
+		return stockProbePath{}, err
+	}
+	if !source.IsValid() {
+		// An unbound lookup is only a source-selection hint. Some vendor
+		// caches alternate table decoration despite unchanged RPDB/FIB. Bind
+		// the socket and both authoritative lookups to this same local source;
+		// retain the entire resulting table/path and policy snapshot instead
+		// of dropping the table field from either observation.
+		source = initial.source
+		bound, err := commandrun.Output(ctx, 4*time.Second, 4096, ip, "-4", "route", "get", address.String(), "from", source.String())
+		if err != nil {
+			return stockProbePath{}, errStockProbePath
+		}
+		selected, err := parseStockProbeRoute(string(bound), address)
+		if err != nil || !sameStockProbeForwarding(initial, selected) {
+			return stockProbePath{}, errStockProbePath
+		}
+		route = bound
+	} else if initial.source != source {
+		return stockProbePath{}, errStockProbePath
+	}
+	path, err := inspectStockProbePath(string(rules), string(route), address, queue, own, port)
+	if err != nil || !stockProbeLocalSource(path.iface, source) {
+		return stockProbePath{}, errStockProbePath
+	}
+	policy, err := readStockProbePolicy(ctx, ip)
+	if err != nil {
+		return stockProbePath{}, err
+	}
+	path.source, path.policy = source, policy
+	return path, nil
+}
+
+type stockProbeRoute struct {
+	source, gateway  netip.Addr
+	iface, canonical string
+}
+
+func parseStockProbeRoute(raw string, address netip.Addr) (stockProbeRoute, error) {
+	refuse := func() (stockProbeRoute, error) { return stockProbeRoute{}, errStockProbePath }
+	lines := strings.Split(strings.TrimSpace(raw), "\n")
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) != "cache" {
+			return refuse()
+		}
+	}
+	f := strings.Fields(lines[0])
+	if len(f) < 3 || f[0] != address.String() {
+		return refuse()
+	}
+	r := stockProbeRoute{canonical: strings.Join(f, " ")}
+	seen := map[string]bool{}
+	for i := 1; i < len(f); i += 2 {
+		if i+1 >= len(f) || seen[f[i]] {
+			return refuse()
+		}
+		seen[f[i]] = true
+		switch f[i] {
+		case "src", "from", "via":
+			ip, err := netip.ParseAddr(f[i+1])
+			if err != nil || !ip.Is4() || !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				return refuse()
+			}
+			if f[i] == "via" {
+				r.gateway = ip
+			} else {
+				if r.source.IsValid() && r.source != ip {
+					return refuse()
+				}
+				r.source = ip
+			}
+		case "dev":
+			r.iface = f[i+1]
+			if r.iface == "" || r.iface == "lo" {
+				return refuse()
+			}
+		case "table":
+			if f[i+1] != "main" {
+				if _, err := strconv.ParseUint(f[i+1], 10, 32); err != nil {
+					return refuse()
+				}
+			}
+		case "uid", "metric":
+			if _, err := strconv.ParseUint(f[i+1], 10, 32); err != nil {
+				return refuse()
+			}
+		default:
+			return refuse()
+		}
+	}
+	if !r.source.IsValid() || r.iface == "" {
+		return refuse()
+	}
+	return r, nil
+}
+
+func sameStockProbeForwarding(a, b stockProbeRoute) bool {
+	return a.source == b.source && a.gateway == b.gateway && a.iface == b.iface
+}
+
+func stockProbeLocalSource(iface string, source netip.Addr) bool {
+	i, err := net.InterfaceByName(iface)
+	if err != nil {
+		return false
+	}
+	addresses, err := i.Addrs()
+	if err != nil {
+		return false
+	}
+	for _, a := range addresses {
+		p, err := netip.ParsePrefix(a.String())
+		if err == nil && p.Addr().Unmap() == source {
+			return true
+		}
+	}
+	return false
+}
+
+// Preserve the actual RPDB and every referenced FIB, including source-specific
+// and foreign VPN routes. No table, lifetime or route annotation is discarded.
+func readStockProbePolicy(ctx context.Context, ip string) (string, error) {
+	rules, err := commandrun.Output(ctx, 4*time.Second, 64<<10, ip, "-4", "rule", "show")
+	if err != nil {
+		return "", errStockProbePath
+	}
+	tables := map[string]bool{"main": true}
+	for _, line := range strings.Split(string(rules), "\n") {
+		f := strings.Fields(line)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] == "lookup" {
+				table := f[i+1]
+				if table != "main" && table != "local" && table != "default" {
+					if _, e := strconv.ParseUint(table, 10, 32); e != nil {
+						return "", errStockProbePath
+					}
+				}
+				tables[table] = true
+			}
+		}
+	}
+	if len(tables) > 32 {
+		return "", errStockProbePath
+	}
+	names := make([]string, 0, len(tables))
+	for name := range tables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	hash := sha256.New()
+	hash.Write(rules)
+	for _, table := range names {
+		routes, err := commandrun.Output(ctx, 4*time.Second, 64<<10, ip, "-4", "route", "show", "table", table)
+		if err != nil {
+			return "", errStockProbePath
+		}
+		fmt.Fprintf(hash, "\ntable=%s\n", table)
+		hash.Write(routes)
+	}
+	return hex.EncodeToString(hash.Sum(nil)), ctx.Err()
 }
 
 // This deliberately recognizes only the official Entware nfqws_post grammar.
@@ -47,19 +223,11 @@ func readStockProbePath(ctx context.Context, address netip.Addr, queue int, own 
 // No foreign rule, mark or stock chain is modified by this observation.
 func inspectStockProbePath(raw, route string, address netip.Addr, queue int, own string, port int) (stockProbePath, error) {
 	refuse := func() (stockProbePath, error) { return stockProbePath{}, errStockProbePath }
-	first := strings.Fields(strings.Split(strings.TrimSpace(route), "\n")[0])
-	if len(first) < 3 || first[0] != address.String() {
+	selected, err := parseStockProbeRoute(route, address)
+	if err != nil {
 		return refuse()
 	}
-	iface := ""
-	for i := 0; i+1 < len(first); i++ {
-		if first[i] == "dev" {
-			iface = first[i+1]
-		}
-	}
-	if iface == "" || iface == "lo" {
-		return refuse()
-	}
+	iface := selected.iface
 	chains := map[string][]string{}
 	canonical := []string{}
 	counts := map[string]uint64{}
@@ -184,7 +352,7 @@ func inspectStockProbePath(raw, route string, address netip.Addr, queue int, own
 		return refuse()
 	}
 	hash := sha256.Sum256([]byte(strings.Join(canonical, "\n")))
-	return stockProbePath{passive: iface == stockIface, graph: hex.EncodeToString(hash[:]), route: strings.Join(first, " "), packets: packets, iface: iface}, nil
+	return stockProbePath{passive: iface == stockIface, graph: hex.EncodeToString(hash[:]), route: selected.canonical, packets: packets, iface: iface, source: selected.source}, nil
 }
 
 // iptables-save canonicalizes option order and adds the implicit tcp module.
@@ -282,7 +450,7 @@ func stockProbeOutputSafe(chains map[string][]string, chain string, queue int, s
 }
 
 func stockProbeSamePath(before, after stockProbePath) bool {
-	return before.passive == after.passive && before.graph == after.graph && before.route == after.route
+	return before.passive == after.passive && before.graph == after.graph && before.route == after.route && before.source == after.source && before.policy == after.policy
 }
 
 func stockProbeSocketConfirmed(before, after stockProbePath, packets uint64) bool {
@@ -313,6 +481,10 @@ func nfqwsProofRefusal(before, after stockProbePath, packets uint64, counterErr,
 		return "nfq-rules-changed"
 	case before.route != after.route:
 		return "nfq-route-changed"
+	case before.source != after.source:
+		return "nfq-source-changed"
+	case before.policy != after.policy:
+		return "nfq-policy-changed"
 	case before.passive && after.packets <= before.packets:
 		return "nfq-stock-counter-not-advanced"
 	default:
