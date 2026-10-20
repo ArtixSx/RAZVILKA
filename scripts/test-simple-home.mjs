@@ -183,6 +183,16 @@ for(const choice of ['cancel','accept','missing','clean']){
   assert.equal(ui.note,'',choice+' clears pending import text');
 }
 
+for(const choice of ['cancel','accept','missing']){
+  const calls=[],prompts=[],ui={busy:'',note:'',error:'',community:[{id:'telegram-ip'}]};
+  const preview={import_guard:'source-sha256',source_sha256:'b'.repeat(64),bundled_fallback:true,source_date:'2026-10-20',source_url:'https://core.telegram.org/resources/cidr.txt',service:{cidrs:['91.108.56.0/22']},conflicts:[]};
+  const actionContext={ui,render(){},api:async(path,options)=>{calls.push({path,options});return path.endsWith('/preview')?preview:{service:{id:'custom-telegram-ip'}};},interfaceManage:async()=>calls.push({manage:true})};
+  if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);assert(!calls.some(call=>call.path?.endsWith('/import')));return choice==='accept';};
+  vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);await actionContext.importCommunity('telegram-ip');
+  assert.equal(calls.some(call=>call.path?.endsWith('/import')),choice==='accept');assert.equal(calls.some(call=>call.manage),choice==='accept');
+  if(prompts.length){assert.match(prompts[0][1],/2026-10-20/);assert.match(prompts[0][1],/https:\/\/core.telegram.org\/resources\/cidr.txt/);assert.match(prompts[0][1],/не свежая загрузка/);}
+}
+
 const {updateNotice}=context.RazvilkaSimpleHome;
 assert.equal(updateNotice({update_available:true,can_prepare:true,latest_version:'0.20.1'}).text,'Вышло обновление 0.20.1');
 assert.equal(updateNotice({update_available:true,can_prepare:false,latest_version:'0.20.1'}),null,'an update this router cannot prepare is not offered');

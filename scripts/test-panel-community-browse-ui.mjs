@@ -141,6 +141,24 @@ await test('unknown source/proof DTO fields and oversized or old-success bodies 
   await f.context.searchCommunityCatalog(true);f.context.closeCommunityCatalog();assert.equal(f.timers.size,0);
 });
 
+await test('bundled Telegram import needs explicit snapshot confirmation before POST',async()=>{
+  for(const choice of ['cancel','accept','missing']){
+    const f=fixture();f.context.communityBrowseLiveAccepted();
+    f.state.communityPreview={entry:{id:'telegram-ip'},service:{cidrs:['91.108.56.0/22']},import_guard:'source-sha256',source_sha256:'a'.repeat(64),bundled_fallback:true,source_date:'2026-10-20',source_url:'https://core.telegram.org/resources/cidr.txt'};
+    f.live(async()=>({service:{id:'custom-telegram-ip'}}));
+    if(choice==='missing')delete f.context.askConfirmation;
+    else f.context.askConfirmation=async(title,message)=>{assert.equal(f.calls.length,0);assert.match(message,/2026-10-20/);assert.match(message,/https:\/\/core.telegram.org\/resources\/cidr.txt/);assert.match(message,/не свежая загрузка/);return choice==='accept';};
+    await f.context.importCommunityService('telegram-ip');
+    assert.equal(f.calls.some(call=>call.method==='POST'),choice==='accept');
+    assert.equal(f.workflowState.communityImport,false);
+  }
+});
+
+await test('bundled Telegram preview shows snapshot date and source without claiming a live fetch',()=>{
+  const f=fixture();f.context.communityBrowseLiveAccepted();
+  f.state.communityPreview={entry:{id:'telegram-ip',name:'Telegram',provider:'Telegram',source_page:'https://core.telegram.org/resources/cidr.txt'},service:{cidrs:['91.108.56.0/22']},source_sha256:'a'.repeat(64),bundled_fallback:true,source_date:'2026-10-20',source_url:'https://core.telegram.org/resources/cidr.txt'};
+  for(const cached of [false,true]){f.state.communityPreview.from_cache=cached;f.context.renderCommunityPreview();const html=f.$('#communityPreview').innerHTML;assert.match(html,/Встроенный снимок от 2026-10-20/);assert.match(html,/не свежая загрузка/);assert.match(html,/Источник: https:\/\/core.telegram.org\/resources\/cidr.txt/);assert.doesNotMatch(html,/загружено сейчас/);assert.match(html,/data-community-import="telegram-ip"/);}
+});
 assert.match(app,/invalidateSavedCommunityBrowse\(!url.startsWith\('\/api\/v1\/auth\/'\)\)/);
 const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');assert(html.indexOf('/panel-community-browse.js?')<html.indexOf('/app.js?'));
 assert(readFileSync(new URL('check.sh',import.meta.url),'utf8').includes('test-panel-community-browse-ui.mjs'));

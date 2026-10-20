@@ -84,14 +84,17 @@ type Conflict struct {
 }
 
 type Preview struct {
-	Entry       Entry           `json:"entry"`
-	Service     catalog.Service `json:"service"`
-	Conflicts   []Conflict      `json:"conflicts"`
-	Skipped     int             `json:"skipped"`
-	SourceSHA   string          `json:"source_sha256"`
-	FetchedAt   string          `json:"fetched_at"`
-	FromCache   bool            `json:"from_cache"`
-	ImportGuard string          `json:"import_guard"`
+	Entry           Entry           `json:"entry"`
+	Service         catalog.Service `json:"service"`
+	Conflicts       []Conflict      `json:"conflicts"`
+	Skipped         int             `json:"skipped"`
+	SourceSHA       string          `json:"source_sha256"`
+	FetchedAt       string          `json:"fetched_at"`
+	FromCache       bool            `json:"from_cache"`
+	ImportGuard     string          `json:"import_guard"`
+	BundledFallback bool            `json:"bundled_fallback,omitempty"`
+	SourceDate      string          `json:"source_date,omitempty"`
+	SourceURL       string          `json:"source_url,omitempty"`
 }
 
 type cachedPreview struct {
@@ -245,6 +248,7 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 
 	domains, cidrs := []string{}, []string{}
 	skipped := 0
+	bundledFallback := false
 	hash := sha256.New()
 	if entry.DomainsURL != "" {
 		var count int
@@ -258,7 +262,12 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 	if entry.CIDRsURL != "" {
 		body, err := m.fetch(ctx, entry.CIDRsURL)
 		if err != nil {
-			return Preview{}, &SourceError{Part: "cidrs", Err: err}
+			if !telegramFallbackAllowed(entry, err) {
+				return Preview{}, &SourceError{Part: "cidrs", Err: err}
+			}
+			body = []byte(telegramSnapshot)
+			bundledFallback = true
+			hash.Write([]byte("RAZVILKA bundled Telegram snapshot " + telegramSnapshotDate + "\n"))
 		}
 		hash.Write([]byte(entry.CIDRsURL))
 		hash.Write(body)
@@ -291,6 +300,9 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 		return Preview{}, errors.New("community source exceeds per-service entry limit")
 	}
 	fetchedAt := time.Now().UTC().Format(time.RFC3339)
+	if bundledFallback {
+		fetchedAt = telegramSnapshotDate + "T00:00:00Z"
+	}
 	digest := hex.EncodeToString(hash.Sum(nil))
 	service := catalog.Service{
 		ID: entry.ID, Name: entry.Name, Category: entry.Category, Icon: entry.Icon,
@@ -304,6 +316,12 @@ func (m *Manager) Preview(ctx context.Context, id string, existing []catalog.Ser
 		return Preview{}, fmt.Errorf("community service validation: %w", err)
 	}
 	preview := Preview{Entry: entry, Service: service, Conflicts: findConflicts(service, existing), Skipped: skipped, SourceSHA: digest, FetchedAt: fetchedAt, ImportGuard: "source-sha256"}
+	if bundledFallback {
+		preview.BundledFallback = true
+		preview.SourceDate = telegramSnapshotDate
+		preview.SourceURL = telegramCIDRsURL
+		preview.Service.Note += " Официальный источник недоступен: использован встроенный снимок от " + telegramSnapshotDate + " (" + telegramCIDRsURL + "), а не свежая загрузка."
+	}
 	m.mu.Lock()
 	m.cache[id] = cachedPreview{preview: clonePreview(preview), at: time.Now()}
 	m.mu.Unlock()
@@ -410,6 +428,9 @@ func (m *Manager) fetch(ctx context.Context, rawURL string) ([]byte, error) {
 	m.mu.RUnlock()
 	resp, err := client.Do(req)
 	if err != nil {
+		if directNetworkFailure(ctx, rawURL, err) {
+			return nil, &sourceNetworkFailure{err: publicfetch.SafeError(err)}
+		}
 		return nil, publicfetch.SafeError(err)
 	}
 	defer resp.Body.Close()

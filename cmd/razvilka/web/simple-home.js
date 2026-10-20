@@ -288,6 +288,7 @@
       const request = typeof workflowRequest === 'function' ? workflowRequest : (path, options) => api(path, options);
       const preview = await request(`/api/v1/community/services/${encodeURIComponent(id)}/preview`, {}, 50000);
       if (preview?.import_guard !== 'source-sha256' || !/^[a-f0-9]{64}$/.test(preview?.source_sha256 || '')) throw new Error('Сервер не подтвердил отпечаток списка. Попробуйте ещё раз.');
+      if (preview.bundled_fallback === true && (typeof askConfirmation !== 'function' || !await askConfirmation('Добавить встроенный снимок Telegram?', `Официальный источник недоступен. Используется встроенный снимок от ${preview.source_date || 'не указано'}: ${preview.source_url || preview.entry?.source_page || 'источник не указан'}. Это не свежая загрузка. Проверьте ${preview.service?.cidrs?.length || 0} IP-сетей перед импортом.`, 'Добавить снимок'))) return;
       const conflicts = preview.conflicts || [];
       if (conflicts.length && (typeof askConfirmation !== 'function' || !await askConfirmation('Импортировать пересекающиеся списки?', `${conflicts.length} записей пересекаются с другими сервисами. Их маршруты не будут заменены.`, 'Импортировать'))) return;
       ui.note = 'Сохраняем сервис…'; render(true);
