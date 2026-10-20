@@ -97,4 +97,15 @@ await check('confirmed applied snapshot clears only obsolete saved Apply instruc
  f.c.acceptResourceExclusions(applied);assert.equal(f.e.message,'');f.c.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Нажмите «Применить исключения»/);
  const draft=fixture(pending);draft.e.dirty=true;draft.e.message='Запись добавлена в черновик.';draft.c.acceptResourceExclusions(applied);assert.equal(draft.e.message,'Запись добавлена в черновик.');assert.equal(draft.e.dirty,true);
 });
+await check('device guidance opens existing NFQWS2 policy settings while retaining experimental scope navigation',()=>{
+ const f=fixture();f.c.renderResourceExclusions();
+ assert.match(f.root.innerHTML,/Для NFQWS2 исключайте устройства через политику доступа Keenetic/);
+ assert.match(f.root.innerHTML,/Экспериментальная общая область/);assert.match(f.root.innerHTML,/одного сервиса с IP-диапазонами/);
+ assert.match(f.root.innerHTML,/Сохранено ID устройств без обхода: 1/);assert.match(f.root.innerHTML,/не подтверждают действующий маршрут/);
+ assert.match(f.root.innerHTML,/data-rz-nav="devices">Открыть экспериментальную общую область/);assert.doesNotMatch(f.root.innerHTML,/Изменить общую область и исключения устройств/);
+ const moves=[],settings={open:false,scrollIntoView:()=>moves.push('scroll'),querySelector:selector=>selector==='summary'?{focus:()=>moves.push('focus')}:null};
+ const oldGet=f.c.document.getElementById;f.c.document.getElementById=id=>id==='view-exclusions'?{querySelector:selector=>selector==='.resource-nfqws-details'?settings:null}:oldGet(id);
+ const button={disabled:false,hasAttribute:key=>key==='data-resource-nfqws-settings'};f.events.get('click')({target:{closest:()=>button}});
+ assert.equal(settings.open,true);assert.deepEqual(moves,['scroll','focus']);assert.equal(f.calls.length,0,'navigation wrote settings');
+});
 console.log(JSON.stringify({suite:'resource-exclusions-ui',passed:checks}));
