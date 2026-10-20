@@ -646,6 +646,10 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 	}
 	failed := make([]string, 0, len(transports))
 	for _, transport := range transports {
+		label := a.ID()
+		if a.ID() == "usque" {
+			label = usqueTransportName(transport)
+		}
 		spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary", transport)
 		evidence, err := a.runCanaryAttempt(ctx, plan, spec, address)
 		if err != nil {
@@ -653,9 +657,9 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 				return err
 			}
 			if a.Processes.Running(spec) {
-				return fmt.Errorf("isolated %s candidate could not be stopped after failed %s probe", a.ID(), usqueTransportName(transport))
+				return fmt.Errorf("isolated %s candidate could not be stopped after failed %s probe", a.ID(), label)
 			}
-			failed = append(failed, usqueTransportName(transport)+": "+err.Error())
+			failed = append(failed, label+": "+err.Error())
 			continue
 		}
 		if a.ID() == "usque" {

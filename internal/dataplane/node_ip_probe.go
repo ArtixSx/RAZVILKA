@@ -3,9 +3,11 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 	"net/netip"
 	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 )
@@ -75,7 +77,15 @@ func probeTunnelViaSOCKSIP(ctx context.Context, rawURL, address string, pinned n
 }
 
 func (a *ProxyTunnelAdapter) nodeServiceIPScopeRequired(route Route) bool {
-	return route.NetworkPolicyGeneration != "" || route.NetworkPolicyRole != "" || a.scopedXray && len(route.Domains) == 0
+	if route.NetworkPolicyGeneration != "" || route.NetworkPolicyRole != "" || a.scopedXray && len(route.Domains) == 0 {
+		return true
+	}
+	// Exact node runtimes materialize CIDR-only routes with a rejecting
+	// default. An opaque SOCKS hostname is outside that finite ruleset.
+	// Use the existing admitted literal path with the original TLS identity;
+	// generic profiles, unresolved groups and other adapters gain no scope.
+	engine, target, exact := routekind.ParseNodeRoute(route.Resolved)
+	return exact && engine == a.ID() && (engine == "sing-box" || engine == "xray") && strings.HasPrefix(target, "node-") && len(route.Domains) == 0 && len(route.CIDRs) != 0
 }
 
 // Admit the complete set before starting a candidate or probing its first pin.

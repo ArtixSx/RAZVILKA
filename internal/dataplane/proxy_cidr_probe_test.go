@@ -193,3 +193,126 @@ func TestScopedXrayCIDRHostnameCanaryRetainsPinnedTLSHostAndAcceptance(t *testin
 		})
 	}
 }
+
+// A legacy exact-node CIDR ruleset rejects SOCKS hostnames. The canary must
+// exercise its admitted IP path first without adding domain permissions.
+func TestLegacyExactNodeCIDRCanaryPinnedTLS(t *testing.T) {
+	for _, engine := range []string{"sing-box", "xray"} {
+		for _, scenario := range []string{"accepted", "http-rejected", "certificate-rejected", "outside-cidr"} {
+			t.Run(engine+"/"+scenario, func(t *testing.T) {
+				backend, roots, names := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) {
+					if r.Host != "example.com" || r.URL.RequestURI() != "/health?q=original" {
+						t.Error("original HTTP identity changed")
+					}
+					w.Header().Set("Content-Type", "text/plain")
+					if scenario == "http-rejected" {
+						w.WriteHeader(http.StatusForbidden)
+					}
+					_, _ = io.WriteString(w, "service reached")
+				})
+				socks := newPinnedSOCKSFixture(t, backend.Listener.Addr().String(), false)
+				a, processes, _ := networkCleanupProxy(t)
+				if engine == "xray" {
+					var err error
+					a, err = NewProxyTunnelAdapter(engine, a.Configs, a.StateRoot)
+					if err != nil {
+						t.Fatal(err)
+					}
+					a.Processes = processes
+				}
+				a.SOCKSProbe = func(context.Context, string) error { return nil }
+				opaqueCalls, ipCalls := 0, 0
+				a.CanaryProbe = func(context.Context, string, string) error {
+					opaqueCalls++
+					return errors.New("SOCKS hostname denied by CIDR ruleset")
+				}
+				a.Resolver = func(context.Context, string) ([]netip.Addr, error) {
+					pins := []netip.Addr{netip.MustParseAddr("8.8.8.8")}
+					if scenario == "outside-cidr" {
+						pins = append(pins, netip.MustParseAddr("9.9.9.9"))
+					}
+					return pins, nil
+				}
+				a.ServiceIPProbe = func(ctx context.Context, rawURL, address string, pin netip.Addr) error {
+					ipCalls++
+					if rawURL != "https://example.com/health?q=original" || address != socks.address || pin.String() != "8.8.8.8" {
+						t.Fatal("canary changed admitted target")
+					}
+					if scenario == "certificate-rejected" {
+						roots = nil
+					}
+					response, cleanup, err := socksHTTPGetPinnedTLS(ctx, rawURL, address, pin, roots)
+					if cleanup != nil {
+						defer cleanup()
+					}
+					if err != nil {
+						return err
+					}
+					defer response.Body.Close()
+					_, err = strictServiceResponse(rawURL, response)
+					return err
+				}
+				route := Route{ServiceID: "telegram-ip", ServiceName: "Telegram IP", Resolved: engine + ":node-" + strings.Repeat("a", 64), ProbeURL: "https://example.com/health?q=original", CIDRs: []string{"8.8.8.8/32"}}
+				root := t.TempDir()
+				spec := a.engineProcessAt(filepath.Join(root, "engine.json"), 19081, root, engine+"-canary", usqueTransport{})
+				result, err := a.runCanaryAttempt(context.Background(), RoutePlan{Routes: []Route{route}}, spec, socks.address)
+				if (err == nil) != (scenario == "accepted") {
+					t.Fatal("canary changed service acceptance", scenario, err)
+				}
+				if opaqueCalls != 0 {
+					t.Fatal("CIDR-only node sent hostname to SOCKS", opaqueCalls)
+				}
+				if scenario == "outside-cidr" {
+					if ipCalls != 0 || len(processes.startSpecs) != 0 || !errors.Is(err, ErrNodeResourceDenied) {
+						t.Fatal("outside-CIDR DNS started candidate", err)
+					}
+					return
+				}
+				if ipCalls != 1 {
+					t.Fatal("missing exact literal probe", ipCalls)
+				}
+				request := <-socks.requests
+				if request.AddressType != 1 || request.Host != "8.8.8.8" || request.Port != 443 {
+					t.Fatal("not a pinned IPv4 SOCKS request", request)
+				}
+				select {
+				case name := <-names:
+					if name != "example.com" {
+						t.Fatal("TLS SNI changed", name)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("no TLS SNI")
+				}
+				if scenario == "accepted" && len(result.ConfirmedRoutes) != 1 {
+					t.Fatal("canary did not confirm service")
+				}
+				if processes.running[engine+"-canary"] {
+					t.Fatal("candidate not cleaned")
+				}
+			})
+		}
+	}
+}
+func TestLegacyNodeIPScopeRequiresExactMatchingCIDROnlyNode(t *testing.T) {
+	a, _, _ := networkCleanupProxy(t)
+	node := "node-" + strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name, resolved string
+		domains, cidrs []string
+		want           bool
+	}{
+		{"exact", "sing-box:" + node, nil, []string{"8.8.8.8/32"}, true},
+		{"other-engine", "xray:" + node, nil, []string{"8.8.8.8/32"}, false},
+		{"generic", "sing-box", nil, []string{"8.8.8.8/32"}, false},
+		{"profile", "sing-box:home", nil, []string{"8.8.8.8/32"}, false},
+		{"group", "sing-box:group-" + strings.Repeat("a", 64), nil, []string{"8.8.8.8/32"}, false},
+		{"domains", "sing-box:" + node, []string{"example.com"}, []string{"8.8.8.8/32"}, false},
+		{"no-cidrs", "sing-box:" + node, nil, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := a.nodeServiceIPScopeRequired(Route{Resolved: tc.resolved, Domains: tc.domains, CIDRs: tc.cidrs}); got != tc.want {
+				t.Fatal("wrong finite scope", got)
+			}
+		})
+	}
+}
