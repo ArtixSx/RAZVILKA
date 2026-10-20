@@ -40,6 +40,7 @@ func ParseURI(raw string) (Result, error) {
 		return Result{}, importError("UNSUPPORTED_TRANSPORT")
 	}
 	preview.EngineID = "sing-box"
+	outbound, _ = SingBoxRuntimeOutbound(outbound)
 	document := map[string]any{
 		"log":       map[string]any{"level": "warn", "timestamp": true},
 		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
