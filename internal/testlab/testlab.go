@@ -600,23 +600,8 @@ func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {
 			if o.ID == "auto" {
 				continue
 			}
-			cell := MatrixCell{ServiceID: s.ID, Route: o.ID, Status: "pending", Reason: "route-specific isolated probe has not run yet"}
-			if o.ID != "direct" {
-				st, ok := statuses[o.ID]
-				if !ok || !st.Installed {
-					cell.Status = "not-ready"
-					cell.Reason = "engine is not installed"
-				} else if !st.Running {
-					cell.Status = "not-ready"
-					cell.Reason = "engine is installed but not running"
-				} else {
-					cell.Status = "adapter-pending"
-					cell.Reason = "engine is running; isolated test adapter is not connected yet"
-				}
-			} else {
-				cell.Status = "adapter-pending"
-				cell.Reason = "DIRECT needs an isolated bypass-free socket before it can be compared fairly"
-			}
+			st, found := statuses[o.ID]
+			cell := unprobedMatrixCell(s.ID, o.ID, st, found)
 			if v, ok := last[s.ID+"|"+o.ID]; ok {
 				copy := v
 				cell.Last = &copy
@@ -630,6 +615,22 @@ func (r *Runner) matrix(cat catalog.Catalog, current []Result) []MatrixCell {
 		}
 	}
 	return cells
+}
+
+// Inventory cannot establish adapter connectivity or service reachability.
+// Until a route probe records its actual result, report the missing observation
+// rather than claim that an implemented adapter has not been connected.
+func unprobedMatrixCell(service, route string, status engine.Status, found bool) MatrixCell {
+	cell := MatrixCell{ServiceID: service, Route: route, Status: "pending", Reason: "route-specific isolated probe has not run yet"}
+	if route == "direct" {
+		return cell
+	}
+	if !found || !status.Installed {
+		cell.Status, cell.Reason = "not-ready", "engine is not installed"
+	} else if !status.Running {
+		cell.Status, cell.Reason = "not-ready", "engine is installed but not running"
+	}
+	return cell
 }
 
 func (r *Runner) probe(ctx context.Context, s catalog.Service, probe catalog.Probe) Result {

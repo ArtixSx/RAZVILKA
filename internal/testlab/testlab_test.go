@@ -9,9 +9,30 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
 )
+
+func TestUnprobedMatrixReportsMissingObservationWithoutInventingAdapterFailure(t *testing.T) {
+	for _, route := range []string{"direct", "nfqws2", "usque"} {
+		t.Run(route, func(t *testing.T) {
+			cell := unprobedMatrixCell("discord", route, engine.Status{Installed: true, Running: true}, true)
+			if cell.Status != "pending" || cell.Last != nil || !strings.Contains(cell.Reason, "has not run yet") {
+				t.Fatalf("inventory invented adapter failure or service evidence: %+v", cell)
+			}
+		})
+	}
+	for _, status := range []engine.Status{{}, {Installed: true}} {
+		cell := unprobedMatrixCell("discord", "nfqws2", status, true)
+		if cell.Status != "not-ready" || cell.Last != nil {
+			t.Fatalf("unavailable engine readiness was lost: %+v", cell)
+		}
+	}
+	if cell := unprobedMatrixCell("discord", "nfqws2", engine.Status{Installed: true, Running: true}, false); cell.Status != "not-ready" {
+		t.Fatalf("unknown engine became available: %+v", cell)
+	}
+}
 
 func TestProbeCurrent(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
