@@ -40,6 +40,7 @@ type autonomyState struct {
 	maintenanceAttempts map[string]maintenanceAttempt
 	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
 	feedPruneAt         time.Time
+	feedPruneFailed     bool
 	autoInstall         *updatecheck.Job // a prepared package the round installs
 }
 

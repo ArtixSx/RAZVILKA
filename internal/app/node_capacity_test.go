@@ -1,8 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +16,44 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
+
+func TestFeedPruneFailureJournalTransitionsAndRecovery(t *testing.T) {
+	a, nodes, now := nodeCapacityFixture(t)
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now); err != nil || output.Len() != 0 {
+		t.Fatalf("healthy no-op reported failure: %v %q", err, output.String())
+	}
+	if err := nodes.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now.Add(feedPruneInterval)); err == nil {
+		t.Fatal("closed store did not refuse cleanup")
+	}
+	if strings.Count(output.String(), "code=FEED_PRUNE_FAILED") != 1 {
+		t.Fatal("missing failure transition", output.String())
+	}
+	// Both a rate-limited skip and a second real failure retain the warning,
+	// without claiming recovery or writing another copy of it.
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(feedPruneInterval+time.Second))
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(2*feedPruneInterval))
+	a.recordFeedPruneOutcome(errors.New("private-node-https://secret.invalid/?token=hidden"))
+	if strings.Count(output.String(), "code=FEED_PRUNE_FAILED") != 1 || strings.Contains(output.String(), "RECOVERED") || strings.Contains(output.String(), "secret.invalid") {
+		t.Fatal("repeated failure leaked or cleared warning", output.String())
+	}
+	// A healthy replacement store permits a real, empty cleanup attempt.
+	healthy, _, _ := nodeCapacityFixture(t)
+	a.Nodes = healthy.Nodes
+	if _, err := a.pruneExpiredFeedNodes(context.Background(), now.Add(3*feedPruneInterval)); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = a.pruneExpiredFeedNodes(context.Background(), now.Add(4*feedPruneInterval))
+	if strings.Count(output.String(), "code=FEED_PRUNE_RECOVERED") != 1 || a.autonomy.feedPruneFailed {
+		t.Fatal("successful cleanup did not settle warning once", output.String())
+	}
+}
 
 func feedURIs(host string, count int) string {
 	lines := make([]string, count)

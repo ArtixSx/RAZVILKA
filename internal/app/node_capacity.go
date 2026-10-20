@@ -33,7 +33,7 @@ const (
 
 // The caller holds exclusive operation admission, which protects references
 // in the config, autopilot and dataplane journals during the batch.
-func (a *App) pruneExpiredFeedNodes(ctx context.Context, now time.Time) (int, error) {
+func (a *App) pruneExpiredFeedNodes(ctx context.Context, now time.Time) (removed int, pruneErr error) {
 	if a.Nodes == nil || ctx.Err() != nil {
 		return 0, nil
 	}
@@ -44,6 +44,7 @@ func (a *App) pruneExpiredFeedNodes(ctx context.Context, now time.Time) (int, er
 	}
 	a.autonomy.feedPruneAt = now
 	a.autonomy.mu.Unlock()
+	defer func() { a.recordFeedPruneOutcome(pruneErr) }()
 	snapshot, err := a.Nodes.Snapshot(ctx, now)
 	if err != nil {
 		return 0, err
@@ -66,6 +67,20 @@ func (a *App) pruneExpiredFeedNodes(ctx context.Context, now time.Time) (int, er
 	}
 	log.Printf("node catalogue: removed %d expired, %d failed and %d long-unchecked feed candidates (%d of %d slots were used)", len(expired), len(failed), len(unchecked), len(snapshot.Nodes), nodestore.MaxNodes)
 	return len(ids), nil
+}
+
+// Report only transitions from actual attempts; interval/context skips cannot
+// clear a failure. Never publish storage errors, node identities or endpoints.
+func (a *App) recordFeedPruneOutcome(err error) {
+	a.autonomy.mu.Lock()
+	previous := a.autonomy.feedPruneFailed
+	a.autonomy.feedPruneFailed = err != nil
+	a.autonomy.mu.Unlock()
+	if err != nil && !previous {
+		log.Print("node catalogue: code=FEED_PRUNE_FAILED Не удалось завершить автоматическую очистку каталога; остальные сервисы продолжают работу.")
+	} else if err == nil && previous {
+		log.Print("node catalogue: code=FEED_PRUNE_RECOVERED Автоматическая очистка каталога снова доступна.")
+	}
 }
 
 // feedUncheckedExcess lists never-checked, enabled, unreferenced feed-only
