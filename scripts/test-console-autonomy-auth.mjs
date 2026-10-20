@@ -14,9 +14,9 @@ function snapshot(revision=1){
 }
 function fixture(authenticated=true,staticInputs=[]){
  const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
- let timerID=0,authCalls=0;
+ let timerID=0,authCalls=0,createdElementID=0;
  function element(id){
-  if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
+  if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,children:[],appendChild(child){this.children.push(child);return child;},events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
   const result=elements.get(id);
   result.contains=target=>target===result;
   result.closest=()=>null;
@@ -27,7 +27,7 @@ function fixture(authenticated=true,staticInputs=[]){
  }
  function listen(map,type,fn){if(!map.has(type))map.set(type,[]);map.get(type).push(fn);}
  function dispatch(map,event){for(const listener of map.get(event.type)||[])listener(event);}
- const document={hidden:false,getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
+ const document={hidden:false,createElement:tag=>{const node=element(`created-${++createdElementID}`);node.tagName=tag.toUpperCase();return node;},getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
  const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
   setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
@@ -58,6 +58,12 @@ await test('initial setup discovery is not canceled by an early protected autono
  f.event('razvilka:view-change','autopilot');assert.equal(f.requests.length,0);
  f.hideAuth();assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/api/v1/panel/autonomy');
  f.respond(0,200,snapshot(1));await flush();assert.equal(f.e('workspace').hidden,false);
+});
+
+await test('auth notice creates a keyboard button that dismisses the notice',async()=>{
+ const f=fixture();f.respond(0,401,{});await flush();
+ const close=f.e('notice').children.at(-1);assert.equal(close.tagName,'BUTTON');assert.equal(close.type,'button');assert.equal(close.className,'notice-close');
+ assert.equal(f.e('notice').hidden,false);close.events.get('click')();assert.equal(f.e('notice').hidden,true);
 });
 
 await test('initial 401 notice clears on restored login and fresh state is requested',async()=>{
