@@ -1047,7 +1047,9 @@ function refreshPanelLoadNotice(show = false) {
   const issues = (state.loadIssues || []).filter(issue => (issue.section === 'authentication' || panelViewKeys().includes(issue.section)) && state.dataLoad?.[issue.section]?.phase !== 'ready');
   state.loadIssues = issues;
   if (!issues.length) { if (owned) hideNotice(); return; }
-  if (!show && !owned) return;
+  // Automatic reads own only their own banner. A failed write must remain
+  // visible even when a later read first reports busy and then recovers.
+  if (!owned && ($('#notice')?.hidden === false || !show)) return;
   const busy = issues.every(issue => issue.busy);
   if (busy && state.dataLoad.services?.savedInstance) { if (owned) hideNotice(); return; }
   const retry = busy || panelLoad.retryCount < 3;

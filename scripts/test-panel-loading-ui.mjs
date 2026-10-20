@@ -340,6 +340,23 @@ await test('recovery removes only resolved sections and never dismisses a newer 
  assert.equal(f.state.noticeDetails,action);assert.equal(f.$('#notice').hidden,false);
 });
 
+await test('Apply failure survives a new busy refresh notice and later automatic recovery',async()=>{
+ const f=fixture();f.state.authenticated=true;f.state.currentView='overview';
+ const action={failure:{title:'Изменения не применены',message:'Discord TLS handshake timeout'},execution:{state:'rolled-back'}};
+ f.context.showNotice('error','Изменения не применены','Откат проверен. Повторите проверку перед применением.',action,true);
+ let busy=true;
+ f.handler(url=>url==='/api/v1/panel/inventory'&&busy?{...f.normal(url),state:'empty',data:undefined}:f.normal(url));
+ await f.context.refreshAll(true);
+ assert.equal(f.state.dataLoad.inventory.phase,'busy');
+ assert.equal(f.state.noticeDetails,action,'new busy banner replaced actionable Apply failure');
+ assert.equal(f.notices.length,1);assert.equal(f.$('#notice').hidden,false);
+ busy=false;await f.context.refreshPanelInventory();
+ assert.equal(f.state.noticeDetails,action,'read recovery dismissed the Apply failure');assert.equal(f.$('#notice').hidden,false);
+ f.context.hideNotice();
+ busy=true;await f.context.refreshAll(true);
+ assert.equal(f.state.noticeDetails.detail_kind,'panel-load','manual dismissal releases the banner for subsequent read issues');
+});
+
 await test('loading details explain each pending section without a successful operation claim',async()=>{
  const f=fixture();f.context.esc=value=>String(value).replaceAll('<','&lt;');f.context.technicalDetails=()=>'';
  vm.runInContext(extract('renderGenericDetails'),f.context);
