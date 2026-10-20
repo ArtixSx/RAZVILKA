@@ -50,6 +50,14 @@ for(const f of ['index.html','interface.js','interface-model.js','console-autono
 test('no external stylesheet/font',()=>assert.doesNotMatch(html,/(?:href|src)="https?:\/\/[^" ]+\.(?:woff2?|ttf|css|js)/));
 test('model never performs requests',()=>assert.doesNotMatch(read(root+'interface-model.js'),/\b(fetch|XMLHttpRequest|setInterval|localStorage|sessionStorage)\s*\(/));
 test('group is not a new route',()=>assert.doesNotMatch(read(root+'interface.js'),/route\s*:\s*['"]ai['"]/));
+test('destructive action and Apply dialogs announce their actual title and explanation',()=>{
+ for(const [id,title,description] of [['actionDialog','actionDialogTitle','actionDialogText'],['applyReviewDialog','applyReviewTitle','applyReviewSubtitle']]){
+  const tag=[...html.matchAll(/<dialog\b[^>]*>/g)].map(match=>match[0]).find(tag=>tag.includes(`id="${id}"`));
+  assert.ok(tag,id);assert.ok(tag.includes(`aria-labelledby="${title}"`));assert.ok(tag.includes(`aria-describedby="${description}"`));
+  for(const target of [title,description])assert.equal(html.split(`id="${target}"`).length-1,1,'dialog references a unique real element');
+ }
+});
+
 test('native inspector accessible name',()=>assert.match(html,/<dialog[^>]*aria-labelledby="ui3InspectorTitle"[^>]*id="ui3ServiceDialog"|<dialog[^>]*id="ui3ServiceDialog"[^>]*aria-labelledby="ui3InspectorTitle"/));
 test('retry fenced across authentication epochs',()=>assert.match(read(root+'console-autonomy.js'),/api\(path,method,body,attempt\+1,requestGeneration\)/));
 test('mutation timeout',()=>assert.match(read(root+'interface.js'),/setTimeout\(\(\)=>controller\.abort\(\),20000\)/));

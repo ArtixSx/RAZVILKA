@@ -526,7 +526,7 @@ hysteria2://…
 </form></div>
 </section><div hidden="" id="a1-workspace"></div><div hidden="" id="a1-authRequired"></div><div class="autonomy-utility" data-autonomy=""><span hidden="" id="a1-connectionLabel"></span><button hidden="" id="a1-reloadButton" type="button">Обновить</button><div class="notice" hidden="" id="a1-notice" role="status"></div></div><footer class="console-footer"><span>RAZVILKA <b>LOCAL FIRST</b></span><span>Интерфейс работает без внешних шрифтов и CDN</span><button class="text-button" id="consoleHelp" type="button"><svg aria-hidden="true" class="ui-icon"><use href="#i-help"></use></svg> Возможности и ограничения</button></footer></main>
 </div>
-<dialog class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
+<dialog aria-labelledby="actionDialogTitle" aria-describedby="actionDialogText" class="action-dialog" id="actionDialog"><form method="dialog"><span class="eyebrow">ПОДТВЕРЖДЕНИЕ</span><h3 id="actionDialogTitle">Подтвердите действие</h3><p id="actionDialogText"></p><div class="dialog-actions"><button class="secondary" value="cancel">Отмена</button><button class="primary" id="actionDialogConfirm" value="confirm">Продолжить</button></div></form></dialog>
 <dialog class="form-dialog" id="nodeEditDialog">
 <form id="nodeEditForm">
 <div class="dialog-head"><div><span class="eyebrow">ЛОКАЛЬНОЕ НАЗВАНИЕ</span><h3 id="nodeEditTitle">Название узла</h3><p>Меняется только подпись в RAZVILKA. Адрес, ключи и рабочие маршруты останутся прежними.</p></div><button aria-label="Закрыть" class="dialog-close" id="nodeEditClose" type="button">×</button></div>
@@ -573,7 +573,7 @@ hysteria2://…
 <div aria-live="polite" class="node-flow-status" id="nodeRouteStatus" role="status"></div>
 <div class="dialog-actions"><button class="secondary" id="nodeRouteCancel" type="button">Вернуться</button><button class="primary" id="nodeRouteApply" type="button">Применить маршрут</button></div>
 </dialog>
-<dialog class="form-dialog apply-review-dialog" id="applyReviewDialog">
+<dialog aria-labelledby="applyReviewTitle" aria-describedby="applyReviewSubtitle" class="form-dialog apply-review-dialog" id="applyReviewDialog">
 <form method="dialog">
 <div class="dialog-head"><div><span class="eyebrow">ПЕРЕД ПРИМЕНЕНИЕМ</span><h3 id="applyReviewTitle">Проверьте изменения</h3><p id="applyReviewSubtitle">Показываем только то, что относится к выбранной операции.</p></div><button aria-label="Закрыть" class="dialog-close" value="cancel">×</button></div>
 <div class="apply-review-content" id="applyReviewContent"></div>
