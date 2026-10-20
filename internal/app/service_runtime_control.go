@@ -241,7 +241,20 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 	}
 	plan, err := a.buildDataplanePlanWithDNSContext(ctx, target, a.nodeRouteOptions(), changeScopeNode, "", &scopedDNSChange{Suspend: stop, Resume: !stop})
 	if err != nil || !plan.Ready {
-		return fail("SERVICE_RUNTIME_CHECK_REQUIRED", "План пока не готов. Проверьте сохранённые подключения; ожидающие изменения сохранены.")
+		// Name the first real reason: a generic "check" hides a refusal the
+		// owner can act on (for example a domain service through a VPN).
+		message := "План пока не готов. Проверьте сохранённые подключения; ожидающие изменения сохранены."
+		if err == nil {
+			for _, blocker := range plan.Blockers {
+				if blocker.Code == "DOMAIN_FLOW_AUTHORITY_REQUIRED" {
+					return fail(serviceRuntimeDomainRoute, blocker.Message+" "+blocker.Resolution)
+				}
+			}
+			if len(plan.Blockers) != 0 {
+				message = plan.Blockers[0].Message + " " + plan.Blockers[0].Resolution
+			}
+		}
+		return fail("SERVICE_RUNTIME_CHECK_REQUIRED", message)
 	}
 	if !stop {
 		for _, route := range plan.Routes {

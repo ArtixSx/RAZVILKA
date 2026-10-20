@@ -10,8 +10,13 @@ import (
 
 func isRuntimeJob(kind string) bool { return kind == "stop" || kind == "resume" }
 
+// serviceRuntimeDomainRoute: the saved route sends a service defined by
+// domains through a VPN or proxy, which selects traffic by IP address and
+// would carry unrelated sites on the same addresses. It is refused for good.
+const serviceRuntimeDomainRoute = "SERVICE_RUNTIME_DOMAIN_ROUTE"
+
 func validRuntimeJobCode(code string) bool {
-	return slices.Contains([]string{"", "SERVICE_RUNTIME_UNAVAILABLE", "SERVICE_CONTROL_CHANGED", "SERVICE_RUNTIME_SAFE_MODE", "SERVICE_RUNTIME_UNCONFIGURED", "SERVICE_RUNTIME_CHANGED", "SERVICE_RUNTIME_CHECK_REQUIRED", "SERVICE_RUNTIME_FAILED"}, code)
+	return slices.Contains([]string{"", "SERVICE_RUNTIME_UNAVAILABLE", "SERVICE_CONTROL_CHANGED", "SERVICE_RUNTIME_SAFE_MODE", "SERVICE_RUNTIME_UNCONFIGURED", "SERVICE_RUNTIME_CHANGED", "SERVICE_RUNTIME_CHECK_REQUIRED", serviceRuntimeDomainRoute, "SERVICE_RUNTIME_FAILED"}, code)
 }
 
 func runtimeJobMessage(j durableServiceJob) string {
@@ -41,6 +46,8 @@ func runtimeJobMessage(j durableServiceJob) string {
 		return "Нет подтверждённого маршрута для переключения. Выберите сервис и проверьте подключение."
 	case "SERVICE_RUNTIME_CHECK_REQUIRED":
 		return "Сохранённое подключение требует проверки. Настройки и ожидающие изменения сохранены."
+	case serviceRuntimeDomainRoute:
+		return "Сохранённый маршрут не включается: сервис задан доменами, а VPN или прокси выбирает трафик по IP-адресам — на тех же адресах работают чужие сайты. Выберите для сервиса NFQWS2 или замените его на «Telegram · через VPN или прокси» из каталога и нажмите «Применить»."
 	}
 	if j.CleanupOutcome == "unverified" {
 		return "Возврат состояния требует проверки. Следующие изменения приостановлены; откройте журнал."

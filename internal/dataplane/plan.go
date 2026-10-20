@@ -402,8 +402,8 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 		for _, route := range input.Routes {
 			if adapterID(route.Resolved) == adapter && len(route.Domains) != 0 {
 				plan.Blockers = append(plan.Blockers, Blocker{Code: "DOMAIN_FLOW_AUTHORITY_REQUIRED", Adapter: adapter,
-					Message:    "Доменный маршрут требует проверки каждого соединения.",
-					Resolution: "Общий IP может принадлежать другим сервисам. Нужен проверенный доменный runtime; одного DNS-ответа недостаточно."})
+					Message:    "Сервис «" + siteExclusionRouteName(route) + "» задан доменами, а VPN или прокси выбирает трафик по IP-адресам: на тех же адресах работают чужие сайты, и они тоже ушли бы в обход.",
+					Resolution: "Выберите для этого сервиса NFQWS2 или замените его вариантом только с IP-сетями (например, «Telegram · через VPN или прокси» из каталога) и примените."})
 				break
 			}
 		}
