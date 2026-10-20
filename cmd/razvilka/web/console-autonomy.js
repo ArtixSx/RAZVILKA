@@ -113,13 +113,13 @@
   if(typeof document==='undefined') return;
   const $=id=>document.getElementById('a1-'+id);
   const $$=selector=>Array.from(document.querySelectorAll(selector)).filter(el=>el.closest('[data-autonomy]'));
-  let snapshot=null,presentationFresh=false,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false;
+  let snapshot=null,presentationFresh=false,feeds=null,step=0,editingPolicy=null,dirty=false,loading=false,saving=false,pauseRequest=null;
   let activeTab='overview',poll=null,sourceDirty=false,adding=false,authGeneration=0,refreshRequest=null,sourceRead=0,sourceEdit=0,wizardEdit=0,viewEpoch=0;
   let consentReviewFingerprint = '';
   const requests=new Set();
   function requireGeneration(generation) { if(generation!==authGeneration){const e=new Error('Ответ относится к завершённой сессии.');e.name='AuthGenerationChanged';e.authGeneration=generation;throw e;} }
   function reportError(e,element=null) { if(e.name==='AuthGenerationChanged'||e.authGeneration!==undefined&&e.authGeneration!==authGeneration)return;if(element)element.textContent=e.message;else notify(e.message,true); }
-  function nextAuthGeneration() { authGeneration++;for(const controller of requests)controller.abort();loading=false;saving=false;adding=false; }
+  function nextAuthGeneration() { authGeneration++;for(const controller of requests)controller.abort();loading=false;saving=false;adding=false;pauseRequest=null; }
   let noticeTimer=null,noticeTransient=false;
   function dismissNotice() { clearTimeout(noticeTimer);noticeTimer=null;noticeTransient=false;$('notice').hidden=true; }
   root.dismissTransientAutonomyNotice=()=>{if(noticeTransient)dismissNotice();};
@@ -170,11 +170,13 @@
     if(activeTab==='setup') setStep(step);
   }
   function setStep(n) {
+    const focusedNext=document.activeElement===$('nextStep');
     step=Math.min(3,Math.max(0,n));
     $$('[data-step-page]').forEach(el=>el.hidden=Number(el.dataset.stepPage)!==step);
     $$('[data-step]').forEach(el=>{el.classList.toggle('active',Number(el.dataset.step)===step);el.setAttribute('aria-current',Number(el.dataset.step)===step?'step':'false');});
     $('backStep').disabled=step===0;$('nextStep').hidden=step===3;$('saveWizard').hidden=step!==3;$('stepCounter').textContent=`Шаг ${step+1} / 4`;
     $('wizardError').textContent='';if(step===3) renderReview();
+    if(focusedNext&&step===3)$('saveWizard').focus();
   }
   function windowText(w) {return w.mode==='off'?'Выключено':`${w.start}–${w.end}`;}
   function policyFromForm() {
@@ -274,7 +276,7 @@
     $('heroTitle').textContent=!presentationFresh?'Нужны свежие данные':!p.setup_complete?'Настройте автопилот':active?'Автопилот работает':'Автопилот приостановлен';
     $('heroDescription').textContent=!presentationFresh?'Показаны последние сохранённые настройки. Текущее состояние автопилота ещё не подтверждено.':!p.setup_complete?'Выберите устройства, источники и расписания. Подбор начнётся после сохранения вашего согласия.':snapshot.safe_mode?'Автоматическое применение ещё не разрешено. Откройте «Область и разрешения» и сохраните выбранные условия запуска.':snapshot.stopped?'Собственные маршруты остановлены в основной панели. Мастер не снимает эту остановку автоматически.':snapshot.manual?'В основной панели включена ручная настройка. Автоматическое применение приостановлено.':!p.enabled?'Пауза останавливает автоматические изменения, но не удаляет применённые маршруты.':'Для каждого сервиса сохраняется пригодный путь. Новые кандидаты получают разрешение только после точной проверки.';
     // Before the first setup the hero action opens the wizard instead of a disabled pause.
-    $('pauseButton').disabled=p.setup_complete&&!presentationFresh&&!p.enabled;$('pauseButton').textContent=!p.setup_complete?'Начать настройку':p.enabled?'Пауза автоматики':'Возобновить автоматику';
+    $('pauseButton').disabled=!!pauseRequest||(p.setup_complete&&!presentationFresh&&!p.enabled);$('pauseButton').textContent=!p.setup_complete?'Начать настройку':p.enabled?'Пауза автоматики':'Возобновить автоматику';
     $('managedCount').textContent=items.length;
     $('healthyCount').textContent=!presentationFresh?'—':Object.entries(snapshot.services||{}).filter(([id,s])=>s.enabled&&serviceProof(id)?.kind==='good').length;
     $('reserveTarget').textContent=p.reserve_target;$('sourceCount').textContent=p.source_ids.length;
@@ -379,7 +381,7 @@
       if(policyConsentRequired(editingPolicy,p,releaseRequested)&&!$('confirmConsent').checked) throw new Error('Подтвердите новые разрешения: источники, способы подключения или область устройств.');
       saving=true;$('saveWizard').disabled=true;
       await api('/api/v1/autonomy','PUT',{expected_revision:editingPolicy.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:releaseRequested&&$('confirmConsent').checked,...(snapshot?.starter?.eligible&&!snapshot.policy.setup_complete?{starter_sha256:snapshot.starter.sha256,starter_service_ids:$$('input[name="initial-starter"]:checked').map(x=>x.value),initial_service_ids:$$('input[name="initial-extra"]:checked').map(x=>x.value)}:{})});
-      requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');if(discardEdit!==wizardEdit){notify('Отправленные настройки сохранены. Новые изменения ещё не сохранены.');tab('setup');return;}notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');tab('overview');
+      requireGeneration(generation);const refreshed=await refresh(true,true,discardEdit);requireGeneration(generation);if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующими изменениями.');if(discardEdit!==wizardEdit){tab('setup');notify('Отправленные настройки сохранены. Новые изменения ещё не сохранены.');return;}tab('overview');notify('Настройки сохранены на роутере. Успех проверки сервисов показывается отдельно.');
     } catch(e) { reportError(e,errorTarget||$('wizardError')); } finally {if(generation===authGeneration){saving=false;$('saveWizard').disabled=false;}}
   }
   document.addEventListener('click',event=>{
@@ -444,7 +446,23 @@
     if(edit!==sourceEdit){notify('Появились новые правки. Подтвердите обновление ещё раз.',true);return;}
     sourceDirty=false;sourceEdit++;void readSources();
   })().catch(e=>reportError(e)));
-  $('pauseButton').addEventListener('click',()=>{if(!snapshot?.policy?.setup_complete){tab('setup');setStep(0);return;}void(async()=>{const generation=authGeneration,p=clone(snapshot.policy);p.enabled=!p.enabled;await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});requireGeneration(generation);await refresh(false,true);requireGeneration(generation);notify(p.enabled?'Автоматика разрешена. Общий ручной режим и остановка сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');})().catch(e=>reportError(e));});
+  async function toggleAutonomyPause() {
+    if(pauseRequest)return;
+    if(!snapshot?.policy?.setup_complete){tab('setup');setStep(0);return;}
+    const request=pauseRequest={generation:authGeneration},p=clone(snapshot.policy);p.enabled=!p.enabled;
+    $('pauseButton').disabled=true;
+    try {
+      await api('/api/v1/autonomy','PUT',{expected_revision:p.revision,policy:p,confirm:'SAVE_AUTONOMY',release_safe_mode:false});
+      requireGeneration(request.generation);
+      const refreshed=await refresh(false,true);requireGeneration(request.generation);
+      if(!refreshed)throw new Error('Настройки сохранены, но актуальное состояние не получено. Обновите состояние перед следующим изменением.');
+      notify(p.enabled?'Автоматика разрешена. Общий ручной режим и остановка сохраняют свои ограничения.':'Автоматика на паузе; маршруты не удалены.');
+    } catch(e) { reportError(e); }
+    finally {
+      if(pauseRequest===request){pauseRequest=null;if(request.generation===authGeneration)render();}
+    }
+  }
+  $('pauseButton').addEventListener('click',()=>void toggleAutonomyPause());
   $('serviceSearch').addEventListener('input',()=>{if(snapshot)renderServices();});
   $('enrollForm').addEventListener('submit',event=>{event.preventDefault();if($('catalogSelect').value)void enroll($('catalogSelect').value).catch(e=>reportError(e));});
   $('openAddService').addEventListener('click',()=>{if(!snapshot?.policy.setup_complete){notify('Завершите мастер перед добавлением сервиса.',true);tab('setup');return;}$('addServiceError').textContent='';$('addServiceDialog').showModal();$('newServiceName').focus();});
