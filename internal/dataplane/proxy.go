@@ -1057,6 +1057,12 @@ func (a *ProxyTunnelAdapter) healthState(ctx context.Context, plan Plan, state P
 			if err := a.probeNodeServiceIP(ctx, route, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 				return a.attributeCandidateFailure(ctx, plan, route, state, err)
 			}
+			// The finite IP probe already verified the original HTTPS
+			// response and TLS identity through this live SOCKS runtime.
+			// An opaque hostname is not admitted by its CIDR-only ruleset.
+			if a.nodeServiceIPScopeRequired(route) {
+				continue
+			}
 		}
 		if len(route.Sources) > 0 {
 			continue

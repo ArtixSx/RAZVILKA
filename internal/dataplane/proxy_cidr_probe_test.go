@@ -316,3 +316,78 @@ func TestLegacyNodeIPScopeRequiresExactMatchingCIDROnlyNode(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeIPHealthFiniteRouteSkipsOnlyOpaqueProbe(t *testing.T) {
+	for _, scenario := range []string{"finite", "domain", "generic", "outside-cidr", "http-rejected", "missing-process"} {
+		t.Run(scenario, func(t *testing.T) {
+			backend, roots, _ := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Host != "example.com" {
+					t.Error("health Host changed")
+				}
+				w.Header().Set("Content-Type", "text/plain")
+				if scenario == "http-rejected" {
+					w.WriteHeader(http.StatusForbidden)
+				}
+				_, _ = io.WriteString(w, "service reached")
+			})
+			socks := newPinnedSOCKSFixture(t, backend.Listener.Addr().String(), false)
+			a, runner, policy := proxyForwardingFixture(t)
+			a.Processes = runner.processes
+			a.SOCKSProbe = func(context.Context, string) error { return nil }
+			a.FreshProfile = func(context.Context) (string, error) { return executionNetwork, nil }
+			runner.processes.running["sing-box-engine"], runner.processes.running["sing-box-tun"] = true, true
+			if err := a.installForwarding(context.Background(), policy); err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "missing-process" {
+				delete(runner.processes.running, "sing-box-engine")
+			}
+			a.Resolver = func(context.Context, string) ([]netip.Addr, error) {
+				return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
+			}
+			opaque, ipCalls := 0, 0
+			a.Probe = func(context.Context, string) error { opaque++; return errors.New("opaque health hostname rejected") }
+			a.ServiceIPProbe = func(ctx context.Context, raw, address string, pin netip.Addr) error {
+				ipCalls++
+				response, cleanup, err := socksHTTPGetPinnedTLS(ctx, raw, socks.address, pin, roots)
+				if cleanup != nil {
+					defer cleanup()
+				}
+				if err != nil {
+					return err
+				}
+				defer response.Body.Close()
+				_, err = strictServiceResponse(raw, response)
+				return err
+			}
+			plan := networkExecutionPlan()
+			route := &plan.Routes[0]
+			route.Domains = nil
+			route.CIDRs = []string{"8.8.8.8/32"}
+			route.ProbeURL = "https://example.com/"
+			if scenario == "domain" {
+				route.Domains = []string{"example.com"}
+			}
+			if scenario == "generic" {
+				route.Resolved = "sing-box"
+			}
+			if scenario == "outside-cidr" {
+				route.CIDRs = []string{"9.9.9.9/32"}
+			}
+			err := a.healthState(context.Background(), plan, policy)
+			if scenario == "finite" {
+				if err != nil || ipCalls != 1 || opaque != 0 {
+					t.Fatal("finite health fell through after pinned success", err, ipCalls, opaque)
+				}
+			} else if err == nil {
+				t.Fatal("health incorrectly passed", scenario)
+			}
+			if (scenario == "domain" || scenario == "generic") && opaque != 1 {
+				t.Fatal("nonfinite opaque health was skipped", scenario, opaque)
+			}
+			if (scenario == "outside-cidr" || scenario == "missing-process") && (ipCalls != 0 || opaque != 0) {
+				t.Fatal("health probe preceded guard", scenario, ipCalls, opaque)
+			}
+		})
+	}
+}
