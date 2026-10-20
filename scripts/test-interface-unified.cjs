@@ -21,6 +21,14 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('domain-route refusal is readable on the service card without advanced details',()=>{
+ const message='Выберите NFQWS2 или выключите сервис: VPN и прокси не различают сайты на общем IP.';
+ const s={id:'youtube',name:'YouTube',enabled:true,applied_state:{enabled:false}};
+ const h=model.humanService(s,{}, {enabled:true},{state:'domain-route-unavailable',message});
+ assert.equal(h.label,'Нет подтверждённого обхода для доменного сервиса');assert.equal(h.detail,message);assert.equal(h.kind,'warn');
+ const {c,state}=fixture();state.services=[s];c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'domain-route-unavailable',message};
+ const html=c.interfaceServiceCard(s,{});assert.match(html,/Нет подтверждённого обхода для доменного сервиса/);assert.match(html,/Выберите NFQWS2/);assert.doesNotMatch(html,/domain-route-unavailable/);
+});
 await test('sidebar count updates outside home and first setup opens the wizard directly',()=>{
  const {c,state,$}=fixture();state.currentView='onboard';
  state.services=[{...service},{...service,id:'discord'},{...service,id:'telegram'}];

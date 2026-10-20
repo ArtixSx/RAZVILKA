@@ -275,6 +275,9 @@ async function api(url, options = {}) {
 function friendlyErrorMessage(value, status = 0) {
   const text = String(value || '').trim();
   const lower = text.toLowerCase();
+  for (const code of ['USQUE_PACKAGE_ADDRESS_CONFLICT','USQUE_PACKAGE_NETWORK_UNAVAILABLE']) {
+    if(text.startsWith(code+':')&&text.slice(code.length+1).trim())return text.slice(code.length+1).trim();
+  }
   const known = {
     'file is missing; import or create a draft first': 'Файла конфигурации ещё нет. Создайте настройки или импортируйте профиль, затем повторите проверку.',
     'invalid json': 'Не удалось прочитать JSON. Проверьте кавычки, запятые и скобки в конфигурации.',

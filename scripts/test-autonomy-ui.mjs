@@ -59,3 +59,6 @@ for(const file of ['autonomy-ui.js','console-autonomy.js']) {
  });
 }
 console.log(`AUTONOMY_UI_PURE_TESTS=${count}`);
+
+const currentLabels=require('../cmd/razvilka/web/console-autonomy.js').stateLabels;
+assert.equal(currentLabels['domain-route-unavailable'],'Нет подтверждённого обхода для доменного сервиса');

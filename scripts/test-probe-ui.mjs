@@ -8,7 +8,7 @@ const context = vm.createContext({
   testStatusLabel: (status) => status,
 });
 // Run the actual UI functions, without bootstrapping a browser or network.
-for (const name of ['friendlyDetail','probeVerdict', 'probeStatusLabel', 'sourceStateText', 'sourceFreshnessText', 'sourceDiffText']) {
+for (const name of ['friendlyErrorMessage','friendlyDetail','probeVerdict', 'probeStatusLabel', 'sourceStateText', 'sourceFreshnessText', 'sourceDiffText']) {
   const functionSource = source.match(new RegExp(`function ${name}\\([^]*?\\n}\\n`));
   assert.ok(functionSource, `${name} must remain testable`);
   vm.runInContext(functionSource[0], context);
@@ -54,3 +54,8 @@ console.log('Source diff UI checks passed');
 
 assert.match(context.friendlyDetail('This probe measures the currently applied routing and is not route-confirmed. Use the isolated route comparison for Smart Route and WARP policy evidence.'),/не подтверждает выбранный маршрут/);
 assert.doesNotMatch(readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8'),/firewall, DNS и default route не меняются/);
+
+for(const code of ['USQUE_PACKAGE_ADDRESS_CONFLICT','USQUE_PACKAGE_NETWORK_UNAVAILABLE']){
+ const reason='Адрес USQUE пересекается с локальной сетью. Установка остановлена.';assert.equal(context.friendlyErrorMessage(code+': '+reason),reason);
+}
+assert.equal(context.friendlyErrorMessage('UNKNOWN_ERROR: исходная причина'),'UNKNOWN_ERROR: исходная причина');
