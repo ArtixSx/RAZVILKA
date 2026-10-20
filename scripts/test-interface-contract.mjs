@@ -15,6 +15,19 @@ test('quick setup does not announce a working connection before checking',()=>{
   assert.match(html,/<h2>Быстрая настройка автопилота<\/h2>/);
   assert.doesNotMatch(html,/Три вопроса — и автопилот работает/);
 });
+test('saved exclusion switches keep checkbox sizing instead of full-width search styling',()=>{
+ const css=read(root+'interface-shell.css'),source=read(root+'resource-exclusions-ui.js');
+ assert.match(source,/<input id="resourceRussianEnabled" type="checkbox"/);assert.match(source,/<input id="resourceRussianAuto" type="checkbox"/);
+ assert.doesNotMatch(css,/\.exclusion-stock input\s*\{/,'generic rule stretches checkbox inputs');
+ assert.match(css,/\.exclusion-stock input:not\(\[type=checkbox\]\):not\(\[type=radio\]\)\s*\{[^}]*width:100%/);
+});
+test('short authentication viewport has its own scroll and safe alignment with a start fallback',()=>{
+ const css=read(root+'interface-shell.css');
+ const rule=css.match(/\.interface-ui \.auth-screen\{([^}]+)}/);assert.ok(rule);
+ assert.match(rule[1],/overflow-y:auto/);assert.match(rule[1],/align-items:start;align-items:safe center/);
+ assert.match(html,/<section class="auth-screen"[^>]*id="authScreen"/);
+});
+
 test('one compiled stylesheet',()=>assert.equal([...html.matchAll(/rel="stylesheet"/g)].length,1));
 test('compiled CSS reproducible',()=>assert.equal(read(root+'interface.css'),read(root+'interface-compat.css')+'\n'+read(root+'interface-shell.css')));
 test('home scope body has an inset while its header retains full card width',()=>{
