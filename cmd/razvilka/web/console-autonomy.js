@@ -249,8 +249,8 @@
   function serviceRow(id,s,compact=false) {
     const r=snapshot.runtime[id]||{},applied=snapshot.applied_services?.[id],proof=serviceProof(id);
     const historical=['healthy','applied'].includes(r.state);
-    const good=presentationFresh&&s.enabled&&proof?.kind==='good',kind=good?'':'warning';
-    const label=!presentationFresh?'Нет свежих данных':!s.enabled?'На паузе':historical?(good?'Доступен · проверено':proof?.label||'Нужна свежая проверка'):(stateLabels[r.state]||r.state||'Ожидает проверки');
+    const good=presentationFresh&&snapshot.policy.enabled&&s.enabled&&proof?.kind==='good',kind=good?'':'warning';
+    const label=!presentationFresh?'Нет свежих данных':!snapshot.policy.enabled?'Автоматика на паузе':!s.enabled?'На паузе':historical?(good?'Доступен · проверено':applied?.enabled?'Применён · нужна проверка':'Нужна свежая проверка'):(stateLabels[r.state]||r.state||'Ожидает проверки');
     const route=applied?.enabled?(applied.route||applied.mode||'Не определён'):'Не применён';
     const short=route.startsWith('sing-box:node-')?`Sing-box · ${route.slice(9,24)}…`:route;
     const count=Array.isArray(r.reserves)?r.reserves.length:0;

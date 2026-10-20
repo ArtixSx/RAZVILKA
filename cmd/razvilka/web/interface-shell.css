@@ -883,7 +883,7 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 
 /* Network scope uses the same stacked fields and quiet grouped choices as
    the other settings cards. Keep checkbox rows distinct from field labels. */
-.interface-ui #listScopeContent .full-panel{padding:20px;min-width:0;}
+.interface-ui #listScopeContent .full-panel{padding:22px;min-width:0;}
 .interface-ui #listScopeContent h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .interface-ui #listScopeContent h3{margin:24px 0 14px;font-size:16px;}
 .interface-ui #listScopeContent p{max-width:82ch;line-height:1.7;margin:10px 0;overflow-wrap:anywhere;}
@@ -900,6 +900,7 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .interface-ui #listScopeContent .dialog-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line);}
 @media(max-width:600px){
  .interface-ui #listScopeContent .full-panel{padding:16px;}
+ .interface-ui #listScopeContent>.panel>.panel-title{margin:-16px -16px 18px;}
  .interface-ui #listScopeContent fieldset{padding:12px;}
  .interface-ui #listScopeContent .check-list{grid-template-columns:minmax(0,1fr);}
  .interface-ui #listScopeContent .dialog-actions>*{flex:1 1 100%;}

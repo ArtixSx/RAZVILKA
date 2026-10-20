@@ -31,7 +31,7 @@ test('quick start spacing is scoped to visible setup and preserves responsive co
   assert.ok(css.includes('@media(max-width:800px){'+scope+'>fieldset:first-of-type{grid-template-columns:minmax(0,1fr)}}'));
   assert.ok(css.includes(scope+' #a1-quickDevices{grid-column:1/-1}'));
   assert.ok(css.includes(scope+'>.form-footer{display:flex;flex-wrap:wrap;gap:12px}'));
-  const rules=css.slice(css.indexOf(scope));
+  const rules=css.split('\n').filter(line=>line.includes(scope)).join('\n');
   assert.doesNotMatch(rules,/font-size|position:sticky|display:none/);
 });
 test('first-run scope radios cannot inherit full-width text fields',()=>{

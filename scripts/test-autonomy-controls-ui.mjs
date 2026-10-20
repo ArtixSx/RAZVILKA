@@ -36,3 +36,13 @@ for(const changed of [false,true]){
  const f=fixture();f.c.refresh=async()=>false;await f.c.toggleAutonomyPause();assert.match(f.notices[0],/актуальное состояние не получено/);assert.equal(f.c.$('notice').textContent,'');assert.equal(f.c.pauseRequest,null);
 }
 console.log('PASS autonomy controls: save notification survives navigation; review focus; pause single flight, readback and auth ownership');
+
+{
+ const f=fixture();Object.assign(f.c,{serviceProof:()=>({kind:'off',label:'Не включён'}),serviceName:id=>id,candidateCooldownText:()=>'',formatDate:value=>value,escapeHTML:String,stateLabels:{}});
+ vm.runInContext(extract('serviceRow'),f.c);
+ for(const state of ['applied','healthy']){
+  f.c.snapshot.runtime={discord:{state,message:'Последний результат'}};f.c.snapshot.applied_services={discord:{enabled:true,route:'nfqws2'}};
+  f.c.snapshot.policy.enabled=false;let html=f.c.serviceRow('discord',{enabled:true,all_lan:true},true);assert.match(html,/Автоматика на паузе/);assert.doesNotMatch(html,/Не включён|Доступен · проверено/);
+  f.c.snapshot.policy.enabled=true;html=f.c.serviceRow('discord',{enabled:true,all_lan:true},true);assert.match(html,/Применён · нужна проверка/);assert.doesNotMatch(html,/Не включён/);
+ }
+}
