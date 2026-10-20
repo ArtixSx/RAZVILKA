@@ -21,6 +21,12 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('quick add announces success only after explicitly accepted management',async()=>{
+ for(const accepted of [false,undefined,true]){
+  const {c,state,notices}=fixture();state.services=[{id:'new',name:'New',enabled:false}];c.interfaceManage=async()=>accepted;
+  await c.interfaceQuickAdd('new');assert.equal(notices.length,accepted===true?1:0);assert.equal(c.interfaceState.busy,false);
+ }
+});
 await test('domain-route refusal is readable on the service card without advanced details',()=>{
  const message='Выберите NFQWS2 или выключите сервис: VPN и прокси не различают сайты на общем IP.';
  const s={id:'youtube',name:'YouTube',enabled:true,applied_state:{enabled:false}};

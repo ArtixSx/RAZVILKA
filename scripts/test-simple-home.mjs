@@ -166,7 +166,7 @@ for(const choice of ['cancel','accept','missing','clean']){
   const actionContext={ui,render(){},api:async(path,options)=>{
     calls.push({path,options});
     return path.endsWith('/preview')?preview:{service:{id:'custom-ga-test'}};
-  },interfaceManage:async(id,on)=>calls.push({manage:id,on})};
+  },interfaceManage:async(id,on)=>{calls.push({manage:id,on});return true;}};
   if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);return choice==='accept';};
   vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);
   await actionContext.importCommunity('ga-test');
@@ -186,7 +186,7 @@ for(const choice of ['cancel','accept','missing','clean']){
 for(const choice of ['cancel','accept','missing']){
   const calls=[],prompts=[],ui={busy:'',note:'',error:'',community:[{id:'telegram-ip'}]};
   const preview={import_guard:'source-sha256',source_sha256:'b'.repeat(64),bundled_fallback:true,source_date:'2026-10-20',source_url:'https://core.telegram.org/resources/cidr.txt',service:{cidrs:['91.108.56.0/22']},conflicts:[]};
-  const actionContext={ui,render(){},api:async(path,options)=>{calls.push({path,options});return path.endsWith('/preview')?preview:{service:{id:'custom-telegram-ip'}};},interfaceManage:async()=>calls.push({manage:true})};
+  const actionContext={ui,render(){},api:async(path,options)=>{calls.push({path,options});return path.endsWith('/preview')?preview:{service:{id:'custom-telegram-ip'}};},interfaceManage:async()=>{calls.push({manage:true});return true;}};
   if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);assert(!calls.some(call=>call.path?.endsWith('/import')));return choice==='accept';};
   vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);await actionContext.importCommunity('telegram-ip');
   assert.equal(calls.some(call=>call.path?.endsWith('/import')),choice==='accept');assert.equal(calls.some(call=>call.manage),choice==='accept');
@@ -340,5 +340,16 @@ console.log('simple home: ok');
   assert.equal(title.textContent,on?'Простой режим':'Расширенный режим');
   assert.equal(attributes['aria-checked'],String(!on));
   assert.match(hint.textContent,on?/Включить все разделы/:/Перейти к сервисам/);
+ }
+}
+
+// Canceling service removal must not announce that its route will be removed.
+{
+ const action=read('cmd/razvilka/web/simple-home.js').match(/  async function act\([^]*?\n  }/)[0];
+ for(const accepted of [false,true,undefined,'failed']){
+  const toasts=[],actionState={busy:'',error:''};
+  const cancelContext={ui:actionState,render(){},interfaceManage:async()=>{if(accepted==='failed')throw Error('Сервер отказал');return accepted;},interfaceToast:message=>toasts.push(message)};
+  vm.createContext(cancelContext);vm.runInContext(action,cancelContext);await cancelContext.act('site',true);
+  assert.equal(toasts.length,accepted===true?1:0,'unaccepted removal announced success');assert.equal(actionState.busy,'');if(accepted==='failed')assert.equal(actionState.error,'Сервер отказал');
  }
 }

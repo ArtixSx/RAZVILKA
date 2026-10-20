@@ -295,7 +295,7 @@
       const saved = await request(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: conflicts.length > 0, refresh: false, expected_source_sha256: preview.source_sha256 }) }, 50000);
       if (!saved?.service?.id) throw new Error('Сервис не сохранён.');
       if (typeof refreshCoreAfterEdit === 'function') await refreshCoreAfterEdit();
-      await interfaceManage(saved.service.id, true);
+      if(await interfaceManage(saved.service.id, true)!==true)throw new Error('Определение импортировано, но включение автоподбора не подтверждено. Обновите состояние.');
       ui.community = ui.community.filter(e => e.id !== id);
       ui.note = '';
       if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
@@ -420,7 +420,8 @@
     if (typeof interfaceManage !== 'function' || ui.busy) return;
     ui.busy = id; ui.error = ''; render(true);
     try {
-      await interfaceManage(id, true, remove);
+      const accepted=await interfaceManage(id, true, remove);
+      if (accepted!==true)return;
       if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
     } catch (e) {
       ui.error = e?.message || 'Действие не выполнено.';

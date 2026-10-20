@@ -21,6 +21,7 @@ for(const outcome of ['cancel','accept','revision','definition','managed','navig
  f.answer(outcome!=='cancel');const result=await pending.catch(error=>error);
  if(['revision','definition','managed','navigation','inspector'].includes(outcome))assert.match(result.message,/изменились/);
  assert.equal(f.calls.length,outcome==='accept'?2:0,'incorrect mutation authority: '+outcome);
+ if(['accept','cancel','logout'].includes(outcome))assert.equal(result,outcome==='accept');
  if(outcome==='accept'){assert.equal(f.calls[0].options.method,'DELETE');assert.deepEqual(JSON.parse(f.calls[0].options.body),{expected_revision:3,confirm:'REMOVE_SERVICE',delete_definition:false});}
  assert.equal(f.c.interfaceState.manageRequest,null);
 }

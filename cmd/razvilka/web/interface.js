@@ -437,8 +437,8 @@ async function interfaceQuickAdd(id){
  interfaceState.busy=true;
  try{
   interfaceSafeRender('services-before-add',()=>renderInterfaceServices(interfaceSummaries()));
-  await interfaceManage(id,true,false);
-  if(epoch===interfaceState.authEpoch)interfaceToast('Сервис добавлен в автоподбор. Дождитесь проверки и применения подключения.');
+  const accepted=await interfaceManage(id,true,false);
+  if(accepted===true&&epoch===interfaceState.authEpoch)interfaceToast('Сервис добавлен в автоподбор. Дождитесь проверки и применения подключения.');
  }catch(error){if(epoch===interfaceState.authEpoch)interfaceSafeRender('add-notice',()=>interfaceToast(error.message));}
  finally{if(epoch===interfaceState.authEpoch){interfaceState.busy=false;interfaceSafeRender('services-after-add',()=>renderInterfaceServices(interfaceSummaries()));}}
 }
@@ -509,7 +509,7 @@ async function interfaceRequest(path, options={}){
  finally{clearTimeout(timer);interfaceRequests.delete(controller);}
 }
 async function interfaceManage(id,enabled,remove=false){
- if(interfaceState.authRevoked||state.authenticated!==true||interfaceState.manageRequest)return;
+ if(interfaceState.authRevoked||state.authenticated!==true||interfaceState.manageRequest)return false;
  const epoch=interfaceState.authEpoch,operation=interfaceState.manageRequest={epoch};
  try {
  const snapshot=consoleSnapshot;if(!snapshot?.policy?.setup_complete)throw new Error('Сначала завершите первоначальную настройку.');
@@ -517,17 +517,18 @@ async function interfaceManage(id,enabled,remove=false){
  if(remove && !old)throw new Error('Сервис уже не находится под автономным управлением.');
  if(remove){
   const view=state.currentView,inspector=interfaceState.inspector,definition=JSON.stringify(service),managed=JSON.stringify(old);
-  if(!await askConfirmation(`Убрать «${service?.name||id}»?`,`Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится.':''}`,'Убрать сервис'))return;
-  if(epoch!==interfaceState.authEpoch||interfaceState.authRevoked||state.authenticated!==true)return;
+  if(!await askConfirmation(`Убрать «${service?.name||id}»?`,`Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится.':''}`,'Убрать сервис'))return false;
+  if(epoch!==interfaceState.authEpoch||interfaceState.authRevoked||state.authenticated!==true)return false;
   if(view!==state.currentView||inspector!==interfaceState.inspector||consoleSnapshot?.policy?.revision!==revision||JSON.stringify(consoleSnapshot?.services?.[id])!==managed||JSON.stringify(state.services.find(s=>s.id===id))!==definition)throw new Error('Сервис или настройки изменились. Откройте новый просмотр и подтвердите удаление снова.');
  }
  const request=remove?{method:'DELETE',body:{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:false}}:{method:'POST',body:{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:revision,confirm:'MANAGE_SERVICE'}};
  await interfaceRequest(remove?`/api/v1/autonomy/services/${encodeURIComponent(id)}`:'/api/v1/autonomy/services',{...request,body:JSON.stringify(request.body)});
  if(epoch!==interfaceState.authEpoch)throw new Error('Сессия изменилась. Войдите снова.');
- const fresh=await interfaceRequest('/api/v1/autonomy');if(epoch!==interfaceState.authEpoch)return;
+ const fresh=await interfaceRequest('/api/v1/autonomy');if(epoch!==interfaceState.authEpoch)return false;
  window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:fresh}));await refreshCoreAfterEdit();
- if(epoch!==interfaceState.authEpoch)return;
- if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceOpenService(id);consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');} } finally {if(interfaceState.manageRequest===operation)interfaceState.manageRequest=null;}
+ if(epoch!==interfaceState.authEpoch)return false;
+ if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceOpenService(id);consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');}
+ return true; } finally {if(interfaceState.manageRequest===operation)interfaceState.manageRequest=null;}
 }
 function interfaceToast(text){consoleText('ui3Toast',text);$('#ui3Toast').hidden=false;clearTimeout(interfaceState.toastTimer);interfaceState.toastTimer=setTimeout(()=>$('#ui3Toast').hidden=true,5500);}
 function interfaceResetFilters(){
