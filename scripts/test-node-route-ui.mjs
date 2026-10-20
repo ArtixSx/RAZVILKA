@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const source = readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
-const names = ['nodeByID', 'openNodeCheck', 'updateNodeCheckSelection', 'closeNodeCheck', 'runNodeCheck', 'previewNodeRoute', 'closeNodeRoute', 'applyNodeRoute', 'waitNodeApplyJob', 'nodeRecoveryBanner'];
+const names = ['checkedNodeEngine','nodeByID', 'openNodeCheck', 'updateNodeCheckSelection', 'closeNodeCheck', 'runNodeCheck', 'previewNodeRoute', 'closeNodeRoute', 'applyNodeRoute', 'waitNodeApplyJob', 'nodeRecoveryBanner'];
 const functions = names.map(name => {
   const match = source.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));
   assert.ok(match, name);
@@ -49,7 +49,8 @@ context.openNodeCheck('node-a');
 assert.equal($('#nodeCheckDialog').open, false, 'expired subscription opened a check flow');
 assert.equal(state.nodeFlow, null);
 delete state.nodes.nodes[0].state;
-const begin = () => { context.openNodeCheck('node-a'); $('#nodeCheckService').value = 'telegram'; };
+const checked={ok:true,engine:'xray',result:{node_id:'node-a',service_id:'telegram',available:true,route_path_id:'xray:node-a',expires_at:new Date(Date.now()+60000).toISOString()}};
+const begin = () => { context.openNodeCheck('node-a'); $('#nodeCheckService').value = 'telegram';state.nodeFlow.checked=checked; };
 const event = { preventDefault() {} };
 begin();
 let finish;
@@ -57,7 +58,7 @@ handler = () => new Promise(resolve => { finish = resolve; });
 const running = context.runNodeCheck(event);
 await context.runNodeCheck(event);
 assert.equal(calls.length, 1, 'double check request');
-finish({ ok: true, result: { node_id: 'node-a', service_id: 'telegram', available: true } });
+finish(checked);
 await running;
 assert.equal($('#nodeCheckPreview').hidden, false);
 assert.equal(calls.length, 1, 'check auto-applied or auto-previewed');
@@ -66,11 +67,11 @@ begin();
 const late = context.runNodeCheck(event);
 context.closeNodeCheck();
 assert.equal(calls.at(-1).options.signal.aborted, true);
-finish({ ok: true, result: { node_id: 'node-a', service_id: 'telegram', available: true } });
+finish(checked);
 await late;
 assert.equal($('#nodeCheckPreview').hidden, true, 'closed check gained authority');
 
-const response = { ready: true, safe_mode: false, review: { node_id: 'node-a', service_id: 'telegram', review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, expires_at: new Date(Date.now() + 60000).toISOString() }, service_name: 'Telegram', node_name: 'Name <private>', note: 'One service', transaction: { blockers: [] } };
+const response = { ready: true, safe_mode: false, review: { engine:'xray',node_id: 'node-a', service_id: 'telegram', review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, expires_at: new Date(Date.now() + 60000).toISOString() }, service_name: 'Telegram', node_name: 'Name <private>', note: 'One service', transaction: { blockers: [] } };
 begin();
 handler = async () => response;
 await context.previewNodeRoute();
@@ -79,7 +80,7 @@ assert.match($('#nodeRouteSummary').innerHTML, /&lt;private&gt;/);
 assert.doesNotMatch($('#nodeRouteSummary').innerHTML, /Name <private>/);
 handler = (url, options) => {
   assert.equal(url, '/api/v1/nodes/node-a/apply');
-  assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, confirm: 'APPLY_NODE_ROUTE', idempotency_key: 'node-apply-token' });
+  assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', engine:'xray',review_token: 'token', reviewed_digest: 'digest', revision: 7, generation: 4, confirm: 'APPLY_NODE_ROUTE', idempotency_key: 'node-apply-token' });
   return new Promise(resolve => { finish = resolve; });
 };
 const beforeApply = calls.length;
@@ -126,3 +127,7 @@ assert.equal($('#nodeRouteApply').disabled, true, 'expired review remained appli
 context.closeNodeRoute();
 
 console.log('Node reviewed apply, double submission and cancellation checks passed');
+
+for(const change of [{result:{...checked.result,expires_at:'2001-01-01T00:00:00Z'}},{engine:'sing-box'}]){
+ begin();state.nodeFlow.checked={...checked,...change};const before=calls.length;await context.previewNodeRoute();assert.equal(calls.length,before,'stale or mismatched checked engine gained preview');
+}

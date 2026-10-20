@@ -8,17 +8,18 @@ const state = { status: { revision: 12 }, services: [{ id: 'telegram', name: 'Te
 let fresh = false, handler, refreshed = 0;
 const calls = [];
 const context = vm.createContext({ state, $, $$: () => [], AbortController, Date, Number, JSON, Set, encodeURIComponent,
-  nodeByID: id => ({ id }), nodeServiceHealth: () => ({ state: fresh ? 'available' : 'inconclusive' }),
+  nodeByID: id => ({ id }), nodeServiceHealth: () => ({ state: fresh ? 'available' : 'inconclusive',engine:fresh?'xray':'' }),
   api: async (url, options) => { calls.push({ url, options }); return handler(url, options); }, refreshAfterMutation: async () => { refreshed++; }, esc: String, setTimeout, clearTimeout });
+vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8').match(/function checkedNodeEngine\([^]*?\n}\n/)[0],context);
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8').match(/async function waitNodeApplyJob\([^]*?\n}\n/)[0], context);
 vm.runInContext(readFileSync(new URL('../cmd/razvilka/web/node-intent-ui.js', import.meta.url), 'utf8'), context);
-const pass = { ok: true, result: { node_id: 'node-a', service_id: 'telegram', available: true } };
-const preview = { ready: true, scope_selection: 'applied', effective_scope: { mode: 'selected', sources: ['192.168.1.40/32'], summary: '192.168.1.40/32' }, review: { node_id: 'node-a', service_id: 'telegram', revision: 12, generation: 5, review_token: 'one-use-token', reviewed_digest: 'digest', expires_at: new Date(Date.now() + 60000).toISOString() } };
+const pass = { ok: true, engine:'xray', result: { route_path_id:'xray:node-a',expires_at:new Date(Date.now()+60000).toISOString(), node_id: 'node-a', service_id: 'telegram', available: true } };
+const preview = { ready: true, scope_selection: 'applied', effective_scope: { mode: 'selected', sources: ['192.168.1.40/32'], summary: '192.168.1.40/32' }, review: { engine:'xray', node_id: 'node-a', service_id: 'telegram', revision: 12, generation: 5, review_token: 'one-use-token', reviewed_digest: 'digest', expires_at: new Date(Date.now() + 60000).toISOString() } };
 const begin = () => { calls.length = 0; fresh = false; state.status.revision = 12; state.nodeFlow = { id: 'node-a', busy: false }; $('#nodeCheckID').value = 'node-a'; $('#nodeCheckService').value = 'telegram'; $('#nodeIntentScope').value = 'applied'; $('#nodeIntentSources').value = ''; $('#nodeCheckResult').textContent = ''; context.renderNodeIntentScope(); };
 const success = async (url, options) => {
   if (url.endsWith('/check')) return pass;
-  if (url.endsWith('/preview')) { assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', scope: { mode: 'applied' }, expected_revision: 12 }); return preview; }
-  if (url.endsWith('/apply')) { assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', review_token: 'one-use-token', reviewed_digest: 'digest', revision: 12, generation: 5, confirm: 'APPLY_NODE_ROUTE', idempotency_key: 'node-apply-one-use-token' }); return { live_applied: true }; }
+  if (url.endsWith('/preview')) { assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', engine:'xray', scope: { mode: 'applied' }, expected_revision: 12 }); return preview; }
+  if (url.endsWith('/apply')) { assert.deepEqual(JSON.parse(options.body), { service_id: 'telegram', engine:'xray', review_token: 'one-use-token', reviewed_digest: 'digest', revision: 12, generation: 5, confirm: 'APPLY_NODE_ROUTE', idempotency_key: 'node-apply-one-use-token' }); return { live_applied: true }; }
   throw new Error(url);
 };
 begin(); handler = success;
@@ -36,7 +37,7 @@ await context.runNodeIntent();
 assert.equal(calls.length, 1, 'inconclusive check allowed apply');
 assert.match($('#nodeCheckResult').textContent, /Контрольный адрес/);
 
-for (const change of [{ revision: 13 }, { node_id: 'node-b' }, { service_id: 'youtube' }, { expires_at: '2001-01-01T00:00:00Z' }, { expires_at: 'invalid' }]) {
+for (const change of [{ engine:'sing-box' },{ revision: 13 }, { node_id: 'node-b' }, { service_id: 'youtube' }, { expires_at: '2001-01-01T00:00:00Z' }, { expires_at: 'invalid' }]) {
   begin(); fresh = true; handler = async () => ({ ...preview, review: { ...preview.review, ...change } });
   await context.runNodeIntent();
   assert.equal(calls.length, 1, `stale/mismatched review applied: ${JSON.stringify(change)}`);
@@ -105,3 +106,9 @@ controller.abort(); finish({ durable_jobs: [{ ...queued, state: 'completed', mes
 await waiting;
 assert.deepEqual(progress, ['Принято на роутере'], 'late private result survived logout');
 console.log('Single-action node flow, explicit scope, fresh-proof shortcut, revision and cancellation fences passed');
+
+for(const change of [{engine:'sing-box'},{result:{...pass.result,route_path_id:'sing-box:node-a'}},{result:{...pass.result,expires_at:'2001-01-01T00:00:00Z'}}]){
+ begin();handler=async()=>({...pass,...change});await context.runNodeIntent();assert.equal(calls.length,1,'mismatched or expired check gained preview authority');
+}
+
+state.nodes={network_profile:'wan:new'};assert.equal(context.checkedNodeEngine({...pass,result:{...pass.result,network_profile:'wan:old'}},'node-a','telegram'),'','network changed since checked response');delete state.nodes;

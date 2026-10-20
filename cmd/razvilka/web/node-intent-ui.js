@@ -70,21 +70,24 @@ async function runNodeIntent() {
   $('#nodeCheckResult').textContent = 'Проверяем доступ через выбранное подключение…';
   try {
     const node = nodeByID(id);
-    if (nodeServiceHealth(node || {}, serviceID).state !== 'available') {
+    const health=nodeServiceHealth(node || {},serviceID);
+    let engine=health.state==='available'&&['sing-box','xray'].includes(health.engine)?health.engine:'';
+    if (!engine) {
       const checked = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
       if (!current()) return;
-      if (!(checked.ok === true && checked.result?.available === true && checked.result.node_id === id && checked.result.service_id === serviceID)) throw new Error(checked.result?.message || 'Доступ не подтверждён. Маршрут не применён.');
+      engine=checkedNodeEngine(checked,id,serviceID);
+      if (!engine) throw new Error(checked.result?.message || 'Доступ не подтверждён. Маршрут не применён.');
     }
     $('#nodeCheckResult').textContent = 'Доступ подтверждён. Сверяем выбранные устройства и текущие настройки…';
-    const preview = await api(`/api/v1/nodes/${encodeURIComponent(id)}/preview`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, scope, expected_revision: revision }) });
+    const preview = await api(`/api/v1/nodes/${encodeURIComponent(id)}/preview`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, engine, scope, expected_revision: revision }) });
     if (!current()) return;
     const review = preview.review;
-    if (review?.node_id !== id || review?.service_id !== serviceID || review?.revision !== revision) throw new Error('Настройки или выбор изменились. Обновите страницу и повторите.');
+    if (review?.node_id !== id || review?.service_id !== serviceID || review?.revision !== revision || review?.engine !== engine) throw new Error('Настройки или выбор изменились. Обновите страницу и повторите.');
     if (preview.scope_selection !== scope.mode || !preview.effective_scope || JSON.stringify(nodeIntentCanonicalSources(preview.effective_scope.sources)) !== JSON.stringify(intent.sources)) throw new Error('Область устройств отличается от показанной. Просмотрите план перед применением.');
     if (!preview.ready || !review.review_token || !Number.isFinite(Date.parse(review.expires_at)) || Date.parse(review.expires_at) <= Date.now()) throw new Error((preview.transaction?.blockers || []).map(item => item.message).join(' · ') || 'Маршрут пока нельзя применить. Проверьте настройки и повторите.');
     $('#nodeCheckResult').textContent = `Применяем для: ${nodeScopeText(preview.effective_scope.sources)}. Проверяем маршрут; при ошибке вернём предыдущий.`;
     $('#nodeCheckCancel').textContent = 'Закрыть';
-    let applied = await api(`/api/v1/nodes/${encodeURIComponent(id)}/apply`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
+    let applied = await api(`/api/v1/nodes/${encodeURIComponent(id)}/apply`, { method: 'POST', signal: controller.signal, body: JSON.stringify({ service_id: serviceID, engine, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
     if (!current()) return;
     applied = await waitNodeApplyJob(applied, controller.signal, message => { if (current()) $('#nodeCheckResult').textContent = message; });
     if (!current()) return;

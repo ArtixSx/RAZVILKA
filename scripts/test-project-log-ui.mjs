@@ -193,3 +193,17 @@ auditState.audit.events = [{ path: '/actual' }];
 auditContext.renderAudit(); auditContext.exportConsoleAudit();
 assert.equal(JSON.parse(downloads[1][1]).events[0].path, '/actual');
 console.log('PASS project log: readable issues/events, honest request outcomes, ordering/bounds, escaping, drawer integration, confirmation reuse and valid export');
+
+{
+ let rendered='',rows=[];const target=auditElements.get('#auditRows');
+ Object.defineProperty(target,'innerHTML',{get:()=>rendered,set:value=>{rendered=value;rows=[...value.matchAll(/<p>([^]*?)<\/p>/g)].map(match=>({textContent:match[1],hidden:false}));}});
+ auditContext.$$=selector=>selector==='#auditRows .audit-row'?rows:[];
+ vm.runInContext(read('cmd/razvilka/web/console.js').match(/function consoleFilterAudit\([^]*?\n/)[0],auditContext);
+ auditContext.$('#consoleAuditSearch').value='ошибка';
+ for(const events of [[{path:'ошибка применения'},{path:'успешный запрос'}],[{path:'фоновый запрос'},{path:'ошибка DNS'},{path:'обновление'}]]){
+  auditState.audit={available:true,events};auditContext.renderAudit();
+  assert.equal(rows.filter(row=>!row.hidden).length,1,'refresh restored unfiltered audit rows');assert.match(rows.find(row=>!row.hidden).textContent,/ошибка/);
+ }
+ auditContext.$('#consoleAuditSearch').value='';auditContext.renderAudit();assert.equal(rows.filter(row=>!row.hidden).length,3);
+ console.log('PASS active audit search survives replacement of rows during refresh');
+}

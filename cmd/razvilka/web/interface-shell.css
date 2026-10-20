@@ -905,3 +905,7 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
  .interface-ui #listScopeContent .check-list{grid-template-columns:minmax(0,1fr);}
  .interface-ui #listScopeContent .dialog-actions>*{flex:1 1 100%;}
 }
+
+/* Traffic filter checkboxes keep their native compact width. */
+.interface-ui #view-connections .filters .check{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
+.interface-ui #view-connections .filters .check input[type=checkbox]{width:auto;min-width:0;flex:none;margin:0;}

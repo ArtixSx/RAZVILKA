@@ -8,7 +8,7 @@ const context = vm.createContext({
   testStatusLabel: (status) => status,
 });
 // Run the actual UI functions, without bootstrapping a browser or network.
-for (const name of ['probeVerdict', 'probeStatusLabel', 'sourceStateText', 'sourceFreshnessText', 'sourceDiffText']) {
+for (const name of ['friendlyDetail','probeVerdict', 'probeStatusLabel', 'sourceStateText', 'sourceFreshnessText', 'sourceDiffText']) {
   const functionSource = source.match(new RegExp(`function ${name}\\([^]*?\\n}\\n`));
   assert.ok(functionSource, `${name} must remain testable`);
   vm.runInContext(functionSource[0], context);
@@ -51,3 +51,6 @@ assert.match(context.sourceDiffText({ diff: { added: 0, removed: 0, previous_sha
 assert.equal(context.sourceDiffText({ diff: { added: -1, removed: 0 } }), '');
 assert.equal(context.sourceDiffText({ legacy_cache: true, diff: { added: 12, removed: 0 } }), '');
 console.log('Source diff UI checks passed');
+
+assert.match(context.friendlyDetail('This probe measures the currently applied routing and is not route-confirmed. Use the isolated route comparison for Smart Route and WARP policy evidence.'),/не подтверждает выбранный маршрут/);
+assert.doesNotMatch(readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8'),/firewall, DNS и default route не меняются/);

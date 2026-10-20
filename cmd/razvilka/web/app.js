@@ -667,6 +667,7 @@ const detailReasonLabels = {
 function friendlyDetail(value) {
   const text = String(value || '').trim();
   if (!text) return 'Дополнительных пояснений нет.';
+  if (text === 'This probe measures the currently applied routing and is not route-confirmed. Use the isolated route comparison for Smart Route and WARP policy evidence.') return 'Проверка измеряет доступ через текущую конфигурацию, но не подтверждает выбранный маршрут. Для подтверждения пути Smart Route и политики WARP используйте изолированное сравнение маршрутов.';
   if (text === 'engine is not installed') return 'Этот обход не установлен.';
   if (text === 'engine is installed but not running') return 'Обход установлен, но сейчас не запущен.';
   if (text === 'WAN interface was not detected') return 'WAN-интерфейс не определён, поэтому честно изолировать прямой маршрут пока нельзя.';
@@ -793,7 +794,7 @@ function renderRouteComparisonDetails(value) {
     const scenario = result.scenario_label ? `<small>${esc(result.scenario_label)}${result.scenario_required ? ' · обязательный' : ''}</small>` : '';
     return `<article class="route-result-card status-${esc(status)}"><div class="route-result-head"><strong>${esc(routeLabel(result.route))}${scenario}</strong><span>${esc(probeStatusLabel(result))}</span></div><div class="probe-verdict ${esc(verdict.tone)}">${esc(verdict.text)}</div>${metrics.length ? `<div class="route-result-metrics">${metrics.map((metric) => `<b>${esc(metric)}</b>`).join('')}</div>` : ''}<p>${esc(friendlyDetail(result.detail))}</p></article>`;
   }).join('');
-  return `<div class="detail-hero ${esc(assessmentTone)}"><span>${esc(assessmentTitle)}</span><h4>${esc(summary)}</h4><p>${esc(assessment?.message || (confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'))}</p></div>${value.control_added ? '<div class="detail-note"><b>Контроль добавлен автоматически</b><p>RAZVILKA проверила DIRECT вместе с выбранными обходами, чтобы не назначать обход без необходимости.</p></div>' : ''}${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(value.note)}</p></div>` : ''}${technicalDetails(value)}`;
+  return `<div class="detail-hero ${esc(assessmentTone)}"><span>${esc(assessmentTitle)}</span><h4>${esc(summary)}</h4><p>${esc(assessment?.message || (confirmed.length ? `Подтверждено рабочих вариантов: ${confirmed.length}.` : 'Ни один выбранный вариант пока не дал подтверждённый ответ.'))}</p></div>${value.control_added ? '<div class="detail-note"><b>Контроль добавлен автоматически</b><p>RAZVILKA проверила DIRECT вместе с выбранными обходами, чтобы не назначать обход без необходимости.</p></div>' : ''}${decisionCards ? `<section class="detail-section"><h4>Решение Smart Route</h4>${decisionCards}</section>` : ''}<section class="detail-section"><h4>Проверенные маршруты</h4><div class="route-result-list">${resultCards || '<div class="detail-empty">Результаты проверки отсутствуют.</div>'}</div></section>${value.note ? `<div class="detail-note"><b>Как выполнялся тест</b><p>${esc(friendlyDetail(value.note))}</p></div>` : ''}${technicalDetails(value)}`;
 }
 
 function renderGenericDetails(value) {
@@ -805,6 +806,7 @@ function renderGenericDetails(value) {
     return `<div class="detail-hero warn"><span>Загрузка данных</span><h4>${busy ? 'Ожидаем свежие сведения' : 'Часть данных не загрузилась'}</h4><p>Последние полученные данные сохранены. Состояние подключения проверяется отдельно.</p></div><div class="detail-section">${value.issues.map(issue => `<div class="detail-note"><b>${esc(sections[issue.section] || issue.section || 'Раздел панели')}</b><p>${esc(issue.message || 'Повторите чтение данных.')}</p></div>`).join('')}</div>${technicalDetails(value)}`;
   }
   const messages = {
+    'This probe measures the currently applied routing and is not route-confirmed. Use the isolated route comparison for Smart Route and WARP policy evidence.':'Проверка измеряет доступ через текущую конфигурацию, но не подтверждает выбранный маршрут. Для подтверждения пути Smart Route и политики WARP используйте изолированное сравнение маршрутов.',
     'Profile was imported into draft only. Validate engine drafts and review the route plan before Apply.':'Профиль импортирован только в черновик. Проверьте файлы обходов и план маршрутов перед применением. Работающие маршруты не изменены.',
     'Private data was decrypted in memory and imported only into draft. UI credentials, recovery key and live dataplane were not changed.':'Приватные данные расшифрованы в памяти и импортированы только в черновик. Данные входа, ключ восстановления и работающие маршруты не изменены.',
   };
@@ -1892,6 +1894,7 @@ function renderAudit() {
   if (button) button.disabled = !read.ready;
   const notice = read.ready ? '' : `<div class="community-empty" role="status">${esc(read.message)} <button class="text-button" type="button" data-panel-refresh>Повторить чтение</button></div>`;
   target.innerHTML = notice + (events.map(renderProjectAuditRow).join('') || (read.ready ? '<div class="community-empty">Действий пока нет.</div>' : ''));
+  if (typeof consoleFilterAudit === 'function') consoleFilterAudit();
 }
 
 function strategyCompatibilityView(validation = {}) {
@@ -3936,6 +3939,13 @@ function closeNodeCheck() {
   if (typeof setNodeIntentBusy === 'function') setNodeIntentBusy(false);
 }
 
+function checkedNodeEngine(response,id,serviceID) {
+  const engine=response?.engine,result=response?.result;
+  if(!['sing-box','xray'].includes(engine)||response?.ok!==true||result?.available!==true||result.node_id!==id||result.service_id!==serviceID||result.route_path_id!==`${engine}:${id}`||!Number.isFinite(Date.parse(result.expires_at))||Date.parse(result.expires_at)<=Date.now())return '';
+  if(state.nodes?.network_profile&&result.network_profile!==state.nodes.network_profile)return '';
+  return engine;
+}
+
 async function runNodeCheck(event) {
   event.preventDefault();
   if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
@@ -3954,7 +3964,8 @@ async function runNodeCheck(event) {
   try {
     const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
     if (state.nodeFlow !== flow || $('#nodeCheckService').value !== serviceID || $('#nodeCheckID').value !== id) return;
-    const passed = response.ok === true && response.result?.available === true && response.result?.service_id === serviceID && response.result?.node_id === id;
+    const passed = !!checkedNodeEngine(response,id,serviceID);
+    flow.checked = passed ? response : null;
     $('#nodeCheckResult').textContent = passed ? 'Сервис доступен через этот узел. Просмотрите маршрут перед применением.' : (response.result?.message || 'Узел не прошёл проверку выбранного сервиса. Можно проверить другой узел.');
     $('#nodeCheckPreview').hidden = !passed;
     await refreshNodes();
@@ -3985,9 +3996,11 @@ async function previewNodeRoute() {
   try {
     const scope = typeof nodeIntentScopeValue === 'function' ? nodeIntentScopeValue() : { mode: 'applied' };
     if (!scope.mode || scope.mode === 'selected' && !scope.sources?.length) throw new Error('Сначала выберите устройства для подключения.');
-    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/preview`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, scope, expected_revision: state.status?.revision }) });
+    const engine=checkedNodeEngine(flow.checked,id,serviceID);
+    if(!engine)throw new Error('Сначала повторите проверку выбранного подключения и сервиса.');
+    const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/preview`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, engine, scope, expected_revision: state.status?.revision }) });
     if (state.nodeFlow !== flow || $('#nodeCheckService').value !== serviceID || $('#nodeCheckID').value !== id) return;
-    if (response.review?.node_id !== id || response.review?.service_id !== serviceID) throw new Error('Ответ относится к другому выбору. Откройте новый план.');
+    if (response.review?.node_id !== id || response.review?.service_id !== serviceID || response.review?.engine !== engine) throw new Error('Ответ относится к другому выбору. Откройте новый план.');
     closeNodeRoute();
     closeNodeCheck();
     state.nodeRouteReview = { ...response, id, serviceID, busy: false, controller: null };
@@ -4035,7 +4048,7 @@ async function applyNodeRoute() {
   if (typeof nodeBrowseActionsAllowed === 'function' && !nodeBrowseActionsAllowed()) return;
   const current = state.nodeRouteReview;
   const review = current?.review;
-  if (!current || current.busy || !current.ready || !review?.review_token || Date.now() >= new Date(review.expires_at).getTime()) return;
+  if (!current || current.busy || !current.ready || !['sing-box','xray'].includes(review?.engine) || !review?.review_token || Date.now() >= new Date(review.expires_at).getTime()) return;
   current.busy = true;
   current.controller = new AbortController();
   current.review = null; // One use, including failures and disconnected clients.
@@ -4044,7 +4057,7 @@ async function applyNodeRoute() {
   $('#nodeRouteCancel').textContent = 'Закрыть';
   $('#nodeRouteStatus').textContent = 'Сохраняем применение на роутере. Закрытие окна не отменяет принятое задание; отмена доступна в разделе «Сервисы».';
   try {
-    let response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
+    let response = await api(`/api/v1/nodes/${encodeURIComponent(current.id)}/apply`, { method: 'POST', signal: current.controller.signal, body: JSON.stringify({ service_id: current.serviceID, engine: review.engine, review_token: review.review_token, reviewed_digest: review.reviewed_digest, revision: review.revision, generation: review.generation, confirm: 'APPLY_NODE_ROUTE', idempotency_key: `node-apply-${review.review_token}` }) });
     if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;
     response = await waitNodeApplyJob(response, current.controller.signal, message => { if (state.nodeRouteReview === current) $('#nodeRouteStatus').textContent = message; });
     if (state.nodeRouteReview !== current || current.controller.signal.aborted) return;

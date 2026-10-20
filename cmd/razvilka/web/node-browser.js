@@ -160,8 +160,9 @@ function nodeServiceHealth(node, serviceID) {
   if (!health || !nodeDate(health.checked_at)) return { label: 'Не проверен', kind: 'unknown', state: 'quarantined' };
   const currentNetwork = state.nodes?.network_profile;
   if (!currentNetwork || health.network_profile !== currentNetwork || Date.parse(health.checked_at) > Date.now() || !nodeDate(health.expires_at) || Date.parse(health.expires_at) <= Date.now()) return { label: 'Перепроверить', kind: 'unknown', state: 'stale', health };
-  const works = health.state === 'available' && health.test_level === 'service' && health.verdict === 'PASS' && health.route_path_id === `sing-box:${node.id}` && !health.direct_leak;
-  if (works) return { label: 'Работает', kind: 'ok', state: 'available', health };
+  const engine=['sing-box','xray'].find(engine=>health.route_path_id===`${engine}:${node.id}`);
+  const works = health.state === 'available' && health.test_level === 'service' && health.verdict === 'PASS' && !!engine && !health.direct_leak;
+  if (works) return { label: 'Работает', kind: 'ok', state: 'available', engine, health };
   const failed = ['FAIL','BLOCKED','MISROUTED'].includes(health.verdict) || health.direct_leak === true;
   if (health.verdict === 'ERROR') return {label:'Ошибка проверки',kind:'warn',state:'inconclusive',health};
   return { label: failed ? 'Не подходит сервису' : 'Нет однозначного результата', kind: failed ? 'bad' : 'unknown', state: failed ? 'degraded' : 'inconclusive', health };

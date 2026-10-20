@@ -261,6 +261,8 @@ assert.equal(context.nodeServiceHealth(state.nodes.nodes[1], 'telegram').state, 
 proof.verdict = 'PASS';
 proof.route_path_id = 'sing-box:node-aaaaaa';
 assert.equal(context.nodeServiceHealth(state.nodes.nodes[1], 'telegram').state, 'inconclusive', 'another node proof granted a definitive verdict');
+proof.route_path_id = 'xray:node-bbbbbb';
+assert.equal(context.nodeServiceHealth(state.nodes.nodes[1], 'telegram').engine,'xray','explicit fresh Xray proof lost its engine');
 proof.route_path_id = 'sing-box:node-bbbbbb';
 context.browser.pings = [{ node_id: 'node-aaaaaa', reachable: true, latency_ms: 17, network_profile: profile, checked_at: new Date(now).toISOString() }];
 clockNow = now + 10 * 60000;
