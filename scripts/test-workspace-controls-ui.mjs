@@ -8,8 +8,10 @@ const $ = id => { if (!elements.has(id)) elements.set(id, { hidden: false, disab
 const state = { serviceControl: null, components: [] }, calls = [], notices = [], views = [], details = [];
 let request = async () => ({}), refreshes = 0;
 const storage = new Map();
+let confirmation=async()=>true;
 const context = vm.createContext({ state, $, Number, document: { hidden: false, addEventListener: (name, fn) => events.set(name, fn) },
   crypto: webcrypto, Uint8Array, Date, sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+  confirm:()=>{throw Error('native confirm must not run');},askConfirmation:(...args)=>confirmation(...args),
   api: async (path, options) => { calls.push({ path, options }); return request(path, options); },
   setTimeout: () => 1, clearTimeout() {}, esc: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'),
   setView: name => views.push(name), showNotice: (...args) => notices.push(args), showDetails: (...args) => details.push(args), renderAudit() {}, refreshAfterMutation: async () => { refreshes++; }, renderOverviewQuickServices() {}, refreshComponents() {}, manageComponent() {} });
@@ -258,3 +260,17 @@ state.serviceControl = { ...state.serviceControl, runtime_state: 'stopped', runn
 context.renderWorkspaceControls();
 assert.equal($('#projectPowerLabel').textContent, 'Обход выключен');
 console.log('Workspace controls: exact revision, no implicit routes, double-click/refusal/logout guards, shared reads and factual versions passed');
+
+// Async Stop confirmation owns one operation and cannot authorize a later session.
+for(const outcome of ['cancel','changed','logout','accept']){
+ events.get('razvilka:auth-required')();events.get('razvilka:auth-restored')();
+ const running={config_revision:100,mode:'auto',runtime_state:'running',running:true,resume_available:true};context.acceptWorkspaceControl(running);
+ let answer;confirmation=()=>new Promise(resolve=>answer=resolve);const before=calls.length;
+ request=async()=>({ok:true,control:{...running,config_revision:101,runtime_state:'stopped',running:false}});
+ const pending=context.toggleWorkspaceRuntime();await context.toggleWorkspaceRuntime();assert.equal(calls.length,before);assert.equal($('#projectPower').disabled,true);
+ if(outcome==='changed')context.acceptWorkspaceControl({...running,config_revision:101});
+ if(outcome==='logout'){events.get('razvilka:auth-required')();events.get('razvilka:auth-restored')();context.acceptWorkspaceControl({...running,config_revision:102});context.control.busy=true;}
+ answer(outcome!=='cancel');await pending;assert.equal(calls.length,before+(outcome==='accept'?1:0),'confirmation outcome '+outcome+' gained incorrect POST authority');
+ if(outcome==='logout')assert.equal(context.control.busy,true,'old confirmation unlocked a new session operation');else assert.equal(context.control.busy,false);
+}
+console.log('PASS Stop uses async confirmation with cancellation, single flight, revision and auth fences');

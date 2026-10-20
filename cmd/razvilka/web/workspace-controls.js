@@ -197,10 +197,18 @@ async function toggleWorkspaceRuntime() {
   }
   const generation = workspaceControl.generation;
   const action = control.running || control.can_stop ? 'stop' : 'resume';
-  // One click used to stop every bypass at once; ask first.
-  if (action === 'stop' && typeof globalThis.confirm === 'function' && !globalThis.confirm('Выключить обход для всех сервисов? Вернётся обычная маршрутизация роутера. Включить снова можно этой же кнопкой.')) return;
   workspaceControl.busy = true; renderWorkspaceControls();
   try {
+    if (action === 'stop') {
+      const fingerprint=value=>JSON.stringify([value?.config_revision,value?.running,value?.can_stop,value?.runtime_state,value?.safe_mode,value?.resume_available]);
+      const reviewed=fingerprint(control);
+      if (!await askConfirmation('Выключить обход для всех сервисов?', 'Вернётся обычная маршрутизация роутера. Включить снова можно этой же кнопкой.', 'Выключить обход')) return;
+      if (generation !== workspaceControl.generation || !workspaceControlVisible()) return;
+      if (reviewed !== fingerprint(workspaceRuntimeControl())) {
+        showNotice('review','Состояние изменилось','Обновите состояние и подтвердите остановку снова.');
+        return;
+      }
+    }
     const intent = { expected_revision: control.config_revision, action, confirm: action === 'stop' ? 'STOP_OWNED_ROUTES' : 'RESUME_OWNED_ROUTES' };
     forgetServiceControlRead();
     const result = await api('/api/v1/service-control/runtime', { method: 'POST', body: JSON.stringify({ ...intent, idempotency_key: workspaceRuntimeToken(intent) }) }).finally(forgetServiceControlRead);
