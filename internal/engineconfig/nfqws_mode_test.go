@@ -37,23 +37,6 @@ func TestNFQWSModeIsDraftOnlyAndRequiresExactReviewAndDiscoveryConsent(t *testin
 	}
 }
 
-func TestNFQWSCustomProfilesAreLiteralAndIgnoreTheManagedBlock(t *testing.T) {
-	raw := "NFQWS_ARGS_CUSTOM=\"--filter-udp=50000 --filter-l7=discord --lua-desync=fake --new --filter-tcp=5222 --lua-desync=multisplit\"\nNFQWS_EXTRA_ARGS=\"$MODE_AUTO\"\n" +
-		ManagedListBegin + "\nNFQWS_EXTRA_ARGS=\"$NFQWS_EXTRA_ARGS --hostlist-exclude=/x\"\n" + ManagedListEnd + "\n"
-	got, err := NFQWSCustomProfiles([]byte(raw))
-	if err != nil || len(got) != 2 || strings.Join(got[0], " ") != "--filter-udp=50000 --filter-l7=discord --lua-desync=fake" || strings.Join(got[1], " ") != "--filter-tcp=5222 --lua-desync=multisplit" {
-		t.Fatalf("%q %v", got, err)
-	}
-	if got, err := NFQWSCustomProfiles([]byte("NFQWS_ARGS_CUSTOM=\"\"\n")); err != nil || len(got) != 0 {
-		t.Fatalf("empty custom: %q %v", got, err)
-	}
-	for _, unresolved := range []string{"NFQWS_ARGS_CUSTOM=\"$OTHER\"\n", "NFQWS_ARGS_CUSTOM=\"`cat /tmp/x`\"\n", "NFQWS_ARGS_CUSTOM='$LITERAL'\n"} {
-		if _, err := NFQWSCustomProfiles([]byte(unresolved)); err == nil {
-			t.Fatalf("%q was read without running the shell", unresolved)
-		}
-	}
-}
-
 // While apply's managed block is in the live file, the owner's assignments
 // still read and edit as before.
 func TestGuidedReaderIgnoresManagedBlock(t *testing.T) {

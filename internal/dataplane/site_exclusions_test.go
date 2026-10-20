@@ -151,39 +151,42 @@ func TestNFQWS2SiteExclusionListsLifecycle(t *testing.T) {
 	}
 }
 
-// Like z2k, exclusions reach every nfqws2 profile the stock init composes: the
-// configuration's managed block extends each profile variable the owner set,
-// leaves empty ones empty and splits custom profiles on --new. Any mode then
-// honours the lists; only a value that cannot be read without the shell is
-// refused.
-func TestNFQWS2ExclusionsReachEveryProfile(t *testing.T) {
-	f := newSiteExclusionFixture(t, "$MODE_LIST")
-	conf := strings.Replace(readText(t, f.config), `NFQWS_ARGS_CUSTOM=""`, `NFQWS_ARGS_CUSTOM="--filter-udp=1400 --filter-l7=discord --lua-desync=fake --new --filter-tcp=5222 --lua-desync=multisplit"`, 1)
-	if err := os.WriteFile(f.config, []byte(conf), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.activate(t, siteExclusionPlan(), f.transaction(t, "tx")); err != nil {
-		t.Fatal(err)
-	}
-	config := readText(t, f.config)
-	host := "--hostlist-exclude=" + f.exclude + " --ipset-exclude=" + f.ipsetExclude
-	for _, want := range []string{
-		`NFQWS_EXTRA_ARGS="$NFQWS_EXTRA_ARGS ` + host + `"`,
-		`if [ -n "$NFQWS_ARGS_IPSET" ]; then NFQWS_ARGS_IPSET="$NFQWS_ARGS_IPSET ` + host + `"; fi`,
-		`if [ -n "$NFQWS_ARGS_UDP" ]; then NFQWS_ARGS_UDP="$NFQWS_ARGS_UDP --ipset-exclude=` + f.ipsetExclude + `"; fi`,
-		`NFQWS_ARGS_CUSTOM="` + nfqws2DoubleQuoted("--filter-udp=1400 --filter-l7=discord --lua-desync=fake "+host+" --new --filter-tcp=5222 --lua-desync=multisplit "+host) + `"`,
-	} {
-		if !strings.Contains(config, want) {
-			t.Fatalf("configuration lacks %q:\n%s", want, config)
+// The block puts profiles without any action before every profile of the
+// owner: excluded names and addresses land there and pass unchanged, while
+// the owner's profiles, the package's lists and connections without a
+// hostname keep working exactly as before. Empty custom profiles create no
+// empty profile.
+func TestNFQWS2ExclusionsLeadEveryProfile(t *testing.T) {
+	for _, custom := range []string{"", "--filter-udp=1400 --filter-l7=discord --lua-desync=fake --new --filter-tcp=5222 --lua-desync=multisplit"} {
+		f := newSiteExclusionFixture(t, "$MODE_LIST")
+		conf := strings.Replace(readText(t, f.config), `NFQWS_ARGS_CUSTOM=""`, `NFQWS_ARGS_CUSTOM="`+custom+`"`, 1)
+		if err := os.WriteFile(f.config, []byte(conf), 0o600); err != nil {
+			t.Fatal(err)
 		}
-	}
-	// What the init's shell actually sees, where a POSIX shell is available.
-	if sh, err := exec.LookPath("sh"); err == nil && runtime.GOOS != "windows" {
-		out, err := exec.Command(sh, "-c", `. "$1"; printf '%s\n' "$NFQWS_EXTRA_ARGS" "$NFQWS_ARGS_UDP" "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
-		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-		if err != nil || len(lines) != 3 || !strings.HasSuffix(lines[0], host) || !strings.HasPrefix(lines[0], "--hostlist="+f.user) ||
-			!strings.HasSuffix(lines[1], "--ipset-exclude="+f.ipsetExclude) || strings.Count(lines[2], host) != 2 {
-			t.Fatalf("sourced profiles: %v %q", err, lines)
+		plan := siteExclusionPlan()
+		plan.SiteExclusions = &SiteExclusions{Domains: []string{"bank.example"}, CIDRs: []string{"198.51.100.7", "2001:db8::/32"}, ServiceDomains: []string{"video.example"}}
+		if err := f.activate(t, plan, f.transaction(t, "tx")); err != nil {
+			t.Fatal(err)
+		}
+		config := readText(t, f.config)
+		leading := "--hostlist-domains=bank.example,video.example --new --ipset-ip=198.51.100.7/32,2001:db8::/32"
+		want := `if [ -n "$NFQWS_ARGS_CUSTOM" ]; then NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM"; else NFQWS_ARGS_CUSTOM="` + leading + `"; fi`
+		if !strings.HasPrefix(config, conf) || !strings.Contains(config, want) || !strings.Contains(config, nfqws2ExclusionFormat) {
+			t.Fatalf("configuration block:\n%s", config)
+		}
+		if strings.Count(config, "NFQWS_EXTRA_ARGS=") != 1 || strings.Count(config, "NFQWS_ARGS_IPSET=") != 1 || strings.Count(config, "NFQWS_ARGS_UDP=") != 1 {
+			t.Fatal("the owner's profiles were changed")
+		}
+		// What the init's shell actually sees, where a POSIX shell is available.
+		if sh, err := exec.LookPath("sh"); err == nil && runtime.GOOS != "windows" {
+			out, err := exec.Command(sh, "-c", `. "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
+			expected := leading
+			if custom != "" {
+				expected += " --new " + custom
+			}
+			if err != nil || string(out) != expected {
+				t.Fatalf("sourced custom profiles: %v %q", err, out)
+			}
 		}
 	}
 
@@ -199,21 +202,14 @@ func TestNFQWS2ExclusionsReachEveryProfile(t *testing.T) {
 		t.Fatalf("configuration changed without exclusions: %q", got)
 	}
 
-	for name, replace := range map[string][2]string{
-		"custom-substitution": {`NFQWS_ARGS_CUSTOM=""`, `NFQWS_ARGS_CUSTOM="$OTHER_PROFILE"`},
-		"braced-reference":    {`NFQWS_EXTRA_ARGS="$MODE_AUTO"`, `NFQWS_EXTRA_ARGS="${MODE_AUTO}"`},
-	} {
-		h := newSiteExclusionFixture(t, "$MODE_AUTO")
-		conf := strings.Replace(readText(t, h.config), replace[0], replace[1], 1)
-		if err := os.WriteFile(h.config, []byte(conf), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := h.activate(t, siteExclusionPlan(), h.transaction(t, "tx")); !errors.Is(err, ErrSiteExclusionsUnread) {
-			t.Fatalf("%s: unreadable configuration accepted: %v", name, err)
-		}
-		if got := readText(t, h.config); got != conf || readText(t, h.exclude) != "stock.example\n" {
-			t.Fatalf("%s: refused Stage changed files", name)
-		}
+	// A block of another instance is never taken over.
+	h := newSiteExclusionFixture(t, "$MODE_AUTO")
+	foreign := readText(t, h.config) + managedBegin + "\n# RAZVILKA INSTANCE someone-else\n" + managedEnd + "\n"
+	if err := os.WriteFile(h.config, []byte(foreign), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.activate(t, siteExclusionPlan(), h.transaction(t, "tx")); err == nil || readText(t, h.config) != foreign {
+		t.Fatalf("a foreign configuration block was replaced: %v", err)
 	}
 }
 
@@ -464,5 +460,55 @@ func TestNFQWS2HealthSkipsExcludedRoutes(t *testing.T) {
 		if excluded != (proof.Required == evidence.None) || excluded && proof.Note != siteExclusionEvidenceNote {
 			t.Fatalf("route evidence for %s: %+v", proof.ServiceID, proof)
 		}
+	}
+}
+
+// The installer's controlled deactivation removes the configuration block
+// too; a same-content transaction rolled back afterwards restores it as the
+// lease records, and rollback verification confirms exactly that.
+func TestNFQWS2RollbackRestoresTheConfigurationBlockTheLeaseRecords(t *testing.T) {
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	plan := siteExclusionPlan()
+	first := f.transaction(t, "first")
+	if err := f.activate(t, plan, first); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit} {
+		if err := call(context.Background(), plan, first); err != nil {
+			t.Fatal(err)
+		}
+	}
+	applied := readText(t, f.config)
+	lease, err := os.ReadFile(filepath.Join(f.adapter.StateRoot, nfqws2LeaseFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Deactivate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(readText(t, f.config), managedBegin) {
+		t.Fatal("controlled deactivation kept the configuration block")
+	}
+	if err := os.WriteFile(filepath.Join(f.adapter.StateRoot, nfqws2LeaseFile), lease, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second := f.transaction(t, "second")
+	if err := f.activate(t, plan, second); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.adapter.Rollback(context.Background(), plan, second); err != nil {
+		t.Fatal(err)
+	}
+	if got := readText(t, f.config); got != applied {
+		t.Fatalf("rollback config=%q", got)
+	}
+	if confirmed, err := f.adapter.VerifyRollback(context.Background(), plan, second); err != nil || !confirmed {
+		t.Fatalf("restored configuration block not confirmed: %v %v", confirmed, err)
+	}
+	if err := os.WriteFile(f.config, []byte(applied+"EXTRA=1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.adapter.VerifyRollback(context.Background(), plan, second); err == nil {
+		t.Fatal("changed configuration accepted by rollback verification")
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -269,17 +268,27 @@ func nfqws2PlanLists(plan Plan, id string) [4][]string {
 	return lists
 }
 
-// ErrSiteExclusionsUnread marks a configuration in which the saved "sites
-// without bypass" cannot be applied to every nfqws2 profile.
+// ErrSiteExclusionsUnread marks "sites without bypass" that cannot be given
+// to nfqws2.
 var ErrSiteExclusionsUnread = errors.New("NFQWS2_SITE_EXCLUSIONS_UNREAD")
 
+// nfqws2ExclusionFormat names the block layout. A later release that changes
+// it must still render this one: boot recovery proves a removed block by
+// re-rendering it against the hash the activating release recorded.
+const nfqws2ExclusionFormat = "# RAZVILKA NFQWS2 EXCLUSIONS v1"
+
+// maxNFQWS2ExclusionArgument keeps one inline list well inside the kernel's
+// per-argument limit.
+const maxNFQWS2ExclusionArgument = 120 << 10
+
 // exclusionConfig renders the owner's nfqws2.conf with this instance's managed
-// block. The stock init sources the file and composes one profile per
-// variable (custom, UDP, the IP list and the hostlist pair), and nfqws2 lists
-// filter only their own profile. Like z2k, which adds its whitelist to every
-// profile, the block extends each profile variable the owner set: hostname
-// profiles get both exclude lists, the UDP profile the address list. Empty
-// variables stay empty, so no profile appears that the owner did not set up.
+// block. nfqws2 selects the first matching profile and selects again once a
+// connection's hostname is known. The block therefore puts one or two
+// profiles without any action before every profile of the owner: excluded
+// names (--hostlist-domains) and excluded addresses (--ipset-ip). Excluded
+// traffic lands there and is passed unchanged; everything else, including
+// connections without a hostname, reaches the owner's profiles exactly as
+// before. The owner's profiles and the package's own lists are not changed.
 // With nothing to exclude the owner's configuration is returned unchanged.
 func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byte, error) {
 	owner, err := a.owner()
@@ -300,60 +309,39 @@ func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byt
 	if len(lists[2])+len(lists[3]) == 0 {
 		return []byte(ownerPart), nil
 	}
-	paths := a.ownedListPaths()
-	for _, path := range paths[2:] {
-		if !nfqws2ShellWord(path) {
-			return nil, fmt.Errorf("%w: путь списка исключений %q нельзя передать nfqws2", ErrSiteExclusionsUnread, path)
-		}
-	}
-	host, udp := []string{}, []string{}
+	profiles := []string{}
 	if len(lists[2]) != 0 {
-		host = append(host, "--hostlist-exclude="+paths[2])
+		for _, name := range lists[2] {
+			if !validManagedDomain(name) {
+				return nil, fmt.Errorf("invalid NFQWS2 domain %q", name)
+			}
+		}
+		profiles = append(profiles, "--hostlist-domains="+strings.Join(sortedUnique(lists[2]), ","))
 	}
 	if len(lists[3]) != 0 {
-		host = append(host, "--ipset-exclude="+paths[3])
-		udp = append(udp, "--ipset-exclude="+paths[3])
-	}
-	custom, err := engineconfig.NFQWSCustomProfiles([]byte(ownerPart))
-	if err != nil {
-		return nil, fmt.Errorf("%w: NFQWS_ARGS_CUSTOM в nfqws2.conf нельзя прочитать без запуска shell, поэтому «Сайты без обхода» не применены; уберите из него подстановки или очистите «Сайты без обхода»", ErrSiteExclusionsUnread)
-	}
-	options := strings.Join(host, " ")
-	lines := []string{"# RAZVILKA INSTANCE " + owner, "# «Сайты без обхода» в каждом профиле nfqws2; блок снимается при остановке RAZVILKA.",
-		`NFQWS_EXTRA_ARGS="$NFQWS_EXTRA_ARGS ` + options + `"`,
-		`if [ -n "$NFQWS_ARGS_IPSET" ]; then NFQWS_ARGS_IPSET="$NFQWS_ARGS_IPSET ` + options + `"; fi`}
-	if len(udp) != 0 {
-		lines = append(lines, `if [ -n "$NFQWS_ARGS_UDP" ]; then NFQWS_ARGS_UDP="$NFQWS_ARGS_UDP `+strings.Join(udp, " ")+`"; fi`)
-	}
-	if len(custom) != 0 {
-		profiles := make([]string, 0, len(custom))
-		for _, profile := range custom {
-			profiles = append(profiles, strings.Join(append(slices.Clone(profile), host...), " "))
+		subnets := make([]string, 0, len(lists[3]))
+		for _, value := range lists[3] {
+			prefix, err := siteExclusionPrefix(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid NFQWS2 CIDR %q", value)
+			}
+			subnets = append(subnets, prefix.String())
 		}
-		lines = append(lines, `NFQWS_ARGS_CUSTOM="`+nfqws2DoubleQuoted(strings.Join(profiles, " --new "))+`"`)
+		profiles = append(profiles, "--ipset-ip="+strings.Join(sortedUnique(subnets), ","))
 	}
+	for _, profile := range profiles {
+		if len(profile) > maxNFQWS2ExclusionArgument {
+			return nil, fmt.Errorf("%w: список «Сайтов без обхода» слишком длинный для одного аргумента nfqws2; сократите его", ErrSiteExclusionsUnread)
+		}
+	}
+	leading := strings.Join(profiles, " --new ")
+	lines := []string{"# RAZVILKA INSTANCE " + owner, nfqws2ExclusionFormat,
+		`if [ -n "$NFQWS_ARGS_CUSTOM" ]; then NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM"; else NFQWS_ARGS_CUSTOM="` + leading + `"; fi`}
 	merged, err := replaceManagedBlock(ownerPart, lines)
 	if err != nil {
 		return nil, err
 	}
 	return []byte(merged), nil
-}
-
-// nfqws2ShellWord admits a path that needs no quoting inside a shell word.
-func nfqws2ShellWord(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, c := range value {
-		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && !strings.ContainsRune("/._-:", c) && c != filepath.Separator {
-			return false
-		}
-	}
-	return true
-}
-
-func nfqws2DoubleQuoted(value string) string {
-	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "$", `\$`, "`", "\\`").Replace(value)
 }
 
 func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) error {

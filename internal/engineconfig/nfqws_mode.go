@@ -153,44 +153,6 @@ func (m *Manager) StageNFQWSMode(ctx context.Context, mode, review string, allow
 	return nfqwsModeView(updated, "staged")
 }
 
-// ErrNFQWSArgumentsUnresolved marks a configuration value that cannot be read
-// without running the shell.
-var ErrNFQWSArgumentsUnresolved = errors.New("NFQWS2 arguments cannot be resolved")
-
-// NFQWSCustomProfiles returns the owner's NFQWS_ARGS_CUSTOM profiles, split on
-// --new, as literal words. The RAZVILKA managed block is ignored; a value with
-// a shell substitution cannot be read without running it and is refused.
-func NFQWSCustomProfiles(raw []byte) ([][]string, error) {
-	assignments, err := scanShellAssignments(string(withoutManagedBlock(raw)))
-	if err != nil {
-		return nil, ErrNFQWSArgumentsUnresolved
-	}
-	value := ""
-	for _, a := range assignments {
-		if a.key == "NFQWS_ARGS_CUSTOM" {
-			value = a.value
-		}
-	}
-	if strings.ContainsAny(value, "$`\\") {
-		return nil, ErrNFQWSArgumentsUnresolved
-	}
-	profiles, current := [][]string{}, []string{}
-	for _, word := range strings.Fields(value) {
-		if word == "--new" {
-			if len(current) != 0 {
-				profiles = append(profiles, current)
-			}
-			current = []string{}
-			continue
-		}
-		current = append(current, word)
-	}
-	if len(current) != 0 {
-		profiles = append(profiles, current)
-	}
-	return profiles, nil
-}
-
 // withoutManagedBlock removes the one RAZVILKA managed block that apply adds
 // to a configuration, so the owner's part reads and edits as before. A
 // malformed or repeated block is left in place and the reader refuses it.

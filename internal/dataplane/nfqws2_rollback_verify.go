@@ -56,7 +56,17 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 		}
 		// Rollback may have put back the block the snapshot lacked and its
 		// lease records (see Rollback); accept exactly that and nothing else.
-		if index == 0 || lease == nil || ownerErr != nil || len(lease.Lists) < index {
+		if index == 0 {
+			if lease == nil || lease.ConfigOwner == "" || nfqws2Hash(file.data) != lease.ConfigOwner || nfqws2Hash(data) != lease.ConfigHash {
+				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+			}
+			restored, err := a.exclusionConfig(file.data, lists)
+			if err != nil || !bytes.Equal(data, restored) {
+				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
+			}
+			continue
+		}
+		if lease == nil || ownerErr != nil || len(lease.Lists) < index {
 			return false, errors.New("NFQWS2 rollback files differ from their snapshot")
 		}
 		if block, blockErr := nfqws2Block(file.data); blockErr != nil || len(block) > 0 {
