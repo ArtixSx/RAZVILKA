@@ -16,6 +16,7 @@
     'scope-pending': 'Применяется к устройствам', 'removal-pending': 'Убирается', 'rate-limited': 'Пауза между попытками',
     'component-stopped': 'Нужный компонент не запущен', 'component-unavailable': 'Нужный компонент не готов',
     'apply-refused': 'Не удалось включить, автопилот повторит', unconfirmed: 'Проверка не дала ответа, автопилот повторит',
+    'domain-route-unavailable': 'Нет подтверждённого обхода для доменного сервиса',
     'capability-refused': 'Недоступно в текущем режиме', excluded: 'Не разрешён списком или исключениями',
     'requires-review': 'Нужна проверка журнала', 'manual-change': 'Изменён вручную', paused: 'На паузе',
     'network-unknown': 'Сеть не определена', 'checker-unavailable': 'Проверка временно недоступна',
