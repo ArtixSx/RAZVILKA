@@ -19,8 +19,8 @@ NFQWS2, VLESS, WireGuard/AmneziaWG or WARP. It runs on the router itself and
 keeps working on schedule with the browser closed.
 
 > [!NOTE]
-> **0.20.0** is a clean new base. What has and has not been verified on a real
-> router is listed in the [current status (RU)](docs/CURRENT_STATUS_RU.md).
+> **0.20.0 is in preparation**, with acceptance still in progress. What has and
+> has not been verified on a real router is listed in the [current status (RU)](docs/CURRENT_STATUS_RU.md).
 > The install commands work once the `v0.20.0` tag is published in
 > [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
@@ -30,8 +30,10 @@ keeps working on schedule with the browser closed.
   <img src="docs/assets/razvilka-how-it-works.svg" alt="Traffic to enabled services takes the bypass; everything else uses the router's ordinary route" width="960">
 </p>
 
-- **Bypass only what you enabled.** Other sites and apps, excluded devices and
-  an empty list keep the router's ordinary route, including your own VPN.
+- **Bypass only what you enabled.** Unlisted sites and apps keep the router's ordinary route,
+  including your own VPN. An empty list does not change that route.
+  NFQWS2 device exclusions use Keenetic policy; RAZVILKA's own device
+  exclusions are not supported yet.
 - **Site exclusions depend on the bypass method.** NFQWS2 leaves excluded
   domains and their subdomains untouched. For VPN and proxy routes, exclude
   an IP address, IP network or service: these routes cannot distinguish
@@ -47,20 +49,23 @@ keeps working on schedule with the browser closed.
 | --- | --- |
 | 🧭 **Autopilot** | Checks the chosen services, picks a working path, keeps a reserve and recovers after failures — within the limits you set |
 | 🧩 **Services** | Ready-made catalog and your own services; groups; access checks from the router |
-| 🔌 **Connections** | VLESS/Xray, WireGuard, AmneziaWG, WARP; subscriptions with node checks by country and result |
+| 🔌 **Connections** | VLESS/Xray, WireGuard, AmneziaWG, WARP; subscriptions, country filtering from publisher labels and separate access checks |
 | 🛡️ **DPI bypass** | NFQWS2 with strategies, compatibility checks and selection |
-| 📱 **Devices** | Home network and device selection, exclusions |
+| 📱 **Devices** | Experimental device selection on the exact NC-1812 profile; NFQWS2 uses Keenetic policy |
 | 🧾 **Log and diagnostics** | Clear error causes, a support report, backups |
-| 🔄 **Updates** | Manual and nightly, with a settings snapshot and automatic rollback |
+| 🔄 **Updates** | Manual and nightly, with a settings snapshot; rollback on confirmed failure, journal review when the outcome is unknown |
 
 "Configured", "route applied" and "service reachable" are shown separately:
 a running process alone does not prove that the bypass works.
+Full hardware acceptance of WireGuard, WARP and AmneziaWG is still pending;
+listing a component does not establish support for every mode.
 
 ## Recommendations
 
 - **Router.** Keenetic or Netcraze with a USB drive and [Entware](docs/INSTALL_RU.md#подготовка-entware).
   Best verified on **Netcraze Ultra (NC-1812), ARM64**. MIPS and MIPSel builds
-  are published but have not been tested on physical MIPS routers.
+  are published, but managed routes on MIPS/MIPSel are not available yet;
+  a successful build does not establish runtime support.
 - **Storage.** At least 1 GB free; a dedicated USB stick or SSD is better.
 - **Router DNS must work** before installation: catalogs, subscriptions and
   checks rely on it. A DNS failure looks like an unreachable service.
@@ -123,7 +128,8 @@ Where things live: settings — `/opt/etc/razvilka`, runtime data —
 An installed 0.20+ updates **from the panel only**: "Обновления" →
 "Проверить версию" → "Установить", or automatically at night on the chosen
 schedule. The panel downloads the release from GitHub, verifies checksums and
-architecture, saves a settings snapshot and restores the previous version on failure.
+architecture and saves a settings snapshot. A confirmed failure triggers rollback;
+an unknown outcome requires journal review.
 
 The installer refuses to run over a working 0.20+ and changes nothing, so an
 update never bypasses its own journal and rollback. To check the version:
@@ -168,8 +174,8 @@ programs and installed bypass packages are not touched.
 | | Status |
 | --- | --- |
 | Netcraze Ultra (NC-1812), ARM64, firmware 5.01.C.6.0-1 | main test router |
-| Other Keenetic / Netcraze ARM64 with Entware | panel and the main whole-network mode; the experimental "Домашняя сеть" mode is NC-1812 only for now |
-| MIPS / MIPSel | built, not tested on hardware |
+| Other Keenetic / Netcraze ARM64 with Entware | panel startup does not establish bypass support; managed routes require an exact supported profile, see the support matrix |
+| MIPS / MIPSel | builds available; managed routes unavailable |
 
 More — [support matrix (RU)](docs/RUNTIME_SUPPORT_RU.md).
 
