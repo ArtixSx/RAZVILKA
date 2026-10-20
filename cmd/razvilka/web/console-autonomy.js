@@ -233,8 +233,8 @@
       $$('input[name="initial-extra"]:checked').map(x => x.value).sort()]);
     if (consentReviewFingerprint !== fingerprint) $('confirmConsent').checked = false;
     consentReviewFingerprint = fingerprint;
-    const consentLabel = $('confirmConsent').closest('label');
-    if (consentLabel) consentLabel.hidden = !consentNeeded;
+    const consentRow = $('confirmConsent').closest('.check-row') || $('confirmConsent').closest('label');
+    if (consentRow) consentRow.hidden = !consentNeeded;
     if (!consentNeeded) $('confirmConsent').checked = false;
     const rows=[['Канал обновлений',p.update_channel==='preview'?'Предварительные и стабильные':'Стабильные'],['Устройства',p.all_lan?'Вся локальная сеть':p.default_sources.join(', ')||'Не выбраны'],['Источники',`${p.source_ids.length} разрешено`],['Предпочитаемые обходы',p.preferred_routes.map(id=>routeLabels[id]||id).join(' → ')||'Подбор узлов'],['Резерв',`${p.reserve_target} профиля, включая основной`],['Сервисы и резерв',`${p.check_seconds} / ${p.reserve_seconds} сек`],['RAZVILKA',`${windowText(p.application)} · ${maintenanceModeText(p.application.mode)}`],['Движки',`${windowText(p.components)} · ${maintenanceModeText(p.components.mode,true)}`],['Часовой пояс',p.timezone]];
     $('reviewSummary').innerHTML=rows.map(([k,v])=>`<div><span>${escapeHTML(k)}</span><b>${escapeHTML(v)}</b></div>`).join('');

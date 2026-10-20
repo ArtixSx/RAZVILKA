@@ -1759,3 +1759,8 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 /* Traffic filter checkboxes keep their native compact width. */
 .interface-ui #view-connections .filters .check{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
 .interface-ui #view-connections .filters .check input[type=checkbox]{width:auto;min-width:0;flex:none;margin:0;}
+
+/* Route name and scenario are separate readable parts, including narrow drawers. */
+.interface-ui .route-result-head{flex-wrap:wrap;}
+.interface-ui .route-result-head>strong{display:inline-flex;align-items:baseline;flex-wrap:wrap;column-gap:8px;row-gap:4px;min-width:0;}
+.interface-ui .route-result-head>strong>small{color:var(--muted);font-size:11px;font-weight:400;}

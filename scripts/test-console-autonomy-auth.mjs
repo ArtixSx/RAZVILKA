@@ -19,7 +19,7 @@ function fixture(authenticated=true,staticInputs=[]){
   if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,children:[],appendChild(child){this.children.push(child);return child;},events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
   const result=elements.get(id);
   result.contains=target=>target===result;
-  result.closest=()=>null;
+  result.closest=selector=>id==='a1-confirmConsent'&&selector==='.check-row'?element('a1-confirmConsentRow'):null;
   if(['a1-starterItems','a1-initialExtras','a1-appDays','a1-engineDays','a1-wizardSources'].includes(id)&&!Object.getOwnPropertyDescriptor(result,'innerHTML').get){
    let html='';Object.defineProperty(result,'innerHTML',{get:()=>html,set(value){html=value;inputs.set(id,[...value.matchAll(/<input\b([^>]+)>/g)].map(([,attrs])=>({name:/name="([^"]*)"/.exec(attrs)?.[1],value:/value="([^"]*)"/.exec(attrs)?.[1],checked:/\bchecked\b/.test(attrs),closest:()=>({})})));}});
   }
@@ -46,8 +46,20 @@ function fixture(authenticated=true,staticInputs=[]){
   runRetry(){const entry=[...timeouts.entries()].find(([,value])=>value.ms===1500);assert.ok(entry,'retry timer missing');timeouts.delete(entry[0]);entry[1].fn();}
  };
 }
+{
+ const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');
+ assert.match(html,/<div class="check-row"><input id="a1-confirmConsent"[^>]*\/><label for="a1-confirmConsent">/,'fixture must model the real sibling checkbox and label');
+}
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log('PASS',name);}
+
+await test('consent row hides unchanged authority and returns for broader device permission',async()=>{
+ const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]);const initial=snapshot();initial.policy.update_channel='stable';f.respond(0,200,initial);await flush();
+ f.click('nextStep');f.click('nextStep');f.click('nextStep');
+ assert.equal(f.e('confirmConsentRow').hidden,true,'unchanged authority left an unnecessary required-looking checkbox');
+ f.e('scopeMode').value='all';f.e('wizardForm').events.get('change')();
+ assert.equal(f.e('confirmConsentRow').hidden,false,'broader scope hid the required consent');assert.equal(f.e('confirmConsent').checked,false);
+});
 
 await test('initial setup discovery is not canceled by an early protected autonomy read',async()=>{
  const f=fixture(false);assert.equal(f.requests.length,0,'protected request ran before core authentication discovery');
