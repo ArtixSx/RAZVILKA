@@ -131,6 +131,9 @@ type Manager struct {
 	retryDelay    time.Duration
 	releaseChecks map[string]catalogStatus
 	updateFault   func(string) error // phase-boundary fault injection; nil in production
+
+	usqueNetworkCheck func() error // isolated network-preflight fixtures only
+
 	// Isolated bundle tests relocate files and supply an already reviewed
 	// synthetic archive. Production uses the fixed owned root/catalog below.
 	nfqwsReleases string
@@ -266,6 +269,9 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
 	release, err := m.fencePackageMutation()
 	if err != nil {
 		return Result{}, NoMutation(err)
@@ -292,6 +298,9 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 	spec, ok := lookup(id)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown component %q", id)
+	}
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
 	}
 	if visiting[id] {
 		return Result{}, fmt.Errorf("component dependency cycle at %s", id)
@@ -372,6 +381,11 @@ func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting ma
 	command := "install"
 	if beforeVersion != "" {
 		command = "upgrade"
+	}
+	// Dependencies and repository refresh can take time; reobserve the local
+	// subnet immediately before the vendor package may start its NDM setup.
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: action}, NoMutation(err)
 	}
 	// Never upgrade the global package set. Only the reviewed allowlisted package.
 	if tx != nil {

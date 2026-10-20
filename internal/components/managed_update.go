@@ -238,6 +238,9 @@ func (m *Manager) ManagedUpdateGuardedWithRollback(ctx context.Context, id strin
 	if !ok || !managedUpdateComponents[id] || check == nil {
 		return Result{}, NoMutation(fmt.Errorf("component %s has no managed update", id))
 	}
+	if err := m.usquePackageNetworkPreflight(id); err != nil {
+		return Result{Component: id, Action: "update"}, NoMutation(err)
+	}
 	tx, err := m.lockUpdateJournal()
 	if err != nil {
 		return Result{}, NoMutation(err)

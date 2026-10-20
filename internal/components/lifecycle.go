@@ -71,6 +71,11 @@ func (m *Manager) Plan(ctx context.Context, id, action string, refresh bool) (Pl
 		AvailableVersion: view.AvailableVersion, Ready: true, Budget: spec.Budget,
 		Claims: append([]Claim(nil), spec.Claims...),
 	}
+	if action != "remove" {
+		if err := m.usquePackageNetworkPreflight(id); err != nil {
+			plan.AddBlocker("USQUE_PACKAGE_NETWORK_PREFLIGHT", err.Error(), "Проверьте сетевые настройки пакета USQUE: его автозапуск не должен пересекаться с существующими сетями роутера.")
+		}
+	}
 	if view.InventoryError != "" {
 		plan.AddBlocker("INVENTORY_CHECK_FAILED", view.InventoryError, "Повторите проверку установленного состояния.")
 	}
