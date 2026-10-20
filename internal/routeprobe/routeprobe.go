@@ -159,8 +159,14 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 		result.Detail = "create probe identifier: " + err.Error()
 		return result
 	}
+	stockBefore, err := readStockProbePath(ctx, address, queueNumber, chain, port)
+	if err != nil {
+		result.Detail = "NFQWS2 stock packet path is not proven; isolated probe refused"
+		return result
+	}
 
-	jumpArgs := []string{"-t", "mangle", "-D", "OUTPUT", "-p", "tcp", "-d", address.String(), "--dport", "443", "--sport", strconv.Itoa(port), "-j", chain}
+	hook, scopeArgs := scopedNFQProbeJump(address, port, chain, stockBefore)
+	jumpArgs := append([]string{"-t", "mangle", "-D", hook}, scopeArgs...)
 	chainCreated, jumpCreated := false, false
 	cleanupErrors := []string{}
 	defer func() {
@@ -191,11 +197,18 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 		return result
 	}
 	chainCreated = true
-	if output, appendErr := runSystemCommand(ctx, iptablesBinary, "-t", "mangle", "-A", chain, "-j", "NFQUEUE", "--queue-num", strconv.Itoa(queueNumber)); appendErr != nil {
+	target := []string{"-t", "mangle", "-A", chain, "-j", "NFQUEUE", "--queue-num", strconv.Itoa(queueNumber)}
+	if stockBefore.passive {
+		// Stock POSTROUTING already queues this destination's interface. Count
+		// the eligible exact socket at POSTROUTING and leave the official path
+		// untouched, avoiding an extra NFQUEUE visit at OUTPUT.
+		target = []string{"-t", "mangle", "-A", chain, "-j", "RETURN"}
+	}
+	if output, appendErr := runSystemCommand(ctx, iptablesBinary, target...); appendErr != nil {
 		result.Detail = "attach NFQUEUE target: " + commandError(output, appendErr)
 		return result
 	}
-	insertArgs := []string{"-t", "mangle", "-I", "OUTPUT", "1", "-p", "tcp", "-d", address.String(), "--dport", "443", "--sport", strconv.Itoa(port), "-j", chain}
+	insertArgs := append([]string{"-t", "mangle", "-I", hook, "1"}, scopeArgs...)
 	if output, insertErr := runSystemCommand(ctx, iptablesBinary, insertArgs...); insertErr != nil {
 		result.Detail = "attach isolated OUTPUT jump: " + commandError(output, insertErr)
 		return result
@@ -206,11 +219,20 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	result = probeHTTP(ctx, client, service, "nfqws2", "isolated NFQUEUE request awaiting exact-chain counter", false)
 	counterOutput, counterErr := runSystemCommand(ctx, iptablesBinary, "-t", "mangle", "-L", chain, "-v", "-n", "-x")
 	packets := parseScopedNFQueuePackets(counterOutput)
+	if stockBefore.passive {
+		packets = parseScopedReturnPackets(counterOutput)
+	}
+	stockAfter, stockErr := readStockProbePath(ctx, address, queueNumber, chain, port)
 	queueStillActive := kernelQueueActive(queueNumber)
-	result.RouteConfirmed = counterErr == nil && packets > 0 && queueStillActive
+	currentQueue, currentProcess, processErr := activeNFQWSQueue()
+	stockConfirmed := stockErr == nil && stockProbeSocketConfirmed(stockBefore, stockAfter, packets) && processErr == nil && currentQueue == queueNumber && currentProcess == processEvidence
+	result.RouteConfirmed = counterErr == nil && packets > 0 && queueStillActive && stockConfirmed
 	if result.RouteConfirmed {
 		result.ObservedRoutePathID = "isolated:nfqws2"
 		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-chain:%s;queue=%d;packets=%d;destination=%s:443;source-port=%d;process=%s", chain, queueNumber, packets, address, port, processEvidence)
+		if stockBefore.passive {
+			result.EvidenceSource = fmt.Sprintf("scoped-stock-postrouting:%s;queue=%d;socket-packets=%d;stock-packets-delta=%d;graph=%s;destination=%s:443;source-port=%d;process=%s", chain, queueNumber, packets, stockAfter.packets-stockBefore.packets, stockAfter.graph, address, port, processEvidence)
+		}
 	} else {
 		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-unconfirmed:queue=%d;packets=%d;kernel-active=%t", queueNumber, packets, queueStillActive)
 		if result.Status == "pass" || result.Status == "partial" {
@@ -386,9 +408,17 @@ func pinnedHTTPSClient(address netip.Addr, sourcePort int, timeout time.Duration
 }
 
 func parseScopedNFQueuePackets(output string) uint64 {
+	return parseScopedTargetPackets(output, "NFQUEUE")
+}
+
+func parseScopedReturnPackets(output string) uint64 {
+	return parseScopedTargetPackets(output, "RETURN")
+}
+
+func parseScopedTargetPackets(output, target string) uint64 {
 	var packets uint64
 	for _, line := range strings.Split(output, "\n") {
-		if !strings.Contains(strings.ToUpper(line), "NFQUEUE") {
+		if !strings.Contains(strings.ToUpper(line), target) {
 			continue
 		}
 		fields := strings.Fields(line)
