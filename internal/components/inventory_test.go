@@ -249,13 +249,11 @@ func TestManualReleaseFileIsVisibleAndCannotBeReplaced(t *testing.T) {
 	}
 }
 
-func TestParentPlanRejectsManualReleaseDependencyBeforeConfirmation(t *testing.T) {
+func TestWarpWireGuardPlanDoesNotRequireLegacyGenerator(t *testing.T) {
 	for _, action := range []string{"install", "update", "remove"} {
-		for _, owned := range []bool{false, true} {
-			name := action + "/manual-wgcf"
-			if owned {
-				name = action + "/receipt-wgcf"
-			}
+		for _, state := range []string{"missing", "manual", "receipt"} {
+			owned := state == "receipt"
+			name := action + "/" + state
 			t.Run(name, func(t *testing.T) {
 				r := &fakeRunner{output: map[string]string{
 					"list": "wireguard-tools - 2.0 - available\n",
@@ -266,8 +264,10 @@ func TestParentPlanRejectsManualReleaseDependencyBeforeConfirmation(t *testing.T
 				m := &Manager{Opkg: "opkg", Runner: r, BinDir: t.TempDir(), Client: offlineReleases()}
 				target := filepath.Join(m.BinDir, "wgcf")
 				binary := []byte("fixture dependency; deliberately not executable")
-				if err := os.WriteFile(target, binary, 0600); err != nil {
-					t.Fatal(err)
+				if state != "missing" {
+					if err := os.WriteFile(target, binary, 0600); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if owned {
 					if err := writeExternalReceipt(target, "2.2.32", binary); err != nil {
@@ -278,12 +278,8 @@ func TestParentPlanRejectsManualReleaseDependencyBeforeConfirmation(t *testing.T
 				if err != nil {
 					t.Fatal(err)
 				}
-				blocked := !owned && action != "remove"
-				if plan.Ready == blocked || hasInventoryIssue(plan, "UNMANAGED_DEPENDENCY") != blocked {
-					t.Fatalf("parent preflight did not match dependency ownership: %+v", plan)
-				}
-				if action != "remove" && !reflect.DeepEqual(plan.Dependencies, []DependencyState{{ID: "wgcf", Installed: true}}) {
-					t.Fatal("installed fact was lost while enforcing ownership", plan.Dependencies)
+				if !plan.Ready || len(plan.Dependencies) != 0 || hasInventoryIssue(plan, "DEPENDENCY_UNAVAILABLE") || hasInventoryIssue(plan, "UNMANAGED_DEPENDENCY") {
+					t.Fatalf("optional legacy generator blocked WireGuard package lifecycle: %+v", plan)
 				}
 				for _, call := range r.calls {
 					if len(call) < 2 || call[1] != "list" && call[1] != "list-installed" {
@@ -291,8 +287,12 @@ func TestParentPlanRejectsManualReleaseDependencyBeforeConfirmation(t *testing.T
 					}
 				}
 				after, err := os.ReadFile(target)
-				if err != nil || string(after) != string(binary) {
-					t.Fatal("preflight changed dependency bytes", err)
+				if state == "missing" {
+					if !os.IsNotExist(err) {
+						t.Fatal("preflight created legacy generator", err)
+					}
+				} else if err != nil || string(after) != string(binary) {
+					t.Fatal("preflight changed optional generator bytes", err)
 				}
 			})
 		}

@@ -145,7 +145,7 @@ func packageRefreshError(output []byte) string {
 }
 
 // RuntimeUses follows only runtime dependencies. A profile generation tool
-// such as wgcf is an installation dependency, not a live forwarding sidecar.
+// such as the optional legacy wgcf generator is not a live forwarding sidecar.
 func RuntimeUses(route, component string) bool {
 	id, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(route)), ":")
 	component = strings.ToLower(strings.TrimSpace(component))

@@ -3,6 +3,7 @@ package components
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,29 +110,35 @@ func TestRepositoryReadCannotClobberExternalDefinition(t *testing.T) {
 	}
 }
 
-func TestParentInstallReusesIntegrityVerifiedDependencyWithoutDownload(t *testing.T) {
+func TestWarpWireGuardInstallDoesNotDownloadLegacyGenerator(t *testing.T) {
 	bin := t.TempDir()
-	target := filepath.Join(bin, "wgcf")
-	data := []byte("fixture bytes never executed")
-	if err := os.WriteFile(target, data, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeExternalReceipt(target, "2.2.0", data); err != nil {
-		t.Fatal(err)
-	}
 	r := &fakeRunner{output: map[string]string{"install": "ok"}}
-	m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), BinDir: bin, Runner: r}
+	requests := 0
+	client := &http.Client{Transport: inventoryTransport(func(*http.Request) (*http.Response, error) {
+		requests++
+		return nil, errors.New("unexpected release request")
+	})}
+	m := &Manager{Opkg: "opkg", RepoDir: t.TempDir(), StateDir: t.TempDir(), BinDir: bin, Runner: r, Client: client}
 	result, err := m.Apply(context.Background(), "warp-wg")
 	if err != nil || !result.OK {
 		t.Fatal(result, err)
 	}
+	installed := false
 	for _, args := range r.calls {
-		if len(args) > 2 && args[2] != "wireguard-tools" {
-			t.Fatal("unexpected dependency upgrade", args)
+		if len(args) > 2 {
+			if args[1] != "install" || args[2] != "wireguard-tools" {
+				t.Fatal("unexpected package operation", args)
+			}
+			installed = true
 		}
 	}
-	after, _ := os.ReadFile(target)
-	if string(after) != string(data) {
-		t.Fatal("existing dependency replaced")
+	if !installed {
+		t.Fatal("WireGuard tools were not installed")
+	}
+	if requests != 0 {
+		t.Fatalf("WireGuard install attempted %d external release requests", requests)
+	}
+	if _, err := os.Stat(filepath.Join(bin, "wgcf")); !os.IsNotExist(err) {
+		t.Fatal("installed optional legacy generator", err)
 	}
 }
