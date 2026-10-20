@@ -256,9 +256,13 @@ func TestLANPartialOrCanceledSamplingNeverPasses(t *testing.T) {
 	address := fixtureLANAddress(t)
 	for _, mode := range []string{"canceled", "parent_deadline"} {
 		t.Run(mode, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
+			var cancel context.CancelFunc
+			served := make(chan struct{}, 1)
 			server, roots := fixtureTLS(t, telegramHost, func(w http.ResponseWriter, _ *http.Request) {
+				select {
+				case served <- struct{}{}:
+				default:
+				}
 				_, _ = io.WriteString(w, "local fixture")
 				if mode == "canceled" {
 					cancel()
@@ -266,10 +270,23 @@ func TestLANPartialOrCanceledSamplingNeverPasses(t *testing.T) {
 			}, net.JoinHostPort(address.String(), "0"))
 			o := fixtureOptions("")
 			o.LANClient, o.Duration = address, time.Second
+			o.ProbeTimeout, o.ControlTimeout = 500*time.Millisecond, 500*time.Millisecond
 			dialer := fixtureMappedLANDialer(t, address, server.Listener.Addr().String(), "")
+			// Fixture setup and Windows address inventory must not turn the
+			// explicit cancellation case into an unrelated parent deadline.
+			var ctx context.Context
+			if mode == "canceled" {
+				ctx, cancel = context.WithCancel(context.Background())
+			} else {
+				ctx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
+			}
+			defer cancel()
 			r, err := observeWithDialer(ctx, o, roots, dialer)
 			if err != nil || r.ExitCode == 0 || r.WindowCompleted || r.Outcome != mode || r.SamplingElapsedSeconds >= o.Duration.Seconds() || r.Final.Code != "not_attempted_parent_cancellation" || len(dialer.targets) != 1 {
 				t.Fatal("partial LAN sampling became PASS or retried", r, err)
+			}
+			if len(served) != 1 || mode == "parent_deadline" && (r.Accepted != 1 || !errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+				t.Fatal("partial-window test did not reach its HTTPS fixture before cancellation/deadline", r)
 			}
 		})
 	}
