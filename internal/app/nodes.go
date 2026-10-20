@@ -382,7 +382,15 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, "для сервиса нет безопасного контрольного сценария", http.StatusBadRequest)
 		return
 	}
-	result, _, err := a.checkAndRecordNodeForEngine(r.Context(), engine, id, service, "", 0)
+	// Omitted engine means the compatible default for this canonical profile.
+	// An explicit executor remains an explicit choice, including its refusal.
+	if request.Engine == "" {
+		engine, err = a.compatibleNodeEngine(r.Context(), engine, id)
+	}
+	var result dataplane.NodeCheckResult
+	if err == nil {
+		result, _, err = a.checkAndRecordNodeForEngine(r.Context(), engine, id, service, "", 0)
+	}
 	if err != nil {
 		switch {
 		case errors.Is(err, errNodeHistoryAdmission):
@@ -430,7 +438,7 @@ func (a *App) nodeCheck(w http.ResponseWriter, r *http.Request, id string) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": result.Available, "result": result, "working_routes_changed": false})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": result.Available, "engine": engine, "result": result, "working_routes_changed": false})
 }
 
 // Both explicit checks and applied-route recovery use this exact checker and

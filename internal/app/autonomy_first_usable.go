@@ -56,6 +56,10 @@ func orderAutonomyExactReserves(ids []string, keep string) []string {
 }
 
 func autonomyTraversalVersion(p autonomy.Policy, s autonomy.Service, engine, profile string) string {
+	if s.ExpectedRoute == "auto" {
+		// Revisit candidates consumed by the old Sing-box-only AUTO traversal.
+		engine += ":compatible-v1"
+	}
 	data, _ := json.Marshal(struct {
 		Revision           uint64
 		Service            autonomy.Service
@@ -166,7 +170,14 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	}, nodestore.SearchHooks{
 		Guard: guard,
 		Check: func(c context.Context, id string) (nodestore.SearchCheck, error) {
-			check, err := a.checkAutonomyReserveForEngine(c, p, s, cfg, engine, id, service, profile)
+			candidateEngine, err := a.autonomyCandidateEngine(c, p, s, engine, id)
+			if err == dataplane.ErrExactNodeUnsupported {
+				return nodestore.SearchCheck{Outcome: nodestore.SearchUnsupported}, nil
+			}
+			if err != nil {
+				return nodestore.SearchCheck{}, err
+			}
+			check, err := a.checkAutonomyReserveForEngine(c, p, s, cfg, candidateEngine, id, service, profile)
 			if err == dataplane.ErrExactNodeUnsupported && c.Err() == nil && check.ErrorCode != "node-cleanup-failed" {
 				return nodestore.SearchCheck{Outcome: nodestore.SearchUnsupported}, nil
 			}
@@ -191,7 +202,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 				}
 				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
 			}
-			return nodestore.SearchCheck{Outcome: outcome, ProbeID: check.ProbeID, CheckedAt: check.FinishedAt}, nil
+			return nodestore.SearchCheck{Outcome: outcome, ProbeID: check.ProbeID, CheckedAt: check.FinishedAt, Engine: candidateEngine}, nil
 		},
 		PersistCursor: func(c context.Context, next int) error {
 			if next == 0 {
@@ -222,7 +233,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			return a.applyAutonomyRoute(c, p, s, cfg, profile, route.Route)
 		},
 		ContinueAfterRollback: func(c context.Context, route nodestore.ResolvedRoute, applyErr error) (bool, error) {
-			failure, ok := a.autonomyCandidateFailureForEngine(c, p, s, cfg, engine, profile, route.NodeID, applyErr)
+			failure, ok := a.autonomyCandidateFailureForEngine(c, p, s, cfg, autonomyNodeEngine(route.Route), profile, route.NodeID, applyErr)
 			if !ok {
 				return false, nil
 			}

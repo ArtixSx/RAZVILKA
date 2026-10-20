@@ -77,6 +77,35 @@ func TestSearchFirstUsableAppliesImmediatelyAndKeepsEngine(t *testing.T) {
 	}
 }
 
+func TestSearchMixedEngineUsesOnlyFreshMatchingExecutorProof(t *testing.T) {
+	for _, actual := range []string{"sing-box", "xray", "invalid"} {
+		t.Run(actual, func(t *testing.T) {
+			s, ids, req, hooks := searchFixture(t, 1, "sing-box")
+			hooks.Check = func(ctx context.Context, id string) (SearchCheck, error) {
+				at := hooks.Now()
+				record := enginePass(id, actual, "mixed-engine", at)
+				if actual == "invalid" {
+					record = enginePass(id, "sing-box", "mixed-engine", at)
+				}
+				if _, err := s.RecordCheck(ctx, id, record, at); err != nil {
+					return SearchCheck{}, err
+				}
+				return SearchCheck{Outcome: SearchUsable, Engine: "xray", ProbeID: record.ProbeID, CheckedAt: at}, nil
+			}
+			applied := ""
+			hooks.Apply = func(_ context.Context, route ResolvedRoute) error { applied = route.Route; return nil }
+			result, err := s.SearchFirstUsable(context.Background(), req, hooks)
+			if actual == "xray" {
+				if err != nil || applied != "xray:"+ids[0] || result.Checks != 1 || result.ApplyAttempts != 1 {
+					t.Fatalf("fresh Xray candidate was not applied with its executor: %+v %s %v", result, applied, err)
+				}
+			} else if err == nil || applied != "" || result.ApplyAttempts != 0 {
+				t.Fatal("Sing-box proof was relabeled as Xray", result, applied, err)
+			}
+		})
+	}
+}
+
 func TestSearchBFailureRequiresVerifiedRollbackBeforeFreshCCheck(t *testing.T) {
 	for _, verified := range []bool{false, true} {
 		t.Run(fmt.Sprint(verified), func(t *testing.T) {

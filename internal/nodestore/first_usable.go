@@ -43,6 +43,9 @@ type SearchCheck struct {
 	Outcome   SearchOutcome
 	ProbeID   string
 	CheckedAt time.Time
+	// A trusted mixed-engine search may name the executor actually checked.
+	// Fresh record verification still binds its route, service and network.
+	Engine string
 }
 
 // SearchHooks are trusted application callbacks. There is no worker, goroutine,
@@ -167,7 +170,14 @@ func (s *Store) SearchFirstUsable(ctx context.Context, req SearchRequest, hooks 
 		if check.Outcome != SearchUsable && check.Outcome != SearchDefiniteFailure {
 			return result, ErrSearchInconclusive
 		}
-		if err := s.verifySearchRecord(ctx, req, id, check, started, now().UTC()); err != nil {
+		candidate := req
+		if check.Engine != "" {
+			if !validRouteEngine(check.Engine) {
+				return result, ErrSearchRequest
+			}
+			candidate.Engine = check.Engine
+		}
+		if err := s.verifySearchRecord(ctx, candidate, id, check, started, now().UTC()); err != nil {
 			return result, err
 		}
 		if err := advance(next); err != nil {
@@ -181,10 +191,10 @@ func (s *Store) SearchFirstUsable(ctx context.Context, req SearchRequest, hooks 
 			return result, err
 		}
 		// Re-read fresh eligibility and the same exact record after cursor I/O.
-		if err := s.verifySearchRecord(ctx, req, id, check, started, now().UTC()); err != nil {
+		if err := s.verifySearchRecord(ctx, candidate, id, check, started, now().UTC()); err != nil {
 			return result, err
 		}
-		route := ResolvedRoute{Route: req.Engine + ":" + id, NodeID: id, Reason: "first-usable"}
+		route := ResolvedRoute{Route: candidate.Engine + ":" + id, NodeID: id, Reason: "first-usable"}
 		if err := guard(); err != nil {
 			return result, err
 		}
