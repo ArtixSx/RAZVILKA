@@ -3,13 +3,13 @@ package dataplane
 import (
 	"context"
 	"errors"
-	"github.com/ArtixSx/razvilka/internal/routekind"
 	"net/netip"
 	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/netresolve"
+	"github.com/ArtixSx/razvilka/internal/routekind"
 )
 
 // Common CDN-backed services return five or more IPv4 addresses. Keep the
