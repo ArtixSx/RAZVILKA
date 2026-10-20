@@ -33,6 +33,17 @@ func TestUSQUEPackageAutomaticPoolRejectsLocalSubnetOverlap(t *testing.T) {
 	}
 }
 
+func TestUSQUEPackageDoesNotExemptUnprovenOwnHostAddress(t *testing.T) {
+	_, address, err := net.ParseCIDR("172.16.1.100/32")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkUSQUEAutomaticAddresses([]net.Addr{address})
+	if err == nil || !strings.Contains(err.Error(), "уже работающего штатного USQUE") {
+		t.Fatal("host address was exempted without ownership or update limitation was hidden", err)
+	}
+}
+
 func TestUSQUENetworkRefusalPrecedesDependenciesAndUpdateJournal(t *testing.T) {
 	refusal := errors.New("USQUE_PACKAGE_ADDRESS_CONFLICT: fixture local subnet")
 	for _, update := range []bool{false, true} {
