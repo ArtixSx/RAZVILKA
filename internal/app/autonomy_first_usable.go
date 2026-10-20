@@ -18,6 +18,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
 )
 
 var errAutonomySearchBudget = errors.New("autonomy apply budget exhausted")
@@ -75,7 +76,6 @@ func autonomyTraversalVersion(p autonomy.Policy, s autonomy.Service, engine, pro
 func prepareAutonomyTraversal(r *autonomy.Runtime, version string, ids []string, now time.Time) {
 	if r.Search == nil || r.Search.Version != version {
 		ordered := slices.Clone(ids)
-		slices.Sort(ordered)
 		r.Search = &autonomy.Traversal{Version: version, Ordered: ordered, Exhausted: len(ordered) == 0}
 		return
 	}
@@ -151,6 +151,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		return finish("requires-review", "Предыдущая попытка применения требует проверки; дальнейший подбор остановлен.")
 	}
 	prepareAutonomyTraversal(&r, autonomyTraversalVersion(p, s, engine, profile), ids, time.Now())
+	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, time.Now())
 	if err := a.persistAutonomySearch(ctx, s.ID, r); err != nil {
 		return finish("requires-review", "Не удалось сохранить ход подбора; переключение остановлено.")
 	}
@@ -270,4 +271,69 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		return finish(state, message)
 	}
 	return finish("searching", "Подходящий узел пока не найден; ограниченный подбор продолжится.")
+}
+
+// Proof is only a scheduling hint. SearchFirstUsable still checks the exact
+// candidate afresh and persists its receipt before the ordinary Apply gate.
+// Never replay a consumed candidate or clear an untrusted application latch.
+func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Policy, s autonomy.Service, r *autonomy.Runtime, engine, profile string, eligible []string, now time.Time) {
+	if r.Search == nil || r.Search.Halted || a.Nodes == nil {
+		return
+	}
+	snapshot, err := a.Nodes.Snapshot(ctx, now)
+	if err != nil {
+		return
+	}
+	nodes := map[string]nodestore.Node{}
+	for _, n := range snapshot.Nodes {
+		nodes[n.ID] = n
+	}
+	t := r.Search
+	preferred, rest := []string{}, []string{}
+	for _, id := range t.Ordered[t.Cursor:] {
+		fresh := false
+		// Avoid reopening the private catalogue for every unchecked/failed
+		// row. This display-history prefilter grants no authority: resolution
+		// and the runtime-contract check below remain mandatory.
+		potential := slices.ContainsFunc(nodes[id].Health.History, func(check nodestore.CheckRecord) bool {
+			return check.ServiceID == s.ID && check.NetworkProfile == profile && check.Verdict == "PASS" && check.TestLevel == "service" && now.Before(check.ExpiresAt)
+		})
+		if potential && slices.Contains(eligible, id) && !r.CandidateCoolingDown(id) && allowedAutonomyNode(p, nodes[id], now) {
+			candidateEngine, err := a.autonomyCandidateEngine(ctx, p, s, engine, id)
+			if err == nil {
+				_, err = a.Nodes.ResolveRouteForEngine(ctx, candidateEngine, id, s.ID, profile, "", time.Time{}, now)
+				fresh = err == nil
+				if fresh && candidateEngine == "sing-box" {
+					// ResolveRoute does not inspect executor defaults. Match the same runtime
+					// contract enforced by materialization without changing canonical material.
+					fresh = a.Nodes.WithSecret(ctx, id, func(raw []byte) error {
+						var outbound map[string]any
+						if json.Unmarshal(raw, &outbound) != nil {
+							return nodestore.ErrRouteProof
+						}
+						_, contract := providerprofile.SingBoxRuntimeOutbound(outbound)
+						if contract == "" {
+							return nil
+						}
+						for _, check := range nodes[id].Health.History {
+							if check.ServiceID == s.ID && check.NetworkProfile == profile && check.RoutePathID == candidateEngine+":"+id {
+								if check.RuntimeContract == contract {
+									return nil
+								}
+								return nodestore.ErrRouteProof
+							}
+						}
+						return nodestore.ErrRouteProof
+					}) == nil
+				}
+			}
+		}
+		if fresh {
+			preferred = append(preferred, id)
+		} else {
+			rest = append(rest, id)
+		}
+	}
+	ordered := slices.Clone(t.Ordered[:t.Cursor])
+	t.Ordered = append(append(ordered, preferred...), rest...)
 }
