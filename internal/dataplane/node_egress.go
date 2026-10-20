@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/netip"
 	"net/url"
 	"strconv"
@@ -30,6 +31,44 @@ type nodeEgressGetter func(context.Context, nodeEgressEndpoint, string) (string,
 type nodeEgressPair struct {
 	directIP, proxyIP   string
 	directErr, proxyErr error
+}
+
+// Only this closed vocabulary crosses the result/API boundary. In particular,
+// never retain an URL error's text: it can contain a remote address or profile.
+type nodeEgressFailure string
+
+func (e nodeEgressFailure) Error() string { return "egress measurement failed: " + string(e) }
+
+func nodeEgressErrorCategory(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.Canceled) {
+		return "canceled"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "timeout"
+	}
+	var failure nodeEgressFailure
+	if errors.As(err, &failure) {
+		switch failure {
+		case "socks_connect", "tcp_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse", "http_transport":
+			return string(failure)
+		}
+	}
+	return "unavailable"
+}
+
+func nodeEgressTransportFailure(err error, fallback nodeEgressFailure) error {
+	var certificate *tls.CertificateVerificationError
+	if errors.As(err, &certificate) {
+		return nodeEgressFailure("certificate")
+	}
+	var timeout net.Error
+	if errors.As(err, &timeout) && timeout.Timeout() {
+		return nodeEgressFailure("timeout")
+	}
+	return fallback
 }
 
 // The pair must use the same HTTPS provider and literal destination. Otherwise
@@ -84,7 +123,15 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 				return "", attempt.Err()
 			}
 			parsed, parseErr := netip.ParseAddr(strings.TrimSpace(ip))
-			if err != nil || parseErr != nil || !parsed.Is4() || parsed.Is4In6() || !publicfetch.PublicAddress(parsed) {
+			if err != nil {
+				// Preserve only a recognized safe category. Context/resource handling
+				// above, provider retries and acceptance conditions stay unchanged.
+				if category := nodeEgressErrorCategory(err); category != "unavailable" {
+					return "", nodeEgressFailure(category)
+				}
+				return "", errors.New("public IPv4 egress measurement is unavailable")
+			}
+			if parseErr != nil || !parsed.Is4() || parsed.Is4In6() || !publicfetch.PublicAddress(parsed) {
 				return "", errors.New("public IPv4 egress measurement is unavailable")
 			}
 			return parsed.String(), nil
@@ -209,6 +256,7 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 		}
 		dial = contextDialer.DialContext
 	}
+	dialFailure := make(chan error, 1)
 	transport := &http.Transport{
 		Proxy: nil, DisableKeepAlives: true, DisableCompression: true,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: p.roots, ServerName: origin.Hostname()},
@@ -221,7 +269,19 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 			if err := checkNodeResource(ctx, host, pinned); err != nil {
 				return nil, err
 			}
-			return dial(ctx, "tcp4", net.JoinHostPort(pinned.String(), "443"))
+			connection, err := dial(ctx, "tcp4", net.JoinHostPort(pinned.String(), "443"))
+			if err != nil {
+				category := nodeEgressFailure("tcp_connect")
+				if proxyAddress != "" {
+					category = "socks_connect"
+				}
+				select {
+				case dialFailure <- nodeEgressTransportFailure(err, category):
+				default:
+				}
+			}
+			// The transport still receives the original error and connection.
+			return connection, err
 		},
 	}
 	defer transport.CloseIdleConnections()
@@ -231,16 +291,37 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 		return "", errors.New("egress request is invalid")
 	}
 	request.Header.Set("User-Agent", "RAZVILKA-Node-Check/1")
+	handshakeDone := make(chan error, 1)
+	request = request.WithContext(httptrace.WithClientTrace(request.Context(), &httptrace.ClientTrace{
+		TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+			select {
+			case handshakeDone <- err:
+			default:
+			}
+		},
+	}))
 	response, err := client.Do(request)
 	if err != nil {
 		if guardErr := checkNodeResource(ctx, "", netip.Addr{}); guardErr != nil {
 			return "", guardErr
 		}
-		return "", errors.New("egress HTTPS request failed")
+		select {
+		case handshakeErr := <-handshakeDone:
+			if handshakeErr != nil {
+				return "", nodeEgressTransportFailure(handshakeErr, "tls_handshake")
+			}
+		default:
+		}
+		select {
+		case failure := <-dialFailure:
+			return "", failure
+		default:
+		}
+		return "", nodeEgressTransportFailure(err, "http_transport")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return "", errors.New("egress HTTPS status is not successful")
+		return "", nodeEgressFailure("http_status")
 	}
 	limit := int64(128)
 	if endpoint.trace {
@@ -249,19 +330,19 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	defer clear(body)
 	if err != nil || int64(len(body)) > limit {
-		return "", errors.New("egress response exceeds its bound")
+		return "", nodeEgressFailure("body_parse")
 	}
 	value := strings.TrimSpace(string(body))
 	if endpoint.trace {
 		trace, err := parseCloudflareTrace(value)
 		if err != nil {
-			return "", errors.New("egress trace is invalid")
+			return "", nodeEgressFailure("body_parse")
 		}
 		value = trace.EgressIP
 	}
 	address, err := netip.ParseAddr(value)
 	if err != nil || !address.Is4() || address.Is4In6() || !publicfetch.PublicAddress(address) {
-		return "", errors.New("egress response is not public IPv4")
+		return "", nodeEgressFailure("body_parse")
 	}
 	if err := checkNodeResource(ctx, origin.Hostname(), pinned); err != nil {
 		return "", err
