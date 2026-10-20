@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log"
 	"reflect"
 	"slices"
 	"sort"
@@ -587,6 +588,7 @@ func (a *App) autonomyProbeRoute(ctx context.Context, s catalog.Service, route, 
 type autonomyRouteObservation struct {
 	Verdict           string
 	RetryAfterSeconds int
+	Reason            string // closed diagnostic code; never provider details or identifiers
 }
 
 // A rate limit schedules only this service. It breaks failure confirmation,
@@ -603,10 +605,17 @@ func (o autonomyRouteObservation) pause(r *autonomy.Runtime) bool {
 	return true
 }
 
-func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Service, route, profile string) autonomyRouteObservation {
-	unknown := autonomyRouteObservation{Verdict: "INCONCLUSIVE"}
+func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Service, route, profile string) (observation autonomyRouteObservation) {
+	defer func() {
+		if observation.Verdict == "INCONCLUSIVE" && observation.Reason != "" {
+			log.Printf("autonomy route observation inconclusive: reason=%s", observation.Reason)
+		}
+	}()
+	unknown := func(reason string) autonomyRouteObservation {
+		return autonomyRouteObservation{Verdict: "INCONCLUSIVE", Reason: reason}
+	}
 	if a.TestLab == nil || a.RouteProber == nil || a.Store == nil {
-		return unknown
+		return unknown("probe-unavailable")
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -616,12 +625,15 @@ func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Servi
 	a.autonomy.mu.Unlock()
 	store := a.Store
 	cfg := store.Get()
-	if !known || a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
-		return unknown
+	if !known {
+		return unknown("service-not-enrolled")
+	}
+	if err := a.autonomyResourceGuard(probeCtx, p, spec, cfg, s); err != nil {
+		return unknown(autonomyObservationContextReason(probeCtx, "resource-before", err))
 	}
 	observed, err := a.freshNetworkProfile(probeCtx)
 	if err != nil || observed != profile {
-		return unknown
+		return unknown(autonomyObservationContextReason(probeCtx, "network-before", err))
 	}
 	// Autonomy consumes this private verdict in its own round. Keep the batch
 	// unrecorded so a closing refusal cannot leak observations into TestLab
@@ -629,21 +641,24 @@ func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Servi
 	runner, prober := a.TestLab, a.RouteProber
 	results := runner.ProbeRoutesUnrecorded(probeCtx, a.catalogSnapshot(), []string{s.ID}, []string{route}, prober)
 	current, err := a.freshNetworkProfile(probeCtx)
-	if err != nil || current != observed || a.TestLab != runner || a.Store != store {
-		return unknown
+	if err != nil || current != observed {
+		return unknown(autonomyObservationContextReason(probeCtx, "network-after", err))
+	}
+	if a.TestLab != runner || a.Store != store {
+		return unknown("observation-owner-changed")
 	}
 	for i := range results {
 		r := &results[i]
 		if r.NetworkProfileID != "" && r.NetworkProfileID != observed || r.EvidenceV2 != nil && r.EvidenceV2.NetworkProfile != "" && r.EvidenceV2.NetworkProfile != observed {
-			return unknown
+			return unknown("result-network-mismatch")
 		}
 		r.NetworkProfileID = observed
 		if r.EvidenceV2 != nil {
 			r.EvidenceV2.NetworkProfile = observed
 		}
 	}
-	if a.autonomyResourceGuard(probeCtx, p, spec, cfg, s) != nil {
-		return unknown
+	if err := a.autonomyResourceGuard(probeCtx, p, spec, cfg, s); err != nil {
+		return unknown(autonomyObservationContextReason(probeCtx, "resource-after", err))
 	}
 	for _, r := range testlab.AggregateScenarios(results) {
 		if r.ServiceID != s.ID || r.Route != route {
@@ -666,10 +681,41 @@ func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Servi
 			if delay <= 0 {
 				delay = 5 * 60
 			}
-			return autonomyRouteObservation{Verdict: "INCONCLUSIVE", RetryAfterSeconds: max(30, min(delay, 30*60))}
+			return autonomyRouteObservation{Verdict: "INCONCLUSIVE", RetryAfterSeconds: max(30, min(delay, 30*60)), Reason: "service-rate-limited"}
 		}
+		if !fresh {
+			return unknown("result-not-fresh")
+		}
+		code := r.ErrorCode
+		if code == "" && r.EvidenceV2 != nil {
+			code = r.EvidenceV2.ErrorCode
+		}
+		switch code {
+		case "timeout":
+			return unknown("probe-timeout")
+		case "tls-certificate-mismatch":
+			return unknown("probe-tls-rejected")
+		}
+		if !r.RouteConfirmed || r.RouteProofError != "" {
+			return unknown("route-proof-unconfirmed")
+		}
+		if r.Status == "not-ready" {
+			return unknown("probe-not-ready")
+		}
+		return unknown("service-verdict-inconclusive")
 	}
-	return unknown
+	return unknown("result-missing")
+}
+
+func autonomyObservationContextReason(ctx context.Context, stage string, failures ...error) string {
+	failure := errors.Join(append(failures, ctx.Err())...)
+	if errors.Is(failure, context.DeadlineExceeded) {
+		return stage + "-deadline"
+	}
+	if errors.Is(failure, context.Canceled) {
+		return stage + "-canceled"
+	}
+	return stage + "-refused"
 }
 
 func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, route string) error {
