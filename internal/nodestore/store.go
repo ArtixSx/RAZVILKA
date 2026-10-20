@@ -93,22 +93,23 @@ type Health struct {
 // CheckRecord contains only bounded, redacted observations. Endpoint hosts,
 // credentials, raw errors and direct egress addresses never enter this DTO.
 type CheckRecord struct {
-	ProbeID        string    `json:"probe_id"`
-	ServiceID      string    `json:"service_id"`
-	NetworkProfile string    `json:"network_profile"`
-	RoutePathID    string    `json:"route_path_id"`
-	TestLevel      string    `json:"test_level"`
-	Verdict        string    `json:"verdict"`
-	State          string    `json:"state"`
-	Stage          string    `json:"stage"`
-	CheckedAt      time.Time `json:"checked_at"`
-	ExpiresAt      time.Time `json:"expires_at"`
-	LatencyMS      int64     `json:"latency_ms,omitempty"`
-	EgressIP       string    `json:"egress_ip,omitempty"`
-	HTTPStatus     int       `json:"http_status,omitempty"`
-	ErrorCode      string    `json:"error_code,omitempty"`
-	Message        string    `json:"message,omitempty"`
-	DirectLeak     bool      `json:"direct_leak,omitempty"`
+	ProbeID         string    `json:"probe_id"`
+	ServiceID       string    `json:"service_id"`
+	NetworkProfile  string    `json:"network_profile"`
+	RoutePathID     string    `json:"route_path_id"`
+	TestLevel       string    `json:"test_level"`
+	Verdict         string    `json:"verdict"`
+	State           string    `json:"state"`
+	Stage           string    `json:"stage"`
+	CheckedAt       time.Time `json:"checked_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	LatencyMS       int64     `json:"latency_ms,omitempty"`
+	EgressIP        string    `json:"egress_ip,omitempty"`
+	HTTPStatus      int       `json:"http_status,omitempty"`
+	ErrorCode       string    `json:"error_code,omitempty"`
+	Message         string    `json:"message,omitempty"`
+	DirectLeak      bool      `json:"direct_leak,omitempty"`
+	RuntimeContract string    `json:"runtime_contract,omitempty"`
 }
 
 type Node struct {
@@ -654,6 +655,9 @@ func validAlias(alias string) bool {
 var checkTokenPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,127}$`)
 
 func validCheckRecord(record CheckRecord, nodeID string) bool {
+	if record.RuntimeContract != "" && (record.RuntimeContract != providerprofile.SingBoxRealityUTLSContract || !strings.HasPrefix(record.RoutePathID, "sing-box:")) {
+		return false
+	}
 	if !checkTokenPattern.MatchString(record.ProbeID) || !sourcePattern.MatchString(record.ServiceID) ||
 		!checkTokenPattern.MatchString(record.NetworkProfile) || !validExactRoute(record.RoutePathID, nodeID) ||
 		record.CheckedAt.IsZero() || record.ExpiresAt.IsZero() || !record.ExpiresAt.After(record.CheckedAt) ||

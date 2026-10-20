@@ -22,6 +22,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/probecheck"
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
@@ -77,6 +78,7 @@ type NodeCheckResult struct {
 	DirectLeak        bool                   `json:"direct_leak"`
 	DirectEgressError string                 `json:"direct_egress_error,omitempty"`
 	ProxyEgressError  string                 `json:"proxy_egress_error,omitempty"`
+	RuntimeContract   string                 `json:"runtime_contract,omitempty"`
 	Stages            []NodeCheckStage       `json:"stages"`
 	Evidence          evidence.ProbeEvidence `json:"evidence"`
 }
@@ -375,6 +377,12 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	endpoint, passed := c.transportStages(ctx, request, &result)
 	if !passed {
 		return result, nil
+	}
+	if c.EngineID() == "sing-box" {
+		var outbound map[string]any
+		if json.Unmarshal(request.Outbound, &outbound) == nil {
+			_, result.RuntimeContract = providerprofile.SingBoxRuntimeOutbound(outbound)
+		}
 	}
 
 	stageStarted := c.currentTime()
@@ -876,24 +884,12 @@ func (c *ExactNodeChecker) prepareSession(ctx context.Context, session exactNode
 	if err := os.MkdirAll(session.Root, 0o700); err != nil {
 		return session, err
 	}
-	var outbound map[string]any
-	if json.Unmarshal(request.Outbound, &outbound) != nil {
-		return session, errors.New("invalid outbound")
+	data, err := compilePinnedSingBoxNodeConfig(request.Outbound, endpoint, session.Port)
+	if err != nil {
+		return session, err
 	}
-	if !endpoint.Pinned.IsValid() {
-		return session, errors.New("endpoint not pinned")
-	}
-	preserveNodeHostname(outbound, endpoint.Host)
-	outbound["server"] = endpoint.Pinned.String()
-	outbound["tag"] = "rz-exact-node"
-	document := map[string]any{
-		"log":       map[string]any{"level": "warn", "timestamp": true},
-		"inbounds":  []any{map[string]any{"type": "socks", "tag": "rz-node-check-in", "listen": "127.0.0.1", "listen_port": session.Port}},
-		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
-		"route":     map[string]any{"final": "rz-exact-node", "auto_detect_interface": true},
-	}
-	data, err := json.MarshalIndent(document, "", "  ")
-	if err != nil || writeAtomic(session.Spec.MatchArg, data, 0o600) != nil {
+	defer clear(data)
+	if writeAtomic(session.Spec.MatchArg, data, 0o600) != nil {
 		return session, errors.New("write candidate")
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -903,6 +899,27 @@ func (c *ExactNodeChecker) prepareSession(ctx context.Context, session exactNode
 		return session, errors.New("sing-box check failed")
 	}
 	return session, nil
+}
+
+func compilePinnedSingBoxNodeConfig(raw []byte, endpoint exactNodeEndpoint, port int) ([]byte, error) {
+	var outbound map[string]any
+	if json.Unmarshal(raw, &outbound) != nil {
+		return nil, errors.New("invalid outbound")
+	}
+	if !endpoint.Pinned.IsValid() {
+		return nil, errors.New("endpoint not pinned")
+	}
+	preserveNodeHostname(outbound, endpoint.Host)
+	outbound, _ = providerprofile.SingBoxRuntimeOutbound(outbound)
+	outbound["server"] = endpoint.Pinned.String()
+	outbound["tag"] = "rz-exact-node"
+	document := map[string]any{
+		"log":       map[string]any{"level": "warn", "timestamp": true},
+		"inbounds":  []any{map[string]any{"type": "socks", "tag": "rz-node-check-in", "listen": "127.0.0.1", "listen_port": port}},
+		"outbounds": []any{outbound, map[string]any{"type": "direct", "tag": "direct"}},
+		"route":     map[string]any{"final": "rz-exact-node", "auto_detect_interface": true},
+	}
+	return json.MarshalIndent(document, "", "  ")
 }
 
 func preserveNodeHostname(outbound map[string]any, hostname string) {

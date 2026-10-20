@@ -342,6 +342,10 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 }
 
 func buildBundleConfig(outbounds []map[string]any, selectedIndex int) ([]byte, error) {
+	outbounds = append([]map[string]any(nil), outbounds...)
+	for i, out := range outbounds {
+		outbounds[i], _ = SingBoxRuntimeOutbound(out)
+	}
 	items := make([]any, 0, len(outbounds)+3)
 	if len(outbounds) == 1 {
 		outbounds[0]["tag"] = "proxy"

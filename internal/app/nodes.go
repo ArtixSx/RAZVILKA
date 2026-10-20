@@ -612,6 +612,7 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 			RoutePathID: result.RoutePathID, TestLevel: result.TestLevel, Verdict: string(result.Verdict), State: state,
 			Stage: result.Stage, CheckedAt: result.FinishedAt, ExpiresAt: result.ExpiresAt, LatencyMS: result.LatencyMS,
 			EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, ErrorCode: result.ErrorCode, Message: result.Message, DirectLeak: result.DirectLeak,
+			RuntimeContract: result.RuntimeContract,
 		}, time.Now())
 		return recordErr
 	})

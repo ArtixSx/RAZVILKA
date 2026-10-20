@@ -208,6 +208,17 @@ func (s *Store) materializeEngine(ctx context.Context, engine string, bindings [
 		if index < 0 || doc.Nodes[index].Disabled || !originFresh(doc.Nodes[index], now) || !nodeHasRouteProofForEngine(doc.Nodes[index], engine, binding, now) {
 			return RouteMaterial{}, ErrRouteProof
 		}
+		if engine == "sing-box" {
+			var outbound map[string]any
+			if json.Unmarshal(secrets[doc.Nodes[index].SecretRef], &outbound) != nil {
+				return RouteMaterial{}, ErrStore
+			}
+			_, contract := providerprofile.SingBoxRuntimeOutbound(outbound)
+			check, _ := latestRouteCheckForEngine(doc.Nodes[index], engine, binding.ServiceID, binding.NetworkProfile)
+			if contract != "" && check.RuntimeContract != contract {
+				return RouteMaterial{}, ErrRouteProof
+			}
+		}
 		requested[binding.NodeID] = doc.Nodes[index]
 	}
 
@@ -231,6 +242,9 @@ func (s *Store) materializeEngine(ctx context.Context, engine string, bindings [
 		}
 		if engine == "sing-box" && !providerprofile.SingBoxSupportsOutbound(outbound) {
 			return RouteMaterial{}, ErrRouteProof
+		}
+		if engine == "sing-box" {
+			outbound, _ = providerprofile.SingBoxRuntimeOutbound(outbound)
 		}
 		collectPrivateEndpointHosts(outbound, endpointSet)
 		if engine == "xray" {
