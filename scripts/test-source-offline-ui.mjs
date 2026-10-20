@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const app=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
 const extract=name=>{const match=app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`));assert(match,name);return match[0];};
-const sourceNames=['acceptSourceOfflineCatalog','sourceOfflineDate','sourceHasSavedCopy','sourceOfflineStateText','syncSourceViewControls','readSourceView','switchSourceView','handleSourceViewLifecycle','sourceStateText','sourceFreshnessText','sourceKindText','sourceDiffText','renderSources','runSourceAction','refreshSources','setSourceDraft','applySourceDraft','discardSourceDraft'];
+const sourceNames=['acceptSourceOfflineCatalog','sourceOfflineDate','sourceHasSavedCopy','sourceOfflineStateText','syncSourceViewControls','readSourceView','switchSourceView','handleSourceViewLifecycle','sourceStateText','sourceFreshnessText','sourceErrorText','sourceKindText','sourceDiffText','renderSources','runSourceAction','refreshSources','setSourceDraft','applySourceDraft','discardSourceDraft'];
 const panelNames=['panelReadContext','panelReadContextCurrent','invalidatePanelReads','readPanelResource','panelViewKeys','panelViewRequests','panelSectionState','panelBusy','refreshPanelLoadNotice','panelSnapshotCurrent','schedulePanelRetry','cancelPanelRefresh','renderPanelLoad','renderPanelSection','acceptPanelSection','acceptPanelInventory','settlePanelReads','refreshAll','loadPanelSnapshot'];
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve;const promise=new Promise(yes=>resolve=yes);return {promise,resolve};};
@@ -98,3 +98,15 @@ f=fixture();await f.context.readSourceView();const lateWrite=deferred();f.set((u
 const applying=f.context.applySourceDraft();f.context.showAuth();lateWrite.resolve({sources:[{...base,ready:true,name:'old authenticated write'}],note:'old success'});await applying;
 assert.equal(f.messages.length,0,'late pre-logout mutation published a success notice');assert.doesNotMatch(f.$('#sourceRows').innerHTML,/old authenticated write/);assert.equal(f.$('#applySourceChanges').disabled,true);
 console.log('PASS source offline UI: exact GET view, immutable live data/dates, truthful warning labels, disabled writes and real panel/auth epoch fences');
+
+for(const outcome of ['partial','failed','retained','all','none']){
+ const f=fixture();await f.context.readSourceView('online');
+ const good={...f.online[0],kind:'domains',applied_enabled:true,ready:true,last_error:'',last_known_good:false,legacy_cache:false,cache_status:'fresh'};
+ const bad={...good,id:'telegram',ready:false,cache_status:'quarantined',last_error:'source network request failed; check DNS, HTTPS and availability'};
+ const rows=outcome==='partial'?[good,bad]:outcome==='failed'?[bad]:outcome==='retained'?[{...bad,ready:true,last_known_good:true,cache_status:'last-known-good'},{...good,applied_enabled:false},{...good,kind:'reference'}]:outcome==='all'?[good]:[{...good,applied_enabled:false}];
+ f.set((url,options)=>url==='/api/v1/sources/refresh'?rows:f.normal(url,options));await f.context.refreshSources();
+ const detail=f.messages.at(-1);assert.equal(detail[1],({partial:'Источники обновлены частично',failed:'Источники не обновлены',retained:'Источники не обновлены',all:'Источники обновлены',none:'Нет используемых источников'})[outcome]);
+ if(outcome==='retained')assert.match(detail[0].message,/0 из 1/,'retained copy, draft-only source and reference must not count as refreshed');
+ if(outcome==='partial'||outcome==='failed'){assert.match(detail[0].message,outcome==='partial'?/1 из 2/:/0 из 1/);const html=f.$('#sourceRows').innerHTML;assert.match(html,/Не удалось загрузить источник/);assert.match(html,/<details><summary>Технические сведения об ошибке<\/summary><p>source network request failed/);}
+}
+console.log('PASS source refresh distinguishes partial/all/none/failure and keeps raw errors in technical details');

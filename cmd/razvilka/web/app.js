@@ -3665,6 +3665,13 @@ function sourceStateText(s) {
   return ['не загружен', ''];
 }
 
+function sourceErrorText(s) {
+  if (!s.last_error) return '';
+  return /network|DNS|HTTPS|timeout|connection|fetch/i.test(s.last_error)
+    ? 'Не удалось загрузить источник. Проверьте DNS, доступ по HTTPS и доступность сервера.'
+    : 'Обновление источника отклонено. Проверьте технические сведения перед повторной загрузкой.';
+}
+
 function sourceFreshnessText(s) {
   if (s.kind === 'reference') return '';
   if (s.cache_status === 'stale') return 'Срок актуальности истёк. Обновите список перед новой настройкой маршрутов.';
@@ -3701,7 +3708,7 @@ function renderSources() {
       const [text, tone] = sourceOfflineStateText(source), provenance = source.provenance || {};
       const metadata = [['SHA256',source.sha256],['Происхождение',provenance.url],['Конечный адрес',provenance.final_url],['Отпечаток исходного ответа',provenance.raw_sha256],['Уровень источника',provenance.trust_tier]];
       const receipt = `<details class="source-saved-receipt"><summary>Отпечаток и происхождение</summary>${metadata.map(([label,value])=>`<div><b>${label}</b><span>${esc(value || '—')}</span></div>`).join('')}</details>`;
-      return `<tr class="${source.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(source.name)}</b><div class="source-role">${esc(source.description || '')}</div></td><td><button class="toggle ${source.enabled ? 'on' : ''}" disabled aria-readonly="true" aria-pressed="${source.enabled}" aria-label="Сохранённый выбор ${esc(source.name)}"><i></i></button><small class="source-applied-state">Сохранённый выбор: ${source.enabled ? 'включён' : 'выключен'}<br>Применённый выбор: ${source.applied_enabled ? 'включён' : 'выключен'}${source.dirty ? '<br>Есть сохранённые изменения выбора' : ''}</small></td><td>${esc(sourceKindText(source.kind))}</td><td><span class="source-state"><i class="state-dot ${tone}"></i>${esc(text)}</span></td><td>${source.entries.toLocaleString('ru-RU')}</td><td><div class="source-role">Загружено: ${esc(sourceOfflineDate(source.updated_at))}<br>Срок локальной копии: ${esc(sourceOfflineDate(source.expires_at))}</div>${source.last_error ? `<div>${esc(source.last_error)}</div>` : ''}<div class="source-role">${esc(sourceDiffText({...source,legacy_cache:false}))}</div>${receipt}</td></tr>`;
+      return `<tr class="${source.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(source.name)}</b><div class="source-role">${esc(source.description || '')}</div></td><td><button class="toggle ${source.enabled ? 'on' : ''}" disabled aria-readonly="true" aria-pressed="${source.enabled}" aria-label="Сохранённый выбор ${esc(source.name)}"><i></i></button><small class="source-applied-state">Сохранённый выбор: ${source.enabled ? 'включён' : 'выключен'}<br>Применённый выбор: ${source.applied_enabled ? 'включён' : 'выключен'}${source.dirty ? '<br>Есть сохранённые изменения выбора' : ''}</small></td><td>${esc(sourceKindText(source.kind))}</td><td><span class="source-state"><i class="state-dot ${tone}"></i>${esc(text)}</span></td><td>${source.entries.toLocaleString('ru-RU')}</td><td><div class="source-role">Загружено: ${esc(sourceOfflineDate(source.updated_at))}<br>Срок локальной копии: ${esc(sourceOfflineDate(source.expires_at))}</div>${source.last_error ? `<p>${esc(sourceErrorText(source))}</p><details><summary>Технические сведения об ошибке</summary><p>${esc(source.last_error)}</p></details>` : ''}<div class="source-role">${esc(sourceDiffText({...source,legacy_cache:false}))}</div>${receipt}</td></tr>`;
     }).join('') || '<tr><td colspan="6">Сохранённых сведений об источниках пока нет.</td></tr>';
     return;
   }
@@ -3715,7 +3722,7 @@ function renderSources() {
       ? '<span class="source-reference-mark">справочно</span>'
       : `<button class="toggle ${s.enabled ? 'on' : ''}" data-source-toggle="${esc(s.id)}" aria-pressed="${s.enabled ? 'true' : 'false'}" aria-label="${s.enabled ? 'Не использовать' : 'Использовать'} ${esc(s.name)}"><i></i></button><small class="source-applied-state">${s.dirty ? `черновик · сейчас ${s.applied_enabled ? 'включён' : 'выключен'}` : s.applied_enabled ? 'используется' : 'выключен'}</small>`;
     const stateText = s.dirty ? `${text} · выбор изменён` : text;
-    return `<tr class="${s.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.description || 'Проверяемый внешний источник данных.')}</div>${String(s.url || '').startsWith('https://') ? `<a class="source-url" href="${esc(s.url)}" target="_blank" rel="noreferrer">Сайт источника ↗</a>` : ''}</td><td><div class="source-choice">${control}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${s.dirty ? 'warn' : cls}"></i>${esc(stateText)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(sourceFreshnessText(s) || s.last_error || '—')}<div class="source-role">${esc(sourceDiffText(s))}</div></td></tr>`;
+    return `<tr class="${s.dirty ? 'source-dirty-row' : ''}"><td><b>${esc(s.name)}</b><div class="source-role">${esc(s.description || 'Проверяемый внешний источник данных.')}</div>${String(s.url || '').startsWith('https://') ? `<a class="source-url" href="${esc(s.url)}" target="_blank" rel="noreferrer">Сайт источника ↗</a>` : ''}</td><td><div class="source-choice">${control}</div></td><td>${esc(sourceKindText(s.kind))}</td><td><span class="source-state"><i class="state-dot ${s.dirty ? 'warn' : cls}"></i>${esc(stateText)}</span></td><td>${s.entries ? Number(s.entries).toLocaleString('ru-RU') : '—'}</td><td>${esc(sourceFreshnessText(s) || sourceErrorText(s) || '—')}${s.last_error ? `<details><summary>Технические сведения об ошибке</summary><p>${esc(s.last_error)}</p></details>` : ''}<div class="source-role">${esc(sourceDiffText(s))}</div></td></tr>`;
   }).join('');
   $$('[data-source-toggle]').forEach((button) => button.addEventListener('click', () => setSourceDraft(button.dataset.sourceToggle, button.getAttribute('aria-pressed') !== 'true')));
 }
@@ -5045,7 +5052,13 @@ async function discardDraft(scope = 'all', engineID = '') {
 }
 
 async function refreshSources() {
-  return runSourceAction(options => api('/api/v1/sources/refresh', { ...options, method: 'POST' }), result => showDetails({ message: 'Сохранённые как используемые источники обновлены и проверены.', sources: result }, 'Источники обновлены'));
+  return runSourceAction(options => api('/api/v1/sources/refresh', { ...options, method: 'POST' }), result => {
+    const rows=Array.isArray(result)?result:result?.sources||[],used=rows.filter(s=>s.kind!=='reference'&&s.applied_enabled);
+    const updated=used.filter(s=>s.ready&&!s.last_error&&!s.last_known_good&&!s.legacy_cache&&!['stale','quarantined'].includes(s.cache_status)).length;
+    const title=!used.length?'Нет используемых источников':updated===used.length?'Источники обновлены':updated?'Источники обновлены частично':'Источники не обновлены';
+    const message=!used.length?'Для обновления нет используемых списков. Справочные источники не загружаются.':`Обновлено и проверено: ${updated} из ${used.length} используемых источников.${updated<used.length?' Остальные не обновлены; проверьте ошибки и наличие предыдущих копий.':''} Рабочие маршруты автоматически не меняются.`;
+    showDetails({message,sources:result},title);
+  });
 }
 
 async function setSourceDraft(id, enabled) {
