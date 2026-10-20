@@ -32,8 +32,11 @@ keeps working on schedule with the browser closed.
 
 - **Bypass only what you enabled.** Other sites and apps, excluded devices and
   an empty list keep the router's ordinary route, including your own VPN.
-- **Exclusions always win.** An excluded device or site is never bypassed —
-  not manually, not by the autopilot, not during recovery.
+- **Site exclusions depend on the bypass method.** NFQWS2 leaves excluded
+  domains and their subdomains untouched. For VPN and proxy routes, exclude
+  an IP address, IP network or service: these routes cannot distinguish
+  domain exclusions. An excluded address or service overlapping a VPN or
+  proxy route blocks application with an explanation.
 - **No capture of unrelated sites.** Services defined by domain names use only
   a method that checks the site name in every connection (NFQWS2). IP routing
   through a VPN or proxy is disabled for them: one IP can host unrelated sites.
