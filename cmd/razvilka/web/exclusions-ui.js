@@ -67,7 +67,8 @@ function renderExclusionSites() {
 }
 
 function renderExclusionAuto() {
-  const view = exclusionsView, entries = new Set(exclusionLines(view.exclude?.content, true));
+  const saved = typeof resourceExclusionsCurrent === 'function' ? (resourceExclusionsCurrent()?.view?.manual || []).filter((row) => row.kind === 'exact' || row.kind === 'suffix').map((row) => String(row.value).toLowerCase()) : [];
+  const view = exclusionsView, entries = new Set([...exclusionLines(view.exclude?.content, true), ...saved]);
   const found = exclusionLines(view.auto?.content).filter((domain) => !exclusionCovered(domain, entries));
   return `<div class="exclusion-head"><h3>Найдено автоматически</h3><span class="tag">${found.length}</span></div>
     <p class="exclusion-lead">Режим AUTO NFQWS2 сам добавляет сайты, которые не открылись без обхода. Иногда сюда попадают и лишние: если сайт работает без обхода или с ним ломается, нажмите «Не обходить».</p>

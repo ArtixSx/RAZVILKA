@@ -12,10 +12,11 @@ import (
 )
 
 // SiteExclusions are the owner's "sites without bypass" in the whole-network
-// mode. NFQWS2 enforces them itself for every connection, before its own
-// selection (stock --hostlist-exclude and --ipset-exclude lists). A route that
-// selects traffic by address cannot see names; an excluded address that falls
-// inside such a route is refused as a conflict instead of being bypassed.
+// mode. NFQWS2 enforces them itself: profiles without actions placed before
+// every profile of the owner take excluded names and addresses (see
+// NFQWS2Adapter.exclusionConfig). A route that selects traffic by address
+// cannot see names; an excluded address that falls inside such a route is
+// refused as a conflict instead of being bypassed.
 //
 // Domains, CIDRs and Services are the owner's saved list. An excluded service
 // keeps its route, so applied state and the project switch stay consistent;

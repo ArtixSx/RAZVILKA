@@ -106,12 +106,17 @@ func TestNFQWS2SiteExclusionListsLifecycle(t *testing.T) {
 	if err := f.activate(t, plan, transaction); err != nil {
 		t.Fatal(err)
 	}
+	// The package's exclude lists keep only comments: an entry there would make
+	// the owner's profiles that read them require a hostname.
 	exclude, ipsetExclude := readText(t, f.exclude), readText(t, f.ipsetExclude)
-	if !strings.HasPrefix(exclude, "stock.example\n"+managedBegin) || !strings.Contains(exclude, "\nbank.example\n"+managedEnd) {
+	if !strings.HasPrefix(exclude, "stock.example\n"+managedBegin) || strings.Contains(exclude, "bank.example") {
 		t.Fatalf("exclude.list=%q", exclude)
 	}
-	if !strings.HasPrefix(ipsetExclude, "10.0.0.0/8\n"+managedBegin) || !strings.Contains(ipsetExclude, "\n198.51.100.7\n"+managedEnd) {
+	if !strings.HasPrefix(ipsetExclude, "10.0.0.0/8\n"+managedBegin) || strings.Contains(ipsetExclude, "198.51.100.7") {
 		t.Fatalf("ipset_exclude.list=%q", ipsetExclude)
+	}
+	if config := readText(t, f.config); !strings.Contains(config, "--hostlist-domains=bank.example --new --ipset-ip=198.51.100.7/32") {
+		t.Fatalf("exclusions missing from the configuration block: %q", config)
 	}
 	if strings.Contains(readText(t, f.user), "bank.example") {
 		t.Fatal("an excluded site was selected for bypass")
@@ -170,7 +175,7 @@ func TestNFQWS2ExclusionsLeadEveryProfile(t *testing.T) {
 		}
 		config := readText(t, f.config)
 		leading := "--hostlist-domains=bank.example,video.example --new --ipset-ip=198.51.100.7/32,2001:db8::/32"
-		want := `if [ -n "$NFQWS_ARGS_CUSTOM" ]; then NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM"; else NFQWS_ARGS_CUSTOM="` + leading + `"; fi`
+		want := `case "$NFQWS_ARGS_CUSTOM" in "` + leading + `"|"` + leading + ` --new "*) ;; "") NFQWS_ARGS_CUSTOM="` + leading + `" ;; *) NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM" ;; esac`
 		if !strings.HasPrefix(config, conf) || !strings.Contains(config, want) || !strings.Contains(config, nfqws2ExclusionFormat) {
 			t.Fatalf("configuration block:\n%s", config)
 		}
@@ -179,7 +184,7 @@ func TestNFQWS2ExclusionsLeadEveryProfile(t *testing.T) {
 		}
 		// What the init's shell actually sees, where a POSIX shell is available.
 		if sh, err := exec.LookPath("sh"); err == nil && runtime.GOOS != "windows" {
-			out, err := exec.Command(sh, "-c", `. "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
+			out, err := exec.Command(sh, "-c", `. "$1"; . "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
 			expected := leading
 			if custom != "" {
 				expected += " --new " + custom
@@ -264,8 +269,8 @@ func TestNFQWS2ExcludedServiceLeavesSelectionLists(t *testing.T) {
 	if strings.Contains(user, "video.example") || strings.Contains(ipset, "192.0.2.0/24") || !strings.Contains(user, "\nyoutube.com\n") {
 		t.Fatalf("excluded service stayed selected: user=%q ipset=%q", user, ipset)
 	}
-	if !strings.Contains(exclude, "\nvideo.example\n") || !strings.Contains(ipsetExclude, "\n192.0.2.0/24\n") {
-		t.Fatalf("excluded service was not excluded: exclude=%q ipset_exclude=%q", exclude, ipsetExclude)
+	if strings.Contains(exclude, "video.example") || strings.Contains(ipsetExclude, "192.0.2.0/24") || !strings.Contains(readText(t, f.config), "--hostlist-domains=video.example --new --ipset-ip=192.0.2.0/24") {
+		t.Fatalf("excluded service was not excluded through the configuration: exclude=%q ipset_exclude=%q", exclude, ipsetExclude)
 	}
 	// Only the excluded service on NFQWS2 still writes its exclusions.
 	g := newSiteExclusionFixture(t, "$MODE_AUTO")
@@ -273,7 +278,7 @@ func TestNFQWS2ExcludedServiceLeavesSelectionLists(t *testing.T) {
 	if err := g.activate(t, plan, g.transaction(t, "tx")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(readText(t, g.exclude), "\nvideo.example\n") {
+	if !strings.Contains(readText(t, g.config), "--hostlist-domains=video.example") {
 		t.Fatal("exclusions were dropped when the excluded service is the adapter's only route")
 	}
 }
@@ -324,7 +329,7 @@ func TestNFQWS2AppliesEngineListDraftBesideManagedBlock(t *testing.T) {
 	if err := f.activate(t, plan, transaction); err != nil {
 		t.Fatal(err)
 	}
-	if got := readText(t, f.exclude); !strings.HasPrefix(got, "stock.example\nowner.example\n"+managedBegin) || !strings.Contains(got, "\nbank.example\n"+managedEnd) {
+	if got := readText(t, f.exclude); !strings.HasPrefix(got, "stock.example\nowner.example\n"+managedBegin) || strings.Contains(got, "bank.example") {
 		t.Fatalf("exclude.list=%q", got)
 	}
 	for _, call := range []func(context.Context, Plan, string) error{f.adapter.Health, f.adapter.Commit} {
@@ -510,5 +515,27 @@ func TestNFQWS2RollbackRestoresTheConfigurationBlockTheLeaseRecords(t *testing.T
 	}
 	if _, err := f.adapter.VerifyRollback(context.Background(), plan, second); err == nil {
 		t.Fatal("changed configuration accepted by rollback verification")
+	}
+}
+
+// The stock init sources nfqws2.conf more than once per restart, and an owner
+// configuration may not assign NFQWS_ARGS_CUSTOM at all: the leading profiles
+// are still added exactly once.
+func TestNFQWS2ExclusionBlockIsIdempotentWhenSourcedTwice(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs a POSIX shell")
+	}
+	f := newSiteExclusionFixture(t, "$MODE_AUTO")
+	conf := strings.Replace(readText(t, f.config), "NFQWS_ARGS_CUSTOM=\"\"\n", "", 1)
+	if err := os.WriteFile(f.config, []byte(conf), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.activate(t, siteExclusionPlan(), f.transaction(t, "tx")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(sh, "-c", `. "$1"; . "$1"; . "$1"; printf '%s' "$NFQWS_ARGS_CUSTOM"`, "sh", f.config).Output()
+	if err != nil || string(out) != "--hostlist-domains=bank.example --new --ipset-ip=198.51.100.7/32" {
+		t.Fatalf("profiles after sourcing three times: %v %q", err, out)
 	}
 }

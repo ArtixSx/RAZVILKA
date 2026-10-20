@@ -196,7 +196,7 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 	}
 	// Exclusions reach every nfqws2 profile through the configuration's own
 	// managed block; without that the owner's configuration is unchanged.
-	staged, err := a.exclusionConfig(config, lists)
+	staged, err := a.exclusionConfig(config, plan)
 	if err != nil {
 		return preflightRefusalError{err}
 	}
@@ -248,24 +248,32 @@ func (s nfqws2Snapshot) ownedList(index int) ([]byte, bool) {
 // An excluded service keeps its route but leaves the selection lists, and
 // exclusions are written while this adapter carries any route at all.
 func nfqws2PlanLists(plan Plan, id string) [4][]string {
-	domains, cidrs, routed := []string{}, []string{}, false
+	domains, cidrs := []string{}, []string{}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != id {
 			continue
 		}
-		routed = true
 		if plan.SiteExclusions.excludesService(route.ServiceID) {
 			continue
 		}
 		domains = append(domains, route.Domains...)
 		cidrs = append(cidrs, route.CIDRs...)
 	}
-	lists := [4][]string{sortedUnique(domains), sortedUnique(cidrs), {}, {}}
-	if routed && plan.SiteExclusions != nil {
-		lists[2] = plan.SiteExclusions.ExcludedDomains()
-		lists[3] = plan.SiteExclusions.ExcludedCIDRs()
+	// The package's exclude lists keep only an empty block: an entry there
+	// would make the owner's profiles that read them require a hostname.
+	// Exclusions reach nfqws2 through the configuration block instead.
+	return [4][]string{sortedUnique(domains), sortedUnique(cidrs), {}, {}}
+}
+
+// nfqws2PlanExclusions are the names and addresses nfqws2 must leave alone,
+// while this adapter carries any route at all.
+func nfqws2PlanExclusions(plan Plan, id string) ([]string, []string) {
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) == id && plan.SiteExclusions != nil {
+			return plan.SiteExclusions.ExcludedDomains(), plan.SiteExclusions.ExcludedCIDRs()
+		}
 	}
-	return lists
+	return nil, nil
 }
 
 // ErrSiteExclusionsUnread marks "sites without bypass" that cannot be given
@@ -277,9 +285,9 @@ var ErrSiteExclusionsUnread = errors.New("NFQWS2_SITE_EXCLUSIONS_UNREAD")
 // re-rendering it against the hash the activating release recorded.
 const nfqws2ExclusionFormat = "# RAZVILKA NFQWS2 EXCLUSIONS v1"
 
-// maxNFQWS2ExclusionArgument keeps one inline list well inside the kernel's
-// per-argument limit.
-const maxNFQWS2ExclusionArgument = 120 << 10
+// maxNFQWS2ExclusionArguments keeps the inline lists, and so the whole
+// nfqws2 command line, well inside what RAZVILKA's process scans read.
+const maxNFQWS2ExclusionArguments = 48 << 10
 
 // exclusionConfig renders the owner's nfqws2.conf with this instance's managed
 // block. nfqws2 selects the first matching profile and selects again once a
@@ -290,7 +298,8 @@ const maxNFQWS2ExclusionArgument = 120 << 10
 // connections without a hostname, reaches the owner's profiles exactly as
 // before. The owner's profiles and the package's own lists are not changed.
 // With nothing to exclude the owner's configuration is returned unchanged.
-func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byte, error) {
+func (a *NFQWS2Adapter) exclusionConfig(config []byte, plan Plan) ([]byte, error) {
+	domains, addresses := nfqws2PlanExclusions(plan, a.ID())
 	owner, err := a.owner()
 	if err != nil {
 		return nil, err
@@ -306,21 +315,21 @@ func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	if len(lists[2])+len(lists[3]) == 0 {
+	if len(domains)+len(addresses) == 0 {
 		return []byte(ownerPart), nil
 	}
 	profiles := []string{}
-	if len(lists[2]) != 0 {
-		for _, name := range lists[2] {
+	if len(domains) != 0 {
+		for _, name := range domains {
 			if !validManagedDomain(name) {
 				return nil, fmt.Errorf("invalid NFQWS2 domain %q", name)
 			}
 		}
-		profiles = append(profiles, "--hostlist-domains="+strings.Join(sortedUnique(lists[2]), ","))
+		profiles = append(profiles, "--hostlist-domains="+strings.Join(sortedUnique(domains), ","))
 	}
-	if len(lists[3]) != 0 {
-		subnets := make([]string, 0, len(lists[3]))
-		for _, value := range lists[3] {
+	if len(addresses) != 0 {
+		subnets := make([]string, 0, len(addresses))
+		for _, value := range addresses {
 			prefix, err := siteExclusionPrefix(value)
 			if err != nil {
 				return nil, fmt.Errorf("invalid NFQWS2 CIDR %q", value)
@@ -329,14 +338,14 @@ func (a *NFQWS2Adapter) exclusionConfig(config []byte, lists [4][]string) ([]byt
 		}
 		profiles = append(profiles, "--ipset-ip="+strings.Join(sortedUnique(subnets), ","))
 	}
-	for _, profile := range profiles {
-		if len(profile) > maxNFQWS2ExclusionArgument {
-			return nil, fmt.Errorf("%w: список «Сайтов без обхода» слишком длинный для одного аргумента nfqws2; сократите его", ErrSiteExclusionsUnread)
-		}
-	}
 	leading := strings.Join(profiles, " --new ")
+	if len(leading) > maxNFQWS2ExclusionArguments {
+		return nil, fmt.Errorf("%w: список «Сайтов без обхода» слишком длинный для nfqws2; сократите его", ErrSiteExclusionsUnread)
+	}
+	// The init sources the file more than once per restart; the line adds
+	// the profiles only where they are not already first.
 	lines := []string{"# RAZVILKA INSTANCE " + owner, nfqws2ExclusionFormat,
-		`if [ -n "$NFQWS_ARGS_CUSTOM" ]; then NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM"; else NFQWS_ARGS_CUSTOM="` + leading + `"; fi`}
+		`case "$NFQWS_ARGS_CUSTOM" in "` + leading + `"|"` + leading + ` --new "*) ;; "") NFQWS_ARGS_CUSTOM="` + leading + `" ;; *) NFQWS_ARGS_CUSTOM="` + leading + ` --new $NFQWS_ARGS_CUSTOM" ;; esac`}
 	merged, err := replaceManagedBlock(ownerPart, lines)
 	if err != nil {
 		return nil, err
@@ -566,7 +575,7 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	configHash := nfqws2Hash(config)
 	if configExists && lease.ConfigOwner != "" && configHash == lease.ConfigOwner {
 		// An interrupted cleanup removed the block this lease records.
-		rendered, err := a.exclusionConfig(config, lists)
+		rendered, err := a.exclusionConfig(config, plan)
 		if err != nil || nfqws2Hash(rendered) != lease.ConfigHash {
 			return false, errors.New("the NFQWS2 configuration block of the committed plan cannot be proven; review is required")
 		}

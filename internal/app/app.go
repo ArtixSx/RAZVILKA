@@ -894,8 +894,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 					dataplaneRecoveryState = "runtime-unverified"
 				}
 			}
-			// Plans of applied-only scopes carry the applied revision.
-			if (latest.Revision == cfg.Revision || latest.Revision == cfg.AppliedRevision) && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {
+			if latest.Revision == cfg.Revision && runtime.Execution != nil && runtime.Execution.PlanID == latest.PlanID && (runtime.Execution.State == "rolled-back" || runtime.Execution.State == "canary-failed") {
 				lastApplyFailure = classifyApplyExecutionFailure(runtime.Execution.Error, runtime.Execution.State).Code
 			}
 		}

@@ -60,7 +60,7 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 			if lease == nil || lease.ConfigOwner == "" || nfqws2Hash(file.data) != lease.ConfigOwner || nfqws2Hash(data) != lease.ConfigHash {
 				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
 			}
-			restored, err := a.exclusionConfig(file.data, lists)
+			restored, err := a.exclusionConfig(file.data, plan)
 			if err != nil || !bytes.Equal(data, restored) {
 				return false, errors.New("NFQWS2 rollback files differ from their snapshot")
 			}
