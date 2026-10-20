@@ -288,3 +288,34 @@ func stockProbeSamePath(before, after stockProbePath) bool {
 func stockProbeSocketConfirmed(before, after stockProbePath, packets uint64) bool {
 	return packets > 0 && stockProbeSamePath(before, after) && (!before.passive || after.packets > before.packets)
 }
+
+// Closed diagnostic codes only. The same observations still decide proof;
+// diagnostics cannot turn a missing counter or changed path into success.
+func nfqwsProofRefusal(before, after stockProbePath, packets uint64, counterErr, stockErr, processErr error, queueActive bool, queue, currentQueue int, process, currentProcess string) string {
+	switch {
+	case counterErr != nil:
+		return "nfq-socket-counter-unavailable"
+	case packets == 0:
+		return "nfq-socket-unobserved"
+	case stockErr != nil:
+		return "nfq-stock-readback-refused"
+	case !queueActive:
+		return "nfq-kernel-queue-unavailable"
+	case processErr != nil:
+		return "nfq-process-readback-refused"
+	case queue != currentQueue:
+		return "nfq-queue-changed"
+	case process != currentProcess:
+		return "nfq-process-changed"
+	case before.passive != after.passive:
+		return "nfq-route-interface-changed"
+	case before.graph != after.graph:
+		return "nfq-rules-changed"
+	case before.route != after.route:
+		return "nfq-route-changed"
+	case before.passive && after.packets <= before.packets:
+		return "nfq-stock-counter-not-advanced"
+	default:
+		return ""
+	}
+}

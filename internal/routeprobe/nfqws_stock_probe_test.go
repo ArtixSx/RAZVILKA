@@ -7,6 +7,49 @@ import (
 	"testing"
 )
 
+func TestNFQProofDiagnosticsRetainEveryExistingProofRequirement(t *testing.T) {
+	type observation struct {
+		before, after                    stockProbePath
+		packets                          uint64
+		counterErr, stockErr, processErr error
+		active                           bool
+		queue, currentQueue              int
+		process, currentProcess          string
+	}
+	for _, tc := range []struct {
+		name, want string
+		alter      func(*observation)
+	}{
+		{"confirmed", "", func(*observation) {}},
+		{"counter", "nfq-socket-counter-unavailable", func(o *observation) { o.counterErr = errors.New("private command error") }},
+		{"socket", "nfq-socket-unobserved", func(o *observation) { o.packets = 0 }},
+		{"stock", "nfq-stock-readback-refused", func(o *observation) { o.stockErr = errors.New("private rules") }},
+		{"kernel", "nfq-kernel-queue-unavailable", func(o *observation) { o.active = false }},
+		{"process-read", "nfq-process-readback-refused", func(o *observation) { o.processErr = errors.New("private process") }},
+		{"queue", "nfq-queue-changed", func(o *observation) { o.currentQueue = 301 }},
+		{"process", "nfq-process-changed", func(o *observation) { o.currentProcess = "other" }},
+		{"interface", "nfq-route-interface-changed", func(o *observation) { o.after.passive = false }},
+		{"graph", "nfq-rules-changed", func(o *observation) { o.after.graph = "different" }},
+		{"route", "nfq-route-changed", func(o *observation) { o.after.route = "different" }},
+		{"stock-counter", "nfq-stock-counter-not-advanced", func(o *observation) { o.after.packets = o.before.packets }},
+		{"active-nonstock", "", func(o *observation) {
+			o.before.passive = false
+			o.after.passive = false
+			o.after.packets = o.before.packets
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := observation{before: stockProbePath{passive: true, graph: "graph", route: "route", packets: 7}, after: stockProbePath{passive: true, graph: "graph", route: "route", packets: 8}, packets: 1, active: true, queue: 300, currentQueue: 300, process: "same", currentProcess: "same"}
+			tc.alter(&o)
+			code := nfqwsProofRefusal(o.before, o.after, o.packets, o.counterErr, o.stockErr, o.processErr, o.active, o.queue, o.currentQueue, o.process, o.currentProcess)
+			oldProof := o.counterErr == nil && o.packets > 0 && o.active && o.stockErr == nil && stockProbeSocketConfirmed(o.before, o.after, o.packets) && o.processErr == nil && o.queue == o.currentQueue && o.process == o.currentProcess
+			if code != tc.want || (code == "") != oldProof {
+				t.Fatalf("diagnostic=%q want=%q old-proof=%t", code, tc.want, oldProof)
+			}
+		})
+	}
+}
+
 const stockProbeFixture = `*mangle
 :PREROUTING ACCEPT [0:0]
 :OUTPUT ACCEPT [0:0]

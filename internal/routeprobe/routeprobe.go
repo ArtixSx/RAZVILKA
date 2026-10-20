@@ -162,6 +162,7 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	stockBefore, err := readStockProbePath(ctx, address, queueNumber, chain, port)
 	if err != nil {
 		result.Detail = "NFQWS2 stock packet path is not proven; isolated probe refused"
+		result.RouteProofError = "nfq-stock-preflight-refused"
 		return result
 	}
 
@@ -187,6 +188,7 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 		}
 		if len(cleanupErrors) > 0 {
 			result.RouteConfirmed = false
+			result.RouteProofError = "nfq-cleanup-refused"
 			result.Status = "fail"
 			result.Detail = strings.TrimSpace(result.Detail + "; cleanup failed: " + strings.Join(cleanupErrors, "; "))
 		}
@@ -225,8 +227,8 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 	stockAfter, stockErr := readStockProbePath(ctx, address, queueNumber, chain, port)
 	queueStillActive := kernelQueueActive(queueNumber)
 	currentQueue, currentProcess, processErr := activeNFQWSQueue()
-	stockConfirmed := stockErr == nil && stockProbeSocketConfirmed(stockBefore, stockAfter, packets) && processErr == nil && currentQueue == queueNumber && currentProcess == processEvidence
-	result.RouteConfirmed = counterErr == nil && packets > 0 && queueStillActive && stockConfirmed
+	proofRefusal := nfqwsProofRefusal(stockBefore, stockAfter, packets, counterErr, stockErr, processErr, queueStillActive, queueNumber, currentQueue, processEvidence, currentProcess)
+	result.RouteConfirmed = proofRefusal == ""
 	if result.RouteConfirmed {
 		result.ObservedRoutePathID = "isolated:nfqws2"
 		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-chain:%s;queue=%d;packets=%d;destination=%s:443;source-port=%d;process=%s", chain, queueNumber, packets, address, port, processEvidence)
@@ -234,7 +236,8 @@ func (m *Manager) probeNFQWS(ctx context.Context, service catalog.Service) (resu
 			result.EvidenceSource = fmt.Sprintf("scoped-stock-postrouting:%s;queue=%d;socket-packets=%d;stock-packets-delta=%d;graph=%s;destination=%s:443;source-port=%d;process=%s", chain, queueNumber, packets, stockAfter.packets-stockBefore.packets, stockAfter.graph, address, port, processEvidence)
 		}
 	} else {
-		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-unconfirmed:queue=%d;packets=%d;kernel-active=%t", queueNumber, packets, queueStillActive)
+		result.RouteProofError = proofRefusal
+		result.EvidenceSource = fmt.Sprintf("scoped-nfqueue-unconfirmed:queue=%d;packets=%d;kernel-active=%t;stock-before=%d;stock-after=%d;passive=%t;proof-code=%s", queueNumber, packets, queueStillActive, stockBefore.packets, stockAfter.packets, stockBefore.passive, proofRefusal)
 		if result.Status == "pass" || result.Status == "partial" {
 			result.Status = "fail"
 			result.Detail = "service replied, but the exact request was not proven to pass through NFQWS2"

@@ -697,6 +697,10 @@ func (a *App) autonomyProbeRouteObservation(ctx context.Context, s catalog.Servi
 			return unknown("probe-tls-rejected")
 		}
 		if !r.RouteConfirmed || r.RouteProofError != "" {
+			switch r.RouteProofError {
+			case "nfq-stock-preflight-refused", "nfq-cleanup-refused", "nfq-socket-counter-unavailable", "nfq-socket-unobserved", "nfq-stock-readback-refused", "nfq-kernel-queue-unavailable", "nfq-process-readback-refused", "nfq-queue-changed", "nfq-process-changed", "nfq-route-interface-changed", "nfq-rules-changed", "nfq-route-changed", "nfq-stock-counter-not-advanced":
+				return unknown(r.RouteProofError)
+			}
 			return unknown("route-proof-unconfirmed")
 		}
 		if r.Status == "not-ready" {
