@@ -116,11 +116,12 @@ type proxyForwardingRepairTable struct {
 }
 
 type proxyForwardingRepair struct {
-	adapter *ProxyTunnelAdapter
-	state   PolicyState
-	lease   proxyForwardingLease
-	tables  []*proxyForwardingRepairTable
-	missing bool
+	adapter             *ProxyTunnelAdapter
+	state               PolicyState
+	lease               proxyForwardingLease
+	tables              []*proxyForwardingRepairTable
+	missing             bool
+	refreshedExclusions bool
 }
 
 // Several adapters can lose the same NDM table in one reset. Carry only the
@@ -150,10 +151,22 @@ func (a *ProxyTunnelAdapter) prepareForwardingRepair(ctx context.Context, plan P
 		return nil, errors.New("committed proxy policy unavailable for forwarding restoration")
 	}
 	lease, exists, err := a.readForwardingLease()
-	if err != nil || !exists || !reflect.DeepEqual(lease.Policy, state) {
+	if err != nil || !exists {
 		return nil, errors.New("committed proxy forwarding lease does not match the current policy")
 	}
 	r := &proxyForwardingRepair{adapter: a, state: state, lease: lease}
+	if !reflect.DeepEqual(lease.Policy, state) {
+		// Endpoint-only refresh retains the original firewall creation ACKs.
+		// Its new exclusions belong to the current exact RPDB receipt; every
+		// other policy coordinate and grant must still match the old lease.
+		if !a.endpointExclusionsOnly(lease.Policy, state) {
+			return nil, errors.New("committed proxy forwarding lease does not match the current policy")
+		}
+		if err := a.verifyRefreshedForwardingReceipt(ctx, state); err != nil {
+			return nil, err
+		}
+		r.refreshedExclusions = true
+	}
 	for _, table := range proxyFirewallTables(state) {
 		if !lease.owns(table) {
 			return nil, errors.New("proxy firewall table has no acknowledged creation lease")
@@ -182,6 +195,14 @@ func (a *ProxyTunnelAdapter) prepareForwardingRepair(ctx context.Context, plan P
 	return r, nil
 }
 
+func (a *ProxyTunnelAdapter) verifyRefreshedForwardingReceipt(ctx context.Context, state PolicyState) error {
+	binding, exists, err := a.readPolicyBinding(state)
+	if err != nil || !exists || binding.Phase != "active" {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	return a.verifyCommittedReceipt(ctx, state)
+}
+
 func (r *proxyForwardingRepair) verifyEnvironment(ctx context.Context, plan Plan) error {
 	a := r.adapter
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
@@ -194,6 +215,11 @@ func (r *proxyForwardingRepair) verifyEnvironment(ctx context.Context, plan Plan
 	lease, exists, err := a.readForwardingLease()
 	if err != nil || !exists || !reflect.DeepEqual(lease, r.lease) {
 		return errors.New("proxy creation lease changed during forwarding restoration")
+	}
+	if r.refreshedExclusions {
+		if err := a.verifyRefreshedForwardingReceipt(ctx, state); err != nil {
+			return err
+		}
 	}
 	if state.Interface != a.Interface || state.Table != a.Table || state.PriorityBase != a.Priority || len(state.Prefixes) == 0 || !regularFile(a.engineConfigPath()) || !regularFile(a.sidecarConfigPath()) || a.Processes == nil || !a.Processes.Running(a.engineProcess()) || !a.Processes.Running(a.sidecarProcess()) {
 		return errors.New("committed proxy processes or policy identity are unavailable")

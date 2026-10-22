@@ -183,3 +183,209 @@ func TestProxyEndpointRefreshCancellationKeepsUnknownAddOrRestoresKnownAdd(t *te
 		})
 	}
 }
+
+func endpointRefreshRepairFixture(t *testing.T) (*Manager, *ProxyTunnelAdapter, Plan, PolicyState) {
+	t.Helper()
+	a, processes, old := networkCleanupProxy(t)
+	processes.running["sing-box-engine"], processes.running["sing-box-tun"] = true, true
+	if err := os.WriteFile(a.engineConfigPath(), []byte(`{"server":"node.example"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	plan := networkExecutionPlan()
+	plan.State, plan.PlanID = "committed", "dp-0123456789abcdef"
+	plan.Routes = []Route{{Resolved: "sing-box", Sources: []string{"192.168.1.25/32"}, CIDRs: old.Prefixes}}
+	manager := New(t.TempDir())
+	manager.FreshProfile = a.FreshProfile
+	if err := manager.Record(plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register(a); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := a.RefreshPolicy(context.Background(), plan); !changed || err != nil {
+		t.Fatal("fixture endpoint refresh did not succeed", changed, err)
+	}
+	return manager, a, plan, old
+}
+
+func TestProxyEndpointRefreshAllowsLaterForwardingInspectionAndWholeTableRepair(t *testing.T) {
+	manager, a, plan, old := endpointRefreshRepairFixture(t)
+	processes := a.Processes.(*proxyFakeProcesses)
+	leaseBefore, _ := os.ReadFile(a.forwardingPath())
+	if changed, err := manager.RestoreCommittedForwarding(context.Background(), plan); err != nil || len(changed) != 0 {
+		t.Fatal("successful endpoint refresh revoked the unchanged firewall lease", changed, err)
+	}
+	current, _, err := a.loadPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := a.Runner.(*proxyFakeRunner)
+	natBefore := firewallImage(t, runner.firewall.table("iptables", "nat"))
+	eraseForwardingTable(runner.firewall, "iptables", "filter", old.Forwarding.Chain)
+	runner.firewall.calls = nil
+	if changed, err := manager.RestoreCommittedForwarding(context.Background(), plan); err != nil || !changed["sing-box"] || len(changed) != 1 {
+		t.Fatal("whole filter loss after endpoint refresh did not recover", changed, err)
+	}
+	if !reflect.DeepEqual(natBefore, firewallImage(t, runner.firewall.table("iptables", "nat"))) {
+		t.Fatal("restoration changed intact NAT")
+	}
+	leaseAfter, _ := os.ReadFile(a.forwardingPath())
+	if string(leaseBefore) != string(leaseAfter) || len(processes.startSpecs) != 0 || len(processes.running) != 2 {
+		t.Fatal("restoration replaced the original lease or restarted a process")
+	}
+	for _, call := range runner.firewall.calls {
+		if strings.Contains(call, "-t nat") && !strings.HasSuffix(call, " -S") {
+			t.Fatal("restoration mutated an intact sibling")
+		}
+	}
+	if err := a.verifyCommittedReceipt(context.Background(), current); err != nil {
+		t.Fatal("restoration changed the current endpoint RPDB authority", err)
+	}
+	if err := a.ObserveOwnedRuntime(context.Background()); err != nil {
+		t.Fatal("restored runtime is not usable", err)
+	}
+}
+
+func TestProxyEndpointRefreshRepairNeverAdoptsOtherPolicyOrUnknownReceipt(t *testing.T) {
+	for _, scenario := range []string{
+		"interface", "table", "priority", "layout", "shared-priority", "prefixes", "source", "destination", "ingress", "managed-rule", "network-generation", "network-role", "runtime-hash", "wireguard-endpoint",
+		"missing-binding", "pending-binding", "missing-receipt", "corrupt-receipt", "unacknowledged-table", "partial-rule", "foreign-rule",
+	} {
+		t.Run(scenario, func(t *testing.T) {
+			manager, a, plan, old := endpointRefreshRepairFixture(t)
+			current, _, err := a.loadPolicy()
+			if err != nil {
+				t.Fatal(err)
+			}
+			lease, _, err := a.readForwardingLease()
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner := a.Runner.(*proxyFakeRunner)
+			eraseForwardingTable(runner.firewall, "iptables", "filter", old.Forwarding.Chain)
+			switch scenario {
+			case "interface":
+				lease.Policy.Interface = "rz-foreign"
+			case "table":
+				lease.Policy.Table++
+			case "priority":
+				lease.Policy.PriorityBase++
+			case "layout":
+				lease.Policy.RuleLayout = 2
+				lease.Policy.SharedPriorityBase = 64
+			case "shared-priority":
+				lease.Policy.SharedPriorityBase = 65
+			case "prefixes":
+				lease.Policy.Prefixes = []string{"198.51.100.21/32"}
+			case "source":
+				lease.Policy.Rules[0].Source = "192.168.1.41/32"
+				lease.Policy.Forwarding.Rules[0].Source = "192.168.1.41/32"
+			case "destination":
+				lease.Policy.Prefixes = []string{"198.51.100.21/32"}
+				lease.Policy.Rules[0].Destination = "198.51.100.21/32"
+				lease.Policy.Forwarding.Rules[0].Destination = "198.51.100.21/32"
+			case "ingress":
+				lease.Policy.Rules[0].Ingress = "br7"
+				lease.Policy.Forwarding.Rules[0].Ingress = "br7"
+			case "managed-rule":
+				lease.Policy.Rules[0].Managed = true
+			case "network-generation":
+				lease.Policy.NetworkPolicyGeneration = strings.Repeat("a", 64)
+			case "network-role":
+				lease.Policy.NetworkDefault = true
+			case "runtime-hash":
+				lease.Policy.RuntimeConfigSHA256 = strings.Repeat("a", 64)
+			case "wireguard-endpoint":
+				lease.Policy.WireGuardEndpoint = &WGEndpointState{Original: "node.example:443"}
+			case "missing-binding":
+				if err := os.Remove(a.policyBindingPath()); err != nil {
+					t.Fatal(err)
+				}
+			case "pending-binding":
+				binding, _, err := a.readPolicyBinding(current)
+				if err != nil {
+					t.Fatal(err)
+				}
+				binding.Phase = "pending"
+				if err := a.writePolicyBinding(binding); err != nil {
+					t.Fatal(err)
+				}
+			case "missing-receipt", "corrupt-receipt":
+				binding, _, err := a.readPolicyBinding(current)
+				if err != nil {
+					t.Fatal(err)
+				}
+				root, _ := a.policyGenerationRoot(binding.Generation)
+				if scenario == "missing-receipt" {
+					err = os.Remove(filepath.Join(root, policyAdditionFile))
+				} else {
+					err = os.WriteFile(filepath.Join(root, policyAdditionFile), []byte(`{}`), 0600)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "unacknowledged-table":
+				lease.Created = []string{"false/nat"}
+			case "partial-rule":
+				// An intact sibling with partial loss never grants reconstruction.
+				table := runner.firewall.table("iptables", "nat")
+				table[old.Forwarding.Chain] = nil
+			case "foreign-rule":
+				table := runner.firewall.table("iptables", "nat")
+				table[old.Forwarding.Chain] = append(table[old.Forwarding.Chain], []string{"-j", "DROP"})
+			}
+			if err := a.writeForwardingLease(lease); err != nil {
+				t.Fatal(err)
+			}
+			beforeFilter := firewallImage(t, runner.firewall.table("iptables", "filter"))
+			beforeNAT := firewallImage(t, runner.firewall.table("iptables", "nat"))
+			runner.firewall.calls = nil
+			if changed, err := manager.RestoreCommittedForwarding(context.Background(), plan); err == nil || len(changed) != 0 {
+				t.Fatal("refreshed exclusion exception adopted unrelated policy or uncertain authority", changed, err)
+			}
+			requireOnlyFirewallReads(t, runner.firewall)
+			if !reflect.DeepEqual(beforeFilter, firewallImage(t, runner.firewall.table("iptables", "filter"))) || !reflect.DeepEqual(beforeNAT, firewallImage(t, runner.firewall.table("iptables", "nat"))) {
+				t.Fatal("refused repair mutated existing firewall objects")
+			}
+		})
+	}
+}
+
+func TestProxyEndpointRefreshRepairRechecksReceiptBeforeFirewallAttachment(t *testing.T) {
+	manager, a, plan, old := endpointRefreshRepairFixture(t)
+	current, _, err := a.loadPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, _, err := a.readPolicyBinding(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := a.Runner.(*proxyFakeRunner)
+	eraseForwardingTable(runner.firewall, "iptables", "filter", old.Forwarding.Chain)
+	beforeFilter := firewallImage(t, runner.firewall.table("iptables", "filter"))
+	beforeNAT := firewallImage(t, runner.firewall.table("iptables", "nat"))
+	revoked, attached := false, false
+	a.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		out, err := runner.Run(ctx, name, args...)
+		if name == "iptables" && len(args) >= 4 && args[0] == "-t" && args[1] == "filter" {
+			if args[2] == "-A" && args[3] == "FORWARD" {
+				attached = true
+			}
+			if !revoked && args[2] == "-N" && args[3] == old.Forwarding.Chain && err == nil {
+				revoked = true
+				binding.Phase = "pending"
+				if err := a.writePolicyBinding(binding); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return out, err
+	})
+	if changed, err := manager.RestoreCommittedForwarding(context.Background(), plan); !errors.Is(err, ErrProxyPolicyUnknown) || len(changed) != 0 || !revoked || attached {
+		t.Fatal("revoked current receipt attached a new firewall grant", changed, err, revoked, attached)
+	}
+	if !reflect.DeepEqual(beforeFilter, firewallImage(t, runner.firewall.table("iptables", "filter"))) || !reflect.DeepEqual(beforeNAT, firewallImage(t, runner.firewall.table("iptables", "nat"))) {
+		t.Fatal("failed repair did not remove only its newly created chain")
+	}
+}
