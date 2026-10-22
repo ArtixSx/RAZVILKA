@@ -1296,6 +1296,17 @@ func (a *ProxyTunnelAdapter) RefreshPolicy(ctx context.Context, plan Plan) (bool
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return false, err
 	}
+	if a.endpointExclusionsOnly(oldState, newState) {
+		// Legacy intent-only policy keeps its existing replacement boundary;
+		// retaining forwarding requires an actual committed receipt generation.
+		_, retained, err := a.readPolicyBinding(oldState)
+		if err != nil {
+			return false, err
+		}
+		if retained {
+			return a.refreshEndpointExclusions(ctx, plan, oldState, newState)
+		}
+	}
 	if err := a.removeCommittedPolicy(ctx, oldState); err != nil {
 		return false, err
 	}

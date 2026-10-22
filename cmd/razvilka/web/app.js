@@ -916,6 +916,7 @@ function onboardingNeeded() {
 }
 
 function openOnboarding(force = false) {
+  if (!workflowSession(workflowState.epoch)) return;
   if (!force && (state.onboardingDeferred || onboardingDone() || !onboardingNeeded())) return;
   state.onboardingDeferred = false;
   state.onboardingStep = Math.max(0, Math.min(3, state.onboardingStep || 0));
@@ -968,6 +969,8 @@ async function onboardingNext() {
 }
 
 async function onboardingAction(event) {
+  const epoch = workflowState.epoch;
+  if (!workflowSession(epoch)) return;
   if (event.target.closest('[data-onboarding-nodes]')) { closeOnboarding(false); setView('nodes'); setNodeBrowserTab('all'); return; }
   const componentButton = event.target.closest('[data-onboarding-component]');
   const serviceButton = event.target.closest('[data-onboarding-service]');
@@ -976,6 +979,7 @@ async function onboardingAction(event) {
     refreshButton.disabled = true;
     refreshButton.textContent = 'Проверка…';
     await refreshComponents(true);
+    if (!workflowSession(epoch)) return;
     renderOnboarding();
     return;
   }
@@ -983,12 +987,14 @@ async function onboardingAction(event) {
     const id = componentButton.dataset.onboardingComponent;
     closeOnboarding(false);
     const completed = await manageComponent(id, 'install');
+    if (!workflowSession(epoch)) return;
     if (completed) state.onboardingStep = 2;
     openOnboarding(true);
   }
   if (serviceButton) {
     serviceButton.disabled = true;
     await toggleService(serviceButton.dataset.onboardingService);
+    if (!workflowSession(epoch)) return;
     renderOnboarding();
   }
 }
@@ -5692,6 +5698,7 @@ function bindEvents() {
   $('#onboardingLater').addEventListener('click', () => closeOnboarding(false));
   $('#overviewSetupResume').addEventListener('click', () => openOnboarding(true));
   $('#onboardingClose').addEventListener('click', () => closeOnboarding(true));
+  document.addEventListener('razvilka:auth-required', () => closeOnboarding(false));
   $('#componentStrip').addEventListener('click', (event) => {
     const config = event.target.closest('.component-config');
     if (config) { void openEngineConfiguration(config.dataset.engineConfig); return; }

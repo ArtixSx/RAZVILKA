@@ -1650,6 +1650,14 @@ body.rz-simple .nav-list [data-main-nav=autopilot],body.rz-simple .nav-list [dat
 body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-simple-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:8px;text-align:left}
 .rz-simple-toggle span:first-child{display:grid;gap:2px}.rz-simple-toggle small{color:var(--muted);font-size:12px}
+/* Both sidebar switches follow their accessible state. An unconfirmed runtime
+   can still be on and stoppable; amber keeps that distinct from confirmed work. */
+.interface-ui .sidebar-foot[role=switch] .power-switch{background:var(--panel2);border-color:var(--line2)}
+.interface-ui .sidebar-foot[role=switch] .power-switch i{transform:translateX(0);background:var(--muted);transition:transform .16s ease,background .16s ease}
+.interface-ui .sidebar-foot[role=switch][aria-checked=true] .power-switch{background:var(--accent-wash);border-color:var(--green)}
+.interface-ui .sidebar-foot[role=switch][aria-checked=true] .power-switch i{transform:translateX(10px);background:var(--green)}
+.interface-ui .project-power.unknown[aria-checked=true] .power-switch{background:var(--panel2);border-color:var(--amber)}
+.interface-ui .project-power.unknown[aria-checked=true] .power-switch i{background:var(--amber)}
 .rz-simple-home{display:grid;gap:16px;max-width:760px;margin:0 auto;padding:4px 0 24px}
 .rz-sh-main{display:grid;gap:16px;min-width:0}
 .rz-sh-engines{min-width:0;padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}

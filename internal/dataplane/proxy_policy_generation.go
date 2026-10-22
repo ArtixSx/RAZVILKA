@@ -227,6 +227,13 @@ func (a *ProxyTunnelAdapter) applyRetainedPolicy(ctx context.Context, state Poli
 }
 
 func (a *ProxyTunnelAdapter) applyRetainedPolicyWithReference(ctx context.Context, state PolicyState, publish func(string) error) error {
+	return a.applyRetainedPolicyGeneration(ctx, state, publish, false)
+}
+
+// Retaining forwarding is limited to an endpoint-only refresh. It never
+// acquires a firewall grant: the original exact lease and live rules must
+// survive, and are rechecked after publishing the new pending RPDB reference.
+func (a *ProxyTunnelAdapter) applyRetainedPolicyGeneration(ctx context.Context, state PolicyState, publish func(string) error, retainForwarding bool) error {
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return err
@@ -253,8 +260,14 @@ func (a *ProxyTunnelAdapter) applyRetainedPolicyWithReference(ctx context.Contex
 	if err := a.writePolicyBinding(binding); err != nil {
 		return err
 	}
-	if err := a.installForwarding(ctx, state); err != nil {
-		return err
+	var forwardingErr error
+	if retainForwarding {
+		forwardingErr = a.verifyForwarding(ctx, state)
+	} else {
+		forwardingErr = a.installForwarding(ctx, state)
+	}
+	if forwardingErr != nil {
+		return forwardingErr
 	}
 	if err := applyPolicyAddition(ctx, a.Runner, a.ip(), state, root, a.additionOptions()); err != nil {
 		return errors.Join(ErrProxyPolicyUnknown, err)
@@ -305,6 +318,16 @@ func (a *ProxyTunnelAdapter) restoreHistoricalPolicyBinding(snapshot proxySnapsh
 }
 
 func (a *ProxyTunnelAdapter) removeCommittedPolicy(ctx context.Context, state PolicyState) error {
+	return a.removeCommittedPolicyGeneration(ctx, state, false)
+}
+
+// Consume only the exact RPDB receipt. Endpoint-only refreshes keep their
+// separately acknowledged, unchanged firewall lease across this operation.
+func (a *ProxyTunnelAdapter) removeCommittedPolicyAddition(ctx context.Context, state PolicyState) error {
+	return a.removeCommittedPolicyGeneration(ctx, state, true)
+}
+
+func (a *ProxyTunnelAdapter) removeCommittedPolicyGeneration(ctx context.Context, state PolicyState, retainForwarding bool) error {
 	binding, exists, err := a.readPolicyBinding(state)
 	if err != nil {
 		return err
@@ -314,7 +337,7 @@ func (a *ProxyTunnelAdapter) removeCommittedPolicy(ctx context.Context, state Po
 		return err
 	}
 	if !exists {
-		if tracked {
+		if tracked || retainForwarding {
 			return ErrProxyPolicyUnknown
 		}
 		return a.removeOwnedPolicy(ctx, state) // Existing legacy boundary only.
@@ -333,6 +356,9 @@ func (a *ProxyTunnelAdapter) removeCommittedPolicy(ctx context.Context, state Po
 	binding.Phase = "removed"
 	if err := a.writePolicyBinding(binding); err != nil {
 		return err
+	}
+	if retainForwarding {
+		return nil
 	}
 	return a.removeForwarding(ctx)
 }
