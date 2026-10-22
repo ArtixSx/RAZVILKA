@@ -19,9 +19,9 @@ NFQWS2, VLESS, WireGuard/AmneziaWG or WARP. It runs on the router itself and
 keeps working on schedule with the browser closed.
 
 > [!NOTE]
-> **0.20.0 is in preparation**, with acceptance still in progress. What has and
-> has not been verified on a real router is listed in the [current status (RU)](docs/CURRENT_STATUS_RU.md).
-> The install commands work once the `v0.20.0` tag is published in
+> **0.20.0 requires a clean installation.** To move from 0.19.x, first remove
+> the previous installation using the [guide (RU)](docs/INSTALL_RU.md#переход-с-0193-и-более-ранних-версий).
+> Start with one service and check access from your device. Download packages from
 > [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
 ## How it works
@@ -189,7 +189,7 @@ More — [SECURITY](SECURITY.md).
 ## Documentation
 
 - [Install, update, uninstall and rollback (RU)](docs/INSTALL_RU.md)
-- [Current status and verification results (RU)](docs/CURRENT_STATUS_RU.md)
+- [Compatibility and limitations (RU)](docs/CURRENT_STATUS_RU.md)
 - [0.20.0 release notes (RU)](docs/releases/0.20.0.md) · [Changelog](CHANGELOG.md)
 - [Roadmap](docs/ROADMAP.md) · [Two DPI engines idea (RU)](docs/DUAL_DPI_ARCHITECTURE_RU.md)
 - [Files and folders (RU)](docs/FILES_RU.md) · [Third-party components](THIRD_PARTY.md)
