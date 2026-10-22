@@ -28,6 +28,41 @@ Object.assign(viewMeta, {
 });
 window.RazvilkaConsoleFilters={service:'all'};
 let consoleSnapshot=null,consoleAutonomyError='',consoleInitialized=false,consolePaletteItems=[],consolePaletteIndex=0;
+let consoleAutonomyReceipt=null;
+function consoleObservationClock(){
+ return typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+}
+function consoleClearAutonomySnapshot(){
+ consoleSnapshot=null;consoleAutonomyReceipt=null;
+}
+function consoleAcceptAutonomySnapshot(value){
+ if(state.authenticated!==true)return false;
+ const observation=value?.observation,now=consoleObservationClock(),previous=consoleAutonomyReceipt;
+ if(observation&&/^[a-f0-9]{32}$/.test(observation.instance_id||'')&&Number.isSafeInteger(observation.revision)&&observation.revision>0&&['available','retained'].includes(observation.state)&&Number.isFinite(Date.parse(observation.observed_at))&&Number.isFinite(observation.data_age_ms)&&observation.data_age_ms>=0){
+  const auth=state.authGeneration||0;
+  if(previous?.auth===auth&&previous.instance===observation.instance_id&&observation.revision<previous.revision)return false;
+  const same=previous?.auth===auth&&previous.instance===observation.instance_id&&previous.revision===observation.revision;
+  // A repeated publication cannot refresh its own age, even if its response
+  // says "available" again. Browser wall-clock changes never renew this lease.
+  const age=same?(now<previous.lastClock?Infinity:Math.max(observation.data_age_ms,previous.age+now-previous.received)):observation.data_age_ms;
+  consoleAutonomyReceipt={auth,instance:observation.instance_id,revision:observation.revision,age,received:now,lastClock:now};
+ }else if(observation)return false;else consoleAutonomyReceipt=null;
+ consoleSnapshot=value;
+ return true;
+}
+function consoleAutonomyCache(){
+ const observation=consoleSnapshot?.observation,receipt=consoleAutonomyReceipt;
+ if(state.authenticated!==true||!receipt||receipt.auth!==(state.authGeneration||0)||!observation||receipt.instance!==observation.instance_id||receipt.revision!==observation.revision)return null;
+ if([consoleSnapshot.applied_services,consoleSnapshot.services,consoleSnapshot.runtime].some(value=>!value||typeof value!=='object'||Array.isArray(value)))return null;
+ const now=consoleObservationClock();
+ // The old-browser Date fallback expires permanently on a backwards jump;
+ // a repeated publication cannot turn that uncertain elapsed time into fresh data.
+ if(now<receipt.lastClock)receipt.age=Infinity;
+ receipt.lastClock=now;
+ const ageMS=receipt.age+Math.max(0,now-receipt.received);
+ return {usable:ageMS<120000,fresh:observation.state==='available'&&ageMS<15000,ageMS,
+  applied:consoleSnapshot.applied_services||{},services:consoleSnapshot.services||{},runtime:consoleSnapshot.runtime||{}};
+}
 const ci=name=>`<svg class="ui-icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const consoleText=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
 function consoleDate(value) {const d=new Date(value);return Number.isFinite(d.getTime())&&d.getFullYear()>2000?d.toLocaleString('ru-RU',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}):'Ещё не проверено';}
@@ -181,8 +216,9 @@ document.addEventListener('click',async e=>{
  else if(b.hasAttribute('data-console-engine-action')){const meta=consoleEngineMeta[b.dataset.consoleEngineAction];if(b.dataset.consoleEngineAction==='xray')switchEngineTab('transfer');else setView(meta.target);}
  }catch(error){showNotice('error',error.message);}
 });
-window.addEventListener('razvilka:autonomy-state',e=>{consoleAutonomyAvailability(true); consoleSnapshot=e.detail;consoleAutonomyError='';renderConsole();});
-window.addEventListener('razvilka:autonomy-error',e=>{if(e.detail.retained&&consoleSnapshot){consoleAutonomyError='';renderConsole();return;}consoleAutonomyAvailability(false,e.detail.status===404?'Автопилот недоступен в установленной версии. Обновите приложение; подключения и ручные настройки остаются доступны.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleSnapshot=null;renderConsole();});
+document.addEventListener('razvilka:auth-required',consoleClearAutonomySnapshot);
+window.addEventListener('razvilka:autonomy-state',e=>{if(!consoleAcceptAutonomySnapshot(e.detail))return;consoleAutonomyAvailability(true);consoleAutonomyError='';renderConsole();});
+window.addEventListener('razvilka:autonomy-error',e=>{if(e.detail.retained&&consoleSnapshot){consoleAutonomyError='';renderConsole();return;}consoleAutonomyAvailability(false,e.detail.status===404?'Автопилот недоступен в установленной версии. Обновите приложение; подключения и ручные настройки остаются доступны.':e.detail.message); consoleAutonomyError=e.detail.message;if(e.detail.status===401||e.detail.status===404)consoleClearAutonomySnapshot();renderConsole();});
 window.addEventListener('hashchange',consoleRouteHash);
 renderConsole();
 

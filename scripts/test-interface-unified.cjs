@@ -4,6 +4,7 @@ const checkout=path.resolve(__dirname,'..');
 const model=require(path.join(checkout,'cmd/razvilka/web/interface-model.js'));
 const full=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/interface.js'),'utf8');
 const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "refreshHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
+names.push('interfaceStatusCache','interfaceStatusServices','interfaceServiceActionsReady');
 const source=names.map(name=>{const f=full.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n}\\n'));assert(f,'Missing production function: '+name);return f[0];}).join('\n');
 const results=[];async function test(name,fn){await fn();results.push({name,status:'passed'});console.log('PASS',name);}
 const service={id:'youtube',name:'YouTube',category:'Видео',enabled:true,applied_state:{enabled:true,route:'nfqws2',sources:['192.168.1.20']}};
@@ -21,6 +22,74 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority',async()=>{
+ const {c,state,$,calls}=fixture(),listeners=new Map();let clock=1000;
+ const consoleSource=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/console.js'),'utf8');
+ c.performance={now:()=>clock};c.consoleAutonomyReceipt=null;c.window={addEventListener:(name,fn)=>listeners.set(name,fn)};c.document.addEventListener=(name,fn)=>listeners.set(name,fn);
+ c.consoleAutonomyAvailability=()=>{};c.renderConsole=()=>c.renderInterfaceHome({telegram:{kind:'good',route:'sing-box:node-1'}});
+ const helpers=['consoleObservationClock','consoleClearAutonomySnapshot','consoleAcceptAutonomySnapshot','consoleAutonomyCache'].map(name=>consoleSource.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'))[0]).join('\n');
+ vm.runInContext(helpers+'\n'+consoleSource.match(/^document.addEventListener\('razvilka:auth-required'.*$/m)[0]+'\n'+consoleSource.match(/^window.addEventListener\('razvilka:autonomy-state'.*$/m)[0],c);
+ const event=value=>listeners.get('razvilka:autonomy-state')({detail:value});
+ state.services=['youtube','discord','instagram','roblox','tiktok','twitch','telegram','openai'].map(id=>({id,name:id,presentation_only:true,enabled:false,applied_state:{enabled:false,route:'auto'}}));
+ state.dataLoad.services={loaded:true,phase:'busy'};state.resourceExclusions={};state.dataLoad.resourceExclusions={phase:'busy'};
+ c.consoleEngineMeta={'sing-box':{name:'Sing-box',tone:'blue',icon:'route'}};
+ const make=(revision,kind,age)=>({policy:{setup_complete:true,enabled:true},observation:{instance_id:'a'.repeat(32),revision,state:kind,data_age_ms:age,observed_at:'2026-10-22T18:46:34Z'},
+  services:Object.fromEntries(state.services.map(s=>[s.id,{enabled:true}])),
+  applied_services:{telegram:{enabled:true,route:'sing-box:node-1'}},
+  runtime:{...Object.fromEntries(['instagram','roblox','tiktok','twitch'].map(id=>[id,{state:'component-stopped',message:'Нужен явный запуск.'}])),youtube:{state:'component-stopped',message:'Запустите NFQWS2 через подтверждённое применение.'},discord:{state:'component-stopped',message:'Нужен явный запуск.'},telegram:{state:'applied',checked_at:'2026-10-22T18:44:31Z'},openai:{state:'domain-route-unavailable',message:'Для доменного списка нужен поддержанный обход.'}}});
+ const original=JSON.stringify(state.services);
+ event(make(1,'retained',45000));
+ assert.match($('#r42RouteDistribution').innerHTML,/Последние сведения: Нужный компонент не запущен/);
+ assert.match($('#ui3Attention').innerHTML,/45 сек назад/);
+ clock+=1000;event(make(2,'available',7000));
+ const home=$('#r42RouteDistribution').innerHTML,attention=$('#ui3Attention').innerHTML;
+ assert.match(home,/Нужный компонент не запущен/);assert.match(home,/Нет подтверждённого обхода для доменного сервиса/);
+ assert.doesNotMatch(home,/Нет свежих данных|Работает/);assert.match(home,/Нужна проверка/);
+ assert.match(attention,/Запустите NFQWS2/);assert.match(attention,/7 сек назад/);
+ assert.doesNotMatch(attention,/Вашего участия не требуется/);
+ assert.match($('#ui7HomeEngines').innerHTML,/<b>1<\/b>/);assert.doesNotMatch($('#ui7HomeEngines').innerHTML,/1 проверено/);
+ assert.equal(JSON.stringify(state.services),original,'presentation must not hydrate the action source');assert.deepEqual(calls,[]);
+ assert.equal(state.dataLoad.services.phase,'busy');assert.equal(state.dataLoad.resourceExclusions.phase,'busy');
+ c.interfaceOpenService('youtube');assert.equal($('#r6InspectorCheck').disabled,true);
+ assert.doesNotMatch($('#r6InspectorControls').innerHTML,/data-rz-action/);assert.equal($('#r6InspectorRemove').innerHTML,'');
+ await c.interfaceCheckService('youtube');assert.deepEqual(calls.filter(call=>call[0]==='start'||call[0]==='manage'),[]);
+ // Polling the SAME publication cannot refresh a retained lease. Neither a
+ // response clock nor runtime.checked_at supplies current PASS/Start authority.
+ clock+=114000;event(make(2,'available',0));
+ assert.equal(c.consoleAutonomyCache().usable,false);assert.match($('#r42RouteDistribution').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#ui3Attention').innerHTML,/Вашего участия не требуется/);
+ event(make(1,'available',0));assert.equal(c.consoleSnapshot.observation.revision,2,'late publication cannot rewind');
+ // A new process/publication may provide new metadata. Auth revocation cannot.
+ const next=make(1,'available',0);next.observation.instance_id='b'.repeat(32);event(next);assert.equal(c.consoleAutonomyCache().fresh,true);
+ state.authenticated=false;event(make(9,'available',0));assert.equal(c.consoleAutonomyCache(),null);assert.equal(c.consoleSnapshot.observation.instance_id,'b'.repeat(32));
+ listeners.get('razvilka:auth-required')();state.authGeneration=1;state.authenticated=true;
+ assert.equal(c.consoleSnapshot,null);assert.equal(c.consoleAutonomyReceipt,null);assert.equal(c.consoleAutonomyCache(),null);
+ c.renderInterfaceHome({});assert.doesNotMatch($('#r42RouteDistribution').innerHTML,/Нужный компонент не запущен|Нет подтверждённого обхода для доменного сервиса/,'login without a new response cannot restore old labels');
+ event(next);assert.equal(c.consoleAutonomyCache().usable,true);state.authGeneration++;
+ assert.equal(c.consoleAutonomyCache(),null,'auth epoch independently fences an uncleared receipt');
+ // Legacy browsers without performance.now fail closed on a backwards wall
+ // clock, and replaying that same server publication cannot renew the age.
+ c.performance=undefined;c.Date=class extends Date{static now(){return clock;}};event({...next,observation:{...next.observation,revision:2}});
+ clock+=10000;assert.equal(c.consoleAutonomyCache().usable,true);clock-=5000;
+ assert.equal(c.consoleAutonomyCache().usable,false);clock+=1000;event({...next,observation:{...next.observation,revision:2}});
+ assert.equal(c.consoleAutonomyCache().usable,false);
+});
+await test('cached metadata does not borrow PASS and unknown waiting does not promise self-repair',()=>{
+ const {c,state,$}=fixture();
+ c.consoleSnapshot.services.youtube={enabled:true};c.consoleSnapshot.runtime.youtube={state:'origin-expired',message:'Источник больше не доступен.'};
+ c.renderInterfaceHome({});assert.doesNotMatch($('#ui3Attention').innerHTML,/Вашего участия не требуется/);
+ const saved={...structuredClone(service),presentation_only:true};
+ const cache={usable:true,fresh:true,ageMS:7000,applied:{youtube:{enabled:true,route:'nfqws2'}}};
+ const h=model.humanService(saved,good,{enabled:true},{state:'healthy',checked_at:new Date().toISOString()},false,[],cache);
+ assert.notEqual(h.kind,'good');assert.equal(h.statusOnly,true);assert.match(h.detail,/не подтверждается/);
+ const removed=model.humanService(saved,good,{enabled:true},{state:'pending'},false,[],{...cache,applied:{}});
+ assert.equal(removed.applied,false);assert.equal(removed.route,'','old row cannot restore a removed cached assignment');
+ assert.equal(model.humanService(saved,good,{enabled:true},{state:'healthy'},false,[{originLabel:'Добавлено вручную'}],cache).excluded,true,'cached status cannot erase a saved exclusion');
+ const retained={...cache,fresh:false,ageMS:45000};
+ const oldTask=model.humanService(service,{}, {enabled:true},{state:'checking',message:'Идёт проверка.'},true,[],retained);
+ assert.equal(oldTask.progress,false);assert.match(oldTask.label,/Последние сведения/);assert.match(oldTask.detail,/45 сек назад/);
+ assert.equal(model.humanService(service,good,{enabled:true},{state:'checking'},true,[],retained).kind,'good','independent current route proof remains authoritative');
+});
 await test('quick add announces success only after explicitly accepted management',async()=>{
  for(const accepted of [false,undefined,true]){
   const {c,state,notices}=fixture();state.services=[{id:'new',name:'New',enabled:false}];c.interfaceManage=async()=>accepted;

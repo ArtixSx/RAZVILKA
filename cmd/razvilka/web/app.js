@@ -1206,7 +1206,9 @@ function cancelPanelInventoryRefresh() {
 }
 
 function refreshPanelInventory() {
-  if (!state.authenticated || document.hidden || state.inventoryUnsupported || panelLoad.request) return Promise.resolve(false);
+  // This memory-only observation must not wait behind protected service/status
+  // reads. Its own flight, shared transport and auth/context guards still bind it.
+  if (!state.authenticated || document.hidden || state.inventoryUnsupported) return Promise.resolve(false);
   if (inventoryRead) return inventoryRead.promise;
   const ticket = { generation: panelLoad.generation, context: panelReadContext(), controller: new AbortController(), promise: null };
   inventoryRead = ticket;

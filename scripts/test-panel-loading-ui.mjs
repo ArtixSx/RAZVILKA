@@ -268,6 +268,19 @@ await test('general refresh requests protected auxiliary data only after authent
  await loggedOut.context.refreshAll();assert.deepEqual(loggedOut.events,[]);
 });
 
+await test('inventory heartbeat recovers stale metadata while a protected panel read is still pending',async()=>{
+ const f=fixture();f.state.authenticated=true;f.state.currentView='overview';
+ f.state.inventoryObservation={receivedAt:0,ageMS:60000};
+ f.context.refreshHomeEngineSummary=()=>f.renders.push('homeEngineSummary');
+ f.panelLoad.request=new Promise(()=>{});
+ assert.equal(f.context.inventoryObservationStale(),true);
+ assert.equal(await f.context.refreshPanelInventory(),true);
+ assert.equal(f.context.inventoryObservationStale(),false);
+ assert.equal(f.state.dataLoad.inventory.phase,'ready');
+ assert(f.renders.includes('homeEngineSummary'));
+ assert(!f.renders.includes('renderEngineControl'));assert(!f.renders.includes('renderDNS'));
+ assert.equal(f.calls.filter(c=>c.url==='/api/v1/panel/inventory').length,1);
+});
 await test('inventory heartbeat shares a flight, fences logout and never redraws editable forms',async()=>{
  const f=fixture();f.state.authenticated=true;f.state.currentView='overview';f.context.refreshHomeEngineSummary=()=>f.renders.push('homeEngineSummary');
  const pending=deferred();f.handler(()=>pending.promise);

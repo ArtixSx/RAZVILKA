@@ -66,14 +66,20 @@ const mixed=model(snap({youtube:'capability-refused',discord:'apply-refused'}),c
 assert.match(mixed.text,/нужно ваше решение/);
 assert.doesNotMatch(mixed.text,/^Автопилот продолжает попытки/);
 assert.equal(model(snap({discord:'apply-refused'}),catalog).text,'Автопилот продолжает попытки. Причина указана у сервиса.','retryable failures keep their wording');
-// Domain services cannot fall back to an IP proxy. The worker can still
-// recheck NFQWS2 on a later round, but this result is not a running check.
+// A later recheck does not make the missing domain path or stopped component
+// self-repairing. Current supported paths require configuration by the owner.
 const domainUnavailable=model(snap({youtube:'domain-route-unavailable'}),catalog);
 assert.equal(domainUnavailable.services[0].short,'Нет подтверждённого обхода для доменного сервиса');
 assert.equal(domainUnavailable.services[0].bucket,'problem');
 assert.equal(domainUnavailable.services[0].detail,'detail youtube');
 assert.doesNotMatch(domainUnavailable.services[0].short,/Проверяется|Работает/);
-assert.equal(domainUnavailable.services[0].owner,false,'NFQWS2 may recover on a later check');
+assert.equal(domainUnavailable.services[0].owner,true,'a recheck does not promise an unavailable path will configure itself');
+for(const state of ['component-stopped','component-unavailable','domain-route-unavailable']){
+  const waitingForOwner=model(snap({youtube:state}),catalog);
+  assert.equal(waitingForOwner.services[0].owner,true,state);
+  assert.match(waitingForOwner.text,/не может включить их сам/,state);
+  assert.doesNotMatch(waitingForOwner.text,/продолжает попытки/,state);
+}
 assert.doesNotMatch(read('cmd/razvilka/web/simple-home.js'),/Автопилот проверит и включит его/,'adding a service does not promise that it will be enabled');
 
 // Retained runtime labels are saved history: neither a current failure nor

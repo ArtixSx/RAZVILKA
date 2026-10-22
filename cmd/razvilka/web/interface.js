@@ -52,15 +52,33 @@ function interfaceAutoLabel(){
  return rim.humanAuto(consoleSnapshot,state.status,!interfaceState.authRevoked&&!consoleAutonomyError).title;
 }
 
+function interfaceStatusCache(){
+ if(interfaceState.authRevoked||state.authenticated!==true||interfaceRecoveryRequired()||typeof consoleAutonomyCache!=='function')return null;
+ return consoleAutonomyCache();
+}
+function interfaceStatusServices(cache){
+ const list=(state.services||[]).slice(),known=new Set(list.map(s=>s.id));
+ if(cache?.usable)for(const service of consoleSnapshot?.catalog_services||[]){
+  if(service?.id&&cache.services[service.id]&&!known.has(service.id)){
+   list.push({...service,enabled:false,presentation_only:true});known.add(service.id);
+  }
+ }
+ return list;
+}
+function interfaceServiceActionsReady(service){
+ return state.authenticated===true&&!interfaceState.authRevoked&&!service?.presentation_only&&interfaceDataReady('services')&&state.dataLoad?.services?.phase==='ready'&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready');
+}
+
 function interfaceServicePresentation(service,summaries){
  const original=(state.services||[]).find(s=>s.id===service.id)||service;
  const managed=consoleSnapshot?.services?.[service.id];
  const auto=rim.humanAuto(consoleSnapshot,state.status,!interfaceState.authRevoked&&!consoleAutonomyError);
  const running=auto.state==='enabled';
- const runtime=running?consoleSnapshot?.runtime?.[service.id]:{};
+ const cache=interfaceStatusCache();
+ const runtime=running&&(!cache||cache.usable)?consoleSnapshot?.runtime?.[service.id]:{};
  const excluded=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const available=!interfaceState.authRevoked&&!['error','busy'].includes(state.dataLoad?.services?.phase)&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready');
- const value=rim.humanService(original,summaries?.[service.id]||{},managed,runtime,available,excluded[service.id]||[]);
+ const value=rim.humanService(original,summaries?.[service.id]||{},managed,runtime,available,excluded[service.id]||[],cache);
  if(!value.excluded&&managed?.enabled===true&&!running)value.control=auto.state==='unknown'?'Состояние автоподбора не получено':auto.state==='paused'?'Автоподбор на общей паузе':'Автоподбор ограничен общей настройкой';
  return value;
 }
@@ -157,7 +175,10 @@ function renderHomeEngineSummary(summaries,loaded,fresh){
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
  const currentSummaries=Object.fromEntries(Object.entries(summaries||{}).filter(([id])=>!exclusions[id]));
  const auto=rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled';
- const usage=rim.engineUsage(loaded?state.services:[],fresh?currentSummaries:{},auto?consoleSnapshot?.services||{}:{},fresh&&auto?consoleSnapshot?.runtime||{}:{});
+ const cache=interfaceStatusCache();
+ const services=interfaceStatusServices(cache).map(s=>{const applied=cache?.usable&&!fresh?(Object.hasOwn(cache.applied,s.id)?cache.applied[s.id]:{enabled:false,route:''}):null;return applied&&typeof applied.enabled==='boolean'&&typeof(applied.route||applied.mode||'')==='string'?{...s,applied_state:applied}:s;});
+ loaded=loaded||cache?.usable;
+ const usage=rim.engineUsage(loaded?services:[],fresh?currentSummaries:{},auto?consoleSnapshot?.services||{}:{},fresh&&auto?consoleSnapshot?.runtime||{}:{});
  const known=state.authenticated===true&&interfaceDataReady('inventory');
  const unavailable=interfaceRecoveryRequired()?'Сведения о компонентах недоступны до проверки журнала. Их состояние пока неизвестно.':'Сведения о компонентах ещё загружаются. Это не означает, что обходы остановлены.';
  const rows=Object.entries(consoleEngineMeta).filter(([id])=>known||usage[id]);
@@ -166,11 +187,12 @@ function renderHomeEngineSummary(summaries,loaded,fresh){
 
 function renderInterfaceHome(summaries){
  const ready=!interfaceState.authRevoked&&state.authenticated===true;
- const loaded=ready&&interfaceDataReady('services');
- const fresh=loaded&&!['error','busy'].includes(state.dataLoad?.services?.phase);
- const list=loaded?(state.services||[]):[];
+ const cache=interfaceStatusCache();
+ const loaded=ready&&(interfaceDataReady('services')||cache?.usable);
+ const fresh=loaded&&interfaceDataReady('services')&&!['error','busy'].includes(state.dataLoad?.services?.phase);
+ const list=loaded?interfaceStatusServices(cache):[];
  const exclusions=typeof interfaceExclusionMap==='function'?interfaceExclusionMap():{};
- const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'?consoleSnapshot?.runtime||{}:{},fresh&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusions);
+ const counts=rim.humanCounts(list,summaries,consoleSnapshot?.services||{},rim.humanAuto(consoleSnapshot,state.status,!consoleAutonomyError).state==='enabled'&&(!cache||cache.usable)?consoleSnapshot?.runtime||{}:{},fresh&&(!state.resourceExclusions||state.dataLoad?.resourceExclusions?.phase==='ready'),exclusions,cache);
  const resourceListKnown=typeof resourceExclusionsSupported==='function'&&resourceExclusionsSupported();
  consoleText('ui3HomeCount',loaded?counts.selected:'—');
  interfaceHomeAuto(ready);
@@ -181,7 +203,7 @@ function renderInterfaceHome(summaries){
  // confirmed result and what the autopilot is doing with them.
  const waiting=attention.length?[]:interfaceHomeOrder(counts.rows.filter(s=>s.member&&!s.excluded&&s.kind!=='good')).slice(0,3);
  const attentionRow=(h,action)=>`<button type="button" class="r5-attention-row" data-rz-inspect="${esc(h.service.id)}"><span><b>${esc(h.service.name)}</b><small>${esc(action?h.pendingDetail||h.pendingLabel||h.label:`${h.label}. ${h.detail||''}`.trim())}</small></span><span>${action?'Разобраться':'Подробнее'} ${ci('chevron')}</span></button>`;
- interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>Что требует внимания</h3>${ci('activity')}</div>${!fresh?'<p>Нет свежих данных для оценки. Это не означает, что подключения не работают.</p>':attention.length?attention.map(h=>attentionRow(h,true)).join(''):waiting.length?`<p class="r5-caption r5-attention-note">Вашего участия не требуется: автопилот занимается этим сам.</p>${waiting.map(h=>attentionRow(h,false)).join('')}`:`<p>${counts.selected?'В последних проверках проблем не обнаружено.':'После добавления сервисов здесь появятся проблемы, требующие вашего участия.'}</p>`}`);
+ interfaceHTML('ui3Attention',`<div class="ui3-section-heading"><h3>Что требует внимания</h3>${ci('activity')}</div>${!fresh&&!cache?.usable?'<p>Нет свежих данных для оценки. Это не означает, что подключения не работают.</p>':attention.length?attention.map(h=>attentionRow(h,true)).join(''):waiting.length?`<p class="r5-caption r5-attention-note">${waiting.every(h=>h.progress)?'Вашего участия не требуется: автопилот занимается этим сам.':'Доступ пока не подтверждён. Откройте сервис, чтобы увидеть последние сведения и причину.'}</p>${waiting.map(h=>attentionRow(h,false)).join('')}`:`<p>${counts.selected?'В последних проверках проблем не обнаружено.':'После добавления сервисов здесь появятся проблемы, требующие вашего участия.'}</p>`}`);
  interfaceHTML('r42RouteDistribution',interfaceHomeServicesHTML(counts.rows.filter(s=>s.member&&!s.excluded),fresh));
  consoleText('ui3RouterName',ready?state.system?.hostname||'Роутер':'Нет сведений');
  consoleText('ui3RouterMeta',ready?state.system?.architecture||'Платформа не определена':'');
@@ -454,6 +476,7 @@ async function interfaceCheckService(id){
  if(interfaceState.authRevoked||$('#authScreen')?.hidden===false||interfaceState.busy||!(state.services||[]).some(s=>s.id===id))return;
  const epoch=interfaceState.authEpoch;
  const message=text=>{if(epoch!==interfaceState.authEpoch)return;interfaceSafeRender('check-notice',()=>{if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open)consoleText('ui3InspectorMessage',text);else interfaceToast(text);});};
+ if(!interfaceServiceActionsReady((state.services||[]).find(s=>s.id===id))){message('Показаны последние сведения. Сначала обновите настройки сервиса.');return;}
  if(serviceDashboard.operation||serviceDashboardJobActive()){message('Уже выполняется проверка. Дождитесь её завершения.');return;}
  interfaceState.busy=true;
  try{
@@ -483,8 +506,8 @@ function interfaceUpdateInspector(){
  consoleText('r6InspectorObserved',consoleDate(s.observed_state?.checked_at));consoleText('r6InspectorAddresses',sources.join(', '));
  interfaceHTML('r6InspectorDomains',(Array.isArray(s.domains)?s.domains:[]).slice(0,100).map(d=>`<code>${esc(d)}</code>`).join('')+((s.domains?.length||0)>100?'<p>Показаны первые 100 доменов. Полный состав доступен в настройках сервиса.</p>':''));
  interfaceHTML('r6InspectorControls',interfaceInspectorControls(s));
- interfaceHTML('r6InspectorRemove',managed&&!managed.removing?'<button type="button" class="ui3-danger-text" data-rz-action="remove">Отключить и убрать из автопилота</button>':'');
- const check=$('#r6InspectorCheck');if(check)check.disabled=!!interfaceState.busy||!!serviceDashboard.operation||serviceDashboardJobActive()||!!managed?.removing;
+ interfaceHTML('r6InspectorRemove',interfaceServiceActionsReady(s)&&managed&&!managed.removing?'<button type="button" class="ui3-danger-text" data-rz-action="remove">Отключить и убрать из автопилота</button>':'');
+ const check=$('#r6InspectorCheck');if(check)check.disabled=!interfaceServiceActionsReady(s)||!!interfaceState.busy||!!serviceDashboard.operation||serviceDashboardJobActive()||!!managed?.removing;
 }
 
 function interfaceOpenService(id){
@@ -594,6 +617,7 @@ function interfaceScopeLabel(service){
 }
 
 function interfaceInspectorControls(service){
+ if(!interfaceServiceActionsReady(service))return '<p>Показаны последние сведения. Для управления нужны свежие настройки сервиса.</p><button type="button" class="secondary" data-panel-refresh>Обновить настройки</button>';
  if(typeof interfaceExclusionMap==='function'&&interfaceExclusionMap()[service.id])return '<p>Исключение сохранено. Добавление или выбор подключения его не отменяет.</p><button type="button" class="secondary" data-rz-nav="exclusions">Открыть исключения</button>';
  const managed=consoleSnapshot?.services?.[service.id];
  const setup=consoleSnapshot?.policy?.setup_complete===true&&!consoleAutonomyError;

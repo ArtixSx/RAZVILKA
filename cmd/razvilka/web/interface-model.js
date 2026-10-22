@@ -195,13 +195,37 @@
   function appliedView(s) {
     return s?.applied_state || {enabled:s?.applied_enabled === true,route:s?.applied_route,sources:s?.applied_sources};
   }
-  function humanService(s, summary = {}, managed = null, runtime = {}, available = true, exclusions = []) {
+  function humanService(s, summary = {}, managed = null, runtime = {}, available = true, exclusions = [], cache = null) {
     s=s&&typeof s==='object'?s:{};summary=summary&&typeof summary==='object'?summary:{};runtime=runtime&&typeof runtime==='object'?runtime:{};
+    if(cache&&!cache.usable)runtime={};
+    if(cache?.usable&&!cache.fresh&&available&&!s.presentation_only){
+      // A fresh configuration does not renew an older runtime observation.
+      // Independent route proof and current edits/exclusions keep precedence.
+      const current=humanService(s,summary,managed,{},true,exclusions);
+      if(current.changed||current.excluded||current.kind==='good'||current.kind==='bad')return current;
+      return humanService(s,{},managed,runtime,false,exclusions,cache);
+    }
     const applied=appliedView(s);
     const changed=serviceChanged(s)||(!s.suspended&&typeof s.dirty!=='boolean'&&typeof s.enabled==='boolean'&&typeof applied.enabled==='boolean'&&s.enabled!==applied.enabled);
     const member=s.enabled===true||!!managed||applied.enabled===true||changed;
     const result={member,changed,applied:applied.enabled===true,route:applied.enabled===true?text(applied.route):'',control:managed?managed.enabled?'Автоподбор включён':'Автоподбор на паузе':'Ручная настройка',kind:'unknown',actionable:false,label:'Не добавлен',detail:'Добавьте сервис, чтобы настроить доступ.'};
-    if(!available||s.presentation_only)return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
+    if(!available||s.presentation_only){
+      if(cache?.usable&&managed){
+        const saved=Object.hasOwn(cache.applied||{},s.id)?cache.applied[s.id]:{enabled:false,route:''};
+        const valid=saved&&typeof saved.enabled==='boolean'&&typeof (saved.route||saved.mode||'')==='string';
+        // Read-only projection. Never mutate the action/configuration source,
+        // inherit a PASS summary or let old desired fields invent a new draft.
+        const display={...s,presentation_only:false,dirty:false,route_dirty:false,sources_dirty:false};
+        if(valid){display.applied_state=saved;display.enabled=saved.enabled;}
+        const h=humanService(display,{},managed,runtime,true,exclusions);
+        const age=Math.floor(cache.ageMS/1000),prefix=cache.fresh?'Статус автопилота':'Последний статус автопилота';
+        return {...h,changed:false,progress:cache.fresh&&h.progress,kind:h.kind==='good'?'unknown':h.kind,
+          label:cache.fresh?h.label:`Последние сведения: ${h.label}`,
+          detail:`${h.detail} ${prefix}: ${age} сек назад. Доступ к сервису этим снимком не подтверждается.`,
+          pendingDetail:h.actionable?`${h.pendingDetail||h.detail} ${prefix}: ${age} сек назад.`:undefined,statusOnly:true};
+      }
+      return {...result,label:'Нет свежих данных',detail:'Последние настройки сохранены. Работа сервиса сейчас не подтверждена.'};
+    }
     if(exclusions.length)return {...result,excluded:true,label:'Исключение сохранено',control:exclusions.map(row=>row.originLabel).join(' · '),detail:'Сервис указан без обхода в сохранённой политике. Применение исключения и снятие прежнего маршрута ещё не подтверждены.',pendingLabel:'Применение исключения не подтверждено'};
     if(!member)return result;
     if(managed?.removing)return {...result,kind:'warn',label:'Отключение в очереди',detail:'Отключение ещё не завершено. Действующее подключение может сохраняться.'};
@@ -224,8 +248,8 @@
     return {...result,kind:'warn',actionable:changed,label:'Нужна проверка',detail:matched?text(summary.detail)||'Подключение назначено, но свежего подтверждения доступа нет.':'Результат не подтверждает это подключение. Дождитесь новой проверки.'};
   }
 
-  function humanCounts(services, summaries = {}, managed = {}, runtime = {}, available = true, exclusions = {}) {
-    const rows=services.map(s=>({service:s,...humanService(s,summaries[s.id],managed[s.id],runtime[s.id],available,exclusions[s.id]||[])}));
+  function humanCounts(services, summaries = {}, managed = {}, runtime = {}, available = true, exclusions = {}, cache = null) {
+    const rows=services.map(s=>({service:s,...humanService(s,summaries[s.id],managed[s.id],runtime[s.id],available,exclusions[s.id]||[],cache)}));
     const selected=rows.filter(s=>s.member&&!s.excluded);
     return {rows,selected:selected.length,good:selected.filter(s=>s.kind==='good').length,
       excluded:rows.filter(s=>s.excluded).length,attention:selected.filter(s=>s.actionable).length,unconfirmed:selected.filter(s=>s.kind!=='good').length,changed:rows.filter(s=>s.changed).length};

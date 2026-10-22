@@ -10,7 +10,7 @@
   const PROGRESS = new Set(['pending', 'checking', 'applying', 'searching', 'scope-pending', 'removal-pending', 'rate-limited']);
   // States the autopilot cannot leave on its own: the owner has to change the
   // mode, a list, the service or the journal first. They are not retried.
-  const WAITS_FOR_OWNER = new Set(['capability-refused', 'excluded', 'manual-change', 'definition-changed', 'unsupported-scenario', 'requires-review']);
+  const WAITS_FOR_OWNER = new Set(['capability-refused', 'excluded', 'manual-change', 'definition-changed', 'unsupported-scenario', 'requires-review', 'component-stopped', 'component-unavailable', 'domain-route-unavailable']);
   const SHORT = {
     pending: 'Ждёт проверки', checking: 'Проверяется', applying: 'Включается', searching: 'Подбирается способ обхода',
     'scope-pending': 'Применяется к устройствам', 'removal-pending': 'Убирается', 'rate-limited': 'Пауза между попытками',
