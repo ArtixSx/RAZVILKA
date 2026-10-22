@@ -57,21 +57,22 @@ type reconcilerDocument struct {
 	Jobs        []durableServiceJob           `json:"jobs,omitempty"`
 }
 type serviceReconciler struct {
-	mu           sync.Mutex
-	once         sync.Once
-	doc          reconcilerDocument
-	image        restorejournal.Image
-	path         string
-	started      bool
-	blocked      bool
-	blockedCode  string
-	cancel       context.CancelFunc
-	activeJobID  uint64
-	durableBurst int
-	dnsResults   map[uint64]json.RawMessage // Bounded diagnostics, never persisted/replayed proof.
-	stop         context.CancelFunc
-	wake         chan struct{}
-	done         chan struct{}
+	mu             sync.Mutex
+	once           sync.Once
+	doc            reconcilerDocument
+	image          restorejournal.Image
+	path           string
+	started        bool
+	blocked        bool
+	blockedCode    string
+	retryAdmission bool // Only typed kernel admission refusal, never an unknown write.
+	cancel         context.CancelFunc
+	activeJobID    uint64
+	durableBurst   int
+	dnsResults     map[uint64]json.RawMessage // Bounded diagnostics, never persisted/replayed proof.
+	stop           context.CancelFunc
+	wake           chan struct{}
+	done           chan struct{}
 }
 
 func automationConfigFingerprint(cfg config.Config) string {
@@ -204,6 +205,9 @@ func (a *App) StartServiceReconciler(ctx context.Context) {
 			r.path = a.Store.AutomationStatePath()
 			if err := a.loadReconcilerLocked(ctx); err != nil {
 				a.blockReconcilerLocked(err)
+				// Startup recovery did not finish. Never retry a replacement empty
+				// document or bypass the normal restart recovery guards.
+				r.retryAdmission = false
 				r.doc = reconcilerDocument{Schema: 1, Owner: reconcilerOwner, Fallback: map[string]fallbackCheckpoint{}}
 			}
 		}
@@ -361,10 +365,12 @@ func (a *App) persistReconcilerLocked(ctx context.Context) (err error) {
 // Called with the reconciler lock held; one event per blocked transition.
 func (a *App) blockReconcilerLocked(err error) {
 	r := &a.reconciler
-	if r.blocked {
-		return
+	wasBlocked := r.blocked
+	if wasBlocked && !r.retryAdmission {
+		return // An uncertain write/currentness fence can never become retryable.
 	}
 	r.blocked = true
+	r.retryAdmission = restorejournal.RetryableFileAdmission(err)
 	r.blockedCode = "storage-unavailable"
 	switch {
 	case errors.Is(err, restorejournal.ErrConflict):
@@ -376,8 +382,22 @@ func (a *App) blockReconcilerLocked(err error) {
 	case errors.Is(err, restorejournal.ErrRecovery):
 		r.blockedCode = "write-unconfirmed"
 	}
-	if a.Audit != nil {
+	if !wasBlocked && a.Audit != nil {
 		_ = a.Audit.Append(auditlog.Event{Action: "SCHEDULE", Path: "/runtime/scheduler/" + r.blockedCode, Outcome: "failed", Actor: "router", RemoteIP: "local"})
+	}
+}
+
+// Retry only scheduler metadata that never passed kernel writer admission.
+// Keep the original image and in-memory checkpoints: reload could erase switch
+// budgets or replay an operation whose runtime side effects already completed.
+// The ordinary lease + CAS must succeed before any more work can be dispatched.
+func (a *App) retryReconcilerAdmissionLocked(ctx context.Context) {
+	r := &a.reconciler
+	if !r.blocked || !r.retryAdmission || ctx.Err() != nil {
+		return
+	}
+	if a.persistReconcilerLocked(ctx) == nil {
+		r.blocked, r.retryAdmission, r.blockedCode = false, false, ""
 	}
 }
 
@@ -389,6 +409,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 	}
 	r := &a.reconciler
 	r.mu.Lock()
+	a.retryReconcilerAdmissionLocked(ctx)
 	blocked := r.blocked || now.Before(r.doc.ManualUntil)
 	due := len(r.doc.Operations) < 5
 	for _, job := range r.doc.Jobs {

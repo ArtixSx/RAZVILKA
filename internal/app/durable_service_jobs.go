@@ -639,6 +639,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	if j.Request.Kind == "node-check" {
 		budget = 75 * time.Second
 	}
+	beforeDispatch := *j
 	j.State, j.Phase, j.CleanupOutcome = "running", "checking", "pending"
 	j.Deadline = minTime(now.Add(budget), j.ExpiresAt)
 	j.Attempts++
@@ -649,6 +650,12 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		cancel()
 		r.cancel = nil
 		r.activeJobID = 0
+		if restorejournal.RetryableFileAdmission(err) {
+			// No worker was dispatched and no journal write was admitted.
+			// Preserve selectability and its retry budget before the scheduler
+			// retries metadata; a saved running state would orphan this job.
+			*j = beforeDispatch
+		}
 		r.mu.Unlock()
 		return true
 	}

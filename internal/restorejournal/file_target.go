@@ -15,6 +15,22 @@ import (
 
 var ErrConflict = errors.New("state file changed since it was read")
 
+type fileLeaseAdmissionRefusal struct{ cause error }
+
+func (e *fileLeaseAdmissionRefusal) Error() string { return e.cause.Error() }
+func (e *fileLeaseAdmissionRefusal) Unwrap() error { return e.cause }
+
+// RetryableFileAdmission identifies only a failed kernel lease acquisition in
+// OpenFileTarget, before any target write. It grants no permission to reload or
+// replay work: a retry still needs a new exact lease, marker validation and CAS.
+// Unknown markers, path changes and failures after admission never qualify.
+func RetryableFileAdmission(err error) bool {
+	// A joined/wrapped outcome may describe additional unknown effects. Only
+	// this exact result from OpenFileTarget proves that no target was opened.
+	_, ok := err.(*fileLeaseAdmissionRefusal)
+	return ok
+}
+
 // FileTarget is a bounded, descriptor-anchored file adapter. It keeps a
 // per-filename OS lease until Close; all participating writers MUST use this
 // adapter. It does not protect against root, legacy writers or hardlink/path
@@ -54,6 +70,10 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 	release, err := acquireNamedLease(root, ".state-"+key+".lock", "RAZVILKA state file writer v1 "+key+"\n")
 	if err != nil {
 		_ = root.Close()
+		var refusal *leaseLockRefusal
+		if errors.As(err, &refusal) {
+			return nil, &fileLeaseAdmissionRefusal{cause: err}
+		}
 		return nil, err
 	}
 	binding, _ := FileBinding(full)

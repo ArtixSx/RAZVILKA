@@ -3,6 +3,7 @@
 package restorejournal
 
 import (
+	"errors"
 	"os"
 	"syscall"
 
@@ -20,6 +21,7 @@ func openPrivate(root *ownedfs.Root, name string, create bool) (*os.File, error)
 func lockFile(file *os.File) error {
 	return syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 }
+func lockContention(err error) bool           { return errors.Is(err, syscall.EWOULDBLOCK) }
 func syncJournalDir(root *ownedfs.Root) error { return root.Sync() }
 
 func openReadOnly(root *ownedfs.Root, name string) (*os.File, error) {

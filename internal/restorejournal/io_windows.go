@@ -3,6 +3,7 @@
 package restorejournal
 
 import (
+	"errors"
 	"os"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -20,6 +21,7 @@ func openPrivate(root *ownedfs.Root, name string, create bool) (*os.File, error)
 func lockFile(file *os.File) error {
 	return windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &windows.Overlapped{})
 }
+func lockContention(err error) bool { return errors.Is(err, windows.ERROR_LOCK_VIOLATION) }
 
 // Windows is a process-crash development/test backend only. File Sync and
 // atomic replacement do not establish directory-entry power-loss durability.

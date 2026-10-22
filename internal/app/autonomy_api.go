@@ -164,6 +164,15 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 	refill := a.autonomy.refillState
 	blocked := a.autonomy.blocked
 	a.autonomy.mu.Unlock()
+	a.reconciler.mu.Lock()
+	schedulerBlocked, schedulerCode := a.reconciler.blocked, a.reconciler.blockedCode
+	a.reconciler.mu.Unlock()
+	blockedCode := ""
+	if schedulerBlocked {
+		blocked = true
+		blockedCode = schedulerCode
+		maintenance = "Автопилот приостановлен: планировщик не подтвердил сохранение очереди. Требуется проверка диагностики; текущие подключения не отключены."
+	}
 	cfg := a.Store.Get()
 	definitions := a.catalogSnapshot()
 	catalogServices := []map[string]any{}
@@ -183,7 +192,7 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 			addressRefresh = map[string]any{"state": v.State, "checked_at": v.CheckedAt}
 		}
 	}
-	return map[string]any{"policy": p, "starter": onboarding.Starter(definitions, starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
+	return map[string]any{"policy": p, "starter": onboarding.Starter(definitions, starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "blocked_code": blockedCode, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
 		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": now.UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, now), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, now), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
 		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": true, "component_install": true, "note": "Автоматическое обновление приложения и установленных компонентов по расписанию реализовано. Сквозная приёмка установки и отката на целевой Entware для 0.20.0 (D11) ещё не завершена. Выполнение требует сохранённой политики и успешных проверок установщика. Проверка и подготовка приложения по расписанию работают отдельно."}}
 }

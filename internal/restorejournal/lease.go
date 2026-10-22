@@ -18,6 +18,22 @@ func acquireLease(root *ownedfs.Root) (func(), error) {
 }
 
 func acquireNamedLease(root *ownedfs.Root, name, marker string) (func(), error) {
+	return acquireNamedLeaseWithLock(root, name, marker, lockFile)
+}
+
+// A kernel admission refusal happens before any marker or target write. Keep
+// that fact separate from invalid metadata and uncertain marker durability.
+type leaseLockRefusal struct{ busy bool }
+
+func (e *leaseLockRefusal) Error() string { return e.Unwrap().Error() }
+func (e *leaseLockRefusal) Unwrap() error {
+	if e.busy {
+		return ErrBusy
+	}
+	return ErrUnavailable
+}
+
+func acquireNamedLeaseWithLock(root *ownedfs.Root, name, marker string, lock func(*os.File) error) (func(), error) {
 	f, err := openPrivate(root, name, true)
 	created := err == nil
 	if errors.Is(err, os.ErrExist) {
@@ -37,8 +53,11 @@ func acquireNamedLease(root *ownedfs.Root, name, marker string) (func(), error) 
 		}
 	}()
 	info, err := f.Stat()
-	if err != nil || !privateFile(info) || lockFile(f) != nil {
+	if err != nil || !privateFile(info) {
 		return nil, ErrBusy
+	}
+	if err := lock(f); err != nil {
+		return nil, &leaseLockRefusal{busy: lockContention(err)}
 	}
 	current, err := root.Stat(name)
 	if err != nil || !os.SameFile(info, current) {
