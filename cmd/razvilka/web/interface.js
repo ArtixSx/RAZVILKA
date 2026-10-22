@@ -506,8 +506,10 @@ function interfaceUpdateInspector(){
  consoleText('r6InspectorObserved',consoleDate(s.observed_state?.checked_at));consoleText('r6InspectorAddresses',sources.join(', '));
  interfaceHTML('r6InspectorDomains',(Array.isArray(s.domains)?s.domains:[]).slice(0,100).map(d=>`<code>${esc(d)}</code>`).join('')+((s.domains?.length||0)>100?'<p>Показаны первые 100 доменов. Полный состав доступен в настройках сервиса.</p>':''));
  interfaceHTML('r6InspectorControls',interfaceInspectorControls(s));
- const removalDisabled=!interfaceServiceActionsReady(s)||interfaceState.busy||managed?.removing?' disabled':'';
- interfaceHTML('r6InspectorRemove',(interfaceServiceActionsReady(s)&&managed&&!managed.removing?`<button type="button" class="secondary" data-rz-action="remove"${removalDisabled}>Убрать из моих сервисов</button>`:'')+(s.custom?`<button type="button" class="ui3-danger-text" data-rz-action="delete"${removalDisabled}>Удалить сервис</button>`:''));
+ const removalChanged=managed?.removing&&consoleSnapshot?.runtime?.[s.id]?.state==='definition-changed';
+ const removalPending=managed?.removing&&!removalChanged;
+ const removalDisabled=!interfaceServiceActionsReady(s)||interfaceState.busy||removalPending?' disabled':'';
+ interfaceHTML('r6InspectorRemove',(interfaceServiceActionsReady(s)&&managed&&!removalPending?`<button type="button" class="secondary" data-rz-action="remove"${removalDisabled}>Убрать из моих сервисов</button>`:'')+(s.custom?`<button type="button" class="ui3-danger-text" data-rz-action="delete"${removalDisabled}>${removalChanged?'Подтвердить удаление снова':'Удалить сервис'}</button>`:''));
  const check=$('#r6InspectorCheck');if(check)check.disabled=!interfaceServiceActionsReady(s)||!!interfaceState.busy||!!serviceDashboard.operation||serviceDashboardJobActive()||!!managed?.removing;
 }
 

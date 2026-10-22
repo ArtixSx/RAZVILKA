@@ -6,6 +6,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 // errAutonomyPlanNotReady marks an autopilot Apply refused while its plan was
@@ -102,6 +103,10 @@ func autonomyLegacyApplyRefused(err error, r *autonomy.Runtime, attempted string
 	}
 	var failed *autonomyApplyFailure
 	if errors.As(err, &failed) {
+		if dataplane.ConfirmedPreEffectRefusal(failed.Execution, err) {
+			r.RefundSwitch()
+			return "apply-refused", "Применение не начиналось: предварительная проверка отказала до изменения рабочих маршрутов. Лимит применений не израсходован; автопилот повторит попытку."
+		}
 		return "apply-refused", attempted
 	}
 	r.RefundSwitch()

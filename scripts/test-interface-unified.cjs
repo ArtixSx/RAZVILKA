@@ -31,6 +31,8 @@ await test('custom delete is visible without expanding details and blocked while
  c.consoleSnapshot.services.youtube.removing=true;c.interfaceUpdateInspector();
  assert.match($('#r6InspectorRemove').innerHTML,/data-rz-action="delete" disabled/);
  assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="remove"/);
+ c.consoleSnapshot.runtime.youtube={state:'definition-changed'};c.interfaceUpdateInspector();
+ assert.match($('#r6InspectorRemove').innerHTML,/data-rz-action="delete">Подтвердить удаление снова/);
  state.services[0].custom=false;c.interfaceUpdateInspector();assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="delete"/);
 });
 await test('cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority',async()=>{

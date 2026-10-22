@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
@@ -15,10 +16,50 @@ type nfqws2InactiveFailure struct {
 	cause error
 }
 
-func (e *nfqws2InactiveFailure) Error() string { return "NFQWS runtime inactivity: " + e.stage }
+func (e *nfqws2InactiveFailure) Error() string {
+	return "NFQWS runtime inactivity: " + strings.Join(nfqws2InactiveStages(e), "/")
+}
 func (e *nfqws2InactiveFailure) Unwrap() error { return e.cause }
 func nfqws2InactiveAt(stage string, err error) error {
 	return &nfqws2InactiveFailure{stage: stage, cause: errors.Join(ErrNFQWSManagedKernelOwner, err)}
+}
+
+// Only this private type's closed branch names may reach public error text.
+// Never format a wrapped foreign error, path, command or process identity.
+func nfqws2InactiveStages(err error) []string {
+	stages, remaining := []string{}, 64
+	seen := map[string]bool{}
+	var visit func(error)
+	visit = func(err error) {
+		if err == nil || remaining == 0 {
+			return
+		}
+		remaining--
+		if failure, ok := err.(*nfqws2InactiveFailure); ok && failure != nil {
+			stage := failure.stage
+			switch stage {
+			case "source", "platform", "coordinates", "identity", "inventory", "closure", "participants", "files", "processes", "inventory.source", "kernel", "files.closure", "observation", "context":
+			default:
+				stage = "unknown"
+			}
+			if !seen[stage] {
+				stages, seen[stage] = append(stages, stage), true
+			}
+		}
+		switch wrapped := err.(type) {
+		case interface{ Unwrap() []error }:
+			for _, cause := range wrapped.Unwrap() {
+				visit(cause)
+			}
+		case interface{ Unwrap() error }:
+			visit(wrapped.Unwrap())
+		}
+	}
+	visit(err)
+	if len(stages) == 0 {
+		return []string{"unknown"}
+	}
+	return stages
 }
 
 // NFQWSRuntimeInactiveStage reports only private fixed source branch labels.
