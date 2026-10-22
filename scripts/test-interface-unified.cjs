@@ -4,7 +4,7 @@ const checkout=path.resolve(__dirname,'..');
 const model=require(path.join(checkout,'cmd/razvilka/web/interface-model.js'));
 const full=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/interface.js'),'utf8');
 const names=["interfaceRecoveryRequired", "interfaceAutoLabel", "interfaceServicePresentation", "interfaceServiceCard", "interfaceGroupHTML", "renderInterfaceNavigation", "interfaceHomeAuto", "interfaceHomeOrder", "interfaceHomeServicesHTML", "renderInterfaceHome", "renderHomeEngineSummary", "refreshHomeEngineSummary", "renderInterfaceServices", "renderInterfaceSettings", "renderInterface", "interfaceOpenService", "interfaceQuickAdd", "interfaceTaskAction", "interfaceCheckService", "interfaceUpdateInspector", "interfaceSafeRender", "interfaceScopeLabel", "interfaceInspectorControls"];
-names.push('interfaceStatusCache','interfaceStatusServices','interfaceServiceActionsReady');
+names.push('interfaceStatusCache','interfaceStatusServices','interfaceServiceActionsReady','interfaceFinishRequestedDeletion');
 const source=names.map(name=>{const f=full.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n}\\n'));assert(f,'Missing production function: '+name);return f[0];}).join('\n');
 const results=[];async function test(name,fn){await fn();results.push({name,status:'passed'});console.log('PASS',name);}
 const service={id:'youtube',name:'YouTube',category:'Видео',enabled:true,applied_state:{enabled:true,route:'nfqws2',sources:['192.168.1.20']}};

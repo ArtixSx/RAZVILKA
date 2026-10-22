@@ -493,10 +493,24 @@ async function interfaceCheckService(id){
  finally{if(epoch===interfaceState.authEpoch){interfaceState.busy=false;interfaceSafeRender('inspector-after-check',()=>interfaceUpdateInspector());}}
 }
 
+function interfaceFinishRequestedDeletion(id){
+ const request=interfaceState.requestedDeletion;
+ if(!request||request.id!==id||request.epoch!==interfaceState.authEpoch||interfaceState.authRevoked||consoleAutonomyError)return false;
+ const cache=typeof consoleAutonomyCache==='function'?consoleAutonomyCache():null;
+ // The worker removes its catalog definition last, then persists removal of
+ // its autonomy entry. Missing catalog data alone cannot confirm that outcome.
+ if(!cache?.fresh||consoleSnapshot?.blocked!==false||!Number.isSafeInteger(consoleSnapshot?.policy?.revision)||consoleSnapshot.policy.revision<=request.revision+1)return false;
+ if(request.instance&&request.instance!==consoleSnapshot.observation?.instance_id)return false;
+ if(!interfaceDataReady('services')||state.dataLoad?.services?.phase!=='ready'||!Array.isArray(state.services)||state.services.some(s=>s.id===id))return false;
+ if(Object.hasOwn(cache.services,id)||Object.hasOwn(cache.runtime,id)||cache.applied[id]?.enabled===true)return false;
+ interfaceState.requestedDeletion=null;
+ consoleText('ui3InspectorMessage','');interfaceCloseInspector();interfaceToast('Сервис удалён из каталога.');
+ return true;
+}
 function interfaceUpdateInspector(){
  const id=interfaceState.inspector;if(!id||!$('#ui3ServiceDialog').open||interfaceState.authRevoked)return;
  const s=(state.services||[]).find(s=>s.id===id);
- if(!s){interfaceHTML('r5InspectorStatus','');consoleText('r5InspectorDetail','Сервис больше не найден в полученном каталоге. Рабочие маршруты этим сообщением не изменяются.');consoleText('r6InspectorRoute','Нет актуальных данных');consoleText('r6InspectorScope','Нет актуальных данных');consoleText('r6InspectorControl','Недоступно');consoleText('r6InspectorTask','Нет актуальных данных');consoleText('r6InspectorReserve','—');consoleText('r6InspectorObserved','—');consoleText('r6InspectorAddresses','');interfaceHTML('r6InspectorDomains','');interfaceHTML('r6InspectorControls','');interfaceHTML('r6InspectorRemove','');if($('#r6InspectorCheck'))$('#r6InspectorCheck').disabled=true;return;}
+ if(!s){if(interfaceFinishRequestedDeletion(id))return;interfaceHTML('r5InspectorStatus','');consoleText('r5InspectorDetail','Сервис не найден в полученном каталоге. Для его состояния нужны актуальные данные.');consoleText('ui3InspectorMessage',interfaceState.requestedDeletion?.id===id?'Завершение удаления ещё не подтверждено актуальными данными.':'');consoleText('r6InspectorRoute','Нет актуальных данных');consoleText('r6InspectorScope','Нет актуальных данных');consoleText('r6InspectorControl','Недоступно');consoleText('r6InspectorTask','Нет актуальных данных');consoleText('r6InspectorReserve','—');consoleText('r6InspectorObserved','—');consoleText('r6InspectorAddresses','');interfaceHTML('r6InspectorDomains','');interfaceHTML('r6InspectorControls','');interfaceHTML('r6InspectorRemove','');if($('#r6InspectorCheck'))$('#r6InspectorCheck').disabled=true;return;}
  const h=interfaceServicePresentation(s,interfaceSummaries()),applied=serviceDashboardApplied(s),r=consoleSnapshot?.runtime?.[id],managed=consoleSnapshot?.services?.[id];
  const sources=Array.isArray(applied.sources)?applied.sources:Array.isArray(s.applied_sources)?s.applied_sources:[];
  interfaceHTML('r5InspectorStatus',interfaceBadge(h));consoleText('r5InspectorDetail',h.detail);
@@ -549,12 +563,13 @@ async function interfaceManage(id,enabled,remove=false,deleteDefinition=false){
   if(view!==state.currentView||inspector!==interfaceState.inspector||consoleSnapshot?.policy?.revision!==revision||JSON.stringify(consoleSnapshot?.services?.[id])!==managed||JSON.stringify(state.services.find(s=>s.id===id))!==definition)throw new Error('Сервис или настройки изменились. Откройте новый просмотр и подтвердите удаление снова.');
  }
  const request=remove?{method:'DELETE',body:{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:deleteDefinition}}:{method:'POST',body:{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:revision,confirm:'MANAGE_SERVICE'}};
- await interfaceRequest(remove?`/api/v1/autonomy/services/${encodeURIComponent(id)}`:'/api/v1/autonomy/services',{...request,body:JSON.stringify(request.body)});
+ const accepted=await interfaceRequest(remove?`/api/v1/autonomy/services/${encodeURIComponent(id)}`:'/api/v1/autonomy/services',{...request,body:JSON.stringify(request.body)});
  if(epoch!==interfaceState.authEpoch)throw new Error('Сессия изменилась. Войдите снова.');
+ if(remove&&deleteDefinition&&accepted?.ok===true&&accepted.pending===true)interfaceState.requestedDeletion={id,epoch,revision,instance:snapshot.observation?.instance_id};
  const fresh=await interfaceRequest('/api/v1/autonomy');if(epoch!==interfaceState.authEpoch)return false;
  window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:fresh}));await refreshCoreAfterEdit();
  if(epoch!==interfaceState.authEpoch)return false;
- if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceOpenService(id);consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');}
+ if(interfaceState.inspector===id&&$('#ui3ServiceDialog').open){interfaceUpdateInspector();if($('#ui3ServiceDialog').open&&(state.services||[]).some(s=>s.id===id))consoleText('ui3InspectorMessage',remove?'Удаление поставлено в очередь. Маршрут ещё не считается снятым.':enabled?'Управление разрешено. Дождитесь проверки и применения.':'Автоподбор на паузе. Маршрут сохранён.');}
  return true; } finally {if(interfaceState.manageRequest===operation)interfaceState.manageRequest=null;}
 }
 function interfaceToast(text){consoleText('ui3Toast',text);$('#ui3Toast').hidden=false;clearTimeout(interfaceState.toastTimer);interfaceState.toastTimer=setTimeout(()=>$('#ui3Toast').hidden=true,5500);}
@@ -601,7 +616,7 @@ document.addEventListener('click',event=>{
 $('#ui3ServiceSearch').addEventListener('input',e=>{interfaceState.query=e.target.value;renderInterfaceServices(interfaceSummaries());});
 function interfaceReturnInspectorFocus(){
  const id=interfaceState.inspector,previous=interfaceState.returnFocus;
- interfaceState.inspector=null;interfaceState.returnFocus=null;
+ interfaceState.inspector=null;interfaceState.returnFocus=null;interfaceState.requestedDeletion=null;
  if(interfaceState.authRevoked||state.currentView!=='services')return;
  // Polling may replace the card while its inspector stays open.
  const target=previous?.isConnected?previous:$$('[data-rz-inspect]').find(button=>button.dataset.rzInspect===id)||$('#ui3ServiceSearch');

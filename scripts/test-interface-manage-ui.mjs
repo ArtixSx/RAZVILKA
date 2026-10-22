@@ -7,7 +7,7 @@ function fixture(){
  const calls=[];let decide;
  const c={state:{authenticated:true,currentView:'services',services:[{id:'site',name:'Сайт',custom:true}]},interfaceState:{authEpoch:1,authRevoked:false,inspector:'site'},consoleSnapshot:{policy:{setup_complete:true,revision:3},services:{site:{enabled:true,sources:['192.0.2.1']}}},
  confirm:()=>{throw Error('native confirm must not run');},askConfirmation:()=>new Promise(resolve=>decide=resolve),
- interfaceRequest:async(path,options)=>{calls.push({path,options});return c.consoleSnapshot;},refreshCoreAfterEdit:async()=>{},window:{dispatchEvent(){}},CustomEvent:class{},encodeURIComponent,$:()=>({open:false}),interfaceOpenService(){},consoleText(){}};
+ interfaceRequest:async(path,options)=>{calls.push({path,options});return c.consoleSnapshot;},refreshCoreAfterEdit:async()=>{},window:{dispatchEvent(){}},CustomEvent:class{},encodeURIComponent,$:()=>({open:false}),interfaceUpdateInspector(){},consoleText(){}};
  vm.createContext(c);vm.runInContext(fn,c);return {c,calls,answer:value=>decide(value)};
 }
 for(const outcome of ['cancel','accept','revision','definition','managed','navigation','inspector','logout']){

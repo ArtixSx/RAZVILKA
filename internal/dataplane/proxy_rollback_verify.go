@@ -8,12 +8,21 @@ import (
 	"os"
 	"reflect"
 	"strings"
+
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 // VerifyRollback is deliberately read-only. A successful Start/restore command
 // is not enough: processes may already have died, a file may differ, or router
 // hooks may have removed/reordered the restored RPDB/firewall rules.
 func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root string) (bool, error) {
+	return a.verifyRollbackWithInactiveProof(ctx, plan, root, nil)
+}
+
+// Tests may supply the existing private proc/kernel observation model. Public
+// verification always obtains the actual platform source, never a predicate,
+// cached absence, or caller-provided success flag.
+func (a *ProxyTunnelAdapter) verifyRollbackWithInactiveProof(ctx context.Context, plan Plan, root string, inactiveProof *proxyInactiveProof) (bool, error) {
 	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
 		if err != nil {
 			return false, err
@@ -83,6 +92,14 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	// Cold/legacy restoration retains its existing cleanup behavior but cannot
 	// acquire a verified live receipt without exact boot and forwarding authority.
 	if !sameBoot || !s.PolicyExists || !s.PolicyWasActive || !s.EngineWasRunning || !s.SidecarWasRunning || policy.RuleLayout != 2 || policy.Forwarding == nil {
+		// A first Sing-box assignment may restore intentionally absent owned
+		// runtime instead of a live route. Confirm that different outcome only
+		// through the existing independent complete absence observer below.
+		if sameBoot && a.ID() == "sing-box" && !s.PolicyExists && !s.PolicyWasActive && !s.PolicyTracked && s.PolicyBinding == nil &&
+			!s.EngineWasRunning && !s.SidecarWasRunning && !s.PackageWasRunning && !s.RuntimeEngineExists && !s.RuntimeSideExists &&
+			!s.TransportExists && !s.NodeManifestExists && !s.NodeInterfaceExists {
+			return a.verifyColdSingboxRollback(ctx, root, s, inactiveProof)
+		}
 		return false, nil
 	}
 	if err := a.waitForSOCKS(ctx); err != nil {
@@ -140,6 +157,100 @@ func (a *ProxyTunnelAdapter) VerifyRollback(ctx context.Context, plan Plan, root
 	// attribution before any next Apply. A broken old service A can be restored
 	// exactly; that does not make it healthy or give candidate B a bad reputation.
 	return true, ctx.Err()
+}
+
+func (a *ProxyTunnelAdapter) verifyColdSingboxRollback(ctx context.Context, root string, snapshot proxySnapshot, proof *proxyInactiveProof) (bool, error) {
+	staged, err := a.rollbackPolicyState(root)
+	if err != nil {
+		return false, err
+	}
+	receipt, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || receipt.Phase != "restored" || receipt.Boot != snapshot.BootID {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if err := a.verifyColdCandidateReceipt(ctx, root, staged, receipt); err != nil {
+		return false, err
+	}
+	absent := PolicyState{Interface: a.Interface, Table: a.Table, PriorityBase: a.Priority}
+	if err := a.verifyCandidateRemoved(ctx, absent, staged); err != nil {
+		return false, err
+	}
+	if proof == nil {
+		actual, err := proxyInactivePlatformProof()
+		if err != nil {
+			return false, errors.Join(ErrProxyRuntimeInactive, err)
+		}
+		proof = &actual
+	}
+	if err := a.verifyRuntimeInactive(ctx, *proof); err != nil {
+		return false, err
+	}
+	// Slow independent inventories cannot turn a changed transaction or boot
+	// into restoration proof. Runtime/config file checks were already made by
+	// VerifyRollback; repeat them after the absence observer's own bookends.
+	current, err := readProxySnapshot(root)
+	if err != nil || !reflect.DeepEqual(current, snapshot) {
+		return false, errors.Join(ErrReviewChanged, err)
+	}
+	currentStaged, err := a.rollbackPolicyState(root)
+	if err != nil || !reflect.DeepEqual(currentStaged, staged) {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	currentReceipt, err := a.readCandidatePolicyReceipt(root, staged)
+	if err != nil || currentReceipt != receipt {
+		return false, errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	if err := a.verifyColdCandidateReceipt(ctx, root, staged, currentReceipt); err != nil {
+		return false, err
+	}
+	boot, err := a.currentBootIdentity()
+	if err != nil || boot != snapshot.BootID {
+		return false, errors.Join(ErrReviewChanged, err)
+	}
+	if err := a.verifyProxySnapshotRuntimeFiles(snapshot); err != nil {
+		return false, err
+	}
+	if snapshot.ConfigDraft {
+		if err := verifyRestoredFile(snapshot.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
+			return false, err
+		}
+	}
+	return ctx.Err() == nil, ctx.Err()
+}
+
+// Use the existing receipt decoder/comparison without opening a writer session:
+// missing/unknown cleanup metadata must not create a lock during readback.
+func (a *ProxyTunnelAdapter) verifyColdCandidateReceipt(ctx context.Context, root string, state PolicyState, receipt proxyPolicyReceipt) error {
+	if receipt.NoAdditions {
+		return a.verifyCandidateReceipt(ctx, root, state, false)
+	}
+	additionRoot := root
+	if receipt.Generation != "" {
+		var err error
+		additionRoot, err = a.policyGenerationRoot(receipt.Generation)
+		if err != nil {
+			return err
+		}
+	}
+	owned, err := ownedfs.Open(additionRoot)
+	if err != nil {
+		return ErrProxyPolicyUnknown
+	}
+	defer owned.Close()
+	lock, err := owned.Stat(policyAdditionLock)
+	marker, markerErr := owned.ReadLimited(policyAdditionLock, int64(len(policyAdditionMarker)+1))
+	if err != nil || !validCloudflareScanLockFile(lock) || markerErr != nil || string(marker) != policyAdditionMarker {
+		return ErrProxyPolicyUnknown
+	}
+	session := policyAdditionSession{root: owned, path: additionRoot, state: state, options: a.additionOptions()}
+	if err := session.load(ctx); err != nil {
+		return errors.Join(ErrProxyPolicyUnknown, err)
+	}
+	status := session.status()
+	if !status.Removed || status.Unknown || receipt.Generation != "" && status.ID != receipt.Generation {
+		return ErrProxyPolicyUnknown
+	}
+	return ctx.Err()
 }
 
 // Include the candidate's families and coordinates: checking only the restored

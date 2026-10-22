@@ -45,6 +45,11 @@ func nfqws2InactiveStages(err error) []string {
 			if !seen[stage] {
 				stages, seen[stage] = append(stages, stage), true
 			}
+			if stage == "inventory.source" {
+				if backend := nfqws2InactiveBackendStage(failure.cause); backend != "" && !seen[backend] {
+					stages, seen[backend] = append(stages, backend), true
+				}
+			}
 		}
 		switch wrapped := err.(type) {
 		case interface{ Unwrap() []error }:
@@ -60,6 +65,21 @@ func nfqws2InactiveStages(err error) []string {
 		return []string{"unknown"}
 	}
 	return stages
+}
+
+// Project only the collector's private, closed stage vocabulary. Wrapped
+// command stderr, paths, table rows and foreign Error() text remain private.
+func nfqws2InactiveBackendStage(err error) string {
+	var failure *backendInventoryFailure
+	if !errors.As(err, &failure) || failure == nil {
+		return ""
+	}
+	switch failure.stage {
+	case "SCOPE", "TOOLS_A", "OPEN_A", "GETGEN_A", "GETTABLE", "TOOLS_B", "CLASSIC", "OPEN_B", "GETGEN_B", "CLOSE":
+		return "backend." + failure.stage
+	default:
+		return "backend.unknown"
+	}
 }
 
 // NFQWSRuntimeInactiveStage reports only private fixed source branch labels.
