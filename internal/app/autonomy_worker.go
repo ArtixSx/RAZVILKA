@@ -108,19 +108,13 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		return
 	}
 	sort.Strings(ids)
-	chosen := ""
+	chosen, firstSearchSlot := selectAutonomyRound(ids, a.autonomy.doc, cfg, now, a.autonomy.ordinaryAfterFirstSearch)
 	var spec autonomy.Service
 	var state autonomy.Runtime
-	for _, id := range ids {
-		r := a.autonomy.doc.Runtime[id]
-		if now.Before(r.NextCheck) {
-			continue
-		}
-		if chosen == "" || r.NextCheck.Before(state.NextCheck) {
-			chosen = id
-			spec = a.autonomy.doc.Services[id]
-			state = r.Clone()
-		}
+	if chosen != "" && len(activate) == 0 {
+		spec = a.autonomy.doc.Services[chosen]
+		state = a.autonomy.doc.Runtime[chosen].Clone()
+		a.autonomy.ordinaryAfterFirstSearch = firstSearchSlot
 	}
 	a.autonomy.mu.Unlock()
 	if len(activate) > 0 {

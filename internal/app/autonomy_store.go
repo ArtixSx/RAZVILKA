@@ -29,19 +29,20 @@ type autonomyDocument struct {
 	Maintenance map[string]string           `json:"maintenance"`
 }
 type autonomyState struct {
-	mu                  sync.Mutex
-	loaded              bool
-	blocked             bool
-	path                string
-	image               restorejournal.Image
-	doc                 autonomyDocument
-	refillState         providerfeed.RefillDecision
-	maintenanceMessage  string
-	maintenanceAttempts map[string]maintenanceAttempt
-	maintenanceTestRun  func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
-	feedPruneAt         time.Time
-	feedPruneFailed     bool
-	autoInstall         *updatecheck.Job // a prepared package the round installs
+	mu                       sync.Mutex
+	loaded                   bool
+	blocked                  bool
+	path                     string
+	image                    restorejournal.Image
+	doc                      autonomyDocument
+	refillState              providerfeed.RefillDecision
+	maintenanceMessage       string
+	maintenanceAttempts      map[string]maintenanceAttempt
+	maintenanceTestRun       func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
+	feedPruneAt              time.Time
+	feedPruneFailed          bool
+	ordinaryAfterFirstSearch bool             // In-memory scheduling fairness only; never consent or persisted state.
+	autoInstall              *updatecheck.Job // a prepared package the round installs
 }
 
 func newAutonomyDocument() autonomyDocument {
