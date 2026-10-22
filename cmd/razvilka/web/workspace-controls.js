@@ -261,15 +261,16 @@ async function openWorkspaceLog() {
   const generation = workspaceControl.generation;
   const context = typeof panelReadContext === 'function' ? panelReadContext() : null;
   const current = () => generation === workspaceControl.generation && workspaceControlVisible() && (context === null || panelReadContextCurrent(context));
-  setView('activity');
-  let jobs = null, jobsError = '', nodeJob = null, nodeJobError = '';
+  let jobs = null, jobsError = '', nodeJob = null, nodeJobError = '', autonomy = null, autonomyError = '';
   try {
-    const [audit, memory, checks] = await Promise.allSettled([api('/api/v1/audit/current?limit=40'), api('/api/v1/service-control/current'), api('/api/v1/node-checks/current')]);
+    const [audit, memory, checks, automatic] = await Promise.allSettled([api('/api/v1/audit/current?limit=40'), api('/api/v1/service-control/current'), api('/api/v1/node-checks/current'), api('/api/v1/panel/autonomy')]);
     if (!current()) return;
     if (memory.status === 'fulfilled') jobs = memory.value.durable_jobs || [];
     else jobsError = memory.reason?.message || 'Не удалось получить очередь заданий.';
     if (checks.status === 'fulfilled' && checks.value && Object.hasOwn(checks.value, 'job') && (checks.value.job === null || typeof checks.value.job === 'object' && !Array.isArray(checks.value.job))) nodeJob = checks.value.job;
     else nodeJobError = 'Не удалось прочитать последнюю проверку подключений. Обновите журнал, чтобы повторить чтение.';
+    if (automatic.status === 'fulfilled') autonomy = automatic.value;
+    else autonomyError = 'Не удалось получить состояние Автопилота. Обновите лог, чтобы повторить чтение.';
     if (audit.status !== 'fulfilled') throw audit.reason;
     state.audit = audit.value;
     renderAudit();
@@ -285,6 +286,7 @@ async function openWorkspaceLog() {
     stop_receipt: workspaceControl.stopReceipt,
     jobs, jobs_error: jobsError,
     node_job: nodeJob, node_job_error: nodeJobError,
+    autonomy, autonomy_error: autonomyError,
     load_issues: (state.loadIssues || []).map(issue => ({section: issue.section, message: issue.message || 'Не удалось получить данные'})),
     audit: state.audit,
     component_issues: (state.components || []).filter(item => item.update_check_error || item.inventory_error).map(item => ({id:item.name || item.id, message:item.inventory_error || item.update_check_error})),

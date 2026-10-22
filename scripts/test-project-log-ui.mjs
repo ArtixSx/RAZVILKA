@@ -101,7 +101,7 @@ assert.equal((out.match(/<article /g) || []).length, 12, 'job history is bounded
 
 const latestCheck = { mode: 'service', scope: 'all-vless', state: 'completed', completed: 3, total: 3, passed: 0, failed: 2, inconclusive: 1, skipped: 0, results: [{ verdict: 'FAIL', test_level: 'service', error_code: 'TIMEOUT', message: '<unavailable>' }], uri: 'vless://must-not-be-shown', label: 'private-label' };
 out = visible({ ...healthy, node_job: latestCheck, jobs: [{ mode: 'service-node-check', state: 'completed' }] });
-assert.match(out, /Последняя проверка подключений[\s\S]*Проверка подключения к сервису[\s\S]*Обработано: 3 \/ 3/);
+assert.match(out, /Последняя ручная проверка каталога подключений[\s\S]*Проверка подключения к сервису[\s\S]*Обработано: 3 \/ 3/);
 assert.match(out, /Пройдены: 0 · Отказ: 2 · Не подтверждены: 1/);
 assert.match(out, /Первый отказ этой проверки: Проверка не пройдена · проверка сервиса: &lt;unavailable&gt;/);
 assert.match(out, /не подтверждение, что обход сейчас работает/);
@@ -112,6 +112,31 @@ assert.match(out, /Результаты прежнего запуска или �
 assert.match(out, /Первый отказ прежней проверки/);
 assert.doesNotMatch(out, /Первый отказ этой проверки/);
 assert.match(visible({ ...healthy, node_job: null }), /ещё не запускалась/);
+assert.match(visible({ ...healthy, node_job: null }), /Отдельная ручная проверка каталога ещё не запускалась/);
+assert.doesNotMatch(visible({ ...healthy, node_job: null }), /Проверка подключений ещё не запускалась/);
+const automatic = { schema: 1, instance_id: 'a'.repeat(32), revision: 2, observed_at: '2026-10-23T00:00:00Z', data_age_ms: 2000, state: 'available', dataplane: 'not-checked', data: { policy: { enabled: true }, services: { example: { enabled: true } }, runtime: { example: { state: 'searching', message: 'Подбираем следующий маршрут', next_check: '0001-01-01T00:00:00Z', node_id: 'must-not-display-node', uri: 'vless://private' } }, catalog_services: [{ id: 'example', name: 'Мой сервис' }] } };
+out = visible({ ...healthy, autonomy: automatic, node_job: null });
+assert.match(out, /Проверки и подбор Автопилота[\s\S]*Мой сервис[\s\S]*Подбор подключения[\s\S]*Подбираем следующий маршрут/);
+assert.match(out, /Отдельная ручная проверка каталога ещё не запускалась/);
+assert.doesNotMatch(out, /vless:|must-not-display-node|status-pass|Следующая попытка по расписанию/);
+assert.match(out, /не подтверждают текущую доступность/);
+out = visible({ ...healthy, autonomy: { ...automatic, state: 'retained', data_age_ms: 40000 } });
+assert.match(out, /сохранённый снимок; текущее состояние обновляется/);
+assert.match(out, /На момент снимка/);
+for (const invalid of [null, {}, { ...automatic, state: 'expired' }, { ...automatic, data_age_ms: 15000 }, { ...automatic, state: 'retained', data_age_ms: 120000 }, { ...automatic, data: { ...automatic.data, runtime: [] } }]) {
+  out = context.renderProjectAutonomy(invalid, '');
+  assert.match(out, /Свежий снимок Автопилота не получен/);
+  assert.doesNotMatch(out, /Подбор подключения|Подбираем следующий маршрут|Автоматика разрешена/);
+}
+out = context.renderProjectAutonomy({ ...automatic, data: { ...automatic.data, blocked: true, maintenance_message: payload, runtime: { example: { state: 'requires-review', message: payload } }, catalog_services: [{ id: 'example', name: payload }] } }, '');
+assert.match(out, /Автоматика приостановлена[\s\S]*Нужна проверка журнала/);
+assert.doesNotMatch(out, /<img|status-pass/);
+assert.match(out, /&lt;img/);
+assert.match(context.renderProjectAutonomy(automatic, payload), /Состояние Автопилота недоступно: &lt;img/);
+const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => ['service-' + i, { enabled: true }]));
+out = context.renderProjectAutonomy({ ...automatic, data: { ...automatic.data, services: many } }, '');
+assert.equal((out.match(/<article /g) || []).length, 20);
+assert.match(out, /Показаны первые 20 сервисов/);
 out = visible({ ...healthy, node_job_error: '<read failed>' });
 assert.match(out, /&lt;read failed&gt;/);
 assert.doesNotMatch(out, /ещё не запускалась|<read failed>/);
