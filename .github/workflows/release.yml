@@ -55,7 +55,15 @@ jobs:
           export RAZVILKA_COMMIT="$GITHUB_SHA"
           export RAZVILKA_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           export RAZVILKA_DIRTY=false
-          ./scripts/check.sh
+          # Native recovery tests verify root-owned router processes. Running
+          # them as runner would correctly refuse their non-root candidate.
+          # Keep the complete gate, including normal/race native tests.
+          sudo env PATH="$PATH" GOTOOLCHAIN="$GOTOOLCHAIN" \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_VERSION="$RAZVILKA_VERSION" RAZVILKA_COMMIT="$RAZVILKA_COMMIT" \
+            RAZVILKA_BUILD_TIME="$RAZVILKA_BUILD_TIME" RAZVILKA_DIRTY="$RAZVILKA_DIRTY" \
+            ./scripts/check.sh
 
       - name: Package Entware bundle
         shell: bash
