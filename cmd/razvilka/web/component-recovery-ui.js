@@ -71,6 +71,7 @@
   function fence() {return !fresh() || recovery.data.recovery_required || recovery.unknownWrite || !!recovery.action;}
   function paint() {
     const model=summary(recovery.data,recovery.receipt),t=model.transaction;
+    const label=recovery.unknownWrite?'Результат восстановления неизвестен':!fresh()&&recovery.data?'Состояние журнала уточняется':model.label;
     const busy=!!recovery.read || !!recovery.action;
     const permission=permissionFor(recovery.data);
     const unknownNote='Результат действия не подтверждён. Нажмите «Прочитать состояние». Повторная запись заблокирована.';
@@ -79,7 +80,7 @@
     for (const panel of document.querySelectorAll('[data-component-recovery-panel]')) {
       const focus=panel.contains(document.activeElement)?document.activeElement?.getAttribute('data-component-recovery-focus'):null;
       const permissionNote=t?.schema_version===3?'Прочитайте текущую ревизию настроек перед восстановлением.':'Восстановление требует текущей ревизии и разрешения после Stop. Панель эти запреты не снимает.';
-      panel.innerHTML=`<div class="ui3-section-heading"><h3>${esc(model.label)}</h3><button class="secondary" type="button" data-component-recovery-read data-component-recovery-focus="read" ${busy?'disabled':''}>${recovery.read?'Читаем…':'Прочитать состояние'}</button></div><p role="status">${esc(note)}</p>${t?`<p>Компонент: <b>${esc(typeof routeLabel==='function'?routeLabel(t.component):t.component)}</b> · прежняя версия <b>${esc(t.before_version)}</b>${t.after_version?` · новая <b>${esc(t.after_version)}</b>`:''}</p><details><summary>Транзакция и этап</summary><p><code>${esc(t.transaction_id)}</code> · ${esc(t.phase)}</p></details>`:''}${buttons?`<div class="ui3-engine-actions">${buttons}</div>${!permission?`<p>${permissionNote}</p>`:''}`:''}`;
+      panel.innerHTML=`<div class="ui3-section-heading"><h3>${esc(label)}</h3><button class="secondary" type="button" data-component-recovery-read data-component-recovery-focus="read" ${busy?'disabled':''}>${recovery.read?'Читаем…':'Прочитать состояние'}</button></div><p role="status">${esc(note)}</p>${t?`<p>Компонент: <b>${esc(typeof routeLabel==='function'?routeLabel(t.component):t.component)}</b> · прежняя версия <b>${esc(t.before_version)}</b>${t.after_version?` · новая <b>${esc(t.after_version)}</b>`:''}</p><details><summary>Транзакция и этап</summary><p><code>${esc(t.transaction_id)}</code> · ${esc(t.phase)}</p></details>`:''}${buttons?`<div class="ui3-engine-actions">${buttons}</div>${!permission?`<p>${permissionNote}</p>`:''}`:''}`;
       if(focus)panel.querySelector(`[data-component-recovery-focus="${focus}"]`)?.focus({preventScroll:true});
     }
   }

@@ -271,7 +271,27 @@ await test('other 409, unknown busy shape and permanent 503 never auto retry',as
 });
 await test('busy after a previous clear journal expires its proof immediately',async()=>{
   const f=fixture();await f.ready(idleSnapshot());assert.equal(f.ctx.componentRecoveryFence(),false);f.clickRead();await flush();f.requests[1].reject(busyRead());await flush();
+  assert.match(f.panel.innerHTML,/<h3>Состояние журнала уточняется<\/h3>/);
+  assert.doesNotMatch(f.panel.innerHTML,/<h3>Незавершённых обновлений нет<\/h3>/);
+  assert.match(f.panel.innerHTML,/временно занят/);assert.match(f.panel.innerHTML,/data-component-recovery-read/);
   assert.equal(f.ctx.componentRecoveryFence(),true);assert.match(f.panel.innerHTML,/изменения компонентов заблокированы/);f.view('overview');await flush();assert.equal(f.timerCount(),0);
+});
+await test('expired idle and completed journal snapshots cannot retain a current success heading',async()=>{
+  for(const value of [idleSnapshot(),snapshot('accepted',false)]){
+    const f=fixture();await f.ready(value);
+    const freshLabel=model.summary(value).label;
+    assert.ok(f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    f.advance(60001);f.ctx.renderComponentRecovery();
+    assert.match(f.panel.innerHTML,/<h3>Состояние журнала уточняется<\/h3>/);
+    assert.ok(!f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    assert.match(f.panel.innerHTML,/Нужно свежее чтение журнала/);
+    assert.match(f.panel.innerHTML,/data-component-recovery-read[^>]*>Прочитать состояние/);
+    assert.doesNotMatch(f.panel.innerHTML,/data-component-repair=/);
+    assert.equal(f.ctx.componentRecoveryFence(),true);assert.equal(f.requests.length,1);
+    f.clickRead();await flush();f.requests[1].resolve(value);await flush();
+    assert.ok(f.panel.innerHTML.includes('<h3>'+freshLabel+'</h3>'));
+    assert.equal(f.ctx.componentRecoveryFence(),false);
+  }
 });
 await test('leave or logout aborts a queued busy retry and late completion cannot restart it',async()=>{
   for(const cancel of ['leave','logout']){
@@ -305,6 +325,7 @@ await test('repair deadline releases busy into unknown read-only state without r
  const post=f.requests[1];assert.equal(post.options.signal.aborted,false);
  await f.tick(369999);assert.equal(post.options.signal.aborted,false);
  await f.tick(1);assert.equal(post.options.signal.aborted,true);assert.equal(f.timerCount(),0);
+ assert.match(f.panel.innerHTML,/<h3>Результат восстановления неизвестен<\/h3>/);
  assert.match(f.panel.innerHTML,/Исход неизвестен/);
  assert.doesNotMatch(f.panel.innerHTML,/data-component-recovery-read[^>]*disabled/);
  f.clickRepair();f.panelRefresh();await flush();assert.equal(f.requests.length,2);
