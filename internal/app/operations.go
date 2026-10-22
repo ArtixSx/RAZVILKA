@@ -199,6 +199,12 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			// Serialize a reviewed profile lookup and service CAS with profile CRUD.
 			exclusive = true
 		}
+		if r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/custom-services/") {
+			// The route guard and catalog/config deletion form one review. A
+			// concurrent shared profile import must not enable a newer draft
+			// between that guard and deletion of the service's Store entries.
+			exclusive = true
+		}
 		// Subscription removal also withdraws autonomy permission. Serialize it
 		// with policy saves, automatic re-creation, imports and manual Apply.
 		if r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/node-feeds/") && !strings.Contains(strings.TrimPrefix(r.URL.Path, "/api/v1/node-feeds/"), "/") {

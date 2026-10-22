@@ -34,6 +34,7 @@ type ScopedDNSAdapter struct {
 	InactivitySettingsPath string
 	InactivityIdentity     *netidentity.Provider
 	InactivityKernelCheck  func(context.Context, netidentity.Identity) error
+	inactivitySources      *RuntimeInactivitySourceReview
 	lifetime               context.Context
 	mu                     sync.Mutex
 	live                   *scopedDNSSession

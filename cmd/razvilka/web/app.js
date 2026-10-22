@@ -4647,11 +4647,24 @@ async function saveCustomService(event) {
 
 async function deleteCustomService(id) {
   const service = state.services.find((item) => item.id === id && item.custom);
-  if (!service || !await askConfirmation('Удалить пользовательский сервис', `${service.name} и его желаемый маршрут будут удалены. Встроенные сервисы удалить нельзя.`, 'Удалить')) return;
+  const auth = state.authGeneration, definition = JSON.stringify(service);
+  if (!service || state.authenticated !== true || (state.customServiceDelete && state.customServiceDelete.auth === auth)) return false;
+  const operation = state.customServiceDelete = { auth };
   try {
-    await api(`/api/v1/custom-services/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!await askConfirmation(`Удалить «${service.name}»?`, 'Будут удалены его домены и настройки. Активный маршрут сначала должен быть снят. Остальные сервисы сохранятся.', 'Удалить сервис')) return false;
+    if (state.authenticated !== true || state.authGeneration !== auth) return false;
+    if (JSON.stringify(state.services.find(item => item.id === id && item.custom)) !== definition) {
+      showDetails({ error: 'Сервис изменился. Откройте его снова и повторите удаление.' }, 'Удаление не выполнено');
+      return false;
+    }
+    const result = await api(`/api/v1/custom-services/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (state.authGeneration !== auth) return false;
     await refreshCoreAfterEdit();
-  } catch (error) { showDetails({ error: error.message }, 'Не удалось удалить сервис'); }
+    if (state.authGeneration !== auth) return false;
+    showNotice('info', result.pending ? 'Удаление в очереди' : 'Сервис удалён', result.pending ? 'Сначала будут сняты его маршруты. Завершение ещё не подтверждено.' : 'Остальные сервисы сохранены.');
+    return !result.pending;
+  } catch (error) { if (state.authGeneration === auth) showDetails({ error: error.message }, 'Не удалось удалить сервис'); return false; }
+  finally { if (state.customServiceDelete === operation) state.customServiceDelete = null; }
 }
 
 function serviceRouteOptionReviewHTML(option) {

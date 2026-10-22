@@ -52,12 +52,23 @@ func (a *App) inheritAutonomyService(ctx context.Context, id string) error {
 // Deletion is a persistent intent, not deletion of the live configuration. The
 // catalog entry remains until a scoped dataplane transaction completes.
 func (a *App) requestAutonomyRemoval(ctx context.Context, id string, deleteDefinition bool) (bool, error) {
+	return a.requestReviewedAutonomyRemoval(ctx, id, deleteDefinition, nil)
+}
+
+// A renewed explicit delete reviews the current definition, never a later
+// definition observed by the worker. HTTP admission serializes catalog edits;
+// the policy revision is checked again under the actual publication mutex.
+func (a *App) requestReviewedAutonomyRemoval(ctx context.Context, id string, deleteDefinition bool, expectedRevision *uint64) (bool, error) {
 	if err := a.loadAutonomy(ctx); err != nil {
 		return false, err
 	}
 	cfg := a.Store.Get()
+	service, known := a.autonomyService(id)
 	a.autonomy.mu.Lock()
 	defer a.autonomy.mu.Unlock()
+	if expectedRevision != nil && a.autonomy.doc.Policy.Revision != *expectedRevision {
+		return false, dataplane.ErrReviewChanged
+	}
 	s, exists := a.autonomy.doc.Services[id]
 	if !exists {
 		return false, nil
@@ -66,6 +77,9 @@ func (a *App) requestAutonomyRemoval(ctx context.Context, id string, deleteDefin
 		return true, dataplane.ErrReviewChanged
 	}
 	s.Removing, s.Enabled, s.DeleteDefinition = true, true, deleteDefinition
+	if deleteDefinition && known {
+		s.Definition = autonomyDefinition(service)
+	}
 	s.DraftFingerprint = autonomyDraftFingerprint(cfg.Services[id])
 	a.autonomy.doc.Services[id] = s
 	a.autonomy.doc.Runtime[id] = autonomy.Runtime{State: "removal-pending", Message: "Сначала будут сняты собственные маршруты сервиса. Остальные сервисы сохраняются."}
@@ -96,8 +110,12 @@ func (a *App) autonomyRemove(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "Подтвердите удаление для актуальной редакции настроек."})
 		return
 	}
-	handled, err := a.requestAutonomyRemoval(r.Context(), id, req.DeleteDefinition)
+	handled, err := a.requestReviewedAutonomyRemoval(r.Context(), id, req.DeleteDefinition, &req.ExpectedRevision)
 	if err != nil {
+		if errors.Is(err, dataplane.ErrReviewChanged) {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Настройки изменились. Повторно подтвердите удаление."})
+			return
+		}
 		writeJSON(w, 503, map[string]any{"error": "Запрос удаления не сохранён; рабочая сеть не изменена."})
 		return
 	}

@@ -61,7 +61,8 @@ type Manager struct {
 	retainedNFQMu      sync.Mutex
 	retainedNFQ        *retainedNFQWSExecution
 	pendingNFQ         *pendingNFQWSExecution
-	wgPreEffectChecks  *NetworkPolicyChecks // Frozen trusted startup association; registryMu.
+	wgPreEffectChecks  *NetworkPolicyChecks           // Frozen trusted startup association; registryMu.
+	runtimeSources     *RuntimeInactivitySourceReview // Original startup association; registryMu.
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
 	replacementXray    *xraySelectedTCPReplacement

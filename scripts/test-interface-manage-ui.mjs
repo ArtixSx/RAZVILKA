@@ -34,3 +34,33 @@ for(const outcome of ['cancel','accept','revision','definition','managed','navig
  resolveNew(false);await pendingNew;assert.equal(f.c.interfaceState.manageRequest,null);
 }
 console.log('PASS service removal: async consent, cancellation, single flight, stale service/view/revision and auth ownership');
+{
+ const f=fixture();const pending=f.c.interfaceManage('site',false,true,true);f.answer(true);assert.equal(await pending,true);
+ assert.equal(JSON.parse(f.calls[0].options.body).delete_definition,true,'custom deletion must explicitly request definition removal after route removal');
+}
+{
+ const f=fixture();f.c.state.services[0].custom=false;
+ await assert.rejects(f.c.interfaceManage('site',false,true,true),/пользовательские/);
+ assert.equal(f.calls.length,0,'built-in catalogue definitions must not be deleted');
+}
+console.log('PASS custom deletion uses reviewed queued removal; built-in definition deletion refused');
+{
+ const app=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
+ const deletion=app.match(/async function deleteCustomService\([^]*?\n}/)[0];
+ for(const outcome of ['cancel','accept','pending','changed','logout','failure']){
+  let answer;const calls=[],notices=[];
+  const c={state:{authenticated:true,authGeneration:1,services:[{id:'custom-site',name:'Сайт',custom:true}]},encodeURIComponent,
+   askConfirmation:()=>new Promise(resolve=>answer=resolve),showDetails:()=>{},showNotice:(...args)=>notices.push(args),refreshCoreAfterEdit:async()=>{},
+   api:async(...args)=>{calls.push(args);if(outcome==='failure')throw Error('Route still active');return {pending:outcome==='pending'};}};
+  vm.createContext(c);vm.runInContext(deletion,c);
+  const pending=c.deleteCustomService('custom-site');assert.equal(await c.deleteCustomService('custom-site'),false);
+  if(outcome==='changed')c.state.services[0].name='Новый состав';
+  if(outcome==='logout'){c.state.authenticated=false;c.state.authGeneration++;}
+  answer(outcome!=='cancel');assert.equal(await pending,outcome==='accept');
+  assert.equal(calls.length,['accept','pending','failure'].includes(outcome)?1:0);
+  assert.equal(c.state.customServiceDelete,null);
+  if(outcome==='pending')assert.match(notices[0][1],/очереди/);
+  if(outcome==='failure')assert.equal(notices.length,0,'failed deletion cannot report success');
+ }
+}
+console.log('PASS unassigned custom deletion: single flight, cancellation, changed definition, auth and queued/failed outcome');

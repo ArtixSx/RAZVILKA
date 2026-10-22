@@ -3203,11 +3203,16 @@ func (a *App) customServiceItem(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 202, map[string]any{"ok": true, "id": id, "pending": true, "live_applied": false})
 			return
 		}
-		if err := a.CustomServices.Delete(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		cfg := a.Store.Get()
+		if cfg.Services[id].Enabled || cfg.AppliedServices[id].Enabled {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "CUSTOM_SERVICE_ROUTE_ACTIVE", "error": "Сначала отключите сервис и примените снятие его маршрута."})
 			return
 		}
 		if err := a.Store.DeleteService(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := a.CustomServices.Delete(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

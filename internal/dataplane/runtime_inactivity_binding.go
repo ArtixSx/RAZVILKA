@@ -13,6 +13,12 @@ import (
 // original admitted tool lease alive throughout every later observation.
 // Construction authenticates the source; it does not prove runtime absence.
 func (m *Manager) BindRuntimeInactivitySources(ctx context.Context, provider *netidentity.Provider, inventory *BackendInventory, settingsPath string) error {
+	return m.bindRuntimeInactivitySources(ctx, provider, inventory, settingsPath, NewNFQWSRuntimeInactiveSource)
+}
+
+// Private complete-source construction seam; production only uses the original
+// concrete constructor above, never a caller supplied source or observation.
+func (m *Manager) bindRuntimeInactivitySources(ctx context.Context, provider *netidentity.Provider, inventory *BackendInventory, settingsPath string, construct func(context.Context, *NFQWS2Adapter, *BackendInventory) (*NFQWSRuntimeInactiveSource, error)) error {
 	if m == nil || !nfqws2InactiveFinite(ctx) || provider == nil || inventory == nil || inventory.reader.Provider != provider ||
 		!filepath.IsAbs(settingsPath) || filepath.Clean(settingsPath) != settingsPath || settingsPath == filepath.VolumeName(settingsPath)+string(filepath.Separator) {
 		stage := "binding-inputs"
@@ -26,25 +32,25 @@ func (m *Manager) BindRuntimeInactivitySources(ctx context.Context, provider *ne
 		}
 		return runtimeInactivityBindingAt(stage, ctx)
 	}
-	m.registryMu.RLock()
-	defer m.registryMu.RUnlock()
+	m.registryMu.Lock()
+	defer m.registryMu.Unlock()
 	nfq, ok := m.Adapters["nfqws2"].(*NFQWS2Adapter)
 	dns, dnsOK := m.Adapters[scopedDNSAdapterID].(*ScopedDNSAdapter)
 	if !ok || !dnsOK || nfq == nil || dns == nil || nfq.StateRoot != filepath.Join(m.StateRoot, "runtime", "nfqws2") || dns.StateRoot != filepath.Join(m.StateRoot, scopedDNSAdapterID) ||
-		dns.InactivityIdentity != nil || dns.InactivityKernelCheck != nil || dns.DNS != nil && dns.DNS.Path != settingsPath || dns.InactivitySettingsPath != "" && dns.InactivitySettingsPath != settingsPath {
+		dns.InactivityIdentity != nil || dns.InactivityKernelCheck != nil || dns.inactivitySources != nil || m.runtimeSources != nil || dns.DNS != nil && dns.DNS.Path != settingsPath || dns.InactivitySettingsPath != "" && dns.InactivitySettingsPath != settingsPath {
 		stage := "binding-participants"
 		switch {
 		case !ok || !dnsOK || nfq == nil || dns == nil:
 		case nfq.StateRoot != filepath.Join(m.StateRoot, "runtime", "nfqws2") || dns.StateRoot != filepath.Join(m.StateRoot, scopedDNSAdapterID):
 			stage = "binding-roots"
-		case dns.InactivityIdentity != nil || dns.InactivityKernelCheck != nil:
+		case dns.InactivityIdentity != nil || dns.InactivityKernelCheck != nil || dns.inactivitySources != nil || m.runtimeSources != nil:
 			stage = "binding-already-bound"
 		default:
 			stage = "binding-dns-settings"
 		}
 		return runtimeInactivityBindingAt(stage, ctx)
 	}
-	source, err := NewNFQWSRuntimeInactiveSource(ctx, nfq, inventory)
+	source, err := construct(ctx, nfq, inventory)
 	if err != nil {
 		return errors.Join(ErrRuntimeInactivity, err, ctx.Err())
 	}
@@ -53,7 +59,8 @@ func (m *Manager) BindRuntimeInactivitySources(ctx context.Context, provider *ne
 	}
 	dns.InactivitySettingsPath = settingsPath
 	dns.InactivityIdentity = provider
-	dns.InactivityKernelCheck = NewScopedDNSInactivityKernelCheck(inventory)
+	m.runtimeSources = newRuntimeInactivitySourceReview(m, nfq, dns, source, settingsPath)
+	dns.inactivitySources = m.runtimeSources
 	return ctx.Err()
 }
 

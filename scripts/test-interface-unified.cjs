@@ -22,6 +22,17 @@ function fixture(){
  return {c,state,$,calls,notices,elements};
 }
 (async()=>{
+await test('custom delete is visible without expanding details and blocked while removal is pending',()=>{
+ const {c,state,$}=fixture();state.services[0].custom=true;c.consoleSnapshot.services.youtube={enabled:true};
+ c.interfaceOpenService('youtube');
+ const content=$('#ui3InspectorContent').innerHTML,buttons=$('#r6InspectorRemove').innerHTML;
+ assert.ok(content.indexOf('id="r6InspectorRemove"')<content.indexOf('<details'));
+ assert.match(buttons,/data-rz-action="delete">Удалить сервис/);assert.match(buttons,/Убрать из моих сервисов/);
+ c.consoleSnapshot.services.youtube.removing=true;c.interfaceUpdateInspector();
+ assert.match($('#r6InspectorRemove').innerHTML,/data-rz-action="delete" disabled/);
+ assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="remove"/);
+ state.services[0].custom=false;c.interfaceUpdateInspector();assert.doesNotMatch($('#r6InspectorRemove').innerHTML,/data-rz-action="delete"/);
+});
 await test('cached autonomy background event hydrates busy home blockers and assignments without PASS or write authority',async()=>{
  const {c,state,$,calls}=fixture(),listeners=new Map();let clock=1000;
  const consoleSource=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/console.js'),'utf8');

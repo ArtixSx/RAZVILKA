@@ -52,12 +52,13 @@ func (a *ScopedDNSAdapter) VerifyRuntimeInactive(ctx context.Context) error {
 func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proof scopedDNSInactiveProof) error {
 	if parent == nil || a == nil || proof.withCurrent == nil || proof.readlink == nil || proof.sameExecutable == nil || proof.selfPID < 1 ||
 		!scopedDNSInactivePath(a.StateRoot) || filepath.Base(a.StateRoot) != scopedDNSAdapterID ||
-		!scopedDNSInactivePath(a.InactivitySettingsPath) || a.InactivityKernelCheck == nil || !scopedDNSInactivePath(proof.procRoot) {
+		!scopedDNSInactivePath(a.InactivitySettingsPath) || a.runtimeInactivityKernel() == nil || !scopedDNSInactivePath(proof.procRoot) {
 		return scopedDNSInactiveAt("source", nil)
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	root, settings, identity, kernel, manager := a.StateRoot, a.InactivitySettingsPath, a.InactivityIdentity, a.InactivityKernelCheck, a.DNS
+	root, settings, identity, kernel, manager := a.StateRoot, a.InactivitySettingsPath, a.InactivityIdentity, a.runtimeInactivityKernel(), a.DNS
+	sources := a.inactivitySources
 	installer := a.installerRole
 	if proof.installerObservation != nil {
 		withCurrent := proof.withCurrent
@@ -82,7 +83,7 @@ func (a *ScopedDNSAdapter) verifyDNSRuntimeInactive(parent context.Context, proo
 		live := a.live
 		a.mu.Unlock()
 		if live != nil || a.installerRole != installer || installer != nil && installer.current(ctx) != nil || a.StateRoot != root || a.InactivitySettingsPath != settings || a.InactivityIdentity != identity || a.DNS != manager ||
-			a.InactivityKernelCheck == nil || reflect.ValueOf(a.InactivityKernelCheck).Pointer() != kernelPC || manager != nil && manager.Path != settings {
+			a.inactivitySources != sources || sources != nil && !sources.dnsCoordinates() || a.runtimeInactivityKernel() == nil || reflect.ValueOf(a.runtimeInactivityKernel()).Pointer() != kernelPC || manager != nil && manager.Path != settings {
 			return 0, ErrScopedDNSRuntimeInactive
 		}
 		return scopedDNSInactiveEpoch(root)

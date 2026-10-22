@@ -506,7 +506,8 @@ function interfaceUpdateInspector(){
  consoleText('r6InspectorObserved',consoleDate(s.observed_state?.checked_at));consoleText('r6InspectorAddresses',sources.join(', '));
  interfaceHTML('r6InspectorDomains',(Array.isArray(s.domains)?s.domains:[]).slice(0,100).map(d=>`<code>${esc(d)}</code>`).join('')+((s.domains?.length||0)>100?'<p>Показаны первые 100 доменов. Полный состав доступен в настройках сервиса.</p>':''));
  interfaceHTML('r6InspectorControls',interfaceInspectorControls(s));
- interfaceHTML('r6InspectorRemove',interfaceServiceActionsReady(s)&&managed&&!managed.removing?'<button type="button" class="ui3-danger-text" data-rz-action="remove">Отключить и убрать из автопилота</button>':'');
+ const removalDisabled=!interfaceServiceActionsReady(s)||interfaceState.busy||managed?.removing?' disabled':'';
+ interfaceHTML('r6InspectorRemove',(interfaceServiceActionsReady(s)&&managed&&!managed.removing?`<button type="button" class="secondary" data-rz-action="remove"${removalDisabled}>Убрать из моих сервисов</button>`:'')+(s.custom?`<button type="button" class="ui3-danger-text" data-rz-action="delete"${removalDisabled}>Удалить сервис</button>`:''));
  const check=$('#r6InspectorCheck');if(check)check.disabled=!interfaceServiceActionsReady(s)||!!interfaceState.busy||!!serviceDashboard.operation||serviceDashboardJobActive()||!!managed?.removing;
 }
 
@@ -517,7 +518,7 @@ function interfaceOpenService(id){
  interfaceState.inspector=id;if(!$('#ui3ServiceDialog').open)interfaceState.returnFocus=document.activeElement;
  // Opening the same inspector must not destroy expanded details or keyboard focus.
  if(same){interfaceUpdateInspector();return;}
- interfaceHTML('ui3InspectorContent',`<div class="ui3-inspector-title"><span class="ui3-service-icon">${consoleServiceIcon(s)}</span><div><h2 id="ui3InspectorTitle" tabindex="-1">${esc(s.name)}</h2><p>${esc(rim.category(s))}</p></div></div><div id="r5InspectorStatus">${interfaceBadge(h)}</div><p id="r5InspectorDetail" class="ui3-inspector-description">${esc(h.detail)}</p><dl class="ui3-inspector-facts"><dt>Подключение</dt><dd id="r6InspectorRoute"></dd><dt>Устройства</dt><dd id="r6InspectorScope"></dd><dt>Автоподбор</dt><dd id="r6InspectorControl"></dd></dl><div class="ui3-inspector-actions"><button type="button" class="primary" data-rz-action="check" id="r6InspectorCheck">Проверить сейчас</button><span id="r6InspectorControls"></span></div><p class="r5-caption">Проверка не меняет подключение. Пауза останавливает только автоподбор, а не доступ к сервису.</p><details class="r5-advanced"><summary>Изменить подключение и устройства</summary><p>Ручной выбор подключения и устройств применяется отдельно.</p><button type="button" class="secondary" data-rz-action="configure">Открыть настройки сервиса</button><span id="r6InspectorRemove"></span></details><details class="r5-advanced"><summary>Технические сведения</summary><dl class="ui3-inspector-facts"><dt>Последняя задача</dt><dd id="r6InspectorTask"></dd><dt>Резерв</dt><dd id="r6InspectorReserve"></dd><dt>Наблюдение</dt><dd id="r6InspectorObserved"></dd></dl><p id="r6InspectorAddresses"></p><div class="r5-domains" id="r6InspectorDomains"></div></details>`);
+ interfaceHTML('ui3InspectorContent',`<div class="ui3-inspector-title"><span class="ui3-service-icon">${consoleServiceIcon(s)}</span><div><h2 id="ui3InspectorTitle" tabindex="-1">${esc(s.name)}</h2><p>${esc(rim.category(s))}</p></div></div><div id="r5InspectorStatus">${interfaceBadge(h)}</div><p id="r5InspectorDetail" class="ui3-inspector-description">${esc(h.detail)}</p><dl class="ui3-inspector-facts"><dt>Подключение</dt><dd id="r6InspectorRoute"></dd><dt>Устройства</dt><dd id="r6InspectorScope"></dd><dt>Автоподбор</dt><dd id="r6InspectorControl"></dd></dl><div class="ui3-inspector-actions"><button type="button" class="primary" data-rz-action="check" id="r6InspectorCheck">Проверить сейчас</button><span id="r6InspectorControls"></span></div><p class="r5-caption">Проверка не меняет подключение. Пауза останавливает только автоподбор, а не доступ к сервису.</p><div class="ui3-inspector-actions" id="r6InspectorRemove"></div><details class="r5-advanced"><summary>Изменить подключение и устройства</summary><p>Ручной выбор подключения и устройств применяется отдельно.</p><button type="button" class="secondary" data-rz-action="configure">Открыть настройки сервиса</button></details><details class="r5-advanced"><summary>Технические сведения</summary><dl class="ui3-inspector-facts"><dt>Последняя задача</dt><dd id="r6InspectorTask"></dd><dt>Резерв</dt><dd id="r6InspectorReserve"></dd><dt>Наблюдение</dt><dd id="r6InspectorObserved"></dd></dl><p id="r6InspectorAddresses"></p><div class="r5-domains" id="r6InspectorDomains"></div></details>`);
  consoleText('ui3InspectorMessage','');const dialog=$('#ui3ServiceDialog');if(!dialog.open)dialog.showModal();
  interfaceUpdateInspector();$('#ui3InspectorTitle').focus();
 }
@@ -531,20 +532,21 @@ async function interfaceRequest(path, options={}){
  catch(e){requireEpoch();if(e.status===401)showAuth(state.status,e.message);if(e.name==='AbortError')throw new Error('Ответ не подтверждён. Проверьте состояние операции перед повтором.');throw e;}
  finally{clearTimeout(timer);interfaceRequests.delete(controller);}
 }
-async function interfaceManage(id,enabled,remove=false){
+async function interfaceManage(id,enabled,remove=false,deleteDefinition=false){
  if(interfaceState.authRevoked||state.authenticated!==true||interfaceState.manageRequest)return false;
  const epoch=interfaceState.authEpoch,operation=interfaceState.manageRequest={epoch};
  try {
  const snapshot=consoleSnapshot;if(!snapshot?.policy?.setup_complete)throw new Error('Сначала завершите первоначальную настройку.');
  const old=snapshot.services?.[id],service=state.services.find(s=>s.id===id),revision=snapshot.policy.revision;
+ if(deleteDefinition&&(!remove||!service?.custom))throw new Error('Удалять можно только добавленные пользовательские сервисы.');
  if(remove && !old)throw new Error('Сервис уже не находится под автономным управлением.');
  if(remove){
   const view=state.currentView,inspector=interfaceState.inspector,definition=JSON.stringify(service),managed=JSON.stringify(old);
-  if(!await askConfirmation(`Убрать «${service?.name||id}»?`,`Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится.':''}`,'Убрать сервис'))return false;
+  if(!await askConfirmation(`${deleteDefinition?'Удалить':'Убрать'} «${service?.name||id}»?`,deleteDefinition?'Сначала будут сняты маршруты этого сервиса, затем удалены его домены и настройки. Остальные сервисы сохранятся.':`Будет поставлена задача на снятие только его маршрута.${service?.custom?' Определение пользовательского сервиса сохранится. Встроенные сервисы остаются в каталоге.':' Встроенный сервис останется в каталоге.'}`,deleteDefinition?'Удалить сервис':'Убрать сервис'))return false;
   if(epoch!==interfaceState.authEpoch||interfaceState.authRevoked||state.authenticated!==true)return false;
   if(view!==state.currentView||inspector!==interfaceState.inspector||consoleSnapshot?.policy?.revision!==revision||JSON.stringify(consoleSnapshot?.services?.[id])!==managed||JSON.stringify(state.services.find(s=>s.id===id))!==definition)throw new Error('Сервис или настройки изменились. Откройте новый просмотр и подтвердите удаление снова.');
  }
- const request=remove?{method:'DELETE',body:{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:false}}:{method:'POST',body:{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:revision,confirm:'MANAGE_SERVICE'}};
+ const request=remove?{method:'DELETE',body:{expected_revision:revision,confirm:'REMOVE_SERVICE',delete_definition:deleteDefinition}}:{method:'POST',body:{service_id:id,enabled,use_defaults:!old,all_lan:old?.all_lan||false,sources:old?.sources||[],expected_revision:revision,confirm:'MANAGE_SERVICE'}};
  await interfaceRequest(remove?`/api/v1/autonomy/services/${encodeURIComponent(id)}`:'/api/v1/autonomy/services',{...request,body:JSON.stringify(request.body)});
  if(epoch!==interfaceState.authEpoch)throw new Error('Сессия изменилась. Войдите снова.');
  const fresh=await interfaceRequest('/api/v1/autonomy');if(epoch!==interfaceState.authEpoch)return false;
@@ -588,7 +590,10 @@ document.addEventListener('click',event=>{
   if(action==='setup'){interfaceCloseInspector();setView('onboard');return;}
   if(action==='check'){void interfaceCheckService(id);return;}
   const epoch=interfaceState.authEpoch;interfaceState.busy=true;b.disabled=true;
-  void interfaceManage(id,action==='manage'||action==='confirm-definition',action==='remove').catch(e=>{if(epoch===interfaceState.authEpoch)consoleText('ui3InspectorMessage',e.message);}).finally(()=>{if(epoch===interfaceState.authEpoch){interfaceState.busy=false;if(b.isConnected)b.disabled=false;}});
+  const operation=action==='delete'&&!consoleSnapshot?.services?.[id]
+   ?deleteCustomService(id).then(removed=>{if(removed&&epoch===interfaceState.authEpoch&&interfaceState.inspector===id)interfaceCloseInspector();})
+   :interfaceManage(id,action==='manage'||action==='confirm-definition',action==='remove'||action==='delete',action==='delete');
+  void operation.catch(e=>{if(epoch===interfaceState.authEpoch)consoleText('ui3InspectorMessage',e.message);}).finally(()=>{if(epoch===interfaceState.authEpoch){interfaceState.busy=false;interfaceUpdateInspector();}});
  }
 });
 $('#ui3ServiceSearch').addEventListener('input',e=>{interfaceState.query=e.target.value;renderInterfaceServices(interfaceSummaries());});

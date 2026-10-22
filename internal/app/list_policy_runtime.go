@@ -39,6 +39,7 @@ type managedListPolicyOwner struct {
 	closeErr              error // guarded by mu; repeated release preserves a failed join
 	startupReady          bool
 	startupFailure        error
+	inactivitySources     managedListInactivitySources
 }
 
 func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (result *managedListPolicyOwner, resultErr error) {
@@ -83,8 +84,16 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 	}
 	defer a.closeUnretainedManagedNFQControl(control)
 	p.control = control
+	stage = "dns-owner"
+	if a.DNS == nil {
+		return nil, dataplane.ErrRuntimeInactivity
+	}
 	stage = "network-identity"
-	provider, err := netidentity.NewReviewedStockNC1812Provider(c)
+	lookupSources := func() (managedListInactivitySources, error) {
+		return p.manager.ReviewRuntimeInactivitySources(c, a.DNS.Path)
+	}
+	sources, provider, inventory, err := selectManagedListInactivitySources(c, lookupSources, netidentity.NewReviewedStockNC1812Provider)
+	p.inactivitySources = sources
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +110,11 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 		return nil, err
 	}
 	stage = "backend-inventory"
-	inventory, err := dataplane.NewReviewedStockNC1812BackendInventory(provider, descriptor)
-	if err != nil {
-		return nil, err
+	if inventory == nil {
+		inventory, err = dataplane.NewReviewedStockNC1812BackendInventory(provider, descriptor)
+		if err != nil {
+			return nil, err
+		}
 	}
 	p.inventory = inventory
 	stage = "policy-tools"
@@ -184,7 +195,8 @@ func (a *App) configureReviewedStockListPolicy(ctx, panel context.Context) (resu
 		return nil, dataplane.ErrRuntimeInactivity
 	}
 	stage = "inactivity-sources"
-	if err := p.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path); err != nil {
+	p.inactivitySources, err = retainManagedListInactivitySources(c, p.inactivitySources, func() error { return p.manager.BindRuntimeInactivitySources(c, provider, inventory, a.DNS.Path) }, lookupSources)
+	if err != nil {
 		return nil, err
 	}
 	stage = "wg-inactivity-sources"
