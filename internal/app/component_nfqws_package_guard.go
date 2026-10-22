@@ -41,6 +41,10 @@ func nfqwsPackageMutationCode(err error) string {
 }
 
 func writeNFQWSPackageMutationFailure(w http.ResponseWriter, err error) bool {
+	if errors.Is(err, components.ErrNFQWSInitialInstall) {
+		writeJSON(w, http.StatusConflict, map[string]any{"code": "NFQWS_INITIAL_INSTALL_REVIEW_REQUIRED", "error": err.Error()})
+		return true
+	}
 	if !errors.Is(err, components.ErrNFQWSOwnedPackageMutation) && !errors.Is(err, components.ErrNFQWSPackageOwnershipUnknown) {
 		return false
 	}

@@ -28,7 +28,7 @@ func (m *Manager) ConfigureNFQWSStockNative(owner *components.Manager) error {
 		return components.ErrStockNFQWSNative
 	}
 	a.stockNativeOwner = owner
-	return nil
+	return owner.BindNFQWSInitialInstallSource(&nfqwsInitialInstallSource{manager: m, adapter: a, owner: owner})
 }
 
 func (a *NFQWS2Adapter) validateStockNative(ctx context.Context, plan Plan, root string) (result error) {

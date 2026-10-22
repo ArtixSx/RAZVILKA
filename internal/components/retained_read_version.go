@@ -82,8 +82,15 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 				return nil
 			}
 			isCurrent := relative == filepath.Join("update-journal", "current.json")
-			isArchive := strings.HasPrefix(entry.Name(), "managed-")
-			if filepath.Dir(relative) == "update-journal" && !isCurrent && entry.Name() != ".writer.lock" {
+			isArchive := strings.HasPrefix(entry.Name(), "managed-") || entry.Name() == "initial-verified.json"
+			stateWriter := ".state-" + digest([]byte("current.json")) + ".lock"
+			if entry.Name() == stateWriter && filepath.Dir(relative) == "update-journal" {
+				marker, err := root.ReadLimited(relative, 256)
+				if err != nil || string(marker) != "RAZVILKA state file writer v1 "+digest([]byte("current.json"))+"\n" {
+					return ErrRetainedManagedUpdate
+				}
+			}
+			if filepath.Dir(relative) == "update-journal" && !isCurrent && entry.Name() != ".writer.lock" && entry.Name() != stateWriter {
 				return ErrRetainedManagedUpdate
 			}
 			if !isCurrent && !isArchive {
@@ -97,18 +104,25 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 			if rejectRepeatedComponentFields(data) != nil || strictJSON(data, &doc) != nil || validateUpdateJournal(doc) != nil || doc.SupervisionVersion < 0 || doc.SupervisionVersion > 1 {
 				return ErrRetainedManagedUpdate
 			}
-			if doc.ManagedNFQWS != nil {
+			if doc.ManagedNFQWS != nil || doc.NFQWSInitialInstall != nil {
 				canonical, _ := json.Marshal(doc)
 				if !bytes.Equal(bytes.TrimSuffix(data, []byte{'\n'}), canonical) {
 					return ErrRetainedManagedUpdate
 				}
 			}
 			if isArchive {
-				expected := filepath.Join("update-journal", doc.TransactionID, "managed-"+doc.Phase+".json")
-				if doc.ManagedNFQWS == nil || relative != expected || doc.Phase != UpdateAcceptedIdle && doc.Phase != UpdateRolledBack || !bytes.Equal(data, bytes.TrimSuffix(data, []byte{'\n'})) {
-					return ErrRetainedManagedUpdate
+				if doc.NFQWSInitialInstall != nil {
+					if relative != filepath.Join("update-journal", doc.TransactionID, "initial-verified.json") || doc.Phase != nfqwsInitialAccepted {
+						return ErrRetainedManagedUpdate
+					}
+					archives[relative] = doc
+				} else {
+					expected := filepath.Join("update-journal", doc.TransactionID, "managed-"+doc.Phase+".json")
+					if doc.ManagedNFQWS == nil || relative != expected || doc.Phase != UpdateAcceptedIdle && doc.Phase != UpdateRolledBack || !bytes.Equal(data, bytes.TrimSuffix(data, []byte{'\n'})) {
+						return ErrRetainedManagedUpdate
+					}
+					archives[relative] = doc
 				}
-				archives[relative] = doc
 			} else {
 				current = &doc
 			}
@@ -128,6 +142,9 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 		return ok && doc.ManagedNFQWS.After == receipt
 	}
 	for _, doc := range archives {
+		if doc.NFQWSInitialInstall != nil {
+			continue
+		}
 		if doc.ManagedNFQWS.Before != nil && !linked(*doc.ManagedNFQWS.Before) {
 			return 0, "", ErrRetainedManagedUpdate
 		}
@@ -142,6 +159,12 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 			if !ok || !sameComponentReadJournal(*current, archive) {
 				return 0, "", ErrRetainedManagedUpdate
 			}
+		}
+	}
+	if current != nil && current.NFQWSInitialInstall != nil && current.Phase == nfqwsInitialAccepted {
+		archive, ok := archives[filepath.Join("update-journal", current.TransactionID, "initial-verified.json")]
+		if !ok || !sameComponentReadJournal(*current, archive) {
+			return 0, "", ErrRetainedManagedUpdate
 		}
 	}
 	name := filepath.Join("receipts", managedNFQWSReceiptName)
@@ -164,7 +187,9 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 		}
 		fmt.Fprintf(hash, "%s\x00", name)
 		hash.Write(data)
-		version = ManagedNFQWSJournalSchema
+		if version < ManagedNFQWSJournalSchema {
+			version = ManagedNFQWSJournalSchema
+		}
 	}
 	closing, closeErr := os.Lstat(stateDirectory)
 	if closeErr != nil || !os.SameFile(info, closing) || root.Check("update-journal") != nil || ctx.Err() != nil {

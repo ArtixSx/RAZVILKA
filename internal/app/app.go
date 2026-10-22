@@ -1532,6 +1532,8 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if action == "remove" {
 		result, err = a.Components.Remove(ctx, id)
+	} else if id == "nfqws2" && action == "install" {
+		result, err = a.installInitialNFQWS(ctx)
 	} else {
 		result, err = a.Components.Apply(ctx, id)
 	}

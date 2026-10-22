@@ -60,6 +60,9 @@ func (m *Manager) RecoverManagedUpdate(ctx context.Context, request ManagedRecov
 	if !exists || doc.TransactionID != request.TransactionID || doc.Component != request.Component || request.TransactionID == "" {
 		return result, errors.New("component recovery does not match the pending transaction")
 	}
+	if doc.NFQWSInitialInstall != nil {
+		return result, ErrNFQWSInitialInstall // No replay, abandon or guessed rollback of an initial opkg intent.
+	}
 	if doc.ManagedNFQWS != nil {
 		return result, errors.New("managed NFQWS payload requires matching file-only bundle recovery")
 	}

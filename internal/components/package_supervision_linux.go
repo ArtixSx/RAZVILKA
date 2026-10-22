@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -180,7 +181,7 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
-	if action != "upgrade" && action != "rollback" {
+	if action != "upgrade" && action != "rollback" && action != "install" {
 		return ErrUpdateUnknown
 	}
 	if err := privateSupervisorRoot(path); err != nil {
@@ -196,6 +197,12 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 		return ErrUpdateUnknown
 	}
 	if (action == "upgrade" && doc.Phase != UpdateStarted) || (action == "rollback" && doc.Phase != UpdateRollbackStarted) {
+		return ErrUpdateUnknown
+	}
+	if action == "install" && (doc.NFQWSInitialInstall == nil || doc.Phase != nfqwsInitialStarted) {
+		return ErrUpdateUnknown
+	}
+	if action != "install" && doc.NFQWSInitialInstall != nil {
 		return ErrUpdateUnknown
 	}
 	snapshotPath := filepath.Join(path, id)
@@ -239,7 +246,26 @@ func runPackageSupervisorAt(path, id, component, action string, test bool) error
 		if len(command.Environment) != 0 {
 			return ErrUpdateUnknown
 		}
-		if action == "upgrade" {
+		if action == "install" {
+			tx := updateTransaction{manager: &Manager{StateDir: filepath.Dir(path)}, root: journal, doc: doc}
+			bounded, cancel := context.WithDeadline(context.Background(), command.Deadline)
+			defer cancel()
+			archive, err := tx.loadNFQWSInitialArchive(bounded)
+			if err != nil || len(command.Args) != 3 || command.Args[0] != "install" || command.Args[1] != "--nodeps" || command.Args[2] != archive {
+				return ErrUpdateUnknown
+			}
+			if doc.NFQWSInitialInstall.Architecture != runtime.GOARCH {
+				return ErrUpdateUnknown
+			}
+			// Long archive validation cannot turn a prior absence DTO into
+			// permission to overwrite newly appeared stock/configuration files.
+			actual := New()
+			actual.Opkg = command.Program
+			preflight, err := actual.nfqwsInitialPreflight(bounded)
+			if err != nil || digest(preflight) != doc.NFQWSInitialInstall.StatusSHA256 {
+				return ErrUpdateUnknown
+			}
+		} else if action == "upgrade" {
 			if len(command.Args) != 2 || command.Args[0] != "upgrade" || command.Args[1] != doc.Package {
 				return ErrUpdateUnknown
 			}

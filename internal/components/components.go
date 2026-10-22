@@ -113,24 +113,25 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 }
 
 type Manager struct {
-	Opkg          string
-	RepoDir       string
-	InfoDir       string // opkg package metadata; default /opt/lib/opkg/info
-	BinDir        string
-	InitDir       string
-	StateDir      string
-	Arch          string
-	Client        *http.Client
-	Timeout       time.Duration
-	Runner        Runner
-	external      map[string]releaseInfo
-	catalog       catalogStatus
-	lastInstalled map[string]string
-	lastAvailable map[string]string
-	availableAt   time.Time // when lastAvailable was read; zero after opkg update
-	retryDelay    time.Duration
-	releaseChecks map[string]catalogStatus
-	updateFault   func(string) error // phase-boundary fault injection; nil in production
+	Opkg             string
+	RepoDir          string
+	InfoDir          string // opkg package metadata; default /opt/lib/opkg/info
+	BinDir           string
+	InitDir          string
+	StateDir         string
+	Arch             string
+	Client           *http.Client
+	Timeout          time.Duration
+	Runner           Runner
+	external         map[string]releaseInfo
+	catalog          catalogStatus
+	lastInstalled    map[string]string
+	lastAvailable    map[string]string
+	availableAt      time.Time // when lastAvailable was read; zero after opkg update
+	retryDelay       time.Duration
+	releaseChecks    map[string]catalogStatus
+	updateFault      func(string) error        // phase-boundary fault injection; nil in production
+	initialNFQSource NFQWSInitialInstallSource // Bound once by the actual startup dataplane owner.
 
 	usqueNetworkCheck func() error // isolated network-preflight fixtures only
 
@@ -290,6 +291,13 @@ func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 			return Result{}, NoMutation(ErrManagedUpdateRequired)
 		}
 	}
+	if id == "nfqws2" {
+		spec, _ := lookup(id)
+		if m.catalog.feedStale(spec) {
+			return Result{}, NoMutation(errors.New("component catalog is stale; refresh package sources successfully before updating"))
+		}
+		return Result{Component: id, Action: "install"}, NoMutation(ErrNFQWSInitialInstall)
+	}
 	return m.applyLocked(ctx, id, map[string]bool{})
 }
 
@@ -300,6 +308,9 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting map[string]bool, tx *updateTransaction, guard func(context.Context) error) (Result, error) {
 	if err := m.nfqwsPackageMutationGuard(id); err != nil {
 		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
+	if id == "nfqws2" && tx == nil {
+		return Result{Component: id, Action: "install"}, NoMutation(ErrNFQWSInitialInstall)
 	}
 	spec, ok := lookup(id)
 	if !ok {

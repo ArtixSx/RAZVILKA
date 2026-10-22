@@ -17,24 +17,18 @@ type fakeRunner struct {
 	afterInstall func() error
 }
 
-func TestNFQWSInstallCreatesOfficialRepositoryBeforeRefresh(t *testing.T) {
+func TestNFQWSPlainInstallCannotRunUpstreamHooksOrCreateFeed(t *testing.T) {
 	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed"}}
 	repo := t.TempDir()
 	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: repo, Runner: r}
-	if _, err := m.Apply(context.Background(), "nfqws2"); err != nil {
-		t.Fatal(err)
+	if _, err := m.Apply(context.Background(), "nfqws2"); !errors.Is(err, ErrNFQWSInitialInstall) {
+		t.Fatal("unsafe plain install accepted", err)
 	}
-	data, err := os.ReadFile(filepath.Join(repo, "nfqws2.conf"))
-	if err != nil {
-		t.Fatal(err)
+	if len(r.calls) != 0 {
+		t.Fatal("plain install reached package runner", r.calls)
 	}
-	want := "src/gz nfqws2-keenetic https://nfqws.github.io/nfqws2-keenetic/all\n"
-	if string(data) != want {
-		t.Fatalf("repository=%q want=%q", data, want)
-	}
-	wantCalls := [][]string{{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "nfqws2-keenetic"}, {"/opt/bin/opkg", "list-installed"}}
-	if !reflect.DeepEqual(r.calls, wantCalls) {
-		t.Fatalf("calls=%v want=%v", r.calls, wantCalls)
+	if entries, err := os.ReadDir(repo); err != nil || len(entries) != 0 {
+		t.Fatal("blocked install changed feeds", entries, err)
 	}
 }
 
@@ -94,17 +88,17 @@ func TestUsqueDeclaresActualSOCKSAndSingBoxRuntime(t *testing.T) {
 }
 
 func TestOpkgInstallWritesVerifiedLifecycleReceipt(t *testing.T) {
-	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed"}}
+	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed", "list-installed": "sing-box-go - 1.13.3-2 - existing shared core\n"}}
 	stateDir := t.TempDir()
 	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: t.TempDir(), StateDir: stateDir, Runner: r}
-	result, err := m.Apply(context.Background(), "nfqws2")
+	result, err := m.Apply(context.Background(), "xray")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.OK || result.Action != "install" || !strings.Contains(result.Output, "verified installed version: 1.0.0") {
 		t.Fatalf("unverified result: %+v", result)
 	}
-	data, err := os.ReadFile(filepath.Join(stateDir, "receipts", "nfqws2.json"))
+	data, err := os.ReadFile(filepath.Join(stateDir, "receipts", "xray.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +107,7 @@ func TestOpkgInstallWritesVerifiedLifecycleReceipt(t *testing.T) {
 	}
 }
 
-func TestInstallReusesExistingOfficialRepositoryDeclaration(t *testing.T) {
+func TestPlainNFQWSInstallCannotUseAnExistingFeedToBypassPinnedBridge(t *testing.T) {
 	r := &fakeRunner{output: map[string]string{"update": "ok", "install": "installed"}}
 	repo := t.TempDir()
 	existing := filepath.Join(repo, "nfqws2-keenetic.conf")
@@ -122,15 +116,17 @@ func TestInstallReusesExistingOfficialRepositoryDeclaration(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: repo, Runner: r}
-	if _, err := m.Apply(context.Background(), "nfqws2"); err != nil {
+	if _, err := m.Apply(context.Background(), "nfqws2"); !errors.Is(err, ErrNFQWSInitialInstall) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "nfqws2.conf")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("duplicate repository file was created: %v", err)
 	}
-	wantCalls := [][]string{{"/opt/bin/opkg", "list-installed"}, {"/opt/bin/opkg", "update"}, {"/opt/bin/opkg", "install", "nfqws2-keenetic"}, {"/opt/bin/opkg", "list-installed"}}
-	if !reflect.DeepEqual(r.calls, wantCalls) {
-		t.Fatalf("calls=%v want=%v", r.calls, wantCalls)
+	if len(r.calls) != 0 {
+		t.Fatal("existing feed bypassed bridge", r.calls)
+	}
+	if after, err := os.ReadFile(existing); err != nil || string(after) != content {
+		t.Fatal("existing feed changed", err)
 	}
 }
 
@@ -212,13 +208,13 @@ func TestApplyUsesFixedPackageAllowlist(t *testing.T) {
 
 func TestSuccessfulInstallIsVisibleAsVerified(t *testing.T) {
 	r := &fakeRunner{output: map[string]string{
-		"list-installed": "",
-		"list":           "nfqws2-keenetic - 1.0.0 - dpi\n",
+		"list-installed": "sing-box-go - 1.13.3-2 - existing shared core\n",
+		"list":           "xray-core - 1.0.0 - proxy\n",
 		"update":         "updated",
 		"install":        "installed",
 	}}
 	m := &Manager{Opkg: "/opt/bin/opkg", RepoDir: t.TempDir(), Runner: r, StateDir: t.TempDir()}
-	result, err := m.Apply(context.Background(), "nfqws2")
+	result, err := m.Apply(context.Background(), "xray")
 	if err != nil || !result.OK {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
@@ -227,7 +223,7 @@ func TestSuccessfulInstallIsVisibleAsVerified(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, view := range views {
-		if view.ID != "nfqws2" {
+		if view.ID != "xray" {
 			continue
 		}
 		if view.Verification != "verified" || view.LastAction != "install" || view.VerifiedVersion != "1.0.0" || view.LastActionAt == "" {
@@ -235,7 +231,7 @@ func TestSuccessfulInstallIsVisibleAsVerified(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("nfqws2 view not found")
+	t.Fatal("xray view not found")
 }
 
 func TestFailedAndInterruptedOperationsRemainVisible(t *testing.T) {

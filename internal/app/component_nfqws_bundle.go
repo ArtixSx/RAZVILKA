@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ManagedComponentReadVersion   = components.ManagedNFQWSJournalSchema
+	ManagedComponentReadVersion   = components.NFQWSInitialInstallSchema
 	managedComponentsState        = installpath.State + "/components"
 	managedNFQBundlePlanPath      = "/api/v1/components/nfqws2/managed-bundle/plan"
 	managedNFQBundleInstallPath   = "/api/v1/components/nfqws2/managed-bundle/install"
@@ -170,7 +170,7 @@ func (a *App) managedNFQHistoryCurrent(ctx context.Context) error {
 func (a *App) managedNFQAuthority(cfg config.Config, control *operationgate.ControlEpochReview, inactive *strategylab.ManagedCompatibilityInactiveReview) components.ManagedNFQWSBundleAuthority {
 	ref := control.Reference()
 	check := func(c context.Context, installation string, sequence, revision uint64, reader int) error {
-		if installation != ref.InstallationID || sequence != ref.Sequence || revision != cfg.Revision || reader != ManagedComponentReadVersion {
+		if installation != ref.InstallationID || sequence != ref.Sequence || revision != cfg.Revision || reader != components.ManagedNFQWSJournalSchema {
 			return components.ErrRecoveryAuthority
 		}
 		if err := a.Operations.WithExclusiveContext(c, func() error { return nil }); err != nil {
@@ -188,13 +188,13 @@ func (a *App) managedNFQAuthority(cfg config.Config, control *operationgate.Cont
 		return errors.Join(a.managedNFQConfigCurrent(c, cfg), control.Current(c))
 	}
 	return components.ManagedNFQWSBundleAuthority{
-		InstallationID: ref.InstallationID, Sequence: ref.Sequence, ReaderVersion: ManagedComponentReadVersion,
+		InstallationID: ref.InstallationID, Sequence: ref.Sequence, ReaderVersion: components.ManagedNFQWSJournalSchema,
 		Check: check, Inactive: inactive.Current,
 		Admit: func(c context.Context, transaction, installation string, sequence, revision uint64, effect string, begin func() error) error {
 			if len(transaction) != 32 || begin == nil {
 				return components.ErrRecoveryAuthority
 			}
-			if err := check(c, installation, sequence, revision, ManagedComponentReadVersion); err != nil {
+			if err := check(c, installation, sequence, revision, components.ManagedNFQWSJournalSchema); err != nil {
 				return err
 			}
 			var err error
@@ -206,7 +206,7 @@ func (a *App) managedNFQAuthority(cfg config.Config, control *operationgate.Cont
 			default:
 				return components.ErrRecoveryAuthority
 			}
-			return errors.Join(err, check(c, installation, sequence, revision, ManagedComponentReadVersion))
+			return errors.Join(err, check(c, installation, sequence, revision, components.ManagedNFQWSJournalSchema))
 		},
 	}
 }

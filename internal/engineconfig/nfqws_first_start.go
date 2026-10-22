@@ -23,6 +23,11 @@ const NFQWSFirstStartStockInitSHA256 = "3c3edefdab45e1f9f7db7a9c28dae2e3c18cf6b5
 // never silently adopted by first-start. The original document is retained.
 const nfqwsFirstStartStockFieldsSHA256 = "6b0a713076923a77259f26506b3e0d65dcc932cac5f6eb55188cabeb831eab5a"
 
+// Exact universal 1.3.1 IPK (SHA256 28af67f8e192c838e007f23517b52b1f8c20d030cef5b971dfc93b7f21a79054)
+// adds --fastpath-workaround=auto to the original base. Closed compilation
+// still replaces the whole base with the fixed reviewed safety recipe.
+const nfqwsFirstStartUniversalStockFieldsSHA256 = "f8ee7eaa3d1227c8cfd3bd4fed0908451ec2d49322bb03b21ddd2c1cc42583e9"
+
 var nfqwsFirstStartStockFields = []string{"NFQWS_BASE_ARGS", "NFQWS_ARGS", "NFQWS_ARGS_QUIC", "NFQWS_ARGS_UDP", "MODE_LIST", "MODE_ALL", "MODE_AUTO", "NFQWS_EXTRA_ARGS", "NFQWS_ARGS_IPSET", "NFQWS_ARGS_CUSTOM", "TCP_PORTS", "UDP_PORTS", "LOG_LEVEL", "LOG_DEBUG_PATH", "USER", "CONFIG_VERSION"}
 var nfqwsFirstStartOwner = regexp.MustCompile(`^[0-9a-f]{24}$`)
 var nfqwsFirstStartInterface = regexp.MustCompile(`^[a-zA-Z0-9_.:-]+$`)
@@ -53,7 +58,8 @@ func NFQWSFirstStartStockConfig(raw []byte) error {
 		}
 		static.WriteString(key + "\x00" + value + "\x00")
 	}
-	if nfqwsFirstStartDigest([]byte(static.String())) != nfqwsFirstStartStockFieldsSHA256 {
+	seal := nfqwsFirstStartDigest([]byte(static.String()))
+	if seal != nfqwsFirstStartStockFieldsSHA256 && seal != nfqwsFirstStartUniversalStockFieldsSHA256 {
 		return ErrNFQWSFirstStart
 	}
 	for _, name := range strings.Fields(fields["ISP_INTERFACE"]) {

@@ -23,7 +23,7 @@ func TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2(t *testing.T) {
 	for _, tc := range []struct{ flag, value string }{
 		{"-self-update-schema", "2\n"}, {"-self-update-schema", "0"}, {"-self-update-schema", "0\nextra"},
 		{"-self-update-read-version", "3\n"}, {"-self-update-read-version", "5\n"}, {"-self-update-read-version", " 4\n"},
-		{"-component-update-schema", "2\n"}, {"-component-update-schema", "4\n"},
+		{"-component-update-schema", "2\n"}, {"-component-update-schema", "5\n"},
 		{"-node-history-read-version", "2\n"}, {"-node-history-read-version", "4\n"},
 		{"-native-enrollment-schema", "0\n"}, {"-subscription-schema", "0\n"},
 	} {

@@ -20,7 +20,7 @@ func TestNativeComponentReaderProbeUsesOnlyItsOwnExactCapabilityFlag(t *testing.
 		version      int
 	}{
 		{"old-component2", "2\\n", 2}, {"component3", "3\\n", 3},
-		{"future", "4\\n", 0}, {"missing-newline", "3", 0},
+		{"component4", "4\\n", 4}, {"future", "5\\n", 0}, {"missing-newline", "3", 0},
 		{"node-version-is-not-component-version", "03\\n", 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {

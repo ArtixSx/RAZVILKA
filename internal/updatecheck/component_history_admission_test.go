@@ -89,7 +89,9 @@ func TestComponentHistoryAdmissionKeepsTypedCurrentAndRollbackReaderRequirements
 		{2, 2, 2, 2, true}, {3, 2, 3, 3, true},
 		{3, 2, 2, 3, false}, {2, 2, 3, 3, false},
 		{3, 3, 2, 2, false}, {3, 3, 3, 2, true},
-		{3, 3, 4, 3, false}, {4, 2, 3, 3, false}, {3, 2, 3, 4, false},
+		{3, 3, 4, 3, true}, {4, 2, 3, 3, true}, {3, 2, 3, 4, false},
+		{4, 2, 4, 4, true}, {4, 2, 3, 4, false}, {4, 3, 4, 4, true},
+		{5, 2, 4, 4, false}, {4, 2, 5, 4, false},
 	} {
 		t.Run(fmt.Sprintf("%d/%d/%d/%d", test.current, test.retained, test.old, test.wanted), func(t *testing.T) {
 			a := componentAdmissionFixture(t)
@@ -155,7 +157,7 @@ func TestComponentHistoryAdmissionRejectsStateInventoryBinaryAndIdentityDrift(t 
 				case "state-same-schema":
 					componentAdmissionState(t, a, 3, components.UpdateStarted)
 				case "state-future":
-					retainedFile(t, a.stateRoot, "components/update-journal/current.json", []byte(`{"schema_version":4}`))
+					retainedFile(t, a.stateRoot, "components/update-journal/current.json", []byte(`{"schema_version":5}`))
 				case "new-controller":
 					data := []byte("new retained controller")
 					retainedFile(t, a.stateRoot, "update-backups/appeared/razvilka.bin", data)
@@ -214,8 +216,8 @@ func TestComponentHistoryAdmissionPassesSameFiniteOriginalOperationContext(t *te
 }
 
 func TestComponentCapabilityProbeIsExactAndIndependentOfNodeAndSelfUpdate(t *testing.T) {
-	for _, componentRequired := range []int{2, 3} {
-		for _, componentReader := range []int{1, 2, 3, 4} {
+	for _, componentRequired := range []int{2, 3, 4} {
+		for _, componentReader := range []int{1, 2, 3, 4, 5} {
 			for _, nodeReader := range []int{2, 3} {
 				probe := func(_ context.Context, _, flag string) (string, error) {
 					switch flag {
@@ -230,14 +232,14 @@ func TestComponentCapabilityProbeIsExactAndIndependentOfNodeAndSelfUpdate(t *tes
 					}
 				}
 				err := checkFileCapabilitiesForHistories(context.Background(), "sealed-controller", 3, componentRequired, probe)
-				pass := componentReader >= componentRequired && componentReader <= 3 && nodeReader == 3
+				pass := componentReader >= componentRequired && componentReader <= 4 && nodeReader == 3
 				if (err == nil) != pass {
 					t.Fatal("independent reader requirements were conflated", componentReader, nodeReader, componentRequired, err)
 				}
 			}
 		}
 	}
-	for _, output := range []string{"", "3", "03\n", "+3\n", " 3\n", "3\r\n", "3\nextra", "0\n", "4\n", "unknown\n"} {
+	for _, output := range []string{"", "3", "03\n", "+3\n", " 3\n", "3\r\n", "3\nextra", "4", "04\n", "4\r\n", "4\nextra", "0\n", "5\n", "unknown\n"} {
 		if _, err := parseComponentReadVersion(output); err == nil {
 			t.Fatal("malformed/future component reader accepted", output)
 		}

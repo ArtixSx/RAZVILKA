@@ -19,7 +19,7 @@ import (
 var ErrComponentHistoryAdmission = errors.New("retained component formats or controller read capability require review")
 
 func knownComponentReadVersion(version int) bool {
-	return version >= 1 && version <= components.ManagedNFQWSJournalSchema
+	return version >= 1 && version <= components.NFQWSInitialInstallSchema
 }
 
 func parseComponentReadVersion(output string) (int, error) {

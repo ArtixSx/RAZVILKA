@@ -59,6 +59,12 @@ type ManagedUpdateState struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// InstalledIdleAccepted projects a validated journal's terminal installation
+// result. It grants no runtime health, process ownership, or action authority.
+func (s ManagedUpdateState) InstalledIdleAccepted() bool {
+	return s.Phase == UpdateAcceptedIdle || s.SchemaVersion == NFQWSInitialInstallSchema && s.Component == "nfqws2" && s.Phase == nfqwsInitialAccepted
+}
+
 type journalConfig struct {
 	Path   string `json:"path"`
 	Blob   string `json:"blob,omitempty"`
@@ -69,14 +75,15 @@ type journalConfig struct {
 
 type updateJournal struct {
 	ManagedUpdateState
-	Package            string                   `json:"package"`
-	PackageFile        string                   `json:"package_file"`
-	PackageSHA256      string                   `json:"package_sha256"`
-	Configs            []journalConfig          `json:"configs"`
-	CandidateSnapshot  bool                     `json:"candidate_snapshot,omitempty"`
-	CandidateConfigs   []journalConfig          `json:"candidate_configs,omitempty"`
-	SupervisionVersion int                      `json:"supervision_version,omitempty"`
-	ManagedNFQWS       *managedNFQWSTransaction `json:"managed_nfqws,omitempty"`
+	NFQWSInitialInstall *nfqwsInitialInstallTransaction `json:"nfqws_initial_install,omitempty"`
+	Package             string                          `json:"package"`
+	PackageFile         string                          `json:"package_file"`
+	PackageSHA256       string                          `json:"package_sha256"`
+	Configs             []journalConfig                 `json:"configs"`
+	CandidateSnapshot   bool                            `json:"candidate_snapshot,omitempty"`
+	CandidateConfigs    []journalConfig                 `json:"candidate_configs,omitempty"`
+	SupervisionVersion  int                             `json:"supervision_version,omitempty"`
+	ManagedNFQWS        *managedNFQWSTransaction        `json:"managed_nfqws,omitempty"`
 }
 
 type updateTransaction struct {
@@ -166,7 +173,7 @@ func readUpdateJournal(root *ownedfs.Root) (updateJournal, bool, error) {
 	if err := validateUpdateJournal(doc); err != nil {
 		return doc, false, err
 	}
-	if doc.ManagedNFQWS != nil {
+	if doc.ManagedNFQWS != nil || doc.NFQWSInitialInstall != nil {
 		canonical, err := json.Marshal(doc)
 		if err != nil || !bytes.Equal(bytes.TrimSuffix(data, []byte{'\n'}), canonical) {
 			return doc, false, ErrManagedNFQWSBundle
@@ -176,10 +183,13 @@ func readUpdateJournal(root *ownedfs.Root) (updateJournal, bool, error) {
 }
 
 func updateTerminal(phase string) bool {
-	return phase == UpdateAccepted || phase == UpdateAcceptedIdle || phase == UpdateRolledBack || phase == UpdateAbandoned
+	return phase == UpdateAccepted || phase == UpdateAcceptedIdle || phase == UpdateRolledBack || phase == UpdateAbandoned || phase == nfqwsInitialAccepted
 }
 
 func validateUpdateJournal(doc updateJournal) error {
+	if doc.NFQWSInitialInstall != nil || doc.SchemaVersion == NFQWSInitialInstallSchema {
+		return validateNFQWSInitialJournal(doc)
+	}
 	if doc.ManagedNFQWS != nil {
 		return validateManagedNFQWSJournal(doc)
 	}

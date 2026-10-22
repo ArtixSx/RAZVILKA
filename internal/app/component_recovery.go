@@ -112,7 +112,7 @@ func (a *App) componentRecoveryStatus(w http.ResponseWriter, r *http.Request) {
 	if a.Store != nil {
 		revision = a.Store.Get().Revision
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending, "transaction": state, "revision": revision, "working_routes_changed": false, "capabilities": a.componentRecoveryCapabilities(ctx, state, pending), "installed_idle_accepted": state.Phase == components.UpdateAcceptedIdle})
+	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending, "transaction": state, "revision": revision, "working_routes_changed": false, "capabilities": a.componentRecoveryCapabilities(ctx, state, pending), "installed_idle_accepted": !pending && state.InstalledIdleAccepted()})
 }
 
 // Callbacks are trusted application dependencies, never decoded from a request.
@@ -161,6 +161,10 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if observed.TransactionID != in.TransactionID || observed.Component != in.Component {
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_TRANSACTION_CHANGED", "error": "component recovery does not match the reviewed transaction"})
+		return
+	}
+	if observed.SchemaVersion == components.NFQWSInitialInstallSchema {
+		writeJSON(w, http.StatusConflict, map[string]any{"code": "NFQWS_INITIAL_INSTALL_REVIEW_REQUIRED", "error": "Первичная установка NFQWS2 требует проверки сохранённого журнала; автоматический повтор и обычный откат пакета недоступны."})
 		return
 	}
 	managedBundle := observed.SchemaVersion == components.ManagedNFQWSJournalSchema && observed.Component == "nfqws2"

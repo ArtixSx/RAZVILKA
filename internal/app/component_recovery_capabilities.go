@@ -10,7 +10,14 @@ import (
 // of acceptance. Live checks and all authority/quiescence are repeated in POST.
 func (a *App) componentRecoveryCapabilities(ctx context.Context, state components.ManagedUpdateState, pending bool) map[string]any {
 	actions := []string{}
-	result := map[string]any{"supported_actions": []string{"accept-live", "accept-installed-idle", "rollback", "verify-rollback", "abandon-prepared"}, "available_actions": actions, "installed_idle_accepted": state.Phase == components.UpdateAcceptedIdle, "live_proof_required": true, "quiescence_confirmed": false, "inactivity_confirmed": false}
+	result := map[string]any{"supported_actions": []string{"accept-live", "accept-installed-idle", "rollback", "verify-rollback", "abandon-prepared"}, "available_actions": actions, "installed_idle_accepted": !pending && state.InstalledIdleAccepted(), "live_proof_required": true, "quiescence_confirmed": false, "inactivity_confirmed": false}
+	if state.SchemaVersion == components.NFQWSInitialInstallSchema {
+		result["supported_actions"] = []string{}
+		if pending {
+			result["error"] = "Первичная установка NFQWS2 требует проверки сохранённого журнала; автоматический повтор и обычный откат пакета недоступны."
+		}
+		return result
+	}
 	if state.SchemaVersion == components.ManagedNFQWSJournalSchema && state.Component == "nfqws2" {
 		result["supported_actions"] = []string{"resume", "rollback"}
 		result["live_proof_required"] = false

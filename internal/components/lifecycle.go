@@ -19,16 +19,17 @@ var validLifecycleActions = map[string]bool{"install": true, "update": true, "re
 var validOperationStatuses = map[string]bool{"running": true, "succeeded": true, "failed": true}
 
 type lifecycleReceipt struct {
-	SchemaVersion int    `json:"schema_version"`
-	Component     string `json:"component"`
-	Package       string `json:"package"`
-	Provider      string `json:"provider"`
-	Action        string `json:"action"`
-	BeforeVersion string `json:"before_version,omitempty"`
-	AfterVersion  string `json:"after_version,omitempty"`
-	CompletedAt   string `json:"completed_at"`
-	TransactionID string `json:"transaction_id,omitempty"`
-	Acceptance    string `json:"acceptance,omitempty"`
+	NFQWSDerived  *nfqwsInitialInstallTransaction `json:"nfqws_derived_inert,omitempty"`
+	SchemaVersion int                             `json:"schema_version"`
+	Component     string                          `json:"component"`
+	Package       string                          `json:"package"`
+	Provider      string                          `json:"provider"`
+	Action        string                          `json:"action"`
+	BeforeVersion string                          `json:"before_version,omitempty"`
+	AfterVersion  string                          `json:"after_version,omitempty"`
+	CompletedAt   string                          `json:"completed_at"`
+	TransactionID string                          `json:"transaction_id,omitempty"`
+	Acceptance    string                          `json:"acceptance,omitempty"`
 }
 
 type operationReceipt struct {
