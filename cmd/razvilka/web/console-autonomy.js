@@ -166,6 +166,7 @@
     const map={overview:'autopilot',services:'managed',sources:'subscription-settings',setup:'onboard'};
     activeTab=Object.hasOwn(map,name)?name:'overview';
     setView(map[activeTab]);
+    if(snapshot&&(activeTab==='overview'||activeTab==='services'))renderServices();
     if(activeTab==='sources') void readSources();
     if(activeTab==='setup') setStep(step);
   }
@@ -491,7 +492,7 @@
     requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
   })().catch(e=>reportError(e));});
-  document.addEventListener('razvilka:view-change',event=>{viewEpoch++;const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
+  document.addEventListener('razvilka:view-change',event=>{viewEpoch++;const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(snapshot&&(name==='overview'||name==='services'))renderServices();if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
   // Explicit refresh works in background tabs too. Read only the protected
   // publication, coalesce with an in-flight read and keep unfinished form edits.
   document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});

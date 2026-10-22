@@ -422,8 +422,9 @@ await test('wizard save readback preserves edits made while PUT was pending',asy
  assert.equal(f.contextView(),'onboard');assert.match(f.e('notice').textContent,/Новые изменения ещё не сохранены/);
 });
 
-await test('wizard ordinary successful save returns to overview with saved revision',async()=>{
+for(const enabled of [false,true])await test('wizard save immediately shows configured services without worker state: '+(enabled?'enabled':'paused'),async()=>{
  const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]),initial=snapshot();
+ initial.policy.enabled=enabled;
  initial.policy.failure_confirm_seconds=60;initial.policy.max_switches_per_hour=6;
  f.respond(0,200,initial);await flush();f.event('razvilka:view-change','onboard');f.respond(1,200,initial);await flush();
  f.e('checkInterval').value='180';f.e('wizardForm').events.get('input')({});
@@ -431,10 +432,30 @@ await test('wizard ordinary successful save returns to overview with saved revis
  const saving=f.e('wizardForm').events.get('submit')({preventDefault(){}});await flush();
  const i=f.requests.length-1;assert.equal(f.requests[i].options.method,'PUT');
  f.respond(i,200,{ok:true});await flush();
- const next=snapshot(2);next.policy.check_seconds=180;f.respond(i+1,200,next);await saving;
+ const next=snapshot(2);next.policy.check_seconds=180;next.policy.enabled=enabled;
+ next.services=Object.fromEntries(Array.from({length:8},(_,n)=>['configured-'+n,{enabled:true,all_lan:true,sources:[]}]));
+ f.respond(i+1,200,next);await saving;
  assert.equal(f.contextView(),'autopilot');assert.equal(f.e('revisionLabel').textContent,'Редакция 2');
  assert.match(f.e('notice').textContent,/Настройки сохранены на роутере/);
  assert.doesNotMatch(f.e('notice').textContent,/Новые изменения/);
+ assert.equal(f.e('managedCount').textContent,8);
+ const list=f.e('overviewServices').innerHTML;
+ assert.equal((list.match(/class="service-card"/g)||[]).length,3,'saved snapshot left the old empty placeholder');
+ assert.match(list,/configured-0/);assert.match(list,enabled?/Ожидает проверки/:/Автоматика на паузе/);
+ assert.match(list,/Нет результата проверки/);assert.match(list,/Не применён/);
+ assert.doesNotMatch(list,/Сначала выберите|Доступен · проверено/);
+});
+
+await test('overview navigation renders the configured saved snapshot before the next read settles',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.event('razvilka:view-change','onboard');
+ const saved=snapshot(2);saved.policy.enabled=false;saved.services={selected:{enabled:true,all_lan:true,sources:[]}};
+ f.respond(1,200,saved);await flush();
+ f.event('razvilka:view-change','autopilot');
+ assert.match(f.e('overviewServices').innerHTML,/selected/);
+ assert.match(f.e('overviewServices').innerHTML,/Автоматика на паузе/);
+ assert.doesNotMatch(f.e('overviewServices').innerHTML,/Сначала выберите/);
+ assert.equal(f.requests.length,3,'navigation must retain its ordinary fresh read');
 });
 
 for(const button of ['reloadButton','reloadSources']){
