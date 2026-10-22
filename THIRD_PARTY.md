@@ -57,3 +57,10 @@ Copyright (c) 2026 nfqws, MIT. The complete notice is retained in
 [docs/NFQWS2_DATA_LICENSE.txt](docs/NFQWS2_DATA_LICENSE.txt) and alongside
 the embedded source data. RAZVILKA groups the data into six services and adds
 local test definitions; it does not bundle or execute that project's installer.
+
+The native-parameter regression fixture
+`internal/components/testdata/nfqws2-keenetic-1.3.1/S51nfqws2` is an unmodified
+installed-router snapshot of that project's MIT-licensed 1.3.1 init script,
+copyright (c) 2026 nfqws. It is only read as test data, never executed. Its
+provenance and SHA256 are recorded alongside the fixture; the same complete
+MIT notice above applies.

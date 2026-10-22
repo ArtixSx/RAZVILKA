@@ -662,6 +662,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+		log.Fatal("stock NFQWS2 native parameter owner unavailable: ", err)
+	}
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: componentManager, Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.

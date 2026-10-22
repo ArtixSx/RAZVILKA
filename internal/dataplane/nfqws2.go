@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
@@ -51,6 +52,7 @@ type NFQWS2Adapter struct {
 	activeProcess        *nfqws2ActiveOwner // Only the actual separate producer can install it.
 	activeExecution      *nfqws2ActiveExecution
 	inactivity           *NFQWSRuntimeInactiveSource // Bound once by the trusted startup owner.
+	stockNativeOwner     *components.Manager         // Actual startup component owner, parameter-check only.
 }
 
 type nfqws2Snapshot struct {
@@ -383,6 +385,9 @@ func (a *NFQWS2Adapter) Validate(ctx context.Context, plan Plan, root string) er
 		if strings.Count(string(data), managedBegin) != 1 || strings.Count(string(data), managedEnd) != 1 {
 			return fmt.Errorf("invalid managed block in %s", path)
 		}
+	}
+	if err := a.validateStockNative(ctx, plan, root); err != nil {
+		return preflightRefusalError{err}
 	}
 	return nil
 }
