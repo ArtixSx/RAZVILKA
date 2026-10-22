@@ -9,7 +9,7 @@ function fixture(){
  document:{activeElement:null,createElement:()=>({setAttribute(){},addEventListener(){}})},
  $:id=>{if(!elements.has(id))elements.set(id,{hidden:false,disabled:false,checked:true,textContent:'',classList:{toggle(){}},appendChild(){},focus(){c.document.activeElement=this;}});return elements.get(id);},$$:()=>[],
  setTimeout:(fn,ms)=>{timers.set(++next,{fn,ms});return next;},clearTimeout:id=>timers.delete(id),clone:structuredClone,
- api:async(...args)=>posts.push(args),refresh:async()=>true,render(){c.$('pauseButton').disabled=!!c.pauseRequest;},renderReview(){},readSources(){},setView(){},validatePolicy:p=>p,policyFromForm:()=>({enabled:true}),policyConsentRequired:()=>false,
+ api:async(...args)=>posts.push(args),refresh:async()=>true,render(){c.$('pauseButton').disabled=!!c.pauseRequest;},renderServices(){},renderReview(){},readSources(){},setView(){},validatePolicy:p=>p,policyFromForm:()=>({enabled:true}),policyConsentRequired:()=>false,
  requireGeneration:g=>{if(g!==c.authGeneration)throw Object.assign(Error('old session'),{name:'AuthGenerationChanged'});},reportError:e=>{if(e.name!=='AuthGenerationChanged')notices.push(e.message);}};
  vm.createContext(c);vm.runInContext(source.slice(source.indexOf('  let noticeTimer='),source.indexOf('  function formatDate'))+'\n'+['tab','setStep','saveWizard','toggleAutonomyPause'].map(extract).join('\n'),c);
  return {c,elements,timers,posts,notices};

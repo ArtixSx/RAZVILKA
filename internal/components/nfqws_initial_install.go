@@ -467,10 +467,10 @@ func (m *Manager) openNFQWSInitialPrefix(prefix string) (*ownedfs.Root, error) {
 	}
 	fail := func(path string) (*ownedfs.Root, error) {
 		root.Close()
-		return nil, fmt.Errorf("%w: каталог %s должен принадлежать root:root и не разрешать запись группе или остальным", ErrNFQWSInitialInstall, filepath.Join(prefix, path))
+		return nil, fmt.Errorf("%w: каталог %s должен принадлежать root и не разрешать запись группе или остальным", ErrNFQWSInitialInstall, filepath.Join(prefix, path))
 	}
 	info, err := root.RootInfo()
-	if err != nil || nfqwsInitialMetadata(info, m.nfqwsFixture != nil) != nil {
+	if err != nil || trustedManagedNFQWSOwner(info, m.nfqwsFixture != nil) != nil {
 		return fail("")
 	}
 	for _, path := range []string{"etc", "etc/init.d", "etc/ndm", "etc/ndm/netfilter.d", "etc/nfqws2", "etc/nfqws2/lists", "etc/nfqws2/lua", "etc/nfqws2/blobs", "usr", "usr/bin", "lib", "lib/opkg", "lib/opkg/info", "var", "var/run", "var/log", "tmp"} {
@@ -478,7 +478,7 @@ func (m *Manager) openNFQWSInitialPrefix(prefix string) (*ownedfs.Root, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if err != nil || !info.IsDir() || nfqwsInitialMetadata(info, m.nfqwsFixture != nil) != nil {
+		if err != nil || !info.IsDir() || trustedManagedNFQWSOwner(info, m.nfqwsFixture != nil) != nil {
 			return fail(path)
 		}
 	}
