@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/catalog"
@@ -48,5 +49,15 @@ func (a *App) finishAutonomyDomainService(ctx context.Context, p autonomy.Policy
 	if current != "" {
 		return finish(autonomyStateDomainRouteUnavailable, "Действующий путь не подтвердил работу сервиса. Сервис задан доменами, поэтому VPN и прокси не назначаются: общий IP может принадлежать чужим сайтам. Маршрут сохранён; проверка повторится.")
 	}
-	return finish(autonomyStateDomainRouteUnavailable, "Сервис задан доменами, поэтому подходит только NFQWS2: он проверяет имя сайта в каждом соединении. NFQWS2 не готов или не подтвердил сервис. VPN и прокси не назначаются: общий IP может принадлежать чужим сайтам.")
+	// Name the prerequisite that the owner can actually change. Importing more
+	// nodes or selecting a DNS profile does not produce a domain-flow runtime,
+	// and must not be presented as a repair for this list-mode restriction.
+	const boundary = " Для доменного списка VPN и прокси недоступны; импорт подключений и смена DNS не помогут. Для них нужен отдельный сервис с проверенными IP-сетями."
+	if !slices.Contains(p.PreferredRoutes, "nfqws2") {
+		return finish(autonomyStateDomainRouteUnavailable, "Разрешите NFQWS2 в маршрутах автопилота и выполните «Проверка NFQWS2» для доменного сервиса."+boundary)
+	}
+	if !a.nfqws2RouteReady() {
+		return finish(autonomyStateDomainRouteUnavailable, "NFQWS2 не готов. Откройте «Обходы», настройте NFQWS2 и выполните «Проверка NFQWS2» для сервиса."+boundary)
+	}
+	return finish(autonomyStateDomainRouteUnavailable, "NFQWS2 готов, но доступ к сервису не подтверждён. В «Проверка NFQWS2» подберите стратегию и повторите проверку."+boundary)
 }
