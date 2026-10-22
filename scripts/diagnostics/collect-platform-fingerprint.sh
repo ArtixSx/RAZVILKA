@@ -1,5 +1,5 @@
 #!/bin/sh
-# Passive local inventory for Codex. No network calls, engine launches, service
+# Passive local platform inventory. No network calls, engine launches, service
 # changes, module loading, firewall/route operations, or configuration exports.
 # Adapted from the supplied RAZVILKA_KEENETIC_CODEX_2026_10_12 materials.
 # Source/archive SHA256 and diagnostic limits are recorded in README.md.

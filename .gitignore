@@ -26,3 +26,11 @@ configs/local/
 
 # Hardware-in-the-loop and local browser smoke-test artifacts
 .hil/
+
+# Local development notes and handoffs are not public project documentation.
+/.review-local/
+/docs/delivery-*/
+/docs/research-*/
+/docs/implementation-*/
+/docs/handoffs/
+/docs/releases/telegram-0.20.0-ru.txt

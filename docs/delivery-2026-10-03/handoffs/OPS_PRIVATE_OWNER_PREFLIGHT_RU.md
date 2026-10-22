@@ -1,7 +1,0 @@
-# OPS: чужой владелец существующего private root
-
-11.10.2026. Root при source audit после layout pin выявил отдельный gap: type/link-only shell guard не отвергал существующий `/opt/razvilka` UID1001. Исправлены upgrade/rollback/uninstall/init и bootstrap до producer/snapshot/app writes. Проверки используют фактическую числовую UID (`ls -nd`) и отказывают при group/other write; UID должна совпадать с действующей UID установщика. Bootstrap требует root ещё на входе, реальный Root install поэтому требует UID0. Standalone custom-base lab fixtures принадлежат собственному Unix пользователю, но этим не получают Go production authority: Go по-прежнему требует euid0 и root-owned предков до `/`.
-
-Bootstrap по умолчанию распаковывает пакет в новый `/opt/razvilka/cache/razvilka-install.XXXXXX`; private root/cache проверяются до mkdir/download и после создания. Явный TMPDIR сохраняет прежний выбор вызывающего администратора. Никаких chown/chmod чужого дерева, global upgrade, permission repair, нового CLI или ослабления Go guard.
-
-Новые actual-entrypoint fixtures покрывают foreign UID1001 и writable private root/run/state для installer/rollback/uninstall/S99. Bootstrap root-only cases покрывают UID1001, mode777 и настоящий private default cache; wrong-type проверяется переносимо. Проверяется конкретный отказ до producer/download и неизменность чужих bytes/metadata. UID/mode случаи Windows не доказывает: их запускает Root на Linux с настоящим root. Portable syntax/path/uninstall/bootstrap в Windows Git Bash проверены отдельно.

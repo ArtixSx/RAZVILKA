@@ -67,7 +67,7 @@ func (r *researchColdWGRunner) Run(ctx context.Context, name string, args ...str
 	return r.base.Run(ctx, name, args...)
 }
 
-// Run under the real dataplane package in Codex. The native kernel/peer are
+// Run under the real dataplane package. The native kernel/peer are
 // replaced here, but the complete adapter Snapshot/Stage/Validate/Canary and
 // cleanup paths are real. Physical-client proof is a separate HIL requirement.
 func TestResearchWGColdPeerAndScopedOnlyPlan(t *testing.T) {
