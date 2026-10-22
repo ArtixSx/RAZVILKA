@@ -164,6 +164,8 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	offset := r.Search.Cursor
 	remaining := r.Search.Ordered[offset:]
 	checkState, checkMessage := "", ""
+	checkedNode := ""
+	var usableCheck nodestore.SearchCheck
 	result, err := a.Nodes.SearchFirstUsable(ctx, nodestore.SearchRequest{
 		Engine: engine, ServiceID: s.ID, NetworkProfile: profile, Ordered: remaining,
 		Current: current, Cursor: 0, Limit: p.CandidatesPerRound,
@@ -203,7 +205,11 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 				}
 				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
 			}
-			return nodestore.SearchCheck{Outcome: outcome, ProbeID: check.ProbeID, CheckedAt: check.FinishedAt, Engine: candidateEngine}, nil
+			record := nodestore.SearchCheck{Outcome: outcome, ProbeID: check.ProbeID, CheckedAt: check.FinishedAt, Engine: candidateEngine}
+			if outcome == nodestore.SearchUsable {
+				checkedNode, usableCheck = id, record
+			}
+			return record, nil
 		},
 		PersistCursor: func(c context.Context, next int) error {
 			if next == 0 {
@@ -248,6 +254,12 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		},
 	})
 	if result.Applied.NodeID != "" {
+		// Search verifies this SAME durable exact PASS before Apply and only
+		// publishes Applied after a successful transaction. Keep its actual
+		// check time, never a UI/commit clock or a rejected peer's observation.
+		if result.Applied.NodeID == checkedNode && result.Applied.Route == usableCheck.Engine+":"+checkedNode {
+			r.CheckedAt = usableCheck.CheckedAt
+		}
 		r.Search.Halted = false
 		r.Reserves = []string{result.Applied.NodeID}
 		r.Failures = 0
