@@ -9,6 +9,28 @@ import (
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
+type delayedPublicationDeadlineContext struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c delayedPublicationDeadlineContext) Deadline() (time.Time, bool) { return c.deadline, true }
+
+func TestCompatibilityPublicationDeadlineDoesNotWaitForCancellationNotification(t *testing.T) {
+	active := &compatibilityInvocation{Command: compatibilityCommand{Deadline: time.Now().Add(time.Minute)}}
+	ctx := delayedPublicationDeadlineContext{Context: context.Background(), deadline: time.Now().Add(-time.Second)}
+	if ctx.Err() != nil {
+		t.Fatal("fixture must model a delayed cancellation notification")
+	}
+	if compatibilityPublicationTimeCurrent(ctx, active) {
+		t.Fatal("expired publication deadline accepted before cancellation reached the child")
+	}
+	ctx.deadline = time.Now().Add(time.Minute)
+	if !compatibilityPublicationTimeCurrent(ctx, active) {
+		t.Fatal("live legacy publication deadline refused")
+	}
+}
+
 // Context arithmetic model only: this does not issue a runtime lease, control,
 // receipt or native compatibility result. Actual owner checks must still refuse
 // this deliberately incomplete invocation, as the last test verifies.

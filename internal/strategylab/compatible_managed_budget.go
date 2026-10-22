@@ -70,7 +70,12 @@ func compatibilityPublicationContext(parent context.Context, active *compatibili
 }
 
 func compatibilityPublicationTimeCurrent(ctx context.Context, active *compatibilityInvocation) bool {
-	if active == nil {
+	if active == nil || ctx == nil || ctx.Err() != nil {
+		return false
+	}
+	// A parent's Done can wake a waiter before cancellation reaches a child.
+	// Enforce the deadline itself before publishing, not just its notification.
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
 		return false
 	}
 	if i := managedCompatibilityForward(ctx); i != nil {
