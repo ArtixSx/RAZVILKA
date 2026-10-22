@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
@@ -51,10 +52,16 @@ func TestNFQWS2FirstStartExplicitRemovalKeepsInertAndFreshOwnerCanApply(t *testi
 	if err := m.Register(&next); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.ConfigureNFQWSStockNative(f.owner); err != nil {
+	// A fresh application lifetime creates a fresh component Manager over the
+	// same durable files. The old instance retains its original startup source
+	// association and must never transfer it to another dataplane owner.
+	owner := components.New()
+	owner.InitDir, owner.InfoDir, owner.StateDir = f.owner.InitDir, f.owner.InfoDir, f.owner.StateDir
+	owner.Runner = f.owner.Runner
+	if err := m.ConfigureNFQWSStockNative(owner); err != nil {
 		t.Fatal(err)
 	}
-	f.a, f.m = &next, m
+	f.a, f.m, f.owner = &next, m, owner
 	f.plan.PlanID = "dp-fresh-owner"
 	f.apply(t)
 	newOwner, _ := f.a.owner()
