@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
@@ -29,14 +30,15 @@ type nfqws2ListLease struct {
 // The durable intent precedes every global write. Both current and prior block
 // hashes allow cleanup after a partial activation, but only for this instance.
 type nfqws2Lease struct {
-	Version     int    `json:"version"`
-	StateRoot   string `json:"state_root"`
-	Owner       string `json:"owner"`
-	Transaction string `json:"transaction"`
-	ConfigPath  string `json:"config_path"`
-	InitPath    string `json:"init_path"`
-	ConfigHash  string `json:"config_hash"`
-	PriorConfig string `json:"prior_config_hash,omitempty"`
+	FirstStart  *nfqws2FirstStartLease `json:"first_start,omitempty"`
+	Version     int                    `json:"version"`
+	StateRoot   string                 `json:"state_root"`
+	Owner       string                 `json:"owner"`
+	Transaction string                 `json:"transaction"`
+	ConfigPath  string                 `json:"config_path"`
+	InitPath    string                 `json:"init_path"`
+	ConfigHash  string                 `json:"config_hash"`
+	PriorConfig string                 `json:"prior_config_hash,omitempty"`
 	// ConfigOwner is the installed configuration without this instance's
 	// block: an interrupted cleanup may already have removed only the block.
 	ConfigOwner string             `json:"config_owner_hash,omitempty"`
@@ -174,6 +176,23 @@ func (a *NFQWS2Adapter) readLease() (*nfqws2Lease, error) {
 			return nil, errors.New("NFQWS2 runtime hash is invalid")
 		}
 	}
+	if lease.FirstStart != nil && (!lanPolicyHash(lease.FirstStart.PriorInitHash) || lease.FirstStart.StockInitHash != engineconfig.NFQWSFirstStartStockInitSHA256) {
+		return nil, errors.New("NFQWS2 first-start ownership is invalid")
+	}
+	if first := lease.FirstStart; first != nil {
+		switch first.Phase {
+		case nfqws2FirstPrepared, nfqws2FirstStarting:
+			if first.Process != nil {
+				return nil, engineconfig.ErrNFQWSFirstStart
+			}
+		case nfqws2FirstRunning, nfqws2FirstStopped, nfqws2FirstRetiring:
+			if first.Process == nil || first.Process.PID <= 1 || first.Process.ParentPID <= 0 || first.Process.Group <= 0 || first.Process.Start == "" || first.Process.BootID == "" || !lanPolicyHash(first.Process.ArgumentsSHA256) || !filepath.IsAbs(first.Process.Executable) {
+				return nil, engineconfig.ErrNFQWSFirstStart
+			}
+		default:
+			return nil, engineconfig.ErrNFQWSFirstStart
+		}
+	}
 	return &lease, nil
 }
 
@@ -265,7 +284,7 @@ func (a *NFQWS2Adapter) verifyOwnedRuntime(lease *nfqws2Lease, partial bool) err
 		return errors.New("NFQWS2 configuration changed outside its ownership manifest")
 	}
 	init, _, err := nfqws2Read(a.InitPath)
-	if err != nil || nfqws2Hash(init) != lease.InitHash {
+	if err != nil || nfqws2Hash(init) != lease.InitHash && !(partial && lease.FirstStart != nil && (nfqws2Hash(init) == lease.FirstStart.PriorInitHash || nfqws2Hash(init) == lease.FirstStart.StockInitHash)) {
 		return errors.New("NFQWS2 init changed outside its ownership manifest")
 	}
 	return nil
@@ -301,7 +320,7 @@ func (a *NFQWS2Adapter) mergeOwnedList(index int, values []string, draft []byte,
 	return []byte(merged), nil
 }
 
-func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
+func (a *NFQWS2Adapter) prepareActivationLease(root string, plans ...Plan) error {
 	snapshot, err := readNFQWS2Snapshot(root)
 	if err != nil {
 		return err
@@ -328,6 +347,36 @@ func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
 		return errors.New("NFQWS2 init is unavailable")
 	}
 	lease.ConfigHash, lease.PriorConfig, lease.InitHash = nfqws2Hash(stagedConfig), nfqws2Hash(snapshot.Config), nfqws2Hash(init)
+	if snapshot.FirstStart {
+		if len(plans) != 1 {
+			return engineconfig.ErrNFQWSFirstStart
+		}
+		expected, err := a.firstStartConfig(plans[0], snapshot.Config)
+		if err != nil || !bytes.Equal(expected, stagedConfig) {
+			return ErrReviewChanged
+		}
+		if !bytes.Equal(init, snapshot.Init) {
+			return ErrReviewChanged
+		}
+		stagedInit, exists, err := nfqws2Read(filepath.Join(root, "S51nfqws2.staged"))
+		if err != nil || !exists {
+			return engineconfig.ErrNFQWSFirstStart
+		}
+		original, err := engineconfig.NFQWSFirstStartOriginalInit(stagedInit, owner)
+		if err != nil {
+			return err
+		}
+		expectedInit, err := engineconfig.NFQWSFirstStartInit(original, owner)
+		if err != nil || !bytes.Equal(expectedInit, stagedInit) {
+			return ErrReviewChanged
+		}
+		lease.InitHash = nfqws2Hash(stagedInit)
+		lease.FirstStart = &nfqws2FirstStartLease{PriorInitHash: nfqws2Hash(init), StockInitHash: nfqws2Hash(original), Phase: nfqws2FirstPrepared}
+		if prior != nil && prior.FirstStart != nil {
+			lease.FirstStart.Phase = prior.FirstStart.Phase
+			lease.FirstStart.Process = prior.FirstStart.Process
+		}
+	}
 	if block, err := nfqws2Block(stagedConfig); err != nil {
 		return errors.New("NFQWS2 staged configuration is invalid")
 	} else if len(block) != 0 {
@@ -336,6 +385,13 @@ func (a *NFQWS2Adapter) prepareActivationLease(root string) error {
 			return errors.New("NFQWS2 staged configuration is invalid")
 		}
 		lease.ConfigOwner = nfqws2Hash([]byte(ownerPart))
+		if snapshot.FirstStart {
+			original, err := engineconfig.NFQWSFirstStartOriginalConfig(stagedConfig, owner)
+			if err != nil {
+				return err
+			}
+			lease.ConfigOwner = nfqws2Hash(original)
+		}
 	}
 	before, existed := nfqws2SnapshotResources(snapshot)
 	for index, path := range a.globalResources() {
@@ -375,6 +431,13 @@ func (a *NFQWS2Adapter) mayRollback(root string, snapshot nfqws2Snapshot) (bool,
 	}
 	if err := a.verifyOwnedRuntime(lease, true); err != nil {
 		return false, err
+	}
+	if snapshot.FirstStart {
+		init, exists, err := nfqws2Read(a.InitPath)
+		staged, stagedExists, stageErr := nfqws2Read(filepath.Join(root, "S51nfqws2.staged"))
+		if err != nil || stageErr != nil || !exists || !stagedExists || !bytes.Equal(init, snapshot.Init) && !bytes.Equal(init, staged) {
+			return false, ErrReviewChanged
+		}
 	}
 	before, existed := nfqws2SnapshotResources(snapshot)
 	for index, path := range a.globalResources() {

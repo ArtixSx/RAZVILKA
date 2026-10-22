@@ -17,6 +17,15 @@ import (
 // journal and current network. A first-setup starter is explicitly NFQWS2-only:
 // no silent VLESS/USQUE/WARP fallback and no requirement to import proxy keys.
 func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, service catalog.Service, cfg config.Config, profile string) autonomy.Runtime {
+	return a.runNFQWS2StarterWithProfileReview(ctx, p, s, r, service, cfg, profile, func() bool {
+		return a.Dataplane != nil && a.Dataplane.NFQWS2FirstStartNeedsApply(s.ID, service.Domains)
+	})
+}
+
+// The review only observes whether the closed owned profile lacks this service.
+// It never authorizes effects: the ordinary Apply still rechecks consent,
+// resource scope, Stop, revisions, ownership, health and rollback throughout.
+func (a *App) runNFQWS2StarterWithProfileReview(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, service catalog.Service, cfg config.Config, profile string, needsApply func() bool) autonomy.Runtime {
 	finish := func(state, message string) autonomy.Runtime { r.State, r.Message = state, message; return r }
 	applied := cfg.AppliedServices[s.ID]
 	// The owner's draft may already return the service to NFQWS2 while another
@@ -42,6 +51,27 @@ func (a *App) runNFQWS2Starter(ctx context.Context, p autonomy.Policy, s autonom
 		// leaves the rounds to the other services.
 		r.NextCheck = at
 		return finish("rate-limited", fmt.Sprintf("Лимит применений за час исчерпан. Следующая попытка примерно через %d мин.", max(1, int(math.Ceil(time.Until(at).Minutes())))))
+	}
+	// An unapplied domain cannot prove this profile works before its domains
+	// are present. Admit only the stopped stock first start or an exact owned
+	// first-start profile that needs this service; never bypass an applied path
+	// or a running owner/legacy profile's ordinary probe.
+	if !applied.Enabled && needsApply != nil && needsApply() {
+		if !s.AllLAN || len(s.Sources) != 0 || len(service.Domains) == 0 || len(service.CIDRs) != 0 {
+			return finish("unsupported-scenario", "Закрытый профиль NFQWS2 поддерживает только домены и TCP 443 для всей домашней сети. Сервис с IP-сетями или отдельными устройствами не применялся.")
+		}
+		if ctx.Err() != nil || !a.autonomyConsent(p, s) || !reflect.DeepEqual(a.Store.Get(), cfg) {
+			return finish("paused", "Подготовка профиля отменена или изменились настройки. Сеть не изменена.")
+		}
+		if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
+			return finish("rate-limited", "Достигнут лимит применений. Подготовка профиля NFQWS2 отложена.")
+		}
+		r.State, r.Message = "applying", "Подготавливаем закрытый профиль NFQWS2: только TCP 443 и домены применяемого плана, с сохранением исключений."
+		a.autonomyRuntime(s.ID, r)
+		if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
+			return finish(autonomyLegacyApplyRefused(err, &r, "Закрытый профиль NFQWS2 не подтверждён. Использована штатная защита и откат."))
+		}
+		return finish("applied", "Закрытый профиль NFQWS2 применён через общую транзакцию и проверен. Остальные функции сервиса проверяются отдельно.")
 	}
 	if !returning && !a.nfqws2RouteRunning() {
 		// The isolated check sends one request through the running daemon's

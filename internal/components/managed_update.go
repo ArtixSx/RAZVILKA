@@ -234,6 +234,9 @@ func (m *Manager) ManagedUpdateGuarded(ctx context.Context, id string, check, gu
 func (m *Manager) ManagedUpdateGuardedWithRollback(ctx context.Context, id string, check, guard, rollbackAcceptance func(context.Context) error) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "update"}, NoMutation(err)
+	}
 	spec, ok := lookup(id)
 	if !ok || !managedUpdateComponents[id] || check == nil {
 		return Result{}, NoMutation(fmt.Errorf("component %s has no managed update", id))

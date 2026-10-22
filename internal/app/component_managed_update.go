@@ -29,6 +29,9 @@ func (a *App) updateComponent(ctx context.Context, id string, guards ...func(con
 		if err := ctx.Err(); err != nil {
 			return components.NoMutation(err)
 		}
+		if err := a.nfqwsPackageMutationGuard(id); err != nil {
+			return components.NoMutation(err)
+		}
 		if err := authority(ctx); err != nil {
 			return components.NoMutation(err)
 		}
@@ -108,6 +111,13 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": err.Error()})
 		return
 	}
+	guard = a.nfqwsPackageUpdateGuard(id, guard)
+	if err := guard(ctx); err != nil {
+		if !writeNFQWSPackageMutationFailure(w, err) {
+			writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": err.Error()})
+		}
+		return
+	}
 	check, adapters, err := a.componentCandidateCheck(ctx, id)
 	success := "Новая версия проверена при работающих маршрутах"
 	if errors.Is(err, errProxyPrecheck) {
@@ -140,6 +150,10 @@ func (a *App) managedComponentUpdate(w http.ResponseWriter, r *http.Request, id 
 	}
 	if err != nil {
 		code := http.StatusBadGateway
+		if writeNFQWSPackageMutationFailure(w, err) {
+			_ = a.Components.RecordOperation(id, "update", "failed", err.Error())
+			return
+		}
 		if errors.Is(err, components.ErrRollbackPackageMissing) {
 			code = http.StatusConflict
 		}

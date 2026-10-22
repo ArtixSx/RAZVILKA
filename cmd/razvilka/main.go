@@ -143,6 +143,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
+	retireDataplaneForRemoval := flag.Bool("retire-dataplane-for-removal", false, "retire owned restart metadata for application removal; requires deactivate-dataplane")
 	retryRollbackPlan := flag.String("retry-rollback-plan", "", "retry an intact failed rollback for this exact plan, while the panel is stopped")
 	retryRollbackDigest := flag.String("retry-rollback-digest", "", "reviewed digest required with retry-rollback-plan")
 	closeRollbackPlan := flag.String("close-rollback-plan", "", "close an intact failed rollback that can no longer be retried (for example after a reboot) by deactivating its owned runtime, while the panel is stopped")
@@ -163,6 +164,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	checkAutonomyState := flag.Bool("check-autonomy-state", false, "check autonomy state next to config without changing files and exit")
 	registerBootRetirementFlags(flag.CommandLine)
 	flag.Parse()
+	if *retireDataplaneForRemoval && !*deactivateDataplane {
+		log.Fatal("retire-dataplane-for-removal requires deactivate-dataplane")
+	}
 	if *nodeHistoryReadVersion {
 		fmt.Println(nodestore.ExactHistoryReadVersion)
 		return
@@ -364,7 +368,30 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		report, deactivateErr := dataplaneManager.Deactivate(ctx)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+			log.Fatal("stock NFQWS2 native owner unavailable")
+		}
+		_, closeSources, err := runtimeManagerSourcesBound(ctx, func() (*dataplane.Manager, error) { return dataplaneManager, nil }, *dnsStatePath)
+		if err != nil {
+			// Existing adapters retain their own cleanup proofs on other
+			// platforms/layouts. A first-start lease must independently refuse
+			// its cleanup without the actual source; never erase it here.
+			log.Print("Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: ", selfUpdateRuntimeManagerFailureStage(err))
+		}
+		var report dataplane.Deactivation
+		var deactivateErr error
+		if *retireDataplaneForRemoval {
+			report, deactivateErr = dataplaneManager.DeactivateForRemoval(ctx)
+		} else {
+			report, deactivateErr = dataplaneManager.Deactivate(ctx)
+		}
+		if closeSources != nil {
+			deactivateErr = errors.Join(deactivateErr, closeSources())
+		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(report); err != nil {
@@ -665,6 +692,20 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
 		log.Fatal("stock NFQWS2 native parameter owner unavailable: ", err)
 	}
+	sourceContext, cancelSources := context.WithTimeout(context.Background(), 30*time.Second)
+	sourceLifetime, stopSourceLifetime := context.WithCancel(context.Background())
+	defer stopSourceLifetime()
+	_, closeRuntimeSources, sourceErr := runtimeManagerSourcesBoundLifetime(sourceContext, sourceLifetime, func() (*dataplane.Manager, error) { return dataplaneManager, nil }, *dnsStatePath)
+	cancelSources()
+	if sourceErr != nil {
+		log.Print("Runtime ownership observation unavailable; controlled NFQWS2 startup remains fenced: ", selfUpdateRuntimeManagerFailureStage(sourceErr))
+	} else {
+		defer func() {
+			if err := closeRuntimeSources(); err != nil {
+				log.Print("Runtime ownership source closure failed")
+			}
+		}()
+	}
 	a := &app.App{Store: store, Catalog: cat, Sources: sm, Telemetry: telemetryStore, EngineConfigs: engineConfigs, EngineLab: engineLab, StrategyLab: strategyLabManager, Components: componentManager, Community: communityCatalog, CustomServices: custom, Dataplane: dataplaneManager, Devices: deviceManager, DNS: dnsManager, Warp: warpManager, USQUE: usqueDoctor, TestLab: testlab.NewRunner(), RouteProber: routeProber, SmartRoute: smartRouteManager, Updates: updatecheck.New(app.Version), Stats: statsSampler, Security: gate, Audit: auditlog.New(*auditLogPath), Start: time.Now(), EffectiveListen: addr, Z2KRoot: *z2kRoot}
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.
@@ -823,7 +864,13 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		recovery.State = "component-recovery-required"
 		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
 	} else {
-		recovery, recoveryErr = dataplaneManager.Recover(recoveryContext)
+		review, reviewErr := bootRecoveryGuard(*cfgPath, store)
+		if reviewErr != nil {
+			// Journal cleanup still runs. Only a committed runtime restart
+			// needs current settings; missing settings never become a grant.
+			review = func(dataplane.Plan) error { return reviewErr }
+		}
+		recovery, recoveryErr = dataplaneManager.Recover(dataplane.WithRecoveryReview(recoveryContext, review))
 	}
 	cancelRecovery()
 	if errors.Is(recoveryErr, dataplane.ErrExecutionJournal) {
@@ -1250,6 +1297,31 @@ func rollbackRecoveryGuard(cfgPath string, store *config.Store) (func(dataplane.
 			return errors.New("applied settings changed or do not match the previous plan")
 		}
 		return nil
+	}, nil
+}
+
+// Boot may restore only the current applied legacy intent, never a desired
+// draft, suspended Stop snapshot, or old permission from the autonomy policy.
+// A managed list/client owner needs its own retained executor review.
+func bootRecoveryGuard(cfgPath string, store *config.Store) (func(dataplane.Plan) error, error) {
+	baseline, err := os.ReadFile(cfgPath)
+	if err != nil || store == nil {
+		return nil, errors.New("boot applied settings are unavailable")
+	}
+	return func(committed dataplane.Plan) error {
+		cfg := store.Get()
+		if committed.State != "committed" || !committed.Ready || committed.Noop || committed.SafeMode || !rollbackAppliedSettingsMatch(cfg, committed) || !dataplane.PlanHonoursLegacyExclusions(cfg, committed) {
+			return errors.New("current applied settings do not authorize boot recovery")
+		}
+		observation, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		return store.WithResourceExclusionObservation(observation, cfg, func(config.EffectiveExclusionSet) error {
+			current, err := os.ReadFile(cfgPath)
+			if err != nil || !bytes.Equal(current, baseline) {
+				return errors.New("boot applied settings changed")
+			}
+			return nil
+		})
 	}, nil
 }
 

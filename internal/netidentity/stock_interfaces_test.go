@@ -14,5 +14,8 @@ func TestStockInterfacesRejectsUnissuedAndProcProvider(t *testing.T) {
 		if raw, err := p.ReadReviewedStockInterfaces(ctx); !errors.Is(err, ErrUnknown) || raw != nil {
 			t.Fatal("unreviewed provider read stock metadata")
 		}
+		if raw, err := p.ReadReviewedStockIPPolicies(ctx); !errors.Is(err, ErrUnknown) || raw != nil {
+			t.Fatal("unreviewed provider read stock policy metadata")
+		}
 	}
 }

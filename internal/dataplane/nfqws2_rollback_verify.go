@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 	}
 	defer unlock()
 	lease, err := a.readLease()
-	if err != nil || !reflect.DeepEqual(lease, snapshot.Lease) {
+	if err != nil || !nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
 		return false, errors.New("NFQWS2 rollback ownership differs from its snapshot")
 	}
 	lists := nfqws2PlanLists(plan, a.ID())
@@ -80,10 +79,30 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 	// A pre-existing external service has no instance manifest to prove its
 	// runtime. Keep that result explicitly unconfirmed, including stopped cases.
 	if lease == nil {
+		if snapshot.FirstStart {
+			init, exists, err := nfqws2Read(a.InitPath)
+			if err != nil || !exists || !bytes.Equal(init, snapshot.Init) {
+				return false, ErrReviewChanged
+			}
+			running, exists, err := nfqws2Read(a.ConfigPath + ".run")
+			if err != nil || exists != snapshot.RunningConfigExisted || !bytes.Equal(running, snapshot.RunningConfig) {
+				return false, ErrReviewChanged
+			}
+			if err := a.observeFirstStartAbsent(ctx, true); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
 		return false, nil
 	}
 	if _, err := a.verifyOwnedLists(false); err != nil {
 		return false, err
+	}
+	if snapshot.FirstStart && snapshot.WasRunning {
+		identity, err := a.captureFirstStartProcess(snapshot.Config)
+		if err != nil || lease.FirstStart == nil || lease.FirstStart.Process == nil || *identity != *lease.FirstStart.Process {
+			return false, errors.New("restored NFQWS2 process identity is not confirmed")
+		}
 	}
 	queue, ok := nfqws2LiteralQueue(snapshot.Config)
 	if !ok {

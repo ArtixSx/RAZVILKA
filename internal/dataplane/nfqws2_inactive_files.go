@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
 type nfqws2InactiveImage struct {
@@ -38,6 +40,7 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
 	images := nfqws2InactiveFiles{}
+	var firstStartStopped *nfqws2Lease
 	// An absent child is anchored to its actual first existing protected parent.
 	// For the private runtime subtree that parent must itself be private.
 	anchor := func(path string, private bool) error {
@@ -126,9 +129,13 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 				if _, _, err := read(filepath.Join(a.StateRoot, nfqws2LeaseFile), true); err != nil {
 					return nil, err
 				}
-				// Keep the existing exact managed v2 Wait/ECHILD/parent ACK
-				// proof. Legacy/v3/unknown or unsettled metadata refuses.
-				if _, err := a.observeManagedNFQWSProcessInactive(ctx); err != nil {
+				lease, leaseErr := a.readLease()
+				if leaseErr == nil && lease != nil && lease.FirstStart != nil && lease.FirstStart.Phase == nfqws2FirstStopped {
+					// This is settled stock resource metadata, never a managed
+					// process ACK. Independent full proc/kernel/queue reads below
+					// must still prove absence in this actual current boot.
+					firstStartStopped = lease
+				} else if _, err := a.observeManagedNFQWSProcessInactive(ctx); err != nil {
 					return nil, err
 				}
 			case lock:
@@ -155,19 +162,45 @@ func nfqws2ReadInactiveFiles(ctx context.Context, a *NFQWS2Adapter, platform nfq
 			return nil, err
 		}
 		if path == a.ConfigPath {
-			if block, err := nfqws2Block(raw); err != nil || len(block) != 0 {
+			if firstStartStopped != nil {
+				if nfqws2Hash(raw) != firstStartStopped.ConfigHash {
+					return nil, ErrNFQWSManagedProcessUnknown
+				}
+				if _, err := engineconfig.NFQWSFirstStartEffectiveConfig(raw, firstStartStopped.Owner); err != nil {
+					return nil, err
+				}
+			} else if block, err := nfqws2Block(raw); err != nil || len(block) != 0 {
+				return nil, ErrNFQWSManagedProcessUnknown
+			}
+		} else if firstStartStopped != nil {
+			if nfqws2Hash(raw) != firstStartStopped.InitHash {
+				return nil, ErrNFQWSManagedProcessUnknown
+			}
+			original, err := engineconfig.NFQWSFirstStartOriginalInit(raw, firstStartStopped.Owner)
+			if err != nil || nfqws2Hash(original) != firstStartStopped.FirstStart.StockInitHash {
 				return nil, ErrNFQWSManagedProcessUnknown
 			}
 		}
 	}
-	for _, path := range lists {
+	for index, path := range lists {
 		raw, _, err := readWith(path, false, listProtected)
 		if err != nil {
 			return nil, err
 		}
 		block, err := nfqws2Block(raw)
-		if err != nil || len(block) != 0 {
+		if firstStartStopped != nil {
+			if err := a.checkListOwnership(firstStartStopped, index, raw, false); err != nil {
+				return nil, err
+			}
+		} else if err != nil || len(block) != 0 {
 			return nil, ErrNFQWSManagedProcessUnknown
+		}
+	}
+	if firstStartStopped != nil {
+		for _, path := range []string{a.ConfigPath + ".run", a.firstStartPIDPath()} {
+			if _, exists, err := read(path, false); err != nil || exists {
+				return nil, ErrNFQWSManagedProcessUnknown
+			}
 		}
 	}
 	return images, ctx.Err()

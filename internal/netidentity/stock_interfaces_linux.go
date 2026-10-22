@@ -14,6 +14,20 @@ import (
 // Only the concrete reviewed stock provider can issue it. The returned text
 // supplies facts, never a retained capability, Home inference or effect grant.
 func (p *Provider) ReadReviewedStockInterfaces(ctx context.Context) ([]byte, error) {
+	return p.readReviewedStockFacts(ctx, "show interface")
+}
+
+// ReadReviewedStockIPPolicies uses the same protected system images, complete
+// reviewed stock scope and fixed environment as the interface reader. It
+// accepts no caller command, shell, credentials or metadata-based authority.
+func (p *Provider) ReadReviewedStockIPPolicies(ctx context.Context) ([]byte, error) {
+	return p.readReviewedStockFacts(ctx, "show ip policy")
+}
+
+func (p *Provider) readReviewedStockFacts(ctx context.Context, commandName string) ([]byte, error) {
+	if commandName != "show interface" && commandName != "show ip policy" {
+		return nil, ErrUnknown
+	}
 	if p == nil || p.profile == nil || p.profile.hash() != nc1812Profile().hash() {
 		return nil, ErrUnknown
 	}
@@ -42,14 +56,14 @@ func (p *Provider) ReadReviewedStockInterfaces(ctx context.Context) ([]byte, err
 			return ErrUnknown
 		}
 		stdout, stderr := &cappedOutput{limit: 1 << 20}, &cappedOutput{limit: 1024}
-		command := exec.CommandContext(c, "/proc/self/fd/3", "-c", "show interface")
+		command := exec.CommandContext(c, "/proc/self/fd/3", "-c", commandName)
 		command.Args[0] = "/bin/ndmc"
 		command.ExtraFiles = []*os.File{image.file}
 		command.Env = []string{"PATH=/bin:/sbin:/usr/bin:/usr/sbin", "LD_LIBRARY_PATH=/lib:/usr/lib", "LANG=C", "LC_ALL=C"}
 		command.Dir = "/"
 		command.Stdout, command.Stderr = stdout, stderr
 		command.WaitDelay = 50 * time.Millisecond
-		if command.Run() != nil || stdout.exceeded || stderr.exceeded || len(stderr.data) != 0 || len(stdout.data) == 0 || c.Err() != nil || !images.unchanged(c) {
+		if command.Run() != nil || stdout.exceeded || stderr.exceeded || len(stderr.data) != 0 || commandName == "show interface" && len(stdout.data) == 0 || c.Err() != nil || !images.unchanged(c) {
 			return ErrUnknown
 		}
 		if _, err := os.Lstat("/etc/ld.so.preload"); !errors.Is(err, os.ErrNotExist) || !nodesUnchanged(nodes) {

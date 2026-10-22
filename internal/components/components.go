@@ -269,6 +269,9 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
 	if err := m.usquePackageNetworkPreflight(id); err != nil {
 		return Result{Component: id, Action: "install"}, NoMutation(err)
 	}
@@ -295,6 +298,9 @@ func (m *Manager) applyLocked(ctx context.Context, id string, visiting map[strin
 }
 
 func (m *Manager) applyJournalLocked(ctx context.Context, id string, visiting map[string]bool, tx *updateTransaction, guard func(context.Context) error) (Result, error) {
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "install"}, NoMutation(err)
+	}
 	spec, ok := lookup(id)
 	if !ok {
 		return Result{}, fmt.Errorf("unknown component %q", id)
@@ -565,6 +571,9 @@ func repositoryDeclared(dir, packageName, repository string) (bool, error) {
 }
 
 func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
+	if err := m.nfqwsPackageArgumentsGuard(args); err != nil {
+		return nil, err
+	}
 	timeout := m.Timeout
 	if timeout <= 0 {
 		timeout = 90 * time.Second
@@ -574,7 +583,12 @@ func (m *Manager) run(parent context.Context, args ...string) ([]byte, error) {
 	if len(args) > 0 && args[0] == "update" {
 		m.availableAt = time.Time{} // package lists change; re-read the catalog
 	}
-	out, err := m.withPackageParents(args, func() ([]byte, error) { return m.Runner.Run(ctx, m.Opkg, args...) })
+	out, err := m.withPackageParents(args, func() ([]byte, error) {
+		if err := m.nfqwsPackageArgumentsGuard(args); err != nil {
+			return nil, err
+		}
+		return m.Runner.Run(ctx, m.Opkg, args...)
+	})
 	if ctx.Err() == context.DeadlineExceeded {
 		return out, fmt.Errorf("timed out after %s", timeout)
 	}

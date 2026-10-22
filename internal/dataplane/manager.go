@@ -412,6 +412,13 @@ func (m *Manager) reconcileNetworkIndependent(ctx context.Context, plan Plan) []
 			continue
 		}
 		step := RecoveryStep{Adapter: id, State: "failed"}
+		if guard, ok := ctx.Value(reviewGuardKey{}).(func(context.Context) error); ok && guard != nil {
+			if err := guard(ctx); err != nil {
+				step.Detail = err.Error()
+				steps = append(steps, step)
+				continue
+			}
+		}
 		adapter, ok := m.adapter(id)
 		if !ok {
 			step.Detail = "adapter is not registered"
@@ -889,6 +896,13 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		}
 	}
 	recovery.PlanID = plan.PlanID
+	reconcileContext, reviewErr := m.reviewedRecoveryContext(ctx, plan)
+	if reviewErr != nil {
+		recovery.State, recovery.Guarded = "intent-refused", true
+		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "intent", State: "failed", Detail: "Current applied settings do not authorize committed runtime recovery."})
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return recovery, errors.Join(reviewErr, executionJournalError(m.writeRecoveryLocked(recovery)))
+	}
 	networkStale := func(cause error) (Recovery, error) {
 		recovery.State, recovery.Guarded, recovery.FailureCount = "network-stale", false, 0
 		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "network", State: "network-stale", Detail: cause.Error()})
@@ -906,14 +920,14 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		}
 		return recovery, cause
 	}
-	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+	if err := m.checkPlanNetwork(reconcileContext, plan); err != nil {
 		// Every new process observes a new network epoch, so a plan with node
 		// routes waits for fresh node checks after any restart. Adapters without
 		// such routes (NFQWS2) do not depend on that proof: restore them now.
 		// Otherwise their services stay without the lists the installer removes
 		// while it replaces the program, and a later node transaction snapshots
 		// and "restores" that incomplete state.
-		recovery.Steps = append(recovery.Steps, m.reconcileNetworkIndependent(ctx, plan)...)
+		recovery.Steps = append(recovery.Steps, m.reconcileNetworkIndependent(reconcileContext, plan)...)
 		return networkStale(err)
 	}
 	var previous *Recovery
@@ -943,7 +957,7 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 			recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: id, State: "failed", Detail: "LAN admission recovery failed; consumer was not started"})
 			continue
 		}
-		if err := m.checkPlanNetwork(ctx, plan); err != nil {
+		if err := m.checkPlanNetwork(reconcileContext, plan); err != nil {
 			return networkStale(err)
 		}
 		step := RecoveryStep{Adapter: id, State: "failed"}
@@ -952,7 +966,7 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 			step.Detail = "adapter is not registered"
 		} else if reconciler, ok := adapter.(RuntimeReconciler); !ok {
 			step.Detail = "adapter does not support boot recovery"
-		} else if err := reconciler.Reconcile(ctx, plan); err != nil {
+		} else if err := reconciler.Reconcile(reconcileContext, plan); err != nil {
 			if errors.Is(err, ErrNetworkChanged) {
 				return networkStale(err)
 			}
@@ -968,7 +982,7 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 		}
 		recovery.Steps = append(recovery.Steps, step)
 	}
-	if err := m.checkPlanNetwork(ctx, plan); err != nil {
+	if err := m.checkPlanNetwork(reconcileContext, plan); err != nil {
 		return networkStale(err)
 	}
 	recovery.State = "recovered"
@@ -1167,6 +1181,12 @@ func policyRefreshFailureCause(err error) string {
 	return "unknown"
 }
 
+// DeactivateForRemoval is an explicit application-removal intent. Ordinary
+// installer quiescence and user Stop retain their restartable owned metadata.
+func (m *Manager) DeactivateForRemoval(ctx context.Context) (Deactivation, error) {
+	return m.Deactivate(withNFQWS2Removal(ctx))
+}
+
 // Deactivate removes only runtime objects explicitly owned by registered
 // adapters. It is used by uninstall/rollback and leaves desired configuration
 // available for a later reinstall.
@@ -1247,6 +1267,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	defer m.endOperation()
 	m.revokeRetainedSingReview()
+	defer func() { resultErr = errors.Join(resultErr, m.closeFirstStartNativeReview()) }()
 	pair, pairErr := m.xrayReplacementFor(ctx, plan)
 	if pairErr != nil {
 		if m.pendingUnenteredXrayReplacement(ctx, plan) {

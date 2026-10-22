@@ -179,6 +179,9 @@ func removeSteps(spec Spec) []PlanStep {
 func (m *Manager) Remove(ctx context.Context, id string) (Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.nfqwsPackageMutationGuard(id); err != nil {
+		return Result{Component: id, Action: "remove"}, NoMutation(err)
+	}
 	release, err := m.fencePackageMutation()
 	if err != nil {
 		return Result{}, NoMutation(err)

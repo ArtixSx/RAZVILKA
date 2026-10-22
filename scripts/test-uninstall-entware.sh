@@ -56,6 +56,7 @@ case "$1" in
     printf '%s\n' '{"ok":true}'
     ;;
   -deactivate-dataplane)
+    [ "${2:-}" = -retire-dataplane-for-removal ] || exit 96
     printf '%s\n' deactivate >>"$RAZVILKA_BASE/calls"
     [ "$CASE" != deactivate-failed ] || exit 44
     ;;

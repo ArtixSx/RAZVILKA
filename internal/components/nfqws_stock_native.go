@@ -1,6 +1,7 @@
 package components
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -12,7 +13,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -22,7 +25,9 @@ var ErrStockNFQWSInit = errors.New("stock NFQWS2 init script is unsupported for 
 
 // Exact read-only nfqws2-keenetic 1.3.1 router snapshot: its _startup_args is
 // the assembly modeled by engineconfig. A version label cannot certify an
-// edited init, including a future managed firewall patch with its own owner.
+// edited init. Only the deterministic three-UDP-guard + inert-dispatch edit may be
+// reconstructed to this exact stock SHA for parameter review. That recognises
+// bytes, not the dataplane lease/permission needed before any shell action.
 const stockNFQWSInitSHA256 = "3c3edefdab45e1f9f7db7a9c28dae2e3c18cf6b50547045d16c7de7cbad4dacc"
 
 type stockNFQWSFile struct {
@@ -51,6 +56,7 @@ type StockNFQWSNativeReview struct {
 	binary                     string
 	initDir, infoDir, stateDir string
 	arguments                  []string
+	ownedInitOwner             string
 	closed, used               bool
 }
 
@@ -145,7 +151,18 @@ func (m *Manager) ReviewStockNFQWSNative(ctx context.Context, arguments []string
 	}
 	initHash := sha256.Sum256(init)
 	if hex.EncodeToString(initHash[:]) != stockNFQWSInitSHA256 {
-		return nil, ErrStockNFQWSInit
+		owner, err := engineconfig.NFQWSFirstStartInitOwner(init)
+		if err != nil {
+			return nil, ErrStockNFQWSInit
+		}
+		original, err := engineconfig.NFQWSFirstStartOriginalInit(init, owner)
+		if err != nil {
+			return nil, ErrStockNFQWSInit
+		}
+		originalHash := sha256.Sum256(original)
+		if hex.EncodeToString(originalHash[:]) != stockNFQWSInitSHA256 {
+			return nil, ErrStockNFQWSInit
+		}
 	}
 	// No shell/config is executed here. Only package-listed file-backed Lua
 	// declarations are admitted; inline Lua and arbitrary expert scripts refuse.
@@ -253,8 +270,14 @@ func (r *StockNFQWSNativeReview) current(ctx context.Context) error {
 	}
 	for _, binding := range r.files {
 		parent, err := os.Lstat(binding.dir)
-		if err != nil || !parent.IsDir() || !os.SameFile(parent, binding.parent) {
+		if err != nil || !parent.IsDir() || !os.SameFile(parent, binding.parent) || parent.Mode() != binding.parent.Mode() {
 			return ErrStockNFQWSNative
+		}
+		if r.ownedInitOwner != "" && binding.dir == r.initDir && binding.name == "S51nfqws2" {
+			if err := r.currentOwnedInit(binding); err != nil {
+				return err
+			}
+			continue
 		}
 		info, err := binding.root.Stat(binding.name)
 		if err != nil || !os.SameFile(info, binding.info) || info.Size() != binding.size || info.Mode() != binding.info.Mode() || binding.root.Check(binding.name) != nil {
@@ -285,6 +308,215 @@ func (r *StockNFQWSNativeReview) DryRun(ctx context.Context) error {
 	}
 	r.used = true
 	_, runErr := r.runner.Run(ctx, r.binary, append([]string{"--dry-run", "--intercept=0"}, r.arguments...)...)
+	if err := r.current(ctx); err != nil {
+		return err
+	}
+	if runErr != nil {
+		return errors.New("stock NFQWS2 native parameters rejected")
+	}
+	return nil
+}
+
+// CheckCurrent rechecks the same retained files and original component writer.
+// It grants no launch permission and cannot be recreated from detached hashes;
+// a consumer must keep this actual review open across its bounded operation.
+func (r *StockNFQWSNativeReview) CheckCurrent(ctx context.Context) error {
+	if r == nil {
+		return ErrStockNFQWSNative
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.current(ctx)
+}
+
+// CheckCurrentWithOwnedInit permits only the fixed reversible three-UDP-guard
+// and inert-dispatch edit for this original owner's init. Binary/Lua/package files
+// and component writer remain retained. This is currentness, not Start authority.
+func (r *StockNFQWSNativeReview) CheckCurrentWithOwnedInit(ctx context.Context, owner string) error {
+	if r == nil {
+		return ErrStockNFQWSNative
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.bindOwnedInit(owner); err != nil {
+		return err
+	}
+	return r.current(ctx)
+}
+
+func (r *StockNFQWSNativeReview) bindOwnedInit(owner string) error {
+	if r.self != r || r.closed || r.ownedInitOwner != "" && r.ownedInitOwner != owner {
+		return ErrStockNFQWSNative
+	}
+	for _, binding := range r.files {
+		if binding.dir == r.initDir && binding.name == "S51nfqws2" {
+			data, err := stockNFQWSReadRetained(binding)
+			if err != nil {
+				return err
+			}
+			original, err := stockNFQWSOriginalInit(data)
+			if err != nil {
+				return ErrStockNFQWSInit
+			}
+			if _, err := engineconfig.NFQWSFirstStartInit(original, owner); err != nil {
+				return ErrStockNFQWSInit
+			}
+			r.ownedInitOwner = owner
+			return nil
+		}
+	}
+	return ErrStockNFQWSInit
+}
+
+func stockNFQWSReadRetained(binding *stockNFQWSFile) ([]byte, error) {
+	if _, err := binding.file.Seek(0, io.SeekStart); err != nil {
+		return nil, ErrStockNFQWSNative
+	}
+	data, err := io.ReadAll(io.LimitReader(binding.file, binding.size+1))
+	if err != nil || int64(len(data)) != binding.size || sha256.Sum256(data) != binding.hash {
+		return nil, ErrStockNFQWSNative
+	}
+	return data, nil
+}
+
+// A retired inert script can belong to a former instance. Recognise its
+// actual exact deterministic bytes before considering another owner; a marker
+// alone never grants ownership or permits the coordinator's later mutation.
+func stockNFQWSOriginalInit(data []byte) ([]byte, error) {
+	hash := sha256.Sum256(data)
+	if hex.EncodeToString(hash[:]) == stockNFQWSInitSHA256 {
+		return slices.Clone(data), nil
+	}
+	beforeOwner, err := engineconfig.NFQWSFirstStartInitOwner(data)
+	if err != nil {
+		return nil, ErrStockNFQWSInit
+	}
+	original, err := engineconfig.NFQWSFirstStartOriginalInit(data, beforeOwner)
+	if err != nil {
+		return nil, ErrStockNFQWSInit
+	}
+	hash = sha256.Sum256(original)
+	if hex.EncodeToString(hash[:]) != stockNFQWSInitSHA256 {
+		return nil, ErrStockNFQWSInit
+	}
+	return original, nil
+}
+
+func (r *StockNFQWSNativeReview) currentOwnedInit(binding *stockNFQWSFile) error {
+	prior, err := stockNFQWSReadRetained(binding)
+	if err != nil {
+		return err
+	}
+	original, err := stockNFQWSOriginalInit(prior)
+	if err != nil {
+		return ErrStockNFQWSInit
+	}
+	hash := sha256.Sum256(original)
+	if hex.EncodeToString(hash[:]) != stockNFQWSInitSHA256 {
+		return ErrStockNFQWSInit
+	}
+	guarded, err := engineconfig.NFQWSFirstStartInit(original, r.ownedInitOwner)
+	if err != nil {
+		return ErrStockNFQWSInit
+	}
+	f, err := binding.root.OpenFile(binding.name, os.O_RDONLY|updateFileFlags(), 0)
+	if err != nil {
+		return ErrStockNFQWSNative
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode() != binding.info.Mode() || info.Size() > 128<<10 {
+		return ErrStockNFQWSNative
+	}
+	data, err := io.ReadAll(io.LimitReader(f, (128<<10)+1))
+	if err != nil || int64(len(data)) != info.Size() || !bytes.Equal(data, prior) && !bytes.Equal(data, guarded) {
+		return ErrStockNFQWSInit
+	}
+	actual, err := binding.root.Stat(binding.name)
+	if err != nil || !os.SameFile(info, actual) || binding.root.Check(binding.name) != nil {
+		return ErrStockNFQWSNative
+	}
+	return nil
+}
+
+// ReviewClosedFirstStartParameters validates the canonical closed config for
+// another exact domain/exclusion image (including rollback) through the SAME
+// original binary and assets. Only the three inline lists may differ from the
+// original reviewed argv; nothing is reacquired from a changed installation.
+func (r *StockNFQWSNativeReview) ReviewClosedFirstStartParameters(ctx context.Context, config []byte, owner string) error {
+	if r == nil || ctx == nil {
+		return ErrStockNFQWSNative
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.bindOwnedInit(owner); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := r.current(ctx); err != nil {
+		return err
+	}
+	effective, err := engineconfig.NFQWSFirstStartEffectiveConfig(config, owner)
+	if err != nil {
+		return err
+	}
+	args, err := engineconfig.NFQWSStartupArguments(effective, nil)
+	if err != nil {
+		return err
+	}
+	lists, _, err := stockNFQWSClosedInlineArguments(args)
+	if err != nil {
+		return err
+	}
+	original, err := engineconfig.NFQWSFirstStartOriginalConfig(config, owner)
+	if err != nil {
+		return err
+	}
+	canonical, err := engineconfig.NFQWSFirstStartConfig(original, owner, lists["--hostlist-domains"], lists["--hostlist-exclude-domains"], lists["--ipset-exclude-ip"])
+	if err != nil || !bytes.Equal(canonical, config) {
+		return ErrStockNFQWSNative
+	}
+	return r.reviewClosedFirstStartArguments(ctx, args)
+}
+
+func stockNFQWSClosedInlineArguments(arguments []string) (map[string][]string, []string, error) {
+	lists := map[string][]string{}
+	fixed := []string{}
+	for _, arg := range arguments {
+		flag, value, _ := strings.Cut(arg, "=")
+		switch flag {
+		case "--hostlist-domains", "--hostlist-exclude-domains", "--ipset-exclude-ip":
+			if _, exists := lists[flag]; exists || value == "" {
+				return nil, nil, ErrStockNFQWSNative
+			}
+			lists[flag] = strings.Split(value, ",")
+		default:
+			fixed = append(fixed, arg)
+		}
+	}
+	if len(lists["--hostlist-domains"]) == 0 {
+		return nil, nil, ErrStockNFQWSNative
+	}
+	return lists, fixed, nil
+}
+
+// Caller holds the original review mutex, and canonical config recognition
+// above has already established the inline values. This also supports a
+// relocated private test model without misbinding /opt assets to other files.
+func (r *StockNFQWSNativeReview) reviewClosedFirstStartArguments(ctx context.Context, args []string) error {
+	_, originalFixed, err := stockNFQWSClosedInlineArguments(r.arguments)
+	if err != nil {
+		return err
+	}
+	_, candidateFixed, err := stockNFQWSClosedInlineArguments(args)
+	if err != nil || !slices.Equal(originalFixed, candidateFixed) {
+		return ErrStockNFQWSNative
+	}
+	if err := r.current(ctx); err != nil {
+		return err
+	}
+	_, runErr := r.runner.Run(ctx, r.binary, append([]string{"--dry-run", "--intercept=0"}, args...)...)
 	if err := r.current(ctx); err != nil {
 		return err
 	}

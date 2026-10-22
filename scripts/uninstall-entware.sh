@@ -100,7 +100,10 @@ else
     -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp" \
     -cloudflare-state "$APPDIR/cloudflare-private")"
   printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success; panel files kept" >&2; exit 1; }
-  "$BINARY" -deactivate-dataplane \
+  # Removal retires RAZVILKA's stopped component configuration before its
+  # ownership ledger can be moved away. Ordinary Stop/update keeps that ledger
+  # and must not take this path. Shared component packages remain installed.
+  "$BINARY" -deactivate-dataplane -retire-dataplane-for-removal \
     -stage "$STATEDIR/staging" \
     -backups "$STATEDIR/backups" \
     -dataplane-state "$STATEDIR/dataplane" >/dev/null

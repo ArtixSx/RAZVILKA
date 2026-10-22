@@ -98,12 +98,29 @@ func finishSelfUpdateRuntimeQuiesce(stage string, closeSource func() error) stri
 // operation. No Verify call reacquires tools, replaces the provider or extends
 // the original caller deadline.
 func selfUpdateRuntimeManagerBound(ctx context.Context) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBound(ctx, selfUpdateRuntimeManager, selfUpdateDefaultPath(installpath.State+"/dns/state.json"))
+}
+
+// The supplied manager is the actual consumer, including offline CLI paths.
+// Platform/tool/provider admission and the retained source lifetime are the
+// same as the existing self-update assembly; no detached absence is imported.
+func runtimeManagerSourcesBound(ctx context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBoundLifetime(ctx, ctx, create, dnsPath)
+}
+
+// Startup bounds acquisition separately from the explicitly owned process
+// lifetime. Each subsequent observation still supplies its own finite context
+// and rechecks the held tool images and network identity; Close revokes all.
+func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
 	if ctx == nil || ctx.Err() != nil {
 		var cause error
 		if ctx != nil {
 			cause = ctx.Err()
 		}
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-context", cause)
+	}
+	if lifetime == nil || lifetime.Err() != nil {
+		return nil, nil, selfUpdateRuntimeSourceFailed("manager-context", nil)
 	}
 	if deadline, finite := ctx.Deadline(); !finite || !time.Now().Before(deadline) {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-context", ctx.Err())
@@ -120,7 +137,10 @@ func selfUpdateRuntimeManagerBound(ctx context.Context) (*dataplane.Manager, fun
 	if err != nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", err)
 	}
-	manager, err := selfUpdateRuntimeManager()
+	if create == nil {
+		return nil, nil, selfUpdateRuntimeSourceFailed("manager-registry", nil)
+	}
+	manager, err := create()
 	if err != nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-registry", err)
 	}
@@ -136,9 +156,9 @@ func selfUpdateRuntimeManagerBound(ctx context.Context) (*dataplane.Manager, fun
 	}
 	var tools *startuptools.Lease
 	if platform == selfUpdateRuntimeStockNC1812 {
-		tools, err = startuptools.AcquireReviewedStockNC1812(ctx, provider)
+		tools, err = startuptools.AcquireReviewedStockNC1812(lifetime, provider)
 	} else {
-		tools, err = startuptools.AcquireUbuntuLegacy(ctx, provider)
+		tools, err = startuptools.AcquireUbuntuLegacy(lifetime, provider)
 	}
 	if err != nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("tools-acquire", err)
@@ -162,7 +182,7 @@ func selfUpdateRuntimeManagerBound(ctx context.Context) (*dataplane.Manager, fun
 	if err != nil {
 		return closeRefused("backend-inventory", err)
 	}
-	if err := manager.BindRuntimeInactivitySources(ctx, provider, inventory, selfUpdateDefaultPath(installpath.State+"/dns/state.json")); err != nil {
+	if err := manager.BindRuntimeInactivitySources(ctx, provider, inventory, dnsPath); err != nil {
 		return closeRefused("inactivity-owner-bind", err)
 	}
 	closing, err := observeSelfUpdateRuntimePlatform(ctx)

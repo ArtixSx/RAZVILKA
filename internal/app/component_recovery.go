@@ -181,10 +181,17 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guard, err := a.componentUpdateGuard(ctx)
+	if err == nil && in.Action == "rollback" && pendingObserved {
+		guard = a.nfqwsPackageUpdateGuard(in.Component, guard)
+		err = guard(ctx)
+	}
 	if err == nil && a.Store.Get().Revision != *in.ExpectedRevision {
 		err = components.ErrRecoveryAuthority
 	}
 	if err != nil {
+		if writeNFQWSPackageMutationFailure(w, err) {
+			return
+		}
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_AUTHORITY_CHANGED", "error": err.Error()})
 		return
 	}
@@ -254,6 +261,9 @@ func (a *App) componentRecoveryAction(w http.ResponseWriter, r *http.Request) {
 		err = a.settleComponentRecovery(ctx, in.TransactionID, in.Component, guard)
 	}
 	if err != nil {
+		if writeNFQWSPackageMutationFailure(w, err) {
+			return
+		}
 		writeJSON(w, http.StatusConflict, map[string]any{"code": "COMPONENT_RECOVERY_UNCONFIRMED", "error": err.Error(), "result": result, "recovery_required": a.PendingComponentRecovery()})
 		return
 	}

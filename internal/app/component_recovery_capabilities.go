@@ -68,6 +68,16 @@ func (a *App) componentRecoveryCapabilities(ctx context.Context, state component
 	case components.UpdateInstalled, components.UpdateRestoreBefore, components.UpdateRollbackReady, components.UpdateRollbackInstalled, components.UpdateRestoreAfter:
 		actions = append(actions, "rollback")
 	}
+	if err := a.nfqwsPackageMutationGuard(state.Component); err != nil {
+		kept := actions[:0]
+		for _, action := range actions {
+			if action != "rollback" {
+				kept = append(kept, action)
+			}
+		}
+		actions = kept
+		result["package_mutation_block_reason"] = err.Error()
+	}
 	result["available_actions"] = actions
 	return result
 }

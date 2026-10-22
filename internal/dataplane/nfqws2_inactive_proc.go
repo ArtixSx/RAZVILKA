@@ -13,7 +13,16 @@ import (
 )
 
 func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter) error {
+	return nfqws2InactiveProcessesExcept(ctx, proof, a, 0, nil)
+}
+
+// The sole exemption is an original, live process rechecked by the actual
+// first-start owner. Ordinary inactivity never exempts a PID or a name.
+func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlatform, a *NFQWS2Adapter, exceptPID int, current func() error) error {
 	if ctx == nil || ctx.Err() != nil || a == nil || proof.selfPID < 1 || !filepath.IsAbs(proof.procRoot) || proof.readlink == nil {
+		return ErrNFQWSManagedProcessUnknown
+	}
+	if exceptPID != 0 && (exceptPID <= 1 || exceptPID == proof.selfPID || current == nil) {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	dir, err := os.Open(proof.procRoot)
@@ -26,6 +35,7 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 		return ErrNFQWSManagedProcessUnknown
 	}
 	self, processes, bytes := false, 0, 0
+	exceptSeen := false
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -49,6 +59,13 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 		state, flags, ticks, err := proxyInactiveProcStat(stat, pid)
 		if err != nil {
 			return ErrNFQWSManagedProcessUnknown
+		}
+		if pid == exceptPID {
+			if exceptSeen || state == 'Z' || state == 'X' || state == 'x' || current() != nil {
+				return ErrNFQWSManagedProcessUnknown
+			}
+			exceptSeen = true
+			continue
 		}
 		text := strings.TrimSpace(string(stat))
 		name := strings.TrimPrefix(text[:strings.LastIndex(text, ")")], strconv.Itoa(pid)+" (")
@@ -81,6 +98,11 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 			if !valid {
 				return ErrNFQWSManagedProcessUnknown
 			}
+			// Stock is_running uses pgrep -f of this entire program path. A
+			// wrapper/observer mentioning it could change stock's PID choice.
+			if exceptPID != 0 && strings.Contains(string(cmd), filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(a.InitPath))), "usr", "bin", "nfqws2")) {
+				return ErrNFQWSManagedProcessUnknown
+			}
 			executable, err := proof.readlink(filepath.Join(path, "exe"))
 			if errors.Is(err, os.ErrNotExist) && proxyInactivePIDGone(path) && pid != proof.selfPID {
 				clear(cmd)
@@ -107,7 +129,7 @@ func nfqws2InactiveProcesses(ctx context.Context, proof nfqws2InactivePlatform, 
 		}
 		self = self || pid == proof.selfPID
 	}
-	if !self || processes == 0 {
+	if !self || processes == 0 || exceptPID != 0 && !exceptSeen {
 		return ErrNFQWSManagedProcessUnknown
 	}
 	return ctx.Err()

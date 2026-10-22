@@ -44,6 +44,9 @@ func (a *NFQWS2Adapter) AdoptPackageInit(packageList string) (previous, adopted 
 	if lease == nil {
 		return "", "", ErrNFQWS2NotOwned
 	}
+	if lease.FirstStart != nil {
+		return "", "", errors.New("stop the owned NFQWS2 first-start before replacing or adopting its package init")
+	}
 	config, _, err := nfqws2Read(a.ConfigPath)
 	if err != nil {
 		return "", "", err

@@ -1446,6 +1446,7 @@ func (a *App) componentList(w http.ResponseWriter, r *http.Request) {
 			views[i].LifecycleBlockReason = "Компонент нужен выбранным или применённым маршрутам. Сначала переключите сервисы и примените изменения."
 		}
 	}
+	a.enrichNFQWSPackageInventory(views)
 	writeJSON(w, http.StatusOK, views)
 }
 
@@ -1488,6 +1489,10 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if err := a.nfqwsPackageMutationGuard(id); err != nil {
+		writeNFQWSPackageMutationFailure(w, err)
+		return
+	}
 	planContext, cancelPlan := context.WithTimeout(r.Context(), 100*time.Second)
 	plan, planErr := a.Components.Plan(planContext, id, action, false)
 	cancelPlan()
@@ -1497,6 +1502,10 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	}
 	a.enrichComponentPlan(&plan)
 	if !plan.Ready {
+		if err := a.nfqwsPackageMutationGuard(id); err != nil {
+			writeNFQWSPackageMutationFailure(w, err)
+			return
+		}
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error": "component lifecycle plan is blocked",
 			"code":  "LIFECYCLE_PLAN_BLOCKED",
@@ -1514,6 +1523,10 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
+	if err := a.nfqwsPackageMutationGuard(id); err != nil {
+		writeNFQWSPackageMutationFailure(w, err)
+		return
+	}
 	_ = a.Components.RecordOperation(id, action, "running", "Операция запущена; итоговая проверка ещё не завершена")
 	var result components.Result
 	var err error
@@ -1524,6 +1537,9 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		_ = a.Components.RecordOperation(id, action, "failed", err.Error())
+		if writeNFQWSPackageMutationFailure(w, err) {
+			return
+		}
 		if result.Output != "" {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "output": result.Output})
 		} else {
@@ -1543,6 +1559,9 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 func (a *App) enrichComponentPlan(plan *components.Plan) {
 	if plan == nil {
 		return
+	}
+	if err := a.nfqwsPackageMutationGuard(plan.Component); err != nil {
+		plan.AddBlocker(nfqwsPackageMutationCode(err), err.Error(), "")
 	}
 	enrichComponentRuntimePlan(plan, (engine.Detector{}).Inventory())
 	if plan.Action == "remove" || plan.Action == "update" {

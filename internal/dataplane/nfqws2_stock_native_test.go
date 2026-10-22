@@ -54,6 +54,11 @@ type stockAdapterFixture struct {
 func newStockAdapterFixture(t *testing.T) stockAdapterFixture {
 	t.Helper()
 	prefix := filepath.Join(t.TempDir(), "opt")
+	return newStockAdapterFixtureAt(t, prefix)
+}
+
+func newStockAdapterFixtureAt(t *testing.T, prefix string) stockAdapterFixture {
+	t.Helper()
 	base := filepath.Join(prefix, "etc", "nfqws2")
 	runner := &stockAdapterRunner{}
 	a := &NFQWS2Adapter{ConfigPath: filepath.Join(base, "nfqws2.conf"), InitPath: filepath.Join(prefix, "etc", "init.d", "S51nfqws2"), UserListPath: filepath.Join(base, "lists", "user.list"), IPSetListPath: filepath.Join(base, "lists", "ipset.list"), Runner: runner, HealthProbe: func(context.Context, string) error { return nil }}

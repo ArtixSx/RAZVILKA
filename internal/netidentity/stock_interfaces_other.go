@@ -7,3 +7,5 @@ import "context"
 func (*Provider) ReadReviewedStockInterfaces(context.Context) ([]byte, error) {
 	return nil, ErrUnknown
 }
+
+func (*Provider) ReadReviewedStockIPPolicies(context.Context) ([]byte, error) { return nil, ErrUnknown }

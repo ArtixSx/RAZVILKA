@@ -52,6 +52,9 @@ func (a *NFQWS2Adapter) validateStockNative(ctx context.Context, plan Plan, root
 		config = snapshot.StagedConfig
 	}
 	expected, err := a.exclusionConfig(config, plan)
+	if snapshot.FirstStart {
+		expected, err = a.firstStartConfig(plan, config)
+	}
 	if err != nil {
 		return err
 	}
@@ -63,17 +66,37 @@ func (a *NFQWS2Adapter) validateStockNative(ctx context.Context, plan Plan, root
 	if err != nil {
 		return err
 	}
+	if snapshot.FirstStart {
+		instance, err := a.owner()
+		if err != nil {
+			return err
+		}
+		owner, err = engineconfig.NFQWSFirstStartEffectiveConfig(staged, instance)
+		if err != nil {
+			return err
+		}
+	}
 	running, runningExists, err := nfqws2Read(a.ConfigPath + ".run")
 	if err != nil {
 		return err
 	}
 	if runningExists {
-		if err := engineconfig.NFQWSRunningConfigMatches(owner, string(running)); err != nil {
+		var err error
+		if snapshot.FirstStart {
+			instance, _ := a.owner()
+			err = engineconfig.NFQWSFirstStartRunningConfig(config, instance, running)
+		} else {
+			err = engineconfig.NFQWSRunningConfigMatches(owner, string(running))
+		}
+		if err != nil {
 			return err
 		}
 	}
 	leading := []string{}
 	domains, addresses := nfqws2PlanExclusions(plan, a.ID())
+	if snapshot.FirstStart {
+		domains, addresses = nil, nil
+	}
 	if len(domains) > 0 {
 		leading = append(leading, "--hostlist-domains="+strings.Join(sortedUnique(domains), ","))
 	}
@@ -160,12 +183,27 @@ func (a *NFQWS2Adapter) validateStockNative(ctx context.Context, plan Plan, root
 	if err != nil {
 		return err
 	}
-	defer func() { result = errors.Join(result, review.Close()) }()
+	retained := false
+	defer func() {
+		if !retained {
+			result = errors.Join(result, review.Close())
+		}
+	}()
 	if err := current(); err != nil {
 		return err
 	}
 	if err := review.DryRun(nativeCtx); err != nil {
 		return err
 	}
-	return current()
+	if err := current(); err != nil {
+		return err
+	}
+	if snapshot.FirstStart {
+		if a.firstStartReview != nil {
+			return components.ErrStockNFQWSNative
+		}
+		a.firstStartReview, a.firstStartReviewRoot = review, root
+		retained = true
+	}
+	return nil
 }

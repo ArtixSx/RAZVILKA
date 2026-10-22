@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -36,40 +35,53 @@ func (nfqws2ExecRunner) Run(ctx context.Context, name string, args ...string) ([
 }
 
 type NFQWS2Adapter struct {
-	StateRoot            string
-	ConfigPath           string
-	UserListPath         string
-	IPSetListPath        string
-	ExcludeListPath      string // Stock hostlist-exclude list: owner's sites without bypass.
-	IPSetExcludeListPath string // Stock ipset-exclude list: owner's addresses without bypass.
-	InitPath             string
-	IPTablesSave         string
-	Runner               NFQWS2Runner
-	Configs              *engineconfig.Manager
-	HealthProbe          func(context.Context, string) error
-	Timeout              time.Duration
-	activationLeaseReady func()             // Deterministic fault injection before the first global write.
-	activeProcess        *nfqws2ActiveOwner // Only the actual separate producer can install it.
-	activeExecution      *nfqws2ActiveExecution
-	inactivity           *NFQWSRuntimeInactiveSource // Bound once by the trusted startup owner.
-	stockNativeOwner     *components.Manager         // Actual startup component owner, parameter-check only.
+	StateRoot                 string
+	ConfigPath                string
+	UserListPath              string
+	IPSetListPath             string
+	ExcludeListPath           string // Stock hostlist-exclude list: owner's sites without bypass.
+	IPSetExcludeListPath      string // Stock ipset-exclude list: owner's addresses without bypass.
+	InitPath                  string
+	IPTablesSave              string
+	Runner                    NFQWS2Runner
+	Configs                   *engineconfig.Manager
+	HealthProbe               func(context.Context, string) error
+	Timeout                   time.Duration
+	activationLeaseReady      func()             // Deterministic fault injection before the first global write.
+	activeProcess             *nfqws2ActiveOwner // Only the actual separate producer can install it.
+	activeExecution           *nfqws2ActiveExecution
+	inactivity                *NFQWSRuntimeInactiveSource                                         // Bound once by the trusted startup owner.
+	stockNativeOwner          *components.Manager                                                 // Actual startup component owner, parameter-check only.
+	firstStartObservation     func(context.Context, bool) error                                   // Private deterministic observation model for lifecycle tests; never bound by startup.
+	firstStartProcessRead     func(int) (components.NFQWSRuntimeProcessIdentity, error)           // Private process readback model, never bound by startup.
+	firstStartStopReview      func(context.Context, components.NFQWSRuntimeProcessIdentity) error // Private full process/PIDfile model; production uses its startup source.
+	firstStartRetirementReady func(string)                                                        // Private deterministic file-CAS fault model, never bound by startup.
+	firstStartReview          *components.StockNFQWSNativeReview                                  // Bounded to the current real Apply, never a detached permission.
+	firstStartReviewRoot      string
+	firstStartScopeRead       func(context.Context) ([]byte, string, error) // Private fact-source model; production uses its original protected provider/current WAN.
+	firstStartReceiptReady    func()                                        // Private deterministic fault injection after exact running receipt persistence.
 }
 
 type nfqws2Snapshot struct {
-	Lease            *nfqws2Lease `json:"instance_lease,omitempty"`
-	UserListExisted  bool         `json:"user_list_existed"`
-	UserList         []byte       `json:"user_list,omitempty"`
-	IPSetListExisted bool         `json:"ipset_list_existed"`
-	IPSetList        []byte       `json:"ipset_list,omitempty"`
-	ExcludeExisted   bool         `json:"exclude_list_existed"`
-	ExcludeList      []byte       `json:"exclude_list,omitempty"`
-	IPSetExclExisted bool         `json:"ipset_exclude_list_existed"`
-	IPSetExcludeList []byte       `json:"ipset_exclude_list,omitempty"`
-	WasRunning       bool         `json:"was_running"`
-	ConfigExisted    bool         `json:"config_existed"`
-	Config           []byte       `json:"config,omitempty"`
-	ConfigDraft      bool         `json:"config_draft"`
-	StagedConfig     []byte       `json:"staged_config,omitempty"`
+	FirstStart           bool         `json:"first_start,omitempty"`
+	Init                 []byte       `json:"init,omitempty"`
+	InitMode             os.FileMode  `json:"init_mode,omitempty"`
+	RunningConfig        []byte       `json:"running_config,omitempty"`
+	RunningConfigExisted bool         `json:"running_config_existed,omitempty"`
+	Lease                *nfqws2Lease `json:"instance_lease,omitempty"`
+	UserListExisted      bool         `json:"user_list_existed"`
+	UserList             []byte       `json:"user_list,omitempty"`
+	IPSetListExisted     bool         `json:"ipset_list_existed"`
+	IPSetList            []byte       `json:"ipset_list,omitempty"`
+	ExcludeExisted       bool         `json:"exclude_list_existed"`
+	ExcludeList          []byte       `json:"exclude_list,omitempty"`
+	IPSetExclExisted     bool         `json:"ipset_exclude_list_existed"`
+	IPSetExcludeList     []byte       `json:"ipset_exclude_list,omitempty"`
+	WasRunning           bool         `json:"was_running"`
+	ConfigExisted        bool         `json:"config_existed"`
+	Config               []byte       `json:"config,omitempty"`
+	ConfigDraft          bool         `json:"config_draft"`
+	StagedConfig         []byte       `json:"staged_config,omitempty"`
 	// Owner's part of each managed list from the engine editor, in lease order.
 	ListDraft   [4]bool   `json:"list_draft"`
 	StagedLists [4][]byte `json:"staged_lists,omitempty"`
@@ -140,9 +152,16 @@ func (a *NFQWS2Adapter) Snapshot(ctx context.Context, plan Plan, root string) er
 	if err != nil {
 		return fmt.Errorf("snapshot NFQWS2 ipset list: %w", err)
 	}
-	if a.Runner != nil && regularFile(a.InitPath) {
+	if err := a.prepareFirstStartSnapshot(ctx, plan, &snapshot); err != nil {
+		return preflightRefusalError{err}
+	}
+	if a.Runner != nil && regularFile(a.InitPath) && !(snapshot.FirstStart && snapshot.Lease == nil) {
 		probeCtx, cancel := context.WithTimeout(ctx, a.timeout())
-		output, statusErr := a.Runner.Run(probeCtx, a.InitPath, "status")
+		action := "status"
+		if snapshot.FirstStart {
+			action = "owned_status"
+		}
+		output, statusErr := a.Runner.Run(probeCtx, a.InitPath, action)
 		cancel()
 		snapshot.WasRunning = statusErr == nil && runningOutput(string(output))
 	}
@@ -199,6 +218,9 @@ func (a *NFQWS2Adapter) Stage(ctx context.Context, plan Plan, root string) error
 	// Exclusions reach every nfqws2 profile through the configuration's own
 	// managed block; without that the owner's configuration is unchanged.
 	staged, err := a.exclusionConfig(config, plan)
+	if snapshot.FirstStart {
+		staged, err = a.stageFirstStart(plan, root, snapshot)
+	}
 	if err != nil {
 		return preflightRefusalError{err}
 	}
@@ -404,24 +426,45 @@ func (a *NFQWS2Adapter) Activate(ctx context.Context, plan Plan, root string) er
 		return preflightRefusalError{err}
 	}
 	defer unlock()
-	if err := a.prepareActivationLease(root); err != nil {
+	if err := a.prepareActivationLease(root, plan); err != nil {
 		return preflightRefusalError{err}
 	}
 	if a.activationLeaseReady != nil {
 		a.activationLeaseReady()
 	}
-	if err := installStaged(filepath.Join(root, "nfqws2.conf.staged"), a.ConfigPath); err != nil {
+	if err := a.activateFirstStartInit(ctx, root); err != nil {
+		return err
+	}
+	installConfigErr := error(nil)
+	firstSnapshot, readErr := readNFQWS2Snapshot(root)
+	if readErr != nil {
+		return readErr
+	}
+	if firstSnapshot.FirstStart {
+		installConfigErr = a.installFirstStartResources(root, firstSnapshot)
+	} else {
+		installConfigErr = installStaged(filepath.Join(root, "nfqws2.conf.staged"), a.ConfigPath)
+	}
+	if err := installConfigErr; err != nil {
 		return fmt.Errorf("activate NFQWS2 config: %w", err)
 	}
 	// nfqws2 drops privileges to `nobody` before it opens host/ipset files.
 	// Keeping these generated lists at 0600 makes the init script print
 	// "Started" while the daemon exits immediately with EACCES.
 	for index, path := range a.ownedListPaths() {
+		if firstSnapshot.FirstStart {
+			break
+		}
 		if err := installStagedMode(filepath.Join(root, nfqws2ListStages[index]), path, 0o644); err != nil {
 			return fmt.Errorf("activate NFQWS2 list %s: %w", filepath.Base(path), err)
 		}
 	}
-	output, err := a.run(ctx, a.InitPath, "restart")
+	var output []byte
+	if firstSnapshot.FirstStart {
+		err = a.startFirstStart(ctx, root)
+	} else {
+		output, err = a.run(ctx, a.InitPath, "restart")
+	}
 	if err != nil {
 		return fmt.Errorf("restart NFQWS2: %s", shortOutput(output, err))
 	}
@@ -475,6 +518,20 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 	if _, err := a.verifyOwnedLists(false); err != nil {
 		return err
 	}
+	if err := a.verifyFirstStartRunning(ctx); err != nil {
+		return err
+	}
+	if lease, err := a.readLease(); err != nil {
+		return err
+	} else if lease != nil && lease.FirstStart != nil {
+		config, _, err := nfqws2Read(a.ConfigPath)
+		if err != nil {
+			return err
+		}
+		if err := a.reviewFirstStartScope(ctx, config, true); err != nil {
+			return err
+		}
+	}
 	output, err := a.run(ctx, a.InitPath, "status")
 	if err != nil || !runningOutput(string(output)) {
 		return fmt.Errorf("NFQWS2 status is not running: %s", shortOutput(output, err))
@@ -520,6 +577,13 @@ func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {
 		return err
 	}
 	defer unlock()
+	lease, err := a.readLease()
+	if err != nil {
+		return err
+	}
+	if lease != nil && lease.FirstStart != nil {
+		return a.reconcileFirstStart(ctx, plan, lease)
+	}
 	restored, err := a.restoreDeactivatedBlocks(plan)
 	if err != nil {
 		return err
@@ -581,6 +645,9 @@ func (a *NFQWS2Adapter) restoreDeactivatedBlocks(plan Plan) (bool, error) {
 	if configExists && lease.ConfigOwner != "" && configHash == lease.ConfigOwner {
 		// An interrupted cleanup removed the block this lease records.
 		rendered, err := a.exclusionConfig(config, plan)
+		if lease.FirstStart != nil {
+			rendered, err = a.firstStartConfig(plan, config)
+		}
 		if err != nil || nfqws2Hash(rendered) != lease.ConfigHash {
 			return false, errors.New("the NFQWS2 configuration block of the committed plan cannot be proven; review is required")
 		}
@@ -654,6 +721,12 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 	}
 	if err := a.verifyOwnedRuntime(lease, true); err != nil {
 		return err
+	}
+	if lease.FirstStart != nil {
+		if isNFQWS2Removal(ctx) {
+			return a.retireFirstStart(ctx, lease)
+		}
+		return a.deactivateFirstStart(ctx, lease)
 	}
 	type removal struct {
 		path string
@@ -739,7 +812,7 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 		return errors.Join(err, pathErr)
 	}
 	if lease.Transaction != transaction {
-		if reflect.DeepEqual(lease, snapshot.Lease) {
+		if nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
 			// Already rolled back: a retry after a rollback that could not put
 			// back the block its lease records (0.19.2).
 			return a.restoreRolledBackBlocks(ctx, plan, snapshot)
@@ -754,6 +827,9 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 	owned, err := a.mayRollback(root, snapshot)
 	if err != nil || !owned {
 		return err
+	}
+	if snapshot.FirstStart {
+		return a.rollbackFirstStart(ctx, root, snapshot, lease)
 	}
 	if err := restoreOptional(a.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {
 		return err
@@ -816,7 +892,7 @@ func (a *NFQWS2Adapter) restoreRolledBackBlocks(ctx context.Context, plan Plan, 
 		return err
 	}
 	defer unlock()
-	if lease, err := a.readLease(); err != nil || !reflect.DeepEqual(lease, snapshot.Lease) {
+	if lease, err := a.readLease(); err != nil || !nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
 		return err
 	}
 	return a.restartWithRestoredBlocks(ctx, plan, snapshot)
@@ -835,6 +911,27 @@ func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {
 }
 
 func (a *NFQWS2Adapter) run(parent context.Context, name string, args ...string) ([]byte, error) {
+	if name == a.InitPath && len(args) == 1 {
+		lease, err := a.readLease()
+		if err != nil {
+			return nil, err
+		}
+		if lease != nil && lease.FirstStart != nil {
+			switch args[0] {
+			case "status":
+				args = []string{"owned_status"}
+			case "start":
+				args = []string{"owned_start"}
+			case "stop":
+				args = []string{"owned_stop"}
+			case "restart":
+				return nil, errors.New("owned NFQWS2 requires controlled stop/start receipts")
+			}
+		}
+		if err := a.firstStartScriptSafe(args[0]); err != nil {
+			return nil, err
+		}
+	}
 	if a.Runner == nil {
 		return nil, errors.New("NFQWS2 command runner is unavailable")
 	}

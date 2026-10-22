@@ -73,6 +73,7 @@ func (a *App) localPanelInventory(ctx context.Context) (panelInventoryData, erro
 	}
 	data.Engines = engine.Visible(a.engineInventorySnapshot())
 	mergeComponentRuntimes(data.Components, data.Engines)
+	a.enrichNFQWSPackageInventory(data.Components)
 	// Version commands are not repeated for the engine strip. Use the package
 	// observation only for the same installed component, retaining its source.
 	for i := range data.Engines {

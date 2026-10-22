@@ -66,6 +66,9 @@ func validBootID(id string) bool               { return bootPattern.MatchString(
 func supervisionName(id, action string) string { return filepath.Join(id, action+".supervision.json") }
 
 func (tx *updateTransaction) runPackage(ctx context.Context, action string, args ...string) ([]byte, error) {
+	if err := tx.manager.nfqwsPackageMutationGuard(tx.doc.Component); err != nil {
+		return nil, err
+	}
 	runner, ok := tx.manager.Runner.(supervisedPackageRunner)
 	if !ok {
 		return tx.manager.run(ctx, args...)
@@ -89,6 +92,9 @@ func (tx *updateTransaction) runPackage(ctx context.Context, action string, args
 		return nil, err
 	}
 	out, err := tx.manager.withPackageParents(args, func() ([]byte, error) {
+		if err := tx.manager.nfqwsPackageMutationGuard(tx.doc.Component); err != nil {
+			return nil, err
+		}
 		return runner.runSupervised(runCtx, tx.manager.Opkg, args, record, root, path)
 	})
 	if faultErr := tx.fault("after:supervision:result"); faultErr != nil {

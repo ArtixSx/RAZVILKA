@@ -16,6 +16,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/security"
 )
 
@@ -191,7 +192,13 @@ func componentHTTPFixture(t *testing.T) (*App, *recoveryPackageRunner) {
 	if _, err := m.List(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{Store: store, Components: m, Security: gate}
+	dp := dataplane.New(filepath.Join(root, "dataplane"))
+	nfq := dataplane.NewNFQWS2Adapter()
+	nfq.InitPath = filepath.Join(m.InitDir, "S51nfqws2")
+	if err := dp.Register(nfq); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: store, Components: m, Security: gate, Dataplane: dp}
 	a.componentRecoveryChecks.inactive = func(context.Context, string) error { return nil }
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		t.Fatal(err)
