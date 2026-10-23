@@ -254,14 +254,14 @@ sh scripts/rollback-entware.sh /opt/razvilka/state/update-backups/<снимок>
 (`/opt/var/lib/razvilka` или программу без журнала обновлений 0.20).
 
 1. Узнайте версию: `/opt/bin/razvilka -version`.
-2. Удалите её деинсталлятором 0.19.3 — он берётся из git-тега и использует
-   уже установленную программу, поэтому старые выпуски в Releases не нужны.
+2. Удалите её деинсталлятором 0.19.3 — ссылка закреплена за исходным коммитом
+   и использует уже установленную программу. Старые теги и Releases не нужны.
    Только он знает, где записаны маршруты старой версии:
 
    ```sh
    mkdir -p /opt/tmp &&
    curl -fsSL --retry 2 -o /opt/tmp/razvilka-old-uninstall.sh \
-     https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.19.3/scripts/uninstall-entware.sh &&
+     https://raw.githubusercontent.com/ArtixSx/RAZVILKA/817783493f0c2784ccc70aa73868cd64e9437634/scripts/uninstall-entware.sh &&
    sh /opt/tmp/razvilka-old-uninstall.sh
    ```
 
@@ -271,8 +271,18 @@ sh scripts/rollback-entware.sh /opt/razvilka/state/update-backups/<снимок>
 3. Отложите старые данные (они не нужны 0.20 и мешают чистой установке):
 
    ```sh
-   D=/opt/razvilka-0.19-backup-$(date -u +%Y%m%dT%H%M%SZ) && mkdir -m 700 "$D" &&
-   for P in /opt/var/lib/razvilka /opt/etc/razvilka; do [ -e "$P" ] && mv "$P" "$D/"; done; ls -la "$D"
+   (
+     set -eu
+     D=/opt/razvilka-0.19-backup-$(date -u +%Y%m%dT%H%M%SZ)
+     mkdir -m 700 "$D"
+     if [ -e /opt/var/lib/razvilka ]; then
+       mv /opt/var/lib/razvilka "$D/state"
+     fi
+     if [ -e /opt/etc/razvilka ]; then
+       mv /opt/etc/razvilka "$D/settings"
+     fi
+     ls -ld "$D"
+   )
    ```
 
 4. Установите 0.20.0 по [обычной инструкции](#установка). Подключения и
