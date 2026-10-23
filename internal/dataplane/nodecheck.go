@@ -482,7 +482,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			return result, nil
 		}
 		result.TestLevel = "protocol"
-		result.fail("egress", "node-egress-failed", "Точный выход через узел не подтвердился.")
+		result.fail("egress", "node-egress-failed", nodeEgressFailureMessage(result.ProxyEgressError))
 		result.addStage("protocol", "failed", "Канал открылся локально, но удалённый протокол или ключ не передал запрос.", stageStarted, c.currentTime())
 		result.addStage("egress", "failed", "Внешний IP через узел не получен.", stageStarted, c.currentTime())
 		finish()
@@ -710,6 +710,33 @@ func (r *NodeCheckResult) fail(stage, code, message string) {
 	if r.Verdict == "" || r.Verdict == evidence.VerdictPass {
 		r.Verdict = evidence.VerdictError
 	}
+}
+
+func nodeEgressFailureMessage(category string) string {
+	const prefix = "Точный выход через узел не подтвердился."
+	var detail string
+	switch category {
+	case "socks_connect":
+		detail = "Проверочный запрос через SOCKS не установил соединение."
+	case "tcp_connect":
+		detail = "Соединение с контрольным адресом не установлено."
+	case "tls_handshake":
+		detail = "TLS-обмен с контрольным адресом не завершён."
+	case "certificate":
+		detail = "TLS-сертификат контрольного адреса не прошёл проверку."
+	case "http_status":
+		detail = "Контрольный адрес вернул неподходящий HTTP-статус."
+	case "timeout":
+		detail = "Контрольный запрос через узел не уложился в срок."
+	case "body_parse":
+		detail = "Ответ контрольного адреса не прошёл проверку."
+	case "http_transport":
+		detail = "HTTP-обмен с контрольным адресом не завершён."
+	}
+	if detail == "" {
+		return prefix
+	}
+	return prefix + " " + detail
 }
 
 func (r *NodeCheckResult) addStage(id, status, message string, started, finished time.Time) {
