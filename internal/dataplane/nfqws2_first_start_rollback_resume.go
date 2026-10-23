@@ -117,5 +117,8 @@ func (a *NFQWS2Adapter) resumeFirstStartRollback(ctx context.Context, root strin
 	if err := current(); err != nil {
 		return err
 	}
-	return a.startFirstStart(ctx, expected.Transaction)
+	if err := a.startFirstStart(ctx, expected.Transaction); err != nil {
+		return a.cleanupNewFirstStartBoot(ctx, err, expected)
+	}
+	return nil
 }

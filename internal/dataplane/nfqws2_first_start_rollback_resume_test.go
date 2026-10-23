@@ -187,3 +187,69 @@ func TestNFQWS2FirstStartRollbackRetryRefusesChangedOrUnknownPriorRuntime(t *tes
 		})
 	}
 }
+
+func TestNFQWS2FirstStartRollbackRetryCleansNewReceiptAfterStartRefusal(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	for _, which := range []string{"scope-after-receipt", "cancel-after-receipt", "ambiguous-start"} {
+		t.Run(which, func(t *testing.T) {
+			f, prior := firstStartInterruptedRollbackFixture(t)
+			ctx, cancel := context.WithCancel(firstStartContext(t))
+			defer cancel()
+			receipts := 0
+			f.a.firstStartReceiptReady = func() {
+				receipts++
+				if which == "scope-after-receipt" {
+					f.policyFacts = []byte("nonempty policy")
+				} else if which == "cancel-after-receipt" {
+					cancel()
+				}
+			}
+			if which == "ambiguous-start" {
+				f.ambiguous = true
+			}
+			calls := len(f.calls)
+			root := filepath.Join(f.m.StateRoot, "transactions", f.plan.PlanID, f.a.ID())
+			err := f.a.Rollback(ctx, f.plan, root)
+			if err == nil {
+				t.Fatal("post-start refusal was ignored", which)
+			}
+			lease, readErr := f.a.readLease()
+			if readErr != nil || lease == nil || lease.FirstStart == nil {
+				t.Fatal("post-start ownership fence missing", which, readErr)
+			}
+			stops := 0
+			for _, call := range f.calls[calls:] {
+				if strings.HasSuffix(call, " owned_stop") {
+					stops++
+				}
+			}
+			if which == "ambiguous-start" {
+				if receipts != 0 || stops != 0 || lease.FirstStart.Phase != nfqws2FirstStarting || lease.FirstStart.Process != nil {
+					t.Fatal("ambiguous start was adopted or stopped without a confirmed receipt", receipts, stops)
+				}
+			} else {
+				if receipts != 1 || stops != 1 || f.running || f.ownedRules || lease.FirstStart.Phase != nfqws2FirstStopped || lease.FirstStart.Process == nil || *lease.FirstStart.Process == *prior.FirstStart.Process {
+					t.Fatal("new confirmed runtime survived its failed post-start check", which, receipts, stops, f.running, f.ownedRules)
+				}
+				if which == "cancel-after-receipt" && !errors.Is(err, context.Canceled) {
+					t.Fatal("post-receipt cancellation cause was discarded", err)
+				}
+			}
+			if confirmed, err := f.a.VerifyRollback(firstStartContext(t), f.plan, root); err == nil || confirmed {
+				t.Fatal("refused new runtime passed strict rollback verification", which, err)
+			}
+			if which != "ambiguous-start" {
+				result, err := f.m.RetryFailedRollback(firstStartContext(t), f.plan.PlanID, f.plan.Digest, func(Plan) error { return nil })
+				if err == nil || result.State != "rollback-failed" || result.RollbackVerified || f.running || f.ownedRules {
+					t.Fatal("a later retry adopted the runtime whose post-start check failed", which, result.State, err)
+				}
+			}
+			if f.a.firstStartReview != nil {
+				t.Fatal("failed restart leaked its native review")
+			}
+			f.assertWriterReleased(t)
+		})
+	}
+}
