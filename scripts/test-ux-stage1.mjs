@@ -1,10 +1,14 @@
 // Runs against full repository files by default. Local excerpt mode is explicit.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import vm from 'node:vm';
 const app = readFileSync(process.env.RAZVILKA_TEST_APP || new URL('../cmd/razvilka/web/app.js', import.meta.url), 'utf8');
 const autonomy = readFileSync(process.env.RAZVILKA_TEST_AUTONOMY || new URL('../cmd/razvilka/web/console-autonomy.js', import.meta.url), 'utf8');
 const heartbeat = readFileSync(process.env.RAZVILKA_TEST_HEARTBEAT || new URL('../cmd/razvilka/web/panel-availability.js', import.meta.url), 'utf8');
+const resourceSource=readFileSync(new URL('../cmd/razvilka/web/resource-exclusions-ui.js',import.meta.url),'utf8');
+const listScopeSource=readFileSync(new URL('../cmd/razvilka/web/list-scope-ui.js',import.meta.url),'utf8');
+const resourceModel=createRequire(import.meta.url)('../cmd/razvilka/web/interface-model.js');
 const extract = name => {const m=app.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n}\\n`)); assert(m, name);return m[0];};
 const flush=()=>new Promise(r=>setImmediate(r));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -75,6 +79,70 @@ await test('one renderer failure does not suppress completed sibling reads',asyn
 await test('failed-only retries do not reload every successful section',async()=>{
  const f=fixture();await f.ctx.refreshAll();f.handler(url=>{if(url==='/api/v1/services')throw new Error('temporary');return f.normal(url);});await f.ctx.refreshAll();f.calls.length=0;f.handler(f.normal);await f.ctx.refreshAll(true);
  assert.deepEqual(f.calls.map(x=>x.url),['/api/v1/auth/status','/api/v1/status','/api/v1/services']);
+});
+function inactiveExclusionDTO() {
+ const effective={policy_revision:0,revision:0,clients:{mode:'',new_devices:'',segment_ids:null,device_ids:null,excluded_device_ids:null,excluded_cidrs:null},
+  russian_enabled:false,legacy_russian:{enabled:false,auto_update_allowed:false,revision:0,service_ids:null,broad_tlds:null},manual:[],russian:[],legacy_rules:[],broad_tlds:[],digest:'a'.repeat(64)};
+ return {ok:true,revision:8,policy_revision:0,exclusion_revision:0,applied_revision:8,resource_exclusions:null,effective,applied_effective:structuredClone(effective),
+  russian_enabled:false,russian_auto_update_allowed:false,desired_matches_applied:true,live_applied:false,scope_configured:false,storage_state:'inactive'};
+}
+function exclusionsReadFixture(view='exclusions') {
+ const f=fixture(),root={innerHTML:'',querySelectorAll:()=>[],addEventListener(){}};
+ f.state.currentView=view;f.ctx.window={RazvilkaInterfaceModel:resourceModel};
+ f.ctx.document.getElementById=id=>id==='resourceExclusionsContent'?root:null;
+ f.ctx.document.addEventListener=()=>{};
+ f.ctx.esc=value=>String(value??'');
+ vm.runInContext(resourceSource,f.ctx);
+ vm.runInContext(listScopeSource,f.ctx);
+ f.ctx.renderInterface=()=>f.ctx.renderResourceExclusions();
+ f.ctx.acceptResourceExclusions(inactiveExclusionDTO());
+ f.state.dataLoad.resourceExclusions={loaded:true,phase:'ready'};
+ f.normalResource=url=>url==='/api/v1/networkpolicy/exclusions'?inactiveExclusionDTO():url==='/api/v1/networkpolicy/review'?{revision:8,policy:null,consent:null,live_applied:false}:f.normal(url);
+ return {...f,root};
+}
+for(const view of ['exclusions','devices'])for(const retry of [false,true])await test(`${view} ${retry?'busy retry':'initial refresh'} waits for exclusive status before protected metadata`,async()=>{
+ const f=exclusionsReadFixture(view),status=deferred(),metadata=[];let exclusive=false,collisions=0;
+ if(retry)f.state.dataLoad.resourceExclusions.phase='busy';
+ f.handler(async url=>{
+  if(url==='/api/v1/auth/status')return f.normal(url);
+  if(url==='/api/v1/status'){exclusive=true;try{return await status.promise;}finally{exclusive=false;}}
+  metadata.push(url);
+  if(exclusive){collisions++;throw Object.assign(new Error('own status holds admission'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});}
+  return f.normalResource(url);
+ });
+ const refresh=f.ctx.refreshAll(retry);await flush();
+ assert.equal(metadata.length,0,'protected reads raced the view\'s own exclusive status');
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(collisions,0);assert(metadata.includes('/api/v1/networkpolicy/exclusions'));
+ assert.equal(f.state.dataLoad.resourceExclusions.phase,'ready');assert.equal(f.ctx.resourceExclusionsCanEdit(),view==='exclusions');
+ f.ctx.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Новые данные не получены/);
+ assert.doesNotMatch(f.root.innerHTML,/id="resourceExclusionKind"[^>]*disabled/);
+ assert.equal(f.calls.filter(call=>call.opt.method&&call.opt.method!=='GET').length,0);
+});
+await test('a failed scope read keeps successfully read exclusion controls ready',async()=>{
+ const f=exclusionsReadFixture();
+ f.handler(url=>{if(url==='/api/v1/networkpolicy/review')throw Object.assign(new Error('another operation started'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});return f.normalResource(url);});
+ await f.ctx.refreshAll();
+ assert.equal(f.state.dataLoad.networkPolicyReview.phase,'busy');assert.equal(f.state.dataLoad.resourceExclusions.phase,'ready');
+ assert.equal(f.state.dataLoad.services.phase,'ready');assert.equal(f.ctx.resourceExclusionsCanEdit(),true);
+ f.ctx.renderResourceExclusions();assert.doesNotMatch(f.root.innerHTML,/Новые данные не получены/);assert.doesNotMatch(f.root.innerHTML,/id="resourceExclusionKind"[^>]*disabled/);
+});
+await test('ordered editor loading leaves memory-only inventory parallel with status',async()=>{
+ const f=fixture(),status=deferred();f.state.currentView='engines';
+ f.handler(url=>url==='/api/v1/status'?status.promise:f.normal(url));
+ const refresh=f.ctx.refreshAll();await flush();
+ assert(f.calls.some(call=>call.url==='/api/v1/panel/inventory'),'memory-only inventory waited behind status');
+ assert.equal(f.state.dataLoad.inventory.phase,'ready');
+ assert.equal(f.calls.filter(call=>['/api/v1/services','/api/v1/engine-configs'].includes(call.url)).length,0);
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(f.state.dataLoad.services.phase,'ready');assert.equal(f.state.dataLoad.engineConfigs.phase,'ready');
+});
+await test('leaving exclusions while status is pending cannot start old-view metadata',async()=>{
+ const f=exclusionsReadFixture(),status=deferred();
+ f.handler(url=>url==='/api/v1/status'?status.promise:f.normalResource(url));
+ const refresh=f.ctx.refreshAll();await flush();f.ctx.cancelPanelRefresh();f.state.currentView='settings';
+ status.resolve(f.normal('/api/v1/status'));await refresh;
+ assert.equal(f.calls.filter(call=>call.url==='/api/v1/networkpolicy/exclusions').length,0);
 });
 await test('navigation is local and survives broken optional renderers',async()=>{
  const f=fixture(),classes=new Map();f.state.engineEditorDirty=true;f.state.engineEditorVersion=42;

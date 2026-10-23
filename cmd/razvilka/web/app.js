@@ -1380,9 +1380,10 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         renderPanelLoad();
       }
     };
-    if(panelLoad.view==='engines'){
+    if(['engines','devices','exclusions'].includes(panelLoad.view)){
       // Status owns exclusive server admission. Keep memory inventory parallel,
       // then start protected metadata after this status reader has settled.
+      // Otherwise busy retries race their own status and lock these editors.
       const context=panelReadContext(),status=requests.find(([key])=>key==='status');
       const inventory=requests.filter(([key])=>key==='inventory');
       const metadata=requests.filter(([key])=>key!=='status'&&key!=='inventory');
@@ -1390,7 +1391,7 @@ async function loadPanelSnapshot(generation, retryFailed = false) {
         settlePanelReads(inventory,readSection),
         (async()=>{
           if(status)await readSection(status);
-          if(!panelSnapshotCurrent(generation)||!panelReadContextCurrent(context)||state.currentView!=='engines')return;
+          if(!panelSnapshotCurrent(generation)||!panelReadContextCurrent(context)||state.currentView!==panelLoad.view)return;
           await settlePanelReads(metadata,readSection);
         })()
       ]);
