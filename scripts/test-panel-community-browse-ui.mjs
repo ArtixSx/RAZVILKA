@@ -33,7 +33,7 @@ let count=0;async function test(name,fn){await fn();count++;console.log('PASS '+
 
 await test('busy catalog explains the blocked operation without treating saved data as import authority',async()=>{
   const f=fixture();
-  f.live(async()=>{throw Object.assign(new Error('private backend detail'),{status:409,code:'RESTORE_OPERATION_BUSY'});});
+  f.live(async()=>{throw Object.assign(new Error('private backend detail'),{status:409,payload:{code:'RESTORE_OPERATION_BUSY'}});});
   await f.context.searchCommunityCatalog(true);
   assert.match(f.$('#communityPreview').textContent,/Роутер занят другой операцией/);
   assert.doesNotMatch(f.$('#communityPreview').textContent,/private backend detail/);

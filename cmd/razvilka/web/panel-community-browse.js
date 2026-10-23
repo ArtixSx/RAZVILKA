@@ -140,9 +140,10 @@ function renderSavedCommunityBrowse() {
 function communityBrowseUnavailable(error) {
   communityBrowse.loading = false;
   if (error.status === 401 || error.status === 403) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return true; }
-  communityBrowse.failure = error.code === 'RESTORE_OPERATION_BUSY'
+  const code = error.payload?.code || error.code;
+  communityBrowse.failure = code === 'RESTORE_OPERATION_BUSY'
     ? 'Роутер занят другой операцией. Дождитесь её завершения и нажмите «Повторить чтение каталога». При непрерывных проверках можно временно поставить автопилот на паузу.'
-    : error.code === 'RESTORE_RECOVERY_REQUIRED'
+    : code === 'RESTORE_RECOVERY_REQUIRED'
       ? 'Требуется восстановление предыдущей операции. Откройте лог проекта, чтобы увидеть причину.'
       : 'Не удалось прочитать актуальный каталог. Проверьте связь с панелью и повторите чтение.';
   communityBrowse.live = false;
