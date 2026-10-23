@@ -581,11 +581,35 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		recoverRollback := func() (dataplane.Execution, error) {
+			if *retryRollbackPlan != "" {
+				return dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, guard)
+			}
+			return dataplaneManager.CloseFailedRollback(ctx, *closeRollbackPlan, *closeRollbackDigest, guard)
+		}
+		// Latest only selects observer assembly. The recovery independently
+		// rechecks its exact reviewed plan/history and applied-settings guard.
+		latest, found, err := dataplaneManager.Latest()
+		if err != nil {
+			log.Fatal(err)
+		}
 		var result dataplane.Execution
-		if *retryRollbackPlan != "" {
-			result, err = dataplaneManager.RetryFailedRollback(ctx, *retryRollbackPlan, *retryRollbackDigest, guard)
+		if found && slices.Contains(latest.Adapters, "nfqws2") {
+			if err := registerScopedDNS(dataplaneManager, nil); err != nil {
+				log.Fatal(err)
+			}
+			componentManager, componentErr := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+			if componentErr != nil {
+				log.Fatal(componentErr)
+			}
+			if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
+				log.Fatal("stock NFQWS2 native owner unavailable")
+			}
+			// Hold the original finite operation's observers through rollback
+			// and verification, then close them before reporting success.
+			result, err = withOfflineRollbackRuntime(ctx, dataplaneManager, *dnsStatePath, recoverRollback, runtimeManagerSourcesBound)
 		} else {
-			result, err = dataplaneManager.CloseFailedRollback(ctx, *closeRollbackPlan, *closeRollbackDigest, guard)
+			result, err = recoverRollback()
 		}
 		if encodeErr := json.NewEncoder(os.Stdout).Encode(result); encodeErr != nil {
 			log.Fatal(encodeErr)
