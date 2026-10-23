@@ -812,6 +812,9 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 		return errors.Join(err, pathErr)
 	}
 	if lease.Transaction != transaction {
+		if nfqws2FirstStartRollbackResumeMatches(lease, snapshot) {
+			return a.resumeFirstStartRollback(ctx, root, snapshot, lease)
+		}
 		if nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
 			// Already rolled back: a retry after a rollback that could not put
 			// back the block its lease records (0.19.2).
