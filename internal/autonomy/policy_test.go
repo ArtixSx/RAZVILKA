@@ -3,10 +3,30 @@ package autonomy
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestDefaultPrefersNFQWS2AndNodeEnginesWithOtherRoutesOptIn(t *testing.T) {
+	want := []string{"nfqws2", "sing-box", "xray"}
+	p := Default()
+	if !slices.Equal(p.PreferredRoutes, want) {
+		t.Fatal("unexpected initial preference", p.PreferredRoutes)
+	}
+	p.PreferredRoutes[0] = "wireguard"
+	if !slices.Equal(Default().PreferredRoutes, want) {
+		t.Fatal("defaults share their preference slice")
+	}
+	for _, route := range []string{"usque", "warp-wg", "amneziawg", "wireguard"} {
+		p := validPolicy()
+		p.PreferredRoutes = []string{route}
+		if !slices.Contains(PreferredRouteIDs, route) || Validate(p) != nil {
+			t.Fatal("additional route lost explicit opt-in", route)
+		}
+	}
+}
 
 func validPolicy() Policy {
 	p := Default()

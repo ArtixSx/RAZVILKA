@@ -5,9 +5,8 @@
   "applied_services": {},
   "engine_order": [
     "nfqws2",
-    "usque",
-    "warp-wg",
-    "sing-box"
+    "sing-box",
+    "xray"
   ],
   "safe_mode": false,
   "revision": 1
