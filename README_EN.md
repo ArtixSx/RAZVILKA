@@ -20,9 +20,6 @@ keeps working on schedule with the browser closed.
 
 Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
-**Test release — 0.20.0 Test (`0.20.0-rc.62`).** Requires a clean installation;
-see the [release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) for its limitations.
-
 ## How it works
 
 <p align="center">
@@ -116,7 +113,7 @@ RAZVILKA_VERSION=v0.20.0-rc.62 sh /opt/tmp/razvilka-setup.sh
 The explicit `RAZVILKA_VERSION` is required: it pins the archive to the same Test
 release as the script. The installer detects the architecture, verifies SHA-256
 and starts the service. Bypass components are installed later from the panel.
-The command requires published release `v0.20.0-rc.62` and its attached assets.
+See the [release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) for Test limitations.
 
 **3. Open the panel** at **http://192.168.1.1:8787** (or your router's address
 with port `8787`; the exact link is printed by the installer). Sign in with the
