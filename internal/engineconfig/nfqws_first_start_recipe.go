@@ -4,10 +4,15 @@ package engineconfig
 // The zero value preserves the exact original v1 representation.
 type NFQWSFirstStartRecipe string
 
-const NFQWSFirstStartStockTLSCircular NFQWSFirstStartRecipe = "stock-tls-circular-v1"
+const (
+	NFQWSFirstStartStockTLSCircular NFQWSFirstStartRecipe = "stock-tls-circular-v1"
+	// The universal 1.3.1 package already implements this upstream mode.
+	// Keep it a separate identity: existing receipts retain fastpath=0.
+	NFQWSFirstStartStockTLSCircularAuto NFQWSFirstStartRecipe = "stock-tls-circular-auto-v1"
+)
 
 func (r NFQWSFirstStartRecipe) Valid() bool {
-	return r == "" || r == NFQWSFirstStartStockTLSCircular
+	return r == "" || r == NFQWSFirstStartStockTLSCircular || r == NFQWSFirstStartStockTLSCircularAuto
 }
 
 const NFQWSFirstStartFormatV2 = "# RAZVILKA NFQWS2 TCP443 STARTER v2"

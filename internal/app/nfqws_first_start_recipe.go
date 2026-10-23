@@ -46,6 +46,7 @@ func (a *App) nfqwsFirstStartRecipe(w http.ResponseWriter, r *http.Request) {
 		"recipes": []map[string]string{
 			{"id": "", "name": "Базовый multisplit · TCP/443", "description": "Исходный закрытый рецепт v1."},
 			{"id": string(engineconfig.NFQWSFirstStartStockTLSCircular), "name": "Стандартный TLS circular · TCP/443", "description": "Три исходные TLS-стратегии stock 1.3.1. Доступность сервиса подтверждает только live health после Apply."},
+			{"id": string(engineconfig.NFQWSFirstStartStockTLSCircularAuto), "name": "Стандартный TLS circular + fastpath auto · TCP/443", "description": "Те же три TLS-стратегии со штатной автоматической защитой сборки TLS от fastpath в stock 1.3.1. Доступность сервиса подтверждает только live health после Apply."},
 		},
 	})
 }

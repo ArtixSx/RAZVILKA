@@ -71,3 +71,14 @@ their strategy arguments, narrows the filters to TLS ClientHello on TCP 443,
 and uses RAZVILKA's reviewed domain list and exclusions. The same MIT notice
 applies. HTTP, MTProto and UDP strategies from that configuration are not part
 of this recipe.
+
+The optional `stock-tls-circular-auto-v1` recipe keeps that same TLS/TCP443
+strategy chain and scope, but uses the universal 1.3.1 package's
+`--fastpath-workaround=auto`. Its implementation and default are documented in
+[`patches/README.md`](https://github.com/nfqws/nfqws2-keenetic/blob/4c094e0ebca4e5c7e409f4137a151d31244b4e85/patches/README.md)
+and [`patches/001-tls-reasm-fastpath.patch`](https://github.com/nfqws/nfqws2-keenetic/blob/4c094e0ebca4e5c7e409f4137a151d31244b4e85/patches/001-tls-reasm-fastpath.patch).
+The patch credits Anonym-tsk/zapret2 at
+`cba26527030206b6d4ae509fad49b26666ca8b9a`. RAZVILKA emits only the option;
+it does not vendor that patch or change the installed package. This selection
+does not establish that a router needs the workaround or that service health
+will pass. Existing recipe IDs keep their original fastpath mode.

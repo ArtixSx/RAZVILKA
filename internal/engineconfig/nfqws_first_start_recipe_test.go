@@ -2,6 +2,8 @@ package engineconfig
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -22,7 +24,7 @@ func TestNFQWSFirstStartRecipeRoundTripAndClosedTCP443(t *testing.T) {
 	if !bytes.Equal(legacy, append(slices.Clone(stock), []byte(ManagedListBegin+"\n"+legacyBlock+ManagedListEnd+"\n")...)) {
 		t.Fatal("default no longer matches the original v1 bytes")
 	}
-	for _, recipe := range []NFQWSFirstStartRecipe{"", NFQWSFirstStartStockTLSCircular} {
+	for _, recipe := range []NFQWSFirstStartRecipe{"", NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto} {
 		raw, err := NFQWSFirstStartConfigForRecipe(stock, owner, []string{"selected.example"}, []string{"bank.example"}, []string{"192.0.2.0/24"}, recipe)
 		if err != nil {
 			t.Fatal(err)
@@ -46,10 +48,17 @@ func TestNFQWSFirstStartRecipeRoundTripAndClosedTCP443(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"--filter-tcp=443", "--filter-l7=tls", "--payload=tls_client_hello", "--hostlist-domains=selected.example", "--hostlist-exclude-domains=bank.example", "--ipset-exclude-ip=192.0.2.0/24", "--fastpath-workaround=0", "--ipcache-hostname=0"} {
+		for _, want := range []string{"--filter-tcp=443", "--filter-l7=tls", "--payload=tls_client_hello", "--hostlist-domains=selected.example", "--hostlist-exclude-domains=bank.example", "--ipset-exclude-ip=192.0.2.0/24", "--ipcache-hostname=0"} {
 			if !slices.Contains(args, want) {
 				t.Fatal("missing closed constraint", want)
 			}
+		}
+		mode := "--fastpath-workaround=0"
+		if recipe == NFQWSFirstStartStockTLSCircularAuto {
+			mode = "--fastpath-workaround=auto"
+		}
+		if !slices.Contains(args, mode) {
+			t.Fatal("wrong fastpath mode", args)
 		}
 		for _, arg := range args {
 			if strings.HasPrefix(arg, "--filter-udp") || arg == "--new" || strings.Contains(arg, "http_req") || strings.Contains(arg, "mtproto") {
@@ -95,6 +104,42 @@ func TestNFQWSFirstStartV2RejectsUnknownOrForgedRecipeMarker(t *testing.T) {
 	} {
 		if _, err := NFQWSFirstStartEffectiveConfig(bad, owner); err == nil {
 			t.Fatal("accepted forged version/recipe")
+		}
+	}
+}
+
+func TestNFQWSFirstStartStockAutoChangesOnlyModeAndRecipeIdentity(t *testing.T) {
+	const owner = "0123456789abcdef01234567"
+	stock := firstStartStock(t)
+	compile := func(recipe NFQWSFirstStartRecipe) []byte {
+		t.Helper()
+		raw, err := NFQWSFirstStartConfigForRecipe(stock, owner, []string{"selected.example"}, []string{"bank.example"}, []string{"192.0.2.0/24"}, recipe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	old := compile(NFQWSFirstStartStockTLSCircular)
+	// Freeze the existing circular overlay separately from its stock prefix.
+	block := old[bytes.Index(old, []byte(ManagedListBegin)):]
+	if got := fmt.Sprintf("%x", sha256.Sum256(block)); got != "40956d57d7a1f739d00668ff154f47b51639718fe512ed340166c596d921d7d9" {
+		t.Fatal("existing circular bytes changed", got)
+	}
+	auto := compile(NFQWSFirstStartStockTLSCircularAuto)
+	start := bytes.Index(auto, []byte(ManagedListBegin))
+	expected := append(slices.Clone(old[:start]), bytes.Replace(old[start:], []byte("# RAZVILKA RECIPE stock-tls-circular-v1\n"), []byte("# RAZVILKA RECIPE stock-tls-circular-auto-v1\n"), 1)...)
+	expected = append(slices.Clone(expected[:start]), bytes.Replace(expected[start:], []byte("--fastpath-workaround=0"), []byte("--fastpath-workaround=auto"), 1)...)
+	if !bytes.Equal(auto, expected) {
+		t.Fatal("auto changed scope, strategies, assets or other flags")
+	}
+	for _, forged := range [][]byte{
+		append(slices.Clone(old[:start]), bytes.Replace(old[start:], []byte("--fastpath-workaround=0"), []byte("--fastpath-workaround=auto"), 1)...),
+		append(slices.Clone(auto[:start]), bytes.Replace(auto[start:], []byte("--fastpath-workaround=auto"), []byte("--fastpath-workaround=0"), 1)...),
+		append(slices.Clone(auto[:start]), bytes.Replace(auto[start:], []byte("--fastpath-workaround=auto"), []byte("--fastpath-workaround=1"), 1)...),
+		bytes.Replace(auto, []byte("# RAZVILKA RECIPE stock-tls-circular-auto-v1"), []byte("# RAZVILKA RECIPE stock-tls-circular-auto-v2"), 1),
+	} {
+		if _, err := NFQWSFirstStartEffectiveConfig(forged, owner); err == nil {
+			t.Fatal("accepted forged mode/identity")
 		}
 	}
 }

@@ -25,7 +25,7 @@ const nfqwsFirstStartStockFieldsSHA256 = "6b0a713076923a77259f26506b3e0d65dcc932
 
 // Exact universal 1.3.1 IPK (SHA256 28af67f8e192c838e007f23517b52b1f8c20d030cef5b971dfc93b7f21a79054)
 // adds --fastpath-workaround=auto to the original base. Closed compilation
-// still replaces the whole base with the fixed reviewed safety recipe.
+// replaces the whole base; only the explicit stock-auto recipe keeps auto.
 const nfqwsFirstStartUniversalStockFieldsSHA256 = "f8ee7eaa3d1227c8cfd3bd4fed0908451ec2d49322bb03b21ddd2c1cc42583e9"
 
 var nfqwsFirstStartStockFields = []string{"NFQWS_BASE_ARGS", "NFQWS_ARGS", "NFQWS_ARGS_QUIC", "NFQWS_ARGS_UDP", "MODE_LIST", "MODE_ALL", "MODE_AUTO", "NFQWS_EXTRA_ARGS", "NFQWS_ARGS_IPSET", "NFQWS_ARGS_CUSTOM", "TCP_PORTS", "UDP_PORTS", "LOG_LEVEL", "LOG_DEBUG_PATH", "USER", "CONFIG_VERSION"}
@@ -132,7 +132,10 @@ func NFQWSFirstStartConfigForRecipe(original []byte, owner string, domains, excl
 	format := NFQWSFirstStartFormat
 	base := "--lua-init=@/opt/etc/nfqws2/lua/zapret-lib.lua --lua-init=@/opt/etc/nfqws2/lua/zapret-antidpi.lua --fastpath-workaround=0 --ipcache-hostname=0"
 	recipeArgs := "--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld"
-	if recipe == NFQWSFirstStartStockTLSCircular {
+	if recipe == NFQWSFirstStartStockTLSCircularAuto {
+		base = strings.Replace(base, "--fastpath-workaround=0", "--fastpath-workaround=auto", 1)
+	}
+	if recipe == NFQWSFirstStartStockTLSCircular || recipe == NFQWSFirstStartStockTLSCircularAuto {
 		format = NFQWSFirstStartFormatV2 + "\n# RAZVILKA RECIPE " + string(recipe)
 		base += " --lua-init=@/opt/etc/nfqws2/lua/zapret-auto.lua --blob=tls_clienthello:@/opt/etc/nfqws2/blobs/tls_clienthello.bin"
 		recipeArgs = nfqwsFirstStartStockTLSCircularArgs
@@ -203,9 +206,9 @@ func NFQWSFirstStartEffectiveConfig(raw []byte, owner string) (string, error) {
 			return "", ErrNFQWSFirstStart
 		}
 	}
-	recipe := NFQWSFirstStartRecipe("")
-	if bytes.Contains(raw[len(original):], []byte(NFQWSFirstStartFormatV2+"\n")) {
-		recipe = NFQWSFirstStartStockTLSCircular
+	recipe, known := nfqwsFirstStartHeaderRecipe(raw[len(original):], owner)
+	if !known {
+		return "", ErrNFQWSFirstStart
 	}
 	expected, err := NFQWSFirstStartConfigForRecipe(original, owner, domains, excluded, addresses, recipe)
 	if err != nil || !bytes.Equal(raw, expected) {
@@ -215,9 +218,21 @@ func NFQWSFirstStartEffectiveConfig(raw []byte, owner string) (string, error) {
 }
 
 func nfqwsFirstStartKnownHeader(block []byte, owner string) bool {
+	_, known := nfqwsFirstStartHeaderRecipe(block, owner)
+	return known
+}
+
+func nfqwsFirstStartHeaderRecipe(block []byte, owner string) (NFQWSFirstStartRecipe, bool) {
 	prefix := ManagedListBegin + "\n# RAZVILKA INSTANCE " + owner + "\n"
-	return bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormat+"\n")) ||
-		bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormatV2+"\n# RAZVILKA RECIPE "+string(NFQWSFirstStartStockTLSCircular)+"\n"))
+	if bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormat+"\n")) {
+		return "", true
+	}
+	for _, recipe := range []NFQWSFirstStartRecipe{NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto} {
+		if bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormatV2+"\n# RAZVILKA RECIPE "+string(recipe)+"\n")) {
+			return recipe, true
+		}
+	}
+	return "", false
 }
 
 func NFQWSFirstStartConfigRecipe(raw []byte, owner string) (NFQWSFirstStartRecipe, error) {
@@ -225,10 +240,8 @@ func NFQWSFirstStartConfigRecipe(raw []byte, owner string) (NFQWSFirstStartRecip
 		return "", err
 	}
 	start := bytes.Index(raw, []byte(ManagedListBegin))
-	if bytes.Contains(raw[start:], []byte(NFQWSFirstStartFormatV2+"\n")) {
-		return NFQWSFirstStartStockTLSCircular, nil
-	}
-	return "", nil
+	recipe, _ := nfqwsFirstStartHeaderRecipe(raw[start:], owner)
+	return recipe, nil
 }
 
 // Every stock action sources this overlay. Only the eight generated fields

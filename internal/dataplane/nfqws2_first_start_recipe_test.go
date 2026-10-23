@@ -31,10 +31,15 @@ func TestNFQWSFirstStartRecipeChangesPlanDigestAndRejectsUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircular
-	after, err := BuildAt(input, time.Unix(100, 0))
-	if err != nil || before.Digest == after.Digest || before.PlanID == after.PlanID || after.NFQWSFirstStartRecipe != input.NFQWSFirstStartRecipe {
-		t.Fatal("recipe not bound to plan", err)
+
+	seen := map[string]bool{before.Digest: true}
+	for _, recipe := range []engineconfig.NFQWSFirstStartRecipe{engineconfig.NFQWSFirstStartStockTLSCircular, engineconfig.NFQWSFirstStartStockTLSCircularAuto} {
+		input.NFQWSFirstStartRecipe = recipe
+		after, err := BuildAt(input, time.Unix(100, 0))
+		if err != nil || seen[after.Digest] || before.PlanID == after.PlanID || after.NFQWSFirstStartRecipe != recipe {
+			t.Fatal("recipe not bound to distinct plan", err)
+		}
+		seen[after.Digest] = true
 	}
 	input.NFQWSFirstStartRecipe = "foreign"
 	if _, err := BuildAt(input, time.Unix(100, 0)); err == nil {
@@ -48,38 +53,51 @@ func TestNFQWS2FirstStartRecipeHealthFailureRestoresPriorRecipe(t *testing.T) {
 	if firstStartNamespace(t) {
 		return
 	}
-	for _, priorRecipe := range []engineconfig.NFQWSFirstStartRecipe{"", engineconfig.NFQWSFirstStartStockTLSCircular} {
-		t.Run(string(priorRecipe), func(t *testing.T) {
-			f := newFirstStartFixture(t)
-			addFirstStartCircularAssets(t, f)
-			f.plan.NFQWSFirstStartRecipe = priorRecipe
-			f.plan.PlanID = "dp-1111111111111111"
-			f.apply(t)
-			before, err := f.a.readLease()
-			if err != nil {
-				t.Fatal(err)
+	recipes := []engineconfig.NFQWSFirstStartRecipe{"", engineconfig.NFQWSFirstStartStockTLSCircular, engineconfig.NFQWSFirstStartStockTLSCircularAuto}
+	for _, priorRecipe := range recipes {
+		for _, candidateRecipe := range recipes {
+			if candidateRecipe == priorRecipe {
+				continue
 			}
-			config := readBytes(t, f.a.ConfigPath)
-			f.plan.PlanID = "dp-2222222222222222"
-			f.plan.Digest = strings.Repeat("b", 64)
-			f.plan.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircular
-			if priorRecipe != "" {
-				f.plan.NFQWSFirstStartRecipe = ""
-			}
-			f.a.HealthProbe = func(context.Context, string) error { return errors.New("modeled strict TLS health failure") }
-			result, err := f.m.Apply(firstStartContext(t), f.plan, nil)
-			if err == nil || result.State != "rolled-back" || !result.RollbackVerified {
-				t.Fatal("cross-recipe rollback not verified", result.State, err)
-			}
-			after, err := f.a.readLease()
-			if err != nil || !nfqws2RollbackLeaseEqual(after, before) || *after.FirstStart.Process == *before.FirstStart.Process || after.FirstStart.Process.ArgumentsSHA256 != before.FirstStart.Process.ArgumentsSHA256 {
-				t.Fatal("prior runtime receipt not freshly restored", err)
-			}
-			if !bytes.Equal(config, readBytes(t, f.a.ConfigPath)) || !f.running || !f.ownedRules || f.a.firstStartReview != nil {
-				t.Fatal("prior recipe/runtime not restored exactly")
-			}
-			f.assertWriterReleased(t)
-		})
+			t.Run(string(priorRecipe)+"-to-"+string(candidateRecipe), func(t *testing.T) {
+				f := newFirstStartFixture(t)
+				addFirstStartCircularAssets(t, f)
+				f.plan.NFQWSFirstStartRecipe = priorRecipe
+				f.plan.PlanID = "dp-1111111111111111"
+				f.apply(t)
+				before, err := f.a.readLease()
+				if err != nil {
+					t.Fatal(err)
+				}
+				config := readBytes(t, f.a.ConfigPath)
+				f.plan.PlanID = "dp-2222222222222222"
+				f.plan.Digest = strings.Repeat("b", 64)
+				f.plan.NFQWSFirstStartRecipe = candidateRecipe
+				healthReached := false
+				f.a.HealthProbe = func(context.Context, string) error {
+					healthReached = true
+					owner, _ := f.a.owner()
+					got, err := engineconfig.NFQWSFirstStartConfigRecipe(readBytes(t, f.a.ConfigPath), owner)
+					lease, leaseErr := f.a.readLease()
+					if err != nil || leaseErr != nil || got != candidateRecipe || !f.running || !f.ownedRules || lease.FirstStart.Process.ArgumentsSHA256 == before.FirstStart.Process.ArgumentsSHA256 {
+						t.Fatal("candidate did not reach health with its own exact running receipt", got, err, leaseErr)
+					}
+					return errors.New("modeled strict TLS health failure")
+				}
+				result, err := f.m.Apply(firstStartContext(t), f.plan, nil)
+				if err == nil || !healthReached || result.State != "rolled-back" || !result.RollbackVerified {
+					t.Fatal("cross-recipe rollback not verified", result.State, err)
+				}
+				after, err := f.a.readLease()
+				if err != nil || !nfqws2RollbackLeaseEqual(after, before) || *after.FirstStart.Process == *before.FirstStart.Process || after.FirstStart.Process.ArgumentsSHA256 != before.FirstStart.Process.ArgumentsSHA256 {
+					t.Fatal("prior runtime receipt not freshly restored", err)
+				}
+				if !bytes.Equal(config, readBytes(t, f.a.ConfigPath)) || !f.running || !f.ownedRules || f.a.firstStartReview != nil {
+					t.Fatal("prior recipe/runtime not restored exactly")
+				}
+				f.assertWriterReleased(t)
+			})
+		}
 	}
 }
 
@@ -88,7 +106,7 @@ func TestNFQWS2FirstStartRecipeMissingAssetsRefusesBeforeStart(t *testing.T) {
 		return
 	}
 	f := newFirstStartFixture(t)
-	f.plan.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircular
+	f.plan.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircularAuto
 	result, err := f.m.Apply(firstStartContext(t), f.plan, nil)
 	if err == nil || result.State == "committed" || f.running || f.ownedRules {
 		t.Fatal("unreviewed recipe started", result.State, err)
@@ -115,7 +133,7 @@ func TestNFQWS2FirstStartRecipePriorRestartScopeRefusalCleansNewReceipt(t *testi
 	}
 	f.plan.PlanID = "dp-2222222222222222"
 	f.plan.Digest = strings.Repeat("b", 64)
-	f.plan.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircular
+	f.plan.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircularAuto
 	f.a.HealthProbe = func(context.Context, string) error { return errors.New("modeled strict TLS failure") }
 	revoked := false
 	f.a.firstStartReceiptReady = func() {

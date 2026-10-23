@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/nfqws-first-start-ui.js',import.meta.url),'utf8');
 const modelContext={};vm.runInNewContext(readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8'),modelContext);
-const snapshot=(recipe='',revision=4)=>({recipe,applied_recipe:'',revision,recipes:[{id:'',name:'Базовый multisplit · TCP/443'},{id:'stock-tls-circular-v1',name:'Стандартный TLS circular · TCP/443'}]});
+const snapshot=(recipe='',revision=4)=>({recipe,applied_recipe:'',revision,recipes:[{id:'',name:'Базовый multisplit · TCP/443'},{id:'stock-tls-circular-v1',name:'Стандартный TLS circular · TCP/443'},{id:'stock-tls-circular-auto-v1',name:'Стандартный TLS circular + fastpath auto · TCP/443'}]});
 function fixture(withCoreReadback=false){
   const elements=new Map(),events=new Map(),requests=[],published=[],readbacks=[];let created=0;
   const element=id=>{if(!elements.has(id))elements.set(id,{value:'',disabled:false,textContent:'',children:[],events:{},setAttribute(k,v){this[k]=v;},replaceChildren(){this.children=[];this.value='';},appendChild(value){this.children.push(value);},addEventListener(name,fn){this.events[name]=fn;}});return elements.get(id);};
@@ -34,6 +34,15 @@ await test('save stages exact revision and never calls plan apply or probe',asyn
  f.requests[1].resolve(snapshot('stock-tls-circular-v1',5));await save;
  assert.match(f.element('nfqFirstRecipeStatus').textContent,/Выбор сохранён в черновике.*план.*Сервисы/);
  assert.equal(f.element('nfqFirstRecipeSave').disabled,true);assert.equal(f.published.length,1);assert.equal(f.published[0].type,'razvilka:panel-refresh');
+ assert(f.requests.every(r=>r.path==='/api/v1/nfqws2/first-start-recipe'));
+});
+await test('stock fastpath auto remains an explicit CAS draft and has no live effect',async()=>{
+ const f=fixture(),read=f.click('Read');f.requests[0].resolve(snapshot());await read;
+ assert.equal(f.element('nfqFirstRecipeSelect').children.length,3);
+ f.choose('stock-tls-circular-auto-v1');assert.equal(f.requests.length,1);
+ const save=f.click('Save');assert.deepEqual(JSON.parse(f.requests[1].options.body),{recipe:'stock-tls-circular-auto-v1',expected_revision:4});
+ f.requests[1].resolve(snapshot('stock-tls-circular-auto-v1',5));await save;
+ assert.equal(f.element('nfqFirstRecipeStatus').role,'status');
  assert(f.requests.every(r=>r.path==='/api/v1/nfqws2/first-start-recipe'));
 });
 await test('lost write reply stays unconfirmed and requires independent read',async()=>{

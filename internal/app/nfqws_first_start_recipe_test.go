@@ -24,7 +24,7 @@ func TestNFQWSFirstStartRecipeAPIStagesOnlyExplicitKnownRevision(t *testing.T) {
 	before := s.Get()
 	get := httptest.NewRecorder()
 	a.nfqwsFirstStartRecipe(get, httptest.NewRequest(http.MethodGet, "/api/v1/nfqws2/first-start-recipe", nil))
-	if get.Code != 200 || !reflect.DeepEqual(before, s.Get()) {
+	if get.Code != 200 || !reflect.DeepEqual(before, s.Get()) || !strings.Contains(get.Body.String(), `"id":"stock-tls-circular-auto-v1"`) {
 		t.Fatal("GET changed intent", get.Code)
 	}
 	for _, body := range []string{`{"recipe":"unknown","expected_revision":0}`, `{"expected_revision":0}`, `{"recipe":null,"expected_revision":0}`, `{"recipe":""}`, `{"recipe":"","expected_revision":0,"arguments":"--filter-tcp=80"}`} {
@@ -50,7 +50,7 @@ func TestNFQWSFirstStartRecipeAPIStagesOnlyExplicitKnownRevision(t *testing.T) {
 
 func TestNFQWSFirstStartRecipeScopeDoesNotLeakPendingChoice(t *testing.T) {
 	cfg := config.Default()
-	cfg.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircular
+	cfg.NFQWSFirstStartRecipe = engineconfig.NFQWSFirstStartStockTLSCircularAuto
 	for _, scope := range []changeScope{changeScopeAll, changeScopeRouting, changeScopeServices, changeScopeDevices, changeScopeEngine, changeScopeExclusions, changeScopeNode} {
 		got := configForChangeScope(cfg, scope)
 		want := engineconfig.NFQWSFirstStartRecipe("")
@@ -85,7 +85,7 @@ func TestNFQWSFirstStartRecipeHandlerKeepsAuthCASAndExclusiveAdmission(t *testin
 		handler.ServeHTTP(w, r)
 		return w
 	}
-	body := fmt.Sprintf(`{"recipe":%q,"expected_revision":%d}`, engineconfig.NFQWSFirstStartStockTLSCircular, s.Get().Revision)
+	body := fmt.Sprintf(`{"recipe":%q,"expected_revision":%d}`, engineconfig.NFQWSFirstStartStockTLSCircularAuto, s.Get().Revision)
 	before := s.Get()
 	if w := request(http.MethodPut, "http://router.local", "", body); w.Code != 401 {
 		t.Fatal("unauthenticated write", w.Code)
@@ -105,7 +105,7 @@ func TestNFQWSFirstStartRecipeHandlerKeepsAuthCASAndExclusiveAdmission(t *testin
 		t.Fatal("recipe write bypassed exclusive admission", w.Code, w.Body.String())
 	}
 	release()
-	if w := request(http.MethodPut, "http://router.local", panelTestToken, body); w.Code != 200 || s.Get().AppliedNFQWSFirstStartRecipe != "" {
+	if w := request(http.MethodPut, "http://router.local", panelTestToken, body); w.Code != 200 || s.Get().NFQWSFirstStartRecipe != engineconfig.NFQWSFirstStartStockTLSCircularAuto || s.Get().AppliedNFQWSFirstStartRecipe != "" {
 		t.Fatal("authenticated draft selection failed or applied live", w.Code, w.Body.String())
 	}
 	staged := s.Get()
