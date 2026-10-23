@@ -34,7 +34,7 @@ function fixture(){
     nodeBrowserActive:()=>true,nodeMeasurementModel:{readStatus:async()=>({response:{},fallback:{},partial:false})},
   };
   vm.createContext(context);
-  vm.runInContext(helper+'\n'+['panelSectionState','renderNodes','closeNodeCheck','closeNodeRoute','clearNodeReveal','openNodeEdit','saveNodeAlias','toggleNodeDisabled','revealNode','refreshNodes','acceptPanelSection'].map(name=>extract(name)).join('\n')+'\n'+extract('workflowCheckAllVLESS',workflow)+'\n'+extract('pollNodeBrowserChecks',browser),context);
+  vm.runInContext(helper+'\n'+['panelSectionState','renderNodes','closeNodeCheck','closeNodeRoute','clearNodeReveal','openNodeEdit','saveNodeAlias','toggleNodeDisabled','revealNode','refreshNodes','acceptPanelSection'].map(name=>extract(name)).join('\n')+'\n'+extract('workflowCheckAllVLESS',workflow)+'\n'+extract('acceptNodeConnectivity',browser)+'\n'+extract('pollNodeBrowserChecks',browser),context);
   context.workflowRequest=(url,options={})=>handler(url,options);
   const envelope=(revision=1,instance='a'.repeat(32))=>({schema:1,instance_id:instance,revision,generated_at:new Date(now-2000).toISOString(),observed_at:new Date(now).toISOString(),data_age_ms:2000,max_age_seconds:900,state:'retained',dataplane:'not-checked',data:{nodes:[{id:'node-'+ 'b'.repeat(64),name:'<Saved>',protocol:'VLESS',transport:'ws'}]}});
   handler=async()=>envelope();

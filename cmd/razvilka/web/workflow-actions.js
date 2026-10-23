@@ -199,7 +199,7 @@ function workflowBulkControls(){
   if(check){check.textContent=`Проверить все VLESS · ${eligible.length}`;check.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!$('#nodeBrowserService').value||!eligible.length||state.nodes?.available===false;}
   if(remove){remove.textContent=`Удалить все VLESS… · ${all.length}`;remove.disabled=workflowState.bulkBusy||workflowState.deleteBusy||running||!all.length||state.nodes?.available===false;}
   const hint=$('.node-check-hint');
-  if(hint)hint.textContent='Проверка открывает выбранный веб-сценарий через узел; пинг измеряет только соединение. Для обычной проверки можно выбрать до 64 подключений. Массовые действия для всех VLESS раскрываются отдельно и не применяют маршруты.';
+  if(hint)hint.textContent='Общий тест проверяет HTTPS через подключение. Тест сервиса открывает выбранный сайт; TCP-пинг проверяет только соединение с сервером. До 64 подключений за запуск, без изменения маршрутов. Отказ одного сайта не означает, что узел не работает для остальных.';
 }
 async function workflowCheckAllVLESS(){
   const browseToken=typeof nodeBrowseActionToken==='function'?nodeBrowseActionToken():null;

@@ -1812,3 +1812,10 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .interface-ui .ui7-source-priority li>span{min-width:0;overflow-wrap:anywhere;}
 .interface-ui .ui7-source-priority li>div{display:flex;gap:6px;flex-shrink:0;}
 .interface-ui .ui7-source-priority select{max-width:100%;min-width:0;}
+
+/* Distinct diagnostic actions remain readable on narrow cards. */
+#view-nodes .node-actions{display:flex;flex-wrap:wrap;gap:8px}
+#view-nodes .node-actions>button{flex:1 1 140px;min-width:0;white-space:normal}
+#view-nodes .node-batch-actions{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+#view-nodes .node-batch-actions>select{flex:1 1 220px;min-width:0}
+#view-nodes .node-batch-actions>button{white-space:normal}

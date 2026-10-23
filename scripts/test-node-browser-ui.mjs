@@ -118,6 +118,29 @@ assert.match(context.renderNodeBrowserCard(udp, 'telegram'), /Не примен�
 assert.match(context.renderNodeBrowserCard(udp, 'telegram'), /data-node-ping="node-dddddd" disabled/);
 assert.match(context.renderNodeBrowserCard(expired, 'telegram'), /data-node-ping="node-cccccc" disabled/);
 
+// Common HTTPS readiness cannot substitute for service evidence, survive
+// an expiry/network change, or hide an unconfirmed cleanup.
+const commonReady = {node_id:'node-aaaaaa',network_profile:profile,test_level:'connectivity',checked_at:new Date(now-1000).toISOString(),expires_at:new Date(now+60000).toISOString(),verdict:'PASS',connectivity_ready:true,cleanup_verified:true,available:false};
+context.acceptNodeConnectivity({connectivity:[commonReady]});
+assert.equal(context.nodeConnectivityState(state.nodes.nodes[0]).label,'HTTPS доступен');
+assert.equal(context.nodeServiceHealth(state.nodes.nodes[0],'telegram').state,'quarantined');
+for (const change of [
+ {network_profile:'another-wan'}, {test_level:'service'}, {cleanup_verified:false},
+ {connectivity_ready:false}, {error_code:'node-cleanup-failed'}, {verdict:'INCONCLUSIVE'},
+ {checked_at:new Date(now+1000).toISOString()}, {expires_at:new Date(now-1).toISOString()},
+ {expires_at:new Date(now+600000).toISOString()}, {checked_at:'invalid'}
+]) {
+ context.acceptNodeConnectivity({connectivity:[{...commonReady,...change}]});
+ assert.notEqual(context.nodeConnectivityState(state.nodes.nodes[0]).kind,'ok',JSON.stringify(change));
+}
+context.acceptNodeConnectivity({connectivity:[commonReady]});
+assert.notEqual(context.nodeConnectivityState({...state.nodes.nodes[0],disabled:true}).kind,'ok');
+assert.notEqual(context.nodeConnectivityState({...state.nodes.nodes[0],state:'expired'}).kind,'ok');
+context.acceptNodeConnectivity({});
+assert.equal(context.nodeConnectivityState(state.nodes.nodes[0]).label,'Не проверен','server restart retained old readiness');
+assert.match(context.renderNodeBrowserCard(state.nodes.nodes[0],'telegram'),/data-node-connectivity=/);
+assert.match(context.renderNodeBrowserCard(state.nodes.nodes[0],'telegram'),/data-node-service-test=/);
+
 // Pending request rejects repeated clicks. A batch never calls route apply.
 context.browser.selected.add('node-aaaaaa');
 let finish;
@@ -161,6 +184,29 @@ for (const failureStatus of [409,503]) {
 }
 handler=async url=>readAPI(url);await context.pollNodeBrowserChecks();
 assert.equal($('#nodeBrowserReadNotice').hidden,true,'notice survived successful refresh');
+
+// Common and service tests have distinct intents. Neither action applies a route;
+// a running common test retains exclusive admission until its cleanup finishes.
+for (const mode of ['connectivity','service']) {
+ const begin=calls.length;
+ let submitted;
+ handler=async(url,options)=>{
+  if(url==='/api/v1/node-checks'&&options?.method==='POST') {
+   submitted=JSON.parse(options.body);
+   return {job:{id:2,state:'running',mode},connectivity:[]};
+  }
+  if(url==='/api/v1/node-checks/current')return {job:{id:2,state:'running',mode},connectivity:[]};
+  if(url==='/api/v1/node-autofallback')return {services:[]};
+  throw new Error('unexpected protected read during check: '+url);
+ };
+ await context.startNodeBrowserCheck(mode,['node-aaaaaa']);
+ assert.equal(submitted.mode,mode);
+ assert.equal(submitted.service_id,mode==='service'?'telegram':'');
+ assert.equal(context.browser.job.state,'running');
+ assert(calls.slice(begin).every(call=>['/api/v1/node-checks','/api/v1/node-checks/current','/api/v1/node-autofallback'].includes(call.url)));
+ context.browser.job=null;
+}
+handler=async url=>readAPI(url);await context.pollNodeBrowserChecks();
 
 // Saved private URL is cleared; only the source identifier is used for refresh.
 $('#nodeFeedPreset').value = 'custom'; $('#nodeFeedURL').value = 'https://example.org/sub?token=private';
