@@ -38,17 +38,24 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
-	NodeID         string    `json:"node_id"`
-	NetworkProfile string    `json:"network_profile"`
-	CheckedAt      time.Time `json:"checked_at"`
-	Reachable      bool      `json:"reachable"`
-	Available      bool      `json:"available"`
-	LatencyMS      int64     `json:"latency_ms,omitempty"`
-	DurationMS     int64     `json:"duration_ms,omitempty"`
-	Message        string    `json:"message"`
-	Verdict        string    `json:"verdict,omitempty"`
-	TestLevel      string    `json:"test_level,omitempty"`
-	ErrorCode      string    `json:"error_code,omitempty"`
+	NodeID            string    `json:"node_id"`
+	NetworkProfile    string    `json:"network_profile"`
+	CheckedAt         time.Time `json:"checked_at"`
+	Reachable         bool      `json:"reachable"`
+	Available         bool      `json:"available"`
+	LatencyMS         int64     `json:"latency_ms,omitempty"`
+	DurationMS        int64     `json:"duration_ms,omitempty"`
+	Message           string    `json:"message"`
+	Verdict           string    `json:"verdict,omitempty"`
+	TestLevel         string    `json:"test_level,omitempty"`
+	ErrorCode         string    `json:"error_code,omitempty"`
+	ConnectivityReady bool      `json:"connectivity_ready"`
+	CleanupVerified   bool      `json:"cleanup_verified"`
+	ExpiresAt         time.Time `json:"expires_at,omitempty"`
+	Engine            string    `json:"engine,omitempty"`
+	Stage             string    `json:"stage,omitempty"`
+	DirectControl     string    `json:"direct_control,omitempty"`
+	ProbeID           string    `json:"probe_id,omitempty"`
 }
 
 type nodeCheckJob struct {
@@ -82,20 +89,22 @@ type nodeCheckJob struct {
 
 type nodeCheckState struct {
 	// Test seam is private and fixed before HTTP serving; production always uses NodeFeeds.
-	fetchSource     func(context.Context, nodeCheckJobRequest) (providerfeed.Result, error)
-	bulkWait        func(context.Context, time.Duration) error // private test seam, fixed before serving
-	mu              sync.Mutex
-	root            context.Context
-	closed          bool
-	nextID          uint64
-	job             *nodeCheckJob
-	cancel          context.CancelFunc
-	done            chan struct{}
-	measurements    *nodequality.Cache
-	pings           map[string]nodeCheckItem
-	serviceResults  map[string]serviceControlResult
-	serviceAttempts map[string]time.Time
-	batchResults    map[uint64]*nodeCheckJob // bounded process-local observations, never replayed from disk
+	fetchSource                   func(context.Context, nodeCheckJobRequest) (providerfeed.Result, error)
+	bulkWait                      func(context.Context, time.Duration) error // private test seam, fixed before serving
+	mu                            sync.Mutex
+	root                          context.Context
+	closed                        bool
+	nextID                        uint64
+	job                           *nodeCheckJob
+	cancel                        context.CancelFunc
+	done                          chan struct{}
+	measurements                  *nodequality.Cache
+	pings                         map[string]nodeCheckItem
+	connectivity                  map[string]nodeCheckItem   // Bounded RAM observations, never service history.
+	connectivityTransportFailures map[string][]nodeCheckItem // At most two unique recent transport failures per key.
+	serviceResults                map[string]serviceControlResult
+	serviceAttempts               map[string]time.Time
+	batchResults                  map[uint64]*nodeCheckJob // bounded process-local observations, never replayed from disk
 }
 
 // StartNodeChecks attaches detached checks to application lifetime. Call before
@@ -161,7 +170,8 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 		pings = append(pings, ping)
 	}
 	sort.Slice(pings, func(i, j int) bool { return pings[i].NodeID < pings[j].NodeID })
-	return map[string]any{"job": job, "pings": pings, "node_measurements": a.nodeChecks.measurements.Snapshot(time.Now().UTC()), "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
+	connectivity := a.nodeConnectivitySnapshotLocked(time.Now().UTC())
+	return map[string]any{"job": job, "pings": pings, "connectivity": connectivity, "node_measurements": a.nodeChecks.measurements.Snapshot(time.Now().UTC()), "working_routes_changed": false, "fetch_and_check": true, "all_vless": true, "cancel_requires_job_id": true}
 }
 
 func (a *App) nodeCheckJobCurrent(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +236,7 @@ func (a *App) nodeCheckJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Выберите от 1 до 64 узлов или действие для всего VLESS-каталога.", http.StatusBadRequest)
 		return
 	}
-	if request.Feed == nil && request.FeedID == "" && (a.managedReconcilerActive() || request.IdempotencyKey != "" || request.ExpectedRevision != nil) {
+	if request.Feed == nil && request.FeedID == "" && (request.Mode == "connectivity" || a.managedReconcilerActive() || request.IdempotencyKey != "" || request.ExpectedRevision != nil) {
 		a.acceptDurableNodeChecks(w, r, request)
 		return
 	}
@@ -440,6 +450,9 @@ func (a *App) runNodeChecks(ctx context.Context, cancel context.CancelFunc, done
 }
 
 func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service catalog.Service, profile string, pinger dataplane.NodePinger) nodeCheckItem {
+	if mode == "connectivity" {
+		return a.runNodeConnectivity(ctx, id, profile)
+	}
 	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, Message: "Проверка не завершена."}
 	if mode == "service" {
 		checkContext, cancel := context.WithTimeout(ctx, time.Minute)

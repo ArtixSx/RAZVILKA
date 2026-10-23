@@ -71,7 +71,7 @@ func validDurableNodeCheck(r serviceControlJobRequest) bool {
 		if len(r.ServiceIDs) != 1 || len(r.ServiceIDs[0]) == 0 || len(r.ServiceIDs[0]) > 128 || strings.Trim(r.ServiceIDs[0], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") != "" {
 			return false
 		}
-	} else if r.NodeCheckMode != "tcp" || len(r.ServiceIDs) != 0 {
+	} else if r.NodeCheckMode != "tcp" && r.NodeCheckMode != "connectivity" || len(r.ServiceIDs) != 0 {
 		return false
 	}
 	seen := map[string]bool{}
@@ -86,6 +86,9 @@ func validDurableNodeCheck(r serviceControlJobRequest) bool {
 
 func (a *App) validateDurableNodeCheckSelection(ctx context.Context, r *serviceControlJobRequest, services []catalog.Service) error {
 	if a.Nodes == nil || r.NodeCheckMode == "service" && (a.NodeChecker == nil || len(services) != 1 || !serviceHasNodeProbe(services[0])) {
+		return errServiceControlRequest
+	}
+	if r.NodeCheckMode == "connectivity" && a.NodeChecker == nil {
 		return errServiceControlRequest
 	}
 	// Stopping live routes must not prevent checking a replacement. These
@@ -254,6 +257,9 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		return out, config.ErrRevisionChanged
 	}
 	if r.NodeCheckMode == "service" && (a.NodeChecker == nil || len(services) != 1 || !serviceHasNodeProbe(services[0])) {
+		return out, errServiceControlRequest
+	}
+	if r.NodeCheckMode == "connectivity" && a.NodeChecker == nil {
 		return out, errServiceControlRequest
 	}
 	profile, err := a.freshNetworkProfile(ctx)
@@ -434,6 +440,8 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 			case !eligible[i]:
 				job.Skipped++
 			case item.Available && item.Verdict == "PASS" && item.TestLevel == "service":
+				job.Passed++
+			case r.NodeCheckMode == "connectivity" && item.ConnectivityReady && item.CleanupVerified && item.TestLevel == "connectivity" && item.Verdict == "PASS":
 				job.Passed++
 			case slices.Contains([]string{"BLOCKED", "MISROUTED", "FAIL"}, item.Verdict):
 				job.Failed++

@@ -44,6 +44,7 @@ type NodeCheckRequest struct {
 	Outbound       []byte
 	Service        catalog.Service
 	NetworkProfile string
+	connectivity   bool // Issued only by CheckConnectivity; never a catalogue service.
 }
 
 type NodeCheckStage struct {
@@ -123,30 +124,31 @@ const MaxExactNodeSlots = 4
 // StateRoot/slot-N on Port+N. A non-blocking gate of free slots prevents
 // port/process collisions with itself.
 type ExactNodeChecker struct {
-	engine         string
-	StateRoot      string
-	Binary         string
-	Port           int
-	Timeout        time.Duration
-	EvidenceTTL    time.Duration
-	Processes      ProcessController
-	FreshProfile   func(context.Context) (string, error)
-	resolve        func(context.Context, string) ([]netip.Addr, error)
-	dialTransport  func(context.Context, exactNodeEndpoint, []netip.Addr) (bool, error)
-	prepare        func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error)
-	start          func(context.Context, exactNodeSession) error
-	identity       func(exactNodeSession) (routeidentity.Passport, error)
-	directEgress   func(context.Context) (string, error)
-	proxyEgress    func(context.Context, string) (string, error)
-	egressPair     func(context.Context, string) nodeEgressPair
-	serviceProbe   func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error)
-	serviceIPProbe func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error)
-	cleanup        func(context.Context, exactNodeSession) error
-	runtimeReady   func() bool
-	xhttpRuntime   func(context.Context, string) (bool, error)
-	now            func() time.Time
-	gate           chan int
-	poisoned       atomic.Bool
+	engine            string
+	StateRoot         string
+	Binary            string
+	Port              int
+	Timeout           time.Duration
+	EvidenceTTL       time.Duration
+	Processes         ProcessController
+	FreshProfile      func(context.Context) (string, error)
+	resolve           func(context.Context, string) ([]netip.Addr, error)
+	dialTransport     func(context.Context, exactNodeEndpoint, []netip.Addr) (bool, error)
+	prepare           func(context.Context, exactNodeSession, NodeCheckRequest, exactNodeEndpoint) (exactNodeSession, error)
+	start             func(context.Context, exactNodeSession) error
+	identity          func(exactNodeSession) (routeidentity.Passport, error)
+	directEgress      func(context.Context) (string, error)
+	proxyEgress       func(context.Context, string) (string, error)
+	egressPair        func(context.Context, string) nodeEgressPair
+	serviceProbe      func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error)
+	serviceIPProbe    func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error)
+	connectivityProbe func(context.Context, string) (int, error)
+	cleanup           func(context.Context, exactNodeSession) error
+	runtimeReady      func() bool
+	xhttpRuntime      func(context.Context, string) (bool, error)
+	now               func() time.Time
+	gate              chan int
+	poisoned          atomic.Bool
 }
 
 func NewExactNodeChecker(stateRoot string) *ExactNodeChecker {
@@ -176,6 +178,7 @@ func NewExactNodeCheckerSlots(stateRoot string, slots int) *ExactNodeChecker {
 	}
 	checker.serviceProbe = checker.probeService
 	checker.serviceIPProbe = checker.probeServiceIP
+	checker.connectivityProbe = checker.probeConnectivity
 	checker.cleanup = checker.cleanupSession
 	checker.runtimeReady = func() bool { return checker.binary() != "" }
 	checker.FreshProfile = func(ctx context.Context) (string, error) {
@@ -503,7 +506,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		result.Verdict = evidence.VerdictInconclusive
 		result.fail("egress", "node-direct-control-unavailable", "IP через узел получен, но прямой контроль недоступен; точный выход не подтверждён.")
 		result.addStage("egress", "failed", "Без прямого контрольного IP нельзя исключить утечку маршрута.", stageStarted, c.currentTime())
-		c.probeRestrictedDiagnostic(ctx, &result, session.Address, proxyIP, request.Service)
+		if !request.connectivity {
+			c.probeRestrictedDiagnostic(ctx, &result, session.Address, proxyIP, request.Service)
+		}
 		finish()
 		return result, nil
 	}
@@ -511,6 +516,11 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	// direct IP, including when the direct control could not be measured.
 	result.EgressIP = proxyIP
 	result.addStage("egress", "passed", "Получен внешний IP через точный outbound; прямой контроль не совпал.", stageStarted, c.currentTime())
+	if request.connectivity {
+		c.finishConnectivity(ctx, session.Address, &result)
+		finish()
+		return result, nil
+	}
 
 	stageStarted = c.currentTime()
 	if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, netip.Addr{}); err != nil {
@@ -679,7 +689,11 @@ func (c *ExactNodeChecker) validRequest(ctx context.Context, request NodeCheckRe
 	} else if !exactSingBoxTransportSupported(request.Outbound) {
 		return ErrExactNodeUnsupported
 	}
-	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || request.Service.ID == "" || selectedNodeProbe(request.Service).URL == "" || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
+	serviceValid := request.Service.ID != "" && selectedNodeProbe(request.Service).URL != ""
+	if request.connectivity {
+		serviceValid = request.Service.ID == "" && request.Service.ProbeURL == "" && c.connectivityProbe != nil
+	}
+	if !exactNodeIDPattern.MatchString(request.NodeID) || len(request.Outbound) == 0 || !serviceValid || !systemprobe.ValidWANProfileID(request.NetworkProfile) {
 		return ErrExactNodeUnavailable
 	}
 	if !filepath.IsAbs(c.StateRoot) || filepath.Clean(c.StateRoot) == filepath.VolumeName(c.StateRoot)+string(filepath.Separator) || c.Port < 1024 || c.Port+MaxExactNodeSlots-1 > 65535 {

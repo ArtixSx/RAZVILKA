@@ -12,7 +12,10 @@ import (
 // One source or an explicit set of node IDs, never both. New fetch workflows
 // require consent; the unchanged per-node request remains backward compatible.
 func validNodeCheckJobRequest(r nodeCheckJobRequest) bool {
-	if r.Mode != "tcp" && r.Mode != "service" {
+	if r.Mode != "tcp" && r.Mode != "service" && r.Mode != "connectivity" {
+		return false
+	}
+	if r.Mode == "connectivity" && r.ServiceID != "" {
 		return false
 	}
 	if r.Feed != nil || r.FeedID != "" {
