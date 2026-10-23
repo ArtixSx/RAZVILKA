@@ -796,6 +796,16 @@ func (a *NFQWS2Adapter) Deactivate(ctx context.Context) error {
 }
 
 func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) error {
+	return a.rollback(ctx, plan, root, false)
+}
+
+// Only Manager's original legacy compensation selects this path. Explicit
+// recovery, managed LAN owners and ordinary adapter callers keep their guards.
+func (a *NFQWS2Adapter) rollbackOriginalFirstStart(ctx context.Context, plan Plan, root string) error {
+	return a.rollback(ctx, plan, root, plan.LAN == nil)
+}
+
+func (a *NFQWS2Adapter) rollback(ctx context.Context, plan Plan, root string, originalFirstStart bool) error {
 	if e, present, err := nfqws2ActiveExecutionFor(ctx, a, plan, root); present {
 		if err != nil {
 			return err
@@ -832,6 +842,14 @@ func (a *NFQWS2Adapter) Rollback(ctx context.Context, plan Plan, root string) er
 		return err
 	}
 	if snapshot.FirstStart {
+		if originalFirstStart {
+			// The locks and mayRollback above bind the exact original snapshot.
+			// Its restoration cannot reuse the rejected forward intent's guard,
+			// which may retain a canceled App owner despite WithoutCancel.
+			// Keep the actual bounded cleanup context and all native/process,
+			// scope, Stop, file/lease and strict verifier checks unchanged.
+			ctx = WithReviewGuard(ctx, nil)
+		}
 		return a.rollbackFirstStart(ctx, root, snapshot, lease)
 	}
 	if err := restoreOptional(a.ConfigPath, snapshot.Config, snapshot.ConfigExisted); err != nil {

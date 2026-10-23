@@ -1665,7 +1665,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			if rejectedDirectPreparation != nil {
 				continue // Never call a live adapter to settle rejected Stage metadata.
 			}
-			if err := run(rollbackCtx, adapter, "rollback", adapter.Rollback); err != nil {
+			restore := adapter.Rollback
+			if nfq, ok := adapter.(*NFQWS2Adapter); ok && plan.LAN == nil {
+				// Only the original legacy NFQ compensation may distinguish a
+				// first-start snapshot from its rejected forward admission.
+				restore = nfq.rollbackOriginalFirstStart
+			}
+			if err := run(rollbackCtx, adapter, "rollback", restore); err != nil {
 				rollbackErr = errors.Join(rollbackErr, err)
 			}
 		}
