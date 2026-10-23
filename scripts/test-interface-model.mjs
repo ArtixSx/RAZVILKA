@@ -57,4 +57,29 @@ check('capability refusal and exclusion are named with the autopilot message',()
     assert.equal(view.label,label);assert.equal(view.kind,'warn');assert.equal(view.detail,'Причина и что сделать.');assert.equal(view.actionable,true);
   }
 });
+check('expired managed runtime cannot turn a terminal failure into pending setup',()=>{
+ const s={...service('one'),dirty:false,applied_state:{enabled:false}},managed={enabled:true};
+ const cache={usable:false,fresh:false,ageMS:120000};
+ for(const state of ['domain-route-unavailable','pending','checking']){
+  const h=m.humanService(s,{},managed,{state,message:'Старое наблюдение.'},true,[],cache);
+  assert.equal(h.kind,'unknown');assert.equal(h.label,'Нет свежих данных');assert.equal(h.progress,false);
+  assert.doesNotMatch(h.detail,/добавлен в автопилот|Дождитесь результата|Старое наблюдение/);
+  assert.equal(h.member,true);assert.equal(h.applied,false);assert.equal(h.control,'Автоподбор включён');
+ }
+});
+check('expired runtime preserves independently current proof edits and saved exclusions',()=>{
+ const s={...service('one'),dirty:true,applied_state:{enabled:true,route:'nfqws2'}},managed={enabled:true};
+ const cache={usable:false,fresh:false,ageMS:120001},runtime={state:'domain-route-unavailable',message:'Старая причина.'};
+ for(const kind of ['good','bad']){
+  const h=m.humanService(s,{kind,route:'nfqws2'},managed,runtime,true,[],cache);
+  assert.equal(h.kind,kind);assert.equal(h.changed,true);assert.equal(h.actionable,true);assert.match(h.pendingLabel,/изменения/);
+ }
+ const changed=m.humanService(s,{},managed,runtime,true,[],cache);
+ assert.equal(changed.label,'Нет свежих данных');assert.equal(changed.changed,true);assert.equal(changed.actionable,true);
+ assert.match(changed.pendingLabel,/изменения/);assert.equal(changed.route,'nfqws2');
+ const excluded=m.humanService(s,{},managed,runtime,true,[{originLabel:'Добавлено вручную'}],cache);
+ assert.equal(excluded.excluded,true);assert.equal(excluded.label,'Исключение сохранено');assert.equal(excluded.control,'Добавлено вручную');
+ assert.notEqual(m.humanService(s,{kind:'good',route:'xray'},managed,runtime,true,[],cache).kind,'good');
+ assert.equal(m.humanService(s,{kind:'good',route:'nfqws2'},managed,runtime,false,[],cache).label,'Нет свежих данных');
+});
 console.log(JSON.stringify({suite:'interface-model',passed:count}));

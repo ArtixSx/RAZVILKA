@@ -103,6 +103,27 @@ await test('cached metadata does not borrow PASS and unknown waiting does not pr
  assert.equal(oldTask.progress,false);assert.match(oldTask.label,/Последние сведения/);assert.match(oldTask.detail,/45 сек назад/);
  assert.equal(model.humanService(service,good,{enabled:true},{state:'checking'},true,[],retained).kind,'good','independent current route proof remains authoritative');
 });
+await test('runtime expiry boundary keeps a ready service inspector unknown without disabling independent controls',()=>{
+ const {c,state,$,calls}=fixture();let clock=0;
+ const consoleSource=fs.readFileSync(path.join(checkout,'cmd/razvilka/web/console.js'),'utf8');
+ const helpers=['consoleObservationClock','consoleAcceptAutonomySnapshot','consoleAutonomyCache'].map(name=>consoleSource.match(new RegExp('function '+name+'\\([^]*?\\n}\\n'))[0]).join('\n');
+ c.performance={now:()=>clock};c.consoleAutonomyReceipt=null;vm.runInContext(helpers,c);
+ state.services[0]={...service,dirty:false,applied_state:{enabled:false}};c.interfaceSummaries=()=>({});
+ c.consoleAcceptAutonomySnapshot({...snap(),services:{youtube:{enabled:true}},applied_services:{},runtime:{youtube:{state:'domain-route-unavailable',message:'Для доменного сервиса нужен NFQWS2.'}},observation:{instance_id:'a'.repeat(32),revision:1,state:'available',data_age_ms:0,observed_at:'2026-10-23T19:00:00Z'}});
+ clock=119999;c.interfaceOpenService('youtube');
+ assert.equal(c.consoleAutonomyCache().usable,true);assert.match($('#r5InspectorStatus').innerHTML,/Последние сведения: Нет подтверждённого обхода/);
+ const controls=$('#r6InspectorControls').innerHTML,removal=$('#r6InspectorRemove').innerHTML;
+ clock=120000;c.interfaceUpdateInspector();
+ assert.equal(c.consoleAutonomyCache().usable,false);assert.match($('#r5InspectorStatus').innerHTML,/Нет свежих данных/);
+ assert.doesNotMatch($('#r5InspectorStatus').innerHTML,/Ожидает настройки|Подбирается|Проверяется/);
+ assert.doesNotMatch($('#r5InspectorDetail').textContent,/добавлен в автопилот/);
+ clock=120001;$('#ui3ServiceDialog').close();c.interfaceOpenService('youtube');
+ assert.match($('#r5InspectorStatus').innerHTML,/Нет свежих данных/,'reopening an expired observation invented a pending task');
+ assert.equal($('#r6InspectorCheck').disabled,false);assert.equal($('#r6InspectorControls').innerHTML,controls);assert.equal($('#r6InspectorRemove').innerHTML,removal);
+ assert.deepEqual(calls.filter(call=>call[0]==='start'||call[0]==='manage'),[]);
+ state.services[0].applied_state={enabled:true,route:'nfqws2',sources:[]};c.interfaceSummaries=()=>({youtube:good});c.interfaceUpdateInspector();
+ assert.match($('#r5InspectorStatus').innerHTML,/Работает/,'expired runtime erased independent current route proof');
+});
 await test('quick add announces success only after explicitly accepted management',async()=>{
  for(const accepted of [false,undefined,true]){
   const {c,state,notices}=fixture();state.services=[{id:'new',name:'New',enabled:false}];c.interfaceManage=async()=>accepted;

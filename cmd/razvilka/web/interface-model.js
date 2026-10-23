@@ -198,6 +198,13 @@
   function humanService(s, summary = {}, managed = null, runtime = {}, available = true, exclusions = [], cache = null) {
     s=s&&typeof s==='object'?s:{};summary=summary&&typeof summary==='object'?summary:{};runtime=runtime&&typeof runtime==='object'?runtime:{};
     if(cache&&!cache.usable)runtime={};
+    if(cache&&!cache.usable&&available&&!s.presentation_only&&managed){
+      // Current configuration cannot renew an expired worker observation or
+      // turn its lost terminal result back into an invented pending task.
+      const current=humanService(s,summary,managed,{},true,exclusions);
+      if(current.excluded||current.kind==='good'||current.kind==='bad')return current;
+      return {...current,kind:'unknown',progress:false,label:'Нет свежих данных',detail:'Настройки сервиса получены. Состояние автоподбора устарело; работа сервиса сейчас не подтверждена.'};
+    }
     if(cache?.usable&&!cache.fresh&&available&&!s.presentation_only){
       // A fresh configuration does not renew an older runtime observation.
       // Independent route proof and current edits/exclusions keep precedence.
