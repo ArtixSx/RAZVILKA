@@ -20,6 +20,9 @@ keeps working on schedule with the browser closed.
 
 Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
+**Test release — 0.20.0 Test (`0.20.0-rc.62`).** Requires a clean installation;
+see the [release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) for its limitations.
+
 ## How it works
 
 <p align="center">
@@ -49,7 +52,7 @@ Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA
 | 🛡️ **DPI bypass** | Managed NFQWS2 HTTPS profiles for domain lists, compatibility checks and rollback on failure |
 | 📱 **Devices** | Experimental device selection on the exact NC-1812 profile; NFQWS2 uses Keenetic policy |
 | 🧾 **Log and diagnostics** | Clear error causes, a support report, backups |
-| 🔄 **Updates** | Manual and nightly, with a settings snapshot; rollback on confirmed failure, journal review when the outcome is unknown |
+| 🔄 **Updates** | Available-release checks; the Test release requires a clean installation |
 
 "Configured", "route applied" and "service reachable" are shown separately:
 a running process alone does not prove that the bypass works.
@@ -101,17 +104,19 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 | MIPS | [mipssf-k3.4](https://bin.entware.net/mipssf-k3.4/installer/mips-installer.tar.gz) | `mips`, soft-float |
 | MIPSel | [mipselsf-k3.4](https://bin.entware.net/mipselsf-k3.4/installer/mipsel-installer.tar.gz) | `mipsle`, soft-float |
 
-**2. Install RAZVILKA with one command:**
+**2. Install Test on a router without an existing RAZVILKA installation:**
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.62/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.62 sh /opt/tmp/razvilka-setup.sh
 ```
 
-The installer detects the architecture, downloads release `v0.20.0`, verifies
-SHA-256 and starts the service. Bypass components are installed later from the panel.
+The explicit `RAZVILKA_VERSION` is required: it pins the archive to the same Test
+release as the script. The installer detects the architecture, verifies SHA-256
+and starts the service. Bypass components are installed later from the panel.
+The command requires published release `v0.20.0-rc.62` and its attached assets.
 
 **3. Open the panel** at **http://192.168.1.1:8787** (or your router's address
 with port `8787`; the exact link is printed by the installer). Sign in with the
@@ -124,11 +129,11 @@ Where things live: settings — `/opt/etc/razvilka`, runtime data —
 
 ## Update
 
-An installed 0.20+ updates **from the panel only**: "Обновления" →
-"Проверить версию" → "Установить", or automatically at night on the chosen
-schedule. The panel downloads the release from GitHub, verifies checksums and
-architecture and saves a settings snapshot. A confirmed failure triggers rollback;
-an unknown outcome requires journal review.
+**Upgrading to this Test from 0.19.x or another prerelease is unsupported.**
+Save the settings you need, follow the removal instructions for your installed
+version and install Test from scratch. Old control journals are not imported.
+The default stable channel skips prereleases; an explicitly selected preview
+channel may offer them. That does not establish support for installing over an RC.
 
 The installer refuses to run over a working 0.20+ and changes nothing, so an
 update never bypasses its own journal and rollback. To check the version:
@@ -147,11 +152,14 @@ its own uninstaller, then install 0.20.0 —
 
 ## Uninstall
 
+The command below is for an installed `0.20.0-rc.62`. For another version,
+use the bootstrap and explicit `RAZVILKA_VERSION` from its release.
+
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.62/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.62 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
 Save the settings and connections you need first. This removes the panel,
@@ -164,7 +172,7 @@ package; do not copy its control journals into the new installation.
 
 Without `--purge`, managed 0.20 removal refuses **before stopping the panel**:
 reinstalling over retained data is currently unsupported. The panel and data
-stay in place. Use the panel for ordinary updates.
+stay in place.
 
 ## Supported routers
 
@@ -187,7 +195,7 @@ More — [SECURITY](SECURITY.md).
 
 - [Install, update, uninstall and rollback (RU)](docs/INSTALL_RU.md)
 - [Compatibility and limitations (RU)](docs/CURRENT_STATUS_RU.md)
-- [0.20.0 release notes (RU)](docs/releases/0.20.0.md) · [Changelog](CHANGELOG.md)
+- [Test release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) · [Changelog](CHANGELOG.md)
 - [Roadmap](docs/ROADMAP.md) · [Two DPI engines idea (RU)](docs/DUAL_DPI_ARCHITECTURE_RU.md)
 - [Files and folders (RU)](docs/FILES_RU.md) · [Third-party components](THIRD_PARTY.md)
 - [Contributing](CONTRIBUTING.md)
