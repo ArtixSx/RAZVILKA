@@ -10,6 +10,22 @@ for(const [name,change] of [
  ['empty scope',p=>p.default_sources=[]],['ambiguous scope',p=>p.all_lan=true],['global CIDR',p=>p.default_sources=['0.0.0.0/0']],['domain as source',p=>p.default_sources=['google.com']],['localhost',p=>p.default_sources=['127.0.0.1']],['no sources or local routes',p=>{p.source_ids=[];p.preferred_routes=[]}],['source URL not ID',p=>p.source_ids=['https://private/?key=123']],['unknown protocol',p=>p.protocols=['trojan']],['empty protocol',p=>p.protocols=[]],['fast check',p=>p.check_seconds=1],['fast reserve',p=>p.reserve_seconds=60],['unbounded batch',p=>p.candidates_per_round=99],['unbounded reserve',p=>p.reserve_target=99],['no zone',p=>p.timezone=''],['unknown zone',p=>p.timezone='No/SuchZone'],['local zone',p=>p.timezone='Local'],['unknown mode',p=>p.application.mode='upgrade'],['unsupported component prepare',p=>p.components.mode='prepare'],['empty days',p=>p.application.days=[]],['equal window',p=>p.application.end=p.application.start],['bad time',p=>p.application.start='24:00'],['unknown preferred',p=>p.preferred_routes=['shell']],['bad switches',p=>p.max_switches_per_hour=100],['bad quorum',p=>p.failure_confirm_seconds=1]
 ])test(name,()=>{const p=policy();change(p);assert.throws(()=>validatePolicy(p));});
 test('local routes do not require subscriptions',()=>{const p=policy();p.source_ids=[];assert.doesNotThrow(()=>validatePolicy(p))});
+for(const file of ['autonomy-ui.js','console-autonomy.js']) {
+ const {validatePolicy:validate}=require('../cmd/razvilka/web/'+file);
+ test(`${file} validates ordered source priority within existing consent`,()=>{
+  const p=policy();p.source_ids=['manual','feed-fixture'];p.preferred_source_ids=['feed-fixture','manual'];assert.doesNotThrow(()=>validate(p));
+  for(const ids of [['missing'],['manual','manual'],'manual',null])assert.throws(()=>validate({...p,preferred_source_ids:ids}));
+  assert.doesNotThrow(()=>validate({...p,preferred_source_ids:[]}));
+ });
+}
+{
+ const {policyConsentRequired}=require('../cmd/razvilka/web/console-autonomy.js');
+ test('reordering already permitted sources grants no new authority',()=>{
+  const p=policy();p.source_ids=['manual','feed-fixture'];p.preferred_source_ids=['manual'];
+  assert.equal(policyConsentRequired(p,{...p,preferred_source_ids:['feed-fixture','manual']}),false);
+  assert.equal(policyConsentRequired(p,{...p,preferred_source_ids:['unapproved']}),true);
+ });
+}
 test('explicit all LAN',()=>{const p=policy();p.all_lan=true;p.default_sources=[];assert.doesNotThrow(()=>validatePolicy(p));});
 test('cross midnight',()=>{const p=policy();p.application.start='23:50';p.application.end='01:10';assert.doesNotThrow(()=>validatePolicy(p));});
 test('prepare only application',()=>{const p=policy();p.application.mode='prepare';assert.doesNotThrow(()=>validatePolicy(p));});

@@ -24,6 +24,7 @@
       if(!/^[0-9a-fA-F:./]+$/.test(v)||/\/0$/.test(v)||v==='0.0.0.0'||v==='::'||v.startsWith('127.')||v.startsWith('::1/')) throw new Error('Нужны IP-адреса или CIDR устройств; не домены и не 0.0.0.0/0.');
     }
     if(!Array.isArray(p.source_ids)||p.source_ids.length>32||p.enabled&&!p.source_ids.length&&!p.preferred_routes?.length||p.source_ids.some(id=>! /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id))) throw new Error('Выберите хотя бы один известный источник для автоматического подбора.');
+    if(p.preferred_source_ids!==undefined&&(!Array.isArray(p.preferred_source_ids)||p.preferred_source_ids.length>32||new Set(p.preferred_source_ids).size!==p.preferred_source_ids.length||p.preferred_source_ids.some(id=>!p.source_ids.includes(id)))) throw new Error('Порядок проверки должен содержать только разрешённые источники без повторений.');
     if(!Array.isArray(p.protocols)||!p.protocols.length||p.protocols.some(x=>!supportedProtocols.includes(x))) throw new Error('Выберите поддержанные протоколы.');
     if(!Array.isArray(p.preferred_routes)||p.preferred_routes.some(x=>!supportedRoutes.includes(x))) throw new Error('Неизвестный предпочтительный обход.');
     const ranges={check_seconds:[60,3600],reserve_seconds:[60,86400],reserve_target:[1,4],candidates_per_round:[1,4],failure_confirm_seconds:[10,300],max_switches_per_hour:[1,20]};
@@ -55,6 +56,10 @@
       if (after[field].some(value => !before[field].includes(value))) return true;
       delete before[field]; delete after[field];
     }
+    // Priority changes order only within the already selected source consent.
+    const sourceOrder = after.preferred_source_ids ?? [];
+    if (!Array.isArray(sourceOrder) || new Set(sourceOrder).size !== sourceOrder.length || sourceOrder.some(id => !next.source_ids.includes(id))) return true;
+    delete before.preferred_source_ids; delete after.preferred_source_ids;
     // A CIDR change is not guessed to be a subset in the browser. It still
     // needs review; only a harmless reordering of the same scope is ignored.
     if (before.all_lan !== after.all_lan) return true;
@@ -186,6 +191,7 @@
     p.update_channel=$('updateChannel')?.value||'stable';p.setup_complete=true;p.enabled=$('autonomyEnabled').checked;p.inherit_new_services=$('inheritNew').checked;
     p.all_lan=$('scopeMode').value==='all';p.default_sources=p.all_lan?[]:splitValues($('scopeAddresses').value);
     p.timezone=$('timezone').value.trim();p.source_ids=[...new Set([...$$('input[name="source"]:checked').map(el=>el.value),...splitValues($('extraSourceIDs').value)])];
+    p.preferred_source_ids=(p.preferred_source_ids||[]).filter(id=>p.source_ids.includes(id));
     p.protocols=$$('input[name="protocol"]:checked').map(el=>el.value);p.preferred_routes=$$('input[name="preferred"]:checked').map(el=>el.value);
     p.reserve_target=Number($('reserveTargetInput').value);p.candidates_per_round=Number($('candidateLimit').value);p.check_seconds=Number($('checkInterval').value);p.reserve_seconds=Number($('reserveInterval').value);
     p.application={mode:$('appUpdateMode').value,start:$('appWindowStart').value,end:$('appWindowEnd').value,days:$$('#a1-appDays input:checked').map(el=>Number(el.value))};

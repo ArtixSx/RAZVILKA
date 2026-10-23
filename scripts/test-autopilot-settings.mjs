@@ -190,4 +190,57 @@ await asyncTest('visible read updates a CAS-conflicted policy while keeping draf
   f.element('autoQuickReset').events.click();assert.equal(f.element('autoQuickCheck').value,300);
 });
 
+test('source priority is an ordered subset and never grants source permission',()=>{
+  const p={...policy,source_ids:['manual','feed-a','feed-b'],preferred_source_ids:[]};
+  const next=model.draft(p,{...inputs,preferred_source_ids:['feed-b','manual']});
+  assert.deepEqual(JSON.parse(JSON.stringify(next.preferred_source_ids)),['feed-b','manual']);
+  assert.deepEqual(JSON.parse(JSON.stringify(next.source_ids)),p.source_ids);assert.deepEqual(JSON.parse(JSON.stringify(next.preferred_routes)),p.preferred_routes);
+  for(const order of [['unknown'],['feed-a','feed-a'],'manual',null,['https://secret.invalid/?token=x']])assert.throws(()=>model.draft(p,{...inputs,preferred_source_ids:order}));
+  assert.deepEqual(JSON.parse(JSON.stringify(model.draft(p,{...inputs,preferred_source_ids:[]}).preferred_source_ids)),[]);
+});
+
+test('source names use safe metadata and do not assert manual privacy',()=>{
+  const choices=model.sourceChoices({policy:{source_ids:['manual','feed-a','feed-b','unlabeled']},source_choices:[{id:'manual',name:'Private personal source',kind:'manual'},{id:'feed-a',name:'Моя подписка'},{id:'feed-b',name:'https://secret.invalid/?token=hidden'}]});
+  assert.equal(choices[0].name,'Добавленные вручную');assert.equal(choices[1].name,'Моя подписка');
+  assert.equal(choices[2].name,'Источник 3');assert.equal(choices[3].name,'Источник 4');
+  const html=model.sourcePriorityHTML(['feed-a','revoked'],[{id:'feed-a',name:'<img src=x onerror=attack()>'}]);
+  assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img|https:|token=|Private/);
+  assert.match(html,/Источник больше не разрешён/);
+});
+
+await asyncTest('priority add reorder remove stays local and save preserves consent and route types',async()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual','feed-a','feed-b'],preferred_source_ids:[]};
+  snap.source_choices=[{id:'manual',kind:'manual'},{id:'feed-a',name:'Подписка A'},{id:'feed-b',name:'Подписка B'}];f.publish(snap);
+  const list=f.element('autoSourcePriorityList'),add=id=>{f.element('autoSourcePrioritySelect').value=id;f.element('autoSourcePriorityAdd').events.click();};
+  const move=(action,index)=>list.events.click({target:{closest:()=>({dataset:{priority:action,index:String(index)}})}});
+  add('feed-a');add('manual');add('feed-b');move('up',2);move('down',0);move('remove',2);
+  assert.equal(f.requests.length,0,'priority editing itself wrote policy or consent');
+  assert.match(list.innerHTML,/1\. Подписка B/);assert.match(list.innerHTML,/2\. Подписка A/);
+  add('not-allowed');assert.doesNotMatch(list.innerHTML,/not-allowed/);
+  const save=f.submit(),body=JSON.parse(f.requests[0].options.body);
+  assert.deepEqual(body.policy.preferred_source_ids,['feed-b','feed-a']);assert.deepEqual(body.policy.source_ids,snap.policy.source_ids);
+  assert.deepEqual(body.policy.preferred_routes,snap.policy.preferred_routes);assert.equal(body.release_safe_mode,false);
+  f.requests[0].resolve({});await new Promise(resolve=>setImmediate(resolve));
+  f.requests[1].resolve({...snap,policy:{...snap.policy,...body.policy,revision:13}});await save;
+  assert.equal(f.element('autoQuickSave').disabled,false);
+});
+
+await asyncTest('revoked source remains visibly invalid until removed and cannot be submitted',async()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual'],preferred_source_ids:['revoked']};f.publish(snap);
+  const list=f.element('autoSourcePriorityList');assert.match(list.innerHTML,/Источник больше не разрешён/);
+  await f.submit();assert.equal(f.requests.length,0);assert.match(f.element('autoQuickMessage').textContent,/разрешённые источники/);
+  list.events.click({target:{closest:()=>({dataset:{priority:'remove',index:'0'}})}});
+  const save=f.submit();assert.deepEqual(JSON.parse(f.requests[0].options.body).policy.preferred_source_ids,[]);
+  f.requests[0].reject(Object.assign(new Error('CAS conflict'),{status:409}));await save;
+  assert.deepEqual(snap.policy.source_ids,['manual']);
+});
+
+test('priority controls preserve dirty edits across a changed revision and clear on logout',()=>{
+  const f=fixture(),snap=f.snapshot();snap.policy={...snap.policy,source_ids:['manual'],preferred_source_ids:['manual']};f.publish(snap);
+  f.edit();f.publish({...snap,policy:{...snap.policy,revision:13,source_ids:[],preferred_source_ids:[]}});
+  assert.match(f.element('autoSourcePriorityList').innerHTML,/Источник больше не разрешён/);
+  assert.equal(f.element('autoSourcePriorityAdd').disabled,true);assert.equal(f.element('autoQuickSave').disabled,true);
+  f.logout();assert.equal(f.element('autoSourcePriorityList').innerHTML,'');
+});
+
 console.log(JSON.stringify({suite:'autopilot-settings',tests:total}));

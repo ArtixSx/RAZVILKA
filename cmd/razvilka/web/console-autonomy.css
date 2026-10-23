@@ -265,3 +265,10 @@
 .console-ui .autonomy-zone .topbar .button{font-size:10px}}
 @media (prefers-reduced-motion:reduce){.console-ui .autonomy-zone *{transition:none!important;scroll-behavior:auto!important}}
 .console-ui .autonomy-zone .window-row small{display:block;margin-top:5px}
+.interface-ui .autonomy-zone .ui7-source-priority{margin:20px 0;padding:16px;border:1px solid var(--border);border-radius:12px;min-width:0;}
+.interface-ui .autonomy-zone .ui7-source-priority legend{padding:0 6px;font-weight:600;}
+.interface-ui .autonomy-zone .ui7-source-priority ol{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px;}
+.interface-ui .autonomy-zone .ui7-source-priority li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.interface-ui .autonomy-zone .ui7-source-priority li>span{overflow-wrap:anywhere;}
+.interface-ui .autonomy-zone .ui7-source-priority li>div{display:flex;gap:6px;}
+.interface-ui .autonomy-zone .ui7-source-priority select{max-width:100%;min-width:0;}

@@ -2,6 +2,30 @@
 (function (root) {
   'use strict';
   const fields = Object.freeze({check_seconds:'autoQuickCheck', reserve_seconds:'autoQuickReserve', reserve_target:'autoQuickTarget', candidates_per_round:'autoQuickCandidates'});
+  const sourceID = id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id);
+  const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function preferredSources(policy, order) {
+    if (!Array.isArray(order) || order.length > 32 || new Set(order).size !== order.length || order.some(id => !sourceID(id) || !policy.source_ids?.includes(id))) throw new Error('Приоритеты должны содержать только уже разрешённые источники без повторений.');
+    return [...order];
+  }
+  function sourceChoices(snapshot) {
+    const allowed = (snapshot?.policy?.source_ids || []).filter(sourceID);
+    const choices = snapshot?.source_choices || snapshot?.source_presets || [];
+    return allowed.map((id, index) => {
+      const source = choices.find(item => item.id === id);
+      const raw = String(source?.name || '').trim();
+      const name = id === 'manual' || source?.kind === 'manual' ? 'Добавленные вручную'
+        : raw && raw.length <= 100 && !/[\x00-\x1f\x7f]|:\/\/|[?&](?:token|key|password)=/i.test(raw) ? raw : `Источник ${index + 1}`;
+      return {id, name};
+    });
+  }
+  function sourcePriorityHTML(order, choices, disabled = false) {
+    const disabledAttr = disabled ? ' disabled' : '';
+    return order.map((id, index) => {
+      const source = choices.find(item => item.id === id), name = source?.name || 'Источник больше не разрешён';
+      return `<li><span>${index + 1}. ${escapeHTML(name)}</span><div><button type="button" class="secondary" data-priority="up" data-index="${index}" aria-label="Выше: ${escapeHTML(name)}"${disabled || index === 0 || !source ? ' disabled' : ''}>↑</button><button type="button" class="secondary" data-priority="down" data-index="${index}" aria-label="Ниже: ${escapeHTML(name)}"${disabled || index === order.length - 1 || !source ? ' disabled' : ''}>↓</button><button type="button" class="secondary" data-priority="remove" data-index="${index}"${disabledAttr}>Убрать</button></div></li>`;
+    }).join('');
+  }
   function draft(policy, values) {
     if (!policy?.setup_complete || !Number.isSafeInteger(policy.revision)) throw new Error('Сначала завершите первоначальную настройку.');
     const next = JSON.parse(JSON.stringify(policy));
@@ -15,6 +39,7 @@
     if (next.check_seconds < 60 || next.check_seconds > 3600) throw new Error('Интервал проверки: от 60 до 3600 секунд.');
     if (next.reserve_seconds < next.check_seconds || next.reserve_seconds > 86400) throw new Error('Резерв проверяется не чаще сервисов и не реже одного раза в сутки.');
     if (next.reserve_target < 1 || next.reserve_target > 4 || next.candidates_per_round < 1 || next.candidates_per_round > 4) throw new Error('Количество подключений и кандидатов: от 1 до 4.');
+    if (Object.hasOwn(values, 'preferred_source_ids')) next.preferred_source_ids = preferredSources(next, values.preferred_source_ids);
     return next;
   }
   function current(snapshot, received, now = Date.now()) {
@@ -23,7 +48,7 @@
       Number.isFinite(time) && Number.isFinite(received) && now >= received && now - received < 60000 &&
       snapshot.observation?.state !== 'retained' && !snapshot.blocked;
   }
-  root.RazvilkaQuickPolicy = Object.freeze({fields, draft, current});
+  root.RazvilkaQuickPolicy = Object.freeze({fields, draft, current, preferredSources, sourceChoices, sourcePriorityHTML});
   if (typeof module !== 'undefined' && module.exports) module.exports = root.RazvilkaQuickPolicy;
   if (typeof document === 'undefined') return;
   const form = document.getElementById('autoQuickForm'); if (!form) return;
@@ -31,10 +56,23 @@
   const message = byID('autoQuickMessage'), save = byID('autoQuickSave');
   let latest = null, base = null, received = 0, dirty = false, busy = false, epoch = 0, unknownWrite = false;
   let instanceID = null, instanceEpoch = 0, baseInstanceEpoch = 0;
+  let sourceOrder = [];
   const retiredInstances = new Set();
   const baseCurrent = () => base && latest?.policy?.revision===base.revision && baseInstanceEpoch===instanceEpoch;
   function render() {
     const usable = current(latest,received) && !!latest?.policy?.setup_complete;
+    const priorityList = byID('autoSourcePriorityList'), prioritySelect = byID('autoSourcePrioritySelect'), priorityAdd = byID('autoSourcePriorityAdd');
+    if (priorityList && prioritySelect && priorityAdd) {
+      const choices = sourceChoices(latest), locked = busy || !usable || unknownWrite || !baseCurrent();
+      priorityList.innerHTML = sourcePriorityHTML(sourceOrder, choices, locked);
+      byID('autoSourcePriorityEmpty').hidden = sourceOrder.length > 0;
+      const available = choices.filter(source => !sourceOrder.includes(source.id));
+      const selected = prioritySelect.value;
+      prioritySelect.innerHTML = available.map(source => `<option value="${escapeHTML(source.id)}">${escapeHTML(source.name)}</option>`).join('');
+      if (available.some(source => source.id === selected)) prioritySelect.value = selected;
+      prioritySelect.disabled = locked || !available.length;
+      priorityAdd.disabled = locked || !available.length;
+    }
     for (const id of Object.values(fields)) byID(id).disabled=busy;
     save.disabled = busy || !usable || unknownWrite || !baseCurrent();
     byID('autoQuickReset').disabled = busy || !latest;
@@ -48,6 +86,7 @@
   function load() {
     if (!latest?.policy) return;
     base = JSON.parse(JSON.stringify(latest.policy));
+    sourceOrder = [...(base.preferred_source_ids || [])];
     baseInstanceEpoch = instanceEpoch;
     for (const [field,id] of Object.entries(fields)) byID(id).value = base[field];
     dirty = false; message.textContent = ''; render();
@@ -68,15 +107,31 @@
   }
   root.addEventListener('razvilka:autonomy-state', event => accept(event.detail));
   root.addEventListener('razvilka:autonomy-error', () => {received=0;render();});
-  document.addEventListener('razvilka:auth-required', () => {epoch++;latest=base=null;instanceID=null;instanceEpoch=baseInstanceEpoch=0;retiredInstances.clear();received=0;dirty=false;busy=false;unknownWrite=false;for(const id of Object.values(fields))byID(id).value='';render();});
-  form.addEventListener('input', () => {dirty=true;render();});
+  document.addEventListener('razvilka:auth-required', () => {epoch++;latest=base=null;sourceOrder=[];instanceID=null;instanceEpoch=baseInstanceEpoch=0;retiredInstances.clear();received=0;dirty=false;busy=false;unknownWrite=false;for(const id of Object.values(fields))byID(id).value='';render();});
+  form.addEventListener('input', event => {if(event?.target?.id==='autoSourcePrioritySelect')return;dirty=true;render();});
+  byID('autoSourcePriorityAdd')?.addEventListener('click', () => {
+    const id = byID('autoSourcePrioritySelect').value;
+    if (busy || unknownWrite || !baseCurrent() || !current(latest,received) || !sourceChoices(latest).some(source => source.id === id) || sourceOrder.includes(id)) return;
+    sourceOrder.push(id); dirty=true; render();
+  });
+  byID('autoSourcePriorityList')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-priority]');
+    if (!button || busy || unknownWrite || !baseCurrent() || !current(latest,received)) return;
+    const index = Number(button.dataset.index), action = button.dataset.priority;
+    if (!Number.isInteger(index) || index < 0 || index >= sourceOrder.length) return;
+    if (action === 'remove') sourceOrder.splice(index,1);
+    else if ((action === 'up' && index > 0 || action === 'down' && index < sourceOrder.length - 1) && sourceChoices(latest).some(source => source.id === sourceOrder[index])) {
+      const next = index + (action === 'up' ? -1 : 1); [sourceOrder[index],sourceOrder[next]] = [sourceOrder[next],sourceOrder[index]];
+    } else return;
+    dirty=true; render();
+  });
   root.addEventListener('beforeunload', event => {if(dirty||busy||unknownWrite){event.preventDefault();event.returnValue='';}});
   byID('autoQuickReset').addEventListener('click', () => {if(!busy)load();});
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (busy) return; const token=epoch, process=instanceEpoch;
     try {
       if (!baseCurrent() || !current(latest,received) || unknownWrite) throw new Error('Обновите состояние перед сохранением. Несохранённые поля оставлены.');
-      const policy=draft(base,Object.fromEntries(Object.entries(fields).map(([field,id])=>[field,byID(id).value])));
+      const policy=draft(base,{...Object.fromEntries(Object.entries(fields).map(([field,id])=>[field,byID(id).value])),preferred_source_ids:sourceOrder});
       busy=true;render();message.textContent='Сохраняем параметры…';
       try {
         await interfaceRequest('/api/v1/autonomy',{method:'PUT',body:JSON.stringify({expected_revision:base.revision,policy,confirm:'SAVE_AUTONOMY',release_safe_mode:false})});
