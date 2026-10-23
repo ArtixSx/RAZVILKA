@@ -341,7 +341,7 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	for _, n := range snapshot.Nodes {
 		if allowedAutonomyNode(p, n, time.Now()) {
 			eligible[n.ID] = n
-			if !r.CandidateCoolingDown(n.ID) {
+			if !r.CandidateCoolingDown(n.ID) && !a.autonomyConnectivityCoolingDown(ctx, p, s, engine, n.ID, profile, time.Now()) {
 				ids = append(ids, n.ID)
 			}
 		}

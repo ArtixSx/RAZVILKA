@@ -108,7 +108,7 @@ func (a *App) freshAutonomyReserveCount(ctx context.Context, snapshot nodestore.
 	}
 	ready := []string{}
 	for _, id := range r.Reserves {
-		if !permitted[id] || r.CandidateCoolingDown(id) {
+		if !permitted[id] || r.CandidateCoolingDown(id) || a.autonomyConnectivityCoolingDown(ctx, p, s, engine, id, profile, now) {
 			continue
 		}
 		if _, err := a.Nodes.ResolveRouteForEngine(ctx, engine, id, s.ID, profile, "", time.Time{}, now); err != nil {
