@@ -46,7 +46,7 @@ Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA
 | 🧭 **Autopilot** | Checks the chosen services, selects a working path and reserve; lets you put your permitted sources first in the search order |
 | 🧩 **Services** | Ready-made catalog and your own services; groups; access checks from the router |
 | 🔌 **Connections** | VLESS/Xray, WireGuard, AmneziaWG, WARP; subscriptions, country filtering from publisher labels and separate access checks |
-| 🛡️ **DPI bypass** | NFQWS2 with strategies, compatibility checks and selection |
+| 🛡️ **DPI bypass** | Managed NFQWS2 HTTPS profiles for domain lists, compatibility checks and rollback on failure |
 | 📱 **Devices** | Experimental device selection on the exact NC-1812 profile; NFQWS2 uses Keenetic policy |
 | 🧾 **Log and diagnostics** | Clear error causes, a support report, backups |
 | 🔄 **Updates** | Manual and nightly, with a settings snapshot; rollback on confirmed failure, journal review when the outcome is unknown |
