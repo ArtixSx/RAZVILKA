@@ -64,3 +64,10 @@ installed-router snapshot of that project's MIT-licensed 1.3.1 init script,
 copyright (c) 2026 nfqws. It is only read as test data, never executed. Its
 provenance and SHA256 are recorded alongside the fixture; the same complete
 MIT notice above applies.
+
+The optional `stock-tls-circular-v1` recipe adapts the three HTTPS strategies
+from `etc/nfqws2/nfqws2.conf` at the same pinned upstream revision. It keeps
+their strategy arguments, narrows the filters to TLS ClientHello on TCP 443,
+and uses RAZVILKA's reviewed domain list and exclusions. The same MIT notice
+applies. HTTP, MTProto and UDP strategies from that configuration are not part
+of this recipe.
