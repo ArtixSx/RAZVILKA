@@ -18,11 +18,7 @@ You pick services and devices; the panel chooses and checks how to reach them:
 NFQWS2, VLESS, WireGuard/AmneziaWG or WARP. It runs on the router itself and
 keeps working on schedule with the browser closed.
 
-> [!NOTE]
-> **0.20.0 requires a clean installation.** To move from 0.19.x, first remove
-> the previous installation using the [guide (RU)](docs/INSTALL_RU.md#переход-с-0193-и-более-ранних-версий).
-> Start with one service and check access from your device. Download packages from
-> [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
+Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA/releases).
 
 ## How it works
 
