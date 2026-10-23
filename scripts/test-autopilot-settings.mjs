@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const src=fs.readFileSync(new URL('../cmd/razvilka/web/autopilot-settings.js',import.meta.url),'utf8');
-const c={};vm.createContext(c);vm.runInContext(src,c);const model=c.RazvilkaQuickPolicy;
+const autonomySource=fs.readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8');
+const c={};vm.createContext(c);vm.runInContext(autonomySource,c);vm.runInContext(src,c);const model=c.RazvilkaQuickPolicy;
 const policy={schema:1,revision:12,setup_complete:true,enabled:true,check_seconds:300,reserve_seconds:1800,reserve_target:3,candidates_per_round:2,source_ids:['private-source'],protocols:['vless'],preferred_routes:['xray'],default_sources:['192.168.1.20'],all_lan:false,application:{mode:'prepare'},components:{mode:'check'}};
 const inputs={check_seconds:'120',reserve_seconds:'1200',reserve_target:'4',candidates_per_round:'1'};
 let total=0;function test(n,f){f();total++;console.log('PASS '+n);}
@@ -22,7 +23,7 @@ function fixture(){
     if(!elements.has(id))elements.set(id,{value:'',textContent:'',disabled:false,events:{},addEventListener(name,fn){this.events[name]=fn;}});
     return elements.get(id);
   };
-  const context={Date,Number,JSON,console,CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
+  const context={Date,Number,JSON,console,RazvilkaAutonomyModel:c.RazvilkaAutonomyModel,CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
     document:{getElementById:element,addEventListener:(name,fn)=>documentListeners.set(name,fn),dispatchEvent(){}},
     addEventListener:(name,fn)=>listeners.set(name,fn),
     dispatchEvent:event=>listeners.get(event.type)?.(event),
@@ -41,6 +42,20 @@ function fixture(){
     leave(){const event={prevented:false,preventDefault(){this.prevented=true;}};listeners.get('beforeunload')?.(event);return event;}
   };
 }
+for(const text of ['Failed to fetch','NetworkError when attempting to fetch resource.','Load failed'])await asyncTest('network loss keeps quick policy write unknown: '+text,async()=>{
+  const f=fixture();f.publish(f.snapshot());f.edit();const save=f.submit();
+  f.requests[0].reject(new TypeError(text));await save;
+  assert.match(f.element('autoQuickMessage').textContent,/Нет связи с панелью.*не подтверждён.*повторная запись заблокирована/);
+  assert.equal(f.element('autoQuickSave').disabled,true);assert.equal(f.element('autoQuickCheck').value,'180');
+  await f.submit();assert.equal(f.requests.length,1);
+  const read=f.visibleReload();f.requests[1].reject(new TypeError(text));await read;
+  assert.match(f.element('autoQuickMessage').textContent,/Нет связи с панелью.*повторная запись заблокирована/);
+  assert.equal(f.requests.filter(r=>r.options.method==='PUT').length,1);assert.equal(f.element('autoQuickSave').disabled,true);
+});
+test('network presentation preserves HTTP, auth and cancellation errors',()=>{
+  const human=c.RazvilkaAutonomyModel.requestErrorText;
+  for(const error of [Object.assign(new Error('Failed to fetch'),{status:503}),Object.assign(new Error('Failed to fetch'),{name:'AbortError'}),Object.assign(new Error('Failed to fetch'),{name:'AuthGenerationChanged'}),new Error('CAS conflict')])assert.equal(human(error,true),error.message);
+});
 test('ordinary edit preserves every authority-bearing and unknown future field',()=>{const next=model.draft(policy,inputs);for(const key of Object.keys(policy))if(!(key in inputs))assert.equal(JSON.stringify(next[key]),JSON.stringify(policy[key]),key);assert.equal(policy.check_seconds,300);assert.equal(next.check_seconds,120);});
 test('range and type constraints match server policy',()=>{for(const [k,v] of [['check_seconds','59'],['check_seconds','3601'],['reserve_seconds','119'],['reserve_seconds','86401'],['reserve_target','5'],['candidates_per_round','0'],['check_seconds','1e3'],['check_seconds',''],['check_seconds','Infinity'],['check_seconds',null]])assert.throws(()=>model.draft(policy,{...inputs,[k]:v}));});
 test('first setup is not silently enabled by interval form',()=>assert.throws(()=>model.draft({...policy,setup_complete:false},inputs)));

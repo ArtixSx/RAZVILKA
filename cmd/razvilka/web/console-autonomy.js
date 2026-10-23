@@ -121,7 +121,12 @@
     // older passive publication cannot replace this completed write's readback.
     return {...next,...(previous?.observation?{observation:{...previous.observation,state:'available',observed_at:next.server_time}}:{})};
   }
-  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData,policyReadbackSnapshot};
+  function requestErrorText(error, mutation=false) {
+    const text=String(error?.message||'');
+    if(error?.status || ['AbortError','AuthGenerationChanged'].includes(error?.name) || !/failed to fetch|networkerror|load failed|network request failed/i.test(text))return text;
+    return mutation?'Нет связи с панелью. Результат действия не подтверждён. Обновите состояние перед повтором.':'Нет связи с панелью. Проверьте, что служба запущена, и обновите состояние.';
+  }
+  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData,policyReadbackSnapshot,requestErrorText};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -171,6 +176,8 @@
     } catch(e) {
       requireGeneration(requestGeneration);
       if(e.name==='AbortError') e=new Error('Ответ не получен. Обновите состояние: запрос мог быть сохранён.');
+      const message=requestErrorText(e,mutation);
+      if(message!==e.message)e=new Error(message,{cause:e});
       e.authGeneration=requestGeneration;
       throw e;
     } finally {clearTimeout(timer);requests.delete(controller);if(mutation&&typeof root.invalidatePanelReads==='function')root.invalidatePanelReads();}

@@ -4,6 +4,7 @@
   const fields = Object.freeze({check_seconds:'autoQuickCheck', reserve_seconds:'autoQuickReserve', reserve_target:'autoQuickTarget', candidates_per_round:'autoQuickCandidates'});
   const sourceID = id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id);
   const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const requestErrorText = (error, mutation=false) => root.RazvilkaAutonomyModel?.requestErrorText(error,mutation) ?? error?.message;
   function preferredSources(policy, order) {
     if (!Array.isArray(order) || order.length > 32 || new Set(order).size !== order.length || order.some(id => !sourceID(id) || !policy.source_ids?.includes(id))) throw new Error('Приоритеты должны содержать только уже разрешённые источники без повторений.');
     return [...order];
@@ -129,6 +130,7 @@
   byID('autoQuickReset').addEventListener('click', () => {if(!busy)load();});
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (busy) return; const token=epoch, process=instanceEpoch;
+    let networkMessage='';
     try {
       if (!baseCurrent() || !current(latest,received) || unknownWrite) throw new Error('Обновите состояние перед сохранением. Несохранённые поля оставлены.');
       const policy=draft(base,{...Object.fromEntries(Object.entries(fields).map(([field,id])=>[field,byID(id).value])),preferred_source_ids:sourceOrder});
@@ -152,12 +154,14 @@
       document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
       message.textContent='Параметры сохранены. Разрешения, устройства и текущие маршруты не изменялись.';
     } catch(error) {
+      const text=requestErrorText(error,true);if(text!==error.message)networkMessage=text;
       if(token===epoch)message.textContent=error.message||'Сохранение не подтверждено. Обновите состояние.';
-    } finally {if(token===epoch){busy=false;render();}}
+    } finally {if(token===epoch){busy=false;render();if(networkMessage)message.textContent=networkMessage+(unknownWrite?' Ваши поля сохранены; повторная запись заблокирована.':'');}}
   });
   // A visible, explicit read reconciles unknown writes without ever replaying PUT.
   async function reconcile(requireUnknown = false) {
     const token=epoch, process=instanceEpoch;if(busy||requireUnknown&&!unknownWrite)return;
+    let networkMessage='';
     busy=true;render();
     try{
       const next=await interfaceRequest('/api/v1/autonomy');if(token!==epoch)return;
@@ -166,8 +170,8 @@
       if(process!==instanceEpoch || !current(next,Date.now()) || !next.policy.setup_complete || !accept(next)) throw new Error('Состояние ещё не подтверждено. Повторите обновление перед сохранением.');
       unknownWrite=false;
       message.textContent='Состояние прочитано. Сравните сохранённые параметры с вашими полями.';
-    }catch(error){if(token===epoch)message.textContent=error.message||'Состояние не прочитано. Повторите обновление.';}
-    finally{if(token===epoch){busy=false;render();}}
+    }catch(error){const text=requestErrorText(error);if(text!==error.message)networkMessage=text;if(token===epoch)message.textContent=error.message||'Состояние не прочитано. Повторите обновление.';}
+    finally{if(token===epoch){busy=false;render();if(networkMessage)message.textContent=networkMessage+(unknownWrite?' Результат сохранения не подтверждён; повторная запись заблокирована.':'');}}
   }
   byID('autoQuickRefresh')?.addEventListener('click', () => reconcile());
   byID('refreshAll')?.addEventListener('click', () => reconcile(true));

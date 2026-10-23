@@ -60,6 +60,28 @@ function fixture(authenticated=true,staticInputs=[],includeQuick=false){
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log('PASS',name);}
 
+for(const text of ['Failed to fetch','NetworkError when attempting to fetch resource.','Load failed'])await test('lost panel read has useful wording: '+text,async()=>{
+ const f=fixture();f.requests[0].reject(new TypeError(text));await flush();
+ assert.match(f.e('notice').textContent,/Нет связи с панелью/);assert.doesNotMatch(f.e('notice').textContent,/Failed to fetch|NetworkError|Load failed/);
+ assert.equal(f.requests.length,1);assert.equal(f.published.filter(e=>e.type==='razvilka:autonomy-state').length,0);
+});
+
+await test('lost mutation response cannot announce completion or replay the write',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();f.click('pauseButton');
+ f.requests[1].reject(new TypeError('Failed to fetch'));await flush();
+ assert.match(f.e('notice').textContent,/Нет связи с панелью.*Результат действия не подтверждён/);
+ assert.doesNotMatch(f.e('notice').textContent,/Автоматика на паузе|Автоматика разрешена/);
+ assert.equal(f.requests.length,2);assert.equal([...f.timeouts.values()].filter(t=>t.ms===1500).length,0);
+});
+
+await test('auth abort stays silent while same-session timeout retains its own wording',async()=>{
+ const f=fixture();f.event('razvilka:auth-required');const notice=f.e('notice').textContent;
+ f.requests[0].reject(Object.assign(new Error('Failed to fetch'),{name:'AbortError'}));await flush();
+ assert.equal(f.e('notice').textContent,notice);
+ const next=fixture();next.requests[0].reject(Object.assign(new Error('The operation was aborted.'),{name:'AbortError'}));await flush();
+ assert.match(next.e('notice').textContent,/Ответ не получен/);assert.doesNotMatch(next.e('notice').textContent,/Нет связи/);
+});
+
 await test('consent row hides unchanged authority and returns for broader device permission',async()=>{
  const f=fixture(true,[{name:'protocol',value:'vless',checked:true}]);const initial=snapshot();initial.policy.update_channel='stable';f.respond(0,200,initial);await flush();
  f.click('nextStep');f.click('nextStep');f.click('nextStep');
