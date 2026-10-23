@@ -144,3 +144,52 @@ func TestNFQWSFirstStartRecipeNodeAndRemovalHypotheticalKeepsAppliedChoice(t *te
 		}
 	}
 }
+
+func TestNFQWSFirstStartRecipePreservedEngineDraftPlanMatchesServicesCommit(t *testing.T) {
+	for _, applied := range []engineconfig.NFQWSFirstStartRecipe{"", engineconfig.NFQWSFirstStartStockTLSCircular} {
+		a := genericReviewFixture(t)
+		if err := a.Store.SetNFQWSFirstStartRecipe(a.Store.Get().Revision, applied); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Store.ApplyDraft(); err != nil {
+			t.Fatal(err)
+		}
+		desired := engineconfig.NFQWSFirstStartStockTLSCircular
+		if applied != "" {
+			desired = ""
+		}
+		if err := a.Store.SetNFQWSFirstStartRecipe(a.Store.Get().Revision, desired); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "nfqws2"}); err != nil {
+			t.Fatal(err)
+		}
+		const draft = "pending.example\n"
+		if _, err := a.EngineConfigs.Stage("nfqws2", "user-list", draft); err != nil {
+			t.Fatal(err)
+		}
+		before := a.Store.Get()
+		r := httptest.NewRequest("GET", "/api/v1/plan?scope=services&engine_drafts=preserve", nil)
+		plan, err := a.buildDataplanePlanForRequest(before, a.routeOptionsSnapshot(), changeScopeServices, "", r)
+		if err != nil || len(plan.EngineDrafts) != 0 {
+			t.Fatal("preserved-draft plan failed", err)
+		}
+		binding, err := a.bindApplyReview(context.Background(), before, plan, changeScopeServices, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		undo, err := binding.commit(a, context.Background(), changeScopeServices)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.NFQWSFirstStartRecipe != a.Store.Get().AppliedNFQWSFirstStartRecipe || plan.NFQWSFirstStartRecipe != desired {
+			t.Fatal("preserved engine-draft plan recipe differs from service commit", plan.NFQWSFirstStartRecipe, a.Store.Get().AppliedNFQWSFirstStartRecipe)
+		}
+		if view, err := a.EngineConfigs.ReadExpert("nfqws2", "user-list"); err != nil || view.Source != "staged" || view.Content != draft {
+			t.Fatal("recipe commit consumed engine draft", err)
+		}
+		if err := undo(); err != nil || !reflect.DeepEqual(a.Store.Get(), before) {
+			t.Fatal("recipe commit rollback lost original intent", err)
+		}
+	}
+}

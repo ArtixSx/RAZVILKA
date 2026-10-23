@@ -3911,7 +3911,7 @@ func changeScopeFromRequest(r *http.Request) (changeScope, string, error) {
 // snapshot; the normal review digest binds the resulting no-draft plan.
 func (a *App) buildDataplanePlanForRequest(cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, r *http.Request) (dataplane.Plan, error) {
 	if scope == changeScopeServices && r.URL.Query().Get("engine_drafts") == "preserve" {
-		return a.buildDataplanePlanForScopeContext(r.Context(), configForChangeScope(cfg, scope), options, changeScopeNode, "")
+		return a.buildDataplanePlanWithDraftModeContext(r.Context(), cfg, options, scope, engineID, nil, true)
 	}
 	return a.buildDataplanePlanForScopeContext(r.Context(), cfg, options, scope, engineID)
 }
@@ -3931,6 +3931,13 @@ func (a *App) buildDataplanePlanWithDNS(cfg config.Config, options []routecatalo
 }
 
 func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, dnsChange *scopedDNSChange) (dataplane.Plan, error) {
+	return a.buildDataplanePlanWithDraftModeContext(ctx, cfg, options, scope, engineID, dnsChange, false)
+}
+
+// Preserving editor drafts narrows only staged engine files. It must not
+// impersonate a node scope and replace desired service recipe intent with the
+// applied recipe while the surrounding service transaction commits desired.
+func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg config.Config, options []routecatalog.Option, scope changeScope, engineID string, dnsChange *scopedDNSChange, preserveEngineDrafts bool) (dataplane.Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return dataplane.Plan{}, err
 	}
@@ -4129,6 +4136,9 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	// discard an unrelated editor draft for that engine.
 	if len(nodeScopedEngines) > 0 && scope != changeScopeEngine && scope != changeScopeExclusions {
 		drafts = filterEngineConfigRefs(drafts, func(id string) bool { return !nodeScopedEngines[id] })
+	}
+	if preserveEngineDrafts {
+		drafts = nil
 	}
 	host := dataplane.DiscoverHost()
 	if a.DataplaneHost != nil {
