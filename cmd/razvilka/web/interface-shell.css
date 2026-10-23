@@ -955,3 +955,10 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 .interface-ui #a1-notice:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;overflow-wrap:anywhere;}
 .interface-ui #a1-notice>.notice-close{grid-column:2;grid-row:1;justify-self:end;align-self:start;flex-shrink:0;margin:0;min-width:28px;padding:2px 6px;line-height:1.2;}
 @media(max-width:520px){.operation-notifications{right:16px;bottom:76px;max-height:calc(100dvh - 100px);}.operation-toast{flex-wrap:wrap;}.operation-toast-copy{flex-basis:100%;}.operation-toast-actions{margin-left:auto;}}
+.interface-ui .ui7-source-priority{margin:20px 0;padding:16px;border:1px solid var(--border);border-radius:12px;min-width:0;}
+.interface-ui .ui7-source-priority legend{padding:0 6px;font-weight:600;}
+.interface-ui .ui7-source-priority ol{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px;}
+.interface-ui .ui7-source-priority li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.interface-ui .ui7-source-priority li>span{min-width:0;overflow-wrap:anywhere;}
+.interface-ui .ui7-source-priority li>div{display:flex;gap:6px;flex-shrink:0;}
+.interface-ui .ui7-source-priority select{max-width:100%;min-width:0;}
