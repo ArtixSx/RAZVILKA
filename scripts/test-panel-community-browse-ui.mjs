@@ -36,6 +36,7 @@ await test('busy live list renders separate historical definitions and local sea
   await f.context.searchCommunityCatalog(true);
   assert.equal(f.state.community,original);assert.equal(f.state.communityPreview,null);assert.equal(f.$('#communityOwnForm').hidden,true);
   const html=f.$('#communityResults').innerHTML;assert.match(html,/&lt;Saved>/);assert.match(html,/Historical display/);
+  assert.match(html,/<article class="community-result community-saved-entry"><div>/);
   assert.doesNotMatch(html,/<button|<input|<select|data-community|PREVIEW|ДОБАВЛЕН|SHA|blocked|access-/);
   assert.match(f.$('#communityBrowseNotice').textContent,/Снимок каталога в памяти/);assert.match(f.$('#communityBrowseNotice').textContent,/не обновления источника/);
   const calls=f.calls.length;f.$('#communitySearch').value='no match';await f.context.searchCommunityCatalog();assert.equal(f.calls.length,calls);assert.match(f.$('#communityResults').innerHTML,/Ничего не найдено/);
@@ -56,9 +57,18 @@ await test('accepted live catalog replaces only the empty retained preview notic
   const searching=f.context.searchCommunityCatalog(true);
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.runtime().showing,true);
+  assert.equal(f.runtime().loading,true);
+  assert.equal(f.$('#communityBrowseRefresh').disabled,true);
+  assert.match(f.$('#communityBrowseRefresh').textContent,/Читаем каталог/);
+  assert.match(f.$('#communityBrowseNotice').textContent,/Читаем актуальный каталог/);
+  assert.match(f.$('#communityPreview').textContent,/пока читаем актуальный каталог/);
+  assert.equal(f.context.communityBrowseActionsAllowed(),false);
   assert.match(f.$('#communityPreview').textContent,/Сохранённые определения/);
   pending.resolve([{id:'telegram',name:'Telegram',category:'Messaging'}]);await searching;
   assert.equal(f.context.communityBrowseActionsAllowed(),true);
+  assert.equal(f.runtime().loading,false);
+  assert.equal(f.$('#communityBrowseRefresh').disabled,false);
+  assert.equal(f.$('#communityBrowseRefresh').hidden,true);
   assert.match(f.$('#communityPreview').innerHTML,/Выберите сервис/);
   assert.doesNotMatch(f.$('#communityPreview').innerHTML,/Сохранённые определения/);
   assert.match(f.$('#communityResults').innerHTML,/ПРОСМОТР/);
@@ -67,6 +77,29 @@ await test('accepted live catalog replaces only the empty retained preview notic
   f.$('#communitySearch').value='Telegram';f.live(async()=>[{id:'telegram',name:'Telegram'}]);
   await f.context.searchCommunityCatalog(true);
   assert.match(f.$('#communityPreview').innerHTML,/Выберите сервис/);
+  assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+
+await test('failed retry ends the loading notice and restores an explicit read retry without snapshot actions',async()=>{
+  const f=fixture();await f.context.searchCommunityCatalog(true);
+  assert.equal(f.$('#communityBrowseRefresh').disabled,false);
+  const pending=deferred();f.live(async()=>{await pending.promise;throw Object.assign(new Error('temporary unavailable'),{status:503});});
+  const searching=f.context.searchCommunityCatalog(true);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.runtime().loading,true);
+  assert.match(f.$('#communityBrowseNotice').textContent,/Читаем актуальный каталог/);
+  assert.equal(f.$('#communityBrowseRefresh').disabled,true);
+  f.context.renderSavedCommunityBrowse();
+  assert.equal(f.$('#communityBrowseRefresh').disabled,true,'snapshot repaint lost pending read status');
+  const before=f.calls.length;await f.context.importCommunityService('saved');assert.equal(f.calls.length,before);
+  pending.resolve();await searching;
+  assert.equal(f.runtime().loading,false);
+  assert.equal(f.$('#communityBrowseRefresh').disabled,false);
+  assert.equal(f.$('#communityBrowseRefresh').hidden,false);
+  assert.equal(f.$('#communityBrowseRefresh').textContent,'Повторить чтение каталога');
+  assert.doesNotMatch(f.$('#communityBrowseNotice').textContent,/Читаем актуальный каталог/);
+  assert.match(f.$('#communityPreview').textContent,/требуют нового чтения каталога/);
+  assert.equal(f.context.communityBrowseActionsAllowed(),false);
   assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
 });
 
@@ -161,5 +194,8 @@ await test('bundled Telegram preview shows snapshot date and source without clai
 });
 assert.match(app,/invalidateSavedCommunityBrowse\(!url.startsWith\('\/api\/v1\/auth\/'\)\)/);
 const html=readFileSync(new URL('../cmd/razvilka/web/index.html',import.meta.url),'utf8');assert(html.indexOf('/panel-community-browse.js?')<html.indexOf('/app.js?'));
+const css=readFileSync(new URL('../cmd/razvilka/web/interface.css',import.meta.url),'utf8');
+assert.match(css,/\.community-result\.community-saved-entry\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,'copy-only saved cards must not inherit the live icon column');
+assert.match(css,/\.community-saved-entry>div\s*\{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere/);
 assert(readFileSync(new URL('check.sh',import.meta.url),'utf8').includes('test-panel-community-browse-ui.mjs'));
 console.log(`Community saved browse: ${count} modeled checks passed; no native/browser claim`);

@@ -1782,3 +1782,8 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 /* Tall first-run and recovery forms scroll inside the authentication overlay.
    Start alignment is the fallback for browsers without safe alignment. */
 .interface-ui .auth-screen{overflow-y:auto;align-items:start;align-items:safe center;}
+
+/* Saved catalogue cards have copy only, without the live icon/action columns. */
+.community-result.community-saved-entry{grid-template-columns:minmax(0,1fr);cursor:default;}
+.community-saved-entry>div{min-width:0;overflow-wrap:anywhere;}
+.community-saved-entry small{white-space:normal;}

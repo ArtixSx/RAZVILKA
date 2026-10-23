@@ -1,7 +1,7 @@
 'use strict';
 
 // Historical display definitions never enter state.community or its previews.
-const communityBrowse = { saved: null, live: false, showing: false, epoch: 0, request: 0, action: 0, invalidatedAt: 0, instance: '', revision: -1, timer: null };
+const communityBrowse = { saved: null, live: false, showing: false, loading: false, epoch: 0, request: 0, action: 0, invalidatedAt: 0, instance: '', revision: -1, timer: null };
 
 function validSavedCommunityBrowse(value) {
   if (value?.schema !== 1 || value.dataplane !== 'not-checked' || value.max_age_seconds !== 900
@@ -40,17 +40,23 @@ function communityBrowseSetControls(readOnly) {
     if (section) section.hidden = readOnly;
   }
   for (const button of document.querySelectorAll('[data-community-import],[data-community-refresh]')) button.disabled = readOnly;
+  const refresh = $('#communityBrowseRefresh');
+  refresh.disabled = communityBrowse.loading;
+  refresh.textContent = communityBrowse.loading ? 'Читаем каталог…' : 'Повторить чтение каталога';
 }
 
 function communityBrowseSearchStarted() {
   communityBrowse.action++;
   communityBrowse.live = false;
+  communityBrowse.loading = true;
   communityBrowseSetControls(true);
+  if (communityBrowse.showing) renderSavedCommunityBrowse();
 }
 
 function communityBrowseLiveAccepted() {
   const wasShowingSaved = communityBrowse.showing;
   communityBrowse.live = true;
+  communityBrowse.loading = false;
   communityBrowse.showing = false;
   clearTimeout(communityBrowse.timer);
   communityBrowseSetControls(false);
@@ -69,7 +75,7 @@ function invalidateSavedCommunityBrowse(mutation = false) {
   clearTimeout(communityBrowse.timer);
   if (mutation !== true) {
     communityBrowse.instance = ''; communityBrowse.revision = -1;
-    communityBrowse.live = false; communityBrowse.showing = false; communityBrowse.action++;
+    communityBrowse.live = false; communityBrowse.showing = false; communityBrowse.loading = false; communityBrowse.action++;
     state.community = []; state.communityPreview = null;
     for (const id of ['communityResults', 'communityPreview', 'communityBrowseNotice']) { const element = $('#' + id); if (element) element.textContent = ''; }
     $('#communityBrowseNotice').hidden = true;
@@ -109,7 +115,9 @@ function renderSavedCommunityBrowse() {
     if (typeof cancelCustomSource === 'function') cancelCustomSource();
   }
   communityBrowseSetControls(true);
-  $('#communityPreview').textContent = 'Сохранённые определения доступны только для просмотра. Состав доменов, предпросмотр и импорт требуют нового чтения каталога.';
+  $('#communityPreview').textContent = communityBrowse.loading
+    ? 'Сохранённые определения доступны для просмотра, пока читаем актуальный каталог. После загрузки можно будет открыть состав доменов и предпросмотр импорта.'
+    : 'Сохранённые определения доступны только для просмотра. Состав доменов, предпросмотр и импорт требуют нового чтения каталога.';
   const saved = communityBrowse.saved, value = saved?.value, elapsed = saved ? Date.now() - saved.receivedAt : -1;
   const age = value && elapsed >= 0 ? value.data_age_ms + elapsed : Infinity;
   const usable = value?.data && ['available', 'retained'].includes(value.state) && age < 900000;
@@ -118,8 +126,8 @@ function renderSavedCommunityBrowse() {
   const entries = usable ? value.data.entries.filter(entry => [entry.id, entry.name, entry.category, entry.description].join(' ').toLowerCase().includes(query)) : [];
   const notice = $('#communityBrowseNotice'); notice.hidden = false;
   notice.textContent = usable
-    ? `Снимок каталога в памяти · создан ${Math.floor(age / 1000)} сек назад. Это время снимка, а не обновления источника. Только просмотр; доступность сервисов не проверена.`
-    : 'Сохранённый каталог сейчас недоступен или устарел. Это не означает, что определения удалены. Повторите чтение позже.';
+    ? `Снимок каталога в памяти · создан ${Math.floor(age / 1000)} сек назад. Это время снимка, а не обновления источника. ${communityBrowse.loading ? 'Читаем актуальный каталог… Пока доступен только просмотр снимка; импорт появится после загрузки.' : 'Только просмотр; доступность сервисов не проверена.'}`
+    : `Сохранённый каталог сейчас недоступен или устарел. Это не означает, что определения удалены. ${communityBrowse.loading ? 'Читаем актуальный каталог…' : 'Повторите чтение позже.'}`;
   $('#communityBrowseRefresh').hidden = false;
   $('#communityResults').innerHTML = entries.map(entry => `<article class="community-result community-saved-entry"><div><b>${esc(entry.name)}</b><small>${esc(entry.category)}</small><p>${esc(entry.description)}</p></div></article>`).join('')
     || `<div class="community-empty">${usable ? 'Ничего не найдено в сохранённых определениях.' : 'Снимок каталога пока недоступен.'}</div>`;
@@ -128,6 +136,7 @@ function renderSavedCommunityBrowse() {
 }
 
 function communityBrowseUnavailable(error) {
+  communityBrowse.loading = false;
   if (error.status === 401 || error.status === 403) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return true; }
   communityBrowse.live = false;
   return renderSavedCommunityBrowse();
