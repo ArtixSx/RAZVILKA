@@ -1,7 +1,7 @@
 'use strict';
 
 // Historical display definitions never enter state.community or its previews.
-const communityBrowse = { saved: null, live: false, showing: false, loading: false, epoch: 0, request: 0, action: 0, invalidatedAt: 0, instance: '', revision: -1, timer: null };
+const communityBrowse = { saved: null, live: false, showing: false, loading: false, failure: '', epoch: 0, request: 0, action: 0, invalidatedAt: 0, instance: '', revision: -1, timer: null };
 
 function validSavedCommunityBrowse(value) {
   if (value?.schema !== 1 || value.dataplane !== 'not-checked' || value.max_age_seconds !== 900
@@ -49,6 +49,7 @@ function communityBrowseSearchStarted() {
   communityBrowse.action++;
   communityBrowse.live = false;
   communityBrowse.loading = true;
+  communityBrowse.failure = '';
   communityBrowseSetControls(true);
   if (communityBrowse.showing) renderSavedCommunityBrowse();
 }
@@ -57,6 +58,7 @@ function communityBrowseLiveAccepted() {
   const wasShowingSaved = communityBrowse.showing;
   communityBrowse.live = true;
   communityBrowse.loading = false;
+  communityBrowse.failure = '';
   communityBrowse.showing = false;
   clearTimeout(communityBrowse.timer);
   communityBrowseSetControls(false);
@@ -75,7 +77,7 @@ function invalidateSavedCommunityBrowse(mutation = false) {
   clearTimeout(communityBrowse.timer);
   if (mutation !== true) {
     communityBrowse.instance = ''; communityBrowse.revision = -1;
-    communityBrowse.live = false; communityBrowse.showing = false; communityBrowse.loading = false; communityBrowse.action++;
+    communityBrowse.live = false; communityBrowse.showing = false; communityBrowse.loading = false; communityBrowse.failure = ''; communityBrowse.action++;
     state.community = []; state.communityPreview = null;
     for (const id of ['communityResults', 'communityPreview', 'communityBrowseNotice']) { const element = $('#' + id); if (element) element.textContent = ''; }
     $('#communityBrowseNotice').hidden = true;
@@ -117,7 +119,7 @@ function renderSavedCommunityBrowse() {
   communityBrowseSetControls(true);
   $('#communityPreview').textContent = communityBrowse.loading
     ? 'Сохранённые определения доступны для просмотра, пока читаем актуальный каталог. После загрузки можно будет открыть состав доменов и предпросмотр импорта.'
-    : 'Сохранённые определения доступны только для просмотра. Состав доменов, предпросмотр и импорт требуют нового чтения каталога.';
+    : (communityBrowse.failure ? communityBrowse.failure + ' ' : '') + 'Сохранённые определения доступны только для просмотра. Состав доменов, предпросмотр и импорт требуют нового чтения каталога.';
   const saved = communityBrowse.saved, value = saved?.value, elapsed = saved ? Date.now() - saved.receivedAt : -1;
   const age = value && elapsed >= 0 ? value.data_age_ms + elapsed : Infinity;
   const usable = value?.data && ['available', 'retained'].includes(value.state) && age < 900000;
@@ -138,6 +140,11 @@ function renderSavedCommunityBrowse() {
 function communityBrowseUnavailable(error) {
   communityBrowse.loading = false;
   if (error.status === 401 || error.status === 403) { showAuth({ authenticated: false }, 'Сессия завершилась. Войдите снова.'); return true; }
+  communityBrowse.failure = error.code === 'RESTORE_OPERATION_BUSY'
+    ? 'Роутер занят другой операцией. Дождитесь её завершения и нажмите «Повторить чтение каталога». При непрерывных проверках можно временно поставить автопилот на паузу.'
+    : error.code === 'RESTORE_RECOVERY_REQUIRED'
+      ? 'Требуется восстановление предыдущей операции. Откройте лог проекта, чтобы увидеть причину.'
+      : 'Не удалось прочитать актуальный каталог. Проверьте связь с панелью и повторите чтение.';
   communityBrowse.live = false;
   return renderSavedCommunityBrowse();
 }

@@ -31,6 +31,22 @@ function fixture(){
 }
 let count=0;async function test(name,fn){await fn();count++;console.log('PASS '+name);}
 
+await test('busy catalog explains the blocked operation without treating saved data as import authority',async()=>{
+  const f=fixture();
+  f.live(async()=>{throw Object.assign(new Error('private backend detail'),{status:409,code:'RESTORE_OPERATION_BUSY'});});
+  await f.context.searchCommunityCatalog(true);
+  assert.match(f.$('#communityPreview').textContent,/Роутер занят другой операцией/);
+  assert.doesNotMatch(f.$('#communityPreview').textContent,/private backend detail/);
+  assert.equal(f.context.communityBrowseActionsAllowed(),false);
+  f.context.renderSavedCommunityBrowse();
+  assert.match(f.$('#communityPreview').textContent,/автопилот на паузу/);
+  f.live(async()=>[{id:'fresh',name:'Fresh',category:'Test'}]);
+  await f.context.searchCommunityCatalog(true);
+  assert.equal(f.runtime().failure,'');
+  assert.equal(f.context.communityBrowseActionsAllowed(),true);
+  f.context.invalidateSavedCommunityBrowse();assert.equal(f.runtime().failure,'');
+});
+
 await test('busy live list renders separate historical definitions and local search with no actions',async()=>{
   const f=fixture(),original=f.state.community;f.$('#communityOwnURL').value='private pending source';
   await f.context.searchCommunityCatalog(true);
