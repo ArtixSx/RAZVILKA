@@ -240,11 +240,13 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			return a.applyAutonomyRoute(c, p, s, cfg, profile, route.Route)
 		},
 		ContinueAfterRollback: func(c context.Context, route nodestore.ResolvedRoute, applyErr error) (bool, error) {
-			failure, ok := a.autonomyCandidateFailureForEngine(c, p, s, cfg, autonomyNodeEngine(route.Route), profile, route.NodeID, applyErr)
+			failure, ok := a.autonomyCandidateRollbackForEngine(c, p, s, cfg, autonomyNodeEngine(route.Route), profile, route.NodeID, applyErr)
 			if !ok {
 				return false, nil
 			}
-			r.RecordCandidateFailure(failure)
+			if failure.NodeID != "" {
+				r.RecordCandidateFailure(failure)
+			}
 			r.Search.Halted = false
 			r.Reserves = slices.DeleteFunc(r.Reserves, func(id string) bool { return id == route.NodeID })
 			if err := a.persistAutonomySearch(c, s.ID, r); err != nil {

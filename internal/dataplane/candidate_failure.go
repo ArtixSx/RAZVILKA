@@ -39,7 +39,11 @@ func candidateRouteDigest(route Route) string {
 // route, including device scope and probe definition. Old journals are not
 // replay authority; a restarted worker must run fresh checks.
 func (e *CandidateServiceFailure) Matches(plan Plan, route Route, now time.Time) bool {
-	return e != nil && (e.Code == "http-403" || e.Code == "http-451") &&
+	return e != nil && (e.Code == "http-403" || e.Code == "http-451") && e.matches(plan, route, now)
+}
+
+func (e *CandidateServiceFailure) matches(plan Plan, route Route, now time.Time) bool {
+	return e != nil &&
 		e.PlanID != "" && e.Digest != "" && e.Network != "" &&
 		e.PlanID == plan.PlanID && e.Digest == plan.Digest && e.Network == plan.NetworkProfileID &&
 		e.ServiceID == route.ServiceID && e.Route == route.Resolved &&
@@ -47,10 +51,25 @@ func (e *CandidateServiceFailure) Matches(plan Plan, route Route, now time.Time)
 		!e.ObservedAt.IsZero() && !e.ObservedAt.After(now) && now.Before(e.ObservedAt.Add(2*time.Minute))
 }
 
+// CandidatePathFailure permits only a fresh search after verified rollback.
+// The transport observation is inconclusive and must never become a durable
+// service failure, cooldown or node reputation penalty.
+type CandidatePathFailure CandidateServiceFailure
+
+func (e *CandidatePathFailure) Error() string {
+	return "candidate HTTPS path is unconfirmed (node-path-io)"
+}
+
+func (e *CandidatePathFailure) Matches(plan Plan, route Route, now time.Time) bool {
+	return e != nil && e.Code == "node-path-io" && (*CandidateServiceFailure)(e).matches(plan, route, now)
+}
+
 func (a *ProxyTunnelAdapter) attributeCandidateFailure(ctx context.Context, plan Plan, route Route, state PolicyState, cause error) error {
 	var response *serviceResponseError
-	if a.ID() != "sing-box" || !strings.HasPrefix(route.Resolved, "sing-box:node-") ||
-		!errors.As(cause, &response) || (response.code != "http-403" && response.code != "http-451") {
+	var path nodeIPProbeFailure
+	serviceFailure := errors.As(cause, &response) && (response.code == "http-403" || response.code == "http-451")
+	pathFailure := errors.As(cause, &path) && path.reason == nodeIPIO
+	if a.ID() != "sing-box" || !strings.HasPrefix(route.Resolved, "sing-box:node-") || !serviceFailure && !pathFailure {
 		return cause
 	}
 	// Loss of common processes, forwarding, policy or review authority must not
@@ -64,7 +83,13 @@ func (a *ProxyTunnelAdapter) attributeCandidateFailure(ctx context.Context, plan
 	if err := a.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
-	return &CandidateServiceFailure{PlanID: plan.PlanID, Digest: plan.Digest,
+	receipt := CandidateServiceFailure{PlanID: plan.PlanID, Digest: plan.Digest,
 		Network: plan.NetworkProfileID, ServiceID: route.ServiceID, Route: route.Resolved,
-		RouteDigest: candidateRouteDigest(route), Code: response.code, ObservedAt: time.Now().UTC()}
+		RouteDigest: candidateRouteDigest(route), ObservedAt: time.Now().UTC()}
+	if serviceFailure {
+		receipt.Code = response.code
+		return &receipt
+	}
+	receipt.Code = "node-path-io"
+	return (*CandidatePathFailure)(&receipt)
 }

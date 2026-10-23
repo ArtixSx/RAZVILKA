@@ -32,10 +32,19 @@ func (a *App) autonomyCandidateFailure(ctx context.Context, p autonomy.Policy, s
 }
 
 func (a *App) autonomyCandidateFailureForEngine(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, engine, profile, id string, err error) (autonomy.CandidateFailure, bool) {
+	failure, ok := a.autonomyCandidateRollbackForEngine(ctx, p, s, base, engine, profile, id, err)
+	return failure, ok && failure.NodeID != ""
+}
+
+// A path-only receipt may resume traversal but returns no durable negative
+// observation. Both receipt types must close through the same rollback gates.
+func (a *App) autonomyCandidateRollbackForEngine(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, engine, profile, id string, err error) (autonomy.CandidateFailure, bool) {
 	var failed *autonomyApplyFailure
 	var cause *dataplane.CandidateServiceFailure
-	if ctx.Err() != nil || !errors.As(err, &failed) || !errors.As(err, &cause) ||
+	var path *dataplane.CandidatePathFailure
+	if ctx.Err() != nil || !errors.As(err, &failed) || !errors.As(err, &cause) && !errors.As(err, &path) ||
 		errors.Is(err, dataplane.ErrNetworkChanged) || errors.Is(err, dataplane.ErrReviewChanged) ||
+		errors.Is(err, dataplane.ErrNodeResourceDenied) ||
 		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
 		failed.Execution.State != "rolled-back" || !failed.Execution.RollbackVerified ||
 		failed.Execution.PlanID != failed.Plan.PlanID || failed.Execution.Digest != failed.Plan.Digest ||
@@ -73,7 +82,10 @@ func (a *App) autonomyCandidateFailureForEngine(ctx context.Context, p autonomy.
 	for _, route := range failed.Plan.Routes {
 		if route.ServiceID == s.ID && route.Resolved == engine+":"+id &&
 			sameNodeRecoveryStrings(route.Sources, s.Sources) && nodeRecoveryServiceMatches(route, service) &&
-			cause.Matches(failed.Plan, route, time.Now()) {
+			(cause.Matches(failed.Plan, route, time.Now()) || path.Matches(failed.Plan, route, time.Now())) {
+			if cause == nil {
+				return autonomy.CandidateFailure{}, true
+			}
 			return autonomy.CandidateFailure{NodeID: strings.TrimPrefix(route.Resolved, engine+":"),
 				Network: profile, Definition: s.Definition, Scope: autonomy.ScopeFingerprint(s.Sources),
 				PlanID: failed.Plan.PlanID, Code: cause.Code, ObservedAt: cause.ObservedAt}, true
