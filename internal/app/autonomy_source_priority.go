@@ -60,6 +60,10 @@ func (a *App) prioritizeAutonomySources(ctx context.Context, p autonomy.Policy, 
 }
 
 func (a *App) tryAutonomyPreferredRoutes(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, cfg config.Config, service catalog.Service, profile string) (autonomy.Runtime, bool) {
+	return a.tryAutonomyPreferredRoutesWithNFQWS2Review(ctx, p, s, r, cfg, service, profile, a.autonomyNFQWS2DomainOnlyProfile)
+}
+
+func (a *App) tryAutonomyPreferredRoutesWithNFQWS2Review(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, cfg config.Config, service catalog.Service, profile string, currentNFQWS2 func(context.Context) bool) (autonomy.Runtime, bool) {
 	finish := func(state, message string) (autonomy.Runtime, bool) {
 		r.State, r.Message = state, message
 		return r, true
@@ -79,6 +83,11 @@ func (a *App) tryAutonomyPreferredRoutes(ctx context.Context, p autonomy.Policy,
 		}
 		if !ready {
 			continue
+		}
+		if route == "nfqws2" {
+			if refusal := autonomyNFQWS2MixedRefusal(ctx, service, currentNFQWS2); refusal != nil {
+				return autonomyCapabilityRefused(refusal, &r), true
+			}
 		}
 		observation := a.autonomyProbeRouteObservation(ctx, service, route, profile)
 		if observation.pause(&r) {
