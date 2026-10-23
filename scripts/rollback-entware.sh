@@ -186,7 +186,7 @@ fi
 probe_self_update_metadata() (
   # These exact metadata entrypoints are read-only, including under Stop.
   # Unsupported flags need the old Go ABI, never a guessed empty response.
-  case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state) ;; *) exit 1 ;; esac
+  case "$2" in -self-update-read-version|-self-update-schema|-check-self-update-state|-component-update-schema|-check-component-update-state) ;; *) exit 1 ;; esac
   [ -f "$1" ] && [ ! -L "$1" ] && [ -x "$1" ] || { echo "Self update metadata binary is unsafe; installation unchanged" >&2; exit 1; }
   command -v timeout >/dev/null 2>&1 || {
     echo "Bounded self update metadata probe is unavailable; installation unchanged" >&2
@@ -211,7 +211,8 @@ probe_self_update_metadata() (
     case "$2" in
       -self-update-read-version) SELF_PROBE_VALUES='2 3 4' ;;
       -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
-      -check-self-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
+      -component-update-schema) SELF_PROBE_VALUES='2 3 4' ;;
+      -check-self-update-state|-check-component-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;
     esac
     for SELF_PROBE_VALUE in $SELF_PROBE_VALUES; do
       printf '%s\n' "$SELF_PROBE_VALUE" >"$SELF_PROBE_DIR/expected"
@@ -221,7 +222,7 @@ probe_self_update_metadata() (
       fi
     done
   fi
-  if [ "$2" != -check-self-update-state ] && [ "$SELF_PROBE_CODE" -eq 2 ] && [ ! -s "$SELF_PROBE_DIR/output" ] &&
+  if [ "$2" != -check-self-update-state ] && [ "$2" != -check-component-update-state ] && [ "$SELF_PROBE_CODE" -eq 2 ] && [ ! -s "$SELF_PROBE_DIR/output" ] &&
     IFS= read -r SELF_PROBE_FIRST <"$SELF_PROBE_DIR/error" && [ "$SELF_PROBE_FIRST" = "flag provided but not defined: $2" ]; then
     printf '%s\n' unsupported
     exit 0
@@ -310,8 +311,15 @@ require_native_enrollment_schema() {
   COMPONENT_JOURNAL="$STATEDIR/components/update-journal/current.json"
   if [ -e "$COMPONENT_JOURNAL" ] || [ -L "$COMPONENT_JOURNAL" ]; then
     [ -f "$COMPONENT_JOURNAL" ] && [ ! -L "$COMPONENT_JOURNAL" ] || { echo "Component update journal is unsafe; installation unchanged" >&2; return 1; }
-    COMPONENT_SCHEMA="$("$1" -component-update-schema 2>/dev/null)" || { echo "Target binary cannot preserve component update recovery; installation unchanged" >&2; return 1; }
-    [ "$COMPONENT_SCHEMA" = 2 ] || { echo "Target binary has an incompatible component update schema; installation unchanged" >&2; return 1; }
+    # The standalone reader inspects fixed production roots, never a supplied
+    # alternate installation. Its declared version alone is not state proof.
+    COMPONENT_PRODUCTION_BASE="$(CDPATH= cd -- /opt && pwd -P)" || return 1
+    [ "$BASE" = "$COMPONENT_PRODUCTION_BASE" ] || { echo "Retained component state requires the fixed production root; installation unchanged" >&2; return 1; }
+    COMPONENT_SCHEMA="$(probe_self_update_metadata "$1" -component-update-schema)" || { echo "Target binary cannot preserve component update recovery; installation unchanged" >&2; return 1; }
+    case "$COMPONENT_SCHEMA" in 2|3|4) ;; *) echo "Target binary has an incompatible component update schema; installation unchanged" >&2; return 1 ;; esac
+    probe_self_update_metadata "$1" -check-component-update-state >/dev/null || {
+      echo "Target binary cannot read retained component update state; installation unchanged" >&2; return 1;
+    }
   fi
   if [ "$AUTONOMY_STATE_PRESENT" = skip ] && [ -e "$APPDIR/config.json.automation.json.autonomy.json" ]; then
     AUTONOMY_COMPATIBILITY="$("$1" -check-autonomy-state -config "$APPDIR/config.json" 2>/dev/null)" || {
