@@ -57,6 +57,13 @@ assert.doesNotMatch(card(), /data-component-action="remove"[^>]*disabled/, 'cata
   assert.match(nfqCard(), /data-component-action="remove"[^>]*disabled/);
   state.components = [{...nfq, rollback_ready:false}];
   assert.match(nfqCard(), /data-component-action="update"[^>]*disabled[^>]*Проверить версии/);
+  // Running managed inventory includes an advisory reason even when its
+  // checked update is permitted; that reason must not override can_update.
+  state.components = [{...nfq, lifecycle_block_reason:'Обновление требует отдельной проверки и подтверждения результата в журнале. Удаление работающего обхода недоступно.'}];
+  assert.match(nfqCard(), /data-component-action="update"(?![^>]*disabled)[^>]*>Обновить с проверкой/);
+  assert.match(nfqCard(), /data-component-action="remove"[^>]*disabled/);
+  state.components = [{...nfq, can_update:false, lifecycle_block_reason:'Изменение пакета NFQWS2 для этого управляемого профиля пока не поддерживается.'}];
+  assert.match(nfqCard(), /data-component-action="update"[^>]*disabled/);
   state.components = [{...base}]; state.engines = [{id:'usque', installed:true, version:'different runtime output'}]; state.services = [];
 }
 state.components[0] = {...base, running:true};

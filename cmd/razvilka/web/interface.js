@@ -386,8 +386,9 @@ function interfaceEngineCard(id,meta){
  const stale=['failed','checking'].includes(update.kind);
  const protectedComponent=component?.lifecycle_block_reason||component?.external_owner||info.running||used.length>0;
  const lifecycleAllowed=component&&!busy&&!component.inventory_error&&!protectedComponent&&!info.observationStale;
- // NFQWS2 is updated while its routes run: checked on the router and rolled back on failure.
- const managedUpdate=component?.managed_update===true&&!component.external_owner&&!component.lifecycle_block_reason;
+ // The backend can offer a checked update while routes run and also explain
+ // why removal is blocked. Its can_update flag still gates the actual action.
+ const managedUpdate=component?.managed_update===true&&!component.external_owner;
  const updateAllowed=managedUpdate?component&&!busy&&!component.inventory_error&&!info.observationStale&&component.rollback_ready===true:lifecycleAllowed;
  const disabledReason=recoveryBlocked?'Прочитайте журнал обновления и завершите соответствующее восстановление.':managedUpdate&&component.update_available&&!component.rollback_ready?'Нажмите «Проверить версии»: RAZVILKA сохранит копию текущей версии для отката.':component?.lifecycle_block_reason||(component?.external_owner?'Компонент управляется внешним проектом.':info.running||used.length?'Сначала остановите обход и перенесите зависимые сервисы на другой маршрут.':stale?'Обновите сведения о пакете перед изменением.':busy?'Дождитесь завершения операции.':'Нет разрешения на действие в каталоге компонентов.');
  const action=(name,label,allowed)=>`<button type="button" class="${name==='remove'?'component-remove':'primary'} component-action" data-component="${esc(id)}" data-component-action="${name}" data-rz-focus="engine-${esc(id)}-${name}" ${allowed?'':`disabled title="${esc(disabledReason)}"`}>${label}</button>`;
