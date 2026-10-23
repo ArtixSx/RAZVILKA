@@ -25,6 +25,7 @@ func (a *App) withdrawAutonomySource(ctx context.Context, id string) (bool, bool
 		return false, false, nil
 	}
 	p.SourceIDs = slices.DeleteFunc(p.SourceIDs, func(value string) bool { return value == id })
+	p.PreferredSourceIDs = slices.DeleteFunc(p.PreferredSourceIDs, func(value string) bool { return value == id })
 	p.Revision++
 	paused := p.Enabled && len(p.SourceIDs) == 0 && len(p.PreferredRoutes) == 0
 	if paused {

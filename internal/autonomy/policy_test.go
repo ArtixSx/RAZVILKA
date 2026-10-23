@@ -70,6 +70,9 @@ func TestPolicyValidation(t *testing.T) {
 		{"no_empty_protocol", func(p *Policy) { p.Protocols = nil }, false},
 		{"no_unsupported_preferred", func(p *Policy) { p.PreferredRoutes = []string{"custom-shell"} }, false},
 		{"no_duplicate_preferred", func(p *Policy) { p.PreferredRoutes = []string{"usque", "usque"} }, false},
+		{"source_priority_consented", func(p *Policy) { p.PreferredSourceIDs = []string{"feed-fixture"} }, true},
+		{"source_priority_no_new_consent", func(p *Policy) { p.PreferredSourceIDs = []string{"manual"} }, false},
+		{"source_priority_unique", func(p *Policy) { p.PreferredSourceIDs = []string{"feed-fixture", "feed-fixture"} }, false},
 		{"own_servers_preferred", func(p *Policy) { p.PreferredRoutes = []string{"amneziawg", "wireguard", "sing-box", "xray"} }, true},
 		{"no_node_route_preferred", func(p *Policy) { p.PreferredRoutes = []string{"sing-box:node-abc"} }, false},
 		{"auto_install", func(p *Policy) { p.Application.Mode = "install" }, true},
@@ -110,12 +113,14 @@ func TestScopeBoundaries(t *testing.T) {
 }
 func TestCloneIsolationAndRoundTrip(t *testing.T) {
 	p := validPolicy()
+	p.PreferredSourceIDs = []string{"feed-fixture"}
 	q := Clone(p)
 	q.SourceIDs[0] = "other"
 	q.Protocols[0] = "bad"
 	q.Application.Days[0] = 4
 	q.DefaultSources[0] = "bad"
 	q.PreferredRoutes[0] = "bad"
+	q.PreferredSourceIDs[0] = "bad"
 	if Validate(p) != nil {
 		t.Fatal("clone aliases policy")
 	}

@@ -32,6 +32,7 @@ type Window struct {
 type Policy struct {
 	UpdateChannel         string   `json:"update_channel,omitempty"`
 	PreferredRoutes       []string `json:"preferred_routes"`
+	PreferredSourceIDs    []string `json:"preferred_source_ids,omitempty"`
 	Schema                int      `json:"schema"`
 	Revision              uint64   `json:"revision"`
 	InheritNewServices    bool     `json:"inherit_new_services"`
@@ -118,6 +119,16 @@ func Validate(p Policy) error {
 	if len(p.PreferredRoutes) > routekind.PreferredCount {
 		return ErrPolicy
 	}
+	if len(p.PreferredSourceIDs) > MaxSources {
+		return ErrPolicy
+	}
+	priorities := map[string]bool{}
+	for _, id := range p.PreferredSourceIDs {
+		if !slices.Contains(p.SourceIDs, id) || priorities[id] {
+			return ErrPolicy
+		}
+		priorities[id] = true
+	}
 	routes := map[string]bool{}
 	for _, r := range p.PreferredRoutes {
 		if !routekind.IsExecutor(r) || routes[r] {
@@ -149,6 +160,7 @@ func Validate(p Policy) error {
 }
 func Clone(p Policy) Policy {
 	p.PreferredRoutes = slices.Clone(p.PreferredRoutes)
+	p.PreferredSourceIDs = slices.Clone(p.PreferredSourceIDs)
 	p.DefaultSources = slices.Clone(p.DefaultSources)
 	p.SourceIDs = slices.Clone(p.SourceIDs)
 	p.Protocols = slices.Clone(p.Protocols)

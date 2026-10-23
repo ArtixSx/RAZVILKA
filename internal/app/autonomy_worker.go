@@ -301,36 +301,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		if refusal := a.autonomyUnappliedRefusal(cfg, p, s, engine); refusal != nil {
 			return autonomyCapabilityRefused(refusal, &r)
 		}
-		for _, route := range p.PreferredRoutes {
-			if ctx.Err() != nil {
-				return finish("paused", "Подбор отменён.")
-			}
-			// Not even probed: the plan would refuse this route for the service.
-			if !routeEligibleForService(service, route) {
-				continue
-			}
-			ready := false
-			for _, o := range a.nodeRouteOptions() {
-				if o.ID == route && o.Ready {
-					ready = true
-				}
-			}
-			if !ready {
-				continue
-			}
-			observation := a.autonomyProbeRouteObservation(ctx, service, route, profile)
-			if observation.pause(&r) {
-				return r
-			}
-			if observation.Verdict == "PASS" {
-				if !r.ReserveSwitch(time.Now(), p.MaxSwitchesPerHour) {
-					return finish("rate-limited", "Лимит применений исчерпан; проверенный обход пока не меняется.")
-				}
-				a.autonomyRuntime(s.ID, r)
-				if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, route); err != nil {
-					return finish(autonomyLegacyApplyRefused(err, &r, "Применение локального обхода не подтверждено; выполнена защита/откат."))
-				}
-				return finish("applied", "Подходящий обход применён через общую транзакцию.")
+		// CIDR-only source preferences get their bounded node phase first.
+		// Domain services retain their existing NFQWS2-only route boundary.
+		if len(p.PreferredSourceIDs) == 0 || autonomyDomainService(service) {
+			if next, done := a.tryAutonomyPreferredRoutes(ctx, p, s, r, cfg, service, profile); done {
+				return next
 			}
 		}
 	}
@@ -340,6 +315,11 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 		return a.finishAutonomyDomainService(ctx, p, s, r, cfg, profile, current, healthy)
 	}
 	if a.Nodes == nil {
+		if current == "" && len(p.PreferredSourceIDs) > 0 {
+			if next, done := a.tryAutonomyPreferredRoutes(ctx, p, s, r, cfg, service, profile); done {
+				return next
+			}
+		}
 		return finish("checker-unavailable", "Точная проверка подключений недоступна.")
 	}
 	if _, err := a.nodeCheckerForEngine(engine); err != nil {

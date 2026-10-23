@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -181,8 +182,23 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 	}
 	sort.Slice(catalogServices, func(i, j int) bool { return catalogServices[i]["name"].(string) < catalogServices[j]["name"].(string) })
 	presets := []map[string]any{}
+	choiceNames := map[string]string{"manual": "Добавленные вручную"}
 	for _, preset := range providerfeed.Builtins() {
 		presets = append(presets, map[string]any{"id": "feed-" + preset.ID, "name": preset.Name, "interval_minutes": preset.DefaultRefreshIntervalMinutes})
+		choiceNames["feed-"+preset.ID] = preset.Name
+	}
+	choices := []map[string]any{}
+	for index, id := range p.SourceIDs {
+		name, known := choiceNames[id]
+		kind := "unknown"
+		if !known {
+			name = fmt.Sprintf("Источник %d", index+1)
+		} else if id == "manual" {
+			kind = "manual"
+		} else {
+			kind = "community"
+		}
+		choices = append(choices, map[string]any{"id": id, "name": name, "kind": kind})
 	}
 	// Expose only bounded scheduling/readback metadata to the authenticated UI.
 	// Never expose old raw refresh errors, destinations or full plan objects here.
@@ -193,7 +209,7 @@ func (a *App) autonomyView(now time.Time) map[string]any {
 		}
 	}
 	return map[string]any{"policy": p, "starter": onboarding.Starter(definitions, starterConfigView(cfg), p, services), "services": services, "runtime": runtime, "blocked": blocked, "blocked_code": blockedCode, "safe_mode": cfg.SafeMode, "manual": cfg.ServiceControl.EffectiveMode() == "manual", "stopped": cfg.ServiceControl.Stopped,
-		"catalog_services": catalogServices, "source_presets": presets, "applied_services": cfg.AppliedServices, "server_time": now.UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, now), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, now), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
+		"catalog_services": catalogServices, "source_presets": presets, "source_choices": choices, "applied_services": cfg.AppliedServices, "server_time": now.UTC(), "next_application_window": autonomy.NextWindow(p.Application, p.Timezone, now), "next_components_window": autonomy.NextWindow(p.Components, p.Timezone, now), "maintenance_message": maintenance, "reserve_refill": refill, "address_refresh": addressRefresh,
 		"capabilities": map[string]any{"automatic_initial_apply": true, "automatic_reserves": true, "scenario": "web", "source_timers": "saved-router-subscriptions", "automatic_install": true, "component_install": true, "note": "Автоматическое обновление приложения и установленных компонентов по расписанию реализовано. Сквозная приёмка установки и отката на целевой Entware для 0.20.0 (D11) ещё не завершена. Выполнение требует сохранённой политики и успешных проверок установщика. Проверка и подготовка приложения по расписанию работают отдельно."}}
 }
 

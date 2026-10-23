@@ -152,10 +152,37 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	}
 	prepareAutonomyTraversal(&r, autonomyTraversalVersion(p, s, engine, profile), ids, time.Now())
 	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, time.Now())
+	priorityCount, priorityErr := a.prioritizeAutonomySources(ctx, p, &r, time.Now())
+	if priorityErr != nil {
+		return finish("catalog-unavailable", "Каталог приоритетных источников недоступен; подбор отложен.")
+	}
 	if err := a.persistAutonomySearch(ctx, s.ID, r); err != nil {
 		return finish("requires-review", "Не удалось сохранить ход подбора; переключение остановлено.")
 	}
+	standardRoutes := func() (autonomy.Runtime, bool) {
+		if cfg.AppliedServices[s.ID].Enabled || len(p.PreferredSourceIDs) == 0 || r.Search.StandardRoutesTried {
+			return r, false
+		}
+		// Scheduling metadata only. Persist before the standard phase so later
+		// public-node rounds/restarts cannot repeatedly starve behind its probes.
+		r.Search.StandardRoutesTried = true
+		if err := a.persistAutonomySearch(ctx, s.ID, r); err != nil {
+			return finish("requires-review", "Не удалось сохранить ход подбора; переключение остановлено."), true
+		}
+		next, done := a.tryAutonomyPreferredRoutes(ctx, p, s, r, cfg, service, profile)
+		r = next
+		return r, done
+	}
 	if r.Search.Exhausted {
+		if r.Search.RetryAt.IsZero() && len(p.PreferredSourceIDs) > 0 {
+			r.Search.RetryAt = time.Now().Add(time.Duration(p.ReserveSeconds) * time.Second)
+			if err := a.persistAutonomySearch(ctx, s.ID, r); err != nil {
+				return finish("requires-review", "Не удалось сохранить ход подбора; переключение остановлено.")
+			}
+		}
+		if next, done := standardRoutes(); done {
+			return next
+		}
 		return finish("searching", "Доступный снимок проверен. Ожидаем разрешённое пополнение или повторную проверку.")
 	}
 	// The library cursor is a ring. Present only the remaining suffix, so its
@@ -166,11 +193,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	checkState, checkMessage := "", ""
 	checkedNode := ""
 	var usableCheck nodestore.SearchCheck
-	result, err := a.Nodes.SearchFirstUsable(ctx, nodestore.SearchRequest{
-		Engine: engine, ServiceID: s.ID, NetworkProfile: profile, Ordered: remaining,
-		Current: current, Cursor: 0, Limit: p.CandidatesPerRound,
-		AllowedSources: p.SourceIDs, Protocols: p.Protocols,
-	}, nodestore.SearchHooks{
+	hooks := nodestore.SearchHooks{
 		Guard: guard,
 		Check: func(c context.Context, id string) (nodestore.SearchCheck, error) {
 			candidateEngine, err := a.autonomyCandidateEngine(c, p, s, engine, id)
@@ -254,7 +277,33 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			}
 			return true, guard(c)
 		},
-	})
+	}
+	checksLeft := p.CandidatesPerRound
+	search := func(count int) (nodestore.SearchResult, error) {
+		offset = r.Search.Cursor
+		remaining = r.Search.Ordered[offset : offset+count]
+		result, err := a.Nodes.SearchFirstUsable(ctx, nodestore.SearchRequest{
+			Engine: engine, ServiceID: s.ID, NetworkProfile: profile, Ordered: remaining,
+			Current: current, Cursor: 0, Limit: checksLeft,
+			AllowedSources: p.SourceIDs, Protocols: p.Protocols,
+		}, hooks)
+		checksLeft -= result.Checks
+		return result, err
+	}
+	var result nodestore.SearchResult
+	var err error
+	priorityEnd := offset + priorityCount
+	if priorityCount > 0 {
+		result, err = search(priorityCount)
+	}
+	if err == nil && result.Applied.NodeID == "" && r.Search.Cursor >= priorityEnd {
+		if next, done := standardRoutes(); done {
+			return next
+		}
+		if checksLeft > 0 && !r.Search.Exhausted {
+			result, err = search(len(r.Search.Ordered) - r.Search.Cursor)
+		}
+	}
 	if result.Applied.NodeID != "" {
 		// Search verifies this SAME durable exact PASS before Apply and only
 		// publishes Applied after a successful transaction. Keep its actual
