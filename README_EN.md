@@ -106,14 +106,14 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.62/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.62 sh /opt/tmp/razvilka-setup.sh
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.63/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.63 sh /opt/tmp/razvilka-setup.sh
 ```
 
 The explicit `RAZVILKA_VERSION` is required: it pins the archive to the same Test
 release as the script. The installer detects the architecture, verifies SHA-256
 and starts the service. Bypass components are installed later from the panel.
-See the [release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) for Test limitations.
+See the [release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.63) for Test limitations.
 
 **3. Open the panel** at **http://192.168.1.1:8787** (or your router's address
 with port `8787`; the exact link is printed by the installer). Sign in with the
@@ -149,14 +149,14 @@ its own uninstaller, then install 0.20.0 —
 
 ## Uninstall
 
-The command below is for an installed `0.20.0-rc.62`. For another version,
+The command below is for an installed `0.20.0-rc.63`. For another version,
 use the bootstrap and explicit `RAZVILKA_VERSION` from its release.
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.62/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.62 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.63/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.63 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
 Save the settings and connections you need first. This removes the panel,
@@ -192,7 +192,7 @@ More — [SECURITY](SECURITY.md).
 
 - [Install, update, uninstall and rollback (RU)](docs/INSTALL_RU.md)
 - [Compatibility and limitations (RU)](docs/CURRENT_STATUS_RU.md)
-- [Test release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.62) · [Changelog](CHANGELOG.md)
+- [Test release notes (RU)](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.63) · [Changelog](CHANGELOG.md)
 - [Roadmap](docs/ROADMAP.md) · [Two DPI engines idea (RU)](docs/DUAL_DPI_ARCHITECTURE_RU.md)
 - [Files and folders (RU)](docs/FILES_RU.md) · [Third-party components](THIRD_PARTY.md)
 - [Contributing](CONTRIBUTING.md)
