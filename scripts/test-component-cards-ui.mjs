@@ -146,7 +146,7 @@ assert.match(card(), /&lt;script&gt;/);
 
 const lifecycleCode = slice(app, 'async function refreshComponents(', 'function renderStatus(');
 function fixture() {
-  const calls=[], notices=[], details=[];
+  const calls=[], notices=[], details=[], notifications=[];
   const refreshButton={disabled:false,textContent:''};
   const component={...base};
   const current={components:[component], engines:[], engineConfigs:[], dataLoad:{},currentView:'overview',homeSummaryRenders:0};
@@ -161,11 +161,13 @@ function fixture() {
     panelSectionState:(key,phase,error)=>{current.dataLoad[key]={loaded:phase==='ready'||current.dataLoad[key]?.loaded===true,phase,message:error?.message||''};},
     api:async(path,options={})=>{calls.push({path,options});return responder(path,options);},
     askConfirmation:(...args)=>confirmation(...args),
+    acceptPanelInventory(){},
     showNotice:(...args)=>notices.push(args),showDetails:(...args)=>details.push(args),
+    notifyOperationSuccess:(...args)=>notifications.push(args),
     refreshHomeEngineSummary(){current.homeSummaryRenders++;},renderComponents(){},renderEngineControl(){},renderEngines(){},renderConsole(){},renderInterfaceEngines(){},
   });
   vm.runInContext(lifecycleCode,ctx);
-  return {ctx,state:current,calls,notices,details,workflowState,refreshButton,setResponder:fn=>responder=fn,setConfirmation:fn=>confirmation=fn};
+  return {ctx,state:current,calls,notices,details,notifications,workflowState,refreshButton,setResponder:fn=>responder=fn,setConfirmation:fn=>confirmation=fn};
 }
 let f=fixture();
 await f.ctx.manageComponent('usque','remove');
@@ -173,6 +175,19 @@ assert.deepEqual(f.calls.filter(c=>c.options.method==='POST').map(c=>c.path), ['
 assert.ok(f.calls[0].path.endsWith('/plan?action=remove'));
 assert.equal(f.calls[0].options.readTimeoutMs,110000);
 assert.equal(f.state.componentOperation,null);
+assert.equal(f.details.length,0,'successful removal must not open the inspector automatically: '+f.details[0]?.[0]?.error);
+assert.equal(f.notifications.length,1);
+assert.match(f.notifications[0][0],/удаление завершено/);
+assert.equal(f.notifications[0][1],'Компонент удалён и повторная проверка подтвердила результат.');
+
+for(const action of ['install','update']) {
+  const completed=fixture();assert.equal(await completed.ctx.manageComponent('usque',action),true);
+  assert.equal(completed.details.length,0,'completed component operation opened the large inspector');
+  assert.equal(completed.notifications.length,1);
+  assert.match(completed.notifications[0][0],action==='update'?/обновление проверено/:/установка проверена/);
+  assert.match(completed.notifications[0][1],/Маршруты сервисов пока не менялись/);
+  assert.equal(completed.notifications[0][2].message,completed.notifications[0][1]);
+}
 
 f=fixture(); f.setResponder(async()=>({ready:false,blockers:[{code:'SERVICE_DEPENDENCY'}]}));
 await f.ctx.manageComponent('usque','remove');
@@ -189,12 +204,16 @@ f=fixture();
 f.setResponder(async (path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:false}:[{...base}]);
 assert.equal(await f.ctx.manageComponent('usque','remove'),false);
 assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'unconfirmed response must not announce successful removal');
+assert.equal(f.notifications.length,0);
+assert.equal(f.notices.at(-1)[0],'error');
+assert.equal(f.details.length,1,'unknown outcome still needs its visible inspector');
 
 f=fixture();f.setResponder(async(path,options)=>path.includes('/plan?')?{ready:true}:options.method==='POST'?{ok:true,pending_live_acceptance:true,transaction_id:'a'.repeat(32)}:[{...base}]);
 assert.equal(await f.ctx.manageComponent('usque','update'),true);
 assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
 assert.equal(f.notices.some(notice=>notice[0]==='success'),false,'202 candidate must not claim accepted update');
 assert.match(f.notices.at(-1)[1],/принятие версии ожидается/);
+assert.equal(f.notifications.length,0,'202 acceptance must not enter the completed success queue');
 
 f=fixture(); let finishPlan;
 f.setResponder(()=>new Promise(resolve=>{finishPlan=resolve;}));

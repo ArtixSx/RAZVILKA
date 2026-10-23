@@ -1655,8 +1655,11 @@ async function manageComponentReviewed(id, requestedAction) {
     if(!workflowSession(epoch))return false;
     Object.assign(state, { engines, engineConfigs });
     renderEngines(); renderEngineControl();
-    showNotice('success', `${component.name}: ${action === 'remove' ? 'удаление завершено' : 'установка проверена'}`, action === 'remove' ? 'Компонент удалён и повторная проверка подтвердила результат.' : 'Версия повторно прочитана с роутера, контрольный результат сохранён. Маршруты сервисов пока не менялись.', { plan, result });
-    showDetails({ plan, result }, `${component.name}: готово`);
+    const title = `${component.name}: ${action === 'remove' ? 'удаление завершено' : action === 'update' ? 'обновление проверено' : 'установка проверена'}`;
+    const message = action === 'remove' ? 'Компонент удалён и повторная проверка подтвердила результат.' : 'Версия повторно прочитана с роутера, контрольный результат сохранён. Маршруты сервисов пока не менялись.';
+    const details = { message, plan, result };
+    if (typeof notifyOperationSuccess === 'function') notifyOperationSuccess(title, message, details);
+    else showNotice('success', title, message, details);
     return true;
   } catch (error) {
     if(!workflowSession(epoch))return false;
@@ -2983,6 +2986,10 @@ async function saveEngineDraft(existingIntent = null) {
     state.engineValidation = null;
     if (!await refreshEngineConfigs(intent) || !engineIntentCurrent(intent)) return null;
     $('#engineEditorMessage').textContent = 'Изменения подготовлены для проверки. Рабочие настройки пока прежние.';
+    if (!existingIntent && typeof notifyOperationSuccess === 'function') {
+      const name = state.engineConfigs.find(engine => engine.id === intent.engineID)?.name || intent.engineID;
+      notifyOperationSuccess(`${name}: черновик сохранён`, $('#engineEditorMessage').textContent, staged);
+    }
     return staged;
   } catch (error) {
     if (engineIntentCurrent(intent)) showDetails({ error: error.message }, 'Изменения не подготовлены — применение остановлено');

@@ -45,6 +45,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-inspector-controls-ui.mjs
   node scripts/test-inspector-deletion-ui.mjs
   node scripts/test-component-cards-ui.mjs
+  node scripts/test-operation-notifications.mjs
   node scripts/test-strategy-compatibility-ui.mjs
   node scripts/test-managed-nfq-bundle-ui.mjs
   node scripts/test-component-recovery-ui.mjs

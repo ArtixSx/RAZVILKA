@@ -932,3 +932,26 @@ body.rz-simple #panelAvailability[data-state=busy],body.rz-simple #panelAvailabi
 /* Tall first-run and recovery forms scroll inside the authentication overlay.
    Start alignment is the fallback for browsers without safe alignment. */
 .interface-ui .auth-screen{overflow-y:auto;align-items:start;align-items:safe center;}
+
+/* Saved catalogue cards have copy only, without the live icon/action columns. */
+.community-result.community-saved-entry{grid-template-columns:minmax(0,1fr);cursor:default;}
+.community-saved-entry>div{min-width:0;overflow-wrap:anywhere;}
+.community-saved-entry small{white-space:normal;}
+
+/* Completed operations stay compact; their technical inspector opens on demand. */
+.operation-notifications{position:fixed;right:20px;bottom:24px;z-index:180;display:grid;gap:10px;width:min(420px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow-y:auto;pointer-events:none;}
+.operation-toast-stack{display:grid;gap:10px;}
+.operation-notification-history-toggle{justify-self:end;pointer-events:auto;font-size:11px;}
+.operation-notification-history{padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);max-height:240px;overflow-y:auto;pointer-events:auto;}
+.operation-notification-history-row{display:block;width:100%;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);font-size:12px;text-align:left;overflow-wrap:anywhere;}
+.operation-notification-history-row:hover{background:var(--panel2);}
+.operation-toast{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1px solid var(--green);border-radius:12px;background:var(--panel);color:var(--text);box-shadow:var(--shadow);pointer-events:auto;}
+.operation-toast-copy{flex:1;min-width:0;overflow-wrap:anywhere;}
+.operation-toast-copy strong{display:block;font-size:13px;line-height:1.4;}
+.operation-toast-copy p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.5;}
+.operation-toast-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.operation-toast-actions button{min-height:32px;padding:5px 8px;font-size:11px;}
+.operation-toast-actions .operation-toast-close{border:0;background:transparent;color:var(--muted);font-size:20px;}
+.interface-ui #a1-notice:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;overflow-wrap:anywhere;}
+.interface-ui #a1-notice>.notice-close{grid-column:2;grid-row:1;justify-self:end;align-self:start;flex-shrink:0;margin:0;min-width:28px;padding:2px 6px;line-height:1.2;}
+@media(max-width:520px){.operation-notifications{right:16px;bottom:76px;max-height:calc(100dvh - 100px);}.operation-toast{flex-wrap:wrap;}.operation-toast-copy{flex-basis:100%;}.operation-toast-actions{margin-left:auto;}}
