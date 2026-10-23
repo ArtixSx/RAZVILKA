@@ -55,7 +55,8 @@ for ARG in "$@"; do
     --without-components) WITH_COMPONENTS=0 ;; # legacy compatibility; UI-only is now the default
     -h|--help)
       echo "Usage: sh bootstrap.sh [--from-artem-flow] [--starter-pack] | --uninstall [--purge] | --rollback"
-      echo "Default: install/update the panel. --uninstall removes panel/owned routes and keeps data."
+      echo "Default: install/update the panel. --uninstall keeps data; managed 0.20 removal refuses before Stop."
+      echo "Managed 0.20 refuses retained-data removal: export settings, then use --uninstall --purge for a clean install."
       echo "--uninstall --purge then moves all RAZVILKA data to /opt/razvilka-removed-<UTC> for a clean reinstall."
       echo "--rollback explicitly restores the last pre-update snapshot."
       echo "Optional environment: RAZVILKA_VERSION=v<release-tag> (default: $RELEASE_TAG; latest only for installation)"

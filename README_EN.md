@@ -151,22 +151,20 @@ its own uninstaller, then install 0.20.0 —
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
   https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0/scripts/bootstrap.sh &&
-sh /opt/tmp/razvilka-setup.sh --uninstall
-```
-
-This removes the panel, its autostart and its own routes. Settings,
-connections and backups are **kept**. A plain install over them is refused:
-the installer sees the previous installation's journal.
-
-To reinstall RAZVILKA **from scratch** afterwards, uninstall with data move:
-
-```sh
 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
-`--purge` **moves** (does not erase) all RAZVILKA data to
+Save the settings and connections you need first. This removes the panel,
+its autostart and its own routes, then **moves** (does not erase) all data to
 `/opt/razvilka-removed-<date>`, readable by `root` only. Entware, third-party
 programs and installed bypass packages are not touched.
+For a clean installation, repeat the Install command and configure the panel
+again. The archive preserves your original data but is not an automatic import
+package; do not copy its control journals into the new installation.
+
+Without `--purge`, managed 0.20 removal refuses **before stopping the panel**:
+reinstalling over retained data is currently unsupported. The panel and data
+stay in place. Use the panel for ordinary updates.
 
 ## Supported routers
 

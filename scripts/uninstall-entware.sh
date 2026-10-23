@@ -26,7 +26,9 @@ case "$#:${1:-}" in
   1:--purge) PURGE=1 ;;
   1:-h|1:--help)
     echo "Usage: sh uninstall-entware.sh [--purge]"
-    echo "Default: remove the panel and its owned routes; keep settings, connections and snapshots."
+    echo "Default: keep data; managed 0.20 removal refuses before stopping the panel."
+    echo "Managed 0.20 retained-data reinstall is unsupported: ordinary removal keeps the panel installed."
+    echo "Export settings first; --purge archives data and permits a clean install."
     echo "--purge: then move all RAZVILKA data to $BASE/razvilka-removed-<UTC> (mode 0700) for a clean reinstall."
     exit 0 ;;
   *) echo "Unknown option: $*. Use rollback-entware.sh explicitly to restore an older version." >&2; exit 2 ;;
@@ -49,6 +51,20 @@ done
 for FILE in "$INIT" "$BINARY"; do
   [ ! -L "$FILE" ] && { [ ! -e "$FILE" ] || { [ -f "$FILE" ] && [ -x "$FILE" ]; }; } || { echo "Unsafe installation file: $FILE" >&2; exit 1; }
 done
+
+require_supported_removal_path() {
+  [ "$PURGE" -eq 0 ] || return 0
+  # A retained epoch, even ready, cannot authorize a raw reinstall. Refuse
+  # before losing the executable that owns it; never classify or erase it here.
+  for REMOVAL_PROTOCOL in "$STATEDIR/self-update-stop" "$STATEDIR/self-update" "$STATEDIR/self-update-files"; do
+    if [ -e "$REMOVAL_PROTOCOL" ] || [ -L "$REMOVAL_PROTOCOL" ]; then
+      echo "Retained-data reinstall is unsupported for this managed installation; panel files and data kept" >&2
+      echo "Export settings before removal. Use --purge to archive all RAZVILKA data for a clean installation." >&2
+      echo "Restore settings only through a validated restore path; do not copy control journals into a new installation." >&2
+      return 1
+    fi
+  done
+}
 
 # Purge moves whole directories. Prove every precondition before Stop, so a
 # refused purge never leaves a half-removed installation behind.
@@ -81,6 +97,7 @@ else
     echo "Порядок перехода: docs/INSTALL_RU.md, раздел «Переход с 0.19.3 и более ранних версий»." >&2
     exit 1
   fi
+  require_supported_removal_path
   [ -x "$BINARY" ] || { echo "Current binary is missing; cannot safely deactivate its routes. Reinstall RAZVILKA before removal." >&2; exit 1; }
 
   if [ -x "$INIT" ]; then
@@ -92,6 +109,10 @@ else
     [ -z "$(pidof razvilka 2>/dev/null || true)" ] || { echo "RAZVILKA is running but its init script is missing; removal stopped" >&2; exit 1; }
   fi
 
+  # Stop can materialize a protocol owner. Keep its repair image rather than
+  # retire routes or remove the panel after the initial observation changed.
+  require_supported_removal_path
+
   # Settle retained private journals while their writer is stopped. A failed
   # stop, private recovery or owned-route cleanup keeps the binary for repair.
   RECOVERY_OUTPUT="$("$BINARY" -recover-private-restore \
@@ -100,6 +121,7 @@ else
     -stage "$STATEDIR/staging" -warp-state "$STATEDIR/warp" \
     -cloudflare-state "$APPDIR/cloudflare-private")"
   printf '%s\n' "$RECOVERY_OUTPUT" | grep -q '"ok":true' || { echo "Private restore recovery did not report success; panel files kept" >&2; exit 1; }
+  require_supported_removal_path
   # Removal retires RAZVILKA's stopped component configuration before its
   # ownership ledger can be moved away. Ordinary Stop/update keeps that ledger
   # and must not take this path. Shared component packages remain installed.
@@ -107,10 +129,11 @@ else
     -stage "$STATEDIR/staging" \
     -backups "$STATEDIR/backups" \
     -dataplane-state "$STATEDIR/dataplane" >/dev/null
+  require_supported_removal_path
   rm -f "$INIT" "$BINARY"
   if [ "$PURGE" -eq 0 ]; then
     # Uninstall is never an implicit rollback: current settings, credentials, nodes,
-    # component packages and update snapshots remain available for reinstallation.
+    # component packages and update snapshots remain available as saved data.
     echo "RAZVILKA panel and owned routes removed. Data and backups kept in $APPDIR and $STATEDIR; installed bypass packages were not removed."
     exit 0
   fi

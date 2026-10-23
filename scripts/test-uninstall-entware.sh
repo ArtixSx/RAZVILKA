@@ -11,17 +11,26 @@ cleanup() { case "$TEST_ROOT" in "$TMP_BASE"/razvilka-uninstall.*) rm -rf "$TEST
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
+# Synthetic canonical control records, including valid SHA-256 seals. The guard
+# must preserve a real ready epoch just as strictly as unknown retained bytes.
+CONTROL_READY_FIXTURE='{"schema":1,"owner":"razvilka-control-authority-v1","installation_id":"11111111111111111111111111111111","sequence":1,"state":"ready","stopped":false,"digest":"af586d364f2e61cbf27e6dc66ecf7dcd05371755a1b3a9cd78e587492cd0a1ec"}'
+CONTROL_STOPPED_FIXTURE='{"schema":1,"owner":"razvilka-control-authority-v1","installation_id":"11111111111111111111111111111111","sequence":2,"transaction_id":"22222222222222222222222222222222","config_revision":7,"state":"observed-stopped","stopped":true,"digest":"3706cb644a0de80c9ee4ac090ae43d3514b0f53be65ac4e527cf6b585608a0ed"}'
+export CONTROL_READY_FIXTURE
+
 assert_retained_in() {
   # $1 holds etc/razvilka, $2 holds the private razvilka tree.
   [ "$(cat "$1/config.json")" = current-settings ] &&
     [ "$(cat "$1/admin.credentials.json")" = current-credentials ] &&
     [ "$(cat "$1/nodes-private/nodes.private.json")" = current-nodes ] &&
-    [ "$(cat "$2/state/update-backups/previous/razvilka.bin")" = old-binary ] &&
-    [ "$(cat "$2/state/self-update-stop/ledger")" = control-ledger ] || { echo "Removal changed retained private data/backup: $CASE" >&2; exit 1; }
+    [ "$(cat "$2/state/update-backups/previous/razvilka.bin")" = old-binary ] || { echo "Removal changed retained private data/backup: $CASE" >&2; exit 1; }
+  if [ "$HAS_CONTROL" -eq 1 ]; then
+    [ "$(cat "$2/state/self-update-stop/ledger")" = control-ledger ] || { echo "Removal changed retained control data: $CASE" >&2; exit 1; }
+  fi
 }
 
 for CASE in success foreign-shared-var symlink-base stop-failed recovery-failed deactivate-failed missing-binary unsafe-directory \
-  legacy-layout legacy-leftover purge purge-after-uninstall purge-legacy-leftover purge-running purge-from-inside purge-legacy-link; do
+  legacy-layout legacy-leftover purge purge-after-uninstall purge-legacy-leftover purge-running purge-from-inside purge-legacy-link \
+  ready-control stopped-control malformed-control empty-control linked-control helper-protocol file-protocol late-protocol late-recovery-protocol late-deactivate-protocol; do
   [ "$CASE" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   [ "$CASE" != purge-legacy-link ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   BASE="$TEST_ROOT/$CASE"
@@ -35,6 +44,14 @@ for CASE in success foreign-shared-var symlink-base stop-failed recovery-failed 
   printf '%s\n' "$BASE/razvilka/state/update-backups/previous" >"$BASE/razvilka/state/current-backup"
   printf '%s\n' old-binary >"$BASE/razvilka/state/update-backups/previous/razvilka.bin"
   printf '%s\n' control-ledger >"$BASE/razvilka/state/self-update-stop/ledger"
+  HAS_CONTROL=0
+  case "$CASE" in
+    purge|purge-*)
+      HAS_CONTROL=1
+      printf '%s' "$CONTROL_READY_FIXTURE" >"$BASE/razvilka/state/self-update-stop/current-v1.json"
+      printf 'RAZVILKA control authority v1\n' >"$BASE/razvilka/state/self-update-stop/.control.lock" ;;
+    *) rm -rf "$BASE/razvilka/state/self-update-stop" ;;
+  esac
   printf '%s\n' current-settings >"$BASE/etc/razvilka/config.json"
   printf '%s\n' current-credentials >"$BASE/etc/razvilka/admin.credentials.json"
   printf '%s\n' current-nodes >"$BASE/etc/razvilka/nodes-private/nodes.private.json"
@@ -45,6 +62,10 @@ set -eu
 [ "$1" = stop ] || exit 97
 printf '%s\n' stop >>"$RAZVILKA_BASE/calls"
 [ "$CASE" != stop-failed ] || exit 42
+if [ "$CASE" = late-protocol ]; then
+  mkdir -p "$RAZVILKA_BASE/razvilka/state/self-update-stop"
+  printf '%s' "$CONTROL_READY_FIXTURE" >"$RAZVILKA_BASE/razvilka/state/self-update-stop/current-v1.json"
+fi
 INIT
   cat >"$BASE/bin/razvilka" <<'BINARY'
 #!/bin/sh
@@ -53,12 +74,20 @@ case "$1" in
   -recover-private-restore)
     printf '%s\n' recovery >>"$RAZVILKA_BASE/calls"
     [ "$CASE" != recovery-failed ] || exit 43
+    if [ "$CASE" = late-recovery-protocol ]; then
+      mkdir -p "$RAZVILKA_BASE/razvilka/state/self-update"
+      printf '%s\n' retained-owner >"$RAZVILKA_BASE/razvilka/state/self-update/current.json"
+    fi
     printf '%s\n' '{"ok":true}'
     ;;
   -deactivate-dataplane)
     [ "${2:-}" = -retire-dataplane-for-removal ] || exit 96
     printf '%s\n' deactivate >>"$RAZVILKA_BASE/calls"
     [ "$CASE" != deactivate-failed ] || exit 44
+    if [ "$CASE" = late-deactivate-protocol ]; then
+      mkdir -p "$RAZVILKA_BASE/razvilka/state/self-update-files"
+      printf '%s\n' retained-owner >"$RAZVILKA_BASE/razvilka/state/self-update-files/current.json"
+    fi
     ;;
   *) exit 98 ;;
 esac
@@ -86,7 +115,31 @@ PIDOF
       mkdir -p "$BASE/var/lib" "$TEST_ROOT/foreign-$CASE"
       printf '%s\n' foreign >"$TEST_ROOT/foreign-$CASE/marker"
       ln -s "$TEST_ROOT/foreign-$CASE" "$BASE/var/lib/razvilka" ;;
+    ready-control|stopped-control|malformed-control|empty-control)
+      mkdir -p "$BASE/razvilka/state/self-update-stop"
+      case "$CASE" in
+        ready-control) printf '%s' "$CONTROL_READY_FIXTURE" >"$BASE/razvilka/state/self-update-stop/current-v1.json" ;;
+        stopped-control) printf '%s' "$CONTROL_STOPPED_FIXTURE" >"$BASE/razvilka/state/self-update-stop/current-v1.json" ;;
+        malformed-control) printf '%s\n' invalid >"$BASE/razvilka/state/self-update-stop/current-v1.json" ;;
+      esac
+      [ "$CASE" = empty-control ] || printf 'RAZVILKA control authority v1\n' >"$BASE/razvilka/state/self-update-stop/.control.lock" ;;
+    linked-control)
+      if [ "$NATIVE_LINKS" -eq 1 ]; then
+        ln -s "$BASE/absent-owner" "$BASE/razvilka/state/self-update-stop"
+      else
+        printf foreign >"$BASE/razvilka/state/self-update-stop"
+      fi ;;
+    helper-protocol|file-protocol)
+      PROTOCOL=self-update
+      [ "$CASE" != file-protocol ] || PROTOCOL=self-update-files
+      mkdir -p "$BASE/razvilka/state/$PROTOCOL"
+      printf '%s\n' unknown-retained-owner >"$BASE/razvilka/state/$PROTOCOL/current.json" ;;
   esac
+  cp "$BASE/etc/init.d/S99razvilka" "$BASE/init-before"
+  [ ! -f "$BASE/bin/razvilka" ] || cp "$BASE/bin/razvilka" "$BASE/binary-before"
+  if [ -f "$BASE/razvilka/state/self-update-stop/current-v1.json" ]; then
+    cp "$BASE/razvilka/state/self-update-stop/current-v1.json" "$BASE/control-before"
+  fi
   FOREIGN_BEFORE="$(ls -nd "$BASE/var")"
   export CASE
   RUN_BASE="$BASE"
@@ -104,14 +157,35 @@ PIDOF
   set --
   case "$CASE" in purge|purge-*) set -- --purge ;; esac
   if [ "$CASE" = purge-after-uninstall ]; then
-    RAZVILKA_BASE="$RUN_BASE" sh "$SCRIPT" >"$BASE/first-output" 2>&1 || { cat "$BASE/first-output"; exit 1; }
-    [ ! -e "$BASE/bin/razvilka" ] && [ -f "$BASE/etc/razvilka/config.json" ] || { echo "Plain uninstall did not keep data" >&2; exit 1; }
+    # Historical nonpurge removal left exactly this absent-panel/retained-owner
+    # shape. Explicit archive purge must remain able to recover it.
+    rm "$BASE/bin/razvilka" "$BASE/etc/init.d/S99razvilka"
   fi
   CODE=0
   RAZVILKA_BASE="$RUN_BASE" sh "$SCRIPT" "$@" >"$BASE/output" 2>&1 || CODE=$?
   CALLS=""
   [ ! -f "$BASE/calls" ] || CALLS="$(tr '\n' ',' <"$BASE/calls")"
   case "$CASE" in
+    ready-control|stopped-control|malformed-control|empty-control|linked-control|helper-protocol|file-protocol|late-protocol|late-recovery-protocol|late-deactivate-protocol)
+      EXPECTED=
+      case "$CASE" in
+        late-protocol) EXPECTED=stop, ;;
+        late-recovery-protocol) EXPECTED=stop,recovery, ;;
+        late-deactivate-protocol) EXPECTED=stop,recovery,deactivate, ;;
+      esac
+      [ "$CODE" = 1 ] && [ "$CALLS" = "$EXPECTED" ] &&
+        cmp -s "$BASE/bin/razvilka" "$BASE/binary-before" &&
+        cmp -s "$BASE/etc/init.d/S99razvilka" "$BASE/init-before" &&
+        grep -q '^Retained-data reinstall is unsupported' "$BASE/output" && grep -q 'Use --purge to archive' "$BASE/output" || {
+        echo "Managed removal lost its panel or began cleanup: $CASE ($CALLS)" >&2; cat "$BASE/output" >&2; exit 1;
+      }
+      [ ! -f "$BASE/control-before" ] || cmp -s "$BASE/control-before" "$BASE/razvilka/state/self-update-stop/current-v1.json" || { echo "Removal rewrote the control record" >&2; exit 1; }
+      assert_retained_in "$BASE/etc/razvilka" "$BASE/razvilka"
+      case "$CASE" in
+        helper-protocol|file-protocol) [ "$(cat "$BASE/razvilka/state/$PROTOCOL/current.json")" = unknown-retained-owner ] || exit 1 ;;
+        linked-control) [ ! -e "$BASE/absent-owner" ] || { echo "Removal followed a protocol link" >&2; exit 1; } ;;
+      esac
+      ;;
     success|foreign-shared-var|symlink-base|legacy-leftover)
       [ "$CODE" = 0 ] && [ ! -e "$BASE/bin/razvilka" ] && [ ! -e "$BASE/etc/init.d/S99razvilka" ] || { cat "$BASE/output"; exit 1; }
       [ "$CALLS" = stop,recovery,deactivate, ] || { echo "Uninstall did not stop/recover/deactivate in order" >&2; exit 1; }
@@ -135,7 +209,9 @@ PIDOF
       ;;
     purge|purge-after-uninstall|purge-legacy-leftover)
       [ "$CODE" = 0 ] && [ ! -e "$BASE/bin/razvilka" ] && [ ! -e "$BASE/etc/init.d/S99razvilka" ] || { cat "$BASE/output"; exit 1; }
-      [ "$CALLS" = stop,recovery,deactivate, ] || { echo "Purge did not deactivate exactly once before moving data ($CALLS)" >&2; exit 1; }
+      EXPECTED=stop,recovery,deactivate,
+      [ "$CASE" != purge-after-uninstall ] || EXPECTED=
+      [ "$CALLS" = "$EXPECTED" ] || { echo "Purge did not deactivate exactly once before moving data ($CALLS)" >&2; exit 1; }
       [ ! -e "$BASE/etc/razvilka" ] && [ ! -e "$BASE/razvilka" ] && [ ! -e "$BASE/var/lib/razvilka" ] || {
         echo "Purge left RAZVILKA data in place" >&2; exit 1;
       }
@@ -150,6 +226,7 @@ PIDOF
         [ "$(ls -nd "$REMOVED" | awk '{print $1}')" = drwx------ ] || { echo "Removed-data folder is not private" >&2; exit 1; }
       fi
       assert_retained_in "$REMOVED/etc-razvilka" "$REMOVED/razvilka"
+      cmp -s "$BASE/control-before" "$REMOVED/razvilka/state/self-update-stop/current-v1.json" || { echo "Purge changed the archived control epoch" >&2; exit 1; }
       if [ "$CASE" = purge-legacy-leftover ]; then
         [ "$(cat "$REMOVED/var-lib-razvilka/marker")" = legacy-leftover ] || { echo "Legacy data was not moved intact" >&2; exit 1; }
       fi
