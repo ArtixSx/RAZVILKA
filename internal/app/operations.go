@@ -192,7 +192,7 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/strategy-lab/selections" {
 			exclusive = true
 		}
-		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair") {
+		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair" || r.URL.Path == "/api/v1/nfqws2/first-start-recipe") {
 			exclusive = true
 		}
 		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/services/") {

@@ -539,6 +539,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
 	mux.HandleFunc("/api/v1/nfqws2/discord-repair", a.nfqwsDiscordRepair)
 	mux.HandleFunc("/api/v1/nfqws2/exclusions", a.nfqwsExclusions)
+	mux.HandleFunc("/api/v1/nfqws2/first-start-recipe", a.nfqwsFirstStartRecipe)
 	mux.HandleFunc("/api/v1/autonomy", a.autonomyAPI)
 	mux.HandleFunc(networkPolicyReviewPath, a.networkPolicyReview)
 	mux.HandleFunc(networkPolicyScopeOptionsPath, a.networkPolicyScopeOptions)
@@ -4133,7 +4134,7 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 	if a.DataplaneHost != nil {
 		host = a.DataplaneHost()
 	}
-	input := dataplane.Input{NetworkProfileID: networkProfile, Revision: planRevision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, SiteExclusions: siteExclusions, Host: host}
+	input := dataplane.Input{NFQWSFirstStartRecipe: cfg.NFQWSFirstStartRecipe, NetworkProfileID: networkProfile, Revision: planRevision, SafeMode: cfg.SafeMode, Routes: routes, RetiringAdapters: retiringAdapters, Engines: engines, EngineConfigDrafts: drafts, ResourceConflicts: resourceConflicts, SiteExclusions: siteExclusions, Host: host}
 	if err := a.composeScopedDNSContext(ctx, cfg, previousDNSPlan, &input, dnsChange); err != nil {
 		return dataplane.Plan{}, err
 	}
@@ -4153,6 +4154,9 @@ func (a *App) buildDataplanePlanWithDNSContext(ctx context.Context, cfg config.C
 }
 
 func configForChangeScope(cfg config.Config, scope changeScope) config.Config {
+	if scope != changeScopeAll && scope != changeScopeRouting && scope != changeScopeServices {
+		cfg.NFQWSFirstStartRecipe = cfg.AppliedNFQWSFirstStartRecipe
+	}
 	clone := func(states map[string]config.ServiceState) map[string]config.ServiceState {
 		out := make(map[string]config.ServiceState, len(states))
 		for id, state := range states {

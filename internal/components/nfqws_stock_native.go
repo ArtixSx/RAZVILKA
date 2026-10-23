@@ -473,7 +473,11 @@ func (r *StockNFQWSNativeReview) ReviewClosedFirstStartParameters(ctx context.Co
 	if err != nil {
 		return err
 	}
-	canonical, err := engineconfig.NFQWSFirstStartConfig(original, owner, lists["--hostlist-domains"], lists["--hostlist-exclude-domains"], lists["--ipset-exclude-ip"])
+	recipe, err := engineconfig.NFQWSFirstStartConfigRecipe(config, owner)
+	if err != nil {
+		return err
+	}
+	canonical, err := engineconfig.NFQWSFirstStartConfigForRecipe(original, owner, lists["--hostlist-domains"], lists["--hostlist-exclude-domains"], lists["--ipset-exclude-ip"], recipe)
 	if err != nil || !bytes.Equal(canonical, config) {
 		return ErrStockNFQWSNative
 	}

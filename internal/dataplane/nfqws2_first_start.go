@@ -82,11 +82,14 @@ func (a *NFQWS2Adapter) firstStartConfig(plan Plan, config []byte) ([]byte, erro
 		}
 		prefixes = append(prefixes, prefix.String())
 	}
-	return engineconfig.NFQWSFirstStartConfig(original, owner, lists[0], domains, prefixes)
+	return engineconfig.NFQWSFirstStartConfigForRecipe(original, owner, lists[0], domains, prefixes, plan.NFQWSFirstStartRecipe)
 }
 
 func (a *NFQWS2Adapter) prepareFirstStartSnapshot(ctx context.Context, plan Plan, s *nfqws2Snapshot) error {
 	if a.stockNativeOwner == nil {
+		if plan.NFQWSFirstStartRecipe != "" {
+			return engineconfig.ErrNFQWSFirstStart
+		}
 		return nil
 	}
 	owner, err := a.owner()
@@ -107,6 +110,9 @@ func (a *NFQWS2Adapter) prepareFirstStartSnapshot(ctx context.Context, plan Plan
 		return errors.New("NFQWS2 lifecycle is unsettled; preserve its ownership fence")
 	}
 	if !initial && !owned {
+		if plan.NFQWSFirstStartRecipe != "" {
+			return engineconfig.ErrNFQWSFirstStart
+		}
 		// Existing expert mode remains available, but status must never source an
 		// unknown script or executable configuration before native validation.
 		if nfqws2Hash(init) != engineconfig.NFQWSFirstStartStockInitSHA256 {
@@ -529,7 +535,23 @@ func (a *NFQWS2Adapter) rollbackFirstStart(ctx context.Context, root string, s n
 		return err
 	}
 	if s.WasRunning {
-		return a.startFirstStart(ctx, s.Lease.Transaction)
+		// Drop the candidate's component writer lock before reacquiring a fresh
+		// review for the exact prior argv/assets. Fixed-argv authority cannot be
+		// reused across recipes, including a v2 candidate restoring v1.
+		if a.firstStartReview != nil {
+			review := a.firstStartReview
+			a.firstStartReview, a.firstStartReviewRoot = nil, ""
+			if err := review.Close(); err != nil {
+				return err
+			}
+		}
+		expected, first := *s.Lease, *s.Lease.FirstStart
+		first.Phase = nfqws2FirstStopped
+		expected.FirstStart = &first
+		if err := a.writeLease(&expected); err != nil {
+			return err
+		}
+		return a.restartFirstStartSnapshot(ctx, root, s, &expected)
 	}
 	return nil
 }

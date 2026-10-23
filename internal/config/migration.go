@@ -107,6 +107,9 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if err := validateServicePolicies(cfg.ServicePolicies); err != nil {
 		return Config{}, report, err
 	}
+	if err := validateNFQWSFirstStartRecipes(cfg); err != nil {
+		return Config{}, report, err
+	}
 	if err := validateConfigServiceBindings(cfg); err != nil {
 		return Config{}, report, err
 	}

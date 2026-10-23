@@ -165,6 +165,7 @@ func nodeRouteConfigForScope(cfg config.Config, id, nodeID string, sources []str
 }
 
 func nodeRouteConfigForEngineScope(cfg config.Config, engine, id, nodeID string, sources []string) config.Config {
+	cfg.NFQWSFirstStartRecipe = cfg.AppliedNFQWSFirstStartRecipe
 	services := make(map[string]config.ServiceState, len(cfg.AppliedServices)+1)
 	for key, value := range cfg.AppliedServices {
 		value.Sources = append([]string(nil), value.Sources...)

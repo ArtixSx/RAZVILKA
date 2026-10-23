@@ -256,7 +256,7 @@ func TestStockNFQWSNativeOwnerPublicClosedReviewNeverRebindsAssets(t *testing.T)
 }
 
 func TestStockNFQWSNativeOwnerClosedParameterReviewUsesOriginalAssets(t *testing.T) {
-	for _, which := range []string{"rollback-positive", "updated-exclusions", "missing-positive", "different-filter", "extra-udp", "changed-binary"} {
+	for _, which := range []string{"rollback-positive", "updated-exclusions", "missing-positive", "different-filter", "extra-udp", "different-recipe", "changed-binary"} {
 		t.Run(which, func(t *testing.T) {
 			m, runner, prefix, args := stockNativeFixture(t)
 			args = append(args, "--hostlist-domains=new.example")
@@ -280,6 +280,8 @@ func TestStockNFQWSNativeOwnerClosedParameterReviewUsesOriginalAssets(t *testing
 				candidate[1] = "--filter-tcp=80"
 			case "extra-udp":
 				candidate = append(candidate, "--filter-udp=443")
+			case "different-recipe":
+				candidate = append(candidate, "--lua-desync=circular:fails=2:time=300:retrans=3:nld=2")
 			case "changed-binary":
 				if err := os.WriteFile(filepath.Join(prefix, "usr", "bin", "nfqws2"), []byte("changed binary\n"), 0755); err != nil {
 					t.Fatal(err)

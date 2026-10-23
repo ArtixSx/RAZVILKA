@@ -82,7 +82,11 @@ func NFQWSFirstStartStockConfig(raw []byte) error {
 // No mutable stock user/auto/ipset list widens this profile, and nobody needs
 // access to a private transaction directory. Native validation owns the argv.
 func NFQWSFirstStartConfig(original []byte, owner string, domains, excludedDomains, excludedCIDRs []string) ([]byte, error) {
-	if !nfqwsFirstStartOwner.MatchString(owner) || NFQWSFirstStartStockConfig(original) != nil {
+	return NFQWSFirstStartConfigForRecipe(original, owner, domains, excludedDomains, excludedCIDRs, "")
+}
+
+func NFQWSFirstStartConfigForRecipe(original []byte, owner string, domains, excludedDomains, excludedCIDRs []string, recipe NFQWSFirstStartRecipe) ([]byte, error) {
+	if !recipe.Valid() || !nfqwsFirstStartOwner.MatchString(owner) || NFQWSFirstStartStockConfig(original) != nil {
 		return nil, ErrNFQWSFirstStart
 	}
 	names := func(values []string) ([]string, error) {
@@ -125,9 +129,17 @@ func NFQWSFirstStartConfig(original []byte, owner string, domains, excludedDomai
 	if len(args) > 24<<10 {
 		return nil, ErrNFQWSFirstStart
 	}
-	block := ManagedListBegin + "\n# RAZVILKA INSTANCE " + owner + "\n" + NFQWSFirstStartFormat + "\n" +
-		"NFQWS_BASE_ARGS='--lua-init=@/opt/etc/nfqws2/lua/zapret-lib.lua --lua-init=@/opt/etc/nfqws2/lua/zapret-antidpi.lua --fastpath-workaround=0 --ipcache-hostname=0'\n" +
-		"NFQWS_ARGS='--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld'\n" +
+	format := NFQWSFirstStartFormat
+	base := "--lua-init=@/opt/etc/nfqws2/lua/zapret-lib.lua --lua-init=@/opt/etc/nfqws2/lua/zapret-antidpi.lua --fastpath-workaround=0 --ipcache-hostname=0"
+	recipeArgs := "--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld"
+	if recipe == NFQWSFirstStartStockTLSCircular {
+		format = NFQWSFirstStartFormatV2 + "\n# RAZVILKA RECIPE " + string(recipe)
+		base += " --lua-init=@/opt/etc/nfqws2/lua/zapret-auto.lua --blob=tls_clienthello:@/opt/etc/nfqws2/blobs/tls_clienthello.bin"
+		recipeArgs = nfqwsFirstStartStockTLSCircularArgs
+	}
+	block := ManagedListBegin + "\n# RAZVILKA INSTANCE " + owner + "\n" + format + "\n" +
+		"NFQWS_BASE_ARGS='" + base + "'\n" +
+		"NFQWS_ARGS='" + recipeArgs + "'\n" +
 		"NFQWS_ARGS_QUIC=''\nNFQWS_ARGS_UDP=''\nNFQWS_ARGS_IPSET=''\nNFQWS_ARGS_CUSTOM=''\n" +
 		"NFQWS_EXTRA_ARGS='" + args + "'\nTCP_PORTS=443\nUDP_PORTS=''\nLOG_LEVEL=0\n" + ManagedListEnd + "\n"
 	separator := ""
@@ -151,7 +163,7 @@ func NFQWSFirstStartOriginalConfig(raw []byte, owner string) ([]byte, error) {
 		return slices.Clone(raw), nil
 	}
 	if bytes.Count(raw, []byte(ManagedListBegin)) != 1 || bytes.Count(raw, []byte(ManagedListEnd)) != 1 ||
-		!bytes.HasPrefix(raw[start:], []byte(ManagedListBegin+"\n# RAZVILKA INSTANCE "+owner+"\n"+NFQWSFirstStartFormat+"\n")) ||
+		!nfqwsFirstStartKnownHeader(raw[start:], owner) ||
 		!bytes.HasSuffix(raw, []byte(ManagedListEnd+"\n")) {
 		return nil, ErrNFQWSFirstStart
 	}
@@ -191,11 +203,32 @@ func NFQWSFirstStartEffectiveConfig(raw []byte, owner string) (string, error) {
 			return "", ErrNFQWSFirstStart
 		}
 	}
-	expected, err := NFQWSFirstStartConfig(original, owner, domains, excluded, addresses)
+	recipe := NFQWSFirstStartRecipe("")
+	if bytes.Contains(raw[len(original):], []byte(NFQWSFirstStartFormatV2+"\n")) {
+		recipe = NFQWSFirstStartStockTLSCircular
+	}
+	expected, err := NFQWSFirstStartConfigForRecipe(original, owner, domains, excluded, addresses, recipe)
 	if err != nil || !bytes.Equal(raw, expected) {
 		return "", ErrNFQWSFirstStart
 	}
 	return updateShellAssignments(string(original), overrides)
+}
+
+func nfqwsFirstStartKnownHeader(block []byte, owner string) bool {
+	prefix := ManagedListBegin + "\n# RAZVILKA INSTANCE " + owner + "\n"
+	return bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormat+"\n")) ||
+		bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormatV2+"\n# RAZVILKA RECIPE "+string(NFQWSFirstStartStockTLSCircular)+"\n"))
+}
+
+func NFQWSFirstStartConfigRecipe(raw []byte, owner string) (NFQWSFirstStartRecipe, error) {
+	if _, err := NFQWSFirstStartEffectiveConfig(raw, owner); err != nil {
+		return "", err
+	}
+	start := bytes.Index(raw, []byte(ManagedListBegin))
+	if bytes.Contains(raw[start:], []byte(NFQWSFirstStartFormatV2+"\n")) {
+		return NFQWSFirstStartStockTLSCircular, nil
+	}
+	return "", nil
 }
 
 // Every stock action sources this overlay. Only the eight generated fields

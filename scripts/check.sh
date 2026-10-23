@@ -40,6 +40,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-interface-home.mjs
   node scripts/test-simple-home.mjs
   node scripts/test-autopilot-settings.mjs
+  node scripts/test-nfqws-first-start-ui.mjs
   node scripts/test-active-panel.mjs
   node scripts/test-inspector-focus.mjs
   node scripts/test-inspector-controls-ui.mjs

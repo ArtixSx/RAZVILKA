@@ -15,6 +15,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/engine"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/routekind"
@@ -79,6 +80,8 @@ type ResourceConflict struct {
 }
 
 type Input struct {
+	NFQWSFirstStartRecipe engineconfig.NFQWSFirstStartRecipe `json:"nfqws_first_start_recipe,omitempty"`
+
 	managedNFQWS           *NFQWSActiveMaterial       // Original in-call managed owner; never JSON/HTTP input.
 	LAN                    *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
 	DNS                    *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
@@ -150,6 +153,8 @@ type RoutePlan struct {
 }
 
 type Plan struct {
+	NFQWSFirstStartRecipe engineconfig.NFQWSFirstStartRecipe `json:"nfqws_first_start_recipe,omitempty"`
+
 	LAN               *LANPolicyRuntimePlan      `json:"lan_policy,omitempty"`
 	DNS               *ScopedDNSPlan             `json:"scoped_dns,omitempty"`
 	DomainPolicy      *DomainPolicyRuntimePlan   `json:"domain_policy,omitempty"`
@@ -265,6 +270,12 @@ func Build(input Input) (Plan, error) {
 }
 
 func BuildAt(input Input, now time.Time) (Plan, error) {
+	if !input.NFQWSFirstStartRecipe.Valid() {
+		return Plan{}, engineconfig.ErrNFQWSFirstStart
+	}
+	if input.NFQWSFirstStartRecipe != "" && input.managedNFQWS != nil {
+		return Plan{}, engineconfig.ErrNFQWSFirstStart
+	}
 	if err := validateDomainTransportIntent(input.DomainPolicy, input.SyntheticDNS, input.DNS, input.SuspendDNS, input.DiscardDNS); err != nil {
 		return Plan{}, err
 	}
@@ -322,6 +333,8 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 	sum := sha256.Sum256(encoded)
 	digest := hex.EncodeToString(sum[:])
 	plan := Plan{
+		NFQWSFirstStartRecipe: input.NFQWSFirstStartRecipe,
+
 		LAN:               input.LAN,
 		DNS:               input.DNS,
 		DomainPolicy:      input.DomainPolicy,

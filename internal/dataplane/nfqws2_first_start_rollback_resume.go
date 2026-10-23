@@ -37,6 +37,12 @@ func (a *NFQWS2Adapter) resumeFirstStartRollback(ctx context.Context, root strin
 		return err
 	}
 	defer unlock()
+	return a.restartFirstStartSnapshot(ctx, root, snapshot, expected)
+}
+
+// Caller holds all runtime resources. A prior recipe receives its own fresh
+// native review; the failed candidate's fixed-argv review is never broadened.
+func (a *NFQWS2Adapter) restartFirstStartSnapshot(ctx context.Context, root string, snapshot nfqws2Snapshot, expected *nfqws2Lease) (result error) {
 	if !nfqws2InactiveFinite(ctx) || !nfqws2FirstStartRollbackResumeMatches(expected, snapshot) {
 		return ErrReviewChanged
 	}

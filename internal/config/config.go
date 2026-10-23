@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -27,6 +28,9 @@ type ServiceState struct {
 }
 
 type Config struct {
+	NFQWSFirstStartRecipe        engineconfig.NFQWSFirstStartRecipe `json:"nfqws_first_start_recipe,omitempty"`
+	AppliedNFQWSFirstStartRecipe engineconfig.NFQWSFirstStartRecipe `json:"applied_nfqws_first_start_recipe,omitempty"`
+
 	SchemaVersion              int                      `json:"schema_version"`
 	Listen                     string                   `json:"listen"`
 	Services                   map[string]ServiceState  `json:"services"` // desired/draft state
@@ -370,6 +374,9 @@ func validDraftScope(scope DraftScope) bool {
 }
 
 func draftScopeDirty(cfg Config, scope DraftScope) bool {
+	if (scope == DraftScopeAll || scope == DraftScopeServices) && cfg.NFQWSFirstStartRecipe != cfg.AppliedNFQWSFirstStartRecipe {
+		return true
+	}
 	baseline := ServiceDraftBaseline(cfg)
 	if scope == DraftScopeAll {
 		return !reflect.DeepEqual(cfg.Services, baseline)
@@ -392,6 +399,9 @@ func draftScopeDirty(cfg Config, scope DraftScope) bool {
 }
 
 func applyDraftScope(cfg *Config, scope DraftScope) {
+	if scope == DraftScopeAll || scope == DraftScopeServices {
+		cfg.AppliedNFQWSFirstStartRecipe = cfg.NFQWSFirstStartRecipe
+	}
 	if scope == DraftScopeAll {
 		cfg.AppliedServices = cloneServices(cfg.Services)
 		return
@@ -416,6 +426,9 @@ func applyDraftScope(cfg *Config, scope DraftScope) {
 }
 
 func discardDraftScope(cfg *Config, scope DraftScope) {
+	if scope == DraftScopeAll || scope == DraftScopeServices {
+		cfg.NFQWSFirstStartRecipe = cfg.AppliedNFQWSFirstStartRecipe
+	}
 	baseline := ServiceDraftBaseline(*cfg)
 	if scope == DraftScopeAll {
 		cfg.Services = baseline
@@ -457,6 +470,9 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) saveLocked() error {
+	if err := validateNFQWSFirstStartRecipes(s.cfg); err != nil {
+		return err
+	}
 	if err := ValidateResourceExclusionStorage(s.cfg); err != nil {
 		return err
 	}

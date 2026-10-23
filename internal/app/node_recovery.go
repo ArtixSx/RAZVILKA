@@ -644,6 +644,6 @@ func (a *App) buildNodeRecoveryPlan(intent nodeRecoveryIntent) (dataplane.Plan, 
 	}
 	// Copy exact applied targets; do not resolve AUTO/group or load any draft.
 	routes := append([]dataplane.Route(nil), intent.plan.Routes...)
-	return dataplane.Build(dataplane.Input{DNS: intent.plan.DNS, NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
+	return dataplane.Build(dataplane.Input{NFQWSFirstStartRecipe: intent.plan.NFQWSFirstStartRecipe, DNS: intent.plan.DNS, NetworkProfileID: intent.profile, Revision: intent.config.AppliedRevision, SafeMode: intent.config.SafeMode,
 		Routes: routes, Engines: engines, ResourceConflicts: conflicts, SiteExclusions: intent.plan.SiteExclusions, Host: host})
 }
