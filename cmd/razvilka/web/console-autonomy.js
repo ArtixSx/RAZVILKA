@@ -514,7 +514,7 @@
     requireGeneration(generation);
     $('subscriptionURL').value='';sourceDirty=false;notify(`Подписка сохранена: ${result.source.source_id}. Добавьте её ID в разрешённые источники мастера.`);await readSources();
   })().catch(e=>reportError(e));});
-  document.addEventListener('razvilka:view-change',event=>{viewEpoch++;const name=({overview:'overview',autopilot:'overview',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(snapshot&&(name==='overview'||name==='services'))renderServices();if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
+  document.addEventListener('razvilka:view-change',event=>{viewEpoch++;const name=({overview:'overview',autopilot:'overview',services:'services',managed:'services','subscription-settings':'sources',onboard:'setup'})[event.detail];if(name){activeTab=name;if(snapshot&&(name==='overview'||name==='services'))renderServices();if(name==='sources')void readSources();if(name==='setup'){fillWizard();renderStarterReview();setStep(step);}void refresh();}});
   // Explicit refresh works in background tabs too. Read only the protected
   // publication, coalesce with an in-flight read and keep unfinished form edits.
   document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});
@@ -534,6 +534,6 @@
   document.addEventListener('razvilka:source-consent-changed',()=>{void refresh(false,true);});
   setStep(0);void refresh();
   // This only refreshes displayed metadata. Backend jobs never depend on it.
-  poll=setInterval(()=>{if(!document.hidden&&!loading&&['autopilot','managed','onboard','overview','updates'].includes(state.currentView))void refresh();},15000);
+  poll=setInterval(()=>{if(!document.hidden&&!loading&&['autopilot','services','managed','onboard','overview','updates'].includes(state.currentView))void refresh();},15000);
   window.addEventListener('pagehide',()=>{clearInterval(poll);}, {once:true});
 })(typeof globalThis!=='undefined'?globalThis:this);

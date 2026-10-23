@@ -14,7 +14,7 @@ function snapshot(revision=1){
  return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
 }
 function fixture(authenticated=true,staticInputs=[],includeQuick=false){
- const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
+ const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),intervals=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
  let timerID=0,authCalls=0,createdElementID=0;
  function element(id){
   if(!elements.has(id)){const classes=new Set();elements.set(id,{value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,options:[],dataset:{},open:false,children:[],appendChild(child){this.children.push(child);return child;},events:new Map(),classList:{toggle(){},add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)},addEventListener(type,fn){this.events.set(type,fn);},setAttribute(){},removeAttribute(){},close(){this.open=false;},showModal(){this.open=true;},focus(){},reset(){}});}
@@ -31,7 +31,7 @@ function fixture(authenticated=true,staticInputs=[],includeQuick=false){
  const document={hidden:false,createElement:tag=>{const node=element(`created-${++createdElementID}`);node.tagName=tag.toUpperCase();return node;},getElementById:element,querySelectorAll:selector=>{const scoped=/^#(a1-[\w-]+) input(:checked)?$/.exec(selector);if(scoped)return (inputs.get(scoped[1])||[]).filter(input=>!scoped[2]||input.checked);const name=/input\[name="([^"]*)"\]/.exec(selector)?.[1];return name?[...inputs.values()].flat().filter(input=>input.name===name&&(!selector.includes(':checked')||input.checked)):[];},addEventListener:(type,fn)=>listen(documentListeners,type,fn),dispatchEvent:event=>dispatch(documentListeners,event)};
  const window={location:{hash:'#autopilot'},addEventListener:(type,fn)=>listen(windowListeners,type,fn),dispatchEvent:event=>{published.push(event);dispatch(windowListeners,event);}};
  const context={document,window,AbortController,URL,console,sessionStorage:{getItem:()=>''},state:{authenticated,services:[],currentView:'autopilot'},Event:class{constructor(type){this.type=type;}},CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},setView(view){context.state.currentView=view;},confirm:()=>{throw Error('native confirm must not run');},askConfirmation:async()=>true,$:selector=>element(selector.startsWith('#')?selector.slice(1):selector),ADMIN_TOKEN_KEY:'fixture-admin-token',
-  setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:()=>++timerID,clearInterval(){},
+  setTimeout(fn,ms){const id=++timerID;timeouts.set(id,{fn,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval(fn,ms){const id=++timerID;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id),
   showAuth(){authCalls++;document.dispatchEvent({type:'razvilka:auth-required'});},
   fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
  };
@@ -45,6 +45,9 @@ function fixture(authenticated=true,staticInputs=[],includeQuick=false){
  return {requests,timeouts,published,contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
+  navigate(view){context.state.currentView=view;document.dispatchEvent({type:'razvilka:view-change',detail:view});},
+  poll(){const timer=[...intervals.values()].find(timer=>timer.ms===15000);assert.ok(timer,'presentation poll missing');timer.fn();},
+  hidden(value){document.hidden=value;},
   readback:detail=>window.dispatchEvent({type:'razvilka:autonomy-policy-readback',detail}),
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
   delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
@@ -266,6 +269,56 @@ await test('queued forced read is discarded across authentication change',async(
  const f=fixture();f.click('reloadButton');f.event('razvilka:auth-required');f.event('razvilka:auth-restored');
  f.respond(0,200,snapshot(1));await flush();assert.equal(f.requests.length,2,'old-session reload was replayed');
  f.respond(1,200,snapshot(2));await flush();assert.match(f.e('revisionLabel').textContent,/2/);
+});
+
+await test('services navigation publishes settled runtime through the normal cached read',async()=>{
+ const f=fixture(),pending=snapshot();
+ pending.catalog_services=[{id:'telegram',name:'Telegram'}];
+ pending.services.telegram={enabled:true,all_lan:true,sources:[]};
+ pending.runtime.telegram={state:'pending',message:'Ожидает проверки.'};
+ f.respond(0,200,pending);await flush();
+ f.navigate('services');
+ assert.equal(f.requests.length,2,'services navigation did not request a fresh publication');
+ assert.equal(f.requests[1].path,'/api/v1/panel/autonomy');
+ const settled=structuredClone(pending);settled.server_time='2026-09-13T10:00:15Z';
+ settled.runtime.telegram={state:'domain-route-unavailable',message:'Для доменного сервиса нужен NFQWS2.'};
+ f.respond(1,200,settled);await flush();
+ assert.equal(f.published.at(-1).type,'razvilka:autonomy-state');
+ assert.equal(f.published.at(-1).detail.runtime.telegram.state,'domain-route-unavailable');
+ assert.match(f.e('serviceRows').innerHTML,/Для доменного сервиса нужен NFQWS2/);
+ assert.doesNotMatch(f.e('serviceRows').innerHTML,/Ожидает проверки/);
+ assert.ok(f.requests.every(request=>request.options.method==='GET'),'presentation navigation performed a write');
+});
+
+await test('services polling keeps reading runtime without navigation and coalesces in-flight reads',async()=>{
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.navigate('services');f.respond(1,200,snapshot());await flush();
+ f.poll();assert.equal(f.requests.length,3,'visible services view did not poll');
+ assert.equal(f.requests[2].path,'/api/v1/panel/autonomy');
+ f.poll();assert.equal(f.requests.length,3,'poll overlapped its pending read');
+ const settled=snapshot();settled.server_time='2026-09-13T10:00:30Z';
+ settled.runtime.telegram={state:'domain-route-unavailable'};
+ f.respond(2,200,settled);await flush();
+ assert.equal(f.published.at(-1).detail.runtime.telegram.state,'domain-route-unavailable');
+ f.hidden(true);f.poll();assert.equal(f.requests.length,3,'hidden services view polled');
+ f.hidden(false);f.navigate('diagnostics');f.poll();assert.equal(f.requests.length,3,'unrelated view polled');
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
+});
+
+await test('services refresh stays behind authentication and rejects late old-session publication',async()=>{
+ const loggedOut=fixture(false);loggedOut.navigate('services');loggedOut.poll();
+ assert.equal(loggedOut.requests.length,0,'services presentation bypassed authentication discovery');
+ const f=fixture();f.respond(0,200,snapshot());await flush();
+ f.navigate('services');const request=f.requests[1];
+ f.event('razvilka:auth-required');assert.equal(request.options.signal.aborted,true);
+ f.poll();assert.equal(f.requests.length,2,'logged-out services poll performed a read');
+ f.event('razvilka:auth-restored');assert.equal(f.requests.length,3);
+ const fresh=snapshot(3);f.respond(2,200,fresh);await flush();
+ const publications=f.published.filter(event=>event.type==='razvilka:autonomy-state').length;
+ f.respond(1,200,snapshot(2));await flush();
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').length,publications);
+ assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').at(-1).detail.policy.revision,3);
+ assert.ok(f.requests.every(request=>request.options.method==='GET'));
 });
 
 await test('ordinary polling uses published snapshot and retained data cannot report enabled',async()=>{
