@@ -35,7 +35,7 @@ func (a *App) finishAutonomyDomainService(ctx context.Context, p autonomy.Policy
 	// Earlier node reserves can never be applied to this service.
 	r.Reserves = nil
 	if current != "" && !dataplane.DomainFlowAuthority(current) {
-		return finish(autonomyStateDomainRouteUnavailable, "Применённый путь через VPN или прокси не подходит для сервиса с доменами: общий IP может принадлежать чужим сайтам. Автопилот его не обновляет и не заменяет. Выберите NFQWS2 или выключите сервис.")
+		return finish(autonomyStateDomainRouteUnavailable, "Применённый путь через VPN или прокси не подходит для сервиса с доменами: общий IP может принадлежать чужим сайтам. Автопилот его не обновляет и не заменяет. Требуется просмотр состава сервиса и поддерживаемого профиля.")
 	}
 	if current != "" && healthy {
 		if !sameNodeRecoveryStrings(cfg.AppliedServices[s.ID].Sources, s.Sources) {
@@ -49,6 +49,34 @@ func (a *App) finishAutonomyDomainService(ctx context.Context, p autonomy.Policy
 	if current != "" {
 		return finish(autonomyStateDomainRouteUnavailable, "Действующий путь не подтвердил работу сервиса. Сервис задан доменами, поэтому VPN и прокси не назначаются: общий IP может принадлежать чужим сайтам. Маршрут сохранён; проверка повторится.")
 	}
+	// These observations explain the result only. A ready component is not
+	// proof of coverage for the service's selectors or selected devices, and an
+	// unknown/external profile must not be declared a closed first-start profile.
+	installed, running, ready := false, false, false
+	for _, option := range a.nodeRouteOptions() {
+		if option.ID == "nfqws2" {
+			installed = installed || option.Installed
+			running = running || option.Running
+			ready = ready || option.Ready
+		}
+	}
+	stopped := ""
+	if installed && !running {
+		stopped = "NFQWS2 установлен, но не запущен. "
+	}
+	limits := ""
+	if service, ok := a.autonomyService(s.ID); ok && len(service.Domains) != 0 && len(service.CIDRs) != 0 {
+		limits = "Домены и IP-сети: работа полного списка не подтверждена. Для закрытого профиля NFQWS2 доступны только домены/TCP 443 для всей LAN. "
+	}
+	if !s.AllLAN || len(s.Sources) != 0 {
+		if limits == "" {
+			limits = "Для закрытого профиля NFQWS2 поддерживается вся домашняя сеть. "
+		}
+		limits += "Работа текущего профиля для выбранных устройств не подтверждена. "
+	}
+	if limits != "" {
+		return finish(autonomyStateDomainRouteUnavailable, stopped+limits+"Список и область сохранены.")
+	}
 	// Name the prerequisite that the owner can actually change. Importing more
 	// nodes or selecting a DNS profile does not produce a domain-flow runtime,
 	// and must not be presented as a repair for this list-mode restriction.
@@ -56,8 +84,11 @@ func (a *App) finishAutonomyDomainService(ctx context.Context, p autonomy.Policy
 	if !slices.Contains(p.PreferredRoutes, "nfqws2") {
 		return finish(autonomyStateDomainRouteUnavailable, "Разрешите NFQWS2 в маршрутах автопилота и выполните «Проверка NFQWS2» для доменного сервиса."+boundary)
 	}
-	if !a.nfqws2RouteReady() {
+	if stopped != "" {
+		return finish(autonomyStateDomainRouteUnavailable, stopped+"Без работающего процесса «Проверка NFQWS2» не подтвердит сервис. Запустите NFQWS2 и повторите проверку. Маршрут сохранён.")
+	}
+	if !ready {
 		return finish(autonomyStateDomainRouteUnavailable, "NFQWS2 не готов. Откройте «Обходы», настройте NFQWS2 и выполните «Проверка NFQWS2» для сервиса."+boundary)
 	}
-	return finish(autonomyStateDomainRouteUnavailable, "NFQWS2 готов, но доступ к сервису не подтверждён. В «Проверка NFQWS2» подберите стратегию и повторите проверку."+boundary)
+	return finish(autonomyStateDomainRouteUnavailable, "Результат «Проверка NFQWS2» не подтвердил доступ к сервису."+boundary)
 }

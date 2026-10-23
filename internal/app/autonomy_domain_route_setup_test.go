@@ -24,11 +24,22 @@ func TestAutopilotDomainServiceNamesActionableSetupWithoutApplying(t *testing.T)
 	}{
 		{"route-disabled", true, false, "Разрешите NFQWS2 в маршрутах автопилота", nil},
 		{"runtime-not-ready", false, true, "Откройте «Обходы», настройте NFQWS2", nil},
-		{"service-unconfirmed", true, true, "NFQWS2 готов, но доступ к сервису не подтверждён", []string{"nfqws2"}},
+		{"service-unconfirmed", true, true, "не подтвердил доступ к сервису", []string{"nfqws2"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service := catalog.Service{ID: "domain-import", Name: "Imported domain list", Domains: []string{"site.example"}, ProbeURL: "https://site.example/"}
 			a, adapter, recorder := domainAutopilotFixture(t, service, test.ready)
+			// This table tests component setup for the closed profile's supported
+			// all-LAN scope; selected-device diagnostics have separate coverage.
+			a.autonomy.mu.Lock()
+			spec := a.autonomy.doc.Services[service.ID]
+			spec.AllLAN, spec.Sources = true, nil
+			a.autonomy.doc.Services[service.ID] = spec
+			err := a.persistAutonomyLocked(context.Background())
+			a.autonomy.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
 			if !test.allowed {
 				a.autonomy.mu.Lock()
 				a.autonomy.doc.Policy.PreferredRoutes = []string{"sing-box", "xray"}
