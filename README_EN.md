@@ -43,7 +43,7 @@ Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA
 
 | | |
 | --- | --- |
-| 🧭 **Autopilot** | Checks the chosen services, picks a working path, keeps a reserve and recovers after failures — within the limits you set |
+| 🧭 **Autopilot** | Checks the chosen services, selects a working path and reserve; lets you put your permitted sources first in the search order |
 | 🧩 **Services** | Ready-made catalog and your own services; groups; access checks from the router |
 | 🔌 **Connections** | VLESS/Xray, WireGuard, AmneziaWG, WARP; subscriptions, country filtering from publisher labels and separate access checks |
 | 🛡️ **DPI bypass** | NFQWS2 with strategies, compatibility checks and selection |
@@ -53,6 +53,9 @@ Downloads and version changes — [Releases](https://github.com/ArtixSx/RAZVILKA
 
 "Configured", "route applied" and "service reachable" are shown separately:
 a running process alone does not prove that the bypass works.
+The "Проверять сначала" setting orders permitted connection sources ahead
+of the standard search when no working path exists or the current one fails.
+A healthy connection stays in place; an empty list keeps the default order.
 Full hardware acceptance of WireGuard, WARP and AmneziaWG is still pending;
 listing a component does not establish support for every mode.
 
