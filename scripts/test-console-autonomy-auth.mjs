@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../cmd/razvilka/web/console-autonomy.js',import.meta.url),'utf8');
+const quickSource=readFileSync(new URL('../cmd/razvilka/web/autopilot-settings.js',import.meta.url),'utf8');
 const coreSource=readFileSync(new URL('../cmd/razvilka/web/app.js',import.meta.url),'utf8');
 const hideAuthSource=coreSource.slice(coreSource.indexOf('function hideAuth() {'),coreSource.indexOf('\nasync function submitSetup('));
 const showAuthSource=coreSource.slice(coreSource.indexOf('function showAuth('),coreSource.indexOf('\nfunction hideAuth() {')).replace('function showAuth(', 'function actualShowAuth(');
@@ -12,7 +13,7 @@ function snapshot(revision=1){
  const window={mode:'check',start:'02:00',end:'03:00',days:[1]};
  return {policy:{revision,enabled:true,setup_complete:true,timezone:'UTC',all_lan:false,default_sources:['192.0.2.1/32'],source_ids:['feed-fixture'],protocols:['vless'],preferred_routes:[],reserve_target:2,candidates_per_round:2,check_seconds:300,reserve_seconds:600,application:window,components:window},services:{},runtime:{},catalog_services:[],source_presets:[],server_time:'2026-09-13T10:00:00Z'};
 }
-function fixture(authenticated=true,staticInputs=[]){
+function fixture(authenticated=true,staticInputs=[],includeQuick=false){
  const elements=new Map(),documentListeners=new Map(),windowListeners=new Map(),requests=[],timeouts=new Map(),published=[],inputs=new Map([['static',staticInputs.map(input=>({closest:()=>({}),...input}))]]);
  let timerID=0,authCalls=0,createdElementID=0;
  function element(id){
@@ -36,9 +37,15 @@ function fixture(authenticated=true,staticInputs=[]){
  };
  vm.runInNewContext(source,context);
  vm.runInNewContext(hideAuthSource+'\n'+showAuthSource,context);
+ if(includeQuick){
+  context.addEventListener=window.addEventListener;context.dispatchEvent=window.dispatchEvent;
+  context.interfaceRequest=async(path,options={})=>{const response=await context.fetch(path,options),data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'request failed'),{status:response.status});return data;};
+  vm.runInNewContext(quickSource,context);
+ }
  return {requests,timeouts,published,contextView:()=>context.state.currentView,confirmWith:fn=>{context.askConfirmation=fn;},e:id=>element('a1-'+id),inputs:name=>[...inputs.values()].flat().filter(input=>input.name===name),authCalls:()=>authCalls,
   hideAuth:()=>context.hideAuth(),actualShowAuth:status=>context.actualShowAuth(status||null,'Войдите снова.'),coreElement:element,
   event:(type,detail)=>{if(type==='razvilka:auth-restored')context.state.authenticated=true;if(type==='razvilka:auth-required')context.state.authenticated=false;document.dispatchEvent({type,detail});},
+  readback:detail=>window.dispatchEvent({type:'razvilka:autonomy-policy-readback',detail}),
   respond(index,status,data){if(requests[index].path==='/api/v1/panel/autonomy'&&status===200&&data?.policy)data={schema:1,instance_id:'a'.repeat(32),revision:data.policy.revision||1,observed_at:data.server_time,data_age_ms:0,state:'available',dataplane:'not-checked',data};requests[index].resolve({status,ok:status>=200&&status<300,json:async()=>data});},
   delayedBody(index,status){const body=deferred();requests[index].resolve({status,ok:status>=200&&status<300,json:()=>body.promise});return body;},
   clickTarget:target=>document.dispatchEvent({type:'click',target}),
@@ -497,6 +504,54 @@ for(const outcome of ['cancel','logout','view','revision','accept'])await test('
   const body=JSON.parse(writes[0].options.body);assert.equal(body.expected_revision,1);assert.equal(body.delete_definition,true);
  }
  if(outcome==='cancel')assert.equal(f.requests.length,before);
+});
+
+await test('quick policy save shares its live revision with pause/resume before a passive refresh',async()=>{
+ const f=fixture(true,[],true),initial=snapshot(3);initial.policy.enabled=false;
+ f.respond(0,200,initial);await flush();
+ f.coreElement('autoQuickCheck').value='180';f.coreElement('autoQuickForm').events.get('input')({target:{id:'autoQuickCheck'}});
+ const save=f.coreElement('autoQuickForm').events.get('submit')({preventDefault(){}});
+ assert.equal(f.requests[1].options.method,'PUT');assert.equal(JSON.parse(f.requests[1].options.body).expected_revision,3);
+ f.respond(1,200,{});await flush();assert.equal(f.requests[2].path,'/api/v1/autonomy');
+ // Equal millisecond timestamps must not admit the older cached revision.
+ const saved=snapshot(4);saved.policy.enabled=false;saved.policy.check_seconds=180;
+ f.respond(2,200,saved);await save;await flush();
+ assert.equal(f.requests[3].path,'/api/v1/panel/autonomy','ordinary publication refresh no longer triggered');
+ f.click('pauseButton');await flush();
+ const resume=f.requests[4],body=JSON.parse(resume.options.body);
+ assert.equal(resume.options.method,'PUT');assert.equal(body.expected_revision,4,'resume used the pre-save console revision');
+ assert.equal(body.policy.enabled,true);assert.equal(body.policy.check_seconds,180,'resume overwrote the quick edit');
+ f.respond(3,200,initial);await flush();
+ assert.equal(f.e('pauseButton').textContent,'Возобновить автоматику','stale publication replaced the shared readback');
+ const resumed=snapshot(5);resumed.policy.check_seconds=180;resumed.server_time='2026-09-13T10:00:02Z';
+ f.respond(4,200,resumed);await flush();assert.equal(f.requests[5].path,'/api/v1/autonomy');
+ f.respond(5,200,resumed);await flush();
+ assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,2,'pause/resume silently replayed a CAS write');
+});
+
+await test('older or retained policy readbacks cannot regress the console revision',async()=>{
+ for(const which of ['older-revision','older-time','retained','blocked','different-instance']){
+  const f=fixture(),initial=snapshot(4);f.respond(0,200,initial);await flush();
+  const next=snapshot(5);next.policy.enabled=false;
+  if(which==='older-revision')next.policy.revision=3;
+  if(which==='older-time')next.server_time='2026-09-13T09:59:59Z';
+  if(which==='retained')next.observation={state:'retained'};
+  if(which==='blocked')next.blocked=true;
+  if(which==='different-instance')next.observation={state:'available',instance_id:'b'.repeat(32)};
+  f.readback(next);f.click('pauseButton');await flush();
+  assert.equal(JSON.parse(f.requests[1].options.body).expected_revision,4,which);
+  f.respond(1,409,{error:'Настройки изменились. Обновите страницу.'});await flush();
+  assert.equal(f.requests.filter(request=>request.options.method==='PUT').length,1,'conflict was retried');
+ }
+});
+
+await test('shared readback keeps unsaved wizard edits and ignores logged-out publications',async()=>{
+ const f=fixture();f.respond(0,200,snapshot(3));await flush();
+ f.e('scopeAddresses').value='192.0.2.80/32';f.e('wizardForm').events.get('input')();
+ f.readback(snapshot(4));assert.equal(f.e('scopeAddresses').value,'192.0.2.80/32');
+ f.event('razvilka:auth-required');const before=f.published.filter(event=>event.type==='razvilka:autonomy-state').length;
+ f.readback(snapshot(5));assert.equal(f.published.filter(event=>event.type==='razvilka:autonomy-state').length,before);
+ assert.equal(f.e('pauseButton').disabled,true);
 });
 
 console.log(JSON.stringify({status:'passed',tests:passed}));

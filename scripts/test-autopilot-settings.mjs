@@ -22,9 +22,10 @@ function fixture(){
     if(!elements.has(id))elements.set(id,{value:'',textContent:'',disabled:false,events:{},addEventListener(name,fn){this.events[name]=fn;}});
     return elements.get(id);
   };
-  const context={Date,Number,JSON,console,CustomEvent:class{constructor(type){this.type=type;}},
+  const context={Date,Number,JSON,console,CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
     document:{getElementById:element,addEventListener:(name,fn)=>documentListeners.set(name,fn),dispatchEvent(){}},
     addEventListener:(name,fn)=>listeners.set(name,fn),
+    dispatchEvent:event=>listeners.get(event.type)?.(event),
     interfaceRequest(path,options={}){const pending=deferred();requests.push({path,options,...pending});return pending.promise;}
   };
   vm.createContext(context);vm.runInContext(src,context);

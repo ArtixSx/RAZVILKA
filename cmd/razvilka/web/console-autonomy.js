@@ -112,7 +112,16 @@
   function sourceCard(s,zone='UTC') {
     return `<article class="panel source-card" data-source-id="${escapeHTML(s.source_id)}"><div class="section-title"><h2>${escapeHTML(s.name||s.source_id)}</h2><span class="tag ${s.saved===true&&s.enabled?'':'neutral'}">${s.saved===true?(s.enabled?'Таймер включён':'Таймер выключен'):'Разовое получение · не сохранено'}</span></div><code>${escapeHTML(s.source_id)}</code><dl><dt>Последняя попытка</dt><dd>${escapeHTML(sourceDate(s.last_attempt_at,zone))}</dd><dt>Успешное получение</dt><dd>${escapeHTML(sourceDate(s.last_success_at,zone))}</dd><dt>Следующий запрос</dt><dd>${escapeHTML(sourceDate(s.next_refresh_at,zone))}</dd><dt>Последний результат</dt><dd>${escapeHTML(sourceStatusLabel(s.status))} · ${Number(s.imported||0)} записей</dd></dl>${s.saved===true?`<form class="source-actions" data-feed-form="${escapeHTML(s.source_id)}"><label><span>Интервал, мин</span><input name="interval" type="number" min="15" max="10080" value="${Number(s.refresh_interval_minutes||60)}" required></label><label><span>Таймер</span><select name="enabled"><option value="true" ${s.enabled?'selected':''}>Включён</option><option value="false" ${!s.enabled?'selected':''}>Выключен</option></select></label><button class="button small" type="submit">Сохранить</button><button class="button small" type="button" data-feed-sync="${escapeHTML(s.source_id)}">Получить сейчас</button></form>`:`<p class="subtle">Источник использован разово. Подписка и расписание не сохранены.</p><button class="button small" type="button" data-feed-add="${escapeHTML(s.source_id)}">Добавить постоянную подписку</button>`}</article>`;
   }
-  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData};
+  function policyReadbackSnapshot(previous, next) {
+    const revision=next?.policy?.revision,time=Date.parse(next?.server_time||'');
+    if(!next?.policy?.setup_complete || !Number.isSafeInteger(revision) || revision<1 || !Number.isFinite(time) || next.observation?.state==='retained' || next.blocked) return null;
+    if(previous?.policy && (revision<previous.policy.revision || time<Date.parse(previous.server_time))) return null;
+    if(previous?.observation?.instance_id && next.observation?.instance_id && previous.observation.instance_id!==next.observation.instance_id) return null;
+    // A direct GET has no publication ID. Preserve its existing instance so an
+    // older passive publication cannot replace this completed write's readback.
+    return {...next,...(previous?.observation?{observation:{...previous.observation,state:'available',observed_at:next.server_time}}:{})};
+  }
+  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData,policyReadbackSnapshot};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -310,7 +319,7 @@
       // A cached poll begun before a mutation/readback must not undo its result.
       // A new process has its own publication instance and resets this ordering.
       const sameInstance=!snapshot?.observation || !next.observation || snapshot.observation.instance_id===next.observation.instance_id;
-      if(!live && sameInstance && Date.parse(next.server_time)<Date.parse(snapshot?.server_time)){if(next.observation.state==='retained')throw new Error('Нужны свежие данные автопилота.');return false;}
+      if(!live && sameInstance && (Date.parse(next.server_time)<Date.parse(snapshot?.server_time) || next.policy.revision<snapshot?.policy?.revision)){if(next.observation.state==='retained')throw new Error('Нужны свежие данные автопилота.');return false;}
       if(live && snapshot?.observation)next.observation={...snapshot.observation,state:'available',observed_at:next.server_time};
       snapshot=next;presentationFresh=next.observation?.state!=='retained';window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
       if(!presentationFresh)window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{retained:true,message:'Показаны последние настройки. Состояние обновляется.'}}));
@@ -502,6 +511,15 @@
   // Explicit refresh works in background tabs too. Read only the protected
   // publication, coalesce with an in-flight read and keep unfinished form edits.
   document.addEventListener('razvilka:panel-refresh',()=>{void refresh();});
+  // Quick settings already obtained an independent GET after their PUT. Share
+  // that exact snapshot before another control can construct a revision/CAS.
+  window.addEventListener('razvilka:autonomy-policy-readback',event=>{
+    if(state.authenticated!==true)return;
+    const next=policyReadbackSnapshot(snapshot,event.detail);
+    if(!next)return;
+    snapshot=next;presentationFresh=true;render();
+    window.dispatchEvent(new CustomEvent('razvilka:autonomy-state',{detail:next}));
+  });
   window.addEventListener('beforeunload',event=>{if(dirty||sourceDirty){event.preventDefault();event.returnValue='';}});
   document.addEventListener('razvilka:auth-required',()=>{nextAuthGeneration();snapshot=null;presentationFresh=false;feeds=null;editingPolicy=null;dirty=false;sourceDirty=false;$('subscriptionURL').value='';$('newServiceURL').value='';$('newServiceName').value='';$('pauseButton').disabled=true;$('authRequired').hidden=false;$('workspace').hidden=true;$('connectionLabel').textContent='Требуется вход';notify('Войдите для чтения настроек и управления.',true);if($('addServiceDialog').open)$('addServiceDialog').close();window.dispatchEvent(new CustomEvent('razvilka:autonomy-error',{detail:{status:401,message:'Войдите для чтения настроек и управления.'}}));});
   document.addEventListener('razvilka:auth-restored',()=>{nextAuthGeneration();notify('');$('wizardError').textContent='';$('addServiceError').textContent='';$('saveWizard').disabled=false;$('authRequired').hidden=true;$('connectionLabel').textContent='Загружаем настройки…';void refresh();if(activeTab==='sources')void readSources();});

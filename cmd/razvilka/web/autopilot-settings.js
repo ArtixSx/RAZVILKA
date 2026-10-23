@@ -98,7 +98,7 @@
     const restarted = instanceID && nextInstance && instanceID !== nextInstance;
     // Publication clocks are comparable only within one router process. Live
     // readbacks have no instance_id, so retain the last known publication ID.
-    if (!restarted && latest && Date.parse(snapshot.server_time) < Date.parse(latest.server_time)) return false;
+    if (!restarted && latest && (Date.parse(snapshot.server_time) < Date.parse(latest.server_time) || snapshot.policy.revision < latest.policy.revision)) return false;
     if (restarted) {retiredInstances.add(instanceID);instanceEpoch++;}
     if (nextInstance) instanceID = nextInstance;
     latest = snapshot; received = Date.now();
@@ -147,6 +147,7 @@
       const next=await interfaceRequest('/api/v1/autonomy');
       if(token!==epoch)return;
       if(process!==instanceEpoch || !current(next,Date.now()) || !next.policy.setup_complete || next.policy.revision<=base.revision || !accept(next)) throw new Error('Сохранение принято, но новая редакция ещё не прочитана. Обновите состояние.');
+      root.dispatchEvent(new CustomEvent('razvilka:autonomy-policy-readback',{detail:next}));
       dirty=false;unknownWrite=false;load();
       document.dispatchEvent(new CustomEvent('razvilka:panel-refresh'));
       message.textContent='Параметры сохранены. Разрешения, устройства и текущие маршруты не изменялись.';
