@@ -94,12 +94,14 @@ func (d *ExactNodeDispatcher) Recover(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// DispatchedNodeChecker implements NodeChecker, NodeCheckCapacity and
+// DispatchedNodeChecker implements NodeChecker, NodeConnectivityChecker, NodeCheckCapacity and
 // TransportScreener. Screens share the quota too, bounding DNS/TCP work.
 type DispatchedNodeChecker struct {
 	dispatcher *ExactNodeDispatcher
 	checker    *ExactNodeChecker
 }
+
+var _ NodeConnectivityChecker = (*DispatchedNodeChecker)(nil)
 
 func (c *DispatchedNodeChecker) EngineID() string {
 	if c == nil || c.checker == nil {
@@ -145,6 +147,14 @@ func (c *DispatchedNodeChecker) Check(ctx context.Context, request NodeCheckRequ
 	}
 	defer func() { <-c.dispatcher.gate }()
 	return c.checker.Check(ctx, request)
+}
+
+func (c *DispatchedNodeChecker) CheckConnectivity(ctx context.Context, request NodeConnectivityRequest) (NodeConnectivityResult, error) {
+	if err := c.acquire(ctx, NodeCheckRequest{NodeID: request.NodeID, Outbound: request.Outbound, NetworkProfile: request.NetworkProfile, connectivity: true}); err != nil {
+		return NodeConnectivityResult{}, err
+	}
+	defer func() { <-c.dispatcher.gate }()
+	return c.checker.CheckConnectivity(ctx, request)
 }
 
 func (c *DispatchedNodeChecker) ScreenTransport(ctx context.Context, request NodeCheckRequest) (NodeCheckResult, bool, error) {
