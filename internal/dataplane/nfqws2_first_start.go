@@ -293,35 +293,53 @@ func (a *NFQWS2Adapter) firstStartRuntimeAbsent(parent context.Context) error {
 	if a.firstStartObservation != nil {
 		return a.firstStartObservation(parent, false)
 	}
+	s := a.inactivity
+	if s == nil || s.adapter != a || s.self != s || s.provider == nil {
+		return nfqws2InactiveAt("source", nil)
+	}
+	return a.firstStartRuntimeAbsentWithSources(parent, s.platform, s.provider.WithCurrent, s.frozen.Read)
+}
+
+// Private source model seam. Production retains the original bound platform,
+// provider and frozen collector above; no caller can replace their authority.
+func (a *NFQWS2Adapter) firstStartRuntimeAbsentWithSources(parent context.Context, platform nfqws2InactivePlatform,
+	withCurrent func(context.Context, func(context.Context, netidentity.Identity) error) error,
+	read func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error)) error {
 	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
 	s := a.inactivity
-	if s == nil || s.adapter != a || s.self != s {
-		return ErrNFQWSManagedKernelOwner
+	if s == nil || s.adapter != a || s.self != s || withCurrent == nil || read == nil {
+		return nfqws2InactiveAt("source", nil)
 	}
 	if err := s.current(ctx); err != nil {
 		return err
 	}
-	err := s.provider.WithCurrent(ctx, func(c context.Context, id netidentity.Identity) error {
+	err := withCurrent(ctx, func(c context.Context, id netidentity.Identity) error {
 		if id != s.identity {
-			return ErrNFQWSManagedKernelOwner
+			return nfqws2InactiveAt("identity", nil)
 		}
-		if err := nfqws2InactiveProcesses(c, s.platform, a); err != nil {
-			return err
+		if err := nfqws2InactiveProcesses(c, platform, a); err != nil {
+			return nfqws2InactiveAt("processes", err)
 		}
 		reader := nfqws2InactiveKernelReader{read: func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
-			image, err := s.frozen.Read(c, id)
+			image, err := read(c, id)
 			if err != nil || image.Scope.Network != id || image.Scope.ToolReviewID != s.frozen.review || image.IPTables != s.frozen.reader.IPTables || image.IP6Tables != s.frozen.reader.IP6Tables {
-				return BackendInventorySnapshot{}, ErrNFQWSManagedKernelOwner
+				return BackendInventorySnapshot{}, nfqws2InactiveAt("inventory.source", err)
 			}
 			return image, nil
-		}, queues: s.platform.queues, sockets: s.platform.sockets}
+		}, queues: platform.queues, sockets: platform.sockets}
 		if err := reader.check(c, id); err != nil {
-			return err
+			return nfqws2InactiveAt("kernel", err)
 		}
-		return nfqws2InactiveProcesses(c, s.platform, a)
+		if err := nfqws2InactiveProcesses(c, platform, a); err != nil {
+			return nfqws2InactiveAt("processes", err)
+		}
+		return nil
 	})
-	return errors.Join(err, s.current(ctx), ctx.Err())
+	if err := errors.Join(err, s.current(ctx), ctx.Err()); err != nil {
+		return nfqws2InactiveAt("observation", err)
+	}
+	return nil
 }
 
 func (a *NFQWS2Adapter) observeFirstStartAbsent(ctx context.Context, full bool) error {
