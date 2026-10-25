@@ -287,7 +287,7 @@ func TestNFQWSApplyKeepsSameIssuerAcrossPhasesAndFencesUnknownPriorOnRollback(t 
 	adapter := NewNFQWS2Adapter()
 	adapter.ConfigPath, adapter.InitPath = filepath.Join(root, "nfqws2.conf"), filepath.Join(root, "init")
 	adapter.UserListPath, adapter.IPSetListPath, adapter.IPTablesSave = filepath.Join(root, "user.list"), filepath.Join(root, "ipset.list"), "iptables-save-model"
-	for path, content := range map[string]string{adapter.ConfigPath: "ISP_INTERFACE=eth3\n", adapter.InitPath: "#!/bin/sh\n", adapter.UserListPath: "manual.example\n", adapter.IPSetListPath: ""} {
+	for path, content := range map[string]string{adapter.ConfigPath: nfqwsHealthMainFixture, adapter.InitPath: "#!/bin/sh\n", adapter.UserListPath: "manual.example\n", adapter.IPSetListPath: ""} {
 		if err := os.WriteFile(path, []byte(content), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -313,6 +313,12 @@ func TestNFQWSApplyKeepsSameIssuerAcrossPhasesAndFencesUnknownPriorOnRollback(t 
 		if command == adapter.InitPath && len(args) == 1 && args[0] == "restart" {
 			restarts++
 			live = true
+			// Model the stock service's generated overlay as well as its live
+			// rules. Health must prove that path before exercising this test's
+			// original issuer/CAS/rollback ordering assertions.
+			if err := os.WriteFile(adapter.ConfigPath+".run", []byte(nfqwsHealthRunningFixture), 0600); err != nil {
+				return nil, err
+			}
 			if restarts == 1 {
 				c = context.WithValue(c, nfqwsExecutionReadbackKey{}, nfqwsExecutionReadback(func(check context.Context, _ *NFQWSScopedPlan, _ string, _ nfqwsExecutionReadbackMode) error {
 					return check.Err()
@@ -327,6 +333,9 @@ func TestNFQWSApplyKeepsSameIssuerAcrossPhasesAndFencesUnknownPriorOnRollback(t 
 		if command == adapter.InitPath && len(args) == 1 && args[0] == "stop" {
 			stops++
 			live = false
+			if err := os.Remove(adapter.ConfigPath + ".run"); err != nil {
+				return nil, err
+			}
 			if err := resource.SettleRemoved(c); err != nil {
 				return nil, err
 			}
