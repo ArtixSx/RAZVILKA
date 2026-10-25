@@ -184,7 +184,7 @@ func (a *App) acceptDurableNodeChecks(w http.ResponseWriter, r *http.Request, q 
 
 func (a *App) nodeCheckCurrentView() map[string]any {
 	view := a.nodeCheckSnapshot()
-	a.addDurableServiceJobs(view)
+	a.addDurableServiceJobsView(view, true)
 	view["durable_selected_checks"] = true
 	view["durable_all_vless"] = true
 	return view

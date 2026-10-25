@@ -499,6 +499,10 @@ func durableQueueHasSpace(doc reconcilerDocument, stop bool) bool {
 }
 
 func (a *App) addDurableServiceJobs(view map[string]any) {
+	a.addDurableServiceJobsView(view, false)
+}
+
+func (a *App) addDurableServiceJobsView(view map[string]any, checksOnly bool) {
 	observations := a.nodeBatchMemoryResults()
 	r := &a.reconciler
 	r.mu.Lock()
@@ -516,6 +520,11 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 			p.DNSResult = slices.Clone(r.dnsResults[j.ID])
 		}
 		jobs = append(jobs, p)
+		// /node-checks/current shares durable history with service control, but
+		// Stop/Resume and mutation jobs are not a node-test presentation.
+		if checksOnly && j.Request.Kind != "node-check" && j.Request.Kind != "check" && j.Request.Kind != "select" {
+			continue
+		}
 		latest = p
 		if !j.terminal() && pending == nil {
 			pending = p
@@ -524,6 +533,10 @@ func (a *App) addDurableServiceJobs(view map[string]any) {
 	view["durable_jobs"] = jobs
 	view["queue_blocked"] = r.blocked
 	current, _ := view["job"].(*nodeCheckJob)
+	if checksOnly && current != nil && current.Mode != "tcp" && current.Mode != "connectivity" && current.Mode != "service" && current.Mode != "service-check" && current.Mode != "service-select" {
+		current = nil
+		view["job"] = (*nodeCheckJob)(nil)
+	}
 	if current != nil && (current.State == "running" || current.State == "canceling") {
 		return
 	}
