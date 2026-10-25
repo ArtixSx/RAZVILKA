@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ArtixSx/RAZVILKA/releases"><img alt="Выпуск" src="https://img.shields.io/github/v/release/ArtixSx/RAZVILKA?display_name=tag&label=%D0%B2%D1%8B%D0%BF%D1%83%D1%81%D0%BA&color=1fb6d9"></a>
+  <a href="https://github.com/ArtixSx/RAZVILKA/releases"><img alt="Сборки в Releases" src="https://img.shields.io/badge/%D0%A1%D0%B1%D0%BE%D1%80%D0%BA%D0%B8-Releases-1fb6d9"></a>
   <img alt="Keenetic · Netcraze · Entware" src="https://img.shields.io/badge/Keenetic%20%C2%B7%20Netcraze-Entware-0b1424">
   <img alt="ARM64 · MIPS · MIPSel" src="https://img.shields.io/badge/ARM64%20%C2%B7%20MIPS%20%C2%B7%20MIPSel-%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B8-e09a2b">
   <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-8aa0c2"></a>
@@ -125,14 +125,14 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.66/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.66 sh /opt/tmp/razvilka-setup.sh
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.67/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.67 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Явный `RAZVILKA_VERSION` обязателен: он закрепляет архив на том же тестовом
 выпуске, что и скрипт. Установщик определит архитектуру, сверит SHA-256 и запустит
 службу. Компоненты обхода ставятся потом из панели. Особенности тестовой сборки —
-в [примечаниях к выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.66).
+в [примечаниях к выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.67).
 
 **3. Откройте панель** — **http://192.168.1.1:8787** (или адрес своего роутера
 с портом `8787`; точная ссылка будет в выводе установщика). Войдите по выданному
@@ -168,14 +168,14 @@ RAZVILKA_VERSION=v0.20.0-rc.66 sh /opt/tmp/razvilka-setup.sh
 
 ## Удаление
 
-Команда ниже относится к установленной `0.20.0-rc.66`. Для другой версии
+Команда ниже относится к установленной `0.20.0-rc.67`. Для другой версии
 используйте bootstrap и явный `RAZVILKA_VERSION` из её выпуска.
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.66/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.66 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.67/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.67 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
 Сначала сохраните нужные настройки и подключения. Команда удаляет панель,
@@ -211,7 +211,7 @@ RAZVILKA_VERSION=v0.20.0-rc.66 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 
 - [Установка, обновление, удаление и откат](docs/INSTALL_RU.md)
 - [Совместимость и ограничения](docs/CURRENT_STATUS_RU.md)
-- [Примечания к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.66) · [История изменений](CHANGELOG.md)
+- [Примечания к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.67) · [История изменений](CHANGELOG.md)
 - [План развития](docs/ROADMAP.md) · [Идея двух DPI-исполнителей](docs/DUAL_DPI_ARCHITECTURE_RU.md)
 - [Что означают файлы и папки](docs/FILES_RU.md) · [Сторонние компоненты](THIRD_PARTY.md)
 - [Как помочь проекту](CONTRIBUTING.md)
