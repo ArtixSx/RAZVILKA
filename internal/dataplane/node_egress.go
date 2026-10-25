@@ -153,12 +153,9 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 		if result.directErr == nil && result.proxyErr == nil {
 			return result
 		}
-		// The provider answered directly, but nothing came through the node
-		// within the attempt: the node failed, and another provider through it
-		// would only wait again (dead nodes took 10 s instead of 5 s).
-		if result.directErr == nil && errors.Is(result.proxyErr, context.DeadlineExceeded) {
-			return result
-		}
+		// A proxy timeout can be specific to this provider or destination.
+		// While the overall budget remains, retry a complete direct/proxy
+		// pair; the previous direct observation cannot control a new target.
 	}
 	return result
 }

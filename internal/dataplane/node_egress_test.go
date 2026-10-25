@@ -318,19 +318,110 @@ func TestNodeEgressPairCancellationSkipsRemainingMeasurements(t *testing.T) {
 	}
 }
 
-// A node that lets nothing through within the attempt is not retried through
-// the backup provider; a provider that failed quickly still is.
-func TestNodeEgressPairDoesNotRetryATimedOutNode(t *testing.T) {
+// A timeout of one HTTPS destination is not evidence that every destination
+// fails through the node. The backup must establish its own direct control.
+func TestNodeEgressPairRetriesProviderTimeoutWithCompletePair(t *testing.T) {
 	var calls []string
+	var attempts []context.Context
+	started := time.Now()
 	result := probeNodeEgressPair(context.Background(), "127.0.0.1:19181", func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
 		calls = append(calls, endpoint.url+"/"+proxy)
+		attempts = append(attempts, ctx)
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > 5*time.Second {
+			t.Fatal("measurement lost its five-second attempt budget")
+		}
+		if endpoint.trace && proxy != "" {
+			<-ctx.Done()
+			return "", ctx.Err()
+		}
+		if endpoint.trace {
+			return "1.1.1.1", nil
+		}
 		if proxy == "" {
 			return "8.8.8.8", nil
 		}
-		<-ctx.Done()
-		return "", ctx.Err()
+		return "9.9.9.9", nil
 	})
-	if len(calls) != 2 || result.directIP != "8.8.8.8" || !errors.Is(result.proxyErr, context.DeadlineExceeded) {
-		t.Fatalf("timed-out node retried or misreported: calls=%v result=%+v", calls, result)
+	want := []string{
+		"https://www.cloudflare.com/cdn-cgi/trace/",
+		"https://www.cloudflare.com/cdn-cgi/trace/127.0.0.1:19181",
+		"https://api.ipify.org//",
+		"https://api.ipify.org//127.0.0.1:19181",
+	}
+	if !reflect.DeepEqual(calls, want) || result.directIP != "8.8.8.8" || result.proxyIP != "9.9.9.9" || result.directErr != nil || result.proxyErr != nil {
+		t.Fatalf("provider timeout prevented a fresh pair: calls=%v result=%+v", calls, result)
+	}
+	if time.Since(started) > 20*time.Second {
+		t.Fatal("overall budget exceeded")
+	}
+	for _, ctx := range attempts {
+		if ctx.Err() == nil {
+			t.Fatal("measurement context leaked")
+		}
+	}
+}
+
+func TestNodeEgressPairTimeoutFallbackRetainsControls(t *testing.T) {
+	for _, scenario := range []string{"direct-fails", "leak", "denied", "canceled", "overall-timeout"} {
+		t.Run(scenario, func(t *testing.T) {
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if scenario == "overall-timeout" {
+				var stop context.CancelFunc
+				parent, stop = context.WithTimeout(parent, 20*time.Millisecond)
+				defer stop()
+			}
+			var calls []string
+			result := probeNodeEgressPair(parent, "127.0.0.1:19181", func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
+				calls = append(calls, endpoint.url+"/"+proxy)
+				if endpoint.trace {
+					if proxy == "" {
+						return "1.1.1.1", nil
+					}
+					if scenario == "canceled" {
+						cancel()
+						return "", ctx.Err()
+					}
+					if scenario == "overall-timeout" {
+						<-ctx.Done()
+						return "", ctx.Err()
+					}
+					return "", context.DeadlineExceeded
+				}
+				if proxy == "" {
+					if scenario == "direct-fails" {
+						return "", errors.New("backup direct unavailable")
+					}
+					if scenario == "denied" {
+						return "", ErrNodeResourceDenied
+					}
+					return "8.8.8.8", nil
+				}
+				return "8.8.8.8", nil
+			})
+			switch scenario {
+			case "direct-fails":
+				if len(calls) != 4 || result.directErr == nil || result.directIP != "" {
+					t.Fatalf("backup reused direct control: %+v %v", result, calls)
+				}
+			case "leak":
+				if len(calls) != 4 || result.directIP != result.proxyIP || result.directErr != nil || result.proxyErr != nil {
+					t.Fatalf("backup leak hidden: %+v %v", result, calls)
+				}
+			case "denied":
+				if len(calls) != 3 || !errors.Is(result.directErr, ErrNodeResourceDenied) || !errors.Is(result.proxyErr, ErrNodeResourceDenied) {
+					t.Fatalf("denial retried: %+v %v", result, calls)
+				}
+			default:
+				want := context.Canceled
+				if scenario == "overall-timeout" {
+					want = context.DeadlineExceeded
+				}
+				if len(calls) != 2 || !errors.Is(result.directErr, want) || !errors.Is(result.proxyErr, want) {
+					t.Fatalf("parent termination retried: %+v %v", result, calls)
+				}
+			}
+		})
 	}
 }
