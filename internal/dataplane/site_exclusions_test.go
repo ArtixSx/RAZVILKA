@@ -36,18 +36,17 @@ func newSiteExclusionFixture(t *testing.T, mode string) siteExclusionFixture {
 	f := siteExclusionFixture{runner: &nfqwsFakeRunner{}, root: root, config: filepath.Join(base, "nfqws2.conf"),
 		user: filepath.Join(lists, "user.list"), ipset: filepath.Join(lists, "ipset.list"),
 		exclude: filepath.Join(lists, "exclude.list"), ipsetExclude: filepath.Join(lists, "ipset_exclude.list")}
-	conf := "ISP_INTERFACE=eth3\n" +
+	conf := nfqwsHealthMainFixture +
 		"MODE_LIST=\"--hostlist=" + f.user + "\"\n" +
 		"MODE_ALL=\"--hostlist-exclude=" + f.exclude + "\"\n" +
 		"MODE_AUTO=\"$MODE_LIST $MODE_ALL\"\n" +
 		"NFQWS_EXTRA_ARGS=\"" + mode + "\"\n" +
 		"NFQWS_ARGS_IPSET=\"--ipset=" + f.ipset + " --ipset-exclude=" + f.ipsetExclude + "\"\n" +
 		"NFQWS_ARGS_UDP=\"--filter-udp=50000-50099 --filter-l7=discord,stun --lua-desync=fake\"\n" +
-		"NFQWS_ARGS_CUSTOM=\"\"\n" +
-		"NFQUEUE_NUM=300\n"
+		"NFQWS_ARGS_CUSTOM=\"\"\n"
 	initPath, iptablesSave := filepath.Join(root, "S51nfqws2"), filepath.Join(root, "iptables-save")
 	for path, content := range map[string]string{
-		f.config: conf, initPath: "#!/bin/sh\n", iptablesSave: "#!/bin/sh\n", f.user: "manual.example\n", f.ipset: "",
+		f.config: conf, f.config + ".run": nfqwsHealthRunningFixture, initPath: "#!/bin/sh\n", iptablesSave: "#!/bin/sh\n", f.user: "manual.example\n", f.ipset: "",
 		f.exclude: "stock.example\n", f.ipsetExclude: "10.0.0.0/8\n",
 	} {
 		if err := os.WriteFile(path, []byte(content), 0o700); err != nil {

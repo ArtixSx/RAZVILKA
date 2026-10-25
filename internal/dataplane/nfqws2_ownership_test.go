@@ -22,7 +22,7 @@ func newOwnedNFQWS2(t *testing.T) (*NFQWS2Adapter, *nfqwsFakeRunner, string) {
 	root := t.TempDir()
 	a := &NFQWS2Adapter{ConfigPath: filepath.Join(root, "nfqws2.conf"), InitPath: filepath.Join(root, "S51nfqws2"),
 		UserListPath: filepath.Join(root, "user.list"), IPSetListPath: filepath.Join(root, "ipset.list")}
-	for path, content := range map[string]string{a.ConfigPath: "ISP_INTERFACE=eth3\n", a.InitPath: "#!/bin/sh\n", a.UserListPath: "manual.example\n", a.IPSetListPath: "192.0.2.10\n"} {
+	for path, content := range map[string]string{a.ConfigPath: nfqwsHealthMainFixture, a.ConfigPath + ".run": nfqwsHealthRunningFixture, a.InitPath: "#!/bin/sh\n", a.UserListPath: "manual.example\n", a.IPSetListPath: "192.0.2.10\n"} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}

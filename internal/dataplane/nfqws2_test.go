@@ -31,7 +31,7 @@ func TestNFQWS2AdapterManagedListsAndRollback(t *testing.T) {
 	ipsetPath := filepath.Join(root, "ipset.list")
 	iptablesSave := filepath.Join(root, "iptables-save")
 	for path, content := range map[string]string{
-		configPath: "ISP_INTERFACE=eth3\n", initPath: "#!/bin/sh\n", userPath: "manual.example\n", ipsetPath: "192.0.2.1\n", iptablesSave: "#!/bin/sh\n",
+		configPath: nfqwsHealthMainFixture, configPath + ".run": nfqwsHealthRunningFixture, initPath: "#!/bin/sh\n", userPath: "manual.example\n", ipsetPath: "192.0.2.1\n", iptablesSave: "#!/bin/sh\n",
 	} {
 		if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
 			t.Fatal(err)

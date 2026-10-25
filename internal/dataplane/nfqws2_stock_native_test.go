@@ -14,15 +14,21 @@ import (
 )
 
 type stockAdapterRunner struct {
-	calls     []string
-	args      []string
-	onNative  func()
-	nativeErr error
-	deadline  time.Duration
+	runningConfigPath string
+	calls             []string
+	args              []string
+	onNative          func()
+	nativeErr         error
+	deadline          time.Duration
 }
 
 func (r *stockAdapterRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	call := name + " " + strings.Join(args, " ")
+	if len(args) == 1 && args[0] == "restart" && r.runningConfigPath != "" {
+		if err := os.WriteFile(r.runningConfigPath, []byte(nfqwsHealthRunningFixture), 0600); err != nil {
+			return nil, err
+		}
+	}
 	r.calls = append(r.calls, call)
 	if slices.Contains(args, "--dry-run") {
 		r.args = slices.Clone(args)
@@ -63,6 +69,7 @@ func newStockAdapterFixtureAt(t *testing.T, prefix string) stockAdapterFixture {
 	runner := &stockAdapterRunner{}
 	a := &NFQWS2Adapter{ConfigPath: filepath.Join(base, "nfqws2.conf"), InitPath: filepath.Join(prefix, "etc", "init.d", "S51nfqws2"), UserListPath: filepath.Join(base, "lists", "user.list"), IPSetListPath: filepath.Join(base, "lists", "ipset.list"), Runner: runner, HealthProbe: func(context.Context, string) error { return nil }}
 	a.IPTablesSave = filepath.Join(prefix, "bin", "iptables-save")
+	runner.runningConfigPath = a.ConfigPath + ".run"
 	m := New(filepath.Join(prefix, "razvilka", "dataplane"))
 	if err := m.Register(a); err != nil {
 		t.Fatal(err)
@@ -80,7 +87,7 @@ func newStockAdapterFixtureAt(t *testing.T, prefix string) stockAdapterFixture {
 		t.Fatal(err)
 	}
 	lists := a.ownedListPaths()
-	config := "USER=nobody\nNFQUEUE_NUM=300\nISP_INTERFACE=eth3\nIPV6_ENABLED=0\nLOG_LEVEL=0\nNFQWS_BASE_ARGS=\"--lua-init=@" + filepath.ToSlash(filepath.Join(base, "lua", "zapret-lib.lua")) + " --fastpath-workaround=0\"\nNFQWS_ARGS=\"--filter-tcp=443 --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld\"\nNFQWS_EXTRA_ARGS=\"--hostlist=" + filepath.ToSlash(lists[0]) + " --hostlist-exclude=" + filepath.ToSlash(lists[2]) + "\"\nNFQWS_ARGS_UDP=\"\"\nNFQWS_ARGS_QUIC=\"\"\nNFQWS_ARGS_IPSET=\"\"\nNFQWS_ARGS_CUSTOM=\"\"\n"
+	config := nfqwsHealthMainFixture + "USER=nobody\nIPV6_ENABLED=0\nLOG_LEVEL=0\nNFQWS_BASE_ARGS=\"--lua-init=@" + filepath.ToSlash(filepath.Join(base, "lua", "zapret-lib.lua")) + " --fastpath-workaround=0\"\nNFQWS_ARGS=\"--filter-tcp=443 --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld\"\nNFQWS_EXTRA_ARGS=\"--hostlist=" + filepath.ToSlash(lists[0]) + " --hostlist-exclude=" + filepath.ToSlash(lists[2]) + "\"\nNFQWS_ARGS_UDP=\"\"\nNFQWS_ARGS_QUIC=\"\"\nNFQWS_ARGS_IPSET=\"\"\nNFQWS_ARGS_CUSTOM=\"\"\n"
 	files := map[string]string{
 		a.IPTablesSave: "#!/bin/sh\n",
 		a.ConfigPath:   config, a.InitPath: string(init), lists[0]: "manual.example\n", lists[1]: "", lists[2]: "excluded.example\n", lists[3]: "",
