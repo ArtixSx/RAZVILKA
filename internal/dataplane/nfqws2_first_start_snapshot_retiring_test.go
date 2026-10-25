@@ -75,7 +75,13 @@ func TestNFQWSFirstStartRetiringSnapshotRejectsStaleOrExpandedScope(t *testing.T
 			case "stop-draft":
 				stop.EngineDrafts = []string{"nfqws2/main"}
 			case "prior-main-draft", "prior-list-draft":
-				a.Configs = engineconfig.New(t.TempDir(), t.TempDir())
+				stage, backup := t.TempDir(), t.TempDir()
+				for _, path := range []string{stage, backup} {
+					if err := os.Chmod(path, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				a.Configs = engineconfig.New(stage, backup)
 				file, data := "main", string(readBytes(t, a.ConfigPath))
 				if kind == "prior-list-draft" {
 					file, data = "user-list", "foreign.example\n"
@@ -153,7 +159,7 @@ func TestNFQWS2FirstStartManagerStopThenResume(t *testing.T) {
 	f.plan.PlanID, f.plan.Revision = "dp-1111111111111111", 1
 	f.apply(t)
 	first := f.identity
-	stop := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-2222222222222222", Digest: strings.Repeat("b", 64), Revision: 2, RetiringAdapters: []string{"nfqws2"}}
+	stop := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-2222222222222222", Digest: strings.Repeat("b", 64), Revision: 2, Ready: true, RetiringAdapters: []string{"nfqws2"}}
 	result, err := f.m.Apply(firstStartContext(t), stop, nil)
 	if err != nil || result.State != "committed" {
 		t.Fatal("manager Stop failed", result, err)
