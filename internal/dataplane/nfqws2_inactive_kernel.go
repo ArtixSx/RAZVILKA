@@ -59,73 +59,79 @@ type nfqws2InactiveKernelReader struct {
 func (r nfqws2InactiveKernelReader) frame(ctx context.Context, comparison []BackendInventoryRow) (nfqws2InactiveQueueFrame, error) {
 	var zero nfqws2InactiveQueueFrame
 	if ctx == nil || ctx.Err() != nil || r.queues == nil || r.sockets == nil {
-		return zero, ErrNFQWSManagedKernelOwner
+		return zero, nfqws2InactiveKernelAt("frame.source", ErrNFQWSManagedKernelOwner)
 	}
 	allowed := map[uint16]bool{}
 	for _, row := range comparison {
 		action, err := nfqwsDirectStockRuleAction(row.Tokens)
 		if err != nil || action.target != "NFQUEUE" || action.queue == nil {
-			return zero, ErrNFQWSManagedKernelOwner
+			return zero, nfqws2InactiveKernelAt("frame.comparison", ErrNFQWSManagedKernelOwner)
 		}
 		allowed[*action.queue] = true
 	}
 	queues, err := r.queues(ctx)
 	if err != nil {
-		return zero, errors.Join(ErrNFQWSManagedKernelOwner, err)
+		return zero, nfqws2InactiveKernelAt("queue.inventory", errors.Join(ErrNFQWSManagedKernelOwner, err))
 	}
 	sockets, err := r.sockets(ctx)
 	if err != nil {
-		return zero, errors.Join(ErrNFQWSManagedKernelOwner, err)
+		return zero, nfqws2InactiveKernelAt("socket.inventory", errors.Join(ErrNFQWSManagedKernelOwner, err))
 	}
 	// Validate a positively read complete socket table even when queues are
 	// empty. An absent proc leaf or an empty/truncated header is never absence.
 	if nfqws2InactiveNetlinkTable(sockets) != nil {
-		return zero, ErrNFQWSManagedKernelOwner
+		return zero, nfqws2InactiveKernelAt("socket.table", ErrNFQWSManagedKernelOwner)
 	}
 	seen := map[uint16]bool{}
 	var frame nfqws2InactiveQueueFrame
 	for _, queue := range queues {
 		if ctx.Err() != nil || seen[queue.number] || !allowed[queue.number] || queue.portID == 0 || queue.copyMode > 2 || queue.copyRange > 65535 {
-			return zero, ErrNFQWSManagedKernelOwner
+			return zero, nfqws2InactiveKernelAt("queue.registration", ErrNFQWSManagedKernelOwner)
 		}
 		seen[queue.number] = true
 		inode, err := nfqwsScopedSocketInode(sockets, queue.portID)
 		if err != nil || inode == "" {
-			return zero, errors.Join(ErrNFQWSManagedKernelOwner, err)
+			return zero, nfqws2InactiveKernelAt("socket.owner", errors.Join(ErrNFQWSManagedKernelOwner, err))
 		}
 		frame.queues = append(frame.queues, nfqwsScopedForeignQueueState{queue: queue, inode: inode})
 	}
 	slices.SortFunc(frame.queues, func(a, b nfqwsScopedForeignQueueState) int { return int(a.queue.number) - int(b.queue.number) })
-	return frame, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return frame, nfqws2InactiveKernelAt("frame.context", err)
+	}
+	return frame, nil
 }
 
 func (r nfqws2InactiveKernelReader) check(ctx context.Context, identity netidentity.Identity) error {
 	if ctx == nil || ctx.Err() != nil || identity.Validate() != nil || r.read == nil {
-		return ErrNFQWSManagedKernelOwner
+		return nfqws2InactiveKernelAt("source", ErrNFQWSManagedKernelOwner)
 	}
 	before, err := r.read(ctx, identity)
 	if err != nil || before.Scope.Network != identity {
-		return errors.Join(ErrNFQWSManagedKernelOwner, err)
+		return nfqws2InactiveKernelAt("inventory.open", errors.Join(ErrNFQWSManagedKernelOwner, err))
 	}
 	comparison, err := nfqws2InactiveKernelRows(before)
 	if err != nil {
-		return err
+		return nfqws2InactiveKernelAt("rules.open", err)
 	}
 	opening, err := r.frame(ctx, comparison)
 	if err != nil {
 		return err
 	}
 	after, err := r.read(ctx, identity)
-	if err != nil || after.Scope.Network != identity || !reflect.DeepEqual(before, after) {
-		return errors.Join(ErrNFQWSManagedKernelOwner, err)
+	if err != nil || after.Scope.Network != identity {
+		return nfqws2InactiveKernelAt("inventory.close", errors.Join(ErrNFQWSManagedKernelOwner, err))
+	}
+	if !reflect.DeepEqual(before, after) {
+		return nfqws2InactiveKernelAt("inventory.changed", ErrNFQWSManagedKernelOwner)
 	}
 	closingComparison, err := nfqws2InactiveKernelRows(after)
 	if err != nil || !reflect.DeepEqual(comparison, closingComparison) {
-		return errors.Join(ErrNFQWSManagedKernelOwner, err)
+		return nfqws2InactiveKernelAt("rules.close", errors.Join(ErrNFQWSManagedKernelOwner, err))
 	}
 	closing, err := r.frame(ctx, closingComparison)
 	if err != nil || !slices.Equal(opening.queues, closing.queues) || ctx.Err() != nil {
-		return errors.Join(ErrNFQWSManagedKernelOwner, err, ctx.Err())
+		return nfqws2InactiveKernelAt("frame.changed", errors.Join(ErrNFQWSManagedKernelOwner, err, ctx.Err()))
 	}
 	return nil
 }

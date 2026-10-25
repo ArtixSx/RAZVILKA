@@ -35,6 +35,12 @@ func nfqws2InactiveStages(err error) []string {
 			return
 		}
 		remaining--
+		if failure, ok := err.(*nfqws2InactiveKernelFailure); ok && failure != nil {
+			stage := "kernel." + nfqws2InactiveKernelLabel(failure.stage)
+			if !seen[stage] {
+				stages, seen[stage] = append(stages, stage), true
+			}
+		}
 		if failure, ok := err.(*nfqws2InactiveProcessFailure); ok && failure != nil {
 			stage := "proc." + nfqws2InactiveProcessLabel(failure.stage)
 			if !seen[stage] {

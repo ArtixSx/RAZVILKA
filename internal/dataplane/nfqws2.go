@@ -839,6 +839,9 @@ func (a *NFQWS2Adapter) rollback(ctx context.Context, plan Plan, root string, or
 			return a.resumeFirstStartRollback(ctx, root, snapshot, lease)
 		}
 		if nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
+			if handled, err := a.rollbackInterruptedFirstStartStop(ctx, plan, root, snapshot, lease, originalFirstStart); handled || err != nil {
+				return err
+			}
 			// Already rolled back: a retry after a rollback that could not put
 			// back the block its lease records (0.19.2).
 			return a.restoreRolledBackBlocks(ctx, plan, snapshot)

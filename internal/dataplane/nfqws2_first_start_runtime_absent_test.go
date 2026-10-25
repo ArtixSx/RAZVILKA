@@ -19,10 +19,10 @@ func TestNFQWSFirstStartRuntimeAbsentPreservesInventoryCauseAndStage(t *testing.
 		err  error
 		text string
 	}{
-		{"backend", backendInventoryAt("TOOLS_A", private), "NFQWS runtime inactivity: observation/kernel/inventory.source/backend.TOOLS_A"},
-		{"unknown-backend", backendInventoryAt("private-stage", private), "NFQWS runtime inactivity: observation/kernel/inventory.source/backend.unknown"},
-		{"deadline", context.DeadlineExceeded, "NFQWS runtime inactivity: observation/kernel/inventory.source"},
-		{"canceled", context.Canceled, "NFQWS runtime inactivity: observation/kernel/inventory.source"},
+		{"backend", backendInventoryAt("TOOLS_A", private), "NFQWS runtime inactivity: observation/kernel/kernel.inventory.open/inventory.source/backend.TOOLS_A"},
+		{"unknown-backend", backendInventoryAt("private-stage", private), "NFQWS runtime inactivity: observation/kernel/kernel.inventory.open/inventory.source/backend.unknown"},
+		{"deadline", context.DeadlineExceeded, "NFQWS runtime inactivity: observation/kernel/kernel.inventory.open/inventory.source"},
+		{"canceled", context.Canceled, "NFQWS runtime inactivity: observation/kernel/kernel.inventory.open/inventory.source"},
 	} {
 		t.Run(cause.name, func(t *testing.T) {
 			f := newNFQWS2InactiveFixture(t)
