@@ -136,3 +136,57 @@ func TestPrivateBackupExportValidEngineFilesPassPreview(t *testing.T) {
 		t.Fatalf("generated backup is not safely previewable: HTTP %d", preview.Code)
 	}
 }
+
+func TestPrivateBackupExportPreservesEmptyNFQWSLists(t *testing.T) {
+	a, _ := privateRestoreTestApp(t)
+	stagePrivateBackupExportFixture(t, a)
+	want := map[string]string{}
+	for _, engine := range engineconfig.Specs() {
+		if engine.ID != "nfqws2" {
+			continue
+		}
+		for _, file := range engine.Files {
+			if file.Syntax != "list" && file.Syntax != "cidr-list" {
+				continue
+			}
+			content := ""
+			if file.ID == "exclude-list" {
+				content = "# No excluded sites yet\n\n"
+			}
+			if _, err := a.EngineConfigs.Stage(engine.ID, file.ID, content); err != nil {
+				t.Fatal(err)
+			}
+			want[file.ID] = content
+		}
+	}
+	w := requestPrivateBackupExport(a)
+	if w.Code != http.StatusOK {
+		t.Fatalf("empty NFQWS2 list prevented backup: HTTP %d", w.Code)
+	}
+	var envelope privatebackup.Envelope
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := privatebackup.Decrypt(envelope, "correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, file := range payload.EngineFiles {
+		if content, ok := want[file.FileID]; ok && file.EngineID == "nfqws2" {
+			if file.Content != content {
+				t.Fatal("empty list or comments were rewritten")
+			}
+			seen++
+		}
+	}
+	if seen != len(want) || seen == 0 {
+		t.Fatal("empty files were omitted from the encrypted backup")
+	}
+	body, _ := json.Marshal(map[string]any{"envelope": envelope, "password": "correct horse battery staple"})
+	preview := httptest.NewRecorder()
+	a.Handler(http.NotFoundHandler()).ServeHTTP(preview, httptest.NewRequest(http.MethodPost, "/api/v1/private-backups/preview", bytes.NewReader(body)))
+	if preview.Code != http.StatusOK {
+		t.Fatalf("empty NFQWS2 lists cannot be restored: HTTP %d", preview.Code)
+	}
+}

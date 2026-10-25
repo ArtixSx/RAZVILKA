@@ -402,6 +402,22 @@ func (m *Manager) validateLocked(engineID, fileID string) Validation {
 }
 
 func validateBytes(v Validation, syntax string, data []byte) Validation {
+	// NFQWS2 creates empty host/IP lists on installation; exclusions can also
+	// legitimately contain no entries. Keep those exact bytes restorable without
+	// admitting empty executable or tunnel configurations.
+	if v.EngineID == "nfqws2" && (syntax == "list" || syntax == "cidr-list") {
+		empty := true
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				empty = false
+				break
+			}
+		}
+		if empty {
+			return v
+		}
+	}
 	switch syntax {
 	case "json":
 		if !json.Valid(data) {
