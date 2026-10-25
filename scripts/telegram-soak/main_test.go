@@ -257,7 +257,14 @@ func TestHTTPSFailuresRedirectTLSAndBodyAreBoundedAndSanitized(t *testing.T) {
 				_, _ = io.WriteString(w, secret)
 			})
 			socks := fixtureSOCKS(t, server.Listener.Addr().String(), "")
-			r, err := observe(context.Background(), fixtureOptions(socks.address), roots)
+			o := fixtureOptions(socks.address)
+			// These cases verify response semantics and sanitization, including
+			// transferring maxBody+1 bytes through TLS/SOCKS under the race
+			// detector. The short request/control timers are tested separately;
+			// they must not win the race against a valid oversized response.
+			o.ProbeTimeout, o.ControlTimeout = 2*time.Second, time.Second
+			o.Duration, o.Interval = 2200*time.Millisecond, 5*time.Second
+			r, err := observe(context.Background(), o, roots)
 			wantCode := map[string]string{"status": "http_status", "redirect": "http_status", "tls": "tls_verification", "body": "body_limit", "headers": "transport_failed"}[mode]
 			if err != nil || r.ExitCode != 2 || !r.WindowCompleted || r.Accepted != 0 || r.Failures != 1 || r.FailureCodes[wantCode] != 1 || len(socks.commands) != 1 || !r.Final.OK {
 				t.Fatal("failure or redirect acquired success", r, err)
