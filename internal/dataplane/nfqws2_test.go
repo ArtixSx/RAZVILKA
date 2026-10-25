@@ -18,7 +18,7 @@ func (r *nfqwsFakeRunner) Run(_ context.Context, name string, args ...string) ([
 		return []byte("service is running"), nil
 	}
 	if strings.Contains(name, "iptables-save") {
-		return []byte("-A nfqws_post -j NFQUEUE --queue-num 300"), nil
+		return []byte(nfqwsHealthRulesFixture), nil
 	}
 	return []byte("ok"), nil
 }

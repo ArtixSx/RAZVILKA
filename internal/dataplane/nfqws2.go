@@ -544,7 +544,9 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 		return errors.New("iptables-save is unavailable")
 	}
 	output, err = a.run(ctx, iptablesSave)
-	if err != nil || !strings.Contains(strings.ToLower(string(output)), "nfqws") || !strings.Contains(strings.ToUpper(string(output)), "NFQUEUE") {
+	config, configExists, configErr := nfqws2Read(a.ConfigPath)
+	queue, queueOK := nfqws2LiteralQueue(config)
+	if err != nil || configErr != nil || !configExists || !queueOK || !nfqws2ReachableQueueRule(output, queue) {
 		return fmt.Errorf("active NFQWS2 NFQUEUE rules were not confirmed: %s", shortOutput(output, err))
 	}
 	probe := a.HealthProbe
@@ -563,6 +565,104 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 		}
 	}
 	return nil
+}
+
+// A process receipt and unrelated firmware NFQUEUE cannot prove our packet
+// path. Recognize only the stock mangle hook and its exact queue. Earlier
+// nonempty hooks or terminal rules remain unknown; observation never edits them.
+func nfqws2ReachableQueueRule(data []byte, queue string) bool {
+	if len(data) == 0 || len(data) > 1<<20 || !nfqws2QueueRule(data, queue) {
+		return false
+	}
+	chains := map[string][]string{}
+	inMangle, complete, seenMangle := false, false, false
+	for _, raw := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "*") {
+			if inMangle || line == "*mangle" && seenMangle {
+				return false
+			}
+			inMangle = line == "*mangle"
+			seenMangle = seenMangle || inMangle
+			continue
+		}
+		if !inMangle {
+			continue
+		}
+		if line == "COMMIT" {
+			inMangle, complete = false, true
+			continue
+		}
+		f := strings.Fields(line)
+		if strings.HasPrefix(line, ":") && len(f) == 3 {
+			name := strings.TrimPrefix(f[0], ":")
+			if _, duplicate := chains[name]; duplicate {
+				return false
+			}
+			chains[name] = nil
+		} else if len(f) >= 4 && f[0] == "-A" {
+			if _, declared := chains[f[1]]; !declared {
+				return false
+			}
+			chains[f[1]] = append(chains[f[1]], strings.Join(f[2:], " "))
+		} else {
+			return false
+		}
+	}
+	if inMangle || !complete {
+		return false
+	}
+	// The ordinary stock owner publishes exactly one unconditional hook.
+	hooks := 0
+	for _, rule := range chains["POSTROUTING"] {
+		f := strings.Fields(rule)
+		if len(f) != 2 || f[0] != "-j" {
+			return false
+		}
+		if f[1] == "nfqws_post" {
+			hooks++
+		} else if child, declared := chains[f[1]]; !declared || len(child) != 0 {
+			return false
+		}
+	}
+	if hooks != 1 || len(chains["nfqws_post"]) == 0 {
+		return false
+	}
+	tcp443 := false
+	for _, rule := range chains["nfqws_post"] {
+		// No RETURN, foreign jump, or other queue may hide the owned path.
+		f := strings.Fields(rule)
+		target, number := 0, 0
+		tcp, port443 := false, false
+		for i := 0; i+1 < len(f); i++ {
+			tcp = tcp || f[i] == "-p" && f[i+1] == "tcp"
+			if f[i] == "--dports" || f[i] == "--dport" {
+				for _, port := range strings.Split(f[i+1], ",") {
+					port443 = port443 || port == "443"
+				}
+			}
+			if f[i] == "-j" {
+				if f[i+1] != "NFQUEUE" {
+					return false
+				}
+				target++
+			}
+			if f[i] == "--queue-num" {
+				if f[i+1] != queue {
+					return false
+				}
+				number++
+			}
+		}
+		if target != 1 || number != 1 {
+			return false
+		}
+		tcp443 = tcp443 || tcp && port443
+	}
+	return tcp443
 }
 
 func (a *NFQWS2Adapter) Reconcile(ctx context.Context, plan Plan) error {

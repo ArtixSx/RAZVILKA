@@ -118,7 +118,7 @@ func newFirstStartFixture(t *testing.T) *firstStartFixture {
 		}
 		if name == f.a.IPTablesSave {
 			if f.ownedRules {
-				return []byte("-A nfqws_post -p tcp --dports 443 -j NFQUEUE --queue-num 300"), nil
+				return []byte(nfqwsHealthRulesFixture), nil
 			}
 			return nil, nil
 		}
