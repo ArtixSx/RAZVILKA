@@ -57,9 +57,12 @@ type ordinaryPreparation struct {
 }
 
 func ordinaryFutureVersions(old, next string) bool {
-	_, _, oldOK := parseComparableVersion(old)
+	oldCore, _, oldOK := parseComparableVersion(old)
 	_, _, nextOK := parseComparableVersion(next)
-	return oldOK && nextOK && compareVersions(old, "0.20.0") >= 0 && compareVersions(next, old) > 0
+	// 0.20 is the first ordinary protocol generation, including its RCs.
+	// Only the generation floor ignores prerelease ordering; the target must
+	// still be strictly newer under the full comparable-version ordering.
+	return oldOK && nextOK && (oldCore[0] > 0 || oldCore[1] >= 20) && compareVersions(next, old) > 0
 }
 
 func (p *ordinaryPreparation) lifetime(ctx context.Context) error {
