@@ -459,13 +459,9 @@ func (a *App) checkAndRecordNodeForEngine(ctx context.Context, engine, id string
 	})
 }
 
-// screenAndRecordNode runs only the DNS and transport stages. A node that
-// fails them is decided and recorded exactly as a full check would record it;
-// otherwise nothing is recorded and a full check is still required.
-func (a *App) screenAndRecordNode(ctx context.Context, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, bool, error) {
-	return a.screenAndRecordNodeForEngine(ctx, "sing-box", id, service, profile)
-}
-
+// screenAndRecordNodeForEngine runs only the DNS and transport stages. A node
+// that fails them is decided and recorded exactly as a full check would
+// record it; otherwise nothing is recorded and a full check is still required.
 func (a *App) screenAndRecordNodeForEngine(ctx context.Context, engine, id string, service catalog.Service, profile string) (dataplane.NodeCheckResult, bool, error) {
 	checker, err := a.nodeCheckerForEngine(engine)
 	if err != nil {

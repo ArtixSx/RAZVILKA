@@ -457,7 +457,9 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 	if mode == "service" {
 		checkContext, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
-		result, _, err := a.checkAndRecordNode(checkContext, id, service, profile, 0)
+		// These rows never lead to Apply; check with the engine the node requires.
+		engine := a.checkOnlyNodeEngine(checkContext, id)
+		result, _, err := a.checkAndRecordNodeForEngine(checkContext, engine, id, service, profile, 0)
 		item.CheckedAt = time.Now().UTC()
 		if err == nil {
 			item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
