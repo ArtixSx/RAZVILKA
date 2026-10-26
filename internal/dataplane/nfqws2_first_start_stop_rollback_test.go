@@ -132,7 +132,7 @@ func TestNFQWS2FirstStartRollbackVerificationRequiresRestoredPacketPath(t *testi
 	if firstStartNamespace(t) {
 		return
 	}
-	for _, kind := range []string{"exact", "missing-hook", "wrong-interface", "wrong-processed-mark", "foreign-queue"} {
+	for _, kind := range []string{"exact", "missing-hook", "wrong-interface", "wrong-processed-mark", "foreign-queue", "missing-pre-hook", "missing-pre-chain", "terminal-before-pre-hook"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newFirstStartFixture(t)
 			f.plan.PlanID = "dp-1111111111111111"
@@ -159,6 +159,12 @@ func TestNFQWS2FirstStartRollbackVerificationRequiresRestoredPacketPath(t *testi
 				rules = strings.ReplaceAll(rules, "0x40000000/0x40000000", "0x20000000/0x20000000")
 			case "foreign-queue":
 				rules = strings.ReplaceAll(rules, "--queue-num 300", "--queue-num 301")
+			case "missing-pre-hook":
+				rules = strings.ReplaceAll(rules, "-A PREROUTING -j nfqws_pre\n", "")
+			case "missing-pre-chain":
+				rules = strings.Replace(nfqws2HealthWithoutLines(rules, "-A nfqws_pre "), ":nfqws_pre - [0:0]\n", "", 1)
+			case "terminal-before-pre-hook":
+				rules = strings.ReplaceAll(rules, "-A PREROUTING -j nfqws_pre\n", "-A PREROUTING -j ACCEPT\n-A PREROUTING -j nfqws_pre\n")
 			}
 			runner := f.a.Runner
 			f.a.Runner = nfqws2RunFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {

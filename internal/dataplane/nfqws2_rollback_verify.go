@@ -128,7 +128,8 @@ func (a *NFQWS2Adapter) VerifyRollback(ctx context.Context, plan Plan, root stri
 	queueConfirmed := nfqws2QueueRule(output, queue)
 	if snapshot.FirstStart && snapshot.WasRunning {
 		running, exists, err := nfqws2Read(a.ConfigPath + ".run")
-		queueConfirmed = err == nil && exists && nfqws2ClosedReachableQueueRule(output, snapshot.Config, running, lease.Owner)
+		queueConfirmed = err == nil && exists && nfqws2ClosedReachableQueueRule(output, snapshot.Config, running, lease.Owner) &&
+			nfqws2ClosedReachablePreRule(output, snapshot.Config, running, lease.Owner)
 	}
 	if queueConfirmed != snapshot.WasRunning {
 		return false, errors.New("NFQWS2 rollback queue rules are not confirmed")

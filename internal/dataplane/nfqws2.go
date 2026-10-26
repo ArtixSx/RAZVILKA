@@ -549,7 +549,9 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 	reachable := false
 	if runningErr == nil && runningExists {
 		if lease != nil && lease.FirstStart != nil {
-			reachable = nfqws2ClosedReachableQueueRule(output, config, running, lease.Owner)
+			// A lost reply-direction graph must not pass behind a live post hook.
+			reachable = nfqws2ClosedReachableQueueRule(output, config, running, lease.Owner) &&
+				nfqws2ClosedReachablePreRule(output, config, running, lease.Owner)
 		} else {
 			reachable = nfqws2ExpertReachableQueueRule(output, config, running)
 		}

@@ -14,13 +14,23 @@ import (
 // Stock iptables-save formatting, including normalized extension-option order.
 const nfqwsHealthMainFixture = "ISP_INTERFACE=eth3\nNFQUEUE_NUM=300\nTCP_PORTS=443\nUDP_PORTS=\nPOLICY_NAME=nfqws\nPOLICY_EXCLUDE=0\n"
 const nfqwsHealthRunningFixture = nfqwsHealthMainFixture + "POLICY_MARK=\n"
+
+// The stock owner's reply-direction graph is part of the same exact hook set.
 const nfqwsHealthRulesFixture = `*mangle
+:PREROUTING ACCEPT [0:0]
 :POSTROUTING ACCEPT [0:0]
 :nfqws_post - [0:0]
+:nfqws_pre - [0:0]
+-A PREROUTING -j nfqws_pre
 -A POSTROUTING -j nfqws_post
 -A nfqws_post -o eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --dports 443 -m connbytes --connbytes 1:15 --connbytes-mode packets --connbytes-dir original -j NFQUEUE --queue-num 300 --queue-bypass
 -A nfqws_post -o eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --dports 443 -m tcp --tcp-flags FIN FIN -j NFQUEUE --queue-num 300 --queue-bypass
 -A nfqws_post -o eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --dports 443 -m tcp --tcp-flags RST RST -j NFQUEUE --queue-num 300 --queue-bypass
+-A nfqws_pre -i eth3 -m mark --mark 0x40000000/0x40000000 -j RETURN
+-A nfqws_pre -i eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --sports 443 -m connbytes --connbytes 1:15 --connbytes-mode packets --connbytes-dir reply -j NFQUEUE --queue-num 300 --queue-bypass
+-A nfqws_pre -i eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --sports 443 -m tcp --tcp-flags SYN,ACK SYN,ACK -j NFQUEUE --queue-num 300 --queue-bypass
+-A nfqws_pre -i eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --sports 443 -m tcp --tcp-flags FIN FIN -j NFQUEUE --queue-num 300 --queue-bypass
+-A nfqws_pre -i eth3 -p tcp -m mark ! --mark 0x40000000/0x40000000 -m multiport --sports 443 -m tcp --tcp-flags RST RST -j NFQUEUE --queue-num 300 --queue-bypass
 COMMIT
 `
 
@@ -228,6 +238,60 @@ func TestNFQWS2ClosedHealthBindsExactInterfaceAndProcessedMark(t *testing.T) {
 	}
 	if nfqws2ClosedReachableQueueRule([]byte(nfqwsHealthRulesFixture), config, []byte(strings.ReplaceAll(string(run), "POLICY_MARK=\n", "POLICY_MARK=0x10/0xff\n")), owner) {
 		t.Fatal("closed policy scope expanded")
+	}
+}
+
+// Drops every save line naming one owned chain: declaration, jump and body.
+func nfqws2HealthWithoutLines(rules, chain string) string {
+	var kept []string
+	for _, line := range strings.Split(rules, "\n") {
+		if !strings.Contains(line, chain) {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// A firmware rewrite that keeps the post hook but loses the reply-direction
+// graph used to pass Health. The router shape with its non-terminal firmware
+// chains before the hook stays accepted.
+func TestNFQWS2FirstStartHealthRequiresOwnedPreroutingHook(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	for _, tc := range []struct {
+		name, rules string
+		accepted    bool
+	}{
+		{"router-shape", nfqws2RouterNATFixture + nfqws2RouterMangleFixture + nfqws2RouterFilterFixture, true},
+		{"missing-pre-jump", strings.Replace(nfqwsHealthRulesFixture, "-A PREROUTING -j nfqws_pre\n", "", 1), false},
+		{"missing-pre-graph", nfqws2HealthWithoutLines(nfqwsHealthRulesFixture, "nfqws_pre"), false},
+		{"empty-pre-chain", nfqws2HealthWithoutLines(nfqwsHealthRulesFixture, "-A nfqws_pre "), false},
+		{"missing-pre-chain", strings.Replace(nfqws2HealthWithoutLines(nfqwsHealthRulesFixture, "-A nfqws_pre "), ":nfqws_pre - [0:0]\n", "", 1), false},
+		{"terminal-before-pre-hook", strings.Replace(nfqwsHealthRulesFixture, "-A PREROUTING -j nfqws_pre\n", "-A PREROUTING -p tcp -j ACCEPT\n-A PREROUTING -j nfqws_pre\n", 1), false},
+		{"conditional-pre-hook", strings.Replace(nfqwsHealthRulesFixture, "-A PREROUTING -j nfqws_pre\n", "-A PREROUTING -i eth3 -j nfqws_pre\n", 1), false},
+		{"pre-body-drift", strings.Replace(nfqwsHealthRulesFixture, "-m tcp --tcp-flags SYN,ACK SYN,ACK", "-m tcp --tcp-flags SYN SYN", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFirstStartFixture(t)
+			f.apply(t)
+			original := f.a.Runner
+			f.a.Runner = nfqws2RunFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if name == f.a.IPTablesSave {
+					return []byte(tc.rules), nil
+				}
+				return original.Run(ctx, name, args...)
+			})
+			probes := 0
+			f.a.HealthProbe = func(context.Context, string) error { probes++; return nil }
+			err := f.a.Health(firstStartContext(t), f.plan, "")
+			if (err == nil) != tc.accepted || (probes != 0) != tc.accepted || !f.running {
+				t.Fatalf("accepted=%v err=%v probes=%d running=%v", tc.accepted, err, probes, f.running)
+			}
+			if !tc.accepted && !strings.Contains(err.Error(), "NFQUEUE rules were not confirmed") {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
