@@ -12,6 +12,10 @@ import (
 
 const nfqws2LockMarker = "RAZVILKA shared NFQWS2 resource lock v1\n"
 
+// errNFQWS2ResourceBusy is only another live holder of the same lock. A
+// background repair skips on it; every other lock error stays a refusal.
+var errNFQWS2ResourceBusy = errors.New("NFQWS2 shared resource is busy")
+
 // Locks are tied to shared resource paths, not the instance StateRoot. Keep
 // each marker inode permanently: unlinking it permits a second concurrent lock.
 func (a *NFQWS2Adapter) lockResources() (func(), error) {
@@ -70,9 +74,12 @@ func acquireNFQWS2ResourceLock(root *ownedfs.Root, name string) (func(), error) 
 		}
 	}()
 	info, err := file.Stat()
+	if err != nil || !validCloudflareScanLockFile(info) {
+		return nil, errors.New("NFQWS2 shared resource lock is unsafe")
+	}
 	// These platform primitives are generic nonblocking flock/LockFileEx.
-	if err != nil || !validCloudflareScanLockFile(info) || lockCloudflareScanFile(file) != nil {
-		return nil, errors.New("NFQWS2 shared resource is busy")
+	if lockCloudflareScanFile(file) != nil {
+		return nil, errNFQWS2ResourceBusy
 	}
 	current, err := root.Stat(name)
 	if err != nil || !os.SameFile(info, current) {

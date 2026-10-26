@@ -464,6 +464,22 @@ func (m *Manager) beginOperation(ctx context.Context) error {
 	}
 }
 
+// tryBeginOperation admits only an idle dataplane. A background repair skips
+// a busy one and never queues behind another operation.
+func (m *Manager) tryBeginOperation() bool {
+	m.operationOnce.Do(func() {
+		if m.operationGate == nil {
+			m.operationGate = make(chan struct{}, 1)
+		}
+	})
+	select {
+	case m.operationGate <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *Manager) endOperation() {
 	if m != nil && m.operationGate != nil {
 		<-m.operationGate

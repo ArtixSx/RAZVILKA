@@ -60,6 +60,7 @@ type NFQWS2Adapter struct {
 	firstStartReviewRoot      string
 	firstStartScopeRead       func(context.Context) ([]byte, string, error) // Private fact-source model; production uses its original protected provider/current WAN.
 	firstStartReceiptReady    func()                                        // Private deterministic fault injection after exact running receipt persistence.
+	firstStartHookModel       func() nfqws2HookSource                       // Private kernel/queue model for hook restoration tests; never bound by startup.
 }
 
 type nfqws2Snapshot struct {
@@ -535,10 +536,7 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 	if err != nil || !runningOutput(string(output)) {
 		return fmt.Errorf("NFQWS2 status is not running: %s", shortOutput(output, err))
 	}
-	iptablesSave := a.IPTablesSave
-	if iptablesSave == "" {
-		iptablesSave = findExecutable("/opt/sbin/iptables-save", "/opt/bin/iptables-save", "iptables-save")
-	}
+	iptablesSave := a.iptablesSavePath()
 	if iptablesSave == "" {
 		return errors.New("iptables-save is unavailable")
 	}

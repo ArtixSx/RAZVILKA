@@ -23,7 +23,14 @@ func (a *NFQWS2Adapter) reconcileFirstStart(ctx context.Context, plan Plan, leas
 	}
 	if lease.FirstStart.Phase == nfqws2FirstRunning {
 		if err := a.verifyFirstStartRunning(ctx); err == nil {
-			return a.Health(ctx, plan, "")
+			// A whole-table firmware rewrite may have removed only the owned
+			// mangle graph under this same live process. Restore exactly that
+			// first; a refusal writes nothing and Health still decides alone.
+			_, restoreErr := a.restoreFirstStartHooksAtBoot(ctx, plan, lease)
+			if err := a.Health(ctx, plan, ""); err != nil {
+				return errors.Join(err, restoreErr)
+			}
+			return nil
 		}
 	}
 	if a.inactivity == nil || lease.FirstStart.Phase == nfqws2FirstRunning && a.inactivity.identity.BootID == lease.FirstStart.Process.BootID {
