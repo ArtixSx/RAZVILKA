@@ -433,6 +433,9 @@ func TestNFQWS2HookRestoreRecreatesLostGraphUnderSameProcess(t *testing.T) {
 			if err != nil || result.Class != NFQWS2HooksLoss || !slices.Equal(result.Restored, tc.restored) || result.Reason != "" || result.RolledBack || result.Uncertain {
 				t.Fatal("lost graph not restored", result, err)
 			}
+			if observed.Instance == "" || result.Instance != observed.Instance {
+				t.Fatal("observation and restoration name different instances", observed.Instance, result.Instance)
+			}
 			var expected []nfqws2HookWrite
 			for _, family := range tc.restored {
 				binary := map[int]string{4: h.iptables, 6: h.ip6tables}[family]
@@ -947,6 +950,61 @@ func TestNFQWS2ResourceLockReportsOnlyContentionAsBusy(t *testing.T) {
 	defer unlock()
 	if _, err := a.lockResources(); !errors.Is(err, errNFQWS2ResourceBusy) {
 		t.Fatal("contention not reported as busy", err)
+	}
+}
+
+func TestNFQWS2HookInstanceNamesTransactionAndReceipt(t *testing.T) {
+	process := components.NFQWSRuntimeProcessIdentity{BootID: "boot-a", Start: "1001", PID: 4242, Executable: "/opt/usr/bin/nfqws2", ArgumentsSHA256: strings.Repeat("a", 64)}
+	lease := func(edit func(*nfqws2Lease)) *nfqws2Lease {
+		receipt := process
+		l := &nfqws2Lease{Transaction: "/state/transactions/dp-a/nfqws2", FirstStart: &nfqws2FirstStartLease{Phase: nfqws2FirstRunning, Process: &receipt}}
+		if edit != nil {
+			edit(l)
+		}
+		return l
+	}
+	base := nfqws2HookInstance(lease(nil))
+	if len(base) != 24 || strings.Trim(base, "0123456789abcdef") != "" || base != nfqws2HookInstance(lease(nil)) {
+		t.Fatal("instance is not a stable digest", base)
+	}
+	if strings.Contains(base, "4242") || strings.Contains(base, "boot-a") {
+		t.Fatal("instance leaks a process value", base)
+	}
+	if nfqws2HookInstance(lease(func(l *nfqws2Lease) { l.FirstStart.Process.Executable = "/other"; l.ConfigHash = "changed" })) != base {
+		t.Fatal("fields outside the key changed the instance")
+	}
+	for name, edit := range map[string]func(*nfqws2Lease){
+		"transaction": func(l *nfqws2Lease) { l.Transaction = "/state/transactions/dp-b/nfqws2" },
+		"boot":        func(l *nfqws2Lease) { l.FirstStart.Process.BootID = "boot-b" },
+		"start":       func(l *nfqws2Lease) { l.FirstStart.Process.Start = "1002" },
+		"pid":         func(l *nfqws2Lease) { l.FirstStart.Process.PID = 4243 },
+	} {
+		if nfqws2HookInstance(lease(edit)) == base {
+			t.Fatal("instance ignores a key field", name)
+		}
+	}
+	if nfqws2HookInstance(nil) != "" || nfqws2HookInstance(lease(func(l *nfqws2Lease) { l.FirstStart.Process = nil })) != "" {
+		t.Fatal("instance invented for a lease without a receipt")
+	}
+}
+
+func TestNFQWS2HookHintPathFollowsRegisteredInit(t *testing.T) {
+	m := New(t.TempDir())
+	if m.NFQWS2HookHintPath() != "" {
+		t.Fatal("hint path without a registered adapter")
+	}
+	a := NewNFQWS2Adapter()
+	prefix := filepath.Join(t.TempDir(), "opt")
+	a.InitPath = filepath.Join(prefix, "etc", "init.d", "S51nfqws2")
+	if err := m.Register(a); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := m.NFQWS2HookHintPath(), filepath.Join(prefix, "etc", "ndm", "netfilter.d", "100-nfqws2.sh"); got != want {
+		t.Fatalf("hint path=%q want %q", got, want)
+	}
+	a.InitPath = "relative/etc/init.d/S51nfqws2"
+	if m.NFQWS2HookHintPath() != "" {
+		t.Fatal("relative init path produced a hint path")
 	}
 }
 

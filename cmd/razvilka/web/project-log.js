@@ -16,6 +16,7 @@ function projectLogSectionName(key) {
 function projectLogAction(event) {
   const path = String(event.path || '').split('?')[0];
   if (event.action === 'SCHEDULE' && path.startsWith('/runtime/scheduler/')) return 'Фоновые проверки остановлены';
+  if (projectLogNFQWS2Restore(event)) return 'Восстановление правил NFQWS2';
   if (event.action === 'BOOT_RECOVERY') return 'Восстановление маршрутов после запуска';
   if (event.action === 'ROLLBACK_RETRY') return 'Повтор незавершённого отката после запуска';
   const component = path.match(/^\/api\/v1\/components\/([^/]+)\/(install|update|remove)$/);
@@ -41,7 +42,36 @@ function projectLogAction(event) {
   return section?.[1] || ({ POST: 'Запрос действия', PUT: 'Изменение настроек', PATCH: 'Изменение настроек', DELETE: 'Удаление', RESTORE: 'Восстановление' })[event.action] || 'Действие панели';
 }
 
+// The router restores only its own NFQWS2 rules after the firmware rewrote
+// a table; a refusal or failure carries one fixed reason code in the path.
+function projectLogNFQWS2Restore(event) {
+  return event?.action === 'RESTORE' ? String(event.path || '').match(/^\/runtime\/nfqws2(?:\/([a-z-]{1,32}))?$/) : null;
+}
+
 function projectLogEventResult(event) {
+  const nfqws2 = projectLogNFQWS2Restore(event);
+  if (nfqws2 && event.outcome === 'ok' && !nfqws2[1]) return { label: 'Правила восстановлены', tone: 'pass', detail: 'Роутер перестроил таблицу правил. RAZVILKA вернула свои правила NFQWS2 без перезапуска обхода.' };
+  if (nfqws2 && event.outcome === 'failed') {
+    const reasons = {
+      'repeated-loss': 'Роутер снова удалял правила сразу после восстановления. Следующая попытка — через 30 минут.',
+      'cleanup-uncertain': 'После неудачной попытки не удалось подтвердить уборку. Чужие правила не тронуты; нужна проверка журнала.',
+      'kernel-other': 'Правила NFQWS2 изменены не так, как при перестройке таблицы роутером. RAZVILKA их не трогает.',
+      'kernel-changed': 'Таблицы правил менялись во время каждой попытки. Попытки продолжаются реже.',
+      'kernel-unreadable': 'Не удалось прочитать таблицы правил роутера. Попытка будет повторена.',
+      'write-failed': 'Команда добавления правила не выполнена. Изменения этой попытки отменены.',
+      'verify-failed': 'Восстановленные правила не подтвердились. Изменения этой попытки отменены.',
+      timeout: 'Восстановление не завершилось вовремя. Изменения этой попытки отменены.',
+      'queue-binding': 'Очередь NFQWS2 не принадлежит запущенному процессу. Правила не добавлены.',
+      'process-identity': 'Процесс NFQWS2 не совпадает с запущенным RAZVILKA. Правила не добавлены.',
+      'scope-changed': 'Интернет-подключение роутера изменилось. Правила для прежнего подключения не добавлены.',
+      'files-changed': 'Файлы настроек NFQWS2 изменились. Правила не добавлены.',
+      'transaction-binding': 'Запуск NFQWS2 не связан с применёнными настройками. Правила не добавлены.',
+      'native-review': 'Установленный пакет NFQWS2 не прошёл проверку. Правила не добавлены.',
+      'source-unavailable': 'Проверенные инструменты чтения правил недоступны. Правила не добавлены.',
+      'graph-outside-scope': 'Эти настройки NFQWS2 не восстанавливаются автоматически.',
+    };
+    return { label: 'Правила не восстановлены', tone: 'fail', detail: (nfqws2[1] && Object.hasOwn(reasons, nfqws2[1]) && reasons[nfqws2[1]]) || 'Правила NFQWS2 не восстановлены; причина требует проверки.' };
+  }
   if (event.action === 'SCHEDULE' && event.outcome === 'failed') {
     const reason = String(event.path || '').replace(/^\/runtime\/scheduler\//, '');
     const reasons = {

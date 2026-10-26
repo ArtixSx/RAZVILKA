@@ -72,6 +72,27 @@ for (const reason of ['journal-changed', 'writer-busy', 'journal-invalid', 'writ
   assert.equal(result.label, 'Автоматика остановлена');
   assert.doesNotMatch(result.detail, /Причина.*не записана/);
 }
+const restoredHooks = { action: 'RESTORE', path: '/runtime/nfqws2', outcome: 'ok', actor: 'router', remote_ip: 'local', duration_ms: 1200 };
+assert.equal(context.projectLogAction(restoredHooks), 'Восстановление правил NFQWS2');
+assert.equal(context.projectLogEventResult(restoredHooks).label, 'Правила восстановлены');
+assert.equal(context.projectLogEventResult(restoredHooks).tone, 'pass');
+assert.match(context.renderProjectAuditRow(restoredHooks), /audit-row ok[\s\S]*Восстановление правил NFQWS2/);
+assert.equal(context.projectLogAction({ action: 'RESTORE', path: '/runtime/forwarding' }), 'Восстановление сетевых настроек', 'forwarding label unchanged');
+for (const reason of ['repeated-loss', 'cleanup-uncertain', 'kernel-other', 'kernel-changed', 'write-failed', 'verify-failed', 'queue-binding', 'timeout']) {
+  const event = { action: 'RESTORE', path: '/runtime/nfqws2/' + reason, outcome: 'failed', actor: 'router' };
+  assert.equal(context.projectLogAction(event), 'Восстановление правил NFQWS2');
+  const result = context.projectLogEventResult(event);
+  assert.equal(result.tone, 'fail');
+  assert.equal(result.label, 'Правила не восстановлены');
+  assert.doesNotMatch(result.detail, /Причина.*не записана|требует проверки\.$/, reason);
+  assert.match(context.renderProjectAuditRow(event), /audit-row failed/);
+}
+for (const odd of [{ action: 'RESTORE', path: '/runtime/nfqws2/constructor', outcome: 'failed' }, { action: 'RESTORE', path: '/runtime/nfqws2/unknown-code', outcome: 'failed' }]) {
+  assert.match(context.projectLogEventResult(odd).detail, /причина требует проверки/, 'unknown reason code must not borrow another text');
+}
+assert.notEqual(context.projectLogAction({ action: 'RESTORE', path: '/runtime/nfqws2/../forwarding' }), 'Восстановление правил NFQWS2');
+assert.notEqual(context.projectLogAction({ action: 'POST', path: '/runtime/nfqws2' }), 'Восстановление правил NFQWS2');
+assert.equal(context.projectLogEventResult({ action: 'RESTORE', path: '/runtime/nfqws2/write-failed', outcome: 'ok' }).tone, 'pass', 'a malformed ok row is not shown as a refusal');
 
 const payload = '<img src=x onerror="alert(1)">';
 out = render({ ...healthy, load_issues: [{ section: payload, message: payload }], component_issues: [{ id: payload, message: payload }], last_action_error: payload, audit: { available: false, last_error: payload, events: [{ path: `/api/v1/components/${payload}/remove`, action: payload, outcome: payload, timestamp: payload, status_code: payload, duration_ms: payload }] } });

@@ -135,6 +135,43 @@ func (a *App) wakeReconciler() {
 	}
 }
 
+// wakeNodeRecoveryOnly makes only the node-recovery observation due and
+// nudges the loop; feeds, service checks and fallback keep their schedule.
+// It reports false while that task runs, because the finishing round sets
+// its own next run, or while no loop exists, so a hint can try again. The
+// woken round repeats every admission and fresh read; a wake grants nothing.
+func (a *App) wakeNodeRecoveryOnly() bool {
+	a.reconciler.mu.Lock()
+	wake := a.reconciler.wake
+	if wake == nil {
+		a.reconciler.mu.Unlock()
+		return false
+	}
+	now := time.Now()
+	for i := range a.reconciler.doc.Operations {
+		op := &a.reconciler.doc.Operations[i]
+		if op.Kind != "node-recovery" {
+			continue
+		}
+		if op.State == "running" {
+			a.reconciler.mu.Unlock()
+			return false
+		}
+		if op.NextRun.IsZero() || op.NextRun.After(now) {
+			op.NextRun = now
+		}
+		// As in wakeReconciler: observation only. Applied-plan recovery
+		// keeps its own bounded probe attempts and retry delays.
+		op.Attempts = 0
+	}
+	a.reconciler.mu.Unlock()
+	select {
+	case wake <- struct{}{}:
+	default:
+	}
+	return true
+}
+
 func (a *App) managedReconcilerActive() bool {
 	a.reconciler.mu.Lock()
 	defer a.reconciler.mu.Unlock()
@@ -213,8 +250,20 @@ func (a *App) StartServiceReconciler(ctx context.Context) {
 		}
 		done := r.done
 		r.mu.Unlock()
+		// The NFQWS2 hook hint only makes node-recovery due. It shares this
+		// context and is joined before done closes, like the loop itself.
+		hint := make(chan struct{})
+		path := ""
+		if a.Dataplane != nil {
+			path = a.Dataplane.NFQWS2HookHintPath()
+		}
+		go func() {
+			defer close(hint)
+			runNFQWS2HookHint(ctx, path, nfqws2HookHintDefaults, a.wakeNodeRecoveryOnly)
+		}()
 		go func() {
 			defer close(done)
+			defer func() { <-hint }()
 			timer := time.NewTimer(time.Second)
 			defer timer.Stop()
 			for {
@@ -531,6 +580,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		switch task.kind {
 		case "node-recovery":
 			forwardingErr = a.restoreForwardingRound(attempt)
+			// The owned NFQWS2 graph repair keeps its own memory-only limits
+			// and audit. Its refusal never fails or delays this shared task.
+			_ = a.restoreNFQWS2HooksRound(attempt, now)
 			a.nodeRecoveryRound(attempt, now)
 			// A stale committed epoch is the reason to revalidate the exact
 			// applied targets, not a failed scheduler dispatch. Recovery owns

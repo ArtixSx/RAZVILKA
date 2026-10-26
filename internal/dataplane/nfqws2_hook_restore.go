@@ -3,10 +3,13 @@ package dataplane
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
@@ -83,6 +86,10 @@ type NFQWS2HookRestore struct {
 	Reason     string              // Fixed code; empty on success or on a FULL no-op.
 	RolledBack bool                // Cleanup proved every created object removed.
 	Uncertain  bool                // Cleanup could not prove it; foreign objects retained.
+	// Instance names the lease transaction and its running receipt once the
+	// lease was read. It is a comparison value for a caller's in-memory
+	// backoff, never a grant, and carries no path or process value.
+	Instance string
 }
 
 type NFQWS2HookFamilyState struct {
@@ -260,26 +267,56 @@ func (a *NFQWS2Adapter) observeFirstStartHooks(ctx context.Context) (NFQWS2HookR
 	if err != nil || lease == nil || lease.FirstStart == nil || lease.FirstStart.Phase != nfqws2FirstRunning || lease.FirstStart.Process == nil {
 		return nfqws2HookRefused(NFQWS2HookReasonLease, errors.Join(ErrReviewChanged, err))
 	}
+	instance := nfqws2HookInstance(lease)
+	refused := func(reason string, cause error) (NFQWS2HookRestore, error) {
+		result, err := nfqws2HookRefused(reason, cause)
+		result.Instance = instance
+		return result, err
+	}
 	owner, err := a.owner()
 	if err != nil {
-		return nfqws2HookRefused(NFQWS2HookReasonFiles, err)
+		return refused(NFQWS2HookReasonFiles, err)
 	}
 	config, configExists, configErr := nfqws2Read(a.ConfigPath)
 	running, runningExists, runningErr := nfqws2Read(a.ConfigPath + ".run")
 	if err := errors.Join(configErr, runningErr); err != nil || !configExists || !runningExists || nfqws2Hash(config) != lease.ConfigHash {
-		return nfqws2HookRefused(NFQWS2HookReasonFiles, errors.Join(ErrReviewChanged, err))
+		return refused(NFQWS2HookReasonFiles, errors.Join(ErrReviewChanged, err))
 	}
 	graph, err := nfqws2FirstStartHookGraph(config, running, owner)
 	if err != nil {
-		return nfqws2HookRefused(NFQWS2HookReasonGraph, err)
+		return refused(NFQWS2HookReasonGraph, err)
 	}
 	snapshot, err := source.read(ctx)
 	if err != nil {
-		return nfqws2HookRefused(NFQWS2HookReasonKernel, err)
+		return refused(NFQWS2HookReasonKernel, err)
 	}
-	var result NFQWS2HookRestore
+	result := NFQWS2HookRestore{Instance: instance}
 	nfqws2HookReport(&result, nfqws2ClassifyHookGraph(graph, snapshot))
 	return result, nil
+}
+
+// nfqws2HookInstance digests the lease transaction and its running receipt
+// {BootID, Start, PID}. A restarted process or another transaction is a new
+// instance, so a caller's backoff and audit deduplication start over.
+func nfqws2HookInstance(lease *nfqws2Lease) string {
+	if lease == nil || lease.FirstStart == nil || lease.FirstStart.Process == nil {
+		return ""
+	}
+	p := lease.FirstStart.Process
+	digest := sha256.Sum256([]byte(lease.Transaction + "\x00" + p.BootID + "\x00" + p.Start + "\x00" + strconv.Itoa(p.PID)))
+	return hex.EncodeToString(digest[:12])
+}
+
+// NFQWS2HookHintPath is the stock NDM netfilter hook that the package
+// installs beside the registered adapter's init script. Data only: watching
+// it is a wake-up hint and grants no admission, review or write.
+func (m *Manager) NFQWS2HookHintPath() string {
+	registered, exists := m.adapter("nfqws2")
+	a, ok := registered.(*NFQWS2Adapter)
+	if !exists || !ok || a == nil || !filepath.IsAbs(a.InitPath) || filepath.Clean(a.InitPath) != a.InitPath {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(a.InitPath)), "ndm", "netfilter.d", "100-nfqws2.sh")
 }
 
 func nfqws2HookClassName(class nfqws2HookClass) string {
@@ -496,6 +533,7 @@ func (t *nfqws2HookAttempt) bind() (string, error) {
 	if lease == nil || lease.FirstStart == nil || lease.FirstStart.Phase != nfqws2FirstRunning || lease.FirstStart.Process == nil {
 		return NFQWS2HookReasonLease, errors.New("NFQWS2 first-start runtime has no confirmed running receipt")
 	}
+	t.result.Instance = nfqws2HookInstance(lease)
 	current, err := a.readLease()
 	if err != nil || !reflect.DeepEqual(current, lease) {
 		return NFQWS2HookReasonLease, errors.Join(ErrReviewChanged, err)

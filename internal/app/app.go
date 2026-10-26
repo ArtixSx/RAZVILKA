@@ -188,6 +188,7 @@ type App struct {
 	NodeFeeds             *providerfeed.Manager
 	nodeReviews           nodeRouteReviewStore
 	nodeRecovery          nodeRecoveryState
+	nfqws2Hooks           nfqws2HookRecoveryState
 	nodeChecks            nodeCheckState
 	nodeRecordMu          sync.Mutex // serializes recording of parallel node checks
 	nodeAutofallback      nodeAutofallbackState
