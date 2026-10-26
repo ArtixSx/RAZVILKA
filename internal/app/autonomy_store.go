@@ -41,8 +41,9 @@ type autonomyState struct {
 	maintenanceTestRun       func(context.Context, string, autonomy.Window, bool) (bool, bool, string)
 	feedPruneAt              time.Time
 	feedPruneFailed          bool
-	ordinaryAfterFirstSearch bool             // In-memory scheduling fairness only; never consent or persisted state.
-	autoInstall              *updatecheck.Job // a prepared package the round installs
+	ordinaryAfterFirstSearch bool                               // In-memory scheduling fairness only; never consent or persisted state.
+	serviceRefusals          map[string]autonomyServiceRefusals // In-memory search pacing only; never consent, proof or persisted state.
+	autoInstall              *updatecheck.Job                   // a prepared package the round installs
 }
 
 func newAutonomyDocument() autonomyDocument {

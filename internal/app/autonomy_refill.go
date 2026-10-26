@@ -33,7 +33,7 @@ func (a *App) autonomyRefill(ctx context.Context, p autonomy.Policy, s autonomy.
 		return
 	}
 	switch r.State {
-	case "healthy", "applied", "searching", "unconfirmed", "origin-expired":
+	case "healthy", "applied", "searching", "unconfirmed", "service-unconfirmed", "origin-expired":
 	default:
 		return
 	}
