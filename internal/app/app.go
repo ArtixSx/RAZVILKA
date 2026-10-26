@@ -189,7 +189,8 @@ type App struct {
 	nodeReviews           nodeRouteReviewStore
 	nodeRecovery          nodeRecoveryState
 	nodeChecks            nodeCheckState
-	nodeRecordMu          sync.Mutex // serializes recording of parallel node checks
+	nodeReadiness         nodeReadinessState // RAM-only rotation; orders search candidates, never proof
+	nodeRecordMu          sync.Mutex         // serializes recording of parallel node checks
 	nodeAutofallback      nodeAutofallbackState
 	retainedProofs        retainedProofState
 	reconciler            serviceReconciler

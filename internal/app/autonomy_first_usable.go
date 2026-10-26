@@ -456,6 +456,9 @@ func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Poli
 			rest = append(rest, id)
 		}
 	}
+	// Among the others, a fresh general connectivity PASS of the readiness
+	// pool goes first and repeated failures go last. Nothing is removed.
+	rest = a.nodeReadinessOrder(rest, engine, profile, s.ExpectedRoute == "auto", now)
 	ordered := slices.Clone(t.Ordered[:t.Cursor])
 	t.Ordered = append(append(ordered, preferred...), rest...)
 }

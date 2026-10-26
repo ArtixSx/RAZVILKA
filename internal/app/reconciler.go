@@ -551,6 +551,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			// Share the existing due-event and cancellation journal; no sixth
 			// operation kind is written into the rc.2 journal format.
 			a.autonomyRound(attempt, time.Now())
+			// At most one spaced connectivity check for the readiness pool,
+			// after the round has released its admission. Ordering only.
+			a.nodeReadinessRound(attempt, time.Now())
 		case "service-checks":
 			if cfg.ServiceControl.Schedule.Enabled && !cfg.ServiceControl.Stopped {
 				done, startErr := a.startServiceControlJob(attempt, serviceControlJobRequest{Kind: "check", ServiceIDs: cfg.ServiceControl.Schedule.ServiceIDs}, true)
