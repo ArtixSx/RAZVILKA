@@ -38,28 +38,29 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
-	DirectEgressError string                      `json:"direct_egress_error,omitempty"`
-	ProxyEgressError  string                      `json:"proxy_egress_error,omitempty"`
-	Stages            []nodeCheckDiagnosticStage  `json:"stages,omitempty"`
-	NodeID            string                      `json:"node_id"`
-	NetworkProfile    string                      `json:"network_profile"`
-	CheckedAt         time.Time                   `json:"checked_at"`
-	Reachable         bool                        `json:"reachable"`
-	Available         bool                        `json:"available"`
-	LatencyMS         int64                       `json:"latency_ms,omitempty"`
-	DurationMS        int64                       `json:"duration_ms,omitempty"`
-	Message           string                      `json:"message"`
-	Verdict           string                      `json:"verdict,omitempty"`
-	TestLevel         string                      `json:"test_level,omitempty"`
-	ErrorCode         string                      `json:"error_code,omitempty"`
-	ConnectivityReady bool                        `json:"connectivity_ready"`
-	CleanupVerified   bool                        `json:"cleanup_verified"`
-	CleanupStatus     dataplane.NodeCleanupStatus `json:"cleanup_status,omitempty"`
-	ExpiresAt         time.Time                   `json:"expires_at,omitempty"`
-	Engine            string                      `json:"engine,omitempty"`
-	Stage             string                      `json:"stage,omitempty"`
-	DirectControl     string                      `json:"direct_control,omitempty"`
-	ProbeID           string                      `json:"probe_id,omitempty"`
+	ServiceErrorCategory string                      `json:"service_error_category,omitempty"`
+	DirectEgressError    string                      `json:"direct_egress_error,omitempty"`
+	ProxyEgressError     string                      `json:"proxy_egress_error,omitempty"`
+	Stages               []nodeCheckDiagnosticStage  `json:"stages,omitempty"`
+	NodeID               string                      `json:"node_id"`
+	NetworkProfile       string                      `json:"network_profile"`
+	CheckedAt            time.Time                   `json:"checked_at"`
+	Reachable            bool                        `json:"reachable"`
+	Available            bool                        `json:"available"`
+	LatencyMS            int64                       `json:"latency_ms,omitempty"`
+	DurationMS           int64                       `json:"duration_ms,omitempty"`
+	Message              string                      `json:"message"`
+	Verdict              string                      `json:"verdict,omitempty"`
+	TestLevel            string                      `json:"test_level,omitempty"`
+	ErrorCode            string                      `json:"error_code,omitempty"`
+	ConnectivityReady    bool                        `json:"connectivity_ready"`
+	CleanupVerified      bool                        `json:"cleanup_verified"`
+	CleanupStatus        dataplane.NodeCleanupStatus `json:"cleanup_status,omitempty"`
+	ExpiresAt            time.Time                   `json:"expires_at,omitempty"`
+	Engine               string                      `json:"engine,omitempty"`
+	Stage                string                      `json:"stage,omitempty"`
+	DirectControl        string                      `json:"direct_control,omitempty"`
+	ProbeID              string                      `json:"probe_id,omitempty"`
 }
 
 type nodeCheckJob struct {

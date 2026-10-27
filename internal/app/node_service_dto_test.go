@@ -123,3 +123,45 @@ func TestServiceDTOHistoryRefusalRetainsProducerCleanup(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceDTOClosedServiceErrorCategory(t *testing.T) {
+	id := "node-" + strings.Repeat("1", 64)
+	q := dataplane.NodeCheckRequest{NodeID: id, NetworkProfile: "wan-0123456789ab"}
+	for _, stage := range []string{"service", "service_ip"} {
+		for _, category := range []string{"service_timeout", "service_transport", "service_status_mismatch", "private endpoint secret", ""} {
+			r := serviceDiagnosticResult(q)
+			r.Stage = stage
+			r.ServiceErrorCategory = category
+			row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray")
+			want := category
+			if category == "private endpoint secret" {
+				want = ""
+			}
+			if row.ServiceErrorCategory != want || row.Available || row.ConnectivityReady {
+				t.Fatal(row)
+			}
+			encoded, _ := json.Marshal(row)
+			if strings.Contains(string(encoded), "secret") {
+				t.Fatal("private category escaped")
+			}
+		}
+	}
+	for _, mismatch := range []string{"node", "network", "route", "stage"} {
+		r := serviceDiagnosticResult(q)
+		r.Stage = "service"
+		r.ServiceErrorCategory = "service_timeout"
+		switch mismatch {
+		case "node":
+			r.NodeID = "other"
+		case "network":
+			r.NetworkProfile = "other"
+		case "route":
+			r.RoutePathID = "other"
+		case "stage":
+			r.Stage = "egress"
+		}
+		if row := nodeCheckItemFromResult(id, q.NetworkProfile, r, nil, "xray"); row.ServiceErrorCategory != "" {
+			t.Fatal("unbound service category admitted", row)
+		}
+	}
+}

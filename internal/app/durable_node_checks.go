@@ -528,6 +528,12 @@ func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResul
 		case "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "service_ip", "cleanup", "resource", "connectivity":
 			item.Stage = result.Stage
 		}
+		if item.Stage == "service" || item.Stage == "service_ip" {
+			switch result.ServiceErrorCategory {
+			case "service_timeout", "service_transport", "service_status_mismatch":
+				item.ServiceErrorCategory = result.ServiceErrorCategory
+			}
+		}
 		switch result.DirectControl {
 		case "not_run", "measured", "unavailable":
 			item.DirectControl = result.DirectControl

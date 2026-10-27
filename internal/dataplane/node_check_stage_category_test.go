@@ -504,6 +504,18 @@ func TestNodeServiceStageMessageDistinguishesTimeoutFromMismatch(t *testing.T) {
 			if result.Message != tc.message || !validStoredCheckMessage(result.Message) || strings.Contains(string(data), "private-profile-marker") {
 				t.Fatalf("message=%q", result.Message)
 			}
+			expectedCategory := ""
+			switch tc.name {
+			case "timeout", "body-timeout", "ip-timeout":
+				expectedCategory = "service_timeout"
+			case "transport", "ip-transport":
+				expectedCategory = "service_transport"
+			case "status-mismatch", "ip-status-mismatch":
+				expectedCategory = "service_status_mismatch"
+			}
+			if result.ServiceErrorCategory != expectedCategory {
+				t.Fatalf("category=%q want %q", result.ServiceErrorCategory, expectedCategory)
+			}
 			messages[tc.name] = result.Message
 		})
 	}
@@ -518,7 +530,45 @@ func TestNodeServiceStageMessageDistinguishesTimeoutFromMismatch(t *testing.T) {
 		return proof, nil
 	}
 	result, err := checker.Check(context.Background(), checkedNodeRequest())
-	if err != nil || result.ErrorCode != "node-route-mismatch" || result.Message != serviceBase {
+	if err != nil || result.ErrorCode != "node-route-mismatch" || result.Message != serviceBase || result.ServiceErrorCategory != "" {
 		t.Fatalf("misrouted proof gained a service explanation: %+v %v", result, err)
+	}
+}
+
+func TestNodeServiceCategoryDoesNotPromoteInvalidOrCanceledProbe(t *testing.T) {
+	for _, mode := range []string{"pass", "invalid", "canceled", "resource", "returned-error"} {
+		t.Run(mode, func(t *testing.T) {
+			c := fakeExactNodeChecker(t)
+			if mode != "pass" {
+				c.serviceProbe = func(ctx context.Context, _, _, _ string, _ catalog.Service) (evidence.ProbeEvidence, error) {
+					report := error(context.DeadlineExceeded)
+					if mode == "canceled" {
+						report = context.Canceled
+					}
+					if mode == "resource" {
+						report = ErrNodeResourceDenied
+					}
+					reportNodeServiceFailure(ctx, report)
+					q := checkedNodeRequest()
+					now := time.Now().UTC()
+					route := "sing-box:" + q.NodeID
+					proof := evidence.ProbeEvidence{SchemaVersion: evidence.ProbeSchemaVersion, ProbeID: "service-failure", StartedAt: now, FinishedAt: now.Add(time.Millisecond), Service: "telegram", Engine: "sing-box", RoutePathID: route, ExpectedRoutePathID: route, ObservedRoutePathID: route, Stage: "service", ErrorCode: "request-failed", Verdict: evidence.VerdictError, Outcome: evidence.OutcomeUnknown}
+					if mode == "invalid" {
+						proof.SchemaVersion = 0
+					}
+					if mode == "returned-error" {
+						return proof, errors.New("private endpoint secret")
+					}
+					return proof, nil
+				}
+			}
+			r, _ := c.Check(context.Background(), checkedNodeRequest())
+			if r.ServiceErrorCategory != "" {
+				t.Fatal("unconfirmed probe became typed timeout", r.ServiceErrorCategory)
+			}
+			if mode == "pass" && !r.Available {
+				t.Fatal("PASS changed", r)
+			}
+		})
 	}
 }
