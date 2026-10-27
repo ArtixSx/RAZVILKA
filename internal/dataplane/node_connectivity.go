@@ -33,6 +33,8 @@ type NodeConnectivityResult struct {
 	DirectControl                           string
 	HTTPStatus                              int
 	DurationMS                              int64
+	DirectEgressError, ProxyEgressError     string
+	Stages                                  []NodeCheckStage
 }
 
 type NodeConnectivityChecker interface {
@@ -49,7 +51,7 @@ func (c *ExactNodeChecker) CheckConnectivity(ctx context.Context, r NodeConnecti
 	checked := c.currentTime()
 	out := NodeConnectivityResult{NodeID: r.NodeID, NetworkProfile: r.NetworkProfile, Engine: c.EngineID(), ProbeID: result.ProbeID,
 		CheckedAt: checked, ExpiresAt: checked.Add(NodeConnectivityTTL), Verdict: result.Verdict, Stage: result.Stage,
-		ErrorCode: result.ErrorCode, Message: result.Message, HTTPStatus: result.HTTPStatus, DurationMS: result.LatencyMS, DirectControl: result.DirectControl}
+		ErrorCode: result.ErrorCode, Message: result.Message, HTTPStatus: result.HTTPStatus, DurationMS: result.LatencyMS, DirectControl: result.DirectControl, DirectEgressError: result.DirectEgressError, ProxyEgressError: result.ProxyEgressError, Stages: append([]NodeCheckStage(nil), result.Stages...)}
 	out.CleanupVerified = err == nil && ctx.Err() == nil && !c.poisoned.Load() && result.Stage != "cleanup" && result.ErrorCode != "node-cleanup-failed"
 	out.Ready = out.CleanupVerified && result.NodeID == r.NodeID && result.ServiceID == "" && result.NetworkProfile == r.NetworkProfile &&
 		result.RoutePathID == c.EngineID()+":"+r.NodeID && result.TestLevel == "connectivity" && result.Stage == "connectivity" &&

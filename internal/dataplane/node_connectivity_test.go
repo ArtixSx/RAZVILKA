@@ -106,3 +106,50 @@ func TestNodeConnectivityFixedTargetDenialPrecedesDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNodeConnectivityRetainsExactEgressDiagnosticsAndCleanup(t *testing.T) {
+	for _, mode := range []string{"pass", "proxy-timeout", "direct-failure", "cleanup"} {
+		t.Run(mode, func(t *testing.T) {
+			c := fakeExactNodeChecker(t)
+			c.connectivityProbe = func(context.Context, string) (int, error) { return 204, nil }
+			if mode == "proxy-timeout" {
+				c.proxyEgress = func(context.Context, string) (string, error) { return "", nodeEgressFailure("dial_timeout") }
+			}
+			if mode == "direct-failure" {
+				c.directEgress = func(context.Context) (string, error) { return "", nodeEgressFailure("http_status") }
+			}
+			if mode == "cleanup" {
+				c.cleanup = func(context.Context, exactNodeSession) error { return errors.New("private endpoint must not escape") }
+			}
+			q := checkedNodeRequest()
+			r, _ := c.CheckConnectivity(context.Background(), NodeConnectivityRequest{NodeID: q.NodeID, NetworkProfile: q.NetworkProfile, Outbound: q.Outbound})
+			if mode == "proxy-timeout" && (r.ProxyEgressError != "dial_timeout" || r.DirectEgressError != "" || r.DirectControl != "measured") {
+				t.Fatal(r)
+			}
+			if mode == "direct-failure" && r.DirectEgressError != "http_status" {
+				t.Fatal(r)
+			}
+			if mode == "pass" && (!r.Ready || !r.CleanupVerified || r.DirectEgressError != "" || r.ProxyEgressError != "") {
+				t.Fatal(r)
+			}
+			if mode == "cleanup" && (r.Ready || r.CleanupVerified || r.Stage != "cleanup") {
+				t.Fatal(r)
+			}
+			if len(r.Stages) == 0 {
+				t.Fatal("producer lost stage diagnostics")
+			}
+			found := false
+			for _, stage := range r.Stages {
+				if stage.Duration < 0 {
+					t.Fatal(stage)
+				}
+				if stage.ID == "egress" || mode == "cleanup" && stage.ID == "cleanup" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("missing original egress/cleanup stage", r.Stages)
+			}
+		})
+	}
+}

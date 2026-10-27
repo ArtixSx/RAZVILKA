@@ -170,6 +170,9 @@ func (a *App) runNodeConnectivityWithReview(parent context.Context, id, profile,
 		item.ConnectivityReady = result.Ready && result.CleanupVerified && result.Verdict == "PASS" && result.Stage == "connectivity" && result.HTTPStatus == 204 && result.DirectControl == "measured" && result.ProbeID != ""
 		item.Verdict, item.ErrorCode, item.Message = string(result.Verdict), result.ErrorCode, result.Message
 		item.DurationMS = result.DurationMS
+		item.DirectEgressError = closedNodeEgressError(result.DirectEgressError)
+		item.ProxyEgressError = closedNodeEgressError(result.ProxyEgressError)
+		item.Stages = closedNodeCheckStages(result.Stages)
 	} else {
 		item.ErrorCode = nodeCheckFailureCode(err)
 		item.Message = nodeCheckFailureMessage(err)

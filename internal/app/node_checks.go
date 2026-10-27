@@ -38,6 +38,9 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
+	DirectEgressError string                      `json:"direct_egress_error,omitempty"`
+	ProxyEgressError  string                      `json:"proxy_egress_error,omitempty"`
+	Stages            []nodeCheckDiagnosticStage  `json:"stages,omitempty"`
 	NodeID            string                      `json:"node_id"`
 	NetworkProfile    string                      `json:"network_profile"`
 	CheckedAt         time.Time                   `json:"checked_at"`
