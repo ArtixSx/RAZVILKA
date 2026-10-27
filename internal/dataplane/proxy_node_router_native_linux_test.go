@@ -30,7 +30,7 @@ import (
 const nativeRouterHTTPSPriority = 22949
 
 func nativeScopedXrayFixtureExtraBudget() time.Duration {
-	if os.Getenv("RAZVILKA_XRAY_ROUTER_HTTPS_NATIVE") == "1" || os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
+	if os.Getenv("RAZVILKA_XRAY_ALL_LAN_NATIVE") == "1" || os.Getenv("RAZVILKA_XRAY_ROUTER_HTTPS_NATIVE") == "1" || os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
 		return 40 * time.Second
 	}
 	return 0

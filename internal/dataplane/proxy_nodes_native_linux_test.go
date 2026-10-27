@@ -356,6 +356,10 @@ func nativeScopedXrayRouter(t *testing.T) {
 		}
 	})
 	plan := Plan{NetworkProfileID: profile, Routes: []Route{{ServiceID: "native-site", ServiceName: "Native site", Selected: "xray:" + id, Resolved: "xray:" + id, Domains: []string{"service.example"}, Sources: []string{"192.168.1.25/32"}, ProbeURL: "https://service.example/probe"}}}
+	if os.Getenv("RAZVILKA_XRAY_ALL_LAN_NATIVE") == "1" {
+		plan.Routes[0].Domains = nil
+		plan.Routes[0].CIDRs = []string{nativeXrayHTTPSIP + "/32"}
+	}
 	plan, err = nativeXrayDispatcherPlan(plan, expectedExit)
 	if err != nil {
 		t.Fatal("seal actual A service predicate", err)
@@ -417,6 +421,11 @@ func nativeScopedXrayRouter(t *testing.T) {
 		t.Logf("A %s: passed", step.name)
 	}
 	assertHealth("A active")
+	if os.Getenv("RAZVILKA_XRAY_ALL_LAN_NATIVE") == "1" {
+		nativeScopedXrayAllLANLifecycle(t, ctx, newAdapter, firstPlan, expectedExit)
+		return
+	}
+
 	if os.Getenv("RAZVILKA_NODE_TRANSIT_MANAGER_NATIVE") == "1" {
 		if err := nativeScopedXrayManagerTransit(t, ctx, a, plan, roots, expectedExit); err != nil {
 			t.Fatal("actual Manager node transit", err)
