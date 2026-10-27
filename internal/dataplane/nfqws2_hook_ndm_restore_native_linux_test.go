@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The same native harness as the defect reproduction, now through the
@@ -327,6 +328,48 @@ func TestNFQWS2HookNDMRestoreNative(t *testing.T) {
 	}
 	if err := n.f.a.Health(nfqws2NDMContext(t), plan, ""); err != nil || n.daemon(t) != daemon {
 		t.Fatal("final graph or daemon", err)
+	}
+
+	// The NFQ compensation already restored its original lease, while another
+	// adapter kept the transaction fenced. NDM then removes NAT and mangle.
+	// Canonical retry must restore hooks under its durable running step and
+	// verify the same daemon, without invoking any process lifecycle command.
+	failed := plan
+	failed.PlanID, failed.Digest, failed.State = "dp-7777777777777777", strings.Repeat("7", 64), "rollback-failed"
+	root := filepath.Join(m.StateRoot, "transactions", failed.PlanID)
+	if err := m.prepareExecutionRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "nfqws2"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.f.a.Snapshot(nfqws2NDMContext(t), failed, filepath.Join(root, "nfqws2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Record(failed); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	execution := Execution{PlanID: failed.PlanID, Digest: failed.Digest, State: "rollback-failed", StartedAt: now, FinishedAt: now}
+	for _, row := range [][2]string{{"snapshot", "passed"}, {"stage", "passed"}, {"activate", "failed"}, {"rollback", "failed"}, {"verify-rollback", "failed"}} {
+		execution.Steps = append(execution.Steps, ExecutionStep{Adapter: "nfqws2", Phase: row[0], State: row[1], StartedAt: now, FinishedAt: now})
+	}
+	if err := m.writeExecution(root, execution); err != nil {
+		t.Fatal(err)
+	}
+	n.restore(t, 4, nfqws2NDMLines(full.Mangle4, "nfqws")+nfqws2NDMLines(full.NAT4, "nfqws"))
+	writes := n.runner.count()
+	retried, err := m.RetryFailedRollback(nfqws2NDMContext(t), failed.PlanID, failed.Digest, func(prior Plan) error {
+		if prior.PlanID != plan.PlanID || prior.Digest != plan.Digest {
+			return ErrReviewChanged
+		}
+		return nil
+	})
+	if err != nil || retried.State != "rolled-back" || !retried.RollbackVerified || m.checkExecutionRecovery() != nil || n.runner.count()-writes != 14 || n.state(t) != full {
+		t.Fatal("canonical rollback retry did not restore and verify the exact native graph", retried, err)
+	}
+	if n.daemon(t) != daemon || !nfqws2NDMSameFiles(n.files(t), files) {
+		t.Fatal("canonical hook retry changed process, queue, lease or files")
 	}
 }
 

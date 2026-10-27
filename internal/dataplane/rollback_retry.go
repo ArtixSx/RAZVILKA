@@ -333,8 +333,14 @@ func (m *Manager) runFailedRollbackRecovery(ctx context.Context, reviewed failed
 		step := ExecutionStep{Adapter: adapter.ID(), Phase: phase, State: "running", StartedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		execution.Steps = append(execution.Steps, step)
 		index := len(execution.Steps) - 1
-		failure = errors.Join(failure, writeExecution(root, execution))
-		err := action(recovery, plan, filepath.Join(root, adapter.ID()))
+		intentErr := writeExecution(root, execution)
+		failure = errors.Join(failure, intentErr)
+		actionContext, closeIntent := recovery, func() {}
+		if intentErr == nil && phase == "retry-rollback" {
+			actionContext, closeIntent = m.nfqws2RollbackHookContext(recovery, reviewed, execution, adapter, guard)
+		}
+		err := action(actionContext, plan, filepath.Join(root, adapter.ID()))
+		closeIntent()
 		execution.Steps[index].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		execution.Steps[index].State = "passed"
 		if err != nil {

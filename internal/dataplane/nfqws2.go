@@ -932,7 +932,10 @@ func (a *NFQWS2Adapter) restoreRolledBackBlocks(ctx context.Context, plan Plan, 
 	if lease, err := a.readLease(); err != nil || !nfqws2RollbackLeaseEqual(lease, snapshot.Lease) {
 		return err
 	}
-	return a.restartWithRestoredBlocks(ctx, plan, snapshot)
+	if err := a.restartWithRestoredBlocks(ctx, plan, snapshot); err != nil {
+		return err
+	}
+	return a.restoreRolledBackHooks(ctx, plan, snapshot)
 }
 
 func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {
