@@ -1485,6 +1485,12 @@ func (a *ProxyTunnelAdapter) Commit(ctx context.Context, plan Plan, root string)
 }
 
 func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root string) error {
+	return a.rollbackWithUnstagedInactiveProof(ctx, plan, root, nil)
+}
+
+// The private observation seam mirrors VerifyRollback's local proc/kernel fixtures.
+// Production always obtains the original platform inventory.
+func (a *ProxyTunnelAdapter) rollbackWithUnstagedInactiveProof(ctx context.Context, plan Plan, root string, proof *proxyInactiveProof) error {
 	if e, handled, err := xraySelectedTCPExecutionFor(ctx, a, plan, root); handled {
 		if err != nil {
 			return err
@@ -1496,7 +1502,7 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root strin
 		if err != nil {
 			return err
 		}
-		return view.Rollback(ctx, frozen, root)
+		return view.rollbackWithUnstagedInactiveProof(ctx, frozen, root, proof)
 	}
 	snapshot, err := readProxySnapshot(root)
 	if err != nil {
@@ -1514,6 +1520,9 @@ func (a *ProxyTunnelAdapter) Rollback(ctx context.Context, plan Plan, root strin
 	if errors.Is(stagedErr, os.ErrNotExist) {
 		if _, err := os.Lstat(proxyPolicyReceiptPath(root)); !errors.Is(err, os.ErrNotExist) {
 			return ErrProxyPolicyUnknown
+		}
+		if handled, err := a.verifyUnstagedColdXray(ctx, root, snapshot, proof); handled {
+			return err
 		}
 		if snapshot.PolicyTracked || snapshot.PolicyBinding != nil || snapshot.PolicyWasActive {
 			// A failed Stage cannot authorize teardown/reinstallation of live A.

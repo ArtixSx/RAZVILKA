@@ -43,6 +43,9 @@ func (a *ProxyTunnelAdapter) verifyRollbackWithInactiveProof(ctx context.Context
 	if err != nil {
 		return false, err
 	}
+	if handled, err := a.verifyUnstagedColdXray(ctx, root, s, inactiveProof); handled {
+		return err == nil, err
+	}
 	a, err = a.xrayPreviousView(s)
 	if err != nil {
 		return false, err
