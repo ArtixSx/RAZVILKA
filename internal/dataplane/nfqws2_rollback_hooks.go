@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type nfqws2RollbackHookIntent struct {
 	root             string
 	guard            func(Plan) error
 	active           bool
+	priorUnconfirmed bool
 }
 
 func (m *Manager) nfqws2RollbackHookContext(ctx context.Context, reviewed failedRollback, execution Execution, adapter Adapter, guard func(Plan) error) (context.Context, func()) {
@@ -32,12 +34,26 @@ func (m *Manager) nfqws2RollbackHookContext(ctx context.Context, reviewed failed
 	}
 	execution.Steps = slices.Clone(execution.Steps)
 	intent := &nfqws2RollbackHookIntent{manager: m, adapter: nfq, failed: reviewed.plan, previous: reviewed.previous, execution: execution, root: reviewed.root, guard: guard, active: true}
+	// Compaction deliberately discards later recovery rows; missing history
+	// cannot establish that every earlier firewall writer acknowledged effects.
+	intent.priorUnconfirmed = strings.Contains(reviewed.latest.Error, "earlier recovery steps compacted")
+	// Inspect the original reviewed image, before running steps are rewritten
+	// or old recovery rows compacted. A matching FULL graph cannot prove who
+	// issued an earlier interrupted or unacknowledged firewall effect.
+	for _, step := range reviewed.latest.Steps {
+		if step.Adapter == "nfqws2" && step.Phase == "retry-rollback" && step.State != "passed" {
+			intent.priorUnconfirmed = true
+		}
+	}
 	return context.WithValue(ctx, nfqws2RollbackHookContextKey{}, intent), func() { intent.active = false }
 }
 
 func (i *nfqws2RollbackHookIntent) current(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if i.priorUnconfirmed {
+		return ErrNFQWS2HookUncertain
 	}
 	if !i.active || i.guard == nil || i.guard(i.previous) != nil {
 		return ErrReviewChanged

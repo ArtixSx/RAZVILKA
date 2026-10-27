@@ -45,9 +45,22 @@ func TestNFQWS2RollbackRetryRestoresAlreadyRunningHooks(t *testing.T) {
 	if firstStartNamespace(t) {
 		return
 	}
-	for _, mode := range []string{"complete-loss", "mangle-loss", "full"} {
+	for _, mode := range []string{"complete-loss", "mangle-loss", "full", "prior-acknowledged"} {
 		t.Run(mode, func(t *testing.T) {
-			h, previous, failed, _ := restoredNFQWS2HookRetryFixture(t)
+			h, previous, failed, root := restoredNFQWS2HookRetryFixture(t)
+			if mode == "prior-acknowledged" {
+				data, err := os.ReadFile(filepath.Join(root, "execution.json"))
+				var execution Execution
+				if err != nil || json.Unmarshal(data, &execution) != nil {
+					t.Fatal("read execution", err)
+				}
+				for _, phase := range []string{"retry-rollback", "retry-verify-rollback"} {
+					execution.Steps = append(execution.Steps, ExecutionStep{Adapter: "nfqws2", Phase: phase, State: "passed", StartedAt: execution.FinishedAt, FinishedAt: execution.FinishedAt})
+				}
+				if err := h.m.writeExecution(root, execution); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if mode == "complete-loss" {
 				h.kernel = newNFQWS2HookKernel(t, nfqws2HookWithoutOwned(nfqws2HookFullV4()), nfqws2RouterIPv6Fixture)
 			}
@@ -81,7 +94,7 @@ func TestNFQWS2RollbackRetryRestoresAlreadyRunningHooks(t *testing.T) {
 					t.Fatal("already-running rollback restarted the process", call)
 				}
 			}
-			want := map[string]int{"complete-loss": 14, "mangle-loss": 12, "full": 0}[mode]
+			want := map[string]int{"complete-loss": 14, "mangle-loss": 12, "full": 0, "prior-acknowledged": 0}[mode]
 			if len(h.writes) != want {
 				t.Fatal("unexpected hook writes", len(h.writes), want)
 			}
@@ -163,6 +176,61 @@ func TestNFQWS2RollbackHookRepairRetainsFenceOnForeignOrDrift(t *testing.T) {
 			}
 			if mode == "unacknowledged-write" && len(h.writes) != 1 {
 				t.Fatal("unknown effect was adopted or cleaned", h.writes)
+			}
+		})
+	}
+}
+
+func TestNFQWS2RollbackHookRetryCannotAdoptUnconfirmedFullGraph(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	for _, mode := range []string{"last-write-timeout", "interrupted", "compacted"} {
+		t.Run(mode, func(t *testing.T) {
+			h, _, failed, root := restoredNFQWS2HookRetryFixture(t)
+			if mode == "last-write-timeout" {
+				h.kernel = newNFQWS2HookKernel(t, nfqws2HookWithoutOwned(nfqws2HookFullV4()), nfqws2RouterIPv6Fixture)
+				h.beforeWrite = func(n, family int, args []string) error {
+					if n == 14 {
+						if err := h.kernel.apply(family, args); err != nil {
+							t.Fatal(err)
+						}
+						return errors.New("last command response lost after effect")
+					}
+					return nil
+				}
+				result, err := h.m.RetryFailedRollback(firstStartContext(t), failed.PlanID, failed.Digest, func(Plan) error { return nil })
+				if !errors.Is(err, ErrNFQWS2HookUncertain) || result.State != "rollback-failed" {
+					t.Fatal("unconfirmed last effect did not retain fence", result, err)
+				}
+				h.beforeWrite = nil
+			} else {
+				var execution Execution
+				data, err := os.ReadFile(filepath.Join(root, "execution.json"))
+				if err != nil || json.Unmarshal(data, &execution) != nil {
+					t.Fatal("read execution", err)
+				}
+				if mode == "compacted" {
+					execution.Error += "; 16 earlier recovery steps compacted"
+				} else {
+					execution.Steps = append(execution.Steps, ExecutionStep{Adapter: "nfqws2", Phase: "retry-rollback", State: "running", StartedAt: execution.FinishedAt})
+				}
+				if err := h.m.writeExecution(root, execution); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !nfqws2HookSameRows(h.kernel.rows(), h.fullKernel(t).rows()) {
+				t.Fatal("fixture must expose the ambiguous exact FULL graph")
+			}
+			before, writes := h.kernel.rows(), len(h.writes)
+			for attempt := 0; attempt < 2; attempt++ {
+				result, err := h.m.RetryFailedRollback(firstStartContext(t), failed.PlanID, failed.Digest, func(Plan) error { return nil })
+				if !errors.Is(err, ErrNFQWS2HookUncertain) || result.State != "rollback-failed" || h.m.checkExecutionRecovery() == nil {
+					t.Fatal("later retry adopted unconfirmed graph", result, err)
+				}
+			}
+			if len(h.writes) != writes || !nfqws2HookSameRows(before, h.kernel.rows()) {
+				t.Fatal("refused retry changed the firewall graph")
 			}
 		})
 	}
