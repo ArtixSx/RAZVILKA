@@ -13,9 +13,16 @@ import (
 
 // RetryFailedRollback is explicit recovery of an intact, finished rollback
 // journal, not permission to erase a fence. The first implementation supports
-// NFQWS2/Sing-box failures before the configuration commit. The caller must
+// NFQWS2/Sing-box failures before the configuration commit, plus the separately
+// reviewed first Xray addition whose Stage left only its cold snapshot. The caller must
 // hold the application's OS state lease and confirm the saved applied settings.
 func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string, guard func(Plan) error) (Execution, error) {
+	return m.retryFailedRollback(ctx, planID, digest, guard, nil)
+}
+
+// The private proof argument is the existing deterministic proc/kernel test
+// source. Production always supplies nil and obtains fresh platform facts.
+func (m *Manager) retryFailedRollback(ctx context.Context, planID, digest string, guard func(Plan) error, coldProof *proxyInactiveProof) (Execution, error) {
 	refuse := func() (Execution, error) {
 		return Execution{}, executionJournalError(errors.New("rollback retry requires matching reviewed journals and applied settings"))
 	}
@@ -27,6 +34,9 @@ func (m *Manager) RetryFailedRollback(ctx context.Context, planID, digest string
 	}
 	defer m.endOperation()
 	reviewed, ok := m.reviewFailedRollback(planID, digest)
+	if !ok {
+		reviewed, ok = m.reviewUnstagedColdXrayRollback(ctx, planID, digest, coldProof)
+	}
 	if !ok {
 		return refuse()
 	}
