@@ -110,6 +110,41 @@ func directProbe(address string) nodeEgressHTTP {
 
 var stageEndpoint = nodeEgressEndpoint{url: "https://example.com/", pinned: netip.MustParseAddr("1.1.1.1")}
 
+// The deadline and the error returned by a TLS body read are independent:
+// closing a connection can produce a plain EOF/error instead of net.Error.
+func TestNodeEgressBodyReadFailureUsesRequestDeadline(t *testing.T) {
+	for _, readErr := range []error{nil, io.ErrUnexpectedEOF, errors.New("private-profile-marker closed connection"), privateTimeoutError{}} {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		got := nodeEgressBodyReadFailure(ctx, readErr)
+		cancel()
+		if nodeEgressErrorCategory(got) != "response_timeout" || strings.Contains(fmt.Sprint(got), "private-profile-marker") {
+			t.Fatalf("deadline body read category=%s err=%v", nodeEgressErrorCategory(got), got)
+		}
+	}
+	if got := nodeEgressBodyReadFailure(context.Background(), io.ErrUnexpectedEOF); nodeEgressErrorCategory(got) != "body_parse" {
+		t.Fatalf("non-timeout read error reclassified: %v", got)
+	}
+	if got := nodeEgressBodyReadFailure(context.Background(), nil); got != nil {
+		t.Fatalf("complete live body rejected: %v", got)
+	}
+	for _, readErr := range []error{nil, io.ErrUnexpectedEOF, privateTimeoutError{}} {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if got := nodeEgressBodyReadFailure(ctx, readErr); !errors.Is(got, context.Canceled) {
+			t.Fatalf("body cancellation became node failure: %v", got)
+		}
+		denied := WithNodeResourceGuard(context.Background(), func(context.Context, string, netip.Addr) error { return ErrNodeResourceDenied })
+		if got := nodeEgressBodyReadFailure(denied, readErr); !errors.Is(got, ErrNodeResourceDenied) {
+			t.Fatalf("body refusal became node failure: %v", got)
+		}
+		expiredDenied, stop := context.WithDeadline(denied, time.Now().Add(-time.Second))
+		if got := nodeEgressBodyReadFailure(expiredDenied, readErr); !errors.Is(got, ErrNodeResourceDenied) {
+			t.Fatalf("deadline masked an earlier body refusal: %v", got)
+		}
+		stop()
+	}
+}
+
 func TestNodeEgressTimeoutNamesTheStalledStage(t *testing.T) {
 	stalledHeaders := func(t *testing.T) nodeEgressHTTP {
 		server, roots, _ := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) { <-r.Context().Done() })

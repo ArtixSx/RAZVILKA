@@ -108,6 +108,22 @@ func nodeEgressTimeoutStage(dialed, secured bool) nodeEgressFailure {
 	return "response_timeout"
 }
 
+// Cancellation can close the underlying TLS connection before the body reader
+// observes its context: the read error need not implement net.Error. Keep the
+// request's deadline authoritative, without disguising cancellation or refusal.
+func nodeEgressBodyReadFailure(ctx context.Context, err error) error {
+	if refused := nodeEgressNotObserved(ctx); refused != nil {
+		return refused
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || nodeEgressTimedOut(err) {
+		return nodeEgressFailure("response_timeout")
+	}
+	if err != nil {
+		return nodeEgressFailure("body_parse")
+	}
+	return nil
+}
+
 // nodeEgressNotObserved returns the error to report as is instead of an
 // egress category: a resource refusal, including one made before a deadline,
 // or a cancellation. After a plain deadline it returns nil, so that the caller
@@ -400,10 +416,10 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	defer clear(body)
-	if err != nil && nodeEgressTimedOut(err) {
-		return "", nodeEgressFailure("response_timeout")
+	if err := nodeEgressBodyReadFailure(ctx, err); err != nil {
+		return "", err
 	}
-	if err != nil || int64(len(body)) > limit {
+	if int64(len(body)) > limit {
 		return "", nodeEgressFailure("body_parse")
 	}
 	value := strings.TrimSpace(string(body))
