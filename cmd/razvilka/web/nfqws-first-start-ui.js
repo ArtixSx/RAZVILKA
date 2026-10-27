@@ -1,10 +1,10 @@
 /* Closed recipe intent only. Reading/selecting never starts a live operation. */
 (function(root) {
   'use strict';
-  const ids=['','stock-tls-circular-v1','stock-tls-circular-auto-v1'];
+  const ids=['','stock-tls-circular-v1','stock-tls-circular-auto-v1','stock-tls-circular-observe-auto-v1'];
   function validSnapshot(value) {
     return value && Number.isSafeInteger(value.revision) && value.revision>=0 && ids.includes(value.recipe) && ids.includes(value.applied_recipe) &&
-      Array.isArray(value.recipes) && value.recipes.length===ids.length && value.recipes.every((entry,index)=>entry.id===ids[index]&&typeof entry.name==='string');
+      Array.isArray(value.recipes) && value.recipes.length===ids.length && value.recipes.every((entry,index)=>entry&&entry.id===ids[index]&&typeof entry.name==='string');
   }
   root.RazvilkaNFQWSFirstStartUI={validSnapshot};
   if(typeof document==='undefined')return;
