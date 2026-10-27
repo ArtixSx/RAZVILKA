@@ -28,9 +28,17 @@ assert.match(stoppedHome.text,/общий переключатель проек�
 assert.doesNotMatch(stoppedHome.text,/Включите автопилот в настройках/);
 assert.equal(JSON.stringify(stoppedSnapshot),stoppedBefore,'presentation changed Stop or autonomy intent');
 const pausedSnapshot=snap({},{policy:{setup_complete:true,enabled:false},stopped:false});
-assert.equal(model(pausedSnapshot,catalog).title,'Автопилот выключен');
-assert.match(model(pausedSnapshot,catalog).text,/Включите автопилот в настройках/);
+assert.equal(model(pausedSnapshot,catalog).title,'Автопилот на паузе');
+assert.equal(model(pausedSnapshot,catalog).tone,'paused','ordinary pause is not an active check or failure');
+assert.match(model(pausedSnapshot,catalog).text,/Пауза не останавливает уже применённые маршруты/);
 assert.equal(model({...pausedSnapshot,stopped:true},catalog).title,'Проект остановлен','policy pause obscured explicit project Stop');
+const pausedRow=model(snap({youtube:'paused'}),catalog).services[0];
+assert.equal(pausedRow.bucket,'problem','presentation tone must not change aggregates');
+assert.equal(pausedRow.tone,'paused');
+const disabledRow=model(snap({youtube:'healthy'},{services:{youtube:{enabled:false}}}),catalog).services[0];
+assert.equal(disabledRow.tone,'paused');assert.equal(disabledRow.bucket,'problem');
+const failedWhilePaused=model(snap({youtube:'paused'},{applied_services:{youtube:{enabled:true,route:'nfqws2'}}}),catalog,{youtube:{kind:'bad',route:'nfqws2'}}).services[0];
+assert.equal(failedWhilePaused.short,'Проверка не пройдена');assert.equal(failedWhilePaused.tone,undefined,'a current failed proof must stay red');
 const shellHTML=read('cmd/razvilka/web/index.html');
 assert.doesNotMatch(shellHTML,/планировщика rc\.2/);
 assert.match(shellHTML,/Расписание работает на роутере/);
@@ -244,6 +252,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
     addEventListener(type,fn){this.events.set(type,fn);}
     append(child){this.children.push(child);}
     prepend(child){this.children.unshift(child);}
+    before(child){this.children.unshift(child);}
     setAttribute(){}
     focus(){}
     matches(){return false;}
@@ -264,7 +273,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
     $:selector=>document.getElementById(selector.slice(1)),$$:selector=>selector==='.view'?elements.filter(e=>e.id.startsWith('view-')):[],
     consoleDrawerInert(){},renderWorkspaceNavigation(){},refreshPanelView(){},
     fetch:()=>{writes++;throw new Error('Navigation must not write');},api:()=>{writes++;throw new Error('Navigation must not write');},
-    setInterval(){},setTimeout(){},scrollTo(){},matchMedia:()=>({matches:false}),
+    setInterval(){},setTimeout(){},clearTimeout(){},scrollTo(){},matchMedia:()=>({matches:false}),
     addEventListener:(type,fn)=>windowEvents.set(type,fn),
   };
   routerContext.window=routerContext;
@@ -276,7 +285,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   }
   const simpleSource=read('cmd/razvilka/web/simple-home.js');
   // Test-only access to closure actions; production source exports no test hook.
-  vm.runInContext(simpleSource.replace('  window.addEventListener(\'razvilka:autonomy-state\'', '  root.testSimpleActions={render,apply};\n  window.addEventListener(\'razvilka:autonomy-state\''),routerContext);
+  vm.runInContext(simpleSource.replace('  window.addEventListener(\'razvilka:autonomy-state\'', '  root.testSimpleActions={render,apply,renderSettings,renderDevicesNote};\n  window.addEventListener(\'razvilka:autonomy-state\''),routerContext);
   routerContext.testSimpleActions.render();
   const home=document.getElementById('rzSimpleHome');
   assert(home&&overview.children.includes(home),'real home was inserted dynamically');
@@ -332,6 +341,50 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   routerContext.testSimpleActions.render(true);
   assert.doesNotMatch(enginePart.innerHTML,/Процесс запущен/,'expired inventory cannot appear fresh');
   assert.equal(writes,0,'inventory rendering never saves or applies configuration');
+
+  // Exercise the real renderer, not just model(): off used to suppress the
+  // entire service column along with Add, despite retaining all enrollments.
+  state.services=[...catalog,...['a','b','c','d'].map(id=>({id,name:`Service ${id}`})),{id:'new-site',name:'New service'}];
+  const seven=Object.fromEntries(state.services.slice(0,7).map(s=>[s.id,'paused']));
+  for(const stopped of [false,true]){
+    routerContext.consoleSnapshot=snap(seven,{policy:{setup_complete:true,enabled:false},stopped});
+    const before=JSON.stringify(routerContext.consoleSnapshot);
+    routerContext.testSimpleActions.render(true);
+    const main=home.children.find(e=>e.dataset.rzPart==='main');
+    assert.match(main.innerHTML,/Мои сервисы/);
+    assert.match(main.innerHTML,/data-rz-sh-toggle-add/);
+    assert.equal((main.innerHTML.match(/data-rz-sh-remove=/g)||[]).length,7,'all paused/stopped enrollments remain visible');
+    assert.equal((main.innerHTML.match(/rz-sh-service rz-sh-paused/g)||[]).length,7,'explicit paused rows use a presentation-only neutral tone');
+    for(const service of state.services.slice(0,7))assert(main.innerHTML.includes(service.name));
+    const toggle={dataset:{},hasAttribute:name=>name==='data-rz-sh-toggle-add'};
+    home.events.get('click')({target:{closest:()=>toggle}});
+    assert.match(main.innerHTML,/data-rz-sh-query/,'paused/stopped Add opens the real catalog');
+    assert.match(main.innerHTML,/New service/);
+    home.events.get('click')({target:{closest:()=>toggle}});
+    assert.equal(JSON.stringify(routerContext.consoleSnapshot),before,'browsing changed Stop or policy intent');
+    assert.equal(writes,0,'browsing enrollments must not enable policy or apply routes');
+  }
+  for(const fixture of [null,{policy:{setup_complete:false}},snap(seven,{blocked:true}),snap(seven,{safe_mode:true})]){
+    routerContext.consoleSnapshot=fixture;routerContext.testSimpleActions.render(true);
+    assert.doesNotMatch(home.children.find(e=>e.dataset.rzPart==='main').innerHTML,/data-rz-sh-toggle-add|data-rz-sh-remove=/,'unknown/setup/recovery cannot expose management');
+  }
+  routerContext.consoleSnapshot=snap(seven,{policy:{setup_complete:true,enabled:false}});
+  for(const authenticated of [false,true]){
+    state.authenticated=authenticated;routerContext.interfaceState={authRevoked:authenticated};
+    routerContext.testSimpleActions.render(true);
+    assert.doesNotMatch(home.children.find(e=>e.dataset.rzPart==='main').innerHTML,/data-rz-sh-toggle-add|data-rz-sh-remove=/,'logout/revoke cannot expose retained management');
+  }
+  state.authenticated=true;routerContext.interfaceState={authRevoked:false};
+  routerContext.consoleSnapshot.policy.all_lan=true;
+  new Element('view-settings');new Element('deviceGrid');
+  routerContext.testSimpleActions.renderSettings(true);routerContext.testSimpleActions.renderDevicesNote();
+  const settings=document.getElementById('rzSimpleSettings').innerHTML;
+  assert.match(settings,/совместимых стабильных выпусков/);assert.match(settings,/Для RC может потребоваться чистая установка/);
+  assert.match(settings,/Автообновление управляемого NFQWS2 пока недоступно/);
+  assert.doesNotMatch(settings,/ставится сама|при сбое возвращается прежняя|обновляются с проверкой и откатом/);
+  assert.match(document.getElementById('rzDevicesScope').textContent,/предназначены для всех устройств/);
+  assert.doesNotMatch(settings+document.getElementById('rzDevicesScope').textContent,/Обход работает|Обход действует/);
+  assert.equal(writes,0,'settings and scope text never change maintenance or route state');
 }
 console.log('simple home: ok');
 

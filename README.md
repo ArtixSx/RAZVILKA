@@ -125,14 +125,14 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.72/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.73/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.73 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Явный `RAZVILKA_VERSION` обязателен: он закрепляет архив на том же тестовом
 выпуске, что и скрипт. Установщик определит архитектуру, сверит SHA-256 и запустит
 службу. Компоненты обхода ставятся потом из панели. Особенности тестовой сборки —
-в [примечаниях к выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.72).
+в [примечаниях к выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.73).
 
 **3. Откройте панель** — **http://192.168.1.1:8787** (или адрес своего роутера
 с портом `8787`; точная ссылка будет в выводе установщика). Войдите по выданному
@@ -168,14 +168,14 @@ RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh
 
 ## Удаление
 
-Команда ниже относится к установленной `0.20.0-rc.72`. Для другой версии
+Команда ниже относится к установленной `0.20.0-rc.73`. Для другой версии
 используйте bootstrap и явный `RAZVILKA_VERSION` из её выпуска.
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.72/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.73/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.73 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
 Сначала сохраните нужные настройки и подключения. Команда удаляет панель,
@@ -211,7 +211,7 @@ RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 
 - [Установка, обновление, удаление и откат](docs/INSTALL_RU.md)
 - [Совместимость и ограничения](docs/CURRENT_STATUS_RU.md)
-- [Примечания к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.72) · [История изменений](CHANGELOG.md)
+- [Примечания к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.73) · [История изменений](CHANGELOG.md)
 - [План развития](docs/ROADMAP.md) · [Идея двух DPI-исполнителей](docs/DUAL_DPI_ARCHITECTURE_RU.md)
 - [Что означают файлы и папки](docs/FILES_RU.md) · [Сторонние компоненты](THIRD_PARTY.md)
 - [Как помочь проекту](CONTRIBUTING.md)

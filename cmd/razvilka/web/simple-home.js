@@ -55,7 +55,7 @@
       const runtime = snapshot.runtime?.[id] || {};
       const state = runtime.state || 'pending';
       const detail = String(runtime.message || '').slice(0, 220);
-      if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', short: 'Автоподбор на паузе', detail, owner: true };
+      if (spec.enabled !== true) return { id, name: label[id] || id, state, bucket: 'problem', tone: 'paused', short: 'Автоподбор на паузе', detail, owner: true };
       // A waiting service says when it continues ("…через 12 мин.").
       const next = state === 'rate-limited' && /Следующая попытка[^.]*через \d+ мин/.exec(detail);
       const applied = snapshot.applied_services?.[id];
@@ -69,7 +69,7 @@
       }
       // Retain the applied assignment during recheck without claiming access.
       if (RECHECK.has(state) && applied?.enabled) return { id, name: label[id] || id, state, bucket: 'progress', short: 'Включён · перепроверяется', detail };
-      return { id, name: label[id] || id, state, bucket: bucket(state), short: next ? next[0] : SHORT[state] || 'Проверяется', detail, owner: WAITS_FOR_OWNER.has(state) };
+      return { id, name: label[id] || id, state, bucket: bucket(state), tone: state === 'paused' ? 'paused' : undefined, short: next ? next[0] : SHORT[state] || 'Проверяется', detail, owner: WAITS_FOR_OWNER.has(state) };
     }).sort((a, b) => ({ problem: 0, progress: 1, ok: 2 }[a.bucket] - { problem: 0, progress: 1, ok: 2 }[b.bucket]) || a.name.localeCompare(b.name, 'ru'));
     const count = kind => services.filter(s => s.bucket === kind).length;
     const base = { services, managed: new Set(services.map(s => s.id)) };
@@ -77,7 +77,7 @@
     if (retained) return { ...base, phase: 'ready', tone: 'progress', title: 'Нет свежих данных автопилота', text: 'Показаны последние настройки. Текущее состояние обновляется; работа сервисов пока не подтверждена.' };
     if (!policy.setup_complete) return { ...base, phase: 'setup', tone: 'setup', title: 'Давайте настроим обход', text: 'Выберите сервисы и устройства. Автопилот проверит доступные способы подключения и подберёт подходящий для выбранных сервисов.' };
     if (snapshot.stopped) return { ...base, phase: 'off', tone: 'problem', title: 'Проект остановлен', text: 'Маршруты остановлены. Для включения используйте общий переключатель проекта. Настройки автопилота не снимают эту остановку.' };
-    if (policy.enabled === false) return { ...base, phase: 'off', tone: 'problem', title: 'Автопилот выключен', text: 'Сервисы не проверяются и не переключаются. Включите автопилот в настройках.' };
+    if (policy.enabled === false) return { ...base, phase: 'off', tone: 'paused', title: 'Автопилот на паузе', text: 'Сервисы не проверяются и не переключаются. Пауза не останавливает уже применённые маршруты. Включить автопилот можно в настройках.' };
     if (!services.length) return { ...base, phase: 'empty', tone: 'setup', title: 'Добавьте первый сервис', text: 'Нажмите «Добавить сервис» и выберите, что должно открываться.' };
     const problems = count('problem'), progress = count('progress');
     // Never promise a retry for a service that waits for the owner.
@@ -237,7 +237,7 @@
     const busy = ui.busy === s.id;
     const via = s.bucket === 'ok' ? routeName(s.id) : '';
     const service = catalog().find(c => c.id === s.id) || { id: s.id, name: s.name };
-    return `<li class="rz-sh-service rz-sh-${s.bucket}"><span class="rz-sh-icon" aria-hidden="true">${icon(service)}<span class="rz-sh-dot"></span></span><div><b>${html(s.name)}</b><small title="${html(s.detail)}">${html(via ? `${s.short} · ${via}` : s.short)}</small></div><button type="button" class="secondary" data-rz-sh-remove="${html(s.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Убираем…' : 'Убрать'}</button></li>`;
+    return `<li class="rz-sh-service rz-sh-${s.tone || s.bucket}"><span class="rz-sh-icon" aria-hidden="true">${icon(service)}<span class="rz-sh-dot"></span></span><div><b>${html(s.name)}</b><small title="${html(s.detail)}">${html(via ? `${s.short} · ${via}` : s.short)}</small></div><button type="button" class="secondary" data-rz-sh-remove="${html(s.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Убираем…' : 'Убрать'}</button></li>`;
   }
 
   function addPanel(m) {
@@ -299,7 +299,7 @@
       if(await interfaceManage(saved.service.id, true)!==true)throw new Error('Определение импортировано, но включение автоподбора не подтверждено. Обновите состояние.');
       ui.community = ui.community.filter(e => e.id !== id);
       ui.note = '';
-      if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
+      if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен в настройки автопилота.');
     } catch (e) {
       ui.note = '';
       ui.error = (typeof workflowError === 'function' ? workflowError(e) : e?.message) || 'Сервис не добавлен.';
@@ -338,13 +338,17 @@
     const focused = document.activeElement?.matches?.('[data-rz-sh-query]');
     const action = m.phase === 'recovery' ? '<button type="button" class="primary" data-view="diagnostics">Открыть восстановление</button>' : m.phase === 'setup' ? '<button type="button" class="primary" data-view="onboard">Начать настройку</button>'
       : m.phase === 'off' ? '<button type="button" class="primary" data-view="autopilot">Открыть автопилот</button>' : '';
-    const canAdd = m.phase === 'ready' || m.phase === 'empty';
+    // Pausing workers or stopping routes does not revoke catalogue browsing
+    // or enrollment. Existing actions still use the shared permission guards;
+    // loading, setup, recovery and a revoked session do not expose management.
+    const authenticated = typeof state === 'object' && state?.authenticated === true && !(typeof interfaceState === 'object' && interfaceState.authRevoked);
+    const canAdd = authenticated && ['ready', 'empty', 'off'].includes(m.phase);
     const doctor = doctorCard();
     const main = (canAdd ? `<div class="rz-sh-head"><h3>Мои сервисы</h3><button type="button" class="${ui.open ? 'secondary' : 'primary'}" data-rz-sh-toggle-add aria-expanded="${ui.open}">${ui.open ? 'Готово' : 'Добавить сервис'}</button></div>${addPanel(m)}`
         + (m.services.length ? `<ul class="rz-sh-list">${m.services.map(serviceRow).join('')}</ul>` : '') : '')
       + (ui.error ? `<p class="rz-sh-error" role="alert">${html(ui.error)}</p>` : '')
       + doctor
-      + '<p class="rz-sh-foot">Автопилот сам подбирает способ обхода, проверяет доступ и переключается при сбое. Вам нужно только выбрать сервисы.</p>';
+      + '<p class="rz-sh-foot">Когда автопилот включён и проект запущен, он подбирает способ обхода, проверяет доступ и переключается при сбое. Состав сервисов можно менять и на паузе.</p>';
     home.classList.toggle('rz-sh-with-engines', !!engines);
     const updateRow = notice ? `<span class="rz-sh-update-dot" aria-hidden="true"></span><span>${html(notice.text)}</span><button type="button" class="secondary" data-rz-sh-update>Обновить</button>` : '';
     // Each part is replaced only when its own markup changed, so a changing
@@ -423,7 +427,7 @@
     try {
       const accepted=await interfaceManage(id, true, remove);
       if (accepted!==true)return;
-      if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен. Автопилот проверит его — результат появится у сервиса.');
+      if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен в настройки автопилота.');
     } catch (e) {
       ui.error = e?.message || 'Действие не выполнено.';
     } finally {
@@ -478,17 +482,17 @@
     const snap = snapshot();
     const p = snap?.policy;
     const version = typeof state === 'object' ? state?.status?.version || '' : '';
-    const devices = !p ? 'Загружаем…' : p.all_lan ? 'Обход действует для всех устройств домашней сети.' : `Обход действует только для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}.`;
+    const devices = !p ? 'Загружаем…' : p.all_lan ? 'Область действия выбранных сервисов — все устройства домашней сети.' : `Область действия выбранных сервисов — выбранные устройства: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}.`;
     const key = JSON.stringify([p?.revision, p?.application?.mode, p?.components?.mode, p?.all_lan, version, ui.settingsBusy, ui.settingsError]);
     if (!force && key === ui.settingsKey) return;
     ui.settingsKey = key;
     const ready = !!p?.setup_complete && !ui.settingsBusy;
     const toggle = (field, title, detail) => `<label class="rz-set-row"><span><b>${title}</b><small>${detail}</small></span><input type="checkbox" role="switch" data-rz-set-nightly="${field}" ${nightly(p?.[field]) ? 'checked' : ''} ${ready ? '' : 'disabled'}></label>`;
     box.innerHTML = `<div class="rz-set-card"><h3>Обновления</h3>`
-      + toggle('application', 'Обновлять RAZVILKA ночью', 'Новая стабильная версия ставится сама; при сбое возвращается прежняя.')
-      + toggle('components', 'Обновлять способы обхода ночью', 'NFQWS2, Sing-box и другие компоненты обновляются с проверкой и откатом.')
+      + toggle('application', 'Обновлять RAZVILKA ночью', 'Разрешить ночную установку совместимых стабильных выпусков после проверки. Для RC может потребоваться чистая установка; ограничения показаны в обновлении.')
+      + toggle('components', 'Обновлять способы обхода ночью', 'Разрешить обновление поддерживаемых совместимых компонентов после проверки. Автообновление управляемого NFQWS2 пока недоступно.')
       + `<div class="rz-set-row"><span><b>Версия</b><small>${html(version ? 'Установлена ' + version : 'Загружаем…')}</small></span><button type="button" class="secondary" data-rz-set-update>Проверить обновления</button></div></div>`
-      + `<div class="rz-set-card"><h3>Устройства</h3><div class="rz-set-row"><span><b>Для кого работает обход</b><small>${html(devices)}</small></span><button type="button" class="secondary" data-view="devices">Открыть</button></div></div>`
+      + `<div class="rz-set-card"><h3>Устройства</h3><div class="rz-set-row"><span><b>Область действия сервисов</b><small>${html(devices)}</small></span><button type="button" class="secondary" data-view="devices">Открыть</button></div></div>`
       + `<div class="rz-set-card"><h3>Резервная копия и помощь</h3><div class="rz-set-row"><span><b>Настройки</b><small>Сервисы и маршруты, без ключей и паролей.</small></span><button type="button" class="secondary" data-rz-set-export>Скачать</button></div><div class="rz-set-row"><span><b>Отчёт для поддержки</b><small>Без ключей, паролей, адресов устройств и истории сайтов.</small></span><button type="button" class="secondary" data-rz-doc-report>Скачать</button></div></div>`
       + (ui.settingsError ? `<p class="rz-sh-error" role="alert">${html(ui.settingsError)}</p>` : '')
       + `<p class="rz-sh-foot">Остальные параметры (DNS, списки сайтов, стратегии, перенос аккаунтов) — в <button type="button" class="link-button" data-rz-set-advanced>расширенном режиме</button>.</p>`;
@@ -506,8 +510,8 @@
       grid.before(note);
     }
     const p = snapshot()?.policy;
-    const text = !p ? '' : p.all_lan ? 'Обход работает для всех устройств домашней сети. Здесь можно дать устройствам понятные имена.'
-      : `Обход работает только для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}. Здесь можно дать устройствам понятные имена.`;
+    const text = !p ? '' : p.all_lan ? 'Выбранные сервисы предназначены для всех устройств домашней сети. Маршруты включаются отдельно. Здесь можно дать устройствам понятные имена.'
+      : `Выбранные сервисы предназначены для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}. Маршруты включаются отдельно. Здесь можно дать устройствам понятные имена.`;
     if (note.textContent !== text) note.textContent = text;
   }
 

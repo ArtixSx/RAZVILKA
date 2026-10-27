@@ -819,6 +819,7 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-badge{flex:none;width:18px;height:18px;border-radius:50%;background:var(--muted)}
 .rz-sh-ok{background:var(--accent-wash)}.rz-sh-ok .rz-sh-badge{background:var(--green)}
 .rz-sh-progress .rz-sh-badge{background:var(--blue);animation:rz-sh-pulse 1.6s ease-in-out infinite}
+.rz-sh-paused .rz-sh-badge{background:var(--amber)}
 .rz-sh-problem{background:var(--r3-rose-wash)}.rz-sh-problem .rz-sh-badge{background:var(--red)}
 .rz-sh-setup .rz-sh-badge{background:var(--violet)}
 @keyframes rz-sh-pulse{50%{opacity:.35}}
@@ -830,6 +831,7 @@ body:not(.rz-simple) #rzSimpleHome{display:none}
 .rz-sh-list b,.rz-sh-catalog b{overflow-wrap:anywhere}.rz-sh-list small,.rz-sh-catalog small{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .rz-sh-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--muted)}
 .rz-sh-service.rz-sh-ok .rz-sh-dot{background:var(--green)}.rz-sh-service.rz-sh-progress .rz-sh-dot{background:var(--blue)}.rz-sh-service.rz-sh-problem .rz-sh-dot{background:var(--red)}
+.rz-sh-service.rz-sh-paused .rz-sh-dot{background:var(--amber)}
 .rz-sh-service.rz-sh-problem small{color:var(--red)}
 .rz-sh-add{display:grid;gap:10px;padding:16px;border:1px solid var(--line2);border-radius:var(--radius);background:var(--panel2)}
 .rz-sh-search{display:grid;gap:6px}.rz-sh-search span{font-weight:600}.rz-sh-search input{width:100%;min-height:44px;font-size:16px}
