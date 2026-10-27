@@ -276,7 +276,10 @@ func (a *ProxyTunnelAdapter) inactiveKernel(ctx context.Context, owner PolicyOwn
 					if parsed.table == a.Table {
 						return ErrProxyRuntimeInactive
 					}
-				} else if table, known := knownWGTransportRuleTable(family, canonical); !known || table == a.Table {
+				} else if table, known := knownWGTransportRuleTable(family, canonical); (!known || table == a.Table) && !firmwarePolicyRule(family, canonical) {
+					// Reuse the same closed foreign-firmware grammar as the
+					// preceding dependency read; unknown syntax and own slots
+					// still refuse in this later, independently fresh inventory.
 					return ErrProxyRuntimeInactive
 				}
 			}
