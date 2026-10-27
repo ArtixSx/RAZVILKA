@@ -79,7 +79,7 @@ type nfqws2HookGraph struct {
 	IPv6      bool
 	Families  []nfqws2HookFamily // IPv4 first; IPv6 only with IPV6_ENABLED=1.
 	// The IPv4 nat state stock leaves in the closed case (the UDP MASQUERADE
-	// is guarded off): an empty nfqws_nat and one jump. Verified, never written.
+	// is guarded off): an empty nfqws_nat and one jump.
 	NAT []BackendInventoryRow
 }
 
@@ -189,6 +189,7 @@ type nfqws2HookClassification struct {
 	Class    nfqws2HookClass
 	Families []nfqws2HookFamilyClass
 	Reason   error // Set only for nfqws2HookOther.
+	NATLoss  bool  // Both exact IPv4 NAT objects absent with complete mangle loss.
 }
 
 // restore lists the families in LOSS when no family is OTHER.
@@ -260,8 +261,9 @@ func nfqws2HookQueueReference(tokens []string, queue uint16) bool {
 // closed graph. FULL: each family's owned mangle rows are token for token the
 // rendered graph (one jump each) and both hooks are reachable. LOSS: a
 // family's mangle holds no owned token and appending the two jumps would make
-// both hooks reachable. Both also require the exact verify-only IPv4 nat
-// state, no owned token in any other table (or in IPv6 when it is disabled)
+// both hooks reachable. IPv4 nat must be exact, or entirely absent together
+// with the IPv4 mangle graph. There may be no owned token in any other table
+// (or in IPv6 when it is disabled)
 // and no rule outside the graph that may deliver to the owned queue.
 // Anything else is OTHER with a fixed reason and must refuse every write.
 func nfqws2ClassifyHookGraph(graph nfqws2HookGraph, snapshot BackendInventorySnapshot) nfqws2HookClassification {
@@ -304,8 +306,12 @@ func nfqws2ClassifyHookGraph(graph nfqws2HookGraph, snapshot BackendInventorySna
 			return other(nfqws2HookAt(row.Family, row.Table, nfqws2HookForeignQueue))
 		}
 	}
-	if err := nfqws2HookNATState(snapshot.Rows, graph.NAT); err != nil {
-		return other(nfqws2HookAt(4, "nat", err))
+	natErr := nfqws2HookNATState(snapshot.Rows, graph.NAT)
+	natAbsent := !slices.ContainsFunc(snapshot.Rows, func(row BackendInventoryRow) bool {
+		return row.Family == 4 && row.Table == "nat" && nfqws2HookOwnedRow(row)
+	})
+	if natErr != nil && !(natErr == nfqws2HookNATMissing && natAbsent) {
+		return other(nfqws2HookAt(4, "nat", natErr))
 	}
 	result := nfqws2HookClassification{Class: nfqws2HookFull}
 	loss := false
@@ -324,11 +330,19 @@ func nfqws2ClassifyHookGraph(graph nfqws2HookGraph, snapshot BackendInventorySna
 	if result.Class == nfqws2HookFull && loss {
 		result.Class = nfqws2HookLoss
 	}
+	if natErr != nil {
+		// Never adopt or complete existing NAT objects, and never repair NAT
+		// alone. This is only the complete IPv4 graph disappearance case.
+		if result.Class != nfqws2HookLoss || result.Families[0].Class != nfqws2HookLoss {
+			return other(nfqws2HookAt(4, "nat", natErr))
+		}
+		result.NATLoss = true
+	}
 	return result
 }
 
-// The verify-only IPv4 nat state: exactly one empty nfqws_nat declaration and
-// one unconditional POSTROUTING jump to it. Restore never writes nat.
+// The exact IPv4 nat state: one empty nfqws_nat declaration and one
+// unconditional POSTROUTING jump. Partial state never grants restoration.
 func nfqws2HookNATState(rows []BackendInventoryRow, expected []BackendInventoryRow) error {
 	if len(expected) != 2 {
 		return errNFQWS2HookGraph

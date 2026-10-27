@@ -592,7 +592,7 @@ func TestNFQWS2HookRestoreRefusesBeforeAnyWrite(t *testing.T) {
 			h.readErr = ErrBackendInventoryUnknown
 		}},
 		{name: "partial-jumps-only", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookPartial), setup: kernel(strings.Replace(strings.Replace(nfqws2HookFullV4(), "-A PREROUTING -j nfqws_pre\n", "", 1), "-A POSTROUTING -j nfqws_post\n", "", 1), nfqws2RouterIPv6Fixture)},
-		{name: "nat-missing", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookNATMissing), setup: kernel(nfqws2HookWithoutOwned(nfqws2HookFullV4()), nfqws2RouterIPv6Fixture)},
+		{name: "nat-only-missing", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookNATMissing), setup: kernel(strings.Replace(strings.Replace(nfqws2HookFullV4(), ":nfqws_nat - [0:0]\n", "", 1), "-A POSTROUTING -j nfqws_nat\n", "", 1), nfqws2RouterIPv6Fixture)},
 		{name: "nat-not-empty", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookNATNonEmpty), setup: kernel(strings.Replace(lossV4, "COMMIT\n", "-A nfqws_nat -o eth3 -p udp -j MASQUERADE\nCOMMIT\n", 1), nfqws2RouterIPv6Fixture)},
 		{name: "owned-in-filter", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookOutsideMangle), setup: kernel(strings.Replace(lossV4, ":_NDM_ACL - [0:0]\n", ":_NDM_ACL - [0:0]\n:nfqws_filter - [0:0]\n", 1), nfqws2RouterIPv6Fixture)},
 		{name: "foreign-queue-reference", reason: NFQWS2HookReasonOther, detail: string(nfqws2HookForeignQueue), setup: kernel(strings.Replace(lossV4, "-A FORWARD -j _NDM_ACL\n", "-A FORWARD -j NFQUEUE --queue-num 300\n", 1), nfqws2RouterIPv6Fixture)},

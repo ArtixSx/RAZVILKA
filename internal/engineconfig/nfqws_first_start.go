@@ -132,13 +132,16 @@ func NFQWSFirstStartConfigForRecipe(original []byte, owner string, domains, excl
 	format := NFQWSFirstStartFormat
 	base := "--lua-init=@/opt/etc/nfqws2/lua/zapret-lib.lua --lua-init=@/opt/etc/nfqws2/lua/zapret-antidpi.lua --fastpath-workaround=0 --ipcache-hostname=0"
 	recipeArgs := "--filter-tcp=443 --filter-l7=tls --payload=tls_client_hello --lua-desync=multisplit:pos=1,midsld"
-	if recipe == NFQWSFirstStartStockTLSCircularAuto {
+	if recipe == NFQWSFirstStartStockTLSCircularAuto || recipe == NFQWSFirstStartStockTLSCircularObserveAuto {
 		base = strings.Replace(base, "--fastpath-workaround=0", "--fastpath-workaround=auto", 1)
 	}
-	if recipe == NFQWSFirstStartStockTLSCircular || recipe == NFQWSFirstStartStockTLSCircularAuto {
+	if recipe == NFQWSFirstStartStockTLSCircular || recipe == NFQWSFirstStartStockTLSCircularAuto || recipe == NFQWSFirstStartStockTLSCircularObserveAuto {
 		format = NFQWSFirstStartFormatV2 + "\n# RAZVILKA RECIPE " + string(recipe)
 		base += " --lua-init=@/opt/etc/nfqws2/lua/zapret-auto.lua --blob=tls_clienthello:@/opt/etc/nfqws2/blobs/tls_clienthello.bin"
 		recipeArgs = nfqwsFirstStartStockTLSCircularArgs
+		if recipe == NFQWSFirstStartStockTLSCircularObserveAuto {
+			recipeArgs = nfqwsFirstStartStockTLSCircularObserveArgs
+		}
 	}
 	block := ManagedListBegin + "\n# RAZVILKA INSTANCE " + owner + "\n" + format + "\n" +
 		"NFQWS_BASE_ARGS='" + base + "'\n" +
@@ -227,7 +230,7 @@ func nfqwsFirstStartHeaderRecipe(block []byte, owner string) (NFQWSFirstStartRec
 	if bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormat+"\n")) {
 		return "", true
 	}
-	for _, recipe := range []NFQWSFirstStartRecipe{NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto} {
+	for _, recipe := range []NFQWSFirstStartRecipe{NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto, NFQWSFirstStartStockTLSCircularObserveAuto} {
 		if bytes.HasPrefix(block, []byte(prefix+NFQWSFirstStartFormatV2+"\n# RAZVILKA RECIPE "+string(recipe)+"\n")) {
 			return recipe, true
 		}

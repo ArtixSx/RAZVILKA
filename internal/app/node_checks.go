@@ -38,24 +38,25 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
-	NodeID            string    `json:"node_id"`
-	NetworkProfile    string    `json:"network_profile"`
-	CheckedAt         time.Time `json:"checked_at"`
-	Reachable         bool      `json:"reachable"`
-	Available         bool      `json:"available"`
-	LatencyMS         int64     `json:"latency_ms,omitempty"`
-	DurationMS        int64     `json:"duration_ms,omitempty"`
-	Message           string    `json:"message"`
-	Verdict           string    `json:"verdict,omitempty"`
-	TestLevel         string    `json:"test_level,omitempty"`
-	ErrorCode         string    `json:"error_code,omitempty"`
-	ConnectivityReady bool      `json:"connectivity_ready"`
-	CleanupVerified   bool      `json:"cleanup_verified"`
-	ExpiresAt         time.Time `json:"expires_at,omitempty"`
-	Engine            string    `json:"engine,omitempty"`
-	Stage             string    `json:"stage,omitempty"`
-	DirectControl     string    `json:"direct_control,omitempty"`
-	ProbeID           string    `json:"probe_id,omitempty"`
+	NodeID            string                      `json:"node_id"`
+	NetworkProfile    string                      `json:"network_profile"`
+	CheckedAt         time.Time                   `json:"checked_at"`
+	Reachable         bool                        `json:"reachable"`
+	Available         bool                        `json:"available"`
+	LatencyMS         int64                       `json:"latency_ms,omitempty"`
+	DurationMS        int64                       `json:"duration_ms,omitempty"`
+	Message           string                      `json:"message"`
+	Verdict           string                      `json:"verdict,omitempty"`
+	TestLevel         string                      `json:"test_level,omitempty"`
+	ErrorCode         string                      `json:"error_code,omitempty"`
+	ConnectivityReady bool                        `json:"connectivity_ready"`
+	CleanupVerified   bool                        `json:"cleanup_verified"`
+	CleanupStatus     dataplane.NodeCleanupStatus `json:"cleanup_status,omitempty"`
+	ExpiresAt         time.Time                   `json:"expires_at,omitempty"`
+	Engine            string                      `json:"engine,omitempty"`
+	Stage             string                      `json:"stage,omitempty"`
+	DirectControl     string                      `json:"direct_control,omitempty"`
+	ProbeID           string                      `json:"probe_id,omitempty"`
 }
 
 type nodeCheckJob struct {
@@ -460,21 +461,7 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 		// These rows never lead to Apply; check with the engine the node requires.
 		engine := a.checkOnlyNodeEngine(checkContext, id)
 		result, _, err := a.checkAndRecordNodeForEngine(checkContext, engine, id, service, profile, 0)
-		item.CheckedAt = time.Now().UTC()
-		if err == nil {
-			item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
-			item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
-		} else {
-			item.Message = nodeCheckFailureMessage(err)
-			item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", nodeCheckFailureCode(err)
-		}
-		// Preserve fatal cleanup even if recording the result also failed.
-		if result.ErrorCode == "node-cleanup-failed" {
-			item.Available = false
-			item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", "node-cleanup-failed"
-			item.Message = "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления."
-		}
-		return item
+		return nodeCheckItemFromResult(id, profile, result, err, engine)
 	}
 	current, err := a.freshNetworkProfile(ctx)
 	if err != nil || current != profile {

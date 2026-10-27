@@ -194,10 +194,11 @@ func nfqws2HookRefused(reason string, cause error) (NFQWS2HookRestore, error) {
 }
 
 // RestoreCommittedNFQWS2Hooks re-creates only the owned first-start mangle
-// graph that a whole-table firmware rewrite removed under the same live stock
-// process. It never starts, stops or restarts NFQWS2, never flushes, inserts
-// or writes nat, and never adopts a partial or foreign graph. The caller must
-// hold its configuration/stop/revision operation lease; WithReviewGuard binds
+// graph that a firmware rewrite removed under the same live stock
+// process. It never starts, stops or restarts NFQWS2, never flushes or inserts,
+// and never adopts a partial or foreign graph. The exact empty IPv4 NAT graph
+// may be recreated only when it and IPv4 mangle are entirely absent. The caller
+// must hold its configuration/stop/revision operation lease; WithReviewGuard binds
 // that authority before and after every effect. A busy dataplane or busy
 // shared resources are skipped, never waited for.
 func (m *Manager) RestoreCommittedNFQWS2Hooks(ctx context.Context, expected Plan) (NFQWS2HookRestore, error) {
@@ -387,6 +388,7 @@ type nfqws2HookAttempt struct {
 	files     []nfqws2HookFile
 	initial   BackendInventorySnapshot
 	families  []nfqws2HookFamily
+	natLoss   bool
 	queue     nfqws2FirstStartQueue
 	native    *components.StockNFQWSNativeReview
 	order     []int
@@ -402,7 +404,8 @@ type nfqws2HookAttempt struct {
 // family in LOSS when no family is OTHER (decisions 1-3). The caller holds
 // lockResources and its operation gate; review re-proves its authority before
 // every command. FULL is a no-op; anything else refuses before the first
-// write. After the first write any failure, cancellation or guard refusal
+// write. Complete IPv4 loss also permits its exact empty NAT graph. After the
+// first write any failure, cancellation or guard refusal
 // removes only this attempt's exact objects.
 func (a *NFQWS2Adapter) restoreFirstStartHooksLocked(ctx context.Context, plan Plan, lease *nfqws2Lease, review func(context.Context) error) (NFQWS2HookRestore, error) {
 	t := &nfqws2HookAttempt{a: a, plan: plan, lease: lease, review: review, attempted: map[int][]BackendInventoryRow{}}
@@ -502,6 +505,7 @@ func (t *nfqws2HookAttempt) admit(ctx context.Context) (string, error) {
 	case nfqws2HookFull:
 		return "", nil
 	case nfqws2HookLoss:
+		t.natLoss = c.NATLoss
 		for _, family := range t.graph.Families {
 			if slices.Contains(c.restore(), family.Family) {
 				t.families = append(t.families, family)
@@ -687,14 +691,18 @@ func (t *nfqws2HookAttempt) current(ctx context.Context) (string, error) {
 // exec records only acknowledged effects as cleanup receipts. An ambiguous
 // outcome must be independently absent before cleanup may remove other effects.
 func (t *nfqws2HookAttempt) exec(ctx context.Context, family int, tokens ...string) (string, error) {
+	return t.execTable(ctx, family, "mangle", tokens...)
+}
+
+func (t *nfqws2HookAttempt) execTable(ctx context.Context, family int, table string, tokens ...string) (string, error) {
 	if err := t.guard(ctx); err != nil {
 		return NFQWS2HookReasonGuard, err
 	}
 	if !slices.Contains(t.order, family) {
 		t.order = append(t.order, family)
 	}
-	row := BackendInventoryRow{Family: family, Table: "mangle", Tokens: slices.Clone(tokens)}
-	args := append([]string{"-t", "mangle"}, tokens...)
+	row := BackendInventoryRow{Family: family, Table: table, Tokens: slices.Clone(tokens)}
+	args := append([]string{"-t", table}, tokens...)
 	t.result.Commands = append(t.result.Commands, NFQWS2HookCommand{Family: family, Args: slices.Clone(args)})
 	if _, err := runFirewallCommand(ctx, t.a.Runner, t.source.binary(family), args...); err != nil {
 		t.unacknowledged = append(t.unacknowledged, row)
@@ -706,8 +714,14 @@ func (t *nfqws2HookAttempt) exec(ctx context.Context, family int, tokens ...stri
 
 // write appends chains and bodies first; the jumps follow, last in their
 // built-in chains as stock appends them, only after an exact readback and a
-// full checkpoint. Nothing is flushed, inserted or written to nat.
+// full checkpoint. A completely lost empty NAT graph follows the same order.
+// Nothing is flushed or inserted.
 func (t *nfqws2HookAttempt) write(ctx context.Context) (string, error) {
+	if t.natLoss {
+		if reason, err := t.execTable(ctx, 4, "nat", t.graph.NAT[0].Tokens...); err != nil {
+			return reason, err
+		}
+	}
 	for _, g := range t.families {
 		for _, chain := range g.Chains {
 			if reason, err := t.exec(ctx, g.Family, "-N", chain); err != nil {
@@ -725,6 +739,11 @@ func (t *nfqws2HookAttempt) write(ctx context.Context) (string, error) {
 	}
 	if reason, err := t.current(ctx); err != nil {
 		return reason, err
+	}
+	if t.natLoss {
+		if reason, err := t.execTable(ctx, 4, "nat", t.graph.NAT[1].Tokens...); err != nil {
+			return reason, err
+		}
 	}
 	for _, g := range t.families {
 		for _, jump := range g.Jumps {
@@ -843,7 +862,7 @@ func (t *nfqws2HookAttempt) rollback(parent context.Context) error {
 			return uncertain(errors.New("an unacknowledged firewall effect is present; nothing was removed"))
 		}
 	}
-	removals, ok := nfqws2HookCleanup(snapshot.Rows, t.order, t.attempted)
+	removals, ok := nfqws2HookCleanup(snapshot.Rows, t.order, t.attempted, t.unacknowledged...)
 	if !ok {
 		return uncertain(errors.New("a foreign owned object is present; nothing was removed"))
 	}
@@ -859,7 +878,7 @@ func (t *nfqws2HookAttempt) rollback(parent context.Context) error {
 	if err != nil {
 		return uncertain(errors.Join(append(failures, err)...))
 	}
-	if residue, ok := nfqws2HookCleanup(after.Rows, t.order, t.attempted); !ok || len(residue) != 0 {
+	if residue, ok := nfqws2HookCleanup(after.Rows, t.order, t.attempted, t.unacknowledged...); !ok || len(residue) != 0 {
 		return uncertain(errors.Join(failures...))
 	}
 	t.result.RolledBack = true
@@ -868,19 +887,28 @@ func (t *nfqws2HookAttempt) rollback(parent context.Context) error {
 
 // nfqws2HookCleanup lists the present rows of each written family's exact
 // attempt in reverse order: jumps, then bodies, then chains. It refuses when
-// any owned mangle row of such a family is not one of them.
-func nfqws2HookCleanup(rows []BackendInventoryRow, order []int, attempted map[int][]BackendInventoryRow) ([]BackendInventoryRow, bool) {
+// any owned row in a touched table of such a family is not one of them.
+func nfqws2HookCleanup(rows []BackendInventoryRow, order []int, attempted map[int][]BackendInventoryRow, unacknowledged ...BackendInventoryRow) ([]BackendInventoryRow, bool) {
 	var removals []BackendInventoryRow
 	for i := len(order) - 1; i >= 0; i-- {
 		family, pending := order[i], attempted[order[i]]
+		tables := map[string]bool{"mangle": true}
+		for _, row := range pending {
+			tables[row.Table] = true
+		}
+		for _, row := range unacknowledged {
+			if row.Family == family {
+				tables[row.Table] = true
+			}
+		}
 		present := make([]bool, len(pending))
 		for _, row := range rows {
-			if row.Family != family || row.Table != "mangle" || !nfqws2HookOwnedRow(row) {
+			if row.Family != family || !tables[row.Table] || !nfqws2HookOwnedRow(row) {
 				continue
 			}
 			index := -1
 			for j, candidate := range pending {
-				if !present[j] && slices.Equal(candidate.Tokens, row.Tokens) {
+				if !present[j] && nfqws2HookSameRow(candidate, row) {
 					index = j
 					break
 				}
@@ -899,14 +927,14 @@ func nfqws2HookCleanup(rows []BackendInventoryRow, order []int, attempted map[in
 	return removals, true
 }
 
-// nfqws2HookRemoval is the exact inverse of one attempted mangle row: -D of
+// nfqws2HookRemoval is the exact inverse of one attempted row: -D of
 // the same rule, or -X of a created chain once its bodies are gone.
 func nfqws2HookRemoval(row BackendInventoryRow) []string {
 	op := "-D"
 	if row.Tokens[0] == "-N" {
 		op = "-X"
 	}
-	return append([]string{"-t", "mangle", op}, row.Tokens[1:]...)
+	return append([]string{"-t", row.Table, op}, row.Tokens[1:]...)
 }
 
 // nfqws2HookWithout removes each listed row exactly once, keeping kernel

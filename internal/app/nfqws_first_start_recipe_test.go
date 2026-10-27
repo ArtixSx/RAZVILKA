@@ -193,3 +193,32 @@ func TestNFQWSFirstStartRecipePreservedEngineDraftPlanMatchesServicesCommit(t *t
 		}
 	}
 }
+
+func TestNFQWSFirstStartObserverRecipeAPIOnlyStagesDraft(t *testing.T) {
+	s, err := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{Store: s}
+	before := s.Get()
+	get := httptest.NewRecorder()
+	a.nfqwsFirstStartRecipe(get, httptest.NewRequest(http.MethodGet, "/api/v1/nfqws2/first-start-recipe", nil))
+	if get.Code != 200 || !strings.Contains(get.Body.String(), string(engineconfig.NFQWSFirstStartStockTLSCircularObserveAuto)) {
+		t.Fatal("observer recipe absent")
+	}
+	body := fmt.Sprintf(`{"recipe":%q,"expected_revision":%d}`, engineconfig.NFQWSFirstStartStockTLSCircularObserveAuto, before.Revision)
+	put := httptest.NewRecorder()
+	a.nfqwsFirstStartRecipe(put, httptest.NewRequest(http.MethodPut, "/api/v1/nfqws2/first-start-recipe", strings.NewReader(body)))
+	after := s.Get()
+	if put.Code != 200 || after.NFQWSFirstStartRecipe != engineconfig.NFQWSFirstStartStockTLSCircularObserveAuto || after.AppliedNFQWSFirstStartRecipe != before.AppliedNFQWSFirstStartRecipe || !strings.Contains(put.Body.String(), `"live_applied":false`) {
+		t.Fatal("recipe did not remain draft", put.Code)
+	}
+	if !reflect.DeepEqual(after.AppliedServices, before.AppliedServices) || !reflect.DeepEqual(after.Services, before.Services) || after.ServiceControl.Stopped != before.ServiceControl.Stopped || after.SafeMode != before.SafeMode {
+		t.Fatal("recipe changed runtime or desired services")
+	}
+	stale := httptest.NewRecorder()
+	a.nfqwsFirstStartRecipe(stale, httptest.NewRequest(http.MethodPut, "/api/v1/nfqws2/first-start-recipe", strings.NewReader(body)))
+	if stale.Code != 409 || !reflect.DeepEqual(after, s.Get()) {
+		t.Fatal("stale observer choice changed intent")
+	}
+}

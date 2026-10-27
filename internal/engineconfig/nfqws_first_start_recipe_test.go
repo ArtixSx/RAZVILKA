@@ -24,7 +24,7 @@ func TestNFQWSFirstStartRecipeRoundTripAndClosedTCP443(t *testing.T) {
 	if !bytes.Equal(legacy, append(slices.Clone(stock), []byte(ManagedListBegin+"\n"+legacyBlock+ManagedListEnd+"\n")...)) {
 		t.Fatal("default no longer matches the original v1 bytes")
 	}
-	for _, recipe := range []NFQWSFirstStartRecipe{"", NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto} {
+	for _, recipe := range []NFQWSFirstStartRecipe{"", NFQWSFirstStartStockTLSCircular, NFQWSFirstStartStockTLSCircularAuto, NFQWSFirstStartStockTLSCircularObserveAuto} {
 		raw, err := NFQWSFirstStartConfigForRecipe(stock, owner, []string{"selected.example"}, []string{"bank.example"}, []string{"192.0.2.0/24"}, recipe)
 		if err != nil {
 			t.Fatal(err)
@@ -54,7 +54,7 @@ func TestNFQWSFirstStartRecipeRoundTripAndClosedTCP443(t *testing.T) {
 			}
 		}
 		mode := "--fastpath-workaround=0"
-		if recipe == NFQWSFirstStartStockTLSCircularAuto {
+		if recipe == NFQWSFirstStartStockTLSCircularAuto || recipe == NFQWSFirstStartStockTLSCircularObserveAuto {
 			mode = "--fastpath-workaround=auto"
 		}
 		if !slices.Contains(args, mode) {
@@ -140,6 +140,65 @@ func TestNFQWSFirstStartStockAutoChangesOnlyModeAndRecipeIdentity(t *testing.T) 
 	} {
 		if _, err := NFQWSFirstStartEffectiveConfig(forged, owner); err == nil {
 			t.Fatal("accepted forged mode/identity")
+		}
+	}
+}
+
+func TestNFQWSFirstStartCircularObserverEnvelopeKeepsMutatorsClosed(t *testing.T) {
+	const owner = "0123456789abcdef01234567"
+	stock := firstStartStock(t)
+	raw, err := NFQWSFirstStartConfigForRecipe(stock, owner, []string{"selected.example"}, []string{"bank.example"}, []string{"192.0.2.0/24"}, NFQWSFirstStartStockTLSCircularObserveAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	main, err := NFQWSFirstStartEffectiveConfig(raw, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := NFQWSStartupArguments(main, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// nfqws2 setters affect following Lua instances. Only the observer may see
+	// bounded replies/other payloads; every stock mutator inherits the closed
+	// outgoing ClientHello envelope, under the same selected/excluded hostlists.
+	incoming, payload := "x", "all"
+	count := 0
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--in-range=") {
+			incoming = strings.TrimPrefix(arg, "--in-range=")
+		}
+		if strings.HasPrefix(arg, "--payload=") {
+			payload = strings.TrimPrefix(arg, "--payload=")
+		}
+		if strings.HasPrefix(arg, "--lua-desync=") {
+			count++
+			if strings.HasPrefix(arg, "--lua-desync=circular:") {
+				if incoming != "-s5556" || payload != "all" || count != 1 {
+					t.Fatal("observer is blind or unbounded", incoming, payload)
+				}
+			} else if incoming != "x" || payload != "tls_client_hello" {
+				t.Fatal("mutator widened to replies or other payloads", arg)
+			}
+		}
+	}
+	if count != 7 {
+		t.Fatal("stock three-strategy chain changed", count)
+	}
+	old, err := NFQWSFirstStartConfigForRecipe(stock, owner, []string{"selected.example"}, []string{"bank.example"}, []string{"192.0.2.0/24"}, NFQWSFirstStartStockTLSCircularAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := bytes.Replace(old, []byte("# RAZVILKA RECIPE "+string(NFQWSFirstStartStockTLSCircularAuto)), []byte("# RAZVILKA RECIPE "+string(NFQWSFirstStartStockTLSCircularObserveAuto)), 1)
+	expected = bytes.Replace(expected, []byte(nfqwsFirstStartStockTLSCircularArgs), []byte(nfqwsFirstStartStockTLSCircularObserveArgs), 1)
+	if !bytes.Equal(raw, expected) {
+		t.Fatal("new recipe changed anything beyond identity and observation envelope")
+	}
+	for _, change := range [][2]string{{"--in-range=-s5556", "--in-range=a"}, {"--in-range=x --payload=tls_client_hello", "--in-range=a --payload=tls_client_hello"}, {"--payload=all --lua-desync=circular", "--payload=tls_client_hello --lua-desync=circular"}, {"--filter-tcp=443", "--filter-tcp=443,8443"}, {"--filter-l7=tls", "--filter-l7=tls,http"}} {
+		start := bytes.Index(raw, []byte(ManagedListBegin))
+		forged := append(slices.Clone(raw[:start]), bytes.Replace(raw[start:], []byte(change[0]), []byte(change[1]), 1)...)
+		if _, err := NFQWSFirstStartEffectiveConfig(forged, owner); err == nil {
+			t.Fatal("forged observer/scope accepted", change)
 		}
 	}
 }

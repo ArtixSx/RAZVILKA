@@ -54,6 +54,17 @@ type NodeCheckStage struct {
 	Duration int64  `json:"duration_ms,omitempty"`
 }
 
+// NodeCleanupStatus describes the original temporary session's cleanup only;
+// it is diagnostic metadata and grants no route or runtime admission.
+type NodeCleanupStatus string
+
+const (
+	NodeCleanupNotObserved NodeCleanupStatus = "not_observed"
+	NodeCleanupNotRequired NodeCleanupStatus = "not_required"
+	NodeCleanupVerified    NodeCleanupStatus = "verified"
+	NodeCleanupFailed      NodeCleanupStatus = "failed"
+)
+
 // NodeCheckResult is deliberately safe for persistence and the Web API. Raw
 // process output, the remote endpoint and direct egress address are omitted.
 type NodeCheckResult struct {
@@ -76,6 +87,7 @@ type NodeCheckResult struct {
 	ErrorCode         string                 `json:"error_code,omitempty"`
 	Message           string                 `json:"message"`
 	DirectControl     string                 `json:"direct_control"`
+	CleanupStatus     NodeCleanupStatus      `json:"cleanup_status,omitempty"`
 	DirectLeak        bool                   `json:"direct_leak"`
 	DirectEgressError string                 `json:"direct_egress_error,omitempty"`
 	ProxyEgressError  string                 `json:"proxy_egress_error,omitempty"`
@@ -202,7 +214,7 @@ func (c *ExactNodeChecker) newResult(request NodeCheckRequest) NodeCheckResult {
 		ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile,
 		RoutePathID: c.EngineID() + ":" + request.NodeID, StartedAt: c.currentTime(), TestLevel: "dns",
 		Stage: "dns", Verdict: evidence.VerdictError, Message: "Проверка не завершена.",
-		DirectControl: "not_run", Stages: []NodeCheckStage{},
+		DirectControl: "not_run", CleanupStatus: NodeCleanupNotRequired, Stages: []NodeCheckStage{},
 	}
 }
 
@@ -392,11 +404,15 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	if err := checkNodeResource(ctx, endpoint.Host, endpoint.Pinned); err != nil {
 		return result, err
 	}
+	// From preparation onward, only the original cleanup outcome can report
+	// whether this temporary session was removed, including partial preparation.
+	result.CleanupStatus = NodeCleanupNotObserved
 	session, err := c.prepare(ctx, c.session(slot), request, endpoint)
 	defer func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
 		defer cleanupCancel()
 		if err := c.cleanup(cleanupCtx, session); err != nil {
+			result.CleanupStatus = NodeCleanupFailed
 			c.poisoned.Store(true)
 			result.Available = false
 			result.Verdict = evidence.VerdictError
@@ -405,6 +421,8 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			result.Message = "Временный процесс не удалось гарантированно убрать; повторные проверки заблокированы до восстановления."
 			result.addStage("cleanup", "failed", "Очистка временного процесса требует внимания.", c.currentTime(), c.currentTime())
 			finish()
+		} else if cleanupCtx.Err() == nil {
+			result.CleanupStatus = NodeCleanupVerified
 		}
 	}()
 	if err != nil {

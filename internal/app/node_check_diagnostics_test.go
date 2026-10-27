@@ -37,7 +37,7 @@ func TestDisabledServiceNodeCheckReportsRealResourceRefusalBeforeRuntime(t *test
 	}
 	// Both detached legacy checks and durable jobs publish the same safe cause.
 	legacy := a.runNodeCheckItem(context.Background(), "service", ids[0], service, "", nil)
-	durable := nodeCheckItemFromResult(ids[0], "", result, err)
+	durable := nodeCheckItemFromResult(ids[0], "", result, err, "sing-box")
 	for _, item := range []nodeCheckItem{legacy, durable} {
 		if item.ErrorCode != "node-resource-refused" || item.Verdict != "INCONCLUSIVE" || item.Available || !strings.Contains(item.Message, "исключения") {
 			t.Fatal("resource denial became generic or positive", item)
@@ -62,7 +62,7 @@ func TestNodeCheckTypedDiagnosticsNeverPublishRawErrorMaterial(t *testing.T) {
 	} {
 		private := "vless://credential@private-host.invalid /private/runtime/path --secret-arg"
 		err := fmt.Errorf("%s: %w", private, tc.err)
-		item := nodeCheckItemFromResult("test-node", "", dataplane.NodeCheckResult{}, err)
+		item := nodeCheckItemFromResult("test-node", "", dataplane.NodeCheckResult{}, err, "sing-box")
 		raw, marshalErr := json.Marshal(item)
 		if marshalErr != nil || item.ErrorCode != tc.code || item.Verdict != "INCONCLUSIVE" || item.Available || strings.Contains(string(raw), private) || strings.Contains(string(raw), "credential") || strings.Contains(string(raw), "private-host") || strings.Contains(string(raw), "--secret") {
 			t.Fatal("unsafe or incorrect public diagnostic", item, marshalErr)

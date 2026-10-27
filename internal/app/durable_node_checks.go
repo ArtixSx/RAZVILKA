@@ -402,7 +402,7 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 					}
 					screened[i] = screenPing(ids[i], profile, result)
 					if final {
-						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil), true
+						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil, engine), true
 					}
 				})
 				for _, i := range batch {
@@ -518,14 +518,46 @@ func eachNodeInParallel(n, limit int, fn func(int)) {
 }
 
 // nodeCheckItemFromResult is the job row of a service check of a node.
-func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResult, err error) nodeCheckItem {
-	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC()}
+func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResult, err error, engine string) nodeCheckItem {
+	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC(), CleanupStatus: dataplane.NodeCleanupNotObserved}
+	if engine == "sing-box" || engine == "xray" {
+		item.Engine = engine // Selected executor, not proof that a process started.
+	}
+	if item.Engine != "" && result.NodeID == id && result.RoutePathID == engine+":"+id && (profile == "" || result.NetworkProfile == profile) {
+		switch result.Stage {
+		case "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "service_ip", "cleanup", "resource", "connectivity":
+			item.Stage = result.Stage
+		}
+		switch result.DirectControl {
+		case "not_run", "measured", "unavailable":
+			item.DirectControl = result.DirectControl
+		}
+		if suffix, ok := strings.CutPrefix(result.ProbeID, "node-check-"); ok && len(suffix) == 24 && strings.Trim(suffix, "0123456789abcdef") == "" {
+			item.ProbeID = result.ProbeID
+		}
+		switch result.CleanupStatus {
+		case dataplane.NodeCleanupNotRequired, dataplane.NodeCleanupVerified, dataplane.NodeCleanupFailed:
+			item.CleanupStatus = result.CleanupStatus
+		}
+		item.CleanupVerified = item.CleanupStatus == dataplane.NodeCleanupVerified
+		if !result.StartedAt.IsZero() && !result.FinishedAt.Before(result.StartedAt) && result.ExpiresAt.After(result.FinishedAt) && result.ExpiresAt.Sub(result.FinishedAt) <= 24*time.Hour {
+			item.CheckedAt, item.ExpiresAt = result.FinishedAt, result.ExpiresAt
+		}
+	}
 	if err == nil {
 		item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
 		item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
 	} else {
 		item.Message = nodeCheckFailureMessage(err)
 		item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", nodeCheckFailureCode(err)
+	}
+	// Preserve the existing fatal cleanup result even if history/admission also
+	// failed. No positive check result or missing legacy field proves cleanup.
+	if result.ErrorCode == "node-cleanup-failed" {
+		item.Available, item.CleanupVerified = false, false
+		item.CleanupStatus = dataplane.NodeCleanupFailed
+		item.Verdict, item.TestLevel, item.ErrorCode = "INCONCLUSIVE", "unconfirmed", "node-cleanup-failed"
+		item.Message = "Очистка временного процесса не подтверждена. Проверки остановлены до восстановления."
 	}
 	return item
 }

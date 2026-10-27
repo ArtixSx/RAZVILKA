@@ -156,6 +156,17 @@ func TestNFQWS2HookNDMRestoreNative(t *testing.T) {
 		t.Fatal("full graph was not a no-op", result, err)
 	}
 
+	// A firmware rewrite may remove NAT together with mangle. Only the
+	// complete disappearance permits recreating the exact empty NAT graph.
+	n.restore(t, 4, nfqws2NDMLines(full.Mangle4, "nfqws")+nfqws2NDMLines(full.NAT4, "nfqws"))
+	natResult, natErr := m.RestoreCommittedNFQWS2Hooks(nfqws2NDMContext(t), plan)
+	if natErr != nil || !slices.Equal(natResult.Restored, []int{4}) || len(natResult.Commands) != 14 || natResult.Uncertain || natResult.RolledBack || n.state(t) != full {
+		t.Fatalf("complete NAT/mangle loss was not restored exactly: %+v %v", natResult, natErr)
+	}
+	if n.daemon(t) != daemon || !nfqws2NDMSameFiles(n.files(t), files) {
+		t.Fatal("NAT restoration changed the daemon, socket or owned files")
+	}
+
 	// The defect, then the production restoration under the same daemon.
 	lost := n.rewrite(t, 4, nil)
 	if out := n.hook(t, "mangle", "iptables"); !strings.Contains(out, nfqws2NDMInert) {
@@ -228,7 +239,8 @@ func TestNFQWS2HookNDMRestoreNative(t *testing.T) {
 		{name: "foreign-rule-on-owned-queue", reason: "foreign-rule-references-owned-queue", v4: nfqws2NDMAppend(lost, nil, "-A FORWARD -p tcp -j NFQUEUE --queue-num 300")},
 		{name: "foreign-same-name-chain", reason: "owned-chain-body-differs", v4: nfqws2NDMAppend(lost, []string{":nfqws_pre - [0:0]"}, "-A nfqws_pre -j RETURN")},
 		{name: "terminal-before-insertion", reason: "prerouting-terminal-before-hook", v4: nfqws2NDMAppend(lost, nil, "-A PREROUTING -j ACCEPT")},
-		{name: "nat-hook-lost", reason: "nat-hook-missing", v4: lost + nfqws2NDMLines(full.NAT4, "nfqws")},
+		{name: "nat-hook-partial", reason: "nat-hook-missing", v4: lost + nfqws2NDMLines(full.NAT4, "-j nfqws_nat")},
+		{name: "nat-only-lost", reason: "nat-hook-missing", v4: full.Mangle4 + nfqws2NDMLines(full.NAT4, "nfqws")},
 		{name: "nat-chain-not-empty", reason: "nat-chain-not-empty", v4: lost + nfqws2NDMAppend(full.NAT4, nil, "-A nfqws_nat -j RETURN")},
 		{name: "owned-object-in-filter", reason: "owned-object-outside-mangle", v4: lost + nfqws2NDMAppend(full.Filter4, []string{":nfqws_fwd - [0:0]"})},
 		{name: "ipv6-token-while-disabled", reason: "owned-object-with-ipv6-disabled", v4: lost, v6: nfqws2NDMAppend(full.Mangle6, []string{":nfqws_post - [0:0]"})},

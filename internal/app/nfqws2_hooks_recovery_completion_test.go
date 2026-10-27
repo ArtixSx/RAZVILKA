@@ -12,10 +12,14 @@ import (
 func TestReviewNFQWS2HookUncertainFencesNextExclusive(t *testing.T) {
 	a, _, model := nfqws2HookAppFixture(t)
 	model.restore = func(context.Context, dataplane.Plan) (dataplane.NFQWS2HookRestore, error) {
-		return dataplane.NFQWS2HookRestore{Class: dataplane.NFQWS2HooksLoss, Reason: dataplane.NFQWS2HookReasonWrite, Uncertain: true, Instance: "instance-a"}, errors.Join(dataplane.ErrNFQWS2HookRestore, dataplane.ErrNFQWS2HookUncertain)
+		return dataplane.NFQWS2HookRestore{Class: dataplane.NFQWS2HooksLoss, Reason: dataplane.NFQWS2HookReasonWrite, Uncertain: true, Instance: "instance-a",
+			Commands: []dataplane.NFQWS2HookCommand{{Family: 4, Args: []string{"-t", "nat", "-N", "nfqws_nat"}}}}, errors.Join(dataplane.ErrNFQWS2HookRestore, dataplane.ErrNFQWS2HookUncertain)
 	}
 	if err := a.restoreNFQWS2HooksRound(context.Background(), time.Now()); !errors.Is(err, dataplane.ErrNFQWS2HookUncertain) {
 		t.Fatal(err)
+	}
+	if !errors.Is(CheckNFQWS2HookRecovery(a.Dataplane.StateRoot), ErrNFQWS2HookRecovery) {
+		t.Fatal("uncertain NAT effect lost its durable recovery intent")
 	}
 	_, release, err := a.Operations.ExclusiveContext(context.Background())
 	if err == nil {
