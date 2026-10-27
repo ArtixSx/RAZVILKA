@@ -101,7 +101,12 @@ func (a *ProxyTunnelAdapter) scopedRoutes(plan Plan) ([]Route, error) {
 		if adapterID(route.Resolved) != a.ID() {
 			continue
 		}
-		if !strings.HasPrefix(route.Resolved, "xray:") || !exactNodeIDPattern.MatchString(strings.TrimPrefix(route.Resolved, "xray:")) || len(route.Sources) == 0 || route.ProbeURL == "" {
+		// An empty source list is the legacy all-LAN intent, not a wildcard
+		// kernel grant. Stage expands it through prepareForwarding into actual
+		// assigned private bridge prefixes and verifies each ingress. Only the
+		// concrete router verifier can check this scope: the optional external
+		// selected/control verifier needs explicit client sources.
+		if !strings.HasPrefix(route.Resolved, "xray:") || !exactNodeIDPattern.MatchString(strings.TrimPrefix(route.Resolved, "xray:")) || len(route.Sources) == 0 && !a.nodeRouterVerifier || route.ProbeURL == "" {
 			return nil, errors.New("scoped Xray requires resolved exact nodes, client sources and service probes")
 		}
 		routes = append(routes, route)

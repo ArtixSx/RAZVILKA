@@ -358,7 +358,7 @@ func (a *ProxyTunnelAdapter) validateXrayModeManifest(data, engine, sidecar []by
 				return m, proxyXrayModeError()
 			}
 		}
-		if id == "" || len(id) > 256 || route.ProbeURL == "" || len(route.ProbeURL) > 4096 || len(route.Sources) == 0 ||
+		if id == "" || len(id) > 256 || route.ProbeURL == "" || len(route.ProbeURL) > 4096 || len(route.Sources) == 0 && !a.nodeRouterVerifier ||
 			r.ServiceID != id || r.NodeID != strings.TrimPrefix(route.Resolved, "xray:") ||
 			(len(r.Domains) != 0 || len(route.Domains) != 0) && !reflect.DeepEqual(r.Domains, route.Domains) ||
 			len(r.Domains) > 2048 || len(r.Destinations) > 2048 {
