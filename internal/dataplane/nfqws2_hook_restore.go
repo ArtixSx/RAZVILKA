@@ -403,8 +403,11 @@ type nfqws2HookAttempt struct {
 	native    *components.StockNFQWSNativeReview
 	order     []int
 	attempted map[int][]BackendInventoryRow
-	detail    string
-	result    NFQWS2HookRestore
+	// A failed command is not an ownership receipt, even if its exact row
+	// appears afterwards: it may be a timed-out effect or a concurrent writer.
+	unacknowledged []BackendInventoryRow
+	detail         string
+	result         NFQWS2HookRestore
 }
 
 // restoreFirstStartHooksLocked re-creates the owned mangle graph of every
@@ -693,8 +696,8 @@ func (t *nfqws2HookAttempt) current(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-// exec records the exact row before its command, so an ambiguous outcome is
-// still eligible for cleanup, and runs it through the reviewed binary.
+// exec records only acknowledged effects as cleanup receipts. An ambiguous
+// outcome must be independently absent before cleanup may remove other effects.
 func (t *nfqws2HookAttempt) exec(ctx context.Context, family int, tokens ...string) (string, error) {
 	if err := t.guard(ctx); err != nil {
 		return NFQWS2HookReasonGuard, err
@@ -702,12 +705,14 @@ func (t *nfqws2HookAttempt) exec(ctx context.Context, family int, tokens ...stri
 	if !slices.Contains(t.order, family) {
 		t.order = append(t.order, family)
 	}
-	t.attempted[family] = append(t.attempted[family], BackendInventoryRow{Family: family, Table: "mangle", Tokens: slices.Clone(tokens)})
+	row := BackendInventoryRow{Family: family, Table: "mangle", Tokens: slices.Clone(tokens)}
 	args := append([]string{"-t", "mangle"}, tokens...)
 	t.result.Commands = append(t.result.Commands, NFQWS2HookCommand{Family: family, Args: slices.Clone(args)})
 	if _, err := runFirewallCommand(ctx, t.a.Runner, t.source.binary(family), args...); err != nil {
+		t.unacknowledged = append(t.unacknowledged, row)
 		return NFQWS2HookReasonWrite, err
 	}
+	t.attempted[family] = append(t.attempted[family], row)
 	return "", nil
 }
 
@@ -842,6 +847,13 @@ func (t *nfqws2HookAttempt) rollback(parent context.Context) error {
 	}
 	if err != nil {
 		return uncertain(err)
+	}
+	for _, row := range snapshot.Rows {
+		if slices.ContainsFunc(t.unacknowledged, func(unknown BackendInventoryRow) bool {
+			return nfqws2HookSameRow(row, unknown)
+		}) {
+			return uncertain(errors.New("an unacknowledged firewall effect is present; nothing was removed"))
+		}
 	}
 	removals, ok := nfqws2HookCleanup(snapshot.Rows, t.order, t.attempted)
 	if !ok {

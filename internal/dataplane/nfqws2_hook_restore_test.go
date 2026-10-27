@@ -672,18 +672,6 @@ func TestNFQWS2HookRestoreRollsBackOnlyItsOwnObjects(t *testing.T) {
 				return nil
 			}
 		}},
-		{name: "ambiguous-jump-write", reason: NFQWS2HookReasonWrite, issued: 11, fault: func(t *testing.T, h *nfqws2HookFixture, _ context.CancelFunc, _ *bool) {
-			// The kernel applied the jump but the command reported failure.
-			h.beforeWrite = func(_ int, family int, args []string) error {
-				if args[3] == "POSTROUTING" {
-					if err := h.kernel.apply(family, args); err != nil {
-						t.Error(err)
-					}
-					return errors.New("modeled lost acknowledgement")
-				}
-				return nil
-			}
-		}},
 		{name: "queue-rebound-before-jumps", reason: NFQWS2HookReasonQueue, issued: 10, fault: func(_ *testing.T, h *nfqws2HookFixture, _ context.CancelFunc, _ *bool) {
 			h.beforeWrite = func(n int, _ int, _ []string) error {
 				if n == 10 {
@@ -1045,5 +1033,85 @@ func TestNFQWS2HookPlanAdmitsOnlySettledFirstStart(t *testing.T) {
 	}
 	if _, err := m.RestoreCommittedNFQWS2Hooks(context.Background(), base); !errors.Is(err, ErrNFQWS2HookRestore) || errors.Is(err, ErrNFQWS2HookBusy) {
 		t.Fatal("uncommitted plan was not refused", err)
+	}
+}
+
+// A matching row after a failed command is not an ownership receipt. These
+// model faults exercise both a concurrent writer and a lost acknowledgement.
+func TestNFQWS2HookRestoreRetainsUnacknowledgedEffects(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	for _, tc := range []struct {
+		name             string
+		at               int
+		foreignReference bool
+	}{
+		{name: "foreign-chain-eexist", at: 1},
+		{name: "timeout-after-chain-effect", at: 2},
+		{name: "timeout-after-body-effect", at: 5},
+		{name: "timeout-after-jump-effect", at: 11},
+		{name: "foreign-chain-with-reference", at: 1, foreignReference: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newNFQWS2HookFixture(t, false)
+			plan := h.committed(t)
+			h.lose(t, 4)
+			var retained []BackendInventoryRow
+			before := h.files(t)
+			h.beforeWrite = func(n int, family int, args []string) error {
+				if n != tc.at {
+					return nil
+				}
+				if err := h.kernel.apply(family, args); err != nil {
+					t.Fatal(err)
+				}
+				if tc.foreignReference {
+					if err := h.kernel.apply(family, []string{"-t", "mangle", "-A", "FORWARD", "-j", "nfqws_post"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				retained = h.kernel.rows()
+				if tc.at == 1 {
+					return nil
+				} // The real model command now refuses EEXIST.
+				return context.DeadlineExceeded // Effect happened, acknowledgement lost.
+			}
+			result, err := h.m.RestoreCommittedNFQWS2Hooks(firstStartContext(t), plan)
+			if !errors.Is(err, ErrNFQWS2HookUncertain) || !result.Uncertain || result.RolledBack || len(result.Restored) != 0 {
+				t.Fatalf("ambiguous effect was adopted: %+v %v", result, err)
+			}
+			if !slices.EqualFunc(retained, h.kernel.rows(), nfqws2HookSameRow) {
+				t.Fatal("unacknowledged or foreign objects removed")
+			}
+			if len(h.writes) != tc.at {
+				t.Fatal("writes continued after uncertainty", h.writes)
+			}
+			h.assertFiles(t, before)
+		})
+	}
+}
+
+func TestReviewHookRestoreMustNotDeleteConcurrentForeignChain(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	h := newNFQWS2HookFixture(t, false)
+	plan := h.committed(t)
+	h.lose(t, 4)
+	h.beforeWrite = func(n int, family int, args []string) error {
+		if n == 1 {
+			if err := h.kernel.apply(family, args); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return nil
+	}
+	result, err := h.m.RestoreCommittedNFQWS2Hooks(firstStartContext(t), plan)
+	if err == nil {
+		t.Fatal("expected EEXIST refusal", result)
+	}
+	if !h.kernel.families[4]["mangle"].has("nfqws_post") {
+		t.Fatalf("foreign chain deleted after failed create: result=%+v writes=%+v", result, h.writes)
 	}
 }
