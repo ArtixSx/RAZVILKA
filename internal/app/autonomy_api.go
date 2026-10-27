@@ -129,6 +129,7 @@ func (a *App) autonomyAPI(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 503, map[string]any{"error": "Разрешения не сохранены. Автоматика не запущена."})
 			return
 		}
+		a.cancelNodeReadiness()
 		if req.ReleaseSafeMode && req.Policy.Enabled {
 			// This is an explicit wizard consent, never an automatic bypass of Safe Mode.
 			if err := a.clearRetiredSafeMode(); err != nil {
@@ -255,7 +256,13 @@ func (a *App) autonomyEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg := a.Store.Get()
 	a.autonomy.mu.Lock()
-	defer a.autonomy.mu.Unlock()
+	permissionsSaved := false
+	defer func() {
+		a.autonomy.mu.Unlock()
+		if permissionsSaved {
+			a.cancelNodeReadiness()
+		}
+	}()
 	if a.autonomy.doc.Policy.Revision != req.ExpectedRevision || a.autonomy.doc.Policy.Revision == ^uint64(0) {
 		writeJSON(w, 409, map[string]any{"error": "Разрешения изменились."})
 		return
@@ -275,6 +282,7 @@ func (a *App) autonomyEnroll(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]any{"error": "Сохранение не подтверждено. Автоматика заблокирована."})
 		return
 	}
+	permissionsSaved = true
 	writeJSON(w, 200, map[string]any{"ok": true, "live_applied": false, "revision": a.autonomy.doc.Policy.Revision, "service": s})
 }
 

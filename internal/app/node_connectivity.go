@@ -15,7 +15,11 @@ import (
 
 // Called only by the explicitly admitted durable job, through its SAME exclusive
 // context. No catalogue service or NodeStore writer is manufactured.
-func (a *App) runNodeConnectivity(parent context.Context, id, profile string) (item nodeCheckItem) {
+func (a *App) runNodeConnectivity(parent context.Context, id, profile string) nodeCheckItem {
+	return a.runNodeConnectivityWithReview(parent, id, profile, "", nil)
+}
+
+func (a *App) runNodeConnectivityWithReview(parent context.Context, id, profile, engine string, review func(context.Context) error) (item nodeCheckItem) {
 	item = nodeCheckItem{NodeID: id, NetworkProfile: profile, TestLevel: "connectivity", Verdict: "INCONCLUSIVE", Message: "Общий HTTPS-тест не завершён."}
 	defer func() {
 		if item.CheckedAt.IsZero() {
@@ -52,6 +56,11 @@ func (a *App) runNodeConnectivity(parent context.Context, id, profile string) (i
 	guard := func(c context.Context, host string, address netip.Addr) error {
 		if c.Err() != nil {
 			return c.Err()
+		}
+		if review != nil {
+			if err := review(c); err != nil {
+				return err
+			}
 		}
 		if a.Store != owner || !reflect.DeepEqual(definitions, a.catalogSnapshot()) {
 			return dataplane.ErrNodeResourceDenied
@@ -108,7 +117,10 @@ func (a *App) runNodeConnectivity(parent context.Context, id, profile string) (i
 		item.ErrorCode = "node-resource-refused"
 		return item
 	}
-	engine, err := a.compatibleNodeEngine(ctx, "sing-box", id)
+	var err error
+	if engine == "" {
+		engine, err = a.compatibleNodeEngine(ctx, "sing-box", id)
+	}
 	if err != nil {
 		item.ErrorCode = nodeCheckFailureCode(err)
 		return item
@@ -132,6 +144,9 @@ func (a *App) runNodeConnectivity(parent context.Context, id, profile string) (i
 	}
 	var result dataplane.NodeConnectivityResult
 	err = a.Nodes.WithSecret(checkCtx, id, func(raw []byte) error {
+		if err := guard(checkCtx, "", netip.Addr{}); err != nil {
+			return err
+		}
 		var e error
 		result, e = checker.CheckConnectivity(checkCtx, dataplane.NodeConnectivityRequest{NodeID: id, NetworkProfile: profile, Outbound: raw})
 		return e

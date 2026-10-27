@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/nodestore"
 )
 
 // The readiness pool walks the nodes the autopilot may use and runs the
@@ -66,6 +69,8 @@ func (e nodeReadinessEntry) failing(now time.Time) bool {
 
 type nodeReadinessState struct {
 	mu          sync.Mutex
+	cancel      context.CancelFunc
+	engineSet   string
 	network     string
 	cursor      string
 	entries     map[string]nodeReadinessEntry
@@ -283,6 +288,29 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 		a.setNodeReadinessState("idle")
 		return
 	}
+	permissionsCurrentLocked := func() bool {
+		valid := a.autonomy.loaded && !a.autonomy.blocked && reflect.DeepEqual(a.autonomy.doc.Policy, p) && len(a.autonomy.doc.Services) == len(services)
+		for _, old := range services {
+			current, ok := a.autonomy.doc.Services[old.ID]
+			valid = valid && ok && reflect.DeepEqual(current, old)
+		}
+		return valid
+	}
+	review := func(c context.Context) error {
+		if err := c.Err(); err != nil {
+			return err
+		}
+		a.autonomy.mu.Lock()
+		valid := permissionsCurrentLocked()
+		a.autonomy.mu.Unlock()
+		if !valid || a.autonomyDiskCurrent(c) != nil {
+			return dataplane.ErrReviewChanged
+		}
+		return nil
+	}
+	if review(ctx) != nil {
+		return
+	}
 	profile, err := a.freshNetworkProfile(ctx)
 	if err != nil {
 		a.setNodeReadinessState("paused-network")
@@ -303,12 +331,13 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 		}
 	}
 	ids, received := []string{}, map[string]time.Time{}
+	sourcePolicy := a.nodeReadinessSourcePolicy(p, snapshot)
 	for _, n := range snapshot.Nodes {
 		seen(n.ID, n.Health.CheckedAt)
 		for _, c := range n.Health.History {
 			seen(n.ID, c.CheckedAt)
 		}
-		if allowedAutonomyNode(p, n, now) {
+		if allowedAutonomyNode(sourcePolicy, n, now) {
 			ids = append(ids, n.ID)
 			for _, o := range n.Origins {
 				if slices.Contains(p.SourceIDs, o.SourceID) && !now.Before(o.ReceivedAt) && now.Before(o.ExpiresAt) && o.ReceivedAt.After(received[n.ID]) {
@@ -329,7 +358,14 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 
 	r := &a.nodeReadiness
 	r.mu.Lock()
-	if r.network != profile || r.entries == nil {
+	engineNames := []string{}
+	for engine := range engines {
+		engineNames = append(engineNames, engine)
+	}
+	slices.Sort(engineNames)
+	engineSet := strings.Join(engineNames, ",")
+	if r.network != profile || r.entries == nil || r.engineSet != engineSet {
+		r.engineSet = engineSet
 		// Results describe one network only.
 		r.network, r.cursor, r.entries, r.controlAt, r.pausedUntil = profile, "", map[string]nodeReadinessEntry{}, time.Time{}, time.Time{}
 	}
@@ -416,7 +452,11 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 			}
 			reads++
 			// The same choice runNodeConnectivity makes; a local material read.
-			engine, err := a.compatibleNodeEngine(ctx, "sing-box", id)
+			base := "sing-box"
+			if !engines[base] {
+				base = "xray"
+			}
+			engine, err := a.compatibleNodeEngine(ctx, base, id)
 			if ctx.Err() != nil {
 				return
 			}
@@ -463,8 +503,47 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 	r.checks = append(r.checks, now)
 	r.mu.Unlock()
 
-	item := a.runNodeConnectivity(ctx, chosen, profile)
+	selectedEngine := entries[chosen].Engine
+	if e, ok := learned[chosen]; ok {
+		selectedEngine = e.Engine
+	}
+	checkCtx, cancelCheck := context.WithCancel(ctx)
+	r.mu.Lock()
+	r.cancel = cancelCheck
+	r.mu.Unlock()
+	defer func() { cancelCheck(); r.mu.Lock(); r.cancel = nil; r.mu.Unlock() }()
+	consent := func(c context.Context) error {
+		if err := review(c); err != nil {
+			return err
+		}
+		snapshot, err := a.Nodes.Snapshot(c, time.Now())
+		if err != nil {
+			return err
+		}
+		sourcePolicy := a.nodeReadinessSourcePolicy(p, snapshot)
+		for _, n := range snapshot.Nodes {
+			if n.ID == chosen && allowedAutonomyNode(sourcePolicy, n, time.Now()) {
+				return nil
+			}
+		}
+		return dataplane.ErrReviewChanged
+	}
+	if consent(checkCtx) != nil {
+		r.mu.Lock()
+		r.state = "idle"
+		r.mu.Unlock()
+		return
+	}
+	item := a.runNodeConnectivityWithReview(checkCtx, chosen, profile, selectedEngine, consent)
+	// Cancellation/revocation is not a node failure, even with a test checker
+	// that never invokes the intermediate resource guard. Preserve cleanup fencing.
+	revoked := consent(checkCtx) != nil
 
+	// Serialize acceptance with permission persistence, closing the gap between
+	// the final review and publishing readiness. No IO occurs under these locks.
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	revoked = revoked || checkCtx.Err() != nil || !permissionsCurrentLocked()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if nodeReadinessOutcomeOf(item) == nodeReadinessNotRun && len(r.checks) > 0 {
@@ -474,6 +553,14 @@ func (a *App) nodeReadinessRound(parent context.Context, now time.Time) {
 		r.cursor = previousCursor
 	}
 	if r.network != profile {
+		return
+	}
+	if revoked && nodeReadinessOutcomeOf(item) != nodeReadinessCleanup {
+		if e, ok := r.entries[chosen]; ok {
+			e.Ready = false
+			r.entries[chosen] = e
+		}
+		r.state = "idle"
 		return
 	}
 	if _, ok := r.entries[chosen]; ok {
@@ -559,4 +646,34 @@ func (a *App) nodeReadinessSnapshot(now time.Time) nodeReadinessView {
 		view.Message += fmt.Sprintf(" Готовы: %d. Отложены после сбоев: %d. Ещё не проверены: %d.", view.Ready, view.BackingOff, view.Unchecked)
 	}
 	return view
+}
+
+// Permission writers call this outside autonomy.mu; runtime evidence writes do not.
+func (a *App) cancelNodeReadiness() {
+	a.nodeReadiness.mu.Lock()
+	cancel := a.nodeReadiness.cancel
+	a.nodeReadiness.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// A saved origin does not keep a disabled/deleted subscription authorized.
+// Manual/file origins retain their ordinary explicit policy membership.
+func (a *App) nodeReadinessSourcePolicy(p autonomy.Policy, snapshot nodestore.Snapshot) autonomy.Policy {
+	active := map[string]bool{}
+	if a.NodeFeeds != nil {
+		for _, source := range a.NodeFeeds.List() {
+			active[source.SourceID] = source.Enabled
+		}
+	}
+	feeds := map[string]bool{}
+	for _, source := range snapshot.Sources {
+		if source.Kind == "community" || source.Kind == "subscription" {
+			feeds[source.ID] = true
+		}
+	}
+	p.SourceIDs = slices.Clone(p.SourceIDs)
+	p.SourceIDs = slices.DeleteFunc(p.SourceIDs, func(id string) bool { return feeds[id] && !active[id] })
+	return p
 }
