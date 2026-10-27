@@ -382,13 +382,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			// its cleanup without the actual source; never erase it here.
 			log.Print("Runtime ownership source unavailable; controlled NFQWS2 cleanup remains fenced: ", selfUpdateRuntimeManagerFailureStage(err))
 		}
-		var report dataplane.Deactivation
-		var deactivateErr error
-		if *retireDataplaneForRemoval {
-			report, deactivateErr = dataplaneManager.DeactivateForRemoval(ctx)
-		} else {
-			report, deactivateErr = dataplaneManager.Deactivate(ctx)
-		}
+		report, deactivateErr := deactivateDataplaneWithHookRecovery(ctx, dataplaneManager, *dnsStatePath, *retireDataplaneForRemoval)
+
 		if closeSources != nil {
 			deactivateErr = errors.Join(deactivateErr, closeSources())
 		}
@@ -853,9 +848,14 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		stopRuntime()
 		retainManagedListRetirement(closeManagedNFQList)
 	}()
+	hookRecoveryErr := app.CheckNFQWS2HookRecovery(dataplaneManager.StateRoot)
+	if hookRecoveryErr != nil {
+		a.Operations.FenceJournal()
+		log.Print(hookRecoveryErr)
+	}
 	a.StartSelfUpdate(runtimeContext)
 	selfRecoveryPending := a.PendingSelfUpdateRecovery()
-	if !selfRecoveryPending {
+	if !selfRecoveryPending && hookRecoveryErr == nil {
 		nodeRecoveryContext, cancelNodeRecovery := context.WithTimeout(runtimeContext, 10*time.Second)
 		if err := nodeDispatch.Recover(nodeRecoveryContext); err != nil {
 			// Each concrete checker preserves its own poison fence. Recover
@@ -865,7 +865,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		cancelNodeRecovery()
 	}
 	componentRecoveryPending := a.PendingComponentRecovery()
-	if !componentRecoveryPending && !selfRecoveryPending {
+	if !componentRecoveryPending && !selfRecoveryPending && hookRecoveryErr == nil {
 		usqueRecoveryContext, cancelUSQUERecovery := context.WithTimeout(runtimeContext, 30*time.Second)
 		usqueRecovery, usqueRecoveryErr := usqueDoctor.RecoverNDMCRepair(usqueRecoveryContext)
 		cancelUSQUERecovery()
@@ -881,7 +881,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	recoveryContext, cancelRecovery := context.WithTimeout(runtimeContext, 2*time.Minute)
 	var recovery dataplane.Recovery
 	var recoveryErr error
-	if selfRecoveryPending {
+	if hookRecoveryErr != nil {
+		recovery.State = "nfqws2-hook-recovery-required"
+		recovery.Guarded = true
+		recoveryErr = hookRecoveryErr
+	} else if selfRecoveryPending {
 		recovery.State = "self-update-recovery-required"
 		log.Print("Unfinished application update: automatic network recovery is paused")
 	} else if componentRecoveryPending {
@@ -917,7 +921,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		log.Printf("dataplane boot recovery completed for %s", recovery.PlanID)
 		_ = a.Audit.Append(auditlog.Event{Action: "BOOT_RECOVERY", Path: "dataplane", Outcome: "ok", Actor: "system", RemoteIP: "local"})
 	}
-	if !selfRecoveryPending && !componentRecoveryPending {
+	if !selfRecoveryPending && !componentRecoveryPending && hookRecoveryErr == nil {
 		if err := settleRecoverySafeMode(store, recovery, recoveryErr); err != nil {
 			// A failed safety-state write must not leave workers admitted.
 			a.Operations.FenceJournal()

@@ -63,6 +63,17 @@ type nfqws2HookRecoveryState struct {
 	// Deterministic models of the two Manager entry points for tests;
 	// production leaves them nil and binds the Manager.
 	observe, restore func(context.Context, dataplane.Plan) (dataplane.NFQWS2HookRestore, error)
+	clock            func() time.Time // Private deterministic test clock; nil uses actual completion time.
+}
+
+func (a *App) nfqws2HookNow() time.Time {
+	a.nfqws2Hooks.mu.Lock()
+	clock := a.nfqws2Hooks.clock
+	a.nfqws2Hooks.mu.Unlock()
+	if clock != nil {
+		return clock()
+	}
+	return time.Now()
 }
 
 func (b *nfqws2HookBudget) bind(key string) {
@@ -186,6 +197,11 @@ func (a *App) nfqws2HookGuard(cfg config.Config) func(context.Context) error {
 		if err := a.Operations.WithExclusiveContext(ctx, func() error { return nil }); err != nil {
 			return err
 		}
+		if owner, ok := ctx.Value(nfqws2HookJournalContextKey{}).(*nfqws2HookJournalOwner); ok {
+			if err := owner.current(); err != nil {
+				return err
+			}
+		}
 		current := a.Store.Get()
 		if current.SafeMode || current.ServiceControl.Stopped || current.AppliedRevision != cfg.AppliedRevision || !reflect.DeepEqual(current.AppliedServices, cfg.AppliedServices) || a.hasDueRuntimeStop(time.Now()) {
 			return errNFQWS2HookAuthority
@@ -238,6 +254,7 @@ func (a *App) restoreNFQWS2HooksRound(ctx context.Context, now time.Time) error 
 		return err
 	}
 	key := nfqws2HookKey(plan, observed.Instance)
+	observedAt := a.nfqws2HookNow()
 	s := &a.nfqws2Hooks
 	s.mu.Lock()
 	s.budget.bind(key)
@@ -245,7 +262,7 @@ func (a *App) restoreNFQWS2HooksRound(ctx context.Context, now time.Time) error 
 		s.mu.Unlock()
 		return nil
 	}
-	attempt, review := s.budget.observed(observed.Class, now)
+	attempt, review := s.budget.observed(observed.Class, observedAt)
 	review = s.budget.once(review)
 	s.mu.Unlock()
 	a.auditNFQWS2Hooks(review, 0)
@@ -265,14 +282,46 @@ func (a *App) restoreNFQWS2HooksRound(ctx context.Context, now time.Time) error 
 	if err != nil || !exists || !reflect.DeepEqual(current, plan) || !nfqws2HookAppliedPlan(cfg, current) {
 		return err
 	}
+	var journal *nfqws2HookJournalOwner
+	if err := a.Operations.WithExclusiveContext(admitted, func() error {
+		if err := a.nfqws2HookGuard(cfg)(admitted); err != nil {
+			return err
+		}
+		var beginErr error
+		journal, beginErr = beginNFQWS2HookJournal(a.Dataplane.StateRoot, plan, observed.Instance)
+		return beginErr
+	}); err != nil {
+		if journal != nil {
+			journal.root.Close()
+		}
+		a.Operations.FenceJournal()
+		return errors.Join(ErrNFQWS2HookRecovery, err)
+	}
+	defer journal.root.Close()
+	admitted = context.WithValue(admitted, nfqws2HookJournalContextKey{}, journal)
 	started := time.Now()
 	result, err := restore(dataplane.WithReviewGuard(admitted, a.nfqws2HookGuard(cfg)), plan)
+	completedAt := a.nfqws2HookNow()
+	// Keep the write-ahead intent on any unproved outcome, including a lost
+	// response after an effect. Fence before releasing the original admission.
+	if result.Uncertain || errors.Is(err, dataplane.ErrNFQWS2HookUncertain) {
+		a.Operations.FenceJournal()
+		err = errors.Join(ErrNFQWS2HookRecovery, err, journal.retain("cleanup-uncertain"))
+	} else if err == nil || result.RolledBack || len(result.Commands) == 0 {
+		if settleErr := journal.settle(); settleErr != nil {
+			a.Operations.FenceJournal()
+			err = errors.Join(ErrNFQWS2HookRecovery, err, settleErr)
+		}
+	} else {
+		a.Operations.FenceJournal()
+		err = errors.Join(ErrNFQWS2HookRecovery, err, journal.retain("unproved-outcome"))
+	}
 	if result.Instance != "" {
 		key = nfqws2HookKey(plan, result.Instance)
 	}
 	s.mu.Lock()
 	s.budget.bind(key)
-	restored, reason := s.budget.settle(result, err, now)
+	restored, reason := s.budget.settle(result, err, completedAt)
 	reason = s.budget.once(reason)
 	s.mu.Unlock()
 	if restored {

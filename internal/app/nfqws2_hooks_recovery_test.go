@@ -143,7 +143,7 @@ func TestNFQWS2HookRepairRestoresUnderExclusiveAdmission(t *testing.T) {
 		}
 		return dataplane.NFQWS2HookRestore{Class: dataplane.NFQWS2HooksLoss, Restored: []int{4}, Instance: model.instance}, nil
 	}
-	if err := a.restoreNFQWS2HooksRound(context.Background(), time.Now()); err != nil {
+	if err := nfqws2HookTestRound(a, context.Background(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	after, err := a.EngineConfigs.ReadExpert("nfqws2", "user-list")
@@ -160,7 +160,7 @@ func TestNFQWS2HookRepairRestoresUnderExclusiveAdmission(t *testing.T) {
 	release()
 	// A complete graph is a cheap no-op: no exclusive admission, no audit.
 	model.class, model.observe = dataplane.NFQWS2HooksFull, nil
-	if err := a.restoreNFQWS2HooksRound(context.Background(), time.Now()); err != nil || model.observed != 2 || model.restored != 1 || len(nfqws2HookAudits(t, a)) != 1 {
+	if err := nfqws2HookTestRound(a, context.Background(), time.Now()); err != nil || model.observed != 2 || model.restored != 1 || len(nfqws2HookAudits(t, a)) != 1 {
 		t.Fatal("full graph reached repair", err, model)
 	}
 }
@@ -242,7 +242,7 @@ func TestNFQWS2HookRepairRefusesBeforeEffect(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = a.restoreNFQWS2HooksRound(ctx, time.Now())
+			err = nfqws2HookTestRound(a, ctx, time.Now())
 			wantObserved := map[string]int{"shared-busy": 1, "observe-refused": 1}[mode]
 			if model.observed != wantObserved || model.restored != 0 {
 				t.Fatalf("refused state reached the runtime: observed=%d restored=%d err=%v", model.observed, model.restored, err)
@@ -323,7 +323,7 @@ func TestNFQWS2HookRepairGuardRechecksAuthorityAfterAdmission(t *testing.T) {
 				}
 				return a.Dataplane.RestoreCommittedNFQWS2Hooks(c, got)
 			}
-			err := a.restoreNFQWS2HooksRound(ctx, time.Now())
+			err := nfqws2HookTestRound(a, ctx, time.Now())
 			if model.restored != 1 || !errors.Is(err, dataplane.ErrNFQWS2HookRestore) {
 				t.Fatal("fixture did not reach the real Manager", model.restored, err)
 			}
@@ -351,11 +351,11 @@ func TestNFQWS2HookRepairBacksOffFailuresAndResetsOnSuccess(t *testing.T) {
 	now := time.Now()
 	at := now
 	for i, delay := range []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 30 * time.Minute, 30 * time.Minute} {
-		if err := a.restoreNFQWS2HooksRound(context.Background(), at); !errors.Is(err, dataplane.ErrNFQWS2HookRestore) || model.restored != i+1 {
+		if err := nfqws2HookTestRound(a, context.Background(), at); !errors.Is(err, dataplane.ErrNFQWS2HookRestore) || model.restored != i+1 {
 			t.Fatalf("attempt %d not made: restored=%d err=%v", i+1, model.restored, err)
 		}
 		// Observation continues meanwhile; admission waits for the delay.
-		if err := a.restoreNFQWS2HooksRound(context.Background(), at.Add(delay-time.Second)); err != nil || model.restored != i+1 {
+		if err := nfqws2HookTestRound(a, context.Background(), at.Add(delay-time.Second)); err != nil || model.restored != i+1 {
 			t.Fatalf("attempt %d retried before %v: restored=%d err=%v", i+1, delay, model.restored, err)
 		}
 		at = at.Add(delay)
@@ -364,7 +364,7 @@ func TestNFQWS2HookRepairBacksOffFailuresAndResetsOnSuccess(t *testing.T) {
 		t.Fatal("repeated failure was not audited exactly once", audits)
 	}
 	model.restore = nil
-	if err := a.restoreNFQWS2HooksRound(context.Background(), at); err != nil || model.restored != 9 {
+	if err := nfqws2HookTestRound(a, context.Background(), at); err != nil || model.restored != 9 {
 		t.Fatal("success after backoff not made", err)
 	}
 	// Success resets the delay and the deduplication of the same failure.
@@ -374,7 +374,7 @@ func TestNFQWS2HookRepairBacksOffFailuresAndResetsOnSuccess(t *testing.T) {
 		after    time.Duration
 		restored int
 	}{{0, 10}, {29 * time.Second, 10}, {30 * time.Second, 11}} {
-		_ = a.restoreNFQWS2HooksRound(context.Background(), at.Add(step.after))
+		_ = nfqws2HookTestRound(a, context.Background(), at.Add(step.after))
 		if model.restored != step.restored {
 			t.Fatalf("delay after success was not reset at %v: restored=%d", step.after, model.restored)
 		}
@@ -389,7 +389,7 @@ func TestNFQWS2HookRepairRetriesRacingRewriteBeforeBackingOff(t *testing.T) {
 	model.restore = nfqws2HookFailure(dataplane.NFQWS2HookReasonChanged)
 	now := time.Now()
 	for i, at := range []time.Duration{0, 30 * time.Second, time.Minute, 90 * time.Second, 150 * time.Second} {
-		_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(at))
+		_ = nfqws2HookTestRound(a, context.Background(), now.Add(at))
 		if model.restored != i+1 {
 			t.Fatalf("attempt %d at %v not made: restored=%d", i+1, at, model.restored)
 		}
@@ -399,7 +399,7 @@ func TestNFQWS2HookRepairRetriesRacingRewriteBeforeBackingOff(t *testing.T) {
 		}
 	}
 	// The third consecutive race is a failure; later races keep growing.
-	_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(150*time.Second+59*time.Second))
+	_ = nfqws2HookTestRound(a, context.Background(), now.Add(150*time.Second+59*time.Second))
 	if model.restored != 5 {
 		t.Fatal("persistent race did not grow the delay", model.restored)
 	}
@@ -414,8 +414,8 @@ func TestNFQWS2HookRepairUncertainCleanupRequiresReview(t *testing.T) {
 	for _, step := range []struct {
 		after    time.Duration
 		restored int
-	}{{0, 1}, {time.Minute, 1}, {29 * time.Minute, 1}, {30 * time.Minute, 2}, {31 * time.Minute, 2}} {
-		_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(step.after))
+	}{{0, 1}, {time.Minute, 1}, {29 * time.Minute, 1}, {30 * time.Minute, 1}, {31 * time.Minute, 1}} {
+		_ = nfqws2HookTestRound(a, context.Background(), now.Add(step.after))
 		if model.restored != step.restored {
 			t.Fatalf("uncertain cleanup retried at %v: restored=%d", step.after, model.restored)
 		}
@@ -434,7 +434,7 @@ func TestNFQWS2HookRepairRepeatedQuickLossRequiresReview(t *testing.T) {
 		after    time.Duration
 		restored int
 	}{{0, 1}, {10 * time.Second, 2}, {20 * time.Second, 3}, {30 * time.Second, 3}, {40 * time.Second, 3}, {30*time.Minute + 29*time.Second, 3}, {30*time.Minute + 30*time.Second, 4}} {
-		_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(step.after))
+		_ = nfqws2HookTestRound(a, context.Background(), now.Add(step.after))
 		if model.restored != step.restored {
 			t.Fatalf("quick-loss limit at %v: restored=%d want %d", step.after, model.restored, step.restored)
 		}
@@ -444,13 +444,13 @@ func TestNFQWS2HookRepairRepeatedQuickLossRequiresReview(t *testing.T) {
 	}
 	// After the review retry one more quick loss is held again at once,
 	// while a loss after a full minute starts counting from zero.
-	_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(30*time.Minute+40*time.Second))
+	_ = nfqws2HookTestRound(a, context.Background(), now.Add(30*time.Minute+40*time.Second))
 	if model.restored != 4 {
 		t.Fatal("quick loss after review retry was restored", model.restored)
 	}
 	b, _, slow := nfqws2HookAppFixture(t)
 	for i, after := range []time.Duration{0, time.Minute, 2 * time.Minute, 3 * time.Minute, 4 * time.Minute} {
-		_ = b.restoreNFQWS2HooksRound(context.Background(), now.Add(after))
+		_ = nfqws2HookTestRound(b, context.Background(), now.Add(after))
 		if slow.restored != i+1 {
 			t.Fatal("slow repeated loss was held for review", after, slow.restored)
 		}
@@ -461,14 +461,14 @@ func TestNFQWS2HookRepairNewInstanceStartsOver(t *testing.T) {
 	a, _, model := nfqws2HookAppFixture(t)
 	model.restore = nfqws2HookFailure(dataplane.NFQWS2HookReasonQueue)
 	now := time.Now()
-	_ = a.restoreNFQWS2HooksRound(context.Background(), now)
-	_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(time.Second))
+	_ = nfqws2HookTestRound(a, context.Background(), now)
+	_ = nfqws2HookTestRound(a, context.Background(), now.Add(time.Second))
 	if model.restored != 1 {
 		t.Fatal("failure did not back off", model.restored)
 	}
 	// A restarted stock process (or another transaction) is a new key.
 	model.instance = "instance-b"
-	_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(2*time.Second))
+	_ = nfqws2HookTestRound(a, context.Background(), now.Add(2*time.Second))
 	if model.restored != 2 {
 		t.Fatal("new instance inherited the old backoff", model.restored)
 	}
@@ -496,8 +496,8 @@ func TestNFQWS2HookRepairSkipsBusyAndSupersededWithoutBackoff(t *testing.T) {
 			a, _, model := nfqws2HookAppFixture(t)
 			model.restore = restore
 			now := time.Now()
-			_ = a.restoreNFQWS2HooksRound(context.Background(), now)
-			_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(time.Second))
+			_ = nfqws2HookTestRound(a, context.Background(), now)
+			_ = nfqws2HookTestRound(a, context.Background(), now.Add(time.Second))
 			if model.restored != 2 {
 				t.Fatal("a skipped attempt delayed the next round", model.restored)
 			}
@@ -514,7 +514,7 @@ func TestNFQWS2HookRepairRefusedOtherGraphIsAuditedOnce(t *testing.T) {
 	model.restore = nfqws2HookFailure(dataplane.NFQWS2HookReasonOther)
 	now := time.Now()
 	for _, after := range []time.Duration{0, 30 * time.Second, 90 * time.Second} {
-		_ = a.restoreNFQWS2HooksRound(context.Background(), now.Add(after))
+		_ = nfqws2HookTestRound(a, context.Background(), now.Add(after))
 	}
 	if model.restored != 3 || !slices.Equal(nfqws2HookAudits(t, a), []string{"failed /runtime/nfqws2/kernel-other"}) {
 		t.Fatal("foreign graph refusal", model.restored, nfqws2HookAudits(t, a))
@@ -612,4 +612,11 @@ func TestReconcilerNarrowWakeMakesOnlyNodeRecoveryDue(t *testing.T) {
 			t.Fatalf("wakeReconciler no longer makes %s due", op.Kind)
 		}
 	}
+}
+
+func nfqws2HookTestRound(a *App, ctx context.Context, now time.Time) error {
+	a.nfqws2Hooks.mu.Lock()
+	a.nfqws2Hooks.clock = func() time.Time { return now }
+	a.nfqws2Hooks.mu.Unlock()
+	return a.restoreNFQWS2HooksRound(ctx, now)
 }
