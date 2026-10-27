@@ -95,9 +95,11 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 	}
 	uuid := ""
 	if u.User != nil {
-		uuid = strings.TrimSpace(u.User.Username())
+		uuid = u.User.Username()
 	}
-	if !looksLikeUUID(uuid) {
+	originalID := uuid
+	uuid, validID := normalizeVLESSID(uuid)
+	if !validID {
 		return nil, Preview{}, errors.New("в ссылке VLESS отсутствует корректный UUID")
 	}
 	q, err := vlessQuery(u)
@@ -167,6 +169,7 @@ func parseVLESS(u *url.URL) (map[string]any, Preview, error) {
 		out["transport"] = value
 	}
 	preview := Preview{Protocol: "VLESS", Name: profileName(u), Server: server, Port: port, TLS: security == "tls" || security == "reality", Transport: transport, Security: security}
+	preview = redactPreview(preview, map[string]any{"uuid": originalID})
 	if insecure(q) {
 		preview.Warnings = append(preview.Warnings, "Проверка сертификата отключена в исходном профиле.")
 	}

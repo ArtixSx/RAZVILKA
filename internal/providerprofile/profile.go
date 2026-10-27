@@ -287,11 +287,13 @@ func normalizeNativeOutbound(source map[string]any) (map[string]any, Preview, er
 		if err := validateNativeVLESS(source); err != nil {
 			return nil, Preview{}, err
 		}
-		uuid := stringField(source, "uuid")
-		if !looksLikeUUID(uuid) {
+		originalID, _ := source["uuid"].(string)
+		uuid, validID := normalizeVLESSID(originalID)
+		if !validID {
 			return nil, Preview{}, errors.New("VLESS-узел не содержит корректный UUID")
 		}
 		outbound["uuid"] = uuid
+		preview = redactPreview(preview, map[string]any{"uuid": originalID})
 		copyFields(outbound, source, "flow", "packet_encoding")
 		copySanitizedFields(outbound, source)
 		preview.Protocol = "VLESS"

@@ -172,7 +172,8 @@ func vlessQuery(u *url.URL) (url.Values, error) {
 	return clean, nil
 }
 
-// Every share-URI importer must reject unknown fields and duplicate aliases.
+// Every share-URI importer must reject unknown fields and duplicate aliases,
+// except redundant aliases that both explicitly require TLS verification.
 // Dropping a certificate pin or transport option changes what the user trusted.
 func profileQuery(u *url.URL, allowed []string, aliases map[string]string) (url.Values, error) {
 	q, err := url.ParseQuery(u.RawQuery)
@@ -193,6 +194,12 @@ func profileQuery(u *url.URL, allowed []string, aliases map[string]string) (url.
 		known := false
 		for _, name := range allowed {
 			known = known || key == name
+		}
+		// Publishers sometimes emit both aliases for certificate verification.
+		// Only redundant explicit false values can be coalesced; contradictory,
+		// true, unknown, and repeated same-key values retain strict rejection.
+		if clean.Has(key) && key == "insecure" && explicitSecureTLS(clean.Get(key)) && explicitSecureTLS(values[0]) {
+			continue
 		}
 		if !known || clean.Has(key) {
 			return nil, importError("INVALID_PARAMETERS")
@@ -215,6 +222,14 @@ func profileQuery(u *url.URL, allowed []string, aliases map[string]string) (url.
 		}
 	}
 	return clean, nil
+}
+
+func explicitSecureTLS(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "0", "false", "no":
+		return true
+	}
+	return false
 }
 
 func quicQuery(u *url.URL, protocol string) (url.Values, error) {

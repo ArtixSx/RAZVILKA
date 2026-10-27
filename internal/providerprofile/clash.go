@@ -113,7 +113,8 @@ func clashProxyToNative(proxy map[string]any, typeName string) (map[string]any, 
 	}
 	switch typeName {
 	case "vless":
-		source["uuid"] = textValue(proxy["uuid"])
+		// Custom VLESS authentication strings are byte-exact, including spaces.
+		source["uuid"] = proxy["uuid"]
 		copyClashText(source, proxy, "flow", "flow")
 		copyClashText(source, proxy, "packet_encoding", "packet-encoding")
 	case "hysteria2":

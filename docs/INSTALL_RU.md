@@ -2,11 +2,11 @@
 
 [Короткая инструкция](../README.md) · [Документация](README.md)
 
-> Инструкция для **0.20.0 Test (`0.20.0-rc.71`)**: чистая установка на Entware
+> Инструкция для **0.20.0 Test (`0.20.0-rc.72`)**: чистая установка на Entware
 > без установленной RAZVILKA. Переход с 0.19.x не поддерживается; для перехода
 > между тестовыми сборками смотрите примечания к нужному выпуску.
 > Ограничения — в
-> [примечаниях к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.71).
+> [примечаниях к тестовому выпуску](https://github.com/ArtixSx/RAZVILKA/releases/tag/v0.20.0-rc.72).
 
 ## Подготовка Entware
 
@@ -62,12 +62,12 @@ opkg update && opkg install curl wget-ssl ca-certificates ca-bundle
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.71/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.71 sh /opt/tmp/razvilka-setup.sh
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.72/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh
 ```
 
 Скрипт сначала полностью скачивается; он запускается только при успешной загрузке.
-Команда закрепляет bootstrap и архив на одном выпуске `v0.20.0-rc.71`; явный
+Команда закрепляет bootstrap и архив на одном выпуске `v0.20.0-rc.72`; явный
 `RAZVILKA_VERSION` обязателен: по умолчанию bootstrap выберет стабильный выпуск.
 Далее установщик проверяет инструменты, получает выбранный архив из GitHub Releases,
 сверяет SHA256 и вызывает установщик из этого архива. Само приложение устанавливается
@@ -114,7 +114,7 @@ RAZVILKA_VERSION=v0.20.0-rc.71 sh /opt/tmp/razvilka-setup.sh
 
 ```sh
 # Для Entware mipselsf-k3.4 (MIPSel)
-RAZVILKA_VERSION=v0.20.0-rc.71 RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh
+RAZVILKA_VERSION=v0.20.0-rc.72 RAZVILKA_ARCH=mipsle sh /opt/tmp/razvilka-setup.sh
 ```
 
 Для `mipssf-k3.4` укажите `RAZVILKA_ARCH=mips`, для `aarch64-k3.10` —
@@ -197,14 +197,14 @@ sh scripts/upgrade-entware.sh --apply
 **Удаление панели с архивированием данных** выполняется отдельно от отката.
 Сначала сохраните нужные настройки и подключения:
 
-Команда ниже — для установленной `0.20.0-rc.71`. Для другой версии используйте
+Команда ниже — для установленной `0.20.0-rc.72`. Для другой версии используйте
 bootstrap и явный `RAZVILKA_VERSION` из её выпуска.
 
 ```sh
 mkdir -p /opt/tmp &&
 curl -fsSL --retry 2 -o /opt/tmp/razvilka-setup.sh \
-  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.71/scripts/bootstrap.sh &&
-RAZVILKA_VERSION=v0.20.0-rc.71 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
+  https://raw.githubusercontent.com/ArtixSx/RAZVILKA/v0.20.0-rc.72/scripts/bootstrap.sh &&
+RAZVILKA_VERSION=v0.20.0-rc.72 sh /opt/tmp/razvilka-setup.sh --uninstall --purge
 ```
 
 Скрипт останавливает панель, убирает её собственные активные маршруты, бинарник

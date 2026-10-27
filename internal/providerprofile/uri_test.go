@@ -51,7 +51,7 @@ func TestParseHysteriaTUICAndShadowsocks(t *testing.T) {
 }
 
 func TestParseURIRejectsMissingSecretsAndUnsupportedSchemes(t *testing.T) {
-	for _, value := range []string{"", "https://example.com", "vless://bad@example.com:443", "hysteria2://example.com:443", "tuic://user@example.com:443"} {
+	for _, value := range []string{"", "https://example.com", "vless://" + strings.Repeat("x", 31) + "@example.com:443", "hysteria2://example.com:443", "tuic://user@example.com:443"} {
 		if _, err := ParseURI(value); err == nil {
 			t.Fatalf("accepted invalid profile %q", value)
 		}
@@ -202,7 +202,7 @@ func TestParseProfileRejectsBrokenSupportedClashProxy(t *testing.T) {
     type: vless
     server: edge.example
     port: 443
-    uuid: not-a-uuid
+    uuid: too-long-to-be-a-custom-vless-identity
 `
 	if _, err := ParseProfile(source); err == nil {
 		t.Fatal("accepted broken supported Clash proxy")
