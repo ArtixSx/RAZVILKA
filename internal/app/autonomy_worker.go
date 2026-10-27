@@ -78,6 +78,18 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		a.autonomy.maintenanceMessage = "Не удалось сохранить подписку; рабочие маршруты не менялись."
 		a.autonomy.mu.Unlock()
 	}
+	// Read-only scheduling hint: a failed catalog read leaves ordinary ordering.
+	// No traversal or eligibility evidence is changed until the selected worker runs.
+	available := []string{}
+	if a.Nodes != nil {
+		if snapshot, err := a.Nodes.Snapshot(ctx, now); err == nil {
+			for _, n := range snapshot.Nodes {
+				if allowedAutonomyNode(p, n, now) {
+					available = append(available, n.ID)
+				}
+			}
+		}
+	}
 	a.autonomy.mu.Lock()
 	ids := []string{}
 	disabledChanged := false
@@ -108,7 +120,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		return
 	}
 	sort.Strings(ids)
-	chosen, firstSearchSlot := selectAutonomyRound(ids, a.autonomy.doc, cfg, now, a.autonomy.ordinaryAfterFirstSearch)
+	chosen, firstSearchSlot := selectAutonomyRound(ids, a.autonomy.doc, cfg, now, a.autonomy.ordinaryAfterFirstSearch, available)
 	var spec autonomy.Service
 	var state autonomy.Runtime
 	if chosen != "" && len(activate) == 0 {

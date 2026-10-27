@@ -203,3 +203,113 @@ func TestAutonomyWorkerFirstSearchSlotStillUsesRealChecksAndApply(t *testing.T) 
 		t.Fatal("first search edited the waiting service's explicit schedule")
 	}
 }
+
+func TestAutonomyFreshFeedPageBorrowsOneSlotWithoutRewinding(t *testing.T) {
+	now := time.Now()
+	for _, consumed := range [][]string{nil, {"old-node"}} {
+		ids, doc, cfg := firstSearchSelectionFixture(now)
+		r := doc.Runtime["telegram"]
+		r.Search = &autonomy.Traversal{Version: strings.Repeat("a", 64), Ordered: slices.Clone(consumed), Cursor: len(consumed), Exhausted: true}
+		doc.Runtime["telegram"] = r
+		before := copySelectionDocument(doc)
+		if id, bonus := selectAutonomyRound(ids, doc, cfg, now, false, []string{"fresh-node"}); id != "telegram" || !bonus {
+			t.Fatal("fresh feed page waited for full routine cycle", id, bonus)
+		}
+		if !reflect.DeepEqual(doc, before) {
+			t.Fatal("selection changed consumed prefix or persisted retry state")
+		}
+		if id, bonus := selectAutonomyRound(ids, doc, cfg, now, true, []string{"fresh-node"}); id != "a-check" || bonus {
+			t.Fatal("fresh feed starved ordinary turn", id, bonus)
+		}
+		prepareAutonomyTraversal(&r, r.Search.Version, append(slices.Clone(consumed), "fresh-node"), now)
+		if r.Search.Cursor != len(consumed) || !reflect.DeepEqual(r.Search.Ordered[:len(consumed)], consumed) && len(consumed) > 0 || r.Search.Exhausted || r.Search.Ordered[r.Search.Cursor] != "fresh-node" {
+			t.Fatal("worker did not preserve consumed prefix", r.Search)
+		}
+	}
+}
+
+func TestAutonomyFreshFeedPriorityRetainsRefusals(t *testing.T) {
+	now := time.Now()
+	for _, reason := range []string{"no-new-id", "cooldown", "retry", "halted", "paused", "future-due", "applied", "removing", "stopped", "disabled-policy"} {
+		t.Run(reason, func(t *testing.T) {
+			ids, doc, cfg := firstSearchSelectionFixture(now)
+			r := doc.Runtime["telegram"]
+			r.Search = &autonomy.Traversal{Ordered: []string{"old"}, Cursor: 1, Exhausted: true}
+			page := []string{"fresh"}
+			switch reason {
+			case "no-new-id":
+				page = []string{"old"}
+			case "cooldown":
+				r.CandidateFailures = []autonomy.CandidateFailure{{NodeID: "fresh", ObservedAt: now.Add(-time.Second), Until: now.Add(time.Hour)}}
+			case "retry":
+				r.Search.RetryAt = now.Add(time.Minute)
+			case "halted":
+				r.Search.Halted = true
+			case "paused":
+				r.State = "paused"
+			case "future-due":
+				r.NextCheck = now.Add(time.Minute)
+			case "applied":
+				cfg.AppliedServices["telegram"] = config.ServiceState{Enabled: true}
+			case "removing":
+				v := doc.Services["telegram"]
+				v.Removing = true
+				doc.Services["telegram"] = v
+			case "stopped":
+				cfg.ServiceControl.Stopped = true
+			case "disabled-policy":
+				doc.Policy.Enabled = false
+			}
+			doc.Runtime["telegram"] = r
+			before := copySelectionDocument(doc)
+			if id, bonus := selectAutonomyRound(ids, doc, cfg, now, false, page); bonus || id == "telegram" {
+				t.Fatal("refusal bypassed", id, bonus)
+			}
+			if !reflect.DeepEqual(before, doc) {
+				t.Fatal("selection mutated refusal")
+			}
+		})
+	}
+}
+
+func TestAutonomyWorkerFreshFeedAfterEmptyTraversalUsesRealChecksAndApply(t *testing.T) {
+	a, _, adapter := autonomousIntegrationFixture(t)
+	if err := a.Store.UpdateService("telegram", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.inheritAutonomyService(context.Background(), "telegram"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	a.autonomy.mu.Lock()
+	r := a.autonomy.doc.Runtime["my-independent-site"]
+	r.State, r.NextCheck = "searching", now.Add(-time.Second)
+	r.Search = &autonomy.Traversal{Version: strings.Repeat("a", 64), Exhausted: true}
+	a.autonomy.doc.Runtime["my-independent-site"] = r
+	ordinary := a.autonomy.doc.Runtime["telegram"]
+	ordinary.NextCheck = now.Add(-time.Hour)
+	a.autonomy.doc.Runtime["telegram"] = ordinary
+	err := a.persistAutonomyLocked(context.Background())
+	a.autonomy.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := []string{}
+	a.NodeChecker = jobNodeChecker(func(_ context.Context, req dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		checked = append(checked, req.Service.ID)
+		return d10Result(req, "sing-box", true), nil
+	})
+	a.autonomyRound(context.Background(), now)
+	a.autonomy.mu.Lock()
+	ordinaryNext := a.autonomy.ordinaryAfterFirstSearch
+	a.autonomy.mu.Unlock()
+	if !reflect.DeepEqual(checked, []string{"my-independent-site"}) || autonomyTestState(a).State != "applied" || !slices.Contains(adapter.calls, "commit") || !ordinaryNext {
+		t.Fatal("bonus slot skipped ordinary exact check/Apply or selected the older routine entry", checked, adapter.calls)
+	}
+	a.autonomy.mu.Lock()
+	unchanged := a.autonomy.doc.Runtime["telegram"]
+	a.autonomy.mu.Unlock()
+	if !reflect.DeepEqual(unchanged, ordinary) {
+		t.Fatal("first search edited the waiting service's explicit schedule")
+	}
+}
