@@ -810,47 +810,56 @@ func TestNFQWS2HookRestoreSkipsBusyDataplane(t *testing.T) {
 	}
 }
 
-func TestNFQWS2HookBootRestoresLossBeforeHealth(t *testing.T) {
+// Same-boot recovery is read-only even with current startup consent. A lost
+// graph must reach the established degraded/deactivation path, never a second
+// repair writer without the application's durable repair journal.
+func TestNFQWS2HookBootLossNeverWritesRepair(t *testing.T) {
 	if firstStartNamespace(t) {
 		return
 	}
 	for _, review := range []bool{true, false} {
 		t.Run(map[bool]string{true: "startup-review", false: "no-startup-review"}[review], func(t *testing.T) {
 			h := newNFQWS2HookFixture(t, false)
-			full := h.kernel.rows()
 			h.lose(t, 4)
-			before, identity, start := h.files(t), h.identity, len(h.calls)
+			// If the boot writer is accidentally reintroduced, its first effect
+			// is an ambiguous native failure: Health must not mask it as success.
+			h.beforeWrite = func(int, int, []string) error { return ErrNFQWS2HookUncertain }
 			ctx := firstStartContext(t)
 			if review {
 				allow := true
 				ctx = h.bootContext(t, &allow)
 			}
 			result, err := h.m.Recover(ctx)
-			if !review {
-				// Without the trusted startup review nothing is written and the
-				// previous degraded outcome is kept.
-				if err == nil || result.State != "degraded" || len(h.writes) != 0 {
-					t.Fatal("unreviewed boot restored hooks", result, err)
-				}
-				return
+			if err == nil || result.State != "degraded" || len(h.writes) != 0 {
+				t.Fatal("boot repaired or accepted the missing graph", result, err, h.writes)
 			}
-			if err != nil || result.State != "recovered" {
-				t.Fatal("boot with a lost graph degraded", result, err)
+			if h.running {
+				t.Fatal("failed Health did not deactivate the owned runtime")
 			}
-			if !slices.EqualFunc(h.kernel.rows(), full, nfqws2HookSameRow) || len(h.writes) != 12 {
-				t.Fatal("boot did not restore the exact graph", h.writes)
-			}
-			if h.identity != identity || !h.running {
-				t.Fatal("boot replaced the live process")
-			}
-			for _, call := range h.calls[start:] {
-				if strings.HasSuffix(call, " owned_start") || strings.HasSuffix(call, " owned_stop") || strings.HasSuffix(call, " restart") {
-					t.Fatal("boot restoration restarted NFQWS2", call)
+			for _, step := range result.Steps {
+				if step.Adapter == "nfqws2" && step.State == "recovered" {
+					t.Fatal("failed Health was masked")
 				}
 			}
-			h.assertFiles(t, before)
 		})
 	}
+}
+
+func TestNFQWS2HookBootFullDoesNotEnterRepairWriter(t *testing.T) {
+	if firstStartNamespace(t) {
+		return
+	}
+	h := newNFQWS2HookFixture(t, false)
+	before, identity := h.files(t), h.identity
+	// A repair source can itself be uncertain; a healthy same-boot runtime
+	// must not invoke it or convert its potential write failure into success.
+	h.a.firstStartHookModel = func() nfqws2HookSource { t.Fatal("boot entered hook repair"); return nfqws2HookSource{} }
+	allow := true
+	result, err := h.m.Recover(h.bootContext(t, &allow))
+	if err != nil || result.State != "recovered" || len(h.writes) != 0 || !h.running || h.identity != identity {
+		t.Fatal("healthy same-boot runtime changed", result, err)
+	}
+	h.assertFiles(t, before)
 }
 
 // Portable pure checks: no namespace is needed for cleanup selection, the

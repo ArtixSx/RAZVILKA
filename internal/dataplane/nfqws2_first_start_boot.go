@@ -23,14 +23,10 @@ func (a *NFQWS2Adapter) reconcileFirstStart(ctx context.Context, plan Plan, leas
 	}
 	if lease.FirstStart.Phase == nfqws2FirstRunning {
 		if err := a.verifyFirstStartRunning(ctx); err == nil {
-			// A whole-table firmware rewrite may have removed only the owned
-			// mangle graph under this same live process. Restore exactly that
-			// first; a refusal writes nothing and Health still decides alone.
-			_, restoreErr := a.restoreFirstStartHooksAtBoot(ctx, plan, lease)
-			if err := a.Health(ctx, plan, ""); err != nil {
-				return errors.Join(err, restoreErr)
-			}
-			return nil
+			// Boot recovery has no hook-restoration write-ahead journal. Observe
+			// the existing runtime only; missing hooks retain the original failed
+			// Health/deactivation path rather than attempting an unrecorded repair.
+			return a.Health(ctx, plan, "")
 		}
 	}
 	if a.inactivity == nil || lease.FirstStart.Phase == nfqws2FirstRunning && a.inactivity.identity.BootID == lease.FirstStart.Process.BootID {

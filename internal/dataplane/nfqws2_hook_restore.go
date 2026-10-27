@@ -371,18 +371,6 @@ func (a *NFQWS2Adapter) restoreFirstStartHooks(ctx context.Context, plan Plan, r
 	return a.restoreFirstStartHooksLocked(ctx, plan, lease, review)
 }
 
-// restoreFirstStartHooksAtBoot runs inside Recover's operation and the
-// resource lock Reconcile already holds. Only the trusted startup review bound
-// to this committed transaction authorizes a write; without it nothing is
-// written and Health decides alone, as before.
-func (a *NFQWS2Adapter) restoreFirstStartHooksAtBoot(parent context.Context, plan Plan, lease *nfqws2Lease) (NFQWS2HookRestore, error) {
-	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
-	defer cancel()
-	return a.restoreFirstStartHooksLocked(ctx, plan, lease, func(c context.Context) error {
-		return a.checkFirstStartBootReview(c, plan, lease)
-	})
-}
-
 // nfqws2HookAttempt is one bounded restoration under lockResources. Every
 // field is detached data read by this attempt; none is a reusable grant.
 type nfqws2HookAttempt struct {
