@@ -49,6 +49,19 @@ func autonomySearchTerminalFailure(result dataplane.NodeCheckResult) bool {
 		result.DirectControl == "not_run" && result.TestLevel == "transport" && result.Stage == "transport" && result.ErrorCode == "node-transport-failed"
 }
 
+// A service timeout schedules another pending peer; it is neither a node
+// failure nor usable evidence. Only the completed original checker and its
+// exact identity may supply this narrowly typed result.
+func autonomySearchServiceTimeout(result dataplane.NodeCheckResult, engine, id, service, profile string, started, now time.Time) bool {
+	return exactNodeResultIdentity(result, engine, id, service, profile) &&
+		result.ProbeID != "" && !result.StartedAt.IsZero() && !result.StartedAt.Before(started) &&
+		!result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(now) && result.ExpiresAt.After(now) &&
+		!result.Available && !result.DirectLeak && result.Verdict == evidence.VerdictError &&
+		result.TestLevel == "service" && result.Stage == "service" && result.ErrorCode == "request-failed" &&
+		result.ServiceErrorCategory == "service_timeout" && result.HTTPStatus == 0 && result.EgressIP != "" &&
+		result.DirectControl == "measured" && result.CleanupStatus == dataplane.NodeCleanupVerified
+}
+
 func autonomyNodeEngine(route string) string {
 	if strings.HasPrefix(route, "xray:") || route == "xray" {
 		return "xray"
@@ -114,6 +127,66 @@ func prepareAutonomyTraversal(r *autonomy.Runtime, version string, ids []string,
 	}
 }
 
+// Priority is a hint, so it cannot promote an inconclusive peer ahead of
+// pending peers that have not had their turn. History only schedules: even a
+// generic service request error grants no failure, cursor advance or Apply.
+func orderAutonomyRecentUnconfirmed(t *autonomy.Traversal, priorityCount int, previous []string, recent map[string]bool) int {
+	pending := t.Ordered[t.Cursor:]
+	priority := priorityCount
+	ready, deferred := []string{}, []string{}
+	for i, id := range pending {
+		if recent[id] {
+			if i < priorityCount {
+				priority--
+			}
+		} else {
+			ready = append(ready, id)
+		}
+	}
+	// Keep the durable rotation among already tried peers, even if readiness
+	// or source hints would otherwise put the same peer first on every round.
+	for _, id := range previous {
+		if recent[id] {
+			deferred = append(deferred, id)
+		}
+	}
+	t.Ordered = append(append(slices.Clone(t.Ordered[:t.Cursor]), ready...), deferred...)
+	return priority
+}
+
+func (a *App) prioritizeAutonomyUntriedService(ctx context.Context, p autonomy.Policy, s autonomy.Service, r *autonomy.Runtime, engine, profile string, previous []string, priorityCount int, now time.Time) (int, error) {
+	snapshot, err := a.Nodes.Snapshot(ctx, now)
+	if err != nil {
+		return 0, err
+	}
+	recent := map[string]bool{}
+	for _, node := range snapshot.Nodes {
+		if !slices.Contains(previous, node.ID) {
+			continue
+		}
+		potential := slices.ContainsFunc(node.Health.History, func(record nodestore.CheckRecord) bool {
+			return record.ServiceID == s.ID && record.NetworkProfile == profile && record.Verdict == "ERROR" && record.ErrorCode == "request-failed"
+		})
+		if !potential {
+			continue
+		}
+		candidateEngine, err := a.autonomyCandidateEngine(ctx, p, s, engine, node.ID)
+		if err != nil {
+			continue // A missing scheduling hint grants nothing.
+		}
+		var latest nodestore.CheckRecord
+		for _, record := range node.Health.History {
+			if record.ServiceID == s.ID && record.NetworkProfile == profile && record.RoutePathID == candidateEngine+":"+node.ID && record.CheckedAt.After(latest.CheckedAt) {
+				latest = record
+			}
+		}
+		recent[node.ID] = !latest.CheckedAt.IsZero() && !latest.CheckedAt.After(now) && latest.ExpiresAt.After(now) &&
+			latest.TestLevel == "service" && (latest.Stage == "service" || latest.Stage == "service_ip") && latest.Verdict == "ERROR" &&
+			latest.ErrorCode == "request-failed" && latest.HTTPStatus == 0 && latest.EgressIP != "" && !latest.DirectLeak
+	}
+	return orderAutonomyRecentUnconfirmed(r.Search, priorityCount, previous, recent), nil
+}
+
 // Unlike the legacy status publisher, this save returns I/O errors. Every
 // cursor and Apply-budget write is a prerequisite, never a best-effort hint.
 func (a *App) persistAutonomySearch(ctx context.Context, id string, r autonomy.Runtime) error {
@@ -169,10 +242,15 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		refusals = autonomyServiceRefusals{version: r.Search.Version}
 		a.setAutonomyServiceRefusals(s.ID, refusals)
 	}
+	previousPending := slices.Clone(r.Search.Ordered[r.Search.Cursor:])
 	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, time.Now())
 	priorityCount, priorityErr := a.prioritizeAutonomySources(ctx, p, &r, time.Now())
 	if priorityErr != nil {
 		return finish("catalog-unavailable", "Каталог приоритетных источников недоступен; подбор отложен.")
+	}
+	priorityCount, priorityErr = a.prioritizeAutonomyUntriedService(ctx, p, s, &r, engine, profile, previousPending, priorityCount, time.Now())
+	if priorityErr != nil {
+		return finish("catalog-unavailable", "Каталог узлов недоступен; подбор отложен.")
 	}
 	if err := a.persistAutonomySearch(ctx, s.ID, r); err != nil {
 		return finish("requires-review", "Не удалось сохранить ход подбора; переключение остановлено.")
@@ -237,11 +315,26 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			if err != nil {
 				return nodestore.SearchCheck{}, err
 			}
+			checkStarted := time.Now()
 			check, err := a.checkAutonomyReserveForEngine(c, p, s, cfg, candidateEngine, id, service, profile)
 			if err == dataplane.ErrExactNodeUnsupported && c.Err() == nil && check.ErrorCode != "node-cleanup-failed" {
 				return nodestore.SearchCheck{Outcome: nodestore.SearchUnsupported}, nil
 			}
 			if err == nil && (autonomyRouteObservation{RetryAfterSeconds: nodeServiceRateLimitSeconds(check, time.Now())}).pause(&r) {
+				checkState, checkMessage = r.State, r.Message
+				return nodestore.SearchCheck{}, nodestore.ErrSearchInconclusive
+			}
+			if err == nil && autonomySearchServiceTimeout(check, candidateEngine, id, service.ID, profile, checkStarted, time.Now()) &&
+				len(r.Search.Ordered)-r.Search.Cursor > 1 && r.Search.Ordered[r.Search.Cursor] == id {
+				if err := guard(c); err != nil {
+					return nodestore.SearchCheck{}, err
+				}
+				pending := r.Search.Ordered[r.Search.Cursor:]
+				r.Search.Ordered = append(append(slices.Clone(r.Search.Ordered[:r.Search.Cursor]), pending[1:]...), id)
+				r.State, r.Message = "searching", "Сервис не ответил вовремя. Подбор продолжится с другого ожидающего узла; этот узел будет проверен позже."
+				if err := a.persistAutonomySearch(c, s.ID, r); err != nil {
+					return nodestore.SearchCheck{}, err
+				}
 				checkState, checkMessage = r.State, r.Message
 				return nodestore.SearchCheck{}, nodestore.ErrSearchInconclusive
 			}
