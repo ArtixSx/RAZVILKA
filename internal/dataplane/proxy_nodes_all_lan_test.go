@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -104,8 +105,13 @@ func TestScopedXrayAllLANRefusesUnprovenScopeBeforeStagedFiles(t *testing.T) {
 			if err := f.a.Snapshot(context.Background(), f.plan, root); err != nil {
 				t.Fatal(err)
 			}
-			if err := f.a.Stage(context.Background(), f.plan, root); err == nil {
+			err := f.a.Stage(context.Background(), f.plan, root)
+			if err == nil {
 				t.Fatal("unproven all-LAN accepted")
+			}
+			var refused preflightRefusalError
+			if mode == "missing-bridge" && !errors.As(err, &refused) {
+				t.Fatal("did not reach physical scope preflight", err)
 			}
 			entries, err := os.ReadDir(root)
 			if err != nil || len(entries) != 1 || entries[0].Name() != "snapshot.json" {
