@@ -21,6 +21,23 @@ func nodeCheckEngine(engine string) (string, error) {
 	return engine, nil
 }
 
+// checkOnlyNodeEngine selects the executor for a user-initiated check that
+// cannot lead to Apply: service checks of selected or catalogue nodes and
+// durable node checks with their screening. As in the single-node and the
+// connectivity check without an explicit engine, this is the engine that the
+// node's canonical material requires. If that engine cannot be resolved or is
+// not installed, the Sing-box default runs and reports its own refusal, so
+// earlier refusals such as a resource refusal keep their precedence. Paths
+// that can lead to Apply keep Sing-box or the consent gate of
+// autonomyCandidateEngine.
+func (a *App) checkOnlyNodeEngine(ctx context.Context, id string) string {
+	engine, err := a.compatibleNodeEngine(ctx, "sing-box", id)
+	if err != nil {
+		return "sing-box"
+	}
+	return engine
+}
+
 func (a *App) nodeCheckerForEngine(engine string) (dataplane.NodeChecker, error) {
 	if engine != "sing-box" && engine != "xray" {
 		return nil, dataplane.ErrExactNodeUnsupported

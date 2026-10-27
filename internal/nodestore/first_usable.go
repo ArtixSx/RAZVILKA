@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,8 +71,50 @@ type SearchResult struct {
 	Unsupported, Rejected                   []string
 }
 
+// SearchServiceOutcome holds the fields that a fresh exact check result and
+// its stored CheckRecord share, so both sides judge one closed predicate.
+type SearchServiceOutcome struct {
+	Available                                      bool
+	Verdict, TestLevel, Stage, ErrorCode, EgressIP string
+	HTTPStatus                                     int
+	DirectLeak                                     bool
+}
+
+// searchContentMismatchCodes are the probe expectations a 2xx answer can miss.
+var searchContentMismatchCodes = []string{"content-type-mismatch", "invalid-json", "json-schema-mismatch", "body-predicate-mismatch"}
+
+// SearchServiceRefusal is the one closed predicate, shared by CORE's search
+// hook and verifySearchRecord, for a definite refusal by the service itself
+// after proven exact egress. The checker publishes EgressIP only after a
+// measured direct control without a leak. The service then answered through
+// the node with a 4xx status, or with a 2xx answer that does not match the
+// probe. The older conservative class is nodequality.ServiceFailure.
+//
+// Everything else stays non-consuming: timeouts and broken requests, server
+// errors (5xx), statuses that ask to retry later (408, 425, 429), redirects,
+// INCONCLUSIVE answers and every literal-IP (service_ip) failure, whose record
+// keeps the name stage's status and cannot tell a refusal from a timeout.
+// Consuming only advances the cursor. It never grants Apply, a candidate
+// failure, cleanup eligibility or a source penalty.
+func SearchServiceRefusal(o SearchServiceOutcome) bool {
+	if o.Available || o.DirectLeak || o.EgressIP == "" || o.TestLevel != "service" || o.Stage != "service" {
+		return false
+	}
+	switch o.Verdict {
+	case "PARTIAL":
+		return o.HTTPStatus >= 400 && o.HTTPStatus < 500 && o.HTTPStatus != 408 && o.HTTPStatus != 425 && o.HTTPStatus != 429 && o.ErrorCode == "http-"+strconv.Itoa(o.HTTPStatus)
+	case "ERROR":
+		return o.HTTPStatus >= 200 && o.HTTPStatus < 300 && slices.Contains(searchContentMismatchCodes, o.ErrorCode)
+	}
+	return false
+}
+
 func searchRecordTerminalFailure(record CheckRecord) bool {
 	if nodequality.ServiceFailure(record.Verdict, record.TestLevel, record.Stage, record.ErrorCode, record.DirectLeak) {
+		return true
+	}
+	if SearchServiceRefusal(SearchServiceOutcome{Available: record.State != "unavailable", Verdict: record.Verdict, TestLevel: record.TestLevel, Stage: record.Stage,
+		ErrorCode: record.ErrorCode, EgressIP: record.EgressIP, HTTPStatus: record.HTTPStatus, DirectLeak: record.DirectLeak}) {
 		return true
 	}
 	// ExactNodeChecker emits node-egress-failed only after measured direct

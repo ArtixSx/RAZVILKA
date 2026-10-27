@@ -343,10 +343,11 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		pinger = dataplane.NewTCPNodePinger()
 	}
 	// A step covers a window of the frozen selection. Pings are only TCP
-	// connects and run together. A service check first decides the nodes that
-	// fail DNS or transport (recorded as a full check would record them),
-	// then checks up to the checker's capacity of the others at once. With
-	// one slot and no screening, a step is one node as before.
+	// connects and run together. A service check first screens the window in
+	// order and decides the nodes that fail DNS or transport (recorded as a
+	// full check would record them), then checks up to the checker's capacity
+	// of the others at once. With one slot and no screening, a step is one
+	// node as before.
 	capacity := a.nodeCheckCapacity()
 	_, screens := a.NodeChecker.(dataplane.TransportScreener)
 	limit := 1
@@ -377,19 +378,39 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		decided := make([]bool, len(ids))
 		screened := make([]nodeCheckItem, len(ids))
 		if screens && r.NodeCheckMode == "service" {
-			eachNodeInParallel(len(ids), durableNodeWindow, func(i int) {
-				if !eligible[i] {
-					return
+			// Screens take the same non-blocking quota as checks, so at most
+			// capacity run at once: a screen refused as busy would leave its
+			// node undecided for nothing. Screening stops once it has found
+			// the first undecided node beyond those this step checks in full,
+			// because the step ends there. Its batch may have screened up to
+			// capacity-1 later nodes; the next step screens them again.
+			pending := []int{}
+			for i := range ids {
+				if eligible[i] {
+					pending = append(pending, i)
 				}
-				result, final, err := a.screenAndRecordNode(checkCtx, ids[i], service, profile)
-				if err != nil {
-					return // A full check decides; it reports its own failure.
+			}
+			for undecided := 0; len(pending) > 0 && undecided <= capacity && checkCtx.Err() == nil; {
+				batch := pending[:min(capacity, len(pending))]
+				pending = pending[len(batch):]
+				eachNodeInParallel(len(batch), capacity, func(k int) {
+					i := batch[k]
+					engine := a.checkOnlyNodeEngine(checkCtx, ids[i])
+					result, final, err := a.screenAndRecordNodeForEngine(checkCtx, engine, ids[i], service, profile)
+					if err != nil {
+						return // A full check decides; it reports its own failure.
+					}
+					screened[i] = screenPing(ids[i], profile, result)
+					if final {
+						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil), true
+					}
+				})
+				for _, i := range batch {
+					if !decided[i] {
+						undecided++
+					}
 				}
-				screened[i] = screenPing(ids[i], profile, result)
-				if final {
-					items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil), true
-				}
-			})
+			}
 		}
 		full := []int{}
 		advanced = 0

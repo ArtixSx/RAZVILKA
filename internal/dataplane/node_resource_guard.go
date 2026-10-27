@@ -48,6 +48,19 @@ func checkNodeResource(ctx context.Context, host string, address netip.Addr) err
 	return g.err
 }
 
+// nodeResourceRefusal returns the sticky refusal of ctx's guard, if any. Unlike
+// checkNodeResource it neither runs the check nor stops at the end of ctx, so
+// a refusal made before a deadline still wins over a timeout explanation.
+func nodeResourceRefusal(ctx context.Context) error {
+	g, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard)
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.err
+}
+
 func checkNodeResourceURL(ctx context.Context, rawURL string, address netip.Addr) error {
 	target, err := url.Parse(rawURL)
 	if err != nil || target.Hostname() == "" {

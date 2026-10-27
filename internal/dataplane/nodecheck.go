@@ -485,7 +485,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			return result, nil
 		}
 		result.TestLevel = "protocol"
-		result.fail("egress", "node-egress-failed", nodeEgressFailureMessage(result.ProxyEgressError))
+		result.fail("egress", "node-egress-failed", nodeEgressFailureMessage(result.ProxyEgressError, c.EngineID()))
 		result.addStage("protocol", "failed", "Канал открылся локально, но удалённый протокол или ключ не передал запрос.", stageStarted, c.currentTime())
 		result.addStage("egress", "failed", "Внешний IP через узел не получен.", stageStarted, c.currentTime())
 		finish()
@@ -526,7 +526,8 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, netip.Addr{}); err != nil {
 		return result, err
 	}
-	proof, err := c.serviceProbe(ctx, session.Address, result.RoutePathID, proxyIP, request.Service)
+	serviceCtx, serviceFailure := withNodeServiceFailure(ctx)
+	proof, err := c.serviceProbe(serviceCtx, session.Address, result.RoutePathID, proxyIP, request.Service)
 	proof.NetworkProfile = request.NetworkProfile
 	result.Evidence = proof
 	result.HTTPStatus = proof.HTTPStatus
@@ -559,11 +560,17 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			if err := checkNodeResourceURL(ctx, selectedNodeProbe(request.Service).URL, address); err != nil {
 				return result, err
 			}
-			ipProof, ipErr := c.serviceIPProbe(ctx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
+			ipCtx, ipFailure := withNodeServiceFailure(ctx)
+			ipProof, ipErr := c.serviceIPProbe(ipCtx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
 			ipProof.NetworkProfile = request.NetworkProfile
-			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !exactNodeProofEngine(ipProof.Engine, c.EngineID()) || ipProof.RoutePathID != result.RoutePathID || ipProof.ExpectedRoutePathID != result.RoutePathID || ipProof.ObservedRoutePathID != result.RoutePathID {
+			ipRoute := exactNodeProofEngine(ipProof.Engine, c.EngineID()) && ipProof.RoutePathID == result.RoutePathID && ipProof.ExpectedRoutePathID == result.RoutePathID && ipProof.ObservedRoutePathID == result.RoutePathID
+			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !ipRoute {
+				category := ""
+				if ipErr == nil && ipProof.Valid() && ipRoute {
+					category = nodeServiceFailureCategory(ipProof, ipFailure)
+				}
 				result.Evidence = ipProof
-				result.fail("service_ip", "node-service-ip-path-failed", "Узел не подтвердил доступ к сервису по IP-адресу, необходимый для маршрута устройств.")
+				result.fail("service_ip", "node-service-ip-path-failed", nodeServiceFailureMessage("Узел не подтвердил доступ к сервису по IP-адресу, необходимый для маршрута устройств.", category))
 				result.Evidence.Verdict = evidence.VerdictError
 				result.addStage("service_ip", "failed", "Имя сервиса проверено, но путь к его IP-адресу не подтверждён.", ipStarted, c.currentTime())
 				finish()
@@ -577,14 +584,17 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		result.addStage("service_ip", "passed", "IP-путь сервиса подтверждён с исходным именем TLS.", ipStarted, c.currentTime())
 	} else {
 		result.ErrorCode = proof.ErrorCode
-		if !exactRoute {
+		category := ""
+		if exactRoute {
+			category = nodeServiceFailureCategory(proof, serviceFailure)
+		} else {
 			result.Verdict = evidence.VerdictMisrouted
 			result.ErrorCode = "node-route-mismatch"
 		}
 		if result.ErrorCode == "" {
 			result.ErrorCode = "node-service-not-confirmed"
 		}
-		result.Message = "Узел передаёт трафик, но выбранный сервис через него не подтверждён."
+		result.Message = nodeServiceFailureMessage("Узел передаёт трафик, но выбранный сервис через него не подтверждён.", category)
 		result.addStage("service", "failed", "Ответ сервиса не соответствует безопасному критерию.", stageStarted, c.currentTime())
 	}
 	finish()
@@ -726,7 +736,11 @@ func (r *NodeCheckResult) fail(stage, code, message string) {
 	}
 }
 
-func nodeEgressFailureMessage(category string) string {
+// nodeEgressFailureMessage explains a closed category in plain words for the
+// engine that carried the request. Timeout texts never claim that the node
+// accepted a TCP connection: the checker does not see the engine's own
+// connect, and the engines answer SOCKS CONNECT at different points.
+func nodeEgressFailureMessage(category, engine string) string {
 	const prefix = "Точный выход через узел не подтвердился."
 	var detail string
 	switch category {
@@ -746,11 +760,90 @@ func nodeEgressFailureMessage(category string) string {
 		detail = "Ответ контрольного адреса не прошёл проверку."
 	case "http_transport":
 		detail = "HTTP-обмен с контрольным адресом не завершён."
+	case "dial_timeout":
+		switch engine {
+		case "xray":
+			// Xray answers CONNECT before it dials the node: this wait was local.
+			detail = "Xray на роутере не ответил вовремя."
+		case "sing-box":
+			// Sing-box answers CONNECT only after its own handshake with the node.
+			detail = "Соединение через узел не открылось вовремя. Возможно, узел не ответил."
+		default:
+			detail = "Соединение через узел не открылось вовремя."
+		}
+	case "tls_timeout":
+		detail = "Защищённое соединение через узел не установилось вовремя."
+		if engine == "xray" {
+			// This wait also covers Xray's own connection to the node.
+			detail += " Возможно, узел не ответил."
+		}
+	case "response_timeout":
+		detail = "Соединение через узел установлено, но ответ не пришёл вовремя."
 	}
 	if detail == "" {
 		return prefix
 	}
 	return prefix + " " + detail
+}
+
+// nodeServiceFailureKey carries a *nodeServiceFailure through the fixed
+// service-probe signature, from probeServicePath back to Check.
+type nodeServiceFailureKey struct{}
+
+// nodeServiceFailure receives the closed category of a service request that
+// got no usable response. Check only turns it into Message text: ErrorCode
+// values, evidence and stored fields stay unchanged.
+type nodeServiceFailure struct{ category string }
+
+func withNodeServiceFailure(ctx context.Context) (context.Context, *nodeServiceFailure) {
+	failure := &nodeServiceFailure{}
+	return context.WithValue(ctx, nodeServiceFailureKey{}, failure), failure
+}
+
+// reportNodeServiceFailure records whether a service request without a usable
+// response timed out (service_timeout) or failed otherwise, for example by a
+// reset, a TLS failure or a refused redirect (service_transport). Neither a
+// refusal nor a cancellation is an observation of the path; neither is kept.
+func reportNodeServiceFailure(ctx context.Context, err error) {
+	failure, _ := ctx.Value(nodeServiceFailureKey{}).(*nodeServiceFailure)
+	if failure == nil || err == nil || errors.Is(err, context.Canceled) || errors.Is(err, ErrNodeResourceDenied) {
+		return
+	}
+	failure.category = "service_transport"
+	if errors.Is(err, context.DeadlineExceeded) || nodeEgressTimedOut(err) {
+		failure.category = "service_timeout"
+	}
+}
+
+// nodeServiceFailureCategory names why a valid service proof on the exact
+// route did not confirm the service: the service answered with a status or
+// content that does not match (service_status_mismatch), or the request got
+// no usable response because it timed out or broke.
+func nodeServiceFailureCategory(proof evidence.ProbeEvidence, failure *nodeServiceFailure) string {
+	if proof.HTTPStatus > 0 {
+		if proof.Verdict != evidence.VerdictPass && proof.Verdict != evidence.VerdictMisrouted {
+			return "service_status_mismatch"
+		}
+		return ""
+	}
+	if failure != nil && (proof.ErrorCode == "request-failed" || proof.ErrorCode == "response-body-invalid") {
+		return failure.category
+	}
+	return ""
+}
+
+// nodeServiceFailureMessage adds one short plain reason to a service-stage
+// failure message. Anything outside the closed categories adds nothing.
+func nodeServiceFailureMessage(message, category string) string {
+	switch category {
+	case "service_timeout":
+		return message + " Сервис не ответил вовремя."
+	case "service_status_mismatch":
+		return message + " Сервис ответил отказом или неожиданным ответом."
+	case "service_transport":
+		return message + " Соединение с сервисом не установилось или оборвалось."
+	}
+	return message
 }
 
 func (r *NodeCheckResult) addStage(id, status, message string, started, finished time.Time) {
@@ -1070,12 +1163,14 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 	}
 	if err != nil {
 		result.ErrorCode = "request-failed"
+		reportNodeServiceFailure(ctx, err)
 		return result, nil
 	}
 	defer response.Body.Close()
 	body, truncated, readErr := readServiceBodySample(ctx, response)
 	if readErr != nil {
 		result.ErrorCode = "response-body-invalid"
+		reportNodeServiceFailure(ctx, readErr)
 		return result, nil
 	}
 	redirects := responseRedirects(response)

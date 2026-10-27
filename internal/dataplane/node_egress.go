@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netresolve"
@@ -35,6 +36,16 @@ type nodeEgressPair struct {
 
 // Only this closed vocabulary crosses the result/API boundary. In particular,
 // never retain an URL error's text: it can contain a remote address or profile.
+//
+// A timed-out request is named by the stage it had reached at the checker's
+// own HTTP client: dial_timeout (no connection yet; through a proxy, the engine
+// did not answer SOCKS CONNECT), tls_timeout (connected, TLS unfinished) and
+// response_timeout (TLS finished, no complete response). Through a proxy none
+// of them proves anything about the engine's own TCP connect to the node,
+// which the checker never observes: Xray answers CONNECT before it dials the
+// node, while Sing-box (1.13.3 on the router, 26.10) answers only after its
+// own handshake with it. "timeout" remains for a deadline whose stage is
+// unknown.
 type nodeEgressFailure string
 
 func (e nodeEgressFailure) Error() string { return "egress measurement failed: " + string(e) }
@@ -52,23 +63,100 @@ func nodeEgressErrorCategory(err error) string {
 	var failure nodeEgressFailure
 	if errors.As(err, &failure) {
 		switch failure {
-		case "socks_connect", "tcp_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse", "http_transport":
+		case "socks_connect", "tcp_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse", "http_transport",
+			"dial_timeout", "tls_timeout", "response_timeout":
 			return string(failure)
 		}
 	}
 	return "unavailable"
 }
 
-func nodeEgressTransportFailure(err error, fallback nodeEgressFailure) error {
+// nodeEgressStageCategory reports whether get named the stage of a failure,
+// which a bare attempt deadline cannot do.
+func nodeEgressStageCategory(category string) bool {
+	switch category {
+	case "", "unavailable", "canceled", "timeout":
+		return false
+	}
+	return true
+}
+
+func nodeEgressTimedOut(err error) bool {
+	var timeout net.Error
+	return errors.As(err, &timeout) && timeout.Timeout()
+}
+
+func nodeEgressTransportFailure(err error, fallback, timeout nodeEgressFailure) error {
 	var certificate *tls.CertificateVerificationError
 	if errors.As(err, &certificate) {
 		return nodeEgressFailure("certificate")
 	}
-	var timeout net.Error
-	if errors.As(err, &timeout) && timeout.Timeout() {
-		return nodeEgressFailure("timeout")
+	if nodeEgressTimedOut(err) {
+		return timeout
 	}
 	return fallback
+}
+
+// nodeEgressTimeoutStage names the stage a timed-out request had reached.
+func nodeEgressTimeoutStage(dialed, secured bool) nodeEgressFailure {
+	switch {
+	case !dialed:
+		return "dial_timeout"
+	case !secured:
+		return "tls_timeout"
+	}
+	return "response_timeout"
+}
+
+// nodeEgressNotObserved returns the error to report as is instead of an
+// egress category: a resource refusal, including one made before a deadline,
+// or a cancellation. After a plain deadline it returns nil, so that the caller
+// can name the stage that ran out of time.
+func nodeEgressNotObserved(ctx context.Context) error {
+	err := checkNodeResource(ctx, "", netip.Addr{})
+	if err == nil || errors.Is(err, ErrNodeResourceDenied) || !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return nodeResourceRefusal(ctx)
+}
+
+// measureNodeEgress takes one IP observation within limit. When the attempt
+// runs out of time, a stage named by get explains it better than the bare
+// deadline. A resource refusal or a cancellation is returned as is: neither
+// is an observation of the node.
+func measureNodeEgress(provider context.Context, get nodeEgressGetter, endpoint nodeEgressEndpoint, address string, limit time.Duration) (string, error) {
+	attempt, stop := context.WithTimeout(provider, limit)
+	defer stop()
+	if err := attempt.Err(); err != nil {
+		return "", err
+	}
+	ip, err := get(attempt, endpoint, address)
+	if guardErr := nodeEgressNotObserved(attempt); guardErr != nil {
+		return "", guardErr
+	}
+	if errors.Is(err, ErrNodeResourceDenied) {
+		return "", err
+	}
+	category := nodeEgressErrorCategory(err)
+	if expired := attempt.Err(); expired != nil {
+		if errors.Is(expired, context.DeadlineExceeded) && nodeEgressStageCategory(category) {
+			return "", nodeEgressFailure(category)
+		}
+		return "", expired
+	}
+	parsed, parseErr := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil {
+		// Preserve only a recognized safe category. Context/resource handling
+		// above, provider retries and acceptance conditions stay unchanged.
+		if category != "unavailable" {
+			return "", nodeEgressFailure(category)
+		}
+		return "", errors.New("public IPv4 egress measurement is unavailable")
+	}
+	if parseErr != nil || !parsed.Is4() || parsed.Is4In6() || !publicfetch.PublicAddress(parsed) {
+		return "", errors.New("public IPv4 egress measurement is unavailable")
+	}
+	return parsed.String(), nil
 }
 
 // The pair must use the same HTTPS provider and literal destination. Otherwise
@@ -107,34 +195,7 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 			endpoint = pinned
 		}
 		measure := func(address string) (string, error) {
-			attempt, stop := context.WithTimeout(provider, 5*time.Second)
-			defer stop()
-			if err := attempt.Err(); err != nil {
-				return "", err
-			}
-			ip, err := get(attempt, endpoint, address)
-			if guardErr := checkNodeResource(attempt, "", netip.Addr{}); guardErr != nil {
-				return "", guardErr
-			}
-			if errors.Is(err, ErrNodeResourceDenied) {
-				return "", err
-			}
-			if attempt.Err() != nil {
-				return "", attempt.Err()
-			}
-			parsed, parseErr := netip.ParseAddr(strings.TrimSpace(ip))
-			if err != nil {
-				// Preserve only a recognized safe category. Context/resource handling
-				// above, provider retries and acceptance conditions stay unchanged.
-				if category := nodeEgressErrorCategory(err); category != "unavailable" {
-					return "", nodeEgressFailure(category)
-				}
-				return "", errors.New("public IPv4 egress measurement is unavailable")
-			}
-			if parseErr != nil || !parsed.Is4() || parsed.Is4In6() || !publicfetch.PublicAddress(parsed) {
-				return "", errors.New("public IPv4 egress measurement is unavailable")
-			}
-			return parsed.String(), nil
+			return measureNodeEgress(provider, get, endpoint, address, 5*time.Second)
 		}
 		result.directIP, result.directErr = measure("")
 		if errors.Is(result.directErr, ErrNodeResourceDenied) {
@@ -254,6 +315,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 		dial = contextDialer.DialContext
 	}
 	dialFailure := make(chan error, 1)
+	// The transport dials and handshakes on its own goroutine and goes on
+	// after the request gives up, so record how far this request got.
+	var dialed, secured atomic.Bool
 	transport := &http.Transport{
 		Proxy: nil, DisableKeepAlives: true, DisableCompression: true,
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: p.roots, ServerName: origin.Hostname()},
@@ -273,9 +337,11 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 					category = "socks_connect"
 				}
 				select {
-				case dialFailure <- nodeEgressTransportFailure(err, category):
+				case dialFailure <- nodeEgressTransportFailure(err, category, "dial_timeout"):
 				default:
 				}
+			} else {
+				dialed.Store(true)
 			}
 			// The transport still receives the original error and connection.
 			return connection, err
@@ -291,6 +357,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	handshakeDone := make(chan error, 1)
 	request = request.WithContext(httptrace.WithClientTrace(request.Context(), &httptrace.ClientTrace{
 		TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+			if err == nil {
+				secured.Store(true)
+			}
 			select {
 			case handshakeDone <- err:
 			default:
@@ -299,13 +368,18 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	}))
 	response, err := client.Do(request)
 	if err != nil {
-		if guardErr := checkNodeResource(ctx, "", netip.Addr{}); guardErr != nil {
+		// The stage the request had reached when it gave up; the background
+		// dial or handshake may still finish a moment later.
+		stage := nodeEgressTimeoutStage(dialed.Load(), secured.Load())
+		// A refusal or cancellation is returned as is. A request that ran out
+		// of time is named below by that stage.
+		if guardErr := nodeEgressNotObserved(ctx); guardErr != nil {
 			return "", guardErr
 		}
 		select {
 		case handshakeErr := <-handshakeDone:
 			if handshakeErr != nil {
-				return "", nodeEgressTransportFailure(handshakeErr, "tls_handshake")
+				return "", nodeEgressTransportFailure(handshakeErr, "tls_handshake", "tls_timeout")
 			}
 		default:
 		}
@@ -314,7 +388,7 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 			return "", failure
 		default:
 		}
-		return "", nodeEgressTransportFailure(err, "http_transport")
+		return "", nodeEgressTransportFailure(err, "http_transport", stage)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -326,6 +400,9 @@ func (p nodeEgressHTTP) get(ctx context.Context, endpoint nodeEgressEndpoint, pr
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	defer clear(body)
+	if err != nil && nodeEgressTimedOut(err) {
+		return "", nodeEgressFailure("response_timeout")
+	}
 	if err != nil || int64(len(body)) > limit {
 		return "", nodeEgressFailure("body_parse")
 	}

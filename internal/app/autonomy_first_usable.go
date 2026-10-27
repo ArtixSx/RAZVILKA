@@ -24,11 +24,22 @@ import (
 var errAutonomySearchBudget = errors.New("autonomy apply budget exhausted")
 var errAutonomySearchPersistence = errors.New("autonomy traversal could not be persisted")
 
+// autonomySearchServiceRefusal reports a consumable refusal by the service
+// itself: the older ServiceFailure class, or the shared definite-refusal class
+// after a measured direct control. The guard counts these in a traversal.
+func autonomySearchServiceRefusal(result dataplane.NodeCheckResult) bool {
+	if nodequality.ServiceFailure(string(result.Verdict), result.TestLevel, result.Stage, result.ErrorCode, result.DirectLeak) {
+		return true
+	}
+	return result.DirectControl == "measured" && nodestore.SearchServiceRefusal(nodestore.SearchServiceOutcome{Available: result.Available, Verdict: string(result.Verdict),
+		TestLevel: result.TestLevel, Stage: result.Stage, ErrorCode: result.ErrorCode, EgressIP: result.EgressIP, HTTPStatus: result.HTTPStatus, DirectLeak: result.DirectLeak})
+}
+
 // This consumes one search candidate, never grants Apply or assigns a source
 // reputation penalty. Local errors and fresh identity/permission checks must
 // already have closed through the ordinary check-and-record owner.
 func autonomySearchTerminalFailure(result dataplane.NodeCheckResult) bool {
-	if nodequality.ServiceFailure(string(result.Verdict), result.TestLevel, result.Stage, result.ErrorCode, result.DirectLeak) {
+	if autonomySearchServiceRefusal(result) {
 		return true
 	}
 	if result.Available || result.DirectLeak || result.Verdict != evidence.VerdictError || result.HTTPStatus != 0 || result.EgressIP != "" {
@@ -150,7 +161,14 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	if r.Search != nil && r.Search.Halted {
 		return finish("requires-review", "Предыдущая попытка применения требует проверки; дальнейший подбор остановлен.")
 	}
+	traversal := r.Search
 	prepareAutonomyTraversal(&r, autonomyTraversalVersion(p, s, engine, profile), ids, time.Now())
+	refusals := a.autonomyServiceRefusals(s.ID, r.Search.Version)
+	if r.Search != traversal {
+		// A new traversal starts its own run of service refusals.
+		refusals = autonomyServiceRefusals{version: r.Search.Version}
+		a.setAutonomyServiceRefusals(s.ID, refusals)
+	}
 	a.prioritizeAutonomyFreshProofs(ctx, p, s, &r, engine, profile, ids, time.Now())
 	priorityCount, priorityErr := a.prioritizeAutonomySources(ctx, p, &r, time.Now())
 	if priorityErr != nil {
@@ -185,6 +203,9 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		}
 		return finish("searching", "Доступный снимок проверен. Ожидаем разрешённое пополнение или повторную проверку.")
 	}
+	if time.Now().Before(refusals.until) {
+		return finish("service-unconfirmed", autonomyServiceUnconfirmedMessage)
+	}
 	// The library cursor is a ring. Present only the remaining suffix, so its
 	// per-call examined bound cannot wrap into an already consumed prefix when
 	// the last round has fewer entries than the checker budget.
@@ -193,8 +214,21 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	checkState, checkMessage := "", ""
 	checkedNode := ""
 	var usableCheck nodestore.SearchCheck
+	// The check the next cursor write consumes, if any; a skipped candidate
+	// is not an observation and leaves the run of refusals unchanged.
+	observed, refused := false, false
 	hooks := nodestore.SearchHooks{
-		Guard: guard,
+		Guard: func(c context.Context) error {
+			if err := guard(c); err != nil {
+				return err
+			}
+			// Stop right after the cursor write that consumed the last
+			// refusal the guard allows, before any further check.
+			if time.Now().Before(refusals.until) {
+				return errAutonomyServiceRefusals
+			}
+			return nil
+		},
 		Check: func(c context.Context, id string) (nodestore.SearchCheck, error) {
 			candidateEngine, err := a.autonomyCandidateEngine(c, p, s, engine, id)
 			if err == dataplane.ErrExactNodeUnsupported {
@@ -226,8 +260,12 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 					checkState, checkMessage = "unconfirmed", "Проверка не подтвердила отказ сервиса; узел не признан неисправным."
 					return nodestore.SearchCheck{}, nodestore.ErrSearchInconclusive
 				}
+				// Besides the cursor, consuming a failure also drops the node from
+				// this service's reserves; a later fresh PASS can list it again.
+				// It records no candidate failure, cleanup or source penalty.
 				r.Reserves = slices.DeleteFunc(r.Reserves, func(candidate string) bool { return candidate == id })
 			}
+			observed, refused = true, outcome == nodestore.SearchDefiniteFailure && autonomySearchServiceRefusal(check)
 			record := nodestore.SearchCheck{Outcome: outcome, ProbeID: check.ProbeID, CheckedAt: check.FinishedAt, Engine: candidateEngine}
 			if outcome == nodestore.SearchUsable {
 				checkedNode, usableCheck = id, record
@@ -243,7 +281,25 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 			if r.Search.Exhausted {
 				r.Search.RetryAt = time.Now().Add(time.Duration(p.ReserveSeconds) * time.Second)
 			}
-			return a.persistAutonomySearch(c, s.ID, r)
+			counted := refusals
+			if observed {
+				counted = counted.observe(refused)
+			}
+			observed, refused = false, false
+			if counted.count >= autonomyServiceRefusalLimit {
+				// Pause instead of consuming the rest of the list. After RetryAt
+				// the search resumes at the cursor with a new run.
+				if !r.Search.Exhausted {
+					r.Search.RetryAt = time.Now().Add(time.Duration(p.ReserveSeconds) * time.Second)
+				}
+				counted = autonomyServiceRefusals{version: counted.version, until: r.Search.RetryAt}
+			}
+			if err := a.persistAutonomySearch(c, s.ID, r); err != nil {
+				return err
+			}
+			refusals = counted
+			a.setAutonomyServiceRefusals(s.ID, refusals)
+			return nil
 		},
 		Apply: func(c context.Context, route nodestore.ResolvedRoute) error {
 			r.Reserves = slices.DeleteFunc(r.Reserves, func(id string) bool { return id == current })
@@ -323,6 +379,9 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	if errors.Is(err, errAutonomySearchBudget) {
 		return finish("rate-limited", "Лимит переключений исчерпан; применение отложено.")
 	}
+	if errors.Is(err, errAutonomyServiceRefusals) {
+		return finish("service-unconfirmed", autonomyServiceUnconfirmedMessage)
+	}
 	if err != nil {
 		if checkState != "" {
 			return finish(checkState, checkMessage)
@@ -397,6 +456,9 @@ func (a *App) prioritizeAutonomyFreshProofs(ctx context.Context, p autonomy.Poli
 			rest = append(rest, id)
 		}
 	}
+	// Among the others, a fresh general connectivity PASS of the readiness
+	// pool goes first and repeated failures go last. Nothing is removed.
+	rest = a.nodeReadinessOrder(rest, engine, profile, s.ExpectedRoute == "auto", now)
 	ordered := slices.Clone(t.Ordered[:t.Cursor])
 	t.Ordered = append(append(ordered, preferred...), rest...)
 }

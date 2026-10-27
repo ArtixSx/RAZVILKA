@@ -15,10 +15,12 @@ import (
 )
 
 func TestNodeEgressDiagnosticCategoriesFromLocalHTTPSAndSOCKS(t *testing.T) {
-	for _, category := range []string{"certificate", "tls_handshake", "socks_connect", "http_status", "body_parse", "timeout"} {
+	// A stalled response used to collapse to the bare "timeout"; it now names
+	// the stage the request had reached.
+	for _, category := range []string{"certificate", "tls_handshake", "socks_connect", "http_status", "body_parse", "response_timeout"} {
 		t.Run(category, func(t *testing.T) {
 			server, roots, _ := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) {
-				if category == "timeout" {
+				if category == "response_timeout" {
 					<-r.Context().Done()
 					return
 				}
@@ -50,7 +52,7 @@ func TestNodeEgressDiagnosticCategoriesFromLocalHTTPSAndSOCKS(t *testing.T) {
 				}
 			}
 			ctx := context.Background()
-			if category == "timeout" {
+			if category == "response_timeout" {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
 				defer cancel()
@@ -64,7 +66,7 @@ func TestNodeEgressDiagnosticCategoriesFromLocalHTTPSAndSOCKS(t *testing.T) {
 }
 
 func TestNodeEgressDiagnosticSurvivesPairAndResultWithoutChangingFailure(t *testing.T) {
-	for _, category := range []string{"socks_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse"} {
+	for _, category := range []string{"socks_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse", "dial_timeout", "tls_timeout", "response_timeout"} {
 		calls := 0
 		pair := probeNodeEgressPair(context.Background(), "127.0.0.1:1080", func(_ context.Context, _ nodeEgressEndpoint, address string) (string, error) {
 			calls++
