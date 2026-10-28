@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
 )
 
 func coldXrayRollbackRetryFixture(t *testing.T) (*Manager, *inactiveFixture, *rollbackVerifierFake, Plan, Execution, string) {
@@ -52,6 +54,77 @@ func coldXrayRollbackRetryFixture(t *testing.T) (*Manager, *inactiveFixture, *ro
 		t.Fatal(err)
 	}
 	return m, f, nfq, candidate, execution, xrayRoot
+}
+
+func TestRetryUnstagedColdXrayExactJournalPlanSurvivesDispatchCopy(t *testing.T) {
+	for _, priorRetry := range []bool{false, true} {
+		t.Run(map[bool]string{false: "original-eight-steps", true: "persisted-twelve-steps"}[priorRetry], func(t *testing.T) {
+			m, f, nfq, plan, original, root := coldXrayRollbackRetryFixture(t)
+			// The captured failed journal has a service descriptor without probes.
+			// Dispatch's defensive service copy turns this nil slice into empty.
+			plan.Routes[0].ProbeService = &catalog.Service{ID: "youtube", Domains: []string{}, Strategy: []string{}}
+			if err := m.Record(plan); err != nil {
+				t.Fatal(err)
+			}
+			plan, _, _ = m.latestLocked()
+			_, copied, err := f.a.dispatchXrayPlan(plan, root, true)
+			if err != nil || reflect.DeepEqual(plan, copied) || plan.Routes[0].ProbeService.Probes != nil || copied.Routes[0].ProbeService.Probes == nil {
+				t.Fatal("fixture did not preserve the original dispatch shape mismatch", err)
+			}
+			if priorRetry {
+				now := time.Now().UTC().Format(time.RFC3339Nano)
+				for _, row := range [][3]string{{"xray", "retry-rollback", "failed"}, {"nfqws2", "retry-rollback", "passed"}, {"nfqws2", "retry-verify-rollback", "passed"}, {"xray", "retry-verify-rollback", "failed"}} {
+					original.Steps = append(original.Steps, ExecutionStep{Adapter: row[0], Phase: row[1], State: row[2], StartedAt: now, FinishedAt: now})
+				}
+				original.FinishedAt = now
+				if err := m.writeExecution(filepath.Dir(root), original); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := proxyRollbackRetryFiles(t, f.a.StateRoot, root)
+			processes := &proxyRollbackRetryProcesses{base: f.a.Processes}
+			f.a.Processes = processes
+			result, err := m.retryFailedRollback(context.Background(), plan.PlanID, plan.Digest, func(Plan) error { return nil }, &f.proof)
+			if err != nil || result.State != "rolled-back" || !result.RollbackVerified || !nfq.rollback || len(result.Steps) != len(original.Steps)+4 || !reflect.DeepEqual(result.Steps[:len(original.Steps)], original.Steps) {
+				t.Fatal("exact original plan could not close its failed transaction", result, err)
+			}
+			if m.checkExecutionRecovery() != nil || len(processes.start) != 0 || len(processes.stop) != 0 || !reflect.DeepEqual(before, proxyRollbackRetryFiles(t, f.a.StateRoot, root)) {
+				t.Fatal("no-effect retry changed Xray files/processes or retained the fence")
+			}
+		})
+	}
+}
+
+func TestRetryUnstagedColdXrayWrapperRejectsOriginalPlanDrift(t *testing.T) {
+	for _, mode := range []string{"probe-shape", "route", "root"} {
+		t.Run(mode, func(t *testing.T) {
+			m, f, _, plan, _, root := coldXrayRollbackRetryFixture(t)
+			plan.Routes[0].ProbeService = &catalog.Service{ID: "youtube"}
+			if err := m.Record(plan); err != nil {
+				t.Fatal(err)
+			}
+			reviewed, ok := m.reviewUnstagedColdXrayRollback(context.Background(), plan.PlanID, plan.Digest, &f.proof)
+			if !ok {
+				t.Fatal("fixture not admitted")
+			}
+			wrapper := reviewed.prepared[1].(*unstagedColdXrayRollback)
+			reads := len(f.runner.seen)
+			switch mode {
+			case "probe-shape":
+				reviewed.plan.Routes[0].ProbeService.Probes = []catalog.Probe{}
+			case "route":
+				reviewed.plan.Routes[0].Resolved = "foreign"
+			case "root":
+				root += "-other"
+			}
+			if err := wrapper.Rollback(context.Background(), reviewed.plan, root); !errors.Is(err, ErrProxyPolicyUnknown) {
+				t.Fatal("changed original plan reached no-op helper", err)
+			}
+			if len(f.runner.seen) != reads || m.checkExecutionRecovery() == nil {
+				t.Fatal("refusal observed a different plan or lost the fence")
+			}
+		})
+	}
 }
 
 func TestRetryUnstagedColdXrayClosesOnlyOriginalFailedTransaction(t *testing.T) {

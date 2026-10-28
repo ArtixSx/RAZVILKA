@@ -42,7 +42,7 @@ func (m *Manager) reviewUnstagedColdXrayRollback(ctx context.Context, planID, di
 	if !ok || !concrete || xray.Configs == nil || xray.StateRoot != filepath.Join(m.StateRoot, "xray") {
 		return failedRollback{}, false
 	}
-	view, frozen, err := xray.dispatchXrayPlan(plan, filepath.Join(root, "xray"), true)
+	view, _, err := xray.dispatchXrayPlan(plan, filepath.Join(root, "xray"), true)
 	if err != nil {
 		return failedRollback{}, false
 	}
@@ -56,10 +56,13 @@ func (m *Manager) reviewUnstagedColdXrayRollback(ctx context.Context, planID, di
 		len(snapshot.NodeManifest) != 0 || len(snapshot.NodeInterface) != 0 || !reflect.DeepEqual(snapshot.Policy, PolicyState{}) {
 		return failedRollback{}, false
 	}
-	xrayOnly := &unstagedColdXrayRollback{Adapter: view, view: view, plan: frozen, root: filepath.Join(root, "xray"), snapshot: snapshot, proof: proof}
+	// Bind the wrapper to the exact reviewed journal image. Dispatch makes an
+	// execution copy whose service slices can have a different nil/empty shape;
+	// that copy is not the plan the recovery runner supplies to its adapters.
+	xrayOnly := &unstagedColdXrayRollback{Adapter: view, view: view, plan: plan, root: filepath.Join(root, "xray"), snapshot: snapshot, proof: proof}
 	// Before any recovery journal or NFQ restoration, prove that no Xray
 	// teardown can be needed. The same complete observer runs at both steps.
-	if err := xrayOnly.Rollback(ctx, frozen, xrayOnly.root); err != nil {
+	if err := xrayOnly.Rollback(ctx, plan, xrayOnly.root); err != nil {
 		return failedRollback{}, false
 	}
 	// A complete kernel observation can take time. Its success must not
@@ -79,7 +82,10 @@ func (m *Manager) reviewUnstagedColdXrayRollback(ctx context.Context, planID, di
 	if err != nil || !exists || !reflect.DeepEqual(previous, closingPrevious) || ctx.Err() != nil {
 		return failedRollback{}, false
 	}
-	return failedRollback{latest: latest, root: root, plan: plan, previous: previous, prepared: []Adapter{nfq, xrayOnly}}, true
+	// The independently decoded closing image is equal but shares no mutable
+	// slices with the wrapper's original binding. Later input drift must still
+	// fail exact equality, including a change of nil/empty shape.
+	return failedRollback{latest: latest, root: root, plan: closingPlan, previous: previous, prepared: []Adapter{nfq, xrayOnly}}, true
 }
 
 func unstagedColdXrayRollbackHistory(planID, digest string, plan, previous Plan, execution Execution) bool {
