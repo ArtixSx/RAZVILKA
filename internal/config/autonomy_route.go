@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 )
 
 // ApplyAutonomyRouteWithRollback is the commit callback of the ordinary
@@ -12,6 +14,55 @@ import (
 func (s *Store) ApplyAutonomyRouteWithRollback(id, route string, sources []string, revision uint64) (func() error, error) {
 	undo, _, err := s.ApplyAutonomyRouteReviewedWithRollback(id, route, sources, revision)
 	return undo, err
+}
+
+// ApplyAutonomyNFQFirstStartRouteWithRollback publishes only the first NFQ
+// service and its explicitly selected closed recipe in the same Store image.
+// The App supplies first-start/catalog/consent admission; this writer cannot
+// migrate a retained NFQ profile or issue an ordinary node commit receipt.
+func (s *Store) ApplyAutonomyNFQFirstStartRouteWithRollback(id string, sources []string, recipe engineconfig.NFQWSFirstStartRecipe, revision uint64) (func() error, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	before := cloneConfig(s.cfg)
+	target := normalizeState(before.Services[id])
+	if before.Revision != revision || recipe == "" || !recipe.Valid() || recipe != before.NFQWSFirstStartRecipe || before.AppliedNFQWSFirstStartRecipe != "" ||
+		len(sources) != 0 || len(target.Sources) != 0 || !target.Enabled || target.Route != "auto" && target.Route != "nfqws2" || before.AppliedServices[id].Enabled {
+		return nil, ErrRevisionChanged
+	}
+	for _, state := range before.AppliedServices {
+		if state.Enabled && (normalizeState(state).Route == "nfqws2" || normalizeState(state).Route == "auto") {
+			return nil, ErrRevisionChanged
+		}
+	}
+	next, err := ReviewedAutonomyRouteCommitImage(before, id, "nfqws2", nil, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	next.AppliedNFQWSFirstStartRecipe = recipe
+	s.cfg = next
+	if err := s.saveLocked(); err != nil {
+		s.cfg = before
+		return nil, err
+	}
+	committed := cloneConfig(s.cfg)
+	used := false
+	return func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if used {
+			return nil
+		}
+		if !reflect.DeepEqual(s.cfg, committed) {
+			return ErrRevisionChanged
+		}
+		s.cfg = cloneConfig(before)
+		if err := s.saveLocked(); err != nil {
+			s.cfg = cloneConfig(committed)
+			return err
+		}
+		used = true
+		return nil
+	}, nil
 }
 
 // The additional receipt records only this actual Store publication and its

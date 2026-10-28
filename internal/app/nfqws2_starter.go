@@ -68,7 +68,7 @@ func (a *App) runNFQWS2StarterWithProfileReview(ctx context.Context, p autonomy.
 		}
 		r.State, r.Message = "applying", "Подготавливаем закрытый профиль NFQWS2: только TCP 443 и домены применяемого плана, с сохранением исключений."
 		a.autonomyRuntime(s.ID, r)
-		if err := a.applyAutonomyRoute(ctx, p, s, cfg, profile, "nfqws2"); err != nil {
+		if err := a.applyAutonomyNFQFirstStartRoute(ctx, p, s, cfg, profile); err != nil {
 			return finish(autonomyLegacyApplyRefused(err, &r, "Закрытый профиль NFQWS2 не подтверждён. Использована штатная защита и откат."))
 		}
 		return finish("applied", "Закрытый профиль NFQWS2 применён через общую транзакцию и проверен. Остальные функции сервиса проверяются отдельно.")

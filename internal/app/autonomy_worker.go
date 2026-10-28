@@ -726,6 +726,16 @@ func autonomyObservationContextReason(ctx context.Context, stage string, failure
 }
 
 func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, route string) error {
+	return a.applyAutonomyRouteWithFirstStartRecipe(ctx, p, s, base, profile, route, false)
+}
+
+// Called only by the closed, unapplied starter branch, never ordinary node,
+// retained profile, removal or global pending-recipe application.
+func (a *App) applyAutonomyNFQFirstStartRoute(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile string) error {
+	return a.applyAutonomyRouteWithFirstStartRecipe(ctx, p, s, base, profile, "nfqws2", true)
+}
+
+func (a *App) applyAutonomyRouteWithFirstStartRecipe(ctx context.Context, p autonomy.Policy, s autonomy.Service, base config.Config, profile, route string, firstStart bool) error {
 	store := a.Store
 	if !a.autonomyConsent(p, s) || a.autonomyDiskCurrent(ctx) != nil || ctx.Err() != nil {
 		return dataplane.ErrReviewChanged
@@ -747,6 +757,23 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		return a.recordAutonomyRoute(ctx, p, s, route)
 	}
 	hypothetical := nodeRouteConfigForScope(base, s.ID, "unused", s.Sources)
+	useDesiredRecipe := firstStart && route == "nfqws2" && base.AppliedNFQWSFirstStartRecipe == "" && base.NFQWSFirstStartRecipe != "" && !base.AppliedServices[s.ID].Enabled
+	for _, applied := range base.AppliedServices {
+		// A retained AUTO selection may already resolve to NFQWS2. It cannot
+		// prove the global profile is uninitialized from config alone.
+		if applied.Enabled && (selectedRoute(applied) == "nfqws2" || selectedRoute(applied) == "auto") {
+			useDesiredRecipe = false
+		}
+	}
+	if useDesiredRecipe {
+		if !base.NFQWSFirstStartRecipe.Valid() || !catalog.IsNFQWS2Starter(service) || !s.AllLAN || len(s.Sources) != 0 || len(service.Domains) == 0 || len(service.CIDRs) != 0 {
+			return dataplane.ErrReviewChanged
+		}
+		hypothetical.NFQWSFirstStartRecipe = base.NFQWSFirstStartRecipe
+		// Node-scope planning deliberately reads the applied recipe. This is
+		// the predicted first-start publication image, not a Store mutation.
+		hypothetical.AppliedNFQWSFirstStartRecipe = base.NFQWSFirstStartRecipe
+	}
 	state := hypothetical.Services[s.ID]
 	state.Route = route
 	state.Mode = route
@@ -791,6 +818,15 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		}
 		if cfg.Revision != expected || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
 			return dataplane.ErrReviewChanged
+		}
+		if useDesiredRecipe {
+			expectedRecipe := base.AppliedNFQWSFirstStartRecipe
+			if committed {
+				expectedRecipe = base.NFQWSFirstStartRecipe
+			}
+			if cfg.NFQWSFirstStartRecipe != base.NFQWSFirstStartRecipe || cfg.AppliedNFQWSFirstStartRecipe != expectedRecipe {
+				return dataplane.ErrReviewChanged
+			}
 		}
 		if !sameAutonomyResourcePolicy(cfg, base) {
 			return dataplane.ErrReviewChanged
@@ -840,7 +876,13 @@ func (a *App) applyAutonomyRoute(ctx context.Context, p autonomy.Policy, s auton
 		if e := guard(ctx); e != nil {
 			return nil, e
 		}
-		undo, e := a.Store.ApplyAutonomyRouteWithRollback(s.ID, route, s.Sources, base.Revision)
+		var undo func() error
+		var e error
+		if useDesiredRecipe {
+			undo, e = a.Store.ApplyAutonomyNFQFirstStartRouteWithRollback(s.ID, s.Sources, base.NFQWSFirstStartRecipe, base.Revision)
+		} else {
+			undo, e = a.Store.ApplyAutonomyRouteWithRollback(s.ID, route, s.Sources, base.Revision)
+		}
 		if e == nil {
 			committed = true
 		}
