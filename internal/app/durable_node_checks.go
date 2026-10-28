@@ -524,6 +524,9 @@ func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResul
 		item.Engine = engine // Selected executor, not proof that a process started.
 	}
 	if item.Engine != "" && result.NodeID == id && result.RoutePathID == engine+":"+id && (profile == "" || result.NetworkProfile == profile) {
+		item.DirectEgressError = closedNodeEgressError(result.DirectEgressError)
+		item.ProxyEgressError = closedNodeEgressError(result.ProxyEgressError)
+		item.Stages = closedNodeCheckStages(result.Stages)
 		switch result.Stage {
 		case "dns", "transport", "configuration", "protocol", "route_identity", "egress", "service", "service_ip", "cleanup", "resource", "connectivity":
 			item.Stage = result.Stage
