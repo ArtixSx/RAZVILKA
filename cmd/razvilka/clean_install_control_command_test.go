@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -16,6 +17,32 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
+
+func TestCleanInstallControlFailureDiagnosticIsClosedAndRetainsMaskedDeadline(t *testing.T) {
+	secret := errors.New("private config value and installation path must not be logged")
+	for _, tc := range []struct {
+		name            string
+		err, contextErr error
+		want            string
+	}{
+		{"native-refusal", operationgate.ErrSelfUpdateStopJournal, nil, "CLEAN_INSTALL_CONTROL_REFUSED"},
+		{"stopped", operationgate.ErrSelfUpdateStopped, nil, "CLEAN_INSTALL_CONTROL_REFUSED"},
+		{"changed", operationgate.ErrSelfUpdateStopChanged, nil, "CLEAN_INSTALL_CONTROL_REFUSED"},
+		{"private-error", secret, nil, "CLEAN_INSTALL_CONTROL_REFUSED"},
+		{"deadline", context.DeadlineExceeded, nil, "CLEAN_INSTALL_CONTROL_DEADLINE"},
+		{"wrapped-deadline", fmt.Errorf("private details: %w", context.DeadlineExceeded), nil, "CLEAN_INSTALL_CONTROL_DEADLINE"},
+		{"joined-deadline", errors.Join(secret, context.DeadlineExceeded), nil, "CLEAN_INSTALL_CONTROL_DEADLINE"},
+		{"masked-deadline", operationgate.ErrSelfUpdateStopJournal, context.DeadlineExceeded, "CLEAN_INSTALL_CONTROL_DEADLINE"},
+		{"text-is-not-deadline", errors.New("context deadline exceeded"), nil, "CLEAN_INSTALL_CONTROL_REFUSED"},
+		{"canceled", context.Canceled, context.Canceled, "CLEAN_INSTALL_CONTROL_REFUSED"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cleanInstallControlFailureCategory(tc.err, tc.contextErr); got != tc.want {
+				t.Fatalf("diagnostic=%q want=%q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestCleanInstallControlDispatchExactArgsAndNoPathOverrides(t *testing.T) {
 	base := t.TempDir()

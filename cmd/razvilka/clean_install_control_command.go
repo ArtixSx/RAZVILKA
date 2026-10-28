@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -12,6 +13,17 @@ import (
 )
 
 const cleanInstallControlCommand = "install-control-initialize"
+
+// Cold flash creation includes durable directory/ledger sync and repeated
+// installed-image checks. Keep a finite budget without relaxing those checks.
+const cleanInstallControlTimeout = 2 * time.Minute
+
+func cleanInstallControlFailureCategory(err, contextErr error) string {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(contextErr, context.DeadlineExceeded) {
+		return "CLEAN_INSTALL_CONTROL_DEADLINE"
+	}
+	return "CLEAN_INSTALL_CONTROL_REFUSED"
+}
 
 func cleanInstallConfigUnapplied(raw []byte) bool {
 	cfg, _, err := config.InspectBytes(raw)
@@ -36,7 +48,7 @@ func runCleanInstallControlCommand(args []string, roots selfUpdateJournalRoots) 
 	if roots != productionSelfUpdateJournalRoots() {
 		return true, 3
 	}
-	parent, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	parent, cancel := context.WithTimeout(context.Background(), cleanInstallControlTimeout)
 	defer cancel()
 	var gate operationgate.Gate
 	ctx, release, err := gate.ExclusiveContext(parent)
@@ -44,8 +56,11 @@ func runCleanInstallControlCommand(args []string, roots selfUpdateJournalRoots) 
 		return true, 3
 	}
 	defer release()
-	if initializeNativeCleanInstallControl(ctx, &gate, args[1]) != nil {
-		fmt.Fprintln(os.Stderr, "CLEAN_INSTALL_CONTROL_REFUSED")
+	if err := initializeNativeCleanInstallControl(ctx, &gate, args[1]); err != nil {
+		// Native ownership checks may deliberately mask their underlying error.
+		// The original deadline still identifies an expired command, while no
+		// filesystem path, config data or arbitrary error text is published.
+		fmt.Fprintln(os.Stderr, cleanInstallControlFailureCategory(err, parent.Err()))
 		return true, 3
 	}
 	if _, err := fmt.Fprintln(os.Stdout, "CLEAN_INSTALL_CONTROL_READY"); err != nil {
