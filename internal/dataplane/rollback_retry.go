@@ -220,7 +220,7 @@ func (m *Manager) reviewFailedRollbackImagesMode(planID, digest string, latest, 
 			prepared = append(prepared, adapter)
 		}
 		if step.State == "failed" {
-			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) && !(retiringStop && step.Phase == "deactivate") {
+			if !seen[step.Adapter] || !slices.Contains([]string{"activate", "health", "commit-adapter"}, step.Phase) && !(retiringStop && step.Phase == "deactivate") && !(step.Adapter == "nfqws2" && step.Phase == "settle-hooks") {
 				return failedRollback{}, false
 			}
 			failedBeforeCommit = true

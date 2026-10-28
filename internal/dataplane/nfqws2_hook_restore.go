@@ -398,6 +398,9 @@ type nfqws2HookAttempt struct {
 	unacknowledged []BackendInventoryRow
 	detail         string
 	result         NFQWS2HookRestore
+	// Candidate-only write-ahead effect journal; committed repair leaves nil.
+	effect         func(NFQWS2HookCommand, string) error
+	borrowedNative bool
 }
 
 // restoreFirstStartHooksLocked re-creates the owned mangle graph of every
@@ -605,7 +608,7 @@ func (t *nfqws2HookAttempt) identity(ctx context.Context) (string, error) {
 // kernel read identical to the admitted one.
 func (t *nfqws2HookAttempt) prepare(ctx context.Context) (string, error) {
 	a := t.a
-	if a.stockNativeOwner == nil || a.firstStartReview != nil {
+	if a.stockNativeOwner == nil || a.firstStartReview != nil && !t.borrowedNative {
 		return NFQWS2HookReasonNative, components.ErrStockNFQWSNative
 	}
 	effective, err := engineconfig.NFQWSFirstStartEffectiveConfig(t.config, t.owner)
@@ -616,13 +619,24 @@ func (t *nfqws2HookAttempt) prepare(ctx context.Context) (string, error) {
 	if err != nil {
 		return NFQWS2HookReasonNative, err
 	}
-	nativeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	review, err := a.stockNativeOwner.ReviewStockNFQWSNative(nativeCtx, arguments)
-	cancel()
-	if err != nil {
-		return NFQWS2HookReasonNative, err
+	review := t.native
+	if t.borrowedNative {
+		if review == nil || a.firstStartReview != review || a.firstStartReviewRoot != t.lease.Transaction {
+			return NFQWS2HookReasonNative, ErrReviewChanged
+		}
+		if err := review.ReviewClosedFirstStartParameters(ctx, t.config, t.owner); err != nil {
+			return NFQWS2HookReasonNative, err
+		}
+	} else {
+		nativeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		var err error
+		review, err = a.stockNativeOwner.ReviewStockNFQWSNative(nativeCtx, arguments)
+		cancel()
+		if err != nil {
+			return NFQWS2HookReasonNative, err
+		}
+		t.native = review
 	}
-	t.native = review
 	if err := review.CheckCurrentWithOwnedInit(ctx, t.owner); err != nil {
 		return NFQWS2HookReasonNative, err
 	}
@@ -645,6 +659,9 @@ func (t *nfqws2HookAttempt) prepare(ctx context.Context) (string, error) {
 // guard runs before every command: the caller's authority, cancellation and
 // the unchanged lease. It is never consulted during cleanup.
 func (t *nfqws2HookAttempt) guard(ctx context.Context) error {
+	if t.borrowedNative && (t.native == nil || t.a.firstStartReview != t.native || t.a.firstStartReviewRoot != t.lease.Transaction) {
+		return ErrReviewChanged
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -703,12 +720,26 @@ func (t *nfqws2HookAttempt) execTable(ctx context.Context, family int, table str
 	}
 	row := BackendInventoryRow{Family: family, Table: table, Tokens: slices.Clone(tokens)}
 	args := append([]string{"-t", table}, tokens...)
-	t.result.Commands = append(t.result.Commands, NFQWS2HookCommand{Family: family, Args: slices.Clone(args)})
+	command := NFQWS2HookCommand{Family: family, Args: slices.Clone(args)}
+	t.result.Commands = append(t.result.Commands, command)
+	if t.effect != nil {
+		if err := t.effect(command, "pending"); err != nil {
+			return NFQWS2HookReasonWrite, err
+		}
+	}
 	if _, err := runFirewallCommand(ctx, t.a.Runner, t.source.binary(family), args...); err != nil {
 		t.unacknowledged = append(t.unacknowledged, row)
+		if t.effect != nil {
+			err = errors.Join(err, t.effect(command, "unknown"))
+		}
 		return NFQWS2HookReasonWrite, err
 	}
 	t.attempted[family] = append(t.attempted[family], row)
+	if t.effect != nil {
+		if err := t.effect(command, "acknowledged"); err != nil {
+			return NFQWS2HookReasonWrite, err
+		}
+	}
 	return "", nil
 }
 

@@ -2136,6 +2136,20 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		{name: "health", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Health }},
 		{name: "commit-adapter", call: func(a Adapter) func(context.Context, Plan, string) error { return a.Commit }},
 	} {
+		// A later adapter can trigger firmware table reconstruction after NFQ
+		// activation. Settle only this candidate's exact first-start hooks under
+		// the existing transaction before observational Health runs unchanged.
+		if phase.name == "health" && plan.LAN == nil && len(adapters) > 1 {
+			for _, adapter := range adapters {
+				if nfq, ok := adapter.(*NFQWS2Adapter); ok {
+					if err := run(ctx, adapter, "settle-hooks", func(c context.Context, candidate Plan, root string) error {
+						return nfq.settleCandidateHooks(c, candidate, root, func(c context.Context) error { return m.checkPlanNetwork(c, plan) })
+					}); err != nil {
+						return execution, fail(err)
+					}
+				}
+			}
+		}
 		for _, adapter := range adapters {
 			if phase.name == "activate" && adapter.ID() == NetworkPolicyAdapterID {
 				continue
