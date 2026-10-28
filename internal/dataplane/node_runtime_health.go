@@ -188,7 +188,7 @@ func (a *ProxyTunnelAdapter) CommittedNodeHealth(ctx context.Context, plan Plan)
 	if err := a.healthState(ctx, plan, state); err != nil {
 		return err
 	}
-	if a.committedXrayAllLAN(plan) {
+	if a.committedNodeAllLAN(plan) {
 		current, exists, err := a.loadPolicy()
 		if err != nil || !exists || !reflect.DeepEqual(current, state) {
 			return errors.Join(ErrReviewChanged, err)
@@ -213,11 +213,39 @@ func (a *ProxyTunnelAdapter) committedXrayAllLAN(plan Plan) bool {
 	return false
 }
 
+// Sing-box uses the same physical LAN expansion during Stage. Only an exact
+// node plan with its configured materializer gets that recorded-scope check;
+// a profile/default route cannot grant all-LAN node authority. Xray keeps its
+// original scoped/owned-verifier requirements unchanged.
+func (a *ProxyTunnelAdapter) committedNodeAllLAN(plan Plan) bool {
+	if a.committedXrayAllLAN(plan) {
+		return true
+	}
+	if a.ID() != "sing-box" || a.NodeRoutes == nil || a.FreshProfile == nil || a.Configs == nil || a.Processes == nil ||
+		a.Interface != "rz-sing" || a.Table != 203 || a.Priority != 22000 {
+		return false
+	}
+	allLAN := false
+	for _, route := range plan.Routes {
+		if adapterID(route.Resolved) != a.ID() {
+			continue
+		}
+		engine, target, exact := routekind.ParseNodeRoute(route.Resolved)
+		if !exact || engine != a.ID() || !strings.HasPrefix(target, "node-") {
+			return false
+		}
+		if len(route.Sources) == 0 {
+			allLAN = true
+		}
+	}
+	return allLAN
+}
+
 // Health validates the recorded scope; a newly connected bridge is not new
 // authority. Recompile only those recorded rules, never an empty-source plan
 // which would discover and append new LAN prefixes during a health poll.
 func (a *ProxyTunnelAdapter) verifyCommittedNodeClientScope(ctx context.Context, plan Plan, state PolicyState) error {
-	allLAN := a.committedXrayAllLAN(plan)
+	allLAN := a.committedNodeAllLAN(plan)
 	allowed, observed := map[string]bool{}, map[string]bool{}
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) != a.ID() {
@@ -281,7 +309,7 @@ func (a *ProxyTunnelAdapter) verifyCommittedNodeClientScope(ctx context.Context,
 		return errors.New("committed node client scope is incomplete")
 	}
 	if allLAN {
-		if err := a.verifyCommittedXrayRuleTuples(ctx, plan, state); err != nil {
+		if err := a.verifyCommittedNodeRuleTuples(ctx, plan, state); err != nil {
 			return err
 		}
 		current, err := a.compileForwarding(ctx, state)
@@ -298,7 +326,7 @@ func (a *ProxyTunnelAdapter) verifyCommittedNodeClientScope(ctx context.Context,
 
 // Canonical intent keeps each destination/ingress tied to its own source
 // grant. An all-LAN route for A must never broaden a selected-only route B.
-func (a *ProxyTunnelAdapter) verifyCommittedXrayRuleTuples(ctx context.Context, plan Plan, state PolicyState) error {
+func (a *ProxyTunnelAdapter) verifyCommittedNodeRuleTuples(ctx context.Context, plan Plan, state PolicyState) error {
 	for _, route := range plan.Routes {
 		if adapterID(route.Resolved) == a.ID() && len(route.Domains) != 0 {
 			return ErrProxyDomainAuthority
