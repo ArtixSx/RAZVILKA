@@ -88,17 +88,54 @@ func (l *nodeTransitLease) VerifyRoute(ctx context.Context) error {
 	defer cancel()
 	status, err := l.Inspect(ctx)
 	if err != nil || !status.Complete || status.Unknown || status.Removed {
-		return errors.Join(ErrNodeTransitUnavailable, err)
+		return nodeTransitPhase("route-receipt", errors.Join(ErrNodeTransitUnavailable, err))
 	}
 	count, err := l.presence(ctx)
 	if err != nil || count != 1 {
-		return errors.Join(ErrNodeTransitUnavailable, err)
+		return nodeTransitPhase("route-presence", errors.Join(ErrNodeTransitUnavailable, err))
 	}
-	output, err := l.runtime.runner.Run(ctx, l.runtime.ip, "-N", "-4", "route", "get", l.spec.Destination.String(), "from", l.spec.Source.String(), "oif", l.spec.Interface)
-	if err != nil || len(output) > 4096 || !nodeTransitRouteMatches(l.spec, string(output)) {
-		return errors.Join(ErrNodeTransitUnavailable, err, ctx.Err())
+	output, err := l.readRoute(ctx)
+	if err != nil {
+		return err
 	}
-	return l.guard(ctx)
+	if len(output) > 4096 || !nodeTransitRouteMatches(l.spec, string(output)) {
+		return nodeTransitPhase("route-lookup-shape", ErrNodeTransitUnavailable)
+	}
+	return nodeTransitPhase("route-closing-guard", l.guard(ctx))
+}
+
+// Entware iproute2 4.4 has route get/from/oif but not -N. Negotiate only
+// that exact unsupported option, never a failed route or malformed success.
+// The query remains the same frozen tuple; the normal strict route parser
+// still requires its exact source, interface and numeric table afterwards.
+func (l *nodeTransitLease) readRoute(ctx context.Context) ([]byte, error) {
+	args := []string{"-N", "-4", "route", "get", l.spec.Destination.String(), "from", l.spec.Source.String(), "oif", l.spec.Interface}
+	output, err := l.runtime.runner.Run(ctx, l.runtime.ip, args...)
+	if ctx.Err() != nil {
+		return nil, nodeTransitPhase("route-lookup-context", errors.Join(ErrNodeTransitUnavailable, ctx.Err()))
+	}
+	var exited interface{ ExitCode() int }
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+		errors.As(err, &exited) && exited.ExitCode() == 255 && wgEndpointUnknownOption(output, "-N") {
+		if !reservedTableNamesUnaliased() {
+			return nil, nodeTransitPhase("route-lookup-table-alias", ErrNodeTransitUnavailable)
+		}
+		if err := l.guard(ctx); err != nil {
+			return nil, nodeTransitPhase("route-lookup-fallback-guard", err)
+		}
+		output, err = l.runtime.runner.Run(ctx, l.runtime.ip, args[1:]...)
+		if err != nil || ctx.Err() != nil {
+			return nil, nodeTransitPhase("route-lookup-plain", errors.Join(ErrNodeTransitUnavailable, err, ctx.Err()))
+		}
+		if !reservedTableNamesUnaliased() {
+			return nil, nodeTransitPhase("route-lookup-closing-table-alias", ErrNodeTransitUnavailable)
+		}
+		return numericReservedTables(output), nil
+	}
+	if err != nil {
+		return nil, nodeTransitPhase("route-lookup-numeric", errors.Join(ErrNodeTransitUnavailable, err))
+	}
+	return output, nil
 }
 
 func nodeTransitRouteMatches(spec NodeTransitSpec, output string) bool {
