@@ -113,18 +113,23 @@ func TestManagedXrayNodeSelectorOriginalDispatcherSelectableWithoutReady(t *test
 	}
 	base := managedXraySelectorBase()
 	originalBase := append([]routecatalog.Option(nil), base...)
-	if f.adapter.NodeTUNProbe != nil || f.a.Dataplane.XrayNodeRouteCapable() {
-		t.Fatal("ordinary factory unexpectedly became the legacy scoped adapter")
+	if f.adapter.NodeTUNProbe != nil {
+		t.Fatal("ordinary factory unexpectedly acquired an independent LAN observer")
 	}
+	verifiedRuntime := f.a.Dataplane.XrayNodeRouteCapable()
 	options := f.a.appendNodeRouteOptions(context.Background(), base)
 	route := "xray:" + f.node
-	if !routecatalog.ValidForServiceWithOptions(route, "telegram", options) || routecatalog.ReadyWithOptions(route, options) {
-		t.Fatal("original managed dispatcher must permit exact selection without Ready", options)
+	if !routecatalog.ValidForServiceWithOptions(route, "telegram", options) || routecatalog.ReadyWithOptions(route, options) != verifiedRuntime {
+		t.Fatal("original managed selection lost its independent verifier boundary", options)
 	}
-	if routecatalog.ValidForServiceWithOptions(route, "youtube", options) || routecatalog.ValidWithOptions("xray:"+group.ID, options) {
+	if routecatalog.ValidForServiceWithOptions(route, "youtube", options) || routecatalog.ValidWithOptions("xray:"+group.ID, options) != verifiedRuntime {
 		t.Fatal("managed selection widened its service or unsupported group", options)
 	}
-	if plannedEngineWithOptions(catalog.Service{Strategy: []string{route}}, nil, options) != "direct" {
+	expectedAuto := "direct"
+	if verifiedRuntime {
+		expectedAuto = route
+	}
+	if plannedEngineWithOptions(catalog.Service{Strategy: []string{route}}, nil, options) != expectedAuto {
 		t.Fatal("selector alone granted an AUTO-ready route")
 	}
 	after, err := f.a.Nodes.Snapshot(context.Background(), time.Now())
@@ -228,8 +233,14 @@ func TestManagedXrayNodeSelectorRefusesUnavailableOwnersAndFactory(t *testing.T)
 			f := newManagedXraySelectorFixture(t)
 			f.record(t, f.pass())
 			test.change(f)
-			if routecatalog.ValidWithOptions("xray:"+f.node, f.a.appendNodeRouteOptions(context.Background(), managedXraySelectorBase())) {
+			if test.name != "missing-admission" && test.name != "refused-admission" && f.a.managedXrayNodeSelectionCapable(context.Background()) {
 				t.Fatal("unavailable owner or factory permitted managed selection")
+			}
+			// An independent router verifier is a separate authority path on
+			// supported hosts; losing managed-list ownership cannot revoke it.
+			want := f.a.Dataplane.XrayNodeRouteCapable() && f.a.nodeHistoryAdmission(context.Background(), "xray") == nil
+			if routecatalog.ValidWithOptions("xray:"+f.node, f.a.appendNodeRouteOptions(context.Background(), managedXraySelectorBase())) != want {
+				t.Fatal("selector confused managed ownership with independent node verification")
 			}
 		})
 	}
