@@ -368,6 +368,10 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		if err := recoverExactNodeCheckersForRemoval(ctx, *dataplaneStatePath, *retireDataplaneForRemoval); err != nil {
+			log.Print("Exact node checker removal refused; retained ownership and panel files must be preserved")
+			return 1
+		}
 		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
 		if err != nil {
 			log.Fatal(err)
