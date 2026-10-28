@@ -75,6 +75,8 @@ type ProxyTunnelAdapter struct {
 	nodeRuntimeIdentity func(ProcessSpec, string) (string, error)
 	nodeXHTTPVersion    func(context.Context, string) error
 	ownedUSQUELiveIO    usqueLiveHealthIO
+	// Private test seam; production uses the Linux OS interface inventory.
+	nodeInterfaceInventory func() ([]net.Interface, error)
 	// Startup-only dispatch capability; operation views never mutate this owner.
 	xrayPlanDispatch           bool
 	xrayOperation              bool

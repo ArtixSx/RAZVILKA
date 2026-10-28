@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
 )
@@ -25,9 +27,28 @@ func (a *ProxyTunnelAdapter) nodeInterfacePath() string {
 }
 
 func (a *ProxyTunnelAdapter) scopedInterfaceIndex(ctx context.Context) (int, error) {
+	if ctx == nil || a == nil {
+		return 0, errors.New("scoped interface inventory unavailable")
+	}
+	ctx, cancel := context.WithTimeout(ctx, a.timeout())
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	output, err := a.run(ctx, a.ip(), "-j", "link", "show", "dev", a.Interface)
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	var exited interface{ ExitCode() int }
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+		errors.As(err, &exited) && exited.ExitCode() == 255 && wgEndpointUnknownOption(output, "-j") {
+		return a.scopedOSInterfaceIndex(ctx)
+	}
 	if err != nil {
 		output, err = a.run(ctx, a.ip(), "-j", "link", "show")
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -53,6 +74,52 @@ func (a *ProxyTunnelAdapter) scopedInterfaceIndex(ctx context.Context) (int, err
 		return 0, errors.New("scoped TUN ifindex readback is unavailable")
 	}
 	return links[0].Index, nil
+}
+
+// Old Entware iproute2 cannot print JSON. Only its exact unsupported-option
+// diagnostic selects this Linux OS inventory; failed or malformed observations
+// never establish absence. This reads no historical lease or command receipt.
+func (a *ProxyTunnelAdapter) scopedOSInterfaceIndex(ctx context.Context) (int, error) {
+	observe := a.nodeInterfaceInventory
+	if observe == nil {
+		if runtime.GOOS != "linux" {
+			return 0, errors.New("scoped OS interface inventory unavailable")
+		}
+		observe = net.Interfaces
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	name := a.Interface
+	links, err := observe()
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	if err != nil || name == "" || a.Interface != name || len(links) == 0 || len(links) > 4096 {
+		return 0, errors.New("scoped OS interface inventory unavailable")
+	}
+	names, indices := map[string]bool{}, map[int]bool{}
+	loopback, index := false, 0
+	for _, link := range links {
+		if link.Name == "" || link.Index < 1 || names[link.Name] || indices[link.Index] {
+			return 0, errors.New("scoped OS interface inventory unavailable")
+		}
+		names[link.Name], indices[link.Index] = true, true
+		loopback = loopback || link.Name == "lo"
+		if link.Name == name {
+			index = link.Index
+		}
+	}
+	if !loopback {
+		return 0, errors.New("scoped OS interface inventory unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if index == 0 {
+		return 0, errNodeInterfaceAbsent
+	}
+	return index, nil
 }
 
 func (a *ProxyTunnelAdapter) recordScopedNodeInterface(ctx context.Context) error {
