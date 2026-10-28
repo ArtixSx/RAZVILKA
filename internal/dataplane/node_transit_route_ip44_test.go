@@ -16,7 +16,7 @@ func (e nodeTransitRouteExit) Error() string { return "modeled route exit" }
 func (e nodeTransitRouteExit) ExitCode() int { return int(e) }
 
 func TestNodeTransitRouteIP44NegotiatesOnlyExactUnsupportedNumericOption(t *testing.T) {
-	for _, mode := range []string{"old-ip", "modern", "wrong-exit", "generic-exit-text", "permission", "wrong-option", "extra-diagnostic", "malformed-success", "wrong-destination", "wrong-source", "wrong-interface", "wrong-table", "missing-table", "reserved-table", "unknown-table", "cancel-numeric", "cancel-plain", "guard-changed", "alias-before", "alias-during", "plain-fib-failure"} {
+	for _, mode := range []string{"old-ip", "modern", "wrong-exit", "generic-exit-text", "permission", "wrong-option", "extra-diagnostic", "malformed-success", "wrong-destination", "wrong-source", "wrong-interface", "wrong-table", "missing-table", "reserved-table", "unknown-table", "cancel-numeric", "cancel-plain", "guard-changed", "alias-before", "alias-during", "numeric-alias-before", "numeric-alias-during", "numeric-self-name", "valid-table-name", "plain-fib-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			l, base, authority := nodeTransitFixture(t)
 			if err := l.Apply(context.Background()); err != nil {
@@ -29,13 +29,22 @@ func TestNodeTransitRouteIP44NegotiatesOnlyExactUnsupportedNumericOption(t *test
 			dir := t.TempDir()
 			rtTablesSources = []string{dir}
 			t.Cleanup(func() { rtTablesSources = saved })
-			alias := func() {
-				if err := os.WriteFile(filepath.Join(dir, "rt_tables"), []byte("204 main\n"), 0600); err != nil {
+			alias := func(contents string) {
+				if err := os.WriteFile(filepath.Join(dir, "rt_tables"), []byte(contents), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if mode == "alias-before" {
-				alias()
+				alias("204 main\n")
+			}
+			if mode == "numeric-alias-before" {
+				alias("205 204\n")
+			}
+			if mode == "numeric-self-name" {
+				alias("204 204\n")
+			}
+			if mode == "valid-table-name" {
+				alias("204 own\n")
 			}
 			numeric := []string{"-N", "-4", "route", "get", l.spec.Destination.String(), "from", l.spec.Source.String(), "oif", l.spec.Interface}
 			plain := numeric[1:]
@@ -87,25 +96,27 @@ func TestNodeTransitRouteIP44NegotiatesOnlyExactUnsupportedNumericOption(t *test
 					output = strings.Replace(output, "table 204", "", 1)
 				case "reserved-table":
 					output = strings.Replace(output, "table 204", "table main", 1)
-				case "unknown-table":
+				case "unknown-table", "valid-table-name":
 					output = strings.Replace(output, "table 204", "table own", 1)
 				case "cancel-plain":
 					cancel()
 				case "alias-during":
-					alias()
+					alias("204 main\n")
+				case "numeric-alias-during":
+					alias("205 204\n")
 				case "plain-fib-failure":
 					return []byte("RTNETLINK answers: Network is unreachable\n"), fibFailure
 				}
 				return []byte(output), nil
 			})
 			err := l.VerifyRoute(ctx)
-			wantPass := mode == "old-ip" || mode == "modern"
+			wantPass := mode == "old-ip" || mode == "modern" || mode == "numeric-self-name"
 			if (err == nil) != wantPass {
 				t.Fatal("format negotiation accepted uncertain route or rejected exact route", mode, err)
 			}
 			wantCalls := 2
 			switch mode {
-			case "modern", "wrong-exit", "generic-exit-text", "permission", "wrong-option", "extra-diagnostic", "malformed-success", "cancel-numeric", "guard-changed", "alias-before":
+			case "modern", "wrong-exit", "generic-exit-text", "permission", "wrong-option", "extra-diagnostic", "malformed-success", "cancel-numeric", "guard-changed", "alias-before", "numeric-alias-before":
 				wantCalls = 1
 			}
 			if len(routeCalls) != wantCalls || !reflect.DeepEqual(routeCalls[0], numeric) || wantCalls == 2 && !reflect.DeepEqual(routeCalls[1], plain) {
@@ -118,5 +129,43 @@ func TestNodeTransitRouteIP44NegotiatesOnlyExactUnsupportedNumericOption(t *test
 				t.Fatal("route readback acquired mutation or unused authority", err)
 			}
 		})
+	}
+}
+
+func TestNodeTransitNumericTableNameCannotMaskForeignTable(t *testing.T) {
+	for _, dropin := range []bool{false, true} {
+		for _, contents := range []string{"205 204\n", "204 204\n205 204\n", "invalid 204\n", "204 own\n", "204 204\n", "0xcc 204\n", "205 other\n"} {
+			t.Run(contents+map[bool]string{false: "file", true: "dropin"}[dropin], func(t *testing.T) {
+				saved := rtTablesSources
+				root := t.TempDir()
+				rtTablesSources = []string{filepath.Join(root, "missing"), root}
+				t.Cleanup(func() { rtTablesSources = saved })
+				path := filepath.Join(root, "rt_tables")
+				if dropin {
+					if err := os.Mkdir(filepath.Join(root, "rt_tables.d"), 0700); err != nil {
+						t.Fatal(err)
+					}
+					path = filepath.Join(root, "rt_tables.d", "owned.conf")
+				}
+				if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+					t.Fatal(err)
+				}
+				want := !strings.Contains(contents, "205 204") && !strings.Contains(contents, "invalid 204")
+				if reservedTableNamesUnaliased() != want {
+					t.Fatal("foreign table acquired the expected numeric display name", contents, dropin)
+				}
+				// The same filesystem evidence must fence existing shared
+				// rule/show fallback, not just the new transit route/get.
+				runner := &ip44Runner{}
+				_, err := runIPNumeric(context.Background(), runner, "ip", "-N", "rule", "show")
+				wantCalls := 1
+				if want {
+					wantCalls = 2
+				}
+				if (err == nil) != want || len(runner.calls) != wantCalls {
+					t.Fatal("shared numeric fallback ignored alias evidence", contents, err, runner.calls)
+				}
+			})
+		}
 	}
 }

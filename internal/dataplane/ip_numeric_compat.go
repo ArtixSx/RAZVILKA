@@ -80,7 +80,9 @@ var rtTablesSources = []string{"/etc/iproute2", "/opt/etc/iproute2", "/usr/share
 // reservedTableNamesUnaliased reports that no rt_tables entry gives another
 // table a reserved name. With an entry such as "203 main" a plain readback
 // would print table 203 as main, so the names prove nothing and the fallback
-// is refused. An unreadable source also refuses it.
+// is refused. Numeric names must identify themselves too: "205 204" would
+// otherwise print a foreign table as the exact number a strict parser expects.
+// An unreadable source also refuses it.
 func reservedTableNamesUnaliased() bool {
 	var files []string
 	for _, root := range rtTablesSources {
@@ -107,6 +109,12 @@ func reservedTableNamesUnaliased() bool {
 			fields := strings.Fields(line)
 			if len(fields) < 2 || strings.HasPrefix(fields[0], "#") {
 				continue
+			}
+			if displayed, err := strconv.ParseUint(fields[1], 10, 32); err == nil && strconv.FormatUint(displayed, 10) == fields[1] {
+				number, err := strconv.ParseUint(fields[0], 0, 32)
+				if err != nil || number != displayed {
+					return false
+				}
 			}
 			want, reserved := reservedTableNumber[fields[1]]
 			if !reserved {
