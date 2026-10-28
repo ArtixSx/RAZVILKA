@@ -147,3 +147,107 @@ func TestNFQWS2CandidateBorrowedReviewIdentityRefusesBeforeEffects(t *testing.T)
 		})
 	}
 }
+
+func TestNFQWS2CandidatePendingJournalRechecksAuthorityBeforeCommand(t *testing.T) {
+	for _, mode := range []string{"stop", "pointer", "root"} {
+		t.Run(mode, func(t *testing.T) {
+			a, _, root := newOwnedNFQWS2(t)
+			transaction := stageOwnedNFQWS2(t, a, root, "old.example")
+			if err := a.Activate(context.Background(), Plan{}, transaction); err != nil {
+				t.Fatal(err)
+			}
+			lease, err := a.readLease()
+			if err != nil {
+				t.Fatal(err)
+			}
+			original := &components.StockNFQWSNativeReview{}
+			a.firstStartReview, a.firstStartReviewRoot = original, lease.Transaction
+			revoked := false
+			calls := 0
+			a.Runner = nfqws2RunFunc(func(context.Context, string, ...string) ([]byte, error) { calls++; return nil, nil })
+			j, err := newNFQWS2CandidateHookJournal(t.TempDir(), Plan{}, "original")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer j.root.Close()
+			attempt := &nfqws2HookAttempt{a: a, lease: lease, native: original, borrowedNative: true, review: func(context.Context) error {
+				if revoked {
+					return ErrReviewChanged
+				}
+				return nil
+			}, source: nfqws2HookSource{iptables: "iptables"}, attempted: map[int][]BackendInventoryRow{}}
+			attempt.effect = func(command NFQWS2HookCommand, state string) error {
+				if err := j.effect(command, state); err != nil {
+					return err
+				}
+				if state == "pending" {
+					switch mode {
+					case "stop":
+						revoked = true
+					case "pointer":
+						a.firstStartReview = &components.StockNFQWSNativeReview{}
+					case "root":
+						a.firstStartReviewRoot = "other"
+					}
+				}
+				return nil
+			}
+			reason, err := attempt.execTable(context.Background(), 4, "mangle", "-N", "nfqws_post")
+			if err == nil || reason != NFQWS2HookReasonGuard || calls != 0 || len(attempt.attempted[4]) != 0 || len(attempt.unacknowledged) != 0 {
+				t.Fatal("command escaped post-journal authority guard")
+			}
+			if len(j.record.Effects) != 1 || j.record.Effects[0].State != "pending" {
+				t.Fatal("durable pending evidence was lost")
+			}
+			if attempt.native != original {
+				t.Fatal("refusal changed original cleanup owner")
+			}
+		})
+	}
+}
+
+func TestNFQWS2CandidateSettlementRollbackRetryPhaseIsExact(t *testing.T) {
+	for _, mode := range []string{"nfq-settle", "nfq-unknown", "sing-settle", "nfq-activate"} {
+		t.Run(mode, func(t *testing.T) {
+			m, _, plan, e := rollbackRetryFixture(t)
+			previous, exists, err := m.Committed()
+			if err != nil || !exists {
+				t.Fatal(err)
+			}
+			adapter := "nfqws2"
+			phase := "settle-hooks"
+			if mode == "sing-settle" {
+				adapter = "sing-box"
+			}
+			if mode == "nfq-unknown" {
+				phase = "settle-hooks-unknown"
+			}
+			if mode == "nfq-activate" {
+				phase = "activate"
+			}
+			if adapter == "nfqws2" {
+				if err := m.Register(&fakeAdapter{id: adapter}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			plan.Adapters, previous.Adapters = []string{adapter}, []string{adapter}
+			var steps []ExecutionStep
+			for _, step := range e.Steps {
+				if step.Phase == "health" {
+					continue
+				}
+				step.Adapter = adapter
+				if step.Phase == "commit-adapter" {
+					step.Phase = phase
+				}
+				steps = append(steps, step)
+			}
+			e.Steps = steps
+			_, ok := m.reviewFailedRollbackImages(plan.PlanID, plan.Digest, &e, &e, plan, previous)
+			want := mode == "nfq-settle" || mode == "nfq-activate"
+			if ok != want {
+				t.Fatalf("phase boundary mode=%s accepted=%v want=%v", mode, ok, want)
+			}
+		})
+	}
+}

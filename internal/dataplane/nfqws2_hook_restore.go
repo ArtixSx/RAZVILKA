@@ -726,6 +726,11 @@ func (t *nfqws2HookAttempt) execTable(ctx context.Context, family int, table str
 		if err := t.effect(command, "pending"); err != nil {
 			return NFQWS2HookReasonWrite, err
 		}
+		// Durable journal publication is an I/O boundary. Stop, lease and the
+		// exact borrowed native owner must still be current before the effect.
+		if err := t.guard(ctx); err != nil {
+			return NFQWS2HookReasonGuard, err
+		}
 	}
 	if _, err := runFirewallCommand(ctx, t.a.Runner, t.source.binary(family), args...); err != nil {
 		t.unacknowledged = append(t.unacknowledged, row)
