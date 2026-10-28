@@ -83,7 +83,10 @@ func TestXrayProductionFactorySelectorUsesExactFreshProofWithoutEffects(t *testi
 			options := f.a.appendNodeRouteOptions(context.Background(), managedXraySelectorBase())
 			route := "xray:" + f.node
 			want := name == "fresh" && runtime.GOOS == "linux"
-			if routecatalog.ValidForServiceWithOptions(route, "custom-telegram-ip", options) != want || routecatalog.ReadyWithOptions(route, options) != want {
+			// Readiness belongs to the route option; its service allowlist
+			// independently rejects Telegram when another service was checked.
+			wantReady := (name == "fresh" || name == "foreign-service") && runtime.GOOS == "linux"
+			if routecatalog.ValidForServiceWithOptions(route, "custom-telegram-ip", options) != want || routecatalog.ReadyWithOptions(route, options) != wantReady {
 				t.Fatal("production exact-node selector lost constructor/platform/proof boundary", options)
 			}
 			if name == "fresh" {
