@@ -35,6 +35,12 @@ type ProcessController interface {
 type OSProcessController struct{}
 
 func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
+	return startManagedProcess(ctx, spec, nil)
+}
+
+// A retained starter transfers this exact Cmd's sole Wait before returning.
+// Ordinary Start keeps its original detached waiter and Stop semantics.
+func startManagedProcess(ctx context.Context, spec ProcessSpec, retain func(*exec.Cmd, []byte) error) error {
 	if err := validateProcessSpec(spec); err != nil {
 		return err
 	}
@@ -58,6 +64,7 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 	configName, _ := filepath.Rel(spec.Dir, spec.MatchArg)
 	receiptName := pidName + routeidentity.ReceiptSuffix
 	configHash := ""
+	var receipt []byte
 	if spec.RouteProof {
 		data, err := owned.ReadLimited(configName, 8<<20)
 		if err != nil {
@@ -114,7 +121,7 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 		}
 		if controller.Running(spec) {
 			if spec.RouteProof {
-				receipt, err := routeidentity.RecordStart(pid, spec.Binary, spec.Args, spec.MatchArg, configHash)
+				receipt, err = routeidentity.RecordStart(pid, spec.Binary, spec.Args, spec.MatchArg, configHash)
 				if err != nil {
 					return fmt.Errorf("record managed route identity: %w", err)
 				}
@@ -125,8 +132,14 @@ func (OSProcessController) Start(ctx context.Context, spec ProcessSpec) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			if retain != nil {
+				if err := retain(command, receipt); err != nil {
+					return err
+				}
+			} else {
+				go func() { _ = command.Wait() }()
+			}
 			ready = true
-			go func() { _ = command.Wait() }()
 			return nil
 		}
 		select {

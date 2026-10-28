@@ -2095,6 +2095,19 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				return execution, failure
 			}
 			failure := rejectCanary(err)
+			if timeout := soleCanaryTimeout(failure); timeout != nil && !liveMutation && undoCommit == nil && !commitPublicationAttempted &&
+				activeNFQScope == nil && activeXrayScope == nil && activeWGScope == nil && pair == nil {
+				// Only this completed pre-activation cycle can certify its live
+				// cleanup error. Journal state alone is never retry permission.
+				current, exists, readErr := m.committedLocked()
+				if guardErr := m.checkPlanNetwork(ctx, plan); guardErr != nil {
+					failure = errors.Join(failure, guardErr)
+				} else if readErr != nil || exists != previousExists || !reflect.DeepEqual(current, previousPolicy) {
+					failure = errors.Join(failure, ErrReviewChanged, readErr)
+				} else {
+					timeout.seal(m, plan, execution, previousPolicy, previousExists)
+				}
+			}
 			return execution, failure
 		}
 	}

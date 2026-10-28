@@ -655,6 +655,15 @@ func (a *ProxyTunnelAdapter) Canary(ctx context.Context, plan RoutePlan, root st
 		spec := a.engineProcessAt(configPath, port, canaryRoot, a.ID()+"-canary", transport)
 		evidence, err := a.runCanaryAttempt(ctx, plan, spec, address)
 		if err != nil {
+			if timeout := soleCanaryTimeout(err); timeout != nil && timeout.cleaned {
+				if err := checkAddressRefreshAuthority(ctx); err != nil {
+					return err
+				}
+				if err := a.checkRouteNetwork(ctx, plan); err != nil {
+					return err
+				}
+				return timeout
+			}
 			if errors.Is(err, errProxyCanaryCleanup) {
 				return err
 			}
@@ -707,14 +716,49 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			pinsByRoute[index] = pins
 		}
 	}
-	if err := a.Processes.Start(ctx, spec); err != nil {
-		return evidence, fmt.Errorf("start isolated %s candidate: %w", a.ID(), err)
+	var original *OriginalProcess
+	var startErr error
+	joinedCandidate := false
+	if a.ID() == "xray" {
+		for _, route := range plan.Routes {
+			joinedCandidate = joinedCandidate || a.nodeServiceIPScopeRequired(route)
+		}
+	}
+	if controller, ok := a.Processes.(OriginalProcessController); ok && joinedCandidate {
+		// Background AUTO has no outer deadline. Bound only the original
+		// Start; the retained exec.Cmd is not tied to this finite context.
+		// Probes and cleanup retain their existing independent budgets.
+		startCtx, cancelStart := context.WithTimeout(ctx, a.timeout())
+		original, startErr = controller.StartOriginal(startCtx, spec, address)
+		cancelStart()
+		if startErr == nil && !original.matches(spec, address) {
+			// A real child token for another request grants no cleanup of that
+			// child, nor permission to fall back to a mutable PID-file lookup.
+			return evidence, errors.Join(errProxyCanaryCleanup, ErrOriginalProcessCleanup)
+		}
+	} else {
+		startErr = a.Processes.Start(ctx, spec)
+	}
+	if startErr != nil {
+		return evidence, fmt.Errorf("start isolated %s candidate: %w", a.ID(), startErr)
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.timeout())
 		defer cancel()
-		if err := a.Processes.Stop(cleanupCtx, spec); err != nil {
+		var cleanupErr error
+		if original != nil {
+			cleanupErr = original.StopAndJoin(cleanupCtx)
+		} else {
+			cleanupErr = a.Processes.Stop(cleanupCtx, spec)
+		}
+		if err := cleanupErr; err != nil {
 			resultErr = errors.Join(resultErr, errProxyCanaryCleanup, fmt.Errorf("stop isolated %s candidate: %w", a.ID(), err))
+		} else if timeout := soleCanaryTimeout(resultErr); timeout != nil {
+			if original != nil && ctx.Err() == nil {
+				timeout.cleaned = true
+			} else {
+				resultErr = nodeIPProbeFailure{nodeIPTimeout}
+			}
 		}
 	}()
 	if err := a.waitForSOCKSProcess(ctx, spec, address); err != nil {
@@ -746,7 +790,7 @@ func (a *ProxyTunnelAdapter) runCanaryAttempt(ctx context.Context, plan RoutePla
 			// admitted literal immediately, retaining original Host/SNI and
 			// the same HTTPS response evaluator; never try an opaque FQDN.
 			if err := a.probeNodeServiceIPPins(ctx, route, address, pins); err != nil {
-				return evidence, err
+				return evidence, candidateCanaryTimeout(plan, route, err)
 			}
 			evidence.ConfirmedRoutes = append(evidence.ConfirmedRoutes, route.ServiceName)
 			continue
