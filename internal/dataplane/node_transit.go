@@ -246,13 +246,13 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 		Guard: func(ctx context.Context, _ int) error { return l.guard(ctx) },
 		Preflight: func(ctx context.Context) error {
 			if err := l.runtime.preflight(ctx, l.spec); err != nil {
-				return err
+				return nodeTransitPhase("preflight-owner", err)
 			}
 			count, err := l.presence(ctx)
 			if err != nil || count != 0 {
-				return errors.Join(ErrNodeTransitUnavailable, err)
+				return nodeTransitPhase("preflight-presence", errors.Join(ErrNodeTransitUnavailable, err))
 			}
-			return l.guard(ctx)
+			return nodeTransitPhase("preflight-closing-guard", l.guard(ctx))
 		},
 		ExactPresence: func(ctx context.Context, index int) (int, error) {
 			if index != 0 {
@@ -274,12 +274,12 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 
 func (l *nodeTransitLease) register(ctx context.Context) error {
 	if err := l.guard(ctx); err != nil {
-		return err
+		return nodeTransitPhase("register-initial-guard", err)
 	}
 	if err := l.runtime.register(ctx, l.spec, l.root, l.digest); err != nil {
-		return err
+		return nodeTransitPhase("register-manager", err)
 	}
-	return l.guard(ctx)
+	return nodeTransitPhase("register-closing-guard", l.guard(ctx))
 }
 
 func (l *nodeTransitLease) Apply(ctx context.Context) error {
@@ -329,14 +329,14 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 		return before
 	}
 	if err := l.register(context.WithValue(ctx, nodeTransitRemovalKey{}, false)); err != nil {
-		return classify(err)
+		return classify(nodeTransitPhase("apply-register", err))
 	}
 	// This early invocation provides a definite before-effects refusal. The
 	// shared backend repeats preflight under its permanent receipt lock; every
 	// error after entering that backend remains unclassified.
 	runtime := l.effectRuntime()
 	if err := runtime.Preflight(ctx); err != nil {
-		return classify(err)
+		return classify(nodeTransitPhase("apply-early-preflight", err))
 	}
 	l.unused.Store(nil)
 	l.effects.Store(true)

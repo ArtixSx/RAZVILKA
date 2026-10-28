@@ -159,42 +159,42 @@ func (a *ProxyTunnelAdapter) scopedNodeRouterHealth(ctx context.Context, plan Pl
 		}
 		if active {
 			if err := requireOwnedUSQUEReviewGuard(c); err != nil {
-				return err
+				return nodeTransitPhase("verify-review", err)
 			}
 			if err := a.checkPlanNetwork(c, plan); err != nil {
-				return err
+				return nodeTransitPhase("verify-plan-network", err)
 			}
 		}
 		currentBoot, err := a.currentBootIdentity()
 		if err != nil || currentBoot != boot {
-			return ErrNodeTransitUnavailable
+			return nodeTransitPhase("verify-boot", ErrNodeTransitUnavailable)
 		}
 		if err := a.verifyScopedNodeInterface(c); err != nil {
-			return err
+			return nodeTransitPhase("verify-interface", err)
 		}
 		currentRuntime, err := a.scopedRuntimeIdentity()
 		if err != nil || currentRuntime != runtimeID {
-			return ErrNodeTransitUnavailable
+			return nodeTransitPhase("verify-runtime", ErrNodeTransitUnavailable)
 		}
 		currentManifest, err := a.readNodeManifest(a.nodeManifestPath())
 		if err != nil {
-			return err
+			return nodeTransitPhase("verify-manifest-read", err)
 		}
 		raw, _ := json.Marshal(currentManifest)
 		if routeidentity.Hash(raw) != manifestHash {
-			return ErrNodeTransitUnavailable
+			return nodeTransitPhase("verify-manifest-identity", ErrNodeTransitUnavailable)
 		}
 		if err := policy.verify(c, a); err != nil {
-			return err
+			return nodeTransitPhase("verify-policy", err)
 		}
 		if err := nodeRouterAssignedSource(c, request, nodeRouterHTTPSOptions{}); err != nil {
-			return err
+			return nodeTransitPhase("verify-assigned-source", err)
 		}
 		if active {
 			if err := nodeRouterReturnPath(c, a.Interface); err != nil {
-				return err
+				return nodeTransitPhase("verify-return-path", err)
 			}
-			return a.nodeRouterBackendDisjoint(c, manifest, source, request.Destination)
+			return nodeTransitPhase("verify-backend-disjoint", a.nodeRouterBackendDisjoint(c, manifest, source, request.Destination))
 		}
 		return c.Err()
 	}

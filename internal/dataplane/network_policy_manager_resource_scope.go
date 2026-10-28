@@ -384,18 +384,18 @@ func (s *executionResourceScope) registerTransit(ctx context.Context, resource *
 		return false, s.persist()
 	}()
 	if err != nil || already {
-		return err
+		return nodeTransitPhase("registration-prepare", err)
 	}
 	if err := resource.readback(ctx, spec, root, digest, networkPolicyTransitPrepared); err != nil {
-		return err
+		return nodeTransitPhase("registration-prepared-readback", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if index, err := s.matchingTransit(resource, spec, root, digest); err != nil || index < 0 {
-		return errors.Join(ErrNodeTransitUnavailable, err)
+		return nodeTransitPhase("registration-closing-match", errors.Join(ErrNodeTransitUnavailable, err))
 	}
 	if err := s.check(ctx, resource, true); err != nil {
-		return err
+		return nodeTransitPhase("registration-closing-forward", err)
 	}
 	resource.admitted = true
 	return nil
