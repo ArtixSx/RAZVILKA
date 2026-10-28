@@ -205,19 +205,30 @@ func (a *ProxyTunnelAdapter) stageScopedXray(ctx context.Context, plan Plan) ([]
 	}
 	endpointHosts := scopedNodeEndpointHosts(document)
 	manifest := &proxyNodeManifest{Schema: 1, Engine: "xray", NetworkProfile: plan.NetworkProfileID, Routes: routes, Requests: requests}
+	// One shared bound for all endpoint DNS/transport selection in this Stage,
+	// not a fresh full budget for every outbound. This creates no live policy.
+	selectionCtx, cancelSelection := context.WithTimeout(ctx, a.timeout())
+	defer cancelSelection()
 	for _, item := range document["outbounds"].([]any)[1:] {
 		outbound := item.(map[string]any)
 		server := outbound["settings"].(map[string]any)["vnext"].([]any)[0].(map[string]any)
 		host := server["address"].(string)
-		addresses, err := a.resolveNodeEndpoint(ctx, host)
+		number, valid := server["port"].(float64)
+		if !valid || number < 1 || number > 65535 || number != float64(int(number)) {
+			return nil, nil, nil, ErrNodeEndpointChanged
+		}
+		selected, err := a.selectScopedNodeEndpoint(selectionCtx, host, int(number))
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		// The following native canary checks this pinned address. Reconcile may
 		// retain it only while a fresh system resolve still contains that IP.
-		pinned := addresses[0].String()
+		pinned := selected.String()
 		server["address"] = pinned
 		manifest.Endpoints = append(manifest.Endpoints, proxyNodeEndpoint{Host: host, IP: pinned, Tag: outbound["tag"].(string)})
+	}
+	if err := errors.Join(checkAddressRefreshAuthority(selectionCtx), selectionCtx.Err()); err != nil {
+		return nil, nil, nil, err
 	}
 	data, err := json.Marshal(document)
 	return data, endpointHosts, manifest, err
@@ -474,9 +485,10 @@ func (a *ProxyTunnelAdapter) validateNodeFiles(ctx context.Context, path, engine
 		}
 		delete(endpoints, endpoint.Tag)
 		addresses, err := a.resolveNodeEndpoint(ctx, endpoint.Host)
+		pinned, pinErr := netip.ParseAddr(endpoint.IP)
 		found := false
 		for _, addr := range addresses {
-			if addr.String() == endpoint.IP {
+			if pinErr == nil && addr.Unmap() == pinned.Unmap() {
 				found = true
 			}
 		}

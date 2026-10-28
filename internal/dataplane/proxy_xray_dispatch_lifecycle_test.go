@@ -88,6 +88,7 @@ func newXrayDispatchFixture(t *testing.T) *xrayDispatchFixture {
 	a.Processes = f.processes
 	a.EngineBin, a.SidecarBin, a.IP, a.IPTables, a.IP6Tables = scoped.a.EngineBin, scoped.a.SidecarBin, scoped.a.IP, scoped.a.IPTables, scoped.a.IP6Tables
 	a.FreshProfile, a.bootIdentity, a.Resolver = scoped.a.FreshProfile, scoped.a.bootIdentity, scoped.a.Resolver
+	a.nodeEndpointDial = scoped.a.nodeEndpointDial
 	a.SOCKSProbe, a.ServiceIPProbe = scoped.a.SOCKSProbe, scoped.a.ServiceIPProbe
 	baseRunner := scoped.a.Runner
 	a.Runner = networkCleanupRunner(func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -175,6 +176,7 @@ func (f *xrayDispatchFixture) freshOwner() *ProxyTunnelAdapter {
 	a.EngineBin, a.SidecarBin, a.IP, a.IPTables, a.IP6Tables = f.a.EngineBin, f.a.SidecarBin, f.a.IP, f.a.IPTables, f.a.IP6Tables
 	a.Processes, a.Runner, a.FreshProfile, a.bootIdentity = f.a.Processes, f.a.Runner, f.a.FreshProfile, f.a.bootIdentity
 	a.Resolver, a.SOCKSProbe, a.ServiceIPProbe = f.a.Resolver, f.a.SOCKSProbe, f.a.ServiceIPProbe
+	a.nodeEndpointDial = f.a.nodeEndpointDial
 	a.CanaryProbe, a.Probe = f.a.CanaryProbe, f.a.Probe
 	a.NodeTUNProbe, a.nodeRuntimeIdentity = f.a.NodeTUNProbe, f.a.nodeRuntimeIdentity
 	a.xrayRetirementPairObserver = f.a.xrayRetirementPairObserver

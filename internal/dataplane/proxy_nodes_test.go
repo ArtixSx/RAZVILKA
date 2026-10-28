@@ -115,6 +115,7 @@ func scopedXrayTestFixture(t *testing.T) *scopedXrayFixture {
 		return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
 	}
 	a.SOCKSProbe = func(context.Context, string) error { return nil }
+	a.nodeEndpointDial = func(context.Context, netip.AddrPort) error { return nil }
 	a.CanaryProbe = func(context.Context, string, string) error { return nil }
 	a.ServiceIPProbe = func(context.Context, string, string, netip.Addr) error { return nil }
 	a.nodeRuntimeIdentity = func(spec ProcessSpec, address string) (string, error) {

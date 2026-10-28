@@ -77,6 +77,8 @@ type ProxyTunnelAdapter struct {
 	ownedUSQUELiveIO    usqueLiveHealthIO
 	// Private test seam; production uses the Linux OS interface inventory.
 	nodeInterfaceInventory func() ([]net.Interface, error)
+	// Startup-fixed private transport seam; production uses a bounded TCP dial.
+	nodeEndpointDial func(context.Context, netip.AddrPort) error
 	// Startup-only dispatch capability; operation views never mutate this owner.
 	xrayPlanDispatch           bool
 	xrayOperation              bool
