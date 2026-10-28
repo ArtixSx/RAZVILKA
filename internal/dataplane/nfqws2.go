@@ -558,7 +558,7 @@ func (a *NFQWS2Adapter) Health(ctx context.Context, plan Plan, root string) erro
 		reachable = false
 	}
 	if err != nil || configErr != nil || !configExists || !queueOK || !reachable {
-		return fmt.Errorf("active NFQWS2 NFQUEUE rules were not confirmed: %s", shortOutput(output, err))
+		return nfqws2HealthRulesDiagnostic(output, err, config, configExists, configErr, running, runningExists, runningErr, lease)
 	}
 	probe := a.HealthProbe
 	if probe == nil {
