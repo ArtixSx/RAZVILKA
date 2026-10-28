@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -124,6 +125,29 @@ func (f *bootRetirementFixture) run(guard func(Plan) error, fault func(string) e
 	return f.m.retireFailedRollbackAfterBoot(context.Background(), f.plan.PlanID, f.plan.Digest, f.settings, guard, bootRetirementOptions{proof: &f.proof, fault: fault})
 }
 
+func bootRetirementTree(t *testing.T, root string) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[path] = data
+		return nil
+	})
+	if err != nil {
+		t.Fatal("read retired file tree", err)
+	}
+	return files
+}
+
 func TestBootRetirementExpiresFilesWithoutKernelOrReceiptAuthority(t *testing.T) {
 	f := newBootRetirementFixture(t)
 	// Firmware rules in other tables do not prevent a negative inventory.
@@ -163,10 +187,25 @@ func TestBootRetirementExpiresFilesWithoutKernelOrReceiptAuthority(t *testing.T)
 	if err := f.a.removeCandidatePolicy(context.Background(), filepath.Join(f.root, "sing-box")); !errors.Is(err, ErrProxyPolicyUnknown) {
 		t.Fatal("file retirement minted cleanup authority", err)
 	}
-	// Even after retirement the ordinary inactivity observer has its old strict
-	// firmware refusal; this feature did not silently weaken that observer.
-	if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); err == nil {
-		t.Fatal("ordinary inactivity observer was weakened")
+	// Both observers use the same closed foreign-firmware grammar. File-only
+	// retirement does not grant authority over our table or unknown RPDB rows.
+	before := bootRetirementTree(t, f.m.StateRoot)
+	if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); err != nil {
+		t.Fatal("known foreign firmware prevented ordinary inactivity proof", err)
+	}
+	foreignRules := f.runner.rules[4]
+	for _, row := range []string{
+		fmt.Sprintf("1400: from all lookup %d\n", f.a.Table),
+		fmt.Sprintf("%d: from all fwmark 0x1 lookup 4096\n", f.a.Priority),
+		"1400: from all lookup 4096 proto unknown\n",
+	} {
+		f.runner.rules[4] = foreignRules + row
+		if err := f.a.verifyRuntimeInactive(context.Background(), f.proof); !errors.Is(err, ErrProxyRuntimeInactive) {
+			t.Fatal("retirement admitted an owned or unrecognized RPDB row", row, err)
+		}
+	}
+	if f.processes.calls != 0 || !reflect.DeepEqual(before, bootRetirementTree(t, f.m.StateRoot)) {
+		t.Fatal("ordinary inactivity observation changed processes or retired files")
 	}
 }
 
