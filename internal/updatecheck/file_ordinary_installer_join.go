@@ -190,10 +190,8 @@ func ordinaryJoinedInstallerRole(review fileReview, record updateRecord, identit
 }
 
 func ordinaryInstallerIdentityRole(review fileReview, record updateRecord, identity fileHelperIdentity, fact bootstrapControllerFact) string {
-	_, _, oldValid := parseComparableVersion(review.OldVersion)
-	_, _, newValid := parseComparableVersion(review.NewVersion)
 	if review.Schema != selfUpdateProtocolSchema || review.Bootstrap != nil || !validJournalReaderProof(review.JournalReaders) || review.JournalReaders.RequiredReader != selfupdatejournal.PairedSchema ||
-		!oldValid || !newValid || compareVersions(review.OldVersion, "0.20.0") < 0 || compareVersions(review.NewVersion, review.OldVersion) <= 0 ||
+		!ordinaryFutureVersions(review.OldVersion, review.NewVersion) ||
 		record.CurrentVersion != review.OldVersion || record.Job.Release == nil || record.Job.Release.Version != review.NewVersion || record.Job.Release.ID != review.ReleaseID ||
 		record.Owner != updaterOwner || record.Job.ID != review.ID || record.Job.ConfigRevision != review.Revision || record.ExecutableHash != review.OldExecutableSHA256 ||
 		record.Job.State != "restarting" || record.Job.Stage != "file-protocol" || record.Job.ReviewToken != "" || record.Job.CanApply || record.Job.CanCancel ||

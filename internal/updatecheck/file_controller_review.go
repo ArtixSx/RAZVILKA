@@ -33,9 +33,7 @@ func ordinaryInstallerReviewKind(review fileReview, record updateRecord) (bool, 
 	if review.Bootstrap != nil {
 		return false, nil
 	}
-	_, _, oldValid := parseComparableVersion(review.OldVersion)
-	_, _, newValid := parseComparableVersion(review.NewVersion)
-	if !oldValid || !newValid || compareVersions(review.OldVersion, "0.20.0") < 0 || compareVersions(review.NewVersion, review.OldVersion) <= 0 ||
+	if !ordinaryFutureVersions(review.OldVersion, review.NewVersion) ||
 		!validJournalReaderProof(review.JournalReaders) || review.JournalReaders.RequiredReader != selfupdatejournal.PairedSchema {
 		return false, ErrOrdinaryInstallerControllerRole
 	}
