@@ -221,6 +221,13 @@ func (a *App) activateHandedOverServices(ctx context.Context, p autonomy.Policy,
 }
 
 func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, now time.Time) autonomy.Runtime {
+	return a.runAutonomyServiceWithNFQWS2Review(ctx, p, s, r, now, func() bool {
+		service, ok := a.autonomyService(s.ID)
+		return ok && a.Dataplane != nil && a.Dataplane.NFQWS2FirstStartNeedsApply(s.ID, service.Domains)
+	})
+}
+
+func (a *App) runAutonomyServiceWithNFQWS2Review(ctx context.Context, p autonomy.Policy, s autonomy.Service, r autonomy.Runtime, now time.Time, needsNFQWS2Apply func() bool) autonomy.Runtime {
 	finish := func(state, message string) autonomy.Runtime { r.State = state; r.Message = message; return r }
 	service, known := a.autonomyService(s.ID)
 	if s.Removing {
@@ -268,6 +275,16 @@ func (a *App) runAutonomyService(ctx context.Context, p autonomy.Policy, s auton
 	}
 	if catalog.IsNFQWS2Starter(service) && s.ExpectedRoute == "nfqws2" {
 		return a.runNFQWS2Starter(ctx, p, s, r, service, cfg, profile)
+	}
+	// An unassigned domain cannot prove the owned first-start profile before
+	// its domains are installed. AUTO may prepare the same reviewed, closed
+	// scope as explicit NFQWS2; ordinary Apply still rechecks all authority.
+	// Domain services cannot use nodes, so source priority has no earlier phase.
+	if s.ExpectedRoute == "auto" && !cfg.AppliedServices[s.ID].Enabled &&
+		catalog.IsNFQWS2Starter(service) && s.AllLAN && len(s.Sources) == 0 &&
+		len(service.Domains) != 0 && len(service.CIDRs) == 0 &&
+		slices.Contains(p.PreferredRoutes, "nfqws2") && needsNFQWS2Apply != nil && needsNFQWS2Apply() {
+		return a.runNFQWS2StarterWithProfileReview(ctx, p, s, r, service, cfg, profile, needsNFQWS2Apply)
 	}
 	current := ""
 	if applied := cfg.AppliedServices[s.ID]; applied.Enabled {
