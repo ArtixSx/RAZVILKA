@@ -31,6 +31,11 @@ type NFQWS2Runner interface {
 type nfqws2ExecRunner struct{}
 
 func (nfqws2ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	// Only the reviewed owned-stop lifecycle runs a foreground init tree.
+	// Generic startup keeps its existing daemon ownership/unknown-outcome path.
+	if len(args) == 1 && args[0] == "owned_stop" {
+		return nfqws2OwnedStopCommand(ctx, name, args...)
+	}
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }
 
@@ -951,6 +956,16 @@ func readNFQWS2Snapshot(root string) (nfqws2Snapshot, error) {
 }
 
 func (a *NFQWS2Adapter) run(parent context.Context, name string, args ...string) ([]byte, error) {
+	return a.runWithTimeout(parent, a.timeout(), name, args...)
+}
+
+func (a *NFQWS2Adapter) runWithTimeout(parent context.Context, budget time.Duration, name string, args ...string) ([]byte, error) {
+	if parent == nil || budget <= 0 {
+		return nil, errors.New("NFQWS2 command context unavailable")
+	}
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
 	if name == a.InitPath && len(args) == 1 {
 		lease, err := a.readLease()
 		if err != nil {
@@ -975,13 +990,13 @@ func (a *NFQWS2Adapter) run(parent context.Context, name string, args ...string)
 	if a.Runner == nil {
 		return nil, errors.New("NFQWS2 command runner is unavailable")
 	}
-	ctx, cancel := context.WithTimeout(parent, a.timeout())
+	ctx, cancel := context.WithTimeout(parent, budget)
 	defer cancel()
 	output, err := a.Runner.Run(ctx, name, args...)
 	if ctx.Err() == context.DeadlineExceeded {
-		return output, fmt.Errorf("command timed out after %s", a.timeout())
+		return output, fmt.Errorf("command deadline exceeded (maximum %s): %w", budget, errors.Join(err, ctx.Err()))
 	}
-	return output, err
+	return output, errors.Join(err, ctx.Err())
 }
 
 func (a *NFQWS2Adapter) timeout() time.Duration {

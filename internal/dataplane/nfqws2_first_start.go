@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -369,8 +370,10 @@ func firstStartReplace(path string, before []byte, beforeExists bool, after []by
 	return restoreOptionalMode(path, after, afterExists, mode)
 }
 
+const nfqws2OwnedStopBudget = 60 * time.Second
+
 func (a *NFQWS2Adapter) stopFirstStart(ctx context.Context, lease *nfqws2Lease) error {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, nfqws2OwnedStopBudget)
 	defer cancel()
 	if lease == nil || lease.FirstStart == nil {
 		return engineconfig.ErrNFQWSFirstStart
@@ -439,7 +442,15 @@ func (a *NFQWS2Adapter) stopFirstStart(ctx context.Context, lease *nfqws2Lease) 
 			return err
 		}
 	}
-	output, err := a.run(ctx, a.InitPath, "owned_stop")
+	// The stock init removes its owned firewall graph BEFORE signalling the
+	// daemon. Let that reviewed foreground stop use the remaining original
+	// lifecycle budget, rather than the generic command's nested 20s cap.
+	output, err := a.runWithTimeout(ctx, nfqws2OwnedStopBudget, a.InitPath, "owned_stop")
+	// An interrupted command or inherited-pipe timeout is unknown even if it
+	// printed a legacy "not running" line. Never publish a stopped receipt.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, exec.ErrWaitDelay) {
+		return err
+	}
 	if err != nil && !(strings.Contains(strings.ToLower(string(output)), "not running") && !runningOutput(string(output))) {
 		return err
 	}
