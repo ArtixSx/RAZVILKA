@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -102,7 +103,80 @@ func (r nfqws2InactiveKernelReader) frame(ctx context.Context, comparison []Back
 	return frame, nil
 }
 
+// A proc seq_file read is not an atomic socket inventory. In particular a
+// transient duplicate is ambiguous, so the parser continues to reject it. Only
+// that exact observation failure may discard the ENTIRE kernel attempt and
+// obtain new complete opening/closing inventories. This never replays a runtime
+// command, reuses a partial frame, changes the original identity, or extends the
+// caller's finite lease. The caller still brackets this with process/file and
+// original source-lease checks.
 func (r nfqws2InactiveKernelReader) check(ctx context.Context, identity netidentity.Identity) error {
+	const attempts = 3
+	for attempt := 0; ; attempt++ {
+		err := r.checkOnce(ctx, identity)
+		if ctx != nil && ctx.Err() != nil {
+			return errors.Join(err, ctx.Err())
+		}
+		if err == nil || attempt+1 == attempts || ctx == nil || !nfqws2InactiveDuplicateRead(err) {
+			return err
+		}
+		timer := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
+	}
+}
+
+// Do not let a duplicate child concealed beside another refusal authorize a
+// retry. These are exactly the wrappers produced by frame/checkOnce; all source,
+// ownership, malformed table, foreign and cancellation leaves remain terminal.
+func nfqws2InactiveDuplicateRead(err error) bool {
+	duplicate, leaves, budget := 0, 0, 16
+	var walk func(error) bool
+	walk = func(err error) bool {
+		budget--
+		if err == nil || budget < 0 {
+			return false
+		}
+		if err == ErrNFQWSManagedKernelOwner {
+			leaves++
+			return true
+		}
+		switch e := err.(type) {
+		case *nfqws2InactiveKernelFailure:
+			if e == nil {
+				return false
+			}
+			switch e.stage {
+			case "socket.table.duplicate":
+				duplicate++
+			case "socket.table", "frame.changed":
+			default:
+				return false
+			}
+			return walk(e.cause)
+		case interface{ Unwrap() []error }:
+			children := e.Unwrap()
+			if len(children) == 0 {
+				return false
+			}
+			for _, child := range children {
+				if !walk(child) {
+					return false
+				}
+			}
+			return true
+		default:
+			return false
+		}
+	}
+	return walk(err) && duplicate == 1 && leaves > 0
+}
+
+func (r nfqws2InactiveKernelReader) checkOnce(ctx context.Context, identity netidentity.Identity) error {
 	if ctx == nil || ctx.Err() != nil || identity.Validate() != nil || r.read == nil {
 		return nfqws2InactiveKernelAt("source", ErrNFQWSManagedKernelOwner)
 	}

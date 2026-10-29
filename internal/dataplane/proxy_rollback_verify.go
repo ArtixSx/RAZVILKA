@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -168,7 +169,7 @@ func (a *ProxyTunnelAdapter) verifyColdSingboxRollback(ctx context.Context, root
 		return false, err
 	}
 	receipt, err := a.readCandidatePolicyReceipt(root, staged)
-	if err != nil || receipt.Phase != "restored" || receipt.Boot != snapshot.BootID {
+	if err != nil || (receipt.Phase != "restored" || receipt.Boot != snapshot.BootID) && !proxyColdCandidateNeverActivated(root, receipt) {
 		return false, errors.Join(ErrProxyPolicyUnknown, err)
 	}
 	if err := a.verifyColdCandidateReceipt(ctx, root, staged, receipt); err != nil {
@@ -224,6 +225,11 @@ func (a *ProxyTunnelAdapter) verifyColdSingboxRollback(ctx context.Context, root
 // Use the existing receipt decoder/comparison without opening a writer session:
 // missing/unknown cleanup metadata must not create a lock during readback.
 func (a *ProxyTunnelAdapter) verifyColdCandidateReceipt(ctx context.Context, root string, state PolicyState, receipt proxyPolicyReceipt) error {
+	if proxyColdCandidateNeverActivated(root, receipt) {
+		// Stage only: Activate never crossed its durable unknown fence. The
+		// caller still proves complete absence and repeats receipt/boot checks.
+		return ctx.Err()
+	}
 	if receipt.NoAdditions {
 		return a.verifyCandidateReceipt(ctx, root, state, false)
 	}
@@ -254,6 +260,23 @@ func (a *ProxyTunnelAdapter) verifyColdCandidateReceipt(ctx context.Context, roo
 		return ErrProxyPolicyUnknown
 	}
 	return ctx.Err()
+}
+
+// A pristine prepared receipt is Stage intent, not an addition ACK. Missing
+// metadata after activation never qualifies: beginCandidatePolicy first writes
+// Boot and Phase=unknown durably. Any addition ledger or lock also fences this
+// branch, even if its bytes are malformed or its file is a symlink.
+func proxyColdCandidateNeverActivated(root string, receipt proxyPolicyReceipt) bool {
+	if receipt.Phase != "prepared" || receipt.Boot != "" || receipt.Generation != "" ||
+		receipt.RestorationGeneration != "" || receipt.RetirementSnapshot != "" || receipt.RetirementReceiptID != "" || receipt.NoAdditions {
+		return false
+	}
+	for _, name := range []string{policyAdditionFile, policyAdditionLock} {
+		if _, err := os.Lstat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+			return false
+		}
+	}
+	return true
 }
 
 // Include the candidate's families and coordinates: checking only the restored
