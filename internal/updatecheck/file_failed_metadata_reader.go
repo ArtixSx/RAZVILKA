@@ -56,7 +56,12 @@ func (a *SelfUpdateFileAdapter) failedMetadataHeader(ctx context.Context, curren
 			return false, ErrFileProtocol
 		}
 		if _, err := os.Lstat(filepath.Join(a.directory, current.Job.ID)); !errors.Is(err, os.ErrNotExist) {
-			return false, ErrFileProtocol
+			// Only cancellation/deadline can stop the supported producer after
+			// Mkdir but before downloading. Space failures precede Mkdir.
+			if err != nil || current.Job.Code != "prepare-cancelled" && current.Job.Code != "prepare-timeout" {
+				return false, ErrFileProtocol
+			}
+			return true, a.emptyFailedPreparationDirectory(ctx, current.Job.ID)
 		}
 		return true, ctx.Err()
 	}
@@ -243,6 +248,44 @@ func (a *SelfUpdateFileAdapter) inertPreparationCache(ctx context.Context, c upd
 	}
 	after, err := os.Lstat(jobPath)
 	if err != nil || !os.SameFile(initial, after) {
+		return ErrFileProtocol
+	}
+	return ctx.Err()
+}
+
+// Observe only the empty owned directory from the metadata -> Mkdir
+// cancellation cut. It is not a cache allowance: even one inert archive,
+// partial extraction or prospective controller keeps this cut fenced.
+func (a *SelfUpdateFileAdapter) emptyFailedPreparationDirectory(ctx context.Context, id string) error {
+	path := filepath.Join(a.directory, id)
+	if a.owned == nil || a.owned(path) != nil {
+		return ErrFileProtocol
+	}
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		return ErrFileProtocol
+	}
+	defer root.Close()
+	before, err := root.RootInfo()
+	if err != nil {
+		return err
+	}
+	entries, err := root.ReadDir(1)
+	if err != nil || len(entries) != 0 {
+		return ErrFileProtocol
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if a.owned(path) != nil {
+		return ErrFileProtocol
+	}
+	held, err := root.RootInfo()
+	if err != nil || !os.SameFile(before, held) || before.Mode() != held.Mode() || before.Size() != held.Size() || !before.ModTime().Equal(held.ModTime()) {
+		return ErrFileProtocol
+	}
+	after, err := os.Lstat(path)
+	if err != nil || !os.SameFile(before, after) || !after.IsDir() || after.Mode()&os.ModeSymlink != 0 || before.Mode() != after.Mode() || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
 		return ErrFileProtocol
 	}
 	return ctx.Err()

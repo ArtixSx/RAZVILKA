@@ -429,6 +429,13 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		failure = err
 		return
 	}
+	// Cancellation may win after directory creation but before the next
+	// producer stage. Retain the exact empty metadata cut without proceeding
+	// to a job-root open or publishing download progress after cancellation.
+	if err = ctx.Err(); err != nil {
+		failure = err
+		return
+	}
 	jobRoot, err := ownedfs.Open(filepath.Join(u.Directory, id))
 	if err != nil {
 		failure = err
