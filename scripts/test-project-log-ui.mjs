@@ -253,3 +253,14 @@ console.log('PASS project log: readable issues/events, honest request outcomes, 
  auditContext.$('#consoleAuditSearch').value='';auditContext.renderAudit();assert.equal(rows.filter(row=>!row.hidden).length,3);
  console.log('PASS active audit search survives replacement of rows during refresh');
 }
+// A busy control image is retained information, regardless of its previous state.
+for (const prior of [healthy.control, {...healthy.control,runtime_state:'unconfigured',running:false}, {...healthy.control,runtime_state:'stopped',running:false}, null]) {
+  out=visible({...healthy,control:prior,control_read_busy:true});
+  assert.match(out,/Состояние обновляется/);
+  assert.match(out,/Сохранённые данные не подтверждают текущее состояние/);
+  assert.doesNotMatch(out,/Обходы включены|Обходы выключены|Нужна настройка|Применение разрешено после проверки/);
+}
+out=visible({...healthy,control_read_busy:true,stop_receipt:{stop_requested:true,authority_revoked:true,stopped_confirmed:false,cleanup_pending:true}});
+assert.match(out,/Остановка запрошена · результат ещё не подтверждён/,'busy state masked pending cleanup');
+assert.match(visible({...healthy,control_read_busy:false}),/Обходы включены/,'fresh log retained busy presentation');
+console.log('PASS project log distinguishes busy retained control from fresh state and retains Stop receipt');

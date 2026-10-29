@@ -149,17 +149,18 @@ function renderProjectLogDetails(value) {
   const stopPending = receipt?.stop_requested === true && receipt.authority_revoked === true && receipt.stopped_confirmed === false && receipt.cleanup_pending === true;
   if (stopPending) problems.push({ name: 'Остановка запрошена', message: 'Запрос сохранён на роутере. Продолжение обновления заблокировано; очистка маршрутов ещё не подтверждена.' });
   const ready = Number.isSafeInteger(control.config_revision);
-  const runtime = stopPending ? 'Остановка запрошена · результат ещё не подтверждён' : !ready || control.runtime_state === 'unknown' ? 'Состояние не получено' : control.running === true ? 'Обходы включены' : control.runtime_state === 'stopped' ? 'Обходы выключены' : 'Нужна настройка';
-  if (!ready || control.runtime_state === 'unknown') problems.push({ name: 'Управление проектом', message: String(control.runtime_issue?.message || 'Состояние обходов не подтверждено. Обновите данные панели.') });
+  const reading = data.control_read_busy === true;
+  const runtime = stopPending ? 'Остановка запрошена · результат ещё не подтверждён' : reading ? 'Состояние обновляется' : !ready || control.runtime_state === 'unknown' ? 'Состояние не получено' : control.running === true ? 'Обходы включены' : control.runtime_state === 'stopped' ? 'Обходы выключены' : 'Нужна настройка';
+  if (!reading && (!ready || control.runtime_state === 'unknown')) problems.push({ name: 'Управление проектом', message: String(control.runtime_issue?.message || 'Состояние обходов не подтверждено. Обновите данные панели.') });
   const uniqueProblems = problems.filter((item, index) => problems.findIndex(other => other.name === item.name && other.message === item.message) === index);
   const allEvents = records(audit.events).sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
   const events = allEvents.slice(0, 40);
   const failures = events.filter(event => projectLogEventResult(event).tone === 'fail').length;
-  const headline = uniqueProblems.length ? 'Есть сообщения, требующие внимания' : failures ? 'В последних действиях есть ошибки' : 'Состояние и последние действия';
-  const summary = uniqueProblems.length ? 'Ниже указаны причины. Последняя ошибка может относиться к предыдущему действию; текущее состояние показано отдельно.' : failures ? 'Ошибки в истории не означают, что обходы сейчас выключены. Сверьте их время и текущее состояние.' : 'Этот журнал показывает состояние панели и ответы на действия. Работу сервиса подтверждает отдельная проверка подключения.';
+  const headline = uniqueProblems.length ? 'Есть сообщения, требующие внимания' : failures ? 'В последних действиях есть ошибки' : reading ? 'Обновляем состояние проекта' : 'Состояние и последние действия';
+  const summary = uniqueProblems.length ? 'Ниже указаны причины. Последняя ошибка может относиться к предыдущему действию; текущее состояние показано отдельно.' : failures ? 'Ошибки в истории не означают, что обходы сейчас выключены. Сверьте их время и текущее состояние.' : reading ? 'Роутер выполняет проверку или изменение. Сохранённые данные не подтверждают текущее состояние обходов.' : 'Этот журнал показывает состояние панели и ответы на действия. Работу сервиса подтверждает отдельная проверка подключения.';
   const issueHTML = uniqueProblems.length ? `<section class="detail-section"><h4>Что требует внимания</h4>${uniqueProblems.map(issue => `<div class="detail-note"><b>${esc(issue.name)}</b><p>${esc(issue.message)}</p></div>`).join('')}</section>` : '';
   const mode = ready ? ({ auto: 'Автопилот', manual: 'Ручная настройка' })[control.mode] || 'Не определено' : 'Не определено';
-  const safeMode = !ready || typeof control.safe_mode !== 'boolean' ? 'Не определено' : control.safe_mode ? 'Безопасный режим: применение маршрутов запрещено' : 'Применение разрешено после проверки';
+  const safeMode = reading ? 'Состояние обновляется' : !ready || typeof control.safe_mode !== 'boolean' ? 'Не определено' : control.safe_mode ? 'Безопасный режим: применение маршрутов запрещено' : 'Применение разрешено после проверки';
   const eventHTML = events.map(event => {
     const result = projectLogEventResult(event);
     const timestamp = Date.parse(event.timestamp);

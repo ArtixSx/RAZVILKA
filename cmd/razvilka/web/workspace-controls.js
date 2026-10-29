@@ -99,14 +99,21 @@ function renderWorkspaceControls() {
   power.disabled = !ready || workspaceControl.busy || !!workspaceControl.runtimeJob || stopPending || (workspaceControl.readBusy && !canStop) || (control.runtime_state === 'unknown' && !canStop);
   power.setAttribute('aria-checked', String(canStop));
   power.classList.toggle('running', running && !stopPending);
-  power.classList.toggle('unknown', stopPending || !ready || control.runtime_state === 'unknown');
-  $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? (canStop ? 'Включён · маршруты не подтверждены' : 'Включён · ждёт применения') : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
+  power.classList.toggle('unknown', stopPending || workspaceControl.readBusy || !ready || control.runtime_state === 'unknown');
+  $('#projectPowerLabel').textContent = workspaceControl.runtimeJob ? (workspaceControl.runtimeJob.mode === 'service-stop' ? 'Останавливаем…' : 'Включаем…') : workspaceControl.busy ? 'Выполняется…' : !ready ? 'Состояние не получено' : control.runtime_state === 'unknown' ? (canStop ? 'Маршруты не подтверждены' : 'Ожидает применения') : running ? 'Проект включён' : control.runtime_state === 'stopped' ? 'Проект выключен' : 'Нужна настройка';
   $('#projectPowerHint').textContent = workspaceControl.runtimeJob ? 'Задание сохранено на роутере' : workspaceControl.readBusy && canStop ? 'Можно поставить остановку в очередь' : workspaceControl.readBusy ? 'Дождитесь завершения проверки' : !ready ? 'Откройте лог или обновите' : control.safe_mode ? 'Безопасный режим · открыть настройки' : canStop ? 'Нажмите, чтобы выключить' : control.runtime_state === 'unknown' ? 'Примените изменения, чтобы подтвердить' : control?.resume_available ? 'Нажмите, чтобы включить' : 'Выбрать и включить сервисы';
   // Simple mode names the switch by what the owner gets: the bypass.
   if (globalThis.document?.body?.classList?.contains?.('rz-simple') && ready && !workspaceControl.runtimeJob && !workspaceControl.busy && !stopPending) {
     if (running) { $('#projectPowerLabel').textContent = 'Обход включён'; $('#projectPowerHint').textContent = 'Нажмите, чтобы выключить всё'; }
     else if (canStop) { $('#projectPowerLabel').textContent = 'Работа обхода не подтверждена'; $('#projectPowerHint').textContent = 'Можно остановить маршруты · откройте лог'; }
     else if (control.runtime_state === 'stopped') { $('#projectPowerLabel').textContent = 'Обход выключен'; if (control?.resume_available) $('#projectPowerHint').textContent = 'Нажмите, чтобы включить'; }
+  }
+  // A busy read preserves the previous Stop authority, but is not a fresh
+  // observation of running/stopped/setup state. Do not turn an old initial
+  // 'unconfigured' snapshot into a new instruction to configure the project.
+  if (workspaceControl.readBusy && !workspaceControl.runtimeJob && !workspaceControl.busy && !stopPending) {
+    $('#projectPowerLabel').textContent = 'Состояние обновляется';
+    $('#projectPowerHint').textContent = canStop ? 'Можно поставить остановку в очередь' : 'Роутер выполняет проверку или изменение';
   }
   if (stopPending) {
     $('#projectPowerLabel').textContent = 'Остановка запрошена';
@@ -118,6 +125,7 @@ function renderWorkspaceControls() {
   const recovery = state.status?.node_recovery;
   const recoveryNote = ['requires-review', 'network-stale', 'revalidating'].includes(recovery?.state) ? recovery.message : '';
   power.title = ready && control.runtime_state === 'unknown' ? recoveryNote || control.runtime_issue?.message || 'Маршруты ещё не подтверждены в текущей сети.' : '';
+  if (workspaceControl.readBusy) power.title = 'Роутер выполняет проверку или изменение. Текущее состояние появится после её завершения.';
   if (stopPending) power.title = 'Запрос остановки принят. Продолжение обновления заблокировано; очистка маршрутов ещё не подтверждена.';
   if (ready) $('#systemText').textContent = workspaceControl.readBusy ? 'Выполняется проверка или изменение' : control.safe_mode ? 'Применение заблокировано в настройках' : control.mode === 'manual' ? 'Подключения меняете вы' : 'Автозамена по правилам сервисов';
   if (stopPending) $('#systemText').textContent = 'Остановка требует подтверждения';
@@ -283,6 +291,7 @@ async function openWorkspaceLog() {
   showDetails({
     detail_kind: 'project-log',
     control: state.serviceControl,
+    control_read_busy: workspaceControl.readBusy === true,
     stop_receipt: workspaceControl.stopReceipt,
     jobs, jobs_error: jobsError,
     node_job: nodeJob, node_job_error: nodeJobError,

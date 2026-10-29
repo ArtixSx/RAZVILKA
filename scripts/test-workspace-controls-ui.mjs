@@ -165,7 +165,7 @@ state.savedPanel = { receivedAt: Date.now(), value: { schema: 1, state: 'retaine
   data: { config: { revision: 25, stopped: false, safe_mode: false, mode: 'auto' }, services: [{ applied: { enabled: true } }] } } };
 context.renderWorkspaceControls();
 assert.equal($('#projectPower').disabled, false, 'first busy login could not queue Stop');
-assert.equal($('#projectPowerLabel').textContent, 'Включён · маршруты не подтверждены', 'retained data claimed a working route');
+assert.equal($('#projectPowerLabel').textContent, 'Состояние обновляется', 'retained data claimed a working route');
 assert.equal($('#projectPower').attributes['aria-label'], 'Остановить маршруты RAZVILKA');
 assert.equal($('#projectModeManual').disabled, true, 'retained data authorized a mode change');
 const beforeSavedMode = calls.length;
@@ -284,3 +284,34 @@ for(const outcome of ['cancel','changed','logout','accept']){
  if(outcome==='logout')assert.equal(context.control.busy,true,'old confirmation unlocked a new session operation');else assert.equal(context.control.busy,false);
 }
 console.log('PASS Stop uses async confirmation with cancellation, single flight, revision and auth fences');
+// Busy polling must not present an earlier initial snapshot as missing setup.
+// Both modes recover their ordinary power label on the next accepted full read.
+for (const simple of [false, true]) {
+  context.document.body = { classList: { contains: name => simple && name === 'rz-simple' } };
+  for (const prior of ['unconfigured', 'running', 'unknown', 'stopped', 'missing']) {
+    events.get('razvilka:auth-required')(); events.get('razvilka:auth-restored')();
+    const old = prior === 'missing' ? null : { config_revision: 500, mode: 'auto', runtime_state: prior, running: prior === 'running', can_stop: prior === 'running' || prior === 'unknown', resume_available: prior === 'stopped' };
+    if (old) context.acceptWorkspaceControl(old);
+    request = async () => { throw Object.assign(new Error('operation busy'), { status: 409 }); };
+    const before = calls.length;
+    await context.refreshWorkspaceControl();
+    assert.equal(state.serviceControl, old, 'busy read replaced known snapshot');
+    assert.equal($('#projectPowerLabel').textContent, 'Состояние обновляется');
+    assert.doesNotMatch($('#projectPowerLabel').textContent, /Нужна настройка|включён|выключен/i);
+    assert.equal($('#projectPower').disabled, !old || !old.can_stop, 'busy presentation changed Stop availability');
+    assert.equal(calls.slice(before).every(call => !call.options?.method || call.options.method === 'GET'), true, 'busy presentation sent mutation');
+    if (old?.can_stop) assert.match($('#projectPowerHint').textContent, /остановку в очередь/);
+    context.acceptWorkspaceControl({ config_revision: 501, mode: 'auto', runtime_state: 'running', running: true, can_stop: true });
+    assert.equal(context.control.readBusy, false);
+    assert.equal($('#projectPowerLabel').textContent, simple ? 'Обход включён' : 'Проект включён');
+  }
+}
+// Project log must explicitly receive the freshness state of its control image.
+context.control.readBusy = true;
+request = async path => path.includes('/audit') ? { available: true, events: [] } : path === '/api/v1/panel/autonomy' ? {schema:1,state:'retained',data:{}} : {durable_jobs:[]};
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].control_read_busy, true);
+context.acceptWorkspaceControl({config_revision:502,mode:'auto',runtime_state:'stopped',running:false});
+await context.openWorkspaceLog();
+assert.equal(details.at(-1)[0].control_read_busy, false);
+console.log('PASS busy control read keeps prior snapshot and Stop authority without setup/running claims; fresh read restores both UI modes');
