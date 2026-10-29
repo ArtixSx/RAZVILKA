@@ -20,6 +20,9 @@ import (
 const MaximumArchiveBytes int64 = 128 << 20
 const MaximumBinaryBytes int64 = 64 << 20
 
+// The only query-bearing release request is this bounded official preview list.
+const officialPreviewEndpoint = "https://api.github.com/repos/" + officialRepository + "/releases?per_page=30"
+
 type Asset struct {
 	ID     int64  `json:"id"`
 	Name   string `json:"name"`
@@ -79,7 +82,7 @@ func FetchReleaseChannel(ctx context.Context, client *http.Client, current, arch
 	}
 	endpoint := "https://api.github.com/repos/" + officialRepository + "/releases/latest"
 	if NormalizedChannel(channel) == "preview" {
-		endpoint = "https://api.github.com/repos/" + officialRepository + "/releases?per_page=30"
+		endpoint = officialPreviewEndpoint
 	}
 	if releaseID > 0 {
 		endpoint = fmt.Sprintf("https://api.github.com/repos/%s/releases/%d", officialRepository, releaseID)
@@ -189,7 +192,7 @@ func fetchLimited(ctx context.Context, client *http.Client, rawURL string, maxim
 
 func officialGET(ctx context.Context, client *http.Client, rawURL string) (*http.Response, error) {
 	u, err := url.Parse(rawURL)
-	if err != nil || publicfetch.ValidateURL(rawURL) != nil || u.RawQuery != "" || (u.Host != "api.github.com" && u.Host != "github.com") {
+	if err != nil || publicfetch.ValidateURL(rawURL) != nil || (u.RawQuery != "" || u.ForceQuery) && rawURL != officialPreviewEndpoint || (u.Host != "api.github.com" && u.Host != "github.com") {
 		return nil, errors.New("release-url-refused")
 	}
 	if client == nil {
