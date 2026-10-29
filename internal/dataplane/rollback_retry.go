@@ -35,6 +35,9 @@ func (m *Manager) retryFailedRollback(ctx context.Context, planID, digest string
 	defer m.endOperation()
 	reviewed, ok := m.reviewFailedRollback(planID, digest)
 	if !ok {
+		reviewed, ok = m.reviewPreparedColdSingboxRollback(ctx, planID, digest, coldProof)
+	}
+	if !ok {
 		reviewed, ok = m.reviewUnstagedColdXrayRollback(ctx, planID, digest, coldProof)
 	}
 	if !ok {
