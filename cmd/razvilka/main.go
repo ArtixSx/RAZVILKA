@@ -895,6 +895,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	} else if componentRecoveryPending {
 		recovery.State = "component-recovery-required"
 		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
+	} else if retained, preserve, preserveErr := a.ObservePendingNFQRecoveryStop(recoveryContext); preserve {
+		// Keep the exact failed-boot evidence available for explicit recovery
+		// Stop. The observation proves inactivity; it does not restart routes,
+		// clear Safe Mode, or turn the failed recovery into a success.
+		recovery, recoveryErr = retained, preserveErr
 	} else {
 		review, reviewErr := bootRecoveryGuardForManager(*cfgPath, store, dataplaneManager)
 		if reviewErr != nil {

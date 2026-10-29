@@ -162,7 +162,15 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 	if cfg.Revision != expectedRevision {
 		return fail("SERVICE_CONTROL_CHANGED", "Настройки изменились. Обновите состояние и повторите действие.")
 	}
-	if cfg.SafeMode {
+	var recoveryStop *nfqRecoveryStopReview
+	if cfg.SafeMode && action == "stop" && a.recoveryStopReviewRequired(parent, cfg) {
+		var reviewErr error
+		recoveryStop, reviewErr = a.reviewNFQRecoveryStop(parent, cfg)
+		if reviewErr != nil {
+			return fail("DATAPLANE_RECOVERY_REQUIRED", "Остановка требует подтверждения, что процессы и правила проекта уже отсутствуют.")
+		}
+	}
+	if cfg.SafeMode && recoveryStop == nil {
 		// Safe Mode was removed. The operator's own Start/Stop clears a flag an
 		// older build or an offline restore left, unless an update still owns it.
 		if err := a.clearRetiredSafeMode(); err != nil {
@@ -184,6 +192,9 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		return fail("SERVICE_RUNTIME_CHANGED", "Применённое состояние требует проверки. Настройки и ожидающие изменения сохранены.")
 	}
 	target := cfg
+	if recoveryStop != nil {
+		target.SafeMode = false
+	}
 	target.Revision++
 	target.Services = map[string]config.ServiceState{}
 	resolved := map[string]string{}
@@ -266,6 +277,9 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 			return fail("SERVICE_RUNTIME_CHANGED", "Состав сохранённых сервисов изменился.")
 		}
 	}
+	if recoveryStop != nil && (len(plan.Routes) != 0 || len(plan.Adapters) != 0 || plan.LAN != nil || plan.DNS != nil || plan.SafeMode || !plan.Ready) {
+		return fail("DATAPLANE_RECOVERY_REQUIRED", "План остановки не должен создавать новые маршруты или правила DNS.")
+	}
 	binding, err := a.bindApplyReview(ctx, cfg, plan, changeScopeNode, "")
 	if err != nil {
 		return fail("SERVICE_RUNTIME_CHANGED", "Настройки или сеть изменились. Повторите действие.")
@@ -273,6 +287,11 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 	ctx = dataplane.WithReviewGuard(ctx, func(ctx context.Context) error {
 		if err := binding.guard(a, ctx); err != nil {
 			return err
+		}
+		if recoveryStop != nil {
+			if err := recoveryStop.check(ctx, false); err != nil {
+				return err
+			}
 		}
 		latest, ok, err := a.Dataplane.Committed()
 		if err != nil || !ok || !reflect.DeepEqual(latest, current) {
@@ -297,7 +316,16 @@ func (a *App) executeServiceRuntime(parent context.Context, action string, expec
 		if err := binding.guard(a, ctx); err != nil {
 			return nil, err
 		}
-		undo, err := a.Store.CommitServiceRuntime(stop, resolved, cfg.Revision)
+		var undo func() error
+		var err error
+		if recoveryStop != nil {
+			if err = recoveryStop.check(ctx, true); err != nil {
+				return nil, err
+			}
+			undo, err = a.Store.CommitServiceRecoveryStop(cfg, resolved)
+		} else {
+			undo, err = a.Store.CommitServiceRuntime(stop, resolved, cfg.Revision)
+		}
 		if errors.Is(err, config.ErrRevisionChanged) {
 			return nil, dataplane.ErrReviewChanged
 		}
