@@ -37,11 +37,28 @@ func retainedControllerImagesWithAdapter(ctx context.Context, installation, stat
 			return nil, ErrFileProtocol
 		}
 		var record updateRecord
-		if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || !jobIDPattern.MatchString(record.Job.ID) || !terminalHelperState(record.Job.State) {
+		if decodeFileProtocol(data, &record) != nil || record.Owner != updaterOwner || !jobIDPattern.MatchString(record.Job.ID) {
 			return nil, ErrFileProtocol
 		}
-		helperPresent = true
-		helperID = record.Job.ID
+		if reader == nil {
+			reader = NewSelfUpdateFileAdapter()
+			reader.installation, reader.directory, reader.fileJournal = installation, helper, filepath.Join(stateRoot, "self-update-files")
+		}
+		effectFree, err := reader.failedMetadataHeader(ctx, record)
+		if err != nil || !effectFree && !terminalHelperState(record.Job.State) {
+			return nil, ErrFileProtocol
+		}
+		if effectFree {
+			// The failed discovery header has no controller image. Still inspect
+			// every other retained helper/file record; none may be omitted because
+			// the latest metadata request failed before its directory existed.
+			if _, err := reader.requiredJournalReadVersion(ctx); err != nil {
+				return nil, err
+			}
+		} else {
+			helperPresent = true
+			helperID = record.Job.ID
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}

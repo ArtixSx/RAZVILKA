@@ -524,7 +524,11 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 	if err != nil {
 		return 0, err
 	}
-	found := preparing && current.Job.Stage == "metadata"
+	effectFreeMetadata, err := a.failedMetadataHeader(ctx, current)
+	if err != nil {
+		return 0, err
+	}
+	found := effectFreeMetadata || preparing && current.Job.Stage == "metadata"
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return 0, err
