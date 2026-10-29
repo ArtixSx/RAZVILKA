@@ -265,9 +265,13 @@ func (u *Updater) PrepareChannel(revision uint64, fingerprint, channel string) (
 			root.Close()
 			return Job{}, readErr
 		}
-		if !retained {
-			err = root.RemoveAll(u.record.Job.ID)
+		if retained {
+			root.Close()
+			// No sealed digest exists to archive this owner. Replacing current
+			// would orphan recovery evidence and fence the next cold reader.
+			return cloneJob(u.record.Job), ErrBusy
 		}
+		err = root.RemoveAll(u.record.Job.ID)
 		root.Close()
 		if err != nil {
 			return Job{}, err

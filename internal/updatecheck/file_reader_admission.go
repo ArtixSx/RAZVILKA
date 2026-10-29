@@ -540,7 +540,7 @@ func (a *SelfUpdateFileAdapter) requiredJournalReadVersion(ctx context.Context) 
 			return 0, ErrFileProtocol
 		}
 		retained := entry.Name() != current.Job.ID
-		if !retained && preparing {
+		if !retained && (preparing || effectFreeMetadata) {
 			found = true
 			if required < selfUpdateProtocolSchema {
 				required = selfUpdateProtocolSchema

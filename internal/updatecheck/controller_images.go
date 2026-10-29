@@ -49,9 +49,9 @@ func retainedControllerImagesWithAdapter(ctx context.Context, installation, stat
 			return nil, ErrFileProtocol
 		}
 		if effectFree {
-			// The failed discovery header has no controller image. Still inspect
+			// The failed pre-effect preparation has no controller image. Still inspect
 			// every other retained helper/file record; none may be omitted because
-			// the latest metadata request failed before its directory existed.
+			// the latest preparation left only its bounded inert download cache.
 			if _, err := reader.requiredJournalReadVersion(ctx); err != nil {
 				return nil, err
 			}
