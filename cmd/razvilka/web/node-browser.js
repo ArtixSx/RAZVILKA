@@ -277,7 +277,55 @@ function renderNodeBrowser() {
   $('#nodeSelectAll').indeterminate = selectable.some(node => nodeBrowser.selected.has(node.id)) && !$('#nodeSelectAll').checked;
   renderNodeBatchStatus();
   restoreNodeBrowserInteraction(interaction);
+  if (typeof captureLiveNodeBrowser === 'function') captureLiveNodeBrowser(nodes);
   if (!nodeBrowser.timer && !nodeBrowser.polling) scheduleNodeBrowserRefresh();
+}
+
+
+// This projection is presentation only. It is never installed in state.nodes,
+// node options, selections or requests, and intentionally omits all health data.
+function captureLiveNodeBrowser(nodes) {
+  if (typeof nodeBrowse === 'undefined' || !nodeBrowseActionsAllowed() || state.dataLoad?.nodes?.phase !== 'ready'
+    || !Array.isArray(nodes) || nodes.length > 512) return;
+  const rows = nodes.map(node => {
+    const country = nodeCountry(node);
+    return { name:String(nodeDisplayName(node)).slice(0,320), protocol:String(node.protocol || '').toLowerCase().slice(0,32),
+      transport:String(nodeTransportLabel(node)).slice(0,64), country:String(country.name || '').slice(0,120),
+      countryCode:String(country.code || 'unknown').slice(0,16),
+      sources:(node.origins || []).slice(0,32).map(origin => ({id:String(origin.source_id || '').slice(0,160),name:String(nodeBrowserSourceName(origin.source_id)).slice(0,320)})) };
+  });
+  if (JSON.stringify(rows).length > 262144) { nodeBrowse.full=null; return; }
+  const at=state.dataLoad.nodes.updatedAt;
+  if (!Number.isFinite(at) || at > Date.now()) { nodeBrowse.full=null; return; }
+  nodeBrowse.full = {rows, at, auth:state.authGeneration || 0, instance:nodeBrowse.instance,
+    process:state.status?.process_id || null, receipt:nodeBrowse.liveReceipt};
+}
+
+function renderHistoricalNodeBrowser(snapshot, elapsed) {
+  const hide = element => { if (element && !nodeBrowse.hidden.has(element)) nodeBrowse.hidden.set(element,element.hidden); if (element) element.hidden=true; };
+  for (const element of $$('#view-nodes .node-tabs, #view-nodes > .console-tabs, #nodeServiceSelectors, #nodeGroupsPanel, #nodeSubscriptions, #nodeOpenImport, #view-nodes .r4-discovery-head, #view-nodes .node-batch-toolbar, #nodeAllVLESSDetails, #nodeCleanupDetails, #view-nodes .node-check-hint')) hide(element);
+  for (const id of ['nodeBrowserContent','nodeSummary','nodeBrowserReadNotice']) $('#'+id).hidden=false;
+  $('#nodeBrowserReadNotice').textContent=`Сведения временно обновляются. Последний прочитанный список · ${Math.floor(elapsed/1000)} сек назад. Только просмотр; доступность подключений сейчас не подтверждена. Фильтр состояния и сортировка временно приостановлены.`;
+  // State/latency are deliberately unavailable: no old PASS or timing is
+  // reinterpreted as current readiness. Preserve the user's chosen values.
+  for (const id of ['nodeStateFilter','nodeSort']) { const element=$('#'+id); if (!nodeBrowse.disabled.has(element)) nodeBrowse.disabled.set(element,element.disabled); element.disabled=true; }
+  const query=($('#nodeSearch').value || '').trim().toLocaleLowerCase('ru');
+  const rows=snapshot.rows.filter(row => (!nodeBrowser.protocol || ({hy2:'hysteria2',ss:'shadowsocks'}[row.protocol] || row.protocol)===nodeBrowser.protocol)
+    && (!nodeBrowser.source || row.sources.some(source=>source.id===nodeBrowser.source))
+    && (!nodeBrowser.country || row.countryCode===nodeBrowser.country)
+    && (!query || [row.name,row.protocol,row.transport,row.country,...row.sources.map(source=>source.name)].join(' ').toLocaleLowerCase('ru').includes(query)));
+  $('#nodeSummary').innerHTML=`<div><span>В последнем списке</span><b>${snapshot.rows.length}</b></div><div><span>Доступность</span><b>Нужна свежая проверка</b></div>`;
+  const sources=new Map(),countries=new Map();
+  for (const row of snapshot.rows) { for (const source of row.sources) sources.set(source.id,source.name); countries.set(row.countryCode,row.country); }
+  $('#nodeSourceFilters').innerHTML='<button type="button" data-node-source="">Все источники</button>'+[...sources].map(([id,name])=>`<button type="button" data-node-source="${esc(id)}" class="${nodeBrowser.source===id?'active':''}">${esc(name)}</button>`).join('');
+  $('#nodeCountryFilters').innerHTML='<button type="button" data-node-country="">Все страны</button>'+[...countries].map(([code,name])=>`<button type="button" data-node-country="${esc(code)}" class="${nodeBrowser.country===code?'active':''}">${esc(name)}</button>`).join('');
+  const pages=Math.max(1,Math.ceil(rows.length/nodeBrowser.pageSize));nodeBrowser.page=Math.max(0,Math.min(nodeBrowser.page,pages-1));
+  const visible=rows.slice(nodeBrowser.page*nodeBrowser.pageSize,(nodeBrowser.page+1)*nodeBrowser.pageSize);
+  nodeBrowser.visible=[];nodeBrowser.selected.clear();
+  $('#nodeList').innerHTML=visible.map(row=>`<article class="node-card"><div class="node-card-head"><div class="node-heading"><div><h3>${esc(row.name)}</h3><span class="node-protocol">${esc(row.protocol)} · ${esc(row.transport)}</span></div></div></div><div class="node-card-caption"><span>${esc(row.country)}</span><span>Сохранённое описание</span></div><p>Доступность сейчас не подтверждена</p></article>`).join('');
+  $('#nodeVisibleCount').textContent=`${rows.length} из ${snapshot.rows.length} · только просмотр`;
+  $('#nodePageLabel').textContent=`${nodeBrowser.page+1} / ${pages}`;$('#nodePagePrevious').disabled=nodeBrowser.page===0;$('#nodePageNext').disabled=nodeBrowser.page>=pages-1;
+  $('#nodeEmpty').style.display=rows.length?'none':'grid';$('#nodeEmpty').querySelector('span').textContent='В последнем списке совпадений нет. Измените поиск или фильтры.';
 }
 
 function renderNodeBrowserCard(node, serviceID) {

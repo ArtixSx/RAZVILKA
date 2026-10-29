@@ -28,13 +28,13 @@ function fixture(){
     api:async(url,options={})=>{context.nodeBrowseGuardRequest(url,options.method||'GET');calls.push({url,...options});if(options.method){writes.push({url,...options});context.invalidateSavedNodeBrowse(true);}return handler(url,options);},
     readPanelResource:async(url)=>handler(url,{}),askConfirmation:(...args)=>confirm(...args),showDetails(){},
     renderNodeBrowser(){$('#nodeList').innerHTML='Live actions';},nodeByID:id=>state.nodes.nodes.find(row=>row.id===id),nodeDisplayName:row=>row.name,
-    nodeBrowser:{selected:new Set([node.id]),visible:[node.id]},workflowState:{deleteSeq:0,fetchSeq:0,deletion:null,epoch:0,bulkBusy:false},
+    nodeBrowser:{selected:new Set([node.id]),visible:[node.id],page:0,pageSize:24},nodeCountry:()=>({name:'<Country>',code:'XX'}),nodeTransportLabel:row=>row.transport||'tcp',nodeBrowserSourceName:id=>'<Source>'+id,workflowState:{deleteSeq:0,fetchSeq:0,deletion:null,epoch:0,bulkBusy:false},
     clearNodeCheckRequest(){},renderWorkflowControls(){},nodeCanCheck:()=>true,workflowSession:()=>true,
     workflowError:error=>error.message,interfaceToast(){},scheduleNodeBrowserRefresh(){},submitNodeCheckRequest:async(...args)=>{writes.push(args);return {job:{id:1,scope:'all-vless',service_id:'video'}};},
     nodeBrowserActive:()=>true,nodeMeasurementModel:{readStatus:async()=>({response:{},fallback:{},partial:false})},
   };
   vm.createContext(context);
-  vm.runInContext(helper+'\n'+['panelSectionState','renderNodes','closeNodeCheck','closeNodeRoute','clearNodeReveal','openNodeEdit','saveNodeAlias','toggleNodeDisabled','revealNode','refreshNodes','acceptPanelSection'].map(name=>extract(name)).join('\n')+'\n'+extract('workflowCheckAllVLESS',workflow)+'\n'+extract('acceptNodeConnectivity',browser)+'\n'+extract('pollNodeBrowserChecks',browser),context);
+  vm.runInContext(helper+'\n'+['panelSectionState','renderNodes','closeNodeCheck','closeNodeRoute','clearNodeReveal','openNodeEdit','saveNodeAlias','toggleNodeDisabled','revealNode','refreshNodes','acceptPanelSection'].map(name=>extract(name)).join('\n')+'\n'+extract('workflowCheckAllVLESS',workflow)+'\n'+extract('acceptNodeConnectivity',browser)+'\n'+extract('pollNodeBrowserChecks',browser)+'\n'+extract('captureLiveNodeBrowser',browser)+'\n'+extract('renderHistoricalNodeBrowser',browser),context);
   context.workflowRequest=(url,options={})=>handler(url,options);
   const envelope=(revision=1,instance='a'.repeat(32))=>({schema:1,instance_id:instance,revision,generated_at:new Date(now-2000).toISOString(),observed_at:new Date(now).toISOString(),data_age_ms:2000,max_age_seconds:900,state:'retained',dataplane:'not-checked',data:{nodes:[{id:'node-'+ 'b'.repeat(64),name:'<Saved>',protocol:'VLESS',transport:'ws'}]}});
   handler=async()=>envelope();
@@ -159,5 +159,46 @@ await test('real poll function separates job-status errors from protected-list r
   await f.context.pollNodeBrowserChecks();assert.equal(f.state.dataLoad.nodes.phase,'busy');assert.equal(f.runtime().blocked,true);assert.equal(f.$('#nodeSavedBrowse').hidden,false);
   f.handler(async url=>{if(url==='/api/v1/nodes')return {available:true,nodes:[f.node]};throw new Error('unrelated metadata unavailable');});
   await f.context.pollNodeBrowserChecks();assert.equal(f.state.dataLoad.nodes.phase,'ready');assert.equal(f.runtime().blocked,false);assert.equal(f.$('#nodeSavedBrowse').hidden,true);
+});
+
+await test('temporary known busy retains full readonly browser and filters without health or action identity',async()=>{
+  const f=fixture();await f.context.loadSavedNodeBrowse(1);f.live();
+  f.node.transport='ws';f.node.origins=[{source_id:'feed'}];f.node.health={verdict:'PASS',secret:'private'};
+  f.context.captureLiveNodeBrowser([f.node]);const original=f.state.nodes;
+  f.$('#nodeSearch').value='Live';f.$('#nodeStateFilter').value='available';f.context.nodeBrowser.source='feed';
+  f.context.panelSectionState('nodes','busy');f.context.renderNodes();
+  assert.equal(f.state.nodes,original);assert.equal(f.$('#nodeSavedBrowse').hidden,true);
+  assert.equal(f.$('#nodeBrowserContent').hidden,false);assert.match(f.$('#nodeList').innerHTML,/Live/);
+  assert.match(f.$('#nodeBrowserReadNotice').textContent,/Только просмотр/);
+  assert.doesNotMatch(f.$('#nodeList').innerHTML,/data-node|button|input|PASS|private|Проверить|Подключить/);
+  assert.doesNotMatch(JSON.stringify(f.runtime().full),/node-[a-f0-9]{64}|health|secret|verdict/);
+  assert.equal(f.$('#nodeSearch').value,'Live');assert.equal(f.context.nodeBrowser.source,'feed');
+  assert.equal(f.$('#nodeStateFilter').value,'available');assert.equal(f.$('#nodeStateFilter').disabled,true);
+  f.$('#nodeSearch').value='missing';f.context.renderNodes();assert.equal(f.$('#nodeList').innerHTML,'');
+  f.context.panelSectionState('nodes','loading');f.context.renderNodes();assert.equal(f.$('#nodeSavedBrowse').hidden,true);
+  assert.equal(f.context.nodeBrowseActionsAllowed(),false);assert.throws(()=>f.context.nodeBrowseGuardRequest('/api/v1/nodes/x','DELETE'));
+  assert.doesNotThrow(()=>f.context.nodeBrowseGuardRequest('/api/v1/node-checks/current?job_id=3','DELETE'));
+  f.live();assert.equal(f.$('#nodeStateFilter').disabled,false);assert.equal(f.context.nodeBrowseActionsAllowed(),true);
+});
+await test('temporary full browser requires prior live receipt, same process/auth and bounded freshness',async()=>{
+  for (const mode of ['no-prior','error','expired','backward','process','auth','mutation','instance']) {
+    const f=fixture();await f.context.loadSavedNodeBrowse(1);
+    if(mode!=='no-prior'){f.live();f.context.captureLiveNodeBrowser([f.node]);}
+    if(mode==='expired')f.advance(120000);
+    if(mode==='backward')f.advance(-1);
+    if(mode==='process')f.state.status.process_id=22;
+    if(mode==='auth')f.state.authGeneration++;
+    if(mode==='mutation')f.context.invalidateSavedNodeBrowse(true);
+    if(mode==='instance')f.runtime().instance='d'.repeat(32);
+    f.context.panelSectionState('nodes',mode==='error'?'error':'busy');f.context.renderNodes();
+    assert.equal(f.$('#nodeSavedBrowse').hidden,false,mode);assert.equal(f.runtime().full,null,mode);
+    f.live();assert.equal(f.context.nodeBrowseActionsAllowed(),true,mode);
+  }
+});
+await test('expired temporary view cannot leave its historical notice over a fresh live read',async()=>{
+  const f=fixture();await f.context.loadSavedNodeBrowse(1);f.live();f.context.captureLiveNodeBrowser([f.node]);
+  f.context.panelSectionState('nodes','busy');f.context.renderNodes();assert.match(f.$('#nodeBrowserReadNotice').textContent,/Только просмотр/);
+  f.advance(120000);f.context.renderNodes();assert.equal(f.$('#nodeSavedBrowse').hidden,false);
+  f.live();assert.equal(f.$('#nodeBrowserReadNotice').hidden,true);assert.equal(f.$('#nodeBrowserReadNotice').textContent,'');
 });
 console.log(`Node saved browse: ${count} modeled lifecycle checks passed (no native/browser claim)`);

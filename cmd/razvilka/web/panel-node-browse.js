@@ -1,7 +1,7 @@
 'use strict';
 
 // Never merge this historical display DTO into state.nodes or route options.
-const nodeBrowse = { saved:null, epoch:0, action:0, request:0, invalidatedAt:0, instance:null, revision:-1, blocked:false, showing:false, liveReadable:false, liveReceipt:0, timer:null, hidden:new Map() };
+const nodeBrowse = { saved:null, full:null, fullShowing:false, epoch:0, action:0, request:0, invalidatedAt:0, instance:null, revision:-1, blocked:false, showing:false, liveReadable:false, liveReceipt:0, timer:null, hidden:new Map(), disabled:new Map() };
 
 function validSavedNodeBrowse(value) {
   if (value?.schema !== 1 || value.dataplane !== 'not-checked' || value.max_age_seconds !== 900
@@ -56,7 +56,7 @@ function closeSavedNodeEditors() {
 function nodeBrowseSectionChanged(phase) {
   nodeBrowse.blocked = phase !== 'ready' || state.nodes?.available !== true || !Array.isArray(state.nodes?.nodes);
   if (phase === 'loading') nodeBrowse.action++; // Preserve typed forms during ordinary refresh.
-  else if (nodeBrowse.blocked) { nodeBrowse.liveReadable = false; closeSavedNodeEditors(); }
+  else if (nodeBrowse.blocked) { if (phase !== 'busy') nodeBrowse.full = null; nodeBrowse.liveReadable = false; closeSavedNodeEditors(); }
   else { nodeBrowse.liveReadable = true; nodeBrowse.liveReceipt++; nodeBrowse.showing = false; }
   for (const id of ['nodeEditForm','nodeGroupForm','nodeGroupUseForm']) {
     const button = $('#'+id)?.querySelector?.('button[type="submit"]'); if (button) button.disabled = nodeBrowse.blocked;
@@ -64,12 +64,13 @@ function nodeBrowseSectionChanged(phase) {
 }
 
 function invalidateSavedNodeBrowse(mutation = false) {
-  nodeBrowse.epoch++; nodeBrowse.request++; nodeBrowse.saved = null;
+  nodeBrowse.epoch++; nodeBrowse.request++; nodeBrowse.saved = null; nodeBrowse.full = null;
   if (mutation) nodeBrowse.invalidatedAt = Date.now();
   clearTimeout(nodeBrowse.timer);
   if (!state.authenticated) {
     nodeBrowse.blocked = true; nodeBrowse.liveReadable = false; closeSavedNodeEditors();
     $('#nodeSavedList').innerHTML = ''; $('#nodeSavedNotice').textContent = ''; $('#nodeSavedSearch').value = '';
+    $('#nodeList').innerHTML=''; $('#nodeSummary').innerHTML=''; $('#nodeBrowserReadNotice').textContent=''; $('#nodeBrowserReadNotice').hidden=true;
     nodeBrowse.instance = null; nodeBrowse.revision = -1; nodeBrowse.invalidatedAt = 0;
   }
   if (state.currentView === 'nodes') renderNodes();
@@ -86,7 +87,7 @@ async function loadSavedNodeBrowse(generation, options = {}) {
     if (nodeBrowse.instance === value.instance_id && nodeBrowse.revision > value.revision) return;
     if (started-value.data_age_ms < nodeBrowse.invalidatedAt) return;
     if (nodeBrowse.instance && nodeBrowse.instance !== value.instance_id && liveReceipt === nodeBrowse.liveReceipt) {
-      closeSavedNodeEditors(); nodeBrowse.liveReadable = false; nodeBrowse.blocked = true;
+      closeSavedNodeEditors(); nodeBrowse.full = null; nodeBrowse.liveReadable = false; nodeBrowse.blocked = true;
       if (state.dataLoad?.nodes) state.dataLoad.nodes = {...state.dataLoad.nodes, phase:'error'};
     }
     nodeBrowse.instance = value.instance_id; nodeBrowse.revision = value.revision;
@@ -101,15 +102,32 @@ async function loadSavedNodeBrowse(generation, options = {}) {
 function renderSavedNodeBrowse() {
   if (state.currentView !== 'nodes') return false;
   clearTimeout(nodeBrowse.timer);
+  for (const [element, disabled] of nodeBrowse.disabled) element.disabled = disabled;
+  nodeBrowse.disabled.clear();
   const panel = $('#nodeSavedBrowse'), phase = state.dataLoad?.nodes?.phase;
   const live = state.authenticated && state.nodes?.available === true && (phase === 'ready' && !nodeBrowse.blocked || phase === 'loading' && nodeBrowse.liveReadable);
   if (live) {
     for (const [element, hidden] of nodeBrowse.hidden) element.hidden = hidden;
-    nodeBrowse.hidden.clear(); panel.hidden = true; nodeBrowse.showing = false;
+    nodeBrowse.hidden.clear(); panel.hidden = true; if (nodeBrowse.fullShowing) { $('#nodeBrowserReadNotice').textContent=''; $('#nodeBrowserReadNotice').hidden=true; } nodeBrowse.fullShowing=false; nodeBrowse.showing = false;
     return false;
   }
+  if (phase === 'busy' && nodeBrowse.full) nodeBrowse.full.busy = true;
+  const full = nodeBrowse.full, elapsedFull = full ? Date.now()-full.at : -1;
+  const temporaryFull = state.authenticated === true && (phase === 'busy' || phase === 'loading' && full?.busy === true) && full
+    && (full.instance || full.process) && full.auth === (state.authGeneration || 0) && elapsedFull >= 0 && elapsedFull < 120000
+    && full.receipt === nodeBrowse.liveReceipt && (!full.instance || full.instance === nodeBrowse.instance)
+    && full.process === (state.status?.process_id || null) && typeof renderHistoricalNodeBrowser === 'function';
+  if (!temporaryFull) nodeBrowse.full = null;
   if (!nodeBrowse.showing) closeSavedNodeEditors();
   nodeBrowse.showing = true; nodeBrowse.blocked = true;
+  if (temporaryFull) {
+    nodeBrowse.fullShowing=true;
+    for (const [element, hidden] of nodeBrowse.hidden) element.hidden = hidden;
+    nodeBrowse.hidden.clear(); panel.hidden = true;
+    renderHistoricalNodeBrowser(full, elapsedFull);
+    if (!document.hidden) nodeBrowse.timer = setTimeout(renderNodes, Math.min(1000,120000-elapsedFull));
+    return true;
+  }
   // Keep the saved workspace separate. It contains no source forms, check
   // controls, selections, operational results or mutation-bearing IDs.
   for (const element of $$('#view-nodes .node-workspace > :not(.node-workspace-head):not(#nodeSavedBrowse), #view-nodes > .console-tabs, #nodeOpenImport')) {
