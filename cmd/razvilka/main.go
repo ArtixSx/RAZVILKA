@@ -896,7 +896,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		recovery.State = "component-recovery-required"
 		log.Print("Unfinished component update: automatic network recovery is paused; the panel and explicit Stop remain available")
 	} else {
-		review, reviewErr := bootRecoveryGuard(*cfgPath, store)
+		review, reviewErr := bootRecoveryGuardForManager(*cfgPath, store, dataplaneManager)
 		if reviewErr != nil {
 			// Journal cleanup still runs. Only a committed runtime restart
 			// needs current settings; missing settings never become a grant.
@@ -1419,7 +1419,8 @@ func retireSafeMode(store *config.Store) {
 // blocked clearing it, so requiring it off made a retry impossible after any
 // restart (0.19.2 on the owner's router). Closing only deactivates owned runtime;
 // retrying restores the snapshot and verifies it strictly. Both leave Safe
-// Mode enabled for the operator to clear.
+// Mode enabled; only a later exact verified-retry review followed by successful
+// committed runtime recovery may retire that flag.
 func closeRollbackSettingsMatch(cfg config.Config, previous dataplane.Plan) bool {
 	cfg.SafeMode = false
 	return rollbackAppliedSettingsMatch(cfg, previous)
