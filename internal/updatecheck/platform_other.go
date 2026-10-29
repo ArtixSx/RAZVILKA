@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+func reviewProductionDaemonPath() (func() error, error) {
+	return nil, errors.New("unsupported-platform")
+}
+
 func checkRootOwnedPath(string) error      { return errors.New("unsupported-platform") }
 func checkProductionPID(int, string) error { return errors.New("unsupported-platform") }
 func helperAlive(int) bool                 { return false }

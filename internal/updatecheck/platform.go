@@ -70,7 +70,11 @@ func checkDeploymentLayout(deployment Deployment) error {
 	if err := checkInstallerWritePaths("/opt", checkRootOwnedPath); err != nil {
 		return errors.New("production-path-ownership-refused")
 	}
-	for _, path := range append([]string{"/opt/bin/razvilka", "/opt/etc/init.d/S99razvilka", "/opt/sbin/start-stop-daemon", installpath.Run + "/razvilka.pid", productionUpdateRoot}, mapValues(deployment.Paths)...) {
+	daemonCurrent, err := reviewProductionDaemonPath()
+	if err != nil {
+		return errors.New("production-path-ownership-refused")
+	}
+	for _, path := range append([]string{"/opt/bin/razvilka", "/opt/etc/init.d/S99razvilka", installpath.Run + "/razvilka.pid", productionUpdateRoot}, mapValues(deployment.Paths)...) {
 		if err := checkRootOwnedPath(path); err != nil {
 			return errors.New("production-path-ownership-refused")
 		}
@@ -80,6 +84,9 @@ func checkDeploymentLayout(deployment Deployment) error {
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0100 == 0 {
 			return errors.New("production-service-unavailable")
 		}
+	}
+	if daemonCurrent() != nil {
+		return errors.New("production-path-ownership-refused")
 	}
 	return nil
 }
