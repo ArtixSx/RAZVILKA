@@ -63,7 +63,11 @@ func TestNFQWSInactiveKernelDiagnosticsPreserveRefusalAndRedactCapture(t *testin
 			defer cancel()
 			err := reader.check(ctx, stock.Scope.Network)
 			outer := nfqws2InactiveAt("observation", nfqws2InactiveAt("kernel", fmt.Errorf("private wrapper: %w", err)))
-			if !errors.Is(err, ErrNFQWSManagedKernelOwner) || outer.Error() != "NFQWS runtime inactivity: observation/kernel/kernel."+stage || strings.Contains(outer.Error(), private.Error()) || NFQWSRuntimeInactiveStage(outer) != "kernel" {
+			want := "NFQWS runtime inactivity: observation/kernel/kernel." + stage
+			if stage == "socket.table" {
+				want += "/kernel.socket.table.header"
+			}
+			if !errors.Is(err, ErrNFQWSManagedKernelOwner) || outer.Error() != want || strings.Contains(outer.Error(), private.Error()) || NFQWSRuntimeInactiveStage(outer) != "kernel" {
 				t.Fatal("unsafe or missing fixed kernel branch", outer)
 			}
 			if (stage == "inventory.open" || stage == "inventory.close" || stage == "queue.inventory" || stage == "socket.inventory") && !errors.Is(outer, private) {

@@ -16,7 +16,8 @@ func nfqws2InactiveKernelAt(stage string, cause error) error {
 }
 func nfqws2InactiveKernelLabel(stage string) string {
 	switch stage {
-	case "source", "inventory.open", "inventory.close", "inventory.changed", "rules.open", "rules.close",
+	case "socket.table.encoding", "socket.table.limit", "socket.table.header", "socket.table.columns", "socket.table.number", "socket.table.duplicate", "socket.table.owner-inode",
+		"source", "inventory.open", "inventory.close", "inventory.changed", "rules.open", "rules.close",
 		"frame.source", "frame.comparison", "queue.inventory", "socket.inventory", "socket.table", "queue.registration",
 		"socket.owner", "frame.context", "frame.changed":
 		return stage

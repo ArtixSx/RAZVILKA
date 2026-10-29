@@ -79,8 +79,8 @@ func (r nfqws2InactiveKernelReader) frame(ctx context.Context, comparison []Back
 	}
 	// Validate a positively read complete socket table even when queues are
 	// empty. An absent proc leaf or an empty/truncated header is never absence.
-	if nfqws2InactiveNetlinkTable(sockets) != nil {
-		return zero, nfqws2InactiveKernelAt("socket.table", ErrNFQWSManagedKernelOwner)
+	if err := nfqws2InactiveNetlinkTable(sockets); err != nil {
+		return zero, nfqws2InactiveKernelAt("socket.table", err)
 	}
 	seen := map[uint16]bool{}
 	var frame nfqws2InactiveQueueFrame

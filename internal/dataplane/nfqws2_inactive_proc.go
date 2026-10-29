@@ -172,13 +172,22 @@ func nfqws2InactiveProcessArgument(arg string, a *NFQWS2Adapter) bool {
 	return value == a.StateRoot || value == a.ConfigPath || value == a.InitPath || slices.Contains(lists[:], value)
 }
 
+// nfqws2InactiveNetlinkTable validates the complete proc table without
+// projecting captured rows into diagnostics. A transient kernel snapshot is
+// still a refusal; it must never be converted to evidence of inactivity.
 func nfqws2InactiveNetlinkTable(text string) error {
+	refuse := func(stage string) error {
+		return nfqws2InactiveKernelAt("socket.table."+stage, ErrNFQWSManagedKernelOwner)
+	}
 	if len(text) == 0 || len(text) > 1<<20 || !utf8.ValidString(text) || strings.ContainsAny(text, "\x00\r") {
-		return ErrNFQWSManagedKernelOwner
+		return refuse("encoding")
 	}
 	lines := strings.Split(text, "\n")
-	if len(lines) > 8192 || strings.Join(strings.Fields(lines[0]), " ") != "sk Eth Pid Groups Rmem Wmem Dump Locks Drops Inode" {
-		return ErrNFQWSManagedKernelOwner
+	if len(lines) > 8192 {
+		return refuse("limit")
+	}
+	if strings.Join(strings.Fields(lines[0]), " ") != "sk Eth Pid Groups Rmem Wmem Dump Locks Drops Inode" {
+		return refuse("header")
 	}
 	seen := map[[2]uint64]bool{}
 	for _, line := range lines[1:] {
@@ -187,15 +196,20 @@ func nfqws2InactiveNetlinkTable(text string) error {
 			continue
 		}
 		if len(fields) != 10 {
-			return ErrNFQWSManagedKernelOwner
+			return refuse("columns")
 		}
 		protocol, e1 := strconv.ParseUint(fields[1], 10, 8)
 		port, e2 := strconv.ParseUint(fields[2], 10, 32)
 		inode, e3 := strconv.ParseUint(fields[9], 10, 64)
+		if e1 != nil || e2 != nil || e3 != nil || strconv.FormatUint(protocol, 10) != fields[1] || strconv.FormatUint(port, 10) != fields[2] || strconv.FormatUint(inode, 10) != fields[9] {
+			return refuse("number")
+		}
 		key := [2]uint64{protocol, port}
-		if e1 != nil || e2 != nil || e3 != nil || strconv.FormatUint(protocol, 10) != fields[1] || strconv.FormatUint(port, 10) != fields[2] ||
-			strconv.FormatUint(inode, 10) != fields[9] || seen[key] || protocol == 12 && port != 0 && inode == 0 {
-			return ErrNFQWSManagedKernelOwner
+		if seen[key] {
+			return refuse("duplicate")
+		}
+		if protocol == 12 && port != 0 && inode == 0 {
+			return refuse("owner-inode")
 		}
 		seen[key] = true
 	}
