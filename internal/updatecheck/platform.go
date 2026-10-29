@@ -176,14 +176,24 @@ func preflightInstaller(ctx context.Context, bundle string, release Release) err
 	if err := runBoundedCommand(version); err != nil || strings.TrimSpace(output.String()) != release.Version {
 		return errors.New("candidate-version-or-architecture-refused")
 	}
-	command := exec.CommandContext(checkCtx, "/bin/sh", filepath.Join(bundle, "scripts/upgrade-entware.sh"), "--dry-run", "--without-components")
+	command, interpreterCurrent, closeInterpreter, err := newReviewedScriptCommand(checkCtx, "/opt", []string{filepath.Join(bundle, "scripts/upgrade-entware.sh"), "--dry-run", "--without-components"})
+	if err != nil {
+		return err
+	}
+	defer closeInterpreter()
 	configureBoundedCommand(command)
 	command.Env = commandEnvironment()
 	command.Stdout = io.Discard
 	errorOutput := &cappedOutput{maximum: 8192}
 	command.Stderr = errorOutput
+	if err := interpreterCurrent(); err != nil {
+		return err
+	}
 	if err := runBoundedCommand(command); err != nil {
 		return errors.New(installerPreflightFailureCode(errorOutput.String()))
+	}
+	if err := interpreterCurrent(); err != nil {
+		return err
 	}
 	return checkCtx.Err()
 }

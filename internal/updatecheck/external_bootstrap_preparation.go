@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -191,13 +190,12 @@ func (p *externalBootstrapPreparation) preflight(ctx context.Context) error {
 		if err := p.current(ctx); err != nil {
 			return externalBootstrapFailure("preparation-owner", err)
 		}
-		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		command := exec.CommandContext(checkCtx, "/bin/sh", "-n", filepath.Join(bundle, "scripts", name))
-		configureBoundedCommand(command)
-		command.Env = commandEnvironment()
-		command.Stdout, command.Stderr = nil, nil
-		err := runBoundedCommand(command)
-		cancel()
+		err := runReviewedScriptSyntax(ctx, p.adapter.installation, filepath.Join(bundle, "scripts", name), func(_ context.Context, _ string, begin func() error) error {
+			if err := p.current(ctx); err != nil {
+				return err
+			}
+			return begin()
+		}, func() error { return p.current(ctx) }, func() error { return p.current(ctx) }, func() error { return p.current(ctx) })
 		if err != nil {
 			return externalBootstrapFailure("release-script-syntax", err)
 		}

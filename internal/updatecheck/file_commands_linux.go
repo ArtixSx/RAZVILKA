@@ -668,12 +668,20 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	if start {
 		args[1] = "start"
 	}
-	program := "/bin/sh"
+	var cmd *exec.Cmd
+	interpreterCurrent := func() error { return nil }
 	if command == "quiesce-old-runtime" {
-		program = filepath.Join(a.directory, id, "control.bin")
+		program := filepath.Join(a.directory, id, "control.bin")
 		args = []string{"self-update-runtime-quiesce", id, strconv.FormatUint(review.Revision, 10), strconv.Itoa(os.Getpid())}
+		cmd = exec.Command(program, args...)
+	} else {
+		var closeInterpreter func()
+		cmd, interpreterCurrent, closeInterpreter, err = newReviewedScriptCommand(nil, a.installation, args)
+		if err != nil {
+			return err
+		}
+		defer closeInterpreter()
 	}
-	cmd := exec.Command(program, args...)
 	cmd.Env = commandEnvironment()
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -692,7 +700,12 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 	if err := a.AuthorityAction(ctx, id, review.Revision, fileCommandAuthorityForReview(review, command)); err != nil {
 		return err
 	}
-	if err := a.EffectAdmission(ctx, id, fileCommandAuthorityForReview(review, command), "command-child-"+command, cmd.Start); err != nil {
+	if err := a.EffectAdmission(ctx, id, fileCommandAuthorityForReview(review, command), "command-child-"+command, func() error {
+		if err := interpreterCurrent(); err != nil {
+			return err
+		}
+		return cmd.Start()
+	}); err != nil {
 		if cmd.Process == nil {
 			return err
 		}
@@ -722,6 +735,10 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		}
 		if !cleanup && time.Now().After(nextStopCheck) {
 			nextStopCheck = time.Now().Add(250 * time.Millisecond)
+			if err := interpreterCurrent(); err != nil {
+				cleanup = true
+				cancel()
+			}
 			if err := a.checkFileCommandStop(ctx, id, command); err != nil {
 				cleanup = true
 				cancel()
@@ -823,6 +840,9 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	_ = cmd.Process.Release()
+	if interpreterCurrent() != nil {
+		cleanup = true
+	}
 	var diagnosticErr error
 	if diagnostic != nil {
 		data, err := diagnostic.finish(ctx)

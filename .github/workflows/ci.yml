@@ -37,6 +37,9 @@ jobs:
           node-version: '24'
           package-manager-cache: false
 
+      - name: Install native parser fixture
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
+
       - name: Full project checks
         shell: bash
         run: |

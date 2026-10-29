@@ -423,16 +423,9 @@ func (p *ordinaryPreparation) preflight(ctx context.Context) (err error) {
 	// Syntax parsing is read-only. Execute the actual owned interpreter, with
 	// no installer replacement workflow or schema2/raw-apply permission.
 	stage = "script-syntax"
-	shell, err := filepath.EvalSymlinks("/bin/sh")
-	if err != nil {
-		return err
-	}
-	shellSHA, err := hashRegularFile(shell, MaximumBinaryBytes)
-	if err != nil {
-		return err
-	}
+
 	for _, name := range []string{"upgrade-entware.sh", "rollback-entware.sh", "S99razvilka"} {
-		_, err := ordinaryImageCommand(ctx, shell, shellSHA, []string{"-n", filepath.Join(jobPath, "bundle/scripts", name)}, "ordinary-prepare-syntax", func(c context.Context, e string, begin func() error) error {
+		err := runReviewedScriptSyntax(ctx, p.adapter.installation, filepath.Join(jobPath, "bundle/scripts", name), func(c context.Context, e string, begin func() error) error {
 			return p.updater.FileEffectAdmission(c, p.record.Job.ID, p.authority.InstallationID, p.authority.Sequence, "start/live", e, begin)
 		}, func() error { return p.current(ctx) }, func() error { return p.quickCurrent(ctx) }, func() error { return p.current(ctx) })
 		if err != nil {
