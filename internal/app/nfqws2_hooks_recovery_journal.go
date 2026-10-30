@@ -304,7 +304,12 @@ func reviewNFQWS2AppHookStop(ctx context.Context, m *dataplane.Manager, settings
 		return nil, nil, err
 	}
 	if err = nfqws2HookStopAdmission(j,
-		func() error { return review.VerifyNFQWS2Inactive(ctx) },
+		func() error {
+			if err := review.VerifyNFQWS2Inactive(ctx); err == nil {
+				return nil
+			}
+			return review.VerifyNFQWS2RebootStop(ctx, j.Plan, j.Instance)
+		},
 		func() (dataplane.NFQWS2HookRestore, error) { return m.ObserveCommittedNFQWS2Hooks(ctx, j.Plan) }); err != nil {
 		closeRoot()
 		return nil, nil, err

@@ -161,8 +161,9 @@ func (s *NFQWSRuntimeInactiveSource) hookInventory(ctx context.Context) (Backend
 	return image, s.current(ctx)
 }
 
-// nfqws2HookPlan admits only a settled first-start plan: no LAN owner, one
-// nfqws2 adapter and at least one route it resolves.
+// nfqws2HookPlan admits a settled first-start plan without a LAN owner,
+// exactly one nfqws2 entry and at least one matching route. Other adapters
+// may coexist; the reboot Stop fallback applies its own stricter scope.
 func nfqws2HookPlan(plan Plan) bool {
 	if plan.State != "committed" || plan.SafeMode || !plan.Ready || plan.Noop || plan.LAN != nil || plan.PlanID == "" || len(plan.Routes) == 0 {
 		return false
@@ -459,9 +460,7 @@ type nfqws2HookFile struct {
 // Lease, live and staged files and the PID file must stay byte-identical for
 // the whole attempt: a restoration never consumes or rewrites any of them.
 func (a *NFQWS2Adapter) firstStartHookFiles(transaction string) ([]nfqws2HookFile, error) {
-	lists := a.ownedListPaths()
-	paths := []string{filepath.Join(a.StateRoot, nfqws2LeaseFile), a.ConfigPath, a.ConfigPath + ".run", a.InitPath, a.firstStartPIDPath(),
-		filepath.Join(transaction, "nfqws2.conf.staged"), filepath.Join(transaction, "S51nfqws2.staged"), lists[0], lists[1], lists[2], lists[3]}
+	paths := a.firstStartHookFilePaths(transaction)
 	files := make([]nfqws2HookFile, 0, len(paths))
 	for _, path := range paths {
 		data, exists, err := nfqws2Read(path)
@@ -471,6 +470,12 @@ func (a *NFQWS2Adapter) firstStartHookFiles(transaction string) ([]nfqws2HookFil
 		files = append(files, nfqws2HookFile{data: data, exists: exists})
 	}
 	return files, nil
+}
+
+func (a *NFQWS2Adapter) firstStartHookFilePaths(transaction string) []string {
+	lists := a.ownedListPaths()
+	return []string{filepath.Join(a.StateRoot, nfqws2LeaseFile), a.ConfigPath, a.ConfigPath + ".run", a.InitPath, a.firstStartPIDPath(),
+		filepath.Join(transaction, "nfqws2.conf.staged"), filepath.Join(transaction, "S51nfqws2.staged"), lists[0], lists[1], lists[2], lists[3]}
 }
 
 func (t *nfqws2HookAttempt) admit(ctx context.Context) (string, error) {

@@ -43,7 +43,7 @@ func (m *Manager) ReviewNFQWS2BootHookStop(ctx context.Context, settings string)
 		closeRoot()
 		return nil, nil, err
 	}
-	if err = review.VerifyNFQWS2Inactive(ctx); err != nil {
+	if err = review.VerifyNFQWS2Inactive(ctx); err != nil && review.VerifyNFQWS2RebootStop(ctx, plan, record.Instance) != nil {
 		observed, observeErr := m.ObserveCommittedNFQWS2Hooks(ctx, plan)
 		if observeErr != nil || observed.Class != NFQWS2HooksLoss || observed.Instance != record.Instance || len(observed.Families) < 1 || len(observed.Families) > 2 {
 			closeRoot()
