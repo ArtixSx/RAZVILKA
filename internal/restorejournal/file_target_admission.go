@@ -27,11 +27,14 @@ func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, befo
 	if f.closed {
 		return ErrUnavailable
 	}
+	if err := f.checkExistingLease(); err != nil {
+		return err
+	}
 	if ctx == nil || admitRename == nil || len(prepared) > 1 || !validImage(before) || !validImage(after) || !after.Exists {
 		return ErrInvalid
 	}
 	before, after = clone(before), clone(after)
-	current, original, err := readPublicationTarget(ctx, f.root, f.name)
+	current, original, err := f.readPublicationTarget(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,20 +42,34 @@ func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, befo
 		return ErrConflict
 	}
 	if equal(before, after) {
-		return nil
+		return f.checkExistingLease()
 	}
 	attempted, err := f.root.WriteAtomicWithRenameAdmission(f.name, after.Data, 0o600, func(rename func() error) error {
 		if ctx.Err() != nil {
 			return ErrAborted
 		}
-		return admitRename(ctx, rename)
+		if f.existingLease == nil {
+			return admitRename(ctx, rename)
+		}
+		return admitRename(ctx, func() error {
+			if err := f.checkExistingLease(); err != nil {
+				return err
+			}
+			if err := f.checkExistingTargetOwner(); err != nil {
+				return err
+			}
+			return rename()
+		})
 	}, func() error {
 		if len(prepared) == 1 && prepared[0] != nil {
 			if err := prepared[0](); err != nil {
 				return err
 			}
 		}
-		current, closing, err := readPublicationTarget(ctx, f.root, f.name)
+		if err := f.checkExistingLease(); err != nil {
+			return err
+		}
+		current, closing, err := f.readPublicationTarget(ctx)
 		if err != nil {
 			return err
 		}
@@ -74,12 +91,15 @@ func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, befo
 	if err := f.syncDir(); err != nil {
 		return &filePublicationError{ErrRecovery, err}
 	}
-	current, _, err = readPublicationTarget(ctx, f.root, f.name)
+	current, _, err = f.readPublicationTarget(ctx)
 	if err != nil {
 		return &filePublicationError{ErrRecovery, err}
 	}
 	if !equal(current, after) {
 		return &filePublicationError{ErrRecovery, ErrConflict}
+	}
+	if err := f.checkExistingLease(); err != nil {
+		return &filePublicationError{ErrRecovery, err}
 	}
 	return nil
 }
@@ -100,6 +120,14 @@ func samePublicationFile(before, after os.FileInfo) bool {
 // Retain the actual target inode alongside the exact bytes. A same-byte path
 // replacement during staging is still a conflicting independently owned file.
 func readPublicationTarget(ctx context.Context, root *ownedfs.Root, name string) (Image, os.FileInfo, error) {
+	return readPublicationTargetMode(ctx, root, name, false)
+}
+
+func (f *FileTarget) readPublicationTarget(ctx context.Context) (Image, os.FileInfo, error) {
+	return readPublicationTargetMode(ctx, f.root, f.name, f.existingLease != nil)
+}
+
+func readPublicationTargetMode(ctx context.Context, root *ownedfs.Root, name string, existingOnly bool) (Image, os.FileInfo, error) {
 	if ctx.Err() != nil {
 		return Image{}, nil, ErrAborted
 	}
@@ -107,7 +135,7 @@ func readPublicationTarget(ctx context.Context, root *ownedfs.Root, name string)
 	if errors.Is(err, os.ErrNotExist) {
 		return Image{}, nil, nil
 	}
-	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxImageBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > MaxImageBytes || existingOnly && !existingOwner(info, false) {
 		return Image{}, nil, ErrInvalid
 	}
 	f, err := openReadOnly(root, name)
@@ -115,7 +143,7 @@ func readPublicationTarget(ctx context.Context, root *ownedfs.Root, name string)
 		return Image{}, nil, ErrUnavailable
 	}
 	actual, statErr := f.Stat()
-	if statErr != nil || !samePublicationFile(info, actual) || !actual.Mode().IsRegular() {
+	if statErr != nil || !samePublicationFile(info, actual) || !actual.Mode().IsRegular() || existingOnly && !existingOwner(actual, false) {
 		_ = f.Close()
 		return Image{}, nil, ErrConflict
 	}
@@ -125,7 +153,7 @@ func readPublicationTarget(ctx context.Context, root *ownedfs.Root, name string)
 	if readErr != nil || closeErr != nil || len(data) > MaxImageBytes {
 		return Image{}, nil, ErrInvalid
 	}
-	if pathErr != nil || !samePublicationFile(actual, closing) || actual.Size() != closing.Size() || !actual.ModTime().Equal(closing.ModTime()) {
+	if pathErr != nil || !samePublicationFile(actual, closing) || actual.Size() != closing.Size() || !actual.ModTime().Equal(closing.ModTime()) || existingOnly && !existingOwner(closing, false) {
 		return Image{}, nil, ErrConflict
 	}
 	if ctx.Err() != nil {

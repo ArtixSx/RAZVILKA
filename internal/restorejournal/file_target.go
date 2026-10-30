@@ -36,14 +36,15 @@ func RetryableFileAdmission(err error) bool {
 // adapter. It does not protect against root, legacy writers or hardlink/path
 // aliases. Targets are configured at startup, never taken from an archive.
 type FileTarget struct {
-	mu      sync.Mutex
-	root    *ownedfs.Root
-	name    string
-	binding string
-	release func()
-	closed  bool
-	write   func(Image) error
-	syncDir func() error
+	mu            sync.Mutex
+	root          *ownedfs.Root
+	name          string
+	binding       string
+	release       func()
+	existingLease *existingNamedLease
+	closed        bool
+	write         func(Image) error
+	syncDir       func() error
 }
 
 func (*FileTarget) String() string   { return "[private state file]" }
@@ -53,6 +54,17 @@ func (*FileTarget) GoString() string { return "[private state file]" }
 // files may be readable by others; replacements are always 0600. Secret stores
 // must additionally require private parent-directory permissions.
 func OpenFileTarget(path string) (*FileTarget, error) {
+	return openFileTarget(path, false)
+}
+
+// OpenExistingFileTarget uses only the existing parent and original per-file
+// marker. It creates no file or marker while opening. The target may be absent;
+// a subsequent writer must still supply its exact expected image to the CAS.
+func OpenExistingFileTarget(path string) (*FileTarget, error) {
+	return openFileTarget(path, true)
+}
+
+func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
 	full, err := targetPath(path)
 	if err != nil {
 		return nil, err
@@ -67,19 +79,42 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 		leaseName = strings.ToLower(leaseName)
 	}
 	key := sum([]byte(leaseName))
-	release, err := acquireNamedLease(root, ".state-"+key+".lock", "RAZVILKA state file writer v1 "+key+"\n")
+	var release func()
+	var existingLease *existingNamedLease
+	if existingOnly {
+		existingLease, err = acquireExistingNamedLease(root, filepath.Dir(full), ".state-"+key+".lock", "RAZVILKA state file writer v1 "+key+"\n", nil)
+		if err == nil {
+			release = func() { _ = existingLease.close() }
+		}
+	} else {
+		release, err = acquireNamedLease(root, ".state-"+key+".lock", "RAZVILKA state file writer v1 "+key+"\n")
+	}
 	if err != nil {
-		_ = root.Close()
+		if closeErr := root.Close(); closeErr != nil && existingOnly {
+			return nil, errors.Join(err, ErrUnavailable)
+		}
 		var refusal *leaseLockRefusal
-		if errors.As(err, &refusal) {
+		if existingOnly {
+			// A joined close failure is not a clean admission refusal.
+			refusal, _ = err.(*leaseLockRefusal)
+		} else {
+			errors.As(err, &refusal)
+		}
+		if refusal != nil {
 			return nil, &fileLeaseAdmissionRefusal{cause: err}
 		}
 		return nil, err
 	}
 	binding, _ := FileBinding(full)
-	f := &FileTarget{root: root, name: name, release: release, binding: binding}
+	f := &FileTarget{root: root, name: name, release: release, binding: binding, existingLease: existingLease}
 	f.syncDir = func() error { return syncJournalDir(root) }
 	f.write = func(after Image) error {
+		if err := f.checkExistingLease(); err != nil {
+			return err
+		}
+		if err := f.checkExistingTargetOwner(); err != nil {
+			return err
+		}
 		var err error
 		if after.Exists {
 			err = root.WriteAtomic(name, after.Data, 0o600)
@@ -89,10 +124,16 @@ func OpenFileTarget(path string) (*FileTarget, error) {
 		if err != nil {
 			return err
 		}
-		return f.syncDir()
+		if err := f.syncDir(); err != nil {
+			return err
+		}
+		return f.checkExistingLease()
 	}
 	if _, err := f.Read(context.Background()); err != nil {
-		_ = f.Close()
+		closeErr := f.Close()
+		if existingOnly && closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
 		return nil, err
 	}
 	return f, nil
@@ -122,11 +163,48 @@ func (f *FileTarget) Close() error {
 		return nil
 	}
 	f.closed = true
-	f.release()
+	var err error
+	if f.existingLease != nil {
+		err = errors.Join(f.checkExistingTargetOwner(), f.existingLease.close())
+	} else {
+		f.release()
+	}
 	if f.root.Close() != nil {
+		if err == nil {
+			return ErrUnavailable
+		}
+		err = errors.Join(err, ErrUnavailable)
+	}
+	return err
+}
+
+func (f *FileTarget) checkExistingLease() error {
+	if f.existingLease == nil {
+		return nil
+	}
+	return f.existingLease.current()
+}
+
+func (f *FileTarget) checkExistingTargetOwner() error {
+	if f.existingLease == nil {
+		return nil
+	}
+	info, err := f.root.Stat(f.name)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.Mode().IsRegular() || !existingOwner(info, false) {
 		return ErrUnavailable
 	}
 	return nil
+}
+
+func (f *FileTarget) readTarget(ctx context.Context) (Image, error) {
+	if f.existingLease == nil {
+		return readTarget(ctx, f.root, f.name)
+	}
+	image, _, err := f.readPublicationTarget(ctx)
+	return image, err
 }
 
 func (f *FileTarget) Read(ctx context.Context) (Image, error) {
@@ -135,7 +213,14 @@ func (f *FileTarget) Read(ctx context.Context) (Image, error) {
 	if f.closed {
 		return Image{}, ErrUnavailable
 	}
-	return readTarget(ctx, f.root, f.name)
+	if err := f.checkExistingLease(); err != nil {
+		return Image{}, err
+	}
+	image, err := f.readTarget(ctx)
+	if err == nil {
+		err = f.checkExistingLease()
+	}
+	return image, err
 }
 
 func (f *FileTarget) CompareAndSwap(ctx context.Context, before, after Image) error {
@@ -144,10 +229,13 @@ func (f *FileTarget) CompareAndSwap(ctx context.Context, before, after Image) er
 	if f.closed {
 		return ErrUnavailable
 	}
+	if err := f.checkExistingLease(); err != nil {
+		return err
+	}
 	if !validImage(before) || !validImage(after) {
 		return ErrInvalid
 	}
-	current, err := readTarget(ctx, f.root, f.name)
+	current, err := f.readTarget(ctx)
 	if err != nil {
 		return err
 	}
@@ -155,7 +243,7 @@ func (f *FileTarget) CompareAndSwap(ctx context.Context, before, after Image) er
 		return ErrConflict
 	}
 	if equal(before, after) {
-		return nil
+		return f.checkExistingLease()
 	}
 	if ctx.Err() != nil {
 		return ErrAborted
