@@ -80,7 +80,8 @@ func (r nfqws2InactiveKernelReader) frame(ctx context.Context, comparison []Back
 	}
 	// Validate a positively read complete socket table even when queues are
 	// empty. An absent proc leaf or an empty/truncated header is never absence.
-	if err := nfqws2InactiveNetlinkTable(sockets); err != nil {
+	owners, err := nfqws2InactiveNetlinkOwners(sockets)
+	if err != nil {
 		return zero, nfqws2InactiveKernelAt("socket.table", err)
 	}
 	seen := map[uint16]bool{}
@@ -90,26 +91,31 @@ func (r nfqws2InactiveKernelReader) frame(ctx context.Context, comparison []Back
 			return zero, nfqws2InactiveKernelAt("queue.registration", ErrNFQWSManagedKernelOwner)
 		}
 		seen[queue.number] = true
-		inode, err := nfqwsScopedSocketInode(sockets, queue.portID)
-		if err != nil || inode == "" {
-			return zero, nfqws2InactiveKernelAt("socket.owner", errors.Join(ErrNFQWSManagedKernelOwner, err))
-		}
-		frame.queues = append(frame.queues, nfqwsScopedForeignQueueState{queue: queue, inode: inode})
+		frame.queues = append(frame.queues, nfqwsScopedForeignQueueState{queue: queue, inode: owners[queue.portID]})
 	}
 	slices.SortFunc(frame.queues, func(a, b nfqwsScopedForeignQueueState) int { return int(a.queue.number) - int(b.queue.number) })
 	if err := ctx.Err(); err != nil {
 		return frame, nfqws2InactiveKernelAt("frame.context", err)
+	}
+	// Validate every registration before classifying a missing peer. Keep the
+	// complete queue tuples and known inodes only to veto a retry on positive
+	// closing drift; this partial frame is never accepted as inactivity.
+	for _, queue := range frame.queues {
+		if queue.inode == "" {
+			return frame, nfqws2InactiveKernelAt("socket.owner", errors.Join(ErrNFQWSManagedKernelOwner, ErrNFQWSScopedOwner, errNFQWS2InactiveSocketPeerMissing))
+		}
 	}
 	return frame, nil
 }
 
 // A proc seq_file read is not an atomic socket inventory. In particular a
 // transient duplicate is ambiguous, so the parser continues to reject it. Only
-// that exact observation failure may discard the ENTIRE kernel attempt and
-// obtain new complete opening/closing inventories. This never replays a runtime
-// command, reuses a partial frame, changes the original identity, or extends the
-// caller's finite lease. The caller still brackets this with process/file and
-// original source-lease checks.
+// that exact failure, or a validated queue whose peer is missing from a complete
+// socket table without positive closing drift, may discard the ENTIRE kernel
+// attempt and obtain new complete opening/closing inventories. This never
+// replays a runtime command, accepts a partial frame, changes the original
+// identity, or extends the caller's finite lease. The caller still brackets this
+// with process/file and original source-lease checks.
 func (r nfqws2InactiveKernelReader) check(ctx context.Context, identity netidentity.Identity) error {
 	const attempts = 3
 	for attempt := 0; ; attempt++ {
@@ -117,7 +123,7 @@ func (r nfqws2InactiveKernelReader) check(ctx context.Context, identity netident
 		if ctx != nil && ctx.Err() != nil {
 			return errors.Join(err, ctx.Err())
 		}
-		if err == nil || attempt+1 == attempts || ctx == nil || !nfqws2InactiveDuplicateRead(err) {
+		if err == nil || attempt+1 == attempts || ctx == nil || !nfqws2InactiveDuplicateRead(err) && !nfqws2InactiveMissingPeerRead(err) {
 			return err
 		}
 		timer := time.NewTimer(20 * time.Millisecond)
@@ -204,6 +210,11 @@ func (r nfqws2InactiveKernelReader) checkOnce(ctx context.Context, identity neti
 		return nfqws2InactiveKernelAt("rules.close", errors.Join(ErrNFQWSManagedKernelOwner, err))
 	}
 	closing, err := r.frame(ctx, closingComparison)
+	if nfqws2InactiveMissingPeerRead(err) && !nfqws2InactiveMissingPeerUnchanged(opening, closing) {
+		// A missing socket must not hide a changed queue tuple or a changed
+		// positively observed peer elsewhere in the closing frame.
+		return nfqws2InactiveKernelAt("frame.changed", ErrNFQWSManagedKernelOwner)
+	}
 	if err != nil || !slices.Equal(opening.queues, closing.queues) || ctx.Err() != nil {
 		return nfqws2InactiveKernelAt("frame.changed", errors.Join(ErrNFQWSManagedKernelOwner, err, ctx.Err()))
 	}
