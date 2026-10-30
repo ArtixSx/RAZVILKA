@@ -12,16 +12,24 @@ type Snapshot struct {
 	Exclusive bool   `json:"exclusive"`
 	Fenced    bool   `json:"fenced"`
 	// Operation names what makes the gate busy, when its owner labeled it.
-	Operation        string `json:"operation,omitempty"`
-	OperationSeconds int64  `json:"operation_seconds,omitempty"`
+	Operation        string    `json:"operation,omitempty"`
+	OperationSeconds int64     `json:"operation_seconds,omitempty"`
+	Progress         *Progress `json:"progress,omitempty"`
 }
 
 func (g *Gate) Snapshot() Snapshot {
+	return g.snapshotAt(time.Now())
+}
+
+func (g *Gate) snapshotAt(now time.Time) Snapshot {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s := Snapshot{State: "idle", Active: g.active, Exclusive: g.exclusive, Fenced: g.fenced}
-	if label, since, ok := g.holderLocked(); ok && label != "" {
-		s.Operation, s.OperationSeconds = label, int64(time.Since(since)/time.Second)
+	if id, h, ok := g.presentationHolderLocked(); ok {
+		if h.label != "" {
+			s.Operation, s.OperationSeconds = h.label, max(0, int64(now.Sub(h.since)/time.Second))
+		}
+		s.Progress = h.progress.snapshot(id, h.since, now)
 	}
 	switch {
 	case g.fenced:

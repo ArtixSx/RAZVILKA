@@ -331,7 +331,9 @@
     const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
     // What the router is busy with replaces the technical availability banner.
     const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
-    const activity = admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
+    const progress = root.RazvilkaPanelAvailability?.progressView(admission, catalog());
+    const activity = progress ? `${progress.activity}. ${progress.timing}`
+      : admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
     // A press that starts on a button must end on the same element, or the
     // browser drops the click; never replace the page under a held pointer.
     if (ui.holding && !force) return;

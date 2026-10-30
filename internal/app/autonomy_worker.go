@@ -15,6 +15,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/testlab"
 )
 
@@ -39,6 +40,9 @@ func (a *App) autonomyConsent(p autonomy.Policy, s autonomy.Service) bool {
 // One service per coordinator round; all mutations use the same admission as
 // manual Apply/restore. No browser timer or second networking daemon is used.
 func (a *App) autonomyRound(ctx context.Context, now time.Time) {
+	// Presentation follows this exact admitted round. It never reads a Store
+	// from HTTP or grants another operation access to the in-flight runtime.
+	ctx, progress := operationgate.WithProgress(ctx, "autonomy")
 	ctx, release, err := a.scopedRuntimeOperation(ctx)
 	if err != nil {
 		return
@@ -46,6 +50,9 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	retained := false
 	defer func() {
 		if !retained {
+			// closeRequest may retain the admission for an unjoined private
+			// cleanup. Keep that wait visible until the actual holder releases.
+			progress("cleanup", "")
 			release()
 		}
 	}()
@@ -57,12 +64,14 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if !p.SetupComplete {
 		return
 	}
+	progress("maintenance", "")
 	a.autonomyMaintenance(ctx, p, now)
 	if a.componentMaintenancePending() {
 		return
 	}
 	if a.runAutoInstall(ctx, p) {
 		// The installer stops this process; until then nothing else runs.
+		progress("update-handoff", "")
 		a.SelfUpdate.RetainHandoff(release)
 		retained = true
 		return
@@ -73,6 +82,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if !p.Enabled || ctx.Err() != nil || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || a.Dataplane == nil {
 		return
 	}
+	progress("subscriptions", "")
 	if err = a.autonomyEnsureFeeds(ctx, p); err != nil {
 		a.autonomy.mu.Lock()
 		a.autonomy.maintenanceMessage = "Не удалось сохранить подписку; рабочие маршруты не менялись."
@@ -80,6 +90,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	}
 	// Read-only scheduling hint: a failed catalog read leaves ordinary ordering.
 	// No traversal or eligibility evidence is changed until the selected worker runs.
+	progress("selecting", "")
 	available := []string{}
 	if a.Nodes != nil {
 		if snapshot, err := a.Nodes.Snapshot(ctx, now); err == nil {
@@ -130,12 +141,14 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	}
 	a.autonomy.mu.Unlock()
 	if len(activate) > 0 {
+		progress("activating", "")
 		a.activateHandedOverServices(ctx, p, activate)
 		return
 	}
 	if chosen == "" {
 		return
 	}
+	progress("checking", chosen)
 	// Retain one original selected-device Review through checks, ordinary
 	// route publication and passive refill. No later guard can reopen it.
 	if !spec.Removing && cfg.NetworkPolicy != nil && cfg.NetworkPolicy.Clients.Mode == "selected_devices" {
@@ -150,6 +163,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 		}
 		ctx = owned
 		defer func() {
+			progress("cleanup", chosen)
 			if err := closeDevices(); err != nil {
 				a.Operations.FenceJournal()
 				state.State, state.Message = "paused", "Не удалось завершить наблюдение устройств. Автоматические действия остановлены."
@@ -170,6 +184,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	a.autonomyRuntime(chosen, state)
 	// Refill is passive catalogue work, not route selection. A failed current
 	// node cannot cause repeated fetches if the permitted pool is already full.
+	progress("reserves", chosen)
 	a.autonomyRefill(ctx, p, spec, state)
 }
 
