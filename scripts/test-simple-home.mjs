@@ -385,6 +385,39 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   assert.match(document.getElementById('rzDevicesScope').textContent,/предназначены для всех устройств/);
   assert.doesNotMatch(settings+document.getElementById('rzDevicesScope').textContent,/Обход работает|Обход действует/);
   assert.equal(writes,0,'settings and scope text never change maintenance or route state');
+
+  // The real home consumes the same bounded progress model as the heartbeat.
+  // Progress remains visible when the autonomy observation is retained/missing,
+  // and cannot renew that observation or become a successful service result.
+  const availability={};vm.runInNewContext(read('cmd/razvilka/web/panel-availability.js'),availability);
+  routerContext.RazvilkaPanelAvailability=availability.RazvilkaPanelAvailability;
+  state.services=[{id:'youtube',name:'YouTube <img src=x onerror=alert(1)>'}];
+  state.panelAvailability={kind:'responding',admission:{state:'busy',active:1,exclusive:true,fenced:false,operation:'автопилот: проверка сервисов и подписок',progress:{
+    id:7,kind:'autonomy',phase:'checking',service_id:'youtube',started_at:'2026-10-31T00:00:00Z',phase_started_at:'2026-10-31T00:01:00Z',deadline_at:'2026-10-31T00:02:00Z',elapsed_seconds:65,phase_seconds:5,remaining_seconds:55,deadline_exceeded:false
+  }}};
+  const saved=snap({youtube:'healthy'},{observation:{state:'retained'},applied_services:{youtube:{enabled:true,route:'nfqws2'}}});
+  routerContext.consoleSnapshot=saved;
+  const savedBefore=JSON.stringify(saved);
+  events.get('razvilka:panel-availability')();
+  assert.match(status.innerHTML,/Нет свежих данных автопилота/);
+  assert.match(status.innerHTML,/Проверка и применение сервиса · YouTube &lt;img/);
+  assert.doesNotMatch(status.innerHTML,/<img|Всё работает/);
+  assert.match(status.innerHTML,/Прошло 1 мин 5 с/);
+  assert.equal(JSON.stringify(saved),savedBefore,'progress renewed retained settings or runtime evidence');
+  routerContext.consoleSnapshot=null;events.get('razvilka:panel-availability')();
+  assert.match(status.innerHTML,/Загружаем состояние/);
+  assert.match(status.innerHTML,/Проверка и применение сервиса/,'progress vanished without a fresh autonomy snapshot');
+  Object.assign(state.panelAvailability.admission.progress,{elapsed_seconds:130,phase_seconds:70,remaining_seconds:0,deadline_exceeded:true});
+  events.get('razvilka:panel-availability')();
+  assert.match(status.innerHTML,/Лимит времени истёк; ожидаем завершения и очистки/);
+  assert.equal(state.panelAvailability.admission.state,'busy','deadline fabricated release');
+  state.panelAvailability.admission.fenced=true;state.panelAvailability.admission.state='recovery-required';routerContext.interfaceRecoveryRequired=()=>true;
+  events.get('razvilka:panel-availability')();
+  assert.match(status.innerHTML,/Нужно восстановление/);
+  assert.doesNotMatch(status.innerHTML,/Проверка и применение сервиса|Прошло/,'recovery headline did not take precedence');
+  routerContext.interfaceRecoveryRequired=()=>false;state.panelAvailability.admission={state:'idle',active:0,exclusive:false,fenced:false};
+  events.get('razvilka:panel-availability')();assert.doesNotMatch(status.innerHTML,/rz-sh-activity/,'released holder retained progress');
+  assert.equal(writes,0,'progress rendering or heartbeat events started an API operation');
 }
 console.log('simple home: ok');
 

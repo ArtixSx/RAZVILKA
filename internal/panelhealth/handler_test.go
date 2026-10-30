@@ -141,3 +141,51 @@ func TestAvailabilityDoesNotDiscloseConfigurationOrRouteClaims(t *testing.T) {
 		}
 	}
 }
+
+func TestAvailabilityProgressRemainsReadableUntilActualRelease(t *testing.T) {
+	var gate operationgate.Gate
+	ctx, update := operationgate.WithProgress(operationgate.WithLabel(context.Background(), "Автопилот"), "autonomy")
+	bounded, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	release, err := gate.Exclusive(bounded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	handler := Handler(&gate)
+	update("checking", "youtube")
+	read := func() response {
+		t.Helper()
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, Path, nil))
+		var value response
+		if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(w.Body.Bytes(), &value) != nil || value.Panel != "responding" || value.Dataplane != "not-checked" {
+			t.Fatalf("liveness/progress response failed: %d %s", w.Code, w.Body.String())
+		}
+		for _, forbidden := range []string{"password", "token", "node_id", "endpoint", "live_active", "healthy", "true_route", "PASS"} {
+			if strings.Contains(w.Body.String(), forbidden) {
+				t.Fatalf("progress included a secret or route claim: %s", forbidden)
+			}
+		}
+		return value
+	}
+	first := read()
+	if p := first.Admission.Progress; p == nil || p.Kind != "autonomy" || p.Phase != "checking" || p.ServiceID != "youtube" || p.DeadlineAt == nil {
+		t.Fatalf("missing live progress: %+v", p)
+	}
+	cancel()
+	update("cleanup", "youtube")
+	gate.FenceJournal()
+	duringCleanup := read()
+	if p := duringCleanup.Admission.Progress; duringCleanup.Admission.State != "recovery-required" || p == nil || p.ID != first.Admission.Progress.ID || p.Phase != "cleanup" {
+		t.Fatalf("cancellation hid unfinished work: %+v", duringCleanup)
+	}
+	if _, err := gate.Enter(context.Background()); err == nil {
+		t.Fatal("HTTP observation granted admission")
+	}
+	release()
+	after := read()
+	if after.Admission.Progress != nil || after.Admission.State != "recovery-required" {
+		t.Fatalf("release retained progress or cleared recovery: %+v", after)
+	}
+}

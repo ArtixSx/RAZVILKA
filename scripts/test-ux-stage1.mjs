@@ -203,6 +203,51 @@ await test('404 mixed-version response stops automatic retries',async()=>{const 
 await test('old heartbeat response cannot supersede a new session',async()=>{const f=monitorFixture(),old=deferred();f.handler(()=>old.promise);f.control.start();const first=f.control.refresh();await flush();f.control.stop();f.handler(async()=>snapshot(true));f.control.start();await f.control.refresh();old.resolve(snapshot());await first;assert.equal(f.published.length,1);assert.equal(f.published[0].admission.state,'busy');});
 await test('heartbeat descriptions do not fabricate service availability',async()=>{const text=model.describe({kind:'unreachable'});assert.match(text,/не доказывает/);assert.match(model.describe({kind:'responding',admission:{state:'recovery-required'}}),/восстановления журнала/);});
 await test('busy heartbeat names the running operation',async()=>{assert.match(model.describe({kind:'responding',admission:{state:'busy',operation:'проверка подключений'}}),/Сейчас выполняется: проверка подключений\./);assert.match(model.describe({kind:'responding',admission:{state:'busy'}}),/Выполняется операция\./);});
+const progressSnapshot=()=>({...snapshot(true),admission:{...snapshot(true).admission,operation:'автопилот: проверка сервисов и подписок',progress:{
+ id:7,kind:'autonomy',phase:'checking',service_id:'youtube',started_at:'2026-10-31T00:00:00Z',phase_started_at:'2026-10-31T00:01:00Z',deadline_at:'2026-10-31T00:02:00Z',elapsed_seconds:65,phase_seconds:5,remaining_seconds:55,deadline_exceeded:false
+}}});
+await test('autonomy progress names its observed phase and known service without claiming route health',async()=>{
+ const value=progressSnapshot(),services=[{id:'youtube',name:'YouTube'}],before=JSON.stringify([value,services]);
+ const view=model.progressView(value.admission,services);
+ assert.equal(view.activity,'Проверка и применение сервиса · YouTube');
+ assert.equal(view.timing,'Прошло 1 мин 5 с · На этапе 5 с · До лимита 55 с');
+ assert.equal(model.progressView(value.admission,[]).activity,'Проверка и применение сервиса','unknown IDs are not guessed as names');
+ assert.doesNotMatch(model.describe({kind:'responding',admission:value.admission},services),/работает|проверен|завершена/);
+ assert.equal(JSON.stringify([value,services]),before,'presentation changed the observed snapshot');
+});
+await test('known progress phases remain bounded presentation labels',async()=>{
+ for(const phase of ['preparing','maintenance','subscriptions','selecting','activating','checking','reserves','cleanup','update-handoff']){
+  const value=progressSnapshot();value.admission.progress.phase=phase;
+  assert(model.progressView(value.admission),phase);
+ }
+ const value=progressSnapshot();delete value.admission.progress.deadline_at;delete value.admission.progress.remaining_seconds;
+ assert.doesNotMatch(model.progressView(value.admission).timing,/лимита/,'a missing budget must not be invented');
+ delete value.admission.progress.service_id;
+ assert.equal(model.progressView(value.admission,[{name:'unrelated private label'}]).activity,'Проверка и применение сервиса');
+});
+await test('invalid optional progress retains liveness and the generic busy fallback',async()=>{
+ const edits=[p=>p.id=0,p=>p.id=Number.MAX_SAFE_INTEGER+1,p=>p.kind='unknown',p=>p.phase='healthy',p=>p.phase='toString',p=>p.started_at='invalid',p=>p.started_at='123',p=>p.phase_started_at='2026-10-30T23:59:59Z',p=>p.phase_started_at='2026-10-31T00:03:00Z',p=>p.elapsed_seconds=-1,p=>p.elapsed_seconds=604801,p=>p.elapsed_seconds=1.5,p=>p.phase_seconds=66,p=>p.remaining_seconds=-1,p=>p.remaining_seconds='55',p=>p.deadline_at='invalid',p=>p.deadline_at='2026-10-30T23:59:59Z',p=>p.deadline_exceeded='true',p=>p.deadline_exceeded=true,p=>p.service_id='<img src=x>',p=>p.service_id='x'.repeat(129),p=>{delete p.deadline_at;},p=>{delete p.deadline_at;delete p.remaining_seconds;p.deadline_exceeded=true;}];
+ for(const edit of edits){const value=progressSnapshot();edit(value.admission.progress);assert(model.validSnapshot(value),'optional progress rejected panel liveness');assert.equal(model.progressView(value.admission),null);assert.match(model.describe({kind:'responding',admission:value.admission}),/Сейчас выполняется: автопилот/);}
+ for(const progress of [null,[],{},'private raw detail']){const value=progressSnapshot();value.admission.progress=progress;assert(model.validSnapshot(value));assert.equal(model.progressView(value.admission),null);}
+});
+await test('deadline expiry and recovery never make an active operation available',async()=>{
+ const value=progressSnapshot();Object.assign(value.admission.progress,{elapsed_seconds:130,phase_seconds:70,remaining_seconds:0,deadline_exceeded:true});
+ const view=model.progressView(value.admission);assert.equal(view.deadlineExceeded,true);assert.match(view.timing,/Лимит времени истёк; ожидаем завершения и очистки/);
+ assert.match(model.describe({kind:'responding',admission:value.admission}),/остаётся занятой/);
+ assert(model.needsAttention({kind:'responding',admission:value.admission}));
+ value.admission.fenced=true;value.admission.state='recovery-required';
+ assert.equal(model.progressView(value.admission),null);assert.match(model.describe({kind:'responding',admission:value.admission}),/восстановления журнала/);
+ value.admission={...snapshot().admission,progress:value.admission.progress};assert.equal(model.progressView(value.admission),null,'idle cannot retain released holder progress');
+});
+await test('progress heartbeats keep the existing scheduler and announce phases rather than elapsed ticks',async()=>{
+ const f=monitorFixture(),value=progressSnapshot();f.handler(async()=>value);f.control.start();await f.control.refresh();
+ const first=model.describe(f.published.at(-1));assert.equal([...f.timers.values()][0].ms,5000);
+ Object.assign(value.admission.progress,{elapsed_seconds:70,phase_seconds:10,remaining_seconds:50});await f.control.refresh();
+ assert.equal(model.describe(f.published.at(-1)),first,'elapsed counters changed the live announcement');
+ assert.equal(f.calls.length,2);assert(f.calls.every(c=>c.readTimeoutMs===3000&&!c.method));
+ assert.equal(f.published.at(-1).dataplane,'not-checked');assert.equal(f.timers.size,1);
+ f.handler(async()=>snapshot());await f.control.refresh();assert.equal(model.progressView(f.published.at(-1).admission),null);assert.equal([...f.timers.values()][0].ms,15000);
+});
 const summary={suite:'ux-stage1',mode:process.env.RAZVILKA_TEST_APP?'audited-source-excerpts-and-new-files':'repository-files',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,tests:results};
 console.log(JSON.stringify(summary));
 process.exitCode=summary.failed?1:0;

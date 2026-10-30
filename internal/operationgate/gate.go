@@ -64,6 +64,7 @@ type holder struct {
 	label     string
 	since     time.Time
 	exclusive bool
+	progress  *admittedProgress
 }
 
 type labelKey struct{}
@@ -89,15 +90,22 @@ func (g *Gate) Holder() (label string, since time.Time, ok bool) {
 }
 
 func (g *Gate) holderLocked() (label string, since time.Time, ok bool) {
-	for _, h := range g.holders {
+	_, h, ok := g.presentationHolderLocked()
+	return h.label, h.since, ok
+}
+
+// Use the same holder for the operation label and progress. Described shared
+// holders are ordered by admission time; progress never changes admission.
+func (g *Gate) presentationHolderLocked() (id uint64, selected holder, ok bool) {
+	for candidateID, h := range g.holders {
 		if h.exclusive {
-			return h.label, h.since, true
+			return candidateID, h, true
 		}
-		if h.label != "" && (!ok || h.since.Before(since)) {
-			label, since, ok = h.label, h.since, true
+		if (h.label != "" || h.progress != nil) && (!ok || h.since.Before(selected.since) || h.since.Equal(selected.since) && candidateID < id) {
+			id, selected, ok = candidateID, h, true
 		}
 	}
-	return label, since, ok
+	return id, selected, ok
 }
 
 func (*Gate) String() string   { return "[application operation gate]" }
@@ -179,7 +187,7 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 	}
 	g.nextHolder++
 	id := g.nextHolder
-	g.holders[id] = holder{label: labelOf(ctx), since: time.Now(), exclusive: exclusive}
+	g.holders[id] = holder{label: labelOf(ctx), since: time.Now(), exclusive: exclusive, progress: bindProgress(ctx)}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
