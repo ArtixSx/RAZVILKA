@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
@@ -62,6 +63,18 @@ func openNFQWS2HookJournalAt(root, alias string) (*ownedfs.Root, error) {
 			return nil, err
 		}
 		defer base.Close()
+		// A shared /opt is not an installation owner before its first
+		// application subtree exists. Prove only that absence beneath the
+		// held canonical descriptor without following the child symlink.
+		// Once the subtree exists, all original owner checks remain required,
+		// even when a deeper state directory has not been created.
+		first, _, _ := strings.Cut(rel, string(filepath.Separator))
+		if _, err := base.LstatChild(first); err != nil {
+			if errors.Is(err, os.ErrNotExist) && nfqws2HookAbsentInstallationCurrent(base, alias, canonical, first) != nil {
+				return nil, ErrNFQWS2HookRecovery
+			}
+			return nil, err
+		}
 		info, err := base.RootInfo()
 		if err == nil {
 			err = nfqws2HookInstallationOwner(info)
@@ -100,6 +113,25 @@ func openNFQWS2HookJournalAt(root, alias string) (*ownedfs.Root, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+// An absent child of a detached old mount is not absence at the configured
+// installation alias. Changed/missing owners deliberately return a fixed
+// refusal: callers interpret any wrapped ErrNotExist as a fresh installation.
+func nfqws2HookAbsentInstallationCurrent(base *ownedfs.Root, alias, canonical, first string) error {
+	if base == nil {
+		return ErrNFQWS2HookRecovery
+	}
+	held, heldErr := base.RootInfo()
+	resolved, resolveErr := filepath.EvalSymlinks(alias)
+	current, statErr := os.Lstat(canonical)
+	if heldErr != nil || resolveErr != nil || statErr != nil || resolved != canonical || !os.SameFile(held, current) || current.Mode()&os.ModeSymlink != 0 {
+		return ErrNFQWS2HookRecovery
+	}
+	if _, err := base.LstatChild(first); !errors.Is(err, os.ErrNotExist) {
+		return ErrNFQWS2HookRecovery
+	}
+	return nil
 }
 
 func readNFQWS2HookJournal(r *ownedfs.Root) (nfqws2HookJournal, []byte, error) {
