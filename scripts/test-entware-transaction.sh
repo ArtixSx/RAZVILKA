@@ -151,7 +151,8 @@ touch "$READINESS_CASE/health-called"
 exit "$READINESS_CODE"
 HEALTH_FIXTURE
     cat >"$READINESS_CASE/init" <<'INIT_FIXTURE'
-#!/bin/sh
+#!/bin/false
+# Deliberately non-POSIX firmware interpreter: callers must select Entware sh.
 set -eu
 case "$1" in
   clear-guard) : ;;
@@ -236,7 +237,7 @@ test_prior_route_evidence() {
 [ "\$*" = "-healthcheck http://127.0.0.1:8787/api/v1/status -healthcheck-pid 4242 -healthcheck-prior -healthcheck-wait 3m" ] || exit 99
 exit $PRIOR_CODE
 PRIOR_FIXTURE
-    printf '#!/bin/sh\ncase "$1" in pid) echo 4242 ;; lan-ip) echo 127.0.0.1 ;; esac\n' >"$PRIOR_CASE/init"
+    printf '#!/bin/false\ncase "$1" in pid) echo 4242 ;; lan-ip) echo 127.0.0.1 ;; esac\n' >"$PRIOR_CASE/init"
     chmod 700 "$PRIOR_CASE/candidate" "$PRIOR_CASE/init"
     RESULT="$(BASE="$PRIOR_CASE" BINDIR="$PRIOR_CASE/bin" BIN_SOURCE="$PRIOR_CASE/candidate" RAZ_INIT="$PRIOR_CASE/init" RAZ_WAS_RUNNING=1       sh -c 'set -eu; . "$1" >/dev/null; printf %s "$PRIOR_ROUTES_CONFIRMED"' sh "$PRIOR_ROOT/probe.sh")"
     EXPECTED=1

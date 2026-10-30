@@ -176,8 +176,16 @@ func nfqws2InactiveProcessArgument(arg string, a *NFQWS2Adapter) bool {
 // projecting captured rows into diagnostics. A transient kernel snapshot is
 // still a refusal; it must never be converted to evidence of inactivity.
 func nfqws2InactiveNetlinkTable(text string) error {
-	refuse := func(stage string) error {
-		return nfqws2InactiveKernelAt("socket.table."+stage, ErrNFQWSManagedKernelOwner)
+	_, err := nfqws2InactiveNetlinkOwners(text)
+	return err
+}
+
+// Owners are returned only after the entire table passes the same strict
+// validation. A missing peer can then be distinguished from malformed or
+// ambiguous input without relaxing the shared scoped socket parser.
+func nfqws2InactiveNetlinkOwners(text string) (map[uint32]string, error) {
+	refuse := func(stage string) (map[uint32]string, error) {
+		return nil, nfqws2InactiveKernelAt("socket.table."+stage, ErrNFQWSManagedKernelOwner)
 	}
 	if len(text) == 0 || len(text) > 1<<20 || !utf8.ValidString(text) || strings.ContainsAny(text, "\x00\r") {
 		return refuse("encoding")
@@ -190,6 +198,7 @@ func nfqws2InactiveNetlinkTable(text string) error {
 		return refuse("header")
 	}
 	seen := map[[2]uint64]bool{}
+	owners := map[uint32]string{}
 	for _, line := range lines[1:] {
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
@@ -212,6 +221,9 @@ func nfqws2InactiveNetlinkTable(text string) error {
 			return refuse("owner-inode")
 		}
 		seen[key] = true
+		if protocol == 12 && port != 0 {
+			owners[uint32(port)] = fields[9]
+		}
 	}
-	return nil
+	return owners, nil
 }

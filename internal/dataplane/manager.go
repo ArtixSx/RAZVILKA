@@ -859,6 +859,11 @@ func (m *Manager) Recover(ctx context.Context) (Recovery, error) {
 	defer m.endOperation()
 	m.revokeRetainedSingReview()
 	recovery := Recovery{State: "skipped", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), Steps: []RecoveryStep{}}
+	if err := m.checkNFQWS2BootHookJournal(); err != nil {
+		recovery.State, recovery.Guarded = "journal-recovery-required", true
+		recovery.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		return recovery, errors.Join(ErrExecutionJournal, err)
+	}
 	if settled, err := m.settleCommittedPublication(); err != nil {
 		recovery.Steps = append(recovery.Steps, RecoveryStep{Adapter: "journal", State: "failed", Detail: "The interrupted commit could not be completed in the journal."})
 	} else if settled {

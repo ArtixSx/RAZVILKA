@@ -119,6 +119,8 @@ type Coordinator struct {
 	slots                           map[string]*slot
 	acquired                        []*slot
 	closed, blocked, runtimeStarted bool
+	offlineServiceControl           bool
+	offlineServiceControlContext    context.Context
 	// Package-private crash/failure seams around REAL typed target writes.
 	beforeWrite    func(string) error
 	afterWrite     func(string)
@@ -132,17 +134,45 @@ func (*Coordinator) GoString() string { return "[private draft recovery coordina
 // never opens optional provider/draft files or creates their directories. A bad
 // journal/target is preserved and blocks startup. No empty-default repair.
 func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outcome, error) {
-	if ctx.Err() != nil {
+	return openCoordinator(ctx, layout, true)
+}
+
+// OpenForOfflineNFQWS2Stop acquires the same real lifetime lease as Open, but
+// requires an idle journal. An already pending explicit Stop must not replay
+// an unrelated private restore before it checks its frozen configuration.
+// No target is opened, read, restored or normalized by this entry point.
+func OpenForOfflineNFQWS2Stop(ctx context.Context, layout Layout) (*Coordinator, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, restorejournal.ErrAborted
+	}
+	if _, finite := ctx.Deadline(); !finite {
+		return nil, restorejournal.ErrInvalid
+	}
+	c, _, err := openCoordinator(ctx, layout, false)
+	return c, err
+}
+
+func openCoordinator(ctx context.Context, layout Layout, recoverTargets bool) (*Coordinator, restorejournal.Outcome, error) {
+	return openCoordinatorMode(ctx, layout, recoverTargets, false)
+}
+
+func openCoordinatorMode(ctx context.Context, layout Layout, recoverTargets, existingOnly bool) (*Coordinator, restorejournal.Outcome, error) {
+	if ctx == nil || ctx.Err() != nil {
 		return nil, restorejournal.Blocked, restorejournal.ErrAborted
+	}
+	if existingOnly && recoverTargets {
+		return nil, restorejournal.Blocked, restorejournal.ErrInvalid
 	}
 	layout, scope, err := normalizeLayout(layout)
 	if err != nil {
 		return nil, restorejournal.Blocked, err
 	}
-	if err := os.MkdirAll(layout.JournalRoot, 0o700); err != nil {
-		return nil, restorejournal.Blocked, restorejournal.ErrUnavailable
+	if !existingOnly {
+		if err := os.MkdirAll(layout.JournalRoot, 0o700); err != nil {
+			return nil, restorejournal.Blocked, restorejournal.ErrUnavailable
+		}
 	}
-	c := &Coordinator{layout: layout, slots: map[string]*slot{}}
+	c := &Coordinator{layout: layout, slots: map[string]*slot{}, offlineServiceControl: existingOnly}
 	add := func(id string, factory func() (managedTarget, error)) {
 		c.slots[id] = &slot{id: id, owner: c, factory: factory}
 	}
@@ -170,18 +200,30 @@ func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outc
 	for id, s := range c.slots {
 		targets[id] = s
 	}
-	c.journal, err = restorejournal.Open(layout.JournalRoot, scope, targets)
+	if existingOnly {
+		c.journal, err = restorejournal.OpenExisting(layout.JournalRoot, scope, targets)
+	} else {
+		c.journal, err = restorejournal.Open(layout.JournalRoot, scope, targets)
+	}
 	if err != nil {
 		return nil, restorejournal.Blocked, err
 	}
-	out, err := c.journal.Recover(ctx)
+	out := restorejournal.Clean
+	if recoverTargets {
+		out, err = c.journal.Recover(ctx)
+	} else {
+		err = c.journal.RequireIdle(ctx)
+	}
 	closeErr := c.releaseTargets()
 	if err != nil || closeErr != nil || out == restorejournal.Blocked {
-		_ = c.journal.Close()
+		journalCloseErr := c.journal.Close()
 		// Recover deliberately returns a recovery fence when its context has
 		// expired, including an empty journal. Preserve that diagnostic fact;
 		// a subsequent normal retry still reopens and validates the journal.
-		return nil, restorejournal.Blocked, openingRecoveryError(errors.Join(err, ctx.Err()), closeErr != nil)
+		if !existingOnly {
+			return nil, restorejournal.Blocked, openingRecoveryError(errors.Join(err, ctx.Err()), closeErr != nil)
+		}
+		return nil, restorejournal.Blocked, openingRecoveryError(errors.Join(err, ctx.Err(), closeErr, journalCloseErr), closeErr != nil || journalCloseErr != nil)
 	}
 	return c, out, nil
 }

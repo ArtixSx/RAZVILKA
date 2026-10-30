@@ -55,8 +55,21 @@ func TestNFQWS2HookAdmissionPendingThenLegitimateSettlement(t *testing.T) {
 	done := make(chan struct{})
 	var restoreErr error
 	go func() { defer close(done); restoreErr = a.restoreNFQWS2HooksRound(context.Background(), time.Now()) }()
-	defer func() { releaseRestore(); <-done }()
-	<-started
+	defer func() {
+		releaseRestore()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Error("hook restoration did not finish after releasing the model")
+		}
+	}()
+	select {
+	case <-started:
+	case <-done:
+		t.Fatalf("hook restoration refused before entering the model: %v", restoreErr)
+	case <-time.After(10 * time.Second):
+		t.Fatal("hook restoration did not enter the model within 10 seconds")
+	}
 	path := filepath.Join(a.Dataplane.StateRoot, nfqws2HookJournalName)
 	before, err := os.ReadFile(path)
 	if err != nil {

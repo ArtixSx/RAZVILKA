@@ -18,7 +18,7 @@ const start = source.indexOf('probe_self_update_metadata() (\n');
 const end = source.indexOf('require_node_history_compatibility() {\n', start);
 assert(start >= 0 && end > start);
 const gates = source.slice(start, end);
-const stop = source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+const stop = source.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
 const recovery = source.indexOf(' -recover-private-restore', stop);
 const deactivate = source.indexOf(' -deactivate-dataplane', recovery);
 const targetCall = 'require_target_self_update_compatibility "' + (scriptName === 'rollback-entware.sh' ? '$BACKUP/razvilka.bin' : '$BIN_SOURCE') + '"';

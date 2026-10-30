@@ -105,7 +105,7 @@ func newStockAdapterFixtureAt(t *testing.T, prefix string) stockAdapterFixture {
 			t.Fatal(err)
 		}
 	}
-	plan := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-stock-native", Digest: strings.Repeat("a", 64), Ready: true, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: "selected", ServiceName: "Selected", Resolved: "nfqws2", Domains: []string{"selected.example"}, ProbeURL: "https://selected.example"}}, SiteExclusions: &SiteExclusions{Domains: []string{"bank.example"}}}
+	plan := Plan{SchemaVersion: SchemaVersion, PlanID: "dp-aaaaaaaaaaaaaaaa", Digest: strings.Repeat("a", 64), Ready: true, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: "selected", ServiceName: "Selected", Resolved: "nfqws2", Domains: []string{"selected.example"}, ProbeURL: "https://selected.example"}}, SiteExclusions: &SiteExclusions{Domains: []string{"bank.example"}}}
 	return stockAdapterFixture{m: m, a: a, owner: owner, runner: runner, plan: plan}
 }
 

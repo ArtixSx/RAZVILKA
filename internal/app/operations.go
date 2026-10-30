@@ -335,6 +335,10 @@ func (a *App) writeOperationFailure(w http.ResponseWriter, err error) {
 		code, status, recovery = "DATAPLANE_RECOVERY_REQUIRED", http.StatusServiceUnavailable, true
 		message = "Восстановление NFQWS2 ещё не подтверждено. Дождитесь завершения операции и обновите состояние; если запрет сохраняется, откройте журнал."
 	}
+	if errors.Is(err, ErrOfflineNFQWS2Stop) {
+		code, status, recovery = "DATAPLANE_RECOVERY_REQUIRED", http.StatusServiceUnavailable, true
+		message = "Остановка маршрутов NFQWS2 ещё не подтверждена. Автоматические изменения приостановлены. При остановленной панели повторите установленную команду -stop-owned-routes с исходными путями конфигурации и состояния. При отказе сохраните журналы для проверки."
+	}
 	// Identity is cache-independent. Supervisors can recognize a live but busy
 	// process without reading locked Stores or inventing dataplane health.
 	body := map[string]any{"ok": false, "code": code, "error": message, "not_started": true, "live_applied": false, "recovery_required": recovery,

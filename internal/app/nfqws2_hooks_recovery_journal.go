@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
@@ -19,7 +20,7 @@ import (
 
 const nfqws2HookJournalName = "nfqws2-hooks-recovery.json"
 
-var ErrNFQWS2HookRecovery = errors.New("NFQWS2 hook recovery is unfinished: stop the panel, run the installed CLI -deactivate-dataplane with its original state paths, then start the panel; unknown or foreign kernel objects require review")
+var ErrNFQWS2HookRecovery = errors.New("NFQWS2 hook recovery is unfinished: stop the panel; for an owned first-start NFQWS2-only route plan, run the installed CLI -stop-owned-routes with its original config/state paths, then start the panel and use Resume; other scopes and unknown or foreign kernel objects require review")
 
 type nfqws2HookJournal struct {
 	Version  int            `json:"version"`
@@ -62,6 +63,18 @@ func openNFQWS2HookJournalAt(root, alias string) (*ownedfs.Root, error) {
 			return nil, err
 		}
 		defer base.Close()
+		// A shared /opt is not an installation owner before its first
+		// application subtree exists. Prove only that absence beneath the
+		// held canonical descriptor without following the child symlink.
+		// Once the subtree exists, all original owner checks remain required,
+		// even when a deeper state directory has not been created.
+		first, _, _ := strings.Cut(rel, string(filepath.Separator))
+		if _, err := base.LstatChild(first); err != nil {
+			if errors.Is(err, os.ErrNotExist) && nfqws2HookAbsentInstallationCurrent(base, alias, canonical, first) != nil {
+				return nil, ErrNFQWS2HookRecovery
+			}
+			return nil, err
+		}
 		info, err := base.RootInfo()
 		if err == nil {
 			err = nfqws2HookInstallationOwner(info)
@@ -100,6 +113,25 @@ func openNFQWS2HookJournalAt(root, alias string) (*ownedfs.Root, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+// An absent child of a detached old mount is not absence at the configured
+// installation alias. Changed/missing owners deliberately return a fixed
+// refusal: callers interpret any wrapped ErrNotExist as a fresh installation.
+func nfqws2HookAbsentInstallationCurrent(base *ownedfs.Root, alias, canonical, first string) error {
+	if base == nil {
+		return ErrNFQWS2HookRecovery
+	}
+	held, heldErr := base.RootInfo()
+	resolved, resolveErr := filepath.EvalSymlinks(alias)
+	current, statErr := os.Lstat(canonical)
+	if heldErr != nil || resolveErr != nil || statErr != nil || resolved != canonical || !os.SameFile(held, current) || current.Mode()&os.ModeSymlink != 0 {
+		return ErrNFQWS2HookRecovery
+	}
+	if _, err := base.LstatChild(first); !errors.Is(err, os.ErrNotExist) {
+		return ErrNFQWS2HookRecovery
+	}
+	return nil
 }
 
 func readNFQWS2HookJournal(r *ownedfs.Root) (nfqws2HookJournal, []byte, error) {
@@ -233,6 +265,10 @@ func (o *nfqws2HookJournalOwner) current() error {
 	return nil
 }
 func (o *nfqws2HookJournalOwner) settle() error {
+	return o.settleAt(time.Now().UTC())
+}
+
+func (o *nfqws2HookJournalOwner) settleAt(finished time.Time) error {
 	if err := o.current(); err != nil {
 		return err
 	}
@@ -246,7 +282,7 @@ func (o *nfqws2HookJournalOwner) settle() error {
 	j := o.record
 	j.State = "settled"
 	j.Reason = "verified-settlement"
-	j.Finished = time.Now().UTC()
+	j.Finished = finished
 	_, err = writeNFQWS2HookJournal(o.root, j)
 	return err
 }
@@ -255,6 +291,28 @@ func (o *nfqws2HookJournalOwner) settle() error {
 // ambiguous graphs before Stop can touch them and retains the exact journal
 // owner through fresh inactivity verification after the original Stop.
 func ReviewNFQWS2HookStop(ctx context.Context, m *dataplane.Manager, settings string) (func() error, func(), error) {
+	bootSettle, bootClose, err := m.ReviewNFQWS2BootHookStop(ctx, settings)
+	if err != nil {
+		return nil, nil, err
+	}
+	settle, closeReview, err := reviewNFQWS2AppHookStop(ctx, m, settings)
+	if err != nil {
+		bootClose()
+		return nil, nil, err
+	}
+	return func() error {
+		if err := settle(); err != nil {
+			return err
+		}
+		return bootSettle()
+	}, func() { closeReview(); bootClose() }, nil
+}
+
+func reviewNFQWS2AppHookStop(ctx context.Context, m *dataplane.Manager, settings string) (func() error, func(), error) {
+	return reviewNFQWS2AppHookStopAt(ctx, m, settings, time.Time{})
+}
+
+func reviewNFQWS2AppHookStopAt(ctx context.Context, m *dataplane.Manager, settings string, finished time.Time) (func() error, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -286,22 +344,58 @@ func ReviewNFQWS2HookStop(ctx context.Context, m *dataplane.Manager, settings st
 		return nil, nil, err
 	}
 	if err = nfqws2HookStopAdmission(j,
-		func() error { return review.VerifyNFQWS2Inactive(ctx) },
+		func() error {
+			if err := review.VerifyNFQWS2Inactive(ctx); err == nil {
+				return nil
+			}
+			return review.VerifyNFQWS2RebootStop(ctx, j.Plan, j.Instance)
+		},
 		func() (dataplane.NFQWS2HookRestore, error) { return m.ObserveCommittedNFQWS2Hooks(ctx, j.Plan) }); err != nil {
 		closeRoot()
 		return nil, nil, err
 	}
 
 	o := &nfqws2HookJournalOwner{path: m.StateRoot, root: r, image: data, record: j}
-	return nfqws2HookStopSettlement(o, func() error { return review.VerifyNFQWS2Inactive(ctx) }), closeRoot, nil
+	return nfqws2HookStopSettlementAt(ctx, m, o, func() error { return review.VerifyNFQWS2Inactive(ctx) }, finished), closeRoot, nil
 }
 
-func nfqws2HookStopSettlement(o *nfqws2HookJournalOwner, verify func() error) func() error {
+func nfqws2HookStopSettlement(ctx context.Context, m *dataplane.Manager, o *nfqws2HookJournalOwner, verify func() error) func() error {
+	return nfqws2HookStopSettlementAt(ctx, m, o, verify, time.Time{})
+}
+
+func nfqws2HookStopSettlementAt(ctx context.Context, m *dataplane.Manager, o *nfqws2HookJournalOwner, verify func() error, finished time.Time) func() error {
+	current := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if m.StateRoot != o.path {
+			return dataplane.ErrReviewChanged
+		}
+		plan, exists, err := m.Committed()
+		if err != nil || !exists || !reflect.DeepEqual(plan, o.record.Plan) {
+			return errors.Join(dataplane.ErrReviewChanged, err)
+		}
+		return ctx.Err()
+	}
 	return func() error {
+		// The admitted plan and journal still belong to this Stop. A fresh
+		// absence observation cannot grant settlement of a changed intent.
+		if err := current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
+		}
+		if err := o.current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
+		}
 		if err := verify(); err != nil {
 			return fmt.Errorf("%w: inactivity: %v", ErrNFQWS2HookRecovery, err)
 		}
-		return o.settle()
+		if err := current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
+		}
+		if finished.IsZero() {
+			return o.settle()
+		}
+		return o.settleAt(finished)
 	}
 }
 

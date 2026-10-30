@@ -55,6 +55,7 @@ type Store struct {
 	cfg            Config
 	diskImage      restorejournal.Image
 	writeUncertain bool
+	strict         *strictExistingStore
 }
 
 type DraftScope string
@@ -486,6 +487,9 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
+	if s.strict != nil {
+		return s.saveStrictLocked(b)
+	}
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -499,10 +503,14 @@ func (s *Store) saveLocked() error {
 }
 
 func (s *Store) persistLocked(target restorejournal.Target, data []byte) error {
+	return s.persistLockedContext(context.Background(), target, data)
+}
+
+func (s *Store) persistLockedContext(ctx context.Context, target restorejournal.Target, data []byte) error {
 	after := restorejournal.Image{Exists: true, Data: data}
-	if err := target.CompareAndSwap(context.Background(), s.diskImage, after); err != nil {
+	if err := target.CompareAndSwap(ctx, s.diskImage, after); err != nil {
 		if errors.Is(err, restorejournal.ErrRecovery) {
-			actual, readErr := target.Read(context.Background())
+			actual, readErr := target.Read(ctx)
 			if readErr == nil && actual.Exists == s.diskImage.Exists && bytes.Equal(actual.Data, s.diskImage.Data) {
 				// The failed write provably left the old bytes unchanged.
 				return restorejournal.ErrAborted

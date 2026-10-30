@@ -142,6 +142,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	healthPrior := flag.Bool("healthcheck-prior", false, "classify the routes of a running process of any release before an upgrade (exit 0 confirmed, 10 known degradation, 75 busy, 76 fenced journal, 1 unknown)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	installComponents := flag.Bool("install-components", false, "install or update recommended bypass components and exit")
+	stopOwnedRoutes := flag.Bool("stop-owned-routes", false, "finish an owned NFQWS2 Stop and durably record stopped routes, while the panel is stopped")
 	deactivateDataplane := flag.Bool("deactivate-dataplane", false, "remove only RAZVILKA-owned runtime routes, interfaces and processes, then exit")
 	retireDataplaneForRemoval := flag.Bool("retire-dataplane-for-removal", false, "retire owned restart metadata for application removal; requires deactivate-dataplane")
 	retryRollbackPlan := flag.String("retry-rollback-plan", "", "retry an intact failed rollback for this exact plan, while the panel is stopped")
@@ -205,13 +206,13 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		return
 	}
 	modes := 0
-	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", bootRetirementCLIRequested(), *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
+	for _, enabled := range []bool{*checkOnly, *migrateConfig, *recoverPrivateRestore, *healthURL != "", *installComponents, *stopOwnedRoutes, *deactivateDataplane, *retryRollbackPlan != "", *closeRollbackPlan != "", bootRetirementCLIRequested(), *adoptNFQWS2Init, *checkDNSState, *checkAutonomyState} {
 		if enabled {
 			modes++
 		}
 	}
 	if modes > 1 {
-		log.Fatal("check, migration, recovery, health, installation and deactivation modes are mutually exclusive")
+		log.Fatal("check, migration, recovery, health, installation, Stop and deactivation modes are mutually exclusive")
 	}
 	if (*selfJob == "") != (*selfWorker == 0) || *selfWorker < 0 || *selfWorker == 1 || *selfJob != "" && modes != 0 {
 		log.Fatal("self update startup requires a matching job and command worker in ordinary daemon mode")
@@ -280,6 +281,15 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		fmt.Printf("healthy: %s\n", version)
 		return
 	}
+	// The outer Stop journal precedes every ordinary startup/mutation effect,
+	// including legacy permission repair and private restore opening. Readers
+	// remain available, and only the separate explicit command can retry it.
+	if !*checkOnly {
+		if err := checkOfflineNFQWS2StopMutation(*dataplaneStatePath, *stopOwnedRoutes); err != nil {
+			log.Print(app.ErrOfflineNFQWS2Stop)
+			return 1
+		}
+	}
 	if !allowSelfUpdateJournalCommand(journalRoots) {
 		os.Exit(1)
 	}
@@ -314,6 +324,26 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			}
 			return
 		}
+	}
+	if *stopOwnedRoutes {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		})
+		cancel()
+		if err != nil {
+			log.Print(app.ErrOfflineNFQWS2Stop, ": ", err)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("owned-route Stop result could not be written")
+			return 1
+		}
+		return
 	}
 	// Older releases could leave per-engine draft directories at 0755. Repair
 	// only the fixed RAZVILKA staging layout before opening recovery targets.
@@ -852,7 +882,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		stopRuntime()
 		retainManagedListRetirement(closeManagedNFQList)
 	}()
-	hookRecoveryErr := app.CheckNFQWS2HookRecovery(dataplaneManager.StateRoot)
+	hookRecoveryErr := checkNFQWS2RecoveryJournals(dataplaneManager.StateRoot)
 	if hookRecoveryErr != nil {
 		a.Operations.FenceJournal()
 		log.Print(hookRecoveryErr)
@@ -1018,6 +1048,33 @@ func runCommand(args []string) (bool, int) {
 }
 
 func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdateJournalRoots) (bool, int) {
+	if len(args) > 0 && strings.ToLower(strings.TrimSpace(args[0])) == "nfqws-managed-process-supervisor" {
+		if args[0] != "nfqws-managed-process-supervisor" {
+			return true, 2
+		}
+		return true, runNFQWSManagedProcessCommand(args[1:], func(id, state, control string) int {
+			if !allowSelfUpdateJournalCommand(journalRoots) {
+				return 3
+			}
+			// Preserve the producer's no-write missing-intent refusal. This
+			// observation only denies a launch; a present or unreadable file
+			// still needs every fence and the original typed owner review.
+			if _, err := os.Lstat(filepath.Join(state, "ownership.json")); errors.Is(err, os.ErrNotExist) {
+				return 1
+			}
+			if err := checkOfflineNFQWS2StopCommand(args); err != nil {
+				fmt.Fprintln(os.Stderr, app.ErrOfflineNFQWS2Stop)
+				return 3
+			}
+			return dataplane.RunNFQWSManagedProcessSupervisor(id, state, control)
+		})
+	}
+	// Several fixed native helpers dispatch before ordinary flag parsing.
+	// Fence them here before any supervisor, restore or updater can write.
+	if err := checkOfflineNFQWS2StopCommand(args); err != nil {
+		fmt.Fprintln(os.Stderr, app.ErrOfflineNFQWS2Stop)
+		return true, 3
+	}
 	if handled, code := runCleanInstallControlCommand(args, journalRoots); handled {
 		return true, code
 	}
@@ -1043,16 +1100,6 @@ func runCommandWithSelfUpdateJournalRoots(args []string, journalRoots selfUpdate
 			return true, 3
 		}
 		return true, runNFQWSCompatibilityCommand(args[1:], strategylab.RunCompatibilitySupervisor)
-	case "nfqws-managed-process-supervisor":
-		if args[0] != command {
-			return true, 2
-		}
-		return true, runNFQWSManagedProcessCommand(args[1:], func(id, state, control string) int {
-			if !allowSelfUpdateJournalCommand(journalRoots) {
-				return 3
-			}
-			return dataplane.RunNFQWSManagedProcessSupervisor(id, state, control)
-		})
 	case "component-package-supervisor":
 		if len(args) != 4 {
 			return true, 2

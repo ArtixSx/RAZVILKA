@@ -15,7 +15,7 @@ try {
     assert(start >= 0 && end > start);
     const gate = source.slice(start, end + 3);
     assert(gate.includes('-self-update-schema'));
-    const stop = source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+    const stop = source.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
     assert(source.indexOf('require_native_enrollment_schema "', end) < stop);
     assert(source.indexOf('require_native_enrollment_schema "', stop) > stop);
     const run = (body, expected) => {

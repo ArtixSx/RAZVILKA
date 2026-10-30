@@ -93,19 +93,31 @@ type document struct {
 // changed binding must not recover a journal against a different set of files.
 // The lease coordinates journal users only; it does not lock live app stores.
 type Journal struct {
-	mu      sync.Mutex
-	root    *ownedfs.Root
-	scope   string
-	targets map[string]Target
-	release func()
-	write   func([]byte) error
-	closed  bool
+	mu            sync.Mutex
+	root          *ownedfs.Root
+	scope         string
+	targets       map[string]Target
+	release       func()
+	existingLease *existingNamedLease
+	write         func([]byte) error
+	closed        bool
 }
 
 func (*Journal) String() string   { return "[private restore journal]" }
 func (*Journal) GoString() string { return "[private restore journal]" }
 
 func Open(path, scope string, targets map[string]Target) (*Journal, error) {
+	return openJournal(path, scope, targets, false)
+}
+
+// OpenExisting retains an already initialized original protocol lease. It
+// creates no directory, marker or journal, and never replays a transaction.
+// Call RequireIdle before using it for an offline operation without recovery.
+func OpenExisting(path, scope string, targets map[string]Target) (*Journal, error) {
+	return openJournal(path, scope, targets, true)
+}
+
+func openJournal(path, scope string, targets map[string]Target, existingOnly bool) (*Journal, error) {
 	if !validHash(scope) || len(targets) == 0 || len(targets) > MaxTargets {
 		return nil, ErrInvalid
 	}
@@ -124,20 +136,40 @@ func Open(path, scope string, targets map[string]Target) (*Journal, error) {
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	release, err := acquireLease(root)
+	var release func()
+	var existingLease *existingNamedLease
+	if existingOnly {
+		existingLease, err = acquireExistingNamedLease(root, path, leaseFile, leaseMarker, info)
+		if err == nil {
+			release = func() { _ = existingLease.close() }
+		}
+	} else {
+		release, err = acquireLease(root)
+	}
 	if err != nil {
-		_ = root.Close()
+		if closeErr := root.Close(); closeErr != nil && existingOnly {
+			return nil, errors.Join(err, ErrUnavailable)
+		}
 		return nil, err
 	}
-	j := &Journal{root: root, scope: scope, targets: copyTargets, release: release}
+	j := &Journal{root: root, scope: scope, targets: copyTargets, release: release, existingLease: existingLease}
 	j.write = func(data []byte) error {
+		if err := j.checkExistingLease(); err != nil {
+			return err
+		}
 		if err := root.WriteAtomic(journalFile, data, 0o600); err != nil {
 			return err
 		}
-		return syncJournalDir(root)
+		if err := syncJournalDir(root); err != nil {
+			return err
+		}
+		return j.checkExistingLease()
 	}
 	if _, err := j.load(); err != nil {
-		_ = j.Close()
+		closeErr := j.Close()
+		if existingOnly && closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
 		return nil, err
 	}
 	return j, nil
@@ -150,11 +182,27 @@ func (j *Journal) Close() error {
 		return nil
 	}
 	j.closed = true
-	j.release()
-	if j.root.Close() != nil {
-		return ErrUnavailable
+	var err error
+	if j.existingLease != nil {
+		_, readErr := j.load()
+		err = errors.Join(readErr, j.existingLease.close())
+	} else {
+		j.release()
 	}
-	return nil
+	if j.root.Close() != nil {
+		if err == nil {
+			return ErrUnavailable
+		}
+		err = errors.Join(err, ErrUnavailable)
+	}
+	return err
+}
+
+func (j *Journal) checkExistingLease() error {
+	if j.existingLease == nil {
+		return nil
+	}
+	return j.existingLease.current()
 }
 
 // Execute refuses a pending journal, captures all before images and publishes
@@ -371,26 +419,44 @@ func (j *Journal) idle() document {
 	return document{Kind: journalKind, Schema: 1, Scope: j.scope, State: "idle"}
 }
 
-func (j *Journal) load() (document, error) {
+func (j *Journal) load() (result document, resultErr error) {
+	if err := j.checkExistingLease(); err != nil {
+		return document{}, err
+	}
+	defer func() {
+		if resultErr == nil {
+			resultErr = j.checkExistingLease()
+		}
+	}()
 	info, err := j.root.Stat(journalFile)
 	if errors.Is(err, os.ErrNotExist) {
 		return j.idle(), nil
 	}
-	if err != nil || !privateFile(info) || info.Size() > maxJournalBytes {
+	if err != nil || !privateFile(info) || info.Size() > maxJournalBytes || j.existingLease != nil && !existingOwner(info, true) {
 		return document{}, ErrInvalid
 	}
 	f, err := openPrivate(j.root, journalFile, false)
 	if err != nil {
 		return document{}, ErrUnavailable
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil && j.existingLease != nil {
+			resultErr = errors.Join(resultErr, ErrUnavailable)
+		}
+	}()
 	actual, err := f.Stat()
-	if err != nil || !privateFile(actual) || !os.SameFile(info, actual) {
+	if err != nil || !privateFile(actual) || !os.SameFile(info, actual) || j.existingLease != nil && !existingOwner(actual, true) {
 		return document{}, ErrInvalid
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, maxJournalBytes+1))
 	if err != nil || len(raw) > maxJournalBytes {
 		return document{}, ErrInvalid
+	}
+	if j.existingLease != nil {
+		closing, err := j.root.Stat(journalFile)
+		if err != nil || !existingOwner(closing, true) || !samePublicationFile(actual, closing) || actual.Size() != closing.Size() || !actual.ModTime().Equal(closing.ModTime()) {
+			return document{}, ErrInvalid
+		}
 	}
 	var doc document
 	if json.Unmarshal(raw, &doc) != nil {

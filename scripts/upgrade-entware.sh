@@ -32,6 +32,8 @@ BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
 [ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
 PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
 export PATH
+# Invoke init scripts through this Entware PATH. Their /bin/sh shebang can
+# otherwise dispatch Keenetic's firmware CLI even from an Entware shell.
 APPDIR="$BASE/etc/razvilka"
 CACHEDIR="$BASE/razvilka/cache"
 STATEDIR="$BASE/razvilka/state"
@@ -482,8 +484,8 @@ fi
 # the final check. Busy (75), fenced (76), unreachable or unknown keep it.
 PRIOR_ROUTES_CONFIRMED=1
 if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
-  PRIOR_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid 2>/dev/null || true)"
-  PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
+  PRIOR_PID="$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" pid 2>/dev/null || true)"
+  PRIOR_URL="http://$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" lan-ip 2>/dev/null || true):${RAZVILKA_PORT:-8787}/api/v1/status"
   PRIOR_STATE=1
   if [ -n "$PRIOR_PID" ]; then
     "$BIN_SOURCE" -healthcheck "$PRIOR_URL" -healthcheck-pid "$PRIOR_PID" -healthcheck-prior -healthcheck-wait 3m >/dev/null 2>&1 && PRIOR_STATE=0 || PRIOR_STATE=$?
@@ -508,9 +510,9 @@ restart_before_snapshot() {
     SAFE_TO_RESTART=0
   fi
   if [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ -x "$RAZ_INIT" ]; then
-    RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the previous RAZVILKA process" >&2
+    RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the previous RAZVILKA process" >&2
   elif [ "$SAFE_TO_RESTART" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ] && [ -n "$LEGACY_CONTROL" ]; then
-    "$LEGACY_CONTROL" start >/dev/null 2>&1 || echo "Could not restart the previous ARTEM Flow process" >&2
+    sh "$LEGACY_CONTROL" start >/dev/null 2>&1 || echo "Could not restart the previous ARTEM Flow process" >&2
   elif [ "$SAFE_TO_RESTART" -ne 1 ]; then
     echo "Private recovery was interrupted or rejected; service remains stopped for safe inspection" >&2
   fi
@@ -526,10 +528,10 @@ trap 'exit 143' TERM
 
 stage 1 "Останавливаем текущую версию, завершаем восстановление и создаём снимок..."
 if [ "$RAZ_WAS_RUNNING" -eq 1 ]; then
-  RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop
+  RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop
 fi
 if [ "$FROM_ARTEM" -eq 1 ] && [ "$LEGACY_RUNNING_DETECTED" -eq 1 ]; then
-  "$LEGACY_CONTROL" stop
+  sh "$LEGACY_CONTROL" stop
 fi
 
 # A registration may have checkpointed while the first check was running.
@@ -814,13 +816,13 @@ if [ "$RAZ_BINARY_PRESENT" -eq 0 ] && [ "$CONFIG_PRESENT" -eq 0 ]; then
 fi
 
 stage 6 "Запускаем новую версию и ждём готовности панели..."
-RAZVILKA_BASE="$BASE" "$RAZ_INIT" clear-guard
+RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" clear-guard
 START_CODE=0
-RAZVILKA_BASE="$BASE" "$RAZ_INIT" start || START_CODE=$?
+RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start || START_CODE=$?
 # S99 keeps the supervised process when readiness is temporarily busy. Let the
 # strict bounded check below inspect that exact PID instead of ending here.
 [ "$START_CODE" -eq 0 ] || [ "$START_CODE" -eq 75 ] || exit "$START_CODE"
-RUNNING_PID="$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" pid)"
+RUNNING_PID="$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" pid)"
 # Exact-node recovery starts after the listener and may own admission for up
 # to eight minutes. Only the bounded strict check can accept its live evidence;
 # an extra one-shot `status` here would prematurely reject pending recovery.
@@ -831,7 +833,7 @@ else
   stage 7 "Проверяем процесс; маршруты не были подтверждены и до обновления..."
   ROUTE_EVIDENCE=""
 fi
-"$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
+"$BINDIR/razvilka" -healthcheck "http://$(RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" lan-ip):${RAZVILKA_PORT:-8787}/api/v1/status" \
   -healthcheck-pid "$RUNNING_PID" ${ROUTE_EVIDENCE:+"$ROUTE_EVIDENCE"} -healthcheck-wait 9m >/dev/null
 if [ -z "$ROUTE_EVIDENCE" ]; then
   echo "Панель обновлена. Маршруты не были подтверждены и до обновления: проверьте подключения и примените сервисы в панели."

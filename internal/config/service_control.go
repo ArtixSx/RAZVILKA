@@ -126,6 +126,12 @@ func (s *Store) UpdateServiceControl(mode *string, schedule *ServiceCheckSchedul
 }
 
 func (s *Store) updateServiceControlLocked(mode *string, schedule *ServiceCheckSchedule, revision uint64) error {
+	if s.strict != nil {
+		if err := s.admitStrictManualLocked(mode, schedule, revision); err != nil {
+			return err
+		}
+		defer func() { s.strict.writingManual = false }()
+	}
 	if s.cfg.Revision != revision || revision == ^uint64(0) {
 		return ErrRevisionChanged
 	}

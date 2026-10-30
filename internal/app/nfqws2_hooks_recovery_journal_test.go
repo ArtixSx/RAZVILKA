@@ -11,6 +11,31 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
+func TestNFQWS2HookBootJournalFencesLiveAdmissionAndOfflineStop(t *testing.T) {
+	a, _, _ := nfqws2HookAppFixture(t)
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(a.Dataplane.StateRoot, "nfqws2-boot-hooks.json")
+	evidence := []byte(`{"state":"pending"}`)
+	if err := os.WriteFile(path, evidence, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, release, err := a.Operations.ExclusiveContext(context.Background())
+	if err == nil {
+		release()
+		t.Fatal("live admission bypassed malformed boot journal")
+	}
+	settle, closeReview, err := ReviewNFQWS2HookStop(context.Background(), a.Dataplane, filepath.Join(a.Dataplane.StateRoot, "config.json"))
+	if err == nil || settle != nil || closeReview != nil {
+		t.Fatal("offline Stop bypassed malformed boot journal", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != string(evidence) {
+		t.Fatal("refusal changed evidence", err)
+	}
+}
+
 func TestNFQWS2HookJournalSuccessAndKnownFailureSettle(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "known-failure"}[failure], func(t *testing.T) {
@@ -96,7 +121,7 @@ func TestNFQWS2HookOfflineStopSettlementRequiresFreshAbsenceAndCAS(t *testing.T)
 	defer o.root.Close()
 	calls := 0
 	inactive := false
-	settle := nfqws2HookStopSettlement(o, func() error {
+	settle := nfqws2HookStopSettlement(context.Background(), a.Dataplane, o, func() error {
 		calls++
 		if !inactive {
 			return dataplane.ErrRuntimeInactivity
@@ -170,7 +195,7 @@ func TestNFQWS2HookOfflineStopAdmissionLossOnly(t *testing.T) {
 			}
 			// Original Stop succeeds, and only a new full absence proof settles.
 			inactive = true
-			settle := nfqws2HookStopSettlement(o, func() error {
+			settle := nfqws2HookStopSettlement(context.Background(), a.Dataplane, o, func() error {
 				if !inactive {
 					return dataplane.ErrRuntimeInactivity
 				}

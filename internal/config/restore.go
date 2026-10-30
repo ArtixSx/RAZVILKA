@@ -163,6 +163,9 @@ func (s *Store) BeginRestore(ctx context.Context) (*RestoreSession, error) {
 	if s.writeUncertain {
 		return nil, restorejournal.ErrRecovery
 	}
+	if s.strict != nil {
+		return nil, restorejournal.ErrInvalid
+	}
 	target, err := OpenRestoreTarget(s.path)
 	if err != nil {
 		return nil, err

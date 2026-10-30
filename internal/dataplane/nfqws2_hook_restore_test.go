@@ -810,10 +810,9 @@ func TestNFQWS2HookRestoreSkipsBusyDataplane(t *testing.T) {
 	}
 }
 
-// Same-boot recovery is read-only even with current startup consent. A lost
-// graph must reach the established degraded/deactivation path, never a second
-// repair writer without the application's durable repair journal.
-func TestNFQWS2HookBootLossNeverWritesRepair(t *testing.T) {
+// Same-boot loss requires current startup consent and a durable boot journal.
+// An uncertain write must still reach the degraded/deactivation path.
+func TestNFQWS2HookBootLossNeverAcceptsUncertainRepair(t *testing.T) {
 	if firstStartNamespace(t) {
 		return
 	}
@@ -821,8 +820,8 @@ func TestNFQWS2HookBootLossNeverWritesRepair(t *testing.T) {
 		t.Run(map[bool]string{true: "startup-review", false: "no-startup-review"}[review], func(t *testing.T) {
 			h := newNFQWS2HookFixture(t, false)
 			h.lose(t, 4)
-			// If the boot writer is accidentally reintroduced, its first effect
-			// is an ambiguous native failure: Health must not mask it as success.
+			// The authorized writer's first effect fails ambiguously; Health
+			// must not mask it as success or permit an automatic replay.
 			h.beforeWrite = func(int, int, []string) error { return ErrNFQWS2HookUncertain }
 			ctx := firstStartContext(t)
 			if review {
@@ -830,8 +829,15 @@ func TestNFQWS2HookBootLossNeverWritesRepair(t *testing.T) {
 				ctx = h.bootContext(t, &allow)
 			}
 			result, err := h.m.Recover(ctx)
-			if err == nil || result.State != "degraded" || len(h.writes) != 0 {
+			wantWrites := 0
+			if review {
+				wantWrites = 1
+			}
+			if err == nil || result.State != "degraded" || len(h.writes) != wantWrites {
 				t.Fatal("boot repaired or accepted the missing graph", result, err, h.writes)
+			}
+			if review && !errors.Is(h.m.CheckNFQWS2BootHookRecovery(), ErrExecutionJournal) {
+				t.Fatal("uncertain boot write did not leave a recovery fence")
 			}
 			if h.running {
 				t.Fatal("failed Health did not deactivate the owned runtime")
