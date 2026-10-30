@@ -19,7 +19,7 @@ import (
 
 const nfqws2HookJournalName = "nfqws2-hooks-recovery.json"
 
-var ErrNFQWS2HookRecovery = errors.New("NFQWS2 hook recovery is unfinished: stop the panel, run the installed CLI -deactivate-dataplane with its original state paths, then start the panel; unknown or foreign kernel objects require review")
+var ErrNFQWS2HookRecovery = errors.New("NFQWS2 hook recovery is unfinished: stop the panel; for an owned first-start NFQWS2-only route plan, run the installed CLI -stop-owned-routes with its original config/state paths, then start the panel and use Resume; other scopes and unknown or foreign kernel objects require review")
 
 type nfqws2HookJournal struct {
 	Version  int            `json:"version"`
@@ -233,6 +233,10 @@ func (o *nfqws2HookJournalOwner) current() error {
 	return nil
 }
 func (o *nfqws2HookJournalOwner) settle() error {
+	return o.settleAt(time.Now().UTC())
+}
+
+func (o *nfqws2HookJournalOwner) settleAt(finished time.Time) error {
 	if err := o.current(); err != nil {
 		return err
 	}
@@ -246,7 +250,7 @@ func (o *nfqws2HookJournalOwner) settle() error {
 	j := o.record
 	j.State = "settled"
 	j.Reason = "verified-settlement"
-	j.Finished = time.Now().UTC()
+	j.Finished = finished
 	_, err = writeNFQWS2HookJournal(o.root, j)
 	return err
 }
@@ -273,6 +277,10 @@ func ReviewNFQWS2HookStop(ctx context.Context, m *dataplane.Manager, settings st
 }
 
 func reviewNFQWS2AppHookStop(ctx context.Context, m *dataplane.Manager, settings string) (func() error, func(), error) {
+	return reviewNFQWS2AppHookStopAt(ctx, m, settings, time.Time{})
+}
+
+func reviewNFQWS2AppHookStopAt(ctx context.Context, m *dataplane.Manager, settings string, finished time.Time) (func() error, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -316,10 +324,14 @@ func reviewNFQWS2AppHookStop(ctx context.Context, m *dataplane.Manager, settings
 	}
 
 	o := &nfqws2HookJournalOwner{path: m.StateRoot, root: r, image: data, record: j}
-	return nfqws2HookStopSettlement(ctx, m, o, func() error { return review.VerifyNFQWS2Inactive(ctx) }), closeRoot, nil
+	return nfqws2HookStopSettlementAt(ctx, m, o, func() error { return review.VerifyNFQWS2Inactive(ctx) }, finished), closeRoot, nil
 }
 
 func nfqws2HookStopSettlement(ctx context.Context, m *dataplane.Manager, o *nfqws2HookJournalOwner, verify func() error) func() error {
+	return nfqws2HookStopSettlementAt(ctx, m, o, verify, time.Time{})
+}
+
+func nfqws2HookStopSettlementAt(ctx context.Context, m *dataplane.Manager, o *nfqws2HookJournalOwner, verify func() error, finished time.Time) func() error {
 	current := func() error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -348,7 +360,10 @@ func nfqws2HookStopSettlement(ctx context.Context, m *dataplane.Manager, o *nfqw
 		if err := current(); err != nil {
 			return errors.Join(ErrNFQWS2HookRecovery, err)
 		}
-		return o.settle()
+		if finished.IsZero() {
+			return o.settle()
+		}
+		return o.settleAt(finished)
 	}
 }
 

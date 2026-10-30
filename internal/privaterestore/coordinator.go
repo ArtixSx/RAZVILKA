@@ -132,7 +132,26 @@ func (*Coordinator) GoString() string { return "[private draft recovery coordina
 // never opens optional provider/draft files or creates their directories. A bad
 // journal/target is preserved and blocks startup. No empty-default repair.
 func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outcome, error) {
-	if ctx.Err() != nil {
+	return openCoordinator(ctx, layout, true)
+}
+
+// OpenForOfflineNFQWS2Stop acquires the same real lifetime lease as Open, but
+// requires an idle journal. An already pending explicit Stop must not replay
+// an unrelated private restore before it checks its frozen configuration.
+// No target is opened, read, restored or normalized by this entry point.
+func OpenForOfflineNFQWS2Stop(ctx context.Context, layout Layout) (*Coordinator, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, restorejournal.ErrAborted
+	}
+	if _, finite := ctx.Deadline(); !finite {
+		return nil, restorejournal.ErrInvalid
+	}
+	c, _, err := openCoordinator(ctx, layout, false)
+	return c, err
+}
+
+func openCoordinator(ctx context.Context, layout Layout, recoverTargets bool) (*Coordinator, restorejournal.Outcome, error) {
+	if ctx == nil || ctx.Err() != nil {
 		return nil, restorejournal.Blocked, restorejournal.ErrAborted
 	}
 	layout, scope, err := normalizeLayout(layout)
@@ -174,7 +193,12 @@ func Open(ctx context.Context, layout Layout) (*Coordinator, restorejournal.Outc
 	if err != nil {
 		return nil, restorejournal.Blocked, err
 	}
-	out, err := c.journal.Recover(ctx)
+	out := restorejournal.Clean
+	if recoverTargets {
+		out, err = c.journal.Recover(ctx)
+	} else {
+		err = c.journal.RequireIdle(ctx)
+	}
 	closeErr := c.releaseTargets()
 	if err != nil || closeErr != nil || out == restorejournal.Blocked {
 		_ = c.journal.Close()

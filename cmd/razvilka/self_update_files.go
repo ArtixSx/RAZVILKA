@@ -59,10 +59,34 @@ func selfUpdateEffectAdmission(ctx context.Context, id, installationID string, s
 // source state is separate from durable Stop; it uses only the original live
 // control epoch and never the stopped compensation admission.
 func selfUpdateEffectAdmissionAt(ctx context.Context, control, configuration, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
+	return selfUpdateEffectAdmissionWithRoots(ctx, control, configuration, selfUpdateDefaultPath(installpath.State+"/dataplane"), id, installationID, sequence, action, effect, begin)
+}
+
+func selfUpdateEffectAdmissionWithRoots(ctx context.Context, control, configuration, dataplaneRoot, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
 	switch action {
 	case "start/live", "stop-owned", "replace-to-rollback", "bootstrap-offline":
 	default:
 		return operationgate.ErrSelfUpdateStopChanged
+	}
+	if ctx == nil || begin == nil {
+		return operationgate.ErrSelfUpdateStopChanged
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := checkOfflineNFQWS2StopMutation(dataplaneRoot, false); err != nil {
+		return err
+	}
+	// Recheck inside the existing effect authority lease: an effect which was
+	// waiting for that lease must observe an intervening explicit Stop intent.
+	fencedBegin := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := checkOfflineNFQWS2StopMutation(dataplaneRoot, false); err != nil {
+			return err
+		}
+		return begin()
 	}
 	r, present, err := operationgate.ReadSelfUpdateStop(ctx, control)
 	if err != nil {
@@ -72,7 +96,7 @@ func selfUpdateEffectAdmissionAt(ctx context.Context, control, configuration, id
 		return operationgate.ErrSelfUpdateStopJournal
 	}
 	if !r.Stopped {
-		return operationgate.WithSelfUpdateEffectAdmission(ctx, control, id, installationID, sequence, effect, begin)
+		return operationgate.WithSelfUpdateEffectAdmission(ctx, control, id, installationID, sequence, effect, fencedBegin)
 	}
 	if action == "bootstrap-offline" {
 		return operationgate.ErrSelfUpdateStopped
@@ -85,7 +109,7 @@ func selfUpdateEffectAdmissionAt(ctx context.Context, control, configuration, id
 	if cfg.SafeMode || cfg.ServiceControl.Stopped {
 		return updatecheck.ErrReviewChanged
 	}
-	return operationgate.WithSelfUpdateStoppedEffectAdmission(ctx, control, id, installationID, sequence, cfg.Revision, action, effect, begin)
+	return operationgate.WithSelfUpdateStoppedEffectAdmission(ctx, control, id, installationID, sequence, cfg.Revision, action, effect, fencedBegin)
 }
 
 func selfUpdateAuthorityReview(control string) func(context.Context, string) (updatecheck.SelfUpdateAuthority, error) {
@@ -391,6 +415,9 @@ func runSelfUpdateRuntimeQuiesceWithJournalRoots(args []string, journalRoots sel
 // through the owning Coordinator before it opens normal Stores.
 func independentSelfUpdateFences(ctx context.Context, configPath, dataplaneRoot string) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := checkOfflineNFQWS2StopMutation(dataplaneRoot, false); err != nil {
 		return err
 	}
 	if err := checkNFQWS2RecoveryJournals(dataplaneRoot); err != nil {

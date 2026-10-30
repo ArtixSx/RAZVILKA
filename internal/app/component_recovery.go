@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 )
 
 var errComponentRecovery = errors.New("component update requires reviewed recovery")
@@ -22,8 +24,25 @@ type componentAdmission struct {
 // InitializeComponentRecoveryGate runs before collectors, HTTP and recovery.
 // Journal reads are bounded and do not take the component manager's mutex.
 func (a *App) InitializeComponentRecoveryGate() error {
+	return a.initializeComponentRecoveryGate(filepath.Join(installpath.State, "dataplane"))
+}
+
+// The production entry point always uses the fixed installation root. Tests
+// substitute that directory so no installed package files are touched.
+func (a *App) initializeComponentRecoveryGate(fixedStateRoot string) error {
 	return a.Operations.SetGuard(func(ctx context.Context) error {
+		// Custom app state paths still share the installed native config/init.
+		// Check the canonical Stop fence on every mutation admission, including
+		// one that appeared after this app acquired a different lease chain.
+		if err := CheckOfflineNFQWS2Stop(fixedStateRoot); err != nil {
+			return err
+		}
 		if a.Dataplane != nil {
+			if a.Dataplane.StateRoot != fixedStateRoot {
+				if err := CheckOfflineNFQWS2Stop(a.Dataplane.StateRoot); err != nil {
+					return err
+				}
+			}
 			if err := a.Dataplane.CheckNFQWS2BootHookRecovery(); err != nil {
 				return err
 			}

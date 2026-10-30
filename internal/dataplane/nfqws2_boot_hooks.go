@@ -42,25 +42,52 @@ func readNFQWS2BootHookEvidence(root *ownedfs.Root) ([]byte, *nfqws2CandidateHoo
 	if err != nil {
 		return nil, nil, err
 	}
+	r, err := decodeNFQWS2BootHookEvidence(raw)
+	return raw, r, err
+}
+
+func decodeNFQWS2BootHookEvidence(raw []byte) (*nfqws2CandidateHookRecord, error) {
 	var r nfqws2CandidateHookRecord
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if d.Decode(&r) != nil || d.Decode(new(any)) != io.EOF || r.Version != 1 || !validPlanID(r.PlanID) || !validPlanDigest(r.Digest) || !validNFQWS2BootHookInstance(r.Instance) {
-		return nil, nil, ErrExecutionJournal
+		return nil, ErrExecutionJournal
 	}
 	if r.State != "pending" && r.State != "uncertain" && r.State != "settled" && r.State != "stopped" || r.State == "settled" && len(r.Effects) == 0 {
-		return nil, nil, ErrExecutionJournal
+		return nil, ErrExecutionJournal
 	}
 	canonical, _ := json.Marshal(r)
 	if !bytes.Equal(raw, canonical) {
-		return nil, nil, ErrExecutionJournal
+		return nil, ErrExecutionJournal
 	}
 	for i, e := range r.Effects {
 		if !validNFQWS2BootHookCommand(e.Command) || e.State != "acknowledged" && (r.State == "settled" || i != len(r.Effects)-1 || e.State != "pending" && e.State != "unknown") {
-			return nil, nil, ErrExecutionJournal
+			return nil, ErrExecutionJournal
 		}
 	}
-	return raw, &r, nil
+	return &r, nil
+}
+
+// ReviewedNFQWS2BootHookStopImage is comparison data for the explicit offline
+// Stop WAL. It preserves every original effect state, including unknown. The
+// real ReviewNFQWS2BootHookStop still owns all admission and settlement writes.
+func ReviewedNFQWS2BootHookStopImage(raw []byte, plan Plan, instance string) ([]byte, bool, error) {
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	r, err := decodeNFQWS2BootHookEvidence(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	if r.State == "stopped" || r.State == "settled" {
+		return slices.Clone(raw), false, nil
+	}
+	if r.PlanID != plan.PlanID || r.Digest != plan.Digest || r.Instance != instance {
+		return nil, false, ErrReviewChanged
+	}
+	r.State = "stopped"
+	after, err := json.Marshal(r)
+	return after, true, err
 }
 
 func validNFQWS2BootHookInstance(s string) bool {
