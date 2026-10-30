@@ -74,6 +74,10 @@ func (j *nfqws2CandidateHookJournal) current() error {
 	return nil
 }
 func (j *nfqws2CandidateHookJournal) save() error {
+	return j.saveWithSync(func() error { return syncDataplaneJournalDirectory(j.root) })
+}
+
+func (j *nfqws2CandidateHookJournal) saveWithSync(syncDirectory func() error) error {
 	raw, err := json.Marshal(j.record)
 	if err != nil {
 		return err
@@ -82,6 +86,9 @@ func (j *nfqws2CandidateHookJournal) save() error {
 		return ErrReviewChanged
 	}
 	if err = j.root.WriteAtomic(nfqws2CandidateHooksJournal, raw, 0600); err != nil {
+		return err
+	}
+	if err = syncDirectory(); err != nil {
 		return err
 	}
 	j.image = raw

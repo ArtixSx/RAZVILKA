@@ -412,7 +412,9 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	defer func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
 		defer cleanupCancel()
-		if err := c.cleanup(cleanupCtx, session); err != nil {
+		// A nil return after the cleanup budget expired does not establish a
+		// completed cleanup. Keep the same fence as an explicit cleanup error.
+		if err := errors.Join(c.cleanup(cleanupCtx, session), cleanupCtx.Err()); err != nil {
 			result.CleanupStatus = NodeCleanupFailed
 			c.poisoned.Store(true)
 			result.Available = false
@@ -422,7 +424,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			result.Message = "Временный процесс не удалось гарантированно убрать; повторные проверки заблокированы до восстановления."
 			result.addStage("cleanup", "failed", "Очистка временного процесса требует внимания.", c.currentTime(), c.currentTime())
 			finish()
-		} else if cleanupCtx.Err() == nil {
+		} else {
 			result.CleanupStatus = NodeCleanupVerified
 		}
 	}()
@@ -668,6 +670,9 @@ func (c *ExactNodeChecker) Recover(ctx context.Context) error {
 	if c == nil || c.StateRoot == "" || c.gate == nil {
 		return ErrExactNodeUnavailable
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// Recovery owns every slot: no check may start while it cleans up.
 	held := []int{}
 	defer func() {
@@ -685,16 +690,24 @@ func (c *ExactNodeChecker) Recover(ctx context.Context) error {
 	}
 	// Also clean slots a previous run with more slots left behind.
 	for slot := range MaxExactNodeSlots {
+		if err := ctx.Err(); err != nil {
+			c.poisoned.Store(true)
+			return err
+		}
 		session := c.session(slot)
 		if slot >= cap(c.gate) {
 			if _, err := os.Lstat(session.Root); errors.Is(err, os.ErrNotExist) {
 				continue
 			}
 		}
-		if err := c.cleanup(ctx, session); err != nil {
+		if err := errors.Join(c.cleanup(ctx, session), ctx.Err()); err != nil {
 			c.poisoned.Store(true)
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		c.poisoned.Store(true)
+		return err
 	}
 	c.poisoned.Store(false)
 	return nil
@@ -1100,6 +1113,11 @@ func preserveNodeHostname(outbound map[string]any, hostname string) {
 	if headers == nil {
 		headers = map[string]any{}
 		transport["headers"] = headers
+	}
+	if hosts, ok := headers["Host"].([]any); typeName == "ws" && ok && len(hosts) > 0 {
+		// Native sing-box headers are listable. Preserve an explicit Host
+		// list; replacing it with the server name changes the WS request.
+		return
 	}
 	if host, _ := headers["Host"].(string); strings.TrimSpace(host) == "" {
 		headers["Host"] = hostname

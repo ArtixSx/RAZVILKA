@@ -8,7 +8,7 @@ for (const name of ['upgrade-entware.sh', 'rollback-entware.sh']) {
   const end = source.indexOf('\n}\n', start);
   assert(start >= 0 && end > start);
   const gate = source.slice(start, end + 3);
-  const stop = source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+  const stop = source.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
   const firstCall = source.indexOf('require_node_history_compatibility "', end);
   const lastCall = source.lastIndexOf('require_node_history_compatibility "');
   assert(firstCall < stop && lastCall > stop, 'target compatibility must precede and follow stop');

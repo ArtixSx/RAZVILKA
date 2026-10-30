@@ -24,6 +24,9 @@ type componentAdmission struct {
 func (a *App) InitializeComponentRecoveryGate() error {
 	return a.Operations.SetGuard(func(ctx context.Context) error {
 		if a.Dataplane != nil {
+			if err := a.Dataplane.CheckNFQWS2BootHookRecovery(); err != nil {
+				return err
+			}
 			if err := CheckNFQWS2HookRecovery(a.Dataplane.StateRoot); err != nil {
 				return err
 			}

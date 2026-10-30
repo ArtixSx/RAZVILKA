@@ -21,7 +21,7 @@ try {
     const gate=source.slice(start,end+3);
     const probeStart=source.indexOf('probe_self_update_metadata() (\n');
     const helpers=probeStart>=0?source.slice(probeStart,start):'';
-    const stop=source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+    const stop=source.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
     assert(source.indexOf('require_legacy_file_protocol_free',end)<stop);
     assert(source.lastIndexOf('require_legacy_file_protocol_free')>stop);
     mkdirSync(join(root,'bin'),{recursive:true});

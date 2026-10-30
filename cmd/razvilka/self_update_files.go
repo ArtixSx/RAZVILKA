@@ -393,7 +393,7 @@ func independentSelfUpdateFences(ctx context.Context, configPath, dataplaneRoot 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := app.CheckNFQWS2HookRecovery(dataplaneRoot); err != nil {
+	if err := checkNFQWS2RecoveryJournals(dataplaneRoot); err != nil {
 		return err
 	}
 	for _, generation := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
@@ -444,6 +444,12 @@ func independentSelfUpdateFences(ctx context.Context, configPath, dataplaneRoot 
 		}
 	}
 	return dataplane.New(dataplaneRoot).CheckExecutionRecovery(ctx)
+}
+
+// Both startup and the independent updater must inspect all hook journals
+// before accepting an older recovery result or allowing another transaction.
+func checkNFQWS2RecoveryJournals(root string) error {
+	return errors.Join(app.CheckNFQWS2HookRecovery(root), dataplane.New(root).CheckNFQWS2BootHookRecovery())
 }
 
 func selfUpdateRecoveryApp(f *app.SelfUpdateFiles, configPath, tokenPath, credentialsPath string, manager *components.Manager, dataplaneRoot string) (*app.App, error) {

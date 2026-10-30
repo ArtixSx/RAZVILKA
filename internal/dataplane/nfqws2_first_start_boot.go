@@ -23,9 +23,17 @@ func (a *NFQWS2Adapter) reconcileFirstStart(ctx context.Context, plan Plan, leas
 	}
 	if lease.FirstStart.Phase == nfqws2FirstRunning {
 		if err := a.verifyFirstStartRunning(ctx); err == nil {
-			// Boot recovery has no hook-restoration write-ahead journal. Observe
-			// the existing runtime only; missing hooks retain the original failed
-			// Health/deactivation path rather than attempting an unrecorded repair.
+			// A healthy existing runtime needs no repair authority or writer.
+			// The Manager has already checked the boot WAL before reconciliation.
+			if err := a.Health(ctx, plan, ""); err == nil {
+				return nil
+			}
+			// The same live owned process may outlive a firmware firewall flush.
+			// Only the boot writer may restore a fully absent graph, recording
+			// intent before every effect; partial/foreign graphs remain refused.
+			if err := a.settleBootHooks(ctx, plan, lease); err != nil {
+				return err
+			}
 			return a.Health(ctx, plan, "")
 		}
 	}

@@ -101,7 +101,8 @@ else
   [ -x "$BINARY" ] || { echo "Current binary is missing; cannot safely deactivate its routes. Reinstall RAZVILKA before removal." >&2; exit 1; }
 
   if [ -x "$INIT" ]; then
-    RAZVILKA_BASE="$BASE" "$INIT" stop
+    # The init's firmware /bin/sh shebang may not be a POSIX interpreter.
+    RAZVILKA_BASE="$BASE" sh "$INIT" stop
   else
     # Without the PID-verifying supervisor, absence of a process must be proved
     # before touching runtime state. A possibly foreign process is never killed.

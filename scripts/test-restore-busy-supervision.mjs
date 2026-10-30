@@ -68,7 +68,7 @@ assert(rollback.includes('-warp-state "$STATEDIR/warp"'));
 
 // Upgrade and rollback must settle the private journal only while the server is
 // stopped, and a backup becomes valid only after all directory images exist.
-const stopAt = upgrade.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+const stopAt = upgrade.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
 const recoverAt = upgrade.indexOf('"$BIN_SOURCE" -recover-private-restore');
 const backupAt = upgrade.indexOf('BACKUP="$BACKUPROOT/$STAMP"');
 const manifestAt = upgrade.indexOf('mv "$BACKUP/manifest.tmp" "$BACKUP/manifest"');
@@ -77,7 +77,7 @@ assert(upgrade.includes('STAGING_PRESENT=$STAGING_PRESENT'));
 assert(upgrade.includes('CLOUDFLARE_PRIVATE_PRESENT=$CLOUDFLARE_PRIVATE_PRESENT'));
 
 assert(!rollback.includes('"$RAZ_INIT" stop || true'));
-const rollbackStopAt = rollback.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+const rollbackStopAt = rollback.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
 const rollbackRecoverAt = rollback.indexOf('"$BINDIR/razvilka" -recover-private-restore');
 const rollbackWriteAt = rollback.indexOf('restore_or_remove "$RAZ_BINARY_PRESENT"');
 assert(rollbackStopAt >= 0 && rollbackStopAt < rollbackRecoverAt && rollbackRecoverAt < rollbackWriteAt);

@@ -36,7 +36,9 @@ esac
 BINARY
   cp "$BASE/bin/razvilka" "$BACKUP/razvilka.bin"
   cat >"$BASE/etc/init.d/S99razvilka" <<'INIT'
-#!/bin/sh
+#!/bin/false
+# Model a firmware shebang that cannot run POSIX code. Rollback must use the
+# Entware shell from its prepared PATH for both the current and restored init.
 set -eu
 echo "$1" >>"$RAZVILKA_BASE/service-actions"
 case "$1" in

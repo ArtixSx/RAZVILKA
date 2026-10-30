@@ -22,7 +22,7 @@ try {
     assert(start >= 0 && end > start && probeStart >= 0 && probeEnd > probeStart);
     const gate = source.slice(start, end + 3);
     const probe = source.slice(probeStart, probeEnd + 3);
-    const stop = source.indexOf('RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop');
+    const stop = source.indexOf('RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop');
     const firstCheck = source.indexOf('require_native_enrollment_schema "', end);
     const recheck = source.indexOf('require_native_enrollment_schema "', stop);
     assert(firstCheck < stop && recheck > stop, 'gate must run before and after quiescence');

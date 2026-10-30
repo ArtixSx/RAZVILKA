@@ -57,7 +57,8 @@ for CASE in success foreign-shared-var symlink-base stop-failed recovery-failed 
   printf '%s\n' current-nodes >"$BASE/etc/razvilka/nodes-private/nodes.private.json"
   printf '%s\n' foreign-init >"$BASE/etc/init.d/S50other-app"
   cat >"$BASE/etc/init.d/S99razvilka" <<'INIT'
-#!/bin/sh
+#!/bin/false
+# A firmware shebang must not select the interpreter for Entware removal.
 set -eu
 [ "$1" = stop ] || exit 97
 printf '%s\n' stop >>"$RAZVILKA_BASE/calls"

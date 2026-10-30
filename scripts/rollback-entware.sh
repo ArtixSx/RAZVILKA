@@ -12,6 +12,8 @@ BASE="$(CDPATH= cd -- "$BASE" && pwd -P)"
 [ "$BASE" != / ] || { echo "Refusing to use the filesystem root as RAZVILKA_BASE" >&2; exit 1; }
 PATH="$BASE/sbin:$BASE/bin:$BASE/usr/sbin:$BASE/usr/bin:$PATH"
 export PATH
+# Use Entware's shell explicitly; an init's /bin/sh shebang may name the
+# firmware CLI, including after restoring the previous init from its snapshot.
 STATEDIR="$BASE/razvilka/state"
 BACKUPROOT="$STATEDIR/update-backups"
 APPDIR="$BASE/etc/razvilka"
@@ -392,10 +394,10 @@ require_legacy_file_protocol_free
 require_installation_paths
 CURRENT_WAS_RUNNING=0
 if [ -x "$RAZ_INIT" ]; then
-  if RAZVILKA_BASE="$BASE" "$RAZ_INIT" status >/dev/null 2>&1; then
+  if RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" status >/dev/null 2>&1; then
     CURRENT_WAS_RUNNING=1
   fi
-  RAZVILKA_BASE="$BASE" "$RAZ_INIT" stop
+  RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" stop
 elif command -v pidof >/dev/null 2>&1 && [ -n "$(pidof razvilka 2>/dev/null || true)" ]; then
   echo "RAZVILKA is running but its init script is unavailable; rollback was not started" >&2
   exit 1
@@ -408,7 +410,7 @@ restart_unchanged_after_compatibility_refusal() {
   # Stop or a retained managed protocol can appear during the target check.
   # Only the legacy path with no such authority may restart unchanged files.
   require_legacy_file_protocol_free || return 0
-  RAZVILKA_BASE="$BASE" "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
+  RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start >/dev/null 2>&1 || echo "Could not restart the unchanged RAZVILKA process" >&2
 }
 if [ "$RAZ_BINARY_PRESENT" -eq 1 ] && { ! require_target_self_update_compatibility "$BACKUP/razvilka.bin" || ! require_native_enrollment_schema "$BACKUP/razvilka.bin" || ! require_node_history_compatibility "$BACKUP/razvilka.bin"; }; then
   restart_unchanged_after_compatibility_refusal
@@ -507,12 +509,12 @@ restore_or_remove "$LEGACY_DISABLED_PRESENT" S99artem-flow.razvilka-disabled "$L
 
 rm -f "$STATEDIR/start-failures" "$STATEDIR/boot-disabled"
 if [ "$RAZ_WAS_RUNNING" -eq 1 ] && [ "$RAZ_INIT_PRESENT" -eq 1 ]; then
-  RAZVILKA_BASE="$BASE" "$RAZ_INIT" start
+  RAZVILKA_BASE="$BASE" sh "$RAZ_INIT" start
 elif [ "$LEGACY_WAS_RUNNING" -eq 1 ]; then
   if [ -x "$LEGACY_INIT" ]; then
-    "$LEGACY_INIT" start
+    sh "$LEGACY_INIT" start
   elif [ -x "$LEGACY_DISABLED" ]; then
-    "$LEGACY_DISABLED" start
+    sh "$LEGACY_DISABLED" start
   else
     echo "Legacy ARTEM Flow was running but its restored init script is unavailable" >&2
     exit 1

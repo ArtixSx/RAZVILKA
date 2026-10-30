@@ -852,7 +852,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		stopRuntime()
 		retainManagedListRetirement(closeManagedNFQList)
 	}()
-	hookRecoveryErr := app.CheckNFQWS2HookRecovery(dataplaneManager.StateRoot)
+	hookRecoveryErr := checkNFQWS2RecoveryJournals(dataplaneManager.StateRoot)
 	if hookRecoveryErr != nil {
 		a.Operations.FenceJournal()
 		log.Print(hookRecoveryErr)

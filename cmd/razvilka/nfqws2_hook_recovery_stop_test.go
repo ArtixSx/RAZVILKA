@@ -91,4 +91,24 @@ func TestIndependentSelfUpdateFencesPendingHookIntent(t *testing.T) {
 	if err := independentSelfUpdateFences(context.Background(), filepath.Join(root, "config.json"), state); err != nil {
 		t.Fatal("valid settlement still blocked", err)
 	}
+	// A settled application journal cannot waive a newer interrupted boot
+	// repair, either during startup inspection or in the independent updater.
+	bootPath := filepath.Join(state, "nfqws2-boot-hooks.json")
+	bootEvidence := []byte(`{"State":"pending"}`)
+	if err := os.WriteFile(bootPath, bootEvidence, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for name, inspect := range map[string]func() error{
+		"startup": func() error { return checkNFQWS2RecoveryJournals(state) },
+		"updater": func() error {
+			return independentSelfUpdateFences(context.Background(), filepath.Join(root, "config.json"), state)
+		},
+	} {
+		if err := inspect(); !errors.Is(err, dataplane.ErrExecutionJournal) {
+			t.Fatal(name, "bypassed pending boot journal", err)
+		}
+	}
+	if raw, err := os.ReadFile(bootPath); err != nil || string(raw) != string(bootEvidence) {
+		t.Fatal("read-only inspection changed recovery evidence", err)
+	}
 }

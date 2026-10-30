@@ -255,6 +255,24 @@ func (o *nfqws2HookJournalOwner) settle() error {
 // ambiguous graphs before Stop can touch them and retains the exact journal
 // owner through fresh inactivity verification after the original Stop.
 func ReviewNFQWS2HookStop(ctx context.Context, m *dataplane.Manager, settings string) (func() error, func(), error) {
+	bootSettle, bootClose, err := m.ReviewNFQWS2BootHookStop(ctx, settings)
+	if err != nil {
+		return nil, nil, err
+	}
+	settle, closeReview, err := reviewNFQWS2AppHookStop(ctx, m, settings)
+	if err != nil {
+		bootClose()
+		return nil, nil, err
+	}
+	return func() error {
+		if err := settle(); err != nil {
+			return err
+		}
+		return bootSettle()
+	}, func() { closeReview(); bootClose() }, nil
+}
+
+func reviewNFQWS2AppHookStop(ctx context.Context, m *dataplane.Manager, settings string) (func() error, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -293,13 +311,37 @@ func ReviewNFQWS2HookStop(ctx context.Context, m *dataplane.Manager, settings st
 	}
 
 	o := &nfqws2HookJournalOwner{path: m.StateRoot, root: r, image: data, record: j}
-	return nfqws2HookStopSettlement(o, func() error { return review.VerifyNFQWS2Inactive(ctx) }), closeRoot, nil
+	return nfqws2HookStopSettlement(ctx, m, o, func() error { return review.VerifyNFQWS2Inactive(ctx) }), closeRoot, nil
 }
 
-func nfqws2HookStopSettlement(o *nfqws2HookJournalOwner, verify func() error) func() error {
+func nfqws2HookStopSettlement(ctx context.Context, m *dataplane.Manager, o *nfqws2HookJournalOwner, verify func() error) func() error {
+	current := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if m.StateRoot != o.path {
+			return dataplane.ErrReviewChanged
+		}
+		plan, exists, err := m.Committed()
+		if err != nil || !exists || !reflect.DeepEqual(plan, o.record.Plan) {
+			return errors.Join(dataplane.ErrReviewChanged, err)
+		}
+		return ctx.Err()
+	}
 	return func() error {
+		// The admitted plan and journal still belong to this Stop. A fresh
+		// absence observation cannot grant settlement of a changed intent.
+		if err := current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
+		}
+		if err := o.current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
+		}
 		if err := verify(); err != nil {
 			return fmt.Errorf("%w: inactivity: %v", ErrNFQWS2HookRecovery, err)
+		}
+		if err := current(); err != nil {
+			return errors.Join(ErrNFQWS2HookRecovery, err)
 		}
 		return o.settle()
 	}
