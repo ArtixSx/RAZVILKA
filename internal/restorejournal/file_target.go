@@ -217,21 +217,28 @@ func (f *FileTarget) checkExistingTargetOwner() error {
 }
 
 func (f *FileTarget) readTarget(ctx context.Context) (Image, error) {
-	if f.mode == 0755 && runtime.GOOS == "linux" {
-		info, err := f.root.Stat(f.name)
-		if err == nil && (!info.Mode().IsRegular() || info.Mode().Perm() != 0755) {
-			return Image{}, ErrInvalid
-		}
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return Image{}, ErrUnavailable
-		}
+	if err := f.checkExecutableTargetMode(); err != nil {
+		return Image{}, err
 	}
-
 	if f.existingLease == nil {
 		return readTarget(ctx, f.root, f.name)
 	}
 	image, _, err := f.readPublicationTarget(ctx)
 	return image, err
+}
+
+func (f *FileTarget) checkExecutableTargetMode() error {
+	if f.mode == 0755 && runtime.GOOS == "linux" {
+		info, err := f.root.Stat(f.name)
+		if err == nil && (!info.Mode().IsRegular() || info.Mode().Perm() != 0755) {
+			return ErrInvalid
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return ErrUnavailable
+		}
+	}
+
+	return nil
 }
 
 func (f *FileTarget) Read(ctx context.Context) (Image, error) {

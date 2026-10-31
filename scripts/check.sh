@@ -78,6 +78,8 @@ if command -v node >/dev/null 2>&1; then
   node --check cmd/razvilka/web/autonomy-ui.js
   node scripts/test-runtime-capabilities-ui.mjs
   node scripts/test-runtime-lifecycle-ui.mjs
+  node scripts/test-proxy-sidecar-ui.mjs
+node scripts/test-hev-recovery-ui.mjs
   node scripts/test-node-job-timing-ui.mjs
   node scripts/test-autonomy-ui.mjs
   node --check cmd/razvilka/web/app.js

@@ -276,6 +276,9 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 }
 
 func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
+	if id == "hev-socks5-tunnel" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.nfqwsPackageMutationGuard(id); err != nil {

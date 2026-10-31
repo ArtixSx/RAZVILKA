@@ -33,20 +33,21 @@ import (
 // the interface by policy routing; neither process may replace the host's
 // default route.
 type ProxyTunnelAdapter struct {
-	EngineID         string
-	Configs          *engineconfig.Manager
-	StateRoot        string
-	Runner           NFQWS2Runner
-	Processes        ProcessController
-	Resolver         PrefixResolver
-	Probe            func(context.Context, string) error
-	SOCKSProbe       func(context.Context, string) error
-	CanaryProbe      func(context.Context, string, string) error
-	ServiceIPProbe   func(context.Context, string, string, netip.Addr) error
-	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
-	ownedUSQUEProbe  usqueOwnedProducer
-	EngineBin        string
-	SidecarBin       string
+	hevInstalledCheck func(context.Context) error // Original component owner, set only by managed startup factory.
+	EngineID          string
+	Configs           *engineconfig.Manager
+	StateRoot         string
+	Runner            NFQWS2Runner
+	Processes         ProcessController
+	Resolver          PrefixResolver
+	Probe             func(context.Context, string) error
+	SOCKSProbe        func(context.Context, string) error
+	CanaryProbe       func(context.Context, string, string) error
+	ServiceIPProbe    func(context.Context, string, string, netip.Addr) error
+	CanaryTraceProbe  func(context.Context, string) (usqueCanaryEvidence, error)
+	ownedUSQUEProbe   usqueOwnedProducer
+	EngineBin         string
+	SidecarBin        string
 	// Fixed for adapter lifetime; empty preserves the original sing-box backend.
 	SidecarKind string
 	PackageInit string

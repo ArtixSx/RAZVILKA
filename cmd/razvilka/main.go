@@ -307,8 +307,12 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err != nil {
 		log.Fatal(err)
 	}
+	configuredComponentOwner, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
 	selfFileState.RecoveryGuard = func(c context.Context) error {
-		return independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath)
+		return errors.Join(independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath), configuredComponentOwner.CheckHEVReleaseIdle(c))
 	}
 	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
 		log.Fatal("matching self update startup authority unavailable; preserve retained files")
@@ -398,7 +402,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if *deactivateDataplane {
 		engineConfigs := engineconfig.New(*stagePath, *backupPath)
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdRemovalDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -411,10 +419,6 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		if err := recoverExactNodeCheckersForRemoval(ctx, *dataplaneStatePath, *retireDataplaneForRemoval); err != nil {
 			log.Print("Exact node checker removal refused; retained ownership and panel files must be preserved")
 			return 1
-		}
-		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
-		if err != nil {
-			log.Fatal(err)
 		}
 		if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
 			log.Fatal("stock NFQWS2 native owner unavailable")
@@ -442,7 +446,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		return
 	}
 	if *adoptNFQWS2Init {
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -518,7 +526,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// lease, but must not create credentials, defaults or unrelated stores.
 	// It never starts workers or serves HTTP, and changes no runtime effects.
 	if bootRetirementCLIRequested() {
-		manager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		manager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -610,7 +622,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// This narrow recovery cannot contain DNS. Do not open or migrate its
 	// settings before returning to the previously installed application.
 	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -664,12 +680,32 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	} else {
 		defer nodeStore.Close()
 	}
+	componentManager := configuredComponentOwner
+	hevRecoveryContext, finishHEVRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, hevRecoveryErr := componentManager.RecoverHEVRelease(hevRecoveryContext)
+	finishHEVRecovery()
+	if hevRecoveryErr != nil {
+		log.Print("HEV component recovery remains pending; its managed sidecar cannot start")
+	}
+	proxySidecarBoot := config.EffectiveProxySidecar(store.Get().ProxySidecar)
 	dataplaneManager, err := newDataplaneManagerWithNodes(*dataplaneStatePath, engineConfigs, nodeStore, func(ctx context.Context) (string, error) {
 		profile, err := systemprobe.FreshWANProfile(ctx)
 		return profile.ID, err
-	})
+	}, proxySidecarStartup{backend: proxySidecarBoot, components: componentManager})
 	if err != nil {
-		log.Fatal(err)
+		if proxySidecarBoot != "hev" {
+			log.Fatal(err)
+		}
+		log.Print("Selected HEV owner is unavailable; serving the recovery panel without starting runtime adapters")
+		recovery, recoveryErr := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, componentManager, *dataplaneStatePath)
+		if recoveryErr != nil {
+			log.Fatal(recoveryErr)
+		}
+		recovery.ProxySidecarBoot = "hev"
+		if err := serveSelfUpdateRecovery(recovery, *listen); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	dnsManager, err := dnscontrol.New(*dnsStatePath)
 	if err != nil {
@@ -748,10 +784,6 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err != nil {
 		log.Fatal("exact node dispatcher configuration: ", err)
 	}
-	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
-	if err != nil {
-		log.Fatal(err)
-	}
 	if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
 		log.Fatal("stock NFQWS2 native parameter owner unavailable: ", err)
 	}
@@ -773,6 +805,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.
 	a.AdmissionPatience = 20 * time.Second
+	a.ProxySidecarBoot = proxySidecarBoot
 	a.Cloudflare = cloudflareStore
 	updateExecutable, _ := os.Executable()
 	_, updatePort, _ := net.SplitHostPort(addr)
@@ -1294,7 +1327,23 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 // Ordinary startup binds the same private catalog to the registered Xray
 // runtime before any Apply/health work. Cold recovery keeps its nil-store
 // observer constructor and never opens a catalog to manufacture absence.
-func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error)) (*dataplane.Manager, error) {
+type proxySidecarStartup struct {
+	recovery   bool
+	backend    string
+	components *components.Manager
+}
+
+func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error), sidecars ...proxySidecarStartup) (*dataplane.Manager, error) {
+	if len(sidecars) > 1 {
+		return nil, errors.New("one original sidecar startup choice required")
+	}
+	sidecar := proxySidecarStartup{backend: "sing-box"}
+	if len(sidecars) == 1 {
+		sidecar = sidecars[0]
+	}
+	if err := config.ValidateProxySidecar(sidecar.backend); err != nil {
+		return nil, err
+	}
 	manager := dataplane.New(stateRoot)
 	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
 	// One explicit startup Store is shared by the catalog and runtime owner.
@@ -1318,9 +1367,18 @@ func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manage
 		var adapter *dataplane.ProxyTunnelAdapter
 		var err error
 		if engineID == "xray" && nodes != nil {
-			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile})
+			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile, ProxySidecar: sidecar.backend, HEVComponents: sidecar.components})
 		} else {
 			adapter, err = dataplane.NewProxyTunnelAdapter(engineID, configs, stateRoot)
+			if err == nil && config.EffectiveProxySidecar(sidecar.backend) == "hev" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if sidecar.recovery {
+					err = dataplane.BindHEVSidecarForRecovery(ctx, adapter, sidecar.components)
+				} else {
+					err = dataplane.BindManagedHEVSidecar(ctx, adapter, sidecar.components)
+				}
+				cancel()
+			}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("configure %s dataplane adapter: %w", engineID, err)

@@ -38,7 +38,7 @@ func TestHEVReleasePinnedNativeInstall(t *testing.T) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(binary)), Header: make(http.Header)}, nil
 	})}
 	for i := 0; i < 2; i++ {
-		result, err := m.installExternal(context.Background(), spec)
+		result, err := m.ApplyHEVGuarded(context.Background(), func(_ context.Context, mutate func() error) error { return mutate() }, func(_ context.Context, rename func() error) error { return rename() })
 		if err != nil || !result.OK {
 			t.Fatalf("install round %d: %+v %v", i, result, err)
 		}
@@ -48,6 +48,9 @@ func TestHEVReleasePinnedNativeInstall(t *testing.T) {
 		}
 		if err := m.hevReleaseIdle(); err != nil {
 			t.Fatal(err)
+		}
+		if observed, err := m.CheckInstalledHEV(context.Background()); err != nil || observed != filepath.Join(m.BinDir, spec.Binary) {
+			t.Fatal("original pinned installation not observed", observed, err)
 		}
 	}
 	if requests != 2 {
@@ -62,5 +65,11 @@ func TestHEVReleasePinnedNativeInstall(t *testing.T) {
 	// Installed remains registered bytes, not native route/probe acceptance.
 	if _, err := os.Stat(filepath.Join(m.StateDir, "receipts", spec.ID+".json")); err != nil {
 		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(m.BinDir, spec.Binary), []byte("foreign same-version text is insufficient"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CheckInstalledHEV(context.Background()); err == nil {
+		t.Fatal("foreign executable revived from retained receipt")
 	}
 }

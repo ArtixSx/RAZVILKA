@@ -22,6 +22,11 @@ func (a *ProxyTunnelAdapter) preflightHEVRuntime(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if a.hevInstalledCheck != nil {
+		if err := a.hevInstalledCheck(ctx); err != nil {
+			return err
+		}
+	}
 	attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	output, err := a.run(attempt, a.sidecarBinary(), "--version")
@@ -49,12 +54,22 @@ func (a *ProxyTunnelAdapter) preflightHEVRuntime(ctx context.Context) error {
 	if found != backendprofile.ReviewedHEVVersion {
 		return errors.New("HEV requires the reviewed 2.17.1 runtime; older Entware and unreviewed versions cannot use this managed dialect")
 	}
+	if a.hevInstalledCheck != nil {
+		if err := a.hevInstalledCheck(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Every forward or rollback restart retains the same original controller,
 // argv and ownership files. A dialect refusal never starts a different core.
 func (a *ProxyTunnelAdapter) startOwnedSidecar(ctx context.Context) error {
+	// Rollback can restore a retained sidecar image. A boot backend choice
+	// must never launch that image through another dialect's executable.
+	if err := a.checkSidecarIdentity(); err != nil {
+		return err
+	}
 	if err := a.preflightHEVRuntime(ctx); err != nil {
 		return err
 	}

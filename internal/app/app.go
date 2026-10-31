@@ -153,6 +153,7 @@ type App struct {
 	EngineConfigs                *engineconfig.Manager
 	EngineLab                    *enginelab.Manager
 	StrategyLab                  *strategylab.Manager
+	ProxySidecarBoot             string // Actual factory choice for this process; never changed by settings writes.
 	strategyCompatibility        strategyCompatibilityState
 	Components                   *components.Manager
 	ComponentHistory             *updatecheck.ComponentHistoryAdmission
@@ -536,6 +537,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/extension-lab/mihomo", a.extensionMihomo)
 	mux.HandleFunc("/api/v1/extension-lab/hev", a.extensionHev)
+	mux.HandleFunc("/api/v1/runtime/proxy-sidecar", a.proxySidecar)
 	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
 	mux.HandleFunc("/api/v1/strategy-lab/builtin-pack", a.builtinStrategyPack)
 	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
@@ -597,6 +599,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc(managedNFQBundleInstalledPath, a.managedNFQBundleInstalled)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
+	mux.HandleFunc(hevRecoveryPath, a.hevRecovery)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	a.registerWireGuardProfileRoutes(mux)
@@ -1538,6 +1541,8 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		result, err = a.Components.Remove(ctx, id)
 	} else if id == "nfqws2" && action == "install" {
 		result, err = a.installInitialNFQWS(ctx)
+	} else if id == "hev-socks5-tunnel" {
+		result, err = a.installHEV(ctx)
 	} else {
 		result, err = a.Components.Apply(ctx, id)
 	}

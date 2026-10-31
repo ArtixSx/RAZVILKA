@@ -19,6 +19,7 @@ type componentAdmissionKey struct{}
 type componentAdmission struct {
 	inspect, stop          bool
 	transaction, component string
+	hevRepair              *components.Manager
 }
 
 // InitializeComponentRecoveryGate runs before collectors, HTTP and recovery.
@@ -56,6 +57,12 @@ func (a *App) initializeComponentRecoveryGate(fixedStateRoot string) error {
 		if a.Components == nil {
 			return nil
 		}
+		if err := a.Components.CheckHEVReleaseIdle(ctx); err != nil {
+			scope, ok := ctx.Value(componentAdmissionKey{}).(componentAdmission)
+			if !ok || !scope.inspect && !scope.stop && scope.hevRepair != a.Components {
+				return errors.Join(errComponentRecovery, err)
+			}
+		}
 		state, pending, err := a.Components.PendingManagedUpdate()
 		if !pending && err == nil {
 			return nil
@@ -74,6 +81,11 @@ func (a *App) initializeComponentRecoveryGate(fixedStateRoot string) error {
 func (a *App) PendingComponentRecovery() bool {
 	if a.Components == nil {
 		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if a.Components.CheckHEVReleaseIdle(ctx) != nil {
+		return true
 	}
 	_, pending, err := a.Components.PendingManagedUpdate()
 	return pending || err != nil
@@ -139,7 +151,8 @@ func (a *App) componentRecoveryStatus(w http.ResponseWriter, r *http.Request) {
 	if a.Store != nil {
 		revision = a.Store.Get().Revision
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending, "transaction": state, "revision": revision, "working_routes_changed": false, "capabilities": a.componentRecoveryCapabilities(ctx, state, pending), "installed_idle_accepted": !pending && state.InstalledIdleAccepted()})
+	hev, hevErr := a.Components.InspectHEVReleaseRecovery(ctx)
+	writeJSON(w, http.StatusOK, map[string]any{"recovery_required": pending || hev.Pending || hevErr != nil, "transaction": state, "revision": revision, "working_routes_changed": false, "capabilities": a.componentRecoveryCapabilities(ctx, state, pending), "installed_idle_accepted": !pending && state.InstalledIdleAccepted(), "hev": map[string]any{"pending": hev.Pending || hevErr != nil, "readable": hevErr == nil, "recovery_url": hevRecoveryPath}})
 }
 
 // Callbacks are trusted application dependencies, never decoded from a request.

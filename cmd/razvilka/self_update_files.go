@@ -142,7 +142,7 @@ func verifySelfUpdateRuntimeInactive(ctx context.Context, observer dataplane.Run
 }
 
 func selfUpdateRuntimeManager() (*dataplane.Manager, error) {
-	manager, err := newDataplaneManager(selfUpdateDefaultPath(installpath.State+"/dataplane"), nil)
+	manager, err := newColdDataplaneManager(context.Background(), selfUpdateDefaultPath(installpath.State+"/dataplane"), nil, selfUpdateDefaultPath("/opt/etc/razvilka/config.json"), components.New())
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +511,9 @@ func selfUpdateRecoveryApp(f *app.SelfUpdateFiles, configPath, tokenPath, creden
 	if err := gate.ConfigureCredentials(credentialsPath); err != nil {
 		return nil, err
 	}
-	f.RecoveryGuard = func(c context.Context) error { return independentSelfUpdateFences(c, configPath, dataplaneRoot) }
+	f.RecoveryGuard = func(c context.Context) error {
+		return errors.Join(independentSelfUpdateFences(c, configPath, dataplaneRoot), manager.CheckHEVReleaseIdle(c))
+	}
 	a := &app.App{Store: store, Security: gate, Components: manager, SelfUpdate: f.Helper, SelfUpdateFiles: f, Start: time.Now()}
 	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		return nil, err
@@ -561,7 +563,7 @@ func selfUpdateRecoveryHandler(a *app.App) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			switch r.URL.Path {
-			case "/api/v1/auth/status", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/self-update/current", "/api/v1/self-update/recovery", "/api/v1/components/recovery", "/api/v1/status", "/api/v1/service-control/runtime":
+			case "/api/v1/auth/status", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/self-update/current", "/api/v1/self-update/recovery", "/api/v1/components/recovery", "/api/v1/components/hev-socks5-tunnel/recovery", "/api/v1/status", "/api/v1/service-control/runtime":
 			default:
 				w.Header().Set("Cache-Control", "no-store")
 				http.Error(w, "self update recovery required", http.StatusServiceUnavailable)

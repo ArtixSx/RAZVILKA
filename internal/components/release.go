@@ -202,7 +202,7 @@ func releaseAssetName(spec Spec, version, architecture string) (string, error) {
 
 func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error) {
 	if spec.ID == "hev-socks5-tunnel" {
-		return m.installHEVRelease(ctx, spec)
+		return Result{Component: spec.ID, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
 	}
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
 	if _, err := os.Lstat(target); err == nil {

@@ -91,7 +91,9 @@ func TestComponentHistoryAdmissionKeepsTypedCurrentAndRollbackReaderRequirements
 		{3, 3, 2, 2, false}, {3, 3, 3, 2, true},
 		{3, 3, 4, 3, true}, {4, 2, 3, 3, true}, {3, 2, 3, 4, false},
 		{4, 2, 4, 4, true}, {4, 2, 3, 4, false}, {4, 3, 4, 4, true},
-		{5, 2, 4, 4, false}, {4, 2, 5, 4, false},
+		{5, 2, 4, 4, true}, {4, 2, 5, 4, true},
+		{5, 2, 5, 5, true}, {5, 2, 4, 5, false}, {4, 2, 5, 5, false},
+		{6, 2, 5, 5, false}, {5, 2, 6, 5, false},
 	} {
 		t.Run(fmt.Sprintf("%d/%d/%d/%d", test.current, test.retained, test.old, test.wanted), func(t *testing.T) {
 			a := componentAdmissionFixture(t)
@@ -216,8 +218,8 @@ func TestComponentHistoryAdmissionPassesSameFiniteOriginalOperationContext(t *te
 }
 
 func TestComponentCapabilityProbeIsExactAndIndependentOfNodeAndSelfUpdate(t *testing.T) {
-	for _, componentRequired := range []int{2, 3, 4} {
-		for _, componentReader := range []int{1, 2, 3, 4, 5} {
+	for _, componentRequired := range []int{2, 3, 4, 5} {
+		for _, componentReader := range []int{1, 2, 3, 4, 5, 6} {
 			for _, nodeReader := range []int{2, 3} {
 				probe := func(_ context.Context, _, flag string) (string, error) {
 					switch flag {
@@ -232,14 +234,14 @@ func TestComponentCapabilityProbeIsExactAndIndependentOfNodeAndSelfUpdate(t *tes
 					}
 				}
 				err := checkFileCapabilitiesForHistories(context.Background(), "sealed-controller", 3, componentRequired, probe)
-				pass := componentReader >= componentRequired && componentReader <= 4 && nodeReader == 3
+				pass := componentReader >= componentRequired && componentReader <= components.HEVReleaseReadVersion && nodeReader == 3
 				if (err == nil) != pass {
 					t.Fatal("independent reader requirements were conflated", componentReader, nodeReader, componentRequired, err)
 				}
 			}
 		}
 	}
-	for _, output := range []string{"", "3", "03\n", "+3\n", " 3\n", "3\r\n", "3\nextra", "4", "04\n", "4\r\n", "4\nextra", "0\n", "5\n", "unknown\n"} {
+	for _, output := range []string{"", "3", "03\n", "+3\n", " 3\n", "3\r\n", "3\nextra", "4", "04\n", "4\r\n", "4\nextra", "0\n", "6\n", "unknown\n"} {
 		if _, err := parseComponentReadVersion(output); err == nil {
 			t.Fatal("malformed/future component reader accepted", output)
 		}

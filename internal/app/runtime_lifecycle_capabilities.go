@@ -32,12 +32,19 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 		"package_update":    registeredLifecycleOperation(false, "managed-package-update-not-registered"),
 	}
 	prerequisites := []string{}
+	componentID := id
+	if id == "hev" {
+		componentID = "hev-socks5-tunnel"
+	}
 	for _, spec := range components.Specs() {
-		if spec.ID == id {
+		if spec.ID == componentID {
 			if spec.Requirement != "" {
 				prerequisites = append(prerequisites, spec.Requirement)
 			}
 			install := a.Components != nil && spec.Provider == "opkg"
+			if componentID == "hev-socks5-tunnel" {
+				install = a.Components != nil && spec.Provider == "github-release"
+			}
 			reason := "package-policy-and-ownership-admission-required"
 			if spec.Provider == "platform" {
 				reason = "external-platform-module-and-tools-required"

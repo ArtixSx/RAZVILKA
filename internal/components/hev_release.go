@@ -63,6 +63,35 @@ func verifyHEVRelease(parent context.Context, path string) error {
 }
 
 func (m *Manager) installHEVRelease(ctx context.Context, spec Spec) (Result, error) {
+	return m.installHEVReleaseGuarded(ctx, spec, nil)
+}
+
+// ApplyHEVGuarded is the only production installation entry. The application
+// performs retained-reader5 admission before entering; guard holds/rechecks its
+// original control, exclusive operation and exact settings around each effect.
+func (m *Manager) ApplyHEVGuarded(ctx context.Context, guard, renameAdmission func(context.Context, func() error) error) (Result, error) {
+	result := Result{Component: "hev-socks5-tunnel", Action: "install"}
+	if m == nil || ctx == nil || guard == nil || renameAdmission == nil {
+		return result, NoMutation(errors.New("HEV original-owner guarded admission is required"))
+	}
+	if err := ctx.Err(); err != nil {
+		return result, NoMutation(err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := guard(ctx, func() error { return ctx.Err() }); err != nil {
+		return result, NoMutation(err)
+	}
+	release, err := m.fencePackageMutation()
+	if err != nil {
+		return result, NoMutation(err)
+	}
+	defer release()
+	spec, _ := lookup("hev-socks5-tunnel")
+	return m.installHEVReleaseGuarded(ctx, spec, guard, renameAdmission)
+}
+
+func (m *Manager) installHEVReleaseGuarded(ctx context.Context, spec Spec, guard func(context.Context, func() error) error, renameAdmissions ...func(context.Context, func() error) error) (Result, error) {
 	result := Result{Component: spec.ID, Action: "install"}
 	info, err := hevPinnedRelease(spec, m.Arch)
 	if err != nil {
@@ -97,16 +126,31 @@ func (m *Manager) installHEVRelease(ctx context.Context, spec Spec) (Result, err
 	if err := verifyHEVRelease(ctx, path); err != nil {
 		return result, err
 	}
-	return m.installHEVImage(ctx, spec, info, binary)
+	return m.installHEVImageGuarded(ctx, spec, info, binary, guard, renameAdmissions...)
 }
 
 // installHEVImage is reached only after pinned digest + version verification.
 // It never starts a service. Recovery is run before inspecting pair ownership,
 // since a prepared transaction may legitimately contain a half-written pair.
 func (m *Manager) installHEVImage(ctx context.Context, spec Spec, info releaseInfo, binary []byte) (result Result, err error) {
+	return m.installHEVImageGuarded(ctx, spec, info, binary, nil)
+}
+func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info releaseInfo, binary []byte, guard func(context.Context, func() error) error, renameAdmissions ...func(context.Context, func() error) error) (result Result, err error) {
 	result = Result{Component: spec.ID, Action: "install"}
-	session, err := m.openHEVRelease(true)
+	if len(renameAdmissions) > 1 {
+		return result, errors.New("one HEV original rename admission is required")
+	}
+	var session *hevReleaseSession
+	open := func() error { session, err = m.openHEVRelease(true); return err }
+	if guard != nil {
+		err = guard(ctx, open)
+	} else {
+		err = open()
+	}
 	if err != nil {
+		if session != nil {
+			err = errors.Join(err, session.close())
+		}
 		return result, err
 	}
 	defer func() { err = errors.Join(err, session.close()) }()
@@ -144,7 +188,12 @@ func (m *Manager) installHEVImage(ctx context.Context, spec Spec, info releaseIn
 	// Journal snapshot admission must use the same ownership-reviewed pair,
 	// rather than adopting an intervening foreign edit as its new before image.
 	session.admission = map[string]restorejournal.Image{"a_binary": before, "b_receipt": receiptBefore}
-	_, err = session.j.Execute(ctx, map[string]restorejournal.Image{"a_binary": {Exists: true, Data: binary}, "b_receipt": {Exists: true, Data: append(receipt, '\n')}, "c_lifecycle": {Exists: true, Data: append(lifecycle, '\n')}})
+	changes := map[string]restorejournal.Image{"a_binary": {Exists: true, Data: binary}, "b_receipt": {Exists: true, Data: append(receipt, '\n')}, "c_lifecycle": {Exists: true, Data: append(lifecycle, '\n')}}
+	session.guard, session.forwardImages = guard, changes
+	if len(renameAdmissions) == 1 {
+		session.renameAdmission = renameAdmissions[0]
+	}
+	_, err = session.j.Execute(ctx, changes)
 	if err != nil {
 		return result, errors.Join(err, errors.Join(session.failures...))
 	}
@@ -158,11 +207,14 @@ func (m *Manager) installHEVImage(ctx context.Context, spec Spec, info releaseIn
 }
 
 type hevReleaseSession struct {
-	j         *restorejournal.Journal
-	files     map[string]*restorejournal.FileTarget
-	paths     map[string]string
-	failures  []error
-	admission map[string]restorejournal.Image
+	j               *restorejournal.Journal
+	files           map[string]*restorejournal.FileTarget
+	paths           map[string]string
+	failures        []error
+	admission       map[string]restorejournal.Image
+	guard           func(context.Context, func() error) error
+	forwardImages   map[string]restorejournal.Image
+	renameAdmission func(context.Context, func() error) error
 }
 
 func (s *hevReleaseSession) close() error {
@@ -198,13 +250,33 @@ func (t *hevReleaseTarget) Read(ctx context.Context) (restorejournal.Image, erro
 }
 
 func (t *hevReleaseTarget) CompareAndSwap(ctx context.Context, before, after restorejournal.Image) error {
+	desired, forward := t.session.forwardImages[t.id]
+	forward = forward && after.Exists == desired.Exists && bytes.Equal(after.Data, desired.Data)
+	mutate := func() error { return t.compareAndSwap(ctx, before, after, forward) }
+	if t.session.guard != nil && forward {
+		err := t.session.guard(ctx, mutate)
+		if err != nil {
+			t.session.failures = append(t.session.failures, err)
+		}
+		return err
+	}
+	// Compensation remains on the original CAS/lease path with the journal's
+	// bounded background context, even after forward admission/caller expired.
+	return mutate()
+}
+func (t *hevReleaseTarget) compareAndSwap(ctx context.Context, before, after restorejournal.Image, forward bool) error {
 	if t.manager.updateFault != nil {
 		if err := t.manager.updateFault("hev:before:" + t.id); err != nil {
 			t.session.failures = append(t.session.failures, err)
 			return err
 		}
 	}
-	err := t.Target.CompareAndSwap(ctx, before, after)
+	var err error
+	if forward && t.session.renameAdmission != nil {
+		err = t.session.files[t.id].CompareAndSwapWithRenameAdmission(ctx, before, after, t.session.renameAdmission)
+	} else {
+		err = t.Target.CompareAndSwap(ctx, before, after)
+	}
 	if err == nil && t.manager.updateFault != nil {
 		err = t.manager.updateFault("hev:after:" + t.id)
 	}
@@ -305,6 +377,15 @@ func (m *Manager) RecoverHEVRelease(ctx context.Context) (out restorejournal.Out
 // RequireIdle is read-only: it uses the existing protocol marker, opens no
 // target, creates no directory and never silently replays an interrupted install.
 func (m *Manager) hevReleaseIdle() (err error) {
+	return m.checkHEVReleaseIdle(context.Background())
+}
+func (m *Manager) checkHEVReleaseIdle(ctx context.Context) (err error) {
+	if ctx == nil {
+		return errors.New("HEV observation context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	root, scope, paths, err := m.hevReleaseLayout()
 	if err != nil {
 		return err
@@ -321,7 +402,7 @@ func (m *Manager) hevReleaseIdle() (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, j.Close()) }()
-	return j.RequireIdle(context.Background())
+	return j.RequireIdle(ctx)
 }
 
 type hevIdleTarget struct{}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
@@ -15,10 +17,12 @@ import (
 // from a panel request. The Manager supplies transient receipt registration to
 // each guarded health operation after this runtime is registered.
 type NodeRuntimeFactoryOptions struct {
-	Configs      *engineconfig.Manager
-	Nodes        *nodestore.Store
-	StateRoot    string
-	FreshProfile func(context.Context) (string, error)
+	ProxySidecar  string
+	HEVComponents *components.Manager
+	Configs       *engineconfig.Manager
+	Nodes         *nodestore.Store
+	StateRoot     string
+	FreshProfile  func(context.Context) (string, error)
 }
 
 // NewXrayNodeRuntime constructs one Xray owner for generic and exact-node plans
@@ -49,5 +53,13 @@ func NewXrayNodeRuntime(options NodeRuntimeFactoryOptions) (*dataplane.ProxyTunn
 		return nil, err
 	}
 	adapter.FreshProfile = options.FreshProfile
+	if err := config.ValidateProxySidecar(options.ProxySidecar); err != nil {
+		return nil, err
+	}
+	if config.EffectiveProxySidecar(options.ProxySidecar) == "hev" {
+		if err := dataplane.BindManagedHEVSidecar(context.Background(), adapter, options.HEVComponents); err != nil {
+			return nil, err
+		}
+	}
 	return adapter, nil
 }

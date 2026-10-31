@@ -58,6 +58,9 @@ func TestRuntimeLifecycleUsesOriginalAdapterAndCheckerRegistrations(t *testing.T
 			t.Fatal("lab export became production runtime", id)
 		}
 	}
+	if got := a.runtimeLifecycle("hev").Operations["installer"]; got.Registration != "registered" || got.Available != nil {
+		t.Fatal("canonical HEV component installer mapping lost or became ready", got)
+	}
 }
 func TestRuntimeLifecycleSharedEngineHTTPInventoryDoesNotPromoteUnknown(t *testing.T) {
 	a, _ := privateRestoreTestApp(t)

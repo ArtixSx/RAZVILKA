@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ManagedComponentReadVersion   = components.NFQWSInitialInstallSchema
+	ManagedComponentReadVersion   = components.HEVReleaseReadVersion
 	managedComponentsState        = installpath.State + "/components"
 	managedNFQBundlePlanPath      = "/api/v1/components/nfqws2/managed-bundle/plan"
 	managedNFQBundleInstallPath   = "/api/v1/components/nfqws2/managed-bundle/install"
@@ -158,7 +158,7 @@ func (a *App) managedNFQHistoryCurrent(ctx context.Context) error {
 	if err != nil || before > ManagedComponentReadVersion {
 		return errors.Join(components.ErrRecoveryAuthority, err)
 	}
-	if err := a.ComponentHistory.CheckWrite(ctx, ManagedComponentReadVersion); err != nil {
+	if err := a.ComponentHistory.CheckWrite(ctx, components.NFQWSInitialInstallSchema); err != nil {
 		return err
 	}
 	after, fresh, err := components.InspectRetainedManagedUpdateReadVersion(ctx, a.Components.StateDir)

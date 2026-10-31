@@ -15,8 +15,8 @@ import (
 // In particular reader4 must not turn schema0 into a general schema2 controller.
 func TestComponentReaderFourOrdinaryAndBootstrapCapabilities(t *testing.T) {
 	for _, schema := range []string{"0\n", "2\n"} {
-		for _, required := range []int{2, 3, 4} {
-			for _, reader := range []int{2, 3, 4, 5} {
+		for _, required := range []int{2, 3, 4, 5} {
+			for _, reader := range []int{2, 3, 4, 5, 6} {
 				probe := func(_ context.Context, _, flag string) (string, error) {
 					switch flag {
 					case "-self-update-schema":
@@ -34,7 +34,7 @@ func TestComponentReaderFourOrdinaryAndBootstrapCapabilities(t *testing.T) {
 				ordinary := checkOrdinaryPreparationCapabilities(context.Background(), "sealed-candidate", 3, required, probe)
 				bootstrap := checkExternalBootstrapCapabilities(context.Background(), "sealed-candidate", 3, required, probe)
 				general := checkFileCapabilitiesForHistories(context.Background(), "sealed-candidate", 3, required, probe)
-				compatible := reader >= required && reader <= 4
+				compatible := reader >= required && reader <= components.HEVReleaseReadVersion
 				if (ordinary == nil) != (compatible && schema == "0\n") || (bootstrap == nil) != (compatible && schema == "0\n") || (general == nil) != (compatible && schema == "2\n") {
 					t.Fatal("component reader4 borrowed or lost another protocol capability", schema, required, reader, ordinary, bootstrap, general)
 				}

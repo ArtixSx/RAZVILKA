@@ -191,6 +191,13 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 			version = ManagedNFQWSJournalSchema
 		}
 	}
+	hevPresent, hevErr := inspectHEVRetained(ctx, stateDirectory, hash)
+	if hevErr != nil {
+		return 0, "", hevErr
+	}
+	if hevPresent && version < HEVReleaseReadVersion {
+		version = HEVReleaseReadVersion
+	}
 	closing, closeErr := os.Lstat(stateDirectory)
 	if closeErr != nil || !os.SameFile(info, closing) || root.Check("update-journal") != nil || ctx.Err() != nil {
 		return 0, "", ErrRetainedManagedUpdate

@@ -78,7 +78,7 @@ func runOfflineNFQWS2StopCLI(ctx context.Context, paths offlineNFQWS2StopPaths) 
 	if err != nil {
 		return result, offlineNFQWS2StopFailed("existing-config", err)
 	}
-	manager, err := newDataplaneManager(paths.dataplane, engineconfig.New(paths.stage, paths.backups))
+	manager, err := newColdDataplaneManager(ctx, paths.dataplane, engineconfig.New(paths.stage, paths.backups), paths.config, componentManager)
 	if err != nil {
 		return result, offlineNFQWS2StopFailed("manager", err)
 	}

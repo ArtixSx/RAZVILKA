@@ -80,7 +80,7 @@ func (a *App) scopedRuntimeOperation(ctx context.Context) (context.Context, func
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" {
+		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath {
 			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return
@@ -193,6 +193,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			exclusive = true
 		}
 		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair" || r.URL.Path == "/api/v1/nfqws2/first-start-recipe") {
+			exclusive = true
+		}
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/runtime/proxy-sidecar" {
 			exclusive = true
 		}
 		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/services/") {

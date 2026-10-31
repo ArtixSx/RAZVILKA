@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 )
 
@@ -45,5 +46,66 @@ func TestHEVVersionPreflightHonorsCancellationAndCommandFailure(t *testing.T) {
 	})
 	if err := a.preflightHEVRuntime(context.Background()); err == nil {
 		t.Fatal("version text disguised command failure")
+	}
+}
+
+func TestHEVManagedOwnerRecheckedOnEveryStartAttempt(t *testing.T) {
+	a := hevFixture(t)
+	checks, commands := 0, 0
+	refused := errors.New("original pinned receipt changed")
+	a.hevInstalledCheck = func(context.Context) error { checks++; return refused }
+	a.Runner = hevVersionFixtureRunner(func(context.Context, string, ...string) ([]byte, error) {
+		commands++
+		return []byte("Version: 2.17.1 fixture"), nil
+	})
+	for i := 0; i < 3; i++ {
+		if err := a.startOwnedSidecar(context.Background()); !errors.Is(err, refused) {
+			t.Fatal("start skipped original component admission", err)
+		}
+	}
+	if checks != 3 || commands != 0 {
+		t.Fatal("refused owner executed binary or cached result", checks, commands)
+	}
+}
+
+func TestHEVStartRefusesOppositeBackendRestoredImage(t *testing.T) {
+	a := hevFixture(t)
+	if err := os.MkdirAll(a.runtimeRoot(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(a.sidecarConfigPath(), []byte(`{"inbounds":[]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	commands := 0
+	a.Runner = hevVersionFixtureRunner(func(context.Context, string, ...string) ([]byte, error) { commands++; return nil, nil })
+	if err := a.startOwnedSidecar(context.Background()); err == nil || commands != 0 {
+		t.Fatal("opposite-kind retained image launched", err, commands)
+	}
+	b, err := a.hevConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(a.sidecarConfigPath(), b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.SidecarKind, a.SidecarBin = "", ""
+	if err := a.startOwnedSidecar(context.Background()); err == nil || commands != 0 {
+		t.Fatal("HEV retained image launched by standard backend", err, commands)
+	}
+}
+
+func TestHEVPreflightRejectsLateOriginalReceiptChange(t *testing.T) {
+	a := hevFixture(t)
+	checks := 0
+	late := errors.New("original receipt changed after command")
+	a.hevInstalledCheck = func(context.Context) error {
+		checks++
+		if checks == 2 {
+			return late
+		}
+		return nil
+	}
+	if err := a.preflightHEVRuntime(context.Background()); !errors.Is(err, late) || checks != 2 {
+		t.Fatal("version result outlived original receipt", err, checks)
 	}
 }
