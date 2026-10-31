@@ -267,7 +267,7 @@ assert.deepEqual(delegated,[['refresh',true],['usque','remove']]);
 
 const timers=[],transport=[];
 const apiContext=vm.createContext({
-  Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
+  Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
   setTimeout:(fn,delay)=>{timers.push(delay);return timers.length;},clearTimeout(){},
   fetch:async(url,options)=>{transport.push({url,options});return {ok:true,json:async()=>({ok:true})};},
   friendlyErrorMessage:value=>value,

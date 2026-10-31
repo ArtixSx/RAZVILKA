@@ -1,4 +1,4 @@
-// Simple mode model checks: no DOM, server or network.
+// Simple mode model and async lifecycle checks with a mocked DOM and network.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -174,15 +174,16 @@ assert.deepEqual(Array.from(communityAvailable(shared,catalog),e=>e.id),['ga-net
 // require the same explicit confirmation as the advanced import dialog.
 const importAction=read('cmd/razvilka/web/simple-home.js').match(/  async function importCommunity\(id\) {[^]*?\n  }\n/);
 assert(importAction);
+const sessionHelpers=['simpleAuthenticated','simpleSession','simpleSessionCurrent'].map(name=>read('cmd/razvilka/web/simple-home.js').match(new RegExp('  function '+name+'\\([^]*?\\n  }'))[0]).join('\n');
 for(const choice of ['cancel','accept','missing','clean']){
   const calls=[],prompts=[],ui={busy:'',note:'',error:'',community:[{id:'ga-test'}]};
   const preview={import_guard:'source-sha256',source_sha256:'a'.repeat(64),conflicts:choice==='clean'?[]:[{value:'shared.example',service_name:'Other service'}]};
-  const actionContext={ui,render(){},api:async(path,options)=>{
+  const actionContext={ui,state:{authenticated:true},render(){},api:async(path,options)=>{
     calls.push({path,options});
     return path.endsWith('/preview')?preview:{service:{id:'custom-ga-test'}};
   },interfaceManage:async(id,on)=>{calls.push({manage:id,on});return true;}};
   if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);return choice==='accept';};
-  vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);
+  vm.createContext(actionContext);vm.runInContext('let sessionEpoch=0;\n'+sessionHelpers+importAction[0],actionContext);
   await actionContext.importCommunity('ga-test');
   const imported=calls.find(c=>c.path?.endsWith('/import'));
   assert.equal(!!imported,choice==='accept'||choice==='clean',choice);
@@ -200,9 +201,9 @@ for(const choice of ['cancel','accept','missing','clean']){
 for(const choice of ['cancel','accept','missing']){
   const calls=[],prompts=[],ui={busy:'',note:'',error:'',community:[{id:'telegram-ip'}]};
   const preview={import_guard:'source-sha256',source_sha256:'b'.repeat(64),bundled_fallback:true,source_date:'2026-10-20',source_url:'https://core.telegram.org/resources/cidr.txt',service:{cidrs:['91.108.56.0/22']},conflicts:[]};
-  const actionContext={ui,render(){},api:async(path,options)=>{calls.push({path,options});return path.endsWith('/preview')?preview:{service:{id:'custom-telegram-ip'}};},interfaceManage:async()=>{calls.push({manage:true});return true;}};
+  const actionContext={ui,state:{authenticated:true},render(){},api:async(path,options)=>{calls.push({path,options});return path.endsWith('/preview')?preview:{service:{id:'custom-telegram-ip'}};},interfaceManage:async()=>{calls.push({manage:true});return true;}};
   if(choice!=='missing')actionContext.askConfirmation=async(...args)=>{prompts.push(args);assert(!calls.some(call=>call.path?.endsWith('/import')));return choice==='accept';};
-  vm.createContext(actionContext);vm.runInContext(importAction[0],actionContext);await actionContext.importCommunity('telegram-ip');
+  vm.createContext(actionContext);vm.runInContext('let sessionEpoch=0;\n'+sessionHelpers+importAction[0],actionContext);await actionContext.importCommunity('telegram-ip');
   assert.equal(calls.some(call=>call.path?.endsWith('/import')),choice==='accept');assert.equal(calls.some(call=>call.manage),choice==='accept');
   if(prompts.length){assert.match(prompts[0][1],/2026-10-20/);assert.match(prompts[0][1],/https:\/\/core.telegram.org\/resources\/cidr.txt/);assert.match(prompts[0][1],/не свежая загрузка/);}
 }
@@ -263,7 +264,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   for(const id of ['view-autopilot','view-nodes','pageTitle','pageSubtitle','consoleMenuBackdrop','consoleMenu'])new Element(id);
   const events=new Map(),windowEvents=new Map(),body=new Element('body');
   const document={body,readyState:'loading',activeElement:new Element(),hidden:false,getElementById:id=>elements.find(e=>e.id===id)||null,createElement:()=>new Element(),querySelector:()=>null,addEventListener:(type,fn)=>events.set(type,fn),dispatchEvent:()=>{}};
-  const state={currentView:'overview',status:{},services:[]};
+  const state={currentView:'overview',status:{},services:[],authenticated:true};
   let writes=0,modeChanges=0;
   const location={hash:'#/overview'};
   const routerContext={document,state,consoleSnapshot:{policy:{setup_complete:false,enabled:true},services:{},runtime:{}},location,
@@ -273,7 +274,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
     $:selector=>document.getElementById(selector.slice(1)),$$:selector=>selector==='.view'?elements.filter(e=>e.id.startsWith('view-')):[],
     consoleDrawerInert(){},renderWorkspaceNavigation(){},refreshPanelView(){},
     fetch:()=>{writes++;throw new Error('Navigation must not write');},api:()=>{writes++;throw new Error('Navigation must not write');},
-    setInterval(){},setTimeout(){},clearTimeout(){},scrollTo(){},matchMedia:()=>({matches:false}),
+    AbortController,setInterval(){},setTimeout(){},clearTimeout(){},scrollTo(){},matchMedia:()=>({matches:false}),
     addEventListener:(type,fn)=>windowEvents.set(type,fn),
   };
   routerContext.window=routerContext;
@@ -285,7 +286,7 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   }
   const simpleSource=read('cmd/razvilka/web/simple-home.js');
   // Test-only access to closure actions; production source exports no test hook.
-  vm.runInContext(simpleSource.replace('  window.addEventListener(\'razvilka:autonomy-state\'', '  root.testSimpleActions={render,apply,renderSettings,renderDevicesNote};\n  window.addEventListener(\'razvilka:autonomy-state\''),routerContext);
+  vm.runInContext(simpleSource.replace('  window.addEventListener(\'razvilka:autonomy-state\'', '  root.testSimpleActions={render,apply,renderSettings,renderDevicesNote,searchCommunity,runDoctor,importCommunity,act,saveNightly,ui};\n  window.addEventListener(\'razvilka:autonomy-state\''),routerContext);
   routerContext.testSimpleActions.render();
   const home=document.getElementById('rzSimpleHome');
   assert(home&&overview.children.includes(home),'real home was inserted dynamically');
@@ -418,6 +419,93 @@ assert.ok(html.indexOf('/simple-home.js?v=')>html.indexOf('/interface.js?v='),'l
   routerContext.interfaceRecoveryRequired=()=>false;state.panelAvailability.admission={state:'idle',active:0,exclusive:false,fenced:false};
   events.get('razvilka:panel-availability')();assert.doesNotMatch(status.innerHTML,/rz-sh-activity/,'released holder retained progress');
   assert.equal(writes,0,'progress rendering or heartbeat events started an API operation');
+
+  // Logout must revoke every simple-mode continuation, including a confirmation
+  // dialog that outlives the session. Deliberately ignore abort in these mocked
+  // transports: a late body must still be fenced before it can update the view.
+  const actions=routerContext.testSimpleActions;
+  const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
+  const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+  const switchSession=()=>{
+    state.authenticated=false;state.authGeneration=(state.authGeneration||0)+1;
+    events.get('razvilka:auth-required')();
+    state.authenticated=true;state.authGeneration++;
+    events.get('razvilka:auth-restored')();
+  };
+  state.authGeneration=1;
+  routerContext.consoleSnapshot=snap({youtube:'pending'});
+  const main=home.children.find(e=>e.dataset.rzPart==='main');
+  const oldDoctor=deferred(),newDoctor=deferred(),doctorCalls=[];
+  routerContext.api=(path,options)=>{doctorCalls.push({path,options});return doctorCalls.length===1?oldDoctor.promise:newDoctor.promise;};
+  const oldDoctorRead=actions.runDoctor();await actions.runDoctor();
+  assert.equal(doctorCalls.length,1,'repeated doctor clicks share the active operation');
+  switchSession();assert.equal(doctorCalls[0].options.signal.aborted,true,'logout cancels the old passive diagnostic');
+  const newDoctorRead=actions.runDoctor();
+  oldDoctor.resolve({schema:1,status:'ok',summary:'private-old-doctor',checks:[]});await oldDoctorRead;
+  assert.equal(actions.ui.doctor,'running','old completion unlocked the new diagnostic');
+  assert.equal(actions.ui.report,null,'old diagnostic repopulated protected data');
+  newDoctor.resolve({schema:1,status:'ok',summary:'current-doctor',checks:[]});await newDoctorRead;
+  assert.match(main.innerHTML,/current-doctor/);assert.doesNotMatch(main.innerHTML,/private-old-doctor/);
+  console.log('PASS simple diagnostic cancels on logout and fences late bodies without unlocking a newer request');
+  state.authenticated=false;state.authGeneration++;
+  events.get('razvilka:auth-required')();
+  assert.equal(actions.ui.report,null);assert.doesNotMatch(main.innerHTML,/current-doctor/);
+  const noAuthCalls=doctorCalls.length;
+  await actions.runDoctor();await actions.importCommunity('blocked');actions.searchCommunity('blocked');
+  assert.equal(doctorCalls.length,noAuthCalls,'a revoked simple home admitted a protected request');
+  console.log('PASS simple logout clears private diagnostic presentation and refuses protected requests');
+  state.authenticated=true;state.authGeneration++;events.get('razvilka:auth-restored')();
+
+  const timers=new Map();let timerID=0;
+  routerContext.setTimeout=fn=>{const id=++timerID;timers.set(id,fn);return id;};
+  routerContext.clearTimeout=id=>timers.delete(id);
+  const fireSearch=()=>{assert.equal(timers.size,1);const [id,fn]=timers.entries().next().value;timers.delete(id);return fn();};
+  const oldSearch=deferred(),newSearch=deferred(),searchCalls=[];
+  routerContext.api=(path,options)=>{searchCalls.push({path,options});return searchCalls.length===1?oldSearch.promise:newSearch.promise;};
+  actions.searchCommunity('old');actions.searchCommunity('old');
+  const oldSearchRead=fireSearch();actions.searchCommunity('old');
+  assert.equal(searchCalls.length,1);assert.equal(timers.size,0,'the same pending query restarted its debounce');
+  switchSession();assert.equal(searchCalls[0].options.signal.aborted,true);
+  actions.searchCommunity('current');const newSearchRead=fireSearch();
+  oldSearch.resolve([{id:'old-service',name:'private-old-catalog'}]);await oldSearchRead;
+  assert.equal(actions.ui.communityState,'loading');assert.equal(actions.ui.community.length,0);
+  newSearch.resolve([{id:'new-service',name:'current-catalog'}]);await newSearchRead;
+  assert.equal(actions.ui.community[0].id,'new-service');assert.equal(actions.ui.communityState,'ready');
+  actions.searchCommunity('current');assert.equal(timers.size,0,'completed same-query browsing should not refetch');
+  console.log('PASS simple catalog coalesces identical queries and fences a prior login response');
+
+  const confirmation=deferred(),newPreview=deferred(),imports=[],toasts=[];
+  const preview={import_guard:'source-sha256',source_sha256:'c'.repeat(64),conflicts:[{value:'overlap.example'}]};
+  routerContext.askConfirmation=()=>confirmation.promise;
+  routerContext.api=async(path,options)=>{imports.push({path,options});if(path.endsWith('/preview'))return path.includes('/old/')?preview:newPreview.promise;return {service:{id:'custom-current'}};};
+  routerContext.interfaceManage=async id=>{imports.push({manage:id});return true;};
+  routerContext.interfaceToast=message=>toasts.push(message);
+  const oldImport=actions.importCommunity('old');await flush();
+  switchSession();const newImport=actions.importCommunity('current');await flush();
+  confirmation.resolve(true);await oldImport;
+  assert.equal(imports.some(call=>call.path?.endsWith('/import')),false,'an old confirmation sent a POST in the new session');
+  assert.equal(actions.ui.busy,'current','old import finally cleared a newer action lock');
+  newPreview.resolve({...preview,conflicts:[]});await newImport;
+  assert.equal(imports.filter(call=>call.path?.endsWith('/import')).length,1);
+  assert(imports.some(call=>call.path?.endsWith('/current/import')));
+  assert.deepEqual(imports.filter(call=>call.manage).map(call=>call.manage),['custom-current']);
+  assert.equal(toasts.length,1,'an obsolete operation announced success');
+  console.log('PASS old simple import confirmation cannot write, announce success or unlock the new session');
+
+  const oldSave=deferred(),newSave=deferred(),saves=[],published=[];
+  routerContext.dispatchEvent=event=>published.push(event);
+  routerContext.api=(path,options={})=>{saves.push({path,options});return options.method==='PUT'?(saves.length===1?oldSave.promise:newSave.promise):Promise.resolve(routerContext.consoleSnapshot);};
+  const oldSettings=actions.saveNightly('application',true);switchSession();
+  const currentSettings=actions.saveNightly('components',true);
+  oldSave.resolve({ok:true});await oldSettings;
+  assert.equal(saves.length,2,'old settings write continued with a new-session readback');
+  assert.equal(actions.ui.settingsBusy,'components','old settings finally unlocked the new write');
+  assert.equal(published.length,0);
+  newSave.resolve({ok:true});await currentSettings;
+  assert.equal(saves.length,3);assert.equal(saves[2].options.method,undefined);
+  assert.equal(published.length,1);assert.equal(published[0].type,'razvilka:autonomy-state');
+  assert.equal(actions.ui.settingsBusy,'');
+  console.log('PASS simple maintenance save fences old readback and preserves the newer write lock');
 }
 console.log('simple home: ok');
 
@@ -440,8 +528,8 @@ console.log('simple home: ok');
  const action=read('cmd/razvilka/web/simple-home.js').match(/  async function act\([^]*?\n  }/)[0];
  for(const accepted of [false,true,undefined,'failed']){
   const toasts=[],actionState={busy:'',error:''};
-  const cancelContext={ui:actionState,render(){},interfaceManage:async()=>{if(accepted==='failed')throw Error('Сервер отказал');return accepted;},interfaceToast:message=>toasts.push(message)};
-  vm.createContext(cancelContext);vm.runInContext(action,cancelContext);await cancelContext.act('site',true);
+  const cancelContext={ui:actionState,state:{authenticated:true},render(){},interfaceManage:async()=>{if(accepted==='failed')throw Error('Сервер отказал');return accepted;},interfaceToast:message=>toasts.push(message)};
+  vm.createContext(cancelContext);vm.runInContext('let sessionEpoch=0;\n'+sessionHelpers+action,cancelContext);await cancelContext.act('site',true);
   assert.equal(toasts.length,accepted===true?1:0,'unaccepted removal announced success');assert.equal(actionState.busy,'');if(accepted==='failed')assert.equal(actionState.error,'Сервер отказал');
  }
 }

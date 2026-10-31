@@ -494,7 +494,7 @@ await test('section 401 cancels sibling reads and opens login without stale resp
 
 await test('GET deadline also covers delayed JSON body, aborts fetch and releases its timer',async()=>{
  const timers=new Map();let timedSignal;
- const context={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
+ const context={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
  setTimeout(fn){timers.set(1,fn);return 1;},clearTimeout(id){timers.delete(id);},
  fetch:async(_url,options)=>{timedSignal=options.signal;return {ok:true,json:()=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Object.assign(new Error('abort'),{name:'AbortError'}))))};}};
  vm.createContext(context);vm.runInContext(extract('api')+'\n'+extract('friendlyErrorMessage'),context);
@@ -504,7 +504,7 @@ await test('GET deadline also covers delayed JSON body, aborts fetch and release
 
 await test('mutation uses caller cancellation without read timeout or automatic replay',async()=>{
  const controller=new AbortController();let observed,timers=0,calls=0;
- const context={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
+ const context={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
  setTimeout(){timers++;},clearTimeout(){},fetch:async(_url,options)=>{calls++;observed=options.signal;return {ok:true,json:async()=>({ok:true})};}};
  vm.createContext(context);vm.runInContext(extract('api'),context);
  await context.api('/api/v1/apply',{method:'POST',signal:controller.signal});assert.equal(observed,controller.signal);assert.equal(timers,0);assert.equal(calls,1);
@@ -521,7 +521,7 @@ await test('activity initial failed journal read renders unavailable and retry i
 await test('busy release metadata updates sidebar and footer together without admitting foreign or invalid version text',async()=>{
  const labels=new Map(['version','footerVersion'].map(id=>[id,{textContent:'v0.20.0'}]));
  let payload={name:'RAZVILKA',version:'0.20.0-rc.35',error:'busy'};
- const context={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
+ const context={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},
  document:{getElementById:id=>labels.get(id)},setTimeout:()=>1,clearTimeout(){},
  fetch:async()=>({ok:false,status:503,text:async()=>JSON.stringify(payload)})};
  vm.createContext(context);vm.runInContext(extract('api')+'\n'+extract('friendlyErrorMessage'),context);

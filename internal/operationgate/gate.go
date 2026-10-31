@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -44,6 +45,7 @@ type Gate struct {
 	holders    map[uint64]holder // admitted operations, for the busy explanation
 	nextHolder uint64
 	guard      Guard
+	view       atomic.Pointer[gateView] // presentation only; never admission authority
 }
 
 // SetGuard is initialization only; changing authority while operations are
@@ -130,6 +132,7 @@ func (g *Gate) fence(reason error) {
 		g.reason = reason
 	}
 	g.fenced = true
+	g.publishViewLocked()
 }
 
 func (g *Gate) enter(ctx context.Context, exclusive bool) (func(), error) {
@@ -188,6 +191,7 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 	g.nextHolder++
 	id := g.nextHolder
 	g.holders[id] = holder{label: labelOf(ctx), since: time.Now(), exclusive: exclusive, progress: bindProgress(ctx)}
+	g.publishViewLocked()
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -198,6 +202,7 @@ func (g *Gate) enterAfter(ctx context.Context, exclusive bool, generation *uint6
 				g.exclusive = false
 			}
 			delete(g.holders, id)
+			g.publishViewLocked()
 		})
 	}, nil
 }

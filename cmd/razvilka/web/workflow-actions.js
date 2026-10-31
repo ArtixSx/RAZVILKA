@@ -6,9 +6,10 @@ const workflowViews = ['nodes','providers','engineconfig','services','managed'];
 function workflowSession(epoch){return epoch===workflowState.epoch && $('#authScreen').hidden;}
 async function workflowRequest(path, options={}, milliseconds=25000){
   const epoch=workflowState.epoch, controller=options.controller||new AbortController();
+  const requireSession=()=>{if(!workflowSession(epoch))throw Object.assign(new Error('Сессия изменилась. Обновите состояние.'),{name:'AuthGenerationChanged'});};
   workflowState.controllers.add(controller);const timer=setTimeout(()=>controller.abort(),milliseconds);
-  try{const result=await api(path,{...options,signal:controller.signal});if(!workflowSession(epoch))throw new Error('Сессия изменилась. Обновите состояние.');return result;}
-  catch(error){if(error.status===401)showAuth({...state.status,authenticated:false,auth_required:true},'Сессия завершилась. Войдите снова.');throw error;}
+  try{const result=await api(path,{...options,signal:controller.signal});requireSession();return result;}
+  catch(error){requireSession();if(error.status===401)showAuth({...state.status,authenticated:false,auth_required:true},'Сессия завершилась. Войдите снова.');throw error;}
   finally{clearTimeout(timer);workflowState.controllers.delete(controller);}
 }
 function workflowError(error){

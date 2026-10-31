@@ -50,26 +50,35 @@ console.log('PASS focus and inert lifecycle for logout, setup and recovery');
 // body can complete after logout/login, even if its transport was aborted.
 const interfaceSource=fs.readFileSync(new URL('../cmd/razvilka/web/interface.js',import.meta.url),'utf8');
 const requestSource=interfaceSource.match(/async function interfaceRequest\([^]*?\n}\n/)[0];
+const workflowSource=fs.readFileSync(new URL('../cmd/razvilka/web/workflow-actions.js',import.meta.url),'utf8');
+const workflowRequestSource=workflowSource.match(/async function workflowRequest\([^]*?\n}\n/)[0];
 const apiSource=source.slice(source.indexOf('async function api('),source.indexOf('\nfunction friendlyErrorMessage('));
+const panelReadsSource=source.slice(source.indexOf('const panelReads ='),source.indexOf('\nconst viewMeta ='));
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function requestFixture(){
-  const requests=[],timers=new Map();let authCalls=0,timerID=0;
-  const context={AbortController,Headers,Set,state:{status:{},authenticated:true},interfaceState:{authEpoch:1},interfaceRequests:new Set(),
+function requestFixture(wrapper='interface'){
+  const requests=[],timers=new Map(),savedInvalidations=[],versions={version:{textContent:'vCURRENT'},footerVersion:{textContent:'vCURRENT'}};let authCalls=0,timerID=0;
+  const context={AbortController,Headers,Set,state:{status:{},authenticated:true,authGeneration:1},interfaceState:{authEpoch:1},interfaceRequests:new Set(),
+    workflowState:{epoch:1,controllers:new Set()},workflowSession:epoch=>epoch===context.workflowState.epoch&&context.state.authenticated,
     ADMIN_TOKEN_KEY:'test',sessionStorage:{getItem:()=> 'fixture-token'},friendlyErrorMessage:value=>value,
+    document:{getElementById:id=>versions[id]||null},
+    invalidateSavedNodeBrowse:value=>savedInvalidations.push(['nodes',value]),
+    invalidateSavedDeviceBrowse:value=>savedInvalidations.push(['devices',value]),
+    invalidateSavedCommunityBrowse:value=>savedInvalidations.push(['community',value]),
     setTimeout(fn){const id=++timerID;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),
     fetch(path,options){const pending=deferred();requests.push({path,options,...pending});return pending.promise;},
-    showAuth(){authCalls++;context.state.authenticated=false;context.interfaceState.authEpoch++;}
+    showAuth(){authCalls++;context.state.authenticated=false;context.state.authGeneration++;context.interfaceState.authEpoch++;context.workflowState.epoch++;context.invalidatePanelReads();}
   };
-  vm.createContext(context);vm.runInContext(apiSource+'\n'+requestSource,context);
-  return {context,requests,timers,authCalls:()=>authCalls,
-    request:options=>context.interfaceRequest('/api/v1/autonomy',options),
-    newSession(){for(const controller of context.interfaceRequests)controller.abort();context.interfaceState.authEpoch++;context.state.authenticated=true;}
+  vm.createContext(context);vm.runInContext(panelReadsSource+'\n'+apiSource+'\n'+requestSource+'\n'+workflowRequestSource,context);
+  return {context,requests,timers,savedInvalidations,versions,authCalls:()=>authCalls,
+    request:options=>context[wrapper==='workflow'?'workflowRequest':'interfaceRequest']('/api/v1/autonomy',options),
+    newSession(){for(const controller of [...context.interfaceRequests,...context.workflowState.controllers])controller.abort();context.interfaceState.authEpoch++;context.workflowState.epoch++;context.state.authGeneration++;context.invalidatePanelReads();context.state.authenticated=true;}
   };
 }
 
+for(const wrapper of ['interface','workflow']){
 for(const status of [401,200]){
-  const f=requestFixture(),body=deferred(),pending=f.request();
+  const f=requestFixture(wrapper),body=deferred(),pending=f.request();
   const result=pending.then(value=>({value}),error=>({error}));
   f.requests[0].resolve({ok:status===200,status,text:()=>body.promise,json:()=>body.promise});await flush();
   f.newSession();body.resolve(status===200?{policy:{revision:1}}:'{"error":"old session"}');
@@ -77,21 +86,60 @@ for(const status of [401,200]){
   assert.equal(f.authCalls(),0,'late 401 revoked a new session');
   assert.equal(f.context.state.authenticated,true);
   assert.equal(settled.error?.name,'AuthGenerationChanged','old response escaped the request epoch');
-  assert.equal(f.context.interfaceRequests.size,0);assert.equal(f.timers.size,0);
-  console.log('PASS shared request rejects late parsed response '+status);
+  assert.equal(f.context.interfaceRequests.size,0);assert.equal(f.context.workflowState.controllers.size,0);assert.equal(f.timers.size,0);
+  console.log('PASS '+wrapper+' request rejects late parsed response '+status);
+}
+
+for(const status of [401,200]){
+  const f=requestFixture(wrapper),body=deferred(),pending=f.request({method:'PUT',body:'{"expected_revision":12}'});
+  const oldResult=pending.catch(error=>error);
+  f.requests[0].resolve({ok:status===200,status,text:()=>body.promise,json:()=>body.promise});await flush();
+  f.newSession();
+  const freshResult=f.context.readPanelResource('/api/v1/services').then(value=>({value}),error=>({error}));await flush();
+  assert.equal(f.requests.length,2,'fresh session must start its own read');
+  const fresh=f.requests[1],before=f.savedInvalidations.length;
+  body.resolve(status===200?{saved:true}:JSON.stringify({name:'RAZVILKA',version:'0.0.0-old-session',error:'old session expired'}));
+  assert.equal((await oldResult).name,'AuthGenerationChanged');
+  assert.equal(fresh.options.signal.aborted,false,'old mutation completion canceled the new session read');
+  assert.equal(f.savedInvalidations.length,before,'old mutation invalidated new-session browse state');
+  assert.equal(f.versions.version.textContent,'vCURRENT');assert.equal(f.versions.footerVersion.textContent,'vCURRENT','old error body changed the new session version');
+  assert.equal(f.authCalls(),0,'old mutation 401 revoked the new session');
+  fresh.resolve({ok:true,status:200,json:async()=>[{id:'fresh-service'}]});
+  const settled=await freshResult;
+  assert.equal(settled.error,undefined,'new session read was fenced by an old completion');
+  assert.equal(JSON.stringify(settled.value),'[{"id":"fresh-service"}]');
+  assert.equal(f.context.interfaceRequests.size,0);assert.equal(f.context.workflowState.controllers.size,0);assert.equal(f.timers.size,0);
+  console.log('PASS '+wrapper+' old mutation '+status+' preserves the new session read and presentation');
 }
 
 {
-  const f=requestFixture(),pending=f.request(),result=pending.catch(error=>error);
-  f.requests[0].resolve({ok:false,status:401,text:async()=>'{"error":"current session expired"}'});
+  const f=requestFixture(wrapper),pending=f.request(),result=pending.catch(error=>error);
+  f.requests[0].resolve({ok:false,status:401,text:async()=>'{"name":"RAZVILKA","version":"0.20.0-current","error":"current session expired"}'});
   assert.equal((await result).status,401);assert.equal(f.authCalls(),1);assert.equal(f.context.state.authenticated,false);
-  assert.equal(f.timers.size,0);console.log('PASS current 401 still revokes authentication');
+  assert.equal(f.versions.version.textContent,'v0.20.0-current');assert.equal(f.versions.footerVersion.textContent,'v0.20.0-current');
+  assert.equal(f.context.workflowState.controllers.size,0);assert.equal(f.timers.size,0);console.log('PASS '+wrapper+' current 401 still revokes authentication');
 }
 
 {
-  const f=requestFixture(),options={method:'PUT',body:'{"expected_revision":12}'},pending=f.request(options);
+  const f=requestFixture(wrapper);
+  const firstRead=f.context.readPanelResource('/api/v1/services').catch(error=>error);await flush();
+  const first=f.requests[0],pending=f.request({method:'PUT',body:'{"expected_revision":12}'}),write=f.requests[1];
+  assert.equal(first.options.signal.aborted,true,'current mutation must invalidate reads before writing');
+  first.resolve({ok:true,status:200,json:async()=>[{id:'before-write'}]});assert.equal((await firstRead).name,'AbortError');
+  const duringRead=f.context.readPanelResource('/api/v1/services').catch(error=>error);await flush();
+  const during=f.requests[2];assert.equal(during.options.signal.aborted,false);
+  write.resolve({ok:true,status:200,json:async()=>({saved:true})});assert.deepEqual(await pending,{saved:true});
+  assert.equal(during.options.signal.aborted,true,'current mutation completion must invalidate concurrent reads');
+  during.resolve({ok:true,status:200,json:async()=>[{id:'during-write'}]});assert.equal((await duringRead).name,'AbortError');
+  assert.deepEqual(f.savedInvalidations,[['nodes',true],['devices',true],['community',true],['nodes',true],['devices',true],['community',true]]);
+  assert.equal(f.timers.size,0);console.log('PASS '+wrapper+' current mutation still invalidates reads before and after writing');
+}
+
+{
+  const f=requestFixture(wrapper),options={method:'PUT',body:'{"expected_revision":12}'},pending=f.request(options);
   const request=f.requests[0];assert.equal(request.options.credentials,'same-origin');assert.equal(request.options.headers.get('authorization'),'Bearer fixture-token');
   assert.equal(request.options.headers.get('content-type'),'application/json');assert.equal(request.options.body,options.body);
   request.resolve({ok:true,status:200,json:async()=>({saved:true})});assert.deepEqual(await pending,{saved:true});
-  assert.equal(f.authCalls(),0);assert.equal(f.timers.size,0);console.log('PASS request preserves credentials and mutation body');
+  assert.equal(f.authCalls(),0);assert.equal(f.context.workflowState.controllers.size,0);assert.equal(f.timers.size,0);console.log('PASS '+wrapper+' request preserves credentials and mutation body');
+}
 }

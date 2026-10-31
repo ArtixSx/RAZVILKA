@@ -147,10 +147,34 @@
 
   const KEY = 'razvilka.simpleMode';
   const ui = { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null, communityState: '', note: '', doctor: '', report: null, doctorError: '', settingsBusy: '', settingsError: '', settingsKey: '' };
-  let communityTimer = 0, communitySeq = 0;
+  let communityTimer = 0, communitySeq = 0, sessionEpoch = 0;
+  let communityController = null, doctorController = null;
   const html = value => (typeof esc === 'function' ? esc(value) : String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
   const snapshot = () => (typeof consoleSnapshot === 'object' ? consoleSnapshot : null);
   const catalog = () => (typeof state === 'object' && Array.isArray(state?.services) ? state.services : []);
+
+  // A request wrapper fences one HTTP response; this token also fences the
+  // gaps between preview, confirmation, import and a later readback.
+  function simpleAuthenticated() {
+    return typeof state === 'object' && state?.authenticated === true
+      && !(typeof interfaceState === 'object' && interfaceState.authRevoked);
+  }
+  function simpleSession() {
+    return simpleAuthenticated() ? { epoch: sessionEpoch, auth: state.authGeneration || 0 } : null;
+  }
+  function simpleSessionCurrent(session) {
+    return !!session && simpleAuthenticated() && session.epoch === sessionEpoch
+      && session.auth === (state.authGeneration || 0);
+  }
+  function resetSimpleSession() {
+    sessionEpoch++; communitySeq++;
+    clearTimeout(communityTimer); communityTimer = 0;
+    communityController?.abort(); communityController = null;
+    doctorController?.abort(); doctorController = null;
+    Object.assign(ui, { open: false, query: '', busy: '', error: '', key: '', community: [], communityQuery: null,
+      communityState: '', note: '', doctor: '', report: null, doctorError: '', settingsBusy: '', settingsError: '', settingsKey: '', holding: false });
+    render(true); renderSettings(true); renderDevicesNote();
+  }
 
   function enabled() {
     try { return localStorage.getItem(KEY) !== '0'; } catch (_) { return true; }
@@ -259,22 +283,30 @@
   // An empty query lists the whole community catalogue, so opening "Add a
   // service" already shows what can be added without typing.
   function searchCommunity(query) {
-    clearTimeout(communityTimer);
+    const session = simpleSession();
+    if (!session || typeof api !== 'function') return;
     const q = query.trim();
-    if (typeof api !== 'function') { ui.community = []; ui.communityState = ''; return; }
-    if (q === ui.communityQuery && ui.communityState === 'ready') return;
+    if (q === ui.communityQuery && ['ready', 'loading'].includes(ui.communityState)) return;
+    clearTimeout(communityTimer);
+    communityController?.abort(); communityController = null;
+    ui.communityQuery = q;
     ui.communityState = 'loading';
     const seq = ++communitySeq;
     communityTimer = setTimeout(async () => {
+      communityTimer = 0;
+      if (seq !== communitySeq || !simpleSessionCurrent(session)) return;
+      const controller = communityController = new AbortController();
       try {
-        const found = await api(`/api/v1/community/services?q=${encodeURIComponent(q)}`, { headers: { 'x-razvilka-read': 'passive' } });
-        if (seq !== communitySeq) return;
+        const found = await api(`/api/v1/community/services?q=${encodeURIComponent(q)}`, { headers: { 'x-razvilka-read': 'passive' }, signal: controller.signal });
+        if (seq !== communitySeq || !simpleSessionCurrent(session)) return;
         ui.community = Array.isArray(found) ? found : [];
-        ui.communityQuery = q; ui.communityState = 'ready';
+        ui.communityState = 'ready';
       } catch (_) {
-        if (seq === communitySeq) { ui.community = []; ui.communityState = 'error'; }
+        if (seq === communitySeq && simpleSessionCurrent(session)) { ui.community = []; ui.communityState = 'error'; }
+      } finally {
+        if (communityController === controller) communityController = null;
       }
-      render(true);
+      if (seq === communitySeq && simpleSessionCurrent(session)) render(true);
     }, 350);
   }
 
@@ -283,28 +315,36 @@
   // dialog of advanced mode does. Overlapping entries never replace the
   // routes of other services.
   async function importCommunity(id) {
-    if (typeof api !== 'function' || ui.busy) return;
+    const session = simpleSession();
+    if (!session || typeof api !== 'function' || ui.busy) return;
     ui.busy = id; ui.error = ''; ui.note = 'Загружаем список доменов сервиса из каталога сообщества…'; render(true);
     try {
       const request = typeof workflowRequest === 'function' ? workflowRequest : (path, options) => api(path, options);
       const preview = await request(`/api/v1/community/services/${encodeURIComponent(id)}/preview`, {}, 50000);
+      if (!simpleSessionCurrent(session)) return;
       if (preview?.import_guard !== 'source-sha256' || !/^[a-f0-9]{64}$/.test(preview?.source_sha256 || '')) throw new Error('Сервер не подтвердил отпечаток списка. Попробуйте ещё раз.');
       if (preview.bundled_fallback === true && (typeof askConfirmation !== 'function' || !await askConfirmation('Добавить встроенный снимок Telegram?', `Официальный источник недоступен. Используется встроенный снимок от ${preview.source_date || 'не указано'}: ${preview.source_url || preview.entry?.source_page || 'источник не указан'}. Это не свежая загрузка. Проверьте ${preview.service?.cidrs?.length || 0} IP-сетей перед импортом.`, 'Добавить снимок'))) return;
+      if (!simpleSessionCurrent(session)) return;
       const conflicts = preview.conflicts || [];
       if (conflicts.length && (typeof askConfirmation !== 'function' || !await askConfirmation('Импортировать пересекающиеся списки?', `${conflicts.length} записей пересекаются с другими сервисами. Их маршруты не будут заменены.`, 'Импортировать'))) return;
+      if (!simpleSessionCurrent(session)) return;
       ui.note = 'Сохраняем сервис…'; render(true);
       const saved = await request(`/api/v1/community/services/${encodeURIComponent(id)}/import`, { method: 'POST', body: JSON.stringify({ allow_conflicts: conflicts.length > 0, refresh: false, expected_source_sha256: preview.source_sha256 }) }, 50000);
+      if (!simpleSessionCurrent(session)) return;
       if (!saved?.service?.id) throw new Error('Сервис не сохранён.');
       if (typeof refreshCoreAfterEdit === 'function') await refreshCoreAfterEdit();
+      if (!simpleSessionCurrent(session)) return;
       if(await interfaceManage(saved.service.id, true)!==true)throw new Error('Определение импортировано, но включение автоподбора не подтверждено. Обновите состояние.');
+      if (!simpleSessionCurrent(session)) return;
       ui.community = ui.community.filter(e => e.id !== id);
       ui.note = '';
       if (typeof interfaceToast === 'function') interfaceToast('Сервис добавлен в настройки автопилота.');
     } catch (e) {
+      if (!simpleSessionCurrent(session)) return;
       ui.note = '';
       ui.error = (typeof workflowError === 'function' ? workflowError(e) : e?.message) || 'Сервис не добавлен.';
     } finally {
-      ui.busy = ''; ui.note = ''; render(true);
+      if (simpleSessionCurrent(session)) { ui.busy = ''; ui.note = ''; render(true); }
     }
   }
 
@@ -312,8 +352,9 @@
     if (!enabled()) return;
     const home = ensure();
     if (!home) return;
-    const snap = snapshot();
-    const summaries = typeof interfaceSummaries === 'function' ? interfaceSummaries() : {};
+    const authenticated = simpleAuthenticated();
+    const snap = authenticated ? snapshot() : null;
+    const summaries = authenticated && typeof interfaceSummaries === 'function' ? interfaceSummaries() : {};
     // Reuse the shared TTL/revision-aware result; runtime history alone does
     // not carry the current network, route and configuration proof.
     const m = model(snap, catalog(), summaries, typeof interfaceRecoveryRequired === 'function' && interfaceRecoveryRequired());
@@ -327,10 +368,10 @@
       const fresh = loaded && !['error', 'busy'].includes(state.dataLoad?.services?.phase);
       renderHomeEngineSummary(summaries, loaded, fresh);
     }
-    const engines = simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '');
-    const notice = updateNotice(typeof state === 'object' ? state?.appUpdate : null);
+    const engines = authenticated ? simpleEngines(document.getElementById('ui7HomeEngines')?.innerHTML || '') : '';
+    const notice = updateNotice(authenticated ? state?.appUpdate : null);
     // What the router is busy with replaces the technical availability banner.
-    const admission = typeof state === 'object' ? state?.panelAvailability?.admission : null;
+    const admission = authenticated ? state?.panelAvailability?.admission : null;
     const progress = root.RazvilkaPanelAvailability?.progressView(admission, catalog());
     const activity = progress ? `${progress.activity}. ${progress.timing}`
       : admission?.state === 'busy' && typeof admission.operation === 'string' ? admission.operation.replace(/^автопилот:\s*/i, '') : '';
@@ -343,9 +384,8 @@
     // Pausing workers or stopping routes does not revoke catalogue browsing
     // or enrollment. Existing actions still use the shared permission guards;
     // loading, setup, recovery and a revoked session do not expose management.
-    const authenticated = typeof state === 'object' && state?.authenticated === true && !(typeof interfaceState === 'object' && interfaceState.authRevoked);
     const canAdd = authenticated && ['ready', 'empty', 'off'].includes(m.phase);
-    const doctor = doctorCard();
+    const doctor = authenticated ? doctorCard() : '';
     const main = (canAdd ? `<div class="rz-sh-head"><h3>Мои сервисы</h3><button type="button" class="${ui.open ? 'secondary' : 'primary'}" data-rz-sh-toggle-add aria-expanded="${ui.open}">${ui.open ? 'Готово' : 'Добавить сервис'}</button></div>${addPanel(m)}`
         + (m.services.length ? `<ul class="rz-sh-list">${m.services.map(serviceRow).join('')}</ul>` : '') : '')
       + (ui.error ? `<p class="rz-sh-error" role="alert">${html(ui.error)}</p>` : '')
@@ -412,28 +452,37 @@
   }
 
   async function runDoctor() {
-    if (ui.doctor === 'running' || typeof api !== 'function') return;
+    const session = simpleSession();
+    if (!session || ui.doctor === 'running' || typeof api !== 'function') return;
+    const controller = doctorController = new AbortController();
     ui.doctor = 'running'; ui.doctorError = ''; render(true);
     try {
-      ui.report = await api('/api/v1/panel/doctor', { headers: { 'x-razvilka-read': 'passive' }, readTimeoutMs: 15000 });
+      const report = await api('/api/v1/panel/doctor', { headers: { 'x-razvilka-read': 'passive' }, readTimeoutMs: 15000, signal: controller.signal });
+      if (!simpleSessionCurrent(session) || doctorController !== controller) return;
+      ui.report = report;
       ui.doctor = 'done';
     } catch (e) {
+      if (!simpleSessionCurrent(session) || doctorController !== controller) return;
       ui.report = null; ui.doctor = 'failed'; ui.doctorError = e?.message || 'Роутер не ответил на проверку.';
+    } finally {
+      if (doctorController === controller) doctorController = null;
     }
-    render(true);
+    if (simpleSessionCurrent(session)) render(true);
   }
 
   async function act(id, remove) {
-    if (typeof interfaceManage !== 'function' || ui.busy) return;
+    const session = simpleSession();
+    if (!session || typeof interfaceManage !== 'function' || ui.busy) return;
     ui.busy = id; ui.error = ''; render(true);
     try {
       const accepted=await interfaceManage(id, true, remove);
-      if (accepted!==true)return;
+      if (!simpleSessionCurrent(session) || accepted!==true)return;
       if (typeof interfaceToast === 'function') interfaceToast(remove ? 'Сервис убирается. Его обход будет снят.' : 'Сервис добавлен в настройки автопилота.');
     } catch (e) {
+      if (!simpleSessionCurrent(session)) return;
       ui.error = e?.message || 'Действие не выполнено.';
     } finally {
-      ui.busy = ''; render(true);
+      if (simpleSessionCurrent(session)) { ui.busy = ''; render(true); }
     }
   }
 
@@ -481,7 +530,7 @@
     if (!enabled()) return;
     const box = settingsSection();
     if (!box) return;
-    const snap = snapshot();
+    const snap = simpleAuthenticated() ? snapshot() : null;
     const p = snap?.policy;
     const version = typeof state === 'object' ? state?.status?.version || '' : '';
     const devices = !p ? 'Загружаем…' : p.all_lan ? 'Область действия выбранных сервисов — все устройства домашней сети.' : `Область действия выбранных сервисов — выбранные устройства: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}.`;
@@ -511,15 +560,16 @@
       note.className = 'rz-devices-scope';
       grid.before(note);
     }
-    const p = snapshot()?.policy;
+    const p = simpleAuthenticated() ? snapshot()?.policy : null;
     const text = !p ? '' : p.all_lan ? 'Выбранные сервисы предназначены для всех устройств домашней сети. Маршруты включаются отдельно. Здесь можно дать устройствам понятные имена.'
       : `Выбранные сервисы предназначены для выбранных устройств: ${Array.isArray(p.default_sources) ? p.default_sources.length : 0}. Маршруты включаются отдельно. Здесь можно дать устройствам понятные имена.`;
     if (note.textContent !== text) note.textContent = text;
   }
 
   async function saveNightly(field, on) {
+    const session = simpleSession();
     const snap = snapshot();
-    if (!snap?.policy?.setup_complete || ui.settingsBusy) return;
+    if (!session || !snap?.policy?.setup_complete || ui.settingsBusy) return;
     ui.settingsBusy = field; ui.settingsError = ''; renderSettings(true);
     try {
       const policy = withNightly(snap.policy, field, on);
@@ -527,13 +577,16 @@
         ? (path, options = {}) => interfaceRequest(path, { ...options, body: options.body === undefined ? undefined : JSON.stringify(options.body) })
         : (path, options = {}) => api(path, { ...options, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
       await request('/api/v1/autonomy', { method: 'PUT', body: { expected_revision: snap.policy.revision, policy, confirm: 'SAVE_AUTONOMY', release_safe_mode: false } });
+      if (!simpleSessionCurrent(session)) return;
       const fresh = await request('/api/v1/autonomy');
+      if (!simpleSessionCurrent(session)) return;
       window.dispatchEvent(new CustomEvent('razvilka:autonomy-state', { detail: fresh }));
       if (typeof interfaceToast === 'function') interfaceToast(on ? 'Ночное обновление включено.' : 'Ночное обновление выключено: версии будут только проверяться.');
     } catch (e) {
+      if (!simpleSessionCurrent(session)) return;
       ui.settingsError = e?.message || 'Настройка не сохранена.';
     } finally {
-      ui.settingsBusy = ''; renderSettings(true);
+      if (simpleSessionCurrent(session)) { ui.settingsBusy = ''; renderSettings(true); }
     }
   }
 
@@ -553,6 +606,8 @@
   window.addEventListener('razvilka:autonomy-state', () => { render(); renderSettings(); renderDevicesNote(); });
   window.addEventListener('razvilka:app-update', () => render());
   document.addEventListener('razvilka:panel-availability', () => render());
+  document.addEventListener('razvilka:auth-required', resetSimpleSession);
+  document.addEventListener('razvilka:auth-restored', resetSimpleSession);
   document.addEventListener('DOMContentLoaded', apply);
   if (document.readyState !== 'loading') apply();
   setInterval(() => { if (!document.hidden) { render(); renderSettings(); renderDevicesNote(); } }, 3000);
