@@ -108,6 +108,7 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 	provider := netidentity.NewProcProvider()
 	tools, err := startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
 	if err != nil {
+		managedProbeNativeErrorChain(t, err, 0)
 		t.Fatal("actual protected tool closure", err)
 	}
 	defer tools.Close()
@@ -323,6 +324,20 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 		t.Fatal("native publication missing or fenced", snapshot)
 	}
 	t.Log("actual isolated consumer: managed native validation + held source socket + queue200 + wrong-source negative + exact counters + TLS/catalogue predicates + soleWait/ACK + COMMON cleanup; platform/WAN classification modeled; no router/LAN acceptance")
+}
+
+func managedProbeNativeErrorChain(t *testing.T, err error, depth int) {
+	if err == nil || depth > 12 {
+		return
+	}
+	t.Logf("native diagnostic[%d] %T: %v", depth, err, err)
+	if many, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range many.Unwrap() {
+			managedProbeNativeErrorChain(t, child, depth+1)
+		}
+	} else if one, ok := err.(interface{ Unwrap() error }); ok {
+		managedProbeNativeErrorChain(t, one.Unwrap(), depth+1)
+	}
 }
 
 func serveManagedProbeNativeTLS(t *testing.T, root string) {

@@ -146,6 +146,17 @@ func (r *ManagedNFQWSProbeConsumer) OwnsContext(ctx context.Context) bool {
 	return ok && e != nil && e.self == e && e.consumer == r && e.open.Load()
 }
 
+// Pending reports this original consumer's retained lifetime only. It issues
+// neither cleanup nor a process owner and cannot recreate one after restart.
+func (r *ManagedNFQWSProbeConsumer) Pending() bool {
+	if r == nil || r.self != r {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.active != nil
+}
+
 func (r *ManagedNFQWSProbeConsumer) ScopeCurrent(ctx context.Context, generation string) error {
 	if !r.OwnsContext(ctx) {
 		return ErrNFQWSScopedOwner
