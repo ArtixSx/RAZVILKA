@@ -7,6 +7,7 @@ on:
       - 'internal/privatebackup/**'
       - 'internal/privaterestore/**'
       - 'internal/updatecheck/**'
+      - 'internal/dataplane/**'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -50,3 +51,33 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local RAZVILKA_PRIVATE_PANEL_NATIVE=1 \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
+  scoped-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned official Xray and disposable namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux unzip busybox-static
+          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+          /usr/local/lib/razvilka-fixtures/xray version
+      - name: Original DNS source, Xray descriptors and cancellation
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestXrayDomainTCPNativeHeldProcessLifecycle|TestNFQWSProbe' -v

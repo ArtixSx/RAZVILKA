@@ -29,7 +29,7 @@
   function writeAction(plan, observation) {
     if (!validPlan(plan) || !plan.ready || matches(plan, observation)) return null;
     if (plan.action === 'update') {
-      return plan.update_available === true && validInstalled(plan.installed) && validInstalled(observation)
+      return plan.installed_idle === true && plan.update_available === true && validInstalled(plan.installed) && validInstalled(observation)
         && ['provider_id', 'flavor', 'manifest_sha256', 'receipt_id'].every(key => plan.installed[key] === observation[key]) ? 'update' : null;
     }
     return (plan.action === undefined || plan.action === 'install') && plan.installed_idle === false && observation === null ? 'install' : null;

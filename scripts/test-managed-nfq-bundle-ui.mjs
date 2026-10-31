@@ -50,6 +50,7 @@ await test('update needs matching original installed readback and cannot fall ba
   assert.equal(model.writeAction(p,old),'update');
   for(const o of [null,{},observation(),{...old,receipt_id:'e'.repeat(32)}])assert.equal(model.writeAction(p,o),null);
   assert.equal(model.writeAction({...p,update_available:false},old),null);
+  assert.equal(model.writeAction({...p,installed_idle:false},old),null);
   assert.equal(model.writeAction(plan(),old),null);
   assert.equal(model.writeAction(plan(),null),'install');
 });
