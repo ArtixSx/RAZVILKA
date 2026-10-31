@@ -41,5 +41,6 @@ jobs:
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app -run "TestStrategyPair|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance"'

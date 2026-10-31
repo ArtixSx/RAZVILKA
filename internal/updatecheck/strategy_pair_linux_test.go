@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
@@ -192,5 +193,63 @@ func TestStrategyPairFailedInstallRestoresExactOldBinaryAndState(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(a.installation, "etc/razvilka/admin.token")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("private rollback did not restore absence", err)
+	}
+}
+
+// Opt-in fixture executes real digest-pinned controller copies. It never runs
+// an installer, starts a daemon, or changes the host's installed application.
+func TestStrategyPairActualBinaryReaders(t *testing.T) {
+	currentPath, oldPath := os.Getenv("RAZVILKA_STRATEGY_PAIR_BINARY"), os.Getenv("RAZVILKA_STRATEGY_PAIR_OLD_BINARY")
+	if currentPath == "" || oldPath == "" {
+		t.Skip("actual controller fixture paths not supplied")
+	}
+	a, _, review, raw := strategyPairFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	current, err := os.ReadFile(currentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.ReadFile(oldPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probeRoot := t.TempDir()
+	retainedFile(t, probeRoot, "current", current)
+	retainedFile(t, probeRoot, "old", old)
+	for _, test := range []struct{ flag, want string }{{"-strategy-lab-read-version", "5\n"}, {"-self-update-private-snapshot-read-version", "3\n"}} {
+		got, err := a.probeStrategyReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "current"), SHA256: digestBytes(current)}, test.flag)
+		if err != nil || got != test.want {
+			t.Fatalf("current actual %s: %q %v", test.flag, got, err)
+		}
+		if _, err := a.probeStrategyReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "old"), SHA256: digestBytes(old)}, test.flag); err == nil {
+			t.Fatal("old controller falsely advertised pair reader", test.flag)
+		}
+	}
+	// Seal a real current/current controller pair through the production probe,
+	// then replace the immutable old controller copy with the true old binary.
+	a.strategyProbe = nil
+	review.OldExecutableSHA256 = digestBytes(current)
+	retainedFile(t, a.installation, "bin/razvilka", current)
+	retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", current)
+	for i, file := range review.Files {
+		if file.Target == "bin/razvilka" {
+			retainedFile(t, filepath.Dir(file.Candidate), filepath.Base(file.Candidate), current)
+			review.Files[i].SHA256 = digestBytes(current)
+		}
+	}
+	proof, err := a.sealStrategyPair(ctx, review)
+	if err != nil || proof == nil {
+		t.Fatal("actual compatible pair not admitted", err)
+	}
+	retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", old)
+	review.OldExecutableSHA256 = digestBytes(old)
+	retainedFile(t, a.installation, "bin/razvilka", old)
+	if _, err := a.sealStrategyPair(ctx, review); !errors.Is(err, ErrStrategyStateAdmission) {
+		t.Fatal("actual old/new incompatible pair admitted", err)
+	}
+	got, err := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))
+	if err != nil || !bytes.Equal(got, raw) {
+		t.Fatal("reader capability probes mutated state", err)
 	}
 }
