@@ -262,6 +262,9 @@ func (a *SelfUpdateFileAdapter) cleanupAbsentCandidate(ctx context.Context, id s
 	if err == nil {
 		err = sealCandidateAbsenceCompletion(ctx, w, final, intent, a.candidateStoppedCompletionFresh, a.candidateStoppedCompletionObservation)
 	}
+	if err == nil {
+		err = a.retainStoppedStrategyHistory(ctx, w)
+	}
 	return true, err
 }
 
@@ -278,6 +281,9 @@ func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFresh(ctx context.Cont
 // Intrinsic facts are separately exercised by the bounded native fixture.
 // Production always enters through the fixed-root check above.
 func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFacts(ctx context.Context, c *candidateAbsenceCompletion) error {
+	return a.candidateStoppedCompletionFactsAt(ctx, c, false)
+}
+func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFactsAt(ctx context.Context, c *candidateAbsenceCompletion, producer bool) error {
 	w := c.wait
 	if a.stopCheck == nil {
 		return ErrFileProtocol
@@ -286,7 +292,11 @@ func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFacts(ctx context.Cont
 	if err != nil || !stopped {
 		return errors.Join(ErrFileProtocol, err)
 	}
-	if err := a.AuthorityAction(ctx, w.owner.id, w.review.Revision, "replace-to-rollback"); err != nil {
+	action := "replace-to-rollback"
+	if producer {
+		action = "stop-owned"
+	}
+	if err := a.AuthorityAction(ctx, w.owner.id, w.review.Revision, action); err != nil {
 		return err
 	}
 	record, review, err := a.load(ctx, w.owner.id)
@@ -319,7 +329,11 @@ func (a *SelfUpdateFileAdapter) candidateStoppedCompletionFacts(ctx context.Cont
 	if err != nil || !present {
 		return errors.Join(ErrFileProtocol, err)
 	}
-	if err := c.receipt(current); err != nil {
+	if producer {
+		if !reflect.DeepEqual(current, c.intent) {
+			return ErrFileCommandUnsettled
+		}
+	} else if err := c.receipt(current); err != nil {
 		return err
 	}
 	root, err := a.commandRoot(w.owner.id)

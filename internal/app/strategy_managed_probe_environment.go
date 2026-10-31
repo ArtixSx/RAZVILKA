@@ -124,7 +124,7 @@ func (r *managedStrategyProbeEnvironment) Current(ctx context.Context) error {
 	if r.closed || r.components == nil || r.runtime == nil {
 		return dataplane.ErrReviewChanged
 	}
-	if err := errors.Join(r.control.Current(ctx), r.sourceCurrent(ctx)); err != nil {
+	if err := errors.Join(r.control.ObserveCurrent(ctx), r.sourceCurrent(ctx)); err != nil {
 		return err
 	}
 	if !r.retired {
@@ -146,7 +146,7 @@ func (r *managedStrategyProbeEnvironment) Current(ctx context.Context) error {
 			return dataplane.ErrReviewChanged
 		}
 	}
-	return errors.Join(r.control.Current(ctx), r.sourceCurrent(ctx))
+	return errors.Join(r.control.ObserveCurrent(ctx), r.sourceCurrent(ctx))
 }
 
 // The App calls this only after the concrete consumer's opaque completion has

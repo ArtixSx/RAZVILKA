@@ -37,6 +37,7 @@ func newOrdinaryPreparation(ctx context.Context, u *Updater, files map[string]st
 		return nil, errOrdinaryPreparation
 	}
 	p := &ordinaryPreparation{updater: u, adapter: NewSelfUpdateFileAdapterWithAuthority(nil, u.FileEffectAdmission), original: ctx, done: done, record: record, files: make(map[string]string, len(files))}
+	p.adapter.ExecutionHistoryReader = u.ExecutionHistoryReader
 	for name, sha := range files {
 		p.files[name] = sha
 	}
@@ -364,6 +365,10 @@ func (p *ordinaryPreparation) capabilities(ctx context.Context, path string, nod
 	return checkOrdinaryPreparationCapabilities(ctx, path, nodes, component, func(c context.Context, path, flag string) (string, error) {
 		return p.run(c, path, []string{flag}, "ordinary-prepare-metadata")
 	})
+}
+
+func (p *ordinaryPreparation) metadata(ctx context.Context, path, flag string) (string, error) {
+	return p.run(ctx, path, []string{flag}, "ordinary-prepare-metadata")
 }
 
 func (p *ordinaryPreparation) preflight(ctx context.Context) (err error) {

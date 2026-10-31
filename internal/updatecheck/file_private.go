@@ -343,6 +343,10 @@ func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id s
 	if snapshot.Schema != 2 && snapshot.Schema != 3 {
 		return ErrFileProtocol
 	}
+	rollbackImages, err := a.strategyRollbackImages(ctx, id, snapshot)
+	if err != nil {
+		return err
+	}
 	// Refuse metadata drift even when the byte-only generic journal would
 	// see equal Before/After and execute no replacement. No implicit repair.
 	for _, path := range privateFilesForSchema(snapshot.Schema) {
@@ -394,7 +398,7 @@ func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id s
 	if err := a.AuthorityAction(ctx, id, review.Revision, "replace-to-rollback"); err != nil {
 		return err
 	}
-	outcome, err := journal.Execute(ctx, snapshot.Images)
+	outcome, err := journal.Execute(ctx, rollbackImages)
 	if err != nil || (outcome != restorejournal.Applied && outcome != restorejournal.Clean) {
 		return errors.Join(ErrFileProtocol, err)
 	}
@@ -438,16 +442,20 @@ func (a *SelfUpdateFileAdapter) verifyPrivateRestore(ctx context.Context, id str
 	if snapshot.Schema != 2 && snapshot.Schema != 3 {
 		return ErrFileProtocol
 	}
+	expectedImages, err := a.strategyRollbackImages(ctx, id, snapshot)
+	if err != nil {
+		return err
+	}
 	for name, path := range fileMutablePrivateDirectories {
 		actual, err := readDirectoryImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
-		expected := snapshot.Images[name]
+		expected := expectedImages[name]
 		if err != nil || actual.Exists != expected.Exists || !bytes.Equal(actual.Data, expected.Data) {
 			return ErrFileProtocol
 		}
 	}
 	for name, path := range privateFilesForSchema(snapshot.Schema) {
 		actual, err := a.readPrivateFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
-		expected := snapshot.Images[name]
+		expected := expectedImages[name]
 		if err != nil || actual.Exists != expected.Exists || !bytes.Equal(actual.Data, expected.Data) {
 			return ErrFileProtocol
 		}

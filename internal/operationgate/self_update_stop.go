@@ -531,6 +531,11 @@ func WithSelfUpdateStoppedEffectAdmission(ctx context.Context, path, id, install
 
 func stoppedCompensationEffect(action, effect string) bool {
 	if action == "stop-owned" {
+		// Only the original joined candidate-stop producer can reach this
+		// fixed metadata rename; it grants no command start or replay.
+		if effect == "strategy-rollback-retention-seal" {
+			return true
+		}
 		// The owning provider still requires the original H's actual start
 		// supervisor Wait and fresh absence before unlinking its held PID file.
 		if effect == "candidate-known-absent-pid" {

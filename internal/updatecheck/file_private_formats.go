@@ -18,7 +18,10 @@ var filePrivateFiles = map[string]string{
 // Legacy registries are immutable: retained schema1/2 snapshots keep their
 // exact key sets. Only schema3 carries the byte-exact StrategyLab pair image.
 const StrategyLabReadVersion = 7
-const PrivateSnapshotReadVersion = 3
+
+// Reader4 additionally preserves a changed, settled StrategyLab image through
+// the original stopped-producer retention record. Snapshot schemas stay1/2/3.
+const PrivateSnapshotReadVersion = 4
 
 func privateFilesForSchema(schema int) map[string]string {
 	if schema != 3 {

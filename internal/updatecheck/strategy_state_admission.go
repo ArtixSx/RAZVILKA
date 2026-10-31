@@ -83,6 +83,18 @@ func (a *SelfUpdateFileAdapter) strategyAdmission(ctx context.Context, id string
 		}
 		return nil
 	}
+	retained, present, err := a.strategyRetention(ctx, review)
+	if err != nil {
+		return err
+	}
+	if present {
+		if preparing || schema != retained.StateSchema || image.Exists != retained.Current.Exists || !bytes.Equal(image.Data, retained.Current.Data) {
+			return ErrStrategyStateAdmission
+		}
+		copyProof := *review.StrategyPair
+		copyProof.StateSchema, copyProof.StateSHA256 = retained.StateSchema, digestBytes(retained.Current.Data)
+		return a.checkStrategyPairMode(ctx, review, image, schema, preparing, &copyProof)
+	}
 	return a.checkStrategyPairMode(ctx, review, image, schema, preparing)
 }
 
@@ -170,10 +182,11 @@ func (a *SelfUpdateFileAdapter) sealStrategyPair(ctx context.Context, review fil
 			return nil, ErrStrategyStateAdmission
 		}
 		snapshotReader, err := probe(ctx, binary, "-self-update-private-snapshot-read-version")
-		if err != nil || snapshotReader != "3\n" {
+		versionSnapshot, versionErr := parsePrivateSnapshotReader(snapshotReader)
+		if err != nil || versionErr != nil {
 			return nil, ErrStrategyStateAdmission
 		}
-		proof.Controllers = append(proof.Controllers, strategyControllerProof{binary.Path, binary.SHA256, version, 3})
+		proof.Controllers = append(proof.Controllers, strategyControllerProof{binary.Path, binary.SHA256, version, versionSnapshot})
 	}
 	if len(proof.Controllers) < 2 {
 		return nil, ErrStrategyStateAdmission
@@ -236,8 +249,14 @@ func (a *SelfUpdateFileAdapter) checkStrategyPair(ctx context.Context, review fi
 	return a.checkStrategyPairMode(ctx, review, image, schema, false)
 }
 
-func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, review fileReview, image restorejournal.Image, schema int, preparing bool) error {
+func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, review fileReview, image restorejournal.Image, schema int, preparing bool, retainedProof ...*strategyPairProof) error {
 	proof := review.StrategyPair
+	if len(retainedProof) > 1 {
+		return ErrStrategyStateAdmission
+	}
+	if len(retainedProof) == 1 {
+		proof = retainedProof[0]
+	}
 	if proof == nil || proof.Schema != 1 || !image.Exists || proof.StateSchema != schema || proof.StateSHA256 != digestBytes(image.Data) || len(proof.Controllers) < 2 || len(proof.Controllers) > 1024 {
 		return ErrStrategyStateAdmission
 	}
@@ -247,7 +266,7 @@ func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, revie
 	}
 	for i, binary := range images {
 		p := proof.Controllers[i]
-		if p.Path != binary.Path || p.SHA256 != binary.SHA256 || (p.StateReader != 5 && p.StateReader != 7) || p.StateReader < schema || p.StateReader < minimumStrategyPairReader(schema) || p.SnapshotReader != 3 {
+		if p.Path != binary.Path || p.SHA256 != binary.SHA256 || (p.StateReader != 5 && p.StateReader != 7) || p.StateReader < schema || p.StateReader < minimumStrategyPairReader(schema) || (p.SnapshotReader != 3 && p.SnapshotReader != 4) {
 			return ErrStrategyStateAdmission
 		}
 		hash, err := hashRegularFile(binary.Path, MaximumBinaryBytes)
@@ -272,6 +291,16 @@ func parseStrategyStateReader(output string) (int, error) {
 		return 0, ErrStrategyStateAdmission
 	}
 	return version, nil
+}
+
+func parsePrivateSnapshotReader(output string) (int, error) {
+	if output == "3\n" {
+		return 3, nil
+	}
+	if output == "4\n" {
+		return 4, nil
+	}
+	return 0, ErrStrategyStateAdmission
 }
 
 type strategyPreparationKey struct{}

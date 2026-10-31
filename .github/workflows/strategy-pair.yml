@@ -10,6 +10,10 @@ on:
       - 'internal/dataplane/**'
       - 'internal/components/**'
       - 'internal/restorejournal/**'
+      - 'internal/app/**'
+      - 'internal/operationgate/**'
+      - 'internal/startuptools/**'
+      - 'scripts/test-managed-probe-native.sh'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -53,7 +57,8 @@ jobs:
           go build -o /tmp/razvilka-current ./cmd/razvilka
           test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
           test "$(/tmp/razvilka-current -component-update-schema)" = 5
-          test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 3
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 2
+          test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
           git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
           if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
@@ -68,7 +73,7 @@ jobs:
             RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
             RAZVILKA_STRATEGY_PAIR_V5_BINARY=/tmp/razvilka-reader5-binary \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app -run "TestStrategyPair|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance"'
+            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app ./internal/dataplane ./internal/operationgate -run "TestStrategyPair|TestStrategyRollbackRetention|TestNativeCandidateStoppedCompletionTwoCuts|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance|TestExecutionHistory|TestExecutionReader|TestRetainedExecutionReader|TestManagedStrategyProbe|TestManagedSelection|TestControlEpochReadObservation"'
       - name: Restored panel boot in isolated network namespace
         shell: bash
         run: |

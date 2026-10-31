@@ -68,16 +68,17 @@ type fileReview struct {
 // Concrete neutral provider: this package does not import app. Production
 // paths are fixed; private overrides below exist only for isolated fixtures.
 type SelfUpdateFileAdapter struct {
-	directory       string
-	installation    string
-	fileJournal     string
-	owned           func(string) error
-	layout          func(Deployment) error
-	capabilities    func(context.Context, string) error
-	filesystem      func(context.Context) error
-	stopCheck       SelfUpdateStopCheck
-	admission       SelfUpdateEffectAdmission
-	runtimeInactive SelfUpdateRuntimeObservation
+	ExecutionHistoryReader ExecutionHistoryReader // Trusted read-only classifier; grants no mutation or runtime authority.
+	directory              string
+	installation           string
+	fileJournal            string
+	owned                  func(string) error
+	layout                 func(Deployment) error
+	capabilities           func(context.Context, string) error
+	filesystem             func(context.Context) error
+	stopCheck              SelfUpdateStopCheck
+	admission              SelfUpdateEffectAdmission
+	runtimeInactive        SelfUpdateRuntimeObservation
 	// Private process observer override is used only by isolated model tests.
 	processInactive func(context.Context, fileProcess) error
 	// Only the synchronous external bootstrap retains actual exec-created
@@ -316,9 +317,10 @@ func reviewedFileList(jobPath string, release Release, hashes map[string]string,
 	return files
 }
 
-func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission) (string, error) {
+func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission, executionReader ExecutionHistoryReader) (string, error) {
 	a := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
 	a.directory = directory
+	a.ExecutionHistoryReader = executionReader
 	return a.stageFileReview(ctx, record, authorityReview)
 }
 
@@ -391,6 +393,23 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	requiredComponentReader, componentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, filepath.Join(stateRootPath, "components"))
 	if err != nil {
 		return "", err
+	}
+	executionRoot := filepath.Join(stateRootPath, "dataplane")
+	executionRequired, executionSeal, err := a.inspectExecutionHistory(ctx, executionRoot)
+	if err != nil {
+		return "", err
+	}
+	executionProbe := probeFileCapability
+	if ordinary != nil {
+		executionProbe = ordinary.metadata
+	}
+	if err := checkExecutionHistoryCapability(ctx, binary, executionRoot, executionProbe, a.inspectExecutionHistory); err != nil {
+		return "", err
+	}
+	if bootstrap == nil {
+		if err := checkExecutionHistoryCapability(ctx, record.Deployment.Executable, executionRoot, executionProbe, a.inspectExecutionHistory); err != nil {
+			return "", err
+		}
 	}
 	if ordinary != nil {
 		if err := ordinary.capabilities(ctx, binary, requiredNodeReader, requiredComponentReader); err != nil {
@@ -575,6 +594,10 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 		return "", errors.Join(ErrReviewChanged, err)
 	}
 	freshAuthority, err := authorityReview(ctx, record.Job.ID)
+	freshExecutionRequired, freshExecutionSeal, executionErr := a.inspectExecutionHistory(ctx, executionRoot)
+	if executionErr != nil || freshExecutionRequired != executionRequired || freshExecutionSeal != executionSeal {
+		return "", errors.Join(ErrExecutionHistoryAdmission, executionErr)
+	}
 	if err != nil || freshAuthority != authority {
 		return "", errors.Join(ErrFileProtocol, err)
 	}
@@ -729,6 +752,9 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
+	if effect == strategyRollbackSealEffect {
+		return action == "stop-owned"
+	}
 	if effect == candidateKnownAbsentPIDEffect {
 		return action == "stop-owned"
 	}
@@ -767,6 +793,9 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
+	if effect == strategyRollbackSealEffect {
+		return true
+	}
 	if effect == candidateKnownAbsentPIDEffect {
 		return true
 	}

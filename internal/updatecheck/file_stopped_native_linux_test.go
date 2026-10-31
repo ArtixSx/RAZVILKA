@@ -3,6 +3,7 @@
 package updatecheck
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 	"golang.org/x/sys/unix"
 )
 
@@ -29,7 +31,7 @@ import (
 // production-root selection and the complete dataplane registry remain Root's
 // genuine future Stop acceptance, never a fixture environment override.
 func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
-	for _, cut := range []string{"before", "after"} {
+	for _, cut := range []string{"before", "after", "strategy", "strategy-crash", "strategy-drift"} {
 		t.Run(cut, func(t *testing.T) {
 			a, u, review, profile := nativeFileFixture(t, "candidate-stopped-"+cut)
 			oldJob := filepath.Join(a.directory, review.ID)
@@ -69,6 +71,37 @@ func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
 			defer cancel()
 			helper := exec.CommandContext(ctx, filepath.Join(job, "control.bin"), "self-update-helper", id)
 			output, err := helper.CombinedOutput() // Actual original H, sole outer Wait.
+			if cut == "strategy-crash" || cut == "strategy-drift" {
+				var exited *exec.ExitError
+				want := 109
+				if cut == "strategy-drift" {
+					want = 110
+				}
+				if !errors.As(err, &exited) || exited.ExitCode() != want {
+					t.Fatalf("original H did not reach retention publication cut: %v\n%s", err, output)
+				}
+				store, err := a.OpenFileJournal()
+				if err != nil {
+					t.Fatal(err)
+				}
+				r, present, err := store.Current()
+				store.Close()
+				if err != nil || !present || r.Phase != "command-started" || r.Command != "stop-candidate-panel" {
+					t.Fatal("crash lost unknown command fence", r.Phase, err)
+				}
+				strategy, err := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))
+				if err != nil || !bytes.Contains(strategy, []byte("recent manual history")) {
+					t.Fatal("crash discarded new history", err)
+				}
+				if err := a.AuthorityAction(ctx, id, review.Revision, "replace-to-rollback"); err == nil {
+					t.Fatal("sealed retention replayed unknown Stop command")
+				}
+				after, err := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))
+				if err != nil || !bytes.Equal(after, strategy) {
+					t.Fatal("unknown refusal rewound history", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("original H fixture: %v\n%s", err, output)
 			}
@@ -270,6 +303,18 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	}
 	review.JournalReaders = proof
 	saveStoppedReview(t, a, u, review)
+	strategyPath := filepath.Join(a.installation, "razvilka/state/strategy-lab.json")
+	var beforeStrategy []byte
+	if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+		beforeStrategy = []byte(`{"schema_version":4,"candidates":{},"evidence":[],"selections":{}}`)
+		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", beforeStrategy)
+		pair, err := a.sealStrategyPair(ctx, review)
+		if err != nil {
+			t.Fatal("actual copied controller reader7/snapshot4 pair", err)
+		}
+		review.StrategyPair = pair
+		saveStoppedReview(t, a, u, review)
+	}
 	store, err := a.OpenFileJournal()
 	if err != nil {
 		t.Fatal(err)
@@ -299,12 +344,31 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 			return err
 		}
 		w, final := nativeStoppedCandidateDeath(t, held, a, store, binary, job, id)
+		var recentStrategy []byte
+		if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+			// Model a manual StrategyLab write after candidate boot through its
+			// actual Store writer. Native H/S/C/R/Wait/Stop facts stay genuine.
+			manager, err := strategylab.New(strategyPath)
+			if err != nil {
+				return err
+			}
+			if _, err := manager.AddCandidate("tcp-tls", "recent manual history", "--filter-tcp=443", "expert"); err != nil {
+				return err
+			}
+			recentStrategy, err = os.ReadFile(strategyPath)
+			if err != nil {
+				return err
+			}
+			if string(recentStrategy) == string(beforeStrategy) {
+				return ErrStrategyStateAdmission
+			}
+		}
 		request := func() {
 			if _, err := operationgate.RequestSelfUpdateStop(held, profile.Control, id, review.Revision); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if profile.Scenario == "candidate-stopped-before" {
+		if profile.Scenario == "candidate-stopped-before" || strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
 			request()
 		}
 		if err := store.Execute(held, id, "stop-candidate-panel", okay, func(cctx context.Context) error {
@@ -320,7 +384,47 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 			if err := a.filePanelAbsent(cctx); err != nil {
 				return err
 			}
-			return sealCandidateAbsenceCompletion(cctx, w, final, intent, a.candidateStoppedCompletionFacts, a.candidateStoppedCompletionObservation)
+			if err := sealCandidateAbsenceCompletion(cctx, w, final, intent, a.candidateStoppedCompletionFacts, a.candidateStoppedCompletionObservation); err != nil {
+				return err
+			}
+			if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+				if profile.Scenario == "candidate-stopped-strategy-drift" {
+					admission := a.admission
+					a.admission = func(c context.Context, id, installation string, sequence uint64, action, effect string, begin func() error) error {
+						err := admission(c, id, installation, sequence, action, effect, begin)
+						if err == nil && effect == strategyRollbackSealEffect {
+							// Out-of-band owner edits deliberately bypass the held
+							// cooperative lease. Closing proof must preserve/refuse.
+							if err := os.WriteFile(strategyPath, append(bytes.Clone(recentStrategy), '\n'), 0600); err != nil {
+								return err
+							}
+							for _, file := range review.Files {
+								if file.Target == "bin/razvilka" {
+									data, err := os.ReadFile(file.Candidate)
+									if err != nil {
+										return err
+									}
+									return os.WriteFile(file.Candidate, append(data, '\n'), 0600)
+								}
+							}
+						}
+						return err
+					}
+				}
+				if err := a.retainStoppedStrategyHistoryAt(cctx, w); err != nil {
+					if profile.Scenario == "candidate-stopped-strategy-drift" {
+						os.Exit(110)
+					}
+					return err
+				}
+				if profile.Scenario == "candidate-stopped-strategy-drift" {
+					return ErrStrategyStateAdmission
+				}
+				if profile.Scenario == "candidate-stopped-strategy-crash" {
+					os.Exit(109)
+				}
+			}
+			return nil
 		}); err != nil {
 			return err
 		}
@@ -343,6 +447,16 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		}
 		if err := store.Execute(held, id, "restore-private-state", okay, func(c context.Context) error { return a.Run(c, id, "restore-private-state") }); err != nil {
 			return err
+		}
+		if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
+			actual, err := os.ReadFile(strategyPath)
+			if err != nil || string(actual) != string(recentStrategy) {
+				return errors.Join(ErrStrategyStateAdmission, err)
+			}
+			snapshot, err := a.privateSnapshot(held, id)
+			if err != nil || string(snapshot.Images["strategy"].Data) != string(beforeStrategy) {
+				return errors.Join(ErrStrategyStateAdmission, err)
+			}
 		}
 		r, present, err := store.Current()
 		if err != nil || !present || r.Command != "restore-private-state" || r.Phase != "command-finished" {

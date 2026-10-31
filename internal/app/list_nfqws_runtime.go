@@ -609,6 +609,9 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 	if !r.original() {
 		return dataplane.ErrNFQWSScopedOwner
 	}
+	if r.app.managedStrategyProbePending() {
+		return dataplane.ErrNFQWSManagedProcessUnknown
+	}
 	r.mu.Lock()
 	live := r.active != nil || r.pending != nil
 	r.mu.Unlock()
@@ -621,6 +624,9 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 	defer r.mu.Unlock()
 	if r.active != nil || r.pending != nil {
 		return dataplane.ErrNFQWSScopedOwner
+	}
+	if r.app.managedStrategyProbePending() || r.probe != nil && r.probe.Pending() {
+		return dataplane.ErrNFQWSManagedProcessUnknown
 	}
 	if r.closed {
 		if r.policy != nil {

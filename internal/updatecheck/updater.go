@@ -74,18 +74,19 @@ type Updater struct {
 	FileAuthorityReview  func(context.Context, string) (SelfUpdateAuthority, error)
 	// Mandatory for installer helper Start; sealed review authority is passed
 	// with action start/live and effect installer-helper. Only Start is inside.
-	FileEffectAdmission SelfUpdateEffectAdmission
-	Current             string
-	Directory           string
-	Deployment          Deployment
-	Client              *http.Client
-	mu                  sync.Mutex
-	record              updateRecord
-	cancel              context.CancelFunc
-	done                chan struct{}
-	handoffDone         chan struct{}
-	handoffActive       bool
-	parent              context.Context
+	FileEffectAdmission    SelfUpdateEffectAdmission
+	ExecutionHistoryReader ExecutionHistoryReader
+	Current                string
+	Directory              string
+	Deployment             Deployment
+	Client                 *http.Client
+	mu                     sync.Mutex
+	record                 updateRecord
+	cancel                 context.CancelFunc
+	done                   chan struct{}
+	handoffDone            chan struct{}
+	handoffActive          bool
+	parent                 context.Context
 	// Tests inject bounded local preflight and launch behavior. Browser input
 	// never configures a command, URL, destination or transport.
 	eligibility func(Deployment) error
@@ -521,7 +522,7 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 		if ordinary != nil {
 			fileReviewSHA, err = ordinary.adapter.stageFileReviewWithOrdinaryPreparation(ctx, reviewRecord, u.FileAuthorityReview, ordinary)
 		} else {
-			fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview, u.FileEffectAdmission)
+			fileReviewSHA, err = stageFileReview(ctx, u.Directory, reviewRecord, u.FileAuthorityReview, u.FileEffectAdmission, u.ExecutionHistoryReader)
 		}
 		if err != nil {
 			failure = err

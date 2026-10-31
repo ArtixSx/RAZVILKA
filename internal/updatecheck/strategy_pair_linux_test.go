@@ -209,8 +209,22 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 		t.Skip("actual controller fixture paths not supplied")
 	}
 	a, _, review, raw := strategyPairFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	probe := func(image selfupdatejournal.BinaryImage, flag string) (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		started := time.Now()
+		out, err := a.probeStrategyReader(ctx, review, image, flag)
+		t.Logf("actual reader flag=%s elapsed=%s", flag, time.Since(started))
+		return out, err
+	}
+	seal := func() (*strategyPairProof, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		started := time.Now()
+		proof, err := a.sealStrategyPair(ctx, review)
+		t.Logf("actual pair seal elapsed=%s", time.Since(started))
+		return proof, err
+	}
 	current, err := os.ReadFile(currentPath)
 	if err != nil {
 		t.Fatal(err)
@@ -222,12 +236,12 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 	probeRoot := t.TempDir()
 	retainedFile(t, probeRoot, "current", current)
 	retainedFile(t, probeRoot, "old", old)
-	for _, test := range []struct{ flag, want string }{{"-strategy-lab-read-version", strconv.Itoa(StrategyLabReadVersion) + "\n"}, {"-self-update-private-snapshot-read-version", "3\n"}} {
-		got, err := a.probeStrategyReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "current"), SHA256: digestBytes(current)}, test.flag)
+	for _, test := range []struct{ flag, want string }{{"-strategy-lab-read-version", strconv.Itoa(StrategyLabReadVersion) + "\n"}, {"-self-update-private-snapshot-read-version", strconv.Itoa(PrivateSnapshotReadVersion) + "\n"}} {
+		got, err := probe(selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "current"), SHA256: digestBytes(current)}, test.flag)
 		if err != nil || got != test.want {
 			t.Fatalf("current actual %s: %q %v", test.flag, got, err)
 		}
-		if _, err := a.probeStrategyReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "old"), SHA256: digestBytes(old)}, test.flag); err == nil {
+		if _, err := probe(selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "old"), SHA256: digestBytes(old)}, test.flag); err == nil {
 			t.Fatal("old controller falsely advertised pair reader", test.flag)
 		}
 	}
@@ -243,7 +257,7 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 			review.Files[i].SHA256 = digestBytes(current)
 		}
 	}
-	proof, err := a.sealStrategyPair(ctx, review)
+	proof, err := seal()
 	if err != nil || proof == nil {
 		t.Fatal("actual compatible pair not admitted", err)
 	}
@@ -253,7 +267,7 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 			t.Fatal(err)
 		}
 		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", settled)
-		if _, err := a.sealStrategyPair(ctx, review); err != nil {
+		if _, err := seal(); err != nil {
 			t.Fatal("actual reader7 pair rejected settled schema5", err)
 		}
 		reader5, err := os.ReadFile(reader5Path)
@@ -263,7 +277,7 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 		retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", reader5)
 		review.OldExecutableSHA256 = digestBytes(reader5)
 		retainedFile(t, a.installation, "bin/razvilka", reader5)
-		if _, err := a.sealStrategyPair(ctx, review); !errors.Is(err, ErrStrategyStateAdmission) {
+		if _, err := seal(); !errors.Is(err, ErrStrategyStateAdmission) {
 			t.Fatal("actual standalone reader5 became a supervised pair reader", err)
 		}
 		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", raw)
@@ -271,7 +285,7 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 	retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", old)
 	review.OldExecutableSHA256 = digestBytes(old)
 	retainedFile(t, a.installation, "bin/razvilka", old)
-	if _, err := a.sealStrategyPair(ctx, review); !errors.Is(err, ErrStrategyStateAdmission) {
+	if _, err := seal(); !errors.Is(err, ErrStrategyStateAdmission) {
 		t.Fatal("actual old/new incompatible pair admitted", err)
 	}
 	got, err := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))

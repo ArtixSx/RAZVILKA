@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -37,7 +39,7 @@ func TestMain(m *testing.M) {
 		}
 		data, err := os.ReadFile(filepath.Join(filepath.Dir(binary), "native-fixture.json"))
 		var p nativeFileProfile
-		if err != nil || decodeFileProtocol(data, &p) != nil || (p.Scenario != "candidate-stopped-before" && p.Scenario != "candidate-stopped-after") {
+		if err != nil || decodeFileProtocol(data, &p) != nil || (p.Scenario != "candidate-stopped-before" && p.Scenario != "candidate-stopped-after" && p.Scenario != "candidate-stopped-strategy" && p.Scenario != "candidate-stopped-strategy-crash" && p.Scenario != "candidate-stopped-strategy-drift") {
 			os.Exit(92)
 		}
 		if flag.Set("test.run", "^TestNativeCandidateStoppedCompletionHelperFixture$") != nil {
@@ -48,6 +50,10 @@ func TestMain(m *testing.M) {
 	if len(os.Args) == 2 {
 		value := ""
 		switch os.Args[1] {
+		case "-strategy-lab-read-version":
+			value = strconv.Itoa(StrategyLabReadVersion)
+		case "-self-update-private-snapshot-read-version":
+			value = strconv.Itoa(PrivateSnapshotReadVersion)
 		case "-self-update-schema":
 			value = "2"
 		case "-component-update-schema", "-node-history-read-version":
@@ -165,7 +171,7 @@ func nativeFileAdapter(directory string, p nativeFileProfile) *SelfUpdateFileAda
 		return r.Stopped, err
 	}
 	a.admission = func(ctx context.Context, id, installationID string, sequence uint64, action, effect string, begin func() error) error {
-		if p.Scenario == "candidate-stopped-before" || p.Scenario == "candidate-stopped-after" {
+		if p.Scenario == "candidate-stopped-before" || p.Scenario == "candidate-stopped-after" || strings.HasPrefix(p.Scenario, "candidate-stopped-strategy") {
 			stop, present, err := operationgate.ReadSelfUpdateStop(ctx, p.Control)
 			if err != nil || !present {
 				return errors.Join(ErrFileProtocol, err)

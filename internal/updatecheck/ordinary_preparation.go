@@ -196,7 +196,7 @@ func (p *ordinaryPreparation) commandMatches(path string, args []string, effect 
 			return false
 		}
 		switch args[0] {
-		case "-version", "-self-update-schema", "-self-update-read-version", "-component-update-schema", "-node-history-read-version", "-native-enrollment-schema", "-subscription-schema":
+		case "-version", "-self-update-schema", "-self-update-read-version", "-component-update-schema", "-node-history-read-version", "-native-enrollment-schema", "-subscription-schema", "-dataplane-execution-read-version":
 			return true
 		}
 	case "ordinary-prepare-check":

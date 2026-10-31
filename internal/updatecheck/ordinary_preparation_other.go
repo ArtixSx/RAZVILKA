@@ -15,6 +15,9 @@ func (p *ordinaryPreparation) preflight(context.Context) error { return errOrdin
 func (p *ordinaryPreparation) capabilities(context.Context, string, int, int) error {
 	return errOrdinaryPreparation
 }
+func (p *ordinaryPreparation) metadata(context.Context, string, string) (string, error) {
+	return "", errOrdinaryPreparation
+}
 func (p *ordinaryPreparation) migrate(context.Context, *ownedfs.Root) error {
 	return errOrdinaryPreparation
 }

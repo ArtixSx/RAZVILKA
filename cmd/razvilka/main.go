@@ -66,6 +66,9 @@ func main() {
 }
 
 func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCode int) {
+	if handled, code := runExecutionReadCommand(os.Args[1:]); handled {
+		return code
+	}
 	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
 		os.Exit(code)
 	}
@@ -818,6 +821,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		"dns": *dnsStatePath,
 	}})
 	a.SelfUpdate.StrategyLabStatePath = *strategyLabStatePath
+	a.SelfUpdate.ExecutionHistoryReader = dataplane.InspectRetainedExecutionReadVersion
 	a.SelfUpdate.Directory = selfFileState.Helper.Directory
 	if selfFileState.Adapter != nil {
 		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
@@ -860,6 +864,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		log.Print("Cloudflare legacy copy locations disabled; existing bypasses are unchanged")
 	}
 	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
+	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
 	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
 	componentReadErr := checkComponentReadState(componentReadContext, a.Components.StateDir, app.ManagedComponentReadVersion)
 	cancelComponentRead()
@@ -1073,6 +1078,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		if err := a.WaitManagedStrategyCompatibility(nodeShutdownContext); err != nil {
 			log.Print("Managed NFQ compatibility completion remains unconfirmed; original operation was not released")
+		}
+		if err := a.WaitManagedStrategyProbes(nodeShutdownContext); err != nil {
+			log.Print("Managed NFQ probe cleanup remains unconfirmed; original resources were retained")
 		}
 		if err := a.WaitNodeAutofallback(nodeShutdownContext); err != nil {
 			log.Print("Node autofallback cleanup did not finish before shutdown")

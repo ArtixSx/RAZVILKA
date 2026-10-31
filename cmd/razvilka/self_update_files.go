@@ -34,7 +34,9 @@ func nativeSelfUpdateFileAdapter() app.SelfUpdateFileAdapter {
 	if runtime.GOOS != "linux" {
 		return nil
 	}
-	return updatecheck.NewSelfUpdateFileAdapterWithAuthority(selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
+	a := updatecheck.NewSelfUpdateFileAdapterWithAuthority(selfUpdateStopCheck, selfUpdateEffectAdmission, selfUpdateRuntimeInactive)
+	a.ExecutionHistoryReader = dataplane.InspectRetainedExecutionReadVersion
+	return a
 }
 
 func selfUpdateStopCheck(ctx context.Context, id string) (bool, error) {

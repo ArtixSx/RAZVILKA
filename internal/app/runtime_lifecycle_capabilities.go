@@ -82,6 +82,9 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 		if registration.ManagedCandidateProbe == "unknown" {
 			probe = unknownLifecycleOperation("managed-network-consumer-registration-unconfirmed")
 		}
+		if a.managedStrategyProbeRuntime() != nil {
+			probe = registeredLifecycleOperation(true, "original-managed-probe-consumer-requires-current-fleet-scope-and-runtime")
+		}
 		operations["native_validation"], operations["managed_candidate_probe"] = native, probe
 	}
 

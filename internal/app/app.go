@@ -155,8 +155,10 @@ type App struct {
 	StrategyLab                  *strategylab.Manager
 	ProxySidecarBoot             string // Actual factory choice for this process; never changed by settings writes.
 	strategyCompatibility        strategyCompatibilityState
+	strategyProbe                strategyProbeState
 	Components                   *components.Manager
 	ComponentHistory             *updatecheck.ComponentHistoryAdmission
+	ExecutionHistory             *updatecheck.ExecutionHistoryAdmission
 	managedNFQBundle             managedNFQBundleState
 	managedNFQListMu             sync.Mutex
 	managedNFQList               *ManagedNFQWSListRuntime
@@ -1266,6 +1268,10 @@ func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request)
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
 		defer cancel()
+		if a.Components != nil {
+			a.probeManagedStrategyCandidate(w, ctx, id, service, input.IPFamily)
+			return
+		}
 		evidence, err := a.StrategyLab.Probe(ctx, id, strategylab.ProbeTarget{ServiceID: service.ID, ProbeURL: service.ProbeURL, IPFamily: input.IPFamily})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
@@ -1310,7 +1316,7 @@ func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if input.Mode != "" && input.Mode != strategylab.ModeManual {
+	if input.Mode != "" && input.Mode != strategylab.ModeManual && (a.Components == nil || input.Mode != strategylab.ModePreferred && input.Mode != strategylab.ModeOnly) {
 		http.Error(w, "unsupported selection mode", http.StatusBadRequest)
 		return
 	}
@@ -1328,6 +1334,14 @@ func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "action": "reset"})
+		return
+	}
+	if a.Components != nil {
+		if input.Action != "" {
+			http.Error(w, "invalid selection action", http.StatusBadRequest)
+			return
+		}
+		a.selectManagedStrategyEvidence(w, r, input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID, input.Mode, input.Frozen)
 		return
 	}
 	selection, err := a.StrategyLab.Select(input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID, input.Frozen)
