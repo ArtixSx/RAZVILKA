@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -35,6 +36,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "-dataplane-execution-read-version" {
+		fmt.Println(dataplane.ExecutionReadVersion)
+		os.Exit(0)
+	}
 	// Actual supervisor ABI dispatch, before Go's flag parser. The production
 	// helper still validates protected original intent and fixed environment.
 	if len(os.Args) == 3 {
@@ -76,14 +81,18 @@ func (a *managedProbeNativeAdmission) WithStart(ctx context.Context, name string
 // held descriptor/tool graph, serial lease, socket, queue, TLS/HTTP criteria,
 // actual positive+negative packets and cleanup are the production consumers.
 func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
-	runManagedStrategyProbeNativeConsumer(t, false)
+	runManagedStrategyProbeNativeConsumer(t, false, false)
 }
 
 func TestManagedStrategyProbeNativeConsumerLateWaitCleanup(t *testing.T) {
-	runManagedStrategyProbeNativeConsumer(t, true)
+	runManagedStrategyProbeNativeConsumer(t, true, false)
 }
 
-func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
+func TestManagedStrategyProbeNativeAppHTTP(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, true)
+}
+
+func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
@@ -171,6 +180,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 	if err := store.SetSafeMode(false); err != nil {
 		t.Fatal(err)
 	}
+	// A real persisted draft revision, never an invented transaction number.
+	// The kernel plan protocol deliberately rejects unversioned revision zero.
+	if err := store.UpdateService("native", config.ServiceState{Route: "direct"}); err != nil {
+		t.Fatal(err)
+	}
 	lab, err := strategylab.New(filepath.Join(root, "strategy-lab.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -233,6 +247,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 	if err := lab.InstallManagedCompatibilityValidator(original, control, p, v, inactive); err != nil {
 		t.Fatal(err)
 	}
+	a.retainManagedNFQControl(control)
 	_ = inactive.Close()
 	if err := bootstrap.Close(); err != nil {
 		t.Fatal(err)
@@ -252,7 +267,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 	if err := completion.RetireKnown(original); err != nil {
 		t.Fatal(err)
 	}
-	manager := dataplane.New(filepath.Join(root, "dataplane"))
+	dataplaneRoot := filepath.Join(root, "dataplane")
+	if appHTTP {
+		dataplaneRoot = "/opt/razvilka/state/dataplane"
+	}
+	if err := os.MkdirAll(dataplaneRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manager := dataplane.New(dataplaneRoot)
 	manager.FreshProfile = a.FreshProfile
 	a.Dataplane = manager
 	adapter := dataplane.NewNFQWS2Adapter()
@@ -264,7 +286,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 		t.Fatal(err)
 	}
 	admission := &managedProbeNativeAdmission{}
+	var appPolicy *managedListPolicyOwner
 	current := func(c context.Context, p *dataplane.LANPolicyRuntimePlan) error {
+		if appHTTP {
+			if appPolicy == nil {
+				return dataplane.ErrNFQWSScopedOwner
+			}
+			return appPolicy.scopeCheck(c, p)
+		}
 		if admission.consumer == nil || p != nil {
 			return dataplane.ErrNFQWSScopedOwner
 		}
@@ -304,6 +333,24 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 	}
 	service := catalog.Service{ID: "native", Name: "Native isolated TLS", Domains: []string{"managed-probe.example"}, ProbeURL: "https://managed-probe.example/", Probes: []catalog.Probe{{ID: "primary", URL: "https://managed-probe.example/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"owned-native-service"}}}}}
 	a.Catalog = catalog.Catalog{Services: []catalog.Service{service}}
+	if appHTTP {
+		checks, err := manager.BindNetworkPolicyChecks(gate, inventory)
+		if err != nil {
+			t.Fatal("bind actual registered policy checks", err)
+		}
+		defer checks.Close()
+		// CI-only platform classification factory. Every retained owner below
+		// is the SAME actual protected tool/provider/control/registered consumer.
+		appPolicy = &managedListPolicyOwner{app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control}
+		appPolicy.self = appPolicy
+		a.managedListPolicy = appPolicy
+		r := &ManagedNFQWSListRuntime{policy: appPolicy, app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control, probe: consumer}
+		r.self = r
+		appPolicy.nfq, a.managedNFQList = r, r
+		release() // Each actual HTTP request must obtain its own new admission.
+		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty)
+		return
+	}
 	criteria, err := strategylab.ManagedProbeCriteriaDigest(service)
 	if err != nil {
 		t.Fatal(err)

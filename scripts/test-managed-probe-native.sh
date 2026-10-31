@@ -71,14 +71,25 @@ export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
 go test -race -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
 chmod 500 "$probe_work/app.test"
+printf '127.0.0.1 localhost\n8.8.8.8 managed-probe.example\n' > "$probe_work/hosts"
+chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-for probe_case in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup; do
+for probe_case in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP; do
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
   mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
+  # Bind the SAME compiled reader/consumer inode at the actual controller
+  # pathname. The real fleet/identity scanner remains in the HTTP admission.
+  mkdir -m 755 /opt/bin
+  touch /opt/bin/razvilka
+  chmod 500 /opt/bin/razvilka
+  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_WORK/app.test" /opt/bin/razvilka
+  # Production LookupNetIP uses the real resolver and this private mount;
+  # no supplied address/lookup callback bypasses catalogue DNS selection.
+  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_WORK/hosts" /etc/hosts
   # Register actual legacy table/proc inventories before the complete reader.
   # This unreferenced disposable chain loads the NFQUEUE target, sees no
   # packets, and is deleted before original App/Manager admission begins.
@@ -89,5 +100,5 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   exec "$@"
-' sh "$probe_work/app.test" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s
+' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s
 done

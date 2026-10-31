@@ -1189,7 +1189,9 @@ func (a *App) strategyLabSnapshot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
 		return
 	}
-	snapshot := a.StrategyLab.Snapshot()
+	// Observe only the original in-process epoch with this fresh request's
+	// bounded read context. Disk history never supplies live eligibility.
+	snapshot := a.StrategyLab.SnapshotWithContext(r.Context())
 	if a.strategyCompatibilityPending() {
 		snapshot.QuiescenceUnknown = true
 	}

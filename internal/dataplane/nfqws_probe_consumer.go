@@ -253,8 +253,11 @@ func (e *nfqwsProbeExecution) cleanupCurrent(ctx context.Context) error {
 
 func (r *ManagedNFQWSProbeConsumer) Execute(ctx context.Context, source *strategylab.CandidateProbeReview, epoch *strategylab.ManagedProbeEpoch, runtime *components.ManagedNFQWSRuntimeLease, service catalog.Service, revision uint64, guard func(context.Context) error) (strategylab.Evidence, *ManagedNFQWSProbeCompletion, error) {
 	var zero strategylab.Evidence
-	if r == nil || r.self != r || ctx == nil || source == nil || epoch == nil || runtime == nil || guard == nil || revision == 0 {
+	if r == nil || r.self != r || ctx == nil || source == nil || epoch == nil || runtime == nil || guard == nil {
 		return zero, nil, ErrNFQWSScopedOwner
+	}
+	if revision == 0 {
+		return zero, newManagedNFQWSProbeCompletion(runtime), fmt.Errorf("unversioned probe configuration: %w", ErrNFQWSScopedOwner)
 	}
 	ref, err := source.ManagedReference(ctx, runtime, r.control)
 	if err != nil {

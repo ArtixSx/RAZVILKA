@@ -6,10 +6,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
+
+func TestNFQWSProbeUnversionedConfigurationIsKnownBeforeEffect(t *testing.T) {
+	c := &ManagedNFQWSProbeConsumer{}
+	c.self = c
+	lease := &components.ManagedNFQWSRuntimeLease{}
+	_, completed, err := c.Execute(context.Background(), &strategylab.CandidateProbeReview{}, &strategylab.ManagedProbeEpoch{}, lease, catalog.Service{}, 0, func(context.Context) error {
+		t.Fatal("unversioned configuration reached source or effects")
+		return nil
+	})
+	if !errors.Is(err, ErrNFQWSScopedOwner) || completed == nil || completed.runtime != lease || c.Pending() {
+		t.Fatal("pre-effect refusal retained unknown resources", completed, err)
+	}
+}
 
 func TestNFQWSProbeConsumerRejectsDetachedOwnersAndCompletionCopies(t *testing.T) {
 	if c, err := NewManagedNFQWSProbeConsumer(New(t.TempDir()), &NetworkPolicyAdapter{}, &BackendInventory{}, &operationgate.ControlEpochReview{}, "unreviewed", netidentity.NewProcProvider(), context.Background()); err == nil || c != nil {
