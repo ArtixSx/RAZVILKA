@@ -79,6 +79,13 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	sha := hex.EncodeToString(hash[:])
 	anchor, _ := root.RootInfo()
 	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-format", "json", "-config", "/proc/self/fd/4"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	nativeLog, err := root.OpenFile("native-fixture.log", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nativeLog.Close()
+	cmd.Stdout = nativeLog
+	cmd.Stderr = nativeLog
 	child, err := reserveXraySelectedTCPProcessWait(ctx, cmd)
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +128,9 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	opening, err := r.observeDomainProcess(read)
 	if err != nil {
 		domainNativeProcessDiagnostics(t, r, read)
+		// This fixture contains only a blackhole outbound, no imported secrets.
+		output, _ := root.ReadLimited("native-fixture.log", 8192)
+		t.Log("actual blackhole Xray output", string(output))
 		t.Fatal("actual inherited process/config association", err)
 	}
 	if err := child.beginReservedWait(); err != nil {
@@ -183,6 +193,9 @@ func domainNativeProcessDiagnostics(t *testing.T, r *XrayDomainTCPExecutionResou
 	stat, statErr := proc.read(ctx, proc.child, "stat", 8192)
 	_, parent, group, parseErr := xraySelectedTCPStat(stat, r.child.pid)
 	t.Log("native stat", statErr, parseErr, "parent matches", parent == r.child.parent, "group matches", group == r.child.pid)
+	if parseErr != nil {
+		t.Logf("native stat kernel shape %q", stat)
+	}
 	image, imageErr := proc.domainKernelImage(ctx, r.definition.NetworkIdentity)
 	t.Log("native image", imageErr, "path matches", image.exe == r.executable.path, "inode matches", sameXrayDomainTCPFile(r.executable.info, image.executable), "argv matches", image.matches(r.child.image.args, r.executable.path, r.executable.info))
 	t.Log("native config FD", r.readDomainConfigFD(ctx, proc))

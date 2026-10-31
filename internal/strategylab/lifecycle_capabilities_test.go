@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sync"
 	"testing"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 func TestLifecycleRegistrationDoesNotPromoteDisabledOrOpaqueExecutors(t *testing.T) {
@@ -41,6 +43,11 @@ func TestLifecycleRegistrationReadsActualConfiguredSupervisedProvider(t *testing
 	if err := os.Chmod(filepath.Dir(approval.BinaryPath), 0700); err != nil {
 		t.Fatal(err)
 	}
+	control, err := operationgate.InitializeSelfUpdateControl(context.Background(), approval.ControlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval.InstallationID, approval.Sequence = control.InstallationID, control.Sequence
 	provider, err := NewSupervisedCompatibilityProvider(model.manager, approval)
 	if err != nil {
 		t.Fatal(err)

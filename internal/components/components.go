@@ -157,6 +157,7 @@ func Specs() []Spec {
 		// Fresh WARP profiles use the built-in generator; wgcf is optional for legacy account rebuilds.
 		{SchemaVersion: 1, ID: "warp-wg", Name: "WARP · WireGuard", Category: "tunnel", Package: "wireguard-tools", Provider: "opkg", Description: "Cloudflare WARP через WireGuard UDP", UseCase: "Бесплатный split-туннель для выбранных сервисов, когда UDP Cloudflare доступен.", Requirement: "Если handshake не проходит на 2408/500/1701/4500, используйте MASQUE или свой сервер.", Removable: true, Capabilities: []string{"wireguard", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 12, FlashMiB: 8, CPUClass: "light"}},
 		{SchemaVersion: 1, ID: "wireguard", Name: "WireGuard · свой сервер", Category: "tunnel", Package: "wireguard-tools", Provider: "opkg", Description: "Обычный WireGuard к вашему серверу", UseCase: "Свой VPS или домашний сервер с WireGuard: без регистрации Cloudflare.", Requirement: "Нужен ваш сервер WireGuard и поддержка WireGuard в ядре роутера. Пакет общий с WARP · WireGuard, поэтому здесь не удаляется.", Removable: false, Capabilities: []string{"wireguard", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 12, FlashMiB: 8, CPUClass: "light"}},
+		{SchemaVersion: 1, ID: "hev-socks5-tunnel", Name: "HEV SOCKS5 TUN", Category: "tool", Provider: "github-release", Repository: "https://github.com/heiher/hev-socks5-tunnel", Binary: "hev-socks5-tunnel", Archive: "binary", Description: "Проверенная версия отдельного SOCKS5 TUN процесса", UseCase: "Дополнительный TUN backend для управляемого SOCKS5 пути.", Requirement: "Установка не включает маршрут: необходимы SOCKS5 клиент, отдельный TUN и проверка среды. Версия закреплена на 2.17.1; доступны Linux amd64/arm64.", Capabilities: []string{"socks5-tun-sidecar"}, Budget: ResourceBudget{RAMMiB: 16, FlashMiB: 4, CPUClass: "light"}},
 		{SchemaVersion: 1, ID: "wgcf", Name: "Генератор WARP", Category: "tool", Provider: "github-release", Repository: "https://github.com/ViRb3/wgcf", Binary: "wgcf", Archive: "binary", Description: "Создаёт профиль Cloudflare WARP", UseCase: "Только регистрация аккаунта и генерация ключей для WARP WireGuard.", Requirement: "Это инструмент, а не самостоятельный обход; требуется компонент WARP · WireGuard.", Removable: true, Capabilities: []string{"warp-registration", "wireguard-profile"}, Budget: ResourceBudget{RAMMiB: 8, FlashMiB: 12, CPUClass: "light"}},
 		{SchemaVersion: 1, ID: "amneziawg", Name: "AmneziaWG · свой сервер", Category: "tunnel", Provider: "platform", Repository: "https://github.com/amnezia-vpn/amneziawg-openwrt", Description: "DPI-устойчивый WireGuard-совместимый туннель", UseCase: "Для полной блокировки и сетей, где обычный WireGuard распознаётся или режется.", Requirement: "Нужен совместимый AmneziaWG-сервер, загруженный модуль amneziawg для текущего ядра роутера и проверенный awg CLI с поддержкой версии профиля.", Capabilities: []string{"amneziawg", "tun", "split-routing"}, Claims: []Claim{{Kind: "interface", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 16, CPUClass: "medium"}},
 	}
@@ -216,6 +217,13 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 			view.CanRemove = view.Installed && spec.Removable && view.InstalledVersionSource == "receipt"
 			if view.Installed && view.InstalledVersionSource != "receipt" {
 				view.LifecycleBlockReason = "Файл установлен вне RAZVILKA; управляемая установка и удаление не подтверждены."
+			}
+			if spec.ID == "hev-socks5-tunnel" {
+				if err := m.hevReleaseIdle(); err != nil {
+					view.CanInstall, view.CanUpdate, view.CanRemove = false, false, false
+					view.State = "recovery-required"
+					view.LifecycleBlockReason = "Установка HEV требует восстановления исходного журнала; автоматический запуск запрещён."
+				}
 			}
 			m.attachLifecycleVerification(&view)
 			views = append(views, view)

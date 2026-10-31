@@ -155,6 +155,10 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 	})
 	cancelRequest()
 	if !entered || !errors.Is(err, context.Canceled) {
+		if output, readErr := resource.root.ReadLimited("xray-domain.log", 8192); readErr == nil {
+			// Only this isolated generated fixture's process log; no imported config.
+			t.Log("actual fixture Xray output", string(output))
+		}
 		if resource.child != nil {
 			marker := &xrayDomainTCPProcessRead{resource: resource, process: resource.child}
 			marker.self = marker

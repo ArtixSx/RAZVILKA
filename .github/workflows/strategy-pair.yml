@@ -92,3 +92,11 @@ jobs:
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -race -count=1 ./internal/dataplane -run '^TestHEVOwnedNativeTUNLifecycle$' -v
+      - name: HEV binary and receipt crash recovery with official pinned asset
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -race -count=1 ./internal/components -run '^TestHEVRelease' -v
