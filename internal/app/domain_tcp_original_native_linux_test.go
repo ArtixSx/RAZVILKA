@@ -344,6 +344,16 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		if err := owner.CurrentSyntheticMapping(original, mapping); err == nil {
 			return errors.New("stopped owner still grants DNS publication")
 		}
+		// The client genuinely retains the earlier DNS answer. A fresh SYN after
+		// original capture/native shutdown must use restored standby forwarding,
+		// preserving the actual client tuple without starting another proxy.
+		late := peers.clientRequest(t, original, "selected", published.Answer)
+		if late.Source != domainOriginalClient || late.Marker != "native-domain-service" {
+			return fmt.Errorf("late SYN through retained synthetic address lost standby baseline: %+v", late)
+		}
+		if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+			return errors.New("late SYN restarted a native runtime")
+		}
 		succeeded = true
 		return nil
 	})
