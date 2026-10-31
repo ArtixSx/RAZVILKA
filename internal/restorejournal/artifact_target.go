@@ -88,7 +88,7 @@ func openArtifactExecutableTarget(path, artifacts string, existing bool) (*Artif
 		_ = root.Close()
 		return nil, ErrConflict
 	}
-	f, err := openFileTargetMode(path, existing, 0755)
+	f, err := openFileTargetLease(path, existing, 0755)
 	if err != nil {
 		_ = root.Close()
 		return nil, err
@@ -101,7 +101,11 @@ func openArtifactExecutableTarget(path, artifacts string, existing bool) (*Artif
 		_ = root.Close()
 		return nil, ErrUnavailable
 	}
-	return &ArtifactFileTarget{file: f, artifacts: root, artifactPath: artifacts, artifactOwner: info, targetPath: full, targetOwner: parent}, nil
+	t := &ArtifactFileTarget{file: f, artifacts: root, artifactPath: artifacts, artifactOwner: info, targetPath: full, targetOwner: parent}
+	if _, err := t.Read(context.Background()); err != nil {
+		return nil, errors.Join(err, t.Close())
+	}
+	return t, nil
 }
 func (t *ArtifactFileTarget) Binding() string {
 	return sum([]byte("artifact-file-v1:0755\x00" + t.file.Binding() + "\x00" + t.artifactPath))

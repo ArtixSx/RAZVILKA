@@ -82,6 +82,24 @@ func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
 	return openFileTargetMode(path, existingOnly, 0600)
 }
 func openFileTargetMode(path string, existingOnly bool, mode os.FileMode) (*FileTarget, error) {
+	f, err := openFileTargetLease(path, existingOnly, mode)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Read(context.Background()); err != nil {
+		closeErr := f.Close()
+		if existingOnly && closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
+	}
+	return f, nil
+}
+
+// Only typed adapters use this constructor: it acquires the exact same writer
+// lease without assuming a byte-image format. The caller must validate the
+// actual target with its own bounded reader before publishing the adapter.
+func openFileTargetLease(path string, existingOnly bool, mode os.FileMode) (*FileTarget, error) {
 	full, err := targetPath(path)
 	if err != nil {
 		return nil, err
@@ -145,13 +163,6 @@ func openFileTargetMode(path string, existingOnly bool, mode os.FileMode) (*File
 			return err
 		}
 		return f.checkExistingLease()
-	}
-	if _, err := f.Read(context.Background()); err != nil {
-		closeErr := f.Close()
-		if existingOnly && closeErr != nil {
-			return nil, errors.Join(err, closeErr)
-		}
-		return nil, err
 	}
 	return f, nil
 }
