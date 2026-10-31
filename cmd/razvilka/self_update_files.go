@@ -423,7 +423,7 @@ func independentSelfUpdateFences(ctx context.Context, configPath, dataplaneRoot 
 	if err := checkNFQWS2RecoveryJournals(dataplaneRoot); err != nil {
 		return err
 	}
-	for _, generation := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
+	for _, generation := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1", "private-restore-strategylab-v1"} {
 		path := filepath.Join(filepath.Dir(configPath), generation)
 		root, err := ownedfs.Open(path)
 		if errors.Is(err, os.ErrNotExist) {

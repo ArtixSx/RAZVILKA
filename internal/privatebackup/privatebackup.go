@@ -20,6 +20,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 const (
@@ -66,6 +67,7 @@ type Payload struct {
 	NodeSnapshot         *nodestore.PrivateSnapshot      `json:"node_snapshot,omitempty"`
 	NativeEnrollment     *nativeenrollment.Snapshot      `json:"native_enrollment,omitempty"`
 	SubscriptionSnapshot *providerfeed.PrivateSnapshot   `json:"subscription_snapshot,omitempty"`
+	StrategyLabSnapshot  *strategylab.PrivateSnapshot    `json:"strategy_lab_snapshot,omitempty"`
 	Devices              []devices.Device                `json:"devices,omitempty"`
 	Digest               string                          `json:"digest"`
 }
@@ -220,6 +222,15 @@ func Validate(payload Payload) error {
 			return errors.New("invalid private native enrollment snapshot")
 		}
 		total += len(payload.NativeEnrollment.Content)
+		if total > MaxPayload {
+			return errors.New("private backup data exceeds safety limit")
+		}
+	}
+	if payload.StrategyLabSnapshot != nil {
+		if strategylab.ValidatePrivateSnapshot(*payload.StrategyLabSnapshot) != nil {
+			return errors.New("invalid private StrategyLab snapshot")
+		}
+		total += len(payload.StrategyLabSnapshot.Content)
 		if total > MaxPayload {
 			return errors.New("private backup data exceeds safety limit")
 		}

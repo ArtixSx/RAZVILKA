@@ -130,7 +130,7 @@ func preparePrivateRecoveries(configPath, customPath, devicesPath, stageRoot, pr
 	if len(warpOverride) == 0 {
 		return leas, current, legacyOutcome, currentOutcome, nil
 	}
-	if len(warpOverride) != 1 || warpOverride[0] == "" {
+	if len(warpOverride) > 2 || warpOverride[0] == "" || len(warpOverride) == 2 && warpOverride[1] == "" {
 		current.Close()
 		leas.Close()
 		return nil, nil, restorejournal.Blocked, restorejournal.Blocked, restorejournal.ErrInvalid
@@ -153,5 +153,32 @@ func preparePrivateRecoveries(configPath, customPath, devicesPath, stageRoot, pr
 	if nativeOutcome != restorejournal.Clean {
 		legacyOutcome = nativeOutcome
 	}
-	return leas, feeds, legacyOutcome, feedOutcome, nil
+	if len(warpOverride) == 1 {
+		return leas, feeds, legacyOutcome, feedOutcome, nil
+	}
+	leas.coordinators = append(leas.coordinators, feeds)
+	providerRoot, err := cloudflareStorePath(configPath, providerOverride)
+	if err != nil {
+		leas.Close()
+		return nil, nil, legacyOutcome, restorejournal.Blocked, err
+	}
+	nodeRoot, err := nodeStorePath(configPath, nodeOverride)
+	if err != nil {
+		leas.Close()
+		return nil, nil, legacyOutcome, restorejournal.Blocked, err
+	}
+	strategy, strategyOutcome, err := openPrivateRecoveryGate(ctx, privaterestore.Layout{
+		Config: configPath, CustomServices: customPath, Devices: devicesPath, StageRoot: stageRoot,
+		ProviderRoot: providerRoot, NodeRoot: nodeRoot, WarpRoot: warpOverride[0],
+		FeedRoot: filepath.Join(filepath.Dir(configPath), "subscriptions-private"), StrategyLabPath: warpOverride[1],
+		JournalRoot: filepath.Join(filepath.Dir(configPath), "private-restore-strategylab-v1"),
+	})
+	if err != nil {
+		leas.Close()
+		return nil, nil, legacyOutcome, restorejournal.Blocked, err
+	}
+	if feedOutcome != restorejournal.Clean {
+		legacyOutcome = feedOutcome
+	}
+	return leas, strategy, legacyOutcome, strategyOutcome, nil
 }

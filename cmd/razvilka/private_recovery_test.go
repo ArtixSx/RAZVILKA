@@ -138,7 +138,7 @@ func TestPrivateRecoveryMaintenanceSettlesJournalWithoutLoadingStores(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 4 || entries[0].Name() != "private-restore" || entries[1].Name() != "private-restore-feeds-v1" || entries[2].Name() != "private-restore-native-v1" || entries[3].Name() != "private-restore-nodes-v1" {
+	if len(entries) != 5 || entries[0].Name() != "private-restore" || entries[1].Name() != "private-restore-feeds-v1" || entries[2].Name() != "private-restore-native-v1" || entries[3].Name() != "private-restore-nodes-v1" || entries[4].Name() != "private-restore-strategylab-v1" {
 		t.Fatalf("maintenance recovery loaded or created application stores: %v", entries)
 	}
 }

@@ -228,7 +228,7 @@ func runOperator(ctx context.Context, p paths, pins incident, beforeWrite func()
 func layouts(p paths) []privaterestore.Layout {
 	base := privaterestore.Layout{Config: filepath.Join(p.configDir, "config.json"), CustomServices: filepath.Join(p.configDir, "custom-services.json"), Devices: filepath.Join(p.configDir, "devices.json"), StageRoot: filepath.Join(p.state, "staging"), ProviderRoot: filepath.Join(p.configDir, "cloudflare-private")}
 	var result []privaterestore.Layout
-	for i, name := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
+	for i, name := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1", "private-restore-strategylab-v1"} {
 		base.JournalRoot = filepath.Join(p.configDir, name)
 		if i >= 1 {
 			base.NodeRoot = filepath.Join(p.configDir, "nodes-private")
@@ -238,6 +238,9 @@ func layouts(p paths) []privaterestore.Layout {
 		}
 		if i >= 3 {
 			base.FeedRoot = filepath.Join(p.configDir, "subscriptions-private")
+		}
+		if i >= 4 {
+			base.StrategyLabPath = filepath.Join(p.state, "strategy-lab.json")
 		}
 		result = append(result, base)
 	}

@@ -92,7 +92,7 @@ if [ -e "$LAYOUT_MARKER" ]; then
         echo "Candidate layout ownership is invalid; existing state preserved" >&2; exit 1;
     }
 else
-    for JOURNAL in "$STATE_DIR/dataplane" "$STATE_DIR/usque-repair" "$CONFIG_DIR/private-restore" "$CONFIG_DIR/private-restore-nodes-v1" "$CONFIG_DIR/private-restore-native-v1" "$CONFIG_DIR/private-restore-feeds-v1"; do
+    for JOURNAL in "$STATE_DIR/dataplane" "$STATE_DIR/usque-repair" "$CONFIG_DIR/private-restore" "$CONFIG_DIR/private-restore-nodes-v1" "$CONFIG_DIR/private-restore-native-v1" "$CONFIG_DIR/private-restore-feeds-v1" "$CONFIG_DIR/private-restore-strategylab-v1"; do
         if [ -e "$JOURNAL" ]; then
             echo "Unowned candidate recovery state exists; existing state preserved" >&2
             exit 1

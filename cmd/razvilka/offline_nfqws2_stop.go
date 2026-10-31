@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 type offlineNFQWS2StopPaths struct {
+	strategyLab                                     string
 	config, customServices, devices, stage, backups string
 	cloudflare, nodes, warp, dataplane, dns         string
 	componentState, componentBin, componentInit     string
@@ -121,7 +123,16 @@ func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPat
 	layout := privaterestore.Layout{Config: paths.config, CustomServices: paths.customServices, Devices: paths.devices, StageRoot: paths.stage, ProviderRoot: providerRoot}
 	leases := &privateRecoveryLeases{}
 	var current *privaterestore.Coordinator
-	for i, generation := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
+	generations := []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"}
+	if paths.strategyLab != "" {
+		generations = append(generations, "private-restore-strategylab-v1")
+	} else if _, err := os.Lstat(filepath.Join(base, "private-restore-strategylab-v1")); !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, errors.New("StrategyLab recovery binding required")
+	}
+	for i, generation := range generations {
+		if i >= 4 {
+			layout.StrategyLabPath = paths.strategyLab
+		}
 		layout.JournalRoot = filepath.Join(base, generation)
 		if i >= 1 {
 			layout.NodeRoot = nodeRoot

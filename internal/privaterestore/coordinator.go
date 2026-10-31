@@ -16,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 var ErrRuntimeStarted = errors.New("private offline restore is unavailable after runtime handover")
@@ -188,6 +189,9 @@ func openCoordinatorMode(ctx context.Context, layout Layout, recoverTargets, exi
 	}
 	if layout.FeedRoot != "" {
 		add("subscriptions", func() (managedTarget, error) { return providerfeed.OpenRestoreTarget(layout.FeedRoot) })
+	}
+	if layout.StrategyLabPath != "" {
+		add("strategy_lab", func() (managedTarget, error) { return strategylab.OpenRestoreTarget(layout.StrategyLabPath) })
 	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {

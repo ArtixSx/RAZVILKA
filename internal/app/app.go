@@ -4765,6 +4765,7 @@ type privateBackupPreviewResult struct {
 	Warnings         []string                  `json:"warnings"`
 	DraftOnly        bool                      `json:"draft_only"`
 	RestoresAccount  bool                      `json:"restores_account"`
+	StrategyLab      bool                      `json:"strategy_lab"`
 	NativeEnrollment bool                      `json:"native_enrollment"`
 	Subscriptions    int                       `json:"subscriptions"`
 	ServicePolicies  int                       `json:"service_policies"`
@@ -4808,6 +4809,14 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		payload.NodeSnapshot = nodes
+	}
+	if a.StrategyLab != nil {
+		snapshot, err := a.StrategyLab.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private StrategyLab state is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.StrategyLabSnapshot = snapshot
 	}
 	if a.NodeFeeds != nil {
 		feeds, err := a.NodeFeeds.ExportPrivateIfPresent(r.Context())
@@ -4964,6 +4973,9 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	if payload.StrategyLabSnapshot != nil && a.StrategyLab == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит StrategyLab, но хранилище недоступно. Импорт не начат.")
+	}
 	if payload.SubscriptionSnapshot != nil && (a.NodeFeeds == nil || !a.NodeFeeds.Persistent()) {
 		return privateBackupPreviewResult{}, errors.New("Архив содержит подписки, но их приватное хранилище недоступно. Импорт не начат.")
 	}
@@ -4989,6 +5001,10 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	}
 	if err := privatebackup.Validate(payload); err != nil {
 		return preview, err
+	}
+	if payload.StrategyLabSnapshot != nil {
+		preview.StrategyLab = true
+		preview.Warnings = append(preview.Warnings, "Текущее состояние StrategyLab заменится состоянием архива с сохранением его истории; восстановленные кандидаты требуют новой проверки. Неоднозначное или работающее состояние остановит импорт.")
 	}
 	if payload.NativeEnrollment != nil {
 		preview.NativeEnrollment = true

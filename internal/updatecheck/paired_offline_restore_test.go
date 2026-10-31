@@ -21,6 +21,8 @@ func offlineRestoreFixture(t *testing.T, large bool) (*priorArchiveFixture, self
 	retainedFile(t, f.installation, "etc/init.d/S99artem-flow", []byte("old legacy Start hook"))
 	retainedFile(t, f.installation, "razvilka/log/old.log", []byte("prior log"))
 	retainedFile(t, f.installation, "etc/razvilka/prior-only/unknown", []byte("opaque prior application data"))
+	retainedFile(t, f.installation, "razvilka/state/strategy-lab.json", []byte("prior StrategyLab must not replay"))
+	retainedFile(t, f.installation, "etc/razvilka/private-restore-strategylab-v1/current.json", []byte("prior StrategyLab journal"))
 	digest, err := f.capture(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -29,6 +31,8 @@ func offlineRestoreFixture(t *testing.T, large bool) (*priorArchiveFixture, self
 	r.Schema, r.Phase = selfupdatejournal.PairedSchema, "paired-prepared"
 	r.Paired = &selfupdatejournal.PairedBinding{ManifestSHA256: digest, PreparedSHA256: f.binding.ReceiptSHA256, ReviewSHA256: f.binding.ReviewSHA256, InstallationID: f.binding.InstallationID, Sequence: f.binding.Sequence, Revision: f.binding.Revision}
 	for path, data := range map[string][]byte{
+		"razvilka/state/strategy-lab.json":                         []byte("current StrategyLab unknown/finalizing generation"),
+		"etc/razvilka/private-restore-strategylab-v1/current.json": []byte("current StrategyLab restore fence"),
 		"bin/razvilka":                                                []byte("new executable"),
 		"etc/init.d/S99razvilka":                                      []byte("new active init"),
 		"etc/init.d/S99artem-flow":                                    []byte("new active legacy init"),
@@ -107,6 +111,8 @@ func TestPairedOfflineRestoreStreamsFullPairAndRetainsCurrentIndependentState(t 
 		t.Fatal("complete pair was not restored", effects)
 	}
 	for path, expected := range map[string][]byte{
+		"razvilka/state/strategy-lab.json":                         []byte("current StrategyLab unknown/finalizing generation"),
+		"etc/razvilka/private-restore-strategylab-v1/current.json": []byte("current StrategyLab restore fence"),
 		"bin/razvilka":                                                bytes.Repeat([]byte("controller bytes\n"), (5<<20)/17+1),
 		"etc/init.d/S99razvilka":                                      []byte(pairedOfflineInitGuard),
 		"etc/init.d/S99artem-flow":                                    []byte(pairedOfflineInitGuard),

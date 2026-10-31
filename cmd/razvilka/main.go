@@ -327,7 +327,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if *stopOwnedRoutes {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{
+		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
 			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
 			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
 			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
@@ -353,7 +353,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 	}
 	if *recoverPrivateRestore {
-		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 		if err != nil {
 			log.Fatal("private draft recovery gate: ", err)
 		}
@@ -454,7 +454,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if *checkOnly || *migrateConfig {
 		if *migrateConfig {
-			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 			if err != nil {
 				log.Fatal("private draft recovery gate: ", err)
 			}
@@ -481,7 +481,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 
 	// Private draft recovery precedes ALL Store loads, token creation and any
 	// runtime initialization. Keep the OS journal lease until server shutdown.
-	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 	if err != nil {
 		log.Fatal("private draft recovery gate: ", err)
 	}

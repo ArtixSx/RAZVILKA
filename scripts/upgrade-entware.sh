@@ -424,7 +424,8 @@ require_native_enrollment_schema() {
 	fi
   SUBSCRIPTION_REQUIRED=0
   for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
-    "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
+    "$APPDIR/private-restore-feeds-v1/restore.private.json" \
+    "$APPDIR/private-restore-strategylab-v1/restore.private.json"; do
     if [ -e "$SUBSCRIPTION_STATE" ] || [ -L "$SUBSCRIPTION_STATE" ]; then
       [ -f "$SUBSCRIPTION_STATE" ] && [ ! -L "$SUBSCRIPTION_STATE" ] || { echo "Private subscription state is unsafe; installation unchanged" >&2; return 1; }
       SUBSCRIPTION_REQUIRED=1
