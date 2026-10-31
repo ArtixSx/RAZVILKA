@@ -23,7 +23,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
-	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/nativecheckfixture"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -90,9 +89,13 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 	if err := history.CheckWrite(context.Background(), nodestore.ExactHistoryReadVersion); err != nil {
 		t.Fatalf("actual original controller history admission: %v", err)
 	}
-	a := &App{Store: store, Nodes: nodes, FreshProfile: checker.FreshProfile, NodeChecker: checker, NodeCheckers: map[string]dataplane.NodeChecker{"xray": checker}, NodeHistoryWriteGuard: history.CheckWrite, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Fixture", ProbeURL: fixture.ProbeURL, Strategy: []string{"xray"}}}}, EngineInventory: func() []engine.Status {
-		return []engine.Status{{ID: "xray", Installed: true, BinaryPath: fixture.Binary}}
-	}}
+	a := &App{Store: store, Nodes: nodes, FreshProfile: checker.FreshProfile, NodeChecker: checker, NodeCheckers: map[string]dataplane.NodeChecker{"xray": checker}, NodeHistoryWriteGuard: history.CheckWrite, Catalog: catalog.Catalog{Services: []catalog.Service{{ID: "telegram", Name: "Fixture", ProbeURL: fixture.ProbeURL, Strategy: []string{"xray"}}}}}
+	for _, id := range ids {
+		selected, err := a.compatibleNodeEngine(context.Background(), "sing-box", id)
+		if err != nil || selected != "xray" {
+			t.Fatalf("actual installed inventory/canonical profile dispatch failed: engine=%s error=%v", selected, err)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.StartNodeChecks(ctx)
 	t.Cleanup(func() {

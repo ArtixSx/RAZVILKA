@@ -35,6 +35,11 @@ if unshare --net --mount sh -eu -c '
  mkdir -p /opt/bin
  cp "$1/app.test" /opt/bin/razvilka
  chmod 0755 /opt/bin/razvilka
+ # Actual route inventory uses the production detector, not the presentation
+ # inventory test seam. Install the same reviewed bytes at its real fixed path.
+ cp "$RAZVILKA_XRAY_NATIVE" /opt/bin/xray
+ chmod 0555 /opt/bin/xray
+ export RAZVILKA_XRAY_NATIVE=/opt/bin/xray
  exec /opt/bin/razvilka -test.run "^TestNativeVLESSQueueHTTPPerformance$" -test.v -test.timeout=25m
 ' sh "$tmp" > "$RAZVILKA_NODE_PERF_OUTPUT/native-performance.log" 2>&1; then
  cat "$RAZVILKA_NODE_PERF_OUTPUT/native-performance.log"
