@@ -20,6 +20,7 @@ type componentAdmission struct {
 	inspect, stop          bool
 	transaction, component string
 	hevRepair              *components.Manager
+	mihomoRepair           *components.Manager
 }
 
 // InitializeComponentRecoveryGate runs before collectors, HTTP and recovery.
@@ -63,6 +64,12 @@ func (a *App) initializeComponentRecoveryGate(fixedStateRoot string) error {
 				return errors.Join(errComponentRecovery, err)
 			}
 		}
+		if err := a.Components.CheckMihomoReleaseIdle(ctx); err != nil {
+			scope, ok := ctx.Value(componentAdmissionKey{}).(componentAdmission)
+			if !ok || !scope.inspect && !scope.stop && scope.mihomoRepair != a.Components {
+				return errors.Join(errComponentRecovery, err)
+			}
+		}
 		state, pending, err := a.Components.PendingManagedUpdate()
 		if !pending && err == nil {
 			return nil
@@ -85,6 +92,9 @@ func (a *App) PendingComponentRecovery() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if a.Components.CheckHEVReleaseIdle(ctx) != nil {
+		return true
+	}
+	if a.Components.CheckMihomoReleaseIdle(ctx) != nil {
 		return true
 	}
 	_, pending, err := a.Components.PendingManagedUpdate()

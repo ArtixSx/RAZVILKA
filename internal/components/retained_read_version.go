@@ -198,6 +198,13 @@ func InspectRetainedManagedUpdateReadVersion(ctx context.Context, stateDirectory
 	if hevPresent && version < HEVReleaseReadVersion {
 		version = HEVReleaseReadVersion
 	}
+	mihomoPresent, mihomoErr := inspectMihomoRetained(ctx, stateDirectory, hash)
+	if mihomoErr != nil {
+		return 0, "", mihomoErr
+	}
+	if mihomoPresent && version < MihomoReleaseReadVersion {
+		version = MihomoReleaseReadVersion
+	}
 	closing, closeErr := os.Lstat(stateDirectory)
 	if closeErr != nil || !os.SameFile(info, closing) || root.Check("update-journal") != nil || ctx.Err() != nil {
 		return 0, "", ErrRetainedManagedUpdate

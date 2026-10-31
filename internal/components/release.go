@@ -143,6 +143,9 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 }
 
 func (m *Manager) latestRelease(ctx context.Context, spec Spec) (releaseInfo, error) {
+	if spec.ID == "mihomo" {
+		return mihomoPinnedRelease(m.Arch)
+	}
 	if spec.ID == "hev-socks5-tunnel" {
 		return hevPinnedRelease(spec, m.Arch)
 	}
@@ -201,6 +204,9 @@ func releaseAssetName(spec Spec, version, architecture string) (string, error) {
 }
 
 func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error) {
+	if spec.ID == "mihomo" {
+		return Result{Component: spec.ID, Action: "install"}, NoMutation(errors.New("Mihomo installation requires ApplyMihomoGuarded original-owner admission"))
+	}
 	if spec.ID == "hev-socks5-tunnel" {
 		return Result{Component: spec.ID, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
 	}
@@ -449,6 +455,10 @@ func externalInstalledVersionContext(ctx context.Context, path string) string {
 // the executable's own output, supplied the version, so callers need not hash
 // the binary a second time.
 func externalVersionContext(ctx context.Context, path string) (string, bool) {
+	if filepath.Base(path) == "mihomo" {
+		version := mihomoInstalledReceiptVersion(ctx, path)
+		return version, version != ""
+	}
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return "", false

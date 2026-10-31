@@ -86,7 +86,13 @@ func hevRetainedHash(value string) bool {
 }
 
 func inspectHEVRetained(ctx context.Context, stateDirectory string, seal io.Writer) (present bool, err error) {
-	path := filepath.Join(stateDirectory, "hev-release-v1")
+	return inspectReleaseRetained(ctx, stateDirectory, "hev-release-v1", validHEVRetainedJournal, seal)
+}
+
+// Both closed release formats use the same original private journal container;
+// the caller supplies the format-specific image validator, never import paths.
+func inspectReleaseRetained(ctx context.Context, stateDirectory, journalName string, validJournal func([]byte) bool, seal io.Writer) (present bool, err error) {
+	path := filepath.Join(stateDirectory, journalName)
 	initial, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -114,7 +120,7 @@ func inspectHEVRetained(ctx context.Context, stateDirectory string, seal io.Writ
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	observed := map[string]os.FileInfo{}
-	fmt.Fprintf(seal, "hev-release-v1\x00%s\x00%d\x00", owner, initial.Mode())
+	fmt.Fprintf(seal, "%s\x00%s\x00%d\x00", journalName, owner, initial.Mode())
 	markerFound := false
 	for _, entry := range entries {
 		if ctx.Err() != nil || entry.Name() != ".restore.lock" && entry.Name() != "restore.private.json" {
@@ -144,7 +150,7 @@ func inspectHEVRetained(ctx context.Context, stateDirectory string, seal io.Writ
 				return false, ErrRetainedManagedUpdate
 			}
 			markerFound = true
-		} else if !validHEVRetainedJournal(raw) {
+		} else if !validJournal(raw) {
 			return false, ErrRetainedManagedUpdate
 		}
 		fmt.Fprintf(seal, "%s\x00%s\x00%d\x00%d\x00%d\x00", entry.Name(), owner, before.Mode(), before.Size(), before.ModTime().UnixNano())

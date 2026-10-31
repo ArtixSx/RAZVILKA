@@ -7,6 +7,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
-func verifyMihomoArtifactRelease(context.Context, string, restorejournal.Image) error {
+func verifyMihomoArtifactRelease(context.Context, string, restorejournal.Image, func(context.Context, func() error) error) error {
 	return restorejournal.ErrUnavailable
 }

@@ -36,8 +36,8 @@ func (w *mihomoVersionOutput) Write(p []byte) (int, error) {
 // A version command must execute the SAME fully verified FD. The name is
 // observed at bookends only; neither directory nor inode replacement can
 // redirect exec to different bytes between hashing and Start.
-func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image restorejournal.Image) (err error) {
-	if parent == nil {
+func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image restorejournal.Image, start func(context.Context, func() error) error) (err error) {
+	if parent == nil || start == nil {
 		return restorejournal.ErrInvalid
 	}
 	ref, err := mihomoArtifactReferenceOf(image)
@@ -101,9 +101,25 @@ func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image
 	cmd.WaitDelay = time.Second
 	var output mihomoVersionOutput
 	cmd.Stdout, cmd.Stderr = &output, &output
-	// Run has exactly one Start/Wait; parent retains the same artifact FD until
-	// it has reaped this metadata-only process and observed both bookends.
-	runErr := cmd.Run()
+	// Only the actual Start syscall enters the original control barrier. File
+	// hashing and the sole Wait remain outside it, so Stop need not wait on IO.
+	started, called := false, false
+	startErr := start(ctx, func() error {
+		if called {
+			return restorejournal.ErrInvalid
+		}
+		called = true
+		e := cmd.Start()
+		started = e == nil
+		return e
+	})
+	if !started {
+		return errors.Join(startErr, restorejournal.ErrUnavailable)
+	}
+	if startErr != nil {
+		_ = cmd.Process.Kill()
+	}
+	runErr := errors.Join(startErr, cmd.Wait())
 	if err := errors.Join(runErr, current()); err != nil {
 		return err
 	}

@@ -4,4 +4,7 @@ package components
 
 import "os"
 
-func mihomoArtifactOwner(os.FileInfo) bool { return false }
+func mihomoInstalledOwner(os.FileInfo) bool { return false }
+
+func mihomoArtifactOwner(os.FileInfo) bool  { return false }
+func mihomoFileIdentity(os.FileInfo) string { return "" }

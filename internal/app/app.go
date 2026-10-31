@@ -602,6 +602,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
 	mux.HandleFunc(hevRecoveryPath, a.hevRecovery)
+	mux.HandleFunc(mihomoRecoveryPath, a.mihomoRecovery)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	a.registerWireGuardProfileRoutes(mux)
@@ -1559,6 +1560,8 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		result, err = a.installInitialNFQWS(ctx)
 	} else if id == "hev-socks5-tunnel" {
 		result, err = a.installHEV(ctx)
+	} else if id == "mihomo" {
+		result, err = a.installMihomo(ctx)
 	} else {
 		result, err = a.Components.Apply(ctx, id)
 	}

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ManagedComponentReadVersion   = components.HEVReleaseReadVersion
+	ManagedComponentReadVersion   = components.MihomoReleaseReadVersion
 	managedComponentsState        = installpath.State + "/components"
 	managedNFQBundlePlanPath      = "/api/v1/components/nfqws2/managed-bundle/plan"
 	managedNFQBundleInstallPath   = "/api/v1/components/nfqws2/managed-bundle/install"

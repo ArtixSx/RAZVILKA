@@ -80,7 +80,7 @@ func (a *App) scopedRuntimeOperation(ctx context.Context) (context.Context, func
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath {
+		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath || r.URL.Path == mihomoRecoveryPath {
 			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return

@@ -410,6 +410,7 @@ function engineLifecyclePresentation(engine) {
  const lifecycle=engine?.lifecycle;
  if(lifecycle?.schema!==1||!lifecycle.operations||typeof lifecycle.operations!=='object')return {known:false,rows:['Контракт операций ещё не подтверждён'],prerequisites:[]};
  const labels={installer:'Установка пакета',import_export:'Профиль / экспорт',staged_validation:'Проверка черновика',native_validation:'Нативная проверка конфига',runtime_preflight:'Проверка версии и владения runtime',sidecar_runtime:'TUN-зависимость родительского маршрута',sidecar_recovery:'Восстановление TUN-зависимости',isolated_probe:'Изолированная проба',managed_candidate_probe:'Проба кандидата StrategyLab',live_apply:'Применение маршрута',live_health:'Проверка применённого маршрута',recovery:'Восстановление',rollback:'Откат',package_update:'Обновление пакета'};
+ labels.package_recovery='Восстановление установки компонента';
  const registration={registered:'исполнитель подключён; условия запуска ещё проверяются',absent:'исполнитель не подключён',unknown:'регистрация не подтверждена','lab-only':'только лаборатория / генерация конфига'};
  const rows=Object.entries(labels).filter(([id])=>lifecycle.operations[id]).map(([id,label])=>`${label}: ${registration[lifecycle.operations[id]?.registration]||registration.unknown}`);
  return {known:true,rows,prerequisites:(Array.isArray(lifecycle.prerequisites)?lifecycle.prerequisites:[]).filter(value=>typeof value==='string')};

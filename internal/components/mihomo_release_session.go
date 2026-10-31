@@ -270,6 +270,13 @@ func (m *Manager) RecoverMihomoRelease(ctx context.Context) (out restorejournal.
 func (m *Manager) mihomoReleaseIdle() (err error) {
 	return m.checkMihomoReleaseIdle(context.Background())
 }
+
+func (m *Manager) CheckMihomoReleaseIdle(ctx context.Context) error {
+	if m == nil {
+		return restorejournal.ErrUnavailable
+	}
+	return m.checkMihomoReleaseIdle(ctx)
+}
 func (m *Manager) checkMihomoReleaseIdle(ctx context.Context) (err error) {
 	if ctx == nil {
 		return errors.New("Mihomo observation context is required")

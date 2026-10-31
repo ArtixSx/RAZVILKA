@@ -315,7 +315,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		log.Fatal(err)
 	}
 	selfFileState.RecoveryGuard = func(c context.Context) error {
-		return errors.Join(independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath), configuredComponentOwner.CheckHEVReleaseIdle(c))
+		return errors.Join(independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath), configuredComponentOwner.CheckHEVReleaseIdle(c), configuredComponentOwner.CheckMihomoReleaseIdle(c))
 	}
 	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
 		log.Fatal("matching self update startup authority unavailable; preserve retained files")
@@ -689,6 +689,12 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	finishHEVRecovery()
 	if hevRecoveryErr != nil {
 		log.Print("HEV component recovery remains pending; its managed sidecar cannot start")
+	}
+	mihomoRecoveryContext, finishMihomoRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, mihomoRecoveryErr := componentManager.RecoverMihomoRelease(mihomoRecoveryContext)
+	finishMihomoRecovery()
+	if mihomoRecoveryErr != nil {
+		log.Print("Mihomo component recovery remains pending; serving the recovery panel")
 	}
 	proxySidecarBoot := config.EffectiveProxySidecar(store.Get().ProxySidecar)
 	dataplaneManager, err := newDataplaneManagerWithNodes(*dataplaneStatePath, engineConfigs, nodeStore, func(ctx context.Context) (string, error) {

@@ -219,7 +219,7 @@ func TestMihomoOfficialPinnedNativeInstall(t *testing.T) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(compressed)), Header: make(http.Header)}, nil
 	})}
 	for range 2 {
-		result, err := m.ApplyMihomoGuarded(context.Background(), mihomoFixtureAdmission, mihomoFixtureAdmission)
+		result, err := m.ApplyMihomoGuarded(context.Background(), mihomoFixtureAdmission, mihomoFixtureAdmission, mihomoFixtureAdmission)
 		if err != nil || !result.OK {
 			t.Fatal(result, err)
 		}
@@ -233,7 +233,7 @@ func TestMihomoOfficialPinnedNativeInstall(t *testing.T) {
 			t.Fatal(readErr, closeErr)
 		}
 		_, _, artifacts, _, _ := m.mihomoReleaseLayout()
-		if err := verifyMihomoArtifactRelease(context.Background(), artifacts, image); err != nil {
+		if err := verifyMihomoArtifactRelease(context.Background(), artifacts, image, mihomoFixtureAdmission); err != nil {
 			t.Fatal(err)
 		}
 		if err := m.mihomoReleaseIdle(); err != nil {

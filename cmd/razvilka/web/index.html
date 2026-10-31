@@ -69,6 +69,7 @@
 </aside>
 <main class="main">
 <details class="space-top"><summary>Восстановление установки HEV</summary><p>Проверяет сохранённую установку бинарника и квитанции. Рабочие процессы и маршруты не запускаются.</p><button id="hevRecoveryRead" type="button" class="secondary">Прочитать журнал HEV</button><button id="hevRecoveryRepair" type="button" class="secondary" disabled>Восстановить показанную установку</button><p id="hevRecoveryStatus" role="status">Сначала прочитайте журнал.</p></details>
+<details class="space-top"><summary>Восстановление установки Mihomo</summary><p>Восстанавливает согласованные бинарник и квитанции сохранённой установки. Маршруты не запускаются.</p><button id="mihomoRecoveryRead" type="button" class="secondary">Прочитать журнал Mihomo</button><button id="mihomoRecoveryRepair" type="button" class="secondary" disabled>Восстановить показанную установку</button><p id="mihomoRecoveryStatus" role="status">Сначала прочитайте журнал.</p></details>
 <header class="topbar"><button aria-expanded="false" aria-label="Открыть меню" class="icon-button mobile-menu" id="consoleMenu" type="button"><svg aria-hidden="true" class="ui-icon"><use href="#i-menu"></use></svg></button>
 <div class="page-title"><span class="ui3-breadcrumb">Локальная панель <span>/</span> <span id="ui3Breadcrumb">Ваша сеть</span></span><h1 id="pageTitle" tabindex="-1">Главная</h1><p id="pageSubtitle">Сервисы, подключения и состояние вашей сети</p></div>
 <div aria-label="Телеметрия роутера" class="top-health-strip" hidden="">
@@ -723,5 +724,6 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <script src="/setup-workflows.js?v=0.20.0"></script><script src="/dns-service-lab.js?v=0.20.0"></script><script src="/dns-scoped.js?v=0.20.0"></script><script src="/automation-setup.js?v=0.20.0"></script><script src="/extension-lab.js?v=0.20.0"></script><script src="/panel-availability.js?v=0.20.0" defer></script>
 <script src="/wireguard-profiles-ui.js?v=0.20.0"></script>
 <script src="/hev-recovery-ui.js?v=0.20.0"></script>
+<script src="/mihomo-recovery-ui.js?v=0.20.0"></script>
 </body>
 </html>

@@ -214,9 +214,9 @@ func verifyMihomoArtifact(ctx context.Context, root *ownedfs.Root, name string, 
 	return ctx.Err()
 }
 
-func (m *Manager) ApplyMihomoGuarded(ctx context.Context, guard, rename func(context.Context, func() error) error) (result Result, err error) {
+func (m *Manager) ApplyMihomoGuarded(ctx context.Context, guard, rename, start func(context.Context, func() error) error) (result Result, err error) {
 	result = Result{Component: "mihomo", Action: "install"}
-	if m == nil || ctx == nil || guard == nil || rename == nil {
+	if m == nil || ctx == nil || guard == nil || rename == nil || start == nil {
 		return result, NoMutation(ErrRecoveryAuthority)
 	}
 	m.mu.Lock()
@@ -250,7 +250,7 @@ func (m *Manager) ApplyMihomoGuarded(ctx context.Context, guard, rename func(con
 	if err != nil {
 		return result, err
 	}
-	if err := verifyMihomoArtifactRelease(ctx, artifacts, image); err != nil {
+	if err := verifyMihomoArtifactRelease(ctx, artifacts, image, start); err != nil {
 		return result, err
 	}
 	return m.installMihomoImage(ctx, info, image, guard, rename)

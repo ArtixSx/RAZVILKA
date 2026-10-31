@@ -150,6 +150,7 @@ func New() *Manager {
 
 func Specs() []Spec {
 	specs := []Spec{
+		{SchemaVersion: 1, ID: "mihomo", Name: "Mihomo", Category: "proxy", Provider: "github-release", Repository: "https://github.com/MetaCubeX/mihomo", Binary: "mihomo", Archive: "gzip", Description: "Закреплённое ядро Mihomo для поддержанных профилей", UseCase: "Установка проверенного бинарника отдельно от подключения маршрута.", Requirement: "Linux amd64/arm64, версия1.19.33. Установка сама не запускает прокси и не меняет маршруты.", Capabilities: []string{"profile-export"}, Budget: ResourceBudget{RAMMiB: 96, FlashMiB: 100, CPUClass: "medium"}},
 		{SchemaVersion: 1, ID: "nfqws2", Name: "NFQWS2", Category: "local-dpi", Package: "nfqws2-keenetic", Provider: "opkg", Repository: "https://nfqws.github.io/nfqws2-keenetic/all", Description: "Локальный DPI-desync через NFQUEUE", UseCase: "Для DPI-фильтрации, замедления и доменных блокировок без внешнего сервера.", Requirement: "Не помогает, если сеть сервиса полностью заблокирована по IP — тогда нужен туннель.", Recommended: true, Removable: true, Capabilities: []string{"tcp", "udp", "quic", "strategy-lab"}, Claims: []Claim{{Kind: "nfqueue", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 24, FlashMiB: 18, CPUClass: "medium"}},
 		{SchemaVersion: 1, ID: "usque", Name: "WARP · MASQUE", Category: "tunnel", Package: "usque-keenetic", Provider: "opkg", Repository: "https://side-effect-tm.github.io/usque-keenetic/all", Description: "Cloudflare WARP через MASQUE (QUIC/HTTP2)", UseCase: "Туннель для полных IP-блокировок; основной транспорт использует UDP/443, TCP/443 проверяется как запасной.", Requirement: "Нужен доступ к Cloudflare endpoint. RAZVILKA запускает USQUE как SOCKS-прокси, а Sing-box с gVisor создаёт отдельный TUN для выбранных сервисов.", Recommended: true, Removable: true, Capabilities: []string{"masque", "quic", "http2", "socks", "tun", "split-routing"}, Dependencies: []string{"sing-box"}, RuntimeDependencies: []string{"sing-box"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "policy-table", Value: "managed"}}, Budget: ResourceBudget{RAMMiB: 32, FlashMiB: 20, CPUClass: "medium"}},
 		{SchemaVersion: 1, ID: "sing-box", Name: "Sing-box · свой сервер", Category: "proxy", Package: "sing-box-go", Provider: "opkg", Description: "Клиент VLESS, Reality, Hysteria2, TUIC и Shadowsocks", UseCase: "Универсальный туннель для сервисов с полной блокировкой, включая TCP, UDP и IP-сети.", Requirement: "Нужен профиль и доступный удалённый сервер. Одна установка Sing-box доступ в интернет не создаёт.", Removable: true, Capabilities: []string{"vless", "reality", "hysteria2", "tuic", "shadowsocks", "tun"}, Claims: []Claim{{Kind: "tun", Value: "managed"}, {Kind: "listen-port", Value: "profile"}}, Budget: ResourceBudget{RAMMiB: 64, FlashMiB: 32, CPUClass: "medium"}},
@@ -226,6 +227,14 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 				}
 			}
 			m.attachLifecycleVerification(&view)
+			if spec.ID == "mihomo" {
+				view.CanUpdate, view.CanRemove = false, false
+				if err := m.mihomoReleaseIdle(); err != nil {
+					view.CanInstall = false
+					view.State = "recovery-required"
+					view.LifecycleBlockReason = "Установка Mihomo требует восстановления исходного журнала."
+				}
+			}
 			views = append(views, view)
 			continue
 		}
@@ -276,6 +285,9 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 }
 
 func (m *Manager) Apply(ctx context.Context, id string) (Result, error) {
+	if id == "mihomo" {
+		return Result{Component: id, Action: "install"}, NoMutation(errors.New("Mihomo installation requires ApplyMihomoGuarded original-owner admission"))
+	}
 	if id == "hev-socks5-tunnel" {
 		return Result{Component: id, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
 	}

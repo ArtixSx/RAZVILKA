@@ -43,8 +43,9 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 				prerequisites = append(prerequisites, spec.Requirement)
 			}
 			install := a.Components != nil && spec.Provider == "opkg"
-			if componentID == "hev-socks5-tunnel" {
+			if componentID == "hev-socks5-tunnel" || componentID == "mihomo" {
 				install = a.Components != nil && spec.Provider == "github-release"
+				operations["package_recovery"] = registeredLifecycleOperation(a.Components != nil && a.Store != nil, "exact-original-component-journal-review-and-settings-revision-required")
 			}
 			reason := "package-policy-and-ownership-admission-required"
 			if spec.Provider == "platform" {
