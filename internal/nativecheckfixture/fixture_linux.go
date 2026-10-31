@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -78,6 +79,14 @@ func Start(t *testing.T) *Fixture {
 	t.Setenv("SSL_CERT_FILE", cert)
 	t.Setenv("SSL_CERT_DIR", filepath.Join(f.Root, "empty-roots"))
 	f.startDNS(t)
+	// Exercise the actual production resolver wrapper before collecting samples.
+	// It retains a method bound to the original DefaultResolver pointer.
+	lookupCtx, lookupCancel := context.WithTimeout(context.Background(), time.Second)
+	addresses, lookupErr := netresolve.LookupNetIP(lookupCtx, "ip4", "service.example")
+	lookupCancel()
+	if lookupErr != nil || len(addresses) != 1 || addresses[0].String() != HTTPSIP {
+		t.Fatalf("physical production DNS fixture failed: %v", lookupErr)
+	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(HTTPSIP, "443"))
 	if err != nil {
 		t.Fatal(err)
@@ -244,10 +253,15 @@ func (f *Fixture) startDNS(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	original := net.DefaultResolver
-	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+	preferGo, dial := original.PreferGo, original.Dial
+	// Configure this original object in place: netresolve.LookupNetIP binds its
+	// method during package initialization, so replacing the global pointer
+	// would leave the real checker using the host's disconnected resolver.
+	original.PreferGo = true
+	original.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "udp", conn.LocalAddr().String())
-	}}
-	t.Cleanup(func() { net.DefaultResolver = original })
+	}
+	t.Cleanup(func() { original.PreferGo, original.Dial = preferGo, dial })
 	go func() {
 		buffer := make([]byte, 4096)
 		for {
