@@ -1,0 +1,10 @@
+go version go1.26.5 linux/amd64
+Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+A unified platform for anti-censorship.
+8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed  /usr/local/lib/razvilka-fixtures/xray
+4551f490ec1dbfb1211bc4a2801c53d97c70c812
+staging loopback-only namespace; stable WAN identity modeled; service delay40ms; N12 repeated plus first per scenario
+reference=current native production path with only per-Check literal observation hidden, not historical release binary
+App=current original queue only; controlled queue25ms before dispatch; HTTP delivery observed, browser paint unmeasured
+stage durations overlap; CPU/RSS/router/physical WAN/Internet unavailable
