@@ -93,7 +93,9 @@ func TestComponentHistoryAdmissionKeepsTypedCurrentAndRollbackReaderRequirements
 		{4, 2, 4, 4, true}, {4, 2, 3, 4, false}, {4, 3, 4, 4, true},
 		{5, 2, 4, 4, true}, {4, 2, 5, 4, true},
 		{5, 2, 5, 5, true}, {5, 2, 4, 5, false}, {4, 2, 5, 5, false},
-		{6, 2, 5, 5, false}, {5, 2, 6, 5, false},
+		{6, 2, 5, 5, true}, {5, 2, 6, 5, true},
+		{6, 2, 6, 6, true}, {6, 2, 5, 6, false}, {5, 2, 6, 6, false},
+		{7, 2, 6, 6, false}, {6, 2, 7, 6, false},
 	} {
 		t.Run(fmt.Sprintf("%d/%d/%d/%d", test.current, test.retained, test.old, test.wanted), func(t *testing.T) {
 			a := componentAdmissionFixture(t)
