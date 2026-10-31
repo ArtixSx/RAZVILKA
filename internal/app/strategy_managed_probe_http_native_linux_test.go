@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -98,6 +99,28 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 	}
 	if !reflect.DeepEqual(before, a.Store.Get()) || a.StrategyLab.Executor != nil {
 		t.Fatal("probe/selection mutated live config or enabled legacy executor")
+	}
+	// The actual Apply source bridge must accept the resulting original epoch
+	// under a NEW real operation/runtime lease, without touching LAN routing.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx, release, err := a.Operations.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	lease, err := a.Components.AcquireCurrentManagedNFQWSRuntime(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	source, err := a.StrategyLab.RetainSelectedCandidateReview(ctx, "native", "tcp", "ipv4", lease)
+	if err != nil {
+		t.Fatal("actual selected native Apply source bridge", err)
+	}
+	defer source.Close()
+	if source.Candidate().ID != candidate || source.Current(ctx) != nil || source.ManagedOwnersCurrent(ctx, lease, a.managedNFQList.control) != nil {
+		t.Fatal("actual selected source lost original runtime/epoch owners")
 	}
 	t.Log("actual authenticated App HTTP: three native TLS/counter passes, per-request original admission, current preferred selection and snapshot; live routing unchanged; CI classification only, no router/LAN acceptance")
 }

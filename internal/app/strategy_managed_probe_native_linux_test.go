@@ -375,6 +375,9 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	probeCtx, probeCancel := context.WithTimeout(original, 14*time.Second)
 	defer probeCancel()
 	probeCtx = startuptools.WithCommandAdmission(probeCtx, admission)
+	if _, parentErr := os.Stat(adapter.StateRoot); parentErr != nil {
+		t.Log("actual producer private parent before first consumer:", parentErr)
+	}
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
 	if lateWait {
 		if err == nil || cleaned != nil || !consumer.Pending() {

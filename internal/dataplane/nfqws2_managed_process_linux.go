@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -186,12 +187,12 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
 	path := filepath.Join(a.StateRoot, nfqws2LeaseFile)
-	if nfqws2ManagedProtected(path, true) != nil {
-		return zero, ErrNFQWSManagedProcessUnknown
+	if err := nfqws2ManagedProtected(path, true); err != nil {
+		return zero, fmt.Errorf("managed process protected parent: %w", err)
 	}
 	parent, err := os.Lstat(a.StateRoot)
 	if err != nil || !parent.IsDir() || parent.Mode().Perm()&0o077 != 0 {
-		return zero, ErrNFQWSManagedProcessUnknown
+		return zero, fmt.Errorf("managed process private parent: %w", errors.Join(ErrNFQWSManagedProcessUnknown, err))
 	}
 	var channel *nfqws2ManagedStartSocket
 	var endpoint *os.File
@@ -204,7 +205,7 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		binding = &frozen
 		// This callback must record pending before the producer intent or Start.
 		if err := admission.BeforeStart(ctx, frozen); err != nil {
-			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)
+			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, fmt.Errorf("managed process before Start: %w", err))
 		}
 	}
 	target, err := restorejournal.OpenFileTarget(path)
