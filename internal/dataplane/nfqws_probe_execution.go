@@ -78,6 +78,9 @@ func (a *nfqwsProbeCanaryAdapter) Canary(ctx context.Context, plan RoutePlan, ro
 	}
 	assembly.binding = typed
 	e.binding = typed
+	if err := e.prepareProcessDirectory(ctx); err != nil {
+		return err
+	}
 	err = assembly.run(e.observeService)
 	if !e.settled.Load() {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
