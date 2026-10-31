@@ -5,6 +5,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/engine"
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
+	"strings"
 )
 
 func registeredLifecycleOperation(registered bool, reason string) engine.LifecycleOperation {
@@ -91,6 +92,16 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 	if id == "mihomo" || id == "hev" {
 		operations["import_export"] = engine.LifecycleOperation{Registration: "lab-only", Reason: "extension-api-config-generation-only"}
 		operations["native_validation"] = registeredLifecycleOperation(false, "extension-does-not-native-validate")
+	}
+	if id == "hev" {
+		dependency := a.Dataplane.ManagedSidecarLifecycleRegistration("hev")
+		operations["native_validation"] = registeredLifecycleOperation(false, "hev-has-no-native-config-check-command")
+		operations["runtime_preflight"] = registeredLifecycleOperation(dependency.RuntimePreflight, "original-component-receipt-and-reviewed-native-version-required")
+		operations["sidecar_runtime"] = registeredLifecycleOperation(len(dependency.Parents) > 0, "parent-route-scope-platform-and-transaction-admission-required")
+		operations["sidecar_recovery"] = registeredLifecycleOperation(dependency.Recovery, "original-parent-retained-runtime-owner-required")
+		if len(dependency.Parents) > 0 {
+			prerequisites = append(prerequisites, "HEV подключён как TUN-зависимость маршрутов "+strings.Join(dependency.Parents, ", ")+"; отдельный маршрут HEV не зарегистрирован")
+		}
 	}
 	return &engine.Lifecycle{Schema: 1, Operations: operations, Prerequisites: prerequisites, Evidence: "registration-only; no applied route, live health, platform acceptance or operation permission"}
 }

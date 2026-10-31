@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
@@ -60,6 +61,49 @@ func TestRuntimeLifecycleUsesOriginalAdapterAndCheckerRegistrations(t *testing.T
 	}
 	if got := a.runtimeLifecycle("hev").Operations["installer"]; got.Registration != "registered" || got.Available != nil {
 		t.Fatal("canonical HEV component installer mapping lost or became ready", got)
+	}
+}
+
+func TestRuntimeLifecycleHEVIsBoundDependencyWithUnknownAvailability(t *testing.T) {
+	a, _ := privateRestoreTestApp(t)
+	a.Components = components.New()
+	a.Components.BinDir = t.TempDir()
+	a.Dataplane = dataplane.New(t.TempDir())
+	adapter, err := dataplane.NewProxyTunnelAdapter("xray", a.EngineConfigs, a.Dataplane.StateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = dataplane.BindHEVSidecarForRecovery(context.Background(), adapter, a.Components); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.Dataplane.Register(adapter); err != nil {
+		t.Fatal(err)
+	}
+	// No executable is installed. Reporting configuration must not probe it or
+	// turn this recovery-only constructor into executable/live permission.
+	lifecycle := a.runtimeLifecycle("hev")
+	for _, id := range []string{"runtime_preflight", "sidecar_runtime", "sidecar_recovery"} {
+		operation := lifecycle.Operations[id]
+		if operation.Registration != "registered" || operation.Available != nil {
+			t.Fatalf("dependency %s not advisory: %+v", id, operation)
+		}
+	}
+	for _, id := range []string{"native_validation", "live_apply", "live_health"} {
+		operation := lifecycle.Operations[id]
+		if operation.Registration != "absent" || operation.Available == nil || *operation.Available {
+			t.Fatalf("HEV invented standalone/config validator %s: %+v", id, operation)
+		}
+	}
+	if len(lifecycle.Prerequisites) == 0 {
+		t.Fatal("parent dependency context lost")
+	}
+	// Shared engine API projects the exact same registration.
+	a.EngineInventory = func() []engine.Status { return []engine.Status{{ID: "hev", Installed: true}} }
+	w := httptest.NewRecorder()
+	a.Handler(http.NotFoundHandler()).ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/engines", nil))
+	var inventory []engine.Status
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &inventory) != nil || len(inventory) != 1 || inventory[0].Lifecycle.Operations["sidecar_runtime"].Available != nil || inventory[0].Lifecycle.Operations["sidecar_runtime"].Registration != "registered" {
+		t.Fatal("HEV inventory projection disagrees", w.Body.String())
 	}
 }
 func TestRuntimeLifecycleSharedEngineHTTPInventoryDoesNotPromoteUnknown(t *testing.T) {
