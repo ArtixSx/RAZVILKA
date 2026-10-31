@@ -123,6 +123,14 @@ func prepareNFQWSProbeBoundSocket(ctx context.Context, raw syscall.RawConn, sour
 }
 
 func (s *nfqwsProbeBoundSocket) current(ctx context.Context) error {
+	return s.check(ctx, true)
+}
+
+func (s *nfqwsProbeBoundSocket) retainedCurrent(ctx context.Context) error {
+	return s.check(ctx, false)
+}
+
+func (s *nfqwsProbeBoundSocket) check(ctx context.Context, forward bool) error {
 	if s == nil || s.self != s || ctx == nil || ctx.Err() != nil {
 		return errNFQWSProbeSocket
 	}
@@ -168,9 +176,11 @@ func (s *nfqwsProbeBoundSocket) current(ctx context.Context) error {
 	if flags, err := unix.FcntlInt(uintptr(s.fd), unix.F_GETFL, 0); err != nil || flags&unix.O_NONBLOCK == 0 {
 		return errNFQWSProbeSocket
 	}
-	source, err := nfqwsProbeRouteSource(ctx, s.destination)
-	if err != nil || source != s.source.Addr() {
-		return errNFQWSProbeSocket
+	if forward {
+		source, err := nfqwsProbeRouteSource(ctx, s.destination)
+		if err != nil || source != s.source.Addr() {
+			return errNFQWSProbeSocket
+		}
 	}
 	return ctx.Err()
 }

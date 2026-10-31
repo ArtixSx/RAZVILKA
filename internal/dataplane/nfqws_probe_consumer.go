@@ -30,6 +30,7 @@ import (
 type ManagedNFQWSProbeConsumer struct {
 	self          *ManagedNFQWSProbeConsumer
 	mu            sync.Mutex
+	cleanupMu     sync.Mutex
 	manager       *Manager
 	adapter       *NFQWS2Adapter
 	gate          *NetworkPolicyAdapter
@@ -63,9 +64,11 @@ type nfqwsProbeExecution struct {
 	resource        *NFQWSExecutionResource
 	binding         *NFQWSScopedBinding
 	open            atomic.Bool
+	executing       atomic.Bool
 	entered         atomic.Bool
 	settled         atomic.Bool
 	processResult   *nfqws2ManagedProcessLease
+	processWait     *nfqwsProbeProcessWait
 	records         *xraySelectedTCPExecutionRecords // Same original authored-record primitive.
 	finishing       atomic.Bool
 	receiptUnlinked atomic.Bool
@@ -190,6 +193,11 @@ func (e *nfqwsProbeExecution) owners(ctx context.Context) error {
 			return err
 		}
 	}
+	if e.processWait != nil && e.processWait.root != nil {
+		if err := e.processWait.root.current(ctx); err != nil {
+			return err
+		}
+	}
 	return c.provider.WithCurrent(ctx, func(cctx context.Context, id netidentity.Identity) error {
 		if e.socket == nil || id != e.socket.identity {
 			return ErrNFQWSScopedOwner
@@ -238,7 +246,7 @@ func (e *nfqwsProbeExecution) cleanupCurrent(ctx context.Context) error {
 		if e.socket.closed || e.socket.bound == nil {
 			return ErrNFQWSScopedOwner
 		}
-		return e.socket.bound.current(ctx)
+		return e.socket.bound.retainedCurrent(ctx)
 	})
 }
 
@@ -275,6 +283,8 @@ func (r *ManagedNFQWSProbeConsumer) Execute(ctx context.Context, source *strateg
 	e := &nfqwsProbeExecution{consumer: r, source: source, epoch: epoch, runtime: runtime, reference: ref, record: record, descriptor: runtime.Descriptor(), cleanup: cleanup, guard: guard, connect: make(chan struct{}), flow: make(chan nfqwsProbeDialResult, 1), service: service}
 	e.self = e
 	e.open.Store(true)
+	e.executing.Store(true)
+	defer e.executing.Store(false)
 	r.mu.Lock()
 	if r.active != nil {
 		r.mu.Unlock()
@@ -385,6 +395,11 @@ func (e *nfqwsProbeExecution) finishKnown() error {
 		}
 		if err := e.records.close(); err != nil {
 			return err
+		}
+		if e.processWait != nil && e.processWait.root != nil {
+			if err := e.processWait.root.close(); err != nil {
+				return err
+			}
 		}
 	}
 	e.open.Store(false)

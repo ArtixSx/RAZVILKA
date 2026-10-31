@@ -13,10 +13,12 @@ func (c *ManagedNFQWSProbeConsumer) RetryKnownCleanup(ctx context.Context) (*Man
 	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil {
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
+	c.cleanupMu.Lock()
+	defer c.cleanupMu.Unlock()
 	c.mu.Lock()
 	e := c.active
 	c.mu.Unlock()
-	if e == nil || e.self != e || !e.open.Load() {
+	if e == nil || e.self != e || !e.open.Load() || e.executing.Load() {
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
 	if !e.entered.Load() {
@@ -32,7 +34,7 @@ func (c *ManagedNFQWSProbeConsumer) RetryKnownCleanup(ctx context.Context) (*Man
 		})
 		return completion, err
 	}
-	if e.resource == nil || e.binding == nil || e.processResult == nil {
+	if e.resource == nil || e.binding == nil || e.processResult == nil && e.processWait == nil {
 		return nil, ErrNFQWSManagedProcessUnknown
 	}
 	// The App still holds the original exclusive lifetime. Its actual tool
@@ -43,6 +45,16 @@ func (c *ManagedNFQWSProbeConsumer) RetryKnownCleanup(ctx context.Context) (*Man
 	ctx = context.WithValue(ctx, nfqwsProbeCleanupKey{}, e)
 	if err := e.cleanupCurrent(ctx); err != nil {
 		return nil, err
+	}
+	if e.processResult == nil {
+		lease, err := e.processWait.acknowledge(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !nfqwsScopedLeaseExecutionMatches(lease, e.resource.plan, e.resource.binding) {
+			return nil, ErrNFQWSManagedProcessUnknown
+		}
+		e.processResult = &lease
 	}
 	if !e.settled.Load() {
 		status, err := e.binding.Inspect(ctx, e.resource.plan, e.resource.root)

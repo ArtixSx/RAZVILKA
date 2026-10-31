@@ -74,6 +74,7 @@ chmod 500 "$probe_work/app.test"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
+for probe_case in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup; do
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
@@ -88,4 +89,5 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   exec "$@"
-' sh "$probe_work/app.test" -test.run='^TestManagedStrategyProbeNativeConsumer$' -test.count=1 -test.v -test.timeout=100s
+' sh "$probe_work/app.test" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s
+done

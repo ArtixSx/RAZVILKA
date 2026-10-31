@@ -17,8 +17,10 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -40,7 +42,16 @@ func TestMain(m *testing.M) {
 		case "nfqws-compatibility-supervisor":
 			os.Exit(strategylab.RunCompatibilitySupervisor(os.Args[2], os.Getenv("RAZVILKA_STRATEGY_LAB_STATE"), os.Getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE")))
 		case "nfqws-managed-process-supervisor":
-			os.Exit(dataplane.RunNFQWSManagedProcessSupervisor(os.Args[2], filepath.Join(os.Getenv("RAZVILKA_DATAPLANE_STATE"), "runtime", "nfqws2"), os.Getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE")))
+			root := filepath.Join(os.Getenv("RAZVILKA_DATAPLANE_STATE"), "runtime", "nfqws2")
+			result := dataplane.RunNFQWSManagedProcessSupervisor(os.Args[2], root, os.Getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE"))
+			if marker, err := os.ReadFile(filepath.Join(root, ".native-fixture-delayed-exit")); result == 0 && err == nil && string(marker) == "after-real-wait\n" {
+				// CI-only fault AFTER actual child/subreaper WaitECHILD publication:
+				// delay THIS original helper's exit beyond the controller join grace.
+				// It owns no remaining child and cannot start another one here.
+				signal.Ignore(syscall.SIGTERM)
+				time.Sleep(3 * time.Second)
+			}
+			os.Exit(result)
 		}
 	}
 	os.Exit(m.Run())
@@ -65,6 +76,14 @@ func (a *managedProbeNativeAdmission) WithStart(ctx context.Context, name string
 // held descriptor/tool graph, serial lease, socket, queue, TLS/HTTP criteria,
 // actual positive+negative packets and cleanup are the production consumers.
 func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false)
+}
+
+func TestManagedStrategyProbeNativeConsumerLateWaitCleanup(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, true)
+}
+
+func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait bool) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
@@ -218,7 +237,7 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 	if err := bootstrap.Close(); err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := lab.AddCandidate("tcp-tls", "native isolated original candidate", "--filter-tcp=443", "expert")
+	candidate, err := lab.AddCandidate("tcp-tls", "native isolated original candidate", "--filter-tcp=443 --lua-desync=multisplit:pos=1", "expert")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,6 +294,14 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	admission.consumer = consumer
+	if lateWait {
+		if err := os.MkdirAll(adapter.StateRoot, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(adapter.StateRoot, ".native-fixture-delayed-exit"), []byte("after-real-wait\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	service := catalog.Service{ID: "native", Name: "Native isolated TLS", Domains: []string{"managed-probe.example"}, ProbeURL: "https://managed-probe.example/", Probes: []catalog.Probe{{ID: "primary", URL: "https://managed-probe.example/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"owned-native-service"}}}}}
 	a.Catalog = catalog.Catalog{Services: []catalog.Service{service}}
 	criteria, err := strategylab.ManagedProbeCriteriaDigest(service)
@@ -302,6 +329,37 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 	defer probeCancel()
 	probeCtx = startuptools.WithCommandAdmission(probeCtx, admission)
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
+	if lateWait {
+		if err == nil || cleaned != nil || !consumer.Pending() {
+			t.Fatal("late original helper exit did not retain its lifetime", evidence, err)
+		}
+		if !evidence.Success || !evidence.RouteConfirmed {
+			t.Fatal("fault did not follow actual owned service flow", evidence, err)
+		}
+		if failure := epoch.Finish(original, nil, err); failure == nil {
+			t.Fatal("unknown original helper Wait published eligibility")
+		}
+		retryCtx := startuptools.WithCommandAdmission(original, admission)
+		completion, cleanupErr := consumer.RetryKnownCleanup(retryCtx)
+		if cleanupErr != nil || completion == nil || consumer.Pending() {
+			t.Fatal("actual original late Wait cleanup failed", cleanupErr)
+		}
+		if err := completion.CloseRuntime(); err != nil {
+			t.Fatal(err)
+		}
+		if err := env.runtimeRetired(); err != nil {
+			t.Fatal(err)
+		}
+		if err := readEmpty(original); err != nil {
+			t.Fatal("late cleanup retained packets/rules", err)
+		}
+		snapshot := lab.SnapshotWithContext(original)
+		if !snapshot.QuiescenceUnknown || len(snapshot.Evidence) != 0 {
+			t.Fatal("physical cleanup cleared source fence or published delayed PASS", snapshot)
+		}
+		t.Log("actual late original helper exit: sole Wait custody + exact ACK CAS + same COMMON removal confirmed; runtime released; source unknown/finalizing preserved; no delayed PASS")
+		return
+	}
 	if err != nil || cleaned == nil {
 		t.Fatal("actual managed kernel/flow consumer", evidence, err)
 	}
