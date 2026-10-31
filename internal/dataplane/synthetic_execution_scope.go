@@ -79,10 +79,13 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 	b := &SyntheticDNSExecutionBinding{scope: scope, adapter: original, plan: frozen, domain: domain, transport: transport, dns: original.DNS, root: original.StateRoot}
 	b.self = b
 	issued := false
-	defer func(){
-		if !issued && scope.adapter=="xray" {
+	defer func() {
+		if !issued && scope.adapter == "xray" {
 			scope.mu.Lock()
-			if scope.domainDNSBinding==b {scope.domainDNSBinding=nil;scope.domainDNS=nil}
+			if scope.domainDNSBinding == b {
+				scope.domainDNSBinding = nil
+				scope.domainDNS = nil
+			}
 			scope.mu.Unlock()
 		}
 	}()

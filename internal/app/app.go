@@ -440,9 +440,9 @@ func (a *App) serviceEvidenceSnapshotWithInventory(cfg config.Config, services [
 
 func (a *App) engineInventorySnapshot() []engine.Status {
 	if a.EngineInventory != nil {
-		return a.EngineInventory()
+		return a.withRuntimeLifecycle(a.EngineInventory())
 	}
-	return (engine.Detector{}).Inventory()
+	return a.withRuntimeLifecycle((engine.Detector{}).Inventory())
 }
 
 func (a *App) appliedEffectiveRoutes(cfg config.Config) map[string]string {
@@ -5398,7 +5398,7 @@ func (a *App) prepareRouteOption(option *routecatalog.Option) {
 		option.Configured = true
 		option.Selectable = true
 	}
-	option.Ready = option.Selectable && a.Dataplane != nil && a.Dataplane.Capable(option.ID)
+	option.Ready = option.Selectable && a.runtimeLifecycle(option.ID).Operations["live_apply"].Registration == "registered"
 	if option.ID == "warp-wg" && !option.Running {
 		option.Ready = false
 	}

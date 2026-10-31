@@ -71,7 +71,7 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 	if q.Action == "preview" {
 		result.Config = ""
 	}
-	writeJSON(w, 200, map[string]any{"result": result, "review": digest, "live_applied": false, "draft_persisted": false})
+	writeJSON(w, 200, map[string]any{"result": result, "review": digest, "live_applied": false, "draft_persisted": false, "lifecycle": a.runtimeLifecycle("mihomo")})
 }
 func (a *App) extensionHev(w http.ResponseWriter, r *http.Request) {
 	if !a.extensionAccess(w, r) {
@@ -101,7 +101,7 @@ func (a *App) extensionHev(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "note": "JSON совместим с YAML. Профиль не создаёт TUN и не меняет маршруты до отдельного запуска. В RAZVILKA выбранный HEV-адаптер пока включается только на программном стенде."})
+	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "lifecycle": a.runtimeLifecycle("hev"), "note": "JSON совместим с YAML. Профиль не создаёт TUN и не меняет маршруты до отдельного запуска. В RAZVILKA выбранный HEV-адаптер пока включается только на программном стенде."})
 }
 func (a *App) strategyPacks(w http.ResponseWriter, r *http.Request) {
 	if !a.extensionAccess(w, r) {
