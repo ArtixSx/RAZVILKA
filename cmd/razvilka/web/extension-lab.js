@@ -5,8 +5,8 @@ const apiModel={
  mihomo(content,index,port,action='preview',review=''){
   if(typeof content!=='string'||!content.trim()||new TextEncoder().encode(content).length>262144)throw new Error('Вставьте профиль до 256 КиБ.');
   if(!Number.isSafeInteger(index)||index<1||index>512||!Number.isSafeInteger(port)||port<1024||port>65535)throw new Error('Проверьте номер узла и локальный порт.');
-  if(!['preview','export'].includes(action)||(action==='export'&&!/^[a-f0-9]{64}$/.test(review)))throw new Error('Сначала получите актуальный предпросмотр.');
-  return {content,options:{index:index-1,socks_port:port},action,review,confirm:'BUILD_MIHOMO_CONFIG'};
+  if(!['preview','export','validate'].includes(action)||(action!=='preview'&&!/^[a-f0-9]{64}$/.test(review)))throw new Error('Сначала получите актуальный предпросмотр.');
+  return {content,options:{index:index-1,socks_port:port},action,review,confirm:action==='validate'?'VALIDATE_MIHOMO_CONFIG':'BUILD_MIHOMO_CONFIG'};
  },
  pack(content,signed,action='preview',review=''){
   if(typeof content!=='string'||!content.trim()||new TextEncoder().encode(content).length>262144)throw new Error('Вставьте JSON-пакет до 256 КиБ.');
@@ -14,6 +14,7 @@ const apiModel={
   return {content,signed:!!signed,action,review,confirm:action==='import'?'IMPORT_STRATEGY_CANDIDATES':''};
  },
  safeResult(reply){if(!reply||reply.live_applied!==false||reply.service_verified===true||reply.native_validated===true)throw new Error('Неизвестный результат сервера. Изменение сети не подтверждено.');return reply;},
+ nativeMihomo(reply,review){const v=reply?.validation,r=reply?.result;if(!/^[a-f0-9]{64}$/.test(review)||reply.review!==review||reply.live_applied!==false||reply.draft_persisted!==false||v?.config_sha256!==review||v.native_validated!==true||v.service_verified!==false||v.live_applied!==false||!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(v.version)||r?.native_validated!==true||r.service_verified!==false||r.live_applied!==false||r.config!=='')throw new Error('Нативная проверка текущего профиля не подтверждена.');return `Профиль принят Mihomo ${v.version}. Доступ сервиса не проверялся; маршруты не менялись.`;},
  mihomoSummary(result){
   apiModel.safeResult(result);
   const source=result.source,index=source?.selected_index,node=Number.isSafeInteger(index)&&index>=0?source?.nodes?.[index]:null;
@@ -38,7 +39,7 @@ if(typeof document==='undefined')return;
 const el=id=>document.getElementById(id),dialog=el('extensionLabDialog');if(!dialog)return;
 let serial=0,controller=null,fileLoading=false,mReview='',pReview='';
 const status=text=>{el('ext5Status').textContent=text;};
-function buttons(){const busy=!!controller||fileLoading;dialog.querySelectorAll('button:not(#ext5Close):not(#ext5Cancel)').forEach(b=>b.disabled=busy);el('ext5MExport').disabled=busy||!mReview;el('ext5PImport').disabled=busy||!pReview;el('ext5Cancel').hidden=!busy;}
+function buttons(){const busy=!!controller||fileLoading;dialog.querySelectorAll('button:not(#ext5Close):not(#ext5Cancel)').forEach(b=>b.disabled=busy);el('ext5MExport').disabled=busy||!mReview;el('ext5MValidate').disabled=busy||!mReview;el('ext5PImport').disabled=busy||!pReview;el('ext5Cancel').hidden=!busy;}
 function cancel(){serial++;controller?.abort();controller=null;fileLoading=false;buttons();}
 function invalidate(kind){cancel();if(kind==='mihomo'){mReview='';el('ext5MResult').textContent='Ввод изменён. Нужен новый предпросмотр.';}if(kind==='packs'){pReview='';el('ext5PResult').textContent='Пакет изменён. Нужен новый предпросмотр.';}buttons();}
 function clear(){cancel();mReview=pReview='';for(const id of ['ext5MText','ext5MFile','ext5PText','ext5PFile'])el(id).value='';el('ext5PCandidates').replaceChildren();el('ext5MResult').textContent='Нет результата.';el('ext5PResult').textContent='Нет результата.';buttons();}
@@ -56,6 +57,7 @@ for(const id of ['ext5HInterface','ext5HAddress','ext5HPort','ext5HMTU','ext5HSe
 function loadFile(id,target,kind){el(id).addEventListener('change',async()=>{invalidate(kind);const file=el(id).files?.[0],seq=serial,epoch=workflowState.epoch;if(!file)return;el(target).value='';if(file.size>262144){status('Файл превышает 256 КиБ.');return;}fileLoading=true;buttons();status('Читаем файл на этом устройстве…');try{const text=await file.text();if(seq===serial&&workflowSession(epoch)&&dialog.open){el(target).value=text;status('Файл прочитан локально. Выполните предпросмотр.');}}catch{if(seq===serial&&workflowSession(epoch)&&dialog.open)status('Не удалось прочитать файл.');}finally{if(seq===serial){fileLoading=false;buttons();}}});}
 loadFile('ext5MFile','ext5MText','mihomo');loadFile('ext5PFile','ext5PText','packs');
 function mBody(action){return apiModel.mihomo(el('ext5MText').value,Number(el('ext5MIndex').value),Number(el('ext5MPort').value),action,mReview);}
+el('ext5MValidate').addEventListener('click',()=>guarded(()=>run('/api/v1/extension-lab/mihomo',mBody('validate'),out=>{const message=apiModel.nativeMihomo(out,mReview);el('ext5MResult').textContent=message;status(message);})));
 el('ext5MPreview').addEventListener('click',()=>guarded(()=>{mReview='';run('/api/v1/extension-lab/mihomo',mBody('preview'),out=>{apiModel.safeResult(out);apiModel.safeResult(out.result);if(!/^[a-f0-9]{64}$/.test(out.review)||out.result.config)throw new Error('Предпросмотр не прошёл проверку.');const summary=apiModel.mihomoSummary(out.result);mReview=out.review;el('ext5MResult').textContent=summary;status('Параметры готовы к скачиванию. YAML содержит ключ подключения.');});}));
 el('ext5MExport').addEventListener('click',()=>guarded(()=>run('/api/v1/extension-lab/mihomo',mBody('export'),out=>{apiModel.safeResult(out);apiModel.safeResult(out.result);if(out.review!==mReview||typeof out.result.config!=='string'||!out.result.config)throw new Error('Профиль изменился.');download(out.result.config,'razvilka-mihomo.yaml');status('YAML передан браузеру. Не публикуйте ключ. Нужны нативная проверка и испытание сервиса.');})));
 el('ext5HBuild').addEventListener('click',()=>guarded(()=>run('/api/v1/extension-lab/hev',{options:{interface:el('ext5HInterface').value.trim(),address:el('ext5HAddress').value.trim(),socks_port:Number(el('ext5HPort').value),mtu:Number(el('ext5HMTU').value),max_sessions:Number(el('ext5HSessions').value)},confirm:'BUILD_HEV_CONFIG'},out=>{apiModel.safeResult(out);if(typeof out.config!=='string'||!out.config)throw new Error('Нет профиля.');download(out.config,'razvilka-hev.json');status(out.note);}))); 

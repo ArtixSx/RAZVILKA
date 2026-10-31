@@ -40,12 +40,30 @@ func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image
 	if parent == nil || start == nil {
 		return restorejournal.ErrInvalid
 	}
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	return withMihomoArtifact(ctx, artifacts, image, func(ctx context.Context, f *os.File) error {
+		output, err := runHeldMihomoCommand(ctx, f, nil, []string{"-v"}, start)
+		if err != nil {
+			return err
+		}
+		fields := strings.Fields(string(output))
+		clear(output)
+		if len(fields) < 3 || fields[0] != "Mihomo" || fields[1] != "Meta" || strings.TrimPrefix(fields[2], "v") != ReviewedMihomoVersion {
+			return errors.New("Mihomo version does not match reviewed release")
+		}
+		return nil
+	})
+}
+
+func withMihomoArtifact(ctx context.Context, artifacts string, image restorejournal.Image, consume func(context.Context, *os.File) error) (err error) {
+	if ctx == nil || consume == nil {
+		return restorejournal.ErrInvalid
+	}
 	ref, err := mihomoArtifactReferenceOf(image)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-	defer cancel()
 	root, err := ownedfs.Open(artifacts)
 	if err != nil {
 		return err
@@ -95,17 +113,26 @@ func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image
 	if err := current(); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/proc/self/fd/3", "-v")
+	consumeErr := consume(ctx, f)
+	return errors.Join(consumeErr, verifyHeldBytes())
+}
+
+func runHeldMihomoCommand(ctx context.Context, f *os.File, extra []*os.File, args []string, start func(context.Context, func() error) error) ([]byte, error) {
+	if ctx == nil || f == nil || start == nil {
+		return nil, restorejournal.ErrInvalid
+	}
+	cmd := exec.CommandContext(ctx, "/proc/self/fd/3", args...)
 	cmd.Args[0] = "mihomo"
-	cmd.ExtraFiles = []*os.File{f}
+	cmd.ExtraFiles = append([]*os.File{f}, extra...)
 	cmd.WaitDelay = time.Second
 	var output mihomoVersionOutput
 	cmd.Stdout, cmd.Stderr = &output, &output
 	// Only the actual Start syscall enters the original control barrier. File
 	// hashing and the sole Wait remain outside it, so Stop need not wait on IO.
-	started, called := false, false
+	started, called, repeated := false, false, false
 	startErr := start(ctx, func() error {
 		if called {
+			repeated = true
 			return restorejournal.ErrInvalid
 		}
 		called = true
@@ -113,22 +140,19 @@ func verifyMihomoArtifactRelease(parent context.Context, artifacts string, image
 		started = e == nil
 		return e
 	})
+	if repeated {
+		startErr = errors.Join(startErr, restorejournal.ErrInvalid)
+	}
 	if !started {
-		return errors.Join(startErr, restorejournal.ErrUnavailable)
+		return nil, errors.Join(startErr, restorejournal.ErrUnavailable)
 	}
 	if startErr != nil {
 		_ = cmd.Process.Kill()
 	}
 	runErr := errors.Join(startErr, cmd.Wait())
-	if err := errors.Join(runErr, current()); err != nil {
-		return err
+	if runErr != nil || output.overflow {
+		clear(output.Bytes())
+		return nil, errors.Join(runErr, restorejournal.ErrUnavailable)
 	}
-	if err := verifyHeldBytes(); err != nil {
-		return err
-	}
-	fields := strings.Fields(output.String())
-	if output.overflow || len(fields) < 3 || fields[0] != "Mihomo" || fields[1] != "Meta" || strings.TrimPrefix(fields[2], "v") != ReviewedMihomoVersion {
-		return errors.New("Mihomo version does not match reviewed release")
-	}
-	return nil
+	return output.Bytes(), nil
 }

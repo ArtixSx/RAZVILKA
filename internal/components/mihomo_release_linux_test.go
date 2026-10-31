@@ -9,12 +9,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/ArtixSx/razvilka/internal/backendprofile"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -239,5 +241,31 @@ func TestMihomoOfficialPinnedNativeInstall(t *testing.T) {
 		if err := m.mihomoReleaseIdle(); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// Hold the selected port while -t validates the compiled profile: config
+	// validation must not require or start a SOCKS listener or a remote server.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	options := backendprofile.MihomoOptions{SOCKSPort: listener.Addr().(*net.TCPAddr).Port}
+	source := "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?security=tls&sni=edge.example&type=tcp"
+	profile, err := backendprofile.Mihomo(source, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review := digest([]byte(profile.Config))
+	starts := 0
+	start := func(ctx context.Context, begin func() error) error {
+		starts++
+		return mihomoFixtureAdmission(ctx, begin)
+	}
+	validation, err := m.ValidateMihomoProfileGuarded(context.Background(), source, options, review, mihomoFixtureAdmission, start)
+	if err != nil || !validation.NativeValidated || validation.ServiceVerified || validation.LiveApplied || validation.ConfigSHA256 != review || starts != 1 {
+		t.Fatal("native config validation lost exact scope", validation, starts, err)
+	}
+	if _, err := m.ValidateMihomoProfileGuarded(context.Background(), source, options, digest([]byte("other config")), mihomoFixtureAdmission, start); err == nil || starts != 1 {
+		t.Fatal("changed preview executed native process", starts, err)
 	}
 }

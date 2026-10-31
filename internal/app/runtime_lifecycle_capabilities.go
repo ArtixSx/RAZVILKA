@@ -94,6 +94,9 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 		operations["import_export"] = engine.LifecycleOperation{Registration: "lab-only", Reason: "extension-api-config-generation-only"}
 		operations["native_validation"] = registeredLifecycleOperation(false, "extension-does-not-native-validate")
 	}
+	if id == "mihomo" {
+		operations["native_validation"] = registeredLifecycleOperation(a.Components != nil && a.Store != nil, "reviewed-generated-profile-and-original-installed-component-required")
+	}
 	if id == "hev" {
 		dependency := a.Dataplane.ManagedSidecarLifecycleRegistration("hev")
 		operations["native_validation"] = registeredLifecycleOperation(false, "hev-has-no-native-config-check-command")

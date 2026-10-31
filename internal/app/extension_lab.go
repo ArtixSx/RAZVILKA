@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -49,7 +50,7 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 	if !extensionDecode(w, r, &q) {
 		return
 	}
-	if (q.Action != "preview" && q.Action != "export") || q.Confirm != "BUILD_MIHOMO_CONFIG" {
+	if (q.Action != "preview" && q.Action != "export" && q.Action != "validate") || (q.Action == "validate" && q.Confirm != "VALIDATE_MIHOMO_CONFIG") || (q.Action != "validate" && q.Confirm != "BUILD_MIHOMO_CONFIG") {
 		writeJSON(w, 400, map[string]any{"error": "Подтвердите построение профиля Mihomo."})
 		return
 	}
@@ -60,12 +61,25 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 	}
 	h := sha256.Sum256([]byte(result.Config))
 	digest := hex.EncodeToString(h[:])
-	if q.Action == "export" && q.Review != digest {
+	if (q.Action == "export" || q.Action == "validate") && q.Review != digest {
 		writeJSON(w, 409, map[string]any{"error": "Параметры изменились. Повторите предпросмотр."})
 		return
 	}
 	if r.Context().Err() != nil || !a.Security.Authenticated(r) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
+		return
+	}
+	if q.Action == "validate" {
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		validation, err := a.validateMihomo(ctx, q.Content, q.Options, digest)
+		if err != nil || ctx.Err() != nil || !a.Security.Authenticated(r) {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Нативная проверка Mihomo не подтверждена. Проверьте установленный компонент и состояние восстановления.", "code": "MIHOMO_NATIVE_VALIDATION_UNCONFIRMED", "live_applied": false, "native_validated": false})
+			return
+		}
+		result.Config = ""
+		result.NativeValidated = true
+		writeJSON(w, http.StatusOK, map[string]any{"result": result, "validation": validation, "review": digest, "live_applied": false, "draft_persisted": false, "lifecycle": a.runtimeLifecycle("mihomo")})
 		return
 	}
 	if q.Action == "preview" {

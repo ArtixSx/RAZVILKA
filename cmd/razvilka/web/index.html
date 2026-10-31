@@ -699,7 +699,7 @@ fd00::25"></textarea><small>По одному адресу или диапазо
 <label for="ext5MFile">Файл профиля (до 256 КиБ)</label><input type="file" id="ext5MFile" accept=".txt,.json,.yaml,.yml,.conf">
 <label for="ext5MText">Ссылка или содержимое профиля</label><textarea id="ext5MText" rows="7" spellcheck="false" autocomplete="off" maxlength="262144" placeholder="vless://…"></textarea>
 <div class="ext5-fields"><label>Узел в исходном списке (начиная с 1)<input type="number" id="ext5MIndex" min="1" max="512" value="1"></label><label>Локальный SOCKS-порт<input type="number" id="ext5MPort" min="1024" max="65535" value="18090"></label></div>
-<div class="ext5-actions"><button type="button" class="primary" id="ext5MPreview">Разобрать профиль</button><button type="button" class="secondary" id="ext5MExport" disabled>Скачать YAML с ключом</button></div>
+<div class="ext5-actions"><button type="button" class="primary" id="ext5MPreview">Разобрать профиль</button><button type="button" class="secondary" id="ext5MExport" disabled>Скачать YAML с ключом</button><button type="button" class="secondary" id="ext5MValidate" disabled>Проверить установленным Mihomo</button></div>
 <pre id="ext5MResult" class="ext5-result">Нет результата. Установленный Mihomo и доступность сервиса не проверялись.</pre>
 <p>Выходной профиль слушает только 127.0.0.1. TUN, DNS-сервер, внешний контроллер и фоновые загрузки отключены. Это не импорт всех правил исходного файла.</p>
 </section>

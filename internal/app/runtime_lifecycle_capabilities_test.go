@@ -55,7 +55,11 @@ func TestRuntimeLifecycleUsesOriginalAdapterAndCheckerRegistrations(t *testing.T
 	}
 	for _, id := range []string{"mihomo", "hev"} {
 		lab := a.runtimeLifecycle(id)
-		if lab.Operations["import_export"].Registration != "lab-only" || lab.Operations["live_apply"].Registration != "absent" || lab.Operations["native_validation"].Registration != "absent" {
+		native := "absent"
+		if id == "mihomo" {
+			native = "registered"
+		}
+		if lab.Operations["import_export"].Registration != "lab-only" || lab.Operations["live_apply"].Registration != "absent" || lab.Operations["native_validation"].Registration != native {
 			t.Fatal("lab export became production runtime", id)
 		}
 	}
