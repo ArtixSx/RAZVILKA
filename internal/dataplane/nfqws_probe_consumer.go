@@ -444,6 +444,7 @@ func (e *nfqwsProbeExecution) prepare(ctx context.Context, revision uint64) erro
 	}
 	id := hex.EncodeToString(nonce[:])
 	deadline, _ := ctx.Deadline()
+	deadline = deadline.UTC() // Durable command equality excludes process-local monotonic time.
 	control := c.control.Reference()
 	d := e.descriptor
 	if len(d.Lua) != 3 || len(d.Blobs) != 2 {
