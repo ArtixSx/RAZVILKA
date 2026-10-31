@@ -13,12 +13,50 @@ on:
       - 'internal/app/**'
       - 'internal/operationgate/**'
       - 'internal/startuptools/**'
+      - 'internal/nativecheckfixture/**'
       - 'scripts/test-managed-probe-native.sh'
+      - 'scripts/check-node-native-performance.sh'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
   contents: read
 jobs:
+  node-native-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned official Xray and isolated fixture tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux unzip
+          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Actual full Check and App queue measurements
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_NODE_PERF_OUTPUT="$GITHUB_WORKSPACE/artifacts/node-native-performance" \
+            sh scripts/check-node-native-performance.sh
+      - name: Preserve measured samples and environment
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: node-native-performance-${{ github.sha }}
+          path: artifacts/node-native-performance
+          if-no-files-found: error
   managed-probe-native:
     runs-on: ubuntu-latest
     timeout-minutes: 15
