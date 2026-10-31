@@ -67,3 +67,29 @@ func TestDomainTCPBaselineKernelContractRejectsUnsupportedPolicyWithoutGrant(t *
 		t.Fatal("comparison DTO issued owner")
 	}
 }
+
+func TestDomainTCPBaselineKernelSameNamespaceVethPeerMetadata(t *testing.T) {
+	image, spec := domainTCPBaselineKernelModel(t)
+	image.Links = []byte(`[{"ifindex":1,"ifname":"lo","qdisc":"noqueue","flags":["UP","LOWER_UP"]},{"ifindex":2,"ifname":"` + spec.Client.Interface + `","link":"lanpeer","linkinfo":{"info_kind":"veth"},"qdisc":"noqueue","flags":["UP","LOWER_UP"]},{"ifindex":4,"ifname":"lanpeer","link":"` + spec.Client.Interface + `","linkinfo":{"info_kind":"veth"},"qdisc":"noqueue","flags":["UP","LOWER_UP"]},{"ifindex":3,"ifname":"wan0","qdisc":"fq_codel","flags":["UP","LOWER_UP"]}]`)
+	if _, err := domainTCPBaselineKernelContract(image, spec); err != nil {
+		t.Fatal("actual iproute2 veth peer metadata rejected", err)
+	}
+	for _, change := range []string{"missing-peer", "nonreciprocal", "non-veth", "foreign-master"} {
+		t.Run(change, func(t *testing.T) {
+			bad := image
+			switch change {
+			case "missing-peer":
+				bad.Links = bytes.Replace(image.Links, []byte(`"ifname":"lanpeer"`), []byte(`"ifname":"different"`), 1)
+			case "nonreciprocal":
+				bad.Links = bytes.Replace(image.Links, []byte(`"link":"`+spec.Client.Interface+`"`), []byte(`"link":"wan0"`), 1)
+			case "non-veth":
+				bad.Links = bytes.ReplaceAll(image.Links, []byte(`"info_kind":"veth"`), []byte(`"info_kind":"bridge"`))
+			case "foreign-master":
+				bad.Links = bytes.Replace(image.Links, []byte(`"ifindex":2`), []byte(`"master":"br-other","ifindex":2`), 1)
+			}
+			if _, err := domainTCPBaselineKernelContract(bad, spec); err == nil {
+				t.Fatal("foreign peer relation accepted", change)
+			}
+		})
+	}
+}

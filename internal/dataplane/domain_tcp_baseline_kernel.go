@@ -76,9 +76,10 @@ func domainTCPBaselineKernelContract(image DomainTCPBaselineReadImage, spec Doma
 	}
 	indices := map[string]int{}
 	up := map[string]bool{}
+	peers := map[string]string{}
 	for _, link := range links {
 		for key := range link {
-			if !slices.Contains([]string{"ifindex", "ifname", "flags", "mtu", "qdisc", "operstate", "linkmode", "group", "txqlen", "link_type", "address", "broadcast", "linkinfo", "link_index", "link_netnsid", "promiscuity", "allmulti", "min_mtu", "max_mtu", "inet6_addr_gen_mode", "num_tx_queues", "num_rx_queues", "gso_max_size", "gso_max_segs", "tso_max_size", "tso_max_segs", "gro_max_size", "gso_ipv4_max_size", "gro_ipv4_max_size"}, key) {
+			if !slices.Contains([]string{"ifindex", "ifname", "link", "flags", "mtu", "qdisc", "operstate", "linkmode", "group", "txqlen", "link_type", "address", "broadcast", "linkinfo", "link_index", "link_netnsid", "promiscuity", "allmulti", "min_mtu", "max_mtu", "inet6_addr_gen_mode", "num_tx_queues", "num_rx_queues", "gso_max_size", "gso_max_segs", "tso_max_size", "tso_max_segs", "gro_max_size", "gso_ipv4_max_size", "gro_ipv4_max_size"}, key) {
 				return zero, ErrDomainTCPBaselineKernel
 			}
 		}
@@ -103,12 +104,27 @@ func domainTCPBaselineKernelContract(image DomainTCPBaselineReadImage, spec Doma
 				return zero, ErrDomainTCPBaselineKernel
 			}
 		}
+		if raw := link["link"]; len(raw) != 0 {
+			var peer string
+			if json.Unmarshal(raw, &peer) != nil || !proxyFirewallInterface.MatchString(peer) || peer == name || peer == "lo" || len(link["linkinfo"]) == 0 {
+				return zero, ErrDomainTCPBaselineKernel
+			}
+			peers[name] = peer
+		}
 		indices[name] = index
 		var flags []string
 		if json.Unmarshal(link["flags"], &flags) != nil {
 			return zero, ErrDomainTCPBaselineKernel
 		}
 		up[name] = slices.Contains(flags, "UP") && slices.Contains(flags, "LOWER_UP")
+	}
+	for name, peer := range peers {
+		// iproute2 exposes a same-namespace veth peer by name, rather than
+		// link_index. This is link metadata only; require the complete reciprocal
+		// pair, never interpret an arbitrary master/tunnel relationship as veth.
+		if indices[peer] == 0 || peers[peer] != name || indices[peer] == indices[name] {
+			return zero, ErrDomainTCPBaselineKernel
+		}
 	}
 	if indices[spec.Client.Interface] == 0 || !up[spec.Client.Interface] {
 		return zero, ErrDomainTCPBaselineKernel
