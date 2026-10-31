@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"path/filepath"
@@ -257,21 +258,21 @@ func (r *ManagedNFQWSProbeConsumer) Execute(ctx context.Context, source *strateg
 	}
 	ref, err := source.ManagedReference(ctx, runtime, r.control)
 	if err != nil {
-		return zero, newManagedNFQWSProbeCompletion(runtime), err
+		return zero, newManagedNFQWSProbeCompletion(runtime), fmt.Errorf("retain native probe source: %w", err)
 	}
 	record, err := epoch.Reference(ctx)
 	if err != nil {
 		return zero, newManagedNFQWSProbeCompletion(runtime), err
 	}
 	if record.CandidateID != ref.Material.CandidateID || record.Incarnation != ref.Material.Incarnation || record.ValidationGeneration != ref.ValidationGeneration || record.ServiceID != ref.Scope.Target.ServiceID || record.CriteriaDigest != ref.Scope.CriteriaDigest {
-		return zero, newManagedNFQWSProbeCompletion(runtime), ErrNFQWSScopedOwner
+		return zero, newManagedNFQWSProbeCompletion(runtime), fmt.Errorf("probe epoch/source binding: %w", ErrNFQWSScopedOwner)
 	}
 	if err := epoch.ProbeOwnersCurrent(ctx, source, runtime, r.control); err != nil {
 		return zero, newManagedNFQWSProbeCompletion(runtime), err
 	}
 	criteria, err := strategylab.ManagedProbeCriteriaDigest(service)
 	if err != nil || criteria != ref.Scope.CriteriaDigest || service.ID != ref.Scope.Target.ServiceID || service.ProbeURL != ref.Scope.Target.ProbeURL {
-		return zero, newManagedNFQWSProbeCompletion(runtime), ErrNFQWSScopedOwner
+		return zero, newManagedNFQWSProbeCompletion(runtime), fmt.Errorf("probe catalogue binding: %w", ErrNFQWSScopedOwner)
 	}
 	cleanup, err := r.control.ReviewExclusiveCleanup(ctx)
 	if err != nil {
@@ -333,9 +334,17 @@ func (r *ManagedNFQWSProbeConsumer) Execute(ctx context.Context, source *strateg
 	}
 	if err == nil {
 		err = e.prepare(ctx, revision)
+		if err != nil {
+			err = fmt.Errorf("prepare original NFQWS probe: %w", err)
+		}
+	} else {
+		err = fmt.Errorf("reserve original probe socket: %w", err)
 	}
 	if err == nil {
 		err = r.manager.ProbeCandidate(WithReviewGuard(ctx, e.operationGuard), e.plan, "nfqws2")
+		if err != nil {
+			err = fmt.Errorf("execute original NFQWS probe: %w", err)
+		}
 	}
 	cancel()
 	// Join the actual flow before releasing its retained duplicate. A blocked
