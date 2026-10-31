@@ -497,7 +497,7 @@ func (e *nfqwsProbeExecution) prepare(ctx context.Context, revision uint64) erro
 	if identity.Kind == netidentity.ProcNetInode {
 		e.spec.NetNamespace = nfqwsProbeNamespace(identity.Inode)
 	}
-	e.plan = Plan{SchemaVersion: SchemaVersion, PlanID: "dp-probe-" + id, Digest: stringsHashProbe(e.spec), Revision: revision, Ready: true, NetworkProfileID: e.record.NetworkID, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: e.record.ServiceID, Selected: "nfqws2", Resolved: "nfqws2", CIDRs: []string{e.reference.Scope.Address.String() + "/32"}}}}
+	e.plan = Plan{SchemaVersion: SchemaVersion, PlanID: "dp-" + id[:16], Digest: stringsHashProbe(e.spec), Revision: revision, Ready: true, NetworkProfileID: e.record.NetworkID, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: e.record.ServiceID, Selected: "nfqws2", Resolved: "nfqws2", CIDRs: []string{e.reference.Scope.Address.String() + "/32"}}}}
 	_, err = CompileNFQWSScopedPlan(e.plan, e.spec)
 	return err
 }

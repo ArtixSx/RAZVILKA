@@ -19,6 +19,11 @@ type NFQWSProbeSpec struct {
 }
 
 func validateNFQWSProbeIntent(plan Plan, spec NFQWSScopedSpec) (NFQWSScopedSpec, error) {
+	// Manager.ProbeCandidate installs the COMMON registrar only for its exact
+	// journal PlanID grammar. Never compile a probe that would skip that owner.
+	if !validPlanID(plan.PlanID) {
+		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
+	}
 	p, c := spec.Probe, spec.Candidate
 	if p == nil || plan.SchemaVersion != SchemaVersion || plan.PlanID == "" || len(plan.PlanID) > 128 || !lanPolicyHash(plan.Digest) || plan.Revision == 0 || plan.NetworkProfileID == "" || !plan.Ready || plan.SafeMode || plan.Noop || len(plan.Blockers) != 0 || len(plan.ResourceConflicts) != 0 || plan.LAN != nil || len(plan.Routes) != 1 || spec.Queue != 200 || !nfqwsScopedSpecNetworkValid(spec) || spec.NetworkIdentity == nil || len(spec.Matches) != 0 || c.ID == "" || len(c.ID) > 128 || !nfqws2ManagedHex(c.Incarnation, 32) || !lanPolicyHash(c.ArgumentsSHA256) || c.ServiceID == "" || c.IPFamily != "ipv4" || len(c.Traffic) != 1 || c.Traffic[0] != (NFQWSScopedTraffic{Protocol: "tcp", First: 443, Last: 443}) {
 		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner

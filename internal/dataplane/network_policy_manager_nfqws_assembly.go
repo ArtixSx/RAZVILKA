@@ -33,7 +33,10 @@ type nfqwsExecutionAssembly struct {
 }
 
 func nfqwsExecutionCommandMatches(command nfqws2ManagedProcessCommand, spec NFQWSScopedSpec) error {
-	if nfqws2ValidateManagedCommand(command) != nil || spec.Queue == 0 || spec.SessionID != command.ID ||
+	if err := nfqws2ValidateManagedCommand(command); err != nil {
+		return errors.Join(ErrNFQWSScopedOwner, fmt.Errorf("managed command validation: %w", err))
+	}
+	if spec.Queue == 0 || spec.SessionID != command.ID ||
 		spec.BootID != command.Parent.BootID || spec.CommandSHA256 != nfqws2ManagedCommandDigest(command) ||
 		spec.Candidate.ArgumentsSHA256 != components.NFQWSRuntimeArgumentsSHA256(command.Program.Path, command.Args) {
 		return ErrNFQWSScopedOwner
@@ -86,7 +89,7 @@ func newNFQWSExecutionAssembly(ctx context.Context, adapter *NFQWS2Adapter, comm
 		return nil, ErrNFQWSScopedOwner
 	}
 	if err := nfqwsExecutionCommandMatches(command, spec); err != nil {
-		return nil, err // Refuse wrong queue/argv before reservation or Start.
+		return nil, fmt.Errorf("match original process command: %w", err) // Before reservation or Start.
 	}
 	owner, err := adapter.owner()
 	if err != nil || adapter.StateRoot != command.StateRoot || owner != command.Owner {
@@ -115,7 +118,7 @@ func newNFQWSExecutionAssembly(ctx context.Context, adapter *NFQWS2Adapter, comm
 	})
 	e.resource, err = AcquireNFQWSExecutionResource(context.WithValue(bounded, nfqwsExecutionReadbackKey{}, readback), spec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("acquire original COMMON NFQWS resource: %w", err)
 	}
 	r := e.resource
 	e.binding = &NFQWSScopedBinding{Runner: runtime.Runner, Tools: runtime.Tools, ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard,
