@@ -29,6 +29,24 @@ const nodeMeasurementModel = (() => {
     return candidates[0] || null;
   }
   function label(value) { const n=number(value); return n===null?'—':n===0?'<1 мс':`${n} мс`; }
+  function jobTiming(job, readbackMS) {
+    const timing=job?.timing, parts=[];
+    const batchNumber=value=>Number.isSafeInteger(value)&&value>=0&&value<=86400000?value:null;
+    const ms=value=>value===0?'<1 мс':`${value} мс`;
+    if(timing?.version===1 && date(timing.enqueued_at)!==null && date(timing.observed_at)!==null && date(timing.enqueued_at)<=date(timing.observed_at)) {
+      const queued=batchNumber(timing.queue_wait_ms),total=batchNumber(timing.total_ms);
+      const admitted=date(timing.first_admitted_at);
+      parts.push(queued!==null&&admitted!==null&&admitted>=date(timing.enqueued_at)&&admitted<=date(timing.observed_at)?`До первого допуска: ${ms(queued)}`:'Первый допуск: время не наблюдалось');
+      if(total!==null&&['enqueue-to-server-completion','enqueue-to-server-observation'].includes(timing.total_kind))parts.push(`${timing.total_kind==='enqueue-to-server-completion'?'От постановки до завершения на сервере':'От постановки до снимка сервера'}: ${ms(total)}`);
+    }
+    const last=Array.isArray(job?.results)?job.results.at(-1):null;
+    if(['service','connectivity'].includes(job?.mode)&&number(last?.duration_ms)!==null)parts.push(`Последняя полная проверка (включая очистку): ${label(last.duration_ms)}`);
+    const stages={dns:'DNS',tcp_connect:'TCP',transport:'Транспорт',configuration:'Validation/подготовка',route_identity:'Старт/идентичность',egress:'Egress',service:'Сервис',service_ip:'IP сервиса',cleanup:'Очистка'};
+    const observed=(Array.isArray(last?.stages)?last.stages:[]).filter(stage=>stages[stage?.id]&&number(stage.duration_ms)!==null).map(stage=>`${stages[stage.id]} ${label(stage.duration_ms)}`);
+    if(observed.length)parts.push(`Этапы последнего узла (не сумма): ${observed.join(', ')}`);
+    if(number(readbackMS)!==null)parts.push(`Чтение результата в панели: ${label(readbackMS)} (отдельно от времени сервера)`);
+    return parts.join(' · ');
+  }
   async function readStatus(api, acceptCurrent) {
     const current=Promise.resolve(api('/api/v1/node-checks/current')).then(response=>{acceptCurrent?.(response);return response;});
     const fallback=Promise.resolve(api('/api/v1/node-autofallback'));
@@ -38,12 +56,12 @@ const nodeMeasurementModel = (() => {
     if(results[0].status==='rejected') throw results[0].reason;
     return {response:results[0].value, fallback:results[1].status==='fulfilled'?results[1].value:null, partial:results[1].status==='rejected'};
   }
-  return Object.freeze({measurement,tcp,label,readStatus});
+  return Object.freeze({measurement,tcp,label,readStatus,jobTiming});
 })();
 // END NODE MEASUREMENT MODEL
 
 // Passive browser state never grants permission to change a route.
-const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], connectivity: [], measurements: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, feedWrite:null, feedUnknown:false, feedEdit:0, polling: null, authRequired: false, ordinals: new Map() };
+const nodeBrowser = { tab: 'all', source: '', country: '', page: 0, pageSize: 24, selected: new Set(), visible: [], pings: [], connectivity: [], measurements: [], job: null, timer: null, feedTimers: new Map(), viewActive: null, epoch: 0, feedWrite:null, feedUnknown:false, feedEdit:0, polling: null, authRequired: false, ordinals: new Map(), readbackMS: null, readbackJobID: null };
 
 // General HTTPS readiness is diagnostic only: it never supplies service health.
 function nodeConnectivityState(node, now = Date.now()) {
@@ -93,6 +111,8 @@ function stopNodeBrowserRefresh(clearSession = false) {
     nodeBrowser.pings = [];
     nodeBrowser.connectivity = [];
     nodeBrowser.measurements = [];
+    nodeBrowser.readbackMS = null;
+    nodeBrowser.readbackJobID = null;
     $('#nodeBrowserReadNotice').textContent = '';
     $('#nodeBrowserReadNotice').hidden = true;
     $('#nodeFeedURL').value = '';
@@ -404,7 +424,8 @@ function renderNodeBatchStatus() {
     :job.mode==='connectivity'?` · HTTPS подтверждён: ${job.passed||0} · не подтверждено: ${(job.failed||0)+(job.inconclusive||0)} · пропущено: ${job.skipped||0}`:'';
   const historical=job.earlier_network_completed>0?` · В прежней сети: ${job.earlier_network_completed} (устарели); оценки выше относятся к текущей сети`:'';
   const reason=job.state==='completed'&&job.mode==='service'&&job.result_state!=='not-retained'&&!job.earlier_network_completed?(job.results||[]).find(row=>row.error_code&&row.message)?.message:'';
-  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${summary}${historical}${job.message ? ` · ${job.message}` : ''}${reason?` · Первый отказ: ${reason}`:''}`;
+  const timing=nodeMeasurementModel.jobTiming(job,nodeBrowser.readbackJobID===job.id?nodeBrowser.readbackMS:null);
+  $('#nodeBatchMessage').textContent = `${label}: ${job.completed || 0} / ${job.total || 0}${scenario}${summary}${historical}${job.message ? ` · ${job.message}` : ''}${reason?` · Первый отказ: ${reason}`:''}${timing?` · ${timing}`:''}`;
 }
 
 async function startNodeBrowserCheck(mode, explicitIDs) {
@@ -480,8 +501,12 @@ async function pollNodeBrowserChecks() {
     let delay = 15000;
     try {
       const read = typeof readPanelResource === 'function' ? readPanelResource : api;
+      const readStarted=Date.now();
       const reading = await nodeMeasurementModel.readStatus(read, response => {
         if (!current()) return;
+        const readback=Date.now()-readStarted;
+        nodeBrowser.readbackMS=Number.isSafeInteger(readback)&&readback>=0?readback:null;
+        nodeBrowser.readbackJobID=response.job?.id??null;
         nodeBrowser.job = response.job || null; nodeBrowser.pings = response.pings || [];nodeBrowser.fetchAndCheck=response.fetch_and_check===true; nodeBrowser.measurements = response.node_measurements || [];
         acceptNodeConnectivity(response);
         // Publish completed checks before unrelated fallback/catalog reads.

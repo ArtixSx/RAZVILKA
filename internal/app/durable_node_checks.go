@@ -184,6 +184,9 @@ func (a *App) acceptDurableNodeChecks(w http.ResponseWriter, r *http.Request, q 
 
 func (a *App) nodeCheckCurrentView() map[string]any {
 	view := a.nodeCheckSnapshot()
+	if job, _ := view["job"].(*nodeCheckJob); job != nil && job.Timing != nil {
+		job.Timing = nodeJobTimingView(job.Timing.EnqueuedAt, job.Timing, job.FinishedAt, time.Now().UTC())
+	}
 	a.addDurableServiceJobsView(view, true)
 	view["durable_selected_checks"] = true
 	view["durable_all_vless"] = true
@@ -238,6 +241,8 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 	if err != nil {
 		return out, err
 	}
+	admittedAt := time.Now().UTC()
+	enqueuedAt := a.durableNodeEnqueuedAt(r.durableID)
 	var done chan struct{}
 	defer func() {
 		release()
@@ -304,6 +309,9 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 		if r.NodeCatalog != nil {
 			job.Scope, job.Matched, job.Skipped = allVLESSScope, r.NodeCatalog.Matched, r.NodeCatalog.Matched-len(r.NodeIDs)
 		}
+	}
+	if job.Timing == nil && !enqueuedAt.IsZero() {
+		job.Timing = nodeJobTimingView(enqueuedAt, &nodeJobTiming{FirstAdmittedAt: &admittedAt}, nil, admittedAt)
 	}
 	a.nodeChecks.job = job
 	job.Completed, job.State, job.Phase, job.FinishedAt = r.durableCursor, "running", "checking", nil

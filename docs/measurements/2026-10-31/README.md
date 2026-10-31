@@ -94,3 +94,46 @@ handshake timestamp раньше принимался; теперь возвра
 CI runner; исходные диагностические времена оставлены в выдержках вывода.
 Неотзывчивый runner нельзя принудительно завершить одной передачей контекста;
 реальный owned executor и cleanup требуют своих native проверок.
+
+## Наблюдение очереди → admission → завершение → чтение
+
+`queue-local.csv` снят существующим reconciler/operation gate через HTTP
+handlers `POST /node-checks` и `GET /node-checks/current` на тестовом приложении.
+Это контролируемая модель: каждый checker выполняет четыре ожидания по 5 мс
+(validation/egress/service/cleanup моделируются), чужой exclusive lease
+удерживается ещё 10 мс. Native ядро и реальная сеть не запускаются.
+Пригодность узла заменена моделью, а durable queue, admission и сохранение
+результата исполняются настоящим кодом приложения. Времена не являются
+ускорением и не подтверждают точность маршрута.
+
+| Сценарий | Размер batch | N повторных | enqueue→server completion p50/p95, мс |
+| --- | --- | --- | --- |
+| Single | 1 | 12 | 62 / 64 |
+| Selected batch | 2 | 12 | 108 / 112 |
+| All VLESS fixture | 2 | 12 | 108 / 121 |
+
+Ещё по одному первому запуску отдельного fixture записано как `first-fixture`.
+Повторные sample также создают новый fixture: это повторения опыта, а не
+измерения прогретого native процесса. All VLESS содержит только два узла,
+не реальный каталог. В тесте `now` планировщика продвигается между шагами;
+реальный такт координатора и ожидание следующих rounds этим не измерены.
+`http_readback_ms` — вызов настоящего HTTP handler в `httptest`, без TCP-сети
+и без браузерного event loop. Windows amd64, Go 1.26.5; CPU/RSS не измерены.
+
+```powershell
+$env:RAZVILKA_QUEUE_PERF='1'
+$env:RAZVILKA_QUEUE_PERF_CSV='C:/path/to/queue-local.csv'
+C:/Projects/RAZVILKA/tools/go/bin/go.exe test ./internal/app -run '^TestDurableNodeLocalTimingExperiment$' -count=1 -v
+```
+
+Новый API diagnostic `job.timing` использует существующее durable `CreatedAt`
+для enqueue и процессное время получения первого exclusive lease для admission.
+После перезапуска admission неизвестен (`null`), а время окончания остаётся
+существующей durable отметкой. На панели отдельно показаны очередь до первого
+допуска, общее время до серверного завершения/снимка, полное время последней
+проверки (уже включающее cleanup), существующие этапы и получение текущего
+ответа браузером. Эти интервалы не складываются: этапы могут пересекаться,
+readback относится к получению снимка отдельно от серверного времени.
+Browser readback измеряется только после существующего session/epoch guard
+и привязывается к job ID; чтение shared cache тоже не выдаётся за native работу.
+Отсутствующий или обратный timestamp не превращается в 0 мс.
