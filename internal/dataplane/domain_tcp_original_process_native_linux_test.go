@@ -155,6 +155,13 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 	})
 	cancelRequest()
 	if !entered || !errors.Is(err, context.Canceled) {
+		if resource.child != nil {
+			marker := &xrayDomainTCPProcessRead{resource: resource, process: resource.child}
+			marker.self = marker
+			marker.open.Store(true)
+			domainNativeProcessDiagnostics(t, resource, context.WithValue(original, xrayDomainTCPProcessReadKey{}, marker))
+			marker.open.Store(false)
+		}
 		t.Fatal("cancelled native callback did not run", entered, err)
 	}
 	cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(original), 5*time.Second)

@@ -52,7 +52,7 @@ func (r *XrayDomainTCPExecutionResource) readDomainProcess(ctx context.Context, 
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	p := r.child
-	args := []string{r.executable.path, "run", "-config", "/proc/self/fd/4"}
+	args := []string{r.executable.path, "run", "-format", "json", "-config", "/proc/self/fd/4"}
 	if p.image.path != "/proc/self/fd/3" || p.image.dir != r.rootPath || !slices.Equal(p.image.args, args) || !slices.Equal(p.image.env, xraySelectedTCPNativeEnvironment()) ||
 		len(p.image.extras) != 2 || p.image.extras[0] != r.executable.file || p.image.extras[1] != r.config {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal

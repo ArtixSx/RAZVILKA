@@ -78,7 +78,7 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	hash := sha256.Sum256(exeData)
 	sha := hex.EncodeToString(hash[:])
 	anchor, _ := root.RootInfo()
-	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-config", "/proc/self/fd/4"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-format", "json", "-config", "/proc/self/fd/4"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
 	child, err := reserveXraySelectedTCPProcessWait(ctx, cmd)
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +120,7 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	read := context.WithValue(context.WithValue(ctx, syntheticExecutionRegistrarKey{}, scope), xrayDomainTCPProcessReadKey{}, marker)
 	opening, err := r.observeDomainProcess(read)
 	if err != nil {
+		domainNativeProcessDiagnostics(t, r, read)
 		t.Fatal("actual inherited process/config association", err)
 	}
 	if err := child.beginReservedWait(); err != nil {
@@ -163,4 +164,26 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	if endpoint.Addr() != netip.MustParseAddr("127.0.0.1") {
 		t.Fatal("test escaped loopback")
 	}
+}
+
+// Read-only stage diagnostics for actual native acceptance failures. The
+// output contains only association booleans/errors, never config or node data.
+func domainNativeProcessDiagnostics(t *testing.T, r *XrayDomainTCPExecutionResource, ctx context.Context) {
+	t.Helper()
+	t.Log("native source files/current", r.filesCurrent(ctx), r.domainProcessCurrent(ctx))
+	if r.child == nil {
+		return
+	}
+	proc, err := openXraySelectedTCPProc(ctx, r.child.pid)
+	if err != nil {
+		t.Log("native proc open", err)
+		return
+	}
+	defer proc.close()
+	stat, statErr := proc.read(ctx, proc.child, "stat", 8192)
+	_, parent, group, parseErr := xraySelectedTCPStat(stat, r.child.pid)
+	t.Log("native stat", statErr, parseErr, "parent matches", parent == r.child.parent, "group matches", group == r.child.pid)
+	image, imageErr := proc.domainKernelImage(ctx, r.definition.NetworkIdentity)
+	t.Log("native image", imageErr, "path matches", image.exe == r.executable.path, "inode matches", sameXrayDomainTCPFile(r.executable.info, image.executable), "argv matches", image.matches(r.child.image.args, r.executable.path, r.executable.info))
+	t.Log("native config FD", r.readDomainConfigFD(ctx, proc))
 }

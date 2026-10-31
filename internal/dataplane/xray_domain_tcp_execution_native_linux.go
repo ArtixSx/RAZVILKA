@@ -55,7 +55,9 @@ func (r *XrayDomainTCPExecutionResource) launchOriginalNative(ctx context.Contex
 	if r.log == nil {
 		return ErrXrayDomainTCPOriginal
 	}
-	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{r.executable.path, "run", "-config", "/proc/self/fd/4"}, Dir: r.rootPath, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{r.executable.file, r.config}, Stdout: r.log, Stderr: r.log, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	// FD4 has no filename extension. Xray's auto decoder otherwise refuses
+	// before listener creation; the reviewed payload is always JSON.
+	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{r.executable.path, "run", "-format", "json", "-config", "/proc/self/fd/4"}, Dir: r.rootPath, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{r.executable.file, r.config}, Stdout: r.log, Stderr: r.log, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
 	p, err := reserveXraySelectedTCPProcessWait(ctx, cmd)
 	if err != nil {
 		return err
