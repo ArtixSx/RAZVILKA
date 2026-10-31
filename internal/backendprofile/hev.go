@@ -7,6 +7,9 @@ import (
 	"regexp"
 )
 
+// ReviewedHEVVersion is the concrete native dialect used by managed profiles.
+const ReviewedHEVVersion = "2.17.1"
+
 type HevOptions struct {
 	Interface   string `json:"interface"`
 	Address     string `json:"address"` // TUN IPv4 CIDR, not a proxy address.

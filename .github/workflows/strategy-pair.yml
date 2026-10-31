@@ -74,6 +74,9 @@ jobs:
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
           /usr/local/lib/razvilka-fixtures/xray version
+          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
       - name: Original DNS source, Xray descriptors and cancellation
         shell: bash
         run: |
@@ -81,3 +84,10 @@ jobs:
             RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestXrayDomainTCPNativeHeldProcessLifecycle|TestNFQWSProbe' -v
+      - name: Actual HEV TUN HTTPS and owned cleanup in private namespaces
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -race -count=1 ./internal/dataplane -run '^TestHEVOwnedNativeTUNLifecycle$' -v

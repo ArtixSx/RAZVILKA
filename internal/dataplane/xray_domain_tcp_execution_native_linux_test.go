@@ -46,6 +46,9 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	endpoint := listener.Addr().(*net.TCPAddr).AddrPort()
 	listener.Close()
 	path := t.TempDir()
+	if err := os.Chmod(path, 0700); err != nil {
+		t.Fatal(err)
+	}
 	root, err := ownedfs.Open(path)
 	if err != nil {
 		t.Fatal(err)

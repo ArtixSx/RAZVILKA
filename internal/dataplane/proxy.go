@@ -996,7 +996,7 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := a.waitForSOCKSProcess(ctx, engine, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+	if err := a.startOwnedSidecar(ctx); err != nil {
 		return err
 	}
 	if err := a.waitForInterface(ctx); err != nil {
@@ -1221,7 +1221,7 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 		_ = a.stopOwned(ctx)
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+	if err := a.startOwnedSidecar(ctx); err != nil {
 		_ = a.stopOwned(ctx)
 		return err
 	}
@@ -1679,7 +1679,7 @@ func (a *ProxyTunnelAdapter) restoreProxySnapshot(ctx context.Context, snapshot 
 		}
 	}
 	if sameBoot && snapshot.SidecarWasRunning {
-		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+		if err := a.startOwnedSidecar(ctx); err != nil {
 			return err
 		}
 	}

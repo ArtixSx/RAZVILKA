@@ -71,7 +71,11 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer control.Close()
-	manager := New(t.TempDir())
+	privateState := t.TempDir()
+	if err := os.Chmod(privateState, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(privateState)
 	manager.FreshProfile = func(context.Context) (string, error) { return check.NetworkProfile, nil }
 	provider := netidentity.NewProcProvider()
 	identity, err := provider.Observe(held)
