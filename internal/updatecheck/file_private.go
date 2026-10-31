@@ -306,19 +306,24 @@ func (a *SelfUpdateFileAdapter) privateSnapshot(ctx context.Context, id string) 
 	if err := validatePrivateSnapshot(snapshot); err != nil {
 		return snapshot, err
 	}
-	_, review, err := a.loadHeader(ctx, id)
-	if err != nil {
-		return snapshot, err
-	}
-	if (snapshot.Schema == 3) != (review.StrategyPair != nil) {
-		return snapshot, ErrStrategyStateAdmission
+	// Legacy schema1/2 inventories remain format-only retained evidence. They
+	// predate StrategyPair and can be read while another helper is preparing.
+	// Schema3 must additionally bind its exact originating retained review.
+	_, review, reviewErr := a.loadHeader(ctx, id)
+	if reviewErr != nil {
+		_, review, reviewErr = a.loadBoundReview(ctx, id, false, true)
 	}
 	if snapshot.Schema == 3 {
+		if reviewErr != nil || review.StrategyPair == nil {
+			return snapshot, ErrStrategyStateAdmission
+		}
 		image := snapshot.Images["strategy"]
 		schema, err := ordinaryStrategyImage(image)
 		if err != nil || schema != review.StrategyPair.StateSchema || digestBytes(image.Data) != review.StrategyPair.StateSHA256 {
 			return snapshot, ErrStrategyStateAdmission
 		}
+	} else if reviewErr == nil && review.StrategyPair != nil {
+		return snapshot, ErrStrategyStateAdmission
 	}
 	return snapshot, nil
 }
