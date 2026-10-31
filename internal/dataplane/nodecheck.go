@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -57,6 +58,15 @@ type NodeCheckStage struct {
 // NodeCleanupStatus describes the original temporary session's cleanup only;
 // it is diagnostic metadata and grants no route or runtime admission.
 type NodeCleanupStatus string
+
+// One synchronous Check owns this observation; it is never persisted or reused
+// by another check. Fresh DNS and resource admission still run before reuse.
+type literalServiceObservationKey struct{}
+type literalServiceObservation struct {
+	url, address, route string
+	pinned              netip.Addr
+	proof               evidence.ProbeEvidence
+}
 
 const (
 	NodeCleanupNotObserved NodeCleanupStatus = "not_observed"
@@ -154,6 +164,7 @@ type ExactNodeChecker struct {
 	proxyEgress       func(context.Context, string) (string, error)
 	egressPair        func(context.Context, string) nodeEgressPair
 	serviceProbe      func(context.Context, string, string, string, catalog.Service) (evidence.ProbeEvidence, error)
+	serviceTLSRoots   *tls.Config // Test trust only; nil uses system roots in production.
 	serviceIPProbe    func(context.Context, string, string, string, catalog.Service, netip.Addr) (evidence.ProbeEvidence, error)
 	connectivityProbe func(context.Context, string) (int, error)
 	cleanup           func(context.Context, exactNodeSession) error
@@ -562,6 +573,10 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		return result, err
 	}
 	serviceCtx, serviceFailure := withNodeServiceFailure(ctx)
+	var firstLiteral literalServiceObservation
+	if guard, _ := ctx.Value(nodeResourceGuardKey{}).(*nodeResourceGuard); guard != nil {
+		serviceCtx = context.WithValue(serviceCtx, literalServiceObservationKey{}, &firstLiteral)
+	}
 	proof, err := c.serviceProbe(serviceCtx, session.Address, result.RoutePathID, proxyIP, request.Service)
 	proof.NetworkProfile = request.NetworkProfile
 	result.Evidence = proof
@@ -596,7 +611,14 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 				return result, err
 			}
 			ipCtx, ipFailure := withNodeServiceFailure(ctx)
-			ipProof, ipErr := c.serviceIPProbe(ipCtx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
+			var ipProof evidence.ProbeEvidence
+			var ipErr error
+			if firstLiteral.pinned == address && firstLiteral.url == selectedNodeProbe(request.Service).URL && firstLiteral.address == session.Address && firstLiteral.route == result.RoutePathID && firstLiteral.proof.ProbeID == proof.ProbeID && firstLiteral.proof.EgressIP == proxyIP {
+				// This exact literal transport already passed the service criteria.
+				ipProof = firstLiteral.proof
+			} else {
+				ipProof, ipErr = c.serviceIPProbe(ipCtx, session.Address, result.RoutePathID, proxyIP, request.Service, address)
+			}
 			ipProof.NetworkProfile = request.NetworkProfile
 			ipRoute := exactNodeProofEngine(ipProof.Engine, c.EngineID()) && ipProof.RoutePathID == result.RoutePathID && ipProof.ExpectedRoutePathID == result.RoutePathID && ipProof.ObservedRoutePathID == result.RoutePathID
 			if ipErr != nil || !ipProof.Valid() || !ipProof.AssuranceLevel().AtLeast(evidence.Service) || !ipRoute {
@@ -1199,7 +1221,7 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 		pinned = addresses[0]
 	}
 	if pinned.IsValid() {
-		response, cleanup, err = socksHTTPGetPinned(ctx, probe.URL, address, pinned)
+		response, cleanup, err = socksHTTPGetPinnedTLS(ctx, probe.URL, address, pinned, c.serviceTLSRoots)
 	} else {
 		response, cleanup, err = socksHTTPGet(ctx, probe.URL, address)
 	}
@@ -1241,6 +1263,11 @@ func (c *ExactNodeChecker) probeServicePath(ctx context.Context, address, routeP
 		result.RedirectChain = append(result.RedirectChain, probecheck.RedactedURL(target))
 	}
 	clear(body)
+	if pinned.IsValid() && result.Verdict == evidence.VerdictPass && result.AssuranceLevel().AtLeast(evidence.Service) {
+		if observation, _ := ctx.Value(literalServiceObservationKey{}).(*literalServiceObservation); observation != nil {
+			*observation = literalServiceObservation{url: probe.URL, address: address, route: routePathID, pinned: pinned, proof: result}
+		}
+	}
 	return result, nil
 }
 
