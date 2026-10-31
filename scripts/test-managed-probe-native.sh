@@ -6,7 +6,7 @@ set -eu
 # fixture models platform classification, NOT artifact bytes, FD ownership,
 # compatibility, NFQUEUE packets, TLS/catalogue predicates or cleanup.
 test "$(id -u)" = 0 || { echo 'ROOT isolated CI fixture required' >&2; exit 2; }
-for probe_tool in curl sha256sum tar python3 unshare ip iptables-legacy ip6tables-legacy nft go; do
+for probe_tool in curl sha256sum tar python3 unshare mount ip iptables-legacy ip6tables-legacy nft go; do
   command -v "$probe_tool" >/dev/null
 done
 probe_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -71,4 +71,12 @@ export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
 go test -race -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
 chmod 500 "$probe_work/app.test"
-unshare --net "$probe_work/app.test" -test.run='^TestManagedStrategyProbeNativeConsumer$' -test.count=1 -test.v -test.timeout=100s
+# GitHub's host /opt is writable for its tool cache. The real protected tool
+# review correctly refuses it as a preload ancestor. Give this disposable
+# mount namespace an actual empty protected /opt; never chmod/change the host.
+unshare --mount --net sh -c '
+  set -eu
+  mount --make-rprivate /
+  mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
+  exec "$@"
+' sh "$probe_work/app.test" -test.run='^TestManagedStrategyProbeNativeConsumer$' -test.count=1 -test.v -test.timeout=100s
