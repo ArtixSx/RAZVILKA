@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -27,14 +28,31 @@ func TestXraySelectedTCPNativeHeldJSONConfig(t *testing.T) {
 	if !filepath.IsAbs(binary) {
 		t.Fatal("absolute Xray required")
 	}
+	if os.Getenv("RAZVILKA_XRAY_SELECTED_NATIVE_CHILD") != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "unshare", "--net", "--fork", os.Args[0], "-test.run=^TestXraySelectedTCPNativeHeldJSONConfig$", "-test.v")
+		cmd.Env = append(os.Environ(), "RAZVILKA_XRAY_SELECTED_NATIVE_CHILD=1")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("isolated selected native: %v %s", err, output)
+		}
+		t.Log(string(output))
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	for _, args := range [][]string{{"link", "set", "lo", "up"}, {"address", "add", "192.168.1.1/32", "dev", "lo"}} {
+		if output, err := exec.CommandContext(ctx, "ip", args...).CombinedOutput(); err != nil {
+			t.Fatalf("isolated LAN listener address: %v %s", err, output)
+		}
+	}
 	provider := netidentity.NewProcProvider()
 	identity, err := provider.Observe(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	listener, err := net.Listen("tcp4", "192.168.1.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +67,7 @@ func TestXraySelectedTCPNativeHeldJSONConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	data, _ := json.Marshal(map[string]any{"log": map[string]any{"loglevel": "error"}, "inbounds": []any{map[string]any{"listen": "127.0.0.1", "port": endpoint.Port(), "protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false}}}, "outbounds": []any{map[string]any{"protocol": "blackhole"}}})
+	data, _ := json.Marshal(map[string]any{"log": map[string]any{"loglevel": "error"}, "inbounds": []any{map[string]any{"listen": endpoint.Addr().String(), "port": endpoint.Port(), "protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false}}}, "outbounds": []any{map[string]any{"protocol": "blackhole"}}})
 	config, err := root.WriteAtomicRetained("xray-redirect.json", data, 0600)
 	if err != nil {
 		t.Fatal(err)
