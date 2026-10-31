@@ -158,7 +158,11 @@ func TestStrategyPairFailedInstallRestoresExactOldBinaryAndState(t *testing.T) {
 	check := func(c context.Context) error { return a.strategyStateAdmission(c, review.ID) }
 	quiescent := func(c context.Context) error { return c.Err() }
 	admit := func(c context.Context, effect string, begin func() error) error { return begin() }
-	if err := store.Prepare(ctx, review.ID, review.Files, check, quiescent); err != nil {
+	if err := a.WithStrategyPairPreparation(ctx, review.ID, func(scoped context.Context) error {
+		return store.Prepare(scoped, review.ID, review.Files, func(c context.Context) error {
+			return a.StrategyPairPreparationAuthority(c, review.ID, review.Revision)
+		}, quiescent)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.InstallAdmitted(ctx, review.ID, check, quiescent, admit); err != nil {
@@ -251,5 +255,67 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))
 	if err != nil || !bytes.Equal(got, raw) {
 		t.Fatal("reader capability probes mutated state", err)
+	}
+}
+
+func TestStrategyPairPreparationScopeCannotAuthorizeReplacementOrSurviveReturn(t *testing.T) {
+	a, _, review, raw := strategyPairFixture(t)
+	var saved context.Context
+	err := a.WithStrategyPairPreparation(context.Background(), review.ID, func(scoped context.Context) error {
+		saved = scoped
+		// Reproduce the real Prepare cut: its original owner has created the
+		// current directory, but no complete receipt exists yet.
+		if err := os.Mkdir(filepath.Join(a.fileJournal, review.ID), 0700); err != nil {
+			return err
+		}
+		if err := a.StrategyPairPreparationAuthority(scoped, review.ID, review.Revision); err != nil {
+			t.Fatal("original prepare read refused", err)
+		}
+		for _, action := range []string{"start/live", "replace-to-rollback"} {
+			if err := a.AuthorityAction(scoped, review.ID, review.Revision, action); err == nil {
+				t.Fatal("prepare token granted replacement", action)
+			}
+		}
+		token := a.strategyPreparationFor(scoped, review.ID)
+		copied := *token
+		forged := context.WithValue(scoped, strategyPreparationKey{}, &copied)
+		if _, err := a.strategyPairCheckImages(forged, review, true); err == nil {
+			t.Fatal("copied token accepted")
+		}
+		if a.strategyPreparationFor(scoped, "ffffffffffffffffffffffffffffffff") != nil {
+			t.Fatal("unrelated job borrowed token")
+		}
+		return nil
+	})
+	if err == nil {
+		t.Fatal("closing accepted partial unreceipted journal")
+	}
+	if a.strategyPreparationFor(saved, review.ID) != nil {
+		t.Fatal("prepare token survived callback")
+	}
+	if err := a.StrategyPairPreparationAuthority(saved, review.ID, review.Revision); err == nil {
+		t.Fatal("retained context authorized partial retry")
+	}
+	got, _ := os.ReadFile(filepath.Join(a.installation, "razvilka/state/strategy-lab.json"))
+	if !bytes.Equal(got, raw) {
+		t.Fatal("partial preparation changed StrategyLab")
+	}
+}
+
+func TestStrategyPairPreparationCancellationRevokesOriginalToken(t *testing.T) {
+	a, _, review, _ := strategyPairFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	err := a.WithStrategyPairPreparation(ctx, review.ID, func(scoped context.Context) error {
+		cancel()
+		if a.strategyPreparationFor(scoped, review.ID) != nil {
+			t.Fatal("cancelled token accepted")
+		}
+		if err := a.StrategyPairPreparationAuthority(scoped, review.ID, review.Revision); err == nil {
+			t.Fatal("cancelled authority accepted")
+		}
+		return ctx.Err()
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation lost", err)
 	}
 }

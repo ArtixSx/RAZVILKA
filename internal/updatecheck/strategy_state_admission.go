@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -53,17 +54,25 @@ func (a *SelfUpdateFileAdapter) strategyStateAdmission(ctx context.Context, ids 
 	if a == nil || a.installation == "" {
 		return ErrFileProtocol
 	}
+	if len(ids) == 1 {
+		return a.strategyAdmission(ctx, ids[0], false)
+	}
+	image, _, err := a.inspectOrdinaryStrategyState(ctx)
+	if err != nil {
+		return err
+	}
+	if image.Exists {
+		return ErrStrategyStateAdmission
+	}
+	return nil
+}
+
+func (a *SelfUpdateFileAdapter) strategyAdmission(ctx context.Context, id string, preparing bool) error {
 	image, schema, err := a.inspectOrdinaryStrategyState(ctx)
 	if err != nil {
 		return err
 	}
-	if len(ids) != 1 {
-		if image.Exists {
-			return ErrStrategyStateAdmission
-		}
-		return nil
-	}
-	_, review, err := a.loadHeader(ctx, ids[0])
+	_, review, err := a.loadHeader(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -73,7 +82,7 @@ func (a *SelfUpdateFileAdapter) strategyStateAdmission(ctx context.Context, ids 
 		}
 		return nil
 	}
-	return a.checkStrategyPair(ctx, review, image, schema)
+	return a.checkStrategyPairMode(ctx, review, image, schema, preparing)
 }
 
 type strategyControllerProof struct {
@@ -217,11 +226,15 @@ func (a *SelfUpdateFileAdapter) probeStrategyReader(ctx context.Context, review 
 }
 
 func (a *SelfUpdateFileAdapter) checkStrategyPair(ctx context.Context, review fileReview, image restorejournal.Image, schema int) error {
+	return a.checkStrategyPairMode(ctx, review, image, schema, false)
+}
+
+func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, review fileReview, image restorejournal.Image, schema int, preparing bool) error {
 	proof := review.StrategyPair
 	if proof == nil || proof.Schema != 1 || !image.Exists || proof.StateSchema != schema || proof.StateSHA256 != digestBytes(image.Data) || len(proof.Controllers) < 2 || len(proof.Controllers) > 1024 {
 		return ErrStrategyStateAdmission
 	}
-	images, err := a.strategyPairImages(ctx, review)
+	images, err := a.strategyPairCheckImages(ctx, review, preparing)
 	if err != nil || len(images) != len(proof.Controllers) {
 		return ErrStrategyStateAdmission
 	}
@@ -239,11 +252,87 @@ func (a *SelfUpdateFileAdapter) checkStrategyPair(ctx context.Context, review fi
 	if err != nil || freshSchema != schema || fresh.Exists != image.Exists || !bytes.Equal(fresh.Data, image.Data) {
 		return ErrStrategyStateAdmission
 	}
-	latest, err := a.strategyPairImages(ctx, review)
+	latest, err := a.strategyPairCheckImages(ctx, review, preparing)
 	if err != nil || !reflect.DeepEqual(images, latest) {
 		return ErrStrategyStateAdmission
 	}
 	return ctx.Err()
+}
+
+type strategyPreparationKey struct{}
+type strategyPreparation struct {
+	self    *strategyPreparation
+	adapter *SelfUpdateFileAdapter
+	ctx     context.Context
+	review  fileReview
+	active  atomic.Bool
+}
+
+func (a *SelfUpdateFileAdapter) strategyPreparationFor(ctx context.Context, id string) *strategyPreparation {
+	if ctx == nil || ctx.Err() != nil {
+		return nil
+	}
+	token, _ := ctx.Value(strategyPreparationKey{}).(*strategyPreparation)
+	if token == nil || token.self != token || token.adapter != a || token.ctx != ctx || token.review.ID != id || !token.active.Load() {
+		return nil
+	}
+	return token
+}
+
+// Only the original synchronous six-file Prepare can borrow this scope. It
+// permits immutable reader observations while Prepare constructs its own
+// still-unreceipted snapshots; it grants no native or file replacement effect.
+func (a *SelfUpdateFileAdapter) WithStrategyPairPreparation(ctx context.Context, id string, use func(context.Context) error) (result error) {
+	if use == nil || ctx == nil || ctx.Err() != nil || a.strategyPreparationFor(ctx, id) != nil {
+		return ErrStrategyStateAdmission
+	}
+	if err := a.strategyStateAdmission(ctx, id); err != nil {
+		return err
+	}
+	_, review, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return err
+	}
+	if review.StrategyPair == nil {
+		return use(ctx)
+	}
+	token := &strategyPreparation{adapter: a, review: review}
+	token.self = token
+	scoped := context.WithValue(ctx, strategyPreparationKey{}, token)
+	token.ctx = scoped
+	token.active.Store(true)
+	defer func() { token.active.Store(false) }()
+	result = use(scoped)
+	token.active.Store(false)
+	// Even an unsuccessful Prepare never turns its incomplete files into a
+	// readable inventory or a grant for another invocation.
+	return errors.Join(result, a.strategyStateAdmission(ctx, id))
+}
+
+func (a *SelfUpdateFileAdapter) StrategyPairPreparationAuthority(ctx context.Context, id string, revision uint64) error {
+	if a.strategyPreparationFor(ctx, id) == nil {
+		return a.AuthorityAction(ctx, id, revision, "start/live")
+	}
+	return a.authorityAction(ctx, id, revision, "start/live", true)
+}
+
+func (a *SelfUpdateFileAdapter) strategyPairCheckImages(ctx context.Context, review fileReview, preparing bool) ([]selfupdatejournal.BinaryImage, error) {
+	if !preparing {
+		return a.strategyPairImages(ctx, review)
+	}
+	token := a.strategyPreparationFor(ctx, review.ID)
+	if token == nil || !reflect.DeepEqual(token.review, review) {
+		return nil, ErrStrategyStateAdmission
+	}
+	actual, err := hashRegularFile(filepath.Join(a.installation, "bin/razvilka"), MaximumBinaryBytes)
+	if err != nil || actual != review.OldExecutableSHA256 {
+		return nil, ErrStrategyStateAdmission
+	}
+	images := make([]selfupdatejournal.BinaryImage, 0, len(review.StrategyPair.Controllers))
+	for _, controller := range review.StrategyPair.Controllers {
+		images = append(images, selfupdatejournal.BinaryImage{Path: controller.Path, SHA256: controller.SHA256})
+	}
+	return images, ctx.Err()
 }
 
 // The installed pathname changes from old to candidate and back during the

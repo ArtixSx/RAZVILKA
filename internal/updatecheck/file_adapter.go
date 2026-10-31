@@ -813,11 +813,15 @@ func (a *SelfUpdateFileAdapter) Authority(ctx context.Context, id string, revisi
 // Action-sensitive authority does not clear Stop. CORE retains independent
 // matching admission and quiescence checks for rollback and owned cleanup.
 func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, revision uint64, action string) error {
+	return a.authorityAction(ctx, id, revision, action, false)
+}
+
+func (a *SelfUpdateFileAdapter) authorityAction(ctx context.Context, id string, revision uint64, action string, preparing bool) error {
 	if err := a.checkStop(ctx, id, action); err != nil {
 		return err
 	}
 	if action == "start/live" || action == "replace-to-rollback" || action == bootstrapOfflineAction {
-		if err := a.strategyStateAdmission(ctx, id); err != nil {
+		if err := a.strategyAdmission(ctx, id, preparing); err != nil {
 			return err
 		}
 	}
