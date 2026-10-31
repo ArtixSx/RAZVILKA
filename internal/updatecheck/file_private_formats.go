@@ -15,6 +15,23 @@ var filePrivateFiles = map[string]string{
 	"token": "etc/razvilka/admin.token", "credentials": "etc/razvilka/admin.credentials.json", "custom": "etc/razvilka/custom-services.json", "devices": "etc/razvilka/devices.json", "source-state": "etc/razvilka/source-state.json", "autonomy": "etc/razvilka/config.json.automation.json.autonomy.json",
 }
 
+// Legacy registries are immutable: retained schema1/2 snapshots keep their
+// exact key sets. Only schema3 carries the byte-exact StrategyLab pair image.
+const StrategyLabReadVersion = 5
+const PrivateSnapshotReadVersion = 3
+
+func privateFilesForSchema(schema int) map[string]string {
+	if schema != 3 {
+		return filePrivateFiles
+	}
+	files := make(map[string]string, len(filePrivateFiles)+1)
+	for name, path := range filePrivateFiles {
+		files[name] = path
+	}
+	files["strategy"] = "razvilka/state/strategy-lab.json"
+	return files
+}
+
 // Retained native/provider/runtime ledgers and LKG generations are not mutable
 // application images. Keep the legacy registry above for reading old snapshots;
 // newly produced snapshots and restore targets contain only this subset.
@@ -66,10 +83,11 @@ func validateDirectoryImage(image restorejournal.Image) (directoryImage, error) 
 
 func validatePrivateSnapshot(snapshot privateFileSnapshot) error {
 	directories := filePrivateDirectories
-	if snapshot.Schema == 2 {
+	if snapshot.Schema == 2 || snapshot.Schema == 3 {
 		directories = fileMutablePrivateDirectories
 	}
-	if (snapshot.Schema != 1 && snapshot.Schema != 2) || !jobIDPattern.MatchString(snapshot.ID) || len(snapshot.Images) != len(directories)+len(filePrivateFiles) {
+	files := privateFilesForSchema(snapshot.Schema)
+	if (snapshot.Schema != 1 && snapshot.Schema != 2 && snapshot.Schema != 3) || !jobIDPattern.MatchString(snapshot.ID) || len(snapshot.Images) != len(directories)+len(files) {
 		return ErrFileProtocol
 	}
 	total := 0
@@ -78,8 +96,13 @@ func validatePrivateSnapshot(snapshot privateFileSnapshot) error {
 			if _, err := validateDirectoryImage(image); err != nil {
 				return err
 			}
-		} else if _, ok := filePrivateFiles[name]; !ok {
+		} else if _, ok := files[name]; !ok {
 			return ErrFileProtocol
+		}
+		if name == "strategy" {
+			if _, err := ordinaryStrategyImage(image); err != nil {
+				return err
+			}
 		}
 		if len(image.Data) > restorejournal.MaxImageBytes || !image.Exists && len(image.Data) != 0 {
 			return ErrFileProtocol

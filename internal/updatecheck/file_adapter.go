@@ -46,6 +46,7 @@ type SelfUpdateAuthority struct {
 type SelfUpdateRuntimeObservation func(context.Context, string) error
 
 type fileReview struct {
+	StrategyPair            *strategyPairProof       `json:"strategy_pair,omitempty"`
 	Schema                  int                      `json:"schema"`
 	ID                      string                   `json:"id"`
 	Revision                uint64                   `json:"revision"`
@@ -85,6 +86,7 @@ type SelfUpdateFileAdapter struct {
 	// Issued only to the actual finite Updater.prepare generation. Public
 	// inventory adapters never reconstruct this capability from persisted data.
 	ordinaryPreparation *ordinaryPreparation
+	strategyProbe       func(context.Context, selfupdatejournal.BinaryImage, string) (string, error)
 }
 
 func NewSelfUpdateFileAdapterWithAuthority(stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) *SelfUpdateFileAdapter {
@@ -341,7 +343,7 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "razvilka/state")
-	if err := a.strategyStateAdmission(ctx); err != nil {
+	if _, _, err := a.inspectOrdinaryStrategyState(ctx); err != nil {
 		return "", err
 	}
 	if record.Job.Release == nil || !helperConfigMatches(record) {
@@ -517,6 +519,10 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 			return "", errors.Join(ErrFileProtocol, err)
 		}
 	}
+	review.StrategyPair, err = a.sealStrategyPair(ctx, review)
+	if err != nil {
+		return "", err
+	}
 	data, err := json.Marshal(review)
 	if err != nil {
 		return "", err
@@ -683,7 +689,7 @@ func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {
 	if a == nil || a.admission == nil || a.runtimeInactive == nil || a.filesystem == nil {
 		return ErrFileProtocol
 	}
-	if err := a.strategyStateAdmission(ctx); err != nil {
+	if err := a.strategyStateAdmission(ctx, id); err != nil {
 		return err
 	}
 	record, review, err := a.load(ctx, id)
@@ -771,7 +777,7 @@ func validFileEffect(effect string) bool {
 		name := strings.TrimPrefix(effect, "rollback-private-")
 		_, directory := fileMutablePrivateDirectories[name]
 		_, file := filePrivateFiles[name]
-		return directory || file
+		return directory || file || name == "strategy"
 	}
 	for _, prefix := range []string{"command-worker-", "command-child-"} {
 		if strings.HasPrefix(effect, prefix) {
@@ -811,7 +817,7 @@ func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, 
 		return err
 	}
 	if action == "start/live" || action == "replace-to-rollback" || action == bootstrapOfflineAction {
-		if err := a.strategyStateAdmission(ctx); err != nil {
+		if err := a.strategyStateAdmission(ctx, id); err != nil {
 			return err
 		}
 	}

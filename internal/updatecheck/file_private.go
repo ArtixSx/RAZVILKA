@@ -180,6 +180,10 @@ func (a *SelfUpdateFileAdapter) privateTargets(ctx context.Context, id string) (
 		return a.filePanelAbsent(c)
 	}
 	targets := map[string]restorejournal.Target{}
+	snapshot, err := a.privateSnapshot(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
 	var closeFiles []func() error
 	close := func() {
 		for _, f := range closeFiles {
@@ -192,7 +196,7 @@ func (a *SelfUpdateFileAdapter) privateTargets(ctx context.Context, id string) (
 		}
 		targets[name] = &fileDirectoryTarget{path: filepath.Join(a.installation, filepath.FromSlash(path)), check: check, admission: admission}
 	}
-	for name, path := range filePrivateFiles {
+	for name, path := range privateFilesForSchema(snapshot.Schema) {
 		full := filepath.Join(a.installation, filepath.FromSlash(path))
 		root, err := a.openPrivateFileRoot(full)
 		if err != nil {
@@ -223,7 +227,18 @@ func (a *SelfUpdateFileAdapter) preparePrivateSnapshot(ctx context.Context, id s
 	if _, err := root.Stat("private-snapshot.json"); !errors.Is(err, os.ErrNotExist) {
 		return ErrFileProtocol
 	}
-	snapshot := privateFileSnapshot{Schema: 2, ID: id, Images: map[string]restorejournal.Image{}}
+	_, review, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := a.strategyStateAdmission(ctx, id); err != nil {
+		return err
+	}
+	schema := 2
+	if review.StrategyPair != nil {
+		schema = 3
+	}
+	snapshot := privateFileSnapshot{Schema: schema, ID: id, Images: map[string]restorejournal.Image{}}
 	total := 0
 	for name, path := range fileMutablePrivateDirectories {
 		image, err := readDirectoryImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
@@ -233,7 +248,7 @@ func (a *SelfUpdateFileAdapter) preparePrivateSnapshot(ctx context.Context, id s
 		snapshot.Images[name] = image
 		total += len(image.Data)
 	}
-	for name, path := range filePrivateFiles {
+	for name, path := range privateFilesForSchema(snapshot.Schema) {
 		image, err := a.readPrivateFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
 		if err != nil {
 			return err
@@ -243,6 +258,19 @@ func (a *SelfUpdateFileAdapter) preparePrivateSnapshot(ctx context.Context, id s
 	}
 	if total > restorejournal.MaxPlanBytes/2 {
 		return ErrFileProtocol
+	}
+	if err := validatePrivateSnapshot(snapshot); err != nil {
+		return err
+	}
+	if snapshot.Schema == 3 {
+		image := snapshot.Images["strategy"]
+		stateSchema, err := ordinaryStrategyImage(image)
+		if err != nil || review.StrategyPair == nil || stateSchema != review.StrategyPair.StateSchema || digestBytes(image.Data) != review.StrategyPair.StateSHA256 {
+			return ErrStrategyStateAdmission
+		}
+	}
+	if err := a.strategyStateAdmission(ctx, id); err != nil {
+		return err
 	}
 	data, err := json.Marshal(snapshot)
 	if err != nil {
@@ -275,7 +303,24 @@ func (a *SelfUpdateFileAdapter) privateSnapshot(ctx context.Context, id string) 
 	if err != nil || string(hash) != digestBytes(data) || decodeFileProtocol(data, &snapshot) != nil || snapshot.ID != id {
 		return snapshot, ErrFileProtocol
 	}
-	return snapshot, validatePrivateSnapshot(snapshot)
+	if err := validatePrivateSnapshot(snapshot); err != nil {
+		return snapshot, err
+	}
+	_, review, err := a.loadHeader(ctx, id)
+	if err != nil {
+		return snapshot, err
+	}
+	if (snapshot.Schema == 3) != (review.StrategyPair != nil) {
+		return snapshot, ErrStrategyStateAdmission
+	}
+	if snapshot.Schema == 3 {
+		image := snapshot.Images["strategy"]
+		schema, err := ordinaryStrategyImage(image)
+		if err != nil || schema != review.StrategyPair.StateSchema || digestBytes(image.Data) != review.StrategyPair.StateSHA256 {
+			return snapshot, ErrStrategyStateAdmission
+		}
+	}
+	return snapshot, nil
 }
 
 func (a *SelfUpdateFileAdapter) verifyPrivateSnapshot(ctx context.Context, id string) error {
@@ -290,12 +335,12 @@ func (a *SelfUpdateFileAdapter) restorePrivateSnapshot(ctx context.Context, id s
 	}
 	// Legacy whole-domain snapshots remain readable retained evidence, but
 	// cannot authorize rewinding independent native/runtime/LKG histories.
-	if snapshot.Schema != 2 {
+	if snapshot.Schema != 2 && snapshot.Schema != 3 {
 		return ErrFileProtocol
 	}
 	// Refuse metadata drift even when the byte-only generic journal would
 	// see equal Before/After and execute no replacement. No implicit repair.
-	for _, path := range filePrivateFiles {
+	for _, path := range privateFilesForSchema(snapshot.Schema) {
 		full := filepath.Join(a.installation, filepath.FromSlash(path))
 		_, err := a.readPrivateFileImage(ctx, full)
 		if err != nil {
@@ -385,7 +430,7 @@ func (a *SelfUpdateFileAdapter) verifyPrivateRestore(ctx context.Context, id str
 	if err != nil {
 		return err
 	}
-	if snapshot.Schema != 2 {
+	if snapshot.Schema != 2 && snapshot.Schema != 3 {
 		return ErrFileProtocol
 	}
 	for name, path := range fileMutablePrivateDirectories {
@@ -395,7 +440,7 @@ func (a *SelfUpdateFileAdapter) verifyPrivateRestore(ctx context.Context, id str
 			return ErrFileProtocol
 		}
 	}
-	for name, path := range filePrivateFiles {
+	for name, path := range privateFilesForSchema(snapshot.Schema) {
 		actual, err := a.readPrivateFileImage(ctx, filepath.Join(a.installation, filepath.FromSlash(path)))
 		expected := snapshot.Images[name]
 		if err != nil || actual.Exists != expected.Exists || !bytes.Equal(actual.Data, expected.Data) {

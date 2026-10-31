@@ -414,7 +414,7 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 			failure = ErrStrategyStateAdmission
 			return
 		}
-		if err := requireNoStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
+		if err := requireOrdinaryStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
 			failure = err
 			return
 		}
@@ -597,7 +597,7 @@ func (u *Updater) Apply(ctx context.Context, id, token string, revision uint64, 
 		if filepath.Clean(u.StrategyLabStatePath) != filepath.Join(filepath.Dir(u.Directory), "strategy-lab.json") {
 			return cloneJob(r.Job), ErrStrategyStateAdmission
 		}
-		if err := requireNoStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
+		if err := requireOrdinaryStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
 			return cloneJob(r.Job), err
 		}
 	}

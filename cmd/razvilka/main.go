@@ -150,6 +150,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	closeRollbackPlan := flag.String("close-rollback-plan", "", "close an intact failed rollback that can no longer be retried (for example after a reboot) by deactivating its owned runtime, while the panel is stopped")
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
+	strategyLabReadVersion := flag.Bool("strategy-lab-read-version", false, "print supported StrategyLab state reader version without opening stores")
+	privateSnapshotReadVersion := flag.Bool("self-update-private-snapshot-read-version", false, "print supported private update snapshot reader version without opening stores")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
 	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
@@ -167,6 +169,14 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	flag.Parse()
 	if *retireDataplaneForRemoval && !*deactivateDataplane {
 		log.Fatal("retire-dataplane-for-removal requires deactivate-dataplane")
+	}
+	if *strategyLabReadVersion {
+		fmt.Println(updatecheck.StrategyLabReadVersion)
+		return
+	}
+	if *privateSnapshotReadVersion {
+		fmt.Println(updatecheck.PrivateSnapshotReadVersion)
+		return
 	}
 	if *nodeHistoryReadVersion {
 		fmt.Println(nodestore.ExactHistoryReadVersion)

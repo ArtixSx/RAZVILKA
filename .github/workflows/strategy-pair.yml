@@ -1,0 +1,45 @@
+name: Strategy pair focused validation
+on:
+  push:
+    branches: ['work/bypass-integration-20261031', 'work/bypass-validation-20261031']
+    paths:
+      - 'internal/strategylab/**'
+      - 'internal/privatebackup/**'
+      - 'internal/privaterestore/**'
+      - 'internal/updatecheck/**'
+      - 'cmd/razvilka/**'
+      - '.github/workflows/strategy-pair.yml'
+permissions:
+  contents: read
+jobs:
+  strategy-pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install native fixture
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
+      - name: Actual reader binary compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o /tmp/razvilka-current ./cmd/razvilka
+          test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 5
+          test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 3
+          git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
+          (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
+          if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
+          if /tmp/razvilka-old-binary -self-update-private-snapshot-read-version >/tmp/old-snapshot.txt 2>&1; then exit 1; fi
+      - name: Focused native and race checks
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app -run "TestStrategyPair|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance"'
