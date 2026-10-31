@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 type nativeFixtureReview struct {
@@ -69,6 +70,27 @@ func InstallNativeFixtureManagedNFQWS(ctx context.Context, base, reviewPath stri
 	ns, err := os.Readlink("/proc/self/ns/net")
 	init, e2 := os.Readlink("/proc/1/ns/net")
 	if os.Geteuid() != 0 || err != nil || e2 != nil || ns == init || !filepath.IsAbs(base) || filepath.Clean(base) != base {
+		return nil, ErrManagedNFQWSBundle
+	}
+	mnt, e3 := os.Readlink("/proc/self/ns/mnt")
+	initialMount, e4 := os.Readlink("/proc/1/ns/mnt")
+	opt, e5 := os.Lstat("/opt")
+	hostOpt, e6 := os.Stat("/proc/1/root/opt")
+	if e3 != nil || e4 != nil || mnt == initialMount || e5 != nil || e6 != nil || !opt.IsDir() || opt.Mode()&os.ModeSymlink != 0 || opt.Mode().Perm() != 0755 || os.SameFile(opt, hostOpt) {
+		return nil, ErrManagedNFQWSBundle
+	}
+	mountinfo, e7 := os.ReadFile("/proc/self/mountinfo")
+	privateOpt := false
+	for _, line := range strings.Split(string(mountinfo), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 6 && fields[4] == "/opt" && strings.Contains(line, " - tmpfs ") {
+			privateOpt = true
+		}
+	}
+	if e7 != nil || !privateOpt {
+		return nil, ErrManagedNFQWSBundle
+	}
+	if _, err := os.Lstat("/opt/lib/razvilka/nfqws2/releases"); !errors.Is(err, os.ErrNotExist) {
 		return nil, ErrManagedNFQWSBundle
 	}
 	info, err := os.Lstat(base)
@@ -158,8 +180,10 @@ func InstallNativeFixtureManagedNFQWS(ctx context.Context, base, reviewPath stri
 	if err != nil {
 		return nil, err
 	}
-	m := &Manager{StateDir: filepath.Join(base, "state"), nfqwsReleases: filepath.Join(base, "releases"), Arch: "arm64", Client: &http.Client{Transport: nativeFixtureTransport{input, manifest.ParentAssetURL}}}
-	m.nfqwsFixture = &managedNFQWSFixtureBoundary{base, info}
+	// Use the REAL public production payload layout in this verified private
+	// mount. NFQWS drops privilege before Lua; a private test ancestor must not
+	// be bypassed by changing its UID or weakening the protected-path reader.
+	m := &Manager{StateDir: filepath.Join(base, "state"), Arch: "arm64", Client: &http.Client{Transport: nativeFixtureTransport{input, manifest.ParentAssetURL}}}
 	m.nfqwsReview = func(actual ManagedNFQWSManifest) error {
 		hash, err := actual.Digest()
 		if err != nil || hash != expected || !reflect.DeepEqual(actual, manifest) {
