@@ -53,6 +53,9 @@ type executionResourceScope struct {
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
 	xrayDomainTCP           map[string]*XrayDomainTCPExecutionResource
 	domainTCPCaptures       map[string]*domainTCPCaptureExecutionResource
+	domainTCPBaselines      map[string]*domainTCPBaselineExecutionResource
+	domainTCPOwner          *DomainTCPOriginalScope
+	domainTCPProof          bool // Only the original reader3-admitted temporary-check entry sets this.
 	domainDNS               *ScopedDNSAdapter
 	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
@@ -322,6 +325,9 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.domainTCPCaptures {
 		ids[id] = true
 	}
+	for id := range s.domainTCPBaselines {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -497,7 +503,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || (s.syntheticBaselines[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil) && resource.State == "prepared" {
+		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || (s.syntheticBaselines[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil) && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -512,7 +518,7 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
@@ -558,9 +564,17 @@ func (m *Manager) WithExecutionResources(ctx context.Context, expected Plan, ada
 }
 
 func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error) error {
+	return m.withExecutionResourcesModeLocked(ctx, expected, adapter, action, false)
+}
+
+func (m *Manager) withExecutionResourcesModeLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof bool) error {
+	ready := expected.Ready
+	if domainProof {
+		ready = adapter == "xray" && validateDomainTCPProofPlan(expected) == nil
+	}
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
 	if guard == nil || action == nil || !slices.Contains(expected.Adapters, adapter) || !validPlanID(expected.PlanID) ||
-		!validPlanDigest(expected.Digest) || expected.SchemaVersion != SchemaVersion || expected.SafeMode || !expected.Ready || expected.Noop ||
+		!validPlanDigest(expected.Digest) || expected.SchemaVersion != SchemaVersion || expected.SafeMode || !ready || expected.Noop ||
 		!filepath.IsAbs(m.StateRoot) || filepath.Clean(m.StateRoot) != m.StateRoot {
 		return ErrNodeTransitUnavailable
 	}
@@ -587,6 +601,7 @@ func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Pla
 	if err != nil {
 		return err
 	}
+	scope.domainTCPProof = domainProof
 	defer scope.close() // Revoke callbacks and anchored descriptors on panic too.
 	actionErr := action(scope.context())
 	err = errors.Join(actionErr, m.checkPlanNetwork(ctx, expected), scope.close())

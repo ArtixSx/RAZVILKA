@@ -27,6 +27,7 @@ type ExecutionResource struct {
 	XraySelectedTCP   *ExecutionXraySelectedTCPDefinition   `json:"xray_selected_tcp,omitempty"`
 	XrayDomainTCP     *ExecutionXrayDomainTCPDefinition     `json:"xray_domain_tcp,omitempty"`
 	DomainTCPCapture  *ExecutionDomainTCPCaptureDefinition  `json:"domain_tcp_capture,omitempty"`
+	DomainTCPBaseline *ExecutionDomainTCPBaselineDefinition `json:"domain_tcp_baseline,omitempty"`
 }
 
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
@@ -42,6 +43,10 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		if result[i].DomainTCPBaseline != nil {
+			d := result[i].DomainTCPBaseline.Clone()
+			result[i].DomainTCPBaseline = &d
+		}
 		if result[i].DomainTCPCapture != nil {
 			d := result[i].DomainTCPCapture.Clone()
 			result[i].DomainTCPCapture = &d
@@ -104,11 +109,16 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			prefix = "xd-"
 		} else if resource.Kind == "domain-tcp-capture" {
 			prefix = "dc-"
+		} else if resource.Kind == "domain-tcp-baseline-flow" {
+			prefix = "bf-"
 		}
 		if (len(resource.ID) != len(prefix)+16 && len(resource.ID) != len(prefix)+32) || !strings.HasPrefix(resource.ID, prefix) || strings.Trim(strings.TrimPrefix(resource.ID, prefix), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.DomainTCPBaseline != nil && resource.Kind != "domain-tcp-baseline-flow" {
+			return ErrExecutionJournal
+		}
 		if resource.DomainTCPCapture != nil && resource.Kind != "domain-tcp-capture" {
 			return ErrExecutionJournal
 		}
@@ -122,6 +132,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		switch resource.Kind {
+		case "domain-tcp-baseline-flow":
+			if err := validateDomainTCPBaselineExecutionResource(execution, resource, terminal); err != nil {
+				return err
+			}
 		case "domain-tcp-capture":
 			if err := validateDomainTCPCaptureExecutionResource(execution, resource, terminal); err != nil {
 				return err

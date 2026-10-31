@@ -242,7 +242,15 @@ func (runner *domainTCPCaptureEffectRunner) WithStart(ctx context.Context, name 
 		return ErrDomainPolicyTCPConsumer
 	}
 	invocation, err := observePolicyEffectCommandInvocation(ctx, r.effects, r.root, name, args)
-	if err != nil || invocation == nil || invocation.cleanup || !reflect.DeepEqual(args, r.effects.Effects[invocation.index].Add) {
+	cleanup := ctx.Value(domainTCPCaptureCleanupKey{}) == r
+	if err != nil || invocation == nil || invocation.cleanup != cleanup {
+		return ErrDomainPolicyTCPConsumer
+	}
+	wanted := r.effects.Effects[invocation.index].Add
+	if cleanup {
+		wanted = r.effects.Effects[invocation.index].Delete
+	}
+	if !reflect.DeepEqual(args, wanted) {
 		return ErrDomainPolicyTCPConsumer
 	}
 	s := r.process.scope
@@ -252,7 +260,12 @@ func (runner *domainTCPCaptureEffectRunner) WithStart(ctx context.Context, name 
 		if err := r.registered(ctx); err != nil {
 			return err
 		}
-		err := r.process.material.control.WithStart(ctx, begin)
+		var err error
+		if cleanup {
+			err = r.process.material.control.WithCleanupStart(ctx, r.process.material.cleanup, begin)
+		} else {
+			err = r.process.material.control.WithStart(ctx, begin)
+		}
 		return errors.Join(err, r.registered(ctx))
 	})
 }

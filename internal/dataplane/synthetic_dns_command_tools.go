@@ -24,6 +24,7 @@ type SyntheticDNSCommandToolRunner interface {
 // hashes and a successful Check cannot issue a command or publication lease.
 // Production obtains it from the original StartupTools policy Lease factory.
 type SyntheticDNSCommandTools struct {
+	IP                     string
 	IPTables, ReviewSHA256 string
 	Identity               netidentity.Identity
 	Provider               *netidentity.Provider

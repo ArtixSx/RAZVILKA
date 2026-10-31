@@ -215,6 +215,9 @@ func domainTCPCaptureBaselineRows(rows []backendInventoryRow, plan PolicyEffectP
 // the end of an unrelated chain are not capture readiness. Each -I 1 occurs
 // in compiler order, so the 443 selector precedes the 80 selector in -S.
 func domainTCPCapturePreparedInventory(rows []backendInventoryRow, plan PolicyEffectPlan) error {
+	if len(plan.Effects) != 7 {
+		return ErrDomainPolicyTCPConsumer
+	}
 	for i := range plan.Effects {
 		count, err := domainTCPCapturePresence(rows, plan, i)
 		if err != nil || count != 1 {

@@ -19,11 +19,18 @@ func (a *ProxyTunnelAdapter) RunDomainPolicyTCPResource(ctx context.Context, res
 	if err != nil {
 		return err
 	}
-	return resource.WithNative(ctx, func(held context.Context) error {
+	return resource.WithNative(ctx, func(held context.Context) (result error) {
 		life, cancel := context.WithCancel(held)
 		defer cancel()
 		x := &DomainPolicyTCPXray{a: a, resource: resource, spec: resource.definition.Capture.Xray, address: resource.definition.PrivateEndpoint.String(), ctx: life, cancel: cancel, connections: make(map[*domainPolicyTCPXrayConn]struct{})}
 		defer x.close()
+		if original, ok := owner.(*DomainTCPOriginalScope); ok {
+			defer func() {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(held), 12*time.Second)
+				defer cancel()
+				result = errors.Join(result, original.finishCapture(cleanup, resource))
+			}()
+		}
 		if err := x.check(held); err != nil {
 			return err
 		}

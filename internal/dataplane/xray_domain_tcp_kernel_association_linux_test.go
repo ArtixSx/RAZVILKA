@@ -23,7 +23,7 @@ import (
 // children cannot satisfy the fixed Xray argv/version, original DNS material,
 // typed scope/map/journal or domain read-interval issuer. No native readiness.
 func TestXrayDomainTCPKernelAssociationsRejectChangeBehindLocalDescriptors(t *testing.T) {
-	for _, changed := range []string{"missing-fd4", "different-fd4", "exec-argv"} {
+	for _, changed := range []string{"missing-fd4", "different-fd4", "different-stdin", "exec-argv"} {
 		t.Run(changed, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -104,13 +104,17 @@ func TestXrayDomainTCPKernelAssociationsRejectChangeBehindLocalDescriptors(t *te
 				t.Fatal(err)
 			}
 			defer unix.Close(directory)
-			fd, err := unix.Openat(directory, "4", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
+			configFD := "4"
+			if changed == "different-stdin" {
+				configFD = "0"
+			}
+			fd, err := unix.Openat(directory, configFD, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
 			local := os.NewFile(uintptr(fd), "[local original test FD4 duplicate]")
 			defer local.Close()
-			openingConfig, err := proc.domainConfigFDInfo(ctx)
+			openingConfig, err := proc.domainConfigFDInfoAt(ctx, configFD)
 			if err != nil || !sameXrayDomainTCPFile(originalInfo, openingConfig) {
 				t.Fatal("actual opening FD4 association failed", err)
 			}
@@ -149,11 +153,11 @@ func TestXrayDomainTCPKernelAssociationsRejectChangeBehindLocalDescriptors(t *te
 					t.Fatal("same-image exec argv drift supplied the opening image", err)
 				}
 			} else {
-				closingConfig, err := proc.domainConfigFDInfo(ctx)
+				closingConfig, err := proc.domainConfigFDInfoAt(ctx, configFD)
 				if err == nil && sameXrayDomainTCPFile(originalInfo, closingConfig) {
 					t.Fatal("local original duplicate hid missing/replaced child FD4")
 				}
-				if changed == "different-fd4" && err != nil {
+				if (changed == "different-fd4" || changed == "different-stdin") && err != nil {
 					t.Fatal("replacement comparison failed before observing its different inode", err)
 				}
 			}
@@ -166,12 +170,24 @@ func TestXrayDomainTCPKernelAssociationHelper(t *testing.T) {
 	if mode == "" {
 		return
 	}
+	commandInput := os.Stdin
+	if mode == "different-stdin" {
+		fd, err := unix.Dup(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		commandInput = os.NewFile(uintptr(fd), "[ordinary helper command pipe]")
+		defer commandInput.Close()
+		if err := unix.Dup3(4, 0, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if os.Getenv("RAZVILKA_DOMAIN_FD4_AFTER_EXEC") == "1" {
 		fmt.Println("changed")
 	} else {
 		fmt.Println("ready")
 	}
-	commands := bufio.NewScanner(os.Stdin)
+	commands := bufio.NewScanner(commandInput)
 	for commands.Scan() {
 		switch commands.Text() {
 		case "change":
@@ -182,6 +198,10 @@ func TestXrayDomainTCPKernelAssociationHelper(t *testing.T) {
 				}
 			case "different-fd4":
 				if err := unix.Dup3(5, 4, 0); err != nil {
+					t.Fatal(err)
+				}
+			case "different-stdin":
+				if err := unix.Dup3(5, 0, 0); err != nil {
 					t.Fatal(err)
 				}
 			case "exec-argv":

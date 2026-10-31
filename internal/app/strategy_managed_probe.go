@@ -149,7 +149,7 @@ func (a *App) probeManagedStrategyCandidate(w http.ResponseWriter, parent contex
 	}()
 	// Run the complete fleet reader review before taking a component leaf
 	// lease. The actual exclusive operation prevents an updater racing it.
-	if a.ExecutionHistory.CheckWrite(ctx) != nil {
+	if a.ExecutionHistory.CheckWrite(ctx, 2) != nil {
 		writeManagedStrategyProbeError(w, false)
 		return
 	}

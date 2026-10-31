@@ -17,8 +17,9 @@ import (
 )
 
 // Separate from StrategyLab, package journals and snapshot readers. Version2
-// understands original domain capture and socket-bound NFQUEUE probe records.
-const ExecutionReadVersion = 2
+// understands original domain capture/socket-bound NFQUEUE records; version3
+// additionally understands original accepted-FD transparent baseline flows.
+const ExecutionReadVersion = 3
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -132,7 +133,10 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 		}
 		for _, resource := range execution.Resources {
 			if resource.DomainTCPCapture != nil || resource.XrayDomainTCP != nil || resource.NFQWS != nil && resource.NFQWS.Spec.Probe != nil {
-				required = ExecutionReadVersion
+				required = max(required, 2)
+			}
+			if resource.DomainTCPBaseline != nil {
+				required = 3
 			}
 		}
 		sum := sha256.Sum256(data)

@@ -291,6 +291,16 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 		},
 		Dial: xray.dial,
 	}
+	if original, ok := owner.(*DomainTCPOriginalScope); ok {
+		kernel, err := original.originalBaselineForCapture(ctx, capture, leased)
+		if err != nil {
+			return refused, err
+		}
+		runtime.originalBaseline = kernel
+		runtime.BaselineDial = func(c context.Context, f DomainPolicyTCPFlow, d DomainPolicyDecision) (net.Conn, error) {
+			return original.dialBaseline(c, kernel, socket, f, d)
+		}
+	}
 	return p.HandleTCP(ctx, conn, flow, runtime)
 }
 

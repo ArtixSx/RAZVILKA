@@ -93,18 +93,24 @@ func (r *domainTCPCaptureExecutionResource) local(ctx context.Context) error {
 	if err != nil || address != r.capture.spec.Listen {
 		return ErrDomainPolicyTCPConsumer
 	}
-	raw, err := r.capture.listener.SyscallConn()
-	if err != nil {
-		return err
-	}
-	if err = raw.Control(func(uintptr) {}); err != nil {
-		return err
-	}
-	r.capture.mu.Lock()
-	closed := r.capture.closed
-	r.capture.mu.Unlock()
-	if closed || r.capture.ctx.Err() != nil {
-		return ErrDomainPolicyTCPConsumer
+	if ctx.Value(domainTCPCaptureCleanupKey{}) == r {
+		if r.process.material.control.CurrentForCleanupOperation(ctx, r.process.material.cleanup) != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
+	} else {
+		raw, err := r.capture.listener.SyscallConn()
+		if err != nil {
+			return err
+		}
+		if err = raw.Control(func(uintptr) {}); err != nil {
+			return err
+		}
+		r.capture.mu.Lock()
+		closed := r.capture.closed
+		r.capture.mu.Unlock()
+		if closed || r.capture.ctx.Err() != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
 	}
 	plan, err := compileDomainTCPCaptureEffects(r.definition.Process.Capture, r.definition.Process.Mapping)
 	if err != nil || !reflect.DeepEqual(plan, r.effects) {
@@ -124,7 +130,8 @@ func (r *domainTCPCaptureExecutionResource) registered(ctx context.Context) erro
 	s := r.process.scope
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.open || s.syntheticClosing || s.failure != nil || s.domainTCPCaptures[filepath.Base(r.relative)] != r || s.checkOriginalOwner(ctx, nil, true, false) != nil {
+	cleanup := ctx.Value(domainTCPCaptureCleanupKey{}) == r
+	if !s.open || !cleanup && (s.syntheticClosing || s.failure != nil) || s.domainTCPCaptures[filepath.Base(r.relative)] != r || s.checkOriginalOwner(ctx, nil, !cleanup, cleanup) != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
 	info, err := s.owned.Stat(r.relative)
@@ -143,6 +150,9 @@ func (r *domainTCPCaptureExecutionResource) registered(ctx context.Context) erro
 }
 
 func (r *domainTCPCaptureExecutionResource) current(ctx context.Context) error {
+	if ctx != nil && ctx.Value(domainTCPCaptureCleanupKey{}) == r {
+		return r.cleanupCurrent(ctx)
+	}
 	if err := r.registered(ctx); err != nil {
 		return err
 	}

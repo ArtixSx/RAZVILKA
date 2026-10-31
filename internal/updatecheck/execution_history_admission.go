@@ -15,7 +15,7 @@ import (
 
 var ErrExecutionHistoryAdmission = errors.New("retained dataplane execution reader requires review")
 
-const ExecutionHistoryReadVersion = 2
+const ExecutionHistoryReadVersion = 3
 
 type ExecutionHistoryReader func(context.Context, string) (int, string, error)
 
@@ -80,8 +80,18 @@ func (a *ExecutionHistoryAdmission) CheckReadable(ctx context.Context) error {
 
 // CheckWrite runs under the caller's original exclusive operation, before any
 // component, StrategyLab or execution-file leaf lock is taken.
-func (a *ExecutionHistoryAdmission) CheckWrite(ctx context.Context) error {
+func (a *ExecutionHistoryAdmission) CheckWrite(ctx context.Context, requested ...int) error {
 	if a == nil || ctx == nil || a.inventory == nil || a.probe == nil || a.inspect == nil || a.reader != ExecutionHistoryReadVersion {
+		return ErrExecutionHistoryAdmission
+	}
+	wanted := ExecutionHistoryReadVersion
+	if len(requested) > 1 {
+		return ErrExecutionHistoryAdmission
+	}
+	if len(requested) == 1 {
+		wanted = requested[0]
+	}
+	if wanted < 1 || wanted > a.reader {
 		return ErrExecutionHistoryAdmission
 	}
 	i := a.inventory
@@ -95,6 +105,7 @@ func (a *ExecutionHistoryAdmission) CheckWrite(ctx context.Context) error {
 	if err != nil || required < 1 || required > a.reader {
 		return errors.Join(ErrExecutionHistoryAdmission, err)
 	}
+	minimum := max(required, wanted)
 	current, err := hashRegularFile(i.executable, MaximumBinaryBytes)
 	if err != nil {
 		return err
@@ -118,7 +129,7 @@ func (a *ExecutionHistoryAdmission) CheckWrite(ctx context.Context) error {
 		if before != current {
 			version, err = a.probe(ctx, image)
 		}
-		if err != nil || version != ExecutionHistoryReadVersion {
+		if err != nil || version < minimum || version > a.reader {
 			return errors.Join(ErrExecutionHistoryAdmission, err)
 		}
 		after, err := hashRegularFile(image.Path, MaximumBinaryBytes)
