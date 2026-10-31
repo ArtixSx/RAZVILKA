@@ -1390,26 +1390,37 @@ func (a *WARPWireGuardAdapter) handshakeTimeout() time.Duration {
 }
 
 func (a *WARPWireGuardAdapter) confirmHandshake(ctx context.Context, interfaceName string) error {
-	deadline := time.Now().Add(a.handshakeTimeout())
+	// Bound each command by the same total observation budget. A separate
+	// wall-clock deadline would allow one stalled wg command to use Timeout
+	// (normally 25s) before noticing the shorter handshake limit.
+	attempt, cancel := context.WithTimeout(ctx, a.handshakeTimeout())
+	defer cancel()
 	for {
-		output, commandErr := a.run(ctx, a.wg(), "show", interfaceName, "latest-handshakes")
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if attempt.Err() != nil {
+			return WARPHandshakeError{}
+		}
+		output, commandErr := a.run(attempt, a.wg(), "show", interfaceName, "latest-handshakes")
+		// A successful read ACK can race cancellation. It is not permission
+		// to publish a handshake after the caller or this attempt expired.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if attempt.Err() != nil {
+			return WARPHandshakeError{}
+		}
 		if _, ok := latestHandshakeTime(string(output), time.Now()); commandErr == nil && ok {
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return WARPHandshakeError{}
-		}
-		delay := 500 * time.Millisecond
-		if remaining := time.Until(deadline); remaining < delay {
-			delay = remaining
-		}
-		if delay <= 0 {
-			return WARPHandshakeError{}
-		}
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
+		case <-attempt.Done():
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return WARPHandshakeError{}
+		case <-time.After(500 * time.Millisecond):
 		}
 	}
 }

@@ -1,0 +1,22 @@
+Recorded tool output excerpts, after warpwg.go confirmHandshake change.
+Command: go test ./internal/dataplane -run '^TestWGHandshake(Budget|Canceled|Parent)|^TestWARPHandshake' -count=1 -v
+Windows amd64, Go 1.26.5; context-aware modeled command runner, no network/process.
+
+=== RUN   TestWGHandshakeBudgetBoundsStalledObservation
+=== RUN   TestWGHandshakeBudgetBoundsStalledObservation/warp-wg
+    warpwg_handshake_budget_test.go:29: model stalled observation elapsed=30.1095ms handshake_budget=30ms command_budget=500ms
+=== RUN   TestWGHandshakeBudgetBoundsStalledObservation/wireguard
+    warpwg_handshake_budget_test.go:29: model stalled observation elapsed=30.5591ms handshake_budget=30ms command_budget=500ms
+=== RUN   TestWGHandshakeBudgetBoundsStalledObservation/amneziawg
+    warpwg_handshake_budget_test.go:29: model stalled observation elapsed=30.3439ms handshake_budget=30ms command_budget=500ms
+--- PASS: TestWGHandshakeBudgetBoundsStalledObservation (0.09s)
+=== RUN   TestWGHandshakeCanceledValidOutputCannotPass
+--- PASS: TestWGHandshakeCanceledValidOutputCannotPass (0.00s)
+=== RUN   TestWGHandshakeParentDeadlineKeepsItsCause
+--- PASS: TestWGHandshakeParentDeadlineKeepsItsCause (0.01s)
+=== RUN   TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner
+--- PASS: TestWARPHandshakeTriesOfficialFallbackPortsAndPersistsWinner (0.19s)
+=== RUN   TestWARPHandshakeFailureDoesNotExposePeerKey
+--- PASS: TestWARPHandshakeFailureDoesNotExposePeerKey (0.00s)
+PASS
+ok github.com/ArtixSx/razvilka/internal/dataplane 1.215s
