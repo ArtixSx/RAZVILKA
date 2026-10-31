@@ -17,7 +17,7 @@ import (
 func strategyPairFixture(t *testing.T) (*SelfUpdateFileAdapter, *Updater, fileReview, []byte) {
 	t.Helper()
 	a, u, review := fileAdapterFixture(t)
-	for _, rel := range []string{"bin", "etc/razvilka", "razvilka/state"} {
+	for _, rel := range []string{"bin", "etc/init.d", "etc/razvilka", "razvilka/state", "file-journal"} {
 		if err := os.MkdirAll(filepath.Join(a.installation, rel), 0700); err != nil {
 			t.Fatal(err)
 		}
