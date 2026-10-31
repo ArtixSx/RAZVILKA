@@ -51,6 +51,9 @@ type executionResourceScope struct {
 	syntheticBaselineSource *syntheticBaselineCoordinator
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
+	xrayDomainTCP           map[string]*XrayDomainTCPExecutionResource
+	domainDNS               *ScopedDNSAdapter
+	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
 	wgOwner                 *wgOperationOwner
 	wgRecords               *wgExecutionRecords
@@ -107,6 +110,7 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
 		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, xraySelectedTCP: map[string]*XraySelectedTCPExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
 	s.observationOpen.Store(true)
+	s.xrayDomainTCP = map[string]*XrayDomainTCPExecutionResource{}
 	if a, ok := adapterOwner.(*WARPWireGuardAdapter); ok && a != nil && a.wgCommandTools != nil {
 		s.wgOwner, err = newWGOperationOwner(ctx, s)
 		if err == nil {
@@ -142,6 +146,7 @@ func (s *executionResourceScope) contextWith(ctx context.Context) context.Contex
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
 	ctx = context.WithValue(ctx, xraySelectedTCPRegistrarKey{}, xraySelectedTCPRegistrar(s.issueXraySelectedTCP))
+	ctx = context.WithValue(ctx, xrayDomainTCPRegistrarKey{}, xrayDomainTCPRegistrar(s.issueXrayDomainTCP))
 	return withSyntheticExecutionRegistrar(ctx, s)
 }
 
@@ -307,6 +312,9 @@ func (s *executionResourceScope) resourceCount() int {
 		ids[id] = true
 	}
 	for id := range s.xraySelectedTCP {
+		ids[id] = true
+	}
+	for id := range s.xrayDomainTCP {
 		ids[id] = true
 	}
 	for _, resource := range s.execution.Resources {
@@ -478,7 +486,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
+		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -493,7 +501,7 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
@@ -504,6 +512,9 @@ func (s *executionResourceScope) close() error {
 	}
 	s.mu.Unlock()
 	for _, resource := range xrayResources {
+		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	for _, resource := range s.xrayDomainTCP {
 		err = errors.Join(err, resource.closeOriginalDescriptors())
 	}
 	if s.wgRecords != nil {

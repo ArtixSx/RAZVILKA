@@ -1,0 +1,163 @@
+//go:build linux
+
+package dataplane
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net"
+	"net/netip"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+)
+
+// Actual Xray, inherited authored config/executable FDs and kernel observations.
+// Process admission/read interval here is an explicit model: this is not proof
+// of the complete DNS-source factory, Manager Apply or router/LAN routing.
+func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
+	binary := os.Getenv("RAZVILKA_XRAY_NATIVE")
+	if binary == "" {
+		t.Skip("isolated actual Xray binary required")
+	}
+	if !filepath.IsAbs(binary) {
+		t.Fatal("absolute Xray binary required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	provider := netidentity.NewProcProvider()
+	identity, err := provider.Observe(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := listener.Addr().(*net.TCPAddr).AddrPort()
+	listener.Close()
+	path := t.TempDir()
+	root, err := ownedfs.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	doc := map[string]any{"log": map[string]any{"loglevel": "error"}, "inbounds": []any{map[string]any{"listen": "127.0.0.1", "port": endpoint.Port(), "protocol": "socks", "settings": map[string]any{"auth": "noauth", "udp": false}}}, "outbounds": []any{map[string]any{"protocol": "blackhole"}}}
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := root.WriteAtomicRetained(xrayDomainTCPConfigName, data, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer config.Close()
+	info, _ := config.Stat()
+	exe, err := os.Open(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer exe.Close()
+	exeInfo, _ := exe.Stat()
+	exeData, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(exeData)
+	sha := hex.EncodeToString(hash[:])
+	anchor, _ := root.RootInfo()
+	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-config", "/proc/self/fd/4"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	child, err := reserveXraySelectedTCPProcessWait(ctx, cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		child.abandonUnstartedWait()
+		t.Fatal(err)
+	}
+	defer func() {
+		if child.child == nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+			return
+		}
+		if !child.waitStarted {
+			_ = child.beginReservedWait()
+		}
+		child.child.Signal(syscall.SIGTERM)
+		cleanup, finish := context.WithTimeout(context.Background(), 5*time.Second)
+		defer finish()
+		if err := child.Joined(cleanup); err != nil {
+			child.child.Kill()
+			child.Joined(cleanup)
+			t.Error(err)
+		}
+	}()
+	if err := child.acknowledgeStart(); err != nil {
+		t.Fatal(err)
+	}
+	scope := &executionResourceScope{networkIdentity: &networkPolicyIdentity{value: identity, provider: provider}}
+	material := &XrayDomainTCPOperationMaterial{}
+	material.self = material
+	r := &XrayDomainTCPExecutionResource{scope: scope, material: material, child: child, root: root, rootPath: path, anchor: anchor, config: config, configInfo: info, executable: &xrayDomainTCPExecutable{file: exe, info: exeInfo, path: binary, sha256: sha}, definition: ExecutionXrayDomainTCPDefinition{ConfigSHA256: nodeDefaultSourceMaterialHash(data), NetworkIdentity: identity, PrivateEndpoint: endpoint}}
+	r.self = r
+	material.resource = r
+	marker := &xrayDomainTCPProcessRead{resource: r, process: child}
+	marker.self = marker
+	marker.open.Store(true)
+	read := context.WithValue(context.WithValue(ctx, syntheticExecutionRegistrarKey{}, scope), xrayDomainTCPProcessReadKey{}, marker)
+	opening, err := r.observeDomainProcess(read)
+	if err != nil {
+		t.Fatal("actual inherited process/config association", err)
+	}
+	if err := child.beginReservedWait(); err != nil {
+		t.Fatal(err)
+	}
+	var observed xraySelectedTCPListenerObservation
+	for {
+		observed, err = r.observeDomainListener(read)
+		if err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(err)
+		case <-child.done:
+			t.Fatal("actual Xray exited before listener")
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+	if !opening.same(observed.process) || observed.inode == 0 || observed.endpoint != endpoint {
+		t.Fatal("listener is not original child")
+	}
+	marker.open.Store(false)
+	if _, err := r.observeDomainListener(read); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+		t.Fatal("closed interval accepted", err)
+	}
+	marker.open.Store(true)
+	if err := root.WriteAtomic(xrayDomainTCPConfigName, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.observeDomainProcess(read); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+		t.Fatal("same-byte replacement adopted", err)
+	}
+	child.child.Signal(syscall.SIGTERM)
+	if err := child.Joined(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.observeDomainListenerAbsent(ctx); err != nil {
+		t.Fatal("listener survived actual Wait", err)
+	}
+	if endpoint.Addr() != netip.MustParseAddr("127.0.0.1") {
+		t.Fatal("test escaped loopback")
+	}
+}

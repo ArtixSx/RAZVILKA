@@ -36,6 +36,11 @@ type XrayDomainTCPExecutionResource struct {
 	configInfo        os.FileInfo
 	executable        *xrayDomainTCPExecutable
 	child             *xraySelectedTCPProcess
+	records           *xraySelectedTCPExecutionRecords
+	startUsed         bool
+	startACK          bool
+	birth             *xraySelectedTCPProcessObservation
+	log               *os.File
 	descriptorsClosed atomic.Bool
 	descriptorsErr    error
 }
@@ -53,8 +58,6 @@ func (s *executionResourceScope) prepareXrayDomainTCPResource(ctx context.Contex
 	if s == nil || m == nil || m.self != m || xraySelectedTCPFinite(ctx) != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != s || s.adapter != "xray" || s.adapterOwner != m.adapter || s.manager != m.manager || s.networkIdentity == nil || s.networkIdentity.provider == nil || !reflect.DeepEqual(s.plan, m.plan) {
 		return nil, ErrXrayDomainTCPOriginal
 	}
-	s.startMu.RLock()
-	defer s.startMu.RUnlock()
 	if err := m.Current(ctx); err != nil {
 		return nil, err
 	}

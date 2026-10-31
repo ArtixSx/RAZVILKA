@@ -34,12 +34,22 @@ type xraySelectedTCPExecutionRecords struct {
 // FD ownership transfers only on success; a failed second publication retains
 // the first actual authored inode rather than adopting a matching replacement.
 func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, file *os.File, info os.FileInfo, canonical []byte) error {
-	if s == nil || index < 0 || index > 1 || file == nil || info == nil || len(canonical) == 0 || len(canonical) > 16<<20 || len(s.xraySelectedTCP) != 1 {
+	if s == nil || index < 0 || index > 1 || file == nil || info == nil || len(canonical) == 0 || len(canonical) > 16<<20 || len(s.xraySelectedTCP)+len(s.xrayDomainTCP) != 1 {
 		return ErrExecutionJournal
 	}
 	var r *XraySelectedTCPExecutionResource
 	for _, resource := range s.xraySelectedTCP {
 		r = resource
+	}
+	if len(s.xrayDomainTCP) == 1 {
+		for _, resource := range s.xrayDomainTCP {
+			if resource == nil || resource.self != resource || resource.scope != s || resource.records == nil || resource.records.scope != s {
+				return ErrExecutionJournal
+			}
+			d := resource.records
+			root, name := d.recordPath(index)
+			return d.captureOriginalRecord(index, file, info, canonical, root, name)
+		}
 	}
 	if r == nil || r.self != r || r.scope != s || r.records == nil || r.records.scope != s {
 		return ErrExecutionJournal
@@ -113,6 +123,11 @@ func (d *xraySelectedTCPExecutionRecords) beforePublication() error {
 	allowMissing := true
 	for _, r := range d.scope.xraySelectedTCP {
 		if r == nil || r.records != d || r.versionUsed || r.startUsed || r.startACK {
+			allowMissing = false
+		}
+	}
+	for _, r := range d.scope.xrayDomainTCP {
+		if r == nil || r.records != d || r.startUsed || r.startACK {
 			allowMissing = false
 		}
 	}

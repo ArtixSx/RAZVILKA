@@ -184,11 +184,19 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	if pair != nil && pair.self == pair && pair.prior != nil && !pair.closed.Load() && scope != nil && (scope == pair.scope || scope == pair.prior.scope) {
 		return executionJournalError(pair.publish(scope, data))
 	}
-	if scope != nil && len(scope.xraySelectedTCP) != 0 {
-		if len(scope.xraySelectedTCP) != 1 {
+	if scope != nil && len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 0 {
+		if len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 1 {
 			return executionJournalError(ErrExecutionJournal)
 		}
 		for _, resource := range scope.xraySelectedTCP {
+			if resource == nil || resource.records == nil {
+				return executionJournalError(ErrExecutionJournal)
+			}
+			if err := resource.records.beforePublication(); err != nil {
+				return executionJournalError(err)
+			}
+		}
+		for _, resource := range scope.xrayDomainTCP {
 			if resource == nil || resource.records == nil {
 				return executionJournalError(ErrExecutionJournal)
 			}
@@ -232,7 +240,7 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.XraySelectedTCP != nil {
+		if resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {

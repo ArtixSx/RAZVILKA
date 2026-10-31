@@ -25,6 +25,7 @@ type ExecutionResource struct {
 	SyntheticBaseline *ExecutionSyntheticBaselineDefinition `json:"synthetic_baseline,omitempty"`
 	Phase             string                                `json:"phase,omitempty"`
 	XraySelectedTCP   *ExecutionXraySelectedTCPDefinition   `json:"xray_selected_tcp,omitempty"`
+	XrayDomainTCP     *ExecutionXrayDomainTCPDefinition     `json:"xray_domain_tcp,omitempty"`
 }
 
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
@@ -40,6 +41,10 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		if result[i].XrayDomainTCP != nil {
+			d := result[i].XrayDomainTCP.Clone()
+			result[i].XrayDomainTCP = &d
+		}
 		result[i].SyntheticBaseline = cloneExecutionSyntheticBaselineDefinition(result[i].SyntheticBaseline)
 		if result[i].XraySelectedTCP != nil {
 			definition := result[i].XraySelectedTCP.Clone()
@@ -90,11 +95,16 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			prefix = "sb-"
 		} else if resource.Kind == "xray-selected-tcp" {
 			prefix = "xr-"
+		} else if resource.Kind == "xray-domain-tcp" {
+			prefix = "xd-"
 		}
 		if (len(resource.ID) != len(prefix)+16 && len(resource.ID) != len(prefix)+32) || !strings.HasPrefix(resource.ID, prefix) || strings.Trim(strings.TrimPrefix(resource.ID, prefix), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.XrayDomainTCP != nil && resource.Kind != "xray-domain-tcp" {
+			return ErrExecutionJournal
+		}
 		if resource.XraySelectedTCP != nil && resource.Kind != "xray-selected-tcp" {
 			return ErrExecutionJournal
 		}
@@ -102,6 +112,13 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		switch resource.Kind {
+		case "xray-domain-tcp":
+			if resource.XrayDomainTCP == nil || resource.XrayDomainTCP.PlanID != planID || resource.XrayDomainTCP.PlanDigest != execution.Digest {
+				return ErrExecutionJournal
+			}
+			if err := validateXrayDomainTCPExecutionResource(resource, terminal); err != nil {
+				return err
+			}
 		case "node-transit":
 			if resource.NodeTransit == nil || resource.NFQWS != nil || resource.SyntheticBaseline != nil || resource.Phase != "" || resource.NodeTransit.PlanID != planID || resource.NodeTransit.PlanDigest != execution.Digest {
 				return ErrExecutionJournal

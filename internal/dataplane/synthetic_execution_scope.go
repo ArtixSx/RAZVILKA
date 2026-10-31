@@ -53,7 +53,19 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 		return nil, ErrDomainTransportRuntime
 	}
 	scope, ok := ctx.Value(syntheticExecutionRegistrarKey{}).(*executionResourceScope)
-	if !ok || scope == nil || scope.manager != m || scope.adapter != scopedDNSAdapterID || scope.adapterOwner != original || scope.networkIdentity == nil || scope.networkIdentity.provider == nil {
+	if !ok || scope == nil || scope.manager != m || scope.networkIdentity == nil || scope.networkIdentity.provider == nil {
+		return nil, ErrDomainTransportRuntime
+	}
+	if scope.adapter == scopedDNSAdapterID {
+		if scope.adapterOwner != original {
+			return nil, ErrDomainTransportRuntime
+		}
+	} else if scope.adapter == "xray" {
+		registered, exists := m.adapter(scopedDNSAdapterID)
+		if !exists || registered != original {
+			return nil, ErrDomainTransportRuntime
+		}
+	} else {
 		return nil, ErrDomainTransportRuntime
 	}
 	frozen := cloneExecutionResourcePlan(expected)
@@ -66,6 +78,23 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 	}
 	b := &SyntheticDNSExecutionBinding{scope: scope, adapter: original, plan: frozen, domain: domain, transport: transport, dns: original.DNS, root: original.StateRoot}
 	b.self = b
+	issued := false
+	defer func(){
+		if !issued && scope.adapter=="xray" {
+			scope.mu.Lock()
+			if scope.domainDNSBinding==b {scope.domainDNSBinding=nil;scope.domainDNS=nil}
+			scope.mu.Unlock()
+		}
+	}()
+	if scope.adapter == "xray" {
+		scope.mu.Lock()
+		if !scope.open || scope.domainDNSBinding != nil {
+			scope.mu.Unlock()
+			return nil, ErrDomainTransportRuntime
+		}
+		scope.domainDNS, scope.domainDNSBinding = original, b
+		scope.mu.Unlock()
+	}
 	if err := b.Current(ctx); err != nil {
 		return nil, err
 	}
@@ -77,6 +106,7 @@ func (m *Manager) BindSyntheticDNSExecution(ctx context.Context, original *Scope
 		_ = b.phase.Close()
 		return nil, err
 	}
+	issued = true
 	return b, nil
 }
 
@@ -120,7 +150,7 @@ func (b *SyntheticDNSExecutionBinding) Current(ctx context.Context) error {
 	checkLocal := func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if s.syntheticClosing || s.manager == nil || s.adapterOwner != b.adapter || b.adapter == nil || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.lifetime == nil || b.adapter.lifetime.Err() != nil || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
+		if s.syntheticClosing || s.manager == nil || !b.originalAdapterRegisteredLocked() || b.adapter == nil || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.lifetime == nil || b.adapter.lifetime.Err() != nil || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
 			return ErrDomainTransportRuntime
 		}
 		return s.checkOriginalOwner(ctx, nil, true, false)
@@ -141,6 +171,21 @@ func (b *SyntheticDNSExecutionBinding) Current(ctx context.Context) error {
 		return err
 	}
 	return checkLocal()
+}
+
+// Caller holds scope.mu. The Xray path retains its separately registered DNS
+// source in the SAME execution; a second scope cannot replace authored journals.
+func (b *SyntheticDNSExecutionBinding) originalAdapterRegisteredLocked() bool {
+	s := b.scope
+	if s.adapter == scopedDNSAdapterID {
+		return s.adapterOwner == b.adapter
+	}
+	if s.adapter != "xray" || s.domainDNS != b.adapter || s.domainDNSBinding != b {
+		return false
+	}
+	s.manager.registryMu.RLock()
+	defer s.manager.registryMu.RUnlock()
+	return s.manager.Adapters[scopedDNSAdapterID] == b.adapter
 }
 
 // Actual source-specific readback component. It retains the original mapping,
