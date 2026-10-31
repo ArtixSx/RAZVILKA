@@ -101,7 +101,7 @@ func (a *App) extensionHev(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "lifecycle": a.runtimeLifecycle("hev"), "note": "JSON совместим с YAML. Профиль не создаёт TUN и не меняет маршруты до отдельного запуска. В RAZVILKA выбранный HEV-адаптер пока включается только на программном стенде."})
+	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "lifecycle": a.runtimeLifecycle("hev"), "note": "JSON совместим с YAML. Экспорт профиля не запускает TUN и не меняет маршруты. Установленный HEV можно выбрать в настройках для следующего запуска; доступность зависит от проверки платформы и маршрута."})
 }
 func (a *App) strategyPacks(w http.ResponseWriter, r *http.Request) {
 	if !a.extensionAccess(w, r) {

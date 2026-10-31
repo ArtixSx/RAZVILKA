@@ -10,6 +10,7 @@ on:
       - 'internal/dataplane/**'
       - 'internal/components/**'
       - 'internal/restorejournal/**'
+      - 'internal/ownedfs/**'
       - 'internal/app/**'
       - 'internal/operationgate/**'
       - 'internal/startuptools/**'
@@ -144,6 +145,9 @@ jobs:
           curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Original DNS source, Xray descriptors and cancellation
         shell: bash
         run: |
@@ -167,3 +171,11 @@ jobs:
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -race -count=1 ./internal/components ./internal/restorejournal ./internal/app ./cmd/razvilka -run '^TestHEV|^TestProxySidecar|^TestRecoveryIdentity' -v
+      - name: Mihomo large artifact transaction and process crash recovery
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -race -count=1 ./internal/ownedfs ./internal/restorejournal ./internal/components -run '^TestAtomicStream|^TestArtifact|^TestMihomo' -v

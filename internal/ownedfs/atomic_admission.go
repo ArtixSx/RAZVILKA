@@ -96,10 +96,11 @@ func (r *Root) verifyStagedFile(name string, created os.FileInfo, mode os.FileMo
 		return errors.Join(ErrStagedFileChanged, err)
 	}
 	actual, statErr := f.Stat()
-	data, readErr := io.ReadAll(io.LimitReader(f, size+1))
+	hash := sha256.New()
+	count, readErr := io.Copy(hash, io.LimitReader(f, size+1))
 	closeErr := f.Close()
 	closing, pathErr := r.Stat(name)
-	if statErr != nil || readErr != nil || closeErr != nil || pathErr != nil || !sameStagedFile(created, actual) || !sameStagedFile(created, closing) || actual.Size() != size || closing.Size() != size || !actual.ModTime().Equal(closing.ModTime()) || int64(len(data)) != size || sha256.Sum256(data) != digest || runtime.GOOS != "windows" && (actual.Mode().Perm() != mode.Perm() || closing.Mode().Perm() != mode.Perm()) {
+	if statErr != nil || readErr != nil || closeErr != nil || pathErr != nil || !sameStagedFile(created, actual) || !sameStagedFile(created, closing) || actual.Size() != size || closing.Size() != size || !actual.ModTime().Equal(closing.ModTime()) || count != size || string(hash.Sum(nil)) != string(digest[:]) || runtime.GOOS != "windows" && (actual.Mode().Perm() != mode.Perm() || closing.Mode().Perm() != mode.Perm()) {
 		return errors.Join(ErrStagedFileChanged, statErr, readErr, closeErr, pathErr)
 	}
 	return nil
