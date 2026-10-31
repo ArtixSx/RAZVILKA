@@ -52,9 +52,9 @@ func (r *XrayDomainTCPExecutionResource) readDomainProcess(ctx context.Context, 
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	p := r.child
-	args := []string{r.executable.path, "run", "-format", "json", "-config", "/proc/self/fd/4"}
+	args := []string{r.executable.path, "run", "-format", "json", "-config", "stdin:"}
 	if p.image.path != "/proc/self/fd/3" || p.image.dir != r.rootPath || !slices.Equal(p.image.args, args) || !slices.Equal(p.image.env, xraySelectedTCPNativeEnvironment()) ||
-		len(p.image.extras) != 2 || p.image.extras[0] != r.executable.file || p.image.extras[1] != r.config {
+		len(p.image.extras) != 2 || p.image.extras[0] != r.executable.file || p.image.extras[1] != r.config || p.cmd.Stdin != r.config {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	stat, err := proc.read(ctx, proc.child, "stat", 8192)
@@ -74,8 +74,9 @@ func (r *XrayDomainTCPExecutionResource) readDomainProcess(ctx context.Context, 
 	// actual child FD4 again; local duplicated FDs cannot close either relation.
 	closingImage, imageErr := proc.domainKernelImage(ctx, network)
 	closingConfig, configErr := proc.domainConfigFDInfo(ctx)
-	if imageErr != nil || configErr != nil || !closingImage.matches(args, r.executable.path, r.executable.info) || !image.same(closingImage) ||
-		!sameXrayDomainTCPFile(r.configInfo, closingConfig) {
+	closingInput, inputErr := proc.domainConfigFDInfoAt(ctx, "0")
+	if imageErr != nil || configErr != nil || inputErr != nil || !closingImage.matches(args, r.executable.path, r.executable.info) || !image.same(closingImage) ||
+		!sameXrayDomainTCPFile(r.configInfo, closingConfig) || !sameXrayDomainTCPFile(r.configInfo, closingInput) {
 		return xraySelectedTCPProcessObservation{}, ErrXrayDomainTCPOriginal
 	}
 	closing, err := proc.read(ctx, proc.child, "stat", 8192)
@@ -99,6 +100,15 @@ func sameXrayDomainTCPFile(original, current os.FileInfo) bool {
 // the held authored FD have already been compared; FD4 must name that exact
 // inode and its complete bytes, with closing held-FD/process/procfs bookends.
 func (r *XrayDomainTCPExecutionResource) readDomainConfigFD(ctx context.Context, proc *xraySelectedTCPProc) error {
+	for _, name := range []string{"0", "4"} {
+		if err := r.readDomainConfigFDAt(ctx, proc, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *XrayDomainTCPExecutionResource) readDomainConfigFDAt(ctx context.Context, proc *xraySelectedTCPProc, name string) error {
 	if r.domainProcessCurrent(ctx) != nil || proc == nil || proc.pid != r.child.pid || r.filesCurrent(ctx) != nil {
 		return ErrXrayDomainTCPOriginal
 	}
@@ -107,7 +117,10 @@ func (r *XrayDomainTCPExecutionResource) readDomainConfigFD(ctx context.Context,
 		return err
 	}
 	defer unix.Close(directory)
-	fd, err := unix.Openat(directory, "4", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
+	if name != "0" && name != "4" {
+		return ErrXrayDomainTCPOriginal
+	}
+	fd, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return ErrXrayDomainTCPOriginal
 	}
@@ -122,7 +135,7 @@ func (r *XrayDomainTCPExecutionResource) readDomainConfigFD(ctx context.Context,
 	hash := sha256.Sum256(data)
 	after, statErr := f.Stat()
 	closing, originalErr := r.config.Stat()
-	childClosing, childErr := proc.domainConfigFDInfo(ctx)
+	childClosing, childErr := proc.domainConfigFDInfoAt(ctx, name)
 	if err != nil || statErr != nil || originalErr != nil || childErr != nil || int64(len(data)) != r.configInfo.Size() ||
 		!sameXrayDomainTCPFile(before, after) || !sameXrayDomainTCPFile(r.configInfo, closing) ||
 		!sameXrayDomainTCPFile(r.configInfo, childClosing) ||

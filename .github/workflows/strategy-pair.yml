@@ -87,7 +87,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestXrayDomainTCPNativeHeldProcessLifecycle|TestNFQWSProbe' -v
+            go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestXrayDomainTCPNativeHeldProcessLifecycle|TestXraySelectedTCPNativeHeldJSONConfig|TestNFQWSProbe' -v
       - name: Actual HEV TUN HTTPS and owned cleanup in private namespaces
         if: ${{ !cancelled() }}
         shell: bash

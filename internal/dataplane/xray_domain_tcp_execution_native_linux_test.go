@@ -78,7 +78,10 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	hash := sha256.Sum256(exeData)
 	sha := hex.EncodeToString(hash[:])
 	anchor, _ := root.RootInfo()
-	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-format", "json", "-config", "/proc/self/fd/4"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	if _, err := config.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{binary, "run", "-format", "json", "-config", "stdin:"}, Dir: path, Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{exe, config}, Stdin: config, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
 	nativeLog, err := root.OpenFile("native-fixture.log", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Fatal(err)
