@@ -1159,7 +1159,7 @@ func (a *App) engines(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, engine.Visible((engine.Detector{}).All()))
+	writeJSON(w, http.StatusOK, engine.Visible(a.engineInventorySnapshot()))
 }
 
 func (a *App) engineLabReport(w http.ResponseWriter, r *http.Request) {
