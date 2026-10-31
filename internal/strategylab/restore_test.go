@@ -196,3 +196,46 @@ func TestPrivateSnapshotRejectsUnrepresentedMemoryFences(t *testing.T) {
 		})
 	}
 }
+
+func TestPrivatePairReviewPreservesSettledSupervisedSessionWithoutAdoption(t *testing.T) {
+	for _, version := range []int{3, 5, 7} {
+		state := emptyState()
+		state.SchemaVersion = version
+		session := compatibilityRecordFixture(t)
+		compatibilityRecordReceipt(session.DryRun, "reaped", true, 1)
+		state.CompatibilitySession = &session
+		_, in := privateFixture(t, state)
+		before := bytes.Clone(in.Content)
+		if schema, err := ReviewPrivatePairSnapshot(in); err != nil || schema != version {
+			t.Fatal("acknowledged terminal data rejected", schema, err)
+		}
+		if !bytes.Equal(in.Content, before) {
+			t.Fatal("pair review rewrote session or generation")
+		}
+		for _, kind := range []string{"unacknowledged", "unknown", "finalizing", "candidate-unknown"} {
+			copy := state
+			copiedSession := compatibilityRecordClone(t, session)
+			copy.CompatibilitySession = &copiedSession
+			switch kind {
+			case "unacknowledged":
+				copy.CompatibilitySession.DryRun.Acknowledged = false
+			case "unknown":
+				copy.CompatibilitySession.Unknown = true
+			case "finalizing":
+				copy.CompatibilityFinalizing = true
+			case "candidate-unknown":
+				copy.Candidates = map[string]Candidate{"candidate": {Validation: Validation{QuiescenceUnknown: true}}}
+			}
+			_, bad := privateFixture(t, copy)
+			if _, err := ReviewPrivatePairSnapshot(bad); !errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+				t.Fatal(kind, err)
+			}
+		}
+	}
+	unknown := emptyState()
+	unknown.SchemaVersion = compatibilityUnknownSchema
+	_, in := privateFixture(t, unknown)
+	if _, err := ReviewPrivatePairSnapshot(in); !errors.Is(err, ErrCompatibilityQuiescenceUnknown) {
+		t.Fatal("schema2 unknown became pair-ready", err)
+	}
+}

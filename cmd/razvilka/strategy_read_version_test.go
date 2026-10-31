@@ -8,7 +8,7 @@ import (
 
 func TestStrategyPairCapabilitiesDoNotOpenStores(t *testing.T) {
 	for _, tc := range []struct{ flag, want string }{
-		{"strategy-lab-read-version", "5"},
+		{"strategy-lab-read-version", "7"},
 		{"self-update-private-snapshot-read-version", "3"},
 	} {
 		t.Run(tc.flag, func(t *testing.T) {

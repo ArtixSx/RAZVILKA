@@ -247,6 +247,27 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 	if err != nil || proof == nil {
 		t.Fatal("actual compatible pair not admitted", err)
 	}
+	if reader5Path := os.Getenv("RAZVILKA_STRATEGY_PAIR_V5_BINARY"); reader5Path != "" {
+		settled, err := os.ReadFile("testdata/strategy-pair-modeled-settled5.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", settled)
+		if _, err := a.sealStrategyPair(ctx, review); err != nil {
+			t.Fatal("actual reader7 pair rejected settled schema5", err)
+		}
+		reader5, err := os.ReadFile(reader5Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", reader5)
+		review.OldExecutableSHA256 = digestBytes(reader5)
+		retainedFile(t, a.installation, "bin/razvilka", reader5)
+		if _, err := a.sealStrategyPair(ctx, review); !errors.Is(err, ErrStrategyStateAdmission) {
+			t.Fatal("actual standalone reader5 became a supervised pair reader", err)
+		}
+		retainedFile(t, a.installation, "razvilka/state/strategy-lab.json", raw)
+	}
 	retainedFile(t, filepath.Join(a.directory, review.ID), "control.bin", old)
 	review.OldExecutableSHA256 = digestBytes(old)
 	retainedFile(t, a.installation, "bin/razvilka", old)

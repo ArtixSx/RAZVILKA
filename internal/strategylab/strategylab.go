@@ -87,6 +87,7 @@ type StageEvidence struct {
 }
 
 type Evidence struct {
+	ManagedEpoch         string `json:"managed_epoch,omitempty"`
 	CandidateIncarnation string `json:"candidate_incarnation,omitempty"`
 	ValidationGeneration string `json:"validation_generation,omitempty"`
 	// Outcome distinguishes service rejection from an unavailable local checker.
@@ -148,6 +149,9 @@ type Selection struct {
 }
 
 type State struct {
+	ManagedProbeEpochs      map[string]ManagedProbeEpochRecord `json:"managed_probe_epochs,omitempty"`
+	ManagedProbeUnknown     bool                               `json:"managed_probe_unknown,omitempty"`
+	managedCurrent          map[string]string
 	CompatibilitySession    *compatibilitySession  `json:"compatibility_session,omitempty"`
 	CompatibilityFinalizing bool                   `json:"compatibility_finalizing,omitempty"`
 	PackReceipts            map[string]PackReceipt `json:"pack_receipts,omitempty"`
@@ -228,8 +232,10 @@ type Manager struct {
 	state                        State
 	image                        restorejournal.Image
 	writeBlocked                 bool
-	compatibilityUnknown         bool         // survives failed persistence/rollback until recovery
-	nativeRunning                bool         // one validation/probe admission until completion
+	compatibilityUnknown         bool // survives failed persistence/rollback until recovery
+	nativeRunning                bool // one validation/probe admission until completion
+	managedProbe                 *ManagedProbeEpoch
+	managedEpochs                map[string]*ManagedProbeEpoch
 	compatibilityPublicationHook func(string) // deterministic private test barriers; nil in production
 }
 
@@ -252,6 +258,9 @@ func New(path string) (*Manager, error) {
 	}
 	if !supportedStrategySchema(m.state.SchemaVersion) {
 		return nil, fmt.Errorf("unsupported Strategy Lab schema %d", m.state.SchemaVersion)
+	}
+	if err := validateManagedProbeState(m.state); err != nil {
+		return nil, err
 	}
 	if supervisedStrategySchema(m.state.SchemaVersion) {
 		checked, err := decodeCompatibilityState(image)
@@ -346,6 +355,17 @@ func emptyState() State {
 }
 
 func (m *Manager) Snapshot() Snapshot {
+	return m.snapshotWithManagedCurrent(nil)
+}
+
+// Live observations require the caller's fresh genuine admission. A bare
+// Snapshot deliberately reports managed proof as history, never borrows the
+// original probe operation's expired exclusive context.
+func (m *Manager) SnapshotWithContext(ctx context.Context) Snapshot {
+	return m.snapshotWithManagedCurrent(m.observeManagedProbeEpochs(ctx))
+}
+
+func (m *Manager) snapshotWithManagedCurrent(managedCurrent map[string]string) Snapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	candidates := make([]Candidate, 0, len(m.state.Candidates))
@@ -356,8 +376,10 @@ func (m *Manager) Snapshot() Snapshot {
 		return candidates[i].PoolID+candidates[i].Name < candidates[j].PoolID+candidates[j].Name
 	})
 	now := m.now()
-	summaries := summarize(m.state, now)
-	selections := selectionsWithHealth(m.state, summaries, now)
+	view := m.state
+	view.managedCurrent = managedCurrent
+	summaries := summarize(view, now)
+	selections := selectionsWithHealth(view, summaries, now)
 	unknown := m.compatibilityUnknownLocked()
 	if unknown {
 		const reason = "Нативная проверка не завершена или её состояние неизвестно; готовность не подтверждена"
@@ -614,6 +636,13 @@ func (m *Manager) DeleteCandidate(id string) error {
 }
 
 func (m *Manager) Record(evidence Evidence) error {
+	if evidence.ManagedEpoch != "" {
+		return errors.New("managed probe evidence requires its original epoch owner")
+	}
+	return m.record(evidence)
+}
+
+func (m *Manager) record(evidence Evidence) error {
 	if evidence.CandidateID == "" || evidence.ServiceID == "" || !validProtocol(evidence.Protocol) || !validFamily(evidence.IPFamily) {
 		return errors.New("candidate, service, protocol and IP family are required")
 	}
@@ -622,6 +651,10 @@ func (m *Manager) Record(evidence Evidence) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.recordLocked(evidence)
+}
+
+func (m *Manager) recordLocked(evidence Evidence) error {
 	if m.compatibilityUnknownLocked() {
 		return ErrCompatibilityQuiescenceUnknown
 	}
@@ -629,24 +662,10 @@ func (m *Manager) Record(evidence Evidence) error {
 	if !ok {
 		return errors.New("candidate is unknown")
 	}
-	if !candidate.Validation.OK || !candidate.Validation.Native {
-		return errors.New("candidate has not passed native NFQWS2 validation")
-	}
-	if !evidenceMatchesCandidate(evidence, candidate) {
-		return errEvidenceBinding
-	}
-	if evidence.CheckedAt == "" {
-		evidence.CheckedAt = m.now().UTC().Format(time.RFC3339)
-	}
-	checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
-	if err != nil || checked.After(m.now()) {
-		return errors.New("evidence timestamp is invalid or in the future")
-	}
-	if err := normalizeEvidence(&evidence); err != nil {
+	var err error
+	evidence, err = prepareRecordedEvidence(evidence, candidate, m.now())
+	if err != nil {
 		return err
-	}
-	if evidence.Success && !evidence.RouteConfirmed {
-		return errors.New("successful evidence must confirm the tested route")
 	}
 	m.state.Evidence = append(m.state.Evidence, evidence)
 	if len(m.state.Evidence) > MaxEvidence {
@@ -654,6 +673,32 @@ func (m *Manager) Record(evidence Evidence) error {
 	}
 	m.reconcileSelectionLocked(evidence)
 	return m.saveLocked()
+}
+
+func prepareRecordedEvidence(evidence Evidence, candidate Candidate, now time.Time) (Evidence, error) {
+	if evidence.CandidateID == "" || evidence.ServiceID == "" || !validProtocol(evidence.Protocol) || !validFamily(evidence.IPFamily) || len(evidence.Stages) == 0 {
+		return Evidence{}, errEvidenceBinding
+	}
+	if !candidate.Validation.OK || !candidate.Validation.Native {
+		return Evidence{}, errors.New("candidate has not passed native NFQWS2 validation")
+	}
+	if !evidenceMatchesCandidate(evidence, candidate) {
+		return Evidence{}, errEvidenceBinding
+	}
+	if evidence.CheckedAt == "" {
+		evidence.CheckedAt = now.UTC().Format(time.RFC3339)
+	}
+	checked, err := time.Parse(time.RFC3339, evidence.CheckedAt)
+	if err != nil || checked.After(now) {
+		return Evidence{}, errors.New("evidence timestamp is invalid or in the future")
+	}
+	if err := normalizeEvidence(&evidence); err != nil {
+		return Evidence{}, err
+	}
+	if evidence.Success && !evidence.RouteConfirmed {
+		return Evidence{}, errors.New("successful evidence must confirm the tested route")
+	}
+	return evidence, nil
 }
 
 func (m *Manager) Select(serviceID, protocol, family, candidateID string, frozen bool) (Selection, error) {
@@ -729,7 +774,7 @@ func summarize(state State, now time.Time) []Summary {
 		if checked.After(group.historyLatest) {
 			group.historyLatest = checked
 		}
-		if !evidenceMatchesCandidate(evidence, state.Candidates[evidence.CandidateID]) {
+		if !evidenceMatchesCandidate(evidence, state.Candidates[evidence.CandidateID]) || !managedEvidenceCurrent(state, evidence) {
 			continue
 		}
 		group.current = true
@@ -865,7 +910,7 @@ func consecutiveFailures(state State, selection Selection, now time.Time) int {
 			continue
 		}
 		checked, err := time.Parse(time.RFC3339, item.CheckedAt)
-		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) || !evidenceMatchesCandidate(item, candidate) {
+		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) || !evidenceMatchesCandidate(item, candidate) || !managedEvidenceCurrent(state, item) {
 			break // uncertainty cannot bridge a consecutive failure quorum
 		}
 		if !selectedAt.IsZero() && !checked.IsZero() && checked.Before(selectedAt) {
@@ -880,7 +925,7 @@ func consecutiveFailures(state State, selection Selection, now time.Time) int {
 }
 
 func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
-	if !reputationEvidence(evidence) || !evidenceMatchesCandidate(evidence, m.state.Candidates[evidence.CandidateID]) {
+	if !reputationEvidence(evidence) || !evidenceMatchesCandidate(evidence, m.state.Candidates[evidence.CandidateID]) || !managedEvidenceCurrent(m.state, evidence) {
 		return
 	}
 	key := selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)

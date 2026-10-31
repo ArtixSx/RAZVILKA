@@ -72,7 +72,7 @@ func (m *Manager) SelectManual(ctx context.Context, serviceID, protocol, family,
 		return Selection{}, err
 	}
 	next.Selections[key] = selection
-	next.SchemaVersion = compatibilitySupervisedSchema
+	next.SchemaVersion = supervisedWriteSchema(next)
 	after, err := compatibilityStateImage(next)
 	if err != nil {
 		return Selection{}, err

@@ -5,12 +5,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 
 // StrategyLab contains compatibility ownership/finalizing fences and evidence
 // generations. An upgrade/rollback over an existing state requires the sealed
-// ordinary unchanged-state pair below. Legacy paths remain closed; parsing a
+// settled unchanged-state pair below. Legacy paths remain closed; parsing a
 // schema alone never establishes rollback authority.
 var ErrStrategyStateAdmission = errors.New("strategy-state-pair-required")
 
@@ -98,6 +99,16 @@ type strategyPairProof struct {
 	Controllers []strategyControllerProof `json:"controllers"`
 }
 
+// Reader5 knows supervised state as standalone history, but its snapshot3
+// pair contract accepted only ordinary1/4. Reader7 is the first controller
+// that understands a settled supervised history in a paired snapshot.
+func minimumStrategyPairReader(schema int) int {
+	if schema == 1 || schema == 4 {
+		return 5
+	}
+	return 7
+}
+
 func ordinaryStrategyImage(image restorejournal.Image) (int, error) {
 	if !image.Exists {
 		if len(image.Data) != 0 {
@@ -106,19 +117,14 @@ func ordinaryStrategyImage(image restorejournal.Image) (int, error) {
 		return 0, nil
 	}
 	h := sha256.Sum256(image.Data)
-	if strategylab.ValidatePrivateSnapshot(strategylab.PrivateSnapshot{Schema: 1, Content: image.Data, SHA256: hex.EncodeToString(h[:])}) != nil {
-		return 0, ErrStrategyStateAdmission
+	// Known terminal supervised history is preserved, never adopted as a
+	// process owner. All actual Stop/journal/resource checks and exact binary
+	// reader proofs remain mandatory at their existing effect boundaries.
+	schema, err := strategylab.ReviewPrivatePairSnapshot(strategylab.PrivateSnapshot{Schema: 1, Content: image.Data, SHA256: hex.EncodeToString(h[:])})
+	if err != nil {
+		return 0, errors.Join(ErrStrategyStateAdmission, err)
 	}
-	var state strategylab.State
-	if json.Unmarshal(image.Data, &state) != nil || (state.SchemaVersion != 1 && state.SchemaVersion != 4) || state.CompatibilitySession != nil || state.CompatibilityFinalizing {
-		return 0, ErrStrategyStateAdmission
-	}
-	for _, c := range state.Candidates {
-		if c.Validation.QuiescenceUnknown {
-			return 0, ErrStrategyStateAdmission
-		}
-	}
-	return state.SchemaVersion, nil
+	return schema, nil
 }
 
 func (a *SelfUpdateFileAdapter) inspectOrdinaryStrategyState(ctx context.Context) (restorejournal.Image, int, error) {
@@ -159,14 +165,15 @@ func (a *SelfUpdateFileAdapter) sealStrategyPair(ctx context.Context, review fil
 	}
 	for _, binary := range images {
 		stateReader, err := probe(ctx, binary, "-strategy-lab-read-version")
-		if err != nil || stateReader != "5\n" {
+		version, versionErr := parseStrategyStateReader(stateReader)
+		if err != nil || versionErr != nil || version < schema || version < minimumStrategyPairReader(schema) {
 			return nil, ErrStrategyStateAdmission
 		}
 		snapshotReader, err := probe(ctx, binary, "-self-update-private-snapshot-read-version")
 		if err != nil || snapshotReader != "3\n" {
 			return nil, ErrStrategyStateAdmission
 		}
-		proof.Controllers = append(proof.Controllers, strategyControllerProof{binary.Path, binary.SHA256, 5, 3})
+		proof.Controllers = append(proof.Controllers, strategyControllerProof{binary.Path, binary.SHA256, version, 3})
 	}
 	if len(proof.Controllers) < 2 {
 		return nil, ErrStrategyStateAdmission
@@ -240,7 +247,7 @@ func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, revie
 	}
 	for i, binary := range images {
 		p := proof.Controllers[i]
-		if p.Path != binary.Path || p.SHA256 != binary.SHA256 || p.StateReader != 5 || p.SnapshotReader != 3 {
+		if p.Path != binary.Path || p.SHA256 != binary.SHA256 || (p.StateReader != 5 && p.StateReader != 7) || p.StateReader < schema || p.StateReader < minimumStrategyPairReader(schema) || p.SnapshotReader != 3 {
 			return ErrStrategyStateAdmission
 		}
 		hash, err := hashRegularFile(binary.Path, MaximumBinaryBytes)
@@ -257,6 +264,14 @@ func (a *SelfUpdateFileAdapter) checkStrategyPairMode(ctx context.Context, revie
 		return ErrStrategyStateAdmission
 	}
 	return ctx.Err()
+}
+
+func parseStrategyStateReader(output string) (int, error) {
+	version, err := strconv.Atoi(strings.TrimSuffix(output, "\n"))
+	if err != nil || (version != 5 && version != StrategyLabReadVersion) || output != strconv.Itoa(version)+"\n" {
+		return 0, ErrStrategyStateAdmission
+	}
+	return version, nil
 }
 
 type strategyPreparationKey struct{}

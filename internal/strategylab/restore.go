@@ -40,6 +40,9 @@ func decodePrivateState(image restorejournal.Image) (State, error) {
 	if d.Decode(&state) != nil || d.Decode(new(any)) != io.EOF || !supportedStrategySchema(state.SchemaVersion) || len(state.Candidates) > 4096 || len(state.Evidence) > MaxEvidence || len(state.Selections) > 4096 || len(state.PackReceipts) > 4096 {
 		return State{}, restorejournal.ErrInvalid
 	}
+	if err := validateManagedProbeState(state); err != nil {
+		return State{}, err
+	}
 	if supervisedStrategySchema(state.SchemaVersion) {
 		return decodeCompatibilityState(image)
 	}
@@ -70,6 +73,32 @@ func ReviewPrivateSnapshot(in PrivateSnapshot) (int, error) {
 	}
 	s, _ := decodePrivateState(restorejournal.Image{Exists: true, Data: in.Content})
 	return len(s.Candidates), nil
+}
+
+// ReviewPrivatePairSnapshot is data-only update compatibility review. A known
+// acknowledged terminal native session can be preserved byte-for-byte with a
+// reader-compatible binary. This neither adopts the recorded process nor
+// grants Start, cleanup, eligibility or a new native validation generation.
+func ReviewPrivatePairSnapshot(in PrivateSnapshot) (int, error) {
+	if err := ValidatePrivateSnapshot(in); err != nil {
+		return 0, err
+	}
+	state, err := decodePrivateState(restorejournal.Image{Exists: true, Data: in.Content})
+	if err != nil {
+		return 0, err
+	}
+	if state.SchemaVersion == compatibilityUnknownSchema || state.ManagedProbeUnknown || state.CompatibilityFinalizing {
+		return 0, ErrCompatibilityQuiescenceUnknown
+	}
+	for _, candidate := range state.Candidates {
+		if candidate.Validation.QuiescenceUnknown {
+			return 0, ErrCompatibilityQuiescenceUnknown
+		}
+	}
+	if state.CompatibilitySession != nil && compatibilitySessionUnknown(*state.CompatibilitySession) {
+		return 0, ErrCompatibilityQuiescenceUnknown
+	}
+	return state.SchemaVersion, nil
 }
 
 func (m *Manager) ExportPrivateIfPresent(ctx context.Context) (*PrivateSnapshot, error) {
@@ -107,7 +136,7 @@ func (m *Manager) compatibilityRetainedUnknownOnDisk() bool {
 	if err != nil {
 		return false
 	}
-	if state.SchemaVersion == compatibilityUnknownSchema || state.CompatibilityFinalizing || state.CompatibilitySession != nil && compatibilitySessionUnknown(*state.CompatibilitySession) {
+	if state.ManagedProbeUnknown || state.SchemaVersion == compatibilityUnknownSchema || state.CompatibilityFinalizing || state.CompatibilitySession != nil && compatibilitySessionUnknown(*state.CompatibilitySession) {
 		return true
 	}
 	for _, candidate := range state.Candidates {

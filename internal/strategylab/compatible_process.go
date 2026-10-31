@@ -38,7 +38,7 @@ func (m *Manager) compatibilityUnknownLocked() bool {
 }
 
 func (m *Manager) compatibilityRetainedUnknownLocked() bool {
-	if m.compatibilityUnknown || m.state.SchemaVersion == compatibilityUnknownSchema || (m.state.CompatibilitySession != nil && m.state.CompatibilitySession.Unknown) {
+	if m.compatibilityUnknown || m.state.ManagedProbeUnknown || m.state.SchemaVersion == compatibilityUnknownSchema || (m.state.CompatibilitySession != nil && m.state.CompatibilitySession.Unknown) {
 		return true
 	}
 	for _, candidate := range m.state.Candidates {
