@@ -16,6 +16,7 @@ on:
       - 'internal/startuptools/**'
       - 'internal/nativecheckfixture/**'
       - 'scripts/test-managed-probe-native.sh'
+      - 'scripts/native-managed-probe-queue-init.py'
       - 'scripts/test-domain-original-native.sh'
       - 'scripts/check-node-native-performance.sh'
       - 'cmd/razvilka/**'

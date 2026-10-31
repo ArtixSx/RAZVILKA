@@ -499,7 +499,16 @@ func (e *nfqwsProbeExecution) prepare(ctx context.Context, revision uint64) erro
 	}
 	e.plan = Plan{SchemaVersion: SchemaVersion, PlanID: "dp-" + id[:16], Digest: stringsHashProbe(e.spec), Revision: revision, Ready: true, NetworkProfileID: e.record.NetworkID, Adapters: []string{"nfqws2"}, Routes: []Route{{ServiceID: e.record.ServiceID, Selected: "nfqws2", Resolved: "nfqws2", CIDRs: []string{e.reference.Scope.Address.String() + "/32"}}}}
 	_, err = CompileNFQWSScopedPlan(e.plan, e.spec)
-	return err
+	if err != nil {
+		return err
+	}
+	// Read-only preflight BEFORE the Manager registrar/COMMON reservation.
+	// Missing module inventory or an occupied queue must not create a durable
+	// pending resource. The genuine BeforeStart repeats the full fresh proof.
+	if err := e.current(ctx); err != nil {
+		return err
+	}
+	return errors.Join(CheckNFQWSScopedQueue(ctx, e.spec.NetNamespace, 200, nil), e.current(ctx))
 }
 
 func nfqwsProbeNamespace(inode uint64) string { return "net:[" + strconv.FormatUint(inode, 10) + "]" }

@@ -30,6 +30,7 @@ tar -xzf "$probe_work/release.tar.gz" -C "$probe_work" \
   zapret2-v1.0.6/files/fake/quic_initial_www_google_com.bin \
   zapret2-v1.0.6/files/fake/tls_clienthello_www_google_com.bin
 export RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$probe_work"
+export RAZVILKA_MANAGED_PROBE_FIXTURE_REPO="$probe_repo"
 python3 - <<'PY'
 import hashlib, json, os, pathlib, subprocess
 work = pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_FIXTURE_WORK'])
@@ -69,8 +70,16 @@ export RAZVILKA_MANAGED_PROBE_NATIVE=1
 export RAZVILKA_NFQWS_MANAGED_GENUINE_REVIEW="$probe_work/genuine.json"
 export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
-go test -race -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
 chmod 500 "$probe_work/app.test"
+python3 - <<'PY'
+import os, pathlib
+program = pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_FIXTURE_WORK']) / 'app.test'
+size = program.stat().st_size
+print('Actual compiled reader/consumer bytes:', size)
+if not 0 < size <= 64 << 20:
+    raise SystemExit('fixture exceeds the real controller binary admission bound')
+PY
 printf '127.0.0.1 localhost\n8.8.8.8 managed-probe.example\n' > "$probe_work/hosts"
 chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
@@ -99,6 +108,7 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
   /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
+  python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
 ' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s
 done
