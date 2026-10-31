@@ -113,3 +113,19 @@ func (r *nfqwsProbeSocketOwner) retire() error {
 	r.closed = true
 	return nil
 }
+
+func (r *nfqwsProbeSocketOwner) probeSpec(record strategylab.ManagedProbeEpochRecord) (NFQWSProbeSpec, error) {
+	if r == nil || r.self != r {
+		return NFQWSProbeSpec{}, errNFQWSProbeSocket
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.bound == nil {
+		return NFQWSProbeSpec{}, errNFQWSProbeSocket
+	}
+	source, dest, dev, ino, err := r.bound.metadata()
+	if err != nil {
+		return NFQWSProbeSpec{}, err
+	}
+	return NFQWSProbeSpec{Source: source, Destination: dest, SocketDevice: dev, SocketInode: ino, Epoch: record.ID, ValidationGeneration: record.ValidationGeneration, CriteriaDigest: record.CriteriaDigest}, nil
+}

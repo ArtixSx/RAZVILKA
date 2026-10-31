@@ -52,6 +52,7 @@ type executionResourceScope struct {
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
 	xrayDomainTCP           map[string]*XrayDomainTCPExecutionResource
+	domainTCPCaptures       map[string]*domainTCPCaptureExecutionResource
 	domainDNS               *ScopedDNSAdapter
 	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
@@ -111,6 +112,7 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, xraySelectedTCP: map[string]*XraySelectedTCPExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
 	s.observationOpen.Store(true)
 	s.xrayDomainTCP = map[string]*XrayDomainTCPExecutionResource{}
+	s.domainTCPCaptures = map[string]*domainTCPCaptureExecutionResource{}
 	if a, ok := adapterOwner.(*WARPWireGuardAdapter); ok && a != nil && a.wgCommandTools != nil {
 		s.wgOwner, err = newWGOperationOwner(ctx, s)
 		if err == nil {
@@ -317,6 +319,9 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.xrayDomainTCP {
 		ids[id] = true
 	}
+	for id := range s.domainTCPCaptures {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -449,6 +454,12 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if probe, ok := s.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.open.Load() && probe.resource != nil && probe.resource.scope == s && !probe.finishing.Load() {
+		s.pending = true // Original cleanup only; retain anchored COMMON descriptors.
+		s.cancel()
+		s.mu.Unlock()
+		return errNFQWSProbeScopeRetained
+	}
 	if s.wgOwner != nil && s.wgOwner.mutationAttempted.Load() && !s.wgCleanupJoined {
 		s.mu.Unlock()
 		return ErrWGOperationOwner
@@ -486,7 +497,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
+		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || (s.syntheticBaselines[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil) && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -501,7 +512,7 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
@@ -590,6 +601,9 @@ func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Pla
 	execution.State = "temporary-complete"
 	if validateExecutionResources(execution, true) != nil {
 		execution.State = "resource-failed"
+	}
+	if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
+		return errors.Join(err, m.writeExecutionOwned(root, execution, scope))
 	}
 	return errors.Join(err, m.writeExecution(root, execution))
 }

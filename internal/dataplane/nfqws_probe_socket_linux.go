@@ -21,6 +21,19 @@ type nfqwsProbeBoundSocket struct {
 	stat                unix.Stat_t
 	source, destination netip.AddrPort
 	closed              bool
+	closeFailed         bool
+}
+
+func (r *nfqwsProbeBoundSocket) metadata() (netip.AddrPort, netip.AddrPort, uint64, uint64, error) {
+	if r == nil || r.self != r {
+		return netip.AddrPort{}, netip.AddrPort{}, 0, 0, errNFQWSProbeSocket
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return netip.AddrPort{}, netip.AddrPort{}, 0, 0, errNFQWSProbeSocket
+	}
+	return r.source, r.destination, uint64(r.stat.Dev), r.stat.Ino, nil
 }
 
 func nfqwsProbeRouteSource(ctx context.Context, destination netip.AddrPort) (netip.Addr, error) {
@@ -171,7 +184,15 @@ func (s *nfqwsProbeBoundSocket) close() error {
 	if s.closed {
 		return nil
 	}
+	if s.closeFailed {
+		return errNFQWSProbeSocket
+	}
+	var current unix.Stat_t
+	if err := unix.Fstat(s.fd, &current); err != nil || current.Dev != s.stat.Dev || current.Ino != s.stat.Ino {
+		return errors.Join(errNFQWSProbeSocket, err)
+	}
 	if err := unix.Close(s.fd); err != nil {
+		s.closeFailed = true // Never retry an ambiguous fd number after port reuse.
 		return err
 	}
 	s.closed = true

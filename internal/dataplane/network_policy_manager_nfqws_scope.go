@@ -106,7 +106,17 @@ func (s *executionResourceScope) issueNFQWS(ctx context.Context, spec NFQWSScope
 			return nil, err
 		}
 	}
-	if _, err := s.plan.FrozenLAN(); err != nil {
+	var probe *nfqwsProbeExecution
+	if spec.Probe != nil {
+		e, ok := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
+		if !ok || e == nil || e.self != e || e.consumer == nil || e.consumer.manager != s.manager || e.consumer.adapter != s.adapterOwner || !reflect.DeepEqual(e.spec, spec) || !reflect.DeepEqual(e.plan, s.plan) {
+			return nil, ErrNFQWSScopedOwner
+		}
+		if err := e.current(ctx); err != nil {
+			return nil, err
+		}
+		probe = e
+	} else if _, err := s.plan.FrozenLAN(); err != nil {
 		return nil, err
 	}
 	compiled, err := CompileNFQWSScopedPlan(s.plan, spec)
@@ -143,6 +153,17 @@ func (s *executionResourceScope) issueNFQWS(ctx context.Context, spec NFQWSScope
 		if err != nil {
 			return nil, executionJournalError(err)
 		}
+	}
+	if probe != nil {
+		// Exact original reservation boundary; a constructor refusal before this
+		// point has no COMMON resource/process/effect and may retire its socket.
+		records, err := newNFQWSProbeRecords(s)
+		if err != nil {
+			return nil, err
+		}
+		probe.resource = r
+		probe.records = records
+		probe.entered.Store(true)
 	}
 	s.nfqws[r.binding.ResourceID] = r
 	s.execution.Resources = append(s.execution.Resources, ExecutionResource{ID: r.binding.ResourceID, Kind: "nfqws-scoped", State: "prepared", Phase: "planned",
@@ -199,6 +220,16 @@ func (r *NFQWSExecutionResource) matching(binding NFQWSExecutionBinding) (int, e
 }
 
 func (r *NFQWSExecutionResource) check(ctx context.Context, forward bool) error {
+	if !forward && r.plan != nil && r.plan.spec.Probe != nil {
+		e, ok := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
+		if !ok || e == nil || e.self != e || e.resource != r || ctx.Value(nfqwsProbeCleanupKey{}) != e {
+			return ErrNFQWSScopedOwner
+		}
+		if err := r.scope.checkOriginalOwner(ctx, &executionTransitResource{relative: r.relative, anchor: r.anchor}, false, true); err != nil {
+			return err
+		}
+		return e.cleanupCurrent(ctx)
+	}
 	if !forward && r.activeCommand != nil {
 		return r.checkOriginalCleanup(ctx)
 	}

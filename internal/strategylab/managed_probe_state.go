@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
@@ -45,6 +47,7 @@ func requireManagedSelectionEpoch(state State, selection Selection, epoch *Manag
 }
 
 type ManagedProbeEpoch struct {
+	consumer                  *ManagedProbeConsumption
 	self                      *ManagedProbeEpoch
 	mu                        sync.Mutex
 	manager                   *Manager
@@ -53,6 +56,72 @@ type ManagedProbeEpoch struct {
 	record                    ManagedProbeEpochRecord
 	running, complete, failed bool
 	nativeSession             *compatibilitySession
+}
+
+// ManagedProbeConsumption pins the original serial slot while its actual
+// synchronous consumer owns process/flow/cleanup. It contains no saved grant.
+type ManagedProbeConsumption struct {
+	self  *ManagedProbeConsumption
+	epoch *ManagedProbeEpoch
+	open  bool
+}
+
+func (r *ManagedProbeEpoch) RetainProbeConsumption(ctx context.Context, source *CandidateProbeReview, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) (*ManagedProbeConsumption, error) {
+	if err := r.ProbeOwnersCurrent(ctx, source, runtime, control); err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running || r.complete || r.failed || r.consumer != nil {
+		return nil, ErrSelectedCandidateChanged
+	}
+	r.manager.mu.Lock()
+	owned := r.manager.nativeRunning && r.manager.managedProbe == r
+	r.manager.mu.Unlock()
+	if !owned {
+		return nil, ErrSelectedCandidateChanged
+	}
+	c := &ManagedProbeConsumption{epoch: r, open: true}
+	c.self = c
+	r.consumer = c
+	return c, nil
+}
+
+func (c *ManagedProbeConsumption) WithStart(ctx context.Context, begin func() error) error {
+	if c == nil || c.self != c || c.epoch == nil || begin == nil || ctx == nil || ctx.Err() != nil {
+		return ErrSelectedCandidateChanged
+	}
+	r := c.epoch
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !c.open || r.consumer != c || !r.running || r.complete || r.failed {
+		return ErrSelectedCandidateChanged
+	}
+	r.manager.mu.Lock()
+	owned := r.manager.nativeRunning && r.manager.managedProbe == r && !r.manager.compatibilityUnknownLocked() && !r.manager.writeBlocked
+	r.manager.mu.Unlock()
+	if !owned {
+		return ErrSelectedCandidateChanged
+	}
+	return begin() // ONLY short control admission + actual synchronous Cmd.Start.
+}
+
+func (c *ManagedProbeConsumption) Close() error {
+	if c == nil || c.self != c || c.epoch == nil {
+		return ErrSelectedCandidateChanged
+	}
+	r := c.epoch
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !c.open {
+		return nil
+	}
+	if r.consumer != c {
+		return ErrSelectedCandidateChanged
+	}
+	c.open = false
+	r.consumer = nil
+	return nil
 }
 
 func managedProbeKey(serviceID, candidateID string) string {
@@ -216,6 +285,37 @@ func (r *ManagedProbeEpoch) Reference(ctx context.Context) (ManagedProbeEpochRec
 	return r.record, nil
 }
 
+// ProbeOwnersCurrent binds the real consumer to this SAME active serial slot
+// and original candidate/runtime/control owners. A completed read-only epoch
+// is history/selection evidence and can never authorize another probe launch.
+func (r *ManagedProbeEpoch) ProbeOwnersCurrent(ctx context.Context, source *CandidateProbeReview, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) error {
+	if r == nil || r.self != r || source == nil || r.source != source || r.manager == nil {
+		return ErrSelectedCandidateChanged
+	}
+	active := func() bool {
+		r.mu.Lock()
+		running := r.running && !r.complete && !r.failed
+		r.mu.Unlock()
+		r.manager.mu.Lock()
+		owned := r.manager.managedProbe == r && r.manager.nativeRunning && !r.manager.compatibilityUnknownLocked() && !r.manager.writeBlocked
+		r.manager.mu.Unlock()
+		return running && owned
+	}
+	if !active() {
+		return ErrSelectedCandidateChanged
+	}
+	if err := source.ManagedOwnersCurrent(ctx, runtime, control); err != nil {
+		return err
+	}
+	if err := r.Current(ctx); err != nil {
+		return err
+	}
+	if !active() {
+		return ErrSelectedCandidateChanged
+	}
+	return ctx.Err()
+}
+
 // Read-only completed evidence observes Manager's acknowledged CAS lineage,
 // not the old live writer lease or global latest compatibility session. The
 // original native receipt remains private in this owner; restart cannot issue
@@ -272,6 +372,9 @@ func (r *ManagedProbeEpoch) Finish(ctx context.Context, evidence *Evidence, clea
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.running || r.failed {
+		return ErrSelectedCandidateChanged
+	}
+	if cleanupErr == nil && r.consumer != nil {
 		return ErrSelectedCandidateChanged
 	}
 	var currentErr error

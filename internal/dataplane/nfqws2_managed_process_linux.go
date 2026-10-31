@@ -276,7 +276,17 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			}
 			cmd.ExtraFiles = []*os.File{endpoint} // Fixed inherited descriptor 3.
 		}
-		startErr := operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
+		start := func() error {
+			return operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
+		}
+		if probe, ok := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok {
+			if probe == nil || probe.self != probe || probe.consumption == nil || !reflect.DeepEqual(probe.command, command) {
+				return ErrNFQWSScopedOwner
+			}
+			admit := start
+			start = func() error { return probe.consumption.WithStart(ctx, admit) }
+		}
+		startErr := start()
 		if endpoint != nil {
 			_ = endpoint.Close()
 		}

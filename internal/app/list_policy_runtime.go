@@ -255,6 +255,12 @@ func (p *managedListPolicyOwner) runtimeFor(ctx context.Context) (*ManagedNFQWSL
 }
 
 func (p *managedListPolicyOwner) scopeCheck(ctx context.Context, plan *dataplane.LANPolicyRuntimePlan) error {
+	if p != nil && p.original() && !p.closed.Load() && p.nfq != nil && p.nfq.probe != nil && p.nfq.probe.OwnsContext(ctx) {
+		if plan != nil {
+			return dataplane.ErrNFQWSScopedOwner
+		}
+		return p.nfq.probe.ScopeCurrent(ctx, "")
+	}
 	if r, err := p.wgRuntimeFor(ctx); r != nil || err != nil {
 		if err != nil {
 			return err

@@ -233,6 +233,11 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	}
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
+	if scope != nil {
+		if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
+			return executionJournalError(probe.publishRecords(data))
+		}
+	}
 	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)
 	latestErr := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-execution.json"), data)
 	return executionJournalError(errors.Join(transactionErr, latestErr))
@@ -240,7 +245,7 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil {
+		if resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {

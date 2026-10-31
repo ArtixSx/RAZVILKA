@@ -35,6 +35,7 @@ type ManagedNFQWSListRuntime struct {
 	gate            *dataplane.NetworkPolicyAdapter
 	checks          *dataplane.NetworkPolicyChecks
 	control         *operationgate.ControlEpochReview
+	probe           *dataplane.ManagedNFQWSProbeConsumer
 	active, stopped *managedNFQWSListExecution
 	pending         *managedNFQWSListExecution
 	closed          bool
@@ -90,6 +91,10 @@ func (a *App) ConfigureReviewedStockNFQWSList(ctx, panel context.Context) (*Mana
 	}
 	r := &ManagedNFQWSListRuntime{policy: policy, app: a, manager: policy.manager, panel: policy.panel, provider: policy.provider, tools: policy.tools, inventory: policy.inventory, gate: policy.gate, checks: policy.checks, control: policy.control}
 	r.self = r
+	r.probe, err = dataplane.NewManagedNFQWSProbeConsumer(r.manager, r.gate, r.inventory, r.control, a.SelfUpdateFiles.ControlRoot, r.provider, r.panel)
+	if err != nil {
+		return nil, err
+	}
 	policy.mu.Lock()
 	defer policy.mu.Unlock()
 	if policy.nfq != nil || policy.closed.Load() {
@@ -125,6 +130,12 @@ func (r *ManagedNFQWSListRuntime) executionFor(ctx context.Context) (*managedNFQ
 
 // WithStart is called ONLY by the original held-fd startup tool executor.
 func (r *ManagedNFQWSListRuntime) WithStart(ctx context.Context, name string, args []string, digest string, begin func() error) error {
+	if r != nil && r.self == r && r.original() && !r.closed && r.probe != nil && r.probe.OwnsContext(ctx) {
+		if r.probe.ProbeCounterCommandCurrent(ctx, name, args, digest) == nil {
+			return r.probe.WithProbeCounterCommandStart(ctx, name, args, digest, begin)
+		}
+		return dataplane.WithNFQWSScopedCommandStart(ctx, name, args, digest, begin)
+	}
 	if _, _, err := r.executionFor(ctx); err != nil {
 		return err
 	}

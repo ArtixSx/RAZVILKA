@@ -80,10 +80,32 @@ func effectArguments(index int, args []string) bool {
 	if index == 2 {
 		return (args[0] == "-4" || args[0] == "-6") && (args[1] == "rule" || args[1] == "route") && (args[2] == "add" || args[2] == "del" || args[1] == "route" && args[2] == "replace")
 	}
+	// A probe counter is an admitted command, never the unrestricted read ABI.
+	// The original consumer must compare its exact live chain and tool digest
+	// again at the held-descriptor Cmd.Start boundary.
+	if index == 0 && probeCounterArguments(args) {
+		return true
+	}
 	if index < 0 || index > 1 || args[0] != "-t" || !readArguments([]string{"-t", args[1], "-S"}) {
 		return false
 	}
 	return args[2] == "-A" || args[2] == "-D" || args[2] == "-I" || args[2] == "-N" || args[2] == "-X"
+}
+
+func probeCounterArguments(args []string) bool {
+	if len(args) != 7 || args[0] != "-t" || args[1] != "mangle" || args[2] != "-L" || args[4] != "-n" || args[5] != "-v" || args[6] != "-x" {
+		return false
+	}
+	chain := args[3]
+	if len(chain) != 24 || !strings.HasPrefix(chain, "RZP_") || !strings.HasSuffix(chain, "_4") {
+		return false
+	}
+	for _, c := range chain[4:22] {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func boundedArguments(args []string) bool {

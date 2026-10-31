@@ -121,6 +121,34 @@ func TestManagedProbeCleanupFailurePersistsUnknownWithoutSchemaDowngrade(t *test
 	}
 }
 
+func TestManagedProbeConsumerSlotCannotBeRetiredOrReissuedByCompletedEpoch(t *testing.T) {
+	m, epoch := managedProbeSlotFixture(t)
+	c := &ManagedProbeConsumption{epoch: epoch, open: true}
+	c.self = c
+	epoch.consumer = c
+	if epoch.Finish(context.Background(), nil, nil) == nil || !m.nativeRunning || m.managedProbe != epoch {
+		t.Fatal("active actual consumer released serial slot")
+	}
+	forged := ManagedProbeConsumption{self: c, epoch: epoch, open: true}
+	called := false
+	if forged.WithStart(context.Background(), func() error { called = true; return nil }) == nil || called || forged.Close() == nil {
+		t.Fatal("copied consumption accepted")
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := epoch.Finish(context.Background(), nil, nil); err != nil || m.nativeRunning {
+		t.Fatal("known consumer retirement did not release own slot", err)
+	}
+	if epoch.ProbeOwnersCurrent(context.Background(), epoch.source, nil, nil) == nil {
+		t.Fatal("completed epoch became new process admission")
+	}
+	_, other := managedProbeSlotFixture(t)
+	if other.ProbeOwnersCurrent(context.Background(), epoch.source, nil, nil) == nil {
+		t.Fatal("another source bound active epoch")
+	}
+}
+
 func TestManagedProbeMalformedEvidenceCannotPartiallyPublishSchemaOrEpoch(t *testing.T) {
 	for _, kind := range []string{"timestamp", "outcome", "scope"} {
 		t.Run(kind, func(t *testing.T) {

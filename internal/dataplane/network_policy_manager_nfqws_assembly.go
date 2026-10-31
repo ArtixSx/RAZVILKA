@@ -142,7 +142,7 @@ func (e *nfqwsExecutionAssembly) current(ctx context.Context, p *NFQWSScopedPlan
 // across LAN/all-capture preflight. Any failed/unknown observation fences the
 // attempt. This does not retry Start or the one-shot resource.Prepared.
 func nfqwsExecutionAwaitQueue(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) error {
-	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.queueReadiness == nil {
+	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.network == nil && b.queueReadiness == nil {
 		return ErrNFQWSScopedOwner
 	}
 	if _, bounded := ctx.Deadline(); !bounded {
@@ -212,6 +212,17 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), 5*time.Second)
 	defer cancel()
+	probe, _ := e.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
+	if probe != nil {
+		if probe.self != probe || probe.resource != r || probe.binding != e.binding {
+			return errors.Join(runErr, ErrNFQWSScopedOwner)
+		}
+		if nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) && lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil {
+			copy := lease
+			probe.processResult = &copy
+		}
+		cleanupCtx = context.WithValue(cleanupCtx, nfqwsProbeCleanupKey{}, probe)
+	}
 	// Inspect is read-only and requires the existing common receipt/lock. A
 	// missing receipt never acquires a new deletion or synthetic unused grant.
 	status, cleanupErr := e.binding.Inspect(cleanupCtx, r.Plan(), r.Root())
@@ -231,6 +242,9 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 		if err := r.SettleRemoved(cleanupCtx); err != nil {
 			cleanupErr = fmt.Errorf("NFQWS removed settlement: %w", err)
 		}
+	}
+	if cleanupErr == nil && probe != nil {
+		cleanupErr = probe.acknowledgeRemoved(cleanupCtx, lease)
 	}
 	if cleanupErr == nil && completed && e.ctx.Err() == nil && nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) &&
 		lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil && nfqwsExecutionOnlyCanceled(runErr, 0) {

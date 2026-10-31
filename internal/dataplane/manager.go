@@ -583,6 +583,12 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 		return fmt.Errorf("dataplane adapter %q is unavailable", adapterID)
 	}
 	canary, ok := adapter.(CanaryAdapter)
+	if scoped, probe, present, err := nfqwsProbeAdapter(ctx, adapter, plan); present {
+		if err != nil {
+			return err
+		}
+		adapter, canary, ok = scoped, probe, true
+	}
 	if !ok {
 		return fmt.Errorf("dataplane adapter %q has no isolated canary", adapterID)
 	}

@@ -24,6 +24,9 @@ type nfqws2ActiveCommandOwner struct {
 // begin must be ONLY the actual synchronous Cmd.Start. Wait and all full
 // closing readbacks belong to the existing producers after this returns.
 func WithNFQWSScopedCommandStart(ctx context.Context, name string, args []string, toolReviewSHA string, begin func() error) error {
+	if ctx != nil && ctx.Value(nfqwsProbeExecutionKey{}) != nil {
+		return withNFQWSProbeCommandStart(ctx, name, args, toolReviewSHA, begin)
+	}
 	if begin == nil {
 		return ErrNFQWSScopedOwner
 	}

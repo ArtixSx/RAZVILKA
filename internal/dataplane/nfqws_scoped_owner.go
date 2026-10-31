@@ -46,6 +46,7 @@ type NFQWSScopedSpec struct {
 	Candidate                       NFQWSScopedCandidate
 	NetworkIdentity                 *netidentity.Identity `json:"network_identity,omitempty"`
 	Matches                         []NFQWSScopedMatch    `json:"matches,omitempty"`
+	Probe                           *NFQWSProbeSpec       `json:"probe,omitempty"`
 }
 
 type NFQWSScopedResources struct {
@@ -102,6 +103,10 @@ func (s NFQWSScopedSpec) Clone() NFQWSScopedSpec {
 	s.Candidate.Traffic = slices.Clone(s.Candidate.Traffic)
 	s.Matches = slices.Clone(s.Matches)
 	s.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(s.NetworkIdentity)
+	if s.Probe != nil {
+		probe := *s.Probe
+		s.Probe = &probe
+	}
 	return s
 }
 
@@ -194,6 +199,9 @@ func nfqwsScopedPublic(p netip.Prefix) bool {
 // validateNFQWSScopedIntent checks only immutable source/plan tuples. It never
 // constructs a chain, effects payload, execution resource or native command.
 func validateNFQWSScopedIntent(expected Plan, spec NFQWSScopedSpec) (NFQWSScopedSpec, error) {
+	if spec.Probe != nil {
+		return validateNFQWSProbeIntent(expected, spec)
+	}
 	candidate := spec.Candidate
 	if len(spec.Matches) > 1024 {
 		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
@@ -283,6 +291,9 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 		return nil, err
 	}
 	spec = checked
+	if spec.Probe != nil {
+		return compileNFQWSProbePlan(expected, spec)
+	}
 	candidate := spec.Candidate
 	p := &NFQWSScopedPlan{lan: CloneLANPolicyRuntime(expected.LAN)}
 	p.resources = NFQWSScopedResources{Queue: spec.Queue, NetNamespace: spec.NetNamespace, Generation: p.lan.Generation, LANDigest: p.lan.Digest, PlanID: expected.PlanID, PlanDigest: expected.Digest, NetworkProfileID: expected.NetworkProfileID, Revision: expected.Revision, CandidateID: candidate.ID, Incarnation: candidate.Incarnation, ArgumentsHash: candidate.ArgumentsSHA256, BootID: spec.BootID, SessionID: spec.SessionID, CommandSHA256: spec.CommandSHA256}

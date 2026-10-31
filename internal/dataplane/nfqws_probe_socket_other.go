@@ -10,6 +10,10 @@ import (
 
 type nfqwsProbeBoundSocket struct{}
 
+func (*nfqwsProbeBoundSocket) metadata() (netip.AddrPort, netip.AddrPort, uint64, uint64, error) {
+	return netip.AddrPort{}, netip.AddrPort{}, 0, 0, errNFQWSProbeSocket
+}
+
 func nfqwsProbeRouteSource(context.Context, netip.AddrPort) (netip.Addr, error) {
 	return netip.Addr{}, errNFQWSProbeSocket
 }

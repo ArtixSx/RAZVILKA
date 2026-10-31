@@ -255,6 +255,11 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	if err := prepared.Current(ctx); err != nil {
 		return refused, err
 	}
+	accepted := &domainAcceptedTCP{capture: capture, conn: conn, socket: socket}
+	accepted.self = accepted
+	accepted.open.Store(true)
+	defer accepted.open.Store(false)
+	ctx = context.WithValue(ctx, domainAcceptedTCPKey{}, accepted)
 	lease, err := owner.AdmitTCP(ctx, socket)
 	if err != nil || lease == nil {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)

@@ -178,7 +178,7 @@ func nfqwsScopedRuleKey(fields []string) string {
 			return unknown
 		}
 		switch key {
-		case "-i", "-j", "--dport", "--queue-num":
+		case "-i", "-j", "--sport", "--dport", "--queue-num":
 		case "-p":
 			if value == "6" {
 				value = "tcp"
@@ -188,6 +188,9 @@ func nfqwsScopedRuleKey(fields []string) string {
 			}
 		case "-s", "-d", "--mark":
 			value = strings.Split(lanClassifierChainKey([]string{key, value}), " ")[1]
+			if key == "--mark" && !strings.Contains(value, "/") {
+				value += "/0xffffffff"
+			}
 		case "--mac-source":
 			mac, err := net.ParseMAC(value)
 			if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || !strings.EqualFold(value, mac.String()) {
@@ -249,10 +252,10 @@ func (p *NFQWSScopedPlan) scopedRowCountsCompared(rules nfqwsScopedRules, compar
 				// This is a conservative global conflict policy. A different
 				// queue does not prove disjoint DPI processing of this scope.
 				for i, value := range fields {
-					if i == 1 && strings.HasPrefix(value, "RZQ_") && !owned {
+					if i == 1 && (strings.HasPrefix(value, "RZQ_") || strings.HasPrefix(value, "RZP_")) && !owned {
 						return nil, ErrNFQWSScopedOwner
 					}
-					if i > 1 && (value == "-j" || value == "-g") && i+1 < len(fields) && (fields[i+1] == "NFQUEUE" || fields[i+1] == "QUEUE" || strings.HasPrefix(fields[i+1], "RZQ_")) && !owned {
+					if i > 1 && (value == "-j" || value == "-g") && i+1 < len(fields) && (fields[i+1] == "NFQUEUE" || fields[i+1] == "QUEUE" || strings.HasPrefix(fields[i+1], "RZQ_") || strings.HasPrefix(fields[i+1], "RZP_")) && !owned {
 						return nil, ErrNFQWSScopedOwner
 					}
 					if (value == "--queue-num" || value == "--queue-balance" || value == "--queue-bypass" || value == "--queue-cpu-fanout") && !owned {
