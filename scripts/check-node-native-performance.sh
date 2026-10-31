@@ -2,7 +2,7 @@
 # Disposable Linux staging fixture: real Xray server/client, DNS/TLS/SOCKS,
 # original Check/queue/controllers. No Internet, router or existing /opt writes.
 set -eu
-: "${RAZVILKA_XRAY_NATIVE:?absolute path to SHA-verified official Xray26.10.31}"
+: "${RAZVILKA_XRAY_NATIVE:?absolute path to SHA-verified official Xray26.3.27 (production XHTTP contract)}"
 : "${RAZVILKA_NODE_PERF_OUTPUT:?absolute artifact output directory}"
 GO=${GO:-go}
 case "$RAZVILKA_XRAY_NATIVE:$RAZVILKA_NODE_PERF_OUTPUT" in /*:/*) ;; *) echo 'paths must be absolute' >&2; exit 2;; esac

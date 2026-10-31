@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -69,8 +70,8 @@ func Start(t *testing.T) *Fixture {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	version, err := exec.CommandContext(ctx, binary, "version").Output()
 	cancel()
-	if err != nil || !strings.Contains(string(version), "26.10.31") {
-		t.Fatal("native measurement requires reviewed Xray26.10.31")
+	if err != nil || !strings.HasPrefix(string(version), "Xray "+providerprofile.XHTTPXrayVersion+" ") {
+		t.Fatal("native measurement requires the production-reviewed XHTTP version " + providerprofile.XHTTPXrayVersion)
 	}
 	f := &Fixture{Binary: binary, Root: t.TempDir(), Entered: make(chan struct{}, 1024), ProbeURL: "https://service.example/generate_204"}
 	cert, key := certificate(t, f.Root)
