@@ -2,6 +2,8 @@ package strategylab
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
@@ -36,6 +38,9 @@ func TestLifecycleRegistrationReadsActualConfiguredSupervisedProvider(t *testing
 		t.Skip("actual protected provider requires Linux ownership proof")
 	}
 	model, approval, _ := compatibilityProviderPreflightFixture(t)
+	if err := os.Chmod(filepath.Dir(approval.BinaryPath), 0700); err != nil {
+		t.Fatal(err)
+	}
 	provider, err := NewSupervisedCompatibilityProvider(model.manager, approval)
 	if err != nil {
 		t.Fatal(err)

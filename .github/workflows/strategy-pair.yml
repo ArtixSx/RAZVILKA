@@ -85,6 +85,7 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestXrayDomainTCPNativeHeldProcessLifecycle|TestNFQWSProbe' -v
       - name: Actual HEV TUN HTTPS and owned cleanup in private namespaces
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
