@@ -427,11 +427,17 @@ func domainOriginalServePeer(t *testing.T, root string) {
 			}()
 		}
 	}()
-	config := map[string]any{"log": map[string]any{"loglevel": "warning", "access": "none"}, "inbounds": []any{map[string]any{"listen": domainOriginalServer, "port": 10443, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": domainOriginalUUID}}, "decryption": "none"}, "streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": filepath.Join(root, "ca.pem"), "keyFile": filepath.Join(root, "key.pem")}}}}}}, "outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": domainOriginalServer}}}
+	config := map[string]any{"log": map[string]any{"loglevel": "debug", "access": "none"}, "inbounds": []any{map[string]any{"listen": domainOriginalServer, "port": 10443, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": domainOriginalUUID}}, "decryption": "none"}, "streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": filepath.Join(root, "ca.pem"), "keyFile": filepath.Join(root, "key.pem")}}}}}}, "outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": domainOriginalServer}}}
 	raw, _ := json.Marshal(config)
 	path := filepath.Join(root, "server.json")
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
+	}
+	check, cancelCheck := context.WithTimeout(ctx, 5*time.Second)
+	output, checkErr := exec.CommandContext(check, os.Getenv("RAZVILKA_XRAY_NATIVE"), "run", "-test", "-config", path).CombinedOutput()
+	cancelCheck()
+	if checkErr != nil {
+		t.Fatalf("physical native server config invalid: %v %s", checkErr, output)
 	}
 	command := exec.Command(os.Getenv("RAZVILKA_XRAY_NATIVE"), "run", "-config", path)
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr

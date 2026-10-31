@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"os"
@@ -36,6 +37,27 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	peers := domainOriginalPeers(t, ctx)
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		// Only generated local fixture logs; never dump imported profiles or
+		// user state. Native errors stay observable without weakening checks.
+		_ = filepath.WalkDir(peers.root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), ".log") {
+				return nil
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				return nil
+			}
+			defer file.Close()
+			data, _ := io.ReadAll(io.LimitReader(file, 8192))
+			relative, _ := filepath.Rel(peers.root, path)
+			t.Logf("isolated fixture %s: %s", relative, data)
+			return nil
+		})
+	})
 	provider := netidentity.NewProcProvider()
 	tools, err := startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_DOMAIN_TOOLS_REVIEW"))
 	if err != nil {
