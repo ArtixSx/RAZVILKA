@@ -70,8 +70,12 @@ func TestManagedNFQWSCurrentRuntimeRefusesMissingCorruptAndUnacceptedReceipt(t *
 			if err != nil {
 				t.Fatal(err)
 			}
-			if lease, err := m.AcquireCurrentManagedNFQWSRuntime(context.Background()); err == nil || lease != nil {
+			lease, readErr := m.AcquireCurrentManagedNFQWSRuntime(context.Background())
+			if readErr == nil || lease != nil {
 				t.Fatal("invalid current source acquired a runtime lease", err)
+			}
+			if errors.Is(readErr, ErrManagedNFQWSReceiptAbsent) != (change == "missing") {
+				t.Fatal("unknown installed state was confused with an absent receipt", readErr)
 			}
 		})
 	}

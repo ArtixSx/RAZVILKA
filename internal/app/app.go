@@ -593,6 +593,7 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc(managedNFQBundlePlanPath, a.managedNFQBundlePlan)
 	mux.HandleFunc(managedNFQBundleInstallPath, a.managedNFQBundleInstall)
+	mux.HandleFunc(managedNFQBundleUpdatePath, a.managedNFQBundleUpdate)
 	mux.HandleFunc(managedNFQBundleInstalledPath, a.managedNFQBundleInstalled)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
