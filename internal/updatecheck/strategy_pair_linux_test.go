@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -221,7 +222,7 @@ func TestStrategyPairActualBinaryReaders(t *testing.T) {
 	probeRoot := t.TempDir()
 	retainedFile(t, probeRoot, "current", current)
 	retainedFile(t, probeRoot, "old", old)
-	for _, test := range []struct{ flag, want string }{{"-strategy-lab-read-version", "5\n"}, {"-self-update-private-snapshot-read-version", "3\n"}} {
+	for _, test := range []struct{ flag, want string }{{"-strategy-lab-read-version", strconv.Itoa(StrategyLabReadVersion) + "\n"}, {"-self-update-private-snapshot-read-version", "3\n"}} {
 		got, err := a.probeStrategyReader(ctx, review, selfupdatejournal.BinaryImage{Path: filepath.Join(probeRoot, "current"), SHA256: digestBytes(current)}, test.flag)
 		if err != nil || got != test.want {
 			t.Fatalf("current actual %s: %q %v", test.flag, got, err)
@@ -277,7 +278,8 @@ func TestStrategyPairPreparationScopeCannotAuthorizeReplacementOrSurviveReturn(t
 			}
 		}
 		token := a.strategyPreparationFor(scoped, review.ID)
-		copied := *token
+		copied := strategyPreparation{self: token.self, adapter: token.adapter, ctx: token.ctx, review: token.review}
+		copied.active.Store(token.active.Load())
 		forged := context.WithValue(scoped, strategyPreparationKey{}, &copied)
 		if _, err := a.strategyPairCheckImages(forged, review, true); err == nil {
 			t.Fatal("copied token accepted")
