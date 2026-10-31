@@ -24,6 +24,15 @@ func strategyRetentionFixture(t *testing.T) (*SelfUpdateFileAdapter, fileReview,
 	t.Helper()
 	ctx := context.Background()
 	a, u, review, prior := strategyPairFixture(t)
+	// The retention ledger checks all three prior installation images against
+	// the sealed review. Populate the actual installation, not just the separate
+	// updater config fixture, before the journal freezes its old images.
+	oldConfig, err := os.ReadFile(u.Deployment.Paths["config"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	retainedFile(t, a.installation, "etc/razvilka/config.json", oldConfig)
+	retainedFile(t, a.installation, "etc/init.d/S99razvilka", []byte("trusted old init"))
 	a.strategyProbe = func(_ context.Context, _ selfupdatejournal.BinaryImage, flag string) (string, error) {
 		if flag == "-strategy-lab-read-version" {
 			return "7\n", nil
@@ -44,6 +53,9 @@ func strategyRetentionFixture(t *testing.T) (*SelfUpdateFileAdapter, fileReview,
 	okay := func(context.Context) error { return nil }
 	if err := store.Prepare(ctx, review.ID, review.Files, okay, okay); err != nil {
 		t.Fatal(err)
+	}
+	if err := store.VerifyReviewedImages(ctx, review.ID, review.Files, review.OldExecutableSHA256, review.OldInitSHA256, review.OldConfigSHA256); err != nil {
+		t.Fatal("retention fixture did not freeze reviewed prior images", err)
 	}
 	root, err := a.commandRoot(review.ID)
 	if err != nil {
