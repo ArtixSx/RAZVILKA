@@ -78,5 +78,14 @@ unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
   mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
+  # Register actual legacy table/proc inventories before the complete reader.
+  # This unreferenced disposable chain loads the NFQUEUE target, sees no
+  # packets, and is deleted before original App/Manager admission begins.
+  /usr/sbin/iptables-legacy -t mangle -S >/dev/null
+  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
+  /usr/sbin/iptables-legacy -t mangle -N RZV_CI_NFQ_BOOTSTRAP
+  /usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+  /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+  /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   exec "$@"
 ' sh "$probe_work/app.test" -test.run='^TestManagedStrategyProbeNativeConsumer$' -test.count=1 -test.v -test.timeout=100s

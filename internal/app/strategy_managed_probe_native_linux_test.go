@@ -142,6 +142,7 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 		return nil
 	}
 	if err := readEmpty(ctx); err != nil {
+		managedProbeNativeErrorChain(t, err, 0)
 		t.Fatal("native empty packet namespace", err)
 	}
 	store, err := config.Load(filepath.Join(root, "config.json"))
