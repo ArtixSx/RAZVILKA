@@ -106,6 +106,9 @@ func knownPreparationFailure(state, stage, code string) bool {
 	if state != "failed" {
 		return false
 	}
+	if code == "strategy-state-pair-required" {
+		return stage == "metadata" || stage == "preflight"
+	}
 	if code == "prepare-timeout" {
 		return stage == "metadata" || stage == "downloading" || stage == "verifying" || stage == "preflight"
 	}

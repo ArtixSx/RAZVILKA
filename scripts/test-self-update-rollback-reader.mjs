@@ -153,6 +153,13 @@ try {
   fixture("printf '3\\n'", "printf '0\\n'", "if [ -e \"$CASE_ROOT/late\" ]; then exit 1; fi; printf '{\"ok\":true}\\n'");
   run('require_target_self_update_compatibility "$BINDIR/razvilka"\nprintf changed > "$STATEDIR/late"\nrequire_target_self_update_compatibility "$BINDIR/razvilka"', 1);
   assert.equal(readFileSync(join(root, 'late'), 'utf8'), 'changed');
+  fixture(legacy);
+  run('RAZVILKA_STRATEGY_LAB_STATE="$STATEDIR/custom"\nrequire_target_self_update_compatibility "$BINDIR/razvilka"', 1);
+  for (const state of ['{"schema_version":1}', '{"schema_version":4}', '{"schema_version":5,"compatibility_finalizing":true}', '{']) {
+    writeFileSync(join(root, 'strategy-lab.json'), state);
+    run('require_target_self_update_compatibility "$BINDIR/razvilka"', 1);
+    assert.equal(readFileSync(join(root, 'strategy-lab.json'), 'utf8'), state);
+  }
 } finally {
   assert.equal(dirname(resolve(root)), resolve(tmpdir()));
   assert(basename(root).startsWith('razvilka-rollback-reader-'));

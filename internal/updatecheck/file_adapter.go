@@ -341,6 +341,9 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "razvilka/state")
+	if err := a.strategyStateAdmission(ctx); err != nil {
+		return "", err
+	}
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -680,6 +683,9 @@ func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {
 	if a == nil || a.admission == nil || a.runtimeInactive == nil || a.filesystem == nil {
 		return ErrFileProtocol
 	}
+	if err := a.strategyStateAdmission(ctx); err != nil {
+		return err
+	}
 	record, review, err := a.load(ctx, id)
 	if err != nil {
 		return err
@@ -803,6 +809,11 @@ func (a *SelfUpdateFileAdapter) Authority(ctx context.Context, id string, revisi
 func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, revision uint64, action string) error {
 	if err := a.checkStop(ctx, id, action); err != nil {
 		return err
+	}
+	if action == "start/live" || action == "replace-to-rollback" || action == bootstrapOfflineAction {
+		if err := a.strategyStateAdmission(ctx); err != nil {
+			return err
+		}
 	}
 	record, review, err := a.loadHeader(ctx, id)
 	if err != nil {

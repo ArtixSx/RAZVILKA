@@ -774,6 +774,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
 		"dns": *dnsStatePath,
 	}})
+	a.SelfUpdate.StrategyLabStatePath = *strategyLabStatePath
 	a.SelfUpdate.Directory = selfFileState.Helper.Directory
 	if selfFileState.Adapter != nil {
 		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)

@@ -69,7 +69,9 @@ type updateRecord struct {
 }
 
 type Updater struct {
-	FileAuthorityReview func(context.Context, string) (SelfUpdateAuthority, error)
+	// Set before Start to the actual configured StrategyLab state path.
+	StrategyLabStatePath string
+	FileAuthorityReview  func(context.Context, string) (SelfUpdateAuthority, error)
 	// Mandatory for installer helper Start; sealed review authority is passed
 	// with action start/live and effect installer-helper. Only Start is inside.
 	FileEffectAdmission SelfUpdateEffectAdmission
@@ -407,6 +409,16 @@ func (u *Updater) prepare(ctx context.Context, id string, done chan struct{}) {
 	u.mu.Lock()
 	channel := u.record.Job.Channel
 	u.mu.Unlock()
+	if u.StrategyLabStatePath != "" {
+		if filepath.Clean(u.StrategyLabStatePath) != filepath.Join(filepath.Dir(u.Directory), "strategy-lab.json") {
+			failure = ErrStrategyStateAdmission
+			return
+		}
+		if err := requireNoStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
+			failure = err
+			return
+		}
+	}
 	release, err := FetchReleaseChannel(ctx, u.Client, u.Current, runtime.GOARCH, 0, channel)
 	if err != nil {
 		failure = err
@@ -581,6 +593,14 @@ func (u *Updater) Apply(ctx context.Context, id, token string, revision uint64, 
 	defer u.mu.Unlock()
 	u.readHelperStatusLocked()
 	r := &u.record
+	if u.StrategyLabStatePath != "" {
+		if filepath.Clean(u.StrategyLabStatePath) != filepath.Join(filepath.Dir(u.Directory), "strategy-lab.json") {
+			return cloneJob(r.Job), ErrStrategyStateAdmission
+		}
+		if err := requireNoStrategyStatePath(ctx, u.StrategyLabStatePath); err != nil {
+			return cloneJob(r.Job), err
+		}
+	}
 	if u.cancel != nil || r.Job.State != "ready" || !r.Job.CanApply {
 		return cloneJob(r.Job), ErrBusy
 	}
@@ -669,6 +689,8 @@ func safeUpdateCode(err error) string {
 
 func updateMessage(code string) string {
 	switch code {
+	case "strategy-state-pair-required":
+		return "Обновление и откат закрыты: состояние StrategyLab требует совместимой пары бинарника и состояния. Сохраните текущую установку; не удаляйте файл состояния."
 	case "production-layout-required":
 		return "Эта тестовая или нестандартная установка не обновляется автоматически. Основная версия роутера сохранена."
 	case "root-required", "unsupported-platform":
