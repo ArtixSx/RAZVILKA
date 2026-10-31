@@ -283,14 +283,21 @@ func (a *App) restoreNFQWS2HooksRound(ctx context.Context, now time.Time) error 
 		return err
 	}
 	var journal *nfqws2HookJournalOwner
+	journalAttempted := false
 	if err := a.Operations.WithExclusiveContext(admitted, func() error {
 		if err := a.nfqws2HookGuard(cfg)(admitted); err != nil {
 			return err
 		}
 		var beginErr error
+		journalAttempted = true
 		journal, beginErr = beginNFQWS2HookJournal(a.Dataplane.StateRoot, plan, observed.Instance)
 		return beginErr
 	}); err != nil {
+		// A refusal before begin has no journal or runtime effect to recover.
+		// Once begin is attempted, even a nil owner may hide a partial write.
+		if !journalAttempted {
+			return err
+		}
 		if journal != nil {
 			journal.root.Close()
 		}

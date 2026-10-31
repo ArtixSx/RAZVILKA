@@ -171,15 +171,15 @@ await test('showModal error fails closed without wedging the next dialog',async(
  const f=confirmationFixture();f.dialog.showModal=()=>{throw new Error('broken')};assert.equal(await f.ask('x','x'),false);f.dialog.showModal=function(){this.open=true;};const next=f.ask('x','x');f.dialog.close('confirm');assert.equal(await next,true);
 });
 for(const [requested,expected] of [[undefined,20000],[3000,3000],[1,250],[110000,110000],[200000,110000]])await test(`GET deadline ${requested} clamps to ${expected}`,async()=>{
- let duration,fetchSignal;const ctx={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(_fn,ms){duration=ms;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{fetchSignal=opt.signal;return {ok:true,json:async()=>({ok:true})};}};
+ let duration,fetchSignal;const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(_fn,ms){duration=ms;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{fetchSignal=opt.signal;return {ok:true,json:async()=>({ok:true})};}};
  vm.createContext(ctx);vm.runInContext(extract('api'),ctx);await ctx.api('/api/v1/panel/availability',requested===undefined?{}:{readTimeoutMs:requested});assert.equal(duration,expected);assert(fetchSignal instanceof AbortSignal);
 });
 await test('read deadline also aborts a delayed response body',async()=>{
- let timer,signal;const ctx={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(fn){timer=fn;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{signal=opt.signal;return {ok:true,json:()=>new Promise((_r,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted'))))};}};
+ let timer,signal;const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(fn){timer=fn;return 1;},clearTimeout(){},fetch:async(_url,opt)=>{signal=opt.signal;return {ok:true,json:()=>new Promise((_r,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted'))))};}};
  vm.createContext(ctx);vm.runInContext(extract('api'),ctx);const pending=ctx.api('/read');await flush();timer();await assert.rejects(pending,e=>e.code==='READ_TIMEOUT');assert(signal.aborted);
 });
 await test('mutations keep caller cancellation and are never automatically replayed',async()=>{
- let timers=0,calls=0;const caller=new AbortController();const ctx={Headers,AbortController,ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(){timers++;},clearTimeout(){},fetch:async(_url,opt)=>{calls++;assert.equal(opt.signal,caller.signal);throw new Error('connection lost');}};
+ let timers=0,calls=0;const caller=new AbortController();const ctx={Headers,AbortController,state:{authGeneration:0},ADMIN_TOKEN_KEY:'fixture',sessionStorage:{getItem:()=>null},setTimeout(){timers++;},clearTimeout(){},fetch:async(_url,opt)=>{calls++;assert.equal(opt.signal,caller.signal);throw new Error('connection lost');}};
  vm.createContext(ctx);vm.runInContext(extract('api'),ctx);await assert.rejects(ctx.api('/api/v1/apply',{method:'POST',signal:caller.signal}));assert.equal(calls,1);assert.equal(timers,0);
 });
 const policyMatch=autonomy.match(/function policyConsentRequired\([^]*?\n  }/);assert(policyMatch);

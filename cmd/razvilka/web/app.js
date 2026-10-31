@@ -208,6 +208,7 @@ async function apiDataMutation(path, options = {}) {
 }
 
 async function api(url, options = {}) {
+  const authGeneration = state.authGeneration || 0;
   const { readTimeoutMs, ...fetchOptions } = options;
   const method = String(options.method || 'GET').toUpperCase();
   const mutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -246,7 +247,7 @@ async function api(url, options = {}) {
 	const rawError = payload?.error || text || `HTTP ${response.status}`;
 	// A busy or fenced answer still names the running release; the sidebar
 	// must not keep the page's placeholder version meanwhile.
-	if (payload?.name === 'RAZVILKA' && /^[0-9A-Za-z.+-]{1,40}$/.test(payload.version || '') && typeof document !== 'undefined') {
+	if (authGeneration === (state.authGeneration || 0) && payload?.name === 'RAZVILKA' && /^[0-9A-Za-z.+-]{1,40}$/.test(payload.version || '') && typeof document !== 'undefined') {
 	  for (const id of ['version', 'footerVersion']) {
 	    const label = document.getElementById(id);
 	    if (label) label.textContent = `v${payload.version}`;
@@ -263,10 +264,15 @@ async function api(url, options = {}) {
     if (timedOut) throw Object.assign(new Error('Ответ задерживается. Последние полученные данные сохранены; повторите обновление.'), { code: 'READ_TIMEOUT' });
     throw error;
   } finally {
-    if (mutation && typeof invalidatePanelReads === 'function') invalidatePanelReads();
-    if (mutation && typeof invalidateSavedNodeBrowse === 'function') invalidateSavedNodeBrowse(!url.startsWith('/api/v1/auth/'));
-    if (mutation && typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
-    if (mutation && typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
+    // A late body can finish after logout/login even when abort was requested.
+    // Its wrapper fences the result; do not cancel the new session's reads or
+    // invalidate its saved views before that wrapper gets control back.
+    if (mutation && authGeneration === (state.authGeneration || 0)) {
+      if (typeof invalidatePanelReads === 'function') invalidatePanelReads();
+      if (typeof invalidateSavedNodeBrowse === 'function') invalidateSavedNodeBrowse(!url.startsWith('/api/v1/auth/'));
+      if (typeof invalidateSavedDeviceBrowse === 'function') invalidateSavedDeviceBrowse(!url.startsWith('/api/v1/auth/'));
+      if (typeof invalidateSavedCommunityBrowse === 'function') invalidateSavedCommunityBrowse(!url.startsWith('/api/v1/auth/'));
+    }
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
   }
