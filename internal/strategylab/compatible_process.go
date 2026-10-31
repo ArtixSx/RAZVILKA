@@ -52,7 +52,7 @@ func (m *Manager) compatibilityRetainedUnknownLocked() bool {
 const (
 	compatibilityCleanupWait      = time.Second
 	compatibilityUnknownSchema    = 2
-	compatibilitySupervisedSchema = 3
+	compatibilitySupervisedSchema = 5
 )
 
 // CompatibilityProcessProvider bounds direct-process and pipe waiting, but

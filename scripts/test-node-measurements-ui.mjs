@@ -18,6 +18,17 @@ test('legacy-only history never fabricates response ping',()=>assert.equal(m.mea
 test('wrong service',()=>assert.equal(get(node,{...metric,service_id:'youtube'}),null));
 test('wrong network',()=>assert.equal(get(node,{...metric,network_profile:'wan-two'}),null));
 test('wrong executor',()=>assert.equal(get(node,{...metric,route_path_id:'xray:node-a'}),null));
+test('exact Xray observation retains its response timing',()=>{
+  const xrayCheck={...check,route_path_id:'xray:node-a',probe_id:'xray-proof'};
+  const xrayMetric={...metric,route_path_id:xrayCheck.route_path_id,probe_id:xrayCheck.probe_id};
+  const observed=get({...node,health:{history:[xrayCheck]}},xrayMetric);
+  assert.equal(observed?.proxy_response_ms,75);
+  assert.equal(observed?.total_check_ms,9500);
+});
+test('new Xray check invalidates older Sing-box timing',()=>{
+  const latest={...check,route_path_id:'xray:node-a',probe_id:'xray-new',checked_at:new Date(now-500).toISOString()};
+  assert.equal(get({...node,health:{history:[check,latest]}}),null);
+});
 test('wrong exact check',()=>assert.equal(get(node,{...metric,probe_id:'another'}),null));
 test('expired measurement',()=>assert.equal(get(node,{...metric,expires_at:new Date(now).toISOString()}),null));
 test('future measurement',()=>assert.equal(get(node,{...metric,checked_at:new Date(now+5000).toISOString()}),null));
@@ -33,6 +44,15 @@ test('newer explicit negative TCP beats old success',()=>{const p={node_id:node.
 test('expired separate ping is not shown',()=>{const p={node_id:node.id,network_profile:'wan-one',checked_at:new Date(now-600001).toISOString(),reachable:true,latency_ms:2};assert.equal(m.tcp(node.id,'wan-one',[p],null,now),null)});
 test('metric helpers do not mutate input',()=>{const before=JSON.stringify([node,metric]);get();assert.equal(JSON.stringify([node,metric]),before)});
 async function asyncTest(name,fn){await fn();console.log('PASS',name);passed++;}
+await asyncTest('ready check is published while fallback status is pending',async()=>{
+  let finishFallback,accepted;
+  const pending=new Promise(resolve=>{finishFallback=resolve;});
+  const reading=m.readStatus(async path=>path.includes('autofallback')?pending:{job:{state:'completed'}},response=>{accepted=response;});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(accepted?.job.state,'completed');
+  finishFallback({active:false});
+  assert.equal((await reading).response,accepted);
+});
 await asyncTest('secondary API error does not discard node checks',async()=>{const r=await m.readStatus(async path=>{if(path.includes('autofallback'))throw new Error('busy');return {pings:[1],node_measurements:[2]}});assert.equal(r.response.pings[0],1);assert.equal(r.partial,true);assert.equal(r.fallback,null)});
 await asyncTest('auth error in either reader still logs out',async()=>{for(const failing of ['current','autofallback'])await assert.rejects(m.readStatus(async path=>{if(path.includes(failing)){const e=new Error('auth');e.status=401;throw e;}return {}}),/auth/)});
 await asyncTest('primary API error is not hidden by fallback success',async()=>await assert.rejects(m.readStatus(async path=>{if(path.endsWith('current'))throw new Error('primary');return {active:false}}),/primary/));

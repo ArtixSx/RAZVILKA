@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -67,16 +68,16 @@ func TestNodeEgressDiagnosticCategoriesFromLocalHTTPSAndSOCKS(t *testing.T) {
 
 func TestNodeEgressDiagnosticSurvivesPairAndResultWithoutChangingFailure(t *testing.T) {
 	for _, category := range []string{"socks_connect", "tls_handshake", "certificate", "http_status", "timeout", "body_parse", "dial_timeout", "tls_timeout", "response_timeout"} {
-		calls := 0
+		var calls atomic.Int32
 		pair := probeNodeEgressPair(context.Background(), "127.0.0.1:1080", func(_ context.Context, _ nodeEgressEndpoint, address string) (string, error) {
-			calls++
+			calls.Add(1)
 			if address == "" {
 				return "8.8.8.8", nil
 			}
 			return "", nodeEgressFailure(category)
 		})
-		if calls != 4 || nodeEgressErrorCategory(pair.proxyErr) != category {
-			t.Fatalf("category=%s provider retry changed: calls=%d error=%v", category, calls, pair.proxyErr)
+		if calls.Load() != 4 || nodeEgressErrorCategory(pair.proxyErr) != category {
+			t.Fatalf("category=%s provider retry changed: calls=%d error=%v", category, calls.Load(), pair.proxyErr)
 		}
 		checker := fakeExactNodeChecker(t)
 		checker.egressPair = func(context.Context, string) nodeEgressPair { return pair }

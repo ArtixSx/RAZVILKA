@@ -70,7 +70,7 @@ func TestExactNodeCheckConfirmsExactServicePath(t *testing.T) {
 	if err != nil || !result.Available || result.Verdict != evidence.VerdictPass || result.TestLevel != "service" || result.EgressIP != "2001:db8::20" || result.DirectLeak {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if result.Evidence.NetworkProfile != "wan-0123456789ab" || result.Evidence.AssuranceLevel() != evidence.Service || len(result.Stages) != 9 {
+	if result.Evidence.NetworkProfile != "wan-0123456789ab" || result.Evidence.AssuranceLevel() != evidence.Service || len(result.Stages) != 10 {
 		t.Fatalf("evidence=%+v stages=%+v", result.Evidence, result.Stages)
 	}
 }

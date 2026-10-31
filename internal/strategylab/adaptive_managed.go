@@ -95,7 +95,7 @@ func adaptiveCandidateDetached(candidate Candidate) Candidate {
 // or changing the newer candidate. Ordinary saveLocked cannot advance this
 // fenced session, so use its same exact file image and bounded CAS cleanup path.
 func (m *Manager) retainAdaptiveValidationUnknownLocked() error {
-	if m.state.SchemaVersion != compatibilitySupervisedSchema {
+	if !supervisedStrategySchema(m.state.SchemaVersion) {
 		return m.saveLocked()
 	}
 	retained := m.state

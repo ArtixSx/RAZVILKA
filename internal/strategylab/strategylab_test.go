@@ -11,6 +11,11 @@ type fakeValidator struct {
 	result Validation
 }
 
+// Data-only source identity for pure summary models, never runtime authority.
+func strategyEvidenceModelCandidate(id string) Candidate {
+	return Candidate{ID: id, Incarnation: "11111111111111111111111111111111", Validation: Validation{OK: true, Native: true, Generation: "22222222222222222222222222222222"}}
+}
+
 type fakeProbeExecutor struct {
 	evidence Evidence
 	target   ProbeTarget
@@ -82,7 +87,7 @@ func TestCandidateNeedsNativeValidationAndConfirmedRepeatedEvidence(t *testing.T
 	if err != nil || !candidate.Validation.OK || !candidate.Validation.Native {
 		t.Fatalf("native validation failed: %v %+v", err, candidate.Validation)
 	}
-	base := Evidence{CandidateID: candidate.ID, ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, LatencyMS: 25, Stages: []StageEvidence{{Stage: "dns", Status: "pass"}, {Stage: "tls", Status: "pass"}, {Stage: "read", Status: "pass"}}}
+	base := Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, LatencyMS: 25, Stages: []StageEvidence{{Stage: "dns", Status: "pass"}, {Stage: "tls", Status: "pass"}, {Stage: "read", Status: "pass"}}}
 	for i := 0; i < RequiredPasses-1; i++ {
 		now = now.Add(time.Minute)
 		if err := manager.Record(base); err != nil {
@@ -243,7 +248,7 @@ func TestDeleteCandidateRemovesOnlyItsDraftEvidenceAndSelections(t *testing.T) {
 	second, _ = manager.Validate(context.Background(), second.ID)
 	for index := 0; index < RequiredPasses; index++ {
 		for _, candidate := range []Candidate{first, second} {
-			if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+			if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -277,13 +282,13 @@ func TestConfidenceDecayStopsOldFailuresFromOutvotingFreshPasses(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index := 0; index < 20; index++ {
-		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, CheckedAt: now.Add(-72 * time.Hour).Add(time.Duration(index) * time.Minute).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, CheckedAt: now.Add(-72 * time.Hour).Add(time.Duration(index) * time.Minute).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for index := 0; index < RequiredPasses; index++ {
 		now = now.Add(time.Second)
-		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: now.Format(time.RFC3339), Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -307,7 +312,7 @@ func TestSelectionRollsBackAfterRepeatedFreshFailures(t *testing.T) {
 	second, _ = manager.Validate(context.Background(), second.ID)
 	pass := func(candidate Candidate) {
 		now = now.Add(time.Second)
-		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -323,7 +328,7 @@ func TestSelectionRollsBackAfterRepeatedFreshFailures(t *testing.T) {
 	}
 	for index := 0; index < RollbackFailures; index++ {
 		now = now.Add(time.Minute)
-		if err := manager.Record(Evidence{CandidateID: second.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: second.ID, CandidateIncarnation: second.Incarnation, ValidationGeneration: second.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -345,7 +350,7 @@ func TestFrozenSelectionReportsDegradationWithoutRollback(t *testing.T) {
 	candidate, _ = manager.Validate(context.Background(), candidate.ID)
 	for index := 0; index < RequiredPasses; index++ {
 		now = now.Add(time.Second)
-		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -354,7 +359,7 @@ func TestFrozenSelectionReportsDegradationWithoutRollback(t *testing.T) {
 	}
 	for index := 0; index < RollbackFailures; index++ {
 		now = now.Add(time.Minute)
-		if err := manager.Record(Evidence{CandidateID: candidate.ID, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
+		if err := manager.Record(Evidence{CandidateID: candidate.ID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "video", Protocol: "tcp", IPFamily: "ipv4", Success: false, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "route", Status: "pass"}, {Stage: "result", Status: "fail"}}}); err != nil {
 			t.Fatal(err)
 		}
 	}

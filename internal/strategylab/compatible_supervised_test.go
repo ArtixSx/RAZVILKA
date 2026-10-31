@@ -45,7 +45,7 @@ func compatibilityProviderHasNoIntent(t *testing.T, p *SupervisedCompatibilityPr
 		t.Fatalf("pre-intent refusal changed provider session: running=%t unknown=%t session=%+v", p.running, p.unknown, p.session)
 	}
 	m := p.manager
-	if m.state.CompatibilitySession != nil || m.state.SchemaVersion != SchemaVersion || m.nativeRunning || m.compatibilityUnknown || m.writeBlocked {
+	if m.state.CompatibilitySession != nil || m.state.SchemaVersion != legacyStrategySchema || m.nativeRunning || m.compatibilityUnknown || m.writeBlocked {
 		t.Fatalf("pre-intent refusal changed Manager authority: session=%+v schema=%d native=%t unknown=%t blocked=%t", m.state.CompatibilitySession, m.state.SchemaVersion, m.nativeRunning, m.compatibilityUnknown, m.writeBlocked)
 	}
 	after, readErr := os.ReadFile(m.Path)

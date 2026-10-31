@@ -196,7 +196,7 @@ func managedCompatibilityInactiveStateLocked(m *Manager, control *operationgate.
 		}
 	}
 	if m.state.CompatibilitySession == nil {
-		if m.state.SchemaVersion != SchemaVersion || m.state.CompatibilityFinalizing || provider != nil && (provider.session != nil || provider.managedRetiredSession != nil) {
+		if !ordinaryStrategySchema(m.state.SchemaVersion) || m.state.CompatibilityFinalizing || provider != nil && (provider.session != nil || provider.managedRetiredSession != nil) {
 			return nil, "", ErrCompatibilityQuiescenceUnknown
 		}
 		for _, candidate := range m.state.Candidates {
@@ -206,7 +206,7 @@ func managedCompatibilityInactiveStateLocked(m *Manager, control *operationgate.
 		}
 		return provider, kind, nil
 	}
-	if m.state.SchemaVersion != compatibilitySupervisedSchema || provider == nil || provider.managedRetiredSession == nil || !compatibilityJSONEqual(provider.session, m.state.CompatibilitySession) || !compatibilityJSONEqual(provider.managedRetiredSession, m.state.CompatibilitySession) || compatibilitySessionUnknown(*m.state.CompatibilitySession) {
+	if !supervisedStrategySchema(m.state.SchemaVersion) || provider == nil || provider.managedRetiredSession == nil || !compatibilityJSONEqual(provider.session, m.state.CompatibilitySession) || !compatibilityJSONEqual(provider.managedRetiredSession, m.state.CompatibilitySession) || compatibilitySessionUnknown(*m.state.CompatibilitySession) {
 		return nil, "", ErrCompatibilityQuiescenceUnknown
 	}
 	return provider, kind, nil

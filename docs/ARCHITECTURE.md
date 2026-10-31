@@ -1,5 +1,11 @@
 # RAZVILKA architecture
 
+This document describes the architecture and its target contracts. The
+[31 October 2026 implementation audit](BYPASS_REVIEW_2026-10-31_RU.md)
+separately records which adapters are registered, which scopes are executable,
+and which integrations remain export-only or laboratory work. A target
+contract below is not a claim of production or hardware acceptance.
+
 ## Product split
 
 RAZVILKA separates three truths that must not be confused:

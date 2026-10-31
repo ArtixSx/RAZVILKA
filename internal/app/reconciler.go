@@ -23,6 +23,7 @@ import (
 
 const reconcilerOwner = "razvilka-service-reconciler-v1"
 const maxReconcilerBytes = 256 << 10
+const reconcilerPollInterval = 5 * time.Second
 
 // The journal stores bounded references and scheduling intent, never credentials,
 // endpoints, probe bodies or authority to replay an old transaction.
@@ -274,7 +275,7 @@ func (a *App) StartServiceReconciler(ctx context.Context) {
 				case <-r.wake:
 				}
 				a.reconcileRound(ctx, time.Now())
-				timer.Reset(5 * time.Second)
+				timer.Reset(reconcilerPollInterval)
 			}
 		}()
 	})
@@ -577,6 +578,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		}
 		r.mu.Unlock()
 		var forwardingErr error
+		var nextAutonomyCheck time.Time
 		switch task.kind {
 		case "node-recovery":
 			forwardingErr = a.restoreForwardingRound(attempt)
@@ -606,6 +608,7 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 			// At most one spaced connectivity check for the readiness pool,
 			// after the round has released its admission. Ordering only.
 			a.nodeReadinessRound(attempt, time.Now())
+			nextAutonomyCheck = a.nextAutonomySearchCheck(time.Now())
 		case "service-checks":
 			if cfg.ServiceControl.Schedule.Enabled && !cfg.ServiceControl.Stopped {
 				done, startErr := a.startServiceControlJob(attempt, serviceControlJobRequest{Kind: "check", ServiceIDs: cfg.ServiceControl.Schedule.ServiceIDs}, true)
@@ -628,6 +631,9 @@ func (a *App) reconcileRound(ctx context.Context, now time.Time) {
 		}
 		if task.kind == "service-checks" || task.kind == "feeds" {
 			op.NextRun = time.Now().Add(task.interval)
+		}
+		if !nextAutonomyCheck.IsZero() && nextAutonomyCheck.Before(op.NextRun) {
+			op.NextRun = nextAutonomyCheck
 		}
 		if attemptErr != nil {
 			op.State = "backoff"

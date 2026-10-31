@@ -45,6 +45,7 @@ func (m *Manager) publishManagedCompatibilityValidationLocked(parent context.Con
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, restorejournal.Image{}, candidate, err)
 	}
 	next.Candidates[candidate.ID], next.CompatibilityFinalizing = candidate, false
+	next.SchemaVersion = compatibilitySupervisedSchema
 	after, err := compatibilityStateImage(next)
 	if err != nil {
 		return m.refuseManagedCompatibilityLocked(i, nil, beforeState, before, restorejournal.Image{}, candidate, err)
@@ -105,6 +106,7 @@ func (m *Manager) refuseManagedCompatibilityLocked(i *managedCompatibilityInvoca
 	}
 	candidate.Validation = compatibilityKnownRefusal(candidate.Validation)
 	next.Candidates[candidate.ID], next.CompatibilityFinalizing = candidate, false
+	next.SchemaVersion = compatibilitySupervisedSchema
 	after, err := compatibilityStateImage(next)
 	if err != nil {
 		m.compatibilityUnknown = true

@@ -24,6 +24,59 @@ await check('missing or invalid saved timestamp never borrows the current time',
 await check('manual unchecked selection is neutral without a health or confidence claim',()=>{const f=fixture();f.state.strategyLab.selections=[{service_id:'youtube',protocol:'tcp',ip_family:'ipv4',candidate_id:'candidate-1',mode:'manual',frozen:true,status:'manual-unchecked',healthy:false,confidence:0,reason:'стратегия выбрана вручную; проверка здоровья ещё не выполнена'}];f.c.renderStrategyLab();const html=f.$('#strategyMemory').innerHTML;assert.match(html,/strategy-memory-card pending/);assert.match(html,/ВЫБРАНО ВРУЧНУЮ · ОЖИДАЕТ ПРОВЕРКИ/);assert.match(html,/проверка здоровья ещё не выполнена/);assert.doesNotMatch(html,/class="strategy-memory-card (?:healthy|degraded)"|% доверия|РАБОТАЕТ|ЕСТЬ ОШИБКИ/);assert.equal(f.calls.length,0);});
 await check('manual frozen degraded snapshot preserves genuine stale evidence reason',()=>{const f=fixture();f.state.strategyLab.selections=[{service_id:'youtube',protocol:'tcp',ip_family:'ipv4',candidate_id:'candidate-1',mode:'manual',frozen:true,status:'frozen-degraded',healthy:false,confidence:0,reason:'результаты проверки устарели'}];f.c.renderStrategyLab();const html=f.$('#strategyMemory').innerHTML;assert.match(html,/strategy-memory-card degraded/);assert.match(html,/результаты проверки устарели/);assert.doesNotMatch(html,/ОЖИДАЕТ ПРОВЕРКИ|strategy-memory-card (?:pending|healthy)/);});
 await check('manual frozen healthy snapshot retains the genuine eligible result',()=>{const f=fixture();f.state.strategyLab.selections=[{service_id:'youtube',protocol:'tcp',ip_family:'ipv4',candidate_id:'candidate-1',mode:'manual',frozen:true,status:'frozen-healthy',healthy:true,confidence:1,reason:'свежие подтверждённые проверки'}];f.c.renderStrategyLab();const html=f.$('#strategyMemory').innerHTML;assert.match(html,/strategy-memory-card healthy/);assert.match(html,/ЗАКРЕПЛЕНО/);assert.match(html,/100% доверия/);assert.doesNotMatch(html,/ОЖИДАЕТ ПРОВЕРКИ|strategy-memory-card (?:pending|degraded)/);});
+const measuredSummary=(extra={})=>({candidate_id:'candidate-1',service_id:'youtube',protocol:'tcp',ip_family:'ipv4',passes:3,fresh_passes:3,fresh_failures:0,confidence:1,average_ttfb_ms:27,average_latency_ms:53,eligible:true,reason:'кандидат воспроизводим и готов только к переносу в draft',...extra});
+await check('legacy or stale PASS history does not manufacture a current timing or ready state',()=>{
+  for (const old of [
+    {fresh_passes:0,average_ttfb_ms:0,average_latency_ms:0},
+    {fresh_passes:0,average_ttfb_ms:27,average_latency_ms:53},
+    {fresh_passes:undefined,average_ttfb_ms:0,average_latency_ms:0},
+  ]) {
+    const f=fixture();
+    f.state.strategyLab.schema_version=4;
+    f.state.strategyLab.summaries=[measuredSummary({...old,eligible:false,confidence:0,reason:'Исторические результаты не подтверждают текущую стратегию; выполните новый тест.'})];
+    f.state.strategyLab.evidence=[{candidate_id:'candidate-1',service_id:'youtube',protocol:'tcp',ip_family:'ipv4',success:true,ttfb_ms:27}];
+    f.c.renderStrategyLab();
+    assert.match(f.$('#strategyEvidence').innerHTML,/нет актуального успешного замера/);
+    assert.doesNotMatch(f.$('#strategyEvidence').innerHTML,/TTFB/);
+    assert.match(f.$('#strategyEvidence').innerHTML,/data-strategy-evidence="0"/);
+    assert.doesNotMatch(f.$('#strategyMemory').innerHTML,/ГОТОВ К ПАМЯТИ|data-strategy-select/);
+    assert.equal(f.calls.length,0);
+  }
+});
+await check('fresh current PASS retains its measured timing and eligibility without new requests',()=>{
+  const f=fixture();
+  f.state.strategyLab.schema_version=4;
+  f.state.strategyLab.summaries=[measuredSummary()];
+  f.c.renderStrategyLab();
+  assert.match(f.$('#strategyEvidence').innerHTML,/TTFB ≈ 27 мс/);
+  assert.doesNotMatch(f.$('#strategyEvidence').innerHTML,/нет актуального успешного замера/);
+  assert.match(f.$('#strategyMemory').innerHTML,/ГОТОВ К ПАМЯТИ/);
+  assert.equal(f.calls.length,0);
+});
+await check('unknown snapshots preserve history without readiness, current timing or healthy presentation',()=>{
+  for (const schema of [2,5]) for (const canonical of [false,true]) {
+    const f=fixture(),reason='Нативная проверка не завершена или её состояние неизвестно; готовность не подтверждена';
+    f.state.strategyLab.schema_version=schema;
+    f.state.strategyLab.quiescence_unknown=true;
+    f.state.strategyLab.summaries=[measuredSummary({eligible:!canonical,reason:canonical?reason:'кандидат воспроизводим и готов только к переносу в draft'})];
+    f.state.strategyLab.evidence=[{candidate_id:'candidate-1',service_id:'youtube',protocol:'tcp',ip_family:'ipv4',success:true,ttfb_ms:27}];
+    f.c.renderStrategyLab();
+    assert.match(f.$('#strategyEvidence').innerHTML,/нет актуального успешного замера/);
+    assert.match(f.$('#strategyEvidence').innerHTML,/3 свежих успеха/);
+    assert.match(f.$('#strategyEvidence').innerHTML,/data-strategy-evidence="0"/);
+    assert.doesNotMatch(f.$('#strategyEvidence').innerHTML,/TTFB|% доверия|strategy-summary eligible|кандидат воспроизводим/);
+    assert.doesNotMatch(f.$('#strategyMemory').innerHTML,/ГОТОВ К ПАМЯТИ|data-strategy-select/);
+    f.state.strategyLab.selections=[{service_id:'youtube',protocol:'tcp',ip_family:'ipv4',candidate_id:'candidate-1',mode:'manual',frozen:true,status:canonical?'unknown':'frozen-healthy',healthy:!canonical,confidence:1,reason:canonical?reason:'свежие подтверждённые проверки',rollback_reason:'Старое событие отката'}];
+    const before=JSON.stringify(f.state.strategyLab);
+    f.c.renderStrategyLab();
+    assert.match(f.$('#strategyMemory').innerHTML,/strategy-memory-card pending/);
+    assert.match(f.$('#strategyMemory').innerHTML,/СОСТОЯНИЕ НЕ ПОДТВЕРЖДЕНО/);
+    assert.match(f.$('#strategyMemory').innerHTML,/Нативная проверка не завершена/);
+    assert.doesNotMatch(f.$('#strategyMemory').innerHTML,/strategy-memory-card (?:healthy|degraded|available)|% доверия|РАБОТАЕТ|ГОТОВ К ПАМЯТИ|Старое событие отката/);
+    assert.equal(JSON.stringify(f.state.strategyLab),before);
+    assert.equal(f.calls.length,0);
+  }
+});
 for(const validation of [{ok:true},{ok:true,native:true},{ok:true,lua_checked:true},{ok:true,native:true,lua_checked:true,quiescence_unknown:true},null])await check('partial/uncertain result does not become compatibility '+JSON.stringify(validation),()=>{const v=fixture().c.strategyCompatibilityView(validation);assert.equal(v.compatible,false);assert.notEqual(v.tone,'pass');});
 await check('explicit compatibility rejection is separate from unconfirmed result',()=>{const v=fixture().c.strategyCompatibilityView({ok:false,native:false,code:'COMPATIBILITY_REJECTED'});assert.equal(v.label,'ПРОВЕРКА ОТКЛОНЕНА');assert.equal(v.compatible,false);});
 await check('legacy native timeout remains unconfirmed rather than incompatible',()=>{const v=fixture().c.strategyCompatibilityView({ok:false,native:true,code:'VALIDATION_TIMEOUT'});assert.equal(v.label,'НЕ ПОДТВЕРЖДЕНО');assert.equal(v.tone,'warn');});

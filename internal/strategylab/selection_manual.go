@@ -72,6 +72,7 @@ func (m *Manager) SelectManual(ctx context.Context, serviceID, protocol, family,
 		return Selection{}, err
 	}
 	next.Selections[key] = selection
+	next.SchemaVersion = compatibilitySupervisedSchema
 	after, err := compatibilityStateImage(next)
 	if err != nil {
 		return Selection{}, err
@@ -154,14 +155,15 @@ func (r *SelectedCandidateReview) manualChoiceCurrentLocked(ctx context.Context)
 	return selectedReviewContext(ctx)
 }
 
-func manualSelectionHasEvidence(evidence []Evidence, selection Selection, now time.Time) bool {
+func manualSelectionHasEvidence(state State, selection Selection, now time.Time) bool {
 	key := selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily)
-	for _, item := range evidence {
+	candidate := state.Candidates[selection.CandidateID]
+	for _, item := range state.Evidence {
 		if item.CandidateID != selection.CandidateID || selectionKey(item.ServiceID, item.Protocol, item.IPFamily) != key {
 			continue
 		}
 		checked, err := time.Parse(time.RFC3339, item.CheckedAt)
-		if err == nil && !checked.After(now) && normalizeEvidence(&item) == nil && reputationEvidence(item) {
+		if err == nil && !checked.After(now) && normalizeEvidence(&item) == nil && reputationEvidence(item) && evidenceMatchesCandidate(item, candidate) {
 			return true
 		}
 	}

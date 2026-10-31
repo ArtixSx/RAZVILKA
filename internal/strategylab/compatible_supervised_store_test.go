@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -812,7 +813,7 @@ func TestCompatibilityStoreRejectsAmbiguousJSON(t *testing.T) {
 		name string
 		data []byte
 	}{
-		{"duplicate-schema", bytes.Replace(image.Data, []byte(`"schema_version": 3`), []byte(`"schema_version": 3, "schema_version": 3`), 1)},
+		{"duplicate-schema", bytes.Replace(image.Data, []byte(fmt.Sprintf(`"schema_version": %d`, compatibilitySupervisedSchema)), []byte(fmt.Sprintf(`"schema_version": %d, "schema_version": %d`, compatibilitySupervisedSchema, compatibilitySupervisedSchema)), 1)},
 		{"duplicate-command-parent", bytes.Replace(image.Data, []byte(`"parent_pid": 20`), []byte(`"parent_pid": 20, "parent_pid": 20`), 1)},
 		{"duplicate-case-folded-parent", bytes.Replace(image.Data, []byte(`"parent_pid": 20`), []byte(`"parent_pid": 20, "PARENT_PID": 20`), 1)},
 		{"malformed-utf8-output", bytes.Replace(terminalImage.Data, []byte(`"output": "terminal"`), malformedOutput, 1)},

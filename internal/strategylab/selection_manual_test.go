@@ -29,12 +29,14 @@ func TestManualSelectionIntentDoesNotAwardEvidenceOrHealth(t *testing.T) {
 func TestManualSelectionSnapshotPreservesUncheckedUntilReputationEvidence(t *testing.T) {
 	now := packTime
 	selection := manualSelection("youtube", "tcp", "ipv4", "chosen", Selection{}, now)
-	for _, kind := range []string{"none", "local-error", "inconclusive", "stale", "future", "invalid", "other-candidate", "other-service", "other-family", "other-protocol", "service-fail", "pass"} {
+	for _, kind := range []string{"none", "local-error", "inconclusive", "stale", "future", "invalid", "other-candidate", "other-service", "other-family", "other-protocol", "legacy-unbound", "old-incarnation", "old-validation", "service-fail", "pass"} {
 		t.Run(kind, func(t *testing.T) {
 			state := emptyState()
+			candidate := strategyEvidenceModelCandidate(selection.CandidateID)
+			state.Candidates[candidate.ID] = candidate
 			key := selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily)
 			state.Selections[key] = selection
-			e := Evidence{CandidateID: selection.CandidateID, ServiceID: selection.ServiceID, Protocol: selection.Protocol, IPFamily: selection.IPFamily, CheckedAt: now.Format(time.RFC3339), Outcome: OutcomePass, Success: true, RouteConfirmed: true}
+			e := Evidence{CandidateID: selection.CandidateID, CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: selection.ServiceID, Protocol: selection.Protocol, IPFamily: selection.IPFamily, CheckedAt: now.Format(time.RFC3339), Outcome: OutcomePass, Success: true, RouteConfirmed: true}
 			switch kind {
 			case "local-error":
 				e.Outcome, e.Success = OutcomeLocalError, false
@@ -54,6 +56,12 @@ func TestManualSelectionSnapshotPreservesUncheckedUntilReputationEvidence(t *tes
 				e.IPFamily = "ipv6"
 			case "other-protocol":
 				e.Protocol = "quic"
+			case "legacy-unbound":
+				e.CandidateIncarnation, e.ValidationGeneration = "", ""
+			case "old-incarnation":
+				e.CandidateIncarnation = "ffffffffffffffffffffffffffffffff"
+			case "old-validation":
+				e.ValidationGeneration = "ffffffffffffffffffffffffffffffff"
 			case "service-fail":
 				e.Outcome, e.Success = OutcomeServiceFail, false
 			}
@@ -79,9 +87,11 @@ func TestManualSelectionSnapshotPreservesUncheckedUntilReputationEvidence(t *tes
 		})
 	}
 	state := emptyState()
+	candidate := strategyEvidenceModelCandidate("chosen")
+	state.Candidates["chosen"] = candidate
 	state.Selections[selectionKey("youtube", "tcp", "ipv4")] = selection
 	for i := 0; i < RequiredPasses; i++ {
-		state.Evidence = append(state.Evidence, Evidence{CandidateID: "chosen", ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: now.Add(-time.Duration(i) * time.Second).Format(time.RFC3339), Outcome: OutcomePass, Success: true, RouteConfirmed: true})
+		state.Evidence = append(state.Evidence, Evidence{CandidateID: "chosen", CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: now.Add(-time.Duration(i) * time.Second).Format(time.RFC3339), Outcome: OutcomePass, Success: true, RouteConfirmed: true})
 	}
 	got := selectionsWithHealth(state, summarize(state, now), now)
 	if !got[0].Healthy || got[0].Status != "frozen-healthy" || got[0].Confidence != 1 {
@@ -178,15 +188,25 @@ func TestManualSelectionCannotAutomaticallyRollback(t *testing.T) {
 	selection := manualSelection("youtube", "tcp", "ipv4", "chosen", Selection{}, packTime.Add(-time.Minute))
 	selection.Frozen = false // Manual mode still blocks automatic mutation.
 	m.state.Selections[key] = selection
+	chosen, alternative := strategyEvidenceModelCandidate("chosen"), strategyEvidenceModelCandidate("alternative")
+	m.state.Candidates[chosen.ID], m.state.Candidates[alternative.ID] = chosen, alternative
 	for i := 0; i < RequiredPasses; i++ {
-		m.state.Evidence = append(m.state.Evidence, Evidence{CandidateID: "alternative", ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: packTime.Format(time.RFC3339), Success: true, RouteConfirmed: true, Outcome: OutcomePass})
+		m.state.Evidence = append(m.state.Evidence, Evidence{CandidateID: "alternative", CandidateIncarnation: alternative.Incarnation, ValidationGeneration: alternative.Validation.Generation, ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: packTime.Format(time.RFC3339), Success: true, RouteConfirmed: true, Outcome: OutcomePass})
 	}
-	failure := Evidence{CandidateID: "chosen", ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: packTime.Format(time.RFC3339), RouteConfirmed: true, Outcome: OutcomeServiceFail}
+	failure := Evidence{CandidateID: "chosen", CandidateIncarnation: chosen.Incarnation, ValidationGeneration: chosen.Validation.Generation, ServiceID: "youtube", Protocol: "tcp", IPFamily: "ipv4", CheckedAt: packTime.Format(time.RFC3339), RouteConfirmed: true, Outcome: OutcomeServiceFail}
 	for i := 0; i < RollbackFailures; i++ {
 		m.state.Evidence = append(m.state.Evidence, failure)
 	}
 	m.reconcileSelectionLocked(failure)
 	if m.state.Selections[key] != selection {
 		t.Fatal("manual intent was automatically switched to an eligible alternative")
+	}
+	// Positive control: the same current observations do permit an automatic
+	// rollback, so the manual assertion cannot pass merely due to unbound data.
+	selection.Mode = ""
+	m.state.Selections[key] = selection
+	m.reconcileSelectionLocked(failure)
+	if m.state.Selections[key].CandidateID != alternative.ID {
+		t.Fatal("fixture did not establish an eligible automatic rollback")
 	}
 }

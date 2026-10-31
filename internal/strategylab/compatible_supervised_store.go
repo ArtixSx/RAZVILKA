@@ -32,7 +32,7 @@ func decodeCompatibilityState(image restorejournal.Image) (State, error) {
 	}
 	d := json.NewDecoder(bytes.NewReader(image.Data))
 	d.DisallowUnknownFields()
-	if d.Decode(&state) != nil || d.Decode(new(any)) != io.EOF || state.SchemaVersion != compatibilitySupervisedSchema || state.CompatibilitySession == nil || validateCompatibilitySession(*state.CompatibilitySession) != nil {
+	if d.Decode(&state) != nil || d.Decode(new(any)) != io.EOF || !supervisedStrategySchema(state.SchemaVersion) || state.CompatibilitySession == nil || validateCompatibilitySession(*state.CompatibilitySession) != nil {
 		return state, ErrCompatibilityQuiescenceUnknown
 	}
 	if state.Candidates == nil {
@@ -86,7 +86,7 @@ func compatibilityActiveInvocation(session *compatibilitySession) *compatibility
 }
 
 func compatibilityStateImage(state State) (restorejournal.Image, error) {
-	if state.SchemaVersion != compatibilitySupervisedSchema || state.CompatibilitySession == nil || validateCompatibilitySession(*state.CompatibilitySession) != nil {
+	if !supervisedStrategySchema(state.SchemaVersion) || state.CompatibilitySession == nil || validateCompatibilitySession(*state.CompatibilitySession) != nil {
 		return restorejournal.Image{}, ErrCompatibilityQuiescenceUnknown
 	}
 	data, err := json.MarshalIndent(state, "", "  ")

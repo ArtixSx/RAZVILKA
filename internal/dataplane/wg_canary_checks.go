@@ -36,7 +36,8 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 		return err
 	}
 	var attempted []int
-	var lastErr error
+	var attemptErrors []error
+	handshakeConfirmed := false
 	for index, port := range ports {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -44,7 +45,7 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 		attempted = append(attempted, port)
 		if index > 0 {
 			if _, err := a.switchEndpointPort(ctx, port); err != nil {
-				lastErr = err
+				attemptErrors = append(attemptErrors, err)
 				continue
 			}
 		}
@@ -60,7 +61,10 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 			if errors.Is(err, tunnelcheck.ErrService) {
 				return err
 			}
-			lastErr = err
+			// ErrBootstrap is returned only after a confirmed handshake. Keep
+			// that distinction even if a later port has a transport failure.
+			handshakeConfirmed = handshakeConfirmed || errors.Is(err, tunnelcheck.ErrBootstrap)
+			attemptErrors = append(attemptErrors, err)
 			continue
 		}
 		if index > 0 && root != "" {
@@ -78,7 +82,10 @@ func (a *WARPWireGuardAdapter) probeCanaryServices(ctx context.Context, plan Rou
 		}
 		return nil
 	}
-	return errors.Join(WARPHandshakeError{Ports: attempted}, lastErr)
+	if !handshakeConfirmed {
+		attemptErrors = append([]error{WARPHandshakeError{Ports: attempted}}, attemptErrors...)
+	}
+	return errors.Join(attemptErrors...)
 }
 
 // The live interface is freshly created after a successful candidate check;
