@@ -175,6 +175,49 @@ func measureNodeEgress(provider context.Context, get nodeEgressGetter, endpoint 
 	return parsed.String(), nil
 }
 
+// Both observations share a pinned destination and a provider deadline, but
+// neither depends on the other's response. Join both getter calls before
+// retrying or returning control to the temporary runtime's cleanup.
+// A resource refusal cancels the sibling and invalidates the whole pair.
+func measureNodeEgressPair(provider context.Context, get nodeEgressGetter, endpoint nodeEgressEndpoint, proxyAddress string) nodeEgressPair {
+	ctx, cancel := context.WithCancel(provider)
+	defer cancel()
+	type observation struct {
+		proxy bool
+		ip    string
+		err   error
+	}
+	observations := make(chan observation, 2)
+	for _, proxy := range []bool{false, true} {
+		go func() {
+			address := ""
+			if proxy {
+				address = proxyAddress
+			}
+			ip, err := measureNodeEgress(ctx, get, endpoint, address, 5*time.Second)
+			observations <- observation{proxy: proxy, ip: ip, err: err}
+		}()
+	}
+	var result nodeEgressPair
+	var refusal error
+	for range 2 {
+		observed := <-observations
+		if observed.proxy {
+			result.proxyIP, result.proxyErr = observed.ip, observed.err
+		} else {
+			result.directIP, result.directErr = observed.ip, observed.err
+		}
+		if errors.Is(observed.err, ErrNodeResourceDenied) {
+			refusal = observed.err
+			cancel()
+		}
+	}
+	if refusal != nil {
+		return nodeEgressPair{directErr: refusal, proxyErr: refusal}
+	}
+	return result
+}
+
 // The pair must use the same HTTPS provider and literal destination. Otherwise
 // destination-based WAN selection could produce two direct public IPs and be
 // mistaken for a verified proxy exit. Retry the whole pair, never half of it.
@@ -210,18 +253,9 @@ func probeNodeEgressPair(ctx context.Context, proxyAddress string, get nodeEgres
 			}
 			endpoint = pinned
 		}
-		measure := func(address string) (string, error) {
-			return measureNodeEgress(provider, get, endpoint, address, 5*time.Second)
-		}
-		result.directIP, result.directErr = measure("")
-		if errors.Is(result.directErr, ErrNodeResourceDenied) {
-			done()
-			result.proxyErr = result.directErr
-			return result
-		}
-		result.proxyIP, result.proxyErr = measure(proxyAddress)
+		result = measureNodeEgressPair(provider, get, endpoint, proxyAddress)
 		done()
-		if errors.Is(result.proxyErr, ErrNodeResourceDenied) {
+		if errors.Is(result.directErr, ErrNodeResourceDenied) || errors.Is(result.proxyErr, ErrNodeResourceDenied) {
 			return result
 		}
 		if err := ctx.Err(); err != nil {

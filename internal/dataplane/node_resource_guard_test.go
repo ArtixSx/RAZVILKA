@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ArtixSx/razvilka/internal/evidence"
@@ -11,14 +12,17 @@ import (
 
 func TestNodeResourceGuardExcludedEgressNeverFallsBack(t *testing.T) {
 	for _, pair := range []bool{false, true} {
-		calls := 0
+		var calls atomic.Int32
 		ctx := WithNodeResourceGuard(context.Background(), func(_ context.Context, host string, _ netip.Addr) error {
 			if host == "www.cloudflare.com" {
 				return ErrNodeResourceDenied
 			}
 			return nil
 		})
-		get := func(context.Context, nodeEgressEndpoint, string) (string, error) { calls++; return "198.51.100.7", nil }
+		get := func(context.Context, nodeEgressEndpoint, string) (string, error) {
+			calls.Add(1)
+			return "198.51.100.7", nil
+		}
 		var err error
 		if pair {
 			result := probeNodeEgressPair(ctx, "127.0.0.1:19181", get)
@@ -26,21 +30,26 @@ func TestNodeResourceGuardExcludedEgressNeverFallsBack(t *testing.T) {
 		} else {
 			_, err = probeNodeEgress(ctx, "", get)
 		}
-		if !errors.Is(err, ErrNodeResourceDenied) || calls != 0 {
-			t.Fatal("excluded CF recipe fell back", err, calls)
+		if !errors.Is(err, ErrNodeResourceDenied) || calls.Load() != 0 {
+			t.Fatal("excluded CF recipe fell back", err, calls.Load())
 		}
 	}
 }
 
 func TestNodeResourceGuardEgressDenialCannotBecomeGenericFailure(t *testing.T) {
-	calls := 0
-	get := func(context.Context, nodeEgressEndpoint, string) (string, error) {
-		calls++
+	var calls atomic.Int32
+	get := func(_ context.Context, endpoint nodeEgressEndpoint, _ string) (string, error) {
+		calls.Add(1)
+		if endpoint.url != "https://www.cloudflare.com/cdn-cgi/trace" || !endpoint.trace {
+			t.Error("resource refusal retried another provider")
+		}
 		return "", ErrNodeResourceDenied
 	}
 	result := probeNodeEgressPair(context.Background(), "127.0.0.1:19181", get)
-	if !errors.Is(result.directErr, ErrNodeResourceDenied) || !errors.Is(result.proxyErr, ErrNodeResourceDenied) || calls != 1 {
-		t.Fatal(result, calls)
+	// Either getter may observe cancellation before starting; both may also
+	// enter before the first refusal is collected. No later provider may run.
+	if count := calls.Load(); !errors.Is(result.directErr, ErrNodeResourceDenied) || !errors.Is(result.proxyErr, ErrNodeResourceDenied) || count < 1 || count > 2 || result.directIP != "" || result.proxyIP != "" {
+		t.Fatal(result, count)
 	}
 }
 

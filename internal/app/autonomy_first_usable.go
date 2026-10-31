@@ -288,6 +288,7 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 	// per-call examined bound cannot wrap into an already consumed prefix when
 	// the last round has fewer entries than the checker budget.
 	offset := r.Search.Cursor
+	startedCursor := offset
 	remaining := r.Search.Ordered[offset:]
 	checkState, checkMessage := "", ""
 	checkedNode := ""
@@ -493,7 +494,17 @@ func (a *App) runAutonomyFirstUsable(ctx context.Context, p autonomy.Policy, s a
 		state, message := autonomyApplyFailureStatus(err)
 		return finish(state, message)
 	}
-	return finish("searching", "Подходящий узел пока не найден; ограниченный подбор продолжится.")
+	r.State, r.Message = "searching", "Подходящий узел пока не найден; ограниченный подбор продолжится."
+	// Continuing a finite cold traversal is not a health recheck. Yield the
+	// admission and resume on a later coordinator tick after durable progress.
+	// Errors (including timeout rotation without consumption) returned above;
+	// RetryAt, exhausted/halted searches and applied-route recovery keep their
+	// existing pacing. Every continuation still enters the same guards/Apply.
+	finished := time.Now()
+	if ctx.Err() == nil && !cfg.AppliedServices[s.ID].Enabled && r.Search.Cursor > startedCursor && firstAutonomySearchDue(r, finished) {
+		r.NextCheck = finished.Add(reconcilerPollInterval)
+	}
+	return r
 }
 
 // Proof is only a scheduling hint. SearchFirstUsable still checks the exact

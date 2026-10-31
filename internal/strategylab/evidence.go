@@ -16,6 +16,20 @@ const (
 
 var scenarioLevels = []string{LevelPacket, LevelHTTP, LevelMedia, LevelVoice, LevelGame}
 
+var errEvidenceBinding = errors.New("probe evidence does not match the current candidate incarnation and native validation; reimport and validate legacy candidates before probing")
+
+func evidenceSourceCurrent(candidate Candidate) bool {
+	return candidate.Validation.OK && candidate.Validation.Native && !candidate.Validation.QuiescenceUnknown &&
+		compatibilityHex(candidate.Incarnation, 32) && compatibilityHex(candidate.Validation.Generation, 32)
+}
+
+// Legacy observations stay visible as history. Missing bindings never inherit
+// current source identity from a read or from a late Record call.
+func evidenceMatchesCandidate(evidence Evidence, candidate Candidate) bool {
+	return evidenceSourceCurrent(candidate) && evidence.CandidateID == candidate.ID &&
+		evidence.CandidateIncarnation == candidate.Incarnation && evidence.ValidationGeneration == candidate.Validation.Generation
+}
+
 // Coverage keeps each scenario's freshness independently. A fresh web pass
 // cannot refresh an old media/voice/game observation.
 type Coverage struct {

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	SchemaVersion      = 1
+	SchemaVersion      = 4
 	MaxEvidence        = 2000
 	RequiredPasses     = 3
 	RollbackFailures   = 3
@@ -46,6 +46,9 @@ var Pools = []Pool{
 }
 
 type Validation struct {
+	// Generation is assigned by Manager before invoking the native validator.
+	// Repeated validation, including same-second PASS, retires prior proof.
+	Generation        string   `json:"generation,omitempty"`
 	QuiescenceUnknown bool     `json:"quiescence_unknown,omitempty"`
 	LuaChecked        bool     `json:"lua_checked,omitempty"`
 	OK                bool     `json:"ok"`
@@ -84,6 +87,8 @@ type StageEvidence struct {
 }
 
 type Evidence struct {
+	CandidateIncarnation string `json:"candidate_incarnation,omitempty"`
+	ValidationGeneration string `json:"validation_generation,omitempty"`
 	// Outcome distinguishes service rejection from an unavailable local checker.
 	Outcome        string          `json:"outcome,omitempty"`
 	Level          string          `json:"level,omitempty"`
@@ -245,10 +250,10 @@ func New(path string) (*Manager, error) {
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("decode Strategy Lab state: %w", err)
 	}
-	if m.state.SchemaVersion != SchemaVersion && m.state.SchemaVersion != compatibilityUnknownSchema && m.state.SchemaVersion != compatibilitySupervisedSchema {
+	if !supportedStrategySchema(m.state.SchemaVersion) {
 		return nil, fmt.Errorf("unsupported Strategy Lab schema %d", m.state.SchemaVersion)
 	}
-	if m.state.SchemaVersion == compatibilitySupervisedSchema {
+	if supervisedStrategySchema(m.state.SchemaVersion) {
 		checked, err := decodeCompatibilityState(image)
 		if err != nil {
 			return nil, errors.Join(ErrCompatibilityQuiescenceUnknown, errors.New("invalid retained compatibility session"))
@@ -278,6 +283,7 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	}
 	candidate, ok := m.state.Candidates[id]
 	if ok {
+		candidate = adaptiveCandidateDetached(candidate)
 		m.nativeRunning = true
 	}
 	m.mu.Unlock()
@@ -287,6 +293,9 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	defer m.finishNative()
 	if !candidate.Validation.OK || !candidate.Validation.Native {
 		return Evidence{}, errors.New("candidate must pass native NFQWS2 validation first")
+	}
+	if !evidenceSourceCurrent(candidate) {
+		return Evidence{}, errEvidenceBinding
 	}
 	protocol := ""
 	for _, pool := range Pools {
@@ -319,6 +328,13 @@ func (m *Manager) Probe(ctx context.Context, id string, target ProbeTarget) (Evi
 	if len(evidence.Stages) == 0 {
 		return Evidence{}, errors.New("executor returned no typed evidence")
 	}
+	if evidence.CandidateID != candidate.ID {
+		return Evidence{}, errEvidenceBinding
+	}
+	// Bind to the source captured before Execute, never to whichever candidate
+	// happens to be current when a delayed executor finishes.
+	evidence.CandidateIncarnation = candidate.Incarnation
+	evidence.ValidationGeneration = candidate.Validation.Generation
 	if err := m.Record(evidence); err != nil {
 		return evidence, err
 	}
@@ -342,12 +358,24 @@ func (m *Manager) Snapshot() Snapshot {
 	now := m.now()
 	summaries := summarize(m.state, now)
 	selections := selectionsWithHealth(m.state, summaries, now)
+	unknown := m.compatibilityUnknownLocked()
+	if unknown {
+		const reason = "Нативная проверка не завершена или её состояние неизвестно; готовность не подтверждена"
+		// Historical measurements remain visible. The global admission fence
+		// cannot be presented as readiness even if its prior binding still matches.
+		for i := range summaries {
+			summaries[i].Eligible, summaries[i].Reason = false, reason
+		}
+		for i := range selections {
+			selections[i].Healthy, selections[i].Status, selections[i].Reason = false, "unknown", reason
+		}
+	}
 	sort.Slice(selections, func(i, j int) bool {
 		return selectionKey(selections[i].ServiceID, selections[i].Protocol, selections[i].IPFamily) < selectionKey(selections[j].ServiceID, selections[j].Protocol, selections[j].IPFamily)
 	})
 	evidence := append(make([]Evidence, 0, len(m.state.Evidence)), m.state.Evidence...)
 	return Snapshot{
-		QuiescenceUnknown: m.compatibilityUnknownLocked(),
+		QuiescenceUnknown: unknown,
 		SchemaVersion:     m.state.SchemaVersion, Mode: "expert-read-only-until-apply", Pools: append([]Pool(nil), Pools...),
 		Candidates: candidates, Evidence: evidence, Summaries: summaries, Selections: selections,
 		Safety: map[string]any{"state_write_blocked": m.writeBlocked, "live_config_changed": false, "default_route_changed": false, "temporary_scoped_firewall_probe": m.Executor != nil, "native_validation_required": true, "required_confirmed_passes": RequiredPasses, "automatic_rollback_failures": RollbackFailures, "confidence_half_life_hours": int(ConfidenceHalfLife / time.Hour), "probe_budget": m.resourceBudget()},
@@ -486,7 +514,12 @@ func (m *Manager) validateCandidate(ctx context.Context, id string, expected *ad
 	if err != nil {
 		return Candidate{}, err
 	}
+	var generation [16]byte
+	if _, err := rand.Read(generation[:]); err != nil {
+		return Candidate{}, fmt.Errorf("generate Strategy Lab validation generation: %w", err)
+	}
 	validation := validator.Validate(ctx, append([]string(nil), arguments...))
+	validation.Generation = hex.EncodeToString(generation[:])
 	validation.Arguments = append([]string(nil), arguments...)
 	if validation.CheckedAt == "" {
 		validation.CheckedAt = m.now().UTC().Format(time.RFC3339)
@@ -497,9 +530,7 @@ func (m *Manager) validateCandidate(ctx context.Context, id string, expected *ad
 		// Preserve real process uncertainty even if its candidate was removed
 		// or rebound while validation was outside the Manager lock.
 		m.compatibilityUnknown = true
-		if m.state.SchemaVersion < compatibilityUnknownSchema {
-			m.state.SchemaVersion = compatibilityUnknownSchema
-		}
+		retainUnknownStrategySchema(&m.state)
 	}
 	current, exists := m.state.Candidates[id]
 	if !exists || !adaptiveCandidateIdentityEqual(current, candidate) {
@@ -601,6 +632,9 @@ func (m *Manager) Record(evidence Evidence) error {
 	if !candidate.Validation.OK || !candidate.Validation.Native {
 		return errors.New("candidate has not passed native NFQWS2 validation")
 	}
+	if !evidenceMatchesCandidate(evidence, candidate) {
+		return errEvidenceBinding
+	}
 	if evidence.CheckedAt == "" {
 		evidence.CheckedAt = m.now().UTC().Format(time.RFC3339)
 	}
@@ -663,6 +697,9 @@ func summarize(state State, now time.Time) []Summary {
 		latency         int64
 		ttfb            int64
 		latest          time.Time
+		historyLatest   time.Time
+		current         bool
+		currentPasses   int
 		weightedSuccess float64
 		weightedTotal   float64
 		freshConfirmed  int
@@ -679,6 +716,23 @@ func summarize(state State, now time.Time) []Summary {
 		if err != nil || checked.After(now) || normalizeEvidence(&evidence) != nil || !reputationEvidence(evidence) {
 			continue
 		}
+		// Lifetime counts remain history, including observations from an older
+		// writer. Only the exact current binding contributes to live reputation.
+		if evidence.Success {
+			group.s.Passes++
+		} else {
+			group.s.Failures++
+		}
+		if evidence.RouteConfirmed {
+			group.s.Confirmed++
+		}
+		if checked.After(group.historyLatest) {
+			group.historyLatest = checked
+		}
+		if !evidenceMatchesCandidate(evidence, state.Candidates[evidence.CandidateID]) {
+			continue
+		}
+		group.current = true
 		if evidence.Success {
 			for _, level := range evidenceLevels(evidence) {
 				if checked.After(group.coverage[level]) {
@@ -687,14 +741,9 @@ func summarize(state State, now time.Time) []Summary {
 			}
 		}
 		if evidence.Success {
-			group.s.Passes++
+			group.currentPasses++
 			group.latency += evidence.LatencyMS
 			group.ttfb += evidence.TTFBMS
-		} else {
-			group.s.Failures++
-		}
-		if evidence.RouteConfirmed {
-			group.s.Confirmed++
 		}
 		age := now.Sub(checked)
 		if age < 0 {
@@ -733,12 +782,22 @@ func summarize(state State, now time.Time) []Summary {
 		if group.weightedTotal > 0 {
 			group.s.Confidence = group.weightedSuccess / group.weightedTotal
 		}
-		if group.s.Passes > 0 {
-			group.s.AverageLatency = float64(group.latency) / float64(group.s.Passes)
-			group.s.AverageTTFB = float64(group.ttfb) / float64(group.s.Passes)
+		if group.currentPasses > 0 {
+			group.s.AverageLatency = float64(group.latency) / float64(group.currentPasses)
+			group.s.AverageTTFB = float64(group.ttfb) / float64(group.currentPasses)
 		}
 		group.s.LastCheckedAt = group.latest.UTC().Format(time.RFC3339)
+		if !group.current {
+			group.s.LastCheckedAt = group.historyLatest.UTC().Format(time.RFC3339)
+		}
+		candidate, exists := state.Candidates[group.s.CandidateID]
 		switch {
+		case !exists:
+			group.s.Reason = "кандидат отсутствует; старые результаты не подтверждают текущую стратегию"
+		case !candidate.Validation.OK || !candidate.Validation.Native || candidate.Validation.QuiescenceUnknown:
+			group.s.Reason = "текущая стратегия не прошла нативную проверку NFQWS2"
+		case !group.current:
+			group.s.Reason = "исторические результаты не привязаны к текущей стратегии и её нативной проверке; выполните новый тест"
 		case group.latest.IsZero() || now.Sub(group.latest) > EvidenceFreshness:
 			group.s.Reason = "результат устарел; выполните новый изолированный тест"
 		case group.s.FreshPasses < RequiredPasses:
@@ -769,8 +828,8 @@ func selectionsWithHealth(state State, summaries []Summary, now time.Time) []Sel
 		summary, ok := byCandidate[selection.CandidateID+"|"+key]
 		selection.Healthy = ok && summary.Eligible
 		selection.Confidence = summary.Confidence
-		selection.ConsecutiveFailures = consecutiveFailures(state.Evidence, selection, now)
-		if selection.Mode == ModeManual && !manualSelectionHasEvidence(state.Evidence, selection, now) {
+		selection.ConsecutiveFailures = consecutiveFailures(state, selection, now)
+		if selection.Mode == ModeManual && !manualSelectionHasEvidence(state, selection, now) {
 			selection.Healthy, selection.Confidence, selection.ConsecutiveFailures = false, 0, 0
 			selection.Status, selection.Reason = manualSelectionUncheckedStatus, manualSelectionUncheckedReason
 			selections = append(selections, selection)
@@ -796,16 +855,17 @@ func selectionsWithHealth(state State, summaries []Summary, now time.Time) []Sel
 	return selections
 }
 
-func consecutiveFailures(evidence []Evidence, selection Selection, now time.Time) int {
+func consecutiveFailures(state State, selection Selection, now time.Time) int {
 	selectedAt, _ := time.Parse(time.RFC3339, selection.SelectedAt)
+	candidate := state.Candidates[selection.CandidateID]
 	count := 0
-	for index := len(evidence) - 1; index >= 0; index-- {
-		item := evidence[index]
+	for index := len(state.Evidence) - 1; index >= 0; index-- {
+		item := state.Evidence[index]
 		if item.CandidateID != selection.CandidateID || selectionKey(item.ServiceID, item.Protocol, item.IPFamily) != selectionKey(selection.ServiceID, selection.Protocol, selection.IPFamily) {
 			continue
 		}
 		checked, err := time.Parse(time.RFC3339, item.CheckedAt)
-		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) {
+		if err != nil || checked.After(now) || now.Sub(checked) > EvidenceFreshness || normalizeEvidence(&item) != nil || !reputationEvidence(item) || !evidenceMatchesCandidate(item, candidate) {
 			break // uncertainty cannot bridge a consecutive failure quorum
 		}
 		if !selectedAt.IsZero() && !checked.IsZero() && checked.Before(selectedAt) {
@@ -820,7 +880,7 @@ func consecutiveFailures(evidence []Evidence, selection Selection, now time.Time
 }
 
 func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
-	if !reputationEvidence(evidence) {
+	if !reputationEvidence(evidence) || !evidenceMatchesCandidate(evidence, m.state.Candidates[evidence.CandidateID]) {
 		return
 	}
 	key := selectionKey(evidence.ServiceID, evidence.Protocol, evidence.IPFamily)
@@ -833,7 +893,7 @@ func (m *Manager) reconcileSelectionLocked(evidence Evidence) {
 		m.state.Selections[key] = selection
 		return
 	}
-	if selection.Frozen || selection.Mode == ModeManual || consecutiveFailures(m.state.Evidence, selection, m.now()) < RollbackFailures {
+	if selection.Frozen || selection.Mode == ModeManual || consecutiveFailures(m.state, selection, m.now()) < RollbackFailures {
 		return
 	}
 	summaries := summarize(m.state, m.now())
@@ -989,11 +1049,10 @@ func (m *Manager) saveLocked() (retErr error) {
 		// Schema 1 readers reject schema 2 instead of ignoring the new bool.
 		// The existing Strategy Lab state is the only persistent record.
 		m.compatibilityUnknown = true
-		if m.state.SchemaVersion < compatibilityUnknownSchema {
-			m.state.SchemaVersion = compatibilityUnknownSchema
-		}
+		retainUnknownStrategySchema(&m.state)
 	}
 	if strings.TrimSpace(m.Path) == "" {
+		promoteStrategyWriteSchema(&m.state)
 		return nil
 	}
 	defer func() {
@@ -1005,8 +1064,8 @@ func (m *Manager) saveLocked() (retErr error) {
 				_ = json.Unmarshal(m.image.Data, &previous)
 			}
 			m.state = previous
-			if m.compatibilityUnknown && m.state.SchemaVersion < compatibilityUnknownSchema {
-				m.state.SchemaVersion = compatibilityUnknownSchema
+			if m.compatibilityUnknown {
+				retainUnknownStrategySchema(&m.state)
 			}
 		}
 	}()
@@ -1018,6 +1077,7 @@ func (m *Manager) saveLocked() (retErr error) {
 	if m.writeBlocked {
 		return restorejournal.ErrRecovery
 	}
+	promoteStrategyWriteSchema(&m.state)
 	if err := os.MkdirAll(filepath.Dir(m.Path), 0700); err != nil {
 		return err
 	}

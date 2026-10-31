@@ -166,6 +166,27 @@ assert.equal(context.browser.job.state, 'completed');
 assert.equal(calls.length, 6);
 assert.ok(calls.every(call => !call.url.includes('/apply')));
 
+// A completed job is visible before slower secondary status/catalog reads.
+for (const blockedPath of ['/api/v1/node-autofallback','/api/v1/nodes']) {
+ let releaseRead;
+ const blocked=new Promise(resolve=>{releaseRead=resolve;});
+ handler=async url=>{
+  if(url===blockedPath)return blocked;
+  if(url==='/api/v1/node-checks/current')return {job:{id:77,state:'completed',mode:'tcp',total:77,completed:77},pings:[]};
+  return readAPI(url);
+ };
+ context.browser.job={id:77,state:'running',mode:'tcp',total:77,completed:0};
+ const polling=context.pollNodeBrowserChecks();
+ await new Promise(resolve=>setImmediate(resolve));
+ try {
+  assert.equal(context.browser.job.completed,77,'completed status waited for '+blockedPath);
+  assert.match($('#nodeBatchMessage').textContent,/Проверка завершена: 77 \/ 77/,'completed result was not rendered');
+ } finally {
+  releaseRead(readAPI(blockedPath));
+  await polling;
+ }
+}
+
 // Metadata contention cannot turn a completed check into a failed check.
 for (const failureStatus of [409,503]) {
  const prior=state.nodes;

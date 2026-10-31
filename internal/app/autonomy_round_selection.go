@@ -38,6 +38,38 @@ func selectAutonomyRound(ids []string, doc autonomyDocument, cfg config.Config, 
 	return oldest, false
 }
 
+// nextAutonomySearchCheck lets the existing feeds operation honor a saved cold
+// search continuation instead of adding its normal feed interval. It only
+// reads scheduling intent: selection, admission and all current guards still
+// run next time. Never make unrelated maintenance due or skip the normal yield.
+func (a *App) nextAutonomySearchCheck(now time.Time) time.Time {
+	if a.Store == nil {
+		return time.Time{}
+	}
+	cfg := a.Store.Get()
+	a.autonomy.mu.Lock()
+	defer a.autonomy.mu.Unlock()
+	doc := a.autonomy.doc
+	if !a.autonomy.loaded || a.autonomy.blocked || !doc.Policy.Enabled || !doc.Policy.SetupComplete || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" {
+		return time.Time{}
+	}
+	var next time.Time
+	for id, s := range doc.Services {
+		r := doc.Runtime[id]
+		if !s.Enabled || s.Removing || !cfg.Services[id].Enabled || cfg.AppliedServices[id].Enabled || !firstAutonomySearchDue(r, now) {
+			continue
+		}
+		at := r.NextCheck
+		if earliest := now.Add(reconcilerPollInterval); at.Before(earliest) {
+			at = earliest
+		}
+		if next.IsZero() || at.Before(next) {
+			next = at
+		}
+	}
+	return next
+}
+
 func firstAutonomySearchDue(r autonomy.Runtime, now time.Time) bool {
 	t := r.Search
 	if r.State != "searching" || t == nil || t.Halted || t.Exhausted || t.Cursor < 0 || t.Cursor >= len(t.Ordered) || now.Before(t.RetryAt) {

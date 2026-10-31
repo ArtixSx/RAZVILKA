@@ -21,7 +21,7 @@ func TestLocalProbeFailuresRemainVisibleWithoutPoisoningOrRollback(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := Evidence{CandidateID: c.ID, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}
+	e := Evidence{CandidateID: c.ID, CandidateIncarnation: c.Incarnation, ValidationGeneration: c.Validation.Generation, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}
 	for i := 0; i < RequiredPasses; i++ {
 		if err := m.Record(e); err != nil {
 			t.Fatal(err)
@@ -57,10 +57,11 @@ func TestLocalProbeFailuresRemainVisibleWithoutPoisoningOrRollback(t *testing.T)
 
 func TestCoverageDoesNotRefreshMediaVoiceGameFromWeb(t *testing.T) {
 	now := time.Date(2026, 10, 4, 1, 0, 0, 0, time.UTC)
-	old := Evidence{CandidateID: "st-1", ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: now.Add(-EvidenceFreshness - time.Second).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "media", Status: "pass"}, {Stage: "voice", Status: "pass"}, {Stage: "game", Status: "pass"}}}
+	candidate := strategyEvidenceModelCandidate("st-1")
+	old := Evidence{CandidateID: "st-1", CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: now.Add(-EvidenceFreshness - time.Second).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "media", Status: "pass"}, {Stage: "voice", Status: "pass"}, {Stage: "game", Status: "pass"}}}
 	fresh := old
 	fresh.CheckedAt, fresh.Stages = now.Format(time.RFC3339), []StageEvidence{{Stage: "read", Status: "pass"}}
-	s := summarize(State{Evidence: []Evidence{old, fresh}}, now)[0]
+	s := summarize(State{Candidates: map[string]Candidate{candidate.ID: candidate}, Evidence: []Evidence{old, fresh}}, now)[0]
 	if len(s.Coverage) != 5 {
 		t.Fatalf("scenario coverage lost: %+v", s)
 	}
@@ -77,9 +78,10 @@ func TestCoverageDoesNotRefreshMediaVoiceGameFromWeb(t *testing.T) {
 
 func TestFutureAndMalformedEvidenceCannotBecomeFresh(t *testing.T) {
 	now := time.Date(2026, 10, 4, 1, 0, 0, 0, time.UTC)
+	candidate := strategyEvidenceModelCandidate("st-1")
 	for _, timestamp := range []string{"broken", now.Add(time.Hour).Format(time.RFC3339)} {
-		e := Evidence{CandidateID: "st-1", ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: timestamp, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}
-		s := summarize(State{Evidence: []Evidence{e, e, e}}, now)[0]
+		e := Evidence{CandidateID: "st-1", CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, CheckedAt: timestamp, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}
+		s := summarize(State{Candidates: map[string]Candidate{candidate.ID: candidate}, Evidence: []Evidence{e, e, e}}, now)[0]
 		if s.Eligible || s.FreshPasses != 0 || len(s.Coverage) != 0 {
 			t.Fatalf("invalid timestamp became fresh: %+v", s)
 		}
@@ -88,18 +90,19 @@ func TestFutureAndMalformedEvidenceCannotBecomeFresh(t *testing.T) {
 
 func TestStaleFailureCannotRollBackFreshSelection(t *testing.T) {
 	now := time.Date(2026, 10, 4, 1, 0, 0, 0, time.UTC)
+	candidate := strategyEvidenceModelCandidate("st-1")
 	selection := Selection{CandidateID: "st-1", ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", SelectedAt: now.Add(-48 * time.Hour).Format(time.RFC3339)}
-	e := Evidence{CandidateID: "st-1", ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", RouteConfirmed: true, Outcome: OutcomeServiceFail, CheckedAt: now.Add(-EvidenceFreshness - time.Second).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "result", Status: "fail"}}}
-	if failures := consecutiveFailures([]Evidence{e, e, e}, selection, now); failures != 0 {
+	e := Evidence{CandidateID: "st-1", CandidateIncarnation: candidate.Incarnation, ValidationGeneration: candidate.Validation.Generation, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", RouteConfirmed: true, Outcome: OutcomeServiceFail, CheckedAt: now.Add(-EvidenceFreshness - time.Second).Format(time.RFC3339), Stages: []StageEvidence{{Stage: "result", Status: "fail"}}}
+	if failures := consecutiveFailures(State{Candidates: map[string]Candidate{candidate.ID: candidate}, Evidence: []Evidence{e, e, e}}, selection, now); failures != 0 {
 		t.Fatalf("stale failures contributed to rollback quorum: %d", failures)
 	}
 	e.CheckedAt = now.Format(time.RFC3339)
-	if failures := consecutiveFailures([]Evidence{e, e, e}, selection, now); failures != RollbackFailures {
+	if failures := consecutiveFailures(State{Candidates: map[string]Candidate{candidate.ID: candidate}, Evidence: []Evidence{e, e, e}}, selection, now); failures != RollbackFailures {
 		t.Fatalf("fresh definite failures no longer contribute: %d", failures)
 	}
 	unknown := e
 	unknown.Outcome, unknown.RouteConfirmed = OutcomeInconclusive, false
-	if failures := consecutiveFailures([]Evidence{e, unknown, e}, selection, now); failures != 1 {
+	if failures := consecutiveFailures(State{Candidates: map[string]Candidate{candidate.ID: candidate}, Evidence: []Evidence{e, unknown, e}}, selection, now); failures != 1 {
 		t.Fatalf("uncertainty bridged a consecutive failure quorum: %d", failures)
 	}
 }
@@ -118,7 +121,7 @@ func TestManagerStopDoesNotRecordLateSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.Executor = adaptiveProbeFunc(func(context.Context, Candidate, ProbeTarget) (Evidence, error) {
 		cancel()
-		return Evidence{CandidateID: c.ID, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}, nil
+		return Evidence{CandidateID: c.ID, CandidateIncarnation: c.Incarnation, ValidationGeneration: c.Validation.Generation, ServiceID: "service", Protocol: "tcp", IPFamily: "ipv4", Success: true, RouteConfirmed: true, Stages: []StageEvidence{{Stage: "read", Status: "pass"}}}, nil
 	})
 	if _, err := m.Probe(ctx, c.ID, ProbeTarget{ServiceID: "service", IPFamily: "ipv4"}); err != context.Canceled {
 		t.Fatalf("late success survived Stop: %v", err)

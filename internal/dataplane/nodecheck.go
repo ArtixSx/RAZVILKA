@@ -221,7 +221,11 @@ func (c *ExactNodeChecker) newResult(request NodeCheckRequest) NodeCheckResult {
 
 func (c *ExactNodeChecker) finishResult(result *NodeCheckResult) {
 	result.FinishedAt = c.currentTime()
-	result.ExpiresAt = result.FinishedAt.Add(c.evidenceTTL())
+	// Completing cleanup changes elapsed time, not the freshness of the
+	// observation already made. Never renew that observation on a later finish.
+	if result.ExpiresAt.IsZero() {
+		result.ExpiresAt = result.FinishedAt.Add(c.evidenceTTL())
+	}
 	result.LatencyMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
 	if result.LatencyMS < 0 {
 		result.LatencyMS = 0
@@ -330,6 +334,10 @@ func (c *ExactNodeChecker) ScreenTransport(parent context.Context, request NodeC
 }
 
 func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckRequest) (result NodeCheckResult, resultErr error) {
+	if c == nil {
+		return NodeCheckResult{}, ErrExactNodeUnavailable
+	}
+	startedAt := c.currentTime()
 	if err := c.validRequest(parent, request); err != nil {
 		return NodeCheckResult{}, err
 	}
@@ -351,7 +359,11 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 		return NodeCheckResult{}, err
 	}
 	result = c.newResult(request)
+	result.StartedAt = startedAt
 	finish := func() { c.finishResult(&result) }
+	// This runs after identity, cleanup and final network/resource observations.
+	// Queue wait before Check is separate from this complete checker lifecycle.
+	defer finish()
 	defer func() {
 		if err := checkNodeResource(ctx, "", netip.Addr{}); err != nil {
 			if result.Stage != "cleanup" {
@@ -410,6 +422,7 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 	result.CleanupStatus = NodeCleanupNotObserved
 	session, err := c.prepare(ctx, c.session(slot), request, endpoint)
 	defer func() {
+		cleanupStarted := c.currentTime()
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(parent), 8*time.Second)
 		defer cleanupCancel()
 		// A nil return after the cleanup budget expired does not establish a
@@ -422,10 +435,11 @@ func (c *ExactNodeChecker) Check(parent context.Context, request NodeCheckReques
 			result.Stage = "cleanup"
 			result.ErrorCode = "node-cleanup-failed"
 			result.Message = "Временный процесс не удалось гарантированно убрать; повторные проверки заблокированы до восстановления."
-			result.addStage("cleanup", "failed", "Очистка временного процесса требует внимания.", c.currentTime(), c.currentTime())
+			result.addStage("cleanup", "failed", "Очистка временного процесса требует внимания.", cleanupStarted, c.currentTime())
 			finish()
 		} else {
 			result.CleanupStatus = NodeCleanupVerified
+			result.addStage("cleanup", "passed", "Временный процесс и его ресурсы убраны.", cleanupStarted, c.currentTime())
 		}
 	}()
 	if err != nil {

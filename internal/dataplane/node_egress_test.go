@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/netip"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,7 +26,8 @@ func TestNodeEgressBackupRetainsMandatoryDirectControlAndLeakRejection(t *testin
 			get := func(ctx context.Context, endpoint nodeEgressEndpoint, address string) (string, error) {
 				deadline, exists := ctx.Deadline()
 				if !exists || time.Until(deadline) > 5*time.Second {
-					t.Fatal("endpoint has no bounded deadline")
+					t.Error("endpoint has no bounded deadline")
+					return "", errors.New("unbounded endpoint")
 				}
 				if address == "" {
 					direct = append(direct, endpoint.url)
@@ -241,13 +244,16 @@ func TestNodeEgressPairNeverMixesProviderAddressesOrRetriesAnObservedLeak(t *tes
 		t.Run(failedPath, func(t *testing.T) {
 			checker := fakeExactNodeChecker(t)
 			calls := []string{}
+			var callsMu sync.Mutex
 			checker.egressPair = func(ctx context.Context, address string) nodeEgressPair {
 				return probeNodeEgressPair(ctx, address, func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
 					path := "direct"
 					if proxy != "" {
 						path = "proxy"
 					}
+					callsMu.Lock()
 					calls = append(calls, endpoint.url+"/"+path)
+					callsMu.Unlock()
 					if endpoint.trace {
 						if failedPath == path {
 							return "", errors.New("primary path unavailable")
@@ -293,10 +299,9 @@ func TestNodeEgressProviderPairSharesOneDNSPinAcrossDirectAndSOCKS(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, address := range []string{"", socks.address} {
-		if _, err := p.get(context.Background(), endpoint, address); err != nil {
-			t.Fatal(err)
-		}
+	pair := measureNodeEgressPair(context.Background(), p.get, endpoint, socks.address)
+	if pair.directErr != nil || pair.proxyErr != nil || pair.directIP != "8.8.8.8" || pair.proxyIP != "8.8.8.8" {
+		t.Fatalf("pinned HTTPS/SOCKS pair failed: %+v", pair)
 	}
 	request := <-socks.requests
 	if lookups != 1 || request.AddressType != 1 || request.Host != "1.1.1.1" {
@@ -307,14 +312,17 @@ func TestNodeEgressProviderPairSharesOneDNSPinAcrossDirectAndSOCKS(t *testing.T)
 func TestNodeEgressPairCancellationSkipsRemainingMeasurements(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	calls := 0
-	result := probeNodeEgressPair(ctx, "127.0.0.1:19181", func(context.Context, nodeEgressEndpoint, string) (string, error) {
-		calls++
+	var calls atomic.Int32
+	result := probeNodeEgressPair(ctx, "127.0.0.1:19181", func(_ context.Context, endpoint nodeEgressEndpoint, _ string) (string, error) {
+		calls.Add(1)
+		if !endpoint.trace {
+			t.Error("canceled pair retried another provider")
+		}
 		cancel()
 		return "8.8.8.8", nil
 	})
-	if calls != 1 || result.directIP != "" || result.proxyIP != "" || !errors.Is(result.directErr, context.Canceled) || !errors.Is(result.proxyErr, context.Canceled) {
-		t.Fatalf("canceled pair continued or published an IP: calls=%d result=%+v", calls, result)
+	if calls.Load() < 1 || calls.Load() > 2 || result.directIP != "" || result.proxyIP != "" || !errors.Is(result.directErr, context.Canceled) || !errors.Is(result.proxyErr, context.Canceled) {
+		t.Fatalf("canceled pair continued or published an IP: calls=%d result=%+v", calls.Load(), result)
 	}
 }
 
@@ -323,13 +331,17 @@ func TestNodeEgressPairCancellationSkipsRemainingMeasurements(t *testing.T) {
 func TestNodeEgressPairRetriesProviderTimeoutWithCompletePair(t *testing.T) {
 	var calls []string
 	var attempts []context.Context
+	var callsMu sync.Mutex
 	started := time.Now()
 	result := probeNodeEgressPair(context.Background(), "127.0.0.1:19181", func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
+		callsMu.Lock()
 		calls = append(calls, endpoint.url+"/"+proxy)
 		attempts = append(attempts, ctx)
+		callsMu.Unlock()
 		deadline, ok := ctx.Deadline()
 		if !ok || time.Until(deadline) > 5*time.Second {
-			t.Fatal("measurement lost its five-second attempt budget")
+			t.Error("measurement lost its five-second attempt budget")
+			return "", errors.New("unbounded measurement")
 		}
 		if endpoint.trace && proxy != "" {
 			<-ctx.Done()
@@ -348,6 +360,12 @@ func TestNodeEgressPairRetriesProviderTimeoutWithCompletePair(t *testing.T) {
 		"https://www.cloudflare.com/cdn-cgi/trace/127.0.0.1:19181",
 		"https://api.ipify.org//",
 		"https://api.ipify.org//127.0.0.1:19181",
+	}
+	// Paths may finish in either order, but a provider must be fully joined
+	// before the next pair starts. Sorting only within each pair preserves it.
+	if len(calls) == len(want) {
+		slices.Sort(calls[:2])
+		slices.Sort(calls[2:])
 	}
 	if !reflect.DeepEqual(calls, want) || result.directIP != "8.8.8.8" || result.proxyIP != "9.9.9.9" || result.directErr != nil || result.proxyErr != nil {
 		t.Fatalf("provider timeout prevented a fresh pair: calls=%v result=%+v", calls, result)
@@ -373,8 +391,11 @@ func TestNodeEgressPairTimeoutFallbackRetainsControls(t *testing.T) {
 				defer stop()
 			}
 			var calls []string
+			var callsMu sync.Mutex
 			result := probeNodeEgressPair(parent, "127.0.0.1:19181", func(ctx context.Context, endpoint nodeEgressEndpoint, proxy string) (string, error) {
+				callsMu.Lock()
 				calls = append(calls, endpoint.url+"/"+proxy)
+				callsMu.Unlock()
 				if endpoint.trace {
 					if proxy == "" {
 						return "1.1.1.1", nil
@@ -410,7 +431,7 @@ func TestNodeEgressPairTimeoutFallbackRetainsControls(t *testing.T) {
 					t.Fatalf("backup leak hidden: %+v %v", result, calls)
 				}
 			case "denied":
-				if len(calls) != 3 || !errors.Is(result.directErr, ErrNodeResourceDenied) || !errors.Is(result.proxyErr, ErrNodeResourceDenied) {
+				if len(calls) < 3 || len(calls) > 4 || result.directIP != "" || result.proxyIP != "" || !errors.Is(result.directErr, ErrNodeResourceDenied) || !errors.Is(result.proxyErr, ErrNodeResourceDenied) {
 					t.Fatalf("denial retried: %+v %v", result, calls)
 				}
 			default:
@@ -418,7 +439,7 @@ func TestNodeEgressPairTimeoutFallbackRetainsControls(t *testing.T) {
 				if scenario == "overall-timeout" {
 					want = context.DeadlineExceeded
 				}
-				if len(calls) != 2 || !errors.Is(result.directErr, want) || !errors.Is(result.proxyErr, want) {
+				if len(calls) < 1 || len(calls) > 2 || result.directIP != "" || result.proxyIP != "" || !errors.Is(result.directErr, want) || !errors.Is(result.proxyErr, want) {
 					t.Fatalf("parent termination retried: %+v %v", result, calls)
 				}
 			}

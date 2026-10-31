@@ -1948,6 +1948,8 @@ function strategyManualSelectionInput(candidateID) {
 
 function renderStrategyLab() {
   const lab = state.strategyLab || {};
+  const quiescenceUnknown = lab.quiescence_unknown === true;
+  const unknownReason = 'Нативная проверка не завершена или её состояние неизвестно; готовность не подтверждена';
   const pools = lab.pools || [];
   const candidates = lab.candidates || [];
   const summaries = lab.summaries || [];
@@ -2000,18 +2002,22 @@ function renderStrategyLab() {
 	const evidence = lab.evidence || [];
   $('#strategyEvidence').innerHTML = summaries.map((summary) => {
 		const latest = [...evidence].reverse().find((item) => item.candidate_id === summary.candidate_id && item.service_id === summary.service_id && item.protocol === summary.protocol && item.ip_family === summary.ip_family);
-		const quality = summary.passes > 0 ? `TTFB ≈ ${Math.round(summary.average_ttfb_ms || summary.average_latency_ms || 0)} мс` : 'нет успешного замера';
-		return `<button class="strategy-summary ${summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.fresh_passes || 0} свежих успеха / ${summary.fresh_failures || 0} ошибок · ${esc(quality)}</span><em>${Math.round((summary.confidence || 0) * 100)}% доверия</em><small>${esc(summary.reason)}</small></button>`;
+		// Lifetime counts include unbound history; timing needs a fresh current PASS.
+		const quality = !quiescenceUnknown && summary.fresh_passes > 0 ? `TTFB ≈ ${Math.round(summary.average_ttfb_ms || summary.average_latency_ms || 0)} мс` : 'нет актуального успешного замера';
+		const confidence = quiescenceUnknown ? 'готовность не подтверждена' : `${Math.round((summary.confidence || 0) * 100)}% доверия`;
+		return `<button class="strategy-summary ${!quiescenceUnknown && summary.eligible ? 'eligible' : ''}" data-strategy-evidence="${esc(latest ? evidence.indexOf(latest) : '')}"><div><b>${esc(serviceName(summary.service_id))}</b><small>${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</small></div><span>${summary.fresh_passes || 0} свежих успеха / ${summary.fresh_failures || 0} ошибок · ${esc(quality)}</span><em>${esc(confidence)}</em><small>${esc(quiescenceUnknown ? unknownReason : summary.reason)}</small></button>`;
 	}).join('') || '<div class="strategy-empty">Результаты появятся после изолированных проверок DNS → TCP → TLS → HTTP и подтверждения счётчика NFQUEUE.</div>';
 	const selectionKey = (item) => `${item.service_id}|${item.protocol}|${item.ip_family}`;
 	const currentByKey = new Map(selections.map((selection) => [selectionKey(selection), selection.candidate_id]));
-	const statusLabels = { healthy: 'РАБОТАЕТ', 'frozen-healthy': 'ЗАКРЕПЛЕНО', degraded: 'НУЖНА ПРОВЕРКА', 'frozen-degraded': 'ЗАКРЕПЛЕНО · НУЖНА ПРОВЕРКА', 'manual-unchecked': 'ВЫБРАНО ВРУЧНУЮ · ОЖИДАЕТ ПРОВЕРКИ' };
+	const statusLabels = { healthy: 'РАБОТАЕТ', 'frozen-healthy': 'ЗАКРЕПЛЕНО', degraded: 'НУЖНА ПРОВЕРКА', 'frozen-degraded': 'ЗАКРЕПЛЕНО · НУЖНА ПРОВЕРКА', 'manual-unchecked': 'ВЫБРАНО ВРУЧНУЮ · ОЖИДАЕТ ПРОВЕРКИ', unknown: 'СОСТОЯНИЕ НЕ ПОДТВЕРЖДЕНО' };
 	const remembered = selections.map((selection) => {
 		const candidate = candidates.find((item) => item.id === selection.candidate_id);
 		const unchecked = selection.status === 'manual-unchecked';
-		return `<article class="strategy-memory-card ${unchecked ? 'pending' : selection.healthy ? 'healthy' : 'degraded'}"><div><span>${esc(statusLabels[selection.status] || selection.status || 'СОСТОЯНИЕ НЕИЗВЕСТНО')}</span><b>${esc(serviceName(selection.service_id))} · ${esc(selection.protocol.toUpperCase())} · ${esc(selection.ip_family)}</b><small>${esc(candidate?.name || selection.candidate_id)}${unchecked ? '' : ` · ${Math.round((selection.confidence || 0) * 100)}% доверия`}</small></div><p>${esc(selection.rollback_reason || selection.reason || 'Ожидаются новые проверки')}</p><button class="secondary" data-strategy-reset="1" data-service="${esc(selection.service_id)}" data-protocol="${esc(selection.protocol)}" data-family="${esc(selection.ip_family)}">Не запоминать</button></article>`;
+		const unknown = quiescenceUnknown || selection.status === 'unknown';
+		const reason = unknown ? unknownReason : selection.rollback_reason || selection.reason || 'Ожидаются новые проверки';
+		return `<article class="strategy-memory-card ${unknown || unchecked ? 'pending' : selection.healthy ? 'healthy' : 'degraded'}"><div><span>${esc(statusLabels[unknown ? 'unknown' : selection.status] || selection.status || 'СОСТОЯНИЕ НЕИЗВЕСТНО')}</span><b>${esc(serviceName(selection.service_id))} · ${esc(selection.protocol.toUpperCase())} · ${esc(selection.ip_family)}</b><small>${esc(candidate?.name || selection.candidate_id)}${unknown || unchecked ? '' : ` · ${Math.round((selection.confidence || 0) * 100)}% доверия`}</small></div><p>${esc(reason)}</p><button class="secondary" data-strategy-reset="1" data-service="${esc(selection.service_id)}" data-protocol="${esc(selection.protocol)}" data-family="${esc(selection.ip_family)}">Не запоминать</button></article>`;
 	});
-	const available = summaries.filter((summary) => summary.eligible && currentByKey.get(selectionKey(summary)) !== summary.candidate_id).map((summary) => {
+	const available = summaries.filter((summary) => !quiescenceUnknown && summary.eligible && currentByKey.get(selectionKey(summary)) !== summary.candidate_id).map((summary) => {
 		const candidate = candidates.find((item) => item.id === summary.candidate_id);
 		return `<article class="strategy-memory-card available"><div><span>ГОТОВ К ПАМЯТИ</span><b>${esc(serviceName(summary.service_id))} · ${esc(summary.protocol.toUpperCase())} · ${esc(summary.ip_family)}</b><small>${esc(candidate?.name || summary.candidate_id)} · ${Math.round((summary.confidence || 0) * 100)}% доверия</small></div><p>Автовозврат сработает только после ${lab.safety?.automatic_rollback_failures || 3} последовательных изолированных отказов.</p><button class="primary" data-strategy-select="${esc(summary.candidate_id)}" data-service="${esc(summary.service_id)}" data-protocol="${esc(summary.protocol)}" data-family="${esc(summary.ip_family)}">Запомнить</button></article>`;
 	});
@@ -3985,7 +3991,7 @@ async function runNodeCheck(event) {
   $('#nodeCheckPreview').hidden = true;
   $('#nodeCheckResult').textContent = 'Проверяем этот узел для выбранного сервиса…';
   button.disabled = true;
-  button.textContent = 'Проверяем до 45 секунд…';
+  button.textContent = 'Проверяем подключение…';
   try {
     const response = await api(`/api/v1/nodes/${encodeURIComponent(id)}/check`, { method: 'POST', signal: flow.controller.signal, body: JSON.stringify({ service_id: serviceID, confirm: 'CHECK_NODE' }) });
     if (state.nodeFlow !== flow || $('#nodeCheckService').value !== serviceID || $('#nodeCheckID').value !== id) return;

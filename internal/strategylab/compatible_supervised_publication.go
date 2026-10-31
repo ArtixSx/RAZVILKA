@@ -42,6 +42,9 @@ func (m *Manager) publishCompatibilityValidationLocked(parent context.Context, c
 		next.Candidates[id] = existing
 	}
 	next.Candidates[candidate.ID] = candidate
+	// A new validation cannot be published in the legacy reader's format.
+	// Exact helper receipt/cleanup writers separately preserve their old image.
+	next.SchemaVersion = compatibilitySupervisedSchema
 	next.CompatibilityFinalizing = false
 	after, err := compatibilityStateImage(next)
 	if err != nil {
