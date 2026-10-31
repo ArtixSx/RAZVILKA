@@ -268,4 +268,53 @@ func TestMihomoOfficialPinnedNativeInstall(t *testing.T) {
 	if _, err := m.ValidateMihomoProfileGuarded(context.Background(), source, options, digest([]byte("other config")), mihomoFixtureAdmission, start); err == nil || starts != 1 {
 		t.Fatal("changed preview executed native process", starts, err)
 	}
+	for name, raw := range map[string]string{
+		"vless-ws":      "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?security=tls&sni=edge.example&type=ws&path=%2Fws&host=cover.example",
+		"vless-grpc":    "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?security=tls&sni=edge.example&type=grpc&serviceName=service",
+		"vless-reality": "vless://123e4567-e89b-12d3-a456-426614174000@edge.example:443?security=reality&sni=cover.example&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=abcd&fp=chrome&type=tcp",
+		"hysteria2":     "hysteria2://testpass@edge.example:443?sni=edge.example",
+		"tuic":          "tuic://123e4567-e89b-12d3-a456-426614174000:testpass@edge.example:443?sni=edge.example&congestion_control=bbr",
+		"shadowsocks":   "ss://YWVzLTEyOC1nY206dGVzdHBhc3M@edge.example:443",
+	} {
+		t.Run(name, func(t *testing.T) {
+			profile, err := backendprofile.Mihomo(raw, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := m.ValidateMihomoProfileGuarded(context.Background(), raw, options, digest([]byte(profile.Config)), mihomoFixtureAdmission, mihomoFixtureAdmission)
+			if err != nil || !result.NativeValidated || result.ServiceVerified || result.LiveApplied {
+				t.Fatal(result, err)
+			}
+		})
+	}
+	for _, mode := range []string{"skipped", "denied", "after-start-error", "cancel-after-start"} {
+		t.Run(mode, func(t *testing.T) {
+			privateTemp := t.TempDir()
+			t.Setenv("TMPDIR", privateTemp)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			admit := func(ctx context.Context, begin func() error) error {
+				switch mode {
+				case "skipped":
+					return nil
+				case "denied":
+					return errors.New("fixture denied before Start")
+				case "after-start-error":
+					return errors.Join(begin(), errors.New("fixture error after actual Start"))
+				default:
+					err := begin()
+					cancel()
+					return err
+				}
+			}
+			result, err := m.ValidateMihomoProfileGuarded(ctx, source, options, review, mihomoFixtureAdmission, admit)
+			if err == nil || result != (MihomoNativeValidation{}) {
+				t.Fatal("unconfirmed command issued proof", result, err)
+			}
+			entries, err := os.ReadDir(privateTemp)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("native validation left its private home", entries, err)
+			}
+		})
+	}
 }
