@@ -16,6 +16,7 @@ on:
       - 'internal/startuptools/**'
       - 'internal/nativecheckfixture/**'
       - 'scripts/test-managed-probe-native.sh'
+      - 'scripts/test-wireguard-native.sh'
       - 'scripts/native-managed-probe-queue-init.py'
       - 'scripts/test-domain-original-native.sh'
       - 'scripts/check-node-native-performance.sh'
@@ -67,6 +68,25 @@ jobs:
           name: node-native-performance-${{ github.sha }}
           path: artifacts/node-native-performance
           if-no-files-found: error
+  wireguard-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Actual kernel and CLI fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y wireguard-tools iproute2 iptables util-linux
+      - name: Isolated WG candidate, endpoint and network lifecycle
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-wireguard-native.sh
   managed-probe-native:
     runs-on: ubuntu-latest
     timeout-minutes: 15
