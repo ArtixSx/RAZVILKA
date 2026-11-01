@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -431,6 +432,24 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	}
 	if !evidence.Success || !evidence.RouteConfirmed || evidence.HTTPStatus != 200 {
 		t.Fatal("native flow not confirmed", evidence)
+	}
+	// Genuine owner regression: a read receives detached data and its error
+	// survives fresh closing material checks after the physical cleanup.
+	beforeReference, err := source.ManagedReference(original, runtime, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observationFailure := errors.New("native detached observation failed")
+	observeErr := epoch.WithProbeReferenceCurrent(original, source, runtime, control, func(reference strategylab.CandidateProbeReference) error {
+		if len(reference.Material.Arguments) == 0 {
+			t.Fatal("native candidate has no actual arguments")
+		}
+		reference.Material.Arguments[0] = "changed-local-comparison"
+		return observationFailure
+	})
+	afterReference, referenceErr := source.ManagedReference(original, runtime, control)
+	if !errors.Is(observeErr, observationFailure) || errors.Is(observeErr, strategylab.ErrSelectedCandidateChanged) || referenceErr != nil || !reflect.DeepEqual(beforeReference, afterReference) {
+		t.Fatal("reference observation lost errors, freshness or detachment", observeErr, referenceErr)
 	}
 	if err := epoch.Finish(original, &evidence, nil); err != nil {
 		t.Fatal(err)
