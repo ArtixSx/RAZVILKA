@@ -4,11 +4,16 @@ package dataplane
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestDomainTCPStandbyRetainedRequiresReader4AndKeepsRecoveryFence(t *testing.T) {
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "private-original")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	e := executionSyntheticResourceFixture(t)
 	e.State, e.Resources[0].Phase = "resource-failed", "standby-retained"
 	m := New(root)
