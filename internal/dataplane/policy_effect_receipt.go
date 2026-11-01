@@ -590,6 +590,9 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	if err := checkWGOriginalLoadedReceipt(ctx, borrow); err != nil {
 		return err
 	}
+	if err := checkDomainStandbyOriginalLoadedReceipt(ctx, borrow); err != nil {
+		return err
+	}
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {
 		return err
 	}
