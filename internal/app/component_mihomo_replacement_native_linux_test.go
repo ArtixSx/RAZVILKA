@@ -30,12 +30,8 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
-func TestMihomoOriginalNativeHTTPVersionReplacement(t *testing.T) {
-	if os.Getenv("RAZVILKA_MIHOMO_REPLACEMENT_NATIVE") != "1" {
-		t.Skip("official predecessor/current archives and private PID/net/mount namespace required")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+func mihomoReplacementNativeApp(t *testing.T, ctx context.Context) *App {
+	t.Helper()
 	for _, dir := range []string{installpath.Config, installpath.State} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
@@ -102,11 +98,33 @@ func TestMihomoOriginalNativeHTTPVersionReplacement(t *testing.T) {
 	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
 		t.Fatal(err)
 	}
+	return a
+}
+
+func TestMihomoReplacementOriginalMainSetup(t *testing.T) {
+	if os.Getenv("RAZVILKA_MIHOMO_MAIN_SETUP") != "1" {
+		t.Skip("actual ordinary Main fixture setup only")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	mihomoReplacementNativeApp(t, ctx)
+	t.Log("original pinned predecessor and known idle package journal prepared; no ordinary-Main inactivity or update claim")
+}
+
+func TestMihomoOriginalNativeHTTPVersionReplacement(t *testing.T) {
+	if os.Getenv("RAZVILKA_MIHOMO_REPLACEMENT_NATIVE") != "1" {
+		t.Skip("official predecessor/current archives and private PID/net/mount namespace required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	a := mihomoReplacementNativeApp(t, ctx)
+	cm := a.Components
 	const token = "mihomo-real-replacement-http-native-token-123456789"
-	a.Security, err = security.NewGate(token)
+	gate, err := security.NewGate(token)
 	if err != nil {
 		t.Fatal(err)
 	}
+	a.Security = gate
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
 	request := func(method, path string) (int, []byte) {

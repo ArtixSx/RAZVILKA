@@ -22,6 +22,8 @@ on:
       - 'scripts/test-mihomo-cold-native.sh'
       - 'scripts/test-mihomo-inactive-native.sh'
       - 'scripts/test-mihomo-replacement-native.sh'
+      - 'scripts/test-mihomo-main-native.sh'
+      - 'scripts/fixtures/mihomo-release-proxy.py'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -253,3 +255,12 @@ jobs:
             RAZVILKA_MIHOMO_PREDECESSOR_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh scripts/test-mihomo-replacement-native.sh
+      - name: Ordinary Main preserves the pair when platform sources are unavailable
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_MIHOMO_PREDECESSOR_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-mihomo-main-native.sh
