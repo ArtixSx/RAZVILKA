@@ -260,6 +260,21 @@ func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, fil
 			domainTCPMeasure("kernel-observe-success")(0)
 		}
 	}()
+	if r == nil || r.self != r || r.capture == nil {
+		return path, ErrDomainTCPBaselineKernel
+	}
+	// Every command in this comparison is one of the original producer's
+	// closed table/version or four baseline-IP queries. No effects, publication
+	// or native Start may borrow this bracket; all actual kernel reads remain.
+	resultErr = r.capture.observeToolsWithFiles(ctx, files, func(observed context.Context, childFiles *xrayDomainTCPFileObservation) error {
+		var err error
+		path, err = r.observeReadWithFiles(observed, childFiles)
+		return err
+	})
+	return path, resultErr
+}
+
+func (r *domainTCPBaselineKernelOwner) observeReadWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (path domainTCPBaselinePath, resultErr error) {
 	if err := r.sourcesWithFiles(ctx, files); err != nil {
 		return path, err
 	}

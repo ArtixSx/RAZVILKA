@@ -400,7 +400,9 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 				return fmt.Errorf("original Run before publication: %w", err)
 			default:
 			}
-			published = peers.clientRequest(t, original, "dns-wait", "")
+			// Keep this real query's source socket alive while the original
+			// publication admission runs. The absolute window includes peer exec.
+			published = peers.clientRequest(t, original, "dns-wait", deadline.UTC().Format(time.RFC3339Nano))
 			if strings.HasPrefix(published.Answer, "198.") {
 				break
 			}

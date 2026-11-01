@@ -7,7 +7,6 @@ import (
 	"net/netip"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
-	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 // Fixed bounded read ABI on the SAME original held IP source. This is not
@@ -15,7 +14,7 @@ import (
 // dialects remain unsupported by the initial JSON comparison contract.
 func (r *syntheticDNSRunner) ReadDomainTCPBaseline(ctx context.Context, client, real netip.Addr, ingress string) (dataplane.DomainTCPBaselineReadImage, error) {
 	var image dataplane.DomainTCPBaselineReadImage
-	if r == nil || r.lease == nil || ctx == nil || ctx.Err() != nil || !client.Is4() || !client.IsPrivate() || !real.Is4() || !publicfetch.PublicAddress(real) || !syntheticDNSIngress(ingress) {
+	if r == nil || r.lease == nil || ctx == nil || ctx.Err() != nil || !domainBaselineQueryValid(client, real, ingress) {
 		return image, at("DOMAIN_BASELINE_READ", nil)
 	}
 	if _, finite := ctx.Deadline(); !finite {
