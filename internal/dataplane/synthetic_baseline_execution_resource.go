@@ -179,6 +179,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 // An attempt is one-shot. Unknown Start/Wait/ACK/readback never retries Add or
 // deletes a possibly issued alias. COMMON's original receipt remains fenced.
 func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context) error {
+	defer domainTCPMeasure("standby-prepare")(0)
 	if r == nil || r.self != r {
 		return ErrSyntheticBaselineTransition
 	}

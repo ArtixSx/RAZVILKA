@@ -257,6 +257,9 @@ func holdXrayDomainTCPExecutable(ctx context.Context, m *XrayDomainTCPOperationM
 }
 
 func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
+	finishMeasure := domainTCPMeasure("whole-executable-hash")
+	var readBytes int64
+	defer func() { finishMeasure(readBytes) }()
 	if p == nil || p.file == nil || p.info == nil || xraySelectedTCPFinite(ctx) != nil || p.info.Size() <= 0 || p.info.Size() > xrayDomainTCPExecutableLimit {
 		return "", ErrXrayDomainTCPOriginal
 	}
@@ -271,6 +274,7 @@ func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
 		if int64(n) != want || err != nil && err != io.EOF {
 			return "", ErrXrayDomainTCPOriginal
 		}
+		readBytes += int64(n)
 		_, _ = hash.Write(block[:n])
 		offset += int64(n)
 	}

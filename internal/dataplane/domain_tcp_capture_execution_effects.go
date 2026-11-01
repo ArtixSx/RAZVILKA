@@ -129,6 +129,7 @@ func (r *domainTCPCaptureExecutionResource) read(ctx context.Context) (backendIn
 // are retained in COMMON; this producer does not infer deletion authority
 // from an expired lifetime or a matching effects receipt.
 func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baseline *syntheticBaselineExecutionResource) error {
+	defer domainTCPMeasure("capture-prepare")(0)
 	if err := r.local(ctx); err != nil {
 		return err
 	}
@@ -150,7 +151,10 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 		return err
 	}
 	r.started = true
-	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error { return errors.Join(r.current(c), baseline.currentBaseline(c)) },
+	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error {
+		defer domainTCPMeasure("capture-add-guard")(0)
+		return errors.Join(r.current(c), baseline.currentBaseline(c))
+	},
 		Preflight: func(c context.Context) error {
 			view, err := r.read(c)
 			if err != nil {

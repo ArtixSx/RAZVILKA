@@ -250,6 +250,7 @@ func (r *XrayDomainTCPExecutionResource) withNativeInPhase(ctx context.Context, 
 // Current observes the actual original child/listener inside the same finite
 // execution. It is not an active-route, capture or DNS-publication receipt.
 func (r *XrayDomainTCPExecutionResource) Current(ctx context.Context) error {
+	defer domainTCPMeasure("process-current")(0)
 	if r == nil || r.self != r {
 		return ErrXrayDomainTCPOriginal
 	}

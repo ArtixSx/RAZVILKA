@@ -319,6 +319,11 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 				}
 			}()
 		}
+		stopDomainMetrics := dataplane.StartDomainTCPNativeMeasurement()
+		stopToolMetrics := startuptools.StartDomainNativeToolMeasurement()
+		defer func() {
+			t.Logf("actual Run through join observation counts: domain=%+v actual_tool_starts=%+v; overlapping cumulative durations, not wall speed", stopDomainMetrics(), stopToolMetrics())
+		}()
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)
 		go func() { runDone <- owner.Run(runCtx, resource) }()
