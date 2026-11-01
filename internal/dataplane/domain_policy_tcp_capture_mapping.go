@@ -149,13 +149,22 @@ func (c *DomainPolicyTCPCapture) PrepareSyntheticMapping(ctx context.Context, so
 	if err := c.owner.PrepareSyntheticCapture(ctx, c, source); err != nil {
 		return nil, err
 	}
-	if err := source.Current(ctx); err != nil {
-		return nil, err
-	}
-	if err := c.Current(ctx); err != nil {
-		return nil, err
-	}
-	if err := c.owner.CurrentSyntheticCapture(ctx, c, source); err != nil {
+	if err := c.observePreparationClosing(ctx, source, func(observed context.Context, files *xrayDomainTCPFileObservation) error {
+		if err := source.Current(observed); err != nil {
+			return err
+		}
+		if err := c.currentWithFiles(observed, files); err != nil {
+			return err
+		}
+		if files != nil {
+			original, ok := c.owner.(*DomainTCPOriginalScope)
+			if !ok || original == nil {
+				return ErrDomainPolicyTCPConsumer
+			}
+			return original.currentSyntheticCaptureWithFiles(observed, c, source, files)
+		}
+		return c.owner.CurrentSyntheticCapture(observed, c, source)
+	}); err != nil {
 		return nil, err
 	}
 	life, cancel := context.WithCancel(c.ctx)
@@ -183,7 +192,9 @@ func (c *DomainPolicyTCPCapture) PrepareSyntheticMapping(ctx context.Context, so
 	}
 	c.mappings[source] = m
 	c.mu.Unlock()
-	if err := m.Current(ctx); err != nil {
+	if err := c.observePreparationClosing(ctx, source, func(observed context.Context, files *xrayDomainTCPFileObservation) error {
+		return m.currentWithFiles(observed, files)
+	}); err != nil {
 		_ = m.Close()
 		return nil, err
 	}

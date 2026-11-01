@@ -288,6 +288,10 @@ func (p *domainOriginalNativePeers) clientRequest(t *testing.T, ctx context.Cont
 	t.Helper()
 	resultPath := filepath.Join(p.root, fmt.Sprintf("result-%d.json", time.Now().UnixNano()))
 	backstop := "10s"
+	if os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") == "30" && !strings.HasPrefix(mode, "dns") {
+		backstop = "15s"
+		t.Logf("DIAGNOSTIC ONLY actual client=%s request deadline10s; default4s benchmark and original scope/context unchanged", mode)
+	}
 	if mode == "dns-wait" && target != "" {
 		backstop = "40s" // Absolute original12/30s query deadline below remains authoritative.
 	}
@@ -323,6 +327,10 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 	}
 	result := domainOriginalPeerResult{}
 	target := os.Getenv("RAZVILKA_DOMAIN_NATIVE_TARGET")
+	clientBudget := 4 * time.Second
+	if os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") == "30" {
+		clientBudget = 10 * time.Second
+	}
 	if strings.HasPrefix(mode, "dns") {
 		source := domainOriginalClient
 		if mode == "dns-other-client" {
@@ -397,7 +405,7 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer conn.Close()
-		conn.SetDeadline(time.Now().Add(4 * time.Second))
+		conn.SetDeadline(time.Now().Add(clientBudget))
 		if _, err = io.WriteString(conn, "opaque-native-baseline\n"); err != nil {
 			t.Fatal(err)
 		}
@@ -422,7 +430,7 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 			return (&net.Dialer{}).DialContext(ctx, "tcp4", net.JoinHostPort(target, "443"))
 		}}
 		defer transport.CloseIdleConnections()
-		client := http.Client{Transport: transport, Timeout: 4 * time.Second}
+		client := http.Client{Transport: transport, Timeout: clientBudget}
 		request, err := http.NewRequest("GET", "https://"+name+"/", nil)
 		if err != nil {
 			t.Fatal(err)

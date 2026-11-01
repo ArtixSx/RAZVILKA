@@ -252,15 +252,13 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 	}
 	p, baseline := o.process, o.baseline
 	s, m := p.scope, p.scope.manager
-	m.retainedXrayMu.Lock()
-	defer m.retainedXrayMu.Unlock()
-	if m.retainedXray != nil || m.replacementXray != nil {
-		return true, ErrDomainPolicyTCPConsumer
-	}
 	owner := &domainTCPStandbyOwner{original: o, process: p, baseline: baseline}
 	owner.self = owner
 	retained := &retainedXrayExecution{scope: s, records: p.records, standby: owner, pending: true}
 	retained.self = retained
+	if err := m.reservePendingDomainStandby(retained); err != nil {
+		return true, err
+	}
 	// Custody precedes the first changed publication. Any later failed write,
 	// alias handoff or closing proof retains these exact anchors cleanup-only.
 	o.mu.Lock()
@@ -269,7 +267,6 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 	s.mu.Lock()
 	s.retained, s.retainedXrayOwner = true, retained
 	s.mu.Unlock()
-	m.retainedXray = retained
 	s.mu.Lock()
 	if !s.open || s.failure != nil || s.domainTCPOwner != o {
 		s.mu.Unlock()
@@ -302,18 +299,36 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 		return true, err
 	}
 	s.mu.Lock()
-	retained.pending = false
 	s.observationOpen.Store(false)
 	s.cancel() // No forward borrower or callback survives the transfer.
 	s.mu.Unlock()
-	m.retainedXray = retained
 	if err := owner.current(); err != nil {
-		s.mu.Lock()
-		retained.pending = true
-		s.mu.Unlock()
 		return true, err
 	}
+	s.mu.Lock()
+	if !s.retained || s.retainedXrayOwner != retained || m.retainedXrayOwner() != retained {
+		s.mu.Unlock()
+		return true, ErrDomainPolicyTCPConsumer
+	}
+	retained.pending = false
+	s.mu.Unlock()
 	return true, nil
+}
+
+// Reserve cleanup-only custody before the first changed publication. The
+// mutex protects this slot only: writers and original-source callbacks below
+// must be free to take it independently. This cannot issue a known footprint.
+func (m *Manager) reservePendingDomainStandby(retained *retainedXrayExecution) error {
+	if m == nil || retained == nil || retained.self != retained || !retained.pending || retained.scope == nil || retained.scope.manager != m || retained.records == nil || retained.records.scope != retained.scope || retained.standby == nil || retained.standby.self != retained.standby || retained.standby.process == nil || retained.standby.process.self != retained.standby.process || retained.standby.process.scope != retained.scope || retained.standby.process.records != retained.records || retained.standby.original == nil || retained.standby.original.self != retained.standby.original || retained.standby.original.process != retained.standby.process || retained.scope.domainTCPOwner != retained.standby.original {
+		return ErrDomainPolicyTCPConsumer
+	}
+	m.retainedXrayMu.Lock()
+	defer m.retainedXrayMu.Unlock()
+	if m.retainedXray != nil || m.replacementXray != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	m.retainedXray = retained
+	return nil
 }
 
 // Author a separate second record before relinquishing the global latest

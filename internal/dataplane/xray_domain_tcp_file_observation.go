@@ -110,18 +110,17 @@ func (r *XrayDomainTCPExecutionResource) withCurrentFileObservation(ctx context.
 	if use == nil {
 		return ErrXrayDomainTCPOriginal
 	}
-	if err := r.Current(ctx); err != nil {
-		return err
-	}
-	v := r.fileOpeningAfterOriginalRead(ctx).files
-	v.open.Store(true)
-	defer v.open.Store(false)
-	result = use(v)
-	v.open.Store(false)
-	if !v.sameOriginal(ctx, r) {
-		return errors.Join(result, ErrXrayDomainTCPOriginal)
-	}
-	return errors.Join(result, r.Current(ctx), ctx.Err())
+	// Full bytes bracket the entire pure operation. Both original material,
+	// control and actual child/listener comparisons remain inside that same
+	// file view, retaining their independent metadata/config readbacks without
+	// repeating its full SHA. Native/effect admission never accepts this view.
+	return r.withFileObservation(ctx, func(v *xrayDomainTCPFileObservation) error {
+		if err := r.currentWithFiles(ctx, v); err != nil {
+			return err
+		}
+		result := use(v)
+		return errors.Join(result, r.currentWithFiles(ctx, v), ctx.Err())
+	})
 }
 
 func (v *xrayDomainTCPFileObservation) forOriginalProcessRead(parent, child context.Context, r *XrayDomainTCPExecutionResource) (*xrayDomainTCPFileObservation, func(), error) {
