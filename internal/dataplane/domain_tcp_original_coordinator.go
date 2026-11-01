@@ -12,6 +12,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // This object belongs to the SAME finite Manager execution. It initially has
@@ -35,6 +36,9 @@ type DomainTCPOriginalScope struct {
 	kernel          *domainTCPBaselineKernelOwner
 	closed          bool
 	cancel          context.CancelFunc
+	standbyReady    bool // Only the actual joined capture finalizer sets this.
+	standbyHistory  *updatecheck.ExecutionHistoryAdmission
+	standbyOwner    *domainTCPStandbyOwner
 }
 
 func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *SyntheticDNSExecutionBinding, backend *BackendInventory) (*DomainTCPOriginalScope, error) {

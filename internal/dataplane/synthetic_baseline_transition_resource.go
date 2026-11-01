@@ -86,7 +86,7 @@ func validateExecutionSyntheticBaselineResource(execution Execution, resource Ex
 		return ErrExecutionJournal
 	}
 	switch resource.Phase {
-	case "planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed":
+	case "planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed", "standby-retained":
 		if resource.State != "prepared" {
 			return ErrExecutionJournal
 		}

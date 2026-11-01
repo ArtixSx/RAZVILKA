@@ -460,6 +460,17 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if owner := s.retainedXrayOwner; owner != nil && owner.self == owner && owner.scope == s && owner.standby != nil {
+		pending := owner.pending
+		s.observationOpen.Store(false)
+		s.cancel()
+		s.mu.Unlock()
+		err := owner.standby.current() // Original restorative-only custody retains the same anchors.
+		if pending {
+			return errors.Join(ErrPolicyAdditionUnknown, err)
+		}
+		return err
+	}
 	if probe, ok := s.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.open.Load() && probe.resource != nil && probe.resource.scope == s && !probe.finishing.Load() {
 		s.pending = true // Original cleanup only; retain anchored COMMON descriptors.
 		s.cancel()
@@ -604,6 +615,11 @@ func (m *Manager) withExecutionResourcesModeLocked(ctx context.Context, expected
 	scope.domainTCPProof = domainProof
 	defer scope.close() // Revoke callbacks and anchored descriptors on panic too.
 	actionErr := action(scope.context())
+	if domainProof && scope.domainTCPOwner != nil {
+		if requested, handoffErr := scope.domainTCPOwner.finishStandbyHandoff(scope.contextWith(ctx), actionErr); requested {
+			return errors.Join(actionErr, handoffErr, scope.close())
+		}
+	}
 	err = errors.Join(actionErr, m.checkPlanNetwork(ctx, expected), scope.close())
 	execution.Steps[0].State = "passed"
 	if err != nil {

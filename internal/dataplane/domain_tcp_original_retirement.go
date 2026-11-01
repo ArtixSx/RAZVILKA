@@ -55,6 +55,9 @@ func (o *DomainTCPOriginalScope) finishCapture(ctx context.Context, process *Xra
 		}
 	}
 	if baseline != nil {
+		o.mu.Lock()
+		o.standbyReady = true
+		o.mu.Unlock()
 		// Exact restorative DNAT remains owned and documented. Empty CT dumps
 		// and TTL alone do not issue the missing client/late-SYN settlement.
 		return dnscontrol.ErrSyntheticDNSTransitionPending

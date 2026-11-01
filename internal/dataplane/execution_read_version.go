@@ -19,7 +19,9 @@ import (
 // Separate from StrategyLab, package journals and snapshot readers. Version2
 // understands original domain capture/socket-bound NFQUEUE records; version3
 // additionally understands original accepted-FD transparent baseline flows.
-const ExecutionReadVersion = 3
+// Version4 also reads retained restorative standby and scoped Mihomo intent;
+// interpreting these records never grants adoption, launch or cleanup.
+const ExecutionReadVersion = 4
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -136,7 +138,13 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 				required = max(required, 2)
 			}
 			if resource.DomainTCPBaseline != nil {
-				required = 3
+				required = max(required, 3)
+			}
+			if resource.SyntheticBaseline != nil && resource.Phase == "standby-retained" {
+				required = 4
+			}
+			if resource.MihomoProbe != nil {
+				required = 4
 			}
 		}
 		sum := sha256.Sum256(data)

@@ -15,7 +15,7 @@ import (
 
 var ErrExecutionHistoryAdmission = errors.New("retained dataplane execution reader requires review")
 
-const ExecutionHistoryReadVersion = 3
+const ExecutionHistoryReadVersion = 4
 
 type ExecutionHistoryReader func(context.Context, string) (int, string, error)
 

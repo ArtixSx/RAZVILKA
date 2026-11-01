@@ -20,6 +20,7 @@ type retainedXrayExecution struct {
 	records   *xraySelectedTCPExecutionRecords
 	pending   bool
 	join      func(context.Context) error
+	standby   *domainTCPStandbyOwner // Static restorative footprint; never a selected process.
 }
 
 type xrayRetainedOperation struct {

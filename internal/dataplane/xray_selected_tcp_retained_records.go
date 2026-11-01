@@ -27,6 +27,7 @@ type xraySelectedTCPExecutionRecords struct {
 	images            [2][]byte
 	closed            bool
 	replacement       atomic.Pointer[xraySelectedTCPReplacement]
+	standbyAlias      atomic.Bool
 }
 
 // Private sink called by CORE's actual two journal writers. Caller holds the
@@ -62,6 +63,9 @@ func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, f
 func (d *xraySelectedTCPExecutionRecords) recordPath(index int) (*ownedfs.Root, string) {
 	if index == 0 {
 		return d.transactionRoot, "execution.json"
+	}
+	if d.standbyAlias.Load() {
+		return d.transactionRoot, "standby-execution.json"
 	}
 	if p := d.replacement.Load(); p != nil && p.self == p && p.prior != nil && p.prior.records == d && p.priorAlias.Load() {
 		return d.transactionRoot, "replacement-execution.json"

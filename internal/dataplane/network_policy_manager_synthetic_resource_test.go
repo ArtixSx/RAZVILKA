@@ -75,7 +75,7 @@ func TestNetworkPolicyManagerSyntheticResourceJSONAndDeepClone(t *testing.T) {
 }
 
 func TestNetworkPolicyManagerSyntheticResourcePhasesKeepTerminalFence(t *testing.T) {
-	for _, phase := range []string{"planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed"} {
+	for _, phase := range []string{"planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed", "standby-retained"} {
 		execution := executionSyntheticResourceFixture(t)
 		execution.Resources[0].Phase = phase
 		if err := validateExecutionResources(execution, false); err != nil {

@@ -28,6 +28,7 @@ type ExecutionResource struct {
 	XrayDomainTCP     *ExecutionXrayDomainTCPDefinition     `json:"xray_domain_tcp,omitempty"`
 	DomainTCPCapture  *ExecutionDomainTCPCaptureDefinition  `json:"domain_tcp_capture,omitempty"`
 	DomainTCPBaseline *ExecutionDomainTCPBaselineDefinition `json:"domain_tcp_baseline,omitempty"`
+	MihomoProbe       *ExecutionMihomoProbeDefinition       `json:"mihomo_probe,omitempty"`
 }
 
 // ExecutionNFQWSDefinition retains full typed compiler input, never argv or
@@ -43,6 +44,10 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		if result[i].MihomoProbe != nil {
+			d := result[i].MihomoProbe.Clone()
+			result[i].MihomoProbe = &d
+		}
 		if result[i].DomainTCPBaseline != nil {
 			d := result[i].DomainTCPBaseline.Clone()
 			result[i].DomainTCPBaseline = &d
@@ -111,11 +116,16 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			prefix = "dc-"
 		} else if resource.Kind == "domain-tcp-baseline-flow" {
 			prefix = "bf-"
+		} else if resource.Kind == "mihomo-probe" {
+			prefix = "mp-"
 		}
 		if (len(resource.ID) != len(prefix)+16 && len(resource.ID) != len(prefix)+32) || !strings.HasPrefix(resource.ID, prefix) || strings.Trim(strings.TrimPrefix(resource.ID, prefix), "0123456789abcdef") != "" || seen[resource.ID] {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.MihomoProbe != nil && resource.Kind != "mihomo-probe" {
+			return ErrExecutionJournal
+		}
 		if resource.DomainTCPBaseline != nil && resource.Kind != "domain-tcp-baseline-flow" {
 			return ErrExecutionJournal
 		}
@@ -132,6 +142,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		switch resource.Kind {
+		case "mihomo-probe":
+			if err := validateMihomoProbeExecutionResource(execution, resource, terminal); err != nil {
+				return err
+			}
 		case "domain-tcp-baseline-flow":
 			if err := validateDomainTCPBaselineExecutionResource(execution, resource, terminal); err != nil {
 				return err
