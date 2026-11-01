@@ -36,6 +36,7 @@ type ManagedNFQWSListRuntime struct {
 	checks          *dataplane.NetworkPolicyChecks
 	control         *operationgate.ControlEpochReview
 	probe           *dataplane.ManagedNFQWSProbeConsumer
+	physicalSource  managedNFQListPhysicalSource // nil selects the production stock constructors.
 	active, stopped *managedNFQWSListExecution
 	pending         *managedNFQWSListExecution
 	closed          bool
@@ -646,7 +647,7 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 }
 
 func (r *ManagedNFQWSListRuntime) original() bool {
-	return r != nil && r.self == r && r.app != nil && r.app.Dataplane == r.manager && r.app.Store != nil && r.manager != nil && r.panel != nil && r.provider != nil && r.tools != nil && r.inventory != nil && r.gate != nil && r.checks != nil && r.control != nil
+	return r != nil && r.self == r && r.app != nil && r.app.Dataplane == r.manager && r.app.Store != nil && r.manager != nil && r.panel != nil && r.provider != nil && r.tools != nil && r.inventory != nil && r.gate != nil && r.checks != nil && r.control != nil && (r.physicalSource == nil || r.physicalSource.original(r))
 }
 
 func (a *App) managedNFQListPending() bool {

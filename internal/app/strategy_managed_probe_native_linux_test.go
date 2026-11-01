@@ -35,6 +35,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/startuptools"
@@ -112,6 +113,7 @@ func TestManagedStrategyProbeNativeClosingEnvironment(t *testing.T) {
 }
 
 func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool, revoke ...string) {
+	lan := appHTTP && len(revoke) == 1 && revoke[0] == "lan"
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
@@ -120,7 +122,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	if os.Geteuid() != 0 || err != nil || e != nil || ns == initial {
 		t.Fatal("ROOT non-init network namespace required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	fixtureBudget := 90 * time.Second
+	if lan {
+		fixtureBudget = 3 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fixtureBudget)
 	defer cancel()
 	command := func(args ...string) {
 		t.Helper()
@@ -138,8 +144,12 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Fatal("refusing namespace with preexisting interface", line)
 		}
 	}
-	command("link", "set", "lo", "up")
-	command("addr", "add", "8.8.8.8/32", "dev", "lo")
+	if lan {
+		setupManagedProbeNativeLAN(t, ctx)
+	} else {
+		command("link", "set", "lo", "up")
+		command("addr", "add", "8.8.8.8/32", "dev", "lo")
+	}
 	// The real installer publishes immutable public-traversable generations.
 	// Keep them below a new protected /var/lib leaf, since production source
 	// guards deliberately refuse public payload directories below sticky /tmp.
@@ -151,9 +161,18 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	serveManagedProbeNativeTLS(t, root)
+	if lan {
+		serveManagedProbeNativeTLS(t, root, managedProbeNativeWANListener)
+	} else {
+		serveManagedProbeNativeTLS(t, root)
+	}
 	provider := netidentity.NewProcProvider()
-	tools, err := startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	var tools *startuptools.Lease
+	if lan {
+		tools, err = startuptools.AcquireNativeFixtureManagedListPolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	} else {
+		tools, err = startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	}
 	if err != nil {
 		managedProbeNativeErrorChain(t, err, 0)
 		t.Fatal("actual protected tool closure", err)
@@ -203,7 +222,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	}
 	// A real persisted draft revision, never an invented transaction number.
 	// The kernel plan protocol deliberately rejects unversioned revision zero.
-	if err := store.UpdateService("native", config.ServiceState{Route: "direct"}); err != nil {
+	initialService := config.ServiceState{Route: "direct"}
+	if lan {
+		initialService = config.ServiceState{Enabled: true, Route: "nfqws2"}
+	}
+	if err := store.UpdateService("native", initialService); err != nil {
 		t.Fatal(err)
 	}
 	lab, err := strategylab.New(filepath.Join(root, "strategy-lab.json"))
@@ -226,6 +249,9 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		t.Fatal(err)
 	}
 	defer control.Close()
+	if lan {
+		approveManagedProbeNativeLAN(t, original, a, control)
+	}
 	if err := lab.InitializeManagedCompatibilitySource(original, control); err != nil {
 		t.Fatal(err)
 	}
@@ -302,6 +328,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	if err := manager.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
+	if lan {
+		configs := engineconfig.New(filepath.Join(root, "engine-stage"), filepath.Join(root, "engine-backup"))
+		for _, other := range []dataplane.Adapter{dataplane.NewWireGuardAdapter(configs, manager.StateRoot), dataplane.NewAmneziaWGAdapter(configs, manager.StateRoot)} {
+			if err := manager.Register(other); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	policyTools, runner, err := tools.PolicyRuntimeTools()
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +357,18 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	denyEffect := func(context.Context, *dataplane.LANPolicyRuntimePlan, dataplane.LANPolicyEffect) error {
 		return dataplane.ErrNFQWSScopedOwner
 	}
-	gate, err := dataplane.NewNetworkPolicyAdapter(original, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyManagedListMode, Provider: provider, Binding: &dataplane.LANPolicyReceiptBinding{Runtime: &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: current}, ApplyGuard: denyEffect, CleanupGuard: denyEffect, RetireCheck: current}, InventoryCheck: func(c context.Context, id netidentity.Identity, p *dataplane.LANPolicyRuntimePlan) error {
+	lanRuntime := &dataplane.LANPolicyRuntime{Runner: runner, IP: policyTools.IP, IPTables: policyTools.IPTables, IP6Tables: policyTools.IP6Tables, ScopeCheck: current}
+	binding := &dataplane.LANPolicyReceiptBinding{Runtime: lanRuntime, ApplyGuard: denyEffect, CleanupGuard: denyEffect, RetireCheck: current}
+	if lan {
+		configureManagedProbeNativeLANBinding(lanRuntime, binding, func() *managedListPolicyOwner { return appPolicy })
+	}
+	gate, err := dataplane.NewNetworkPolicyAdapter(original, dataplane.NetworkPolicyAssemblyOptions{Mode: dataplane.LANPolicyManagedListMode, Provider: provider, Binding: binding, InventoryCheck: func(c context.Context, id netidentity.Identity, p *dataplane.LANPolicyRuntimePlan) error {
+		if lan {
+			if appPolicy == nil || appPolicy.checks == nil {
+				return dataplane.ErrNetworkPolicyConsumers
+			}
+			return appPolicy.checks.InventoryCheck(c, id, p)
+		}
 		if id != identity {
 			return dataplane.ErrNetworkPolicyIdentity
 		}
@@ -353,6 +398,10 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		}
 	}
 	service := catalog.Service{ID: "native", Name: "Native isolated TLS", Domains: []string{"managed-probe.example"}, ProbeURL: "https://managed-probe.example/", Probes: []catalog.Probe{{ID: "primary", URL: "https://managed-probe.example/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"owned-native-service"}}}}}
+	if lan {
+		service.Domains = nil
+		service.CIDRs = []string{"8.8.8.8/32"}
+	}
 	a.Catalog = catalog.Catalog{Services: []catalog.Service{service}}
 	if appHTTP {
 		checks, err := manager.BindNetworkPolicyChecks(gate, inventory)
@@ -360,16 +409,41 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Fatal("bind actual registered policy checks", err)
 		}
 		defer checks.Close()
+		var wgSources map[string]*dataplane.WGInactivityRead
+		if lan {
+			wgSources = map[string]*dataplane.WGInactivityRead{}
+			for _, engine := range []string{"wireguard", "amneziawg"} {
+				source, err := tools.ReviewWGInactivity(original, manager, control, engine)
+				if err != nil {
+					t.Fatal("actual managed-list WG inactivity source", engine, err)
+				}
+				defer source.Close()
+				wgSources[engine] = source
+			}
+			if err := checks.BindManagedWGInactivitySources(original, wgSources); err != nil {
+				t.Fatal("actual both WG inactivity binding", err)
+			}
+		}
 		// CI-only platform classification factory. Every retained owner below
 		// is the SAME actual protected tool/provider/control/registered consumer.
-		appPolicy = &managedListPolicyOwner{app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control}
+		appPolicy = &managedListPolicyOwner{app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control, wgInactivity: wgSources}
 		appPolicy.self = appPolicy
 		a.managedListPolicy = appPolicy
 		r := &ManagedNFQWSListRuntime{policy: appPolicy, app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control, probe: consumer}
 		r.self = r
 		appPolicy.nfq, a.managedNFQList = r, r
+		if lan {
+			if err := installNativeFixtureNFQListPhysicalSource(r); err != nil {
+				t.Fatal(err)
+			}
+		}
 		release() // Each actual HTTP request must obtain its own new admission.
-		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty)
+		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
+		defer stopHTTPProfile()
+		defer func() {
+			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
+		}()
+		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan)
 		return
 	}
 	criteria, err := strategylab.ManagedProbeCriteriaDigest(service)
@@ -604,7 +678,7 @@ func managedProbeNativeErrorChain(t *testing.T, err error, depth int) {
 	}
 }
 
-func serveManagedProbeNativeTLS(t *testing.T, root string) {
+func serveManagedProbeNativeTLS(t *testing.T, root string, listen ...func() (net.Listener, error)) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -626,7 +700,12 @@ func serveManagedProbeNativeTLS(t *testing.T, root string) {
 		t.Fatal(err)
 	}
 	t.Setenv("SSL_CERT_FILE", path)
-	listener, err := net.Listen("tcp4", "8.8.8.8:443")
+	var listener net.Listener
+	if len(listen) == 0 {
+		listener, err = net.Listen("tcp4", "8.8.8.8:443")
+	} else {
+		listener, err = listen[0]()
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

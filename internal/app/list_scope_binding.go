@@ -44,6 +44,7 @@ type ListScopeBinding struct {
 	closePhysical              func() error
 	originalPhysicalObserver   *physicalscope.Observer
 	originalPhysicalReview     *physicalscope.Review
+	homeSegmentID              string // Empty for the production stock source.
 	bound                      *dataplane.LANPolicyRuntimePlan
 	boundOnce, invalid, closed bool
 	closeErr                   error
@@ -86,6 +87,10 @@ func NewReviewedStockNC1812ListScopeBinding(ctx context.Context, a *App, provide
 // acquire is a private source-level test seam. Production always constructs
 // the concrete stock Observer/Review above; tests explicitly model physics.
 func newListScopeBinding(ctx context.Context, a *App, acquire func(context.Context, physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error)) (*ListScopeBinding, error) {
+	return newListScopeBindingForIdentity(ctx, a, acquire, netidentity.ReviewedSingleInitNet, "")
+}
+
+func newListScopeBindingForIdentity(ctx context.Context, a *App, acquire func(context.Context, physicalscope.SelectionReader) (func(context.Context) error, func() physicalscope.Snapshot, func() error, error), kind netidentity.Kind, home string) (*ListScopeBinding, error) {
 	c, cancel, err := listScopeContext(ctx)
 	if err != nil {
 		return nil, err
@@ -94,7 +99,7 @@ func newListScopeBinding(ctx context.Context, a *App, acquire func(context.Conte
 	if a == nil || a.Store == nil || acquire == nil {
 		return nil, ErrListScopeChanged
 	}
-	b := &ListScopeBinding{app: a, store: a.Store, network: a.FreshProfile}
+	b := &ListScopeBinding{app: a, store: a.Store, network: a.FreshProfile, homeSegmentID: home}
 	b.self = b
 	if b.network == nil {
 		b.network = func(c context.Context) (string, error) { p, err := systemprobe.FreshWANProfile(c); return p.ID, err }
@@ -129,7 +134,7 @@ func newListScopeBinding(ctx context.Context, a *App, acquire func(context.Conte
 			return errors.Join(ErrListScopeChanged, err)
 		}
 		b.facts = b.physicalSnapshot()
-		if b.facts.ReviewID == "" || b.facts.Identity.Validate() != nil || b.facts.Identity.Kind != netidentity.ReviewedSingleInitNet {
+		if b.facts.ReviewID == "" || b.facts.Identity.Validate() != nil || b.facts.Identity.Kind != kind {
 			return ErrListScopeChanged
 		}
 		if _, err := b.compilerScope(time.Now().UTC()); err != nil {
@@ -173,6 +178,12 @@ func (b *ListScopeBinding) selection(ctx context.Context) (physicalscope.Selecti
 	}
 	s := physicalscope.Selection{Revision: cfg.DefaultRouteConsent.ApprovalRevision, PolicyRevision: cfg.NetworkPolicy.Revision, SegmentIDs: slices.Clone(cfg.NetworkPolicy.Clients.SegmentIDs)}
 	slices.Sort(s.SegmentIDs)
+	if b.homeSegmentID != "" {
+		if len(s.SegmentIDs) != 1 || s.SegmentIDs[0] != b.homeSegmentID {
+			return physicalscope.Selection{}, ErrListScopeChanged
+		}
+		s.SegmentIDs, s.HomeSegmentID = nil, b.homeSegmentID
+	}
 	if clients := cfg.NetworkPolicy.Clients; clients.Mode == "selected_devices" && clients.NewDevices == "base" {
 		s.SelectedDevices = &physicalscope.SelectedDeviceProjection{DeviceIDs: slices.Clone(clients.DeviceIDs), ExcludedDeviceIDs: slices.Clone(clients.ExcludedDeviceIDs)}
 		slices.Sort(s.SelectedDevices.DeviceIDs)
@@ -269,9 +280,16 @@ func (b *ListScopeBinding) Observe(ctx context.Context) (DefaultRouteSnapshot, e
 func (b *ListScopeBinding) compilerScope(now time.Time) (DefaultRouteSnapshot, error) {
 	s := DefaultRouteSnapshot{Authority: b.reference, DNSMode: "baseline", Scope: autonomy.ScopeObservation{BootID: b.facts.Identity.BootID, NetworkID: b.networkID, Revision: b.facts.Selection.Revision, ObservedAt: now, FreshUntil: now.Add(time.Minute)}}
 	aliases := map[string]string{}
+	selectedIDs := b.facts.Selection.SegmentIDs
+	if b.homeSegmentID != "" {
+		if b.facts.Selection.HomeSegmentID != b.homeSegmentID || len(selectedIDs) != 0 || len(b.facts.Selection.GuestSegmentIDs) != 0 {
+			return DefaultRouteSnapshot{}, ErrListScopeChanged
+		}
+		selectedIDs = []string{b.homeSegmentID}
+	}
 	for _, segment := range b.facts.Segments {
 		id := ""
-		for _, selected := range b.facts.Selection.SegmentIDs {
+		for _, selected := range selectedIDs {
 			if selected == segment.ID || selected == segment.NativeName {
 				if id != "" {
 					return DefaultRouteSnapshot{}, ErrListScopeChanged
@@ -299,7 +317,7 @@ func (b *ListScopeBinding) compilerScope(now time.Time) (DefaultRouteSnapshot, e
 			s.GuestSegmentIDs = append(s.GuestSegmentIDs, id)
 		}
 	}
-	if len(aliases) != len(b.facts.Selection.SegmentIDs) {
+	if len(aliases) != len(selectedIDs) {
 		return DefaultRouteSnapshot{}, ErrListScopeChanged
 	}
 	for _, device := range b.facts.Devices {

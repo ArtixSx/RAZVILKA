@@ -107,7 +107,13 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-for probe_case in TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment; do
+probe_cases='TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_timeout=100s
+if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
+  probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP'
+  probe_timeout=240s
+fi
+for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
 if test "$probe_case" = TestClassicReadBatchNativeMutation; then probe_program="$probe_work/startuptools.test"; fi
@@ -135,7 +141,7 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
-' sh "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s || probe_status=$?
+' sh "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout="$probe_timeout" || probe_status=$?
 # Analyze outside the private /opt mount; retain the original native failure.
 if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then

@@ -16,6 +16,7 @@ on:
       - 'internal/startuptools/**'
       - 'internal/nativecheckfixture/**'
       - 'scripts/test-managed-probe-native.sh'
+      - 'scripts/test-managed-probe-lan-native.sh'
       - 'scripts/test-wireguard-native.sh'
       - 'scripts/native-managed-probe-queue-init.py'
       - 'scripts/test-domain-original-native.sh'
@@ -90,8 +91,13 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh scripts/test-wireguard-native.sh
   managed-probe-native:
+    name: managed-probe-native (${{ matrix.build-mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -101,11 +107,18 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Disposable native NFQUEUE fixture dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
         shell: bash
         run: |
-          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" sh scripts/test-managed-probe-native.sh
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh
+      - name: Actual App LAN apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh
   strategy-pair:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -75,15 +75,23 @@ func AcquireNativeFixturePolicyWithOuterNetFD(ctx context.Context, provider *net
 }
 
 func acquireNativeFixturePolicy(ctx context.Context, provider *netidentity.Provider, reviewPath string) (*Lease, error) {
+	p, err := nativeFixturePolicyProfile(reviewPath)
+	if err != nil {
+		return nil, err
+	}
+	return acquire(ctx, provider, p)
+}
+
+func nativeFixturePolicyProfile(reviewPath string) (profile, error) {
 	data, err := os.ReadFile(reviewPath)
 	if err != nil || len(data) > 4096 {
-		return nil, ErrUnknown
+		return profile{}, ErrUnknown
 	}
 	var review struct{ XTablesSHA256, IPToolSHA256, Version, IPVersion string }
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields()
 	if d.Decode(&review) != nil || d.Decode(new(any)) != io.EOF || len(review.XTablesSHA256) != 64 || strings.Trim(review.XTablesSHA256, "0123456789abcdef") != "" || len(review.IPToolSHA256) != 64 || strings.Trim(review.IPToolSHA256, "0123456789abcdef") != "" || !strings.HasPrefix(review.Version, "1.8.") || !strings.HasSuffix(review.Version, " (legacy)") || len(review.Version) > 64 || len(review.IPVersion) > 256 || !strings.HasPrefix(review.IPVersion, "ip utility, iproute2-") {
-		return nil, ErrUnknown
+		return profile{}, ErrUnknown
 	}
 	p := ubuntuPolicyProfile()
 	p.id = "ci-only-native-platform-classification-modeled"
@@ -91,5 +99,5 @@ func acquireNativeFixturePolicy(ctx context.Context, provider *netidentity.Provi
 	p.ipSHA = review.IPToolSHA256
 	p.version = review.Version
 	p.ipVersion = review.IPVersion
-	return acquire(ctx, provider, p)
+	return p, nil
 }

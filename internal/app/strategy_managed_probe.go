@@ -105,11 +105,13 @@ func writeManagedStrategyProbeError(w http.ResponseWriter, recovery bool) {
 func (a *App) probeManagedStrategyCandidate(w http.ResponseWriter, parent context.Context, id string, service catalog.Service, family string) {
 	r := a.managedStrategyProbeRuntime()
 	if r == nil {
+		logManagedNFQRuntimeFailure("strategy-probe-owner", dataplane.ErrNFQWSScopedOwner)
 		writeManagedStrategyProbeError(w, false)
 		return
 	}
 	ctx, release, err := a.privateExclusiveOperation(parent)
 	if err != nil {
+		logManagedNFQRuntimeFailure("strategy-probe-admission", err)
 		a.writeOperationFailure(w, err)
 		return
 	}
@@ -149,36 +151,46 @@ func (a *App) probeManagedStrategyCandidate(w http.ResponseWriter, parent contex
 	}()
 	// Run the complete fleet reader review before taking a component leaf
 	// lease. The actual exclusive operation prevents an updater racing it.
-	if a.ExecutionHistory.CheckWrite(ctx, 2) != nil {
+	if err := a.ExecutionHistory.CheckWrite(ctx, 2); err != nil {
+		logManagedNFQRuntimeFailure("strategy-probe-execution-reader", err)
 		writeManagedStrategyProbeError(w, false)
 		return
 	}
 	scope, err := managedStrategyProbeScope(ctx, service, family)
 	if err != nil {
+		logManagedNFQRuntimeFailure("strategy-probe-scope", err)
 		writeManagedStrategyProbeError(w, false)
 		return
 	}
 	lease, err := a.Components.AcquireCurrentManagedNFQWSRuntime(ctx)
 	if err != nil {
+		logManagedNFQRuntimeFailure("strategy-probe-component", err)
 		writeManagedStrategyProbeError(w, false)
 		return
 	}
 	held.lease = lease
+	phase := "strategy-probe-source"
 	source, err := a.StrategyLab.RetainCandidateProbeReview(ctx, id, scope, lease)
 	if err == nil {
 		held.source = source
+		phase = "strategy-probe-environment"
 		held.environment, err = newManagedStrategyProbeEnvironment(ctx, a, r.control, lease, service, scope)
 	}
 	if err == nil {
+		phase = "strategy-probe-begin"
 		held.epoch, err = a.StrategyLab.BeginManagedProbe(ctx, source, held.environment, held.environment.networkID, held.environment.policyHash)
 	}
 	var evidence strategylab.Evidence
 	if err == nil {
+		phase = "strategy-probe-execute"
 		probeCtx, cancel := context.WithTimeout(ctx, 14*time.Second)
 		probeCtx = startuptools.WithCommandAdmission(probeCtx, r)
 		held.entered = true
 		evidence, held.completion, err = r.probe.Execute(probeCtx, source, held.epoch, lease, service, held.environment.expected.Revision, held.environment.Current)
 		cancel()
+	}
+	if err != nil {
+		logManagedNFQRuntimeFailure(phase, err)
 	}
 	if held.entered && held.completion == nil {
 		_ = held.epoch.Finish(ctx, nil, errors.Join(dataplane.ErrNFQWSManagedProcessUnknown, err))
@@ -189,10 +201,15 @@ func (a *App) probeManagedStrategyCandidate(w http.ResponseWriter, parent contex
 	}
 	if held.epoch != nil {
 		observed := managedStrategyProbeObservation(id, evidence, err)
-		err = errors.Join(err, held.epoch.Finish(ctx, observed, nil))
+		finishErr := held.epoch.Finish(ctx, observed, nil)
+		if finishErr != nil {
+			logManagedNFQRuntimeFailure("strategy-probe-finish", finishErr)
+		}
+		err = errors.Join(err, finishErr)
 	}
 	cleanupErr := held.closeKnownRuntime()
 	if cleanupErr != nil {
+		logManagedNFQRuntimeFailure("strategy-probe-retirement", cleanupErr)
 		a.Operations.FenceJournal()
 		retain = true
 		writeManagedStrategyProbeError(w, true)
