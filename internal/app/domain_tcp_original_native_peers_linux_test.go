@@ -65,6 +65,17 @@ func domainOriginalPeers(t *testing.T, ctx context.Context) *domainOriginalNativ
 	if !filepath.IsAbs(binary) {
 		t.Fatal("pinned official Xray required")
 	}
+	// Upstream v26.10.31 transport/internet/tls/{config_other.go,config.go}
+	// defaults to its bundled CA pool unless useSystemCa is configured. This
+	// exact local-CA fixture uses reviewed26.3.27, keeping the production
+	// compiler, closed native environment and certificate verification intact:
+	// https://github.com/XTLS/Xray-core/blob/v26.10.31/transport/internet/tls/config_other.go
+	versionCtx, versionCancel := context.WithTimeout(ctx, 3*time.Second)
+	version, versionErr := exec.CommandContext(versionCtx, binary, "version").Output()
+	versionCancel()
+	if versionErr != nil || !strings.HasPrefix(string(version), "Xray 26.3.27 ") || filepath.Base(binary) != "xray" {
+		t.Fatal("local verified-CA workflow requires pinned reviewed Xray26.3.27 named xray")
+	}
 	p := &domainOriginalNativePeers{root: t.TempDir(), binary: binary}
 	var nonce [5]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
