@@ -72,6 +72,9 @@ export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
 go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
 chmod 500 "$probe_work/app.test"
+# Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
+# private /opt mount; this diagnostic compiler work is not a probe budget.
+timeout 50s go tool pprof -h >/dev/null 2>&1
 python3 - <<'PY'
 import os, pathlib
 program = pathlib.Path(os.environ['RAZVILKA_MANAGED_PROBE_FIXTURE_WORK']) / 'app.test'
@@ -114,7 +117,7 @@ unshare --mount --net sh -c '
 ' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s || probe_status=$?
 # Analyze outside the private /opt mount; retain the original native failure.
 if test -f "$probe_work/$probe_case.pprof"; then
-  if ! timeout 10s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+  if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi
