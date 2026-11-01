@@ -287,10 +287,17 @@ func (r *syntheticBaselineExecutionResource) prepareCapture(ctx context.Context)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.currentBaseline(ctx); err != nil {
-		return nil, err
-	}
-	if err := prepared.Current(ctx); err != nil {
+	// PrepareSyntheticMapping has returned from its actual capture effects.
+	// Only the following closing observations borrow the original sources;
+	// phase persistence below remains outside this readonly bracket.
+	if err := r.observeTools(ctx, func(observed context.Context) error {
+		return r.observeOriginalFiles(observed, func(files *xrayDomainTCPFileObservation) error {
+			if err := r.currentBaselineWithFiles(observed, files); err != nil {
+				return err
+			}
+			return prepared.currentWithFiles(observed, files)
+		})
+	}); err != nil {
 		return nil, err
 	}
 	if err := r.binding.scope.recordSyntheticBaselinePhase(ctx, r, "capture-ready"); err != nil {

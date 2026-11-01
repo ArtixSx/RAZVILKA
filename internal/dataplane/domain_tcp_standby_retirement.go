@@ -315,7 +315,7 @@ func (r *domainTCPStandbyRetirement) publishRemoved(ctx context.Context, retaine
 		return r.closeErr
 	}
 	if r.publicationDone {
-		return r.closeOriginalCustody(retained)
+		return r.closeOriginalCustody(ctx, retained)
 	}
 	s.mu.Lock()
 	if r.before == nil {
@@ -410,12 +410,15 @@ func (r *domainTCPStandbyRetirement) publishRemoved(ctx context.Context, retaine
 		return err
 	}
 	r.publicationDone = true
-	return r.closeOriginalCustody(retained)
+	return r.closeOriginalCustody(ctx, retained)
 }
 
-func (r *domainTCPStandbyRetirement) closeOriginalCustody(retained *retainedXrayExecution) error {
+func (r *domainTCPStandbyRetirement) closeOriginalCustody(ctx context.Context, retained *retainedXrayExecution) error {
 	o, s := r.owner, r.owner.process.scope
 	p := o.process
+	if err := r.retireDNSOwnerRecord(ctx); err != nil {
+		return err
+	}
 	closers := []func() error{
 		func() error {
 			if p.log != nil {
@@ -463,6 +466,9 @@ func (r *domainTCPStandbyRetirement) closeOriginalCustody(retained *retainedXray
 	if m.retainedXray != retained {
 		return ErrPolicyAdditionUnknown
 	}
+	if err := r.retireDNSRegistry(ctx); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	s.open = false
 	s.retained = false
@@ -476,5 +482,62 @@ func (r *domainTCPStandbyRetirement) closeOriginalCustody(retained *retainedXray
 	o.original.standbyOwner = nil
 	r.finished = true
 	o.original.mu.Unlock()
+	return nil
+}
+
+func (r *domainTCPStandbyRetirement) originalDNSMode() (*ScopedDNSAdapter, *scopedDNSSession, *scopedDNSSyntheticMode, error) {
+	if r == nil || r.self != r || !r.cleaned || !r.publicationDone || r.owner == nil || r.owner.process == nil || r.owner.original == nil {
+		return nil, nil, nil, ErrDomainPolicyTCPConsumer
+	}
+	p := r.owner.process
+	m := p.material
+	if m == nil || m.binding == nil || m.binding.self != m.binding || m.binding.adapter == nil || m.session == nil || m.session.synthetic == nil {
+		return nil, nil, nil, ErrDomainPolicyTCPConsumer
+	}
+	a, s := m.binding.adapter, m.session
+	mode := s.synthetic
+	if mode.binding != m.binding || mode.control != m.control || mode.source != m.dnsSource || mode.ownerRecord == nil || mode.ownerRecord.self != mode.ownerRecord || mode.ownerRecord.path != a.StateRoot || m.binding.root != a.StateRoot {
+		return nil, nil, nil, ErrDomainPolicyTCPConsumer
+	}
+	return a, s, mode, nil
+}
+func (r *domainTCPStandbyRetirement) retireDNSOwnerRecord(ctx context.Context) error {
+	a, s, mode, err := r.originalDNSMode()
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.live != s || s.inactiveJoined() != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	// The finalizer already proved this exact joined final ledger never sent.
+	// No public/cold record can enter this private original close cursor.
+	return mode.ownerRecord.retire(ctx)
+}
+func (r *domainTCPStandbyRetirement) retireDNSRegistry(ctx context.Context) error {
+	a, s, mode, err := r.originalDNSMode()
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.live != s || mode.ownerRecord.closeErr != nil {
+		return errors.Join(ErrDomainPolicyTCPConsumer, mode.ownerRecord.closeErr)
+	}
+	// Keep the LAST original file/root descriptors until every other close
+	// completed. Both names and canonical bytes are checked afresh on every
+	// retry and immediately before these final closes and registry publication.
+	if err := mode.ownerRecord.retire(ctx); err != nil {
+		return err
+	}
+	if err := mode.ownerRecord.close(); err != nil {
+		r.closeErr = errors.Join(ErrPolicyAdditionUnknown, err)
+		return r.closeErr
+	}
+	if err := scopedDNSInactiveRetire(a.StateRoot, s); err != nil {
+		return err
+	}
+	a.live = nil
 	return nil
 }
