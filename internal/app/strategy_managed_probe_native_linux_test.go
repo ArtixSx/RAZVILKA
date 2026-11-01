@@ -148,6 +148,8 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var toolMeasurements managedProbeNativeToolMeasurements
+	descriptor.Check = toolMeasurements.wrap(descriptor.Check)
 	inventory, err := dataplane.NewBackendInventory(provider, descriptor)
 	if err != nil {
 		t.Fatal(err)
@@ -384,8 +386,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	}
 	stopStackDiagnostic := managedProbeNativeStackDeadline(t)
 	defer stopStackDiagnostic()
+	stopCPUProfile := managedProbeNativeCPUProfile(t, root)
+	defer stopCPUProfile()
+	toolCalls, toolNanos := toolMeasurements.calls.Load(), toolMeasurements.nanos.Load()
+	probeStarted := time.Now()
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
 	stopStackDiagnostic()
+	t.Log("native measured Execute", time.Since(probeStarted), "actual inventory ToolCheck calls", toolMeasurements.calls.Load()-toolCalls, "ToolCheck wall", time.Duration(toolMeasurements.nanos.Load()-toolNanos))
+	stopCPUProfile()
 	if lateWait {
 		if err == nil || cleaned != nil || !consumer.Pending() {
 			t.Fatal("late original helper exit did not retain its lifetime", evidence, err)
@@ -480,8 +488,8 @@ func managedProbeNativeProcessDiagnostic(t *testing.T, stateRoot, processRoot st
 		var record struct {
 			State        string
 			Resources    []struct{ Kind, State, Phase string }
-			Receipt      components.NFQWSSupervisionReceipt
-			Acknowledged bool
+			Receipt      components.NFQWSSupervisionReceipt `json:"process_receipt"`
+			Acknowledged bool                               `json:"process_acknowledged"`
 		}
 		decodeErr := json.NewDecoder(io.LimitReader(f, 2<<20)).Decode(&record)
 		_ = f.Close()
