@@ -17,8 +17,12 @@ var retireRollbackBootPlan = new(string)
 var retireRollbackBootDigest = new(string)
 var retireMihomoBootPlan = new(string)
 var retireMihomoBootDigest = new(string)
+var retireMihomoParentPlan = new(string)
+var retireMihomoParentDigest = new(string)
 
 func registerBootRetirementFlags(flags *flag.FlagSet) {
+	flags.StringVar(retireMihomoParentPlan, "retire-mihomo-probe-after-parent-plan", "", "retire finite Mihomo metadata after its original parent exited; requires intact origin and complete native absence, panel stopped")
+	flags.StringVar(retireMihomoParentDigest, "retire-mihomo-probe-after-parent-digest", "", "reviewed digest required with retire-mihomo-probe-after-parent-plan")
 	flags.StringVar(retireMihomoBootPlan, "retire-mihomo-probe-after-boot-plan", "", "retire an interrupted finite Mihomo check after a real reboot, with the panel stopped; preserves failed service status")
 	flags.StringVar(retireMihomoBootDigest, "retire-mihomo-probe-after-boot-digest", "", "reviewed digest required with retire-mihomo-probe-after-boot-plan")
 	flags.StringVar(retireRollbackBootPlan, "retire-rollback-after-boot-plan", "", "explicitly archive intact old-boot proxy metadata after proving runtime absence, while the panel is stopped; never confirms rollback or service access")
@@ -26,7 +30,11 @@ func registerBootRetirementFlags(flags *flag.FlagSet) {
 }
 
 func bootRetirementCLIRequested() bool {
-	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested()
+	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested()
+}
+
+func mihomoParentRetirementCLIRequested() bool {
+	return *retireMihomoParentPlan != "" || *retireMihomoParentDigest != ""
 }
 
 func mihomoBootRetirementCLIRequested() bool {
@@ -34,6 +42,12 @@ func mihomoBootRetirementCLIRequested() bool {
 }
 
 func bootRetirementCLIFlagError() error {
+	if mihomoParentRetirementCLIRequested() && (*retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested()) {
+		return errors.New("Mihomo parent retirement cannot be combined with other retirement modes")
+	}
+	if (*retireMihomoParentPlan == "") != (*retireMihomoParentDigest == "") {
+		return errors.New("Mihomo parent retirement requires both reviewed plan and digest")
+	}
 	if mihomoBootRetirementCLIRequested() && (*retireRollbackBootPlan != "" || *retireRollbackBootDigest != "") {
 		return errors.New("post-reboot retirement modes are mutually exclusive")
 	}

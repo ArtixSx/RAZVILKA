@@ -13,7 +13,17 @@ import (
 // Reuse the existing idle-only offline lease acquisition: no private restore,
 // defaults, credentials, Store handover, runtime or network mutation.
 func runMihomoBootRetirementCLI(ctx context.Context, paths offlineNFQWS2StopPaths) (result dataplane.Execution, resultErr error) {
-	if !mihomoBootRetirementCLIRequested() || bootRetirementCLIFlagError() != nil {
+	return runMihomoRetirementCLI(ctx, paths, false)
+}
+
+func runMihomoRetirementCLI(ctx context.Context, paths offlineNFQWS2StopPaths, afterParent bool) (result dataplane.Execution, resultErr error) {
+	requested := mihomoBootRetirementCLIRequested()
+	id, digest := *retireMihomoBootPlan, *retireMihomoBootDigest
+	if afterParent {
+		requested = mihomoParentRetirementCLIRequested()
+		id, digest = *retireMihomoParentPlan, *retireMihomoParentDigest
+	}
+	if !requested || bootRetirementCLIFlagError() != nil {
 		return result, dataplane.ErrMihomoProbeRetirement
 	}
 	leases, _, err := openOfflineRuntimeLeases(ctx, paths, privaterestore.OpenForOfflineServiceControl)
@@ -45,7 +55,11 @@ func runMihomoBootRetirementCLI(ctx context.Context, paths offlineNFQWS2StopPath
 	var hold func(int) error
 	hold = func(i int) error {
 		if i == len(leases.coordinators) {
-			result, err = dataplane.New(paths.dataplane).RetireMihomoProbeAfterBoot(ctx, *retireMihomoBootPlan, *retireMihomoBootDigest, current)
+			if afterParent {
+				result, err = dataplane.New(paths.dataplane).RetireMihomoProbeAfterParentExit(ctx, id, digest, current)
+			} else {
+				result, err = dataplane.New(paths.dataplane).RetireMihomoProbeAfterBoot(ctx, id, digest, current)
+			}
 			return err
 		}
 		return leases.coordinators[i].WithOfflineServiceControl(ctx, paths.config, func(context.Context) error { return hold(i + 1) })

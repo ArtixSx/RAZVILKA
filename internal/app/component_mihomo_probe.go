@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -152,9 +153,10 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 		return nil
 	}
 	var result dataplane.MihomoServiceProbe
+	var publishOrigin bool
 	err = a.ComponentHistory.CheckReadable(heldCtx)
 	if err == nil {
-		err = a.ExecutionHistory.CheckWrite(heldCtx, 4)
+		publishOrigin, err = chooseMihomoProbeLineage(heldCtx, a.ExecutionHistory.CheckWrite)
 	}
 	if err == nil {
 		held.control, err = a.Operations.ReviewControlEpoch(heldCtx, a.SelfUpdateFiles.ControlRoot)
@@ -174,7 +176,11 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 			endpoint, e := env.endpoint(heldCtx, host)
 			err = e
 			if err == nil {
-				held.source, err = a.Components.ReviewMihomoProbe(heldCtx, raw, options, review, host, endpoint, a.hevForwardGuard(cfg, held.control))
+				if publishOrigin {
+					held.source, err = a.Components.ReviewMihomoProbe(heldCtx, raw, options, review, host, endpoint, a.hevForwardGuard(cfg, held.control))
+				} else {
+					held.source, err = a.Components.ReviewMihomoProbeLegacy(heldCtx, raw, options, review, host, endpoint, a.hevForwardGuard(cfg, held.control))
+				}
 			}
 		}
 	}
@@ -198,6 +204,23 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"probe": result, "review": review, "live_applied": false, "draft_persisted": false, "recovery_required": false})
+}
+
+// Each call performs its own complete real fleet/history observation. A
+// failed reader5 review is never reused as reader4 permission. Existing
+// reader5 or unknown history still refuses through CheckWrite's maximum.
+func chooseMihomoProbeLineage(ctx context.Context, check func(context.Context, ...int) error) (bool, error) {
+	err5 := check(ctx, 5)
+	if err5 == nil {
+		return true, nil
+	}
+	if ctx.Err() != nil {
+		return false, errors.Join(err5, ctx.Err())
+	}
+	if err4 := check(ctx, 4); err4 != nil {
+		return false, errors.Join(err5, err4)
+	}
+	return false, nil
 }
 
 // GET is observation only. POST can retry only the retained in-memory owner;

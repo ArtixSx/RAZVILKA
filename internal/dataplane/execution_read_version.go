@@ -21,7 +21,8 @@ import (
 // additionally understands original accepted-FD transparent baseline flows.
 // Version4 also reads retained restorative standby and scoped Mihomo intent;
 // interpreting these records never grants adoption, launch or cleanup.
-const ExecutionReadVersion = 4
+// Version5 additionally reads source-issued Mihomo parent/death lineage.
+const ExecutionReadVersion = 5
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -141,10 +142,13 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 				required = max(required, 3)
 			}
 			if resource.SyntheticBaseline != nil && resource.Phase == "standby-retained" {
-				required = 4
+				required = max(required, 4)
 			}
 			if resource.MihomoProbe != nil {
-				required = 4
+				required = max(required, 4)
+				if !resource.MihomoProbe.Source.ParentOrigin.IsZero() {
+					required = max(required, 5)
+				}
 			}
 		}
 		sum := sha256.Sum256(data)

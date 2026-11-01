@@ -5,6 +5,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +35,17 @@ import (
 // joined native cleanup. Only WAN label/platform classification is modeled;
 // all public-format IPs exist solely inside disposable network namespaces.
 func TestMihomoOriginalNativeHTTPServiceAndCleanup(t *testing.T) {
+	runMihomoOriginalNativeHTTP(t, false)
+}
+
+func TestMihomoOriginalNativeHTTPReader4Fallback(t *testing.T) {
+	if os.Getenv("RAZVILKA_EXECUTION_READER4_BINARY") == "" {
+		t.Skip("actual pinned reader4 controller required")
+	}
+	runMihomoOriginalNativeHTTP(t, true)
+}
+
+func runMihomoOriginalNativeHTTP(t *testing.T, legacy bool) {
 	if os.Getenv("RAZVILKA_MIHOMO_SERVICE_NATIVE") != "1" {
 		t.Skip("isolated native fixture only")
 	}
@@ -93,6 +106,30 @@ func TestMihomoOriginalNativeHTTPServiceAndCleanup(t *testing.T) {
 	}
 	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
 		t.Fatal(err)
+	}
+	var oldBytes []byte
+	if legacy {
+		oldBytes, err = os.ReadFile(os.Getenv("RAZVILKA_EXECUTION_READER4_BINARY"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		root := filepath.Join(installpath.State, "update-backups", "reader4-pinned-d36")
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "razvilka.bin"), oldBytes, 0500); err != nil {
+			t.Fatal(err)
+		}
+		hash := sha256.Sum256(oldBytes)
+		if err := os.WriteFile(filepath.Join(root, "razvilka.sha256"), []byte(hex.EncodeToString(hash[:])), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if a.ExecutionHistory.CheckWrite(ctx, 5) == nil {
+			t.Fatal("actual retained reader4 admitted writer5")
+		}
+		if err := a.ExecutionHistory.CheckWrite(ctx, 4); err != nil {
+			t.Fatal("actual retained reader4 denied legacy format", err)
+		}
 	}
 	const token = "mihomo-real-http-native-token-1234567890"
 	a.Security, err = security.NewGate(token)
@@ -169,6 +206,19 @@ func TestMihomoOriginalNativeHTTPServiceAndCleanup(t *testing.T) {
 	var record dataplane.Execution
 	if json.Unmarshal(execution, &record) != nil || record.State != "temporary-complete" || len(record.Resources) != 1 || record.Resources[0].Kind != "mihomo-probe" || record.Resources[0].Phase != "removed" {
 		t.Fatal("actual COMMON terminal missing")
+	}
+	if legacy {
+		if !record.Resources[0].MihomoProbe.Source.ParentOrigin.IsZero() || bytes.Contains(execution, []byte("parent_origin")) {
+			t.Fatal("reader4 fallback published reader5 field")
+		}
+		if version, _, err := dataplane.InspectRetainedExecutionReadVersion(ctx, m.StateRoot); err != nil || version != 4 {
+			t.Fatal("legacy history no longer readable", version, err)
+		}
+		after, err := os.ReadFile(filepath.Join(installpath.State, "update-backups", "reader4-pinned-d36", "razvilka.bin"))
+		if err != nil || !bytes.Equal(oldBytes, after) {
+			t.Fatal("fallback removed or changed retained controller", err)
+		}
+		t.Log("actual pinned d36 controller inventory refused5, separately admitted4; real HTTP service/cleanup passed with unchanged reader4 backup and omitted parent origin")
 	}
 	t.Logf("real HTTP preview→original installed source→native VLESS/TLS mandatory services→joined cleanup→HTTP response elapsed=%s result=%+v; no live route", time.Since(started), response.Probe)
 }

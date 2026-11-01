@@ -168,7 +168,11 @@ func (a *MihomoProbeAdapter) Check(ctx context.Context, manager *Manager, source
 	if err := componentHistory.CheckReadable(ctx); err != nil {
 		return result, err
 	}
-	if err := history.CheckWrite(ctx, 4); err != nil {
+	requiredReader := 4
+	if !source.Reference().ParentOrigin.IsZero() {
+		requiredReader = 5
+	}
+	if err := history.CheckWrite(ctx, requiredReader); err != nil {
 		return result, err
 	}
 	if err := control.Current(ctx); err != nil {

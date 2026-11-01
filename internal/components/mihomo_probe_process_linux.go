@@ -51,6 +51,11 @@ func (s *MihomoProbeSource) RunProbeAdmitted(ctx context.Context, control *opera
 	if admission == nil {
 		return nil, ErrMihomoProbePending
 	}
+	// Only this source-issued origin predates COMMON publication; copied
+	// process metadata can never supply the Linux parent-death guarantee.
+	if s.parentOrigin == nil || s.parentOrigin.reference().Validate() != nil || s.publishParentOrigin && s.parentOrigin.reference() != s.reference.ParentOrigin || !s.publishParentOrigin && !s.reference.ParentOrigin.IsZero() {
+		return nil, ErrMihomoProbeOrigin
+	}
 	deadline, finite := ctx.Deadline()
 	if !finite || time.Until(deadline) <= 0 || time.Until(deadline) > 2*time.Minute {
 		return nil, ErrMihomoProbePending

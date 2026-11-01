@@ -343,13 +343,13 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			return
 		}
 	}
-	if mihomoBootRetirementCLIRequested() {
+	if mihomoBootRetirementCLIRequested()||mihomoParentRetirementCLIRequested() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		result, err := runMihomoBootRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+		result, err := runMihomoRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
 			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
 			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
 			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
-		})
+		},mihomoParentRetirementCLIRequested())
 		cancel()
 		if err != nil {
 			log.Print(dataplane.ErrMihomoProbeRetirement)

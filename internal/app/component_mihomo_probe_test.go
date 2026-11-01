@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -19,6 +20,43 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
+
+func TestMihomoProbeLineageFallbackRequiresSeparateFreshAdmission(t *testing.T) {
+	for _, kind := range []string{"reader5", "reader4", "history5-or-unknown", "cancel"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var calls []int
+			origin, err := chooseMihomoProbeLineage(ctx, func(c context.Context, wanted ...int) error {
+				if c != ctx || len(wanted) != 1 {
+					t.Fatal("detached admission")
+				}
+				calls = append(calls, wanted[0])
+				if wanted[0] == 5 && kind != "reader5" {
+					if kind == "cancel" {
+						cancel()
+					}
+					return errors.New("reader5 refused")
+				}
+				if wanted[0] == 4 && kind == "history5-or-unknown" {
+					return errors.New("reader4 refused retained maximum")
+				}
+				return nil
+			})
+			if kind == "reader5" {
+				if err != nil || !origin || len(calls) != 1 || calls[0] != 5 {
+					t.Fatal(origin, err, calls)
+				}
+			} else if kind == "reader4" {
+				if err != nil || origin || len(calls) != 2 || calls[0] != 5 || calls[1] != 4 {
+					t.Fatal(origin, err, calls)
+				}
+			} else if err == nil || origin || kind == "cancel" && len(calls) != 1 {
+				t.Fatal("failed or canceled review became legacy grant", origin, err, calls)
+			}
+		})
+	}
+}
 
 func TestMihomoProbeOriginalRequestAdmissionIsExclusiveAndRetainable(t *testing.T) {
 	a := &App{}

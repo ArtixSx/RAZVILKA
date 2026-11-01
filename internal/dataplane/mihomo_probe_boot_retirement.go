@@ -23,6 +23,7 @@ type mihomoProbeRetirement struct {
 	Before   []byte               `json:"before"`
 	After    []byte               `json:"after"`
 	Observed netidentity.Identity `json:"observed"`
+	SameBoot bool                 `json:"same_boot,omitempty"`
 }
 
 // RetireMihomoProbeAfterBoot is file-only, explicit offline maintenance. The
@@ -63,6 +64,10 @@ func decodeMihomoRetirementExecution(raw []byte) (Execution, error) {
 }
 
 func mihomoRetirementTerminal(before Execution, finished string) (Execution, error) {
+	return mihomoRetirementTerminalDetail(before, finished, mihomoRetirementDetail)
+}
+
+func mihomoRetirementTerminalDetail(before Execution, finished, detail string) (Execution, error) {
 	if before.State != "checking" && before.State != "resource-failed" && before.State != "journal-failed" && before.State != "cancelled" {
 		return Execution{}, ErrMihomoProbeRetirement
 	}
@@ -73,13 +78,22 @@ func mihomoRetirementTerminal(before Execution, finished string) (Execution, err
 	after.Resources = cloneExecutionResources(before.Resources)
 	after.Resources[0].State, after.Resources[0].Phase = "removed", "removed"
 	after.Steps = append([]ExecutionStep(nil), before.Steps...)
-	after.Steps[0].State, after.Steps[0].FinishedAt, after.Steps[0].Detail = "failed", finished, mihomoRetirementDetail
-	after.State, after.FinishedAt, after.Error = "temporary-complete", finished, mihomoRetirementDetail
+	after.Steps[0].State, after.Steps[0].FinishedAt, after.Steps[0].Detail = "failed", finished, detail
+	after.State, after.FinishedAt, after.Error = "temporary-complete", finished, detail
 	return after, validateExecutionResources(after, true)
 }
 
 func (m *Manager) retireMihomoProbeAfterBoot(ctx context.Context, id, digest string, offlineCurrent func(context.Context) error,
 	absent func(context.Context, netidentity.Identity, int) (netidentity.Identity, error), fault func(string) error) (result Execution, resultErr error) {
+	if absent == nil {
+		return result, ErrMihomoProbeRetirement
+	}
+	return m.retireMihomoProbeMetadata(ctx, id, digest, offlineCurrent, func(c context.Context, d ExecutionMihomoProbeDefinition) (netidentity.Identity, error) {
+		return absent(c, d.NetworkIdentity, d.Source.SOCKSPort)
+	}, false, fault)
+}
+
+func (m *Manager) retireMihomoProbeMetadata(ctx context.Context, id, digest string, offlineCurrent func(context.Context) error, absent func(context.Context, ExecutionMihomoProbeDefinition) (netidentity.Identity, error), sameBoot bool, fault func(string) error) (result Execution, resultErr error) {
 	if m == nil || xraySelectedTCPFinite(ctx) != nil || !validExecutionPlanID(id) || !strings.HasPrefix(id, "dp-check-") || !validPlanDigest(digest) || offlineCurrent == nil || absent == nil {
 		return result, ErrMihomoProbeRetirement
 	}
@@ -140,12 +154,16 @@ func (m *Manager) retireMihomoProbeAfterBoot(ctx context.Context, id, digest str
 			return result, ErrMihomoProbeRetirement
 		}
 		manifest.Schema = 1
+		manifest.SameBoot = sameBoot
 	}
 	before, err := decodeMihomoRetirementExecution(manifest.Before)
 	if err != nil || before.PlanID != id || before.Digest != digest {
 		return result, ErrMihomoProbeRetirement
 	}
 	definition := before.Resources[0].MihomoProbe
+	if (sameBoot || manifest.SameBoot) && definition.Source.ParentOrigin.Validate() != nil {
+		return result, ErrMihomoProbeRetirement
+	}
 	finished := time.Now().UTC().Format(time.RFC3339Nano)
 	if exists {
 		parsed, err := decodeMihomoRetirementExecution(manifest.After)
@@ -154,7 +172,11 @@ func (m *Manager) retireMihomoProbeAfterBoot(ctx context.Context, id, digest str
 		}
 		finished = parsed.FinishedAt
 	}
-	after, err := mihomoRetirementTerminal(before, finished)
+	detail := mihomoRetirementDetail
+	if manifest.SameBoot {
+		detail = mihomoColdRetirementDetail
+	}
+	after, err := mihomoRetirementTerminalDetail(before, finished, detail)
 	if err != nil {
 		return result, err
 	}
@@ -176,8 +198,8 @@ func (m *Manager) retireMihomoProbeAfterBoot(ctx context.Context, id, digest str
 		if err := rootCurrent(); err != nil {
 			return err
 		}
-		current, err := absent(ctx, definition.NetworkIdentity, definition.Source.SOCKSPort)
-		if err != nil || current.Validate() != nil || current.BootID == definition.NetworkIdentity.BootID {
+		current, err := absent(ctx, *definition)
+		if err != nil || current.Validate() != nil || (current.BootID == definition.NetworkIdentity.BootID) != sameBoot {
 			return ErrMihomoProbeRetirement
 		}
 		if runIdentity.Validate() == nil && current != runIdentity {

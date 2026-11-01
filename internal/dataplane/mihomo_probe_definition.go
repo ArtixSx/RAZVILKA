@@ -32,6 +32,9 @@ func (d ExecutionMihomoProbeDefinition) Clone() ExecutionMihomoProbeDefinition {
 
 func (d ExecutionMihomoProbeDefinition) validate() error {
 	r := d.Source
+	if !r.ParentOrigin.IsZero() && (r.ParentOrigin.Validate() != nil || r.ParentOrigin.BootID != d.NetworkIdentity.BootID) {
+		return ErrMihomoProbe
+	}
 	if d.Schema != 1 || !validPlanID(d.PlanID) || !validPlanDigest(d.PlanDigest) || d.NetworkProfile == "" || d.Revision == 0 || d.NetworkIdentity.Validate() != nil ||
 		r.Version != components.ReviewedMihomoVersion || !validPlanDigest(r.BinarySHA256) || r.BinarySize < 1 || r.BinarySize > 256<<20 || !validPlanDigest(r.ReviewSHA256) || !validPlanDigest(r.ConfigSHA256) ||
 		r.ServerHost == "" || !r.Endpoint.Is4() || !publicfetch.PublicAddress(r.Endpoint) || r.SOCKSPort < 1024 || r.SOCKSPort > 65535 || r.SOCKSPort == 8787 {

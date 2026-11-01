@@ -15,30 +15,33 @@ import (
 // Comparison data only. A serialized reference cannot recreate the original
 // installed writer lease, grant a process, or issue a route/service result.
 type MihomoProbeReference struct {
-	Version      string     `json:"version"`
-	BinarySHA256 string     `json:"binary_sha256"`
-	BinarySize   int64      `json:"binary_size"`
-	ReviewSHA256 string     `json:"review_sha256"`
-	ConfigSHA256 string     `json:"config_sha256"`
-	ServerHost   string     `json:"server_host"`
-	Endpoint     netip.Addr `json:"endpoint"`
-	SOCKSPort    int        `json:"socks_port"`
+	Version      string                  `json:"version"`
+	BinarySHA256 string                  `json:"binary_sha256"`
+	BinarySize   int64                   `json:"binary_size"`
+	ReviewSHA256 string                  `json:"review_sha256"`
+	ConfigSHA256 string                  `json:"config_sha256"`
+	ServerHost   string                  `json:"server_host"`
+	Endpoint     netip.Addr              `json:"endpoint"`
+	SOCKSPort    int                     `json:"socks_port"`
+	ParentOrigin MihomoProbeParentOrigin `json:"parent_origin,omitzero"`
 }
 
 type MihomoProbeSource struct {
-	self           *MihomoProbeSource
-	manager        *Manager
-	session        *mihomoReleaseSession
-	mu             sync.Mutex
-	closed         bool
-	probeUsed      bool
-	probe          *MihomoProbeProcess
-	closeErr       error
-	artifacts      string
-	image, receipt restorejournal.Image
-	profile        []byte
-	reference      MihomoProbeReference
-	guard          func(context.Context, func() error) error
+	self                *MihomoProbeSource
+	manager             *Manager
+	session             *mihomoReleaseSession
+	mu                  sync.Mutex
+	closed              bool
+	probeUsed           bool
+	probe               *MihomoProbeProcess
+	closeErr            error
+	artifacts           string
+	image, receipt      restorejournal.Image
+	profile             []byte
+	reference           MihomoProbeReference
+	guard               func(context.Context, func() error) error
+	parentOrigin        mihomoProbeOriginOwner
+	publishParentOrigin bool
 }
 
 func (*MihomoProbeSource) String() string   { return "[private original Mihomo probe source]" }
@@ -48,6 +51,17 @@ func (*MihomoProbeSource) GoString() string { return "[private original Mihomo p
 // It does not start a process. The scoped consumer must separately reserve its
 // original execution resource and admit an actual native Start.
 func (m *Manager) ReviewMihomoProbe(ctx context.Context, raw string, options backendprofile.MihomoOptions, review, host string, endpoint netip.Addr, guard func(context.Context, func() error) error) (source *MihomoProbeSource, err error) {
+	return m.reviewMihomoProbe(ctx, raw, options, review, host, endpoint, guard, true)
+}
+
+// ReviewMihomoProbeLegacy preserves the reader4 wire format after a trusted
+// caller's fresh reader4 fleet admission. The same private actual parent and
+// Linux death backstop are retained; same-boot cold retirement is unavailable.
+func (m *Manager) ReviewMihomoProbeLegacy(ctx context.Context, raw string, options backendprofile.MihomoOptions, review, host string, endpoint netip.Addr, guard func(context.Context, func() error) error) (*MihomoProbeSource, error) {
+	return m.reviewMihomoProbe(ctx, raw, options, review, host, endpoint, guard, false)
+}
+
+func (m *Manager) reviewMihomoProbe(ctx context.Context, raw string, options backendprofile.MihomoOptions, review, host string, endpoint netip.Addr, guard func(context.Context, func() error) error, publishOrigin bool) (source *MihomoProbeSource, err error) {
 	if m == nil || ctx == nil || guard == nil {
 		return nil, ErrRecoveryAuthority
 	}
@@ -101,10 +115,21 @@ func (m *Manager) ReviewMihomoProbe(ctx context.Context, raw string, options bac
 	if err != nil {
 		return nil, err
 	}
-	source = &MihomoProbeSource{manager: m, session: session, artifacts: artifacts, image: image, receipt: receipt, profile: []byte(pinned.Config), guard: guard,
+	source = &MihomoProbeSource{manager: m, session: session, artifacts: artifacts, image: image, receipt: receipt, profile: []byte(pinned.Config), guard: guard, publishParentOrigin: publishOrigin,
 		reference: MihomoProbeReference{Version: owner.Version, BinarySHA256: ref.SHA256, BinarySize: ref.Size, ReviewSHA256: review, ConfigSHA256: digest([]byte(pinned.Config)), ServerHost: host, Endpoint: endpoint, SOCKSPort: options.SOCKSPort}}
 	source.self = source
+	source.parentOrigin, err = captureMihomoProbeOrigin(ctx)
+	if err != nil {
+		clear(source.profile)
+		return nil, err
+	}
+	if source.parentOrigin != nil && publishOrigin {
+		source.reference.ParentOrigin = source.parentOrigin.reference()
+	}
 	if err = source.Current(ctx); err != nil {
+		if source.parentOrigin != nil {
+			err = errors.Join(err, source.parentOrigin.close())
+		}
 		clear(source.profile)
 		return nil, err
 	}
@@ -129,6 +154,16 @@ func (s *MihomoProbeSource) currentLocked(ctx context.Context) error {
 		return ErrRecoveryAuthority
 	}
 	return s.guard(ctx, func() error {
+		if s.parentOrigin != nil {
+			if s.publishParentOrigin && s.parentOrigin.reference() != s.reference.ParentOrigin || !s.publishParentOrigin && !s.reference.ParentOrigin.IsZero() {
+				return ErrMihomoProbeOrigin
+			}
+			if err := s.parentOrigin.current(ctx); err != nil {
+				return err
+			}
+		} else if !s.reference.ParentOrigin.IsZero() {
+			return ErrMihomoProbeOrigin
+		}
 		approved, pinErr := mihomoReviewedRawArtifact(s.manager.Arch)
 		if pinErr != nil || approved.SHA256 != s.reference.BinarySHA256 || approved.Size != s.reference.BinarySize {
 			return restorejournal.ErrConflict
@@ -178,6 +213,9 @@ func (s *MihomoProbeSource) Close() error {
 	}
 	s.closed = true
 	clear(s.profile)
-	s.closeErr = s.session.close()
+	if s.parentOrigin != nil {
+		s.closeErr = s.parentOrigin.close()
+	}
+	s.closeErr = errors.Join(s.closeErr, s.session.close())
 	return s.closeErr
 }
