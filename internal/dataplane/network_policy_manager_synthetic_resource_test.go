@@ -74,6 +74,39 @@ func TestNetworkPolicyManagerSyntheticResourceJSONAndDeepClone(t *testing.T) {
 	}
 }
 
+func TestSyntheticBaselineJournalPreservesCanonicalNetworkIdentity(t *testing.T) {
+	for _, phase := range []string{"baseline-prepared", "standby-retained"} {
+		t.Run(phase, func(t *testing.T) {
+			e := executionSyntheticResourceFixture(t)
+			e.State, e.Resources[0].Phase = "resource-failed", phase
+			root := filepath.Join(t.TempDir(), "private-dataplane")
+			transaction := filepath.Join(root, "transactions", e.PlanID)
+			if err := os.MkdirAll(transaction, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := New(root).writeExecution(transaction, e); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{filepath.Join(root, "latest-execution.json"), filepath.Join(transaction, "execution.json")} {
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var readback Execution
+				if err := json.Unmarshal(raw, &readback); err != nil {
+					t.Fatal("writer emitted unreadable canonical network identity", err)
+				}
+				if err := validateExecutionResources(readback, false); err != nil {
+					t.Fatal(err)
+				}
+				if readback.Resources[0].SyntheticBaseline.NetworkIdentity != e.Resources[0].SyntheticBaseline.NetworkIdentity {
+					t.Fatal("network identity changed during persistence")
+				}
+			}
+		})
+	}
+}
+
 func TestNetworkPolicyManagerSyntheticResourcePhasesKeepTerminalFence(t *testing.T) {
 	for _, phase := range []string{"planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed", "standby-retained"} {
 		execution := executionSyntheticResourceFixture(t)
