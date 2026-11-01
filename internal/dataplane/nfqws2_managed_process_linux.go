@@ -393,11 +393,11 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		case waitErr = <-done:
 			joined = true
 		case <-timer.C:
-			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, ctx.Err())
+			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, startErr, ctx.Err())
 		}
 	}
 	if waitErr != nil {
-		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, waitErr)
+		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, startErr, waitErr)
 	}
 	// ACK acknowledges ONLY kernel process settlement, even after Stop/cancel.
 	// It grants neither replay, managed selection nor kernel effect retirement.

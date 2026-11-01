@@ -9,9 +9,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -20,7 +22,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -378,7 +382,10 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	if _, parentErr := os.Stat(adapter.StateRoot); parentErr != nil {
 		t.Log("actual producer private parent before first consumer:", parentErr)
 	}
+	stopStackDiagnostic := managedProbeNativeStackDeadline(t)
+	defer stopStackDiagnostic()
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
+	stopStackDiagnostic()
 	if lateWait {
 		if err == nil || cleaned != nil || !consumer.Pending() {
 			t.Fatal("late original helper exit did not retain its lifetime", evidence, err)
@@ -411,6 +418,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 		return
 	}
 	if err != nil || cleaned == nil {
+		managedProbeNativeProcessDiagnostic(t, manager.StateRoot, adapter.StateRoot)
 		t.Fatal("actual managed kernel/flow consumer", evidence, err)
 	}
 	if !evidence.Success || !evidence.RouteConfirmed || evidence.HTTPStatus != 200 {
@@ -433,6 +441,52 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 		t.Fatal("native publication missing or fenced", snapshot)
 	}
 	t.Log("actual isolated consumer: managed native validation + held source socket + queue200 + wrong-source negative + exact counters + TLS/catalogue predicates + soleWait/ACK + COMMON cleanup; platform/WAN classification modeled; no router/LAN acceptance")
+}
+
+func managedProbeNativeStackDeadline(t *testing.T) func() {
+	done := make(chan struct{})
+	timer := time.AfterFunc(12*time.Second, func() {
+		defer close(done)
+		data := make([]byte, 64<<10)
+		used := runtime.Stack(data, true)
+		t.Log("native parent goroutine stacks before bounded probe deadline:\n" + string(data[:used]))
+	})
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			if !timer.Stop() {
+				<-done
+			}
+		})
+	}
+}
+
+// Read-only diagnostics for this explicitly isolated CI tree. Emit only
+// closed protocol phase/receipt fields, never keys, PEM or arbitrary files.
+func managedProbeNativeProcessDiagnostic(t *testing.T, stateRoot, processRoot string) {
+	t.Helper()
+	for _, path := range []string{filepath.Join(stateRoot, "latest-execution.json"), filepath.Join(processRoot, "ownership.json")} {
+		f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			t.Log("native retained diagnostic", filepath.Base(path), err)
+			continue
+		}
+		info, err := f.Stat()
+		if err != nil || !info.Mode().IsRegular() || info.Size() > 2<<20 {
+			_ = f.Close()
+			t.Log("native retained diagnostic is not a bounded regular file", filepath.Base(path), err)
+			continue
+		}
+		var record struct {
+			State        string
+			Resources    []struct{ Kind, State, Phase string }
+			Receipt      components.NFQWSSupervisionReceipt
+			Acknowledged bool
+		}
+		decodeErr := json.NewDecoder(io.LimitReader(f, 2<<20)).Decode(&record)
+		_ = f.Close()
+		t.Log("native retained diagnostic", filepath.Base(path), "decode", decodeErr, "state", record.State, "resources", record.Resources, "receipt", record.Receipt.State, "started", record.Receipt.Started, "WaitECHILD", record.Receipt.WaitECHILD, "ACK", record.Acknowledged, "PID", record.Receipt.PID, "exit", record.Receipt.ExitCode)
+	}
 }
 
 func managedProbeNativeErrorChain(t *testing.T, err error, depth int) {
