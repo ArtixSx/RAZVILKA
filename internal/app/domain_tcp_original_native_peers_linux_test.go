@@ -336,7 +336,18 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 		buffer := make([]byte, 4096)
 		n, err := socket.Read(buffer)
 		if err != nil {
-			t.Fatal(err)
+			if !domainOriginalDNSRefusalTimeout(mode, err) {
+				t.Fatal(err)
+			}
+			// Explicit absence/refusal only. The caller's publication loop must
+			// still observe a real synthetic answer and original LookupPublished.
+			result.RCode = -1
+			result.Marker = "bounded-dns-no-answer"
+			data, _ := json.Marshal(result)
+			if err := os.WriteFile(os.Getenv("RAZVILKA_DOMAIN_NATIVE_RESULT"), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			return
 		}
 		var answer dnsmessage.Message
 		if answer.Unpack(buffer[:n]) != nil {

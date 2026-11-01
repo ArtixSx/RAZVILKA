@@ -7,6 +7,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"net"
+	"os"
 	"testing"
 )
 
@@ -48,6 +49,32 @@ func TestDomainOriginalNativeStopNeverSwallowsUnexpectedFailure(t *testing.T) {
 	}
 	if domainOriginalExpectedStopError(errors.Join(expected, errors.New("unrelated original cleanup failed"))) || domainOriginalExpectedStopError(context.Canceled) {
 		t.Fatal("unexpected failure or missing original standby sentinel hidden")
+	}
+}
+
+func domainOriginalDNSRefusalTimeout(mode string, err error) bool {
+	if mode != "dns-unready" && mode != "dns-wait" && mode != "dns-other-client" {
+		return false
+	}
+	return errors.Is(err, os.ErrDeadlineExceeded) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
+func TestDomainOriginalDNSRefusalDoesNotBecomePublication(t *testing.T) {
+	timeout := &net.OpError{Op: "read", Net: "udp4", Err: os.ErrDeadlineExceeded}
+	for _, mode := range []string{"dns-unready", "dns-wait", "dns-other-client"} {
+		if !domainOriginalDNSRefusalTimeout(mode, timeout) {
+			t.Fatal("bounded negative DNS refusal rejected", mode)
+		}
+	}
+	for _, mode := range []string{"dns", "selected", "mismatch", "opaque"} {
+		if domainOriginalDNSRefusalTimeout(mode, timeout) {
+			t.Fatal("positive transport timeout was accepted", mode)
+		}
+	}
+	for _, err := range []error{context.Canceled, context.DeadlineExceeded, errors.New("unexpected UDP transport failure")} {
+		if domainOriginalDNSRefusalTimeout("dns-wait", err) {
+			t.Fatal("unexpected/canceled caller hidden", err)
+		}
 	}
 }
 

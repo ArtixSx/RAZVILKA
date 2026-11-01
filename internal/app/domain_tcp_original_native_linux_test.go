@@ -277,7 +277,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 			return fmt.Errorf("unexpected original unpublished reservation: %w", err)
 		}
 		// A real client query before capture cannot publish a synthetic answer.
-		unready := peers.clientRequest(t, original, "dns", "")
+		unready := peers.clientRequest(t, original, "dns-unready", "")
 		if strings.HasPrefix(unready.Answer, "198.") {
 			return errors.New("unprepared capture published DNS")
 		}
@@ -313,7 +313,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 				return fmt.Errorf("original Run before publication: %w", err)
 			default:
 			}
-			published = peers.clientRequest(t, original, "dns", "")
+			published = peers.clientRequest(t, original, "dns-wait", "")
 			if strings.HasPrefix(published.Answer, "198.") {
 				break
 			}
