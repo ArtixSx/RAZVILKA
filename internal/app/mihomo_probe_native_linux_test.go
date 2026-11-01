@@ -87,11 +87,20 @@ func TestMihomoOriginalNativeServiceAndCommonCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	history := updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
-	for i, scenario := range []string{"complete", "required-semantic-failure", "excluded-required-scenario"} {
+	for i, scenario := range []string{"complete", "required-semantic-failure", "excluded-required-scenario", "panic-after-listener"} {
 		t.Run(scenario, func(t *testing.T) {
 			probeCtx, finish := context.WithTimeout(held, 40*time.Second)
 			defer finish()
-			probeCtx = dataplane.WithReviewGuard(probeCtx, control.Current)
+			probeCtx = dataplane.WithReviewGuard(probeCtx, func(c context.Context) error {
+				if scenario == "panic-after-listener" {
+					data, _ := os.ReadFile(filepath.Join(m.StateRoot, "latest-execution.json"))
+					var e dataplane.Execution
+					if json.Unmarshal(data, &e) == nil && len(e.Resources) == 1 && e.Resources[0].MihomoProbe != nil && e.Resources[0].MihomoProbe.Source.SOCKSPort == 29400+i && e.Resources[0].Phase == "listener-ready" {
+						panic("fixture observer panic")
+					}
+				}
+				return control.Current(c)
+			})
 			probeCtx = dataplane.WithNodeResourceGuard(probeCtx, func(c context.Context, host string, address netip.Addr) error {
 				if host != domainOriginalServer && host != "service.example.com" && host != "unknown.example.com" {
 					return dataplane.ErrNodeResourceDenied
@@ -124,7 +133,30 @@ func TestMihomoOriginalNativeServiceAndCommonCleanup(t *testing.T) {
 				service.Probes[1].Expect.BodyContains = []string{"must-not-be-accepted"}
 			}
 			started := time.Now()
-			result, err := a.Check(probeCtx, m, source, service, 1, "wan-0123456789ab", componentsHistory, history, control)
+			var result dataplane.MihomoServiceProbe
+			panicked := false
+			func() {
+				defer func() {
+					if value := recover(); value != nil {
+						if value != "fixture observer panic" {
+							panic(value)
+						}
+						panicked = true
+					}
+				}()
+				result, err = a.Check(probeCtx, m, source, service, 1, "wan-0123456789ab", componentsHistory, history, control)
+			}()
+			if scenario == "panic-after-listener" {
+				if !panicked || !a.Pending() {
+					t.Fatal("exceptional unwind lost original cleanup owner")
+				}
+				cleanupCtx, done := context.WithTimeout(held, 15*time.Second)
+				defer done()
+				if err := a.RetryCleanup(cleanupCtx); err != nil {
+					t.Fatal("same-owner panic cleanup", err)
+				}
+				err = errors.New("fixture observer panic")
+			}
 			t.Logf("actual service probe scenario=%s elapsed=%s result=%+v err=%v", scenario, time.Since(started), result, err)
 			if a.Pending() {
 				t.Fatal("original COMMON/process cleanup remains pending", err)
@@ -149,6 +181,9 @@ func TestMihomoOriginalNativeServiceAndCommonCleanup(t *testing.T) {
 			var execution dataplane.Execution
 			if json.Unmarshal(data, &execution) != nil || execution.State != "temporary-complete" || len(execution.Resources) != 1 || execution.Resources[0].Kind != "mihomo-probe" || execution.Resources[0].Phase != "removed" {
 				t.Fatal("actual terminal COMMON missing")
+			}
+			if scenario != "complete" && (len(execution.Steps) != 1 || execution.Steps[0].State != "failed") {
+				t.Fatal("failed/exceptional check became successful metadata")
 			}
 		})
 	}

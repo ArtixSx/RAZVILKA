@@ -20,6 +20,9 @@ func TestMihomoProbeDoesNotAdvertiseOrAcceptLiveLifecycle(t *testing.T) {
 	if got := m.AdapterLifecycleRegistration("mihomo"); got != want {
 		t.Fatalf("got %+v", got)
 	}
+	if m.Capable("mihomo") || m.CanaryCapable("mihomo") {
+		t.Fatal("isolated probe became ordinary Apply/canary capability")
+	}
 	for _, action := range []func(context.Context, Plan, string) error{a.Snapshot, a.Stage, a.Validate, a.Activate, a.Health, a.Commit, a.Rollback} {
 		if action(context.Background(), Plan{Ready: true}, t.TempDir()) == nil {
 			t.Fatal("forged ready plan entered lifecycle")

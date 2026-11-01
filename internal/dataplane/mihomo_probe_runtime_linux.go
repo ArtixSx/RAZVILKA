@@ -17,10 +17,15 @@ import (
 )
 
 func (r *mihomoProbeResource) run(ctx context.Context) (result error) {
+	returned := false
 	defer func() {
+		if !returned {
+			r.actionErr = errors.Join(r.actionErr, ErrMihomoProbe)
+		}
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		result = errors.Join(result, r.clean(r.scope.contextWith(cleanup)))
+		r.actionErr = errors.Join(r.actionErr, result)
 	}()
 	if err := r.current(ctx); err != nil {
 		return err
@@ -60,6 +65,7 @@ func (r *mihomoProbeResource) run(ctx context.Context) (result error) {
 	if child != nil {
 		r.child = child
 	}
+	returned = true
 	return err
 }
 

@@ -545,8 +545,11 @@ func (m *Manager) Capable(id string) bool {
 	}
 	m.registryMu.RLock()
 	defer m.registryMu.RUnlock()
-	_, ok := m.Adapters[id]
-	return ok
+	adapter, ok := m.Adapters[id]
+	if _, probeOnly := adapter.(*MihomoProbeAdapter); probeOnly {
+		return false
+	}
+	return ok && adapter != nil
 }
 
 func (m *Manager) CanaryCapable(id string) bool {
