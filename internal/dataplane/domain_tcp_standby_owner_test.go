@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -34,6 +35,53 @@ func TestDomainTCPStandbyCannotBeIssuedFromMetadataOrCopiedOwner(t *testing.T) {
 	owner.self = owner
 	if err := owner.current(); err == nil {
 		t.Fatal("retained status without actual handoff")
+	}
+}
+
+func TestDomainTCPStandbyGlobalReadRefusesInPlaceContentWithRestoredMetadata(t *testing.T) {
+	root := t.TempDir()
+	record := Execution{PlanID: "dp-aaaaaaaaaaaaaaaa", Digest: strings.Repeat("a", 64), State: "resource-failed", Error: "before"}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "latest-execution.json")
+	file, err := writeDataplaneJournalRetained(path, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &domainTCPStandbyOwner{latest: file, latestInfo: info}
+	owner.self = owner
+	if err := owner.globalRecordCurrent(root, record); err != nil {
+		t.Fatal(err)
+	}
+	changed := record
+	changed.Error = "after!" // Same length, valid JSON and original inode.
+	modified, _ := json.Marshal(changed)
+	writable, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writable.WriteAt(modified, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := writable.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil || !os.SameFile(info, after) || info.Size() != after.Size() || !info.ModTime().Equal(after.ModTime()) {
+		t.Fatal("fixture metadata did not match original", err)
+	}
+	if err := owner.globalRecordCurrent(root, record); err == nil {
+		t.Fatal("matching metadata hid changed original global bytes")
 	}
 }
 

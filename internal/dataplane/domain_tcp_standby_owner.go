@@ -365,25 +365,8 @@ func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
 		return ErrExecutionJournal
 	}
 	check := func() error {
-		held, err := standby.latest.Stat()
-		named, statErr := os.Lstat(filepath.Join(m.StateRoot, "latest-execution.json"))
-		matches := func(info os.FileInfo) bool {
-			return info != nil && validNetworkPolicyReceiptFile(info) && os.SameFile(standby.latestInfo, info) && info.Mode() == standby.latestInfo.Mode() && info.Size() == standby.latestInfo.Size() && info.ModTime().Equal(standby.latestInfo.ModTime())
-		}
-		if err != nil || statErr != nil || !matches(held) || !matches(named) || held.Size() < 1 || held.Size() > 16<<20 {
-			return errors.Join(ErrExecutionJournal, err, statErr)
-		}
-		data := make([]byte, int(held.Size()))
-		n, readErr := standby.latest.ReadAt(data, 0)
-		var canonical bytes.Buffer
-		expected, marshalErr := json.Marshal(record)
-		if readErr != nil || n != len(data) || marshalErr != nil || json.Compact(&canonical, data) != nil || !bytes.Equal(canonical.Bytes(), expected) {
-			return errors.Join(ErrExecutionJournal, readErr, marshalErr)
-		}
-		after, afterErr := standby.latest.Stat()
-		closing, closingErr := os.Lstat(filepath.Join(m.StateRoot, "latest-execution.json"))
-		if afterErr != nil || closingErr != nil || !matches(after) || !matches(closing) {
-			return errors.Join(ErrExecutionJournal, afterErr, closingErr)
+		if err := standby.globalRecordCurrent(m.StateRoot, record); err != nil {
+			return err
 		}
 		owner.scope.mu.Lock()
 		same := owner.scope.retained && owner.scope.retainedXrayOwner == owner && reflect.DeepEqual(*owner.scope.execution, record)
@@ -400,4 +383,32 @@ func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
 		return err
 	}
 	return check()
+}
+
+// Original FD and bytes only. This comparison cannot issue a standby owner.
+func (standby *domainTCPStandbyOwner) globalRecordCurrent(root string, record Execution) error {
+	if standby == nil || standby.self != standby || standby.latest == nil || standby.latestInfo == nil {
+		return ErrExecutionJournal
+	}
+	held, err := standby.latest.Stat()
+	named, statErr := os.Lstat(filepath.Join(root, "latest-execution.json"))
+	matches := func(info os.FileInfo) bool {
+		return info != nil && validNetworkPolicyReceiptFile(info) && os.SameFile(standby.latestInfo, info) && info.Mode() == standby.latestInfo.Mode() && info.Size() == standby.latestInfo.Size() && info.ModTime().Equal(standby.latestInfo.ModTime())
+	}
+	if err != nil || statErr != nil || !matches(held) || !matches(named) || held.Size() < 1 || held.Size() > 16<<20 {
+		return errors.Join(ErrExecutionJournal, err, statErr)
+	}
+	data := make([]byte, int(held.Size()))
+	n, readErr := standby.latest.ReadAt(data, 0)
+	var canonical bytes.Buffer
+	expected, marshalErr := json.Marshal(record)
+	if readErr != nil || n != len(data) || marshalErr != nil || json.Compact(&canonical, data) != nil || !bytes.Equal(canonical.Bytes(), expected) {
+		return errors.Join(ErrExecutionJournal, readErr, marshalErr)
+	}
+	after, afterErr := standby.latest.Stat()
+	closing, closingErr := os.Lstat(filepath.Join(root, "latest-execution.json"))
+	if afterErr != nil || closingErr != nil || !matches(after) || !matches(closing) {
+		return errors.Join(ErrExecutionJournal, afterErr, closingErr)
+	}
+	return nil
 }
