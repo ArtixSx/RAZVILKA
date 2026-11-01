@@ -161,6 +161,9 @@ jobs:
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -race -count=1 ./internal/startuptools -run 'TestVersionReadBatch|TestVersionBatchMetadata' -v
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
             RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestDomainTCPBaseline|TestXrayDomainFileObservation|TestXrayDomainTCPNativeHeldProcessLifecycle|TestXraySelectedTCPNativeHeldJSONConfig|TestNFQWSProbe' -v
