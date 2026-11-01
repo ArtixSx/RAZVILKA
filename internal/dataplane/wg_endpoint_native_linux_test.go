@@ -122,9 +122,12 @@ func nativeWGEndpointClient(t *testing.T) {
 				t.Fatal("candidate", err)
 			}
 			t.Log("valid isolated candidate service and handshake passed")
-			for _, step := range []func(context.Context, Plan, string) error{a.Activate, a.Health, a.Commit} {
-				if err := step(ctx, plan, transaction); err != nil {
-					t.Fatal(err)
+			for _, step := range []struct {
+				name string
+				run  func(context.Context, Plan, string) error
+			}{{"activate", a.Activate}, {"health", a.Health}, {"commit", a.Commit}} {
+				if err := step.run(ctx, plan, transaction); err != nil {
+					t.Fatal(step.name, err)
 				}
 			}
 			state, exists, err := a.loadPolicyState()
@@ -381,6 +384,11 @@ func nativeWGKernelCapture(t *testing.T, ns, label string) {
 		{"ip", "-4", "-j", "route", "get", "198.51.100.10", "from", "10.66.0.2", "oif", "rz-wg-canary"},
 		{"ip", "-4", "-j", "route", "get", "198.51.100.10", "from", "10.66.0.2"},
 		{"sysctl", "-n", "net.ipv4.conf.all.rp_filter", "net.ipv4.conf.default.rp_filter", "net.ipv4.conf.wan-c.rp_filter", "net.ipv4.conf.wan-s.rp_filter", "net.ipv4.conf.wg-server.rp_filter"},
+	}
+	for _, family := range []string{"-4", "-6"} {
+		for _, table := range []string{"205", "206", "213", "214", "219"} {
+			commands = append(commands, []string{"ip", "-N", family, "-j", "route", "show", "table", table}, []string{"ip", "-N", family, "route", "show", "table", table})
+		}
 	}
 	for _, field := range []string{"public-key", "peers", "endpoints", "latest-handshakes", "transfer", "fwmark"} {
 		commands = append(commands, []string{"wg", "show", "all", field})
