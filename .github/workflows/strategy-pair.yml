@@ -23,6 +23,7 @@ on:
       - 'scripts/test-mihomo-inactive-native.sh'
       - 'scripts/test-mihomo-replacement-native.sh'
       - 'scripts/test-mihomo-main-native.sh'
+      - 'scripts/test-mihomo-main-bound-native.sh'
       - 'scripts/fixtures/mihomo-release-proxy.py'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
@@ -264,3 +265,12 @@ jobs:
             RAZVILKA_MIHOMO_PREDECESSOR_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh scripts/test-mihomo-main-native.sh
+      - name: Main factory registry and owned replacement with native platform classification
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_MIHOMO_PREDECESSOR_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-mihomo-main-bound-native.sh

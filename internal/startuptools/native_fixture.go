@@ -10,9 +10,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
@@ -23,6 +26,55 @@ func AcquireNativeFixturePolicy(ctx context.Context, provider *netidentity.Provi
 	if os.Geteuid() != 0 || err != nil || e2 != nil || ns == initial || provider == nil {
 		return nil, ErrUnknown
 	}
+	return acquireNativeFixturePolicy(ctx, provider, reviewPath)
+}
+
+var errNativeFixtureOuterNamespace = errors.New("native fixture requires a different genuine outer network namespace descriptor")
+
+// AcquireNativeFixturePolicyWithOuterNetFD preserves the same actual tool
+// producer for a private PID namespace, where /proc/1 is already local. The
+// caller retains a genuine outer network namespace descriptor opened before
+// unshare. Namespace comparison is fixture isolation, never runtime absence.
+func AcquireNativeFixturePolicyWithOuterNetFD(ctx context.Context, provider *netidentity.Provider, reviewPath string, outer *os.File) (*Lease, error) {
+	if ctx == nil || ctx.Err() != nil || provider == nil {
+		return nil, ErrUnknown
+	}
+	if outer == nil || os.Geteuid() != 0 {
+		return nil, errors.Join(ErrUnknown, errNativeFixtureOuterNamespace)
+	}
+	var opening unix.Stat_t
+	var fs unix.Statfs_t
+	fd := int(outer.Fd())
+	if unix.Fstat(fd, &opening) != nil || unix.Fstatfs(fd, &fs) != nil || fs.Type != unix.NSFS_MAGIC {
+		return nil, errors.Join(ErrUnknown, errNativeFixtureOuterNamespace)
+	}
+	kind, err := unix.IoctlRetInt(fd, unix.NS_GET_NSTYPE)
+	if err != nil || kind != unix.CLONE_NEWNET {
+		return nil, errors.Join(ErrUnknown, errNativeFixtureOuterNamespace)
+	}
+	current, err := os.Open("/proc/self/ns/net")
+	if err != nil {
+		return nil, err
+	}
+	defer current.Close()
+	var inner unix.Stat_t
+	var innerFS unix.Statfs_t
+	innerKind, innerErr := unix.IoctlRetInt(int(current.Fd()), unix.NS_GET_NSTYPE)
+	if innerErr != nil || innerKind != unix.CLONE_NEWNET || unix.Fstatfs(int(current.Fd()), &innerFS) != nil || innerFS.Type != unix.NSFS_MAGIC || unix.Fstat(int(current.Fd()), &inner) != nil || opening.Dev == inner.Dev && opening.Ino == inner.Ino {
+		return nil, errors.Join(ErrUnknown, errNativeFixtureOuterNamespace)
+	}
+	lease, err := acquireNativeFixturePolicy(ctx, provider, reviewPath)
+	if err != nil {
+		return nil, err
+	}
+	var closing, namedInner unix.Stat_t
+	if unix.Fstat(fd, &closing) != nil || unix.Stat("/proc/self/ns/net", &namedInner) != nil || opening != closing || inner.Dev != namedInner.Dev || inner.Ino != namedInner.Ino {
+		return nil, errors.Join(ErrUnknown, errNativeFixtureOuterNamespace, lease.Close())
+	}
+	return lease, nil
+}
+
+func acquireNativeFixturePolicy(ctx context.Context, provider *netidentity.Provider, reviewPath string) (*Lease, error) {
 	data, err := os.ReadFile(reviewPath)
 	if err != nil || len(data) > 4096 {
 		return nil, ErrUnknown

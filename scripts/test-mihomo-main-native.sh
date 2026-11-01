@@ -10,10 +10,27 @@ trap 'rm -rf -- "$mihomo_main_work"' EXIT HUP INT TERM
 export TMPDIR="$mihomo_main_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 cd "$mihomo_main_repo"
 go test -tags razvilka_native_fixture -c -o "$mihomo_main_work/app.test" ./internal/app
-go build -o "$mihomo_main_work/controller" ./cmd/razvilka
+if test "${RAZVILKA_MIHOMO_MAIN_NATIVE_BINDING:-}" = 1; then
+ go test -tags razvilka_native_fixture ./internal/startuptools -run "^TestNativePolicyOuterNamespaceRequiresDifferentGenuineNetFD$" -count=1 -v
+ go build -tags razvilka_native_fixture -o "$mihomo_main_work/controller" ./cmd/razvilka
+ python3 - "$mihomo_main_work/runtime-native-tool-review.json" <<'PY'
+import hashlib,json,pathlib,subprocess,sys
+version=subprocess.check_output(['/usr/sbin/iptables-legacy','--version'],text=True).strip()
+assert version.startswith('iptables v')
+review={'XTablesSHA256':hashlib.sha256(pathlib.Path('/usr/sbin/xtables-legacy-multi').read_bytes()).hexdigest(),'IPToolSHA256':hashlib.sha256(pathlib.Path('/usr/bin/ip').read_bytes()).hexdigest(),'Version':version.removeprefix('iptables v'),'IPVersion':subprocess.check_output(['/usr/sbin/ip','-Version'],text=True)}
+path=pathlib.Path(sys.argv[1]);path.write_text(json.dumps(review));path.chmod(0o600)
+print('Tagged native platform classification only; actual tool image/version source:',json.dumps(review))
+PY
+ export RAZVILKA_RUNTIME_NATIVE_REVIEW="$mihomo_main_work/runtime-native-tool-review.json" RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD=3
+else
+ go build -o "$mihomo_main_work/controller" ./cmd/razvilka
+fi
 chmod 500 "$mihomo_main_work/app.test" "$mihomo_main_work/controller"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=github.com -addext subjectAltName=DNS:github.com -keyout "$mihomo_main_work/key.pem" -out "$mihomo_main_work/ca.pem" >/dev/null 2>&1
 chmod 600 "$mihomo_main_work/key.pem" "$mihomo_main_work/ca.pem"
+# Open the actual outer scope before unshare. This is retained comparison data
+# for fixture isolation, never a signal, runtime owner or inactivity grant.
+exec 3</proc/self/ns/net
 unshare --mount --net --pid --fork sh -eu -c '
  mount --make-rprivate /
  umount -l /proc
@@ -68,11 +85,23 @@ status,body=request("GET","/api/v1/components/mihomo/plan?action=update&refresh=
 plan=json.loads(body)
 assert status==200 and plan["ready"] is True and plan["installed_version"]=="1.19.32" and plan["available_version"]=="1.19.33",(status,body)
 status,body=request("POST","/api/v1/components/mihomo/update")
-assert status!=200 and b"fresh owned runtime inactivity proof is unavailable" in body,(status,body)
 assert int(work.joinpath("proxy-transfer-complete").read_text())==pathlib.Path(os.environ["RAZVILKA_MIHOMO_ARCHIVE"]).stat().st_size,"default client did not fetch the full exact release asset"
-for before,path in [("binary-before","/opt/bin/mihomo"),("receipt-before","/opt/bin/.mihomo.razvilka.json"),("lifecycle-before","/opt/razvilka/state/components/receipts/mihomo.json")]:assert work.joinpath(before).read_bytes()==pathlib.Path(path).read_bytes(),path
-assert "manager-platform" in work.joinpath("main.log").read_text()
-print("PASS actual ordinary Main auth/plan/update transport and unchanged original pair: unsupported platform source correctly refuses global inactivity. This is a negative prerequisite test; no ordinary-Main replacement success, runtime, service or router-readiness claim.")
+if os.environ.get('RAZVILKA_MIHOMO_MAIN_NATIVE_BINDING')=='1':
+ import hashlib
+ result=json.loads(body);assert status==200 and result['ok'] is True and result['installed_idle_accepted'] is True,(status,body)
+ data=pathlib.Path('/opt/bin/mihomo').read_bytes();digest=hashlib.sha256(data).hexdigest()
+ assert len(data)==62017662 and digest=='09c2cb429cf45fb56884ceb91a0e5b17cc8b2c866c07811bcf75dfb59fef7662'
+ receipt=json.loads(pathlib.Path('/opt/bin/.mihomo.razvilka.json').read_bytes());assert receipt=={'version':'1.19.33','sha256':digest},receipt
+ life=json.loads(pathlib.Path('/opt/razvilka/state/components/receipts/mihomo.json').read_bytes());assert life['before_version']=='1.19.32' and life['after_version']=='1.19.33',life
+ status,body=request('GET','/api/v1/extension-lab/mihomo/probe');view=json.loads(body);assert status==200 and view['lifecycle']['operations']['package_update']['registration']=='registered' and view['lifecycle']['operations']['package_update'].get('available') is None
+ assert view['lifecycle']['operations']['live_apply']['registration']=='absent'
+ assert 'Runtime ownership observation unavailable' not in work.joinpath('main.log').read_text()
+ print('PASS actual Main complete factory registry, original held ELF tools/provider/full inventories, verified HTTPS default-client asset and exact1.19.32→1.19.33 package replacement. Platform classification is tagged/modelled; no router, service or live-apply claim.')
+else:
+ assert status!=200 and b"fresh owned runtime inactivity proof is unavailable" in body,(status,body)
+ for before,path in [("binary-before","/opt/bin/mihomo"),("receipt-before","/opt/bin/.mihomo.razvilka.json"),("lifecycle-before","/opt/razvilka/state/components/receipts/mihomo.json")]:assert work.joinpath(before).read_bytes()==pathlib.Path(path).read_bytes(),path
+ assert "manager-platform" in work.joinpath("main.log").read_text()
+ print("PASS actual ordinary Main auth/plan/update transport and unchanged original pair: unsupported platform source correctly refuses global inactivity. This is a negative prerequisite test; no ordinary-Main replacement success, runtime, service or router-readiness claim.")
 PY
 ' sh "$mihomo_main_work" "$mihomo_main_repo" || {
  mihomo_main_status=$?

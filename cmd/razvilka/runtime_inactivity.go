@@ -133,8 +133,15 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 	if err != nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", err)
 	}
+	fixture, fixtureErr := runtimeInactivityFixture(ctx, facts)
+	if fixtureErr != nil {
+		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", fixtureErr)
+	}
+	if fixture != nil {
+		defer fixture.Close()
+	}
 	platform, err := selectSelfUpdateRuntimePlatform(facts)
-	if err != nil {
+	if err != nil && fixture == nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", err)
 	}
 	if create == nil {
@@ -155,7 +162,9 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 		return nil, nil, selfUpdateRuntimeSourceFailed("network-provider", err)
 	}
 	var tools *startuptools.Lease
-	if platform == selfUpdateRuntimeStockNC1812 {
+	if fixture != nil {
+		tools, err = fixture.Acquire(lifetime, provider)
+	} else if platform == selfUpdateRuntimeStockNC1812 {
 		tools, err = startuptools.AcquireReviewedStockNC1812(lifetime, provider)
 	} else {
 		tools, err = startuptools.AcquireUbuntuLegacy(lifetime, provider)
@@ -188,6 +197,11 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 	closing, err := observeSelfUpdateRuntimePlatform(ctx)
 	if err != nil || closing != facts || ctx.Err() != nil {
 		return closeRefused("manager-platform", errors.Join(err, ctx.Err()))
+	}
+	if fixture != nil {
+		if err := fixture.Close(); err != nil {
+			return closeRefused("manager-platform", err)
+		}
 	}
 	return manager, tools.Close, nil
 }
