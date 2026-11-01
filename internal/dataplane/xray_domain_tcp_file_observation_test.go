@@ -15,7 +15,10 @@ import (
 // native resource or process; the tests exercise the read-only file protocol.
 func domainFileObservationModel(t *testing.T) (*XrayDomainTCPExecutionResource, context.Context) {
 	t.Helper()
-	path := t.TempDir()
+	path := filepath.Join(t.TempDir(), "private-original-files")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
 	root, err := ownedfs.Open(path)
 	if err != nil {
 		t.Fatal(err)
