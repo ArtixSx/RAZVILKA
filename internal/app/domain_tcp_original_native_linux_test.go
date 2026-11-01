@@ -334,7 +334,15 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 			}
 		}()
 		var published domainOriginalPeerResult
-		deadline := time.Now().Add(12 * time.Second)
+		publicationBudget := 12 * time.Second
+		if diagnostic := os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION"); diagnostic != "" {
+			if diagnostic != "30" {
+				return errors.New("unknown diagnostic publication window")
+			}
+			publicationBudget = 30 * time.Second
+			t.Log("DIAGNOSTIC FUNCTIONAL WINDOW30s; original100s context and60s freshness unchanged; NOT12s performance acceptance")
+		}
+		deadline := time.Now().Add(publicationBudget)
 		for time.Now().Before(deadline) {
 			select {
 			case err := <-runDone:
