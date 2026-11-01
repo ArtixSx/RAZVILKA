@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -95,6 +96,10 @@ func (s *MihomoProbeSource) RunProbeAdmitted(ctx context.Context, control *opera
 	native.command = exec.Command("/proc/self/fd/3", "-f", "/proc/self/fd/4", "-d", "/proc/self/fd/5")
 	native.command.Args[0] = "mihomo"
 	native.command.Env = []string{}
+	// A finite probe must not outlive its creating controller thread. Go's
+	// Linux exec path also checks parent identity after PR_SET_PDEATHSIG to
+	// cover death between fork and prctl. This is no cold recovery grant.
+	native.command.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	native.command.ExtraFiles = []*os.File{native.binary, native.profile, native.directory}
 	native.command.Stdout, native.command.Stderr = io.Discard, io.Discard
 	var startMu sync.Mutex

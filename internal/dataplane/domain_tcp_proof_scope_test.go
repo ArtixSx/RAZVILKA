@@ -2,6 +2,9 @@ package dataplane
 
 import (
 	"context"
+	"errors"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -17,6 +20,25 @@ func domainTCPProofPlanModel(t *testing.T) Plan {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func TestDomainTCPProofRetainedPoolRefusesBeforeFleetOrJournal(t *testing.T) {
+	p := domainTCPProofPlanModel(t)
+	m := New(filepath.Join(t.TempDir(), "manager"))
+	m.retainedXray = &retainedXrayExecution{}
+	history := updatecheck.NewExecutionHistoryAdmission(func(context.Context, string) (int, string, error) {
+		t.Fatal("occupied domain pool reached fleet scan")
+		return 0, "", nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := m.WithDomainTCPProofResources(ctx, p, history, func(context.Context) error { t.Fatal("occupied domain pool reached callback"); return nil })
+	if !errors.Is(err, ErrDomainPolicyTCPCaptureRetirementPending) {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(m.StateRoot); !os.IsNotExist(err) {
+		t.Fatal("occupied pool created a new journal", err)
+	}
 }
 
 func TestDomainTCPProofPlanKeepsRealBlockersWithoutUnusedTUN(t *testing.T) {

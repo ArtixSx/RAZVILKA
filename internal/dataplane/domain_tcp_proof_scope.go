@@ -70,6 +70,12 @@ func (m *Manager) WithDomainTCPProofResources(ctx context.Context, p Plan, histo
 	if !bounded || time.Until(deadline) <= 0 || time.Until(deadline) > 2*time.Minute {
 		return ErrDomainTransportRuntime
 	}
+	// The existing retained slot bounds the restorative pool to ONE owner.
+	// Unrelated checks may observe a known footprint; another domain execution
+	// must not acquire native/effect resources and fail only at final handoff.
+	if m.retainedXrayOwner() != nil {
+		return ErrDomainPolicyTCPCaptureRetirementPending
+	}
 	if err := history.CheckWrite(ctx, 3); err != nil {
 		return err
 	}
@@ -77,5 +83,8 @@ func (m *Manager) WithDomainTCPProofResources(ctx context.Context, p Plan, histo
 		return err
 	}
 	defer m.endOperation()
+	if m.retainedXrayOwner() != nil {
+		return ErrDomainPolicyTCPCaptureRetirementPending
+	}
 	return m.withExecutionResourcesModeLocked(ctx, p, "xray", action, true)
 }
