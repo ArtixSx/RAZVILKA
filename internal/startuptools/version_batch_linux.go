@@ -96,6 +96,7 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 // lookup and extension membership is observed anew before and after each
 // literal command. sameNode includes ctime for every non-directory object.
 func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
+	noteVersionMetadataAttempt(r)
 	if err := r.pathsCurrent(ctx); err != nil {
 		return err
 	}
