@@ -31,6 +31,8 @@ type MihomoProbeSource struct {
 	session        *mihomoReleaseSession
 	mu             sync.Mutex
 	closed         bool
+	probeUsed      bool
+	probe          *MihomoProbeProcess
 	closeErr       error
 	artifacts      string
 	image, receipt restorejournal.Image
@@ -164,6 +166,9 @@ func (s *MihomoProbeSource) Close() error {
 	defer s.mu.Unlock()
 	if s.closed {
 		return s.closeErr
+	}
+	if s.probe != nil {
+		return ErrMihomoProbePending
 	}
 	s.closed = true
 	clear(s.profile)
