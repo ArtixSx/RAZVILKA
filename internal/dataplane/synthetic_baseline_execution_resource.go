@@ -201,30 +201,46 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 		Runner: &syntheticBaselineEffectRunner{resource: r},
 		Tools:  PolicyEffectTools{IPTables: r.tools.IPTables},
 		Preflight: func(c context.Context) error {
-			if err := r.current(c); err != nil {
-				return err
-			}
-			view, err := r.inspector.read(c)
-			if err != nil {
-				return err
-			}
-			for i := range r.effects.Effects {
-				count, err := syntheticBaselineExactPresence(view.Rows, r.effects, i)
-				if err != nil || count != 0 {
-					return errors.Join(ErrSyntheticBaselineTransition, err)
+			return r.observeTools(c, func(observed context.Context) error {
+				if err := r.current(observed); err != nil {
+					return err
 				}
-			}
-			return syntheticBaselinePreDNATEquivalent(view.Rows, r.effects)
+				view, err := r.inspector.read(observed)
+				if err != nil {
+					return err
+				}
+				for i := range r.effects.Effects {
+					count, err := syntheticBaselineExactPresence(view.Rows, r.effects, i)
+					if err != nil || count != 0 {
+						return errors.Join(ErrSyntheticBaselineTransition, err)
+					}
+				}
+				return syntheticBaselinePreDNATEquivalent(view.Rows, r.effects)
+			})
 		},
-		ExactPresence: r.inspector.ExactPresence,
-		BeforeDelete:  func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending },
-		Guard:         func(c context.Context, _ int) error { return r.current(c) },
+		ExactPresence: func(c context.Context, i int) (int, error) {
+			count := 0
+			err := r.observeTools(c, func(observed context.Context) error {
+				var err error
+				count, err = r.inspector.ExactPresence(observed, i)
+				return err
+			})
+			return count, err
+		},
+		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending },
+		Guard: func(c context.Context, _ int) error {
+			defer domainTCPMeasure("standby-add-guard")(0)
+			return r.observeTools(c, r.current)
+		},
 	}
 	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
-	if err := r.currentBaseline(ctx); err != nil {
+	// All COMMON additions returned before this pure closing comparison.
+	if err := r.observeTools(ctx, func(observed context.Context) error {
+		return r.observeOriginalFiles(observed, func(files *xrayDomainTCPFileObservation) error { return r.currentBaselineWithFiles(observed, files) })
+	}); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
