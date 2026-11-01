@@ -147,6 +147,11 @@ if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
+  # Cumulative callers attribute syscall/SHA cost to the original producer;
+  # flat runtime leaves alone cannot distinguish tools from runtime assets.
+  if ! timeout 50s go tool pprof -top -cum -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
 fi
 test "$probe_status" = 0 || exit "$probe_status"
 done

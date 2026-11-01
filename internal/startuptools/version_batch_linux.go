@@ -28,7 +28,7 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 	if l == nil || l.review == nil || ctx == nil || ctx.Err() != nil {
 		return at("VERSION_BATCH_SCOPE", nil)
 	}
-	if err := l.readObservationBytesCurrent(ctx); err != nil {
+	if err := l.versionBatchBoundary(ctx); err != nil {
 		return err
 	}
 	scoped, cancel := context.WithCancel(ctx)
@@ -45,12 +45,25 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 	if observed == nil && l.profile.ipAlias != "" {
 		observed = b.read(scoped, l, 2)
 	}
-	// Even a failed command cannot hide a concurrent graph mutation.
-	closing := l.readObservationBytesCurrent(ctx)
+	// Every child has its own full metadata closing check even on failure.
+	// An enclosing original observation also closes the full byte graph.
+	closing := l.versionBatchBoundary(ctx)
 	if l.closed.Load() || l.lifetime == nil || l.lifetime.Err() != nil {
 		closing = errors.Join(closing, at("VERSION_BATCH_SCOPE", nil))
 	}
 	return errors.Join(observed, closing, ctx.Err())
+}
+
+// Under the SAME original readonly observation, each actual child's complete
+// metadata Start/closing pair already brackets this fixed, callback-free
+// batch. Avoid two additional complete metadata traversals, preserving the
+// original scope/identity/lifetime checks here and outer full SHA bookends.
+// Ordinary checks retain their existing complete byte checks unchanged.
+func (l *Lease) versionBatchBoundary(ctx context.Context) error {
+	if _, present := readObservationMarker(ctx); present {
+		return l.readObservationCurrent(ctx) // Invalid/foreign markers never fall back.
+	}
+	return l.readObservationBytesCurrent(ctx)
 }
 
 func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error {
@@ -78,9 +91,6 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
 	runErr := l.runObservedRead(c, command)
-	if command.Process != nil {
-		domainNativeToolStarted("literal-version")
-	}
 	var observed error
 	if runErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		observed = commandResultFailure("COMMAND_RESULT", runErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)
@@ -99,6 +109,7 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 // lookup and extension membership is observed anew before and after each
 // literal command. sameNode includes ctime for every non-directory object.
 func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
+	noteVersionMetadataAttempt(r)
 	if err := r.pathsCurrent(ctx); err != nil {
 		return err
 	}

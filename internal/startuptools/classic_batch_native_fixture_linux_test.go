@@ -282,9 +282,11 @@ func readObservationNativeLifecycle(t *testing.T, ctx context.Context, lease *Le
 	var escaped context.Context
 	err := lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
 		escaped = observed
+		metadataBefore := NativeFixtureVersionMetadataCount(lease)
 		if err := lease.Check(observed, lease.identity); err != nil {
 			return err
 		}
+		t.Log("native completed scoped three-version Check original metadata traversal attempts", NativeFixtureVersionMetadataCount(lease)-metadataBefore)
 		original, _ := readObservationMarker(observed)
 		copied := &toolReadObservation{self: original, lease: lease, review: original.review, identity: original.identity, digest: original.digest, ctx: original.ctx, deadline: original.deadline, active: true}
 		if err := lease.Check(context.WithValue(observed, toolReadObservationKey{}, copied), lease.identity); !errors.Is(err, ErrUnknown) {
@@ -314,6 +316,32 @@ func readObservationNativeLifecycle(t *testing.T, ctx context.Context, lease *Le
 	}
 	if err := lease.Check(ctx, lease.identity); err != nil {
 		t.Fatal("scope retirement cancelled original owner", nativeStages(err))
+	}
+	// A genuinely executed fixed --version observation must retain its
+	// comparison failure alongside a later actual closing membership change.
+	// Only the expected version string is deliberately corrupted; original
+	// executable/argv/FD/loader/admission remain the actual protected producer.
+	extra := filepath.Join(lease.profile.extension, "rzv-version-close-negative")
+	versionErr := lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
+		expected := lease.profile.version
+		lease.profile.version = expected + "-negative-comparison"
+		readErr := lease.Check(observed, lease.identity)
+		lease.profile.version = expected
+		var failed *failure
+		if !errors.As(readErr, &failed) || failed.stage != "BACKEND_VERSION" {
+			t.Fatal("actual version observation failure missing", nativeStages(readErr))
+		}
+		if err := os.WriteFile(extra, []byte("private negative closing membership"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return readErr
+	})
+	removeErr := os.Remove(extra)
+	if removeErr != nil || !strings.Contains(nativeStages(versionErr), "BACKEND_VERSION") || !strings.Contains(nativeStages(versionErr), "CHECK_EXTENSION_SET") {
+		t.Fatal("actual version or closing exception lost", nativeStages(versionErr), removeErr)
+	}
+	if err := lease.Check(ctx, lease.identity); err != nil {
+		t.Fatal("private negative membership removal did not restore original graph", nativeStages(err))
 	}
 	panicValue := new(int)
 	func() {
