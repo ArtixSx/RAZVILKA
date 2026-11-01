@@ -67,7 +67,7 @@ func TestNativeCandidateStoppedCompletionTwoCuts(t *testing.T) {
 					t.Fatal("actual Installation/Control must remain outside the helper inventory", err, statErr)
 				}
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 			helper := exec.CommandContext(ctx, filepath.Join(job, "control.bin"), "self-update-helper", id)
 			output, err := helper.CombinedOutput() // Actual original H, sole outer Wait.
@@ -132,8 +132,18 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	if len(os.Args) != 3 || os.Args[1] != "self-update-helper" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// This is the whole multi-process fixture backstop, including repeated
+	// complete copies/hashes of the race-instrumented test controller. It is
+	// separate from every unchanged production reader/Wait/effect deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
+	fixtureStarted, phaseStarted := time.Now(), time.Now()
+	phase := "setup"
+	checkpoint := func(next string) {
+		t.Logf("stopped-fixture phase=%s elapsed_ms=%d total_ms=%d deadline_expired=%t", phase, time.Since(phaseStarted).Milliseconds(), time.Since(fixtureStarted).Milliseconds(), ctx.Err() != nil)
+		phase, phaseStarted = next, time.Now()
+	}
+	defer func() { checkpoint("returned") }()
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -260,6 +270,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		return admitErr
 	}
 	sealStarted := time.Now()
+	checkpoint("journal-readers")
 	proof, err := a.sealJournalReadersWithProbe(ctx, review, func(c context.Context, _ string) (SelfUpdateAuthority, error) {
 		stop, present, err := operationgate.ReadSelfUpdateStop(c, profile.Control)
 		authorityCalls++
@@ -303,6 +314,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	}
 	review.JournalReaders = proof
 	saveStoppedReview(t, a, u, review)
+	checkpoint("strategy-pair")
 	strategyPath := filepath.Join(a.installation, "razvilka/state/strategy-lab.json")
 	var beforeStrategy []byte
 	if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
@@ -315,6 +327,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		review.StrategyPair = pair
 		saveStoppedReview(t, a, u, review)
 	}
+	checkpoint("journal-prepare")
 	store, err := a.OpenFileJournal()
 	if err != nil {
 		t.Fatal(err)
@@ -327,6 +340,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 	retainedFile(t, a.installation, "etc/razvilka/admin.token", []byte("original private token"))
 	retainedFile(t, a.installation, "etc/razvilka/admin.credentials.json", []byte(`{"fixture":"original credentials"}`))
 	for _, command := range []string{"stop-old-panel", "prepare-private-state"} {
+		checkpoint(command)
 		if err := store.Execute(ctx, id, command, okay, func(c context.Context) error { return a.Run(c, id, command) }); err != nil {
 			t.Fatal(err)
 		}
@@ -336,13 +350,16 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		}
 	}
 	if err := runOrdinaryInstallerJoinScope(a, ctx, id, func(held context.Context) error {
+		checkpoint("quiesce-old-runtime")
 		if err := store.Execute(held, id, "quiesce-old-runtime", okay, func(c context.Context) error { return nativeStoppedQuiesceJoin(c, a, binary, id) }); err != nil {
 			return err
 		}
 		quiet := func(c context.Context) error { return a.Quiescence(c, id) }
+		checkpoint("install-files")
 		if err := store.Install(held, id, okay, quiet); err != nil {
 			return err
 		}
+		checkpoint("candidate-death")
 		w, final := nativeStoppedCandidateDeath(t, held, a, store, binary, job, id)
 		var recentStrategy []byte
 		if strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
@@ -371,6 +388,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		if profile.Scenario == "candidate-stopped-before" || strings.HasPrefix(profile.Scenario, "candidate-stopped-strategy") {
 			request()
 		}
+		checkpoint("stop-candidate-and-retain-history")
 		if err := store.Execute(held, id, "stop-candidate-panel", okay, func(cctx context.Context) error {
 			intent, _, err := store.Current()
 			if err != nil {
@@ -442,9 +460,11 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		admit := func(c context.Context, effect string, begin func() error) error {
 			return a.EffectAdmission(c, id, "replace-to-rollback", effect, begin)
 		}
+		checkpoint("restore-files")
 		if err := store.RestoreAdmitted(held, id, okay, quiet, admit); err != nil {
 			return err
 		}
+		checkpoint("restore-private-state")
 		if err := store.Execute(held, id, "restore-private-state", okay, func(c context.Context) error { return a.Run(c, id, "restore-private-state") }); err != nil {
 			return err
 		}
@@ -468,6 +488,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(job, "stop-candidate-panel.process.json")); !errors.Is(err, os.ErrNotExist) {
 			return ErrFileProtocol
 		}
+		checkpoint("settle-stopped-rollback")
 		authority := nativeStoppedCandidateAuthority(a, profile.Control)
 		if err := a.SettleStoppedRollback(ctx, id, authority); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("cold first settlement did not refuse missing ledger", err)
@@ -493,6 +514,7 @@ func TestNativeCandidateStoppedCompletionHelperFixture(t *testing.T) {
 		if string(controlBefore) != string(controlAfter) || string(requestBefore) != string(requestAfter) {
 			return ErrFileProtocol
 		}
+		checkpoint("final-inspect")
 		return a.Inspect(held, id)
 	}); err != nil {
 		t.Fatal(err)
