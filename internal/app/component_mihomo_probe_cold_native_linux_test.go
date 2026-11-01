@@ -42,6 +42,20 @@ func TestMihomoColdForeignCopy(t *testing.T) {
 	time.Sleep(60 * time.Second)
 }
 
+func TestMihomoColdActualNetworkIdentity(t *testing.T) {
+	if os.Getenv("RAZVILKA_MIHOMO_COLD_READY") == "" {
+		t.Skip("isolated actual PID namespace identity only")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := netidentity.NewProcProvider().WithCurrent(ctx, func(held context.Context, identity netidentity.Identity) error {
+		t.Log("actual fresh namespace identity", identity.Kind, identity.Inode)
+		return held.Err()
+	}); err != nil {
+		t.Fatal("fixture cannot attribute a later refusal to the foreign PID namespace", err)
+	}
+}
+
 func TestMihomoColdOriginalProducer(t *testing.T) {
 	ready := os.Getenv("RAZVILKA_MIHOMO_COLD_READY")
 	if ready == "" {

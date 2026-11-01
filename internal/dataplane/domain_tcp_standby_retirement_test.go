@@ -373,3 +373,30 @@ func TestDomainTCPStandbyDNSOwnerRetryRechecksBothNames(t *testing.T) {
 		})
 	}
 }
+
+func TestDomainTCPStandbyDNSOwnerDestinationRaceCannotOverwrite(t *testing.T) {
+	r, retained, ctx := standbyRetirementPublicationModel(t)
+	record := r.owner.process.material.session.synthetic.ownerRecord
+	originalRename := record.rename
+	foreign := []byte("foreign destination appeared at actual rename boundary")
+	record.rename = func(dir *os.File, from, to string) error {
+		if err := record.root.WriteAtomic(to, foreign, 0600); err != nil {
+			return err
+		}
+		return originalRename(dir, from, to)
+	}
+	if err := r.publishRemoved(ctx, retained); err == nil {
+		t.Fatal("destination race overwrote foreign history")
+	}
+	actual, err := os.ReadFile(filepath.Join(record.path, record.destination))
+	if err != nil || string(actual) != string(foreign) {
+		t.Fatal("foreign destination changed", err)
+	}
+	source, err := os.ReadFile(filepath.Join(record.path, "owner.json"))
+	if err != nil || string(source) != string(record.canonical) {
+		t.Fatal("original source lost on destination collision", err)
+	}
+	if _, err := scopedDNSInactiveEpoch(record.path); err == nil {
+		t.Fatal("destination race released original lifecycle")
+	}
+}

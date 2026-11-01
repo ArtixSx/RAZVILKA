@@ -15,6 +15,9 @@ chmod 500 "$mihomo_inactive_work/dataplane.test"
 # misclassified as a competing controller. No process is exempted in code.
 unshare --mount --net --pid --fork sh -eu -c '
  mount --make-rprivate /
+ # Detach the inherited proc tree in this private namespace. The identity
+ # observer deliberately rejects hidden, stacked /proc mountpoints.
+ umount -l /proc
  mount -t proc proc /proc
  mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
  ip link set lo up
