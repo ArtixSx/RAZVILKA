@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -320,6 +321,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 		}
 		if !strings.HasPrefix(published.Answer, "198.") {
+			domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 			return errors.New("actual DNS publication did not become available")
 		}
 		same, err := owner.LookupPublished(original, transport.Definition.Client, netip.MustParseAddr(published.Answer))
@@ -433,6 +435,38 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		t.Fatal("unissued late-SYN/cache settlement unexpectedly cleared known standby footprint")
 	}
 	t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
+}
+
+func domainOriginalPublicationDiagnostics(t *testing.T, root string) {
+	t.Helper()
+	buffer := make([]byte, 64<<10)
+	n := runtime.Stack(buffer, true)
+	t.Logf("original publication blocked; bounded goroutine stacks:\n%s", buffer[:n])
+	file, err := os.Open(filepath.Join(root, "latest-execution.json"))
+	if err == nil {
+		var execution dataplane.Execution
+		err = json.NewDecoder(io.LimitReader(file, 4<<20)).Decode(&execution)
+		file.Close()
+		if err == nil {
+			for _, resource := range execution.Resources {
+				t.Logf("actual COMMON progress kind=%s state=%s phase=%s", resource.Kind, resource.State, resource.Phase)
+			}
+		}
+	}
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), ".log") {
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer file.Close()
+		data, _ := io.ReadAll(io.LimitReader(file, 8192))
+		relative, _ := filepath.Rel(root, path)
+		t.Logf("actual generated runtime %s: %s", relative, data)
+		return nil
+	})
 }
 
 // Read-only independent process observation for assertions, never deletion or
