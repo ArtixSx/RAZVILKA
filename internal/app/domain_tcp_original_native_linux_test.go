@@ -13,7 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -290,6 +292,32 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		resource, err := dataplane.AcquireXrayDomainTCPExecutionResource(original, material)
 		if err != nil {
 			return fmt.Errorf("original resource issuer: %w", err)
+		}
+		if work := os.Getenv("RAZVILKA_DOMAIN_CPU_PROFILE"); work != "" {
+			info, err := os.Lstat(work)
+			if err != nil {
+				return err
+			}
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			if !filepath.IsAbs(work) || filepath.Clean(work) != work || work != os.Getenv("RAZVILKA_DOMAIN_FIXTURE_WORK") || !strings.HasPrefix(work, "/tmp/razvilka-domain-original.") || !info.IsDir() || info.Mode().Perm() != 0700 || !ok || stat.Uid != uint32(os.Geteuid()) {
+				return errors.New("CPU profile requires original private CI work directory")
+			}
+			profile, err := os.OpenFile(filepath.Join(work, "original-run.cpu.pprof"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if err != nil {
+				return err
+			}
+			if err := pprof.StartCPUProfile(profile); err != nil {
+				_ = profile.Close()
+				return err
+			}
+			// Registered before the Run join defer below: StopCPUProfile runs
+			// only after the original child/consumer has joined, even on failure.
+			defer func() {
+				pprof.StopCPUProfile()
+				if err := profile.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
 		}
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)

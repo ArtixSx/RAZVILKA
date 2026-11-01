@@ -168,10 +168,19 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: |
+          mkdir -p -m 700 artifacts/domain-native
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain-native' EXIT
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain-native" \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            sh scripts/test-domain-original-native.sh
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain-native/native.log
+      - name: Original domain native CPU evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-native-${{ github.sha }}
+          path: artifacts/domain-native
       - name: Actual HEV TUN HTTPS and owned cleanup in private namespaces
         if: ${{ !cancelled() }}
         shell: bash
