@@ -41,16 +41,25 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var q struct {
-		Content string                       `json:"content"`
-		Options backendprofile.MihomoOptions `json:"options"`
-		Action  string                       `json:"action"`
-		Review  string                       `json:"review"`
-		Confirm string                       `json:"confirm"`
+		Content          string                       `json:"content"`
+		Options          backendprofile.MihomoOptions `json:"options"`
+		Action           string                       `json:"action"`
+		Review           string                       `json:"review"`
+		Confirm          string                       `json:"confirm"`
+		ServiceID        string                       `json:"service_id"`
+		ExpectedRevision *uint64                      `json:"expected_revision"`
 	}
 	if !extensionDecode(w, r, &q) {
 		return
 	}
-	if (q.Action != "preview" && q.Action != "export" && q.Action != "validate") || (q.Action == "validate" && q.Confirm != "VALIDATE_MIHOMO_CONFIG") || (q.Action != "validate" && q.Confirm != "BUILD_MIHOMO_CONFIG") {
+	confirm := "BUILD_MIHOMO_CONFIG"
+	if q.Action == "validate" {
+		confirm = "VALIDATE_MIHOMO_CONFIG"
+	}
+	if q.Action == "probe" {
+		confirm = "PROBE_MIHOMO_SERVICE"
+	}
+	if (q.Action != "preview" && q.Action != "export" && q.Action != "validate" && q.Action != "probe") || q.Confirm != confirm {
 		writeJSON(w, 400, map[string]any{"error": "Подтвердите построение профиля Mihomo."})
 		return
 	}
@@ -61,12 +70,16 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 	}
 	h := sha256.Sum256([]byte(result.Config))
 	digest := hex.EncodeToString(h[:])
-	if (q.Action == "export" || q.Action == "validate") && q.Review != digest {
+	if q.Action != "preview" && q.Review != digest {
 		writeJSON(w, 409, map[string]any{"error": "Параметры изменились. Повторите предпросмотр."})
 		return
 	}
 	if r.Context().Err() != nil || !a.Security.Authenticated(r) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
+		return
+	}
+	if q.Action == "probe" {
+		a.probeMihomo(w, r, q.Content, q.Options, digest, q.ServiceID, q.ExpectedRevision)
 		return
 	}
 	if q.Action == "validate" {

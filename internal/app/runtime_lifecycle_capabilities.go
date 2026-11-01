@@ -96,6 +96,7 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 	}
 	if id == "mihomo" {
 		operations["native_validation"] = registeredLifecycleOperation(a.Components != nil && a.Store != nil, "reviewed-generated-profile-and-original-installed-component-required")
+		operations["isolated_probe"] = registeredLifecycleOperation(a.mihomoProbeRegistered(), "original-installed-source-catalog-service-current-network-and-exclusive-cleanup-required")
 	}
 	if id == "hev" {
 		dependency := a.Dataplane.ManagedSidecarLifecycleRegistration("hev")

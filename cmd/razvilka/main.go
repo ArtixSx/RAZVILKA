@@ -37,6 +37,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/installpath"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
@@ -871,6 +872,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
 	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
+	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
+		log.Print("Isolated Mihomo service check unavailable: original registration refused")
+	}
 	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
 	componentReadErr := checkComponentReadState(componentReadContext, a.Components.StateDir, app.ManagedComponentReadVersion)
 	cancelComponentRead()

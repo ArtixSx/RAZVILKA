@@ -80,7 +80,7 @@ func (a *App) scopedRuntimeOperation(ctx context.Context) (context.Context, func
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath || r.URL.Path == mihomoRecoveryPath {
+		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath || r.URL.Path == mihomoRecoveryPath || r.URL.Path == mihomoProbeRecoveryPath {
 			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return
@@ -146,6 +146,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		}
 		a.interruptAutomation(r)
 		nodeJobOwnsAdmission := (r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/service-control/runtime") && r.Method == http.MethodPost
+		// Pure conversion does not read Store; validate/probe acquire their own
+		// exclusive admission, retaining it if the original cleanup is pending.
+		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/extension-lab/mihomo"
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/dns/service-compare" && r.Method == http.MethodPost
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isNodeApplyPath(r)
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isScopedDNSApplyPath(r)

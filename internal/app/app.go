@@ -156,6 +156,7 @@ type App struct {
 	ProxySidecarBoot             string // Actual factory choice for this process; never changed by settings writes.
 	strategyCompatibility        strategyCompatibilityState
 	strategyProbe                strategyProbeState
+	mihomoProbe                  mihomoProbeState
 	Components                   *components.Manager
 	ComponentHistory             *updatecheck.ComponentHistoryAdmission
 	ExecutionHistory             *updatecheck.ExecutionHistoryAdmission
@@ -538,6 +539,7 @@ func nfqws2Presentation(serviceID string, desired, planned string, desiredEnable
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/extension-lab/mihomo", a.extensionMihomo)
+	mux.HandleFunc("/api/v1/extension-lab/mihomo/probe", a.mihomoProbeRecovery)
 	mux.HandleFunc("/api/v1/extension-lab/hev", a.extensionHev)
 	mux.HandleFunc("/api/v1/runtime/proxy-sidecar", a.proxySidecar)
 	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
