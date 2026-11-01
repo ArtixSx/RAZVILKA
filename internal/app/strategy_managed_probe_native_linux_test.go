@@ -471,7 +471,13 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			}
 			return errors.Join(callbackFailure, closeErr)
 		})
-		if !called || !errors.Is(readErr, callbackFailure) || !errors.Is(readErr, strategylab.ErrSelectedCandidateChanged) && !errors.Is(readErr, dataplane.ErrReviewChanged) {
+		// Store revision refusal is intentionally preserved by the real
+		// exclusion observer; source/runtime/control revoke their own owner.
+		revoked := errors.Is(readErr, strategylab.ErrSelectedCandidateChanged) || errors.Is(readErr, dataplane.ErrReviewChanged)
+		if revoke[0] == "environment" {
+			revoked = errors.Is(readErr, config.ErrRevisionChanged)
+		}
+		if !called || !errors.Is(readErr, callbackFailure) || !revoked {
 			t.Fatal("actual closing revocation or original callback failure lost", readErr)
 		}
 		// Cleanup was independently confirmed before the revocation. Refusing
