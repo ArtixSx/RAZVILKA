@@ -35,12 +35,16 @@ func nfqwsPacketMAC(raw string) (string, error) {
 }
 
 func validateNFQWSPacketSnapshot(cfg config.Config, s NFQWSPacketScopeSnapshot) error {
+	return validateNFQWSPacketSnapshotForIdentity(cfg, s, netidentity.ReviewedSingleInitNet)
+}
+
+func validateNFQWSPacketSnapshotForIdentity(cfg config.Config, s NFQWSPacketScopeSnapshot, kind netidentity.Kind) error {
 	i, err := nfqwsPacketIntent(cfg)
 	if err != nil {
 		return err
 	}
 	f := s.Facts
-	if !reflect.DeepEqual(i, f.Intent) || !defaultRouteScopeReferenceValid(cfg, s.Authority) || s.Authority.ApprovalRevision != i.Revision || s.Authority.PolicyRevision != i.PolicyRevision || f.Control.InstallationID != s.Authority.InstallationID || f.Control.Sequence != s.Authority.Sequence || s.DNSMode != "baseline" || !systemprobe.ValidWANProfileID(s.NetworkID) || len(f.ScopeID) != 32 || strings.Trim(f.ScopeID, "0123456789abcdef") != "" || f.Identity.Validate() != nil || f.Identity.Kind != netidentity.ReviewedSingleInitNet {
+	if !reflect.DeepEqual(i, f.Intent) || !defaultRouteScopeReferenceValid(cfg, s.Authority) || s.Authority.ApprovalRevision != i.Revision || s.Authority.PolicyRevision != i.PolicyRevision || f.Control.InstallationID != s.Authority.InstallationID || f.Control.Sequence != s.Authority.Sequence || s.DNSMode != "baseline" || !systemprobe.ValidWANProfileID(s.NetworkID) || len(f.ScopeID) != 32 || strings.Trim(f.ScopeID, "0123456789abcdef") != "" || f.Identity.Validate() != nil || f.Identity.Kind != kind {
 		return dataplane.ErrReviewChanged
 	}
 	h := f.Home
@@ -97,13 +101,17 @@ func validateNFQWSPacketSnapshot(cfg config.Config, s NFQWSPacketScopeSnapshot) 
 // First slice: one Home prefix, lan_except/inherit, one TCP4 NFQ service with
 // literal destinations and no per-service Sources. Unsupported cases refuse.
 func CompileNFQWSIPv4LANPacketPolicy(cfg config.Config, s NFQWSPacketScopeSnapshot, services []dataplane.Route, paths map[string]DefaultRoutePath, now time.Time) (*DefaultRouteCompilation, error) {
+	return compileNFQWSIPv4LANPacketPolicyForIdentity(cfg, s, services, paths, now, netidentity.ReviewedSingleInitNet)
+}
+
+func compileNFQWSIPv4LANPacketPolicyForIdentity(cfg config.Config, s NFQWSPacketScopeSnapshot, services []dataplane.Route, paths map[string]DefaultRoutePath, now time.Time, kind netidentity.Kind) (*DefaultRouteCompilation, error) {
 	refuse := func(reason string) (*DefaultRouteCompilation, error) {
 		return nil, fmt.Errorf("%w: NFQ IPv4 LAN packet purpose: %s", ErrDefaultRouteCapability, reason)
 	}
 	if now.IsZero() || cfg.Revision == 0 || cfg.Revision == ^uint64(0) {
 		return nil, dataplane.ErrReviewChanged
 	}
-	if err := validateNFQWSPacketSnapshot(cfg, s); err != nil {
+	if err := validateNFQWSPacketSnapshotForIdentity(cfg, s, kind); err != nil {
 		return nil, err
 	}
 	if len(services) != 1 || len(paths) != 1 {

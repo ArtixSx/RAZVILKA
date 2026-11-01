@@ -354,6 +354,9 @@ func TestManagedStrategyProbeNativeLANPhysical(t *testing.T) {
 	if err != nil || p.original == nil || view.Facts.Identity.Kind != netidentity.ProcNetInode || view.Facts.Home.Interface != "rzhome" || len(view.Facts.ExcludedMACs) != 1 || view.Facts.ExcludedMACs[0] != "02:00:00:77:00:20" {
 		t.Fatal("actual packet selectors", view, err)
 	}
+	if out, err := CompileNFQWSIPv4LANPacketPolicy(store.Get(), view, nil, nil, time.Now()); out != nil || !errors.Is(err, dataplane.ErrReviewChanged) {
+		t.Fatal("public stock compiler accepted genuine Proc comparison", out, err)
+	}
 	// A real structural event must invalidate these SAME retained sources.
 	managedProbeNativeIP(t, ctx, "link", "set", "rzhome", "down")
 	if _, err := p.Observe(c); err == nil {

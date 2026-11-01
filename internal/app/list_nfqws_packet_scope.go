@@ -45,6 +45,7 @@ type NFQWSPacketScopeBinding struct {
 	control                    *operationgate.ControlEpochReview
 	physical                   nfqwsPacketObserver
 	original                   *physicalscope.IPv4LANPacketScope
+	identityKind               netidentity.Kind // Frozen by the original source constructor.
 	expected                   config.Config
 	snapshot                   NFQWSPacketScopeSnapshot
 	network                    func(context.Context) (string, error)
@@ -75,6 +76,10 @@ func NewReviewedStockNC1812NFQWSPacketScopeBinding(ctx context.Context, a *App, 
 
 // Private model seam; production always retains the concrete original above.
 func newNFQWSPacketScopeBinding(ctx context.Context, a *App, acquire func(context.Context, *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error)) (*NFQWSPacketScopeBinding, error) {
+	return newNFQWSPacketScopeBindingForIdentity(ctx, a, acquire, netidentity.ReviewedSingleInitNet)
+}
+
+func newNFQWSPacketScopeBindingForIdentity(ctx context.Context, a *App, acquire func(context.Context, *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error), kind netidentity.Kind) (*NFQWSPacketScopeBinding, error) {
 	c, cancel, err := listScopeContext(ctx)
 	if err != nil {
 		return nil, err
@@ -83,7 +88,7 @@ func newNFQWSPacketScopeBinding(ctx context.Context, a *App, acquire func(contex
 	if a == nil || a.Store == nil || a.SelfUpdateFiles == nil || acquire == nil {
 		return nil, ErrListScopeChanged
 	}
-	b := &NFQWSPacketScopeBinding{app: a, store: a.Store, network: a.FreshProfile}
+	b := &NFQWSPacketScopeBinding{app: a, store: a.Store, network: a.FreshProfile, identityKind: kind}
 	b.self = b
 	if b.network == nil {
 		b.network = func(c context.Context) (string, error) { p, e := systemprobe.FreshWANProfile(c); return p.ID, e }
@@ -122,7 +127,7 @@ func newNFQWSPacketScopeBinding(ctx context.Context, a *App, acquire func(contex
 		}
 		b.snapshot.Facts = b.physical.PacketFacts()
 		b.snapshot.DNSMode = "baseline"
-		if e = validateNFQWSPacketSnapshot(b.expected, b.snapshot); e != nil {
+		if e = validateNFQWSPacketSnapshotForIdentity(b.expected, b.snapshot, b.identityKind); e != nil {
 			return e
 		}
 		return b.currentLocked(c)
@@ -235,6 +240,23 @@ func (b *NFQWSPacketScopeBinding) Observe(ctx context.Context) (NFQWSPacketScope
 	}
 	return s, nil
 }
+
+// The actual retained binding selects its immutable source kind. No exported
+// compiler accepts a Proc snapshot as substitute for this original owner.
+func (b *NFQWSPacketScopeBinding) compile(ctx context.Context, cfg config.Config, comparison NFQWSPacketScopeSnapshot, services []dataplane.Route, paths map[string]DefaultRoutePath, now time.Time) (out *DefaultRouteCompilation, result error) {
+	result = b.use(ctx, func(context.Context) error {
+		if !reflect.DeepEqual(cfg, b.expected) || !reflect.DeepEqual(comparison, b.snapshot) {
+			return dataplane.ErrReviewChanged
+		}
+		var err error
+		out, err = compileNFQWSIPv4LANPacketPolicyForIdentity(cfg, b.snapshot, services, paths, now, b.identityKind)
+		return err
+	})
+	if result != nil {
+		out = nil
+	}
+	return out, result
+}
 func (b *NFQWSPacketScopeBinding) BindCompilation(ctx context.Context, c *DefaultRouteCompilation) error {
 	return b.use(ctx, func(context.Context) error {
 		if c == nil || b.boundOnce || c.packet == nil || !reflect.DeepEqual(c.packet, &b.snapshot) || !reflect.DeepEqual(c.policy, b.expected.NetworkPolicy) || c.LAN() == nil || c.LAN().Mode != dataplane.LANPolicyNFQWSDirectMode || c.LAN().Generation != c.Digest() {
@@ -242,7 +264,7 @@ func (b *NFQWSPacketScopeBinding) BindCompilation(ctx context.Context, c *Defaul
 		}
 		// Recompile the original immutable comparison to refuse replaced rules or
 		// negative gates, including package-local partial/copy compositions.
-		rebuilt, err := CompileNFQWSIPv4LANPacketPolicy(b.expected, b.snapshot, defaultRouteCloneRoutes(c.packetServices), c.snapshot.Paths, time.Now())
+		rebuilt, err := compileNFQWSIPv4LANPacketPolicyForIdentity(b.expected, b.snapshot, defaultRouteCloneRoutes(c.packetServices), c.snapshot.Paths, time.Now(), b.identityKind)
 		if err != nil || !reflect.DeepEqual(rebuilt, c) {
 			return errors.Join(ErrListScopeChanged, err)
 		}

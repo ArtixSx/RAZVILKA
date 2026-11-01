@@ -97,7 +97,7 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	}
 	phase = "compile"
 	if packetPurpose {
-		compilation, err = CompileNFQWSIPv4LANPacketPolicy(cfg, packetSnapshot, services, snapshot.Paths, time.Now())
+		compilation, err = e.packetScope.compile(c, cfg, packetSnapshot, services, snapshot.Paths, time.Now())
 	} else {
 		compilation, err = CompileDefaultRoutePolicy(cfg, snapshot, services, time.Now())
 	}
