@@ -439,6 +439,11 @@ func domainOriginalServePeer(t *testing.T, root string) {
 		}
 	}()
 	config := map[string]any{"log": map[string]any{"loglevel": "debug", "access": "none"}, "inbounds": []any{map[string]any{"listen": domainOriginalServer, "port": 10443, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": domainOriginalUUID}}, "decryption": "none"}, "streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": filepath.Join(root, "ca.pem"), "keyFile": filepath.Join(root, "key.pem")}}}}}}, "outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": domainOriginalServer}}}
+	// The genuine unguarded node precheck also proves SOCKS domain requests.
+	// This isolated peer has no host systemd-resolved service; resolve only its
+	// exact physical fixture names through Xray's own DNS, not a fake probe.
+	config["dns"] = map[string]any{"hosts": map[string]any{"service.example.com": domainOriginalServer, "unknown.example.com": domainOriginalServer, "www.cloudflare.com": domainOriginalServer, "api.ipify.org": domainOriginalServer}}
+	config["outbounds"] = []any{map[string]any{"protocol": "freedom", "sendThrough": domainOriginalServer, "settings": map[string]any{"domainStrategy": "UseIPv4"}}}
 	raw, _ := json.Marshal(config)
 	path := filepath.Join(root, "server.json")
 	if err := os.WriteFile(path, raw, 0600); err != nil {
