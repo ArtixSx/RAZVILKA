@@ -45,6 +45,9 @@ func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 }
 
 func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
+	return e.observeTools(ctx, e.captureCurrentObserved)
+}
+func (e *nfqwsProbeExecution) captureCurrentObserved(ctx context.Context) error {
 	if err := e.current(ctx); err != nil {
 		return err
 	}

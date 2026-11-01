@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -24,7 +25,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
-	for _, kind := range []string{"held-file", "extension-membership"} {
+	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -41,10 +42,10 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			mounts, readErr := io.ReadAll(io.LimitReader(mountFile, (1<<20)+1))
+			mounts, mountReadErr := io.ReadAll(io.LimitReader(mountFile, (1<<20)+1))
 			closeErr := mountFile.Close()
-			if readErr != nil || closeErr != nil || len(mounts) > 1<<20 {
-				t.Fatal("bounded actual mount inventory", readErr, closeErr)
+			if mountReadErr != nil || closeErr != nil || len(mounts) > 1<<20 {
+				t.Fatal("bounded actual mount inventory", mountReadErr, closeErr)
 			}
 			privateRoot, tmpfsOpt := false, false
 			for _, line := range strings.Split(string(mounts), "\n") {
@@ -133,10 +134,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer syscall.Unmount(extensions, syscall.MNT_DETACH)
-			chain := "RZV_CI_RO_FD"
-			if kind == "extension-membership" {
-				chain = "RZV_CI_RO_SET"
-			}
+			chain := "RZV_CI_RO_" + strconv.Itoa(index)
 			for _, args := range [][]string{{"-t", "mangle", "-N", chain}, {"-t", "mangle", "-A", chain, "-p", "tcp", "-m", "tcp", "--dport", "443", "-j", "RETURN"}} {
 				if output, err := exec.CommandContext(ctx, "/usr/sbin/iptables-legacy", args...).CombinedOutput(); err != nil {
 					t.Fatal("inert no-hook fixture setup", err, string(output))
@@ -148,6 +146,12 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				t.Fatal("actual protected producer", nativeStages(err))
 			}
 			defer lease.Close()
+			if strings.HasPrefix(kind, "observation-") {
+				readObservationNativeLifecycle(t, ctx, lease, kind == "observation-close")
+				if kind == "observation-close" {
+					return
+				}
+			}
 			watch, err := syscall.InotifyInit1(syscall.IN_NONBLOCK | syscall.IN_CLOEXEC)
 			if err != nil {
 				t.Fatal(err)
@@ -180,7 +184,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 					case <-time.After(100 * time.Microsecond):
 					}
 				}
-				if kind == "held-file" {
+				if strings.HasSuffix(kind, "held-file") {
 					file, err := os.OpenFile(filepath.Join(private, "libxt_comment.so"), os.O_WRONLY|os.O_APPEND, 0)
 					if err != nil {
 						complete(err)
@@ -197,7 +201,18 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				}
 				complete(err)
 			}()
-			result, readErr := lease.ReadBoundedClassicTables(ctx, lease.identity, lease.digest, lease.profile.aliases, 1<<20, [2][]string{{"mangle"}, {"mangle"}})
+			var result [2][][]byte
+			var readErr error
+			read := func(observed context.Context) error {
+				var err error
+				result, err = lease.ReadBoundedClassicTables(observed, lease.identity, lease.digest, lease.profile.aliases, 1<<20, [2][]string{{"mangle"}, {"mangle"}})
+				return err
+			}
+			if strings.HasPrefix(kind, "observation-") {
+				readErr = lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, read)
+			} else {
+				readErr = read(ctx)
+			}
 			returned := time.Now()
 			mutation := <-mutated
 			if mutation.err != nil {
@@ -213,4 +228,139 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 			t.Log("actual protected first -S loaded held TCP extension;", kind, "change refused whole image; no hooks or packets, host tools unchanged")
 		})
 	}
+}
+
+// Uses the genuine protected factory source. The callback itself never calls
+// Close: its external owner performs shutdown concurrently, as in production.
+func readObservationNativeLifecycle(t *testing.T, ctx context.Context, lease *Lease, externalClose bool) {
+	t.Helper()
+	callbackFailure := errors.New("original native readonly callback failure")
+	if externalClose {
+		entered := make(chan struct{})
+		callbackExited := make(chan struct{})
+		finished := make(chan error, 1)
+		go func() {
+			finished <- lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
+				defer close(callbackExited)
+				if err := lease.Check(observed, lease.identity); err != nil {
+					return err
+				}
+				close(entered)
+				<-observed.Done()
+				return callbackFailure
+			})
+		}()
+		select {
+		case <-entered:
+		case err := <-finished:
+			t.Fatal("external Close observation did not start", nativeStages(err))
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		if err := lease.Close(); err != nil {
+			t.Fatal("original external Close", err)
+		}
+		if ctx.Err() != nil {
+			t.Fatal("parent deadline replaced actual external Close cancellation")
+		}
+		select {
+		case <-callbackExited:
+		default:
+			t.Fatal("Close released descriptors before original callback finished")
+		}
+		select {
+		case err := <-finished:
+			if !errors.Is(err, callbackFailure) || !errors.Is(err, ErrUnknown) {
+				t.Fatal("external Close lost callback or invalidated owner", err)
+			}
+		case <-time.After(operationTimeout):
+			t.Fatal("original observation caller did not receive terminal Close error")
+		}
+		t.Log("actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors")
+		return
+	}
+	var escaped context.Context
+	err := lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
+		escaped = observed
+		if err := lease.Check(observed, lease.identity); err != nil {
+			return err
+		}
+		original, _ := readObservationMarker(observed)
+		copied := &toolReadObservation{self: original, lease: lease, review: original.review, identity: original.identity, digest: original.digest, ctx: original.ctx, deadline: original.deadline, active: true}
+		if err := lease.Check(context.WithValue(observed, toolReadObservationKey{}, copied), lease.identity); !errors.Is(err, ErrUnknown) {
+			t.Fatal("copied observation borrowed genuine held source", err)
+		}
+		for _, source := range []*Lease{lease, new(Lease)} {
+			_, err := source.policyEffect(observed, 0, []string{"-t", "mangle", "-N", "RZV_MUST_NOT_CREATE"})
+			var refused *failure
+			if !errors.As(err, &refused) || refused.stage != "READ_OBSERVATION_EFFECT" {
+				t.Fatal("effect entered readonly source", err)
+			}
+			_, err = source.runWGInactivityHeld(observed, "foreign", []string{"set"}...)
+			if !errors.As(err, &refused) || refused.stage != "READ_OBSERVATION_EFFECT" {
+				t.Fatal("WG admission entered readonly source", err)
+			}
+		}
+		return callbackFailure
+	})
+	if !errors.Is(err, callbackFailure) {
+		t.Fatal("native callback exception lost", err)
+	}
+	if err := lease.Check(escaped, lease.identity); !errors.Is(err, ErrUnknown) {
+		t.Fatal("late original observation issued facts", err)
+	}
+	if err := lease.WithReadOnlyToolObservation(escaped, lease.identity, lease.digest, func(context.Context) error { t.Fatal("expired loan invoked callback"); return nil }); !errors.Is(err, ErrUnknown) {
+		t.Fatal(err)
+	}
+	if err := lease.Check(ctx, lease.identity); err != nil {
+		t.Fatal("scope retirement cancelled original owner", nativeStages(err))
+	}
+	panicValue := new(int)
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != panicValue {
+				t.Fatal("original panic changed", recovered)
+			}
+		}()
+		_ = lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error { escaped = observed; panic(panicValue) })
+	}()
+	if err := lease.Check(escaped, lease.identity); !errors.Is(err, ErrUnknown) {
+		t.Fatal("panic leaked active readonly context", err)
+	}
+	if err := lease.Check(ctx, lease.identity); err != nil {
+		t.Fatal("panic leaked original tool gate", nativeStages(err))
+	}
+	// One genuine held read remains active when the callback returns an error.
+	// Retirement must cancel it and join its gate borrower before closing SHA.
+	entered := make(chan error, 1)
+	joined := make(chan struct{}, 1)
+	err = lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
+		go func() {
+			if err := lease.lock(observed); err != nil {
+				entered <- err
+				return
+			}
+			err := lease.current(observed, lease.identity, true)
+			entered <- err
+			<-observed.Done()
+			joined <- struct{}{}
+			lease.unlock()
+		}()
+		if err := <-entered; err != nil {
+			return err
+		}
+		return callbackFailure
+	})
+	if !errors.Is(err, callbackFailure) {
+		t.Fatal("joined native read lost callback error", err)
+	}
+	select {
+	case <-joined:
+	default:
+		t.Fatal("original held native read was not joined")
+	}
+	if err := lease.Check(ctx, lease.identity); err != nil {
+		t.Fatal("joined original source did not remain current", nativeStages(err))
+	}
+	t.Log("actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed")
 }
