@@ -11,6 +11,10 @@ import (
 )
 
 func (r *XrayDomainTCPExecutionResource) observeDomainListener(ctx context.Context) (xraySelectedTCPListenerObservation, error) {
+	return r.observeDomainListenerWithOpening(ctx, nil)
+}
+
+func (r *XrayDomainTCPExecutionResource) observeDomainListenerWithOpening(ctx context.Context, opening *xrayDomainTCPFileOpening) (xraySelectedTCPListenerObservation, error) {
 	if r.domainProcessCurrent(ctx) != nil || r.scope.networkIdentity == nil || r.scope.networkIdentity.provider == nil {
 		return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal
 	}
@@ -19,7 +23,7 @@ func (r *XrayDomainTCPExecutionResource) observeDomainListener(ctx context.Conte
 		if current != r.definition.NetworkIdentity || r.domainProcessCurrent(held) != nil {
 			return ErrXrayDomainTCPOriginal
 		}
-		return r.withFileObservation(held, func(files *xrayDomainTCPFileObservation) error {
+		observe := func(files *xrayDomainTCPFileObservation) error {
 			proc, err := openXraySelectedTCPProc(held, r.child.pid)
 			if err != nil {
 				return err
@@ -47,7 +51,11 @@ func (r *XrayDomainTCPExecutionResource) observeDomainListener(ctx context.Conte
 			}
 			observed = xraySelectedTCPListenerObservation{process: last, endpoint: r.definition.PrivateEndpoint, inode: inode}
 			return nil
-		})
+		}
+		if opening != nil {
+			return r.withFileObservationAfterOpening(held, opening, observe)
+		}
+		return r.withFileObservation(held, observe)
 	})
 	if err != nil || r.domainProcessCurrent(ctx) != nil {
 		return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal

@@ -166,7 +166,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestDomainTCPBaseline|TestXrayDomainFileObservation|TestXrayDomainTCPNativeHeldProcessLifecycle|TestXraySelectedTCPNativeHeldJSONConfig|TestNFQWSProbe' -v
+            go test -race -count=1 ./internal/dataplane -run 'TestDomainTCPOriginalFactoryProcessCancellation|TestDomainTCPFactoryOriginalDNSReserve|TestDomainTCPBaseline|TestXrayDomainFileObservation|TestXrayDomainFileOpening|TestXrayDomainTCPNativeHeldProcessLifecycle|TestXraySelectedTCPNativeHeldJSONConfig|TestNFQWSProbe' -v
       - name: Original LAN DNS capture selected TLS and transparent baseline
         if: ${{ !cancelled() }}
         shell: bash

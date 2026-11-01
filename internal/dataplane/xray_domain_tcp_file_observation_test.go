@@ -157,3 +157,76 @@ func TestXrayDomainFileObservationRefusesReboundSameInodeDescriptor(t *testing.T
 		t.Fatal("closing read accepted replaced original descriptor")
 	}
 }
+
+// This model has no Cmd, kernel birth, material or registrar: it cannot grant a
+// process read. It tests only the one-use transfer of a completed file opening.
+func domainFileOpeningModel(t *testing.T) (*XrayDomainTCPExecutionResource, context.Context, func(), *xrayDomainTCPFileOpening) {
+	t.Helper()
+	r, ctx := domainFileObservationModel(t)
+	if err := r.filesCurrent(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r.child = &xraySelectedTCPProcess{}
+	read, closeRead, err := r.processReadContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(closeRead)
+	return r, read, closeRead, r.fileOpeningAfterOriginalRead(read)
+}
+
+func TestXrayDomainFileOpeningIsSingleOriginalRead(t *testing.T) {
+	r, ctx, closeRead, o := domainFileOpeningModel(t)
+	copied := xrayDomainTCPFileOpening{self: o, files: o.files, read: o.read}
+	if copied.consume(ctx, r) == nil {
+		t.Fatal("copied opening accepted")
+	}
+	if o.consume(context.Background(), r) == nil {
+		t.Fatal("unrelated context accepted")
+	}
+	other := &XrayDomainTCPExecutionResource{child: r.child}
+	other.self = other
+	if o.consume(ctx, other) == nil {
+		t.Fatal("cross-resource opening accepted")
+	}
+	type providerKey struct{}
+	held := context.WithValue(ctx, providerKey{}, true)
+	if err := r.withFileObservationAfterOpening(held, o, func(v *xrayDomainTCPFileObservation) error { return r.filesCurrentForObservation(held, v) }); err != nil {
+		t.Fatal(err)
+	}
+	if o.consume(held, r) == nil {
+		t.Fatal("opening replay accepted")
+	}
+	_, ctx2, close2, o2 := domainFileOpeningModel(t)
+	close2()
+	if o2.consume(ctx2, o2.files.resource) == nil {
+		t.Fatal("retired read opening accepted")
+	}
+	closeRead()
+}
+
+func TestXrayDomainFileOpeningClosingHashRejectsMutationAfterOpening(t *testing.T) {
+	r, ctx, _, o := domainFileOpeningModel(t)
+	witness := errors.New("actual readonly callback failure")
+	err := r.withFileObservationAfterOpening(ctx, o, func(v *xrayDomainTCPFileObservation) error {
+		f, err := os.OpenFile(r.executable.path, os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		_, writeErr := f.WriteAt([]byte("Y"), 0)
+		closeErr := f.Close()
+		if writeErr != nil || closeErr != nil {
+			return errors.Join(writeErr, closeErr)
+		}
+		if err := os.Chtimes(r.executable.path, r.executable.info.ModTime(), r.executable.info.ModTime()); err != nil {
+			return err
+		}
+		if err := r.filesCurrentForObservation(ctx, v); err != nil {
+			t.Fatal(err)
+		}
+		return witness
+	})
+	if !errors.Is(err, witness) || !errors.Is(err, ErrXrayDomainTCPOriginal) {
+		t.Fatal("closing proof or original exception omitted", err)
+	}
+}

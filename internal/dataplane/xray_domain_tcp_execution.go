@@ -264,7 +264,10 @@ func (r *XrayDomainTCPExecutionResource) listenerCurrent(ctx context.Context) er
 		return err
 	}
 	defer closeRead()
-	actual, err := r.observeDomainListener(read)
+	// No callback or native effect occurs between the full originalContext
+	// opening above and this one-use, same-process readonly observation.
+	opening := r.fileOpeningAfterOriginalRead(read)
+	actual, err := r.observeDomainListenerWithOpening(read, opening)
 	if err != nil || r.birth == nil || !r.birth.same(actual.process) {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
