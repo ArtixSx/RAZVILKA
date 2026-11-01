@@ -45,6 +45,38 @@
 | F: lifecycle механизмов | Ведущий: core/native integration; Capabilities: Mihomo App/API/UI/recovery; Review: независимое ревью | HEV2.17.1 TUN/HTTPS/cleanup, install/crash recovery и next-boot проверены. Mihomo install/reinstall/package recovery и официальный native validation работают. На0f37cad7/job124707328916 реальный HTTP preview→review→VLESS→все обязательные TLS predicates→COMMON cleanup PASS2.175с; adapter1779мс. Failure/exclusion/panic также PASS; Store неизменён, live_applied=false. Повтор d36/job124713335197 и parent-death SIGKILL native PASS. Post-boot retirement120feb72 сохраняет исходную историю и failed service, поддерживает повтор после каждой частичной записи; независимое ревью и Linux normal/race d36 PASS (старый boot моделируется, текущая socket absence реальна) | Same-boot recovery реализуется с исходным parent lineage, reader5 и проверяемым reader4 fallback; actual CLI/lease/namespace/parent-death/panel tests впереди. Далее live apply/health и безопасная замена версии; внутренние задачи. Аппаратные WAN/reboot отдельно |
 | G: независимая приёмка | Review; ведущий CI | На d36ec63e A/job124713335120 и D/job124713334933 PASS; scoped-native/job124713335197 FAIL по B, managed-probe-native/job124713335153 FAIL по C. F/HEV шаги PASS. Full CI d36/run41260755678: Go normal/race, vet и UI PASS, MIPS build FAIL из-за несовпадающих build tags baseline reader/policyRead. Tags согласованы с фактически поддержанными amd64/arm64, остальные платформы сохраняют отказ; локальные сборки Linux amd64/arm64/mips/mipsle PASS. Ошибка canonical SyntheticBaseline writer120 устранена в d36 с независимым ревью. Отменённые прогоны не считаются PASS | Повтор полного CI итогового интегрированного SHA обязателен; PR23 остаётся draft без merge. Для аппаратных LAN/WAN/reboot нужны выделенное устройство, LAN-клиент и авторизация; сценарии стенда сохраняются в scripts и native tests |
 
+### Уточнение по результатам d1877b0d и текущей интеграции
+
+- A: на d1877b0d повтор native/race и запуск восстановленной панели завершились
+  успешно: run41262742480/job124719152306. Это проверка совместимой пары,
+  истории, ручного выбора и восстановления панели; аппаратный power-loss отдельно.
+- B: исходный DNS owner теперь уходит в неизменяемую историю только после
+  подтверждённой очистки. Проверены частичные повторы, смена inode/байтов,
+  неизвестный результат закрытия и появление чужого назначения непосредственно
+  перед атомарным rename. Сквозной маршрут ещё не принят. Изолированный4f71
+  проходит actual source/error/panic/revocation, но диагностические30с всё ещё
+  заканчиваются до DNS публикации; следующая работа — повторные чтения inventory.
+- C: изолированныйe363 впервые получил actual TLS/catalogue HTTP200/body20,
+  точные NFQUEUE counters и отрицательный wrong-source контроль. Исходный процесс
+  завершён с WaitECHILD, но очистка исчерпала5с бюджет: completion/evidence не
+  опубликованы, unknown fence сохранён. Это прогресс функции, не успешный полный
+  workflow и не подтверждение ускорения. Владелец Backup исправляет затраты
+  исходных readonly проверок очистки; лимиты и проверки не ослабляются.
+- D: новая серия с CPU/RSS опубликована в
+  [исходных измерениях570b](measurements/2026-11-01/native-vless-resources-570b/README.md).
+  Повтор d187/job124719152411 PASS. Полное время controlled Check p50 уменьшилось
+  с509.784 до405.332мс; уменьшение памяти не заявляется.
+- E/F: d187/job124719152402 подтвердил actual HTTP2.275607154с и reader4 fallback
+  HTTP2.794947656с с неизменённым старым бинарником и журналом формата4.
+  Same-boot retirement с parent lineage/read-version5 реализован и прошёл ревью,
+  но native cold/inactivity остановились до эффектов: стенд оставлял второй
+  `/proc` mount. Исправление изолированных namespace подготовлено в ee936149;
+  production identity admission не меняется. Capabilities завершает безопасную
+  замену версии через исходный writer session и фактическую общую inactivity.
+- G: полный CI d187 ещё выполняется; результаты отдельных шагов не являются
+  общим PASS. Новый интегрированный SHA будет проверен отдельно. Непринятые
+  оптимизации B/C и replacement WIP не включаются в коммиты автоматически.
+
 Для отдельного сайта требуется установить конкретный URL/репозиторий; встроенная
 панель находится в этом репозитории. Рабочий роутер не изменяется. Аппаратные
 испытания потребуют выделенного устройства/LAN-клиента и отдельной авторизации
