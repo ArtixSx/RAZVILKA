@@ -25,6 +25,7 @@ on:
       - 'scripts/test-mihomo-main-native.sh'
       - 'scripts/test-mihomo-main-bound-native.sh'
       - 'scripts/fixtures/mihomo-release-proxy.py'
+      - 'scripts/fixtures/mihomo-main-session.sh'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -143,7 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
           curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
           echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted

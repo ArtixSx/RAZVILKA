@@ -39,7 +39,10 @@ unshare --mount --net --pid --fork sh -eu -c '
  producer= copy= panel=
  trap '\''for child in "$producer" "$copy" "$panel"; do if test -n "$child"; then kill -KILL "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi; done'\'' EXIT HUP INT TERM
  export RAZVILKA_MIHOMO_COLD_READY="$work/ready.json"
- /opt/bin/razvilka -test.run="^TestMihomoColdOriginalProducer$" -test.v -test.timeout=100s > "$work/producer.log" 2>&1 &
+ # A new PID namespace otherwise inherits an invisible outer group (PGID0),
+ # which the original process-association reader correctly refuses. Create a
+ # real local session; this child remains our original $! and sole waiter.
+ setsid /opt/bin/razvilka -test.run="^TestMihomoColdOriginalProducer$" -test.v -test.timeout=100s > "$work/producer.log" 2>&1 &
  producer=$!
  python3 - "$work/ready.json" "$producer" <<'\''PY'\''
 import pathlib,sys,time
@@ -124,7 +127,7 @@ assert (root/"latest-execution.json").read_bytes()==(root/"transactions"/after["
 print("PASS actual parent/Pdeath exit, foreign PID namespace/copy/lease refusal, public cold CLI exact archive/CAS; no service or original cleanup proof")
 PY
  # Ordinary Main now has to pass the very same retained recovery admission.
- /opt/bin/razvilka -listen 127.0.0.1:28787 > "$work/panel.log" 2>&1 &
+ setsid /opt/bin/razvilka -listen 127.0.0.1:28787 > "$work/panel.log" 2>&1 &
  panel=$!
  python3 - <<'\''PY'\''
 import json,time,urllib.request

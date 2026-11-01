@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -61,6 +62,10 @@ func TestMihomoColdOriginalProducer(t *testing.T) {
 	if ready == "" {
 		t.Skip("isolated actual original producer only")
 	}
+	if syscall.Getpgrp() < 1 {
+		t.Fatal("fixture requires an actual visible process group in its new PID namespace")
+	}
+	t.Log("actual original producer has a visible local process group")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	const base = "/opt/etc/razvilka"
