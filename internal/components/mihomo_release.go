@@ -228,6 +228,19 @@ func verifyMihomoArtifact(ctx context.Context, root *ownedfs.Root, name string, 
 }
 
 func (m *Manager) ApplyMihomoGuarded(ctx context.Context, guard, rename, start func(context.Context, func() error) error) (result Result, err error) {
+	return m.applyMihomoGuarded(ctx, guard, rename, start, nil)
+}
+
+// ApplyMihomoReplacementGuarded additionally requires the original runtime
+// owner's complete inactivity observation at every forward package CAS.
+func (m *Manager) ApplyMihomoReplacementGuarded(ctx context.Context, guard, rename, start func(context.Context, func() error) error, inactive func(context.Context, *MihomoReplacementReview) error) (Result, error) {
+	if inactive == nil {
+		return Result{Component: "mihomo", Action: "update"}, NoMutation(ErrRecoveryAuthority)
+	}
+	return m.applyMihomoGuarded(ctx, guard, rename, start, inactive)
+}
+
+func (m *Manager) applyMihomoGuarded(ctx context.Context, guard, rename, start func(context.Context, func() error) error, inactive func(context.Context, *MihomoReplacementReview) error) (result Result, err error) {
 	result = Result{Component: "mihomo", Action: "install"}
 	if m == nil || ctx == nil || guard == nil || rename == nil || start == nil {
 		return result, NoMutation(ErrRecoveryAuthority)
@@ -266,5 +279,5 @@ func (m *Manager) ApplyMihomoGuarded(ctx context.Context, guard, rename, start f
 	if err := verifyMihomoArtifactRelease(ctx, artifacts, image, start); err != nil {
 		return result, err
 	}
-	return m.installMihomoImage(ctx, info, image, guard, rename)
+	return m.installMihomoImageWithReplacement(ctx, info, image, guard, rename, inactive)
 }

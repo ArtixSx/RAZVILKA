@@ -27,7 +27,11 @@ func (a *MihomoProbeAdapter) VerifyRuntimeInactive(parent context.Context) error
 	a.busy = true
 	a.mu.Unlock()
 	defer func() { a.mu.Lock(); a.busy = false; a.mu.Unlock() }()
-	if err := observeMihomoProbeInactive(ctx, a.provider); err != nil {
+	replacement, err := a.replacementObservation(ctx)
+	if err != nil {
+		return errors.Join(ErrRuntimeInactivity, err)
+	}
+	if err := observeMihomoProbeInactive(ctx, a.provider, replacement); err != nil {
 		return errors.Join(ErrRuntimeInactivity, err)
 	}
 	a.mu.Lock()

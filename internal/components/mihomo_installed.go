@@ -39,8 +39,11 @@ func mihomoInstalledReceiptVersion(ctx context.Context, path string) string {
 		return ""
 	}
 	var receipt externalReceipt
-	approved, pinErr := mihomoReviewedRawArtifact(runtime.GOARCH)
-	if pinErr != nil || json.Unmarshal(raw, &receipt) != nil || receipt.Version != ReviewedMihomoVersion || receipt.SHA256 != approved.SHA256 {
+	if json.Unmarshal(raw, &receipt) != nil {
+		return ""
+	}
+	approved, pinErr := mihomoInstalledRawArtifact(receipt.Version, runtime.GOARCH)
+	if pinErr != nil || receipt.SHA256 != approved.SHA256 {
 		return ""
 	}
 	before, err := root.Stat("mihomo")

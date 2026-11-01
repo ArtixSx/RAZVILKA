@@ -21,6 +21,7 @@ on:
       - 'scripts/check-node-native-performance.sh'
       - 'scripts/test-mihomo-cold-native.sh'
       - 'scripts/test-mihomo-inactive-native.sh'
+      - 'scripts/test-mihomo-replacement-native.sh'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -239,3 +240,16 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh scripts/test-mihomo-inactive-native.sh
+      - name: Actual Mihomo predecessor refusal and HTTP version replacement
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 -o /tmp/mihomo-1.19.32.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.32/mihomo-linux-amd64-v1.19.32.gz
+          echo '8451100836c9eda194331c2babfad490b2faf30cebc1a04b0e76fd8ac2d35d10  /tmp/mihomo-1.19.32.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo-1.19.32.gz /usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_MIHOMO_PREDECESSOR_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo-1.19.32.gz \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-mihomo-replacement-native.sh

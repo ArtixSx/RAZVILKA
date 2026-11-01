@@ -228,9 +228,9 @@ func (m *Manager) listLocked(ctx context.Context, refresh, passive bool) ([]View
 			}
 			m.attachLifecycleVerification(&view)
 			if spec.ID == "mihomo" {
-				view.CanUpdate, view.CanRemove = false, false
+				view.CanRemove = false
 				if err := m.mihomoReleaseIdle(); err != nil {
-					view.CanInstall = false
+					view.CanInstall, view.CanUpdate = false, false
 					view.State = "recovery-required"
 					view.LifecycleBlockReason = "Установка Mihomo требует восстановления исходного журнала."
 				}

@@ -30,6 +30,10 @@ func (f *mihomoSmallFile) CompareAndSwapWithRenameAdmission(ctx context.Context,
 // different running image: initial install and identical pinned reinstall are
 // supported here; changed-version transitions require the runtime owner.
 func (m *Manager) installMihomoImage(ctx context.Context, info releaseInfo, image restorejournal.Image, guard, rename func(context.Context, func() error) error) (result Result, err error) {
+	return m.installMihomoImageWithReplacement(ctx, info, image, guard, rename, nil)
+}
+
+func (m *Manager) installMihomoImageWithReplacement(ctx context.Context, info releaseInfo, image restorejournal.Image, guard, rename func(context.Context, func() error) error, inactive func(context.Context, *MihomoReplacementReview) error) (result Result, err error) {
 	result = Result{Component: "mihomo", Action: "install"}
 	ref, err := mihomoArtifactReferenceOf(image)
 	if err != nil || guard == nil || rename == nil {
@@ -65,7 +69,17 @@ func (m *Manager) installMihomoImage(ctx context.Context, info releaseInfo, imag
 			return result, errors.New("existing Mihomo has no valid original ownership receipt")
 		}
 		if !bytes.Equal(before.Data, image.Data) {
-			return result, errors.New("Mihomo version replacement requires original runtime inactivity admission")
+			if inactive == nil {
+				return result, errors.New("Mihomo version replacement requires original runtime inactivity admission")
+			}
+			s.replacement, err = newMihomoReplacementReview(ctx, m, s, before)
+			if err != nil {
+				return result, err
+			}
+			s.inactive = inactive
+			if err := inactive(ctx, s.replacement); err != nil {
+				return result, err
+			}
 		}
 		oldVersion, result.Action = receipt.Version, "update"
 	} else if receiptBefore.Exists {
@@ -89,6 +103,8 @@ func (m *Manager) installMihomoImage(ctx context.Context, info releaseInfo, imag
 }
 
 type mihomoReleaseSession struct {
+	replacement     *MihomoReplacementReview
+	inactive        func(context.Context, *MihomoReplacementReview) error
 	j               *restorejournal.Journal
 	files           map[string]mihomoReleaseFile
 	paths           map[string]string
@@ -101,6 +117,9 @@ type mihomoReleaseSession struct {
 
 func (s *mihomoReleaseSession) close() error {
 	var errs []error
+	if s.replacement != nil {
+		errs = append(errs, s.replacement.close())
+	}
 	if s.j != nil {
 		errs = append(errs, s.j.Close())
 	}
@@ -136,7 +155,20 @@ func (t *mihomoReleaseTarget) CompareAndSwap(ctx context.Context, before, after 
 	forward = forward && after.Exists == desired.Exists && bytes.Equal(after.Data, desired.Data)
 	mutate := func() error { return t.compareAndSwap(ctx, before, after, forward) }
 	if t.session.guard != nil && forward {
-		err := t.session.guard(ctx, mutate)
+		err := t.session.guard(ctx, func() error {
+			if t.session.replacement != nil {
+				if err := t.session.inactive(ctx, t.session.replacement); err != nil {
+					return err
+				}
+			}
+			if err := mutate(); err != nil {
+				return err
+			}
+			if t.session.replacement != nil {
+				return t.session.inactive(ctx, t.session.replacement)
+			}
+			return nil
+		})
 		if err != nil {
 			t.session.failures = append(t.session.failures, err)
 		}
@@ -158,6 +190,9 @@ func (t *mihomoReleaseTarget) compareAndSwap(ctx context.Context, before, after 
 		err = t.session.files[t.id].CompareAndSwapWithRenameAdmission(ctx, before, after, t.session.renameAdmission)
 	} else {
 		err = t.Target.CompareAndSwap(ctx, before, after)
+	}
+	if forward && t.session.replacement != nil {
+		err = errors.Join(err, t.session.replacement.acknowledge(t.id, before, after, err))
 	}
 	if err == nil && t.manager.updateFault != nil {
 		err = t.manager.updateFault("mihomo:after:" + t.id)

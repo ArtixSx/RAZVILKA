@@ -7,6 +7,14 @@ import (
 )
 
 func (a *App) installMihomo(ctx context.Context) (components.Result, error) {
+	return a.applyMihomoPackage(ctx, false)
+}
+
+func (a *App) updateMihomo(ctx context.Context) (components.Result, error) {
+	return a.applyMihomoPackage(ctx, true)
+}
+
+func (a *App) applyMihomoPackage(ctx context.Context, replace bool) (components.Result, error) {
 	if a == nil || a.Components == nil || a.Store == nil || a.ComponentHistory == nil || a.SelfUpdateFiles == nil || a.Components.StateDir != managedComponentsState {
 		return components.Result{}, components.NoMutation(components.ErrRecoveryAuthority)
 	}
@@ -25,7 +33,22 @@ func (a *App) installMihomo(ctx context.Context) (components.Result, error) {
 		return components.Result{}, components.NoMutation(err)
 	}
 	defer control.Close()
-	return a.Components.ApplyMihomoGuarded(held, a.hevForwardGuard(a.Store.Get(), control), control.WithRename, control.WithStart)
+	guard := a.hevForwardGuard(a.Store.Get(), control)
+	if !replace {
+		return a.Components.ApplyMihomoGuarded(held, guard, control.WithRename, control.WithStart)
+	}
+	a.mihomoProbe.mu.Lock()
+	adapter := a.mihomoProbe.adapter
+	a.mihomoProbe.mu.Unlock()
+	if a.Dataplane == nil || adapter == nil || !adapter.RegisteredWith(a.Dataplane) {
+		return components.Result{}, components.NoMutation(components.ErrRecoveryAuthority)
+	}
+	inactive := func(c context.Context, review *components.MihomoReplacementReview) error {
+		return guard(c, func() error {
+			return a.Dataplane.VerifyMihomoReplacementInactive(c, adapter, review)
+		})
+	}
+	return a.Components.ApplyMihomoReplacementGuarded(held, guard, control.WithRename, control.WithStart, inactive)
 }
 
 func (a *App) validateMihomo(ctx context.Context, source string, options backendprofile.MihomoOptions, review string) (components.MihomoNativeValidation, error) {

@@ -14,7 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
-func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provider) error {
+func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview) error {
 	if xraySelectedTCPFinite(ctx) != nil || provider == nil {
 		return ErrRuntimeInactivity
 	}
@@ -30,6 +30,11 @@ func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provi
 			if actual != identity {
 				return ErrRuntimeInactivity
 			}
+			if replacement != nil {
+				if err := replacement.Current(observed); err != nil {
+					return err
+				}
+			}
 			proof, err := scopedDNSInactivePlatformProof()
 			if err != nil {
 				return err
@@ -43,6 +48,12 @@ func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provi
 				same, err := originalSame(first, second)
 				if err != nil || same {
 					return same, err
+				}
+				if replacement != nil {
+					old, err := replacement.MatchesProcessImage(observed, second)
+					if err != nil || old {
+						return old, err
+					}
 				}
 				name, err := os.Readlink(second)
 				if err != nil {
@@ -87,6 +98,11 @@ func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provi
 			closingHash, closingInfo, err := mihomoColdFileHash(observed, "/proc/self/exe")
 			if err != nil || closingHash != selfHash || !os.SameFile(selfInfo, closingInfo) || selfInfo.Size() != closingInfo.Size() {
 				return errors.Join(ErrRuntimeInactivity, err)
+			}
+			if replacement != nil {
+				if err := replacement.Current(observed); err != nil {
+					return err
+				}
 			}
 			return observed.Err()
 		})

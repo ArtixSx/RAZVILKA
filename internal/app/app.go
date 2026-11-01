@@ -1563,7 +1563,11 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	} else if id == "hev-socks5-tunnel" {
 		result, err = a.installHEV(ctx)
 	} else if id == "mihomo" {
-		result, err = a.installMihomo(ctx)
+		if action == "update" {
+			result, err = a.updateMihomo(ctx)
+		} else {
+			result, err = a.installMihomo(ctx)
+		}
 	} else {
 		result, err = a.Components.Apply(ctx, id)
 	}
