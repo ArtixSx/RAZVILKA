@@ -161,17 +161,19 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 		})
 	},
 		Preflight: func(c context.Context) error {
-			view, err := r.read(c)
-			if err != nil {
-				return err
-			}
-			for i := range r.effects.Effects {
-				count, err := domainTCPCapturePresence(view.Rows, r.effects, i)
-				if err != nil || count != 0 {
-					return ErrDomainPolicyTCPConsumer
+			return r.process.withCurrentFileObservation(c, func(files *xrayDomainTCPFileObservation) error {
+				view, err := r.readWithFiles(c, files)
+				if err != nil {
+					return err
 				}
-			}
-			return baseline.currentBaseline(c)
+				for i := range r.effects.Effects {
+					count, err := domainTCPCapturePresence(view.Rows, r.effects, i)
+					if err != nil || count != 0 {
+						return ErrDomainPolicyTCPConsumer
+					}
+				}
+				return baseline.currentBaselineWithFiles(c, files)
+			})
 		},
 		ExactPresence: func(c context.Context, i int) (int, error) {
 			view, err := r.read(c)
@@ -185,7 +187,11 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
-	if err := errors.Join(r.checkPrepared(ctx), baseline.currentBaseline(ctx)); err != nil {
+	// COMMON has returned from all actual mutations. This separate readonly
+	// closing comparison cannot lend its view to any command admission.
+	if err := r.process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+		return errors.Join(r.checkPreparedWithFiles(ctx, files), baseline.currentBaselineWithFiles(ctx, files))
+	}); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
