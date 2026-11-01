@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/netip"
 	"strings"
 	"testing"
@@ -10,8 +11,31 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/physicalscope"
 )
+
+func TestNFQWSPacketPublicCompilerRefusesValidProcComparison(t *testing.T) {
+	a, b, _ := nfqwsPacketFixture(t)
+	listScopeOperation(t, a, func(ctx context.Context) {
+		s, err := b.Observe(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Facts.Identity.Kind = netidentity.ProcNetInode
+		s.Facts.Identity.Inode = 42
+		s.Facts.Identity.PlatformReviewSHA256 = ""
+		if err := s.Facts.Identity.Validate(); err != nil {
+			t.Fatal("negative must use structurally valid Proc identity", err)
+		}
+		if out, err := CompileNFQWSIPv4LANPacketPolicy(a.Store.Get(), s, nil, nil, time.Now()); out != nil || !errors.Is(err, dataplane.ErrReviewChanged) {
+			t.Fatal("public stock compiler accepted Proc comparison", out, err)
+		}
+		if out, err := b.compile(ctx, a.Store.Get(), s, nil, nil, time.Now()); out != nil || !errors.Is(err, dataplane.ErrReviewChanged) {
+			t.Fatal("stock original binding accepted relabeled comparison", out, err)
+		}
+	})
+}
 
 func TestNFQWSPacketCompilerRefusesUnsupportedAndEmptyPurposes(t *testing.T) {
 	a, b, _ := nfqwsPacketFixture(t)

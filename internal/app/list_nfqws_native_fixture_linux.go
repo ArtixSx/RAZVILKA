@@ -81,11 +81,11 @@ func NewNativeFixtureNFQWSPacketScopeBinding(ctx context.Context, a *App, provid
 	if provider == nil {
 		return nil, ErrListScopeChanged
 	}
-	return newNFQWSPacketScopeBinding(ctx, a, func(c context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
+	return newNFQWSPacketScopeBindingForIdentity(ctx, a, func(c context.Context, b *NFQWSPacketScopeBinding) (nfqwsPacketObserver, error) {
 		original, err := physicalscope.NewNativeFixtureIPv4LANPacketScope(c, provider, b.control, a.SelfUpdateFiles.ControlRoot, b.intent)
 		if err == nil {
 			b.original = original
 		}
 		return original, err
-	})
+	}, netidentity.ProcNetInode)
 }

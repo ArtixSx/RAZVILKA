@@ -33,6 +33,12 @@ chmod 500 "$domain_work/app.test"
 # both the namespace run and its CPU sample, retaining diagnostics on failure.
 timeout 50s go tool pprof -h > "$domain_work/pprof-prewarm.log" 2>&1 || true
 domain_status=0
+domain_case=TestDomainTCPOriginalNativeAcceptedFlows
+case "${RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE:-0}" in
+ 0) ;;
+ 1) domain_case=TestDomainTCPOriginalNativeUnpublishedRetirement ;;
+ *) exit 2 ;;
+esac
 unshare --mount --net sh -eu -c '
  mount --make-rprivate /
  # Original tool/preload review must observe protected ancestors, not the
@@ -47,8 +53,8 @@ unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t nat -S >/dev/null
  /usr/sbin/iptables-legacy -t filter -S >/dev/null
  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
- exec /opt/bin/razvilka -test.run="^TestDomainTCPOriginalNativeAcceptedFlows$" -test.v -test.count=1 -test.timeout=180s
-' sh "$domain_work" || domain_status=$?
+ exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout=180s
+' sh "$domain_work" "$domain_case" || domain_status=$?
 # Keep the child's result. CPU symbols and bounded top output contain no
 # profile/config credentials and are analyzed by the parent outside /opt.
 if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
@@ -58,6 +64,12 @@ if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
   cp "$domain_work/original-run.cpu.pprof" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/"
   timeout 50s go tool pprof -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-top.txt" || true
  fi
- printf 'child_exit_status=%s\npublication_budget_seconds=%s\nprofile_span=original_Run_through_join\ndiagnostic_only=%s\n' "$domain_status" "${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-12}" "${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-false}" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
+ domain_publication_budget=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-12}
+ domain_diagnostic=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-false}
+ if test "$domain_case" = TestDomainTCPOriginalNativeUnpublishedRetirement; then
+  domain_publication_budget=not-sent
+  domain_diagnostic=unpublished-readiness30-retirement-only
+ fi
+ printf 'child_exit_status=%s\npublication_budget_seconds=%s\nprofile_span=original_Run_through_join\ndiagnostic_only=%s\nnative_case=%s\n' "$domain_status" "$domain_publication_budget" "$domain_diagnostic" "$domain_case" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
 fi
 exit "$domain_status"

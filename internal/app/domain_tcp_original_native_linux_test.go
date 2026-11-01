@@ -33,6 +33,14 @@ import (
 )
 
 func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeUnpublishedRetirement(t *testing.T) {
+	runDomainTCPOriginalNative(t, true)
+}
+
+func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	if os.Getenv(domainOriginalNativeEnv) != "1" {
 		t.Skip("explicit disposable native original domain workflow")
 	}
@@ -324,10 +332,12 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		if err != nil || observation.PossiblyIssued || observation.RealIPv4.String() != domainOriginalServer {
 			return fmt.Errorf("unexpected original unpublished reservation: %w", err)
 		}
-		// A real client query before capture cannot publish a synthetic answer.
-		unready := peers.clientRequest(t, original, "dns-unready", "")
-		if strings.HasPrefix(unready.Answer, "198.") {
-			return errors.New("unprepared capture published DNS")
+		if !unpublished {
+			// A real client query before capture cannot publish a synthetic answer.
+			unready := peers.clientRequest(t, original, "dns-unready", "")
+			if strings.HasPrefix(unready.Answer, "198.") {
+				return errors.New("unprepared capture published DNS")
+			}
 		}
 		spec := dataplane.DomainPolicyTCPCaptureSpec{Xray: dataplane.DomainPolicyTCPXraySpec{Generation: domain.Generation, NetworkProfile: "wan-0123456789ab", ServiceID: service.ID, NodeID: nodeID, Name: "service.example.com", RealIP: observation.RealIPv4}, Client: autonomy.ClientPacket{Address: transport.Definition.Client, MAC: transport.Definition.MAC, Interface: "br0", SegmentID: "home"}, DeviceID: "selected", Listen: netip.MustParseAddrPort(transport.CaptureEndpoint), Limits: dataplane.DomainPolicySniffLimits{Bytes: 16 << 10, Timeout: time.Second}}
 		material, err := dataplane.ReviewXrayDomainTCPOperationMaterial(original, binding, xray, nodeSource, mapping, service, spec)
@@ -383,6 +393,40 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 				}
 			}
 		}()
+		if unpublished {
+			// No client DNS request is sent in this case. Readiness observes
+			// the same original owner only; it cannot mark an answer issued.
+			ready, cancelReady := context.WithTimeout(original, 30*time.Second)
+			defer cancelReady()
+			for {
+				if owner.CurrentSyntheticMapping(ready, mapping) == nil {
+					break
+				}
+				select {
+				case err := <-runDone:
+					joined = true
+					return fmt.Errorf("original unpublished Run before readiness: %w", err)
+				case <-ready.Done():
+					return fmt.Errorf("actual unpublished original readiness: %w", ready.Err())
+				case <-time.After(50 * time.Millisecond):
+				}
+			}
+			stopRun()
+			select {
+			case runErr := <-runDone:
+				joined = true
+				if !domainOriginalExpectedStopError(runErr) {
+					return fmt.Errorf("unpublished original cleanup result: %w", runErr)
+				}
+			case <-time.After(15 * time.Second):
+				return errors.New("unpublished original Run did not join")
+			}
+			if err := owner.RetainStandby(original, history); err != nil {
+				return fmt.Errorf("original unpublished standby transfer: %w", err)
+			}
+			succeeded = true
+			return nil
+		}
 		var published domainOriginalPeerResult
 		publicationBudget := 12 * time.Second
 		if diagnostic := os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION"); diagnostic != "" {
@@ -500,6 +544,52 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	if readErr != nil || version < 4 || seal == "" {
 		t.Fatalf("known standby not covered by actual reader4: version=%d error=%v", version, readErr)
 	}
+	if unpublished {
+		cleanupCtx, cleanupRelease, err := operations.ExclusiveContext(ctx)
+		if err != nil {
+			t.Fatal("fresh exclusive retirement admission", err)
+		}
+		defer cleanupRelease()
+		cleanup, err := control.ReviewExclusiveCleanup(cleanupCtx)
+		if err != nil {
+			t.Fatal("fresh original cleanup review", err)
+		}
+		if err := retainedOwner.RetireUnpublishedStandby(cleanupCtx, cleanup); err != nil {
+			t.Fatal("actual never-issued original compensation", err)
+		}
+		if err := retainedOwner.RetireUnpublishedStandby(cleanupCtx, cleanup); err != nil {
+			t.Fatal("same completed original compensation retry", err)
+		}
+		if retainedOwner.RetainedStandbyCurrent(ctx) == nil {
+			t.Fatal("retired original standby still grants readback")
+		}
+		if err := manager.CheckExecutionRecovery(cleanupCtx); err != nil {
+			t.Fatal("actual retired terminal journals still fence operations", err)
+		}
+		view, err := backend.Read(cleanupCtx, identity)
+		if err != nil {
+			t.Fatal("independent closing complete packet inventory", err)
+		}
+		for _, row := range view.Rows {
+			for _, token := range row.Tokens {
+				if strings.HasPrefix(token, "RZSB_") || strings.HasPrefix(token, "RZDC_") || strings.HasPrefix(token, "RZDI_") {
+					t.Fatal("actual compensation left original packet footprint", row.Family, row.Table, token)
+				}
+			}
+		}
+		data, err := os.ReadFile(filepath.Join(manager.StateRoot, "latest-execution.json"))
+		var execution dataplane.Execution
+		if err != nil || json.Unmarshal(data, &execution) != nil || execution.State != "temporary-complete" {
+			t.Fatal("actual compensation terminal journal", err, execution.State)
+		}
+		for _, r := range execution.Resources {
+			if r.State != "removed" && r.State != "unused" {
+				t.Fatal("actual compensation left a live resource", r.Kind, r.State)
+			}
+		}
+		t.Log("actual never-issued original DNS reservation → native/capture/kernel readiness → joined original standby → fresh original exclusive cleanup → exact COMMON removal, terminal journals and released lifecycle; no client DNS send or TTL/cache assumption")
+		return
+	}
 	// Current contract intentionally retains standby until the real original
 	// cache/late-SYN settlement can be issued. TTL/empty CT is NOT that grant.
 	data, readErr := os.ReadFile(filepath.Join(manager.StateRoot, "latest-execution.json"))
@@ -521,6 +611,22 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	}
 	if !retained {
 		t.Fatal("unissued late-SYN/cache settlement unexpectedly cleared known standby footprint")
+	}
+	cleanupCtx, cleanupRelease, err := operations.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal("fresh published-alias cleanup admission", err)
+	}
+	defer cleanupRelease()
+	cleanup, err := control.ReviewExclusiveCleanup(cleanupCtx)
+	if err != nil {
+		t.Fatal("fresh published-alias cleanup review", err)
+	}
+	if err := retainedOwner.RetireUnpublishedStandby(cleanupCtx, cleanup); !errors.Is(err, dataplane.ErrDomainPolicyTCPCaptureRetirementPending) {
+		t.Fatal("published alias did not reach original possibly-issued refusal", err)
+	}
+	afterRefusal, err := os.ReadFile(filepath.Join(manager.StateRoot, "latest-execution.json"))
+	if err != nil || string(afterRefusal) != string(data) || retainedOwner.RetainedStandbyCurrent(ctx) != nil {
+		t.Fatal("published-alias refusal changed original retained custody", err)
 	}
 	t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
 }

@@ -223,6 +223,24 @@ jobs:
         with:
           name: domain-native-${{ github.sha }}
           path: artifacts/domain-native
+      - name: Original never-issued domain reservation and actual retirement
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mkdir -p -m 700 artifacts/domain-native-unpublished
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain-native-unpublished' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE=1 \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain-native-unpublished" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain-native-unpublished/native.log
+      - name: Never-issued retirement evidence separate from publication performance
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-native-unpublished-${{ github.sha }}
+          path: artifacts/domain-native-unpublished
       - name: Actual HEV TUN HTTPS and owned cleanup in private namespaces
         if: ${{ !cancelled() }}
         shell: bash
