@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -183,7 +184,17 @@ func (p *xraySelectedTCPReplacement) priorStructural(ctx context.Context) error 
 }
 
 func newXraySelectedTCPRecords(s *executionResourceScope) (*xraySelectedTCPExecutionRecords, error) {
-	if s == nil || s.manager == nil || s.managerRoot != s.manager.StateRoot || s.root != filepath.Join(s.managerRoot, "transactions", s.plan.PlanID) {
+	if s == nil || s.execution == nil || s.manager == nil || s.managerRoot != s.manager.StateRoot || !validPlanID(s.plan.PlanID) || !validPlanDigest(s.plan.Digest) || s.execution.Digest != s.plan.Digest {
+		return nil, ErrExecutionJournal
+	}
+	if s.execution.ResourcePlanID == "" {
+		if s.execution.PlanID != s.plan.PlanID {
+			return nil, ErrExecutionJournal
+		}
+	} else if s.execution.ResourcePlanID != s.plan.PlanID || !strings.HasPrefix(s.execution.PlanID, "dp-check-") || !validExecutionPlanID(s.execution.PlanID) {
+		return nil, ErrExecutionJournal
+	}
+	if s.root != filepath.Join(s.managerRoot, "transactions", s.execution.PlanID) {
 		return nil, ErrExecutionJournal
 	}
 	d := &xraySelectedTCPExecutionRecords{scope: s}

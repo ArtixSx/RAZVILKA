@@ -211,6 +211,11 @@ func (p *syntheticBaselineExecutionPhase) withDomainNativeActivity(request conte
 		return err
 	}
 	err := use(held)
+	if held.Err() != nil {
+		// Forward Current refuses this canceled context before observing a
+		// source. Preserve precise cancellation and all actual cleanup errors.
+		return errors.Join(err, held.Err(), request.Err())
+	}
 	return errors.Join(err, held.Err(), request.Err(), p.binding.Current(held))
 }
 

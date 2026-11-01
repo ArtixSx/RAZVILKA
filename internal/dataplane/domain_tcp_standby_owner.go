@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,10 +16,12 @@ import (
 // This original owner holds only an already acknowledged restorative footprint.
 // It cannot start a child, publish DNS, select a route, or expire a client cache.
 type domainTCPStandbyOwner struct {
-	self     *domainTCPStandbyOwner
-	original *DomainTCPOriginalScope
-	process  *XrayDomainTCPExecutionResource
-	baseline *syntheticBaselineExecutionResource
+	self       *domainTCPStandbyOwner
+	original   *DomainTCPOriginalScope
+	process    *XrayDomainTCPExecutionResource
+	baseline   *syntheticBaselineExecutionResource
+	latest     *os.File // SAME original global writer inode, retained across alias handoff.
+	latestInfo os.FileInfo
 }
 
 // RetainStandby requests handoff of the SAME acknowledged standby after Run
@@ -292,7 +295,7 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 	if err := o.standbyCurrent(ctx); err != nil {
 		return true, err
 	}
-	if err := p.records.detachStandbyAlias(ctx); err != nil {
+	if err := p.records.detachStandbyAlias(ctx, owner); err != nil {
 		return true, err
 	}
 	if err := owner.current(); err != nil {
@@ -315,7 +318,7 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 
 // Author a separate second record before relinquishing the global latest
 // coordinate. Its FD comes from this exact writer, never a pathname read.
-func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context) error {
+func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context, owner *domainTCPStandbyOwner) error {
 	if d == nil || d.scope == nil || d.standbyAlias.Load() {
 		return ErrExecutionJournal
 	}
@@ -332,6 +335,14 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 	}
 	info, err := file.Stat()
 	if err == nil {
+		d.mu.Lock()
+		if owner == nil || owner.self != owner || owner.process.records != d || owner.latest != nil || d.files[1] == nil {
+			d.mu.Unlock()
+			return errors.Join(ErrExecutionJournal, file.Close())
+		}
+		owner.latest, owner.latestInfo = d.files[1], d.infos[1]
+		d.files[1], d.infos[1], d.images[1] = nil, nil, nil
+		d.mu.Unlock()
 		err = d.captureOriginalRecord(1, file, info, data, d.transactionRoot, "standby-execution.json")
 	}
 	if err != nil {
@@ -339,4 +350,54 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 	}
 	d.standbyAlias.Store(true)
 	return d.current(ctx, true)
+}
+
+// The known-owner exception is scoped to this SAME last global publication.
+// Any later/foreign publication, even equal bytes on a replaced inode, cannot
+// hide an unknown transaction behind the retained baseline's older document.
+func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
+	owner := m.retainedXrayOwner()
+	if owner == nil || owner.self != owner || owner.standby == nil || owner.pending || owner.scope == nil || owner.scope.manager != m {
+		return ErrPolicyAdditionUnknown
+	}
+	standby := owner.standby
+	if standby.self != standby || standby.latest == nil || standby.latestInfo == nil {
+		return ErrExecutionJournal
+	}
+	check := func() error {
+		held, err := standby.latest.Stat()
+		named, statErr := os.Lstat(filepath.Join(m.StateRoot, "latest-execution.json"))
+		matches := func(info os.FileInfo) bool {
+			return info != nil && validNetworkPolicyReceiptFile(info) && os.SameFile(standby.latestInfo, info) && info.Mode() == standby.latestInfo.Mode() && info.Size() == standby.latestInfo.Size() && info.ModTime().Equal(standby.latestInfo.ModTime())
+		}
+		if err != nil || statErr != nil || !matches(held) || !matches(named) || held.Size() < 1 || held.Size() > 16<<20 {
+			return errors.Join(ErrExecutionJournal, err, statErr)
+		}
+		data := make([]byte, int(held.Size()))
+		n, readErr := standby.latest.ReadAt(data, 0)
+		var canonical bytes.Buffer
+		expected, marshalErr := json.Marshal(record)
+		if readErr != nil || n != len(data) || marshalErr != nil || json.Compact(&canonical, data) != nil || !bytes.Equal(canonical.Bytes(), expected) {
+			return errors.Join(ErrExecutionJournal, readErr, marshalErr)
+		}
+		after, afterErr := standby.latest.Stat()
+		closing, closingErr := os.Lstat(filepath.Join(m.StateRoot, "latest-execution.json"))
+		if afterErr != nil || closingErr != nil || !matches(after) || !matches(closing) {
+			return errors.Join(ErrExecutionJournal, afterErr, closingErr)
+		}
+		owner.scope.mu.Lock()
+		same := owner.scope.retained && owner.scope.retainedXrayOwner == owner && reflect.DeepEqual(*owner.scope.execution, record)
+		owner.scope.mu.Unlock()
+		if !same {
+			return ErrExecutionJournal
+		}
+		return nil
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	if err := standby.current(); err != nil {
+		return err
+	}
+	return check()
 }

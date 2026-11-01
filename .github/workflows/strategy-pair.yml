@@ -195,4 +195,4 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -race -count=1 ./internal/ownedfs ./internal/restorejournal ./internal/components -run '^TestAtomicStream|^TestArtifact|^TestMihomo' -v
+            go test -race -count=1 ./internal/ownedfs ./internal/restorejournal ./internal/components ./internal/dataplane -run '^TestAtomicStream|^TestArtifact|^TestMihomo' -v

@@ -57,12 +57,17 @@ func (m *Manager) checkExecutionRecovery() error {
 	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
+	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
 	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
+	case "resource-failed":
+		if !knownStandby {
+			return executionJournalError(errors.New("previous execution requires recovery"))
+		}
 	default:
 		return executionJournalError(errors.New("previous execution requires recovery"))
 	}
-	if err := validateExecutionResources(*latest, true); err != nil {
+	if err := validateExecutionResources(*latest, !knownStandby); err != nil {
 		return executionJournalError(err)
 	}
 	if _, err := time.Parse(time.RFC3339Nano, latest.FinishedAt); err != nil {
@@ -80,6 +85,9 @@ func (m *Manager) checkExecutionRecovery() error {
 	}
 	if !exists || !reflect.DeepEqual(latest, transaction) {
 		return executionJournalError(errors.New("execution records disagree; recovery is required"))
+	}
+	if knownStandby {
+		return executionJournalError(m.checkKnownDomainStandbyRecord(*latest))
 	}
 	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
 		return executionJournalError(err)
@@ -245,7 +253,7 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
+		if resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {
