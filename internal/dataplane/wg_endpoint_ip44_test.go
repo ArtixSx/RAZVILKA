@@ -278,6 +278,11 @@ func TestWGEndpointMissingTableJSONRequiresIndependentTextConfirmation(t *testin
 		calls                   int
 	}{
 		{"ipv4", "[]\nError: ipv4: FIB table does not exist.\nDump terminated\n", "Error: ipv4: FIB table does not exist.\nDump terminated", false, false, true, 2},
+		{"native-ipv4-open-array", "Error: ipv4: FIB table does not exist.\nDump terminated\n[", "Error: ipv4: FIB table does not exist.\nDump terminated", false, false, true, 2},
+		{"native-ipv6-open-array", "Error: ipv6: FIB table does not exist.\nDump terminated\n[", "Error: ipv6: FIB table does not exist.\nDump terminated", true, false, true, 2},
+		{"native-open-array-text-refused", "Error: ipv4: FIB table does not exist.\nDump terminated\n[", "Error: ipv4: FIB table does not exist.\nDump terminated\n[", false, false, false, 2},
+		{"native-open-array-extra", "Error: ipv4: FIB table does not exist.\nDump terminated\n[[", "", false, false, false, 1},
+		{"native-open-array-route", "Error: ipv4: FIB table does not exist.\nDump terminated\n[{", "", false, false, false, 1},
 		{"ipv4-suffix", "Error: ipv4: FIB table does not exist.\nDump terminated\n[]\n", "Error: ipv4: FIB table does not exist.\nDump terminated", false, false, true, 2},
 		{"ipv6-suffix", "Error: ipv6: FIB table does not exist.\nDump terminated\n[]\n", "", true, false, true, 2},
 		{"ipv6", "[]\nError: ipv6: FIB table does not exist.\nDump terminated", "", true, false, true, 2},

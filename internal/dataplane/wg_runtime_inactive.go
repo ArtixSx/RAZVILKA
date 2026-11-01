@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -154,18 +153,7 @@ func (a *WARPWireGuardAdapter) readWGNumericTable(ctx context.Context, table, fa
 	if !details && (wgEndpointUnknownOption(data, "-N") || wgEndpointUnknownOption(data, "-j")) {
 		return data, err
 	}
-	message := strings.TrimSpace(string(data))
-	if strings.HasPrefix(message, "[]\n") {
-		message = strings.TrimSpace(strings.TrimPrefix(message, "[]\n"))
-	}
-	if strings.HasSuffix(message, "\n[]") {
-		message = strings.TrimSpace(strings.TrimSuffix(message, "\n[]"))
-	}
-	if strings.HasPrefix(message, "[") && strings.HasSuffix(message, "]") {
-		message = strings.TrimSpace(message[1 : len(message)-1])
-	}
-	absent := fmt.Sprintf("Error: ipv%d: FIB table does not exist.", family)
-	if message != absent && message != absent+"\nDump terminated" {
+	if !wgMissingTableDiagnostic(data, family, true) {
 		return nil, err
 	}
 	confirmation, confirmErr := readPolicyTable(ctx, numericPolicyReadRunner{base: a.Runner}, a.ip(), PolicyState{Table: table}, family)

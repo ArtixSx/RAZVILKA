@@ -80,7 +80,9 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Actual kernel and CLI fixture dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y wireguard-tools iproute2 iptables util-linux
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y wireguard-tools iproute2 iptables util-linux kmod
+      - name: Prepare bridge module on the disposable CI runner
+        run: sudo modprobe br_netfilter
       - name: Isolated WG candidate, endpoint and network lifecycle
         shell: bash
         run: |

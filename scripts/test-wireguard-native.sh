@@ -10,7 +10,8 @@ export GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 go test -c -o "$wg_native_work/dataplane.test" ./internal/dataplane
 chmod 500 "$wg_native_work/dataplane.test"
 test -d /etc/wireguard || { echo 'wireguard-tools must prepare its standard directory'; exit 2; }
-for wg_native_case in TestWGNativeCandidateIsolation TestWGNativeEndpointLifecycle TestWGNativeNetworkReceipt; do
+wg_native_status=0
+for wg_native_case in TestWGNativeEmptyTables TestWGNativeCandidateIsolation TestWGNativeEndpointLifecycle TestWGNativeNetworkReceipt; do
   # Each case has a fresh network and private named-netns directory. Test
   # children and their peer interfaces have no path to the runner host network.
   unshare --mount --net --pid --fork --kill-child sh -eu -c '
@@ -32,5 +33,6 @@ for wg_native_case in TestWGNativeCandidateIsolation TestWGNativeEndpointLifecyc
     status=0
     setsid "$1" -test.run="^$2$" -test.count=1 -test.v -test.timeout=240s || status=$?
     exit "$status"
-  ' sh "$wg_native_work/dataplane.test" "$wg_native_case"
+  ' sh "$wg_native_work/dataplane.test" "$wg_native_case" || wg_native_status=1
 done
+exit "$wg_native_status"
