@@ -19,6 +19,8 @@ on:
       - 'scripts/native-managed-probe-queue-init.py'
       - 'scripts/test-domain-original-native.sh'
       - 'scripts/check-node-native-performance.sh'
+      - 'scripts/test-mihomo-cold-native.sh'
+      - 'scripts/test-mihomo-inactive-native.sh'
       - 'cmd/razvilka/**'
       - '.github/workflows/strategy-pair.yml'
 permissions:
@@ -98,7 +100,7 @@ jobs:
           go build -o /tmp/razvilka-current ./cmd/razvilka
           test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
           test "$(/tmp/razvilka-current -component-update-schema)" = 6
-          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 4
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 5
           test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
           git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
@@ -214,3 +216,26 @@ jobs:
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             sh scripts/test-mihomo-probe-native.sh
+      - name: Actual Mihomo parent exit, offline retirement and retained reader4
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin d36ec63e4d67f6621dd8026c9f85e9f410ec67bc
+          git worktree add --detach /tmp/razvilka-execution-reader4 d36ec63e4d67f6621dd8026c9f85e9f410ec67bc
+          (cd /tmp/razvilka-execution-reader4 && go build -o /tmp/razvilka-execution-reader4-binary ./cmd/razvilka)
+          test "$(/tmp/razvilka-execution-reader4-binary -dataplane-execution-read-version)" = 4
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_EXECUTION_READER4_BINARY=/tmp/razvilka-execution-reader4-binary \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-mihomo-cold-native.sh
+      - name: Actual idle Mihomo registry and foreign process refusal
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-mihomo-inactive-native.sh
