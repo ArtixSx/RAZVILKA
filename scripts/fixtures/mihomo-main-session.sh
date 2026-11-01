@@ -53,10 +53,13 @@ status,body=request("GET","/api/v1/components/mihomo/plan?action=update&refresh=
 plan=json.loads(body)
 assert status==200 and plan["ready"] is True and plan["installed_version"]=="1.19.32" and plan["available_version"]=="1.19.33",(status,body)
 status,body=request("POST","/api/v1/components/mihomo/update")
+if status!=200:
+ print('Actual full-factory update refusal HTTP',status,'bounded body:',body[:4096].decode('utf-8','replace'),flush=True)
 assert int(work.joinpath("proxy-transfer-complete").read_text())==pathlib.Path(os.environ["RAZVILKA_MIHOMO_ARCHIVE"]).stat().st_size,"default client did not fetch the full exact release asset"
 if os.environ.get('RAZVILKA_MIHOMO_MAIN_NATIVE_BINDING')=='1':
  import hashlib
- result=json.loads(body);assert status==200 and result['ok'] is True and result['installed_idle_accepted'] is True,(status,body)
+ assert status==200,(status,body[:4096])
+ result=json.loads(body);assert result['ok'] is True and result['installed_idle_accepted'] is True,(status,body)
  data=pathlib.Path('/opt/bin/mihomo').read_bytes();digest=hashlib.sha256(data).hexdigest()
  assert len(data)==62017662 and digest=='09c2cb429cf45fb56884ceb91a0e5b17cc8b2c866c07811bcf75dfb59fef7662'
  receipt=json.loads(pathlib.Path('/opt/bin/.mihomo.razvilka.json').read_bytes());assert receipt=={'version':'1.19.33','sha256':digest},receipt

@@ -1,0 +1,46 @@
+[
+  {
+    "mode": "production",
+    "phase": "before",
+    "commit": "43cf7891ad5d518ec235015617295a0274a27d90",
+    "execute_seconds": 14.926097792,
+    "tool_check_count": 272,
+    "tool_check_seconds": 9.654335467,
+    "consumer_result": "FAIL",
+    "run_id": 41266277782,
+    "job_id": 124729629801
+  },
+  {
+    "mode": "production",
+    "phase": "after",
+    "commit": "f48e7d3ab1936a09d50f77513cab6e74c2ae779c",
+    "execute_seconds": 8.370467348,
+    "tool_check_count": 382,
+    "tool_check_seconds": 4.10442205,
+    "consumer_result": "PASS",
+    "run_id": 41266277782,
+    "job_id": 124729629801
+  },
+  {
+    "mode": "race",
+    "phase": "before",
+    "commit": "43cf7891ad5d518ec235015617295a0274a27d90",
+    "execute_seconds": 15.009592372,
+    "tool_check_count": 49,
+    "tool_check_seconds": 4.211495797,
+    "consumer_result": "FAIL",
+    "run_id": 41266277782,
+    "job_id": 124729629861
+  },
+  {
+    "mode": "race",
+    "phase": "after",
+    "commit": "f48e7d3ab1936a09d50f77513cab6e74c2ae779c",
+    "execute_seconds": 15.011572384,
+    "tool_check_count": 84,
+    "tool_check_seconds": 3.641803911,
+    "consumer_result": "FAIL",
+    "run_id": 41266277782,
+    "job_id": 124729629861
+  }
+]
