@@ -239,10 +239,14 @@ func (r *domainTCPBaselineKernelOwner) sourcesWithFiles(ctx context.Context, fil
 	if r == nil || r.self != r || r.capture == nil || r.baseline == nil || r.reader == nil || r.capture.tools == nil || !sameNetworkPolicyDependency(r.reader, r.capture.tools.Runner) || r.baseline.capture != r.capture.capture || r.baseline.mapping != r.capture.mapping {
 		return ErrDomainTCPBaselineKernel
 	}
-	if err := r.capture.checkPreparedWithFiles(ctx, files); err != nil {
-		return err
-	}
-	return r.baseline.currentBaselineWithFiles(ctx, files)
+	// Only fixed xtables/version observations borrow the original tool source.
+	// Actual route/forwarding reads below run after this bracket has closed.
+	return r.capture.observeToolsWithFiles(ctx, files, func(observed context.Context, childFiles *xrayDomainTCPFileObservation) error {
+		if err := r.capture.checkPreparedWithFiles(observed, childFiles); err != nil {
+			return err
+		}
+		return r.baseline.currentBaselineWithFiles(observed, childFiles)
+	})
 }
 
 func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBaselinePath, error) {
@@ -268,7 +272,12 @@ func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, fil
 		if err != nil {
 			return path, fmt.Errorf("domain TCP baseline original route read: %w", err)
 		}
-		view, err := r.capture.readWithFiles(ctx, files)
+		var view backendInventorySnapshot
+		err = r.capture.observeToolsWithFiles(ctx, files, func(observed context.Context, childFiles *xrayDomainTCPFileObservation) error {
+			var readErr error
+			view, readErr = r.capture.readWithFiles(observed, childFiles)
+			return readErr
+		})
 		if err != nil {
 			return path, err
 		}

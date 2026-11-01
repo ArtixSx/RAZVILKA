@@ -141,6 +141,24 @@ func (v *xrayDomainTCPFileObservation) forOriginalProcessRead(parent, child cont
 	return nested, func() { nested.open.Store(false) }, nil
 }
 
+// Called only by observeToolsWithFiles inside the same original tool source's
+// synchronous callback. The outer complete-byte opening/closing remains live;
+// this child preserves every nested file/config/metadata observation.
+func (v *xrayDomainTCPFileObservation) forOriginalToolRead(parent, child context.Context, r *XrayDomainTCPExecutionResource) (*xrayDomainTCPFileObservation, func(), error) {
+	if v.current(parent, r) != nil || child == nil || child.Err() != nil || parent.Err() != nil {
+		return nil, nil, ErrXrayDomainTCPOriginal
+	}
+	parentDeadline, parentFinite := parent.Deadline()
+	childDeadline, childFinite := child.Deadline()
+	if !parentFinite || !childFinite || childDeadline.After(parentDeadline) || child.Value(xrayDomainTCPProcessReadKey{}) != parent.Value(xrayDomainTCPProcessReadKey{}) {
+		return nil, nil, ErrXrayDomainTCPOriginal
+	}
+	nested := &xrayDomainTCPFileObservation{parent: v, resource: v.resource, executable: v.executable, file: v.file, executableInfo: v.executableInfo, path: v.path, sha256: v.sha256, config: v.config, info: v.info, ctx: child}
+	nested.self = nested
+	nested.open.Store(true)
+	return nested, func() { nested.open.Store(false) }, nil
+}
+
 func (r *XrayDomainTCPExecutionResource) withNestedFileObservation(ctx context.Context, files *xrayDomainTCPFileObservation, use func(*xrayDomainTCPFileObservation) error) error {
 	if use == nil || files.current(ctx, r) != nil {
 		return ErrXrayDomainTCPOriginal
