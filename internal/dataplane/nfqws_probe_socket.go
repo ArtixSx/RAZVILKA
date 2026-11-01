@@ -67,31 +67,17 @@ func newNFQWSProbeSocketOwner(ctx context.Context, raw syscall.RawConn, source *
 }
 
 func (r *nfqwsProbeSocketOwner) current(ctx context.Context) error {
-	if r == nil || r.self != r || r.source == nil {
-		return errNFQWSProbeSocket
-	}
-	reference, err := r.source.Reference(ctx)
-	if err != nil {
-		return errors.Join(errNFQWSProbeSocket, err)
-	}
-	return r.kernelReferenceCurrent(ctx, r.source, reference)
-}
-
-// Kernel observation only, called inside this SAME active epoch's full source
-// opening/closing bracket. A detached reference cannot construct this original
-// owner or grant a Start. Dialer and other callers retain current's full source
-// observation; physical descriptor, route and provider checks stay unchanged.
-func (r *nfqwsProbeSocketOwner) kernelReferenceCurrent(ctx context.Context, source *strategylab.CandidateProbeReview, reference strategylab.CandidateProbeReference) error {
 	if r == nil || r.self != r || ctx == nil || ctx.Err() != nil || r.issuer == nil || r.issuer.Err() != nil {
 		return errNFQWSProbeSocket
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.closed || r.bound == nil || r.source == nil || r.source != source || r.provider == nil {
+	if r.closed || r.bound == nil || r.source == nil || r.provider == nil {
 		return errNFQWSProbeSocket
 	}
-	if !reflect.DeepEqual(reference, r.reference) {
-		return errNFQWSProbeSocket
+	reference, err := r.source.Reference(ctx)
+	if err != nil || !reflect.DeepEqual(reference, r.reference) {
+		return errors.Join(errNFQWSProbeSocket, err)
 	}
 	if err := r.provider.WithCurrent(ctx, func(_ context.Context, identity netidentity.Identity) error {
 		if identity != r.identity {

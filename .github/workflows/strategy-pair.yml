@@ -61,8 +61,13 @@ jobs:
           path: artifacts/node-native-performance
           if-no-files-found: error
   managed-probe-native:
+    name: managed-probe-native (${{ matrix.build-mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -76,7 +81,7 @@ jobs:
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
         shell: bash
         run: |
-          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" sh scripts/test-managed-probe-native.sh
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh
   strategy-pair:
     runs-on: ubuntu-latest
     timeout-minutes: 20

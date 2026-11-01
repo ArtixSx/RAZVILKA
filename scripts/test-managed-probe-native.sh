@@ -70,7 +70,22 @@ export RAZVILKA_MANAGED_PROBE_NATIVE=1
 export RAZVILKA_NFQWS_MANAGED_GENUINE_REVIEW="$probe_work/genuine.json"
 export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
-go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+probe_build_mode=${RAZVILKA_MANAGED_PROBE_BUILD_MODE:-race}
+printf 'Actual native build mode: %s\n' "$probe_build_mode"
+uname -a
+go version
+python3 - <<'PY'
+import pathlib
+for line in pathlib.Path('/proc/cpuinfo').read_text().splitlines():
+    if line.startswith('model name'):
+        print('Actual CPU:', line)
+        break
+PY
+case "$probe_build_mode" in
+  race) go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app ;;
+  production) go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app ;;
+  *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
+esac
 chmod 500 "$probe_work/app.test"
 # Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
 # private /opt mount; this diagnostic compiler work is not a probe budget.

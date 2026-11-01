@@ -217,12 +217,14 @@ func (e *nfqwsProbeExecution) current(ctx context.Context) error {
 	if err := e.guard(ctx); err != nil {
 		return err
 	}
-	return e.epoch.WithProbeReferenceCurrent(ctx, e.source, e.runtime, e.consumer.control, func(ref strategylab.CandidateProbeReference) error {
-		if !reflect.DeepEqual(ref, e.reference) || !reflect.DeepEqual(e.runtime.Descriptor(), e.descriptor) {
-			return ErrNFQWSScopedOwner
-		}
-		return e.socket.kernelReferenceCurrent(ctx, e.source, ref)
-	})
+	if err := e.epoch.ProbeOwnersCurrent(ctx, e.source, e.runtime, e.consumer.control); err != nil {
+		return err
+	}
+	ref, err := e.source.ManagedReference(ctx, e.runtime, e.consumer.control)
+	if err != nil || !reflect.DeepEqual(ref, e.reference) || !reflect.DeepEqual(e.runtime.Descriptor(), e.descriptor) {
+		return errors.Join(ErrNFQWSScopedOwner, err)
+	}
+	return e.socket.current(ctx)
 }
 
 func (e *nfqwsProbeExecution) cleanupCurrent(ctx context.Context) error {

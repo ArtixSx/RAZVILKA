@@ -289,7 +289,31 @@ func (r *ManagedProbeEpoch) Reference(ctx context.Context) (ManagedProbeEpochRec
 // and original candidate/runtime/control owners. A completed read-only epoch
 // is history/selection evidence and can never authorize another probe launch.
 func (r *ManagedProbeEpoch) ProbeOwnersCurrent(ctx context.Context, source *CandidateProbeReview, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) error {
-	return r.WithProbeReferenceCurrent(ctx, source, runtime, control, func(CandidateProbeReference) error { return nil })
+	if r == nil || r.self != r || source == nil || r.source != source || r.manager == nil {
+		return ErrSelectedCandidateChanged
+	}
+	active := func() bool {
+		r.mu.Lock()
+		running := r.running && !r.complete && !r.failed
+		r.mu.Unlock()
+		r.manager.mu.Lock()
+		owned := r.manager.managedProbe == r && r.manager.nativeRunning && !r.manager.compatibilityUnknownLocked() && !r.manager.writeBlocked
+		r.manager.mu.Unlock()
+		return running && owned
+	}
+	if !active() {
+		return ErrSelectedCandidateChanged
+	}
+	if err := source.ManagedOwnersCurrent(ctx, runtime, control); err != nil {
+		return err
+	}
+	if err := r.Current(ctx); err != nil {
+		return err
+	}
+	if !active() {
+		return ErrSelectedCandidateChanged
+	}
+	return ctx.Err()
 }
 
 // Read-only completed evidence observes Manager's acknowledged CAS lineage,
