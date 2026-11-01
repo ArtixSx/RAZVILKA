@@ -32,6 +32,11 @@ func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) (
 	command.Dir = "/"
 	command.Stdout, command.Stderr = stdout, stderr
 	command.WaitDelay = 100 * time.Millisecond
+	defer func() {
+		if command.Process != nil {
+			domainNativeToolStarted("original-read")
+		}
+	}()
 	if err := command.Run(); err != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		return nil, commandResultFailure("COMMAND_RESULT", err, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)
 	}

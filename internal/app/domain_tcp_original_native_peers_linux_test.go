@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -40,6 +41,7 @@ const domainOriginalUUID = "123e4567-e89b-12d3-a456-426614174000"
 type domainOriginalNativePeers struct{ root, client, server, binary string }
 type domainOriginalPeerResult struct {
 	Source, Marker, Answer string
+	SourcePort, ClientPort string
 	RCode                  int
 }
 
@@ -372,6 +374,7 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 		if json.NewDecoder(conn).Decode(&result) != nil {
 			t.Fatal("opaque original baseline result missing")
 		}
+		_, result.ClientPort, _ = net.SplitHostPort(conn.LocalAddr().String())
 	} else {
 		ca, err := os.ReadFile(filepath.Join(root, "ca.pem"))
 		if err != nil {
@@ -390,7 +393,14 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 		}}
 		defer transport.CloseIdleConnections()
 		client := http.Client{Transport: transport, Timeout: 4 * time.Second}
-		response, err := client.Get("https://" + name + "/")
+		request, err := http.NewRequest("GET", "https://"+name+"/", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		localPort := ""
+		trace := &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) { _, localPort, _ = net.SplitHostPort(info.Conn.LocalAddr().String()) }}
+		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
+		response, err := client.Do(request)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -398,6 +408,7 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 		if response.StatusCode != 200 || json.NewDecoder(response.Body).Decode(&result) != nil {
 			t.Fatal("actual TLS service response missing")
 		}
+		result.ClientPort = localPort
 	}
 	data, _ := json.Marshal(result)
 	if err := os.WriteFile(os.Getenv("RAZVILKA_DOMAIN_NATIVE_RESULT"), data, 0600); err != nil {
@@ -413,7 +424,7 @@ func domainOriginalServePeer(t *testing.T, root string) {
 		t.Fatal(err)
 	}
 	server := &http.Server{ReadHeaderTimeout: 3 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		source, _, _ := net.SplitHostPort(r.RemoteAddr)
+		source, sourcePort, _ := net.SplitHostPort(r.RemoteAddr)
 		if r.URL.Path == "/cdn-cgi/trace" {
 			fmt.Fprintf(w, "ip=%s\nwarp=off\n", source)
 			return
@@ -422,7 +433,7 @@ func domainOriginalServePeer(t *testing.T, root string) {
 			io.WriteString(w, source)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(domainOriginalPeerResult{Source: source, Marker: "native-domain-service"})
+		_ = json.NewEncoder(w).Encode(domainOriginalPeerResult{Source: source, SourcePort: sourcePort, Marker: "native-domain-service"})
 	})}
 	go func() { _ = server.ServeTLS(listener, filepath.Join(root, "ca.pem"), filepath.Join(root, "key.pem")) }()
 	defer server.Close()
@@ -444,8 +455,8 @@ func domainOriginalServePeer(t *testing.T, root string) {
 				if err != nil {
 					return
 				}
-				source, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-				_ = json.NewEncoder(conn).Encode(domainOriginalPeerResult{Source: source, Marker: strings.TrimSpace(line)})
+				source, sourcePort, _ := net.SplitHostPort(conn.RemoteAddr().String())
+				_ = json.NewEncoder(conn).Encode(domainOriginalPeerResult{Source: source, SourcePort: sourcePort, Marker: strings.TrimSpace(line)})
 			}()
 		}
 	}()

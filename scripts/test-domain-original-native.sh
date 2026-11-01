@@ -58,6 +58,6 @@ if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
   cp "$domain_work/original-run.cpu.pprof" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/"
   timeout 50s go tool pprof -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-top.txt" || true
  fi
- printf 'child_exit_status=%s\npublication_budget_seconds=12\nprofile_span=original_Run_through_join\n' "$domain_status" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
+ printf 'child_exit_status=%s\npublication_budget_seconds=%s\nprofile_span=original_Run_through_join\ndiagnostic_only=%s\n' "$domain_status" "${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-12}" "${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-false}" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
 fi
 exit "$domain_status"

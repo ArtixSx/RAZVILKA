@@ -124,6 +124,7 @@ func (l *Lease) policyEffect(original context.Context, index int, args []string)
 				if err := command.Start(); err != nil {
 					return at("EFFECT_START", err)
 				}
+				domainNativeToolStarted("original-effect")
 				started = true
 				return nil
 			})

@@ -319,6 +319,11 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 				}
 			}()
 		}
+		stopDomainMetrics := dataplane.StartDomainTCPNativeMeasurement()
+		stopToolMetrics := startuptools.StartDomainNativeToolMeasurement()
+		defer func() {
+			t.Logf("actual Run through join observation counts: domain=%+v actual_tool_starts=%+v; overlapping cumulative durations, not wall speed", stopDomainMetrics(), stopToolMetrics())
+		}()
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)
 		go func() { runDone <- owner.Run(runCtx, resource) }()
@@ -334,7 +339,15 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 			}
 		}()
 		var published domainOriginalPeerResult
-		deadline := time.Now().Add(12 * time.Second)
+		publicationBudget := 12 * time.Second
+		if diagnostic := os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION"); diagnostic != "" {
+			if diagnostic != "30" {
+				return errors.New("unknown diagnostic publication window")
+			}
+			publicationBudget = 30 * time.Second
+			t.Log("DIAGNOSTIC FUNCTIONAL WINDOW30s; original100s context and60s freshness unchanged; NOT12s performance acceptance")
+		}
+		deadline := time.Now().Add(publicationBudget)
 		for time.Now().Before(deadline) {
 			select {
 			case err := <-runDone:
@@ -369,11 +382,11 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 			return fmt.Errorf("selected actual TLS flow not through native VLESS: %+v", selected)
 		}
 		mismatch := peers.clientRequest(t, original, "mismatch", published.Answer)
-		if mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
+		if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.SourcePort != mismatch.ClientPort || mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
 			return fmt.Errorf("mismatched SNI changed original baseline tuple: %+v", mismatch)
 		}
 		opaque := peers.clientRequest(t, original, "opaque", published.Answer)
-		if opaque.Source != domainOriginalClient || opaque.Marker != "opaque-native-baseline" {
+		if opaque.SourcePort == "" || opaque.SourcePort == "0" || opaque.SourcePort != opaque.ClientPort || opaque.Source != domainOriginalClient || opaque.Marker != "opaque-native-baseline" {
 			return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
 		}
 		stopRun()
@@ -403,7 +416,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		// original capture/native shutdown must use restored standby forwarding,
 		// preserving the actual client tuple without starting another proxy.
 		late := peers.clientRequest(t, original, "selected", published.Answer)
-		if late.Source != domainOriginalClient || late.Marker != "native-domain-service" {
+		if late.SourcePort == "" || late.SourcePort == "0" || late.SourcePort != late.ClientPort || late.Source != domainOriginalClient || late.Marker != "native-domain-service" {
 			return fmt.Errorf("late SYN through retained synthetic address lost standby baseline: %+v", late)
 		}
 		if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
