@@ -119,7 +119,18 @@ func TestHEVOwnedNativeTUNLifecycle(t *testing.T) {
 		}
 	}()
 	for round := 0; round < 2; round++ {
+		t.Logf("actual HEV start round=%d", round+1)
 		if err = a.startOwnedSidecar(ctx); err != nil {
+			// This fixture generates only local test endpoints. Read the bounded
+			// original child's log before TempDir cleanup, without retrying Start
+			// or changing the process/controller's original refusal.
+			if log, openErr := os.Open(spec.LogPath); openErr == nil {
+				if info, statErr := log.Stat(); statErr == nil && info.Mode().IsRegular() {
+					data, readErr := io.ReadAll(io.LimitReader(log, 16<<10))
+					t.Logf("original HEV fixture child log read=%v output=%q", readErr, data)
+				}
+				_ = log.Close()
+			}
 			t.Fatal("owned HEV start", err)
 		}
 		if err = a.waitForInterface(ctx); err != nil {

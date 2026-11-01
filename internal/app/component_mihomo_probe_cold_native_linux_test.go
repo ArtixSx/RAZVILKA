@@ -168,7 +168,10 @@ func TestMihomoColdOriginalProducer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer source.Close()
-	service := catalog.Service{ID: "native-cold", Name: "Actual interrupted finite probe", ProbeURL: "https://1.1.1.2/", Strategy: []string{"mihomo"}, Probes: []catalog.Probe{{ID: "primary", Label: "Interrupted before service request", URL: "https://1.1.1.2/", Required: true}}}
+	service := catalog.Service{ID: "native-cold", Name: "Actual interrupted finite probe", Category: "fixture", ProbeURL: "https://1.1.1.2/", Strategy: []string{"mihomo"}, Probes: []catalog.Probe{{ID: "primary", Label: "Interrupted before service request", URL: "https://1.1.1.2/", Required: true}}}
+	if err := catalog.Validate(catalog.Catalog{Services: []catalog.Service{service}}); err != nil {
+		t.Fatal("original interrupted probe catalog fixture", err)
+	}
 	checked := dataplane.WithReviewGuard(held, control.Current)
 	checked = dataplane.WithNodeResourceGuard(checked, func(c context.Context, host string, _ netip.Addr) error {
 		if host == "1.1.1.2" {

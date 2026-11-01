@@ -53,7 +53,7 @@ import json,os,pathlib,sys,time,urllib.request,urllib.error
 work=pathlib.Path(sys.argv[1]);deadline=time.monotonic()+45;base="http://127.0.0.1:28891"
 def request(method,path):
  token=pathlib.Path("/opt/etc/razvilka/admin.token").read_text().strip()
- q=urllib.request.Request(base+path,method=method,headers={"Authorization":"Bearer "+token,"Origin":base})
+ q=urllib.request.Request(base+path,data=b"{}" if method=="POST" else None,method=method,headers={"Authorization":"Bearer "+token,"Origin":base,"Content-Type":"application/json"})
  try:
   with urllib.request.urlopen(q,timeout=90) as r:return r.status,r.read(1024*1024)
  except urllib.error.HTTPError as e:return e.code,e.read(1024*1024)

@@ -135,6 +135,7 @@ func TestMihomoOriginalNativeHTTPVersionReplacement(t *testing.T) {
 		}
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Origin", server.URL)
+		r.Header.Set("Content-Type", "application/json")
 		response, err := http.DefaultClient.Do(r)
 		if err != nil {
 			t.Fatal(err)
