@@ -1,0 +1,53 @@
+//go:build linux && (amd64 || arm64)
+
+package startuptools
+
+import (
+	"context"
+	"errors"
+	"testing"
+)
+
+func TestClassicReadBatchRejectsCopiedExpiredAndForeignInvocation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := &Lease{review: &heldReview{}, lifetime: ctx}
+	b := &classicTableReadBatch{lease: l, ctx: ctx, active: true, commands: []classicTableReadCommand{{family: 0, table: "mangle"}}}
+	b.self = b
+	for _, tc := range []struct {
+		name         string
+		b            *classicTableReadBatch
+		ctx          context.Context
+		l            *Lease
+		index, limit int
+	}{
+		{"copy", &classicTableReadBatch{self: b, lease: l, ctx: ctx, active: true, commands: b.commands}, ctx, l, 0, 1024},
+		{"foreign-context", b, context.Background(), l, 0, 1024},
+		{"foreign-lease", b, ctx, &Lease{review: l.review, lifetime: ctx}, 0, 1024},
+		{"out-of-order", b, ctx, l, 1, 1024},
+		{"nil-context", b, nil, l, 0, 1024},
+		{"zero-budget", b, ctx, l, 0, 0},
+		{"oversize-budget", b, ctx, l, 0, maxOutputBytes + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.b.read(tc.ctx, tc.l, tc.index, tc.limit)
+			var refused *failure
+			if !errors.Is(err, ErrUnknown) || !errors.As(err, &refused) || refused.stage != "CLASSIC_BATCH_SCOPE" {
+				t.Fatal("invalid invocation reached command leaf", err)
+			}
+		})
+	}
+	b.active = false
+	if _, err := b.read(ctx, l, 0, 1024); err == nil {
+		t.Fatal("expired batch remained usable")
+	}
+	for _, command := range []classicTableReadCommand{{family: 2, table: "mangle"}, {family: 0, table: "mangle -F"}, {family: 0, table: "-S"}} {
+		bad := &classicTableReadBatch{lease: l, ctx: ctx, active: true, commands: []classicTableReadCommand{command}}
+		bad.self = bad
+		_, err := bad.read(ctx, l, 0, 1024)
+		var refused *failure
+		if !errors.As(err, &refused) || refused.stage != "CLASSIC_BATCH_SCOPE" {
+			t.Fatal("nonliteral read reached command image", err)
+		}
+	}
+}

@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -count=1 ./internal/startuptools -run '^TestVersionReadBatch|^TestVersionBatchMetadata' -v
+            go test -count=1 ./internal/startuptools ./internal/dataplane -run '^TestVersionReadBatch|^TestVersionBatchMetadata|^TestClassicReadBatch|^TestBackendInventoryBatch' -v
       - name: Same worker before and after actual managed consumer
         shell: bash
         run: |
