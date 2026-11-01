@@ -37,7 +37,7 @@ func (l *Lease) execute(ctx context.Context, index, limit int, args ...string) (
 			domainNativeToolStarted("original-read")
 		}
 	}()
-	if err := command.Run(); err != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
+	if err := l.runObservedRead(c, command); err != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		return nil, commandResultFailure("COMMAND_RESULT", err, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)
 	}
 	if err := l.review.unchanged(c); err != nil {

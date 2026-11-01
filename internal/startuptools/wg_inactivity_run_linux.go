@@ -28,6 +28,9 @@ func (l *Lease) runWGInactivity(original context.Context, name string, args ...s
 // Both entry points retain THIS lease through actual Start, sole Wait and
 // closing review. The original WG runner has already checked its own WG ABI.
 func (l *Lease) runWGInactivityHeld(original context.Context, name string, args ...string) ([]byte, error) {
+	if err := readObservationEffectRefusal(original); err != nil {
+		return nil, err
+	}
 	if _, finite := original.Deadline(); !finite {
 		return nil, at("WG_INACTIVITY_DEADLINE", nil)
 	}

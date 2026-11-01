@@ -40,19 +40,20 @@ func at(stage string, err error) error {
 // short acquisition-only context. Acquisition and each read are internally
 // capped. Close cancels and joins reads/effects before releasing descriptors.
 type Lease struct {
-	provider  *netidentity.Provider
-	identity  netidentity.Identity
-	profile   profile
-	review    *heldReview
-	digest    string
-	lifetime  context.Context
-	cancel    context.CancelFunc
-	gate      chan struct{}
-	closeDone chan struct{}
-	closeErr  error
-	closed    atomic.Bool
-	retainMu  sync.Mutex
-	retained  sync.WaitGroup
+	provider    *netidentity.Provider
+	identity    netidentity.Identity
+	profile     profile
+	review      *heldReview
+	digest      string
+	lifetime    context.Context
+	cancel      context.CancelFunc
+	gate        chan struct{}
+	closeDone   chan struct{}
+	closeErr    error
+	closed      atomic.Bool
+	retainMu    sync.Mutex
+	retained    sync.WaitGroup
+	readRelease func() // Guarded by the original gate; released only by unlock.
 }
 
 // AcquireUbuntuLegacy selects only the reviewed Ubuntu AMD64 1.8.11 legacy
@@ -71,20 +72,49 @@ func (l *Lease) lock(ctx context.Context) error {
 	if l == nil || ctx == nil || ctx.Err() != nil || l.gate == nil || l.lifetime == nil || l.closed.Load() || l.lifetime.Err() != nil {
 		return at("LIFETIME", nil)
 	}
+	release, observationDone, err := l.registerReadObservation(ctx)
+	if err != nil {
+		return err
+	}
 	select {
 	case <-ctx.Done():
+		if release != nil {
+			release()
+		}
 		return at("CONTEXT", ctx.Err())
 	case <-l.lifetime.Done():
+		if release != nil {
+			release()
+		}
 		return at("LIFETIME", l.lifetime.Err())
+	case <-observationDone:
+		if release != nil {
+			release()
+		}
+		return at("READ_OBSERVATION_CLOSED", nil)
 	case <-l.gate:
 	}
+	l.readRelease = release
 	if l.closed.Load() || l.lifetime.Err() != nil || ctx.Err() != nil {
 		l.unlock()
 		return at("LIFETIME", nil)
 	}
+	if observationDone != nil {
+		if err := l.readObservationCurrent(ctx); err != nil {
+			l.unlock()
+			return err
+		}
+	}
 	return nil
 }
-func (l *Lease) unlock() { l.gate <- struct{}{} }
+func (l *Lease) unlock() {
+	if l.readRelease != nil {
+		release := l.readRelease
+		l.readRelease = nil
+		release()
+	}
+	l.gate <- struct{}{}
+}
 
 func boundedReadContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	if ctx == nil {

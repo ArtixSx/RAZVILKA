@@ -28,7 +28,7 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 	if l == nil || l.review == nil || ctx == nil || ctx.Err() != nil {
 		return at("VERSION_BATCH_SCOPE", nil)
 	}
-	if err := l.review.unchanged(ctx); err != nil {
+	if err := l.readObservationBytesCurrent(ctx); err != nil {
 		return err
 	}
 	scoped, cancel := context.WithCancel(ctx)
@@ -46,7 +46,7 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 		observed = b.read(scoped, l, 2)
 	}
 	// Even a failed command cannot hide a concurrent graph mutation.
-	closing := l.review.unchanged(ctx)
+	closing := l.readObservationBytesCurrent(ctx)
 	if l.closed.Load() || l.lifetime == nil || l.lifetime.Err() != nil {
 		closing = errors.Join(closing, at("VERSION_BATCH_SCOPE", nil))
 	}
@@ -77,7 +77,7 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 	command.Args[0], command.Env, command.Dir = name, l.profile.environment(), "/"
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
-	runErr := command.Run()
+	runErr := l.runObservedRead(c, command)
 	if command.Process != nil {
 		domainNativeToolStarted("literal-version")
 	}

@@ -82,6 +82,51 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Genuine public readonly source scope before the measured Run window.
+	// An original callback failure stays a failure; its context cannot be reused
+	// for even another literal observation after synchronous revocation.
+	scopeWitness := errors.New("actual B readonly source callback failure")
+	var expiredToolRead context.Context
+	scopeErr := tools.WithReadOnlyToolObservation(ctx, identity, descriptor.ReviewSHA256, func(observed context.Context) error {
+		expiredToolRead = observed
+		if err := tools.Check(observed, identity); err != nil {
+			return err
+		}
+		if _, err := tools.RunBounded(observed, descriptor.IPTables, 1<<20, "-t", "mangle", "-S"); err != nil {
+			return err
+		}
+		return scopeWitness
+	})
+	var onlyScopeWitness func(error) bool
+	onlyScopeWitness = func(err error) bool {
+		if err == scopeWitness {
+			return true
+		}
+		if joined, ok := err.(interface{ Unwrap() []error }); ok {
+			children := joined.Unwrap()
+			if len(children) == 0 {
+				return false
+			}
+			for _, child := range children {
+				if !onlyScopeWitness(child) {
+					return false
+				}
+			}
+			return true
+		}
+		if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+			return onlyScopeWitness(wrapped.Unwrap())
+		}
+		return false
+	}
+	if !onlyScopeWitness(scopeErr) {
+		t.Fatal("actual B tool scope lost callback error", scopeErr)
+	}
+	if _, err := tools.RunBounded(expiredToolRead, descriptor.IPTables, 1<<20, "-t", "mangle", "-S"); !errors.Is(err, startuptools.ErrUnknown) {
+		t.Fatal("expired original B read scope issued data", err)
+	}
+
 	operations := &operationgate.Gate{}
 	held, release, err := operations.ExclusiveContext(ctx)
 	if err != nil {
