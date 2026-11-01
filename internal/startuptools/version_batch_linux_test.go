@@ -8,7 +8,36 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestVersionBatchBoundaryRefusesBorrowedMarkersWithoutFallback(t *testing.T) {
+	base, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	l := &Lease{lifetime: base, review: &heldReview{}}
+	foreign := &Lease{lifetime: base, review: &heldReview{}}
+	o := &toolReadObservation{lease: l, review: l.review, active: true, deadline: time.Now().Add(time.Second)}
+	o.self = o
+	scoped := context.WithValue(base, toolReadObservationKey{}, o)
+	o.ctx = scoped
+	for name, source := range map[string]*Lease{"foreign": foreign, "closed": l} {
+		if name == "closed" {
+			o.active = false
+		}
+		if err := source.versionBatchBoundary(scoped); !errors.Is(err, ErrUnknown) {
+			t.Fatal("unissued marker reached graph fallback", name, err)
+		}
+	}
+	o.active = true
+	copy := &toolReadObservation{self: o, lease: l, review: l.review, active: true, deadline: o.deadline, ctx: scoped}
+	if err := l.versionBatchBoundary(context.WithValue(base, toolReadObservationKey{}, copy)); !errors.Is(err, ErrUnknown) {
+		t.Fatal("copied marker admitted", err)
+	}
+	cancel()
+	if err := l.versionBatchBoundary(scoped); !errors.Is(err, ErrUnknown) {
+		t.Fatal("canceled marker admitted", err)
+	}
+}
 
 func TestVersionReadBatchRejectsForeignAndExpiredInvocation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
