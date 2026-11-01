@@ -19,7 +19,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
-func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, readEmpty func(context.Context) error) {
+func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, readEmpty func(context.Context) error, lan ...bool) {
 	t.Helper()
 	const token = "native-probe-original-api-token-1234567890"
 	var err error
@@ -110,6 +110,10 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModeManual)
 	if !reflect.DeepEqual(before, a.Store.Get()) {
 		t.Fatal("manual metadata choice changed live config")
+	}
+	if len(lan) > 0 && lan[0] {
+		runManagedProbeNativeLANApply(t, a, func(method, path, body string) (int, []byte) { return request(method, path, body, server.URL, true) }, readEmpty)
+		return // The LAN helper reports its actual Apply/Stop evidence.
 	}
 	t.Log("actual authenticated App HTTP: three native TLS/counter passes, current preferred selection/snapshot, explicit frozen manual choice, original selected source bridge; live routing unchanged; CI classification only, no router/LAN acceptance")
 }
