@@ -36,6 +36,7 @@ type DomainTCPOriginalScope struct {
 	kernel            *domainTCPBaselineKernelOwner
 	closed            bool
 	cancel            context.CancelFunc
+	publicationOpen   bool // Only the completed original producer opens this phase.
 	standbyReady      bool // Only the actual joined capture finalizer sets this.
 	standbyHistory    *updatecheck.ExecutionHistoryAdmission
 	standbyOwner      *domainTCPStandbyOwner
@@ -174,7 +175,7 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.mu.Unlock()
 	// Publication remains false until complete original process/capture/kernel
 	// checks pass, including a genuine transparent baseline capability.
-	if err := o.CurrentSyntheticMapping(ctx, process.material.mapping); err != nil {
+	if err := o.compareSyntheticMapping(ctx, process.material.mapping); err != nil {
 		return err
 	}
 	if consume == nil {
@@ -182,9 +183,15 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	}
 	life, cancel := context.WithCancel(ctx)
 	o.mu.Lock()
+	if ctx.Err() != nil || o.closed || o.prepared != prepared || o.kernel != kernel {
+		o.mu.Unlock()
+		cancel()
+		return errors.Join(ErrDomainPolicyTCPConsumer, ctx.Err())
+	}
 	o.cancel = cancel
+	o.publicationOpen = true
 	o.mu.Unlock()
-	defer func() { cancel(); o.mu.Lock(); o.closed = true; o.mu.Unlock() }()
+	defer func() { cancel(); o.mu.Lock(); o.publicationOpen = false; o.closed = true; o.mu.Unlock() }()
 	return consume(life)
 }
 
@@ -222,6 +229,21 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticCapture(ctx context.Context, ca
 	return r.checkPrepared(ctx)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
+	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	o.mu.Lock()
+	open, closed := o.publicationOpen, o.closed
+	o.mu.Unlock()
+	if !open || closed {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return o.compareSyntheticMapping(ctx, mapping)
+}
+
+// The first producer comparison cannot be reentered as publication readiness.
+// Opening the phase never replaces these full live comparisons on each send.
+func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
 	if err := o.baseCurrent(ctx); err != nil {
 		return err
 	}
