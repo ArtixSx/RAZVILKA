@@ -33,13 +33,17 @@ func TestVersionReadBatchRejectsForeignAndExpiredInvocation(t *testing.T) {
 		{"non-version-index", b, ctx, l, 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.token.read(tc.ctx, tc.lease, tc.index); !errors.Is(err, ErrUnknown) {
+			err := tc.token.read(tc.ctx, tc.lease, tc.index)
+			var refused *failure
+			if !errors.Is(err, ErrUnknown) || !errors.As(err, &refused) || refused.stage != "VERSION_BATCH_SCOPE" {
 				t.Fatal("invocation escaped", err)
 			}
 		})
 	}
 	b.active = false
-	if err := b.read(ctx, l, 0); !errors.Is(err, ErrUnknown) {
+	err := b.read(ctx, l, 0)
+	var refused *failure
+	if !errors.Is(err, ErrUnknown) || !errors.As(err, &refused) || refused.stage != "VERSION_BATCH_SCOPE" {
 		t.Fatal("revoked invocation survived", err)
 	}
 }
