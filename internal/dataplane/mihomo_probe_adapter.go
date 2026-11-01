@@ -45,6 +45,16 @@ func (*MihomoProbeAdapter) Health(context.Context, Plan, string) error   { retur
 func (*MihomoProbeAdapter) Commit(context.Context, Plan, string) error   { return ErrMihomoProbe }
 func (*MihomoProbeAdapter) Rollback(context.Context, Plan, string) error { return ErrMihomoProbe }
 
+// RegisteredWith is a read-only comparison of the actual registry slot, not
+// a cached startup flag or a claim that the installed runtime is available.
+func (a *MihomoProbeAdapter) RegisteredWith(manager *Manager) bool {
+	if a == nil || a.self != a || manager == nil {
+		return false
+	}
+	registered, ok := manager.adapter("mihomo")
+	return ok && registered == a
+}
+
 type MihomoServiceProbe struct {
 	ReviewSHA256    string `json:"review_sha256"`
 	ConfigSHA256    string `json:"config_sha256"`
@@ -152,7 +162,7 @@ func (a *MihomoProbeAdapter) Check(ctx context.Context, manager *Manager, source
 		a.mu.Unlock()
 		result.DurationMS = time.Since(started).Milliseconds()
 	}()
-	if registered, ok := manager.adapter("mihomo"); !ok || registered != a {
+	if !a.RegisteredWith(manager) {
 		return result, ErrMihomoProbe
 	}
 	if err := componentHistory.CheckReadable(ctx); err != nil {

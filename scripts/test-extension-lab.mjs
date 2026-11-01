@@ -13,6 +13,8 @@ test('export requires review',()=>assert.throws(()=>m.mihomo(source,1,18090,'exp
 test('export requires exact confirmation operation',()=>assert.equal(m.mihomo(source,1,18090,'export','a'.repeat(64)).confirm,'BUILD_MIHOMO_CONFIG'));
 test('native validation requires current review and distinct confirmation',()=>{assert.throws(()=>m.mihomo(source,1,18090,'validate'));assert.equal(m.mihomo(source,1,18090,'validate','a'.repeat(64)).confirm,'VALIDATE_MIHOMO_CONFIG');});
 const nativeReview='a'.repeat(64), nativeReply={review:nativeReview,live_applied:false,draft_persisted:false,validation:{config_sha256:nativeReview,version:'1.19.33',native_validated:true,service_verified:false,live_applied:false},result:{native_validated:true,service_verified:false,live_applied:false,config:''}};
+const probeLifecycle={schema:1,operations:{isolated_probe:{registration:'registered',available:null}}};
+test('probe registration is tri-state and never a readiness observation',()=>{for(const lifecycle of [null,{}, {schema:2,operations:probeLifecycle.operations},{schema:1,operations:{isolated_probe:{registration:'future'}}}])assert.equal(m.mihomoProbeCapability(lifecycle).registration,'unknown');assert.equal(m.mihomoProbeCapability({schema:1,operations:{isolated_probe:{registration:'absent',available:false}}}).registration,'absent');const v=m.mihomoProbeCapability(probeLifecycle);assert.equal(v.registration,'registered');assert.match(v.label,/Допуск.*при запуске/);assert.doesNotMatch(v.label,/готов|доступен/);});
 test('service probe binds review, catalog id and current revision with distinct confirmation',()=>{const q=m.probeMihomo(source,1,18090,nativeReview,'service',4);assert.equal(q.action,'probe');assert.equal(q.confirm,'PROBE_MIHOMO_SERVICE');assert.equal(q.service_id,'service');assert.equal(q.expected_revision,4);for(const [s,r] of [['',4],['service',undefined],['service',0]])assert.throws(()=>m.probeMihomo(source,1,18090,nativeReview,s,r));});
 const serviceReply={review:nativeReview,live_applied:false,draft_persisted:false,recovery_required:false,probe:{review_sha256:nativeReview,config_sha256:'b'.repeat(64),service_id:'service',network_profile:'wan-current',service_verified:true,cleanup_verified:true,live_applied:false}};
 test('service proof accepts distinct pinned profile only with joined cleanup',()=>assert.match(m.serviceMihomo(serviceReply,nativeReview,'service'),/Процесс завершён/));
@@ -58,7 +60,7 @@ for(const fence of ['input','logout','cancel','close'])await asyncTest('native v
 });
 for(const fence of ['service','input','logout','cancel','close'])await asyncTest('native service proof late response cannot survive '+fence,async()=>{
  let finish;const pending=new Promise(resolve=>finish=resolve);
- const f=fixture(async(_path,options)=>JSON.parse(options.body).action==='preview'?{review:nativeReview,live_applied:false,result:preview}:pending);
+ const f=fixture(async(_path,options)=>JSON.parse(options.body).action==='preview'?{review:nativeReview,live_applied:false,result:preview,lifecycle:probeLifecycle}:pending);
  f.el('ext5MText').value=source;f.click('ext5MPreview');await new Promise(setImmediate);
  f.el('ext5MService').value='service';f.click('ext5MProbe');assert.equal(f.requests.length,2);
  assert.equal(JSON.parse(f.requests[1].options.body).confirm,'PROBE_MIHOMO_SERVICE');
@@ -69,6 +71,15 @@ for(const fence of ['service','input','logout','cancel','close'])await asyncTest
  const before=f.el('ext5MResult').textContent;finish(serviceReply);await new Promise(setImmediate);
  assert.equal(f.el('ext5MResult').textContent,before);assert.doesNotMatch(f.el('ext5MResult').textContent,/Сервис доступен/);
  assert.equal(f.requests[1].options.controller.signal.aborted,true);
+});
+for(const registration of ['registered','absent','unknown'])await asyncTest('preview lifecycle controls probe availability without claiming ready '+registration,async()=>{
+ const lifecycle=registration==='unknown'?{schema:2,operations:probeLifecycle.operations}:{schema:1,operations:{isolated_probe:{registration,available:null}}};
+ const f=fixture(async()=>({review:nativeReview,live_applied:false,result:preview,lifecycle}));f.el('ext5MText').value=source;f.click('ext5MPreview');await new Promise(setImmediate);
+ assert.equal(f.el('ext5MProbe').disabled,registration!=='registered');assert.doesNotMatch(f.el('ext5MLifecycle').textContent,/готов|сервис доступен/i);
+});
+await asyncTest('status reread uses same lifecycle and cold no-owner never means cleanup',async()=>{
+ const f=fixture(async()=>({owner_present:false,cleanup_confirmed:false,execution_recovery_required:true,live_applied:false,lifecycle:probeLifecycle}));f.click('ext5MReadProbe');await new Promise(setImmediate);
+ assert.match(f.el('ext5MLifecycle').textContent,/зарегистрирован/);assert.match(f.el('ext5Status').textContent,/не подтверждает завершение/);assert.match(f.el('ext5Status').textContent,/требует восстановления/);assert.equal(f.el('ext5MProbe').disabled,true);
 });
 
 await asyncTest('file read blocks preview of previous content until new contents arrive',async()=>{

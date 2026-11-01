@@ -105,9 +105,49 @@ func TestMihomoProbeRegistrationBindsOriginalOwners(t *testing.T) {
 	if !a.mihomoProbeRegistered() {
 		t.Fatal("original registration missing")
 	}
+	if op := a.runtimeLifecycle("mihomo").Operations["isolated_probe"]; op.Registration != "registered" || op.Available != nil {
+		t.Fatal("original registration became absent or ready", op)
+	}
+	// Manager.Register rejects duplicate IDs. Model a defensive exported-slot
+	// drift before concurrency; equal IDs/paths cannot replace the actual owner.
+	original := a.mihomoProbe.adapter
+	a.Dataplane.Adapters["mihomo"] = dataplane.NewMihomoProbeAdapter(a.Components, netidentity.NewProcProvider())
+	if a.mihomoProbeRegistered() || a.runtimeLifecycle("mihomo").Operations["isolated_probe"].Registration != "absent" {
+		t.Fatal("stale saved registration became current")
+	}
+	a.Dataplane.Adapters["mihomo"] = original
 	a.Components = components.New()
 	if a.mihomoProbeRegistered() {
 		t.Fatal("replacement component owner accepted")
+	}
+}
+
+func TestMihomoProbeStatusPublishesSameOriginalLifecycle(t *testing.T) {
+	a, send := awgAPITest(t)
+	a.Components = components.New()
+	a.Dataplane = dataplane.New(t.TempDir())
+	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
+		t.Fatal(err)
+	}
+	w := send("GET", mihomoProbeRecoveryPath, nil)
+	var out struct {
+		Lifecycle struct {
+			Schema     int `json:"schema"`
+			Operations map[string]struct {
+				Registration string `json:"registration"`
+				Available    *bool  `json:"available"`
+			} `json:"operations"`
+		} `json:"lifecycle"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	operation := out.Lifecycle.Operations["isolated_probe"]
+	if out.Lifecycle.Schema != 1 || operation.Registration != "registered" || operation.Available != nil {
+		t.Fatal("status disagrees with original lifecycle", w.Body.String())
+	}
+	if a.runtimeLifecycle("mihomo").Operations["live_apply"].Registration != "absent" {
+		t.Fatal("probe became ordinary route")
 	}
 }
 

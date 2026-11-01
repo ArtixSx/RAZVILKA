@@ -31,6 +31,14 @@ func TestMihomoProbeDoesNotAdvertiseOrAcceptLiveLifecycle(t *testing.T) {
 	if a.Pending() || a.RetryCleanup(context.Background()) == nil {
 		t.Fatal("missing original owner adopted")
 	}
+	if !a.RegisteredWith(m) {
+		t.Fatal("actual original slot missing")
+	}
+	// Model replacement of the exported registry before concurrent users.
+	m.Adapters["mihomo"] = NewMihomoProbeAdapter(components.New(), netidentity.NewProcProvider())
+	if a.RegisteredWith(m) {
+		t.Fatal("replacement registry slot retained original registration")
+	}
 }
 
 func TestMihomoProbeCoversEveryRequiredCatalogScenario(t *testing.T) {

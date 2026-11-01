@@ -64,7 +64,7 @@ func (a *App) mihomoProbeRegistered() bool {
 	a.mihomoProbe.mu.Lock()
 	defer a.mihomoProbe.mu.Unlock()
 	s := &a.mihomoProbe
-	return s.adapter != nil && s.manager == a.Dataplane && s.components == a.Components
+	return s.adapter != nil && s.manager == a.Dataplane && s.components == a.Components && s.adapter.RegisteredWith(s.manager)
 }
 
 func writeMihomoProbeFailure(w http.ResponseWriter, pending bool) {
@@ -221,7 +221,7 @@ func (a *App) mihomoProbeRecovery(w http.ResponseWriter, r *http.Request) {
 			cancel()
 			recovery = &required
 		}
-		writeJSON(w, 200, map[string]any{"owner_present": held != nil, "cleanup_confirmed": false, "execution_recovery_required": recovery, "live_applied": false})
+		writeJSON(w, 200, map[string]any{"owner_present": held != nil, "cleanup_confirmed": false, "execution_recovery_required": recovery, "live_applied": false, "lifecycle": a.runtimeLifecycle("mihomo")})
 		return
 	}
 	var input struct {
