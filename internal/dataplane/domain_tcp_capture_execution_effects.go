@@ -156,31 +156,40 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	r.started = true
 	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error {
 		defer domainTCPMeasure("capture-add-guard")(0)
-		return r.process.withCurrentFileObservation(c, func(files *xrayDomainTCPFileObservation) error {
-			return errors.Join(r.currentWithFiles(c, files), baseline.currentBaselineWithFiles(c, files))
+		return r.observeTools(c, func(observed context.Context) error {
+			return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+				return errors.Join(r.currentWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))
+			})
 		})
 	},
 		Preflight: func(c context.Context) error {
-			return r.process.withCurrentFileObservation(c, func(files *xrayDomainTCPFileObservation) error {
-				view, err := r.readWithFiles(c, files)
-				if err != nil {
-					return err
-				}
-				for i := range r.effects.Effects {
-					count, err := domainTCPCapturePresence(view.Rows, r.effects, i)
-					if err != nil || count != 0 {
-						return ErrDomainPolicyTCPConsumer
+			return r.observeTools(c, func(observed context.Context) error {
+				return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+					view, err := r.readWithFiles(observed, files)
+					if err != nil {
+						return err
 					}
-				}
-				return baseline.currentBaselineWithFiles(c, files)
+					for i := range r.effects.Effects {
+						count, err := domainTCPCapturePresence(view.Rows, r.effects, i)
+						if err != nil || count != 0 {
+							return ErrDomainPolicyTCPConsumer
+						}
+					}
+					return baseline.currentBaselineWithFiles(observed, files)
+				})
 			})
 		},
 		ExactPresence: func(c context.Context, i int) (int, error) {
-			view, err := r.read(c)
-			if err != nil {
-				return 0, err
-			}
-			return domainTCPCapturePresence(view.Rows, r.effects, i)
+			count := 0
+			err := r.observeTools(c, func(observed context.Context) error {
+				view, err := r.read(observed)
+				if err != nil {
+					return err
+				}
+				count, err = domainTCPCapturePresence(view.Rows, r.effects, i)
+				return err
+			})
+			return count, err
 		},
 		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending }}
 	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
@@ -189,8 +198,10 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	}
 	// COMMON has returned from all actual mutations. This separate readonly
 	// closing comparison cannot lend its view to any command admission.
-	if err := r.process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
-		return errors.Join(r.checkPreparedWithFiles(ctx, files), baseline.currentBaselineWithFiles(ctx, files))
+	if err := r.observeTools(ctx, func(observed context.Context) error {
+		return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+			return errors.Join(r.checkPreparedWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))
+		})
 	}); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
