@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
@@ -24,6 +25,26 @@ func (r *domainTCPCaptureExecutionResource) observeTools(ctx context.Context, us
 		return use(ctx)
 	} // Existing producers retain their full-check path.
 	return original.WithReadOnlyToolObservation(ctx, r.tools.Identity, r.tools.ReviewSHA256, use)
+}
+
+// The original tool producer supplies this derived context synchronously. A
+// file view is rebound only here, never from an arbitrary caller context.
+func (r *domainTCPCaptureExecutionResource) observeToolsWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation, use func(context.Context, *xrayDomainTCPFileObservation) error) error {
+	if use == nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return r.observeTools(ctx, func(observed context.Context) error {
+		if files == nil || observed == ctx {
+			return use(observed, files)
+		}
+		child, closeChild, err := files.forOriginalToolRead(ctx, observed, r.process)
+		if err != nil {
+			return err
+		}
+		defer closeChild()
+		result := use(observed, child)
+		return errors.Join(result, child.current(observed, r.process), files.current(ctx, r.process))
+	})
 }
 
 func (r *syntheticBaselineExecutionResource) observeTools(ctx context.Context, use func(context.Context) error) error {

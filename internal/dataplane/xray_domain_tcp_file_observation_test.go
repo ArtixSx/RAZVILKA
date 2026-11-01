@@ -158,6 +158,72 @@ func TestXrayDomainFileObservationRefusesReboundSameInodeDescriptor(t *testing.T
 	}
 }
 
+func TestXrayDomainFileObservationToolReadRetainsOriginalParent(t *testing.T) {
+	r, ctx := domainFileObservationModel(t)
+	childCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var child *xrayDomainTCPFileObservation
+	err := r.withFileObservation(ctx, func(parent *xrayDomainTCPFileObservation) error {
+		var closeChild func()
+		var err error
+		child, closeChild, err = parent.forOriginalToolRead(ctx, childCtx, r)
+		if err != nil {
+			return err
+		}
+		defer closeChild()
+		if err := r.filesCurrentForObservation(childCtx, child); err != nil {
+			return err
+		}
+		if _, _, err := parent.forOriginalToolRead(childCtx, childCtx, r); err == nil {
+			t.Fatal("unrelated parent context borrowed the original view")
+		}
+		if err := r.filesCurrentForObservation(ctx, child); err == nil {
+			t.Fatal("child view crossed its exact original observation context")
+		}
+		parent.open.Store(false)
+		if err := r.filesCurrentForObservation(childCtx, child); err == nil {
+			t.Fatal("child outlived original parent")
+		}
+		parent.open.Store(true)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child == nil || child.open.Load() || r.filesCurrentForObservation(childCtx, child) == nil {
+		t.Fatal("derived view escaped the synchronous original read")
+	}
+}
+
+func TestXrayDomainFileObservationToolReadPreservesClosingHashAndError(t *testing.T) {
+	r, ctx := domainFileObservationModel(t)
+	childCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	witness := errors.New("original tool observation callback error")
+	err := r.withFileObservation(ctx, func(parent *xrayDomainTCPFileObservation) error {
+		child, closeChild, err := parent.forOriginalToolRead(ctx, childCtx, r)
+		if err != nil {
+			return err
+		}
+		defer closeChild()
+		f, err := os.OpenFile(r.executable.path, os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		_, writeErr := f.WriteAt([]byte("X"), 0)
+		if err := errors.Join(writeErr, f.Close(), os.Chtimes(r.executable.path, r.executable.info.ModTime(), r.executable.info.ModTime())); err != nil {
+			return err
+		}
+		if err := r.filesCurrentForObservation(childCtx, child); err != nil {
+			t.Fatal("fixture failed to restore metadata", err)
+		}
+		return witness
+	})
+	if !errors.Is(err, witness) || !errors.Is(err, ErrXrayDomainTCPOriginal) {
+		t.Fatal("derived read omitted callback error or full closing-byte refusal", err)
+	}
+}
+
 // This model has no Cmd, kernel birth, material or registrar: it cannot grant a
 // process read. It tests only the one-use transfer of a completed file opening.
 func domainFileOpeningModel(t *testing.T) (*XrayDomainTCPExecutionResource, context.Context, func(), *xrayDomainTCPFileOpening) {

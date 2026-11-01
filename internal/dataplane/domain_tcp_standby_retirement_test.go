@@ -6,7 +6,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
-	"net/netip"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,10 +144,19 @@ func standbyRetirementPublicationModel(t *testing.T) (*domainTCPStandbyRetiremen
 		}
 		ownerRecord.syncDirectory = func() error { return nil }
 	}
-	udp, tcp, err := listenScopedDNS(netip.MustParseAddrPort("127.0.0.1:0"))
+	// This file-only finalization model needs two real closed descriptors,
+	// not a common DNS port. Bind each protocol to its own kernel-selected port
+	// so UDP's ephemeral choice cannot collide with another test's TCP socket.
+	udp, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = udp.Close() })
+	tcp, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tcp.Close() })
 	session := &scopedDNSSession{done: make(chan struct{}), resources: scopedDNSInactiveResources{udp: udp, tcp: tcp}}
 	session.resources.cancelled.Store(true)
 	udp.Close()
