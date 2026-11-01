@@ -81,6 +81,9 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 }
 
 func (l *Lease) policyEffect(original context.Context, index int, args []string) ([]byte, error) {
+	if err := readObservationEffectRefusal(original); err != nil {
+		return nil, err
+	}
 	c, cancel := context.WithTimeout(original, 25*time.Second)
 	defer cancel()
 	stop := context.AfterFunc(l.lifetime, cancel)

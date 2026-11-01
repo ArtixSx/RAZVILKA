@@ -83,7 +83,7 @@ func (l *Lease) ReadBoundedClassicTables(ctx context.Context, expected netidenti
 		if actual != expected || !l.profile.acceptsIdentity(actual) {
 			return at("READ_IDENTITY", nil)
 		}
-		if err := classicBatchBytesCurrent(held, l.review); err != nil {
+		if err := l.classicBatchBytesCurrent(held); err != nil {
 			return err
 		}
 		scoped, stop := context.WithCancel(held)
@@ -100,7 +100,7 @@ func (l *Lease) ReadBoundedClassicTables(ctx context.Context, expected netidenti
 			remaining -= len(output)
 			result[command.family] = append(result[command.family], output)
 		}
-		return errors.Join(observed, classicBatchBytesCurrent(held, l.review), held.Err())
+		return errors.Join(observed, l.classicBatchBytesCurrent(held), held.Err())
 	})
 	if err != nil || c.Err() != nil || l.closed.Load() || l.lifetime.Err() != nil {
 		return zero, at("CLASSIC_BATCH_READ", errors.Join(err, c.Err(), l.lifetime.Err()))
@@ -108,13 +108,13 @@ func (l *Lease) ReadBoundedClassicTables(ctx context.Context, expected netidenti
 	return result, nil
 }
 
-func classicBatchBytesCurrent(ctx context.Context, review *heldReview) error {
+func (l *Lease) classicBatchBytesCurrent(ctx context.Context) error {
 	leaf, cancel, err := boundedReadContext(ctx)
 	if err != nil {
 		return err
 	}
 	defer cancel()
-	return errors.Join(review.unchanged(leaf), leaf.Err())
+	return errors.Join(l.readObservationBytesCurrent(leaf), leaf.Err())
 }
 
 func (b *classicTableReadBatch) read(ctx context.Context, l *Lease, index, limit int) ([]byte, error) {
@@ -142,7 +142,7 @@ func (b *classicTableReadBatch) read(ctx context.Context, l *Lease, index, limit
 	command.Args[0], command.Env, command.Dir = name, l.profile.environment(), "/"
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
-	runErr := command.Run()
+	runErr := l.runObservedRead(c, command)
 	var observed error
 	if runErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		observed = commandResultFailure("COMMAND_RESULT", runErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)

@@ -445,6 +445,11 @@ func (b *NFQWSScopedBinding) readback(ctx context.Context, p *NFQWSScopedPlan, m
 }
 
 func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return b.readbackPrefixObserved(observed, p, mode, index, prefix)
+	})
+}
+func (b *NFQWSScopedBinding) readbackPrefixObserved(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
 	if ctx == nil || p == nil {
 		return ErrNFQWSScopedOwner
 	}
