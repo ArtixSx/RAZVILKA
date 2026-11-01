@@ -30,7 +30,11 @@ func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 	if err != nil || len(out) > 16<<10 {
 		return 0, fmt.Errorf("probe counter command: %w", errors.Join(ErrNFQWSScopedOwner, err))
 	}
-	count, err := nfqwsProbeParseCounter(out, chain)
+	protocol, protocolErr := e.counterProtocol(ctx)
+	if protocolErr != nil {
+		return 0, fmt.Errorf("probe counter original tool format: %w", protocolErr)
+	}
+	count, err := nfqwsProbeParseCounter(out, chain, protocol)
 	if err != nil {
 		return 0, fmt.Errorf("probe counter parse: %w", err)
 	}
@@ -60,7 +64,12 @@ func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
 // The exact owned one-rule chain must contain one NFQUEUE row. Rounded human
 // counters, extra rules, multiple rows, headers for another chain and unknown
 // output are refused. The complete -S inventory separately checks selectors.
-func nfqwsProbeParseCounter(raw []byte, chain string) (uint64, error) {
+func nfqwsProbeParseCounter(raw []byte, chain, protocol string) (uint64, error) {
+	// Format comes only from the original protected tool owner, never the
+	// response. Each invocation admits exactly that owner's known spelling.
+	if protocol != "6" && protocol != "tcp" {
+		return 0, ErrNFQWSScopedOwner
+	}
 	if len(raw) == 0 || len(raw) > 16<<10 {
 		return 0, ErrNFQWSScopedOwner
 	}
@@ -73,7 +82,7 @@ func nfqwsProbeParseCounter(raw []byte, chain string) (uint64, error) {
 		return 0, ErrNFQWSScopedOwner
 	}
 	row := strings.Fields(lines[2])
-	if len(row) < 12 || row[2] != "NFQUEUE" || row[3] != "tcp" || strings.Join(row[len(row)-3:], " ") != "NFQUEUE num 200" {
+	if len(row) < 12 || row[2] != "NFQUEUE" || row[3] != protocol || strings.Join(row[len(row)-3:], " ") != "NFQUEUE num 200" {
 		return 0, ErrNFQWSScopedOwner
 	}
 	pkts, err := strconv.ParseUint(row[0], 10, 64)

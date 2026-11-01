@@ -129,6 +129,9 @@ func NewManagedNFQWSProbeConsumer(manager *Manager, gate *NetworkPolicyAdapter, 
 	if _, ok := inventory.reader.Runner.(backendInventoryBoundedRunner); !ok {
 		return nil, ErrNFQWSScopedOwner
 	}
+	if _, ok := inventory.reader.Runner.(nfqwsProbeCounterFormatOwner); !ok {
+		return nil, ErrNFQWSScopedOwner
+	}
 	manager.registryMu.RLock()
 	registered, generation := manager.Adapters["nfqws2"], manager.registryGeneration
 	registeredGate := manager.Adapters[NetworkPolicyAdapterID]
@@ -454,6 +457,9 @@ func (e *nfqwsProbeExecution) prepare(ctx context.Context, revision uint64) erro
 	c := e.consumer
 	if err := e.current(ctx); err != nil {
 		return err
+	}
+	if _, err := e.counterProtocol(ctx); err != nil {
+		return errors.Join(err, e.current(ctx))
 	}
 	parent, err := components.ReadNFQWSSupervisionIdentity()
 	if err != nil {

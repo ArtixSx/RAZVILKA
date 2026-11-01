@@ -77,13 +77,23 @@ func TestNFQWSProbeKnownCleanupRetainsOwnerOnDescriptorFailure(t *testing.T) {
 func TestNFQWSProbeCounterParserRejectsForeignQueueAndRows(t *testing.T) {
 	base := "Chain RZP_012345678901234567_4 (1 references)\n pkts bytes target prot opt in out source destination\n 12 1024 NFQUEUE tcp -- * * 192.168.1.1 8.8.8.8 tcp spt:35001 dpt:443 mark match 0x0 NFQUEUE num 200\n"
 	chain := "RZP_012345678901234567_4"
-	if count, err := nfqwsProbeParseCounter([]byte(base), chain); err != nil || count != 12 {
-		t.Fatal(count, err)
-	}
-	for _, bad := range []string{strings.Replace(base, "num 200", "num 2000", 1), strings.Replace(base, " 12 1024", " 12K 1024", 1), strings.Replace(base, "NFQUEUE tcp", "ACCEPT tcp", 1), base + " 1 20 ACCEPT all -- * * 0.0.0.0/0 0.0.0.0/0\n", strings.Replace(base, chain, "FOREIGN", 1)} {
-		if _, err := nfqwsProbeParseCounter([]byte(bad), chain); err == nil {
-			t.Fatal("untrusted counter accepted", bad)
+	for _, protocol := range []string{"6", "tcp"} {
+		valid := base
+		crossFormat := strings.Replace(base, "NFQUEUE tcp", "NFQUEUE 6", 1)
+		if protocol == "6" {
+			valid, crossFormat = crossFormat, valid
 		}
+		if count, err := nfqwsProbeParseCounter([]byte(valid), chain, protocol); err != nil || count != 12 {
+			t.Fatal(protocol, count, err)
+		}
+		for _, bad := range []string{crossFormat, strings.Replace(valid, "num 200", "num 2000", 1), strings.Replace(valid, " 12 1024", " 12K 1024", 1), strings.Replace(valid, "NFQUEUE", "ACCEPT", 1), valid + " 1 20 ACCEPT all -- * * 0.0.0.0/0 0.0.0.0/0\n", strings.Replace(valid, chain, "FOREIGN", 1)} {
+			if _, err := nfqwsProbeParseCounter([]byte(bad), chain, protocol); err == nil {
+				t.Fatal("untrusted counter accepted", protocol, bad)
+			}
+		}
+	}
+	if _, err := nfqwsProbeParseCounter([]byte(base), chain, "unknown"); err == nil {
+		t.Fatal("unknown tool profile accepted")
 	}
 }
 
