@@ -1,0 +1,235 @@
+2026-11-01T03:20:28.8435563Z === RUN   TestWGNativeEmptyTables
+2026-11-01T03:20:28.8436190Z === RUN   TestWGNativeEmptyTables/warp-wg
+2026-11-01T03:20:28.9079452Z === RUN   TestWGNativeEmptyTables/wireguard
+2026-11-01T03:20:28.9708378Z === RUN   TestWGNativeEmptyTables/amneziawg
+2026-11-01T03:20:29.0325734Z --- PASS: TestWGNativeEmptyTables (0.19s)
+2026-11-01T03:20:29.0326305Z     --- PASS: TestWGNativeEmptyTables/warp-wg (0.06s)
+2026-11-01T03:20:29.0326666Z     --- PASS: TestWGNativeEmptyTables/wireguard (0.06s)
+2026-11-01T03:20:29.0326986Z     --- PASS: TestWGNativeEmptyTables/amneziawg (0.06s)
+2026-11-01T03:20:29.0327219Z PASS
+2026-11-01T03:20:29.0529356Z === RUN   TestWGNativeCandidateIsolation
+2026-11-01T03:20:29.2170031Z === RUN   TestWGNativeCandidateIsolation
+2026-11-01T03:20:29.2371455Z === RUN   TestWGNativeCandidateIsolation
+2026-11-01T03:20:32.3767233Z     wg_canary_native_linux_test.go:230: === RUN   TestWGNativeCandidateIsolation
+2026-11-01T03:20:32.3768018Z         === RUN   TestWGNativeCandidateIsolation/ipv4
+2026-11-01T03:20:32.3768567Z         === RUN   TestWGNativeCandidateIsolation/ipv6
+2026-11-01T03:20:32.3769128Z         --- PASS: TestWGNativeCandidateIsolation (3.12s)
+2026-11-01T03:20:32.3769803Z             --- PASS: TestWGNativeCandidateIsolation/ipv4 (1.55s)
+2026-11-01T03:20:32.3770299Z             --- PASS: TestWGNativeCandidateIsolation/ipv6 (1.56s)
+2026-11-01T03:20:32.3770845Z         PASS
+2026-11-01T03:20:32.3771040Z         
+2026-11-01T03:20:32.3820230Z --- PASS: TestWGNativeCandidateIsolation (3.33s)
+2026-11-01T03:20:32.3820779Z PASS
+2026-11-01T03:20:32.4077857Z === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:32.4078199Z === RUN   TestWGNativeEndpointLifecycle/93.184.216.34
+2026-11-01T03:20:32.5156645Z === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:32.5359212Z === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:36.5482009Z     wg_canary_native_linux_test.go:230: === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:36.5483057Z         === RUN   TestWGNativeEndpointLifecycle/93.184.216.34
+2026-11-01T03:20:36.5483918Z             wg_endpoint_native_linux_test.go:86: ordinary WAN service control passed
+2026-11-01T03:20:36.5484998Z             wg_endpoint_native_linux_test.go:107: wrong-key canary rejected with handshake error while WAN service is reachable
+2026-11-01T03:20:36.5486010Z             wg_endpoint_native_linux_test.go:124: valid isolated candidate service and handshake passed
+2026-11-01T03:20:36.5487941Z             wg_endpoint_native_linux_test.go:275: different-peer activation health failed; rollback restored old peer service with fresh receipt; operation cleanup and actual marker write cuts resumed with unchanged interface/generation; retry and process restart passed
+2026-11-01T03:20:36.5489088Z         --- PASS: TestWGNativeEndpointLifecycle (3.99s)
+2026-11-01T03:20:36.5489794Z             --- PASS: TestWGNativeEndpointLifecycle/93.184.216.34 (3.99s)
+2026-11-01T03:20:36.5490273Z         PASS
+2026-11-01T03:20:36.5491293Z         
+2026-11-01T03:20:36.5533244Z === RUN   TestWGNativeEndpointLifecycle/2606:4700::1111
+2026-11-01T03:20:36.6652325Z === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:36.6859569Z === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:40.6856138Z     wg_canary_native_linux_test.go:230: === RUN   TestWGNativeEndpointLifecycle
+2026-11-01T03:20:40.6856793Z         === RUN   TestWGNativeEndpointLifecycle/2606:4700::1111
+2026-11-01T03:20:40.6858117Z             wg_endpoint_native_linux_test.go:86: ordinary WAN service control passed
+2026-11-01T03:20:40.6859269Z             wg_endpoint_native_linux_test.go:107: wrong-key canary rejected with handshake error while WAN service is reachable
+2026-11-01T03:20:40.6860030Z             wg_endpoint_native_linux_test.go:124: valid isolated candidate service and handshake passed
+2026-11-01T03:20:40.6861862Z             wg_endpoint_native_linux_test.go:275: different-peer activation health failed; rollback restored old peer service with fresh receipt; operation cleanup and actual marker write cuts resumed with unchanged interface/generation; retry and process restart passed
+2026-11-01T03:20:40.6863290Z         --- PASS: TestWGNativeEndpointLifecycle (3.98s)
+2026-11-01T03:20:40.6863779Z             --- PASS: TestWGNativeEndpointLifecycle/2606:4700::1111 (3.98s)
+2026-11-01T03:20:40.6864082Z         PASS
+2026-11-01T03:20:40.6864254Z         
+2026-11-01T03:20:40.6900436Z --- PASS: TestWGNativeEndpointLifecycle (8.28s)
+2026-11-01T03:20:40.6901310Z     --- PASS: TestWGNativeEndpointLifecycle/93.184.216.34 (4.15s)
+2026-11-01T03:20:40.6901925Z     --- PASS: TestWGNativeEndpointLifecycle/2606:4700::1111 (4.14s)
+2026-11-01T03:20:40.6902322Z PASS
+2026-11-01T03:20:40.7103740Z === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:40.8077420Z === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:41.8005345Z     wg_network_native_linux_test.go:219: native first stage=snapshot begin
+2026-11-01T03:20:41.8045814Z     wg_network_native_linux_test.go:224: native first stage=snapshot passed
+2026-11-01T03:20:41.8046560Z     wg_network_native_linux_test.go:219: native first stage=stage begin
+2026-11-01T03:20:41.8606737Z     wg_network_native_linux_test.go:224: native first stage=stage passed
+2026-11-01T03:20:41.8607286Z     wg_network_native_linux_test.go:219: native first stage=validate begin
+2026-11-01T03:20:41.9152530Z     wg_network_native_linux_test.go:224: native first stage=validate passed
+2026-11-01T03:20:41.9153152Z     wg_network_native_linux_test.go:219: native first stage=canary begin
+2026-11-01T03:20:42.1277517Z     wg_network_native_linux_test.go:224: native first stage=canary passed
+2026-11-01T03:20:42.1278082Z     wg_network_native_linux_test.go:219: native first stage=activate begin
+2026-11-01T03:20:42.2748139Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=0
+2026-11-01T03:20:42.3083445Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=0
+2026-11-01T03:20:42.3085858Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=0
+2026-11-01T03:20:42.3218299Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=1
+2026-11-01T03:20:42.3559384Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=1
+2026-11-01T03:20:42.3561727Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=1
+2026-11-01T03:20:42.3694864Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=2
+2026-11-01T03:20:42.3984567Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=2
+2026-11-01T03:20:42.3987270Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=2
+2026-11-01T03:20:42.4117525Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=3
+2026-11-01T03:20:42.4410721Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=3
+2026-11-01T03:20:42.4414285Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=3
+2026-11-01T03:20:42.4546216Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=4
+2026-11-01T03:20:42.4842056Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=4
+2026-11-01T03:20:42.4844296Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=4
+2026-11-01T03:20:42.4978720Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=5
+2026-11-01T03:20:42.5277754Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=5
+2026-11-01T03:20:42.5279976Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=5
+2026-11-01T03:20:42.5415835Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=6
+2026-11-01T03:20:42.5724409Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=6
+2026-11-01T03:20:42.5726334Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=6
+2026-11-01T03:20:42.5863281Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=7
+2026-11-01T03:20:42.6156410Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=7
+2026-11-01T03:20:42.6158488Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=7
+2026-11-01T03:20:42.6291279Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=8
+2026-11-01T03:20:42.6611359Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=8
+2026-11-01T03:20:42.6613720Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=8
+2026-11-01T03:20:42.6751770Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=9
+2026-11-01T03:20:42.7045676Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=9
+2026-11-01T03:20:42.7048336Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=9
+2026-11-01T03:20:42.7181537Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=10
+2026-11-01T03:20:42.7472678Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=10
+2026-11-01T03:20:42.7475117Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=10
+2026-11-01T03:20:42.7613206Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=11
+2026-11-01T03:20:42.7914286Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=11
+2026-11-01T03:20:42.7916703Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=11
+2026-11-01T03:20:42.8050072Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=12
+2026-11-01T03:20:42.8338086Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=12
+2026-11-01T03:20:42.8341034Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=12
+2026-11-01T03:20:42.8472654Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=13
+2026-11-01T03:20:42.8767844Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=13
+2026-11-01T03:20:42.8769659Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=13
+2026-11-01T03:20:42.8904512Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=14
+2026-11-01T03:20:42.9198279Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=14
+2026-11-01T03:20:42.9201189Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=14
+2026-11-01T03:20:42.9329863Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=15
+2026-11-01T03:20:42.9623714Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=15
+2026-11-01T03:20:42.9625542Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=15
+2026-11-01T03:20:42.9756147Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=16
+2026-11-01T03:20:43.0048362Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=16
+2026-11-01T03:20:43.0051255Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=16
+2026-11-01T03:20:43.0181050Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=17
+2026-11-01T03:20:43.0471122Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=17
+2026-11-01T03:20:43.0473326Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=17
+2026-11-01T03:20:43.0604065Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=18
+2026-11-01T03:20:43.0894607Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=18
+2026-11-01T03:20:43.0896845Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=18
+2026-11-01T03:20:43.1034163Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=intent effect=19
+2026-11-01T03:20:43.1321585Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=add effect=19
+2026-11-01T03:20:43.1324106Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=added effect=19
+2026-11-01T03:20:43.1325040Z     wg_network_native_linux_test.go:224: native first stage=activate passed
+2026-11-01T03:20:43.1325770Z     wg_network_native_linux_test.go:219: native first stage=health begin
+2026-11-01T03:20:43.3338275Z     wg_network_native_linux_test.go:224: native first stage=health passed
+2026-11-01T03:20:43.3338774Z     wg_network_native_linux_test.go:219: native first stage=commit begin
+2026-11-01T03:20:43.3354197Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=promotion-intent effect=-1
+2026-11-01T03:20:43.3355129Z     wg_network_native_linux_test.go:207: native first receipt checkpoint=promotion-copy effect=-1
+2026-11-01T03:20:43.3369870Z     wg_network_native_linux_test.go:224: native first stage=commit passed
+2026-11-01T03:20:43.3781136Z     wg_network_native_linux_test.go:267: native exact committed real WG consumer passed
+2026-11-01T03:20:43.8787468Z     wg_network_native_linux_test.go:277: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:43.8788130Z         --- PASS: TestWGNativeNetworkReceipt (0.00s)
+2026-11-01T03:20:43.8788406Z         PASS
+2026-11-01T03:20:43.8788589Z         
+2026-11-01T03:20:43.8917556Z     wg_network_native_linux_test.go:277: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:43.8918270Z         --- PASS: TestWGNativeNetworkReceipt (0.00s)
+2026-11-01T03:20:43.8918615Z         PASS
+2026-11-01T03:20:43.8918791Z         
+2026-11-01T03:20:43.9035725Z     wg_network_native_linux_test.go:277: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:43.9036423Z         --- PASS: TestWGNativeNetworkReceipt (0.00s)
+2026-11-01T03:20:43.9036787Z         PASS
+2026-11-01T03:20:43.9036967Z         
+2026-11-01T03:20:43.9164578Z     wg_network_native_linux_test.go:277: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:43.9165156Z         --- PASS: TestWGNativeNetworkReceipt (0.00s)
+2026-11-01T03:20:43.9165487Z         PASS
+2026-11-01T03:20:43.9165749Z         
+2026-11-01T03:20:44.6426368Z     wg_network_native_linux_test.go:305: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:44.6427033Z         --- PASS: TestWGNativeNetworkReceipt (0.24s)
+2026-11-01T03:20:44.6427442Z         PASS
+2026-11-01T03:20:44.6427629Z         
+2026-11-01T03:20:44.6529460Z     wg_network_native_linux_test.go:277: === RUN   TestWGNativeNetworkReceipt
+2026-11-01T03:20:44.6530170Z         --- PASS: TestWGNativeNetworkReceipt (0.00s)
+2026-11-01T03:20:44.6531151Z         PASS
+2026-11-01T03:20:44.6531417Z         
+2026-11-01T03:20:45.0017026Z     wg_network_native_linux_test.go:219: native unknown-cut stage=snapshot begin
+2026-11-01T03:20:45.0057204Z     wg_network_native_linux_test.go:224: native unknown-cut stage=snapshot passed
+2026-11-01T03:20:45.0058032Z     wg_network_native_linux_test.go:219: native unknown-cut stage=stage begin
+2026-11-01T03:20:45.0561958Z     wg_network_native_linux_test.go:224: native unknown-cut stage=stage passed
+2026-11-01T03:20:45.0563224Z     wg_network_native_linux_test.go:219: native unknown-cut stage=validate begin
+2026-11-01T03:20:45.1055983Z     wg_network_native_linux_test.go:224: native unknown-cut stage=validate passed
+2026-11-01T03:20:45.1056798Z     wg_network_native_linux_test.go:219: native unknown-cut stage=canary begin
+2026-11-01T03:20:45.3146326Z     wg_network_native_linux_test.go:224: native unknown-cut stage=canary passed
+2026-11-01T03:20:45.3146953Z     wg_network_native_linux_test.go:219: native unknown-cut stage=activate begin
+2026-11-01T03:20:45.4497852Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=0
+2026-11-01T03:20:45.4795834Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=0
+2026-11-01T03:20:45.4797860Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=0
+2026-11-01T03:20:45.4930827Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=1
+2026-11-01T03:20:45.5224415Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=1
+2026-11-01T03:20:45.5226577Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=1
+2026-11-01T03:20:45.5359190Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=2
+2026-11-01T03:20:45.5652878Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=2
+2026-11-01T03:20:45.5654965Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=2
+2026-11-01T03:20:45.5791518Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=3
+2026-11-01T03:20:45.6088059Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=3
+2026-11-01T03:20:45.6090877Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=3
+2026-11-01T03:20:45.6226641Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=4
+2026-11-01T03:20:45.6518137Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=4
+2026-11-01T03:20:45.6520255Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=4
+2026-11-01T03:20:45.6650978Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=5
+2026-11-01T03:20:45.6947418Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=5
+2026-11-01T03:20:45.6949566Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=5
+2026-11-01T03:20:45.7082328Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=6
+2026-11-01T03:20:45.7381752Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=6
+2026-11-01T03:20:45.7384471Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=6
+2026-11-01T03:20:45.7516078Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=7
+2026-11-01T03:20:45.7809502Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=7
+2026-11-01T03:20:45.7811806Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=7
+2026-11-01T03:20:45.7960726Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=8
+2026-11-01T03:20:45.8237906Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=8
+2026-11-01T03:20:45.8239849Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=8
+2026-11-01T03:20:45.8371912Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=9
+2026-11-01T03:20:45.8664442Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=9
+2026-11-01T03:20:45.8666728Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=9
+2026-11-01T03:20:45.8797932Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=10
+2026-11-01T03:20:45.9094765Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=10
+2026-11-01T03:20:45.9097534Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=10
+2026-11-01T03:20:45.9229250Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=11
+2026-11-01T03:20:45.9525109Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=11
+2026-11-01T03:20:45.9528090Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=11
+2026-11-01T03:20:45.9663823Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=12
+2026-11-01T03:20:45.9949609Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=12
+2026-11-01T03:20:45.9951824Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=12
+2026-11-01T03:20:46.0092146Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=13
+2026-11-01T03:20:46.0386731Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=13
+2026-11-01T03:20:46.0389464Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=13
+2026-11-01T03:20:46.0524147Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=14
+2026-11-01T03:20:46.0819079Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=14
+2026-11-01T03:20:46.0821566Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=14
+2026-11-01T03:20:46.0958616Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=15
+2026-11-01T03:20:46.1255984Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=15
+2026-11-01T03:20:46.1258346Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=15
+2026-11-01T03:20:46.1391924Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=16
+2026-11-01T03:20:46.1695598Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=16
+2026-11-01T03:20:46.1697728Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=16
+2026-11-01T03:20:46.1830251Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=17
+2026-11-01T03:20:46.2124774Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=17
+2026-11-01T03:20:46.2126933Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=17
+2026-11-01T03:20:46.2267536Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=18
+2026-11-01T03:20:46.2565099Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=18
+2026-11-01T03:20:46.2567371Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=18
+2026-11-01T03:20:46.2701577Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=intent effect=19
+2026-11-01T03:20:46.2997652Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=add effect=19
+2026-11-01T03:20:46.2999351Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=added effect=19
+2026-11-01T03:20:46.3000103Z     wg_network_native_linux_test.go:224: native unknown-cut stage=activate passed
+2026-11-01T03:20:46.3000807Z     wg_network_native_linux_test.go:219: native unknown-cut stage=health begin
+2026-11-01T03:20:46.5053347Z     wg_network_native_linux_test.go:224: native unknown-cut stage=health passed
+2026-11-01T03:20:46.5053930Z     wg_network_native_linux_test.go:219: native unknown-cut stage=commit begin
+2026-11-01T03:20:46.5068933Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=promotion-intent effect=-1
+2026-11-01T03:20:46.5070026Z     wg_network_native_linux_test.go:207: native unknown-cut receipt checkpoint=promotion-copy effect=-1
+2026-11-01T03:20:46.5078476Z     wg_network_native_linux_test.go:224: native unknown-cut stage=commit passed
+2026-11-01T03:20:46.5712845Z     wg_network_native_linux_test.go:392: actual dual-family LAN TCP/UDP source NAT; excluded MAC/privacy baseline; same-peer/fresh process; known/unknown receipt cuts passed
+2026-11-01T03:20:46.6209591Z --- PASS: TestWGNativeNetworkReceipt (5.91s)
+2026-11-01T03:20:46.6209890Z PASS
