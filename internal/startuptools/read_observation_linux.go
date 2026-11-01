@@ -161,7 +161,7 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 			return readArguments(args) || slices.Equal(args, []string{"--version"})
 		}
 		if index == 2 {
-			return slices.Equal(args, []string{"-Version"})
+			return slices.Equal(args, []string{"-Version"}) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
 		}
 		return slices.Equal(args, []string{"--version"})
 	}

@@ -287,7 +287,11 @@ func (p *domainOriginalNativePeers) localDoH(t *testing.T) {
 func (p *domainOriginalNativePeers) clientRequest(t *testing.T, ctx context.Context, mode, target string) domainOriginalPeerResult {
 	t.Helper()
 	resultPath := filepath.Join(p.root, fmt.Sprintf("result-%d.json", time.Now().UnixNano()))
-	command := exec.CommandContext(ctx, "ip", "netns", "exec", p.client, os.Args[0], "-test.run=^TestDomainTCPOriginalNativePeer$", "-test.v", "-test.timeout=10s")
+	backstop := "10s"
+	if mode == "dns-wait" && target != "" {
+		backstop = "40s" // Absolute original12/30s query deadline below remains authoritative.
+	}
+	command := exec.CommandContext(ctx, "ip", "netns", "exec", p.client, os.Args[0], "-test.run=^TestDomainTCPOriginalNativePeer$", "-test.v", "-test.timeout="+backstop)
 	command.Env = append(os.Environ(), "RAZVILKA_DOMAIN_NATIVE_PEER="+mode, "RAZVILKA_DOMAIN_NATIVE_ROOT="+p.root, "RAZVILKA_DOMAIN_NATIVE_TARGET="+target, "RAZVILKA_DOMAIN_NATIVE_RESULT="+resultPath)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -329,14 +333,37 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer socket.Close()
-		socket.SetDeadline(time.Now().Add(time.Second))
+		deadline := time.Now().Add(time.Second)
+		persistent := mode == "dns-wait" && target != ""
+		if persistent {
+			var err error
+			deadline, err = time.Parse(time.RFC3339Nano, target)
+			if err != nil || deadline.After(time.Now().Add(30*time.Second)) {
+				t.Fatal("invalid fixed publication window", err)
+			}
+		}
 		query := dnsmessage.Message{Header: dnsmessage.Header{ID: 7, RecursionDesired: true}, Questions: []dnsmessage.Question{{Name: dnsmessage.MustNewName("service.example.com."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}}}
 		wire, _ := query.Pack()
-		if _, err = socket.Write(wire); err != nil {
-			t.Fatal(err)
-		}
 		buffer := make([]byte, 4096)
-		n, err := socket.Read(buffer)
+		n := 0
+		for {
+			readDeadline := deadline
+			if next := time.Now().Add(time.Second); persistent && next.Before(readDeadline) {
+				readDeadline = next
+			}
+			if err := socket.SetDeadline(readDeadline); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = socket.Write(wire); err != nil {
+				break
+			}
+			n, err = socket.Read(buffer)
+			if !persistent || !domainOriginalDNSRefusalTimeout(mode, err) || !time.Now().Before(deadline) {
+				break
+			}
+			// Retry at most once per second, retaining the SAME real UDP
+			// descriptor/query/source port and its original absolute deadline.
+		}
 		if err != nil {
 			if !domainOriginalDNSRefusalTimeout(mode, err) {
 				t.Fatal(err)
@@ -352,12 +379,15 @@ func TestDomainTCPOriginalNativePeer(t *testing.T) {
 			return
 		}
 		var answer dnsmessage.Message
-		if answer.Unpack(buffer[:n]) != nil {
+		if answer.Unpack(buffer[:n]) != nil || !answer.Response || answer.ID != query.ID || len(answer.Questions) != 1 || answer.Questions[0] != query.Questions[0] {
 			t.Fatal("actual DNS reply invalid")
 		}
 		result.RCode = int(answer.RCode)
 		for _, a := range answer.Answers {
 			if body, ok := a.Body.(*dnsmessage.AResource); ok {
+				if a.Header.Name != query.Questions[0].Name || a.Header.Class != dnsmessage.ClassINET {
+					t.Fatal("actual DNS address belongs to another query")
+				}
 				result.Answer = net.IP(body.A[:]).String()
 			}
 		}
