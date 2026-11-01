@@ -19,33 +19,35 @@ func (r *XrayDomainTCPExecutionResource) observeDomainListener(ctx context.Conte
 		if current != r.definition.NetworkIdentity || r.domainProcessCurrent(held) != nil {
 			return ErrXrayDomainTCPOriginal
 		}
-		proc, err := openXraySelectedTCPProc(held, r.child.pid)
-		if err != nil {
-			return err
-		}
-		defer proc.close()
-		before, err := r.readDomainProcess(held, proc, current)
-		if err != nil {
-			return err
-		}
-		inode, err := proc.domainListener(held, r.definition.PrivateEndpoint)
-		if err != nil || proc.socketFD(held, inode) != nil {
-			return ErrXrayDomainTCPOriginal
-		}
-		after, err := r.readDomainProcess(held, proc, current)
-		if err != nil || !before.same(after) {
-			return ErrXrayDomainTCPOriginal
-		}
-		closing, err := proc.domainListener(held, r.definition.PrivateEndpoint)
-		if err != nil || closing != inode || proc.socketFD(held, inode) != nil {
-			return ErrXrayDomainTCPOriginal
-		}
-		last, err := r.readDomainProcess(held, proc, current)
-		if err != nil || !after.same(last) || proc.current(held) != nil || r.domainProcessCurrent(held) != nil {
-			return ErrXrayDomainTCPOriginal
-		}
-		observed = xraySelectedTCPListenerObservation{process: last, endpoint: r.definition.PrivateEndpoint, inode: inode}
-		return nil
+		return r.withFileObservation(held, func(files *xrayDomainTCPFileObservation) error {
+			proc, err := openXraySelectedTCPProc(held, r.child.pid)
+			if err != nil {
+				return err
+			}
+			defer proc.close()
+			before, err := r.readDomainProcessWithFiles(held, proc, current, files)
+			if err != nil {
+				return err
+			}
+			inode, err := proc.domainListener(held, r.definition.PrivateEndpoint)
+			if err != nil || proc.socketFD(held, inode) != nil {
+				return ErrXrayDomainTCPOriginal
+			}
+			after, err := r.readDomainProcessWithFiles(held, proc, current, files)
+			if err != nil || !before.same(after) {
+				return ErrXrayDomainTCPOriginal
+			}
+			closing, err := proc.domainListener(held, r.definition.PrivateEndpoint)
+			if err != nil || closing != inode || proc.socketFD(held, inode) != nil {
+				return ErrXrayDomainTCPOriginal
+			}
+			last, err := r.readDomainProcessWithFiles(held, proc, current, files)
+			if err != nil || !after.same(last) || proc.current(held) != nil || r.domainProcessCurrent(held) != nil {
+				return ErrXrayDomainTCPOriginal
+			}
+			observed = xraySelectedTCPListenerObservation{process: last, endpoint: r.definition.PrivateEndpoint, inode: inode}
+			return nil
+		})
 	})
 	if err != nil || r.domainProcessCurrent(ctx) != nil {
 		return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal
