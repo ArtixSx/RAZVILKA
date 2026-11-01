@@ -71,6 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
@@ -78,10 +79,25 @@ jobs:
           cache: false
       - name: Disposable native NFQUEUE fixture dependencies
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
-      - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
+      - name: Version batch metadata and invocation refusal regressions
         shell: bash
         run: |
-          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -count=1 ./internal/startuptools -run '^TestVersionReadBatch|^TestVersionBatchMetadata' -v
+      - name: Same worker before and after actual managed consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          before_source="$RUNNER_TEMP/managed-probe-before"
+          git worktree add --detach "$before_source" 43cf7891ad5d518ec235015617295a0274a27d90
+          before_status=0
+          echo '=== BEFORE43cf fixed version observations; same worker ==='
+          (cd "$before_source" && sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh) || before_status=$?
+          after_status=0
+          echo '=== AFTER version observation batch; same worker ==='
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh || after_status=$?
+          echo "Actual native statuses before=$before_status after=$after_status"
+          test "$before_status" = 0 && test "$after_status" = 0
   strategy-pair:
     runs-on: ubuntu-latest
     timeout-minutes: 20
