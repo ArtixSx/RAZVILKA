@@ -39,7 +39,7 @@ func (r *ManagedProbeEpoch) WithProbeReferenceCurrent(ctx context.Context, sourc
 	if err := r.environment.Current(ctx); err != nil {
 		return err
 	}
-	reference, err := source.ManagedReference(ctx, runtime, control)
+	reference, err := source.managedProbeReferencePhase(ctx, runtime, control)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (r *ManagedProbeEpoch) WithProbeReferenceCurrent(ctx context.Context, sourc
 	copy.Material.Traffic = slices.Clone(reference.Material.Traffic)
 	readErr := read(copy)
 	environmentErr := r.environment.Current(ctx)
-	closing, closingErr := source.ManagedReference(ctx, runtime, control)
+	closing, closingErr := source.managedProbeReferencePhase(ctx, runtime, control)
 	if closingErr == nil && !reflect.DeepEqual(reference, closing) {
 		closingErr = ErrSelectedCandidateChanged
 	}
@@ -60,4 +60,40 @@ func (r *ManagedProbeEpoch) WithProbeReferenceCurrent(ctx context.Context, sourc
 		closingErr = errors.Join(ErrSelectedCandidateChanged, closingErr)
 	}
 	return errors.Join(readErr, environmentErr, closingErr, ctx.Err())
+}
+
+// One phase of the enclosing observation bracket. No callback can occur
+// between the complete material check and the immutable reference derivation.
+// The other complete phase MUST remain after the external read/environment.
+// Public Reference/ManagedReference retain their independent full brackets.
+func (r *CandidateProbeReview) managedProbeReferencePhase(ctx context.Context, runtime *components.ManagedNFQWSRuntimeLease, control *operationgate.ControlEpochReview) (reference CandidateProbeReference, result error) {
+	if r == nil || r.self != r || selectedReviewContext(ctx) != nil {
+		return reference, errors.Join(ErrSelectedCandidateChanged, selectedReviewContext(ctx))
+	}
+	r.mu.Lock()
+	if r.closed || r.material == nil {
+		r.mu.Unlock()
+		return reference, ErrSelectedCandidateChanged
+	}
+	priorEpoch := r.material.managedEpoch
+	r.mu.Unlock()
+	if priorEpoch != nil {
+		if err := priorEpoch.Current(ctx); err != nil {
+			return reference, err
+		}
+		// Registered before locks: closing Current runs only after both unlocks.
+		defer func() { result = errors.Join(result, priorEpoch.Current(ctx)) }()
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.material == nil || r.material.managedEpoch != priorEpoch || runtime == nil || control == nil || r.material.runtime != runtime || r.material.provider == nil || r.material.provider.managedControl != control || r.material.binding.manager == nil {
+		return reference, ErrSelectedCandidateChanged
+	}
+	m := r.material.binding.manager
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if err := r.material.materialCurrentLocked(ctx); err != nil {
+		return reference, err
+	}
+	return r.referenceLocked()
 }

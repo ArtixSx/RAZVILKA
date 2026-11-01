@@ -125,7 +125,11 @@ func (e *nfqwsProbeExecution) observeService(ctx context.Context, r *NFQWSExecut
 		return ErrNFQWSScopedOwner
 	}
 	afterNegative, err := e.counter(ctx)
-	if err != nil || afterNegative != before {
+	if err != nil {
+		stage("firewall", "fail", "negative control counter unavailable")
+		return err
+	}
+	if afterNegative != before {
 		stage("firewall", "fail", "wrong source reached owned NFQUEUE")
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
