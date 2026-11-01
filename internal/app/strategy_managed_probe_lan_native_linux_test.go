@@ -438,4 +438,54 @@ func setupManagedProbeNativeLAN(t *testing.T, ctx context.Context) {
 	for _, name := range []string{"rzincluded", "rzexcluded"} {
 		ip("netns", "exec", name, "/usr/bin/ping", "-c", "1", "-W", "2", "8.8.8.8")
 	}
+	awaitManagedProbeNativeLANAddresses(t, ctx)
+}
+
+// Let the actual IPv6 DAD protocol settle before acquiring the immutable
+// original topology. Production readers still reject tentative/failed rows;
+// this test preflight never filters, edits or fabricates their capture.
+func awaitManagedProbeNativeLANAddresses(t *testing.T, ctx context.Context) {
+	t.Helper()
+	settle, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	for {
+		data, err := exec.CommandContext(settle, "/usr/sbin/ip", "-j", "address", "show").Output()
+		if err != nil || len(data) > 64<<10 {
+			t.Fatal("actual address settlement read", err)
+		}
+		var links []struct {
+			IfName    string `json:"ifname"`
+			Addresses []struct {
+				Tentative bool     `json:"tentative"`
+				DADFailed bool     `json:"dadfailed"`
+				Flags     []string `json:"flags"`
+			} `json:"addr_info"`
+		}
+		if err := json.Unmarshal(data, &links); err != nil {
+			t.Fatal(err)
+		}
+		pending := false
+		for _, link := range links {
+			for _, a := range link.Addresses {
+				if a.DADFailed {
+					t.Fatal("actual fixture DAD failed", link.IfName)
+				}
+				pending = pending || a.Tentative
+				for _, flag := range a.Flags {
+					if flag == "dadfailed" {
+						t.Fatal("actual fixture DAD failed", link.IfName)
+					}
+					pending = pending || flag == "tentative"
+				}
+			}
+		}
+		if !pending {
+			return
+		}
+		select {
+		case <-settle.Done():
+			t.Fatal("actual fixture addresses remained tentative", settle.Err())
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
 }

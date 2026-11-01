@@ -35,6 +35,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/startuptools"
@@ -166,7 +167,12 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		serveManagedProbeNativeTLS(t, root)
 	}
 	provider := netidentity.NewProcProvider()
-	tools, err := startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	var tools *startuptools.Lease
+	if lan {
+		tools, err = startuptools.AcquireNativeFixtureManagedListPolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	} else {
+		tools, err = startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	}
 	if err != nil {
 		managedProbeNativeErrorChain(t, err, 0)
 		t.Fatal("actual protected tool closure", err)
@@ -322,6 +328,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	if err := manager.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
+	if lan {
+		configs := engineconfig.New(filepath.Join(root, "engine-stage"), filepath.Join(root, "engine-backup"))
+		for _, other := range []dataplane.Adapter{dataplane.NewWireGuardAdapter(configs, manager.StateRoot), dataplane.NewAmneziaWGAdapter(configs, manager.StateRoot)} {
+			if err := manager.Register(other); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	policyTools, runner, err := tools.PolicyRuntimeTools()
 	if err != nil {
 		t.Fatal(err)
@@ -395,9 +409,24 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Fatal("bind actual registered policy checks", err)
 		}
 		defer checks.Close()
+		var wgSources map[string]*dataplane.WGInactivityRead
+		if lan {
+			wgSources = map[string]*dataplane.WGInactivityRead{}
+			for _, engine := range []string{"wireguard", "amneziawg"} {
+				source, err := tools.ReviewWGInactivity(original, manager, control, engine)
+				if err != nil {
+					t.Fatal("actual managed-list WG inactivity source", engine, err)
+				}
+				defer source.Close()
+				wgSources[engine] = source
+			}
+			if err := checks.BindManagedWGInactivitySources(original, wgSources); err != nil {
+				t.Fatal("actual both WG inactivity binding", err)
+			}
+		}
 		// CI-only platform classification factory. Every retained owner below
 		// is the SAME actual protected tool/provider/control/registered consumer.
-		appPolicy = &managedListPolicyOwner{app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control}
+		appPolicy = &managedListPolicyOwner{app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control, wgInactivity: wgSources}
 		appPolicy.self = appPolicy
 		a.managedListPolicy = appPolicy
 		r := &ManagedNFQWSListRuntime{policy: appPolicy, app: a, manager: manager, panel: ctx, provider: provider, tools: tools, inventory: inventory, gate: gate, checks: checks, control: control, probe: consumer}
@@ -409,6 +438,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			}
 		}
 		release() // Each actual HTTP request must obtain its own new admission.
+		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
+		defer stopHTTPProfile()
+		defer func() {
+			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
+		}()
 		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan)
 		return
 	}
