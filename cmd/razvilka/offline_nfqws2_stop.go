@@ -111,6 +111,10 @@ func runOfflineNFQWS2StopCLI(ctx context.Context, paths offlineNFQWS2StopPaths) 
 // protocol's actual lifetime lease in the same order as daemon startup, but
 // require idle metadata without recovering or opening any target Store.
 func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPaths) (*privateRecoveryLeases, *privaterestore.Coordinator, error) {
+	return openOfflineRuntimeLeases(ctx, paths, privaterestore.OpenForOfflineNFQWS2Stop)
+}
+
+func openOfflineRuntimeLeases(ctx context.Context, paths offlineNFQWS2StopPaths, open func(context.Context, privaterestore.Layout) (*privaterestore.Coordinator, error)) (*privateRecoveryLeases, *privaterestore.Coordinator, error) {
 	providerRoot, err := cloudflareStorePath(paths.config, paths.cloudflare)
 	if err != nil {
 		return nil, nil, err
@@ -143,7 +147,7 @@ func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPat
 		if i >= 3 {
 			layout.FeedRoot = filepath.Join(base, "subscriptions-private")
 		}
-		current, err = privaterestore.OpenForOfflineNFQWS2Stop(ctx, layout)
+		current, err = open(ctx, layout)
 		if err != nil {
 			return nil, nil, errors.Join(err, leases.Close())
 		}

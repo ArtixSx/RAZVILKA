@@ -15,17 +15,31 @@ import (
 
 var retireRollbackBootPlan = new(string)
 var retireRollbackBootDigest = new(string)
+var retireMihomoBootPlan = new(string)
+var retireMihomoBootDigest = new(string)
 
 func registerBootRetirementFlags(flags *flag.FlagSet) {
+	flags.StringVar(retireMihomoBootPlan, "retire-mihomo-probe-after-boot-plan", "", "retire an interrupted finite Mihomo check after a real reboot, with the panel stopped; preserves failed service status")
+	flags.StringVar(retireMihomoBootDigest, "retire-mihomo-probe-after-boot-digest", "", "reviewed digest required with retire-mihomo-probe-after-boot-plan")
 	flags.StringVar(retireRollbackBootPlan, "retire-rollback-after-boot-plan", "", "explicitly archive intact old-boot proxy metadata after proving runtime absence, while the panel is stopped; never confirms rollback or service access")
 	flags.StringVar(retireRollbackBootDigest, "retire-rollback-after-boot-digest", "", "reviewed digest required with retire-rollback-after-boot-plan")
 }
 
 func bootRetirementCLIRequested() bool {
-	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != ""
+	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested()
+}
+
+func mihomoBootRetirementCLIRequested() bool {
+	return *retireMihomoBootPlan != "" || *retireMihomoBootDigest != ""
 }
 
 func bootRetirementCLIFlagError() error {
+	if mihomoBootRetirementCLIRequested() && (*retireRollbackBootPlan != "" || *retireRollbackBootDigest != "") {
+		return errors.New("post-reboot retirement modes are mutually exclusive")
+	}
+	if (*retireMihomoBootPlan == "") != (*retireMihomoBootDigest == "") {
+		return errors.New("Mihomo post-reboot retirement requires both the reviewed plan and digest")
+	}
 	if (*retireRollbackBootPlan == "") != (*retireRollbackBootDigest == "") {
 		return errors.New("post-reboot retirement requires both the reviewed plan and digest")
 	}
