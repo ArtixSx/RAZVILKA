@@ -109,7 +109,10 @@ func domainTCPCaptureReceiptMatchesRows(rows []backendInventoryRow, plan PolicyE
 }
 
 func (r *domainTCPCaptureExecutionResource) read(ctx context.Context) (backendInventorySnapshot, error) {
-	if err := r.current(ctx); err != nil {
+	return r.readWithFiles(ctx, nil)
+}
+func (r *domainTCPCaptureExecutionResource) readWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (backendInventorySnapshot, error) {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return backendInventorySnapshot{}, err
 	}
 	view, err := r.backend.Read(ctx, r.tools.Identity)
@@ -122,7 +125,7 @@ func (r *domainTCPCaptureExecutionResource) read(ctx context.Context) (backendIn
 	if view.Scope.Network != r.tools.Identity {
 		return backendInventorySnapshot{}, ErrDomainPolicyTCPConsumer
 	}
-	return view, r.current(ctx)
+	return view, r.currentWithFiles(ctx, files)
 }
 
 // Capture cannot precede its SAME original standby baseline. Uncertain adds
@@ -203,7 +206,10 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 }
 
 func (r *domainTCPCaptureExecutionResource) checkPrepared(ctx context.Context) error {
-	if err := r.current(ctx); err != nil {
+	return r.checkPreparedWithFiles(ctx, nil)
+}
+func (r *domainTCPCaptureExecutionResource) checkPreparedWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	receipt, err := observeNetworkPolicyEffects(ctx, r.effects, r.root, policyAdditionOptions{})
@@ -212,14 +218,14 @@ func (r *domainTCPCaptureExecutionResource) checkPrepared(ctx context.Context) e
 	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted || status.Added != len(r.effects.Effects) || status.Pending != 0 || status.Cleaned != 0 {
 		return errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
-	view, err := r.read(ctx)
+	view, err := r.readWithFiles(ctx, files)
 	if err != nil {
 		return err
 	}
 	if err := domainTCPCapturePreparedInventory(view.Rows, r.effects); err != nil {
 		return err
 	}
-	return errors.Join(r.current(ctx), receipt.current())
+	return errors.Join(r.currentWithFiles(ctx, files), receipt.current())
 }
 
 type domainTCPCaptureEffectRunner struct {

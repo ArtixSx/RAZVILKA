@@ -217,6 +217,9 @@ func (o *DomainTCPOriginalScope) PrepareSyntheticCapture(ctx context.Context, ca
 	return r.prepare(ctx, baseline)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticCapture(ctx context.Context, capture *DomainPolicyTCPCapture, mapping *dnscontrol.SyntheticDNSMapping) error {
+	return o.currentSyntheticCaptureWithFiles(ctx, capture, mapping, nil)
+}
+func (o *DomainTCPOriginalScope) currentSyntheticCaptureWithFiles(ctx context.Context, capture *DomainPolicyTCPCapture, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
 	if err := o.CheckCapture(ctx, capture); err != nil {
 		return err
 	}
@@ -226,7 +229,7 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticCapture(ctx context.Context, ca
 	if r == nil || r.capture != capture || r.mapping != mapping {
 		return ErrDomainPolicyTCPConsumer
 	}
-	return r.checkPrepared(ctx)
+	return r.checkPreparedWithFiles(ctx, files)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
 	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil {
@@ -248,15 +251,29 @@ func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, ma
 		return err
 	}
 	o.mu.Lock()
+	process := o.process
+	o.mu.Unlock()
+	if process == nil || process.self != process {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+		return o.compareSyntheticMappingWithFiles(ctx, mapping, files)
+	})
+}
+func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
+	if err := o.baseCurrent(ctx); err != nil {
+		return err
+	}
+	o.mu.Lock()
 	process, capture, prepared, kernel, closed := o.process, o.capture, o.prepared, o.kernel, o.closed
 	o.mu.Unlock()
 	if closed || process == nil || process.material.mapping != mapping || capture == nil || prepared == nil || kernel == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := prepared.Current(ctx); err != nil {
+	if err := prepared.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
-	if err := kernel.Current(ctx); err != nil {
+	if err := kernel.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	return process.material.Current(ctx)
