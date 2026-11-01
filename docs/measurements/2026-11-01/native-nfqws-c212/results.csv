@@ -1,0 +1,5 @@
+build_mode,variant,source_sha,job_id,cpu,go_version,execute_seconds,inventory_check_calls,inventory_check_wall_seconds,metadata_traversal_attempts,completed_three_version_check_metadata_attempts,core_outcome,lan_outcome,native_fault_regressions
+production,before,b0d6db98be420e581909e439fb6ab53b10b8b102,124744126893,AMD EPYC 7763,go1.26.5,15.341111910,381,7.863359523,3548,8,deadline_failure,probe_deadline_before_apply,pass
+production,after,c21256a818c3b5d4676005141f81a6f1f443aeb7,124744126893,AMD EPYC 7763,go1.26.5,14.597642019,381,7.232780854,3114,6,deadline_failure,probe_deadline_before_apply,pass
+race,before,b0d6db98be420e581909e439fb6ab53b10b8b102,124744126880,AMD EPYC 9V45,go1.26.5,15.010660849,128,3.993842943,1010,8,capture_deadline,probe_deadline_before_apply,pass
+race,after,c21256a818c3b5d4676005141f81a6f1f443aeb7,124744126880,AMD EPYC 9V45,go1.26.5,15.007755809,141,3.937627901,1068,6,capture_deadline,probe_deadline_before_apply,pass
