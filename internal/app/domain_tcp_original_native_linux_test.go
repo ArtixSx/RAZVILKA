@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/autonomy"
-	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
@@ -111,7 +110,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		t.Fatal("actual private node import", err)
 	}
 	nodeID := imported.Nodes[0].ID
-	service := catalog.Service{ID: "service", Name: "Original native domain service", Category: "fixture", Domains: []string{"service.example.com"}, Strategy: []string{"xray"}, ProbeURL: "https://service.example.com/", Probes: []catalog.Probe{{ID: "primary", URL: "https://service.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"native-domain-service"}}}}}
+	service := domainOriginalNativeService()
 	checker := dataplane.NewExactXrayNodeCheckerSlots(filepath.Join(peers.root, "node-check"), 1)
 	checker.Binary = peers.binary
 	checker.Port = 29185
@@ -250,6 +249,8 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	}
 	history := updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
 	succeeded := false
+	var retainedOwner *dataplane.DomainTCPOriginalScope
+	var retainedMapping *dnscontrol.SyntheticDNSMapping
 	originalPlanRaw, _ := json.Marshal(plan)
 	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(held, control.Current), plan, history, func(original context.Context) error {
 		binding, err := manager.BindSyntheticDNSExecution(original, dnsAdapter, plan)
@@ -260,6 +261,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		if err != nil {
 			return fmt.Errorf("original owner constructor: %w", err)
 		}
+		retainedOwner = owner
 		if err := owner.StartDNS(original, resolver, control); err != nil {
 			return fmt.Errorf("original unpublished DNS: %w", err)
 		}
@@ -269,6 +271,7 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		if err != nil {
 			return fmt.Errorf("original DNS reserve: %w", err)
 		}
+		retainedMapping = mapping
 		observation, err := mapping.Observation(original)
 		if err != nil || observation.PossiblyIssued || observation.RealIPv4.String() != domainOriginalServer {
 			return fmt.Errorf("unexpected original unpublished reservation: %w", err)
@@ -347,8 +350,8 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		select {
 		case runErr := <-runDone:
 			joined = true
-			if runErr == nil {
-				return errors.New("canceled original Run lost its cause")
+			if !domainOriginalExpectedStopError(runErr) {
+				return fmt.Errorf("unexpected original Run/cleanup result: %w", runErr)
 			}
 		case <-time.After(15 * time.Second):
 			return errors.New("original Run cleanup did not join")
@@ -376,15 +379,36 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 		if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
 			return errors.New("late SYN restarted a native runtime")
 		}
+		if err := owner.RetainStandby(original, history); err != nil {
+			return fmt.Errorf("original known standby handoff request: %w", err)
+		}
 		succeeded = true
 		return nil
 	})
-	if !succeeded {
+	if !succeeded || err != nil {
 		t.Fatalf("full original domain native workflow: %v blockers=%+v", err, plan.Blockers)
 	}
 	after, _ := json.Marshal(plan)
 	if string(after) != string(originalPlanRaw) || plan.Ready {
 		t.Fatal("native proof promoted or mutated ordinary Apply plan")
+	}
+	// The SAME original owner survives for restorative readback only after the
+	// wrapper's complete handoff and release of its original exclusive gate.
+	release()
+	readCtx, readCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer readCancel()
+	if retainedOwner == nil || retainedMapping == nil {
+		t.Fatal("actual original standby custody lost after exclusive release")
+	}
+	if err := retainedOwner.RetainedStandbyCurrent(readCtx); err != nil {
+		t.Fatalf("actual original standby custody after exclusive release: %v", err)
+	}
+	if retainedOwner.CurrentSyntheticMapping(readCtx, retainedMapping) == nil {
+		t.Fatal("known standby custody revived forward publication")
+	}
+	version, seal, readErr := dataplane.InspectRetainedExecutionReadVersion(readCtx, manager.StateRoot)
+	if readErr != nil || version < 4 || seal == "" {
+		t.Fatalf("known standby not covered by actual reader4: version=%d error=%v", version, readErr)
 	}
 	// Current contract intentionally retains standby until the real original
 	// cache/late-SYN settlement can be issued. TTL/empty CT is NOT that grant.
@@ -398,17 +422,17 @@ func TestDomainTCPOriginalNativeAcceptedFlows(t *testing.T) {
 	}
 	retained := false
 	for _, r := range execution.Resources {
-		if r.Kind == "synthetic-baseline" && r.State == "prepared" {
+		if r.Kind == "synthetic-baseline" && r.State == "prepared" && r.Phase == "standby-retained" {
 			retained = true
 		}
 		if (r.Kind == "xray-domain-tcp" || r.Kind == "domain-tcp-capture") && r.State != "removed" {
 			t.Fatalf("original process/capture cleanup not published: %s %s", r.Kind, r.State)
 		}
 	}
-	if !retained || err == nil {
-		t.Fatal("unissued late-SYN/cache settlement unexpectedly cleared common fence")
+	if !retained {
+		t.Fatal("unissued late-SYN/cache settlement unexpectedly cleared known standby footprint")
 	}
-	t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque preserve routed client source+bytes; original capture/native child joined; standby/common retained pending genuine cache/late-SYN retirement; ordinary Apply remains blocked")
+	t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
 }
 
 // Read-only independent process observation for assertions, never deletion or
