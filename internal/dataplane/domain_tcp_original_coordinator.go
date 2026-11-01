@@ -246,7 +246,14 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, ma
 
 // The first producer comparison cannot be reentered as publication readiness.
 // Opening the phase never replaces these full live comparisons on each send.
-func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
+func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) (resultErr error) {
+	finishMeasure := domainTCPMeasure("mapping-compare")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("mapping-compare-success")(0)
+		}
+	}()
 	if err := o.baseCurrent(ctx); err != nil {
 		return err
 	}
@@ -278,14 +285,26 @@ func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Co
 	}
 	return process.material.Current(ctx)
 }
-func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) error {
+func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) (resultErr error) {
+	finishMeasure := domainTCPMeasure("publication-gate")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("publication-gate-success")(0)
+		}
+	}()
 	if send == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
 	if err := o.CurrentSyntheticMapping(ctx, mapping); err != nil {
 		return err
 	}
+	finishSend := domainTCPMeasure("dns-send")
 	err := send(ctx)
+	finishSend(0)
+	if err == nil {
+		domainTCPMeasure("dns-send-success")(0)
+	}
 	return errors.Join(err, o.CurrentSyntheticMapping(ctx, mapping))
 }
 func (o *DomainTCPOriginalScope) LookupPublished(ctx context.Context, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {

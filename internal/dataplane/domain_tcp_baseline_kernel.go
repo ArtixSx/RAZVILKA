@@ -248,8 +248,14 @@ func (r *domainTCPBaselineKernelOwner) sourcesWithFiles(ctx context.Context, fil
 func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBaselinePath, error) {
 	return r.observeWithFiles(ctx, nil)
 }
-func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (domainTCPBaselinePath, error) {
-	var path domainTCPBaselinePath
+func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (path domainTCPBaselinePath, resultErr error) {
+	finishMeasure := domainTCPMeasure("kernel-observe")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("kernel-observe-success")(0)
+		}
+	}()
 	if err := r.sourcesWithFiles(ctx, files); err != nil {
 		return path, err
 	}
