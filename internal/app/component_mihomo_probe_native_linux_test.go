@@ -74,6 +74,11 @@ func TestMihomoOriginalNativeHTTPServiceAndCleanup(t *testing.T) {
 	a := &App{Store: store, Catalog: catalog.Catalog{Services: []catalog.Service{service}}, Components: cm, Dataplane: m, FreshProfile: profile,
 		ComponentHistory: updatecheck.NewComponentHistoryAdmission(components.MihomoReleaseReadVersion), ExecutionHistory: updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion),
 		SelfUpdateFiles: &SelfUpdateFiles{ControlRoot: filepath.Join(peers.root, "http-control"), Directory: filepath.Join(peers.root, "http-update-files")}}
+	// The production gate installs its immutable guard before the first
+	// admitted operation, including creation of the actual control record.
+	if err := a.InitializeComponentRecoveryGate(); err != nil {
+		t.Fatal(err)
+	}
 	held, release, err := a.Operations.ExclusiveContext(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -81,9 +86,6 @@ func TestMihomoOriginalNativeHTTPServiceAndCleanup(t *testing.T) {
 	_, err = operationgate.InitializeSelfUpdateControl(held, a.SelfUpdateFiles.ControlRoot)
 	release()
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := a.InitializeComponentRecoveryGate(); err != nil {
 		t.Fatal(err)
 	}
 	if result, err := a.installMihomo(ctx); err != nil || !result.OK {
