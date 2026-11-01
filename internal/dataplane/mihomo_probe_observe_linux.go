@@ -35,7 +35,33 @@ func (a mihomoProbeObservation) same(b mihomoProbeObservation) bool {
 }
 
 func observeMihomoProbeProcess(ctx context.Context, child *components.MihomoProbeProcess, ref components.MihomoProbeReference, provider *netidentity.Provider, expected netidentity.Identity) (result mihomoProbeObservation, err error) {
+	return observeOriginalMihomoProcess(ctx, child, ref, provider, expected)
+}
+
+type originalMihomoObservedChild interface {
+	Current(context.Context) error
+	PID() int
+	MatchesFile(string, os.FileInfo) bool
+}
+
+// Only original concrete component owners reach the comparison reader. An
+// arbitrary interface implementation or serialized PID cannot mint an owner.
+func originalMihomoObservedOwner(child originalMihomoObservedChild) bool {
+	switch owner := child.(type) {
+	case *components.MihomoProbeProcess:
+		return owner != nil
+	case *components.MihomoLiveProcess:
+		return owner != nil
+	default:
+		return false
+	}
+}
+
+func observeOriginalMihomoProcess(ctx context.Context, child originalMihomoObservedChild, ref components.MihomoProbeReference, provider *netidentity.Provider, expected netidentity.Identity) (result mihomoProbeObservation, err error) {
 	if xraySelectedTCPFinite(ctx) != nil || child == nil || provider == nil || expected.Validate() != nil || ref.SOCKSPort < 1024 || ref.SOCKSPort > 65535 || ref.SOCKSPort == 8787 {
+		return result, errMihomoProbeObservation
+	}
+	if !originalMihomoObservedOwner(child) {
 		return result, errMihomoProbeObservation
 	}
 	err = provider.WithCurrent(ctx, func(held context.Context, current netidentity.Identity) error {
@@ -74,7 +100,7 @@ func observeMihomoProbeProcess(ctx context.Context, child *components.MihomoProb
 	return result, nil
 }
 
-func readMihomoProbeProcess(ctx context.Context, proc *xraySelectedTCPProc, child *components.MihomoProbeProcess, ref components.MihomoProbeReference, network netidentity.Identity) (mihomoProbeObservation, error) {
+func readMihomoProbeProcess(ctx context.Context, proc *xraySelectedTCPProc, child originalMihomoObservedChild, ref components.MihomoProbeReference, network netidentity.Identity) (mihomoProbeObservation, error) {
 	var result mihomoProbeObservation
 	if proc == nil || proc.pid != child.PID() || proc.current(ctx) != nil {
 		return result, errMihomoProbeObservation
@@ -112,7 +138,7 @@ func readMihomoProbeProcess(ctx context.Context, proc *xraySelectedTCPProc, chil
 	return mihomoProbeObservation{pid: proc.pid, parent: parent, group: group, start: start, network: network, executable: closing.executable, profile: config, home: home}, nil
 }
 
-func readMihomoProbeFile(ctx context.Context, proc *xraySelectedTCPProc, child *components.MihomoProbeProcess, number, kind, digest string) (os.FileInfo, error) {
+func readMihomoProbeFile(ctx context.Context, proc *xraySelectedTCPProc, child originalMihomoObservedChild, number, kind, digest string) (os.FileInfo, error) {
 	if number != "4" || kind != "profile" {
 		if number != "5" || kind != "home" {
 			return nil, errMihomoProbeObservation
