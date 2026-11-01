@@ -62,6 +62,7 @@ func TestNativeVLESSCheckPerformance(t *testing.T) {
 	}
 	request := NodeCheckRequest{NodeID: checkedNodeID, Outbound: fixture.Outbound, NetworkProfile: nativecheckfixture.Profile, Service: catalog.Service{ID: "telegram", ProbeURL: fixture.ProbeURL, Strategy: []string{"xray"}}}
 	rows := [][]string{{"algorithm", "scenario", "sample", "phase", "started_utc", "wall_monotonic_ms", "check_latency_ms", "finished_utc", "available", "error_code", "cleanup", "service_requests", "stages_json"}}
+	rows[0] = append(rows[0], nativecheckfixture.ResourceCSVHeaders...)
 	for _, scenario := range []string{"live", "dead-service", "cancel", "dead-node"} {
 		if scenario == "dead-node" {
 			fixture.StopServer(t)
@@ -96,11 +97,20 @@ func TestNativeVLESSCheckPerformance(t *testing.T) {
 				close(cancelDone)
 			}
 			calls := fixture.ServiceCalls.Load()
+			resources, err := nativecheckfixture.StartResourceSample()
+			if err != nil {
+				t.Fatal("native resource observation", err)
+			}
+			defer resources.Stop() // Also joins on a failed assertion or panic.
 			started := time.Now()
 			result, err := checker.Check(ctx, request)
 			elapsed := time.Since(started)
 			cancel()
 			<-cancelDone
+			usage, resourceErr := resources.Stop()
+			if resourceErr != nil {
+				t.Fatal("native resource closing observation", resourceErr)
+			}
 			if err != nil && scenario != "cancel" {
 				t.Fatalf("%s check error: %v", scenario, err)
 			}
@@ -137,7 +147,8 @@ func TestNativeVLESSCheckPerformance(t *testing.T) {
 					t.Fatalf("actual service request count=%d want%d", got, wanted)
 				}
 			}
-			rows = append(rows, []string{algorithm, scenario, strconv.Itoa(sample), phase, started.UTC().Format(time.RFC3339Nano), fmt.Sprintf("%.3f", float64(elapsed)/float64(time.Millisecond)), strconv.FormatInt(result.LatencyMS, 10), result.FinishedAt.Format(time.RFC3339Nano), strconv.FormatBool(result.Available), result.ErrorCode, string(result.CleanupStatus), strconv.FormatInt(fixture.ServiceCalls.Load()-calls, 10), string(stages)})
+			row := []string{algorithm, scenario, strconv.Itoa(sample), phase, started.UTC().Format(time.RFC3339Nano), fmt.Sprintf("%.3f", float64(elapsed)/float64(time.Millisecond)), strconv.FormatInt(result.LatencyMS, 10), result.FinishedAt.Format(time.RFC3339Nano), strconv.FormatBool(result.Available), result.ErrorCode, string(result.CleanupStatus), strconv.FormatInt(fixture.ServiceCalls.Load()-calls, 10), string(stages)}
+			rows = append(rows, append(row, usage.CSV()...))
 		}
 		sort.Float64s(samples)
 		t.Logf("native full Check algorithm=%s scenario=%s repeated N=%d p50=%.3fms p95=%.3fms; stages overlap; fixture service delay40ms", algorithm, scenario, len(samples), samples[5], samples[11])

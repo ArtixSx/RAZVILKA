@@ -61,7 +61,10 @@ func TestDomainTCPStandbyRemoveBindsOriginalLoadedReceiptBeforeAnyDelete(t *test
 // model input here, never a source of production packet cleanup authority.
 func standbyRetirementPublicationModel(t *testing.T) (*domainTCPStandbyRetirement, *retainedXrayExecution, context.Context) {
 	t.Helper()
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "private-original")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	execution := &Execution{PlanID: "dp-check-" + strings.Repeat("a", 32), ResourcePlanID: "dp-" + strings.Repeat("a", 16), Digest: strings.Repeat("a", 64), State: "resource-failed"}
 	transaction := filepath.Join(root, "transactions", execution.PlanID)
 	if err := os.MkdirAll(transaction, 0700); err != nil {

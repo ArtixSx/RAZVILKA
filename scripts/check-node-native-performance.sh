@@ -16,10 +16,17 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
  "$RAZVILKA_XRAY_NATIVE" version
  sha256sum "$RAZVILKA_XRAY_NATIVE"
  git rev-parse HEAD
- printf '%s\n' 'staging loopback-only namespace; stable WAN identity modeled; service delay40ms; N12 repeated plus first per scenario' 'reference=current native production path with only per-Check literal observation hidden, not historical release binary' 'App=current original queue only; controlled queue25ms before dispatch; HTTP delivery observed, browser paint unmeasured' 'stage durations overlap; CPU/RSS/router/physical WAN/Internet unavailable'
+ printf '%s\n' 'staging loopback-only namespace; stable WAN identity modeled; service delay40ms; N12 repeated plus first per scenario' 'reference=current native production path with only per-Check literal observation hidden, not historical release binary' 'App=current original queue only; controlled queue25ms before dispatch; HTTP delivery observed, browser paint unmeasured' 'stage durations overlap; router/physical WAN/Internet/browser paint unmeasured' 'resources schema linux-rusage-observed-rss-v1: RUSAGE_SELF+RUSAGE_CHILDREN user/system CPU deltas per full Check (both algorithms) or App POST-through-HTTP-readback job' 'self CPU/RSS includes fixture TLS+DNS and sampler overhead; child CPU includes only reaped children during window incl native version/validation/client commands; preexisting peer subtree excluded from sampled child RSS' 'RSS absolute observed peak from /proc/statm every10ms, not Maxrss delta; new children enumerated across Go OS threads; short-lived children may be missed; empty child peak means no child RSS sample, not zero memory use'
 } > "$RAZVILKA_NODE_PERF_OUTPUT/environment.txt"
 "$GO" test -c -o "$tmp/dataplane.test" ./internal/dataplane
 "$GO" test -c -o "$tmp/app.test" ./internal/app
+if "$GO" test ./internal/nativecheckfixture -run '^TestResourceSample' -count=1 -v > "$RAZVILKA_NODE_PERF_OUTPUT/resource-helper.log" 2>&1; then
+ cat "$RAZVILKA_NODE_PERF_OUTPUT/resource-helper.log"
+else
+ code=$?
+ cat "$RAZVILKA_NODE_PERF_OUTPUT/resource-helper.log"
+ exit "$code"
+fi
 export RAZVILKA_XRAY_NETNS=1 RAZVILKA_NODE_NATIVE_PERF=1
 if unshare --net --mount sh -eu -c '
  mount --make-rprivate /

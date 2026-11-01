@@ -140,6 +140,7 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 		return data, response.StatusCode
 	}
 	rows := [][]string{{"scenario", "sample", "phase", "post_started_utc", "post_to_http_readback_monotonic_ms", "queue_wait_ms", "enqueue_to_server_completion_ms", "readback_http_ms", "http_received_utc", "completed", "native_checks", "cleanup", "check_results_json"}}
+	rows[0] = append(rows[0], nativecheckfixture.ResourceCSVHeaders...)
 	for _, scenario := range []string{"single", "selected-batch", "all-vless"} {
 		var samples []float64
 		for sample := 0; sample < 13; sample++ {
@@ -160,6 +161,12 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			resources, err := nativecheckfixture.StartResourceSample()
+			if err != nil {
+				release()
+				t.Fatal("queue resource observation", err)
+			}
+			defer resources.Stop()
 			start := time.Now()
 			data, status := exchange("POST", "/api/v1/node-checks", request)
 			if status != 202 {
@@ -181,6 +188,10 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 					t.Fatalf("readback HTTP%d", status)
 				}
 				if view.Job.State == "completed" {
+					usage, resourceErr := resources.Stop()
+					if resourceErr != nil {
+						t.Fatal("queue resource closing observation", resourceErr)
+					}
 					if view.Job.Timing == nil || view.Job.Timing.QueueWaitMS == nil || view.Job.Timing.TotalMS == nil || view.Job.Timing.TotalKind != "enqueue-to-server-completion" {
 						t.Fatal("missing original admission/completion span")
 					}
@@ -206,7 +217,8 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 						samples = append(samples, float64(received.Sub(start))/float64(time.Millisecond))
 					}
 					encoded, _ := json.Marshal(results)
-					rows = append(rows, []string{scenario, strconv.Itoa(sample), phase, start.UTC().Format(time.RFC3339Nano), fmt.Sprintf("%.3f", float64(received.Sub(start))/float64(time.Millisecond)), strconv.FormatInt(*view.Job.Timing.QueueWaitMS, 10), strconv.FormatInt(*view.Job.Timing.TotalMS, 10), fmt.Sprintf("%.3f", float64(received.Sub(readStart))/float64(time.Millisecond)), received.UTC().Format(time.RFC3339Nano), strconv.Itoa(view.Job.Completed), strconv.Itoa(len(results)), "verified", string(encoded)})
+					row := []string{scenario, strconv.Itoa(sample), phase, start.UTC().Format(time.RFC3339Nano), fmt.Sprintf("%.3f", float64(received.Sub(start))/float64(time.Millisecond)), strconv.FormatInt(*view.Job.Timing.QueueWaitMS, 10), strconv.FormatInt(*view.Job.Timing.TotalMS, 10), fmt.Sprintf("%.3f", float64(received.Sub(readStart))/float64(time.Millisecond)), received.UTC().Format(time.RFC3339Nano), strconv.Itoa(view.Job.Completed), strconv.Itoa(len(results)), "verified", string(encoded)}
+					rows = append(rows, append(row, usage.CSV()...))
 					break
 				}
 				if time.Now().After(deadline) {
