@@ -100,6 +100,22 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 	if !reflect.DeepEqual(before, a.Store.Get()) || a.StrategyLab.Executor != nil {
 		t.Fatal("probe/selection mutated live config or enabled legacy executor")
 	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModePreferred)
+	manual := strings.Replace(selection, `"mode":"preferred"`, `"mode":"manual"`, 1)
+	code, data = request(http.MethodPost, "/api/v1/strategy-lab/selections", manual, server.URL, true)
+	var choice strategylab.Selection
+	if code != http.StatusOK || json.Unmarshal(data, &choice) != nil || choice.CandidateID != candidate || choice.Mode != strategylab.ModeManual || !choice.Frozen || choice.Healthy {
+		t.Fatal("actual manual choice must remain frozen intent", code, string(data))
+	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModeManual)
+	if !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("manual metadata choice changed live config")
+	}
+	t.Log("actual authenticated App HTTP: three native TLS/counter passes, current preferred selection/snapshot, explicit frozen manual choice, original selected source bridge; live routing unchanged; CI classification only, no router/LAN acceptance")
+}
+
+func assertManagedProbeNativeSelectedSource(t *testing.T, a *App, candidate string, mode strategylab.AdaptiveMode) {
+	t.Helper()
 	// The actual Apply source bridge must accept the resulting original epoch
 	// under a NEW real operation/runtime lease, without touching LAN routing.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -119,8 +135,7 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 		t.Fatal("actual selected native Apply source bridge", err)
 	}
 	defer source.Close()
-	if source.Candidate().ID != candidate || source.Current(ctx) != nil || source.ManagedOwnersCurrent(ctx, lease, a.managedNFQList.control) != nil {
+	if source.Candidate().ID != candidate || source.Selection().Mode != mode || source.Current(ctx) != nil || source.ManagedOwnersCurrent(ctx, lease, a.managedNFQList.control) != nil {
 		t.Fatal("actual selected source lost original runtime/epoch owners")
 	}
-	t.Log("actual authenticated App HTTP: three native TLS/counter passes, per-request original admission, current preferred selection and snapshot; live routing unchanged; CI classification only, no router/LAN acceptance")
 }
