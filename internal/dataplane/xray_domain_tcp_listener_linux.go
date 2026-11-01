@@ -15,6 +15,12 @@ func (r *XrayDomainTCPExecutionResource) observeDomainListener(ctx context.Conte
 }
 
 func (r *XrayDomainTCPExecutionResource) observeDomainListenerWithOpening(ctx context.Context, opening *xrayDomainTCPFileOpening) (xraySelectedTCPListenerObservation, error) {
+	return r.observeDomainListenerFiles(ctx, opening, nil)
+}
+func (r *XrayDomainTCPExecutionResource) observeDomainListenerUsingFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (xraySelectedTCPListenerObservation, error) {
+	return r.observeDomainListenerFiles(ctx, nil, files)
+}
+func (r *XrayDomainTCPExecutionResource) observeDomainListenerFiles(ctx context.Context, opening *xrayDomainTCPFileOpening, files *xrayDomainTCPFileObservation) (xraySelectedTCPListenerObservation, error) {
 	if r.domainProcessCurrent(ctx) != nil || r.scope.networkIdentity == nil || r.scope.networkIdentity.provider == nil {
 		return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal
 	}
@@ -51,6 +57,14 @@ func (r *XrayDomainTCPExecutionResource) observeDomainListenerWithOpening(ctx co
 			}
 			observed = xraySelectedTCPListenerObservation{process: last, endpoint: r.definition.PrivateEndpoint, inode: inode}
 			return nil
+		}
+		if files != nil {
+			nested, closeFiles, err := files.forOriginalProcessRead(ctx, held, r)
+			if err != nil {
+				return err
+			}
+			defer closeFiles()
+			return r.withNestedFileObservation(held, nested, observe)
 		}
 		if opening != nil {
 			return r.withFileObservationAfterOpening(held, opening, observe)

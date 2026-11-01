@@ -15,3 +15,7 @@ func (*XrayDomainTCPExecutionResource) observeDomainListenerAbsent(context.Conte
 func (*XrayDomainTCPExecutionResource) observeDomainListenerWithOpening(context.Context, *xrayDomainTCPFileOpening) (xraySelectedTCPListenerObservation, error) {
 	return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal
 }
+
+func (*XrayDomainTCPExecutionResource) observeDomainListenerUsingFiles(context.Context, *xrayDomainTCPFileObservation) (xraySelectedTCPListenerObservation, error) {
+	return xraySelectedTCPListenerObservation{}, ErrXrayDomainTCPOriginal
+}

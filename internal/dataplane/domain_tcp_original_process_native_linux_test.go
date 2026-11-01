@@ -148,6 +148,38 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 		if err := resource.Current(active); err != nil {
 			return err
 		}
+
+		// Real source/child/kernel opening+closing, with explicit nested readonly
+		// views only. Callback failures and panic cannot become successful evidence.
+		witness := errors.New("original readonly Guard callback failed")
+		var retained *xrayDomainTCPFileObservation
+		observedErr := resource.withCurrentFileObservation(active, func(files *xrayDomainTCPFileObservation) error {
+			retained = files
+			if err := resource.currentWithFiles(active, files); err != nil {
+				return err
+			}
+			if err := resource.currentWithFiles(active, files); err != nil {
+				return err
+			}
+			return witness
+		})
+		if !errors.Is(observedErr, witness) || errors.Is(observedErr, ErrXrayDomainTCPOriginal) {
+			return errors.Join(errors.New("actual readonly bracket lost original exception or identity"), observedErr)
+		}
+		if err := resource.currentWithFiles(active, retained); !errors.Is(err, ErrXrayDomainTCPOriginal) {
+			return errors.New("retained Guard view remained live")
+		}
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("readonly Guard panic erased")
+				}
+			}()
+			_ = resource.withCurrentFileObservation(active, func(files *xrayDomainTCPFileObservation) error { retained = files; panic("original Guard panic") })
+		}()
+		if retained.open.Load() {
+			return errors.New("panic retained live Guard view")
+		}
 		entered = true
 		cancelRequest()
 		<-active.Done()

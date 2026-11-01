@@ -230,3 +230,36 @@ func TestXrayDomainFileOpeningClosingHashRejectsMutationAfterOpening(t *testing.
 		t.Fatal("closing proof or original exception omitted", err)
 	}
 }
+
+func TestXrayDomainFileObservationDerivedViewNeedsLiveParent(t *testing.T) {
+	r, ctx := domainFileObservationModel(t)
+	r.child = &xraySelectedTCPProcess{}
+	scope := &executionResourceScope{}
+	r.scope = scope
+	r.material = &XrayDomainTCPOperationMaterial{resource: r}
+	r.material.self = r.material
+	ctx = context.WithValue(ctx, syntheticExecutionRegistrarKey{}, scope)
+	if err := r.withFileObservation(ctx, func(parent *xrayDomainTCPFileObservation) error {
+		read, closeRead, err := r.processReadContext(ctx)
+		if err != nil {
+			return err
+		}
+		defer closeRead()
+		nested, closeFiles, err := parent.forOriginalProcessRead(ctx, read, r)
+		if err != nil {
+			return err
+		}
+		defer closeFiles()
+		if err := nested.current(read, r); err != nil {
+			return err
+		}
+		parent.open.Store(false)
+		if nested.current(read, r) == nil {
+			t.Fatal("derived view outlived original parent")
+		}
+		parent.open.Store(true)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

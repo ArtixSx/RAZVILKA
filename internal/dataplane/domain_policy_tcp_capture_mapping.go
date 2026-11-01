@@ -63,6 +63,9 @@ func (c *DomainPolicyTCPCapture) Address() (netip.AddrPort, error) {
 }
 
 func (c *DomainPolicyTCPCapture) Current(ctx context.Context) error {
+	return c.currentWithFiles(ctx, nil)
+}
+func (c *DomainPolicyTCPCapture) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil || c.ctx.Err() != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -86,7 +89,7 @@ func (c *DomainPolicyTCPCapture) Current(ctx context.Context) error {
 	if err := c.owner.CheckCapture(ctx, c); err != nil {
 		return err
 	}
-	return errors.Join(c.xray.check(ctx), ctx.Err(), c.ctx.Err())
+	return errors.Join(c.xray.checkWithFiles(ctx, files), ctx.Err(), c.ctx.Err())
 }
 
 // Prepare does not publish. The concrete original owner must install/read back
