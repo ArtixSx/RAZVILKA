@@ -69,6 +69,44 @@ func TestSyntheticSettlementOriginalCleanupAfterCancelStopAndRelease(t *testing.
 	}
 }
 
+func TestSyntheticSettlementOriginalXrayScopeRequiresRegisteredDNSBinding(t *testing.T) {
+	for _, drift := range []string{"", "dns-pointer", "binding-pointer", "dns-registry", "xray-registry"} {
+		t.Run(drift, func(t *testing.T) {
+			b, control, cleanup, _, _, _ := syntheticSettlementOwnerModel(t)
+			s := b.scope
+			// Socket-free owner model: retain the SAME actual scope/root and
+			// control lease, with the separately registered DNS source used by
+			// the Xray producer. No process or publication is granted here.
+			xray := new(ProxyTunnelAdapter)
+			s.adapter, s.adapterOwner = "xray", xray
+			s.manager.Adapters["xray"] = xray
+			s.domainDNS, s.domainDNSBinding = b.adapter, b
+			switch drift {
+			case "dns-pointer":
+				s.domainDNS = new(ScopedDNSAdapter)
+			case "binding-pointer":
+				copy := *b
+				s.domainDNSBinding = &copy
+			case "dns-registry":
+				s.manager.Adapters[scopedDNSAdapterID] = new(ScopedDNSAdapter)
+			case "xray-registry":
+				s.manager.Adapters["xray"] = new(ProxyTunnelAdapter)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			calls := 0
+			err := b.withSettlementCurrent(ctx, control, cleanup, func() error { calls++; return nil })
+			if drift == "" {
+				if err != nil || calls != 1 {
+					t.Fatal(calls, err)
+				}
+			} else if err == nil || calls != 0 {
+				t.Fatal("changed original source admitted", calls, err)
+			}
+		})
+	}
+}
+
 func TestSyntheticSettlementOriginalScopeBookendsRefuseDrift(t *testing.T) {
 	for _, kind := range []string{"copy", "unbounded", "cancelled", "scope-close", "registry", "registry-after", "root", "root-fd", "dns", "network", "profile-intent", "physical-before", "physical-after", "control-close"} {
 		t.Run(kind, func(t *testing.T) {

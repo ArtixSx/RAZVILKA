@@ -281,7 +281,7 @@ func (b *SyntheticDNSExecutionBinding) checkSettlementOwner(ctx context.Context)
 	s := b.scope
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.manager == nil || s.networkIdentity == nil || s.owned == nil || b.adapter == nil || s.adapterOwner != b.adapter || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
+	if s.manager == nil || s.networkIdentity == nil || s.owned == nil || b.adapter == nil || !b.originalAdapterRegisteredLocked() || b.adapter.DNS != b.dns || b.adapter.StateRoot != b.root || b.adapter.InactivityIdentity != s.networkIdentity.provider || !reflect.DeepEqual(s.plan, b.plan) {
 		return ErrDomainTransportRuntime
 	}
 	opened, err := s.owned.RootInfo()
