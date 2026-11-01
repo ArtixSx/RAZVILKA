@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	xnetproxy "golang.org/x/net/proxy"
 )
@@ -30,6 +32,10 @@ func socksHTTPGetPinned(ctx context.Context, rawURL, address string, pinned neti
 // A test CA may be supplied here; production uses system roots. ServerName is
 // always derived from the original URL and verification cannot be disabled.
 func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned netip.Addr, roots *tls.Config) (*http.Response, func(), error) {
+	return socksHTTPGetPinnedObservedTLS(ctx, rawURL, address, pinned, roots, nil, nil)
+}
+
+func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, pinned netip.Addr, roots *tls.Config, service *catalog.Service, chain *[]string) (*http.Response, func(), error) {
 	if ctx == nil {
 		return nil, nil, errors.New("pinned service context is required")
 	}
@@ -100,13 +106,18 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 	client := serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL)
 	previous := client.CheckRedirect
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
-		if err := checkNodeResource(request.Context(), request.URL.Hostname(), pinned); err != nil {
+		if err := checkNodeResourceURL(request.Context(), request.URL.String(), pinned); err != nil {
 			return err
 		}
 		if request.URL.Scheme != "https" || request.URL.User != nil || !samePinnedServiceHost(request.URL.Hostname(), origin.Hostname()) || request.URL.Port() != "" && request.URL.Port() != "443" {
 			return errors.New("pinned service redirect changed its origin")
 		}
 		return previous(request, via)
+	}
+	if service != nil && chain != nil {
+		selected := *service
+		selected.ProbeURL = rawURL
+		client = probecheck.RecordingClient(client, selected, chain)
 	}
 	response, err := client.Do(request)
 	if err != nil {

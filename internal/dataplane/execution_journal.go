@@ -242,6 +242,9 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	if scope != nil {
+		if scope.mihomo != nil {
+			return executionJournalError(scope.mihomo.publishRecords(data))
+		}
 		if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
 			return executionJournalError(probe.publishRecords(data))
 		}

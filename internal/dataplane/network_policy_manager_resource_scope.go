@@ -56,6 +56,8 @@ type executionResourceScope struct {
 	domainTCPBaselines      map[string]*domainTCPBaselineExecutionResource
 	domainTCPOwner          *DomainTCPOriginalScope
 	domainTCPProof          bool // Only the original reader3-admitted temporary-check entry sets this.
+	mihomoProof             bool // Only the original reader4-admitted finite check sets this.
+	mihomo                  *mihomoProbeResource
 	domainDNS               *ScopedDNSAdapter
 	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
@@ -460,6 +462,12 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if s.mihomo != nil && s.open {
+		s.observationOpen.Store(false)
+		s.cancel()
+		s.mu.Unlock()
+		return ErrMihomoProbe // The original finite wrapper finishes both writer FDs.
+	}
 	if owner := s.retainedXrayOwner; owner != nil && owner.self == owner && owner.scope == s && owner.standby != nil {
 		pending := owner.pending
 		s.observationOpen.Store(false)
@@ -579,9 +587,16 @@ func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Pla
 }
 
 func (m *Manager) withExecutionResourcesModeLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof bool) error {
+	return m.withExecutionResourcesModesLocked(ctx, expected, adapter, action, domainProof, false)
+}
+
+func (m *Manager) withExecutionResourcesModesLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof, mihomoProof bool) error {
 	ready := expected.Ready
 	if domainProof {
 		ready = adapter == "xray" && validateDomainTCPProofPlan(expected) == nil
+	}
+	if mihomoProof {
+		ready = !domainProof && adapter == "mihomo" && validateMihomoProbePlan(expected) == nil
 	}
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
 	if guard == nil || action == nil || !slices.Contains(expected.Adapters, adapter) || !validPlanID(expected.PlanID) ||
@@ -613,8 +628,14 @@ func (m *Manager) withExecutionResourcesModeLocked(ctx context.Context, expected
 		return err
 	}
 	scope.domainTCPProof = domainProof
+	scope.mihomoProof = mihomoProof
 	defer scope.close() // Revoke callbacks and anchored descriptors on panic too.
 	actionErr := action(scope.context())
+	if mihomoProof && scope.mihomo != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 12*time.Second)
+		defer cancel()
+		return scope.mihomo.finish(scope.contextWith(cleanup), actionErr)
+	}
 	if domainProof && scope.domainTCPOwner != nil {
 		if requested, handoffErr := scope.domainTCPOwner.finishStandbyHandoff(scope.contextWith(ctx), actionErr); requested {
 			return errors.Join(actionErr, handoffErr, scope.close())

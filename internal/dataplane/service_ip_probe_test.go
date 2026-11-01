@@ -14,8 +14,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/catalog"
 )
 
 type pinnedSOCKSRequest struct {
@@ -270,6 +273,39 @@ func TestPinnedServiceSameOriginRedirectRetainsPinAndResponseSemantics(t *testin
 		if request := <-socks.requests; request.AddressType != 1 || request.Host != "1.1.1.1" {
 			t.Fatalf("redirect changed pin: %+v", request)
 		}
+	}
+}
+
+func TestPinnedServiceCatalogRejectsRedirectBeforeSecondRequest(t *testing.T) {
+	var requests atomic.Int32
+	backend, roots, _ := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Redirect(w, r, "/allowed-looking-final", http.StatusFound)
+	})
+	socks := newPinnedSOCKSFixture(t, backend.Listener.Addr().String(), false)
+	service := catalog.Service{ProbeURL: "https://example.com/", Probes: []catalog.Probe{{ID: "strict", URL: "https://example.com/", Required: true, Expect: catalog.ProbeExpectation{RedirectPolicy: "none"}}}}
+	var chain []string
+	response, cleanup, err := socksHTTPGetPinnedObservedTLS(context.Background(), service.ProbeURL, socks.address, netip.MustParseAddr("1.1.1.1"), roots, &service, &chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusFound || requests.Load() != 1 || len(chain) != 1 {
+		t.Fatal("catalog redirect fence lost", response.StatusCode, requests.Load(), chain)
+	}
+}
+
+func TestPinnedServiceDeniedCatalogTargetNeverDialsSOCKS(t *testing.T) {
+	var requests atomic.Int32
+	backend, roots, _ := newPinnedTLSFixture(t, func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(200) })
+	socks := newPinnedSOCKSFixture(t, backend.Listener.Addr().String(), false)
+	ctx := WithNodeResourceGuard(context.Background(), func(context.Context, string, netip.Addr) error { return ErrNodeResourceDenied })
+	service := catalog.Service{ProbeURL: "https://example.com/blocked"}
+	var chain []string
+	response, cleanup, err := socksHTTPGetPinnedObservedTLS(ctx, service.ProbeURL, socks.address, netip.MustParseAddr("1.1.1.1"), roots, &service, &chain)
+	if !errors.Is(err, ErrNodeResourceDenied) || response != nil || cleanup != nil || len(socks.requests) != 0 || requests.Load() != 0 {
+		t.Fatal("denied target reached actual transport", err)
 	}
 }
 

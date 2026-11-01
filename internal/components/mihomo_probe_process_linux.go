@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -36,7 +37,17 @@ type mihomoProbeNativeLinux struct {
 // listener, service or route ready. On an unconfirmed cleanup it returns the
 // SAME owner, retains all files and refuses source.Close.
 func (s *MihomoProbeSource) RunProbe(ctx context.Context, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, observe func(context.Context, *MihomoProbeProcess) error) (process *MihomoProbeProcess, result error) {
+	return s.RunProbeAdmitted(ctx, control, cleanup, func(_ context.Context, begin func() error) error { return begin() }, observe)
+}
+
+// RunProbeAdmitted additionally enters the original COMMON resource's start
+// barrier. The supplied admission cannot replace actual control.WithStart or
+// replay its syscall. It must not retain begin after the synchronous call.
+func (s *MihomoProbeSource) RunProbeAdmitted(ctx context.Context, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, admission func(context.Context, func() error) error, observe func(context.Context, *MihomoProbeProcess) error) (process *MihomoProbeProcess, result error) {
 	if s == nil || s.self != s || ctx == nil || control == nil || cleanup == nil || observe == nil {
+		return nil, ErrMihomoProbePending
+	}
+	if admission == nil {
 		return nil, ErrMihomoProbePending
 	}
 	deadline, finite := ctx.Deadline()
@@ -86,14 +97,37 @@ func (s *MihomoProbeSource) RunProbe(ctx context.Context, control *operationgate
 	native.command.Env = []string{}
 	native.command.ExtraFiles = []*os.File{native.binary, native.profile, native.directory}
 	native.command.Stdout, native.command.Stderr = io.Discard, io.Discard
-	startErr := control.WithStart(ctx, func() error {
-		err := native.command.Start()
-		native.started = err == nil
-		return err
+	var startMu sync.Mutex
+	called, repeated, open := false, false, true
+	defer func() { startMu.Lock(); open = false; startMu.Unlock() }()
+	startErr := admission(ctx, func() error {
+		startMu.Lock()
+		defer startMu.Unlock()
+		if !open {
+			return ErrMihomoProbePending
+		}
+		if called {
+			repeated = true
+			return ErrMihomoProbePending
+		}
+		called = true
+		return control.WithStart(ctx, func() error {
+			err := native.command.Start()
+			native.started = err == nil
+			if native.started {
+				// Establish the sole Wait before any enclosing admission can
+				// return an error or panic after the actual Start succeeded.
+				go func() { native.waitErr = native.command.Wait(); close(native.done) }()
+			}
+			return err
+		})
 	})
-	if native.started {
-		go func() { native.waitErr = native.command.Wait(); close(native.done) }()
+	startMu.Lock()
+	open = false
+	if repeated {
+		startErr = errors.Join(startErr, ErrMihomoProbePending)
 	}
+	startMu.Unlock()
 	if startErr != nil || !native.started {
 		return process, errors.Join(startErr, ErrMihomoProbePending)
 	}

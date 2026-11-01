@@ -24,6 +24,9 @@ func (m *Manager) AdapterLifecycleRegistration(id string) AdapterLifecycleRegist
 	if adapter == nil {
 		return AdapterLifecycleRegistration{}
 	}
+	if a, ok := adapter.(*MihomoProbeAdapter); ok {
+		return AdapterLifecycleRegistration{Registered: a != nil && a.self == a, IsolatedProbe: a != nil && a.self == a}
+	}
 	_, canary := adapter.(CanaryAdapter)
 	_, recovery := adapter.(RuntimeReconciler)
 	return AdapterLifecycleRegistration{Registered: true, StagedValidation: true, IsolatedProbe: canary, LiveApply: true, LiveHealth: true, Recovery: recovery, Rollback: true}

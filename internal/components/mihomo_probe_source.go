@@ -118,6 +118,12 @@ func (s *MihomoProbeSource) Reference() MihomoProbeReference {
 	return s.reference
 }
 
+// OwnedBy compares the original installed manager pointer only. Equal paths or
+// a serialized reference cannot recreate the held writer lease.
+func (s *MihomoProbeSource) OwnedBy(manager *Manager) bool {
+	return s != nil && s.self == s && manager != nil && s.manager == manager
+}
+
 func (s *MihomoProbeSource) currentLocked(ctx context.Context) error {
 	if s.closed || s.session == nil || s.manager == nil || s.guard == nil || ctx == nil || digest(s.profile) != s.reference.ConfigSHA256 {
 		return ErrRecoveryAuthority

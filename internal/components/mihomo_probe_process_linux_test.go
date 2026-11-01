@@ -35,7 +35,7 @@ func TestMihomoOfficialProbeOwnsNativeStartWaitAndPendingCleanup(t *testing.T) {
 	if _, err := m.installMihomoImage(context.Background(), info, image, mihomoFixtureAdmission, mihomoFixtureAdmission); err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"complete", "cancel", "panic", "pending"} {
+	for _, scenario := range []string{"complete", "cancel", "panic", "pending", "admission-skip", "admission-repeat", "admission-error", "admission-panic"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "control")
 			if _, err := operationgate.InitializeSelfUpdateControl(context.Background(), root); err != nil {
@@ -77,6 +77,27 @@ func TestMihomoOfficialProbeOwnsNativeStartWaitAndPendingCleanup(t *testing.T) {
 			defer source.Close()
 			var observed *MihomoProbeProcess
 			var native *mihomoProbeNativeLinux
+			var late func() error
+			admission := func(_ context.Context, begin func() error) error {
+				late = begin
+				observed = source.probe
+				native = observed.native.(*mihomoProbeNativeLinux)
+				if scenario == "admission-skip" {
+					return nil
+				}
+				if err := begin(); err != nil {
+					return err
+				}
+				switch scenario {
+				case "admission-repeat":
+					_ = begin() // Even a swallowed repeated-call error poisons admission.
+				case "admission-error":
+					return errors.New("fixture admission error")
+				case "admission-panic":
+					panic("fixture panic")
+				}
+				return nil
+			}
 			panicked := false
 			func() {
 				defer func() {
@@ -87,7 +108,7 @@ func TestMihomoOfficialProbeOwnsNativeStartWaitAndPendingCleanup(t *testing.T) {
 						panicked = true
 					}
 				}()
-				_, err = source.RunProbe(ctx, control, cleanup, func(ctx context.Context, child *MihomoProbeProcess) error {
+				_, err = source.RunProbeAdmitted(ctx, control, cleanup, admission, func(ctx context.Context, child *MihomoProbeProcess) error {
 					observed = child
 					native = child.native.(*mihomoProbeNativeLinux)
 					if child.PID() < 1 || source.Close() != ErrMihomoProbePending || source.CleanupProbe(ctx) != ErrMihomoProbePending {
@@ -135,6 +156,25 @@ func TestMihomoOfficialProbeOwnsNativeStartWaitAndPendingCleanup(t *testing.T) {
 			}()
 			if observed == nil || native == nil {
 				t.Fatal("actual child missing", err)
+			}
+			if late == nil || late() == nil {
+				t.Fatal("retained admission replayed Start")
+			}
+			if scenario == "admission-skip" && native.started {
+				t.Fatal("skipped admission started child")
+			}
+			if scenario == "admission-panic" && !panicked {
+				t.Fatal("admission panic swallowed")
+			}
+			if (scenario == "admission-skip" || scenario == "admission-repeat" || scenario == "admission-error") && err == nil {
+				t.Fatal("invalid admission returned success")
+			}
+			if native.started && scenario != "pending" {
+				select {
+				case <-native.done:
+				default:
+					t.Fatal("sole Wait not joined after admission")
+				}
 			}
 			if scenario == "pending" {
 				if err == nil || !errors.Is(source.Close(), ErrMihomoProbePending) {
