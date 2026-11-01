@@ -187,9 +187,10 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			// Their concrete runtime check cannot upgrade a shared operation.
 			exclusive = true
 		}
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && (strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") || strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/probe")) {
 			// Supervised compatibility uses the original request operation for
-			// its exact source publication; a shared request cannot upgrade it.
+			// its exact source publication. Managed probes retain this same
+			// exclusive owner through physical cleanup; shared cannot upgrade.
 			exclusive = true
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/strategy-lab/selections" {
