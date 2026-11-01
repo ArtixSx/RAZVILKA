@@ -3,8 +3,13 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -108,6 +113,56 @@ func standbyRetirementPublicationModel(t *testing.T) (*domainTCPStandbyRetiremen
 	retained := &retainedXrayExecution{scope: s, records: d, standby: owner, pending: true}
 	retained.self = retained
 	s.retainedXrayOwner, m.retainedXray = retained, retained
+
+	// Actual local socket close/join accounting and original writer FDs only;
+	// this model does not issue a native source/control/packet cleanup grant.
+	dnsRoot := filepath.Join(root, "dns-model")
+	if err := os.Mkdir(dnsRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dnsFiles, err := ownedfs.Open(dnsRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerBytes := []byte("original model synthetic owner")
+	ownerFile, err := dnsFiles.WriteAtomicRetained("owner.json", ownerBytes, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerRecord, err := retainDomainTCPDNSOwnerRecord(dnsFiles, dnsRoot, ownerFile, ownerBytes, execution.PlanID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ownerFile.Close(); ownerRecord.directory.Close(); dnsFiles.Close() })
+	if runtime.GOOS == "windows" {
+		// Model only: Linux native tests execute actual RENAME_NOREPLACE+fsync.
+		ownerRecord.rename = func(_ *os.File, from, to string) error {
+			if _, err := os.Lstat(filepath.Join(dnsRoot, to)); !errors.Is(err, os.ErrNotExist) {
+				return errors.New("model destination occupied")
+			}
+			return os.Rename(filepath.Join(dnsRoot, from), filepath.Join(dnsRoot, to))
+		}
+		ownerRecord.syncDirectory = func() error { return nil }
+	}
+	udp, tcp, err := listenScopedDNS(netip.MustParseAddrPort("127.0.0.1:0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &scopedDNSSession{done: make(chan struct{}), resources: scopedDNSInactiveResources{udp: udp, tcp: tcp}}
+	session.resources.cancelled.Store(true)
+	udp.Close()
+	tcp.Close()
+	close(session.done)
+	adapter := &ScopedDNSAdapter{StateRoot: dnsRoot, live: session}
+	binding := &SyntheticDNSExecutionBinding{adapter: adapter, root: dnsRoot}
+	binding.self = binding
+	control := &operationgate.ControlEpochReview{}
+	source := &dnscontrol.NetworkPolicyDNSSyntheticResolver{}
+	session.synthetic = &scopedDNSSyntheticMode{binding: binding, source: source, control: control, ownerRecord: ownerRecord}
+	scopedDNSInactivePublish(dnsRoot, session)
+	t.Cleanup(func() { _ = scopedDNSInactiveRetire(dnsRoot, session) })
+	p.material = &XrayDomainTCPOperationMaterial{binding: binding, session: session, control: control, dnsSource: source}
+
 	r := &domainTCPStandbyRetirement{owner: owner, cleaned: true}
 	r.self = r
 	original.standbyRetirement = r
@@ -169,8 +224,151 @@ func TestDomainTCPStandbyFinalizationRetryKeepsOriginalCustody(t *testing.T) {
 			if err := r.publishRemoved(ctx, retained); err != nil {
 				t.Fatal("same original finalization did not resume", err)
 			}
+			mode := r.owner.process.material.session.synthetic
+			if _, err := scopedDNSInactiveEpoch(mode.binding.root); err != nil || mode.binding.adapter.live != nil {
+				t.Fatal("completed original DNS lifecycle remains fenced", err)
+			}
 			if !r.finished || s.open || s.retained || s.manager.retainedXrayOwner() != nil || r.owner.original.standbyOwner != nil {
 				t.Fatal("completed finalization retained active custody")
+			}
+		})
+	}
+}
+
+func TestDomainTCPStandbyDNSOwnerRetirementRefusesChangedInputs(t *testing.T) {
+	for _, change := range []string{"foreign-destination", "equal-image-replacement", "same-inode-mutation"} {
+		t.Run(change, func(t *testing.T) {
+			r, retained, ctx := standbyRetirementPublicationModel(t)
+			record := r.owner.process.material.session.synthetic.ownerRecord
+			ownerPath := filepath.Join(record.path, "owner.json")
+			switch change {
+			case "foreign-destination":
+				if err := os.WriteFile(filepath.Join(record.path, record.destination), []byte("foreign retained history"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "equal-image-replacement":
+				if err := record.root.WriteAtomic("owner.json", record.canonical, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "same-inode-mutation":
+				f, err := os.OpenFile(ownerPath, os.O_WRONLY, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, e := f.WriteAt([]byte("X"), 0)
+				ce := f.Close()
+				if e != nil || ce != nil {
+					t.Fatal(e, ce)
+				}
+				if err := os.Chtimes(ownerPath, record.info.ModTime(), record.info.ModTime()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before, err := os.ReadFile(ownerPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := r.publishRemoved(ctx, retained); err == nil {
+				t.Fatal("foreign original owner accepted")
+			}
+			after, err := os.ReadFile(ownerPath)
+			if err != nil || string(after) != string(before) {
+				t.Fatal("foreign source owner was changed", err)
+			}
+			if _, err := scopedDNSInactiveEpoch(record.path); err == nil || r.owner.process.material.binding.adapter.live == nil {
+				t.Fatal("failed retirement lost DNS custody")
+			}
+		})
+	}
+}
+
+func TestDomainTCPStandbyDNSOwnerUnknownRenameRetainsSameCursor(t *testing.T) {
+	r, retained, ctx := standbyRetirementPublicationModel(t)
+	record := r.owner.process.material.session.synthetic.ownerRecord
+	originalRename := record.rename
+	witness := errors.New("actual rename completed before acknowledgement failure")
+	record.rename = func(dir *os.File, from, to string) error {
+		if err := originalRename(dir, from, to); err != nil {
+			return err
+		}
+		return witness
+	}
+	if err := r.publishRemoved(ctx, retained); !errors.Is(err, witness) {
+		t.Fatal("rename exception lost", err)
+	}
+	if record.moved || !record.attempted || r.finished {
+		t.Fatal("uncertain rename minted known lifecycle")
+	}
+	if _, err := scopedDNSInactiveEpoch(record.path); err == nil {
+		t.Fatal("uncertain rename removed registry custody")
+	}
+	// Retry observes both original names and same held writer. No second rename.
+	record.rename = func(*os.File, string, string) error { t.Fatal("uncertain rename replayed blindly"); return nil }
+	if err := r.publishRemoved(ctx, retained); err != nil {
+		t.Fatal(err)
+	}
+	if !r.finished {
+		t.Fatal("original rename cursor did not finish")
+	}
+}
+
+func TestDomainTCPStandbyDNSOwnerActualCloseFailureKeepsRegistry(t *testing.T) {
+	r, retained, ctx := standbyRetirementPublicationModel(t)
+	record := r.owner.process.material.session.synthetic.ownerRecord
+	record.beforeClose = func(i int) {
+		if i == 0 {
+			_ = record.file.Close()
+		}
+	}
+	if err := r.publishRemoved(ctx, retained); err == nil || record.closeErr == nil {
+		t.Fatal("actual original close error erased", err)
+	}
+	if err := r.publishRemoved(ctx, retained); err == nil {
+		t.Fatal("closed original FD adopted on retry")
+	}
+	if _, err := scopedDNSInactiveEpoch(record.path); err == nil || r.owner.process.material.binding.adapter.live == nil {
+		t.Fatal("unknown close released registry")
+	}
+}
+
+func TestDomainTCPStandbyDNSOwnerRetryRechecksBothNames(t *testing.T) {
+	for _, change := range []string{"new-foreign-owner", "replaced-retired-history"} {
+		t.Run(change, func(t *testing.T) {
+			r, retained, ctx := standbyRetirementPublicationModel(t)
+			record := r.owner.process.material.session.synthetic.ownerRecord
+			witness := errors.New("original close cursor paused after owner move")
+			once := false
+			r.closeFault = func(i int) error {
+				if i == 5 && !once {
+					once = true
+					return witness
+				}
+				return nil
+			}
+			if err := r.publishRemoved(ctx, retained); !errors.Is(err, witness) {
+				t.Fatal("did not reach original post-move cut", err)
+			}
+			if !record.moved || record.closeIndex != 0 {
+				t.Fatal("final DNS writer closed before retry boundary")
+			}
+			name := "owner.json"
+			data := []byte("foreign new source owner")
+			if change == "replaced-retired-history" {
+				name = record.destination
+				data = record.canonical
+			}
+			if err := record.root.WriteAtomic(name, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.publishRemoved(ctx, retained); err == nil {
+				t.Fatal("cached owner-move bit bypassed fresh proof")
+			}
+			actual, err := os.ReadFile(filepath.Join(record.path, name))
+			if err != nil || string(actual) != string(data) {
+				t.Fatal("foreign input overwritten", err)
+			}
+			if _, err := scopedDNSInactiveEpoch(record.path); err == nil || r.owner.process.material.binding.adapter.live == nil || r.owner.process.scope.manager.retainedXrayOwner() != retained {
+				t.Fatal("foreign retry inputs released original custody")
 			}
 		})
 	}
