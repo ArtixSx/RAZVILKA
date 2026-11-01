@@ -63,6 +63,9 @@ func (c *DomainPolicyTCPCapture) Address() (netip.AddrPort, error) {
 }
 
 func (c *DomainPolicyTCPCapture) Current(ctx context.Context) error {
+	return c.currentWithFiles(ctx, nil)
+}
+func (c *DomainPolicyTCPCapture) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil || c.ctx.Err() != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -86,7 +89,7 @@ func (c *DomainPolicyTCPCapture) Current(ctx context.Context) error {
 	if err := c.owner.CheckCapture(ctx, c); err != nil {
 		return err
 	}
-	return errors.Join(c.xray.check(ctx), ctx.Err(), c.ctx.Err())
+	return errors.Join(c.xray.checkWithFiles(ctx, files), ctx.Err(), c.ctx.Err())
 }
 
 // Prepare does not publish. The concrete original owner must install/read back
@@ -253,6 +256,9 @@ func (*DomainPolicyTCPCaptureMapping) GoString() string {
 }
 
 func (m *DomainPolicyTCPCaptureMapping) Current(ctx context.Context) error {
+	return m.currentWithFiles(ctx, nil)
+}
+func (m *DomainPolicyTCPCaptureMapping) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if m == nil || m.self != m || ctx == nil || ctx.Err() != nil || m.ctx.Err() != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -266,11 +272,18 @@ func (m *DomainPolicyTCPCaptureMapping) Current(ctx context.Context) error {
 	if err != nil || !m.capture.matchesObservation(actual) || !reflect.DeepEqual(immutableSyntheticTCPObservation(actual), immutableSyntheticTCPObservation(m.observation)) {
 		return errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
-	if err := m.capture.Current(ctx); err != nil {
+	if err := m.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	// This lower original readback MUST NOT call the DNS publication combiner,
 	// which calls this Current. NET mapping.Current itself has no such cycle.
+	if files != nil {
+		original, ok := m.capture.owner.(*DomainTCPOriginalScope)
+		if !ok {
+			return ErrDomainPolicyTCPConsumer
+		}
+		return errors.Join(original.currentSyntheticCaptureWithFiles(ctx, m.capture, m.source, files), ctx.Err(), m.ctx.Err())
+	}
 	return errors.Join(m.capture.owner.CurrentSyntheticCapture(ctx, m.capture, m.source), ctx.Err(), m.ctx.Err())
 }
 

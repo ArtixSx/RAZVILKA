@@ -21,6 +21,7 @@ func (o *DomainTCPOriginalScope) finishCapture(ctx context.Context, process *Xra
 		return ErrDomainPolicyTCPConsumer
 	}
 	o.closed = true
+	o.publicationOpen = false
 	if o.cancel != nil {
 		o.cancel()
 	}

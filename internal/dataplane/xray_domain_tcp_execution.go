@@ -106,6 +106,9 @@ func (r *XrayDomainTCPExecutionResource) matching() (int, error) {
 // The caller holds resource.mu and the scope start barrier. Cleanup uses the
 // pre-issued exclusive cleanup lifetime, never the expired forward request.
 func (r *XrayDomainTCPExecutionResource) originalContext(ctx context.Context, cleanup bool) (context.Context, error) {
+	return r.originalContextWithFiles(ctx, cleanup, nil)
+}
+func (r *XrayDomainTCPExecutionResource) originalContextWithFiles(ctx context.Context, cleanup bool, files *xrayDomainTCPFileObservation) (context.Context, error) {
 	if r == nil || r.material == nil {
 		return nil, ErrXrayDomainTCPOriginal
 	}
@@ -114,12 +117,15 @@ func (r *XrayDomainTCPExecutionResource) originalContext(ctx context.Context, cl
 			return nil, err
 		}
 	}
-	return r.originalContextAlreadyHeld(ctx, cleanup)
+	return r.originalContextAlreadyHeldWithFiles(ctx, cleanup, files)
 }
 
 // Local closing bookend after full external source reads. Native Start alone
 // calls this while holding startMu; it must never recursively take that lock.
 func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeld(ctx context.Context, cleanup bool) (context.Context, error) {
+	return r.originalContextAlreadyHeldWithFiles(ctx, cleanup, nil)
+}
+func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx context.Context, cleanup bool, files *xrayDomainTCPFileObservation) (context.Context, error) {
 	if r == nil || r.self != r || r.descriptorsClosed.Load() || r.scope == nil || r.records == nil || xraySelectedTCPFinite(ctx) != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope {
 		return nil, ErrXrayDomainTCPOriginal
 	}
@@ -142,7 +148,7 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeld(ctx context.
 	if err := r.records.current(ctx, true); err != nil {
 		return nil, err
 	}
-	if err := r.filesCurrent(ctx); err != nil {
+	if err := r.filesCurrentForObservation(ctx, files); err != nil {
 		return nil, err
 	}
 	return ctx, nil
@@ -250,21 +256,34 @@ func (r *XrayDomainTCPExecutionResource) withNativeInPhase(ctx context.Context, 
 // Current observes the actual original child/listener inside the same finite
 // execution. It is not an active-route, capture or DNS-publication receipt.
 func (r *XrayDomainTCPExecutionResource) Current(ctx context.Context) error {
+	return r.currentWithFiles(ctx, nil)
+}
+func (r *XrayDomainTCPExecutionResource) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	defer domainTCPMeasure("process-current")(0)
 	if r == nil || r.self != r {
 		return ErrXrayDomainTCPOriginal
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.listenerCurrent(ctx)
+	return r.listenerCurrentWithFiles(ctx, files)
 }
 
 func (r *XrayDomainTCPExecutionResource) listenerCurrent(ctx context.Context) error {
+	return r.listenerCurrentWithFiles(ctx, nil)
+}
+func (r *XrayDomainTCPExecutionResource) listenerCurrentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if files != nil {
+		return r.listenerCurrentInFileObservation(ctx, files)
+	}
 	read, closeRead, err := r.originalProcessReadContext(ctx, false)
 	if err != nil {
 		return err
 	}
 	defer closeRead()
-	actual, err := r.observeDomainListener(read)
+	// No callback or native effect occurs between the full originalContext
+	// opening above and this one-use, same-process readonly observation.
+	opening := r.fileOpeningAfterOriginalRead(read)
+	actual, err := r.observeDomainListenerWithOpening(read, opening)
 	if err != nil || r.birth == nil || !r.birth.same(actual.process) {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
@@ -331,4 +350,29 @@ func (r *XrayDomainTCPExecutionResource) closeOriginalDescriptors() error {
 // Needed by native Start callers to keep file identity at both bookends.
 func (r *XrayDomainTCPExecutionResource) originalFilesSame() bool {
 	return r.birth != nil && os.SameFile(r.birth.executable, r.executable.info) && os.SameFile(r.birth.config, r.configInfo)
+}
+
+func (r *XrayDomainTCPExecutionResource) listenerCurrentInFileObservation(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if err := files.current(ctx, r); err != nil {
+		return err
+	}
+	original, err := r.originalContextWithFiles(ctx, false, files)
+	if err != nil || r.child == nil {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	read, closeRead, err := r.processReadContext(original)
+	if err != nil {
+		return err
+	}
+	defer closeRead()
+	nested, closeFiles, err := files.forOriginalProcessRead(ctx, read, r)
+	if err != nil {
+		return err
+	}
+	defer closeFiles()
+	actual, err := r.observeDomainListenerUsingFiles(read, nested)
+	if err != nil || r.birth == nil || !r.birth.same(actual.process) {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	return nil
 }

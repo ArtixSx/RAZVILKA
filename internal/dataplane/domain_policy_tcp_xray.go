@@ -265,12 +265,13 @@ func (x *DomainPolicyTCPXray) checkSource(ctx context.Context) error {
 	return errors.Join(ctx.Err(), x.ctx.Err())
 }
 
-func (x *DomainPolicyTCPXray) check(ctx context.Context) error {
+func (x *DomainPolicyTCPXray) check(ctx context.Context) error { return x.checkWithFiles(ctx, nil) }
+func (x *DomainPolicyTCPXray) checkWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if err := x.checkSource(ctx); err != nil {
 		return err
 	}
 	if x.resource != nil {
-		return x.resource.Current(ctx)
+		return x.resource.currentWithFiles(ctx, files)
 	}
 	identity, err := x.a.verifyNodeProcess(x.process, x.address)
 	if err != nil || identity == "" || identity != x.identity || !x.a.Processes.Running(x.process) {

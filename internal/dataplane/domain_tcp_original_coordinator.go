@@ -36,6 +36,7 @@ type DomainTCPOriginalScope struct {
 	kernel            *domainTCPBaselineKernelOwner
 	closed            bool
 	cancel            context.CancelFunc
+	publicationOpen   bool // Only the completed original producer opens this phase.
 	standbyReady      bool // Only the actual joined capture finalizer sets this.
 	standbyHistory    *updatecheck.ExecutionHistoryAdmission
 	standbyOwner      *domainTCPStandbyOwner
@@ -174,7 +175,7 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.mu.Unlock()
 	// Publication remains false until complete original process/capture/kernel
 	// checks pass, including a genuine transparent baseline capability.
-	if err := o.CurrentSyntheticMapping(ctx, process.material.mapping); err != nil {
+	if err := o.compareSyntheticMapping(ctx, process.material.mapping); err != nil {
 		return err
 	}
 	if consume == nil {
@@ -182,9 +183,15 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	}
 	life, cancel := context.WithCancel(ctx)
 	o.mu.Lock()
+	if ctx.Err() != nil || o.closed || o.prepared != prepared || o.kernel != kernel {
+		o.mu.Unlock()
+		cancel()
+		return errors.Join(ErrDomainPolicyTCPConsumer, ctx.Err())
+	}
 	o.cancel = cancel
+	o.publicationOpen = true
 	o.mu.Unlock()
-	defer func() { cancel(); o.mu.Lock(); o.closed = true; o.mu.Unlock() }()
+	defer func() { cancel(); o.mu.Lock(); o.publicationOpen = false; o.closed = true; o.mu.Unlock() }()
 	return consume(life)
 }
 
@@ -210,6 +217,9 @@ func (o *DomainTCPOriginalScope) PrepareSyntheticCapture(ctx context.Context, ca
 	return r.prepare(ctx, baseline)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticCapture(ctx context.Context, capture *DomainPolicyTCPCapture, mapping *dnscontrol.SyntheticDNSMapping) error {
+	return o.currentSyntheticCaptureWithFiles(ctx, capture, mapping, nil)
+}
+func (o *DomainTCPOriginalScope) currentSyntheticCaptureWithFiles(ctx context.Context, capture *DomainPolicyTCPCapture, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
 	if err := o.CheckCapture(ctx, capture); err != nil {
 		return err
 	}
@@ -219,9 +229,45 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticCapture(ctx context.Context, ca
 	if r == nil || r.capture != capture || r.mapping != mapping {
 		return ErrDomainPolicyTCPConsumer
 	}
-	return r.checkPrepared(ctx)
+	return r.checkPreparedWithFiles(ctx, files)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
+	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	o.mu.Lock()
+	open, closed := o.publicationOpen, o.closed
+	o.mu.Unlock()
+	if !open || closed {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return o.compareSyntheticMapping(ctx, mapping)
+}
+
+// The first producer comparison cannot be reentered as publication readiness.
+// Opening the phase never replaces these full live comparisons on each send.
+func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) (resultErr error) {
+	finishMeasure := domainTCPMeasure("mapping-compare")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("mapping-compare-success")(0)
+		}
+	}()
+	if err := o.baseCurrent(ctx); err != nil {
+		return err
+	}
+	o.mu.Lock()
+	process := o.process
+	o.mu.Unlock()
+	if process == nil || process.self != process {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+		return o.compareSyntheticMappingWithFiles(ctx, mapping, files)
+	})
+}
+func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
 	if err := o.baseCurrent(ctx); err != nil {
 		return err
 	}
@@ -231,22 +277,34 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, ma
 	if closed || process == nil || process.material.mapping != mapping || capture == nil || prepared == nil || kernel == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := prepared.Current(ctx); err != nil {
+	if err := prepared.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
-	if err := kernel.Current(ctx); err != nil {
+	if err := kernel.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	return process.material.Current(ctx)
 }
-func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) error {
+func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) (resultErr error) {
+	finishMeasure := domainTCPMeasure("publication-gate")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("publication-gate-success")(0)
+		}
+	}()
 	if send == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
 	if err := o.CurrentSyntheticMapping(ctx, mapping); err != nil {
 		return err
 	}
+	finishSend := domainTCPMeasure("dns-send")
 	err := send(ctx)
+	finishSend(0)
+	if err == nil {
+		domainTCPMeasure("dns-send-success")(0)
+	}
 	return errors.Join(err, o.CurrentSyntheticMapping(ctx, mapping))
 }
 func (o *DomainTCPOriginalScope) LookupPublished(ctx context.Context, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {

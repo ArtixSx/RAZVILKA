@@ -143,6 +143,9 @@ func (r *syntheticBaselineExecutionResource) local(ctx context.Context) error {
 }
 
 func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error {
+	return r.currentWithFiles(ctx, nil)
+}
+func (r *syntheticBaselineExecutionResource) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if err := r.local(ctx); err != nil {
 		return err
 	}
@@ -155,7 +158,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 	if err := r.mapping.Current(ctx); err != nil {
 		return err
 	}
-	if err := r.capture.Current(ctx); err != nil {
+	if err := r.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := r.tools.Runner.CheckSyntheticDNS(ctx, r.tools.Identity); err != nil {
@@ -164,7 +167,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 	if err := r.control.Current(ctx); err != nil {
 		return err
 	}
-	if err := r.capture.Current(ctx); err != nil {
+	if err := r.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := r.mapping.Current(ctx); err != nil {
@@ -179,6 +182,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 // An attempt is one-shot. Unknown Start/Wait/ACK/readback never retries Add or
 // deletes a possibly issued alias. COMMON's original receipt remains fenced.
 func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context) error {
+	defer domainTCPMeasure("standby-prepare")(0)
 	if r == nil || r.self != r {
 		return ErrSyntheticBaselineTransition
 	}
@@ -236,7 +240,10 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 // This does not establish native RPDB/post-DNAT firmware equivalence, nor DNS
 // publication. The eventual concrete publication receiver must prove those.
 func (r *syntheticBaselineExecutionResource) currentBaseline(ctx context.Context) error {
-	if err := r.current(ctx); err != nil {
+	return r.currentBaselineWithFiles(ctx, nil)
+}
+func (r *syntheticBaselineExecutionResource) currentBaselineWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	// Retain the actual anchored document and permanent lock descriptors
@@ -250,7 +257,7 @@ func (r *syntheticBaselineExecutionResource) currentBaseline(ctx context.Context
 	if err := r.inspector.CheckPrepared(ctx); err != nil {
 		return err
 	}
-	if err := r.current(ctx); err != nil {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	return receipt.current()

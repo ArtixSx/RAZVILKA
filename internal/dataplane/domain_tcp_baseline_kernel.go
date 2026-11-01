@@ -219,7 +219,12 @@ func newDomainTCPBaselineKernelOwner(ctx context.Context, capture *domainTCPCapt
 	}
 	r := &domainTCPBaselineKernelOwner{capture: capture, baseline: baseline, reader: reader}
 	r.self = r
-	path, err := r.observe(ctx)
+	var path domainTCPBaselinePath
+	err := capture.process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+		var observeErr error
+		path, observeErr = r.observeWithFiles(ctx, files)
+		return observeErr
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -228,18 +233,30 @@ func newDomainTCPBaselineKernelOwner(ctx context.Context, capture *domainTCPCapt
 }
 
 func (r *domainTCPBaselineKernelOwner) sources(ctx context.Context) error {
+	return r.sourcesWithFiles(ctx, nil)
+}
+func (r *domainTCPBaselineKernelOwner) sourcesWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if r == nil || r.self != r || r.capture == nil || r.baseline == nil || r.reader == nil || r.capture.tools == nil || !sameNetworkPolicyDependency(r.reader, r.capture.tools.Runner) || r.baseline.capture != r.capture.capture || r.baseline.mapping != r.capture.mapping {
 		return ErrDomainTCPBaselineKernel
 	}
-	if err := r.capture.checkPrepared(ctx); err != nil {
+	if err := r.capture.checkPreparedWithFiles(ctx, files); err != nil {
 		return err
 	}
-	return r.baseline.currentBaseline(ctx)
+	return r.baseline.currentBaselineWithFiles(ctx, files)
 }
 
 func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBaselinePath, error) {
-	var path domainTCPBaselinePath
-	if err := r.sources(ctx); err != nil {
+	return r.observeWithFiles(ctx, nil)
+}
+func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (path domainTCPBaselinePath, resultErr error) {
+	finishMeasure := domainTCPMeasure("kernel-observe")
+	defer func() {
+		finishMeasure(0)
+		if resultErr == nil {
+			domainTCPMeasure("kernel-observe-success")(0)
+		}
+	}()
+	if err := r.sourcesWithFiles(ctx, files); err != nil {
 		return path, err
 	}
 	spec := r.capture.definition.Process.Capture
@@ -251,7 +268,7 @@ func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBa
 		if err != nil {
 			return path, fmt.Errorf("domain TCP baseline original route read: %w", err)
 		}
-		view, err := r.capture.read(ctx)
+		view, err := r.capture.readWithFiles(ctx, files)
 		if err != nil {
 			return path, err
 		}
@@ -273,7 +290,7 @@ func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBa
 			return path, fmt.Errorf("domain TCP baseline packet-hook contract: %w", err)
 		}
 		if pass == 0 {
-			if err := r.sources(ctx); err != nil {
+			if err := r.sourcesWithFiles(ctx, files); err != nil {
 				return path, err
 			}
 		}
@@ -282,7 +299,10 @@ func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBa
 }
 
 func (r *domainTCPBaselineKernelOwner) Current(ctx context.Context) error {
-	path, err := r.observe(ctx)
+	return r.currentWithFiles(ctx, nil)
+}
+func (r *domainTCPBaselineKernelOwner) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	path, err := r.observeWithFiles(ctx, files)
 	if err != nil {
 		return err
 	}

@@ -150,13 +150,16 @@ func (r *domainTCPCaptureExecutionResource) registered(ctx context.Context) erro
 }
 
 func (r *domainTCPCaptureExecutionResource) current(ctx context.Context) error {
+	return r.currentWithFiles(ctx, nil)
+}
+func (r *domainTCPCaptureExecutionResource) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if ctx != nil && ctx.Value(domainTCPCaptureCleanupKey{}) == r {
 		return r.cleanupCurrent(ctx)
 	}
 	if err := r.registered(ctx); err != nil {
 		return err
 	}
-	if err := r.process.Current(ctx); err != nil {
+	if err := r.process.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := r.mapping.Current(ctx); err != nil {
