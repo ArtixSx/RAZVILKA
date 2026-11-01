@@ -448,17 +448,7 @@ func (l *Lease) current(ctx context.Context, expected netidentity.Identity, vers
 			return at("CHECK_IDENTITY", nil)
 		}
 		if versions {
-			for i := range l.profile.aliases {
-				if err := l.version(held, i); err != nil {
-					return err
-				}
-			}
-			if l.profile.ipAlias != "" {
-				if err := l.ipVersion(held); err != nil {
-					return err
-				}
-			}
-			return held.Err()
+			return l.versionBatchCurrent(held)
 		}
 		return l.review.unchanged(held)
 	})

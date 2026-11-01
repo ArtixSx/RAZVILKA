@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -19,7 +20,7 @@ import (
 
 func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 	if err := e.captureCurrent(ctx); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("probe counter opening capture: %w", err)
 	}
 	if e.resource == nil || e.binding == nil || len(e.resource.plan.chains) != 1 {
 		return 0, ErrNFQWSScopedOwner
@@ -27,13 +28,20 @@ func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 	chain := e.resource.plan.chains[0].name
 	out, err := e.binding.Runner.Run(ctx, e.binding.Tools.IPTables, "-t", "mangle", "-L", chain, "-n", "-v", "-x")
 	if err != nil || len(out) > 16<<10 {
-		return 0, errors.Join(ErrNFQWSScopedOwner, err)
+		return 0, fmt.Errorf("probe counter command: %w", errors.Join(ErrNFQWSScopedOwner, err))
 	}
-	count, err := nfqwsProbeParseCounter(out, chain)
+	protocol, protocolErr := e.counterProtocol(ctx)
+	if protocolErr != nil {
+		return 0, fmt.Errorf("probe counter original tool format: %w", protocolErr)
+	}
+	count, err := nfqwsProbeParseCounter(out, chain, protocol)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("probe counter parse: %w", err)
 	}
-	return count, e.captureCurrent(ctx)
+	if err := e.captureCurrent(ctx); err != nil {
+		return 0, fmt.Errorf("probe counter closing capture: %w", err)
+	}
+	return count, nil
 }
 
 func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
@@ -45,10 +53,10 @@ func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
 	}
 	status, err := e.binding.Inspect(ctx, e.resource.plan, e.resource.root)
 	if err != nil || !status.Complete || status.Removed || status.Unknown || status.Promoted || status.Pending != 0 || status.Cleaned != 0 || status.Added != len(e.resource.plan.mixed.Effects) {
-		return errors.Join(ErrNFQWSScopedOwner, err)
+		return fmt.Errorf("probe capture receipt complete=%t removed=%t unknown=%t promoted=%t pending=%d cleaned=%d added=%d: %w", status.Complete, status.Removed, status.Unknown, status.Promoted, status.Pending, status.Cleaned, status.Added, errors.Join(ErrNFQWSScopedOwner, err))
 	}
 	if err := e.binding.readback(ctx, e.resource.plan, nfqwsScopedComplete, -1); err != nil {
-		return err
+		return fmt.Errorf("probe capture full readback: %w", err)
 	}
 	return e.current(ctx)
 }
@@ -56,7 +64,12 @@ func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
 // The exact owned one-rule chain must contain one NFQUEUE row. Rounded human
 // counters, extra rules, multiple rows, headers for another chain and unknown
 // output are refused. The complete -S inventory separately checks selectors.
-func nfqwsProbeParseCounter(raw []byte, chain string) (uint64, error) {
+func nfqwsProbeParseCounter(raw []byte, chain, protocol string) (uint64, error) {
+	// Format comes only from the original protected tool owner, never the
+	// response. Each invocation admits exactly that owner's known spelling.
+	if protocol != "6" && protocol != "tcp" {
+		return 0, ErrNFQWSScopedOwner
+	}
 	if len(raw) == 0 || len(raw) > 16<<10 {
 		return 0, ErrNFQWSScopedOwner
 	}
@@ -69,7 +82,7 @@ func nfqwsProbeParseCounter(raw []byte, chain string) (uint64, error) {
 		return 0, ErrNFQWSScopedOwner
 	}
 	row := strings.Fields(lines[2])
-	if len(row) < 12 || row[2] != "NFQUEUE" || row[3] != "tcp" || strings.Join(row[len(row)-3:], " ") != "NFQUEUE num 200" {
+	if len(row) < 12 || row[2] != "NFQUEUE" || row[3] != protocol || strings.Join(row[len(row)-3:], " ") != "NFQUEUE num 200" {
 		return 0, ErrNFQWSScopedOwner
 	}
 	pkts, err := strconv.ParseUint(row[0], 10, 64)
@@ -112,7 +125,11 @@ func (e *nfqwsProbeExecution) observeService(ctx context.Context, r *NFQWSExecut
 		return ErrNFQWSScopedOwner
 	}
 	afterNegative, err := e.counter(ctx)
-	if err != nil || afterNegative != before {
+	if err != nil {
+		stage("firewall", "fail", "negative control counter unavailable")
+		return err
+	}
+	if afterNegative != before {
 		stage("firewall", "fail", "wrong source reached owned NFQUEUE")
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}

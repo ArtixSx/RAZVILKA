@@ -70,7 +70,26 @@ export RAZVILKA_MANAGED_PROBE_NATIVE=1
 export RAZVILKA_NFQWS_MANAGED_GENUINE_REVIEW="$probe_work/genuine.json"
 export RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$probe_work/tools.json"
 cd "$probe_repo"
-go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+probe_build_mode=${RAZVILKA_MANAGED_PROBE_BUILD_MODE:-race}
+printf 'Actual native build mode: %s\n' "$probe_build_mode"
+uname -a
+go version
+python3 - <<'PY'
+import pathlib
+for line in pathlib.Path('/proc/cpuinfo').read_text().splitlines():
+    if line.startswith('model name'):
+        print('Actual CPU:', line)
+        break
+PY
+case "$probe_build_mode" in
+  race)
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
+  production)
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/app.test" ./internal/app
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
+  *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
+esac
 chmod 500 "$probe_work/app.test"
 # Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
 # private /opt mount; this diagnostic compiler work is not a probe budget.
@@ -88,8 +107,10 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-for probe_case in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP; do
+for probe_case in TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment; do
 probe_status=0
+probe_program=/opt/bin/razvilka
+if test "$probe_case" = TestClassicReadBatchNativeMutation; then probe_program="$probe_work/startuptools.test"; fi
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
@@ -114,7 +135,7 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
-' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s || probe_status=$?
+' sh "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s || probe_status=$?
 # Analyze outside the private /opt mount; retain the original native failure.
 if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then

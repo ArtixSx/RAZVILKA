@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -22,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -96,7 +98,20 @@ func TestManagedStrategyProbeNativeAppHTTP(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true)
 }
 
-func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool) {
+func TestManagedStrategyProbeNativeClosingSource(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, false, "source")
+}
+func TestManagedStrategyProbeNativeClosingRuntime(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, false, "runtime")
+}
+func TestManagedStrategyProbeNativeClosingControl(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, false, "control")
+}
+func TestManagedStrategyProbeNativeClosingEnvironment(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, false, "environment")
+}
+
+func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool, revoke ...string) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
@@ -432,8 +447,80 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool)
 	if !evidence.Success || !evidence.RouteConfirmed || evidence.HTTPStatus != 200 {
 		t.Fatal("native flow not confirmed", evidence)
 	}
+	if len(revoke) > 0 {
+		beforeImage, err := os.ReadFile(lab.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		callbackFailure := errors.New("original native observation callback failed")
+		called := false
+		readErr := epoch.WithProbeReferenceCurrent(original, source, runtime, control, func(strategylab.CandidateProbeReference) error {
+			called = true
+			var closeErr error
+			switch revoke[0] {
+			case "source":
+				closeErr = source.Close()
+			case "runtime":
+				closeErr = runtime.Close()
+			case "control":
+				closeErr = control.Close()
+			case "environment":
+				closeErr = a.Store.SetSafeMode(true)
+			default:
+				t.Fatal("unknown native revocation")
+			}
+			return errors.Join(callbackFailure, closeErr)
+		})
+		if !called || !errors.Is(readErr, callbackFailure) || !errors.Is(readErr, strategylab.ErrSelectedCandidateChanged) && !errors.Is(readErr, dataplane.ErrReviewChanged) {
+			t.Fatal("actual closing revocation or original callback failure lost", readErr)
+		}
+		// Cleanup was independently confirmed before the revocation. Refusing
+		// stale publication must not fabricate a cleanup failure or new fence.
+		if err := epoch.Finish(original, &evidence, nil); err == nil {
+			t.Fatal("revoked original owner published stale PASS")
+		}
+		if err := cleaned.CloseRuntime(); err != nil {
+			t.Fatal(err)
+		}
+		if consumer.Pending() {
+			t.Fatal("known cleanup acquired a pending owner")
+		}
+		if err := readEmpty(original); err != nil {
+			t.Fatal("original physical cleanup lost", err)
+		}
+		afterImage, err := os.ReadFile(lab.Path)
+		if err != nil || !bytes.Equal(beforeImage, afterImage) || len(lab.Snapshot().Evidence) != 0 {
+			t.Fatal("revocation mutated StrategyLab or published evidence", err)
+		}
+		t.Log("actual closing", revoke[0], "revocation refused stale evidence; callback error retained; same physical cleanup confirmed")
+		return
+	}
+	// Genuine owner regression: a read receives detached data and its error
+	// survives fresh closing material checks after the physical cleanup.
+	beforeReference, err := source.ManagedReference(original, runtime, control)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observationFailure := errors.New("native detached observation failed")
+	observeErr := epoch.WithProbeReferenceCurrent(original, source, runtime, control, func(reference strategylab.CandidateProbeReference) error {
+		if len(reference.Material.Arguments) == 0 {
+			t.Fatal("native candidate has no actual arguments")
+		}
+		reference.Material.Arguments[0] = "changed-local-comparison"
+		return observationFailure
+	})
+	afterReference, referenceErr := source.ManagedReference(original, runtime, control)
+	if !errors.Is(observeErr, observationFailure) || errors.Is(observeErr, strategylab.ErrSelectedCandidateChanged) || referenceErr != nil || !reflect.DeepEqual(beforeReference, afterReference) {
+		t.Fatal("reference observation lost errors, freshness or detachment", observeErr, referenceErr)
+	}
 	if err := epoch.Finish(original, &evidence, nil); err != nil {
 		t.Fatal(err)
+	}
+	if err := epoch.WithProbeReferenceCurrent(original, source, runtime, control, func(strategylab.CandidateProbeReference) error {
+		t.Fatal("completed original epoch reached an observation")
+		return nil
+	}); !errors.Is(err, strategylab.ErrSelectedCandidateChanged) {
+		t.Fatal("completed original epoch remained active", err)
 	}
 	if err := cleaned.CloseRuntime(); err != nil {
 		t.Fatal(err)

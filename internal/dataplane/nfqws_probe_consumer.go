@@ -129,6 +129,9 @@ func NewManagedNFQWSProbeConsumer(manager *Manager, gate *NetworkPolicyAdapter, 
 	if _, ok := inventory.reader.Runner.(backendInventoryBoundedRunner); !ok {
 		return nil, ErrNFQWSScopedOwner
 	}
+	if _, ok := inventory.reader.Runner.(nfqwsProbeCounterFormatOwner); !ok {
+		return nil, ErrNFQWSScopedOwner
+	}
 	manager.registryMu.RLock()
 	registered, generation := manager.Adapters["nfqws2"], manager.registryGeneration
 	registeredGate := manager.Adapters[NetworkPolicyAdapterID]
@@ -217,14 +220,12 @@ func (e *nfqwsProbeExecution) current(ctx context.Context) error {
 	if err := e.guard(ctx); err != nil {
 		return err
 	}
-	if err := e.epoch.ProbeOwnersCurrent(ctx, e.source, e.runtime, e.consumer.control); err != nil {
-		return err
-	}
-	ref, err := e.source.ManagedReference(ctx, e.runtime, e.consumer.control)
-	if err != nil || !reflect.DeepEqual(ref, e.reference) || !reflect.DeepEqual(e.runtime.Descriptor(), e.descriptor) {
-		return errors.Join(ErrNFQWSScopedOwner, err)
-	}
-	return e.socket.current(ctx)
+	return e.epoch.WithProbeReferenceCurrent(ctx, e.source, e.runtime, e.consumer.control, func(ref strategylab.CandidateProbeReference) error {
+		if !reflect.DeepEqual(ref, e.reference) || !reflect.DeepEqual(e.runtime.Descriptor(), e.descriptor) {
+			return ErrNFQWSScopedOwner
+		}
+		return e.socket.kernelReferenceCurrent(ctx, e.source, ref)
+	})
 }
 
 func (e *nfqwsProbeExecution) cleanupCurrent(ctx context.Context) error {
@@ -456,6 +457,9 @@ func (e *nfqwsProbeExecution) prepare(ctx context.Context, revision uint64) erro
 	c := e.consumer
 	if err := e.current(ctx); err != nil {
 		return err
+	}
+	if _, err := e.counterProtocol(ctx); err != nil {
+		return errors.Join(err, e.current(ctx))
 	}
 	parent, err := components.ReadNFQWSSupervisionIdentity()
 	if err != nil {
