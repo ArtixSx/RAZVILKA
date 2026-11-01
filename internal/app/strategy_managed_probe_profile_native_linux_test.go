@@ -5,11 +5,12 @@ package app
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime/pprof"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -32,9 +33,18 @@ func (m *managedProbeNativeToolMeasurements) wrap(original func(context.Context,
 	}
 }
 
-func managedProbeNativeCPUProfile(t *testing.T, root string) func() {
+func managedProbeNativeCPUProfile(t *testing.T, _ string) func() {
 	t.Helper()
-	path := filepath.Join(root, "native-probe-cpu.pprof")
+	work := os.Getenv("RAZVILKA_MANAGED_PROBE_FIXTURE_WORK")
+	info, err := os.Lstat(work)
+	if err != nil || filepath.Clean(work) != work || filepath.Dir(work) != "/tmp" || !strings.HasPrefix(filepath.Base(work), "razvilka-managed-probe.") || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0700 {
+		t.Fatal("actual private CI profile directory required", err)
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != uint32(os.Geteuid()) {
+		t.Fatal("foreign CI profile directory refused")
+	}
+	path := filepath.Join(work, filepath.Base(t.Name())+".pprof")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Fatal(err)
@@ -51,22 +61,9 @@ func managedProbeNativeCPUProfile(t *testing.T, root string) func() {
 				t.Log("native CPU profile close", err)
 				return
 			}
-			program, err := os.Executable()
-			if err != nil {
-				t.Log(err)
-				return
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			// Diagnostic only, AFTER actual Execute. The linked profile contains
-			// function names/counts, no payload, credentials or owner recreation.
-			cmd := exec.CommandContext(ctx, "go", "tool", "pprof", "-top", "-nodecount=20", program, path)
-			cmd.WaitDelay = 100 * time.Millisecond
-			output, err := cmd.CombinedOutput()
-			if len(output) > 64<<10 {
-				output = output[:64<<10]
-			}
-			t.Log("native measured CPU profile", err, "\n"+string(output))
+			// The parent analyzes this AFTER leaving the private /opt mount,
+			// which intentionally hides the host Go compiler/toolchain.
+			t.Log("native measured CPU profile saved", filepath.Base(path))
 		})
 	}
 }

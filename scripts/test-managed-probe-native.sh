@@ -6,7 +6,7 @@ set -eu
 # fixture models platform classification, NOT artifact bytes, FD ownership,
 # compatibility, NFQUEUE packets, TLS/catalogue predicates or cleanup.
 test "$(id -u)" = 0 || { echo 'ROOT isolated CI fixture required' >&2; exit 2; }
-for probe_tool in curl sha256sum tar python3 unshare mount ip iptables-legacy ip6tables-legacy nft go; do
+for probe_tool in curl sha256sum tar python3 unshare mount ip iptables-legacy ip6tables-legacy nft go timeout; do
   command -v "$probe_tool" >/dev/null
 done
 probe_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -86,6 +86,7 @@ chmod 400 "$probe_work/hosts"
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
 for probe_case in TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP; do
+probe_status=0
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
@@ -110,5 +111,12 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
-' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s
+' sh /opt/bin/razvilka -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout=100s || probe_status=$?
+# Analyze outside the private /opt mount; retain the original native failure.
+if test -f "$probe_work/$probe_case.pprof"; then
+  if ! timeout 10s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+fi
+test "$probe_status" = 0 || exit "$probe_status"
 done
