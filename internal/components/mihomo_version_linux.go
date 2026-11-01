@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -63,6 +64,10 @@ func withMihomoArtifact(ctx context.Context, artifacts string, image restorejour
 	ref, err := mihomoArtifactReferenceOf(image)
 	if err != nil {
 		return err
+	}
+	approved, err := mihomoReviewedRawArtifact(runtime.GOARCH)
+	if err != nil || ref != approved {
+		return ErrRecoveryAuthority
 	}
 	root, err := ownedfs.Open(artifacts)
 	if err != nil {

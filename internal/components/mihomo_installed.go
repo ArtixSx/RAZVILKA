@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
@@ -38,11 +39,12 @@ func mihomoInstalledReceiptVersion(ctx context.Context, path string) string {
 		return ""
 	}
 	var receipt externalReceipt
-	if json.Unmarshal(raw, &receipt) != nil || receipt.Version != ReviewedMihomoVersion || !hevRetainedHash(receipt.SHA256) {
+	approved, pinErr := mihomoReviewedRawArtifact(runtime.GOARCH)
+	if pinErr != nil || json.Unmarshal(raw, &receipt) != nil || receipt.Version != ReviewedMihomoVersion || receipt.SHA256 != approved.SHA256 {
 		return ""
 	}
 	before, err := root.Stat("mihomo")
-	if err != nil || !mihomoInstalledOwner(before) || before.Size() < 1 || before.Size() > ownedfs.MaxAtomicArtifactBytes {
+	if err != nil || !mihomoInstalledOwner(before) || before.Size() != approved.Size {
 		return ""
 	}
 	f, err := root.OpenFile("mihomo", hevRetainedReadFlags, 0)

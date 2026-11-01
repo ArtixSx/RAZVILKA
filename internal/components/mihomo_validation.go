@@ -59,6 +59,10 @@ func (m *Manager) ValidateMihomoProfileGuarded(ctx context.Context, source strin
 	if err != nil {
 		return result, err
 	}
+	approved, err := mihomoReviewedRawArtifact(m.Arch)
+	if err != nil || ref != approved {
+		return result, ErrRecoveryAuthority
+	}
 	receiptImage, err := s.files["b_receipt"].Read(ctx)
 	if err != nil {
 		return result, err

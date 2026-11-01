@@ -19,6 +19,19 @@ import (
 const MihomoReleaseReadVersion = 6
 const ReviewedMihomoVersion = "1.19.33"
 
+// Expanded bytes from the exact compressed SHA-pinned release assets below.
+// Re-opening a matching local binary/receipt pair is not release provenance.
+func mihomoReviewedRawArtifact(arch string) (mihomoArtifactReference, error) {
+	switch arch {
+	case "amd64":
+		return mihomoArtifactReference{SHA256: "09c2cb429cf45fb56884ceb91a0e5b17cc8b2c866c07811bcf75dfb59fef7662", Size: 62017662}, nil
+	case "arm64":
+		return mihomoArtifactReference{SHA256: "8c73570d9a5f388bc2f58eee0b347ccfab84fb3cf1a0f8f2cf5eac7005fbcdc0", Size: 57475198}, nil
+	default:
+		return mihomoArtifactReference{}, ErrRecoveryAuthority
+	}
+}
+
 func mihomoPinnedRelease(arch string) (releaseInfo, error) {
 	var digest string
 	switch arch {
