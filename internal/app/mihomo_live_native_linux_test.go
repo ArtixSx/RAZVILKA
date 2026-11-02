@@ -245,7 +245,9 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
 		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			execution, applyErr := a.applyDataplane(r.Context(), plan, func() (func() error, error) {
+			bounded, finish := context.WithTimeout(r.Context(), 110*time.Second)
+			defer finish()
+			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
 				return store.ApplyDraftScopeAtRevisionWithRollback(config.DraftScopeAll, current.Revision)
 			})
 			detail := ""
