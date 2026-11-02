@@ -30,4 +30,59 @@ jobs:
           set -euo pipefail
           race_option=""
           if test "${{ matrix.mode }}" = race; then race_option="-race"; fi
-          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot' -v
+          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot|^TestMihomoColdRuntime|^TestMihomoLiveColdRetirement' -v
+
+  original-parent-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Pinned official Xray and disposable namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+          /usr/local/lib/razvilka-fixtures/xray version
+          # The real local CA fixture uses the compiler's reviewed 26.3.27.
+          # 26.10.31 defaults to a bundled CA pool instead of system roots.
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
+          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Actual producer parent death CLI cleanup and updater fences
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo modprobe tun
+          race_mode=0
+          if test "${{ matrix.mode }}" = race; then race_mode=1; fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-same-boot-native.sh

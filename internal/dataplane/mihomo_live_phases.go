@@ -181,7 +181,10 @@ func (a *MihomoProbeAdapter) liveActivate(ctx context.Context, p Plan, root stri
 	if err = r.proxy.applyCandidatePolicy(ctx, r.definition.Policy, root); err != nil {
 		return err
 	}
-	return r.currentBeforeStart(ctx)
+	if err := r.currentBeforeStart(ctx); err != nil {
+		return err
+	}
+	return mihomoSameBootNativeProducerPolicyACK(ctx, r, root)
 }
 func (a *MihomoProbeAdapter) liveCommit(ctx context.Context, p Plan, root string) error {
 	r, err := a.phaseResource(ctx, p, root)

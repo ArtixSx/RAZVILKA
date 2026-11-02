@@ -67,6 +67,11 @@ func sameBootInputsFixture(t *testing.T, use func(context.Context, *privateresto
 	}
 	e := mihomoColdIntentFixture(t)
 	e.State = "committed"
+	e.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	for n := range e.Steps {
+		e.Steps[n].State = "passed"
+		e.Steps[n].FinishedAt = e.FinishedAt
+	}
 	e.Resources[0].State = "active"
 	e.Resources[0].Phase = "active"
 	e.Resources[0].MihomoLive.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}

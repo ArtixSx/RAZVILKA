@@ -70,6 +70,13 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		t.Fatal(err)
 	}
 	nodesRoot := filepath.Join(peers.root, "live-nodes")
+	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
+	if parentProducer {
+		nodesRoot = "/opt/razvilka/state/nodes"
+		if err := os.MkdirAll(filepath.Dir(nodesRoot), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err = os.Mkdir(nodesRoot, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +101,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		t.Fatal(err)
 	}
 	cfg := config.Default()
+	if parentProducer {
+		cfg.ProxySidecar = "hev"
+	}
 	cfg.SafeMode = false
 	cfg.Services = map[string]config.ServiceState{service.ID: {Enabled: true, Route: selected, Sources: []string{domainOriginalClient + "/32"}}}
 	if degradeAfterCAS {
@@ -104,6 +114,12 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		cfg.Services[service.ID] = before
 	}
 	cfgPath := filepath.Join(peers.root, "live-config.json")
+	if parentProducer {
+		cfgPath = "/opt/etc/razvilka/config.json"
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	raw, _ := json.Marshal(cfg)
 	if err = os.WriteFile(cfgPath, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -151,6 +167,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	}
 	a := &App{Store: store, Nodes: nodes, Components: cm, Dataplane: manager, EngineConfigs: configs, Catalog: catalog.Catalog{Services: []catalog.Service{service}}, FreshProfile: fresh, ProxySidecarBoot: "hev", ExecutionHistory: updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion), ComponentHistory: updatecheck.NewComponentHistoryAdmission(components.MihomoReleaseReadVersion)}
 	controlRoot := filepath.Join(peers.root, "live-control")
+	if parentProducer {
+		controlRoot = "/opt/razvilka/state/self-update-stop"
+	}
 	a.SelfUpdateFiles = &SelfUpdateFiles{ControlRoot: controlRoot}
 	if _, err = operationgate.InitializeSelfUpdateControl(lifetime, controlRoot); err != nil {
 		t.Fatal(err)

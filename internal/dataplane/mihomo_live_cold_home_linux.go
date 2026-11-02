@@ -22,6 +22,17 @@ import (
 // observer under its original exclusive offline lifetime. This helper only
 // reads the fixed compiled temporary parent, never a serialized arbitrary path.
 func observeMihomoColdHome(ctx context.Context, d ExecutionMihomoLiveDefinition, negative func(context.Context) (netidentity.Identity, error)) (out mihomoColdHomeArchive, resultErr error) {
+	return observeMihomoOfflineHome(ctx, d, negative, false)
+}
+
+func observeMihomoSameBootHome(ctx context.Context, o *mihomoSameBootCleanup) (mihomoColdHomeArchive, error) {
+	if o == nil || o.self != o || o.inputs == nil {
+		return mihomoColdHomeArchive{}, ErrMihomoLiveRetirement
+	}
+	return observeMihomoOfflineHome(ctx, o.inputs.definition, o.absent, true)
+}
+
+func observeMihomoOfflineHome(ctx context.Context, d ExecutionMihomoLiveDefinition, negative func(context.Context) (netidentity.Identity, error), sameBoot bool) (out mihomoColdHomeArchive, resultErr error) {
 	if ctx == nil || negative == nil || xraySelectedTCPFinite(ctx) != nil || d.validate() != nil || d.NativeHome == nil || d.NativeHome.Validate() != nil {
 		return out, ErrMihomoLiveRetirement
 	}
@@ -31,7 +42,7 @@ func observeMihomoColdHome(ctx context.Context, d ExecutionMihomoLiveDefinition,
 		return out, ErrMihomoLiveRetirement
 	}
 	identity, err := negative(ctx)
-	if err != nil || identity.Validate() != nil || identity.BootID == d.NetworkIdentity.BootID {
+	if err != nil || identity.Validate() != nil || !sameBoot && identity.BootID == d.NetworkIdentity.BootID || sameBoot && identity != d.NetworkIdentity {
 		return out, errors.Join(ErrMihomoLiveRetirement, err)
 	}
 	before, err := os.Lstat(ref.Parent)
@@ -57,6 +68,9 @@ func observeMihomoColdHome(ctx context.Context, d ExecutionMihomoLiveDefinition,
 	// exact private scratch child. Never bind its mutable link count/times.
 	parentIdentity := fmt.Sprintf("%d:%d:%d:%d:%d", ps.Dev, ps.Ino, ps.Uid, ps.Gid, uint32(held.Mode()))
 	out = mihomoColdHomeArchive{Schema: 1, Reference: ref, ObservedParent: parentIdentity, OriginalParent: uint64(ps.Dev) == ref.ParentDevice && ps.Ino == ref.ParentInode}
+	if sameBoot && !out.OriginalParent {
+		return out, ErrMihomoLiveRetirement
+	}
 	bookend := func() error {
 		named, e1 := os.Lstat(ref.Parent)
 		actual, e2 := parent.Stat(".")
@@ -70,6 +84,9 @@ func observeMihomoColdHome(ctx context.Context, d ExecutionMihomoLiveDefinition,
 	}
 	child, err := parent.Lstat(ref.Name)
 	if errors.Is(err, os.ErrNotExist) {
+		if sameBoot {
+			return out, ErrMihomoLiveRetirement
+		}
 		out.State = "absent"
 		closing, closeErr := negative(ctx)
 		_, absentErr := parent.Lstat(ref.Name)

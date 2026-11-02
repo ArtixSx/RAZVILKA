@@ -343,6 +343,26 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			return
 		}
 	}
+	if mihomoLiveParentRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveParentRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		}, selfFileState.ControlRoot)
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
 	if mihomoLiveBootRetirementCLIRequested() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		result, err := runMihomoLiveBootRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,

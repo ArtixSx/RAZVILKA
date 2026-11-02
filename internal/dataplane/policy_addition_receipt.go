@@ -69,13 +69,16 @@ type policyAdditionOptions struct {
 }
 
 type policyAdditionSession struct {
-	root     *ownedfs.Root
-	lock     *os.File // The actual still-held permanent writer marker.
-	unlocked func()
-	path     string
-	state    PolicyState
-	doc      policyAdditionDocument
-	options  policyAdditionOptions
+	self           *policyAdditionSession
+	sameBoot       *mihomoSameBootPolicy
+	sameBootClosed bool
+	root           *ownedfs.Root
+	lock           *os.File // The actual still-held permanent writer marker.
+	unlocked       func()
+	path           string
+	state          PolicyState
+	doc            policyAdditionDocument
+	options        policyAdditionOptions
 	// unsynced: the file holds a settled state not yet forced to disk.
 	unsynced bool
 	// created: this session's exclusive create made the lock file.
@@ -179,7 +182,9 @@ func openPolicyAdditionRootSession(ctx context.Context, path string, options pol
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &policyAdditionSession{root: root, lock: lock, unlocked: unlock, path: path, options: options, created: created}, nil
+	s := &policyAdditionSession{root: root, lock: lock, unlocked: unlock, path: path, options: options, created: created}
+	s.self = s
+	return s, nil
 }
 
 func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, bool, error) {
@@ -228,7 +233,14 @@ func lockPolicyAdditionRoot(root *ownedfs.Root) (func(), *os.File, bool, error) 
 	return func() { unlockCloudflareScanFile(file); file.Close() }, file, created, nil
 }
 
-func (s *policyAdditionSession) close() { s.unlocked(); s.root.Close() }
+func (s *policyAdditionSession) close() {
+	if s.sameBoot != nil {
+		closeMihomoSameBootPolicySession(s)
+		return
+	}
+	s.unlocked()
+	s.root.Close()
+}
 func (s *policyAdditionSession) fault(point string, index int) error {
 	if s.options.fault != nil {
 		return s.options.fault(point, index)
@@ -237,6 +249,9 @@ func (s *policyAdditionSession) fault(point string, index int) error {
 }
 func (s *policyAdditionSession) save(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if handled, err := saveMihomoSameBootPolicy(ctx, s); handled {
 		return err
 	}
 	if ctx.Value(wgCommonWriterKey{}) != nil && ctx.Value(wgOperationOwnerKey{}) != nil {
@@ -277,6 +292,9 @@ func (s *policyAdditionSession) save(ctx context.Context) error {
 // USB drive of a Keenetic each fsync costs about half a second, so halving
 // them keeps a 60-selector policy inside its activation and rollback budgets.
 func (s *policyAdditionSession) saveSettled(ctx context.Context) error {
+	if _, present := mihomoSameBootPolicyCursor(ctx); present {
+		return s.save(ctx)
+	}
 	if runtime.GOOS != "linux" || ctx.Value(wgCommonWriterKey{}) != nil && ctx.Value(wgOperationOwnerKey{}) != nil {
 		return s.save(ctx)
 	}
@@ -336,6 +354,9 @@ func (s *policyAdditionSession) validatePolicyDocument(ctx context.Context) erro
 
 func (s *policyAdditionSession) loadDocument(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if handled, err := loadMihomoSameBootPolicy(ctx, s); handled {
 		return err
 	}
 	info, err := s.root.Stat(policyAdditionFile)

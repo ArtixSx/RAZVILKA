@@ -27,6 +27,7 @@ type mihomoSameBootInputs struct {
 	records               []*mihomoColdRecord
 	before                Execution
 	definition            ExecutionMihomoLiveDefinition
+	candidate             bool
 	closed                bool
 	closeErr              error
 }
@@ -84,10 +85,14 @@ func holdMihomoSameBootInputs(ctx context.Context, set *privaterestore.OfflineSe
 	}
 	// This first lane refuses in-flight transit and ambiguous publication; it
 	// never changes finalizing/unknown state to make recovery admissible.
-	if i.before.State != "committed" {
+	i.candidate = i.before.State == "applying"
+	if i.before.State != "committed" && !i.candidate {
 		return nil, ErrMihomoLiveRetirement
 	}
 	for _, r := range i.before.Resources {
+		if r.MihomoLive != nil && (i.candidate && (r.Phase != "policy-pending" || r.State != "prepared") || !i.candidate && (r.Phase != "active" || r.State != "active")) {
+			return nil, ErrMihomoLiveRetirement
+		}
 		if r.MihomoLive == nil && (r.State != "removed" || r.NodeTransit == nil) {
 			return nil, ErrMihomoLiveRetirement
 		}
