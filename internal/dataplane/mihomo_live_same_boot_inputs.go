@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -50,19 +51,19 @@ func holdMihomoSameBootInputs(ctx context.Context, set *privaterestore.OfflineSe
 	// transaction by an arbitrary archive or runtime-derived path is forbidden.
 	state, err := i.holdRoot(statePath, nil, "")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("same-boot original state root: %w", err)
 	}
 	transactions, err := i.holdRoot(filepath.Join(statePath, "transactions"), state, "transactions")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("same-boot original transactions root: %w", err)
 	}
 	transaction, err := i.holdRoot(filepath.Join(statePath, "transactions", id), transactions, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("same-boot original transaction root: %w", err)
 	}
 	configRoot, err := i.holdRoot(filepath.Dir(configPath), nil, "")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("same-boot original configuration root: %w", err)
 	}
 	for _, item := range []struct {
 		root *os.Root
