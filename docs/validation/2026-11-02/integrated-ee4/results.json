@@ -1,0 +1,50 @@
+{
+  "commit": "ee4a4edcd3971536ec57f41d351437673a25f109",
+  "full_push": {
+    "run": 41438254305,
+    "result": "success"
+  },
+  "full_pr": {
+    "run": 41438262275,
+    "result": "success"
+  },
+  "cold": {
+    "run": 41438254290,
+    "result": "success"
+  },
+  "health": {
+    "run": 41438254344,
+    "result": "success"
+  },
+  "focused": {
+    "run": 41438254238,
+    "result": "failure",
+    "passed": {
+      "strategy-pair": 125253353839,
+      "wireguard-native": 125253353578,
+      "node-native-performance": 125253353689
+    },
+    "failed": {
+      "scoped-native": 125253353451,
+      "managed-probe-production": 125253353687,
+      "managed-probe-race": 125253353680
+    }
+  },
+  "warm": {
+    "run": 41438254254,
+    "result": "failure",
+    "postcas": {
+      "job": 125253354328,
+      "result": "success"
+    },
+    "lifecycle": {
+      "job": 125253354784,
+      "result": "failure"
+    }
+  },
+  "domain": {
+    "run": 41438254212,
+    "result": "failure"
+  },
+  "router_acceptance": false
+}

@@ -1,0 +1,37 @@
+{
+  "commit": "288eac88b4194868ad9f44da54ff8d821c3d5022",
+  "full_ci": {
+    "run": 41440491928,
+    "result": "success"
+  },
+  "native_run": 41440491807,
+  "normal_job": 125260825199,
+  "race_job": 125260825697,
+  "source_tests_normal_and_race": "success",
+  "benchmark": "BenchmarkOriginalFenceWakeScheduling",
+  "poll_ns": [
+    18938325,
+    19347095,
+    19523615
+  ],
+  "wake_ns": [
+    37578,
+    37563,
+    39314
+  ],
+  "poll_fresh_drains_per_op": [
+    2,
+    2.02,
+    2.02
+  ],
+  "wake_fresh_drains_per_op": [
+    2,
+    2,
+    2
+  ],
+  "allocation_comparison_accepted": false,
+  "reason": "fixed collector startup amortized over different iteration counts",
+  "full_lan_workflow": "failure",
+  "full_workflow_speedup_claimed": false,
+  "raw_log_sha256": "d4fa41dd77f0957580689c510e6ad550a598330b116008d5472ed243fa55a65a"
+}
