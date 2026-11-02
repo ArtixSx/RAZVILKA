@@ -156,7 +156,10 @@ func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
 			command.Stdout = &output
 			command.Stderr = &output
 			command.WaitDelay = 200 * time.Millisecond
-			if err := command.Run(); err != nil || output.overflow {
+			childStarted := time.Now()
+			childErr := command.Run()
+			t.Logf("actual_native_updater_child phase=%s duration_ms=%.3f", stage, float64(time.Since(childStarted).Microseconds())/1000)
+			if err := childErr; err != nil || output.overflow {
 				return errors.Join(errors.New("actual updater guard child failed"), err)
 			}
 			want := "guard=fenced"
@@ -186,11 +189,19 @@ func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
 			return e
 		})
 	}
-	if cut == "" {
-		err = run(ctx)
-	} else {
-		err = dataplane.WithMihomoSameBootNativeACKCut(ctx, cut, run)
+	actorStarted := time.Now()
+	measurements, measuredErr := dataplane.WithMihomoSameBootNativeMeasurements(ctx, func(measured context.Context) error {
+		if cut == "" {
+			return run(measured)
+		}
+		return dataplane.WithMihomoSameBootNativeACKCut(measured, cut, run)
+	})
+	err = measuredErr
+	t.Logf("actual_sameboot_actor inclusive_ms=%.3f", float64(time.Since(actorStarted).Microseconds())/1000)
+	for _, row := range measurements {
+		t.Logf("actual_sameboot_inclusive phase=%s calls=%d wall_ms=%.3f", row.Phase, row.Calls, float64(row.Nanoseconds)/1e6)
 	}
+
 	if err != nil {
 		t.Fatalf("actual sameboot CLI %v prepare_stage=%s", err, dataplane.MihomoSameBootRetirementStage(err))
 	}

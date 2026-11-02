@@ -101,6 +101,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	}
 	c := &mihomoSameBootRetirementCursor{manager: m, ctx: ctx, history: history}
 	c.self = c
+	defer mihomoSameBootNativeTiming(c, "prepare")()
 	keep := false
 	defer func() {
 		if !keep {
@@ -223,6 +224,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 // Parent-gone plus exact same network identity precede even a pidfd signal.
 // No controller or interface absence is inferred from serialized metadata.
 func (c *mihomoSameBootRetirementCursor) beforeSidecar() error {
+	defer mihomoSameBootNativeTiming(c, "source-before-sidecar")()
 	if c != nil && c.unknown != nil {
 		return errors.Join(ErrMihomoLiveRetirement, c.unknown)
 	}
@@ -274,12 +276,17 @@ func sameBootRetirementError(c *mihomoSameBootRetirementCursor) error {
 }
 
 func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
+	defer mihomoSameBootNativeTiming(c, "run")()
+	finishPhase := mihomoSameBootNativeTiming(c, "phase-opening")
+	defer func() { finishPhase() }()
+	phase := func(name string) { finishPhase(); finishPhase = mihomoSameBootNativeTiming(c, name) }
 	if err := c.beforeSidecar(); err != nil {
 		return Execution{}, err
 	}
 	if err := c.checkHistory(); err != nil {
 		return Execution{}, err
 	}
+	phase("phase-intent")
 	if err := c.publishArchive("retirement.json", c.intent, c.beforeSidecar); err != nil {
 		return Execution{}, err
 	}
@@ -287,6 +294,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		return Execution{}, err
 	}
 	o := c.owner
+	phase("phase-sidecar")
 	if !c.sidecarDone {
 		if err := stopMihomoSameBootSidecar(c.ctx, o); err != nil {
 			c.unknown = c.sidecarFailureAfterAttempt(err)
@@ -301,6 +309,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := mihomoSameBootNativeStage(c.ctx, c, "sidecar", current); err != nil {
 		return Execution{}, err
 	}
+	phase("phase-policy")
 	if !c.policyDone {
 		if o.policy == nil {
 			return Execution{}, ErrPolicyAdditionUnknown
@@ -318,6 +327,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := mihomoSameBootNativeStage(c.ctx, c, "policy", current); err != nil {
 		return Execution{}, err
 	}
+	phase("phase-forwarding")
 	if !c.forwardingDone {
 		lease, present, err := c.effectProxy.readForwardingLease()
 		if err != nil || !present || !reflect.DeepEqual(lease.Policy, o.inputs.definition.Policy) {
@@ -332,6 +342,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := mihomoSameBootNativeStage(c.ctx, c, "forwarding", kernelAbsent); err != nil {
 		return Execution{}, err
 	}
+	phase("phase-archive")
 	if _, err := o.absent(c.ctx); err != nil {
 		return Execution{}, err
 	}
@@ -396,6 +407,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := mihomoSameBootNativeStage(c.ctx, c, "archive", terminalCurrent); err != nil {
 		return Execution{}, err
 	}
+	phase("phase-terminal")
 	for n := range 2 {
 		if bytes.Equal(o.inputs.records[n].data, c.intent.After) && !c.terminalPending[n] {
 			continue
@@ -417,6 +429,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 			return Execution{}, err
 		}
 	}
+	phase("phase-completed")
 	if err := c.publishArchive("completed.json", struct {
 		Schema                    int
 		BeforeSHA256, AfterSHA256 string
@@ -430,6 +443,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 }
 
 func (c *mihomoSameBootRetirementCursor) homeCurrent() error {
+	defer mihomoSameBootNativeTiming(c, "home-current")()
 	if c.home == nil {
 		return ErrMihomoLiveRetirement
 	}
