@@ -148,7 +148,8 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 	}
 	out, outOK := command.Stdout.(*output)
 	errOut, errOK := command.Stderr.(*output)
-	if !outOK || !errOK || out.limit <= 0 || out.limit > maxOutputBytes || errOut.limit <= 0 || errOut.limit > 4096 {
+	combined := outOK && errOK && out == errOut
+	if !outOK || !errOK || out == nil || errOut == nil || out.limit <= 0 || out.limit > maxOutputBytes || errOut.limit <= 0 || errOut.limit > 4096 && !combined {
 		return false
 	}
 	args := command.Args[1:]
@@ -158,12 +159,12 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 			continue
 		}
 		if index < 2 {
-			return readArguments(args) || slices.Equal(args, []string{"--version"})
+			return readArguments(args) || !combined && slices.Equal(args, []string{"--version"})
 		}
 		if index == 2 {
-			return slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
+			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
 		}
-		return slices.Equal(args, []string{"--version"})
+		return !combined && slices.Equal(args, []string{"--version"})
 	}
 	return false
 }
