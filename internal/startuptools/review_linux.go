@@ -313,6 +313,9 @@ func (r *heldReview) capture(ctx context.Context) error {
 	if err != nil || !r.nodes[canonical].info.IsDir() {
 		return at("EXTENSION_DIRECTORY", err)
 	}
+	if err := r.retainExtensionPath(canonical); err != nil {
+		return err
+	}
 	file, err := openDirectory(canonical, r.nodes[canonical].info)
 	if err != nil {
 		return at("EXTENSION_OPEN", err)

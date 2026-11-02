@@ -35,7 +35,7 @@ jobs:
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
       - name: Original writer and typed reader regressions
-        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose'
+        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose'
       - name: Actual DNS send, original Stop and cached-alias TLS
         shell: bash
         run: |
