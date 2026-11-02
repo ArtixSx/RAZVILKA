@@ -22,7 +22,10 @@ func sameBootInputsFixture(t *testing.T, use func(context.Context, *privateresto
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	base := t.TempDir()
+	base := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(base, 0700); err != nil {
+		t.Fatal(err)
+	}
 	l := privaterestore.Layout{Config: filepath.Join(base, "config.json"), CustomServices: filepath.Join(base, "custom.json"), Devices: filepath.Join(base, "devices.json"), StageRoot: filepath.Join(base, "stage"), ProviderRoot: filepath.Join(base, "provider")}
 	var cs []*privaterestore.Coordinator
 	defer func() {
