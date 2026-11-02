@@ -67,12 +67,13 @@ type PolicyEffectTools struct {
 // Runner must also consume CORE admission at its actual process-start boundary.
 // A successful Runner result acknowledges the actual mutation, not its enqueue.
 type PolicyEffectRuntime struct {
-	Runner        NFQWS2Runner
-	Tools         PolicyEffectTools
-	Preflight     func(context.Context) error
-	ExactPresence func(context.Context, int) (int, error)
-	BeforeDelete  func(context.Context, int) error
-	Guard         func(context.Context, int) error
+	nodeTransitOrigin *nodeTransitPolicyRuntimeOrigin
+	Runner            NFQWS2Runner
+	Tools             PolicyEffectTools
+	Preflight         func(context.Context) error
+	ExactPresence     func(context.Context, int) (int, error)
+	BeforeDelete      func(context.Context, int) error
+	Guard             func(context.Context, int) error
 }
 
 func (t PolicyEffectTools) command(tool PolicyEffectTool) string {
@@ -159,9 +160,10 @@ func PolicyEffectPlanDigest(plan PolicyEffectPlan) (string, error) {
 
 type policyEffectSession struct {
 	*policyAdditionSession
-	plan   PolicyEffectPlan
-	hash   string
-	borrow *policyEffectReceiptBorrow
+	plan                PolicyEffectPlan
+	hash                string
+	borrow              *policyEffectReceiptBorrow
+	nodeTransitPresence *nodeTransitPolicyRuntimeBinding
 }
 
 func (s *policyEffectSession) save(ctx context.Context) (result error) {
@@ -271,6 +273,31 @@ func (s *policyEffectSession) guard(ctx context.Context, runtime PolicyEffectRun
 	return ctx.Err()
 }
 
+func (s *policyEffectSession) exactPresence(ctx context.Context, runtime PolicyEffectRuntime, index int) (int, error) {
+	if b := s.nodeTransitPresence; b != nil {
+		count, err := b.presence(ctx, s.plan, s.path, index)
+		return count, nodeTransitPhase("effect-presence", err)
+	}
+	return runtime.ExactPresence(ctx, index)
+}
+
+// Call only immediately after exactPresence, with no intervening callback,
+// save, fault or effect. The sealed original reader already completed the
+// same full guard; ctx checks remain on both sides of this pure comparison.
+func (s *policyEffectSession) guardAfterPresence(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b := s.nodeTransitPresence; b != nil {
+		if index != 0 || !b.validFor(s.plan, s.path) {
+			return ErrNodeTransitUnavailable
+		}
+	} else if err := runtime.Guard(ctx, index); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
 func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
 	if s.doc.Steps[index].State != "planned" {
 		return ErrPolicyAdditionUnknown
@@ -293,21 +320,21 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	if err := s.fault("intent", index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	present, err := runtime.ExactPresence(ctx, index)
+	present, err := s.exactPresence(ctx, runtime, index)
 	if err != nil || present != 0 {
 		return errors.Join(ErrPolicyAdditionUnknown, ErrPolicyAdditionReceipt, err)
 	}
-	if err := s.guard(ctx, runtime, index); err != nil {
+	if err := s.guardAfterPresence(ctx, runtime, index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	// Execute only the private copy of the caller's reconstructed expected plan.
 	// A foreign copy may have appeared during durable intent IO. Never append
 	// another indistinguishable copy even though the initial preflight was clear.
-	present, err = runtime.ExactPresence(ctx, index)
+	present, err = s.exactPresence(ctx, runtime, index)
 	if err != nil || present != 0 {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	if err := s.guard(ctx, runtime, index); err != nil {
+	if err := s.guardAfterPresence(ctx, runtime, index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
 	effect := s.plan.Effects[index]
@@ -411,11 +438,16 @@ func ApplyPolicyEffectsWithReceipt(ctx context.Context, runtime PolicyEffectRunt
 }
 
 func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions) error {
+	runtime, presenceOwner, err := preparePolicyEffectRuntime(runtime, plan, root)
+	if err != nil {
+		return err
+	}
 	s, err := openPolicyEffectSession(ctx, plan, root, options)
 	if err != nil {
 		return err
 	}
 	defer s.close()
+	s.nodeTransitPresence = presenceOwner
 	if err := s.validateRuntime(runtime); err != nil {
 		return err
 	}
@@ -555,11 +587,16 @@ func (s *policyEffectSession) inspectCleanupPlan(ctx context.Context, runtime Po
 }
 
 func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions) error {
+	runtime, presenceOwner, err := preparePolicyEffectRuntime(runtime, plan, root)
+	if err != nil {
+		return err
+	}
 	s, err := openPolicyEffectSession(ctx, plan, root, options)
 	if err != nil {
 		return err
 	}
 	defer s.close()
+	s.nodeTransitPresence = presenceOwner
 	if err := s.validateRuntime(runtime); err != nil {
 		return err
 	}

@@ -328,6 +328,16 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 	}
 }
 
+// Only the original shared factory opts in. Early preflight continues to use
+// effectRuntime's full callbacks; the receipt entry fills these bare roles
+// privately after checking the exact runner/tools/plan/root and before IO.
+func (l *nodeTransitLease) policyEffectRuntime() PolicyEffectRuntime {
+	if l.runtime.sharedOwner == nil {
+		return l.effectRuntime()
+	}
+	return PolicyEffectRuntime{Runner: l.runtime.runner, Tools: PolicyEffectTools{IP: l.runtime.ip}, nodeTransitOrigin: newNodeTransitPolicyRuntimeOrigin(l)}
+}
+
 func (l *nodeTransitLease) register(ctx context.Context) error {
 	if err := l.guard(ctx); err != nil {
 		return nodeTransitPhase("register-initial-guard", err)
@@ -396,7 +406,7 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 	}
 	l.unused.Store(nil)
 	l.effects.Store(true)
-	if err := applyPolicyEffects(ctx, runtime, l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
+	if err := applyPolicyEffects(ctx, l.policyEffectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
 		return err
 	}
 	return l.verifyAppliedPresence(ctx)
@@ -443,7 +453,7 @@ func (l *nodeTransitLease) Remove(ctx context.Context) error {
 	if err := l.register(context.WithValue(ctx, nodeTransitRemovalKey{}, true)); err != nil {
 		return err
 	}
-	return removePolicyEffects(ctx, l.effectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
+	return removePolicyEffects(ctx, l.policyEffectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
 }
 
 // VerifyUnused consumes only this lease's live before-effects refusal. A fresh
