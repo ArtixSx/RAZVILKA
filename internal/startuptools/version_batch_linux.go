@@ -40,9 +40,12 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if fact != nil {
-		// Reobserve the whole graph for this byte-only fact. No callback or
-		// child occurs between the two static alias projections below.
+	if fact != nil && l.profile.ipAlias == "" {
+		// An alias-only profile needs its own complete metadata observation.
+		// With IP, the mandatory actual child's full Start/closing metadata
+		// pair brackets these fixed alias values too: the intervening two
+		// projections have no callback, effect, or escaping result. Preserve
+		// every actual IP invocation and both of its metadata observations.
 		if err := l.review.versionMetadataCurrent(scoped); err != nil {
 			return err
 		}

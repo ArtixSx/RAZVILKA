@@ -61,9 +61,11 @@ func TestStaticVersionFactNativeScope(t *testing.T) {
 			escaped = observed
 			for check, want := range [][3]uint64{{1, 1, 1}, {0, 0, 1}} {
 				before := NativeFixtureVersionChildCount(l)
+				metadataBefore := NativeFixtureVersionMetadataCount(l)
 				if err := l.Check(observed, l.identity); err != nil {
 					return err
 				}
+				t.Log("actual version batch", pass, check, "metadata traversals", NativeFixtureVersionMetadataCount(l)-metadataBefore)
 				if got := staticChildrenDelta(l, before); got != want {
 					return fmt.Errorf("scope %d check %d child Starts %v, want %v", pass, check, got, want)
 				}
