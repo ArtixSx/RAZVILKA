@@ -1,0 +1,12 @@
+2026-11-02T08:35:50.9343708Z === RUN   TestManagedStrategyProbeNativeConsumer
+2026-11-02T08:35:51.9180769Z     strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-3374672626/dataplane/runtime/nfqws2: no such file or directory
+2026-11-02T08:35:58.1757789Z 2026/11/02 08:35:58 http: TLS handshake error from 8.8.8.8:37517: EOF
+2026-11-02T08:36:03.2131448Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 2112230624 8103838
+2026-11-02T08:36:03.2132887Z     strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T08:36:03.2149815Z     strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.993487406s} cleanup-current:{75 75 1.499603232s} counter:{3 3 2.113118121s} current:{153 153 5.110499461s} environment:{153 153 304.767135ms} epoch-source-runtime:{153 153 2.170448111s} owners:{228 228 4.11698764s} policy-apply:{1 1 3.30051452s} policy-readback:{23 23 3.984387197s} policy-remove:{1 1 2.961416533s}]
+2026-11-02T08:36:03.2154033Z     strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+2026-11-02T08:36:03.2155901Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2312
+2026-11-02T08:36:03.2157711Z     strategy_managed_probe_native_linux_test.go:524: native measured Execute 11.294915711s actual inventory ToolCheck calls 382 ToolCheck wall 4.894974555s
+2026-11-02T08:36:03.2213211Z     strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeConsumer.pprof
+2026-11-02T08:36:03.3554297Z     strategy_managed_probe_native_linux_test.go:658: actual isolated consumer: managed native validation + held source socket + queue200 + wrong-source negative + exact counters + TLS/catalogue predicates + soleWait/ACK + COMMON cleanup; platform/WAN classification modeled; no router/LAN acceptance
+2026-11-02T08:36:03.3582735Z --- PASS: TestManagedStrategyProbeNativeConsumer (12.42s)

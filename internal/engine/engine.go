@@ -16,22 +16,23 @@ import (
 )
 
 type Status struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Installed    bool      `json:"installed"`
-	Configured   bool      `json:"configured"`
-	RuntimeReady bool      `json:"runtime_ready"`
-	Running      bool      `json:"running"`
-	Kind         string    `json:"kind"`
-	Description  string    `json:"description"`
-	BinaryPath   string    `json:"binary_path,omitempty"`
-	Version      string    `json:"version,omitempty"`
-	Architecture string    `json:"architecture"`
-	Capabilities []string  `json:"capabilities"`
-	NativeCheck  bool      `json:"native_check"`
-	Ownership    Ownership `json:"ownership"`
-	External     bool      `json:"external"`
-	ManagedBy    string    `json:"managed_by,omitempty"`
+	Lifecycle    *Lifecycle `json:"lifecycle,omitempty"`
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	Installed    bool       `json:"installed"`
+	Configured   bool       `json:"configured"`
+	RuntimeReady bool       `json:"runtime_ready"`
+	Running      bool       `json:"running"`
+	Kind         string     `json:"kind"`
+	Description  string     `json:"description"`
+	BinaryPath   string     `json:"binary_path,omitempty"`
+	Version      string     `json:"version,omitempty"`
+	Architecture string     `json:"architecture"`
+	Capabilities []string   `json:"capabilities"`
+	NativeCheck  bool       `json:"native_check"`
+	Ownership    Ownership  `json:"ownership"`
+	External     bool       `json:"external"`
+	ManagedBy    string     `json:"managed_by,omitempty"`
 }
 
 // Ownership describes kernel/network resources an adapter may claim. Empty

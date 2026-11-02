@@ -20,6 +20,7 @@ type retainedXrayExecution struct {
 	records   *xraySelectedTCPExecutionRecords
 	pending   bool
 	join      func(context.Context) error
+	standby   *domainTCPStandbyOwner // Static restorative footprint; never a selected process.
 }
 
 type xrayRetainedOperation struct {
@@ -211,9 +212,20 @@ func (m *Manager) CheckRetainedManagedXraySelectedTCP(ctx context.Context) error
 }
 
 func (m *Manager) HasPendingManagedXraySelectedTCP() bool {
+	if m.hasPendingDomainSuccessor() {
+		return true
+	}
 	if m.hasPendingXrayReplacement() {
 		return true
 	}
 	o := m.retainedXrayOwner()
-	return o != nil && o.self == o && o.pending
+	if o == nil || o.self != o {
+		return false
+	}
+	if o.scope == nil {
+		return true // An original slot with missing lifetime cannot confirm idle.
+	}
+	o.scope.mu.Lock()
+	defer o.scope.mu.Unlock()
+	return o.pending
 }

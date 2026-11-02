@@ -313,6 +313,9 @@ func (r *heldReview) capture(ctx context.Context) error {
 	if err != nil || !r.nodes[canonical].info.IsDir() {
 		return at("EXTENSION_DIRECTORY", err)
 	}
+	if err := r.retainExtensionPath(canonical); err != nil {
+		return err
+	}
 	file, err := openDirectory(canonical, r.nodes[canonical].info)
 	if err != nil {
 		return at("EXTENSION_OPEN", err)
@@ -392,8 +395,8 @@ func (r *heldReview) pathsCurrent(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return at("CHECK_CONTEXT", ctx.Err())
 		}
-		info, err := os.Lstat(n.path)
-		if err != nil || !sameNode(n.info, info) {
+		same, err := freshPathNode(n.path, n.info)
+		if err != nil || !same {
 			return at("CHECK_PATH", err)
 		}
 		if n.link != "" {
@@ -441,25 +444,23 @@ func (r *heldReview) resolveExisting(path string) (string, error) {
 
 func (l *Lease) current(ctx context.Context, expected netidentity.Identity, versions bool) error {
 	if l.review == nil || l.provider == nil || expected != l.identity || !l.profile.acceptsIdentity(expected) {
+		l.forgetVersionFact(ctx)
 		return at("CHECK_IDENTITY", nil)
 	}
-	return l.provider.WithCurrent(ctx, func(held context.Context, actual netidentity.Identity) error {
+	err := l.provider.WithCurrent(ctx, func(held context.Context, actual netidentity.Identity) error {
 		if actual != expected || l.closed.Load() || l.lifetime.Err() != nil {
 			return at("CHECK_IDENTITY", nil)
 		}
 		if versions {
-			for i := range l.profile.aliases {
-				if err := l.version(held, i); err != nil {
-					return err
-				}
-			}
-			if l.profile.ipAlias != "" {
-				if err := l.ipVersion(held); err != nil {
-					return err
-				}
-			}
-			return held.Err()
+			return l.versionBatchCurrent(held)
 		}
 		return l.review.unchanged(held)
 	})
+	if err == nil && versions {
+		err = l.rememberVersionFact(ctx)
+	}
+	if err != nil {
+		l.forgetVersionFact(ctx)
+	}
+	return err
 }

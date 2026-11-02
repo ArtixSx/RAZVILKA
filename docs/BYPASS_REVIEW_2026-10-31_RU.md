@@ -267,3 +267,42 @@ commit; ссылки на CI и точные результаты фиксиру
 Аппаратные показатели скорости, 24–72-часовой прогон, WAN/reboot/power-loss
 и работоспособность приложений с реального LAN-клиента здесь не измерялись.
 Стабильный выпуск, merge и установка на роутер этим документом не выполняются.
+
+## Повторная сверка контрактов 31.10.2026
+
+Сверено по исходникам `a36f534339f2a9ccf37956537a527ae77f7d0d59`.
+Эта сверка подтверждает наличие связей в коде; новые native/LAN/аппаратные
+испытания в её рамках не выполнялись. Исторические результаты CI выше относятся
+к своим commit и не заменяют проверки интегрированного изменения.
+
+| Механизм | Вход и validation / isolated probe | Apply, health, recovery | Update / rollback и следующий блокер |
+| --- | --- | --- | --- |
+| NFQWS2 | Managed bundle и supervised compatibility; StrategyLab startup оставляет `Executor = nil` | Зарегистрированный адаптер и ограниченные first-start / LIST пути; полного пути StrategyLab candidate → network evidence → Apply нет | Общий managed-update механизм существует, но owned package/init защищены `NFQWS_OWNED_PROFILE_PACKAGE_UNSUPPORTED`; нужен совместимый managed bundle update, включая recovery |
+| sing-box VLESS, Hysteria2, TUIC, Shadowsocks | Канонический импорт, native checker и изолированный URL/egress путь | Общий proxy adapter, health/reconcile/rollback в разрешённом scope | Общий guarded package update с cache/journal; проверка живого маршрута и аппаратный сценарий обязательны отдельно |
+| Xray VLESS | Compiler и отдельный checker для поддержанных transport | Startup связывает Xray adapter с private node store; TUN sidecar — sing-box | Общий guarded package update; успешная проверка узла не снимает domain-flow отказ |
+| WG / WARP | Профиль; canary, handshake, service/trace проверки различаются | Зарегистрированные WG/WARP adapters с health/reconcile/rollback | Общий managed package update предусмотрен; cold handshake, WAN/reboot и восстановление проверяются на целевой системе |
+| AWG | Импорт и runtime preflight требуют совместимого модуля и awg CLI | Зарегистрированный адаптер; разрешённый scope и native prerequisites обязательны | В общем списке managed-update компонентов AWG отсутствует; автоматической поставки kernel backend нет |
+| USQUE/MASQUE | Профиль и owned probes; sing-box является runtime dependency | Зарегистрированный proxy adapter, SOCKS → sing-box/gVisor TUN, health/reconcile/rollback | Общий guarded package update; QUIC/HTTP2 до провайдера не доказывает LAN UDP/голос |
+| Telegram | Каталожный сервис; HTTPS и ограниченные MTProto diagnostics | Использует разрешённый NFQ/proxy/VPN путь, отдельного MTProxy adapter нет | Обновляется выбранный runtime; сообщения, медиа и звонки требуют отдельных прикладных проб |
+| Scoped DNS / AdGuard DNS | Production resolver profile; lab/experimental не проходит scoped admission | `dns-scoped` регистрируется только на Linux; один DIRECT service/profile/private IPv4 /32, DNS к LAN:53 | Общая транзакция и listener cleanup; это не установка AdGuard Home, не перехват DoH и не весь IPv6 |
+| Smart DNS lab | Каталог и диагностика | Production Apply/AUTO не разрешаются успехом диагностики | Требуется отдельное решение production admission и аппаратная приёмка |
+| Mihomo | Preview/export с digest review | `live_applied=false`; adapter/checker в startup отсутствуют | Нет production installer/lifecycle |
+| HEV | Генератор; `native_validated=false` | Только opt-in constructor программного стенда, обычный startup использует sing-box | Нет доверенного package, admission UI и аппаратной приёмки |
+
+Источники уточнения: [startup](../cmd/razvilka/main.go),
+[общий managed update](../internal/components/managed_update.go),
+[проверки обновления маршрута](../internal/app/component_managed_update.go),
+[owned NFQ package guard](../internal/app/component_nfqws_package_guard.go),
+[extension API](../internal/app/extension_lab.go),
+[HEV constructor](../internal/dataplane/hev_sidecar.go).
+`DOMAIN_FLOW_AUTHORITY_REQUIRED` остаётся действующим ограничением общего
+IP-based domain-only маршрута; успешный probe его не отменяет.
+
+### Границы проверки сайта
+
+В отслеживаемых файлах этой ветки найдены встроенная панель
+`cmd/razvilka/web`, README и документация. В `.github/workflows` находятся
+`ci.yml` и `release.yml`; отдельный сайт, его deployment workflow или CNAME
+не установлены. Это не доказывает отсутствие внешнего сайта. Для проверки и
+исправления опубликованного сайта нужен его конкретный URL и источник.
+Проверка внешней опубликованной версии и deploy здесь не выполнены.

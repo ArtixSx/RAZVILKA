@@ -21,6 +21,7 @@ import (
 )
 
 type nodeApplyAdapter struct {
+	planned *dataplane.Plan
 	calls   []string
 	after   func(string) error
 	observe func(context.Context) error
@@ -34,7 +35,9 @@ func (a *nodeApplyAdapter) phase(name string) error {
 	}
 	return nil
 }
-func (a *nodeApplyAdapter) Snapshot(context.Context, dataplane.Plan, string) error {
+func (a *nodeApplyAdapter) Snapshot(_ context.Context, plan dataplane.Plan, _ string) error {
+	original := defaultRouteClonePlan(plan)
+	a.planned = &original
 	return a.phase("snapshot")
 }
 func (a *nodeApplyAdapter) Stage(context.Context, dataplane.Plan, string) error {

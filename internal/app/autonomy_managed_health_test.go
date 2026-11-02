@@ -17,7 +17,7 @@ import (
 // only the journal precondition used by the autonomous managed matcher, never
 // fabricates an original managed owner or declares native health.
 func TestAutonomyManagedXrayJournalMatchesActualCommittedPublicationToOriginalPlannedIntent(t *testing.T) {
-	a, id, _ := nodeApplyFixture(t)
+	a, id, adapter := nodeApplyFixture(t)
 	preview := nodeRouteRequest(a, id, "preview", map[string]any{"service_id": "telegram"}, "owner-a", context.Background())
 	var reviewed struct {
 		Ready       bool            `json:"ready"`
@@ -36,12 +36,19 @@ func TestAutonomyManagedXrayJournalMatchesActualCommittedPublicationToOriginalPl
 		t.Fatal("fixture did not exercise actual planned/committed difference", err)
 	}
 	revision := a.Store.Get().AppliedRevision
-	if !autonomyManagedXrayJournalMatches(a.Dataplane, committed, reviewed.Transaction, revision) {
+	// Apply rebuilds the immutable plan from the reviewed intent. Its actual
+	// CreatedAt may cross a second boundary after preview; preview is not the
+	// original execution image. Observe that image at the existing Snapshot.
+	if adapter.planned == nil || adapter.planned.Digest != reviewed.Transaction.Digest || adapter.planned.PlanID != reviewed.Transaction.PlanID {
+		t.Fatal("actual original execution intent was not observed")
+	}
+	planned := *adapter.planned
+	if !autonomyManagedXrayJournalMatches(a.Dataplane, committed, planned, revision) {
 		t.Fatal("actual committed documentary fields revoked unchanged original intent")
 	}
-	for _, change := range []string{"plan-ID", "digest", "revision", "route", "scope", "recipe", "noncommitted", "document-copy"} {
+	for _, change := range []string{"plan-ID", "digest", "revision", "created-at", "route", "scope", "recipe", "noncommitted", "document-copy"} {
 		t.Run(change, func(t *testing.T) {
-			original, actual := defaultRouteClonePlan(reviewed.Transaction), defaultRouteClonePlan(committed)
+			original, actual := defaultRouteClonePlan(planned), defaultRouteClonePlan(committed)
 			switch change {
 			case "plan-ID":
 				original.PlanID += "-foreign"
@@ -49,6 +56,8 @@ func TestAutonomyManagedXrayJournalMatchesActualCommittedPublicationToOriginalPl
 				original.Digest = "foreign"
 			case "revision":
 				original.Revision++
+			case "created-at":
+				original.CreatedAt = "2000-01-01T00:00:00Z"
 			case "route":
 				original.Routes[0].Resolved = "direct"
 			case "scope":
@@ -65,8 +74,8 @@ func TestAutonomyManagedXrayJournalMatchesActualCommittedPublicationToOriginalPl
 			}
 		})
 	}
-	if autonomyManagedXrayJournalMatches(dataplane.New(t.TempDir()), committed, reviewed.Transaction, revision) ||
-		autonomyManagedXrayJournalMatches(a.Dataplane, committed, reviewed.Transaction, revision+1) {
+	if autonomyManagedXrayJournalMatches(dataplane.New(t.TempDir()), committed, planned, revision) ||
+		autonomyManagedXrayJournalMatches(a.Dataplane, committed, planned, revision+1) {
 		t.Fatal("foreign journal or wrong applied revision accepted")
 	}
 }

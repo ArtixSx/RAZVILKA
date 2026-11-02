@@ -115,6 +115,7 @@ func (j durableServiceJob) presentation() *nodeCheckJob {
 		ErrorCode: code, Total: total, Completed: completed,
 		StartedAt: j.CreatedAt, FinishedAt: j.FinishedAt, Message: message, Results: []nodeCheckItem{}}
 	if j.Request.Kind == "node-check" {
+		p.Timing = nodeJobTimingView(j.CreatedAt, nil, j.FinishedAt, time.Now().UTC())
 		p.Mode, p.Total = j.Request.NodeCheckMode, len(j.Request.NodeIDs)
 		p.EarlierNetworkCompleted = j.CheckEpochStart
 		if !j.terminal() && j.Reason == "network-unconfirmed" {
@@ -513,6 +514,7 @@ func (a *App) addDurableServiceJobsView(view map[string]any, checksOnly bool) {
 		p := j.presentation()
 		if current, ok := observations[j.ID]; ok && j.Request.Kind == "node-check" && current.network != "" && current.network == j.CheckNetwork {
 			p.ResultState = "current-process"
+			p.Timing = nodeJobTimingView(j.CreatedAt, current.Timing, j.FinishedAt, time.Now().UTC())
 			p.Results = slices.Clone(current.Results)
 			p.Passed, p.Failed, p.Inconclusive, p.Skipped = current.Passed, current.Failed, current.Inconclusive, current.Skipped
 		}

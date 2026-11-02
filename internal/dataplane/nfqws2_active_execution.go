@@ -46,6 +46,7 @@ type nfqws2ActiveExecution struct {
 	activationAttempted    bool
 	activationSeal         *nfqws2ActiveActivationSeal
 	lanActivationAttempted bool
+	processDirectory       *nfqwsActiveProcessDirectory
 	preEffectLAN           *nfqwsPreEffectLANReview
 	directPreparation      *nfqwsDirectPreparationWitness
 }
@@ -170,6 +171,7 @@ func nfqws2ActiveSamePlan(expected, actual Plan) bool {
 // Structural/typed owner checks also serve cleanup. They deliberately do not
 // query the forward source, selected scope or ready-only control after Stop.
 func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseOwners)()
 	if e == nil || e.self != e || e.material == nil || e.material.self != e.material || nfqws2ActiveOperation(ctx) != nil ||
 		e.material.manager == nil || e.material.manager.StateRoot != e.material.managerRoot || e.gate == nil || e.gate.Binding != e.lan ||
 		e.lan == nil || e.runtime == nil || e.lan.Runtime != e.runtime || e.material.adapter == nil || e.material.provider == nil || e.inventory.reader.CheckTools == nil ||
@@ -198,6 +200,11 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 	if !associated {
 		return ErrNFQWSScopedOwner
 	}
+	if directory := e.originalProcessDirectory(); directory != nil {
+		if err := directory.current(ctx); err != nil {
+			return err
+		}
+	}
 	return e.material.provider.WithCurrent(ctx, func(c context.Context, identity netidentity.Identity) error {
 		if identity != e.material.intent.NetworkIdentity {
 			return ErrNFQWSScopedOwner
@@ -207,6 +214,7 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) forward(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseCurrent)()
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
@@ -220,6 +228,7 @@ func (e *nfqws2ActiveExecution) forward(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) cleanupCurrent(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseCleanupCurrent)()
 	if e == nil || e.cleanup == nil || e.material == nil || e.material.control == nil {
 		return ErrNFQWSScopedOwner
 	}
@@ -328,6 +337,21 @@ func (e *nfqws2ActiveExecution) verifyLAN(ctx context.Context, lan *LANPolicyRun
 		return ErrNFQWSScopedOwner
 	}
 	ctx = networkPolicyConsumerContext(ctx, e.plan)
+	// Activation's pre-Acquire LAN review precedes the original binding.
+	// Keep its full existing observation path until that producer exists.
+	if e.binding == nil || e.resource == nil {
+		return e.verifyLANObserved(ctx, lan)
+	}
+	// Prepared-owner verification uses a deliberate readonly binding copy.
+	// Borrow only from this execution's original binding around these pure
+	// receipt/LAN/inventory reads; no result crosses the enclosing callback.
+	return e.binding.observeActiveTools(ctx, e.resource.Plan(), func(observed context.Context) error {
+		return e.verifyLANObserved(observed, lan)
+	})
+}
+
+func (e *nfqws2ActiveExecution) verifyLANObserved(ctx context.Context, lan *LANPolicyRuntimePlan) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseActiveLAN)()
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
@@ -385,19 +409,25 @@ func (e *nfqws2ActiveExecution) prepare(ctx context.Context) error {
 	return nil
 }
 
-func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
+func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseActivate)()
+	stage := "activate.issue"
+	defer func() { resultErr = nfqwsExecutionFailure(stage, resultErr) }()
 	seal, err := e.issueOriginalActivation(ctx)
 	if err != nil {
 		return err
 	}
+	stage = "activate.guards"
 	if e.committedGuard == nil || e.cleanupGuard == nil || e.cleanup == nil {
 		return preflightRefusalError{ErrNFQWSScopedOwner}
 	}
 	guards := nfqwsExecutionTransferGuards{committed: e.committedGuard, cleanup: e.cleanupGuard, originalCleanup: e.cleanup, control: e.material.control}
 	ctx = context.WithValue(ctx, nfqwsExecutionTransferGuardsKey{}, guards)
+	stage = "activate.consume"
 	if err := seal.consume(ctx, e); err != nil {
 		return preflightRefusalError{err}
 	}
+	stage = "activate.associate"
 	e.mu.Lock()
 	if e.started {
 		e.mu.Unlock()
@@ -447,6 +477,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	})
 	ctx = context.WithValue(ctx, nfqwsExecutionReadbackKey{}, readback)
 	ctx = context.WithValue(ctx, nfqwsExecutionActiveReadbackKey{}, activeReadback)
+	stage = "activate.resource"
 	r, err := AcquireNFQWSExecutionResource(ctx, e.spec.Clone())
 	if err != nil {
 		e.mu.Lock()
@@ -455,12 +486,14 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		return err
 	}
 	e.resource = r
+	stage = "activate.configure"
 	if err := r.configureActive(ctx, e.material.command); err != nil {
 		e.mu.Lock()
 		e.preparationErr = err
 		e.mu.Unlock()
 		return err
 	}
+	stage = "activate.binding"
 	e.binding, err = NewTypedNFQWSScopedBinding(e.material.provider, &e.inventory, NFQWSScopedBinding{
 		Runner: e.runtimeFrozen.Runner, Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
 		ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard, VerifyLAN: e.verifyLAN, AdditionalReadback: e.additional,
@@ -476,6 +509,17 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		e.mu.Unlock()
 		return err
 	}
+	stage = "activate.process-directory"
+	// This exact producer owns its additional inventory predicate. Removing
+	// the public callback makes mixed/replaced callbacks fail explicitly.
+	e.binding.AdditionalReadback = nil
+	e.binding.activeReadback = e
+	if err := e.prepareOriginalProcessDirectory(ctx); err != nil {
+		e.mu.Lock()
+		e.preparationErr = err
+		e.mu.Unlock()
+		return err
+	}
 	admission := nfqws2ActiveProcessAdmission{execution: e, Binding: r.Binding(), Spec: r.Plan().Spec(), Provider: e.material.provider,
 		BeforeStart: r.BeforeStart, WithStart: r.WithStart, Current: func(c context.Context, b NFQWSExecutionBinding) error {
 			if b != r.Binding() {
@@ -483,7 +527,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 			}
 			return e.current(c, r.Plan())
 		}, WithTransfer: r.WithTransfer, PublishTransferACK: r.PublishTransferACK,
-		Prepared: func(c context.Context, b NFQWSExecutionBinding, obs NFQWSActiveObservation) error {
+		Prepared: func(c context.Context, b NFQWSExecutionBinding, obs NFQWSActiveObservation) (result error) {
+			phase := "prepared.owner-opening"
+			defer func() { result = nfqwsExecutionFailure(phase, result) }()
 			p := nfqws2ActivePreparedFromContext(c)
 			if p == nil || b != r.Binding() || p.VerifyOwnerObservation(c, obs) != nil {
 				return ErrNFQWSScopedOwner
@@ -495,20 +541,29 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 			}
 			e.prepared = p
 			e.mu.Unlock()
+			phase = "prepared.bind"
 			if err := r.bindPrepared(c, p, obs); err != nil {
 				return err
 			}
-			if err := r.PreparedActive(c, b, obs); err != nil {
-				return err
+			phase = "prepared.active"
+			preparedErr := func() error {
+				defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
+				return r.PreparedActive(c, b, obs)
+			}()
+			if preparedErr != nil {
+				return preparedErr
 			}
+			phase = "prepared.policy-apply"
 			if err := e.binding.Apply(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root()); err != nil {
 				return err
 			}
+			phase = "prepared.owner-closing"
 			return p.VerifyOwnerObservation(c, obs)
 		}}
 	e.mu.Lock()
 	e.launchInvoked = true // Sticky even when the producer returns nil/unknown.
 	e.mu.Unlock()
+	stage = "activate.start"
 	p, startErr := e.material.adapter.startPreparedNFQWSProcess(ctx, e.panel, e.material.command, nil, admission)
 	e.mu.Lock()
 	if e.prepared == nil {
@@ -522,6 +577,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	if startErr != nil || p == nil || p != original {
 		return errors.Join(ErrNFQWSScopedOwner, startErr)
 	}
+	stage = "activate.health"
 	return e.health(ctx)
 }
 

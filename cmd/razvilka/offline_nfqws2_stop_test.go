@@ -45,7 +45,7 @@ func TestOfflineNFQWS2StopCLIChild(t *testing.T) {
 }
 
 func offlineStopTestPaths(base string) offlineNFQWS2StopPaths {
-	return offlineNFQWS2StopPaths{
+	return offlineNFQWS2StopPaths{strategyLab: filepath.Join(base, "lab.json"),
 		config: filepath.Join(base, "config.json"), customServices: filepath.Join(base, "custom.json"), devices: filepath.Join(base, "devices.json"),
 		stage: filepath.Join(base, "staging"), backups: filepath.Join(base, "backups"), cloudflare: filepath.Join(base, "cloudflare"), nodes: filepath.Join(base, "nodes"),
 		warp: filepath.Join(base, "warp"), dataplane: filepath.Join(base, "dataplane"), dns: filepath.Join(base, "dns.json"),
@@ -309,7 +309,7 @@ func TestOfflineNFQWS2StopRequiresExistingConfigAndReleasesAllLeases(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			allowed := map[string]bool{"staging": true, "private-restore": true, "private-restore-nodes-v1": true, "private-restore-native-v1": true, "private-restore-feeds-v1": true}
+			allowed := map[string]bool{"staging": true, "private-restore": true, "private-restore-nodes-v1": true, "private-restore-native-v1": true, "private-restore-feeds-v1": true, "private-restore-strategylab-v1": true}
 			if content != "missing" {
 				allowed["config.json"] = true
 			}
@@ -322,7 +322,7 @@ func TestOfflineNFQWS2StopRequiresExistingConfigAndReleasesAllLeases(t *testing.
 			if err != nil || stage.Mode().Perm() != 0755 {
 				t.Fatal("explicit Stop normalized staging before native review", err)
 			}
-			legacy, current, _, _, err := preparePrivateRecoveries(paths.config, paths.customServices, paths.devices, paths.stage, paths.cloudflare, paths.nodes, paths.warp)
+			legacy, current, _, _, err := preparePrivateRecoveries(paths.config, paths.customServices, paths.devices, paths.stage, paths.cloudflare, paths.nodes, paths.warp, paths.strategyLab)
 			if err != nil {
 				t.Fatal("refused command leaked a private recovery lifetime lease", err)
 			}
@@ -334,7 +334,7 @@ func TestOfflineNFQWS2StopRequiresExistingConfigAndReleasesAllLeases(t *testing.
 }
 
 func TestOfflineNFQWS2StopCannotRunBesideAnyPrivateGeneration(t *testing.T) {
-	for _, generation := range []string{"legacy", "nodes", "native", "feeds"} {
+	for _, generation := range []string{"legacy", "nodes", "native", "feeds", "strategy"} {
 		t.Run(generation, func(t *testing.T) {
 			base := t.TempDir()
 			p := offlineStopTestPaths(base)
@@ -350,6 +350,8 @@ func TestOfflineNFQWS2StopCannotRunBesideAnyPrivateGeneration(t *testing.T) {
 				lease, _, err = prepareNodePrivateRecoveryContext(ctx, p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes)
 			case "native":
 				lease, _, err = prepareNativePrivateRecovery(ctx, p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp)
+			case "strategy":
+				lease, _, err = privaterestore.Open(ctx, privaterestore.Layout{Config: p.config, CustomServices: p.customServices, Devices: p.devices, StageRoot: p.stage, ProviderRoot: p.cloudflare, NodeRoot: p.nodes, WarpRoot: p.warp, FeedRoot: filepath.Join(base, "subscriptions-private"), StrategyLabPath: p.strategyLab, JournalRoot: filepath.Join(base, "private-restore-strategylab-v1")})
 			case "feeds":
 				lease, _, err = prepareFeedPrivateRecovery(ctx, p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp)
 			}
@@ -375,7 +377,7 @@ func TestOfflineNFQWS2StopCannotRunBesideAnyPrivateGeneration(t *testing.T) {
 }
 
 func TestOfflineNFQWS2StopDoesNotReplayPreparedPrivateRestore(t *testing.T) {
-	for generation, directory := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
+	for generation, directory := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1", "private-restore-strategylab-v1"} {
 		t.Run(directory, func(t *testing.T) {
 			base := t.TempDir()
 			p := offlineStopTestPaths(base)
@@ -391,7 +393,7 @@ func TestOfflineNFQWS2StopDoesNotReplayPreparedPrivateRestore(t *testing.T) {
 			if _, err := engineconfig.New(p.stage, p.backups).Stage("nfqws2", "user-list", "retained.example\n"); err != nil {
 				t.Fatal(err)
 			}
-			legacy, current, _, _, err := preparePrivateRecoveries(p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp)
+			legacy, current, _, _, err := preparePrivateRecoveries(p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp, p.strategyLab)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -458,7 +460,7 @@ func TestOfflineNFQWS2StopDoesNotReplayPreparedPrivateRestore(t *testing.T) {
 			}
 			// This is a recoverable real typed scope, not corrupt metadata which
 			// happened to refuse: the old ordinary Open path demonstrably writes.
-			legacy, current, older, newest, err := preparePrivateRecoveries(p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp)
+			legacy, current, older, newest, err := preparePrivateRecoveries(p.config, p.customServices, p.devices, p.stage, p.cloudflare, p.nodes, p.warp, p.strategyLab)
 			if err != nil || older != restorejournal.RolledBack && newest != restorejournal.RolledBack {
 				t.Fatal("control did not reproduce ordinary recovery's target writes", older, newest, err)
 			}

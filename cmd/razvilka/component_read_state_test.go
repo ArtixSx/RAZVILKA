@@ -14,7 +14,7 @@ import (
 )
 
 func TestComponentReadMetadataIsExactStandaloneAndKeepsLegacyWriter(t *testing.T) {
-	if components.ComponentUpdateSchema != 2 || components.ManagedNFQWSJournalSchema != 3 || app.ManagedComponentReadVersion != 4 {
+	if components.ComponentUpdateSchema != 2 || components.ManagedNFQWSJournalSchema != 3 || app.ManagedComponentReadVersion != 6 {
 		t.Fatal("legacy package writer changed or actual reader unavailable")
 	}
 	state := filepath.Join(t.TempDir(), "never-initialize")

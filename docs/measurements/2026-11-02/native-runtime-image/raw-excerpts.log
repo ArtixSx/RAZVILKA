@@ -1,0 +1,100 @@
+=== production full raw job log SHA256 3873f4b074b520220832f456727a3fd1f4f069d694ef42931cd4d8c94b076585 ===
+2026-11-02T02:27:44.7964422Z go version go1.26.5 linux/amd64
+2026-11-02T02:28:57.2317231Z --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences (0.00s)
+2026-11-02T02:28:57.2318699Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged (0.00s)
+2026-11-02T02:28:57.2320400Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime (0.00s)
+2026-11-02T02:28:57.2322047Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte (0.00s)
+2026-11-02T02:28:57.2323561Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated (0.00s)
+2026-11-02T02:28:57.2325071Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd (0.00s)
+2026-11-02T02:28:57.2326796Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled (0.00s)
+2026-11-02T02:28:57.2329303Z --- PASS: TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier (0.03s)
+2026-11-02T02:28:57.2339698Z --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift (0.13s)
+2026-11-02T02:28:57.2341230Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime (0.02s)
+2026-11-02T02:28:57.2370465Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode (0.02s)
+2026-11-02T02:28:57.2372086Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member (0.02s)
+2026-11-02T02:28:57.2373600Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced (0.02s)
+2026-11-02T02:28:57.2375098Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd (0.02s)
+2026-11-02T02:28:57.2376455Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled (0.02s)
+2026-11-02T02:28:57.2381450Z --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking (0.04s)
+2026-11-02T02:28:57.2382844Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo (0.03s)
+2026-11-02T02:28:57.2384312Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink (0.02s)
+2026-11-02T02:28:57.4429482Z echo "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"
+2026-11-02T02:28:57.7050374Z HEAD is now at 1e14b1c2 test: measure actual managed payload reads and in-process allocation in native workflows
+2026-11-02T02:28:58.3082251Z go version go1.26.5 linux/amd64
+2026-11-02T02:28:58.3315900Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-02T02:29:57.1900867Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 5439873832 8768150
+2026-11-02T02:29:57.1903130Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T02:29:57.1916451Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 13.094472209s actual inventory ToolCheck calls 382 ToolCheck wall 5.640121055s
+2026-11-02T02:29:57.3441478Z --- PASS: TestManagedStrategyProbeNativeConsumer (14.27s)
+2026-11-02T02:30:10.2968496Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 4544135872 6221322
+2026-11-02T02:30:10.2970381Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T02:30:10.2983460Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 11.381176191s actual inventory ToolCheck calls 242 ToolCheck wall 3.577840104s
+2026-11-02T02:30:46.3102311Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 14113282312 19860201
+2026-11-02T02:30:46.3103331Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 41976 3432377520
+2026-11-02T02:30:46.3275584Z --- FAIL: TestManagedStrategyProbeNativeAppHTTP (30.78s)
+2026-11-02T02:30:47.5118615Z go version go1.26.5 linux/amd64
+2026-11-02T02:30:47.5338887Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-02T02:31:25.4548552Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 14227883792 20361824
+2026-11-02T02:31:25.4550136Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 41976 3432377520
+2026-11-02T02:31:25.4771691Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (33.31s)
+2026-11-02T02:31:26.4724816Z go version go1.26.5 linux/amd64
+2026-11-02T02:31:26.4941786Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-02T02:32:16.1090004Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 3566881664 8608736
+2026-11-02T02:32:16.1091154Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T02:32:16.1098533Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 12.334399823s actual inventory ToolCheck calls 382 ToolCheck wall 5.621329866s
+2026-11-02T02:32:16.2452592Z --- PASS: TestManagedStrategyProbeNativeConsumer (13.53s)
+2026-11-02T02:32:28.3957677Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 2670885184 6061751
+2026-11-02T02:32:28.3959950Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T02:32:28.3974265Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 10.585413226s actual inventory ToolCheck calls 242 ToolCheck wall 3.566571483s
+2026-11-02T02:33:03.0056198Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 10328240664 19541944
+2026-11-02T02:33:03.0058203Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 41976 3432377520
+2026-11-02T02:33:03.0222302Z --- FAIL: TestManagedStrategyProbeNativeAppHTTP (29.37s)
+2026-11-02T02:33:04.1062030Z go version go1.26.5 linux/amd64
+2026-11-02T02:33:04.1284386Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-02T02:33:40.5162512Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 10441263640 20042872
+2026-11-02T02:33:40.5164296Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 41976 3432377520
+2026-11-02T02:33:40.5370317Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (31.88s)
+2026-11-02T02:33:41.0599263Z Actual native statuses before=1 before_lan=1 after=1 lan=1
+=== race full raw job log SHA256 30d06dacdd252500c1412daf5c0024b6aa29ae2904379e76400990f06bb46ceb ===
+2026-11-02T02:27:45.5038257Z go version go1.26.5 linux/amd64
+2026-11-02T02:29:12.0552463Z --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences (0.01s)
+2026-11-02T02:29:12.0553406Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged (0.00s)
+2026-11-02T02:29:12.0554089Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime (0.00s)
+2026-11-02T02:29:12.0554755Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte (0.00s)
+2026-11-02T02:29:12.0555357Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated (0.00s)
+2026-11-02T02:29:12.0555949Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd (0.00s)
+2026-11-02T02:29:12.0556537Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled (0.00s)
+2026-11-02T02:29:12.0557564Z --- PASS: TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier (0.07s)
+2026-11-02T02:29:12.0561773Z --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift (0.28s)
+2026-11-02T02:29:12.0562383Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime (0.05s)
+2026-11-02T02:29:12.0563308Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode (0.05s)
+2026-11-02T02:29:12.0563948Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member (0.04s)
+2026-11-02T02:29:12.0564570Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced (0.04s)
+2026-11-02T02:29:12.0565209Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd (0.05s)
+2026-11-02T02:29:12.0583035Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled (0.05s)
+2026-11-02T02:29:12.0585745Z --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking (0.59s)
+2026-11-02T02:29:12.0586341Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo (0.05s)
+2026-11-02T02:29:12.0586956Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink (0.54s)
+2026-11-02T02:29:12.3228503Z echo "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"
+2026-11-02T02:29:12.5275414Z HEAD is now at 1e14b1c2 test: measure actual managed payload reads and in-process allocation in native workflows
+2026-11-02T02:29:13.1368163Z go version go1.26.5 linux/amd64
+2026-11-02T02:29:13.1543941Z Actual CPU: model name	: AMD EPYC 9V74 80-Core Processor
+2026-11-02T02:30:39.9834765Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 4509797832 3362501
+2026-11-02T02:30:39.9836322Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 6996 572062920
+2026-11-02T02:30:39.9842641Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 15.010040214s actual inventory ToolCheck calls 108 ToolCheck wall 3.32873371s
+2026-11-02T02:30:41.0111386Z go version go1.26.5 linux/amd64
+2026-11-02T02:30:41.0291656Z Actual CPU: model name	: AMD EPYC 9V74 80-Core Processor
+2026-11-02T02:31:09.1682621Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 4634825736 3500779
+2026-11-02T02:31:09.1683425Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 7224 590706480
+2026-11-02T02:31:09.2094285Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.56s)
+2026-11-02T02:31:10.0934033Z go version go1.26.5 linux/amd64
+2026-11-02T02:31:10.1108442Z Actual CPU: model name	: AMD EPYC 9V74 80-Core Processor
+2026-11-02T02:32:19.1426900Z     strategy_managed_probe_native_linux_test.go:511: native measured Execute in-process allocated-bytes/objects 3207718720 4730714
+2026-11-02T02:32:19.1428439Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 9660 789898200
+2026-11-02T02:32:19.1434759Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 15.020807279s actual inventory ToolCheck calls 170 ToolCheck wall 4.366477503s
+2026-11-02T02:32:20.2889395Z go version go1.26.5 linux/amd64
+2026-11-02T02:32:20.3071411Z Actual CPU: model name	: AMD EPYC 9V74 80-Core Processor
+2026-11-02T02:32:49.2491560Z     strategy_managed_probe_native_linux_test.go:454: native actual HTTP in-process allocated-bytes/objects 3171727176 4756076
+2026-11-02T02:32:49.2492744Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 9576 783029520
+2026-11-02T02:32:49.2949581Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.92s)
+2026-11-02T02:32:49.7501266Z Actual native statuses before=1 before_lan=1 after=1 lan=1

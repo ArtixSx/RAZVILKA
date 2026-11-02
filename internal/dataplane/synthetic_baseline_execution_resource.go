@@ -143,6 +143,9 @@ func (r *syntheticBaselineExecutionResource) local(ctx context.Context) error {
 }
 
 func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error {
+	return r.currentWithFiles(ctx, nil)
+}
+func (r *syntheticBaselineExecutionResource) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if err := r.local(ctx); err != nil {
 		return err
 	}
@@ -155,7 +158,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 	if err := r.mapping.Current(ctx); err != nil {
 		return err
 	}
-	if err := r.capture.Current(ctx); err != nil {
+	if err := r.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := r.tools.Runner.CheckSyntheticDNS(ctx, r.tools.Identity); err != nil {
@@ -164,7 +167,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 	if err := r.control.Current(ctx); err != nil {
 		return err
 	}
-	if err := r.capture.Current(ctx); err != nil {
+	if err := r.capture.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	if err := r.mapping.Current(ctx); err != nil {
@@ -179,6 +182,7 @@ func (r *syntheticBaselineExecutionResource) current(ctx context.Context) error 
 // An attempt is one-shot. Unknown Start/Wait/ACK/readback never retries Add or
 // deletes a possibly issued alias. COMMON's original receipt remains fenced.
 func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context) error {
+	defer domainTCPMeasure("standby-prepare")(0)
 	if r == nil || r.self != r {
 		return ErrSyntheticBaselineTransition
 	}
@@ -197,30 +201,46 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 		Runner: &syntheticBaselineEffectRunner{resource: r},
 		Tools:  PolicyEffectTools{IPTables: r.tools.IPTables},
 		Preflight: func(c context.Context) error {
-			if err := r.current(c); err != nil {
-				return err
-			}
-			view, err := r.inspector.read(c)
-			if err != nil {
-				return err
-			}
-			for i := range r.effects.Effects {
-				count, err := syntheticBaselineExactPresence(view.Rows, r.effects, i)
-				if err != nil || count != 0 {
-					return errors.Join(ErrSyntheticBaselineTransition, err)
+			return r.observeTools(c, func(observed context.Context) error {
+				if err := r.current(observed); err != nil {
+					return err
 				}
-			}
-			return syntheticBaselinePreDNATEquivalent(view.Rows, r.effects)
+				view, err := r.inspector.read(observed)
+				if err != nil {
+					return err
+				}
+				for i := range r.effects.Effects {
+					count, err := syntheticBaselineExactPresence(view.Rows, r.effects, i)
+					if err != nil || count != 0 {
+						return errors.Join(ErrSyntheticBaselineTransition, err)
+					}
+				}
+				return syntheticBaselinePreDNATEquivalent(view.Rows, r.effects)
+			})
 		},
-		ExactPresence: r.inspector.ExactPresence,
-		BeforeDelete:  func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending },
-		Guard:         func(c context.Context, _ int) error { return r.current(c) },
+		ExactPresence: func(c context.Context, i int) (int, error) {
+			count := 0
+			err := r.observeTools(c, func(observed context.Context) error {
+				var err error
+				count, err = r.inspector.ExactPresence(observed, i)
+				return err
+			})
+			return count, err
+		},
+		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending },
+		Guard: func(c context.Context, _ int) error {
+			defer domainTCPMeasure("standby-add-guard")(0)
+			return r.observeTools(c, r.currentInOriginalFileObservation)
+		},
 	}
 	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
-	if err := r.currentBaseline(ctx); err != nil {
+	// All COMMON additions returned before this pure closing comparison.
+	if err := r.observeTools(ctx, func(observed context.Context) error {
+		return r.observeOriginalFiles(observed, func(files *xrayDomainTCPFileObservation) error { return r.currentBaselineWithFiles(observed, files) })
+	}); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
@@ -236,7 +256,10 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 // This does not establish native RPDB/post-DNAT firmware equivalence, nor DNS
 // publication. The eventual concrete publication receiver must prove those.
 func (r *syntheticBaselineExecutionResource) currentBaseline(ctx context.Context) error {
-	if err := r.current(ctx); err != nil {
+	return r.currentBaselineWithFiles(ctx, nil)
+}
+func (r *syntheticBaselineExecutionResource) currentBaselineWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	// Retain the actual anchored document and permanent lock descriptors
@@ -250,7 +273,7 @@ func (r *syntheticBaselineExecutionResource) currentBaseline(ctx context.Context
 	if err := r.inspector.CheckPrepared(ctx); err != nil {
 		return err
 	}
-	if err := r.current(ctx); err != nil {
+	if err := r.currentWithFiles(ctx, files); err != nil {
 		return err
 	}
 	return receipt.current()
@@ -264,10 +287,17 @@ func (r *syntheticBaselineExecutionResource) prepareCapture(ctx context.Context)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.currentBaseline(ctx); err != nil {
-		return nil, err
-	}
-	if err := prepared.Current(ctx); err != nil {
+	// PrepareSyntheticMapping has returned from its actual capture effects.
+	// Only the following closing observations borrow the original sources;
+	// phase persistence below remains outside this readonly bracket.
+	if err := r.observeTools(ctx, func(observed context.Context) error {
+		return r.observeOriginalFiles(observed, func(files *xrayDomainTCPFileObservation) error {
+			if err := r.currentBaselineWithFiles(observed, files); err != nil {
+				return err
+			}
+			return prepared.currentWithFiles(observed, files)
+		})
+	}); err != nil {
 		return nil, err
 	}
 	if err := r.binding.scope.recordSyntheticBaselinePhase(ctx, r, "capture-ready"); err != nil {

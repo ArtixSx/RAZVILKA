@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -114,6 +115,7 @@ func runExternalBootstrapCommand(args []string, roots selfUpdateJournalRoots) (b
 		})
 	}
 	adapter := updatecheck.NewSelfUpdateFileAdapterWithAuthority(selfUpdateStopCheck, admit, selfUpdateRuntimeInactive)
+	adapter.ExecutionHistoryReader = dataplane.InspectRetainedExecutionReadVersion
 	result, err := adapter.BootstrapExternalOld193(ctx, args[1], args[2], args[3], owner, authority)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, externalBootstrapFailureOutput(updatecheck.ExternalBootstrapFailureCategory(err)))

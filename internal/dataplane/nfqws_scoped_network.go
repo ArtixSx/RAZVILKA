@@ -23,7 +23,7 @@ type nfqwsScopedNetworkBinding struct {
 // Legacy namespace callbacks cannot supply typed queue/backend observations.
 func NewTypedNFQWSScopedBinding(provider *netidentity.Provider, inventory *BackendInventory, binding NFQWSScopedBinding) (*NFQWSScopedBinding, error) {
 	if provider == nil || inventory == nil || inventory.reader.Provider != provider || inventory.reader.Runner == nil || inventory.reader.CheckTools == nil ||
-		binding.network != nil || binding.Runner == nil || binding.ApplyGuard == nil || binding.CleanupGuard == nil || binding.VerifyLAN == nil ||
+		binding.network != nil || binding.activeReadback != nil || binding.Runner == nil || binding.ApplyGuard == nil || binding.CleanupGuard == nil || binding.VerifyLAN == nil ||
 		binding.ProcessRunning == nil || binding.ProcessInactive == nil || binding.AdditionalReadback == nil ||
 		binding.Tools.IPTables != inventory.reader.IPTables || binding.Tools.IP6Tables != inventory.reader.IP6Tables {
 		return nil, ErrNFQWSScopedOwner

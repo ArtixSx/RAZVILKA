@@ -35,6 +35,8 @@ type ManagedNFQWSListRuntime struct {
 	gate            *dataplane.NetworkPolicyAdapter
 	checks          *dataplane.NetworkPolicyChecks
 	control         *operationgate.ControlEpochReview
+	probe           *dataplane.ManagedNFQWSProbeConsumer
+	physicalSource  managedNFQListPhysicalSource // nil selects the production stock constructors.
 	active, stopped *managedNFQWSListExecution
 	pending         *managedNFQWSListExecution
 	closed          bool
@@ -90,6 +92,10 @@ func (a *App) ConfigureReviewedStockNFQWSList(ctx, panel context.Context) (*Mana
 	}
 	r := &ManagedNFQWSListRuntime{policy: policy, app: a, manager: policy.manager, panel: policy.panel, provider: policy.provider, tools: policy.tools, inventory: policy.inventory, gate: policy.gate, checks: policy.checks, control: policy.control}
 	r.self = r
+	r.probe, err = dataplane.NewManagedNFQWSProbeConsumer(r.manager, r.gate, r.inventory, r.control, a.SelfUpdateFiles.ControlRoot, r.provider, r.panel)
+	if err != nil {
+		return nil, err
+	}
 	policy.mu.Lock()
 	defer policy.mu.Unlock()
 	if policy.nfq != nil || policy.closed.Load() {
@@ -125,6 +131,12 @@ func (r *ManagedNFQWSListRuntime) executionFor(ctx context.Context) (*managedNFQ
 
 // WithStart is called ONLY by the original held-fd startup tool executor.
 func (r *ManagedNFQWSListRuntime) WithStart(ctx context.Context, name string, args []string, digest string, begin func() error) error {
+	if r != nil && r.self == r && r.original() && !r.closed && r.probe != nil && r.probe.OwnsContext(ctx) {
+		if r.probe.ProbeCounterCommandCurrent(ctx, name, args, digest) == nil {
+			return r.probe.WithProbeCounterCommandStart(ctx, name, args, digest, begin)
+		}
+		return dataplane.WithNFQWSScopedCommandStart(ctx, name, args, digest, begin)
+	}
 	if _, _, err := r.executionFor(ctx); err != nil {
 		return err
 	}
@@ -598,6 +610,9 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 	if !r.original() {
 		return dataplane.ErrNFQWSScopedOwner
 	}
+	if r.app.managedStrategyProbePending() {
+		return dataplane.ErrNFQWSManagedProcessUnknown
+	}
 	r.mu.Lock()
 	live := r.active != nil || r.pending != nil
 	r.mu.Unlock()
@@ -610,6 +625,9 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 	defer r.mu.Unlock()
 	if r.active != nil || r.pending != nil {
 		return dataplane.ErrNFQWSScopedOwner
+	}
+	if r.app.managedStrategyProbePending() || r.probe != nil && r.probe.Pending() {
+		return dataplane.ErrNFQWSManagedProcessUnknown
 	}
 	if r.closed {
 		if r.policy != nil {
@@ -629,7 +647,7 @@ func (r *ManagedNFQWSListRuntime) Close(ctx context.Context) error {
 }
 
 func (r *ManagedNFQWSListRuntime) original() bool {
-	return r != nil && r.self == r && r.app != nil && r.app.Dataplane == r.manager && r.app.Store != nil && r.manager != nil && r.panel != nil && r.provider != nil && r.tools != nil && r.inventory != nil && r.gate != nil && r.checks != nil && r.control != nil
+	return r != nil && r.self == r && r.app != nil && r.app.Dataplane == r.manager && r.app.Store != nil && r.manager != nil && r.panel != nil && r.provider != nil && r.tools != nil && r.inventory != nil && r.gate != nil && r.checks != nil && r.control != nil && (r.physicalSource == nil || r.physicalSource.original(r))
 }
 
 func (a *App) managedNFQListPending() bool {

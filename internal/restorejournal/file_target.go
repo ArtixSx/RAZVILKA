@@ -36,6 +36,7 @@ func RetryableFileAdmission(err error) bool {
 // adapter. It does not protect against root, legacy writers or hardlink/path
 // aliases. Targets are configured at startup, never taken from an archive.
 type FileTarget struct {
+	mode          os.FileMode // 0600 state by default; explicit executable adapter uses 0755.
 	mu            sync.Mutex
 	root          *ownedfs.Root
 	name          string
@@ -64,7 +65,41 @@ func OpenExistingFileTarget(path string) (*FileTarget, error) {
 	return openFileTarget(path, true)
 }
 
+// OpenExecutableFileTarget is the existing CAS/lease adapter for a trusted
+// executable destination. Its typed caller must bind this 0755 contract in the
+// journal scope; arbitrary imported paths cannot select it. Secret-store
+// constructors and OpenExistingFileTarget retain the original 0600 behavior.
+func OpenExecutableFileTarget(path string) (*FileTarget, error) {
+	return openFileTargetMode(path, false, 0755)
+}
+
+// OpenExistingExecutableFileTarget retains the original writer marker while
+// recovering the trusted executable contract. It never creates a new marker.
+func OpenExistingExecutableFileTarget(path string) (*FileTarget, error) {
+	return openFileTargetMode(path, true, 0755)
+}
 func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
+	return openFileTargetMode(path, existingOnly, 0600)
+}
+func openFileTargetMode(path string, existingOnly bool, mode os.FileMode) (*FileTarget, error) {
+	f, err := openFileTargetLease(path, existingOnly, mode)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Read(context.Background()); err != nil {
+		closeErr := f.Close()
+		if existingOnly && closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
+	}
+	return f, nil
+}
+
+// Only typed adapters use this constructor: it acquires the exact same writer
+// lease without assuming a byte-image format. The caller must validate the
+// actual target with its own bounded reader before publishing the adapter.
+func openFileTargetLease(path string, existingOnly bool, mode os.FileMode) (*FileTarget, error) {
 	full, err := targetPath(path)
 	if err != nil {
 		return nil, err
@@ -106,7 +141,7 @@ func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
 		return nil, err
 	}
 	binding, _ := FileBinding(full)
-	f := &FileTarget{root: root, name: name, release: release, binding: binding, existingLease: existingLease}
+	f := &FileTarget{mode: mode, root: root, name: name, release: release, binding: binding, existingLease: existingLease}
 	f.syncDir = func() error { return syncJournalDir(root) }
 	f.write = func(after Image) error {
 		if err := f.checkExistingLease(); err != nil {
@@ -117,7 +152,7 @@ func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
 		}
 		var err error
 		if after.Exists {
-			err = root.WriteAtomic(name, after.Data, 0o600)
+			err = root.WriteAtomic(name, after.Data, f.mode)
 		} else {
 			err = root.Remove(name)
 		}
@@ -128,13 +163,6 @@ func openFileTarget(path string, existingOnly bool) (*FileTarget, error) {
 			return err
 		}
 		return f.checkExistingLease()
-	}
-	if _, err := f.Read(context.Background()); err != nil {
-		closeErr := f.Close()
-		if existingOnly && closeErr != nil {
-			return nil, errors.Join(err, closeErr)
-		}
-		return nil, err
 	}
 	return f, nil
 }
@@ -200,11 +228,28 @@ func (f *FileTarget) checkExistingTargetOwner() error {
 }
 
 func (f *FileTarget) readTarget(ctx context.Context) (Image, error) {
+	if err := f.checkExecutableTargetMode(); err != nil {
+		return Image{}, err
+	}
 	if f.existingLease == nil {
 		return readTarget(ctx, f.root, f.name)
 	}
 	image, _, err := f.readPublicationTarget(ctx)
 	return image, err
+}
+
+func (f *FileTarget) checkExecutableTargetMode() error {
+	if f.mode == 0755 && runtime.GOOS == "linux" {
+		info, err := f.root.Stat(f.name)
+		if err == nil && (!info.Mode().IsRegular() || info.Mode().Perm() != 0755) {
+			return ErrInvalid
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return ErrUnavailable
+		}
+	}
+
+	return nil
 }
 
 func (f *FileTarget) Read(ctx context.Context) (Image, error) {

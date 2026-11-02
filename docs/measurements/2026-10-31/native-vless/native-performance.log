@@ -1,0 +1,23 @@
+=== RUN   TestNativeVLESSCheckPerformance
+    nodecheck_native_perf_linux_test.go:44: historical-request-reference
+        === RUN   TestNativeVLESSCheckPerformance
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=historical-request-reference scenario=live repeated N=12 p50=502.681ms p95=506.826ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=historical-request-reference scenario=dead-service repeated N=12 p50=397.119ms p95=564.884ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=historical-request-reference scenario=cancel repeated N=12 p50=356.381ms p95=493.929ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=historical-request-reference scenario=dead-node repeated N=12 p50=6.140ms p95=6.746ms; stages overlap; fixture service delay40ms
+        --- PASS: TestNativeVLESSCheckPerformance (16.65s)
+        PASS
+    nodecheck_native_perf_linux_test.go:44: current-reuse
+        === RUN   TestNativeVLESSCheckPerformance
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=current-reuse scenario=live repeated N=12 p50=396.741ms p95=398.146ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=current-reuse scenario=dead-service repeated N=12 p50=397.594ms p95=448.912ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=current-reuse scenario=cancel repeated N=12 p50=357.107ms p95=362.588ms; stages overlap; fixture service delay40ms
+            nodecheck_native_perf_linux_test.go:143: native full Check algorithm=current-reuse scenario=dead-node repeated N=12 p50=6.256ms p95=6.852ms; stages overlap; fixture service delay40ms
+        --- PASS: TestNativeVLESSCheckPerformance (15.09s)
+        PASS
+--- PASS: TestNativeVLESSCheckPerformance (31.75s)
+PASS
+=== RUN   TestNativeVLESSQueueHTTPPerformance
+    node_native_perf_linux_test.go:192: native checker not used/passed: calls=0 passed=0 job={Timing:0x268dc0ba0000 network: Scope: ResultState:current-process EarlierNetworkCompleted:0 Matched:0 Passed:0 Failed:0 Inconclusive:1 ID:221753159561743 Phase:done ErrorCode: Skipped:0 Fetch:<nil> Mode:service ServiceID:telegram State:completed Total:1 Completed:1 StartedAt:2026-10-31 23:09:33.857098459 +0000 UTC FinishedAt:2026-10-31 23:09:33.89980436 +0000 UTC Message:Проверка подключений завершена. Маршруты не применялись; результаты имеют ограниченный срок. Results:[{ServiceErrorCategory: DirectEgressError: ProxyEgressError: Stages:[] NodeID:node-3df4e3bac1a9182b0a22301fda79f558a335cb68662486dc39fbba399ea6e81b NetworkProfile:wan-0123456789ab CheckedAt:2026-10-31 23:09:33.899749703 +0000 UTC Reachable:false Available:false LatencyMS:0 DurationMS:0 Message:Модуль точной проверки недоступен. Проверьте компоненты и журнал запуска RAZVILKA. Verdict:INCONCLUSIVE TestLevel:unconfirmed ErrorCode:node-checker-unavailable ConnectivityReady:false CleanupVerified:false CleanupStatus:not_observed ExpiresAt:0001-01-01 00:00:00 +0000 UTC Engine:sing-box Stage: DirectControl: ProbeID:}] ServiceResults:[] DNSResult:[] DNSRequest:<nil> DNSApplyAction:}
+--- FAIL: TestNativeVLESSQueueHTTPPerformance (0.15s)
+FAIL

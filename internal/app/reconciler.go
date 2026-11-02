@@ -187,7 +187,7 @@ func (a *App) interruptAutomation(r *http.Request) {
 		return
 	}
 	// These POST endpoints are pure conversions, not routing/installation intents.
-	if r.URL.Path == "/api/v1/extension-lab/mihomo" || r.URL.Path == "/api/v1/extension-lab/hev" {
+	if r.URL.Path == "/api/v1/extension-lab/mihomo" || r.URL.Path == "/api/v1/extension-lab/hev" || r.URL.Path == mihomoProbeRecoveryPath {
 		return
 	}
 

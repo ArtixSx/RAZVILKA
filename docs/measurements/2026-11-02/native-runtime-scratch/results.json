@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "kind": "single separate-run comparison; allocated bytes only, not RSS or causal speed proof",
+  "samples": [
+    {
+      "label": "before",
+      "commit": "7038cdd4c05a2f110f273db21ef7b5ec1c6c0c31",
+      "run": 41417804693,
+      "job": 125185814196,
+      "original_log_sha256": "17e2f21120e2e7ea0c60cf0d8946620bc1b8eddf57c875c2be249e6cd8a4e645",
+      "core_pass": true,
+      "core_test_wall_seconds": 8.36,
+      "execute_seconds": 7.632065091,
+      "allocated_bytes": 2031138832,
+      "allocated_objects": 7493694,
+      "http_three_probe_pass": true,
+      "http_test_wall_seconds": 27.13,
+      "member_reads": 13260,
+      "member_bytes": 1084270200,
+      "tool_checks": 382,
+      "version_child_starts": [
+        163,
+        163,
+        386
+      ],
+      "metadata_traversals": 2312
+    },
+    {
+      "label": "after",
+      "commit": "071e0dcbc375bd4a0d0bef1ca3f18a217551e1e2",
+      "run": 41421353459,
+      "job": 125197379590,
+      "original_log_sha256": "f919859ff4373a0ee4389f5a48f5586f2b1910dab820dd9e3c9d14f4a120e912",
+      "core_pass": true,
+      "core_test_wall_seconds": 12.93,
+      "execute_seconds": 11.715606522,
+      "allocated_bytes": 1157043240,
+      "allocated_objects": 7482215,
+      "member_reads": 13260,
+      "member_bytes": 1084270200,
+      "tool_checks": 382,
+      "version_child_starts": [
+        163,
+        163,
+        386
+      ],
+      "metadata_traversals": 2312,
+      "http_three_probe_pass": false,
+      "http_test_wall_seconds": 27.72
+    }
+  ],
+  "full_ci": 41421353395,
+  "normal_and_race_original_fd_guards_pass": true,
+  "limitations": [
+    "Different CI runner allocations; no matched hardware/load proof",
+    "One core sample per revision; no p50/p95 or resident-memory claim",
+    "After HTTP and full LAN/manual/race failed; direction incomplete",
+    "No reduction in actual member reads, metadata checks, child starts or ToolCheck calls"
+  ]
+}

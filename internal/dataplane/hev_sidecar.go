@@ -88,6 +88,9 @@ func (a *ProxyTunnelAdapter) buildSidecarConfig(ctx context.Context) ([]byte, er
 		return nil, e
 	}
 	if a.effectiveSidecar() == "hev" {
+		if err := a.preflightHEVRuntime(ctx); err != nil {
+			return nil, preflightRefusalError{err}
+		}
 		return a.hevConfig()
 	}
 	schema, e := a.detectSidecarSchema(ctx)
@@ -124,6 +127,9 @@ func (a *ProxyTunnelAdapter) validateSidecarConfig(ctx context.Context, path str
 		}
 		if !bytes.Equal(actual, expected) {
 			return errors.New("staged HEV config was changed")
+		}
+		if err := a.preflightHEVRuntime(ctx); err != nil {
+			return err
 		}
 		// Upstream has no native dry-run equivalent. Do not start a real TUN as a
 		// syntax test; Activate+Health must prove the running sidecar on the test rig.

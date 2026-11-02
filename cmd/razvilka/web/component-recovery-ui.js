@@ -40,17 +40,19 @@
     if (typeof value?.recovery_required !== 'boolean' || !Number.isSafeInteger(value.revision) || value.revision < 0) return false;
     if(value.capabilities!=null && !validCapabilities(value.capabilities))return false;
     const t=value.transaction;
-    if (!value.recovery_required && !t?.transaction_id) return true;
+    const hevPending=value.hev?.pending===true;
+    if ((!value.recovery_required || hevPending) && !t?.transaction_id) return true;
     const managed=t?.schema_version===3;
     if(managed && value.capabilities && (value.capabilities.live_proof_required!==false || value.capabilities.supported_actions.some(a=>!['resume','rollback'].includes(a))))return false;
     return [1,2,3].includes(t?.schema_version) && (t.phase!=='accepted-installed-idle' || t.schema_version!==1) && /^[a-f0-9]{32}$/.test(t.transaction_id) && (managed?t.component==='nfqws2':supported.includes(t.component))
       && Object.hasOwn(managed?managedStages:stages,t.phase) && typeof t.before_version==='string' && t.before_version.length>0 && t.before_version.length<=256
       && (managed?typeof t.after_version==='string' && t.after_version.length>0 && t.after_version.length<=256:t.after_version==null || typeof t.after_version==='string' && t.after_version.length<=256)
       && Number.isFinite(Date.parse(t.updated_at))
-      && value.recovery_required===!['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(t.phase);
+      && value.recovery_required===(hevPending || !['accepted','accepted-installed-idle','rolled-back','abandoned'].includes(t.phase));
   }
   function summary(value, receipt) {
     if (!valid(value)) return {label:'Журнал не прочитан',detail:'Изменения компонентов недоступны до свежего чтения.',actions:[],tone:'unknown'};
+    if(value.hev?.pending===true)return {label:'Установка HEV требует восстановления',detail:'Откройте «Восстановление установки HEV» в верхней части панели и прочитайте журнал. Остальные изменения приостановлены.',actions:[],tone:'unknown'};
     const t=value.transaction;
     if (!t?.transaction_id) return {label:'Незавершённых обновлений нет',detail:'Установка, процесс и доступ сервиса проверяются отдельно.',actions:[],tone:'unknown'};
     const managed=t.schema_version===3;

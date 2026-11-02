@@ -16,6 +16,9 @@ func (l *Lease) runSyntheticDNS(ctx context.Context, name string, args ...string
 		return nil, at("SYNTHETIC_DNS_UNISSUED", nil)
 	}
 	frozen := slices.Clone(args)
+	if name == l.profile.ipAlias && syntheticDomainBaselineIPArguments(frozen) && !l.profile.stock {
+		return l.policyEffect(ctx, 2, frozen)
+	}
 	if name != l.profile.aliases[0] || !syntheticDNSArguments(frozen) {
 		return nil, at("SYNTHETIC_DNS_ABI", nil)
 	}

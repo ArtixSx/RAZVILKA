@@ -23,19 +23,22 @@ var ErrSelectedCandidateChanged = errors.New("saved StrategyLab selection or its
 // completed compatibility; it grants no list, queue, LAN or launch permission.
 // Detached Candidate/Selection values cannot replace this original handle.
 type SelectedCandidateReview struct {
-	self       *SelectedCandidateReview
-	mu         sync.Mutex
-	closed     bool
-	binding    adaptiveCandidateBinding
-	selection  Selection
-	path       string
-	image      restorejournal.Image
-	file       os.FileInfo
-	parent     os.FileInfo
-	provider   *SupervisedCompatibilityProvider
-	review     compatibilityReview
-	runtime    *components.ManagedNFQWSRuntimeLease
-	descriptor components.NFQWSRuntimeDescriptor
+	probe        *ManagedProbeEpoch
+	managedEpoch *ManagedProbeEpoch
+	canary       bool
+	self         *SelectedCandidateReview
+	mu           sync.Mutex
+	closed       bool
+	binding      adaptiveCandidateBinding
+	selection    Selection
+	path         string
+	image        restorejournal.Image
+	file         os.FileInfo
+	parent       os.FileInfo
+	provider     *SupervisedCompatibilityProvider
+	review       compatibilityReview
+	runtime      *components.ManagedNFQWSRuntimeLease
+	descriptor   components.NFQWSRuntimeDescriptor
 }
 
 func selectedReviewKeyValid(serviceID, protocol, family string) bool {
@@ -60,11 +63,18 @@ func (m *Manager) RetainSelectedCandidateReview(ctx context.Context, serviceID, 
 	if !exists || selection.ServiceID != serviceID || selection.Protocol != protocol || selection.IPFamily != family {
 		return nil, ErrSelectedCandidateChanged
 	}
+	var managedEpoch *ManagedProbeEpoch
+	if selection.Mode != ModeManual {
+		managedEpoch, err = m.currentManagedProbeEpoch(ctx, candidate.ID, serviceID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	binding, err := foundation.bind(candidate)
 	if err != nil {
 		return nil, err
 	}
-	r := &SelectedCandidateReview{binding: binding, selection: selection, runtime: runtime, descriptor: runtime.Descriptor()}
+	r := &SelectedCandidateReview{binding: binding, selection: selection, runtime: runtime, descriptor: runtime.Descriptor(), managedEpoch: managedEpoch}
 	r.self = r
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -184,12 +194,18 @@ func (r *SelectedCandidateReview) ManagedOwnersCurrent(ctx context.Context, runt
 // App Store/Gate, close the component lease, or span NFQ admission/transfer.
 // Checks use only the component lease, protected files and read-only control;
 // no native validation, App Store/Gate acquisition or state writes occur here.
-func (r *SelectedCandidateReview) WithCurrent(ctx context.Context, use func() error) error {
+func (r *SelectedCandidateReview) WithCurrent(ctx context.Context, use func() error) (result error) {
 	if r == nil || r.self != r || r.binding.manager == nil || use == nil {
 		return ErrSelectedCandidateChanged
 	}
 	if err := selectedReviewContext(ctx); err != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
+	}
+	if r.managedEpoch != nil {
+		if err := r.managedEpoch.Current(ctx); err != nil {
+			return err
+		}
+		defer func() { result = errors.Join(result, r.managedEpoch.Current(ctx)) }()
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -301,12 +317,17 @@ func (r *SelectedCandidateReview) sourceLocked(ctx context.Context) error {
 // against the completed native invocation, without treating it as saved data.
 func (r *SelectedCandidateReview) candidateSourceLocked(ctx context.Context) error {
 	m := r.binding.manager
-	if m == nil || selectedReviewContext(ctx) != nil || m.Path != r.path || !compatibilityCleanPath(r.path) || m.compatibilityUnknownLocked() || m.writeBlocked || m.nativeRunning || !r.image.Exists || !m.image.Exists || !bytes.Equal(m.image.Data, r.image.Data) {
+	if m == nil || selectedReviewContext(ctx) != nil || m.Path != r.path || !compatibilityCleanPath(r.path) || m.compatibilityUnknownLocked() || m.writeBlocked || m.nativeRunning && (r.probe == nil || m.managedProbe != r.probe) || !r.image.Exists || !m.image.Exists || r.managedEpoch == nil && !bytes.Equal(m.image.Data, r.image.Data) {
 		return ErrSelectedCandidateChanged
 	}
 	candidate, candidateExists := m.state.Candidates[r.binding.candidate.ID]
 	if !candidateExists || !adaptiveCandidateIdentityEqual(candidate, r.binding.candidate) || !compatibilityJSONEqual(candidate.Validation, r.binding.candidate.Validation) {
 		return ErrSelectedCandidateChanged
+	}
+	if !r.canary {
+		if err := requireManagedSelectionEpoch(m.state, r.selection, r.managedEpoch); err != nil {
+			return err
+		}
 	}
 	validator, err := adaptiveManagedValidatorLocked(m)
 	if err != nil {
@@ -319,21 +340,37 @@ func (r *SelectedCandidateReview) candidateSourceLocked(ctx context.Context) err
 	provider.mu.Lock()
 	completed := !provider.running && !provider.unknown && provider.session != nil && compatibilityJSONEqual(provider.session, m.state.CompatibilitySession)
 	provider.mu.Unlock()
-	if !completed || selectedReviewCompatibility(m.state, candidate, r.selection, r.review) != nil {
+	view := m.state
+	if r.managedEpoch != nil {
+		key := managedProbeKey(r.selection.ServiceID, candidate.ID)
+		epoch := r.managedEpoch
+		if epoch.self != epoch || epoch.manager != m || epoch.nativeSession == nil || m.managedEpochs[key] != epoch || m.state.ManagedProbeEpochs[key] != epoch.record || epoch.record.ValidationGeneration != candidate.Validation.Generation || epoch.source.material.provider != provider {
+			return ErrSelectedCandidateChanged
+		}
+		view.CompatibilitySession = epoch.nativeSession
+		provider.mu.Lock()
+		completed = !provider.running && !provider.unknown
+		provider.mu.Unlock()
+	}
+	if !completed || selectedReviewCompatibility(view, candidate, r.selection, r.review) != nil {
 		return ErrSelectedCandidateChanged
 	}
 	file, fileErr := os.Lstat(r.path)
 	parent, parentErr := os.Lstat(filepath.Dir(r.path))
-	if fileErr != nil || parentErr != nil || r.file == nil || r.parent == nil || !file.Mode().IsRegular() || !parent.IsDir() || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
+	if fileErr != nil || parentErr != nil || r.file == nil || r.parent == nil || !file.Mode().IsRegular() || !parent.IsDir() || r.managedEpoch == nil && !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
 		return ErrSelectedCandidateChanged
 	}
 	image, err := restorejournal.ReadFileImage(ctx, r.path)
-	if err != nil || !image.Exists || !bytes.Equal(image.Data, r.image.Data) || selectedReviewContext(ctx) != nil {
+	expectedImage := r.image
+	if r.managedEpoch != nil {
+		expectedImage = m.image
+	}
+	if err != nil || !image.Exists || !bytes.Equal(image.Data, expectedImage.Data) || selectedReviewContext(ctx) != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
 	file, fileErr = os.Lstat(r.path)
 	parent, parentErr = os.Lstat(filepath.Dir(r.path))
-	if fileErr != nil || parentErr != nil || !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
+	if fileErr != nil || parentErr != nil || r.managedEpoch == nil && !os.SameFile(file, r.file) || !os.SameFile(parent, r.parent) {
 		return ErrSelectedCandidateChanged
 	}
 	return nil

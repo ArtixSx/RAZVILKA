@@ -20,6 +20,8 @@ import (
 	"github.com/ArtixSx/razvilka/internal/nativeenrollment"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
+	"github.com/ArtixSx/razvilka/internal/routekind"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 const (
@@ -66,6 +68,7 @@ type Payload struct {
 	NodeSnapshot         *nodestore.PrivateSnapshot      `json:"node_snapshot,omitempty"`
 	NativeEnrollment     *nativeenrollment.Snapshot      `json:"native_enrollment,omitempty"`
 	SubscriptionSnapshot *providerfeed.PrivateSnapshot   `json:"subscription_snapshot,omitempty"`
+	StrategyLabSnapshot  *strategylab.PrivateSnapshot    `json:"strategy_lab_snapshot,omitempty"`
 	Devices              []devices.Device                `json:"devices,omitempty"`
 	Digest               string                          `json:"digest"`
 }
@@ -121,7 +124,7 @@ func Validate(payload Payload) error {
 		if _, err := config.NormalizeSources(state.Sources); err != nil {
 			return fmt.Errorf("service %s: %w", id, err)
 		}
-		if !validRoute(firstNonEmpty(state.Route, state.Mode, "auto")) {
+		if !validServiceRoute(firstNonEmpty(state.Route, state.Mode, "auto")) {
 			return fmt.Errorf("service %s has an invalid route", id)
 		}
 	}
@@ -220,6 +223,15 @@ func Validate(payload Payload) error {
 			return errors.New("invalid private native enrollment snapshot")
 		}
 		total += len(payload.NativeEnrollment.Content)
+		if total > MaxPayload {
+			return errors.New("private backup data exceeds safety limit")
+		}
+	}
+	if payload.StrategyLabSnapshot != nil {
+		if strategylab.ValidatePrivateSnapshot(*payload.StrategyLabSnapshot) != nil {
+			return errors.New("invalid private StrategyLab snapshot")
+		}
+		total += len(payload.StrategyLabSnapshot.Content)
 		if total > MaxPayload {
 			return errors.New("private backup data exceeds safety limit")
 		}
@@ -398,6 +410,19 @@ func validRoute(route string) bool {
 	default:
 		return false
 	}
+}
+
+// Retained service selections are comparison/draft data. They do not add a
+// concrete node or group to EngineOrder, AUTO or fresh runtime eligibility.
+func validServiceRoute(route string) bool {
+	if validRoute(route) {
+		return true
+	}
+	if _, _, ok := routekind.ParseNodeRoute(route); ok {
+		return true
+	}
+	node, found := strings.CutPrefix(route, "mihomo:")
+	return found && len(node) == 69 && strings.HasPrefix(node, "node-") && strings.Trim(node[5:], "0123456789abcdef") == ""
 }
 
 func validID(value string) bool {

@@ -255,6 +255,11 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	if err := prepared.Current(ctx); err != nil {
 		return refused, err
 	}
+	accepted := &domainAcceptedTCP{capture: capture, conn: conn, socket: socket}
+	accepted.self = accepted
+	accepted.open.Store(true)
+	defer accepted.open.Store(false)
+	ctx = context.WithValue(ctx, domainAcceptedTCPKey{}, accepted)
 	lease, err := owner.AdmitTCP(ctx, socket)
 	if err != nil || lease == nil {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
@@ -276,15 +281,22 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 			if current != original || id != flowID || !binding.matches(f) || !time.Now().Before(mapping.ExpiresAt) {
 				return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
 			}
-			if err := prepared.Current(c); err != nil {
-				return autonomy.ScopeObservation{}, err
-			}
-			return lease.Guard(c, socket)
+			return capture.guardPreparedFlow(c, original, prepared, lease, socket)
 		},
 		Lease: func(c context.Context, _ DomainPolicyTCPFlow, _ DomainPolicyDecision, forward func(context.Context) error) error {
 			return lease.WithFlow(c, socket, forward)
 		},
 		Dial: xray.dial,
+	}
+	if original, ok := owner.(*DomainTCPOriginalScope); ok {
+		kernel, err := original.originalBaselineForCapture(ctx, capture, leased)
+		if err != nil {
+			return refused, err
+		}
+		runtime.originalBaseline = kernel
+		runtime.BaselineDial = func(c context.Context, f DomainPolicyTCPFlow, d DomainPolicyDecision) (net.Conn, error) {
+			return original.dialBaseline(c, kernel, socket, f, d)
+		}
 	}
 	return p.HandleTCP(ctx, conn, flow, runtime)
 }

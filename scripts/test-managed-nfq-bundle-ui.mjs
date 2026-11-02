@@ -44,6 +44,34 @@ function fixture(view='engines'){
   };return f;
 }
 let total=0;async function test(name,fn){await fn();total++;console.log('PASS '+name);}
+await test('update needs matching original installed readback and cannot fall back to install',()=>{
+  const old=observation({flavor:'previous',manifest_sha256:'c'.repeat(64),receipt_id:'d'.repeat(32)});
+  const p=plan({action:'update',update_available:true,installed_idle:true,installed:old});
+  assert.equal(model.writeAction(p,old),'update');
+  for(const o of [null,{},observation(),{...old,receipt_id:'e'.repeat(32)}])assert.equal(model.writeAction(p,o),null);
+  assert.equal(model.writeAction({...p,update_available:false},old),null);
+  assert.equal(model.writeAction({...p,installed_idle:false},old),null);
+  assert.equal(model.writeAction(plan(),old),null);
+  assert.equal(model.writeAction(plan(),null),'install');
+});
+await test('managed update posts one CAS to update and independently verifies the new receipt',async()=>{
+  const old=observation({flavor:'previous',manifest_sha256:'c'.repeat(64),receipt_id:'d'.repeat(32)});
+  const f=fixture();await f.ready(plan({action:'update',update_available:true,installed_idle:true,installed:old}),old);
+  assert.match(f.card(),/Обновить управляемый пакет/);f.clickInstall();f.clickInstall();await flush();
+  assert.equal(f.requests[3].path,base+'/update');assert.deepEqual(JSON.parse(f.requests[3].options.body),{expected_revision:7});
+  f.requests[3].resolve(success());await flush();
+  await f.resolveRead(4,plan({action:'update',update_available:false,installed_idle:true,installed:observation()}),observation());
+  assert.equal(f.notices.length,1);assert.equal(f.requests.filter(r=>r.options.method==='POST').length,1);
+});
+await test('rollback to previous bundle settles unknown update using its exact retained receipt',async()=>{
+  const old=observation({flavor:'previous',manifest_sha256:'c'.repeat(64),receipt_id:'d'.repeat(32)});
+  const p=plan({action:'update',update_available:true,installed_idle:true,installed:old});
+  const f=fixture();await f.ready(p,old);f.clickInstall();await flush();f.requests[3].reject(new Error('lost response'));await flush();
+  const recovered=f.context.refreshManagedNFQBundle(terminalJournal(),receipt({flavor:old.flavor,manifest_sha256:old.manifest_sha256,transaction_id:old.receipt_id}));
+  await flush();await f.resolveRead(4,p,old);assert.equal(await recovered,true);
+  assert.equal(f.requests.filter(r=>r.options.method==='POST').length,1);
+  assert.doesNotMatch(f.card(),/Исход установки ещё не подтверждён/);
+});
 await test('plan and installed readers reject partial, future and changed identity facts',()=>{
   assert(model.validPlan(plan()));assert(model.matches(plan(),observation()));
   for(const value of [{},plan({revision:-1}),plan({working_routes_changed:true}),plan({ready:'yes'}),plan({bundle:{...bundle,manifest_sha256:'bad'}})])assert.equal(model.validPlan(value),false);

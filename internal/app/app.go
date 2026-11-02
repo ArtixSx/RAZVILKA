@@ -153,9 +153,13 @@ type App struct {
 	EngineConfigs                *engineconfig.Manager
 	EngineLab                    *enginelab.Manager
 	StrategyLab                  *strategylab.Manager
+	ProxySidecarBoot             string // Actual factory choice for this process; never changed by settings writes.
 	strategyCompatibility        strategyCompatibilityState
+	strategyProbe                strategyProbeState
+	mihomoProbe                  mihomoProbeState
 	Components                   *components.Manager
 	ComponentHistory             *updatecheck.ComponentHistoryAdmission
+	ExecutionHistory             *updatecheck.ExecutionHistoryAdmission
 	managedNFQBundle             managedNFQBundleState
 	managedNFQListMu             sync.Mutex
 	managedNFQList               *ManagedNFQWSListRuntime
@@ -440,9 +444,9 @@ func (a *App) serviceEvidenceSnapshotWithInventory(cfg config.Config, services [
 
 func (a *App) engineInventorySnapshot() []engine.Status {
 	if a.EngineInventory != nil {
-		return a.EngineInventory()
+		return a.withRuntimeLifecycle(a.EngineInventory())
 	}
-	return (engine.Detector{}).Inventory()
+	return a.withRuntimeLifecycle((engine.Detector{}).Inventory())
 }
 
 func (a *App) appliedEffectiveRoutes(cfg config.Config) map[string]string {
@@ -535,7 +539,11 @@ func nfqws2Presentation(serviceID string, desired, planned string, desiredEnable
 func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/extension-lab/mihomo", a.extensionMihomo)
+	mux.HandleFunc("/api/v1/extension-lab/mihomo/probe", a.mihomoProbeRecovery)
+	mux.HandleFunc(mihomoNodePath, a.mihomoNodeAction)
+	mux.HandleFunc("/api/v1/mihomo/selection", a.mihomoNodeSelection)
 	mux.HandleFunc("/api/v1/extension-lab/hev", a.extensionHev)
+	mux.HandleFunc("/api/v1/runtime/proxy-sidecar", a.proxySidecar)
 	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
 	mux.HandleFunc("/api/v1/strategy-lab/builtin-pack", a.builtinStrategyPack)
 	mux.HandleFunc("/api/v1/nfqws2/setup-mode", a.nfqwsSetupMode)
@@ -593,9 +601,12 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux.HandleFunc("/api/v1/components", a.componentList)
 	mux.HandleFunc(managedNFQBundlePlanPath, a.managedNFQBundlePlan)
 	mux.HandleFunc(managedNFQBundleInstallPath, a.managedNFQBundleInstall)
+	mux.HandleFunc(managedNFQBundleUpdatePath, a.managedNFQBundleUpdate)
 	mux.HandleFunc(managedNFQBundleInstalledPath, a.managedNFQBundleInstalled)
 	mux.HandleFunc("/api/v1/components/", a.componentAction)
 	mux.HandleFunc("/api/v1/components/recovery", a.componentRecoveryStatus)
+	mux.HandleFunc(hevRecoveryPath, a.hevRecovery)
+	mux.HandleFunc(mihomoRecoveryPath, a.mihomoRecovery)
 	mux.HandleFunc("/api/v1/amneziawg", a.amneziaAPI)
 	mux.HandleFunc("/api/v1/amneziawg/", a.amneziaAPI)
 	a.registerWireGuardProfileRoutes(mux)
@@ -1159,7 +1170,7 @@ func (a *App) engines(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, engine.Visible((engine.Detector{}).All()))
+	writeJSON(w, http.StatusOK, engine.Visible(a.engineInventorySnapshot()))
 }
 
 func (a *App) engineLabReport(w http.ResponseWriter, r *http.Request) {
@@ -1183,7 +1194,9 @@ func (a *App) strategyLabSnapshot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Strategy Lab disabled", http.StatusServiceUnavailable)
 		return
 	}
-	snapshot := a.StrategyLab.Snapshot()
+	// Observe only the original in-process epoch with this fresh request's
+	// bounded read context. Disk history never supplies live eligibility.
+	snapshot := a.StrategyLab.SnapshotWithContext(r.Context())
 	if a.strategyCompatibilityPending() {
 		snapshot.QuiescenceUnknown = true
 	}
@@ -1262,6 +1275,10 @@ func (a *App) strategyLabCandidateAction(w http.ResponseWriter, r *http.Request)
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
 		defer cancel()
+		if a.Components != nil {
+			a.probeManagedStrategyCandidate(w, ctx, id, service, input.IPFamily)
+			return
+		}
 		evidence, err := a.StrategyLab.Probe(ctx, id, strategylab.ProbeTarget{ServiceID: service.ID, ProbeURL: service.ProbeURL, IPFamily: input.IPFamily})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
@@ -1306,7 +1323,7 @@ func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if input.Mode != "" && input.Mode != strategylab.ModeManual {
+	if input.Mode != "" && input.Mode != strategylab.ModeManual && (a.Components == nil || input.Mode != strategylab.ModePreferred && input.Mode != strategylab.ModeOnly) {
 		http.Error(w, "unsupported selection mode", http.StatusBadRequest)
 		return
 	}
@@ -1324,6 +1341,14 @@ func (a *App) strategyLabSelections(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "action": "reset"})
+		return
+	}
+	if a.Components != nil {
+		if input.Action != "" {
+			http.Error(w, "invalid selection action", http.StatusBadRequest)
+			return
+		}
+		a.selectManagedStrategyEvidence(w, r, input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID, input.Mode, input.Frozen)
 		return
 	}
 	selection, err := a.StrategyLab.Select(input.ServiceID, input.Protocol, input.IPFamily, input.CandidateID, input.Frozen)
@@ -1537,6 +1562,14 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 		result, err = a.Components.Remove(ctx, id)
 	} else if id == "nfqws2" && action == "install" {
 		result, err = a.installInitialNFQWS(ctx)
+	} else if id == "hev-socks5-tunnel" {
+		result, err = a.installHEV(ctx)
+	} else if id == "mihomo" {
+		if action == "update" {
+			result, err = a.updateMihomo(ctx)
+		} else {
+			result, err = a.installMihomo(ctx)
+		}
 	} else {
 		result, err = a.Components.Apply(ctx, id)
 	}
@@ -3989,6 +4022,22 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 		state := cfg.Services[service.ID]
 		if state.Enabled {
 			selected := selectedRoute(state)
+			_, mihomoNode := mihomoNodeRouteID(selected)
+			if strings.HasPrefix(selected, "mihomo:") {
+				if !mihomoNode || mihomoNodeServiceScope(cfg, service, state.Sources) != nil {
+					return dataplane.Plan{}, errMihomoNodeScope
+				}
+				if _, err := a.reviewMihomoNode(ctx, selected); err != nil {
+					return dataplane.Plan{}, err
+				}
+				if networkProfile == "" {
+					var err error
+					networkProfile, err = a.freshNetworkProfile(ctx)
+					if err != nil {
+						return dataplane.Plan{}, err
+					}
+				}
+			}
 			nodeEngine, nodeTarget, nodeRoute := routekind.ParseNodeRoute(selected)
 			if routekind.HasNodeRoutePrefix(selected) && (!nodeRoute || !routecatalog.ValidForServiceWithOptions(selected, service.ID, options)) {
 				return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
@@ -4051,7 +4100,7 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
 			}
 			engine, target, exactNode := routekind.ParseNodeRoute(resolved)
-			if resolved == "usque" || exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
+			if resolved == "usque" || mihomoNode || exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
 				// The actual runtime consumes the catalog's complete service
 				// predicate. Keep it in the reviewed plan for ordinary Apply and
 				// autonomy alike, detached from later catalog/editor changes.
@@ -4084,11 +4133,17 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 	engines := make([]dataplane.Engine, 0, len(options))
 	nodeScopedEngines := map[string]bool{}
 	for _, route := range routes {
+		if _, ok := mihomoNodeRouteID(route.Resolved); ok {
+			nodeScopedEngines["mihomo"] = true
+		}
 		if engine, target, ok := routekind.ParseNodeRoute(route.Resolved); ok && strings.HasPrefix(target, "node-") {
 			nodeScopedEngines[engine] = true
 		}
 	}
 	for _, option := range options {
+		if option.ID == "mihomo" && nodeScopedEngines["mihomo"] {
+			continue // Exact registered source/receipt supplies this fact below.
+		}
 		if option.ID == "auto" || option.ID == "direct" {
 			continue
 		}
@@ -4100,6 +4155,13 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 			configured = true
 		}
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
+	}
+	if nodeScopedEngines["mihomo"] {
+		fact, err := a.mihomoNodeEngineFact(ctx)
+		if err != nil {
+			return dataplane.Plan{}, err
+		}
+		engines = append(engines, fact)
 	}
 	resourceConflicts := []dataplane.ResourceConflict{}
 	if a.EngineLab != nil {
@@ -4765,6 +4827,7 @@ type privateBackupPreviewResult struct {
 	Warnings         []string                  `json:"warnings"`
 	DraftOnly        bool                      `json:"draft_only"`
 	RestoresAccount  bool                      `json:"restores_account"`
+	StrategyLab      bool                      `json:"strategy_lab"`
 	NativeEnrollment bool                      `json:"native_enrollment"`
 	Subscriptions    int                       `json:"subscriptions"`
 	ServicePolicies  int                       `json:"service_policies"`
@@ -4808,6 +4871,14 @@ func (a *App) privateBackupExport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		payload.NodeSnapshot = nodes
+	}
+	if a.StrategyLab != nil {
+		snapshot, err := a.StrategyLab.ExportPrivateIfPresent(r.Context())
+		if err != nil {
+			http.Error(w, "private StrategyLab state is unavailable; backup was not created", http.StatusServiceUnavailable)
+			return
+		}
+		payload.StrategyLabSnapshot = snapshot
 	}
 	if a.NodeFeeds != nil {
 		feeds, err := a.NodeFeeds.ExportPrivateIfPresent(r.Context())
@@ -4964,6 +5035,9 @@ func decodePrivateBackup(w http.ResponseWriter, r *http.Request) (privatebackup.
 }
 
 func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackupPreviewResult, error) {
+	if payload.StrategyLabSnapshot != nil && a.StrategyLab == nil {
+		return privateBackupPreviewResult{}, errors.New("Архив содержит StrategyLab, но хранилище недоступно. Импорт не начат.")
+	}
 	if payload.SubscriptionSnapshot != nil && (a.NodeFeeds == nil || !a.NodeFeeds.Persistent()) {
 		return privateBackupPreviewResult{}, errors.New("Архив содержит подписки, но их приватное хранилище недоступно. Импорт не начат.")
 	}
@@ -4989,6 +5063,10 @@ func (a *App) previewPrivateBackup(payload privatebackup.Payload) (privateBackup
 	}
 	if err := privatebackup.Validate(payload); err != nil {
 		return preview, err
+	}
+	if payload.StrategyLabSnapshot != nil {
+		preview.StrategyLab = true
+		preview.Warnings = append(preview.Warnings, "Текущее состояние StrategyLab заменится состоянием архива с сохранением его истории; восстановленные кандидаты требуют новой проверки. Неоднозначное или работающее состояние остановит импорт.")
 	}
 	if payload.NativeEnrollment != nil {
 		preview.NativeEnrollment = true
@@ -5381,7 +5459,7 @@ func (a *App) prepareRouteOption(option *routecatalog.Option) {
 		option.Configured = true
 		option.Selectable = true
 	}
-	option.Ready = option.Selectable && a.Dataplane != nil && a.Dataplane.Capable(option.ID)
+	option.Ready = option.Selectable && a.runtimeLifecycle(option.ID).Operations["live_apply"].Registration == "registered"
 	if option.ID == "warp-wg" && !option.Running {
 		option.Ready = false
 	}

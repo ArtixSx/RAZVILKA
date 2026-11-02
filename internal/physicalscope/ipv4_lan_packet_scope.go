@@ -118,6 +118,10 @@ func NewReviewedStockNC1812IPv4LANPacketScope(ctx context.Context, provider *net
 // Only this private test seam can model I/O. Production uses the concrete
 // original provider/control/kernelFence factory, never caller fact callbacks.
 func newIPv4LANPacketScope(ctx context.Context, intent IPv4LANPacketIntentReader, source ipv4LANPacketSource) (*IPv4LANPacketScope, error) {
+	return newIPv4LANPacketScopeForIdentity(ctx, intent, source, netidentity.ReviewedSingleInitNet)
+}
+
+func newIPv4LANPacketScopeForIdentity(ctx context.Context, intent IPv4LANPacketIntentReader, source ipv4LANPacketSource, kind netidentity.Kind) (*IPv4LANPacketScope, error) {
 	c, cancel, err := operationContext(ctx)
 	if err != nil {
 		return nil, err
@@ -147,7 +151,7 @@ func newIPv4LANPacketScope(ctx context.Context, intent IPv4LANPacketIntentReader
 	}
 	p.facts.Intent, p.facts.Control, p.facts.ExcludedMACs = cloneIPv4LANPacketIntent(i), source.ref, macs
 	err = source.current(c, func(held context.Context, id netidentity.Identity) error {
-		if id.Validate() != nil || id.Kind != netidentity.ReviewedSingleInitNet {
+		if id.Validate() != nil || id.Kind != kind {
 			return at("packet.identity.kind", nil)
 		}
 		p.facts.Identity = id
@@ -316,7 +320,7 @@ func (p *IPv4LANPacketScope) current(ctx context.Context, retained bool) error {
 		}
 	}
 	if _, err := p.capture(c, p.facts.Intent, &p.topology, retained); err != nil {
-		if !errors.Is(err, operationgate.ErrSelfUpdateStopped) {
+		if !errors.Is(err, operationgate.ErrSelfUpdateStopped) && !packetReadNotSubmitted(p.fence, err) {
 			p.physicalBad = true
 		}
 		p.forwardBad = true
@@ -565,6 +569,10 @@ func (p *IPv4LANPacketScope) ObserveMembership(ctx context.Context) (*IPv4LANMem
 }
 
 func packetTopologyFromFacts(in scopeOptionsInput, intent IPv4LANPacketIntent) (ipv4LANPacketTopology, error) {
+	return packetTopologyFromFactsForSource(in, intent, true, "")
+}
+
+func packetTopologyFromFactsForSource(in scopeOptionsInput, intent IPv4LANPacketIntent, stock bool, home string) (ipv4LANPacketTopology, error) {
 	var t ipv4LANPacketTopology
 	if len(in.links) > 4096 || len(in.addresses) > 4096 || len(in.routes) > 4096 {
 		return t, at("packet.structure.limit", nil)
@@ -578,14 +586,24 @@ func packetTopologyFromFacts(in scopeOptionsInput, intent IPv4LANPacketIntent) (
 			}
 		}
 	}
-	native, err := parseNDM(in.native)
-	if err != nil {
-		return t, err
+	var native []nativeSegment
+	var err error
+	if stock {
+		native, err = parseNDM(in.native)
+		if err != nil {
+			return t, err
+		}
+	} else if len(in.native) != 0 || home == "" || len(intent.SegmentIDs) != 1 || intent.SegmentIDs[0] != home {
+		return t, at("packet.fixture.home", nil)
 	}
 	if len(native) > 4096 {
 		return t, at("packet.structure.limit", nil)
 	}
-	segments, err := assembleSegments(Selection{Revision: intent.Revision, PolicyRevision: intent.PolicyRevision, SegmentIDs: slices.Clone(intent.SegmentIDs)}, native, true, in.links, in.addresses, in.routes)
+	selection := Selection{Revision: intent.Revision, PolicyRevision: intent.PolicyRevision, SegmentIDs: slices.Clone(intent.SegmentIDs)}
+	if !stock {
+		selection.SegmentIDs, selection.HomeSegmentID = nil, home
+	}
+	segments, err := assembleSegments(selection, native, stock, in.links, in.addresses, in.routes)
 	if err != nil || len(segments) != 1 || !segments[0].Home || segments[0].Guest {
 		return t, at("packet.home", errOrUnknown(err))
 	}

@@ -84,6 +84,19 @@ func (r *SyntheticDNSRetirementReview) ClosedObservation(ctx context.Context) (S
 	return observation, nil
 }
 
+// ObserveClosed reads only the SAME joined source's final publication ledger.
+// It grants neither cleanup nor cache expiry and does not revive its released
+// operation. A retained restorative owner uses it to compare its footprint.
+func (r *SyntheticDNSRetirementReview) ObserveClosed(ctx context.Context) (SyntheticDNSMappingObservation, error) {
+	if r == nil || r.self != r || ctx == nil || ctx.Err() != nil {
+		return SyntheticDNSMappingObservation{}, ErrSyntheticDNSMapping
+	}
+	if deadline, bounded := ctx.Deadline(); !bounded || !time.Now().Before(deadline) {
+		return SyntheticDNSMappingObservation{}, ErrSyntheticDNSMapping
+	}
+	return r.readClosed(ctx)
+}
+
 func (r *SyntheticDNSRetirementReview) readClosed(ctx context.Context) (observation SyntheticDNSMappingObservation, resultErr error) {
 	s, m := r.source, r.mapping
 	if ctx.Err() != nil || s == nil || s.self != s || m == nil || m.self != m || m.source != s || s.control != r.control || s.root != r.root || !s.closed.Load() {
@@ -128,7 +141,7 @@ func (r *SyntheticDNSRetirementReview) readClosed(ctx context.Context) (observat
 	wire, err := owned.ReadLimited(syntheticDNSLedgerName, 1<<20)
 	disk, decodeErr := decodeSyntheticDNSLedger(wire)
 	after, statErr := os.Lstat(r.root)
-	if err != nil || decodeErr != nil || statErr != nil || !os.SameFile(r.anchor, after) || syntheticDNSProtectedRoot(r.root) != nil || !reflect.DeepEqual(disk, s.ledger) || ctx.Err() != nil {
+	if err != nil || decodeErr != nil || statErr != nil || !os.SameFile(r.anchor, after) || syntheticDNSProtectedRoot(r.root) != nil || !s.closedLedgerMatches(disk) || ctx.Err() != nil {
 		return SyntheticDNSMappingObservation{}, errors.Join(ErrSyntheticDNSMapping, err, decodeErr, statErr, ctx.Err())
 	}
 	row.CNAMEChain = slices.Clone(row.CNAMEChain)

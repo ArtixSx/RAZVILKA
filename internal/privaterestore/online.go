@@ -14,6 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 	"github.com/ArtixSx/razvilka/internal/warp"
 )
 
@@ -21,14 +22,15 @@ import (
 // The caller MUST exclude all API/worker/collector operations until return and
 // permanently fence their admission on Blocked, before releasing exclusion.
 type Stores struct {
-	Config   *config.Store
-	Custom   *customservices.Manager
-	Devices  *devices.Manager
-	Engines  *engineconfig.Manager
-	Provider *cloudflareprovider.Store
-	Nodes    *nodestore.Store
-	Warp     *warp.Manager
-	Feeds    *providerfeed.Manager
+	Config      *config.Store
+	Custom      *customservices.Manager
+	Devices     *devices.Manager
+	Engines     *engineconfig.Manager
+	Provider    *cloudflareprovider.Store
+	Nodes       *nodestore.Store
+	Warp        *warp.Manager
+	Feeds       *providerfeed.Manager
+	StrategyLab *strategylab.Manager
 }
 
 func (Stores) String() string   { return "[private restore stores]" }
@@ -59,6 +61,9 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 		return restorejournal.Clean, restorejournal.ErrInvalid
 	}
 	if payload.SubscriptionSnapshot != nil && (stores.Feeds == nil || c.layout.FeedRoot == "") {
+		return restorejournal.Clean, restorejournal.ErrInvalid
+	}
+	if payload.StrategyLabSnapshot != nil && (stores.StrategyLab == nil || c.layout.StrategyLabPath == "") {
 		return restorejournal.Clean, restorejournal.ErrInvalid
 	}
 	refs := make([]engineconfig.DraftRef, 0, len(payload.EngineFiles))
@@ -193,6 +198,17 @@ func (c *Coordinator) RestoreOnline(ctx context.Context, payload privatebackup.P
 		closers = append(closers, feeds.Close)
 		want, bindingErr = providerfeed.RestoreBinding(c.layout.FeedRoot)
 		if err := bind("subscriptions", feeds, feeds.Binding(), want, bindingErr); err != nil {
+			return restorejournal.Clean, err
+		}
+	}
+	if payload.StrategyLabSnapshot != nil {
+		lab, err := stores.StrategyLab.BeginRestore(ctx)
+		if err != nil {
+			return restorejournal.Clean, err
+		}
+		closers = append(closers, lab.Close)
+		want, bindingErr = strategylab.RestoreBinding(c.layout.StrategyLabPath)
+		if err := bind("strategy_lab", lab, lab.Binding(), want, bindingErr); err != nil {
 			return restorejournal.Clean, err
 		}
 	}

@@ -33,9 +33,10 @@ type githubRelease struct {
 }
 
 type releaseInfo struct {
-	Version  string
-	Asset    releaseAsset
-	Checksum releaseAsset
+	Version      string
+	Asset        releaseAsset
+	Checksum     releaseAsset
+	PinnedSHA256 string
 }
 
 type externalReceipt struct {
@@ -123,7 +124,7 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 		m.releaseChecks[spec.ID] = check
 		view.CheckedAt, view.UpdateCheckError, view.CatalogStale = check.CheckedAt, "", false
 	}
-	view.Available = info.Version != "" && info.Asset.URL != "" && info.Checksum.URL != ""
+	view.Available = info.Version != "" && info.Asset.URL != "" && (info.Checksum.URL != "" || info.PinnedSHA256 != "")
 	view.AvailableVersion = info.Version
 	if info.Version != "" {
 		view.AvailableVersionSource = "github-release"
@@ -142,6 +143,12 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 }
 
 func (m *Manager) latestRelease(ctx context.Context, spec Spec) (releaseInfo, error) {
+	if spec.ID == "mihomo" {
+		return mihomoPinnedRelease(m.Arch)
+	}
+	if spec.ID == "hev-socks5-tunnel" {
+		return hevPinnedRelease(spec, m.Arch)
+	}
 	repository, err := url.Parse(spec.Repository)
 	if err != nil || repository.Scheme != "https" || repository.Hostname() != "github.com" {
 		return releaseInfo{}, errors.New("invalid GitHub release repository")
@@ -197,6 +204,12 @@ func releaseAssetName(spec Spec, version, architecture string) (string, error) {
 }
 
 func (m *Manager) installExternal(ctx context.Context, spec Spec) (Result, error) {
+	if spec.ID == "mihomo" {
+		return Result{Component: spec.ID, Action: "install"}, NoMutation(errors.New("Mihomo installation requires ApplyMihomoGuarded original-owner admission"))
+	}
+	if spec.ID == "hev-socks5-tunnel" {
+		return Result{Component: spec.ID, Action: "install"}, NoMutation(errors.New("HEV installation requires ApplyHEVGuarded original-owner admission"))
+	}
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
 	if _, err := os.Lstat(target); err == nil {
 		if externalReceiptVersion(target) == "" {
@@ -442,6 +455,10 @@ func externalInstalledVersionContext(ctx context.Context, path string) string {
 // the executable's own output, supplied the version, so callers need not hash
 // the binary a second time.
 func externalVersionContext(ctx context.Context, path string) (string, bool) {
+	if filepath.Base(path) == "mihomo" {
+		version := mihomoInstalledReceiptVersion(ctx, path)
+		return version, version != ""
+	}
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return "", false
@@ -460,6 +477,12 @@ func externalReportedVersion(path string) string {
 	return externalReportedVersionContext(context.Background(), path)
 }
 func externalReportedVersionContext(parent context.Context, path string) string {
+	if filepath.Base(path) == "hev-socks5-tunnel" {
+		if verifyHEVRelease(parent, path) == nil {
+			return "2.17.1"
+		}
+		return ""
+	}
 	for _, args := range [][]string{{"--version"}, {"version"}, {"-v"}} {
 		if parent.Err() != nil {
 			return ""

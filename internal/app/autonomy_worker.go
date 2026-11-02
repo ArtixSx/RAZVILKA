@@ -79,7 +79,7 @@ func (a *App) autonomyRound(ctx context.Context, now time.Time) {
 	if !cfg.SafeMode {
 		_, _ = a.pruneExpiredFeedNodes(ctx, now)
 	}
-	if !p.Enabled || ctx.Err() != nil || cfg.SafeMode || cfg.ServiceControl.Stopped || cfg.ServiceControl.EffectiveMode() == "manual" || a.Dataplane == nil {
+	if ctx.Err() != nil || a.autonomyRouteBlockReason(p, cfg) != "" {
 		return
 	}
 	progress("subscriptions", "")

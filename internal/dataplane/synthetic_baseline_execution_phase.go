@@ -19,6 +19,8 @@ type syntheticBaselineExecutionPhase struct {
 	barrier   sync.RWMutex
 	closed    atomic.Bool
 	joined    chan struct{}
+	nativeMu  sync.Mutex
+	nativeWG  sync.WaitGroup
 }
 
 func newSyntheticBaselineExecutionPhase(ctx context.Context, b *SyntheticDNSExecutionBinding) (*syntheticBaselineExecutionPhase, error) {
@@ -75,9 +77,13 @@ func (p *syntheticBaselineExecutionPhase) Close() error {
 	if p == nil || p.self != p {
 		return ErrSyntheticBaselineTransition
 	}
-	if p.closed.CompareAndSwap(false, true) {
+	p.nativeMu.Lock()
+	won := p.closed.CompareAndSwap(false, true)
+	p.nativeMu.Unlock()
+	if won {
 		p.cancel()
 		p.stopScope()
+		p.nativeWG.Wait()
 		p.barrier.Lock()
 		close(p.joined)
 		p.barrier.Unlock()

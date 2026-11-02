@@ -60,6 +60,13 @@ func (p *xraySelectedTCPProc) domainKernelImage(ctx context.Context, expected ne
 }
 
 func (p *xraySelectedTCPProc) domainConfigFDInfo(ctx context.Context) (os.FileInfo, error) {
+	return p.domainConfigFDInfoAt(ctx, "4")
+}
+
+func (p *xraySelectedTCPProc) domainConfigFDInfoAt(ctx context.Context, name string) (os.FileInfo, error) {
+	if name != "0" && name != "4" {
+		return nil, ErrXrayDomainTCPOriginal
+	}
 	if p == nil || xraySelectedTCPFinite(ctx) != nil || p.current(ctx) != nil {
 		return nil, ErrXrayDomainTCPOriginal
 	}
@@ -68,7 +75,7 @@ func (p *xraySelectedTCPProc) domainConfigFDInfo(ctx context.Context) (os.FileIn
 		return nil, err
 	}
 	defer unix.Close(directory)
-	fd, err := unix.Openat(directory, "4", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
+	fd, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, ErrXrayDomainTCPOriginal
 	}

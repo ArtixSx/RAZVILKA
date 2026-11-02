@@ -86,8 +86,13 @@ func (r *XraySelectedTCPExecutionResource) startOriginalNative(ctx context.Conte
 	if err != nil || !validNetworkPolicyReceiptFile(info) || r.root.Sync() != nil {
 		return errXraySelectedTCPRuntime
 	}
-	cmd := &exec.Cmd{Path: "/proc/self/fd/3", Args: []string{r.executable.path, "run", "-config", "/proc/self/fd/4"}, Dir: r.rootPath,
-		Env: xraySelectedTCPNativeEnvironment(), ExtraFiles: []*os.File{r.executable.file, r.config}, Stdout: r.log, Stderr: r.log, SysProcAttr: &syscall.SysProcAttr{Setpgid: true}}
+	// The upstream regular-file loader requires an extension independently of
+	// -format. Read JSON from this SAME authored FD as stdin, retaining FD4 for
+	// independent inherited-config association; never reopen a runtime path.
+	cmd, err := xrayHeldJSONCommand(r.executable.path, r.rootPath, r.executable.file, r.config, r.log)
+	if err != nil {
+		return err
+	}
 	p, err := reserveXraySelectedTCPProcessWait(bound, cmd)
 	if err != nil {
 		return err

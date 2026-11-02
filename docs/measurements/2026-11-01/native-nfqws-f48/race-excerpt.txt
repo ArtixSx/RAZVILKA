@@ -1,0 +1,13 @@
+2026-11-01T02:42:31.3151161Z go version go1.26.5 linux/amd64
+2026-11-01T02:43:46.7153420Z Actual native build mode: race
+2026-11-01T02:43:46.7189167Z go version go1.26.5 linux/amd64
+2026-11-01T02:45:27.5412057Z     strategy_managed_probe_native_linux_test.go:396: native measured Execute 15.009592372s actual inventory ToolCheck calls 49 ToolCheck wall 4.211495797s
+2026-11-01T02:45:27.5808283Z --- FAIL: TestManagedStrategyProbeNativeConsumer (21.95s)
+2026-11-01T02:45:28.0796905Z Actual native build mode: race
+2026-11-01T02:45:28.0833394Z go version go1.26.5 linux/amd64
+2026-11-01T02:46:21.2207434Z     classic_batch_native_fixture_linux_test.go:150: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-01T02:46:21.7086874Z     classic_batch_native_fixture_linux_test.go:150: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-01T02:46:21.9568904Z     classic_batch_native_fixture_linux_test.go:150: actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors
+2026-11-01T02:46:21.9593924Z --- PASS: TestClassicReadBatchNativeMutation (1.60s)
+2026-11-01T02:46:43.4638316Z     strategy_managed_probe_native_linux_test.go:410: native measured Execute 15.011572384s actual inventory ToolCheck calls 84 ToolCheck wall 3.641803911s
+2026-11-01T02:46:43.5070561Z --- FAIL: TestManagedStrategyProbeNativeConsumer (20.41s)

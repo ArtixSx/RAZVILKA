@@ -40,12 +40,13 @@ type DomainPolicyTCPFlow struct {
 // a plain default/direct socket is not a physical LAN baseline grant.
 // There is no listener, independent manager, worker registry, journal or epoch.
 type DomainPolicyTCPRuntime struct {
-	Limits       DomainPolicySniffLimits
-	Guard        func(context.Context, DomainPolicyTCPFlow) (autonomy.ScopeObservation, error)
-	Lease        func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision, func(context.Context) error) error
-	Dial         func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error)
-	BaselineDial func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error)
-	Now          func() time.Time // trusted local owner clock; nil uses real time
+	Limits           DomainPolicySniffLimits
+	Guard            func(context.Context, DomainPolicyTCPFlow) (autonomy.ScopeObservation, error)
+	Lease            func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision, func(context.Context) error) error
+	Dial             func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error)
+	BaselineDial     func(context.Context, DomainPolicyTCPFlow, DomainPolicyDecision) (net.Conn, error)
+	Now              func() time.Time              // trusted local owner clock; nil uses real time
+	originalBaseline *domainTCPBaselineKernelOwner // Private actual capture owner; callbacks alone cannot grant synthetic fallback.
 }
 
 func (r DomainPolicyTCPRuntime) now() time.Time {
@@ -103,7 +104,7 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 	}
 	question.Name, question.NameSource, question.NameState = evidence.Name, evidence.Source, evidence.State
 	question.BeforeOutbound = true
-	if flow.synthetic != nil && (evidence.State != DomainPolicyNameVisible || evidence.Name != flow.synthetic.mapping.Name || flow.Coalesced) {
+	if flow.synthetic != nil && runtime.originalBaseline == nil && (evidence.State != DomainPolicyNameVisible || evidence.Name != flow.synthetic.mapping.Name || flow.Coalesced) {
 		d.Reason = "SYNTHETIC_FLOW_NAME_MISMATCH"
 		return d, ErrDomainPolicy
 	}
@@ -111,11 +112,14 @@ func (p *DomainPolicy) HandleTCP(ctx context.Context, conn net.Conn, flow Domain
 	if err = errors.Join(err, ctx.Err()); err != nil {
 		return d, err
 	}
-	d = p.DecideWithScope(question, scope, runtime.now())
+	d, err = p.decideTCPWithBaseline(ctx, flow, question, scope, runtime)
+	if err != nil {
+		return d, err
+	}
 	if d.Kind == "outside" {
 		return d, nil
 	}
-	if flow.synthetic != nil && !flow.synthetic.acceptsDecision(d) {
+	if flow.synthetic != nil && !flow.synthetic.acceptsDecision(d) && (d.Kind != "baseline" || runtime.originalBaseline == nil) {
 		d.Kind, d.Reason = "refused", "SYNTHETIC_POSITIVE_ROUTE_REQUIRED"
 		return d, ErrDomainPolicy
 	}
@@ -180,7 +184,10 @@ func (p *DomainPolicy) forwardTCP(ctx context.Context, conn net.Conn, flow Domai
 		if err = errors.Join(err, ctx.Err()); err != nil {
 			return err
 		}
-		current := p.DecideWithScope(question, scope, runtime.now())
+		current, err := p.decideTCPWithBaseline(ctx, flow, question, scope, runtime)
+		if err != nil {
+			return err
+		}
 		if current.Generation != decision.Generation || current.Kind != decision.Kind || current.Route != decision.Route || current.ServiceID != decision.ServiceID || current.Reason != decision.Reason {
 			return ErrDomainPolicy
 		}

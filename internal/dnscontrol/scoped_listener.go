@@ -82,6 +82,15 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 	var workers sync.WaitGroup
 	var connections sync.Map
 	slots := make(chan struct{}, 4)
+	// Only identical datagrams from the SAME peer on this SAME socket share
+	// an in-flight operation. A duplicate is dropped, never answered from an
+	// old result or admission. At most the four actual workers retain a key.
+	type udpRequest struct {
+		peer netip.AddrPort
+		wire string
+	}
+	var pendingMu sync.Mutex
+	pending := make(map[udpRequest]struct{}, cap(slots))
 	completed := make(chan error, 2)
 	go func() {
 		buffer := make([]byte, 4097)
@@ -91,16 +100,43 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 				completed <- err
 				return
 			}
-			if n > 4096 || handler.Admit(ctx, peer.Addr().Unmap()) != nil {
+			if n > 4096 {
 				continue
 			}
 			wire := append([]byte(nil), buffer[:n]...)
+			key := udpRequest{peer: peer, wire: string(wire)}
+			pendingMu.Lock()
+			if _, duplicate := pending[key]; duplicate {
+				pendingMu.Unlock()
+				continue
+			}
 			select {
 			case slots <- struct{}{}:
+				pending[key] = struct{}{}
+				pendingMu.Unlock()
+				release := func() {
+					pendingMu.Lock()
+					delete(pending, key)
+					pendingMu.Unlock()
+					<-slots
+				}
+				// Include synchronous admission in the original pending key.
+				// A refusal or panic releases it before any worker is issued.
+				admitted := func() (ok bool) {
+					defer func() {
+						if !ok {
+							release()
+						}
+					}()
+					return handler.Admit(ctx, peer.Addr().Unmap()) == nil
+				}()
+				if !admitted {
+					continue
+				}
 				workers.Add(1)
 				go func() {
 					defer workers.Done()
-					defer func() { <-slots }()
+					defer release()
 					_ = exchangeScopedDNS(ctx, handler, peer.Addr().Unmap(), wire, true, func(reply []byte) error {
 						if err := udp.SetWriteDeadline(time.Now().Add(endpointProbeTimeout)); err != nil {
 							return err
@@ -110,6 +146,10 @@ func ServeScopedDNS(ctx context.Context, udp *net.UDPConn, tcp *net.TCPListener,
 					})
 				}()
 			default:
+				pendingMu.Unlock()
+				if handler.Admit(ctx, peer.Addr().Unmap()) != nil {
+					continue
+				}
 				// A combined owner has no separately admitted failure publisher.
 				// Drop saturation instead of starting an unbounded extra exchange.
 				if handler.Publish != nil {

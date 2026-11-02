@@ -25,7 +25,10 @@ func TestWARPCanaryPreservesProviderFailureAcrossPortFallback(t *testing.T) {
 			}
 			runner := &warpFakeRunner{active: true}
 			a.Runner, a.WG, a.IP = runner, "wg", "ip"
-			a.HandshakeTimeout = time.Nanosecond
+			// This fixture checks failure classification, not late ACK admission.
+			// Leave time for the modeled successful read; an already-expired
+			// budget correctly refuses it after the total-budget fix.
+			a.HandshakeTimeout = 100 * time.Millisecond
 			a.FallbackPorts = []int{500, 4500}
 			plan := RoutePlan{Adapter: "warp-wg", Routes: []Route{{Resolved: "warp-wg", ServiceName: "selected", ProbeURL: "https://service.example/", Sources: []string{"192.168.1.4/32"}}}}
 			before := append([]string(nil), plan.Routes[0].Sources...)

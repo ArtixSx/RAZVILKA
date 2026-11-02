@@ -25,6 +25,7 @@ const xrayDomainTCPExecutableLimit = 128 << 20
 type XrayDomainTCPExecutionResource struct {
 	self              *XrayDomainTCPExecutionResource
 	mu                sync.Mutex
+	nativeDone        chan struct{} // Entire original WithNative phase/callback/cleanup returned.
 	scope             *executionResourceScope
 	material          *XrayDomainTCPOperationMaterial
 	definition        ExecutionXrayDomainTCPDefinition
@@ -36,6 +37,11 @@ type XrayDomainTCPExecutionResource struct {
 	configInfo        os.FileInfo
 	executable        *xrayDomainTCPExecutable
 	child             *xraySelectedTCPProcess
+	records           *xraySelectedTCPExecutionRecords
+	startUsed         bool
+	startACK          bool
+	birth             *xraySelectedTCPProcessObservation
+	log               *os.File
 	descriptorsClosed atomic.Bool
 	descriptorsErr    error
 }
@@ -53,8 +59,6 @@ func (s *executionResourceScope) prepareXrayDomainTCPResource(ctx context.Contex
 	if s == nil || m == nil || m.self != m || xraySelectedTCPFinite(ctx) != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != s || s.adapter != "xray" || s.adapterOwner != m.adapter || s.manager != m.manager || s.networkIdentity == nil || s.networkIdentity.provider == nil || !reflect.DeepEqual(s.plan, m.plan) {
 		return nil, ErrXrayDomainTCPOriginal
 	}
-	s.startMu.RLock()
-	defer s.startMu.RUnlock()
 	if err := m.Current(ctx); err != nil {
 		return nil, err
 	}
@@ -142,6 +146,10 @@ func (s *executionResourceScope) prepareXrayDomainTCPResource(ctx context.Contex
 }
 
 func (r *XrayDomainTCPExecutionResource) filesCurrent(ctx context.Context) error {
+	return r.filesCurrentForObservation(ctx, nil)
+}
+
+func (r *XrayDomainTCPExecutionResource) filesCurrentForObservation(ctx context.Context, view *xrayDomainTCPFileObservation) error {
 	if r == nil || r.self != r || r.descriptorsClosed.Load() || xraySelectedTCPFinite(ctx) != nil || r.root == nil || r.config == nil || r.configInfo == nil || r.executable == nil {
 		return ErrXrayDomainTCPOriginal
 	}
@@ -166,6 +174,9 @@ func (r *XrayDomainTCPExecutionResource) filesCurrent(ctx context.Context) error
 	defer clear(data)
 	if n, err := r.config.ReadAt(data, 0); err != nil || n != len(data) || nodeDefaultSourceMaterialHash(data) != r.definition.ConfigSHA256 {
 		return ErrXrayDomainTCPOriginal
+	}
+	if view != nil {
+		return errors.Join(check(), view.current(ctx, r), ctx.Err())
 	}
 	return errors.Join(check(), r.executable.current(ctx), ctx.Err())
 }
@@ -247,6 +258,9 @@ func holdXrayDomainTCPExecutable(ctx context.Context, m *XrayDomainTCPOperationM
 }
 
 func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
+	finishMeasure := domainTCPMeasure("whole-executable-hash")
+	var readBytes int64
+	defer func() { finishMeasure(readBytes) }()
 	if p == nil || p.file == nil || p.info == nil || xraySelectedTCPFinite(ctx) != nil || p.info.Size() <= 0 || p.info.Size() > xrayDomainTCPExecutableLimit {
 		return "", ErrXrayDomainTCPOriginal
 	}
@@ -261,6 +275,7 @@ func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
 		if int64(n) != want || err != nil && err != io.EOF {
 			return "", ErrXrayDomainTCPOriginal
 		}
+		readBytes += int64(n)
 		_, _ = hash.Write(block[:n])
 		offset += int64(n)
 	}
@@ -268,6 +283,17 @@ func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
 }
 
 func (p *xrayDomainTCPExecutable) current(ctx context.Context) error {
+	if err := p.metadataCurrent(ctx); err != nil {
+		return err
+	}
+	hash, err := p.hash(ctx)
+	if err != nil || hash != p.sha256 {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	return errors.Join(p.metadataCurrent(ctx), ctx.Err())
+}
+
+func (p *xrayDomainTCPExecutable) metadataCurrent(ctx context.Context) error {
 	if p == nil || p.file == nil || p.info == nil || xraySelectedTCPFinite(ctx) != nil {
 		return ErrXrayDomainTCPOriginal
 	}
@@ -280,13 +306,6 @@ func (p *xrayDomainTCPExecutable) current(ctx context.Context) error {
 			return ErrXrayDomainTCPOriginal
 		}
 		return nil
-	}
-	if err := check(); err != nil {
-		return err
-	}
-	hash, err := p.hash(ctx)
-	if err != nil || hash != p.sha256 {
-		return ErrXrayDomainTCPOriginal
 	}
 	return errors.Join(check(), ctx.Err())
 }

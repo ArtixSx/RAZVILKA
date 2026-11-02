@@ -141,6 +141,22 @@ func TestPolicyLeaseScopeAndBoundedABI(t *testing.T) {
 	}
 }
 
+func TestProbeCounterABIStillRequiresOriginalCommandAdmission(t *testing.T) {
+	args := []string{"-t", "mangle", "-L", "RZP_0123456789abcdef01_4", "-n", "-v", "-x"}
+	if !effectArguments(0, args) || effectArguments(1, args) || readArguments(args) {
+		t.Fatal("counter escaped original admission")
+	}
+	for _, changed := range [][]string{{"-t", "mangle", "-L", "OUTPUT", "-n", "-v", "-x"}, {"-t", "mangle", "-L", "RZP_0123456789abcdef01_4", "-n", "-v", "-x", "-Z"}, {"-t", "nat", "-L", "RZP_0123456789abcdef01_4", "-n", "-v", "-x"}} {
+		if effectArguments(0, changed) {
+			t.Fatal("broad counter ABI", changed)
+		}
+	}
+	called := false
+	if err := invokeAdmission(context.Background(), "iptables", args, strings.Repeat("a", 64), func() bool { return true }, func() error { called = true; return nil }); err == nil || called {
+		t.Fatal("counter launched without original consumer", err)
+	}
+}
+
 func TestAdmissionCancellationRefusesBeforeActualStart(t *testing.T) {
 	base, cancel := context.WithCancel(context.Background())
 	starts := 0

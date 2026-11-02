@@ -89,10 +89,14 @@ func (r *SelectedCandidateReview) referenceLocked() (SelectedCandidateReference,
 		ReceiptID: r.descriptor.ReceiptID, ManifestSHA256: r.descriptor.ManifestSHA256,
 		SourceDigest: hex.EncodeToString(sourceHash[:]), Arguments: slices.Clone(arguments), Traffic: traffic}
 	var failures []error
+	compatibilitySession := r.binding.manager.state.CompatibilitySession
+	if r.managedEpoch != nil {
+		compatibilitySession = r.managedEpoch.nativeSession
+	}
 	for _, item := range []struct {
 		value any
 		to    *string
-	}{{selection, &reference.SelectionDigest}, {r.binding.manager.state.CompatibilitySession, &reference.CompatibilityDigest},
+	}{{selection, &reference.SelectionDigest}, {compatibilitySession, &reference.CompatibilityDigest},
 		{struct{ Material, Runtime any }{r.review, r.descriptor}, &reference.MaterialDigest},
 		{arguments, &reference.ArgumentsDigest}, {traffic, &reference.TrafficDigest}} {
 		value, err := selectedReferenceDigest(item.value)

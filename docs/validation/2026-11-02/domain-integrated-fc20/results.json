@@ -1,0 +1,83 @@
+{
+  "commit": "fc20a792f1735f3b545bcdae5e263865cfa15fe2",
+  "run": 41429725627,
+  "overall": "FAILURE",
+  "cases": [
+    {
+      "scenario": "baseline",
+      "job": 125224984493,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativePublishedDNSStandby",
+      "wall_seconds": 27.04,
+      "raw_sha256": "10acd7e4bf5787a3264a9818eab5adcf5114ebdce7ad48bacdcfa099e585a35c",
+      "skipped": false
+    },
+    {
+      "scenario": "clean",
+      "job": 125227410382,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 52.03,
+      "raw_sha256": "1f95357411e7c5e345b70405f25db49386155c6568f91398a812d22212700914",
+      "skipped": false
+    },
+    {
+      "scenario": "alias0",
+      "job": 125227410459,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 39.54,
+      "raw_sha256": "de548a66fe3f6b3603b298c97a00ba56f4e935c665d5c43477a5c82bff3cb77c",
+      "skipped": false
+    },
+    {
+      "scenario": "alias1",
+      "job": 125227410377,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 52.82,
+      "raw_sha256": "a3c326bbe3c17320f28fe135bbb716a28e55140c9e11a310942329124e2a0c62",
+      "skipped": false
+    },
+    {
+      "scenario": "global",
+      "job": 125227410397,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 53.45,
+      "raw_sha256": "68276ba80c3433c0272735a9ad571c3d37a7e5112357c069e301769b8f2ebbb5",
+      "skipped": false
+    },
+    {
+      "scenario": "foreign-history",
+      "job": 125227410627,
+      "outcome": "PASS",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 44.85,
+      "raw_sha256": "21cc7cdf56a384e75e5c2cd352c5f230aef33ee5319c8b5fd16c494ea5979c4a",
+      "skipped": false
+    },
+    {
+      "scenario": "registry",
+      "job": 125227410599,
+      "outcome": "FAIL",
+      "test": "TestDomainTCPOriginalNativeDNSDetachment",
+      "wall_seconds": 43.97,
+      "raw_sha256": "17dc1cb48bd1bda9f8fa85acd0beb27b0e9a019f52591eae03f396dc2a812ab0",
+      "skipped": false
+    }
+  ],
+  "other_failed_cases": [
+    "initial-ACK none",
+    "initial-ACK global",
+    "initial-ACK transaction",
+    "initial-ACK joined-failure",
+    "initial-ACK never-issued"
+  ],
+  "limits": [
+    "DNS-only publication/Stop/cached-alias TLS; selected-service continuation not proven",
+    "Diagnostic publication window 30s and client deadline10s; not production12s/4s performance acceptance",
+    "Different hosted workers; durations are not paired speed evidence",
+    "No physical router/WAN acceptance"
+  ]
+}

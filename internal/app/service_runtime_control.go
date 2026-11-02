@@ -137,6 +137,9 @@ type serviceRuntimeOutcome struct {
 }
 
 func (a *App) observeCommittedRuntime(ctx context.Context, plan dataplane.Plan) error {
+	if handled, err := a.observeCommittedMihomo(ctx, plan); handled {
+		return err
+	}
 	if handled, err := a.observeCommittedManagedWG(ctx, plan); handled {
 		return err
 	}

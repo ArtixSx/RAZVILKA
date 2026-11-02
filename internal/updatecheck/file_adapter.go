@@ -46,6 +46,7 @@ type SelfUpdateAuthority struct {
 type SelfUpdateRuntimeObservation func(context.Context, string) error
 
 type fileReview struct {
+	StrategyPair            *strategyPairProof       `json:"strategy_pair,omitempty"`
 	Schema                  int                      `json:"schema"`
 	ID                      string                   `json:"id"`
 	Revision                uint64                   `json:"revision"`
@@ -67,16 +68,17 @@ type fileReview struct {
 // Concrete neutral provider: this package does not import app. Production
 // paths are fixed; private overrides below exist only for isolated fixtures.
 type SelfUpdateFileAdapter struct {
-	directory       string
-	installation    string
-	fileJournal     string
-	owned           func(string) error
-	layout          func(Deployment) error
-	capabilities    func(context.Context, string) error
-	filesystem      func(context.Context) error
-	stopCheck       SelfUpdateStopCheck
-	admission       SelfUpdateEffectAdmission
-	runtimeInactive SelfUpdateRuntimeObservation
+	ExecutionHistoryReader ExecutionHistoryReader // Trusted read-only classifier; grants no mutation or runtime authority.
+	directory              string
+	installation           string
+	fileJournal            string
+	owned                  func(string) error
+	layout                 func(Deployment) error
+	capabilities           func(context.Context, string) error
+	filesystem             func(context.Context) error
+	stopCheck              SelfUpdateStopCheck
+	admission              SelfUpdateEffectAdmission
+	runtimeInactive        SelfUpdateRuntimeObservation
 	// Private process observer override is used only by isolated model tests.
 	processInactive func(context.Context, fileProcess) error
 	// Only the synchronous external bootstrap retains actual exec-created
@@ -85,6 +87,7 @@ type SelfUpdateFileAdapter struct {
 	// Issued only to the actual finite Updater.prepare generation. Public
 	// inventory adapters never reconstruct this capability from persisted data.
 	ordinaryPreparation *ordinaryPreparation
+	strategyProbe       func(context.Context, selfupdatejournal.BinaryImage, string) (string, error)
 }
 
 func NewSelfUpdateFileAdapterWithAuthority(stop SelfUpdateStopCheck, admission SelfUpdateEffectAdmission, runtime ...SelfUpdateRuntimeObservation) *SelfUpdateFileAdapter {
@@ -314,9 +317,10 @@ func reviewedFileList(jobPath string, release Release, hashes map[string]string,
 	return files
 }
 
-func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission) (string, error) {
+func stageFileReview(ctx context.Context, directory string, record updateRecord, authorityReview func(context.Context, string) (SelfUpdateAuthority, error), admission SelfUpdateEffectAdmission, executionReader ExecutionHistoryReader) (string, error) {
 	a := NewSelfUpdateFileAdapterWithAuthority(nil, admission)
 	a.directory = directory
+	a.ExecutionHistoryReader = executionReader
 	return a.stageFileReview(ctx, record, authorityReview)
 }
 
@@ -341,6 +345,9 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	directory := a.directory
 	configRootPath := filepath.Join(a.installation, "etc/razvilka")
 	stateRootPath := filepath.Join(a.installation, "razvilka/state")
+	if _, _, err := a.inspectOrdinaryStrategyState(ctx); err != nil {
+		return "", err
+	}
 	if record.Job.Release == nil || !helperConfigMatches(record) {
 		return "", ErrReviewChanged
 	}
@@ -386,6 +393,23 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	requiredComponentReader, componentSeal, err := components.InspectRetainedManagedUpdateReadVersion(ctx, filepath.Join(stateRootPath, "components"))
 	if err != nil {
 		return "", err
+	}
+	executionRoot := filepath.Join(stateRootPath, "dataplane")
+	executionRequired, executionSeal, err := a.inspectExecutionHistory(ctx, executionRoot)
+	if err != nil {
+		return "", err
+	}
+	executionProbe := probeFileCapability
+	if ordinary != nil {
+		executionProbe = ordinary.metadata
+	}
+	if err := checkExecutionHistoryCapability(ctx, binary, executionRoot, executionProbe, a.inspectExecutionHistory); err != nil {
+		return "", err
+	}
+	if bootstrap == nil {
+		if err := checkExecutionHistoryCapability(ctx, record.Deployment.Executable, executionRoot, executionProbe, a.inspectExecutionHistory); err != nil {
+			return "", err
+		}
 	}
 	if ordinary != nil {
 		if err := ordinary.capabilities(ctx, binary, requiredNodeReader, requiredComponentReader); err != nil {
@@ -514,6 +538,10 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 			return "", errors.Join(ErrFileProtocol, err)
 		}
 	}
+	review.StrategyPair, err = a.sealStrategyPair(ctx, review)
+	if err != nil {
+		return "", err
+	}
 	data, err := json.Marshal(review)
 	if err != nil {
 		return "", err
@@ -566,6 +594,10 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 		return "", errors.Join(ErrReviewChanged, err)
 	}
 	freshAuthority, err := authorityReview(ctx, record.Job.ID)
+	freshExecutionRequired, freshExecutionSeal, executionErr := a.inspectExecutionHistory(ctx, executionRoot)
+	if executionErr != nil || freshExecutionRequired != executionRequired || freshExecutionSeal != executionSeal {
+		return "", errors.Join(ErrExecutionHistoryAdmission, executionErr)
+	}
 	if err != nil || freshAuthority != authority {
 		return "", errors.Join(ErrFileProtocol, err)
 	}
@@ -680,6 +712,9 @@ func (a *SelfUpdateFileAdapter) Ready(ctx context.Context, id string) error {
 	if a == nil || a.admission == nil || a.runtimeInactive == nil || a.filesystem == nil {
 		return ErrFileProtocol
 	}
+	if err := a.strategyStateAdmission(ctx, id); err != nil {
+		return err
+	}
 	record, review, err := a.load(ctx, id)
 	if err != nil {
 		return err
@@ -717,6 +752,9 @@ func (a *SelfUpdateFileAdapter) EffectAdmission(ctx context.Context, id, action,
 }
 
 func validFileEffectAction(effect, action string) bool {
+	if effect == strategyRollbackSealEffect {
+		return action == "stop-owned"
+	}
 	if effect == candidateKnownAbsentPIDEffect {
 		return action == "stop-owned"
 	}
@@ -755,6 +793,9 @@ func validFileEffectAction(effect, action string) bool {
 }
 
 func validFileEffect(effect string) bool {
+	if effect == strategyRollbackSealEffect {
+		return true
+	}
 	if effect == candidateKnownAbsentPIDEffect {
 		return true
 	}
@@ -765,7 +806,7 @@ func validFileEffect(effect string) bool {
 		name := strings.TrimPrefix(effect, "rollback-private-")
 		_, directory := fileMutablePrivateDirectories[name]
 		_, file := filePrivateFiles[name]
-		return directory || file
+		return directory || file || name == "strategy"
 	}
 	for _, prefix := range []string{"command-worker-", "command-child-"} {
 		if strings.HasPrefix(effect, prefix) {
@@ -801,8 +842,17 @@ func (a *SelfUpdateFileAdapter) Authority(ctx context.Context, id string, revisi
 // Action-sensitive authority does not clear Stop. CORE retains independent
 // matching admission and quiescence checks for rollback and owned cleanup.
 func (a *SelfUpdateFileAdapter) AuthorityAction(ctx context.Context, id string, revision uint64, action string) error {
+	return a.authorityAction(ctx, id, revision, action, false)
+}
+
+func (a *SelfUpdateFileAdapter) authorityAction(ctx context.Context, id string, revision uint64, action string, preparing bool) error {
 	if err := a.checkStop(ctx, id, action); err != nil {
 		return err
+	}
+	if action == "start/live" || action == "replace-to-rollback" || action == bootstrapOfflineAction {
+		if err := a.strategyAdmission(ctx, id, preparing); err != nil {
+			return err
+		}
 	}
 	record, review, err := a.loadHeader(ctx, id)
 	if err != nil {

@@ -26,7 +26,15 @@
     return validReceipt(receipt) && validInstalled(observation) && receipt.transaction_id === observation.receipt_id
       && ['provider_id', 'flavor', 'manifest_sha256'].every(key => receipt[key] === observation[key]);
   }
-  root.RazvilkaManagedNFQBundle = Object.freeze({ validPlan, validInstalled, matches, validReceipt, receiptMatches });
+  function writeAction(plan, observation) {
+    if (!validPlan(plan) || !plan.ready || matches(plan, observation)) return null;
+    if (plan.action === 'update') {
+      return plan.installed_idle === true && plan.update_available === true && validInstalled(plan.installed) && validInstalled(observation)
+        && ['provider_id', 'flavor', 'manifest_sha256', 'receipt_id'].every(key => plan.installed[key] === observation[key]) ? 'update' : null;
+    }
+    return (plan.action === undefined || plan.action === 'install') && plan.installed_idle === false && observation === null ? 'install' : null;
+  }
+  root.RazvilkaManagedNFQBundle = Object.freeze({ validPlan, validInstalled, matches, validReceipt, receiptMatches, writeAction });
   if (typeof document === 'undefined') return;
 
   const views = new Set(['engines', 'engineconfig', 'updates']);
@@ -36,19 +44,19 @@
   const busy = () => !!managed.read || !!managed.action || !!state.componentOperation || !!state.componentRefreshRequest;
   const currentRevision = () => managed.revision === managed.plan?.revision && !(Number.isSafeInteger(state.status?.revision) && state.status.revision > managed.plan.revision);
   const installed = () => fresh() && matches(managed.plan, managed.installed);
-  const allowed = () => active() && fresh() && currentRevision() && managed.plan.ready && !installed() && !busy() && !managed.unknownWrite
+  const allowed = () => active() && fresh() && currentRevision() && writeAction(managed.plan, managed.installed) !== null && !busy() && !managed.unknownWrite
     && !(typeof componentRecoveryFence === 'function' && componentRecoveryFence());
 
   function card(id) {
     if (id !== 'nfqws2') return '';
-    const ready = fresh(), present = installed();
+    const ready = fresh(), present = installed(), updating = managed.plan?.action === 'update';
     const note = managed.unknownWrite ? [managed.error, 'Исход установки ещё не подтверждён. Прочитайте состояние и журнал восстановления; повторная установка заблокирована.'].filter(Boolean).join(' ')
       : managed.error || (present ? 'Управляемый пакет установлен и сейчас не используется для рабочих маршрутов.'
         : !ready ? 'Прочитайте план и текущее состояние управляемого пакета.'
           : !currentRevision() ? 'Настройки изменились. Прочитайте новый план перед установкой.'
             : managed.plan.reason || (managed.plan.ready ? 'План готов. Установку нужно запустить отдельно.' : 'Установка сейчас недоступна.'));
     const bundle = ready && managed.plan.bundle ? `<small>Пакет: ${esc(managed.plan.bundle.flavor)} · ${esc(managed.plan.bundle.architecture)}</small>` : '';
-    return `<section data-managed-nfq-panel aria-label="Управляемый пакет NFQWS2"><b>Управляемый пакет NFQWS2</b><p role="status">${esc(note)}</p>${bundle}<small>Установка файлов не включает обход. Совместимость и соединение проверяются отдельно.</small><div class="ui3-engine-actions"><button type="button" class="secondary" data-managed-nfq-read data-rz-focus="managed-nfq-read" ${busy() ? 'disabled' : ''}>${managed.read ? 'Читаем…' : 'Прочитать план и состояние'}</button><button type="button" class="primary" data-managed-nfq-install data-rz-focus="managed-nfq-install" ${allowed() ? '' : 'disabled'}>${managed.action ? 'Устанавливаем…' : 'Установить управляемый пакет'}</button></div></section>`;
+    return `<section data-managed-nfq-panel aria-label="Управляемый пакет NFQWS2"><b>Управляемый пакет NFQWS2</b><p role="status">${esc(note)}</p>${bundle}<small>Установка файлов не включает обход. Совместимость и соединение проверяются отдельно.</small><div class="ui3-engine-actions"><button type="button" class="secondary" data-managed-nfq-read data-rz-focus="managed-nfq-read" ${busy() ? 'disabled' : ''}>${managed.read ? 'Читаем…' : 'Прочитать план и состояние'}</button><button type="button" class="primary" data-managed-nfq-install data-rz-focus="managed-nfq-install" ${allowed() ? '' : 'disabled'}>${managed.action ? 'Выполняем…' : updating ? 'Обновить управляемый пакет' : 'Установить управляемый пакет'}</button></div></section>`;
   }
   function render() {
     if (typeof renderComponents === 'function') renderComponents();
@@ -98,14 +106,15 @@
   }
   async function install() {
     if (!allowed()) return false;
-    const ticket = { id: 'nfqws2', action: 'managed-bundle-install', epoch: managed.epoch, plan: managed.plan, sent: false, controller: new AbortController() };
+    const operation = writeAction(managed.plan, managed.installed);
+    const ticket = { id: 'nfqws2', action: 'managed-bundle-' + operation, epoch: managed.epoch, plan: managed.plan, sent: false, controller: new AbortController() };
     managed.action = ticket; state.componentOperation = ticket;
     const current = () => ticket.epoch === managed.epoch && managed.action === ticket && state.authenticated;
     const timer = setTimeout(() => ticket.controller.abort(), 370000);
     render();
     try {
       managed.unknownWrite = true; ticket.sent = true;
-      const result = await api(base + '/install', { method: 'POST', signal: ticket.controller.signal, body: JSON.stringify({ expected_revision: ticket.plan.revision }) });
+      const result = await api(base + '/' + operation, { method: 'POST', signal: ticket.controller.signal, body: JSON.stringify({ expected_revision: ticket.plan.revision }) });
       if (!current()) return false;
       if (result?.ok !== true || result.installed_idle !== true || typeof result.compatibility_ready !== 'boolean'
         || result.working_routes_changed !== false || !validReceipt(result.receipt)) throw new Error('Сервер не подтвердил установку управляемого пакета. Повторная установка не отправляется.');
@@ -142,7 +151,7 @@
       && ['accepted-installed-idle', 'rolled-back', 'abandoned'].includes(transaction.phase);
     const observed = await read();
     const matching = observed && epoch === managed.epoch && settled && currentRevision() && journal.revision === managed.plan.revision
-      && (receipt ? matches(managed.plan, managed.installed) && receiptMatches(receipt, managed.installed)
+      && (receipt ? validInstalled(managed.installed) && receiptMatches(receipt, managed.installed)
         : ['rolled-back', 'abandoned'].includes(transaction.phase) && managed.installed === null);
     if (matching) { managed.unknownWrite = false; render(); }
     return matching;

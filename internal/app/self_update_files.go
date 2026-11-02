@@ -40,6 +40,13 @@ type SelfUpdateFileAdapter interface {
 	Finish(context.Context, string, bool) error
 }
 
+// The optional concrete pair owner scopes only synchronous journal preparation.
+// It cannot authorize installation or process effects with preparation evidence.
+type selfUpdateStrategyPairPreparation interface {
+	WithStrategyPairPreparation(context.Context, string, func(context.Context) error) error
+	StrategyPairPreparationAuthority(context.Context, string, uint64) error
+}
+
 // RunHelper is a new handoff only, never a crash-resume command. Each external
 // command has a distinct durable intent and is supervised by the trusted OPS
 // provider. A failed command remains unknown; only a failed live check after a
@@ -280,6 +287,11 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 				return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-recovery", err)
 			}
 		}
+		if action == "prepare" {
+			if pair, ok := f.Adapter.(selfUpdateStrategyPairPreparation); ok {
+				return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-provider", pair.StrategyPairPreparationAuthority(c, id, revision))
+			}
+		}
 		return updatecheck.SelfUpdateFileFailureAt(action, boundary+"-provider", f.Adapter.AuthorityAction(c, id, revision, selfUpdateActionAuthority(action)))
 	}
 	authority := func(c context.Context) error { return authorityAt(c, "authority") }
@@ -337,6 +349,14 @@ func (f *SelfUpdateFiles) Action(ctx context.Context, id, action string, revisio
 	defer s.Close()
 	switch action {
 	case "prepare":
+		// The concrete owner retains an exact pre-Prepare StrategyLab pair while
+		// the journal is synchronously constructing its not-yet-published image.
+		// Legacy adapters keep the existing path and gain no new authority.
+		if pair, ok := f.Adapter.(selfUpdateStrategyPairPreparation); ok {
+			return pair.WithStrategyPairPreparation(ctx, id, func(preparation context.Context) error {
+				return s.Prepare(preparation, id, files, authority, quiescence)
+			})
+		}
 		return s.Prepare(ctx, id, files, authority, quiescence)
 	case "install":
 		r, present, err := s.Current()

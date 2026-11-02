@@ -18,9 +18,10 @@ import (
 // transferred the original Manager owner at Commit, so scope close cancels and
 // joins it. The existing Manager's closed runtime check remains in force.
 type scopedDNSSyntheticMode struct {
-	binding *SyntheticDNSExecutionBinding
-	source  *dnscontrol.NetworkPolicyDNSSyntheticResolver
-	control *operationgate.ControlEpochReview
+	ownerRecord *domainTCPDNSOwnerRecord
+	binding     *SyntheticDNSExecutionBinding
+	source      *dnscontrol.NetworkPolicyDNSSyntheticResolver
+	control     *operationgate.ControlEpochReview
 }
 
 type scopedDNSSyntheticState struct {
@@ -34,6 +35,10 @@ type scopedDNSSyntheticState struct {
 // original coordinator before Manager can open its execution path. Opening
 // these listeners itself grants none of those effects or publication readiness.
 func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding *SyntheticDNSExecutionBinding, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, publication dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner) error {
+	return a.startSyntheticDNSContinuingLocked(ctx, binding, resolver, control, publication, nil)
+}
+
+func (a *ScopedDNSAdapter) startSyntheticDNSContinuingLocked(ctx context.Context, binding *SyntheticDNSExecutionBinding, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, publication dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner, continuation *dnscontrol.SyntheticDNSLedgerContinuation) error {
 	if a == nil || binding == nil || binding.self != binding || binding.adapter != a || a.live != nil || resolver == nil || control == nil {
 		return ErrDomainTransportRuntime
 	}
@@ -68,7 +73,12 @@ func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding 
 		}
 	}()
 	owner := &scopedDNSSyntheticPublication{binding: binding, original: publication}
-	source, err := dnscontrol.NewNetworkPolicyDNSSyntheticResolver(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner)
+	var source *dnscontrol.NetworkPolicyDNSSyntheticResolver
+	if continuation == nil {
+		source, err = dnscontrol.NewNetworkPolicyDNSSyntheticResolver(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner)
+	} else {
+		source, err = dnscontrol.NewNetworkPolicyDNSSyntheticResolverWithContinuation(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner, continuation)
+	}
 	if err != nil {
 		return err
 	}
@@ -107,7 +117,11 @@ func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding 
 	if err != nil {
 		return err
 	}
-	defer files.Close()
+	defer func() {
+		if !keep {
+			_ = files.Close()
+		}
+	}()
 	if err := source.CheckAdapterBinding(ctx, a.DNS, binding.transport.DNS, control, a.StateRoot, binding.transport.Definition); err != nil {
 		return err
 	}
@@ -115,10 +129,15 @@ func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding 
 	if err != nil || len(data) > 128<<10 {
 		return errors.Join(ErrSyntheticBaselineTransition, err)
 	}
-	if err := files.WriteAtomic("owner.json", data, 0600); err != nil {
+	file, err := files.WriteAtomicRetained("owner.json", data, 0600)
+	if err != nil {
 		return err
 	}
-	mode := &scopedDNSSyntheticMode{binding: binding, source: source, control: control}
+	record, err := retainDomainTCPDNSOwnerRecord(files, a.StateRoot, file, data, binding.scope.execution.PlanID)
+	if err != nil {
+		return errors.Join(err, file.Close())
+	}
+	mode := &scopedDNSSyntheticMode{binding: binding, source: source, control: control, ownerRecord: record}
 	session := &scopedDNSSession{synthetic: mode, done: make(chan struct{}), cancel: func() { stopScope(); cancel() }, resources: scopedDNSInactiveResources{udp: udp, tcp: tcp}}
 	scopedDNSInactivePublish(a.StateRoot, session)
 	a.live = session

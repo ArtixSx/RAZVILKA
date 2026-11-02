@@ -1,0 +1,3 @@
+child_exit_status=1
+publication_budget_seconds=12
+profile_span=original_Run_through_join

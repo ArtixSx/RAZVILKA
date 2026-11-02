@@ -76,7 +76,7 @@ func (i *managedCompatibilityInvocation) preparePhaseLocked(session compatibilit
 		return nil, err
 	}
 	next := before
-	next.SchemaVersion, next.CompatibilitySession, next.CompatibilityFinalizing = compatibilitySupervisedSchema, &session, true
+	next.SchemaVersion, next.CompatibilitySession, next.CompatibilityFinalizing = supervisedWriteSchema(next), &session, true
 	intent, err := compatibilityStateImage(next)
 	if err != nil {
 		return nil, err

@@ -112,6 +112,17 @@ func runtimeManagerSourcesBound(ctx context.Context, create func() (*dataplane.M
 // lifetime. Each subsequent observation still supplies its own finite context
 // and rechecks the held tool images and network identity; Close revokes all.
 func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBoundTools(ctx, lifetime, create, dnsPath, false)
+}
+
+// Offline Mihomo additionally reads RPDB/routes through the original reviewed
+// IP image. Ordinary inactivity callers retain their existing xtables profile.
+// Selecting the richer protected image set grants no command Start admission.
+func mihomoColdRuntimeSourcesBound(ctx context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBoundTools(ctx, ctx, create, dnsPath, true)
+}
+
+func runtimeManagerSourcesBoundTools(ctx, lifetime context.Context, create func() (*dataplane.Manager, error), dnsPath string, coldIP bool) (*dataplane.Manager, func() error, error) {
 	if ctx == nil || ctx.Err() != nil {
 		var cause error
 		if ctx != nil {
@@ -133,8 +144,15 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 	if err != nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", err)
 	}
+	fixture, fixtureErr := runtimeInactivityFixture(ctx, facts)
+	if fixtureErr != nil {
+		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", fixtureErr)
+	}
+	if fixture != nil {
+		defer fixture.Close()
+	}
 	platform, err := selectSelfUpdateRuntimePlatform(facts)
-	if err != nil {
+	if err != nil && fixture == nil {
 		return nil, nil, selfUpdateRuntimeSourceFailed("manager-platform", err)
 	}
 	if create == nil {
@@ -155,7 +173,13 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 		return nil, nil, selfUpdateRuntimeSourceFailed("network-provider", err)
 	}
 	var tools *startuptools.Lease
-	if platform == selfUpdateRuntimeStockNC1812 {
+	if fixture != nil {
+		tools, err = fixture.Acquire(lifetime, provider)
+	} else if coldIP && platform == selfUpdateRuntimeStockNC1812 {
+		tools, err = startuptools.AcquireReviewedStockNC1812Policy(lifetime, provider)
+	} else if coldIP {
+		tools, err = startuptools.AcquireUbuntuLegacyPolicy(lifetime, provider)
+	} else if platform == selfUpdateRuntimeStockNC1812 {
 		tools, err = startuptools.AcquireReviewedStockNC1812(lifetime, provider)
 	} else {
 		tools, err = startuptools.AcquireUbuntuLegacy(lifetime, provider)
@@ -168,6 +192,12 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 			cause = errors.Join(cause, errSelfUpdateRuntimeSourceClose, closeErr)
 		}
 		return nil, nil, selfUpdateRuntimeSourceFailed(stage, cause)
+	}
+	if coldIP {
+		original, descriptor, _, err := tools.MihomoColdReadTools()
+		if err != nil || original != tools || descriptor.Provider != provider {
+			return closeRefused("tools-inventory", err)
+		}
 	}
 	backendTools, err := tools.InventoryTools()
 	if err != nil {
@@ -188,6 +218,11 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 	closing, err := observeSelfUpdateRuntimePlatform(ctx)
 	if err != nil || closing != facts || ctx.Err() != nil {
 		return closeRefused("manager-platform", errors.Join(err, ctx.Err()))
+	}
+	if fixture != nil {
+		if err := fixture.Close(); err != nil {
+			return closeRefused("manager-platform", err)
+		}
 	}
 	return manager, tools.Close, nil
 }

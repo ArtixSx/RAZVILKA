@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
@@ -19,11 +20,13 @@ import (
 // cannot be reconstructed from a backend snapshot, receipt argv or Ready bit.
 // This is the kernel readback component, not the combined publication lease.
 type syntheticBaselineKernelInspector struct {
-	self     *syntheticBaselineKernelInspector
-	backend  *BackendInventory
-	identity *networkPolicyIdentity
-	plan     PolicyEffectPlan
-	mapping  *dnscontrol.SyntheticDNSMapping
+	self      *syntheticBaselineKernelInspector
+	backend   *BackendInventory
+	identity  *networkPolicyIdentity
+	plan      PolicyEffectPlan
+	mapping   *dnscontrol.SyntheticDNSMapping
+	capture   atomic.Pointer[domainTCPCaptureExecutionResource]
+	successor *domainTCPGlobalSuccessor
 }
 
 func newSyntheticBaselineKernelInspector(ctx context.Context, backend *BackendInventory, identity *networkPolicyIdentity, transport *SyntheticDNSTransportPlan, domain *DomainPolicyRuntimePlan, mapping *dnscontrol.SyntheticDNSMapping) (*syntheticBaselineKernelInspector, error) {
@@ -64,6 +67,27 @@ func (i *syntheticBaselineKernelInspector) read(ctx context.Context) (backendInv
 	}
 	if err := i.identity.check(ctx); err != nil {
 		return backendInventorySnapshot{}, err
+	}
+	if i.successor != nil {
+		view.Rows, err = i.successor.counterfactualRows(ctx, i.backend, view.Rows)
+		if err != nil {
+			return backendInventorySnapshot{}, err
+		}
+	}
+	if capture := i.capture.Load(); capture != nil {
+		if capture.mapping != i.mapping || capture.backend != i.backend || capture.process == nil || capture.process.scope == nil || capture.process.scope.networkIdentity != i.identity {
+			return backendInventorySnapshot{}, ErrSyntheticBaselineTransition
+		}
+		if err := capture.registered(ctx); err != nil {
+			return backendInventorySnapshot{}, err
+		}
+		view.Rows, err = capture.counterfactualRows(ctx, view.Rows)
+		if err != nil {
+			return backendInventorySnapshot{}, err
+		}
+		if err := capture.registered(ctx); err != nil {
+			return backendInventorySnapshot{}, err
+		}
 	}
 	return view, nil
 }

@@ -291,6 +291,15 @@ probe_self_update_metadata() (
 )
 
 require_target_self_update_compatibility() {
+  [ -z "${RAZVILKA_STRATEGY_LAB_STATE:-}" ] || {
+    echo "Custom StrategyLab state path: replacement refused; preserve state; recovery may be required" >&2; return 1;
+  }
+  # No compatible StrategyLab binary/state pair is sealed by this protocol yet.
+  # Repeated at every existing compatibility boundary, including after stop.
+  if [ -e "$STATEDIR/strategy-lab.json" ] || [ -L "$STATEDIR/strategy-lab.json" ]; then
+    echo "StrategyLab replacement refused; preserve StrategyLab state; recovery may be required." >&2
+    return 1
+  fi
   SELF_TARGET_READER="$(probe_self_update_metadata "$1" -self-update-read-version)" || return 1
   case "$SELF_TARGET_READER" in
     unsupported) return 0 ;; # Existing selected-backup/private-state gates still apply.
@@ -415,7 +424,8 @@ require_native_enrollment_schema() {
 	fi
   SUBSCRIPTION_REQUIRED=0
   for SUBSCRIPTION_STATE in "$APPDIR/subscriptions-private/subscriptions.private.json" \
-    "$APPDIR/private-restore-feeds-v1/restore.private.json"; do
+    "$APPDIR/private-restore-feeds-v1/restore.private.json" \
+    "$APPDIR/private-restore-strategylab-v1/restore.private.json"; do
     if [ -e "$SUBSCRIPTION_STATE" ] || [ -L "$SUBSCRIPTION_STATE" ]; then
       [ -f "$SUBSCRIPTION_STATE" ] && [ ! -L "$SUBSCRIPTION_STATE" ] || { echo "Private subscription state is unsafe; installation unchanged" >&2; return 1; }
       SUBSCRIPTION_REQUIRED=1

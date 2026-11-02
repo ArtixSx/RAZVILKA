@@ -41,6 +41,7 @@ type DomainPolicyTCPXrayOwner interface {
 
 type DomainPolicyTCPXray struct {
 	a              *ProxyTunnelAdapter
+	resource       *XrayDomainTCPExecutionResource
 	owner          DomainPolicyTCPXrayOwner
 	spec           DomainPolicyTCPXraySpec
 	process        ProcessSpec
@@ -231,6 +232,9 @@ func (x *DomainPolicyTCPXray) matches(spec DomainPolicyTCPXraySpec) bool {
 }
 
 func (x *DomainPolicyTCPXray) checkSource(ctx context.Context) error {
+	if x != nil && x.resource != nil {
+		return x.checkOriginalResource(ctx)
+	}
 	if err := errors.Join(ctx.Err(), x.ctx.Err(), x.owner.CheckTCPProcess(ctx, x.process, x.configHash)); err != nil {
 		return err
 	}
@@ -261,9 +265,13 @@ func (x *DomainPolicyTCPXray) checkSource(ctx context.Context) error {
 	return errors.Join(ctx.Err(), x.ctx.Err())
 }
 
-func (x *DomainPolicyTCPXray) check(ctx context.Context) error {
+func (x *DomainPolicyTCPXray) check(ctx context.Context) error { return x.checkWithFiles(ctx, nil) }
+func (x *DomainPolicyTCPXray) checkWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	if err := x.checkSource(ctx); err != nil {
 		return err
+	}
+	if x.resource != nil {
+		return x.resource.currentWithFiles(ctx, files)
 	}
 	identity, err := x.a.verifyNodeProcess(x.process, x.address)
 	if err != nil || identity == "" || identity != x.identity || !x.a.Processes.Running(x.process) {

@@ -1,0 +1,18 @@
+2026-11-01T02:42:28.3691446Z go version go1.26.5 linux/amd64
+2026-11-01T02:43:40.4630638Z Actual native build mode: production
+2026-11-01T02:43:40.4651037Z go version go1.26.5 linux/amd64
+2026-11-01T02:44:24.0596310Z     strategy_managed_probe_native_linux_test.go:396: native measured Execute 14.926097792s actual inventory ToolCheck calls 272 ToolCheck wall 9.654335467s
+2026-11-01T02:44:24.0671130Z --- FAIL: TestManagedStrategyProbeNativeConsumer (16.55s)
+2026-11-01T02:44:24.4301812Z Actual native build mode: production
+2026-11-01T02:44:24.4322111Z go version go1.26.5 linux/amd64
+2026-11-01T02:44:47.5769100Z     classic_batch_native_fixture_linux_test.go:150: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-01T02:44:47.7433253Z     classic_batch_native_fixture_linux_test.go:150: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-01T02:44:47.8245768Z     classic_batch_native_fixture_linux_test.go:150: actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors
+2026-11-01T02:44:47.8254837Z --- PASS: TestClassicReadBatchNativeMutation (0.54s)
+2026-11-01T02:44:57.2266949Z     strategy_managed_probe_native_linux_test.go:410: native measured Execute 8.370467348s actual inventory ToolCheck calls 382 ToolCheck wall 4.10442205s
+2026-11-01T02:44:57.3446888Z     strategy_managed_probe_native_linux_test.go:538: actual isolated consumer: managed native validation + held source socket + queue200 + wrong-source negative + exact counters + TLS/catalogue predicates + soleWait/ACK + COMMON cleanup; platform/WAN classification modeled; no router/LAN acceptance
+2026-11-01T02:44:57.3450781Z --- PASS: TestManagedStrategyProbeNativeConsumer (9.43s)
+2026-11-01T02:45:06.3333371Z     strategy_managed_probe_native_linux_test.go:410: native measured Execute 7.905447431s actual inventory ToolCheck calls 242 ToolCheck wall 2.567794873s
+2026-11-01T02:45:09.8106878Z     strategy_managed_probe_native_linux_test.go:440: actual late original helper exit: sole Wait custody + exact ACK CAS + same COMMON removal confirmed; runtime released; source unknown/finalizing preserved; no delayed PASS
+2026-11-01T02:45:09.8110588Z --- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (12.30s)
+2026-11-01T02:45:10.8835326Z --- FAIL: TestManagedStrategyProbeNativeAppHTTP (0.91s)

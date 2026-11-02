@@ -57,12 +57,22 @@ func (m *Manager) checkExecutionRecovery() error {
 	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
+	// A completed new attempt can still retain its original predecessors.
+	// Documentary bytes never reconstruct that multi-owner pool after restart.
+	if latest.DomainDNSCoexistence != nil {
+		return executionJournalError(m.checkKnownDomainPoolRecord(*latest))
+	}
+	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
 	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
+	case "resource-failed":
+		if !knownStandby {
+			return executionJournalError(errors.New("previous execution requires recovery"))
+		}
 	default:
 		return executionJournalError(errors.New("previous execution requires recovery"))
 	}
-	if err := validateExecutionResources(*latest, true); err != nil {
+	if err := validateExecutionResources(*latest, !knownStandby); err != nil {
 		return executionJournalError(err)
 	}
 	if _, err := time.Parse(time.RFC3339Nano, latest.FinishedAt); err != nil {
@@ -81,7 +91,13 @@ func (m *Manager) checkExecutionRecovery() error {
 	if !exists || !reflect.DeepEqual(latest, transaction) {
 		return executionJournalError(errors.New("execution records disagree; recovery is required"))
 	}
+	if knownStandby {
+		return executionJournalError(m.checkKnownDomainStandbyRecord(*latest))
+	}
 	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
+	if err := m.checkRetainedMihomoRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
 	if err := m.checkRetainedXrayRecord(*latest); err != nil {
@@ -116,7 +132,7 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 		return false, nil
 	}
 	// A documentary ACTIVE row cannot reconstruct the original live owner.
-	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil {
+	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil || m.checkRetainedMihomoRecord(*latest) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {
@@ -159,6 +175,36 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	if execution.State == mihomoActiveCheckingState || execution.MihomoLiveHealthOperation != nil {
+		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.self != scope.mihomoLive || scope.mihomoLive.scope != scope || scope.execution == nil || execution.MihomoLiveHealthOperation == nil || scope.execution.MihomoLiveHealthOperation == nil || *execution.MihomoLiveHealthOperation != *scope.execution.MihomoLiveHealthOperation {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		r := scope.mihomoLive
+		c, a := r.healthCheck, r.transitHistory
+		checking := c != nil && c.self == c && c.owner == r && (c.open || c.stopping) && c.publishing
+		archiving := a != nil && a.self == a && a.owner == r && a.publishing
+		if !checking && !archiving {
+			return executionJournalError(ErrExecutionJournal)
+		}
+	}
+	// Reader8 documentary archives have an exclusive transaction-only writer.
+	// Neither generic writer may turn an archive into the current execution.
+	if execution.MihomoTransitHistoryArchive != nil {
+		return ErrExecutionJournal
+	}
+	// A documentary keeper does not allow an unrelated writer to hide the
+	// original baselines. Only the next actual successor may replace latest.
+	if execution.DomainDNSCoexistence == nil {
+		m.retainedXrayMu.Lock()
+		hasPool := m.domainPool != nil
+		m.retainedXrayMu.Unlock()
+		if hasPool {
+			return ErrDomainPolicyTCPCaptureRetirementPending
+		}
+	}
+	if execution.DomainDNSCoexistence != nil && (scope == nil || scope.domainSuccessor == nil || scope.domainSuccessor.scope != scope || scope.domainSuccessor.original() != nil) {
+		return ErrExecutionJournal
+	}
 	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
 		return executionJournalError(ErrExecutionJournal)
 	}
@@ -178,14 +224,21 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	if err != nil {
 		return executionJournalError(err)
 	}
+	if scope != nil && scope.domainSuccessor != nil {
+		// Only the still-live finite producer uses generic scope.persist.
+		// Retained DNS detachment/retirement publish through their own SAME
+		// original holders with actual fresh cleanup contexts; cancellation
+		// here must not be converted into fresh forward admission.
+		return executionJournalError(scope.domainSuccessor.publish(scope.ctx, data))
+	}
 	m.retainedXrayMu.Lock()
 	pair := m.replacementXray
 	m.retainedXrayMu.Unlock()
 	if pair != nil && pair.self == pair && pair.prior != nil && !pair.closed.Load() && scope != nil && (scope == pair.scope || scope == pair.prior.scope) {
 		return executionJournalError(pair.publish(scope, data))
 	}
-	if scope != nil && len(scope.xraySelectedTCP) != 0 {
-		if len(scope.xraySelectedTCP) != 1 {
+	if scope != nil && len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 0 {
+		if len(scope.xraySelectedTCP)+len(scope.xrayDomainTCP) != 1 {
 			return executionJournalError(ErrExecutionJournal)
 		}
 		for _, resource := range scope.xraySelectedTCP {
@@ -196,19 +249,38 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 				return executionJournalError(err)
 			}
 		}
+		for _, resource := range scope.xrayDomainTCP {
+			if resource == nil || resource.records == nil {
+				return executionJournalError(ErrExecutionJournal)
+			}
+			if err := resource.records.beforePublication(); err != nil {
+				return executionJournalError(err)
+			}
+		}
 		publish := func(index int, path string) error {
+			for _, resource := range scope.xraySelectedTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
+			for _, resource := range scope.xrayDomainTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
 			file, err := writeDataplaneJournalRetained(path, data)
 			if err != nil {
 				return err
 			}
+			accepted := false
 			info, err := file.Stat()
 			if err == nil {
-				err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
+				accepted, err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
 			}
-			if err != nil {
+			if !accepted {
 				return errors.Join(err, file.Close())
 			}
-			return nil // Original sink accepted ownership of this writer's FD.
+			return err // Original sink owns the new FD even when the old close failed.
 		}
 		transactionErr := publish(0, filepath.Join(root, "execution.json"))
 		latestErr := publish(1, filepath.Join(m.StateRoot, "latest-execution.json"))
@@ -225,14 +297,28 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	}
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
+	if scope != nil {
+		if scope.mihomoLive != nil {
+			return executionJournalError(scope.mihomoLive.publishRecords(data))
+		}
+		if scope.mihomo != nil {
+			return executionJournalError(scope.mihomo.publishRecords(data))
+		}
+		if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
+			return executionJournalError(probe.publishRecords(data))
+		}
+	}
 	transactionErr := writeDataplaneJournal(filepath.Join(root, "execution.json"), data)
 	latestErr := writeDataplaneJournal(filepath.Join(m.StateRoot, "latest-execution.json"), data)
 	return executionJournalError(errors.Join(transactionErr, latestErr))
 }
 
 func executionHasNetworkIdentity(execution Execution) bool {
+	if execution.DomainDNSCoexistence != nil {
+		return true
+	}
 	for _, resource := range execution.Resources {
-		if resource.XraySelectedTCP != nil {
+		if resource.SyntheticBaseline != nil || resource.MihomoLive != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {

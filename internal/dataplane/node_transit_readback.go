@@ -20,9 +20,10 @@ import (
 type networkPolicyTransitReadbackMode string
 
 const (
-	networkPolicyTransitPrepared networkPolicyTransitReadbackMode = "prepared"
-	networkPolicyTransitRemoved  networkPolicyTransitReadbackMode = "removed"
-	networkPolicyTransitUnused   networkPolicyTransitReadbackMode = "unused"
+	networkPolicyTransitPrepared      networkPolicyTransitReadbackMode = "prepared"
+	networkPolicyTransitRemoved       networkPolicyTransitReadbackMode = "removed"
+	networkPolicyTransitUnused        networkPolicyTransitReadbackMode = "unused"
+	networkPolicyTransitUnusedCurrent networkPolicyTransitReadbackMode = "unused-current" // Only after original issuer's consumed-proof ACK.
 )
 
 type networkPolicyTransitReadback func(context.Context, NodeTransitSpec, string, string, networkPolicyTransitReadbackMode) error
@@ -165,13 +166,19 @@ func nodeTransitReadEffects(ctx context.Context, plan PolicyEffectPlan, path str
 }
 
 type nodeRouterTransitReadback struct {
-	spec   NodeTransitSpec
-	root   string
-	info   os.FileInfo
-	lease  *nodeTransitLease
-	unused *nodeTransitBeforeEffectsError
-	owner  func(context.Context) error
+	self            *nodeRouterTransitReadback
+	registration    nodeTransitRegistration
+	resultErr       error // Original body result, captured before its synchronous cleanup.
+	unusedValidated bool  // Only original VerifyUnused completed; never inferred from a row.
+	spec            NodeTransitSpec
+	root            string
+	info            os.FileInfo
+	lease           *nodeTransitLease
+	unused          *nodeTransitBeforeEffectsError
+	owner           func(context.Context) error
 }
+
+type nodeRouterTransitOriginalReadbackKey struct{}
 
 func (b *nodeRouterTransitReadback) readback(ctx context.Context, spec NodeTransitSpec, root, digest string, mode networkPolicyTransitReadbackMode) error {
 	if ctx == nil || ctx.Err() != nil || b == nil || b.lease == nil || b.info == nil || b.owner == nil ||
@@ -219,7 +226,7 @@ func (b *nodeRouterTransitReadback) readback(ctx context.Context, spec NodeTrans
 		if err != nil || !status.Removed || status.Unknown {
 			return errors.Join(ErrNodeTransitUnavailable, err)
 		}
-	case networkPolicyTransitUnused:
+	case networkPolicyTransitUnused, networkPolicyTransitUnusedCurrent:
 		if b.unused == nil || b.unused.lease != b.lease {
 			return ErrNodeTransitUnavailable
 		}

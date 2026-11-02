@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/backendprofile"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/routeidentity"
@@ -60,7 +61,7 @@ func ReviewNodeDefaultSource(ctx context.Context, store *nodestore.Store, resolv
 
 func reviewNodeDefaultSource(ctx context.Context, store *nodestore.Store, resolved string, now func() time.Time) (*NodeDefaultSourceReview, error) {
 	engine, id, found := strings.Cut(resolved, ":")
-	if store == nil || now == nil || !found || engine != "xray" && engine != "sing-box" || !exactNodeIDPattern.MatchString(id) {
+	if store == nil || now == nil || !found || engine != "xray" && engine != "sing-box" && engine != "mihomo" || !exactNodeIDPattern.MatchString(id) {
 		return nil, ErrNodeDefaultSource
 	}
 	r := &NodeDefaultSourceReview{store: store, now: now,
@@ -150,7 +151,7 @@ func (r *NodeDefaultSourceReview) WithMaterial(ctx context.Context, use func([]b
 
 func (r *NodeDefaultSourceReview) valid() bool {
 	return r != nil && r.store != nil && r.now != nil && r.ref.Schema == 1 &&
-		(r.ref.EngineID == "xray" || r.ref.EngineID == "sing-box") && exactNodeIDPattern.MatchString(r.ref.NodeID) &&
+		(r.ref.EngineID == "xray" || r.ref.EngineID == "sing-box" || r.ref.EngineID == "mihomo") && exactNodeIDPattern.MatchString(r.ref.NodeID) &&
 		r.ref.Resolved == r.ref.EngineID+":"+r.ref.NodeID && r.ref.NodeGeneration > 0 &&
 		r.state.generation == r.ref.NodeGeneration && validNetworkPolicyGeneration(r.ref.MaterialSHA256)
 }
@@ -237,6 +238,15 @@ func nodeDefaultSourceMaterialHash(material []byte) string {
 func nodeDefaultSourceSupported(engine string, material []byte) bool {
 	if len(material) == 0 || len(material) > providerprofile.MaxProfileBytes {
 		return false
+	}
+	if engine == "mihomo" {
+		raw, err := mihomoNodeSourceProfile(material)
+		defer clear(raw)
+		if err != nil {
+			return false
+		}
+		_, err = backendprofile.Mihomo(string(raw), backendprofile.MihomoOptions{SOCKSPort: 18083})
+		return err == nil
 	}
 	if engine == "xray" {
 		profile, err := providerprofile.VLESSProfileFromJSON(material)

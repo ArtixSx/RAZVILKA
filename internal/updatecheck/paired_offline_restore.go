@@ -49,10 +49,12 @@ const pairedOfflineInitGuard = "#!/bin/sh\n" +
 var pairedOfflineProtected = []string{
 	"etc/razvilka/private-restore", "etc/razvilka/private-restore-nodes-v1",
 	"etc/razvilka/private-restore-native-v1", "etc/razvilka/private-restore-feeds-v1",
+	"etc/razvilka/private-restore-strategylab-v1",
 	"etc/razvilka/cloudflare-private",
 	"razvilka/state/self-update", "razvilka/state/self-update-files", "razvilka/state/self-update-stop",
 	"razvilka/state/update-backups", "razvilka/state/current-backup",
 	"razvilka/state/dataplane", "razvilka/state/warp", "razvilka/state/backups",
+	"razvilka/state/strategy-lab.json",
 	"razvilka/state/components/update-journal", "razvilka/state/components/operations",
 	"razvilka/state/components/rollback-packages",
 }

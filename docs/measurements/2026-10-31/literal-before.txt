@@ -1,0 +1,19 @@
+=== RUN   TestGuardedLiteralFirstIPSingleRequest
+--- PASS: TestGuardedLiteralFirstIPSingleRequest (0.01s)
+=== RUN   TestGuardedLiteralLocalPerformance
+    nodecheck_literal_reuse_test.go:80: literal_sample,0,94.047,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,1,93.258,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,2,94.795,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,3,94.937,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,4,93.847,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,5,93.678,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,6,93.624,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,7,94.198,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,8,93.345,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,9,93.325,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,10,94.374,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,11,93.179,2
+    nodecheck_literal_reuse_test.go:80: literal_sample,12,93.492,2
+--- PASS: TestGuardedLiteralLocalPerformance (1.22s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	2.078s

@@ -37,6 +37,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/engineconfig"
 	"github.com/ArtixSx/razvilka/internal/enginelab"
 	"github.com/ArtixSx/razvilka/internal/installpath"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
@@ -66,6 +67,9 @@ func main() {
 }
 
 func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCode int) {
+	if handled, code := runExecutionReadCommand(os.Args[1:]); handled {
+		return code
+	}
 	if handled, code := runComponentReadCommand(os.Args[1:], productionComponentStateDirectory); handled {
 		os.Exit(code)
 	}
@@ -150,6 +154,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	closeRollbackPlan := flag.String("close-rollback-plan", "", "close an intact failed rollback that can no longer be retried (for example after a reboot) by deactivating its owned runtime, while the panel is stopped")
 	closeRollbackDigest := flag.String("close-rollback-digest", "", "reviewed digest required with close-rollback-plan")
 	adoptNFQWS2Init := flag.Bool("adopt-nfqws2-init", false, "record the init script of an nfqws2-keenetic package upgraded outside RAZVILKA in the NFQWS2 ownership lease, while the panel is stopped")
+	strategyLabReadVersion := flag.Bool("strategy-lab-read-version", false, "print supported StrategyLab state reader version without opening stores")
+	privateSnapshotReadVersion := flag.Bool("self-update-private-snapshot-read-version", false, "print supported private update snapshot reader version without opening stores")
 	nativeEnrollmentSchema := flag.Bool("native-enrollment-schema", false, "print the supported private native enrollment schema and exit")
 	nodeHistoryReadVersion := flag.Bool("node-history-read-version", false, "print the supported exact node history read capability and exit")
 	checkNodeHistory := flag.Bool("check-node-history-state", false, "check retained node history compatibility without changing files and exit")
@@ -167,6 +173,14 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	flag.Parse()
 	if *retireDataplaneForRemoval && !*deactivateDataplane {
 		log.Fatal("retire-dataplane-for-removal requires deactivate-dataplane")
+	}
+	if *strategyLabReadVersion {
+		fmt.Println(updatecheck.StrategyLabReadVersion)
+		return
+	}
+	if *privateSnapshotReadVersion {
+		fmt.Println(updatecheck.PrivateSnapshotReadVersion)
+		return
 	}
 	if *nodeHistoryReadVersion {
 		fmt.Println(nodestore.ExactHistoryReadVersion)
@@ -297,8 +311,12 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err != nil {
 		log.Fatal(err)
 	}
+	configuredComponentOwner, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
 	selfFileState.RecoveryGuard = func(c context.Context) error {
-		return independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath)
+		return errors.Join(independentSelfUpdateFences(c, *cfgPath, *dataplaneStatePath), configuredComponentOwner.CheckHEVReleaseIdle(c), configuredComponentOwner.CheckMihomoReleaseIdle(c))
 	}
 	if *selfJob != "" && selfFileState.StartupAllowed(context.Background(), *selfJob, *selfWorker) != nil {
 		log.Fatal("matching self update startup authority unavailable; preserve retained files")
@@ -325,9 +343,67 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			return
 		}
 	}
+	if mihomoLiveParentRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveParentRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		}, selfFileState.ControlRoot)
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
+	if mihomoLiveBootRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveBootRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		})
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
+	if mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+		}, mihomoParentRetirementCLIRequested())
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoProbeRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo retirement result could not be written")
+			return 1
+		}
+		return
+	}
 	if *stopOwnedRoutes {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{
+		result, err := runOfflineNFQWS2StopCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
 			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
 			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
 			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
@@ -353,7 +429,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 	}
 	if *recoverPrivateRestore {
-		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+		legacyRecovery, privateRecovery, legacyOutcome, outcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 		if err != nil {
 			log.Fatal("private draft recovery gate: ", err)
 		}
@@ -388,7 +464,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if *deactivateDataplane {
 		engineConfigs := engineconfig.New(*stagePath, *backupPath)
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdRemovalDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -401,10 +481,6 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		if err := recoverExactNodeCheckersForRemoval(ctx, *dataplaneStatePath, *retireDataplaneForRemoval); err != nil {
 			log.Print("Exact node checker removal refused; retained ownership and panel files must be preserved")
 			return 1
-		}
-		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
-		if err != nil {
-			log.Fatal(err)
 		}
 		if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
 			log.Fatal("stock NFQWS2 native owner unavailable")
@@ -432,7 +508,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		return
 	}
 	if *adoptNFQWS2Init {
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -454,7 +534,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	if *checkOnly || *migrateConfig {
 		if *migrateConfig {
-			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+			legacyRecovery, privateRecovery, _, _, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 			if err != nil {
 				log.Fatal("private draft recovery gate: ", err)
 			}
@@ -481,7 +561,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 
 	// Private draft recovery precedes ALL Store loads, token creation and any
 	// runtime initialization. Keep the OS journal lease until server shutdown.
-	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath)
+	legacyRecovery, privateRecovery, legacyOutcome, privateOutcome, err := preparePrivateRecoveries(*cfgPath, *customServicesPath, *devicesPath, *stagePath, *cloudflareStatePath, *nodeStatePath, *warpStatePath, *strategyLabStatePath)
 	if err != nil {
 		log.Fatal("private draft recovery gate: ", err)
 	}
@@ -508,7 +588,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// lease, but must not create credentials, defaults or unrelated stores.
 	// It never starts workers or serves HTTP, and changes no runtime effects.
 	if bootRetirementCLIRequested() {
-		manager, err := newDataplaneManager(*dataplaneStatePath, engineconfig.New(*stagePath, *backupPath))
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		manager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineconfig.New(*stagePath, *backupPath), *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -600,7 +684,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// This narrow recovery cannot contain DNS. Do not open or migrate its
 	// settings before returning to the previously installed application.
 	if *retryRollbackPlan != "" || *closeRollbackPlan != "" {
-		dataplaneManager, err := newDataplaneManager(*dataplaneStatePath, engineConfigs)
+		componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dataplaneManager, err := newColdDataplaneManager(context.Background(), *dataplaneStatePath, engineConfigs, *cfgPath, componentManager)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -654,12 +742,38 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	} else {
 		defer nodeStore.Close()
 	}
+	componentManager := configuredComponentOwner
+	hevRecoveryContext, finishHEVRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, hevRecoveryErr := componentManager.RecoverHEVRelease(hevRecoveryContext)
+	finishHEVRecovery()
+	if hevRecoveryErr != nil {
+		log.Print("HEV component recovery remains pending; its managed sidecar cannot start")
+	}
+	mihomoRecoveryContext, finishMihomoRecovery := context.WithTimeout(context.Background(), 15*time.Second)
+	_, mihomoRecoveryErr := componentManager.RecoverMihomoRelease(mihomoRecoveryContext)
+	finishMihomoRecovery()
+	if mihomoRecoveryErr != nil {
+		log.Print("Mihomo component recovery remains pending; serving the recovery panel")
+	}
+	proxySidecarBoot := config.EffectiveProxySidecar(store.Get().ProxySidecar)
 	dataplaneManager, err := newDataplaneManagerWithNodes(*dataplaneStatePath, engineConfigs, nodeStore, func(ctx context.Context) (string, error) {
 		profile, err := systemprobe.FreshWANProfile(ctx)
 		return profile.ID, err
-	})
+	}, proxySidecarStartup{backend: proxySidecarBoot, components: componentManager})
 	if err != nil {
-		log.Fatal(err)
+		if proxySidecarBoot != "hev" {
+			log.Fatal(err)
+		}
+		log.Print("Selected HEV owner is unavailable; serving the recovery panel without starting runtime adapters")
+		recovery, recoveryErr := selfUpdateRecoveryApp(selfFileState, *cfgPath, *tokenPath, *credentialsPath, componentManager, *dataplaneStatePath)
+		if recoveryErr != nil {
+			log.Fatal(recoveryErr)
+		}
+		recovery.ProxySidecarBoot = "hev"
+		if err := serveSelfUpdateRecovery(recovery, *listen); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	dnsManager, err := dnscontrol.New(*dnsStatePath)
 	if err != nil {
@@ -738,10 +852,6 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if err != nil {
 		log.Fatal("exact node dispatcher configuration: ", err)
 	}
-	componentManager, err := configuredComponents(*componentState, *componentBin, *componentInit, *componentRepo, *componentInfo)
-	if err != nil {
-		log.Fatal(err)
-	}
 	if err := dataplaneManager.ConfigureNFQWSStockNative(componentManager); err != nil {
 		log.Fatal("stock NFQWS2 native parameter owner unavailable: ", err)
 	}
@@ -763,6 +873,7 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	// Panel actions wait briefly for background work instead of failing with
 	// "busy" at once; the operation holding the gate is named if they still fail.
 	a.AdmissionPatience = 20 * time.Second
+	a.ProxySidecarBoot = proxySidecarBoot
 	a.Cloudflare = cloudflareStore
 	updateExecutable, _ := os.Executable()
 	_, updatePort, _ := net.SplitHostPort(addr)
@@ -774,6 +885,8 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		"cloudflare": updateCloudflarePath, "nodes": updateNodePath, "stage": *stagePath, "backups": *backupPath, "warp": *warpStatePath, "dataplane": *dataplaneStatePath,
 		"dns": *dnsStatePath,
 	}})
+	a.SelfUpdate.StrategyLabStatePath = *strategyLabStatePath
+	a.SelfUpdate.ExecutionHistoryReader = dataplane.InspectRetainedExecutionReadVersion
 	a.SelfUpdate.Directory = selfFileState.Helper.Directory
 	if selfFileState.Adapter != nil {
 		a.SelfUpdate.FileAuthorityReview = selfUpdateAuthorityReview(selfFileState.ControlRoot)
@@ -816,6 +929,14 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		log.Print("Cloudflare legacy copy locations disabled; existing bypasses are unchanged")
 	}
 	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
+	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
+	mihomoProvider := a.Dataplane.MihomoLiveStartupProvider()
+	if mihomoProvider == nil {
+		mihomoProvider = netidentity.NewProcProvider()
+	}
+	if err := a.ConfigureMihomoProbe(mihomoProvider); err != nil {
+		log.Print("Isolated Mihomo service check unavailable: original registration refused")
+	}
 	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
 	componentReadErr := checkComponentReadState(componentReadContext, a.Components.StateDir, app.ManagedComponentReadVersion)
 	cancelComponentRead()
@@ -849,6 +970,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if managedWGListErr != nil {
 		log.Printf("Managed WG startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedWGListErr))
 	}
+	mihomoLiveContext, cancelMihomoLive := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := a.ConfigureMihomoLive(mihomoLiveContext); err != nil {
+		log.Print("Persistent Mihomo runtime unavailable: original startup binding refused")
+	}
+	cancelMihomoLive()
 	managedNFQCloseAttempted := false
 	closeManagedNFQList := func(ctx context.Context) error {
 		if managedNFQCloseAttempted {
@@ -1029,6 +1155,9 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 		}
 		if err := a.WaitManagedStrategyCompatibility(nodeShutdownContext); err != nil {
 			log.Print("Managed NFQ compatibility completion remains unconfirmed; original operation was not released")
+		}
+		if err := a.WaitManagedStrategyProbes(nodeShutdownContext); err != nil {
+			log.Print("Managed NFQ probe cleanup remains unconfirmed; original resources were retained")
 		}
 		if err := a.WaitNodeAutofallback(nodeShutdownContext); err != nil {
 			log.Print("Node autofallback cleanup did not finish before shutdown")
@@ -1283,7 +1412,23 @@ func newDataplaneManager(stateRoot string, configs *engineconfig.Manager) (*data
 // Ordinary startup binds the same private catalog to the registered Xray
 // runtime before any Apply/health work. Cold recovery keeps its nil-store
 // observer constructor and never opens a catalog to manufacture absence.
-func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error)) (*dataplane.Manager, error) {
+type proxySidecarStartup struct {
+	recovery   bool
+	backend    string
+	components *components.Manager
+}
+
+func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manager, nodes *nodestore.Store, freshProfile func(context.Context) (string, error), sidecars ...proxySidecarStartup) (*dataplane.Manager, error) {
+	if len(sidecars) > 1 {
+		return nil, errors.New("one original sidecar startup choice required")
+	}
+	sidecar := proxySidecarStartup{backend: "sing-box"}
+	if len(sidecars) == 1 {
+		sidecar = sidecars[0]
+	}
+	if err := config.ValidateProxySidecar(sidecar.backend); err != nil {
+		return nil, err
+	}
 	manager := dataplane.New(stateRoot)
 	wireGuardAdapter := dataplane.NewWireGuardAdapter(configs, stateRoot)
 	// One explicit startup Store is shared by the catalog and runtime owner.
@@ -1307,9 +1452,18 @@ func newDataplaneManagerWithNodes(stateRoot string, configs *engineconfig.Manage
 		var adapter *dataplane.ProxyTunnelAdapter
 		var err error
 		if engineID == "xray" && nodes != nil {
-			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile})
+			adapter, err = app.NewXrayNodeRuntime(app.NodeRuntimeFactoryOptions{Configs: configs, Nodes: nodes, StateRoot: stateRoot, FreshProfile: freshProfile, ProxySidecar: sidecar.backend, HEVComponents: sidecar.components})
 		} else {
 			adapter, err = dataplane.NewProxyTunnelAdapter(engineID, configs, stateRoot)
+			if err == nil && config.EffectiveProxySidecar(sidecar.backend) == "hev" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if sidecar.recovery {
+					err = dataplane.BindHEVSidecarForRecovery(ctx, adapter, sidecar.components)
+				} else {
+					err = dataplane.BindManagedHEVSidecar(ctx, adapter, sidecar.components)
+				}
+				cancel()
+			}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("configure %s dataplane adapter: %w", engineID, err)

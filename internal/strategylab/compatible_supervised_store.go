@@ -35,6 +35,9 @@ func decodeCompatibilityState(image restorejournal.Image) (State, error) {
 	if d.Decode(&state) != nil || d.Decode(new(any)) != io.EOF || !supervisedStrategySchema(state.SchemaVersion) || state.CompatibilitySession == nil || validateCompatibilitySession(*state.CompatibilitySession) != nil {
 		return state, ErrCompatibilityQuiescenceUnknown
 	}
+	if err := validateManagedProbeState(state); err != nil {
+		return state, ErrCompatibilityQuiescenceUnknown
+	}
 	if state.Candidates == nil {
 		state.Candidates = map[string]Candidate{}
 	}
@@ -116,7 +119,7 @@ func (m *Manager) beginCompatibilitySessionLocked(ctx context.Context, session c
 		return ErrCompatibilityQuiescenceUnknown
 	}
 	state := m.state
-	state.SchemaVersion = compatibilitySupervisedSchema
+	state.SchemaVersion = supervisedWriteSchema(state)
 	state.CompatibilitySession = &session
 	state.CompatibilityFinalizing = true
 	after, err := compatibilityStateImage(state)

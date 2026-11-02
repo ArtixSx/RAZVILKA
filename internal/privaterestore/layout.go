@@ -17,15 +17,16 @@ import (
 // Layout is trusted deployment configuration, never part of an imported archive.
 // Journal must be stable across launches, including when there is no pending plan.
 type Layout struct {
-	Config         string
-	CustomServices string
-	Devices        string
-	StageRoot      string
-	ProviderRoot   string
-	NodeRoot       string // Optional; omitted deployments retain the v1 journal binding.
-	WarpRoot       string // Optional native enrollment image; trusted deployment path.
-	FeedRoot       string // Optional private subscriptions image.
-	JournalRoot    string
+	Config          string
+	CustomServices  string
+	Devices         string
+	StageRoot       string
+	ProviderRoot    string
+	NodeRoot        string // Optional; omitted deployments retain the v1 journal binding.
+	WarpRoot        string // Optional native enrollment image; trusted deployment path.
+	FeedRoot        string // Optional private subscriptions image.
+	StrategyLabPath string // Optional private StrategyLab state file.
+	JournalRoot     string
 }
 
 func (Layout) String() string   { return "[private restore layout]" }
@@ -54,7 +55,7 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 		}
 		*p = abs
 	}
-	for _, root := range []*string{&out.NodeRoot, &out.WarpRoot, &out.FeedRoot} {
+	for _, root := range []*string{&out.NodeRoot, &out.WarpRoot, &out.FeedRoot, &out.StrategyLabPath} {
 		if *root != "" {
 			abs, err := filepath.Abs(*root)
 			if err != nil || strings.TrimSpace(*root) == "" || abs == filepath.VolumeName(abs)+string(filepath.Separator) {
@@ -64,6 +65,9 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 		}
 	}
 	files := []string{out.Config, out.CustomServices, out.Devices}
+	if out.StrategyLabPath != "" {
+		files = append(files, out.StrategyLabPath)
+	}
 	dirs := []string{out.StageRoot, out.ProviderRoot, out.JournalRoot}
 	if out.NodeRoot != "" {
 		dirs = append(dirs, out.NodeRoot)
@@ -104,6 +108,9 @@ func normalizeLayout(in Layout) (Layout, string, error) {
 	}
 	if out.FeedRoot != "" {
 		bindings = append(bindings, "subscriptions-schema-1", canonical(out.FeedRoot))
+	}
+	if out.StrategyLabPath != "" {
+		bindings = append(bindings, "strategy-lab-private-v1", canonical(out.StrategyLabPath))
 	}
 	for _, spec := range engineconfig.Specs() {
 		for _, file := range spec.Files {

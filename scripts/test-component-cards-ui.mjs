@@ -142,6 +142,10 @@ assert.match(card(), /&lt;script&gt;/);
     assert.match(owned, /component-runtime running">ЗАПУЩЕН/);
     assert.doesNotMatch(owned, /component-verification verified/, 'structural ownership must not verify installation');
   }
+  const mihomo={...base,id:'mihomo',name:'Mihomo',provider:'github-release',installed_version:'1.19.32',available_version:'1.19.33'};
+  assert.match(render(mihomo),/data-component="mihomo" data-component-action="update"(?![^>]*disabled)/);
+  current.componentOperation={id:'mihomo',action:'update'};
+  assert.match(render(mihomo),/data-component-action="update"[^>]*disabled/);
 }
 
 const lifecycleCode = slice(app, 'async function refreshComponents(', 'function renderStatus(');
@@ -187,6 +191,22 @@ for(const action of ['install','update']) {
   assert.match(completed.notifications[0][0],action==='update'?/обновление проверено/:/установка проверена/);
   assert.match(completed.notifications[0][1],/Маршруты сервисов пока не менялись/);
   assert.equal(completed.notifications[0][2].message,completed.notifications[0][1]);
+}
+
+{
+  const current=fixture();
+  current.state.components=[{...base,id:'mihomo',name:'Mihomo',provider:'github-release'}];
+  let message='';current.setConfirmation(async(_title,body)=>{message=body;return true;});
+  assert.equal(await current.ctx.manageComponent('mihomo','update'),true);
+  assert.deepEqual(current.calls.filter(c=>c.options.method==='POST').map(c=>c.path),['/api/v1/components/mihomo/update']);
+  assert.match(message,/проверкой SHA-256 архива/);
+  assert.match(message,/фактического отсутствия работающих обходов и прежнего процесса Mihomo/);
+  assert.match(message,/не останавливает их автоматически/);
+  assert.doesNotMatch(message,/checksums\.txt/);
+  const blocked=fixture();blocked.state.components=[{...base,id:'mihomo',name:'Mihomo'}];
+  blocked.setResponder(async()=>({ready:false,blockers:[{code:'RUNTIME_STATE_UNKNOWN'}]}));
+  await blocked.ctx.manageComponent('mihomo','update');
+  assert.equal(blocked.calls.filter(c=>c.options.method==='POST').length,0);
 }
 
 f=fixture(); f.setResponder(async()=>({ready:false,blockers:[{code:'SERVICE_DEPENDENCY'}]}));

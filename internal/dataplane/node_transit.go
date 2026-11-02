@@ -52,23 +52,38 @@ type NodeTransitOwnershipSpec struct {
 
 func NodeTransitOwnershipSpecs() []NodeTransitOwnershipSpec {
 	owners := PolicyOwnershipSpecs()
-	end := 0
-	for _, owner := range owners {
-		if owner.SharedPriorityEnd > end {
-			end = owner.SharedPriorityEnd
-		}
-	}
-	if end < 1 || len(owners) == 0 || len(owners) > 64 || end > (1<<31-1)-len(owners) {
+	if len(owners) == 0 || len(owners) > 64 {
 		return nil
 	}
 	result := make([]NodeTransitOwnershipSpec, len(owners))
 	for i, owner := range owners {
-		priority := end + i + 1
+		// These slots are retained in existing execution records. Deriving all
+		// of them from a growing shared-priority maximum would reinterpret old
+		// journals and collide with existing owners when an adapter is added.
+		priority := 0
+		switch owner.Adapter {
+		case "warp-wg":
+			priority = 72
+		case "usque":
+			priority = 73
+		case "sing-box":
+			priority = 74
+		case "xray":
+			priority = 75
+		case "amneziawg":
+			priority = 76
+		case "wireguard":
+			priority = 77
+		case "mihomo":
+			priority = 80
+		default:
+			return nil
+		}
 		if owner.Adapter == "" || !proxyFirewallInterface.MatchString(owner.Interface) || owner.Table < 1 || owner.Table > 252 {
 			return nil
 		}
 		for j, other := range owners {
-			if priority >= other.PriorityBase && priority <= other.PriorityEnd || priority == other.EndpointPriority || j != i && (owner.Adapter == other.Adapter || owner.Interface == other.Interface || owner.Table == other.Table) {
+			if priority >= other.PriorityBase && priority <= other.PriorityEnd || priority >= other.SharedPriorityBase && priority <= other.SharedPriorityEnd || priority == other.EndpointPriority || j != i && (owner.Adapter == other.Adapter || owner.Interface == other.Interface || owner.Table == other.Table) {
 				return nil
 			}
 		}
@@ -108,6 +123,7 @@ func nodeTransitSpecDigest(spec NodeTransitSpec) (string, error) {
 // Cleanup uses its caller's separate authority; cancel detachment cannot renew
 // a revoked review because the same context-aware guard remains mandatory.
 type nodeTransitRuntime struct {
+	sharedOwner                    *nodeTransitSharedOwner
 	runner                         NFQWS2Runner
 	ip                             string
 	preflight, guard, beforeDelete func(context.Context, NodeTransitSpec) error
@@ -206,6 +222,15 @@ func newNodeTransitLease(spec NodeTransitSpec, root string, runtime nodeTransitR
 
 func newNodeTransitLeaseWithOptions(spec NodeTransitSpec, root string, runtime nodeTransitRuntime, options nodeTransitOptions) (*nodeTransitLease, error) {
 	plan, err := CompileNodeTransit(spec)
+	shared := runtime.sharedOwner
+	if shared != nil {
+		if shared.self != shared || shared.check == nil || shared.spec != spec || shared.root != root || shared.lease.Load() != nil || runtime.preflight != nil || runtime.guard != nil || runtime.beforeDelete != nil {
+			return nil, ErrNodeTransitUnavailable
+		}
+		// The constructor, not a function-pointer guess or caller flag, sets all
+		// roles to one retained original check on this exact lease/spec/root.
+		runtime.preflight, runtime.guard, runtime.beforeDelete = shared.check, shared.check, shared.check
+	}
 	if err != nil || !filepath.IsAbs(root) || filepath.Clean(root) != root || runtime.runner == nil || runtime.ip == "" || strings.ContainsAny(runtime.ip, "\x00\r\n") ||
 		runtime.preflight == nil || runtime.guard == nil || runtime.beforeDelete == nil || runtime.register == nil {
 		return nil, errors.Join(ErrNodeTransitUnavailable, err)
@@ -213,7 +238,15 @@ func newNodeTransitLeaseWithOptions(spec NodeTransitSpec, root string, runtime n
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &nodeTransitLease{spec: spec, plan: plan, digest: plan.Generation, root: root, runtime: runtime, options: options}, nil
+	lease := &nodeTransitLease{spec: spec, plan: plan, digest: plan.Generation, root: root, runtime: runtime, options: options}
+	if shared != nil {
+		if !shared.lease.CompareAndSwap(nil, lease) {
+			return nil, ErrNodeTransitUnavailable
+		}
+		check := func(ctx context.Context, spec NodeTransitSpec) error { return shared.run(lease, ctx, spec) }
+		lease.runtime.preflight, lease.runtime.guard, lease.runtime.beforeDelete = check, check, check
+	}
+	return lease, nil
 }
 
 func (l *nodeTransitLease) identity(ctx context.Context) error {
@@ -243,8 +276,21 @@ func (l *nodeTransitLease) guard(ctx context.Context) error {
 
 func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 	return PolicyEffectRuntime{Runner: l.runtime.runner, Tools: PolicyEffectTools{IP: l.runtime.ip},
-		Guard: func(ctx context.Context, _ int) error { return l.guard(ctx) },
+		Guard: func(ctx context.Context, _ int) error { return nodeTransitPhase("effect-guard", l.guard(ctx)) },
 		Preflight: func(ctx context.Context) error {
+			if owner := l.runtime.sharedOwner; owner != nil {
+				if !owner.validFor(l) {
+					return ErrNodeTransitUnavailable
+				}
+				// presence already calls the SAME full ownership guard before
+				// and after both-family actual reads. The otherwise adjacent
+				// duplicate opening/closing callbacks contain no intervening IO.
+				count, err := l.presence(ctx)
+				if err != nil || count != 0 {
+					return nodeTransitPhase("preflight-presence", errors.Join(ErrNodeTransitUnavailable, err))
+				}
+				return nil
+			}
 			if err := l.runtime.preflight(ctx, l.spec); err != nil {
 				return nodeTransitPhase("preflight-owner", err)
 			}
@@ -258,11 +304,21 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 			if index != 0 {
 				return 0, ErrNodeTransitUnavailable
 			}
-			return l.presence(ctx)
+			count, err := l.presence(ctx)
+			return count, nodeTransitPhase("effect-presence", err)
 		},
 		BeforeDelete: func(ctx context.Context, index int) error {
 			if index != 0 {
 				return ErrNodeTransitUnavailable
+			}
+			if owner := l.runtime.sharedOwner; owner != nil {
+				if !owner.validFor(l) {
+					return ErrNodeTransitUnavailable
+				}
+				// These roles are the same original check. There is no IO or
+				// callback between beforeDelete and guard; guard also keeps
+				// the actual boot/interface identity comparison.
+				return l.guard(ctx)
 			}
 			if err := l.runtime.beforeDelete(ctx, l.spec); err != nil {
 				return err
@@ -270,6 +326,16 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 			return l.guard(ctx)
 		},
 	}
+}
+
+// Only the original shared factory opts in. Early preflight continues to use
+// effectRuntime's full callbacks; the receipt entry fills these bare roles
+// privately after checking the exact runner/tools/plan/root and before IO.
+func (l *nodeTransitLease) policyEffectRuntime() PolicyEffectRuntime {
+	if l.runtime.sharedOwner == nil {
+		return l.effectRuntime()
+	}
+	return PolicyEffectRuntime{Runner: l.runtime.runner, Tools: PolicyEffectTools{IP: l.runtime.ip}, nodeTransitOrigin: newNodeTransitPolicyRuntimeOrigin(l)}
 }
 
 func (l *nodeTransitLease) register(ctx context.Context) error {
@@ -340,12 +406,27 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 	}
 	l.unused.Store(nil)
 	l.effects.Store(true)
-	if err := applyPolicyEffects(ctx, runtime, l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
+	if err := applyPolicyEffects(ctx, l.policyEffectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
 		return err
+	}
+	return l.verifyAppliedPresence(ctx)
+}
+
+func (l *nodeTransitLease) verifyAppliedPresence(ctx context.Context) error {
+	if owner := l.runtime.sharedOwner; owner != nil && !owner.validFor(l) {
+		return ErrNodeTransitUnavailable
 	}
 	count, err := l.presence(ctx)
 	if err != nil || count != 1 {
 		return errors.Join(ErrPolicyAdditionUnknown, ErrNodeTransitUnavailable, err)
+	}
+	if owner := l.runtime.sharedOwner; owner != nil {
+		if !owner.validFor(l) {
+			return ErrNodeTransitUnavailable
+		}
+		// presence has just completed this same full original guard after
+		// both-family reads. Only the count comparison intervenes here.
+		return ctx.Err()
 	}
 	return l.guard(ctx)
 }
@@ -372,7 +453,7 @@ func (l *nodeTransitLease) Remove(ctx context.Context) error {
 	if err := l.register(context.WithValue(ctx, nodeTransitRemovalKey{}, true)); err != nil {
 		return err
 	}
-	return removePolicyEffects(ctx, l.effectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
+	return removePolicyEffects(ctx, l.policyEffectRuntime(), l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault})
 }
 
 // VerifyUnused consumes only this lease's live before-effects refusal. A fresh

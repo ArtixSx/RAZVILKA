@@ -80,7 +80,7 @@ func (a *App) scopedRuntimeOperation(ctx context.Context) (context.Context, func
 // cleanup finish; inheriting the context value does not extend ownership.
 func (a *App) operationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" {
+		if r.URL.Path == "/api/v1/components/recovery" || r.URL.Path == "/api/v1/self-update/recovery" || r.URL.Path == hevRecoveryPath || r.URL.Path == mihomoRecoveryPath || r.URL.Path == mihomoProbeRecoveryPath {
 			// Recovery owns exact inspection/repair admission behind auth and CSRF.
 			next.ServeHTTP(w, r)
 			return
@@ -146,6 +146,9 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 		}
 		a.interruptAutomation(r)
 		nodeJobOwnsAdmission := (r.URL.Path == "/api/v1/node-checks" || r.URL.Path == "/api/v1/service-control/jobs" || r.URL.Path == "/api/v1/service-control/runtime") && r.Method == http.MethodPost
+		// Pure conversion does not read Store; validate/probe acquire their own
+		// exclusive admission, retaining it if the original cleanup is pending.
+		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/extension-lab/mihomo"
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || r.URL.Path == "/api/v1/dns/service-compare" && r.Method == http.MethodPost
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isNodeApplyPath(r)
 		nodeJobOwnsAdmission = nodeJobOwnsAdmission || isScopedDNSApplyPath(r)
@@ -167,6 +170,11 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		exclusive := (r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/nodes/")) || strings.HasPrefix(r.URL.Path, "/api/v1/autonomy/services/") && r.Method == http.MethodDelete || r.URL.Path == "/api/v1/autonomy" && r.Method == http.MethodPut || r.URL.Path == "/api/v1/autonomy/services" && r.Method == http.MethodPost || r.Method == http.MethodPost && (r.URL.Path == "/api/v1/nodes/delete-batch" || r.URL.Path == "/api/v1/apply" || r.URL.Path == "/api/v1/self-update/apply" || r.URL.Path == "/api/v1/service-control/runtime" || r.URL.Path == "/api/v1/private-backups/import" || r.URL.Path == "/api/v1/diagnostics/usque/repair" || strings.HasPrefix(r.URL.Path, "/api/v1/nodes/") && strings.HasSuffix(r.URL.Path, "/apply"))
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, mihomoNodePath) {
+			// Preview and Apply use the original operationScope, allowing only
+			// its own bounded Apply borrower to retain pending cleanup custody.
+			exclusive = true
+		}
 		if r.Method == http.MethodPost && (r.URL.Path == networkPolicyReviewPath || r.URL.Path == resourceExclusionsPath) {
 			exclusive = true
 		}
@@ -184,15 +192,19 @@ func (a *App) operationMiddleware(next http.Handler) http.Handler {
 			// Their concrete runtime check cannot upgrade a shared operation.
 			exclusive = true
 		}
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/strategy-lab/candidates/") && (strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/validate") || strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/probe")) {
 			// Supervised compatibility uses the original request operation for
-			// its exact source publication; a shared request cannot upgrade it.
+			// its exact source publication. Managed probes retain this same
+			// exclusive owner through physical cleanup; shared cannot upgrade.
 			exclusive = true
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/strategy-lab/selections" {
 			exclusive = true
 		}
 		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/nfqws2/setup-mode" || r.URL.Path == "/api/v1/nfqws2/discord-repair" || r.URL.Path == "/api/v1/nfqws2/first-start-recipe") {
+			exclusive = true
+		}
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v1/runtime/proxy-sidecar" {
 			exclusive = true
 		}
 		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/services/") {

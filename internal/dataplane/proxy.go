@@ -33,20 +33,22 @@ import (
 // the interface by policy routing; neither process may replace the host's
 // default route.
 type ProxyTunnelAdapter struct {
-	EngineID         string
-	Configs          *engineconfig.Manager
-	StateRoot        string
-	Runner           NFQWS2Runner
-	Processes        ProcessController
-	Resolver         PrefixResolver
-	Probe            func(context.Context, string) error
-	SOCKSProbe       func(context.Context, string) error
-	CanaryProbe      func(context.Context, string, string) error
-	ServiceIPProbe   func(context.Context, string, string, netip.Addr) error
-	CanaryTraceProbe func(context.Context, string) (usqueCanaryEvidence, error)
-	ownedUSQUEProbe  usqueOwnedProducer
-	EngineBin        string
-	SidecarBin       string
+	mihomoOwner       *MihomoProbeAdapter
+	hevInstalledCheck func(context.Context) error // Original component owner, set only by managed startup factory.
+	EngineID          string
+	Configs           *engineconfig.Manager
+	StateRoot         string
+	Runner            NFQWS2Runner
+	Processes         ProcessController
+	Resolver          PrefixResolver
+	Probe             func(context.Context, string) error
+	SOCKSProbe        func(context.Context, string) error
+	CanaryProbe       func(context.Context, string, string) error
+	ServiceIPProbe    func(context.Context, string, string, netip.Addr) error
+	CanaryTraceProbe  func(context.Context, string) (usqueCanaryEvidence, error)
+	ownedUSQUEProbe   usqueOwnedProducer
+	EngineBin         string
+	SidecarBin        string
 	// Fixed for adapter lifetime; empty preserves the original sing-box backend.
 	SidecarKind string
 	PackageInit string
@@ -156,6 +158,8 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18081, "rz-sing", "172.31.21.1/30", 203, 22000
 	case "xray":
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18082, "rz-xray", "172.31.22.1/30", 204, 24000
+	case "mihomo":
+		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18083, "rz-mihomo", "172.31.23.1/30", 207, 31200
 	default:
 		return nil, fmt.Errorf("unsupported proxy tunnel engine %q", id)
 	}
@@ -996,7 +1000,7 @@ func (a *ProxyTunnelAdapter) Activate(ctx context.Context, plan Plan, root strin
 	if err := a.waitForSOCKSProcess(ctx, engine, net.JoinHostPort("127.0.0.1", strconv.Itoa(a.SOCKSPort))); err != nil {
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+	if err := a.startOwnedSidecar(ctx); err != nil {
 		return err
 	}
 	if err := a.waitForInterface(ctx); err != nil {
@@ -1221,7 +1225,7 @@ func (a *ProxyTunnelAdapter) Reconcile(ctx context.Context, plan Plan) (retErr e
 		_ = a.stopOwned(ctx)
 		return err
 	}
-	if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+	if err := a.startOwnedSidecar(ctx); err != nil {
 		_ = a.stopOwned(ctx)
 		return err
 	}
@@ -1679,7 +1683,7 @@ func (a *ProxyTunnelAdapter) restoreProxySnapshot(ctx context.Context, snapshot 
 		}
 	}
 	if sameBoot && snapshot.SidecarWasRunning {
-		if err := a.Processes.Start(ctx, a.sidecarProcess()); err != nil {
+		if err := a.startOwnedSidecar(ctx); err != nil {
 			return err
 		}
 	}
@@ -1876,6 +1880,10 @@ func (a *ProxyTunnelAdapter) engineProcessAt(config string, port int, root, proc
 		args = []string{"run", "-c", config}
 	case "xray":
 		args = []string{"run", "-config", config}
+	case "mihomo":
+		// Logical comparison spec only; the original component owner launches
+		// its retained executable/profile/home FDs, never this pathname.
+		args = []string{"-f", "/proc/self/fd/4", "-d", "/proc/self/fd/5"}
 	}
 	return ProcessSpec{ID: processID, Binary: a.engineBinary(), Args: args, Dir: root, PIDPath: filepath.Join(root, "engine.pid"), LogPath: filepath.Join(root, "engine.log"), MatchArg: config, RouteProof: true}
 }
@@ -2022,7 +2030,13 @@ func (a *ProxyTunnelAdapter) sidecarProcess() ProcessSpec {
 	if a.effectiveSidecar() == "hev" {
 		args = []string{config}
 	}
-	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config, RouteProof: a.scopedXray}
+	if a.ID() == "mihomo" {
+		args = []string{"run", "-c", "/proc/self/fd/4"}
+		if a.effectiveSidecar() == "hev" {
+			args = []string{"/proc/self/fd/4"}
+		}
+	}
+	return ProcessSpec{ID: a.ID() + "-tun", Binary: a.sidecarBinary(), Args: args, Dir: a.runtimeRoot(), PIDPath: filepath.Join(a.runtimeRoot(), "sidecar.pid"), LogPath: filepath.Join(a.runtimeRoot(), "sidecar.log"), MatchArg: config, RouteProof: a.scopedXray || a.ID() == "mihomo"}
 }
 func (a *ProxyTunnelAdapter) stopOwned(ctx context.Context) error {
 	var firstErr error

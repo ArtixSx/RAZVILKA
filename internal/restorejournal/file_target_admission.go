@@ -44,7 +44,7 @@ func (f *FileTarget) CompareAndSwapWithRenameAdmission(ctx context.Context, befo
 	if equal(before, after) {
 		return f.checkExistingLease()
 	}
-	attempted, err := f.root.WriteAtomicWithRenameAdmission(f.name, after.Data, 0o600, func(rename func() error) error {
+	attempted, err := f.root.WriteAtomicWithRenameAdmission(f.name, after.Data, f.mode, func(rename func() error) error {
 		if ctx.Err() != nil {
 			return ErrAborted
 		}
@@ -124,6 +124,9 @@ func readPublicationTarget(ctx context.Context, root *ownedfs.Root, name string)
 }
 
 func (f *FileTarget) readPublicationTarget(ctx context.Context) (Image, os.FileInfo, error) {
+	if err := f.checkExecutableTargetMode(); err != nil {
+		return Image{}, nil, err
+	}
 	return readPublicationTargetMode(ctx, f.root, f.name, f.existingLease != nil)
 }
 

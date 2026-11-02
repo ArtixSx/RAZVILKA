@@ -46,6 +46,7 @@ type NFQWSScopedSpec struct {
 	Candidate                       NFQWSScopedCandidate
 	NetworkIdentity                 *netidentity.Identity `json:"network_identity,omitempty"`
 	Matches                         []NFQWSScopedMatch    `json:"matches,omitempty"`
+	Probe                           *NFQWSProbeSpec       `json:"probe,omitempty"`
 }
 
 type NFQWSScopedResources struct {
@@ -102,6 +103,10 @@ func (s NFQWSScopedSpec) Clone() NFQWSScopedSpec {
 	s.Candidate.Traffic = slices.Clone(s.Candidate.Traffic)
 	s.Matches = slices.Clone(s.Matches)
 	s.NetworkIdentity = cloneNFQWSScopedNetworkIdentity(s.NetworkIdentity)
+	if s.Probe != nil {
+		probe := *s.Probe
+		s.Probe = &probe
+	}
 	return s
 }
 
@@ -194,6 +199,9 @@ func nfqwsScopedPublic(p netip.Prefix) bool {
 // validateNFQWSScopedIntent checks only immutable source/plan tuples. It never
 // constructs a chain, effects payload, execution resource or native command.
 func validateNFQWSScopedIntent(expected Plan, spec NFQWSScopedSpec) (NFQWSScopedSpec, error) {
+	if spec.Probe != nil {
+		return validateNFQWSProbeIntent(expected, spec)
+	}
 	candidate := spec.Candidate
 	if len(spec.Matches) > 1024 {
 		return NFQWSScopedSpec{}, ErrNFQWSScopedOwner
@@ -283,6 +291,9 @@ func CompileNFQWSScopedPlan(expected Plan, spec NFQWSScopedSpec) (*NFQWSScopedPl
 		return nil, err
 	}
 	spec = checked
+	if spec.Probe != nil {
+		return compileNFQWSProbePlan(expected, spec)
+	}
 	candidate := spec.Candidate
 	p := &NFQWSScopedPlan{lan: CloneLANPolicyRuntime(expected.LAN)}
 	p.resources = NFQWSScopedResources{Queue: spec.Queue, NetNamespace: spec.NetNamespace, Generation: p.lan.Generation, LANDigest: p.lan.Digest, PlanID: expected.PlanID, PlanDigest: expected.Digest, NetworkProfileID: expected.NetworkProfileID, Revision: expected.Revision, CandidateID: candidate.ID, Incarnation: candidate.Incarnation, ArgumentsHash: candidate.ArgumentsSHA256, BootID: spec.BootID, SessionID: spec.SessionID, CommandSHA256: spec.CommandSHA256}
@@ -474,6 +485,7 @@ type NFQWSScopedBinding struct {
 	// Checks other kernel backends (including nftables) and the exact physical
 	// namespace of Runner. Unknown or overlapping foreign capture must refuse.
 	AdditionalReadback func(context.Context, *NFQWSScopedPlan) error
+	activeReadback     *nfqws2ActiveExecution // Original active producer; mutually exclusive with callback.
 	// Only the private after-Start phase observes empty -> exact ready owned.
 	// Strict pre-Start, Prepared, Apply and cleanup still use QueueCheck.
 	queueReadiness func(context.Context, string, uint16, *components.NFQWSRuntimeProcessIdentity) (bool, error)
@@ -482,7 +494,7 @@ type NFQWSScopedBinding struct {
 }
 
 func (b *NFQWSScopedBinding) prepare(p *NFQWSScopedPlan, cleanup bool) (PolicyEffectRuntime, PolicyEffectPlan, error) {
-	if b == nil || p == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || (b.network == nil && b.QueueCheck == nil) || b.AdditionalReadback == nil || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
+	if b == nil || p == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || (b.network == nil && b.QueueCheck == nil) || (b.AdditionalReadback == nil) == (b.activeReadback == nil) || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
 		return PolicyEffectRuntime{}, PolicyEffectPlan{}, ErrNFQWSScopedOwner
 	}
 	if (p.resources.NetworkIdentity != nil) != (b.network != nil) {
@@ -543,6 +555,7 @@ func cloneNFQWSScopedEffect(e PolicyEffect) PolicyEffect {
 // fresh exact running process/queue/LAN check. root is the common Execution's
 // retained participant receipt root; this binding creates no second ledger.
 func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyApply)()
 	r, plan, err := b.prepare(p, false)
 	if err != nil {
 		return err
@@ -563,6 +576,7 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 }
 
 func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyRemove)()
 	r, plan, err := b.prepare(p, true)
 	if err != nil {
 		return err

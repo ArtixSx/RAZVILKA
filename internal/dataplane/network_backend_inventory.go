@@ -114,6 +114,12 @@ type backendInventoryBoundedRunner interface {
 	RunBounded(context.Context, string, int, ...string) ([]byte, error)
 }
 
+// Optional original protected producer for one complete classic image. It
+// batches only the existing literal table reads, never effects or callbacks.
+type backendInventoryClassicBatchRunner interface {
+	ReadBoundedClassicTables(context.Context, netidentity.Identity, string, [2]string, int, [2][]string) ([2][][]byte, error)
+}
+
 func (r *backendInventoryReader) Read(ctx context.Context, scope backendInventoryScope) (backendInventorySnapshot, error) {
 	if r == nil || r.Provider == nil {
 		return backendInventorySnapshot{}, errBackendInventory
@@ -153,7 +159,7 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 			return errBackendInventory
 		}
 		var err error
-		result, err = r.capture(held, scope, platform, runner)
+		result, err = r.captureWithToolObservation(held, scope, platform, runner)
 		return err
 	})
 	if err != nil || ctx.Err() != nil || uses != 1 {
@@ -258,7 +264,7 @@ func (r *backendInventoryReader) capture(ctx context.Context, scope backendInven
 	if len(tables) != 0 {
 		result.NFTState = backendNFTPresent
 	}
-	result.Rows, err = r.classic(ctx, platform, runner, func() error { return backendInventoryAt("TOOLS_B", errors.Join(r.checkTools(ctx, scope), ctx.Err())) })
+	result.Rows, err = r.classic(ctx, scope, platform, runner, func() error { return backendInventoryAt("TOOLS_B", errors.Join(r.checkTools(ctx, scope), ctx.Err())) })
 	if err != nil {
 		var staged *backendInventoryFailure
 		if !errors.As(err, &staged) {
@@ -344,7 +350,7 @@ func backendClassicNames(data []byte) ([]string, error) {
 	return names, nil
 }
 
-func (r *backendInventoryReader) classic(ctx context.Context, p backendInventoryPlatform, runner backendInventoryBoundedRunner, between func() error) ([]backendInventoryRow, error) {
+func (r *backendInventoryReader) classic(ctx context.Context, scope backendInventoryScope, p backendInventoryPlatform, runner backendInventoryBoundedRunner, between func() error) ([]backendInventoryRow, error) {
 	type image struct {
 		names  [2][]string
 		bodies [][]byte
@@ -365,14 +371,31 @@ func (r *backendInventoryReader) classic(ctx context.Context, p backendInventory
 				return image{}, err
 			}
 		}
+		var batch [2][][]byte
+		batched := false
+		if original, ok := runner.(backendInventoryClassicBatchRunner); ok && len(result.names[0])+len(result.names[1]) > 0 {
+			frozen := [2][]string{slices.Clone(result.names[0]), slices.Clone(result.names[1])}
+			var err error
+			batch, err = original.ReadBoundedClassicTables(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, backendClassicBytes-budget.bytes, frozen)
+			if err != nil || ctx.Err() != nil || len(batch[0]) != len(result.names[0]) || len(batch[1]) != len(result.names[1]) {
+				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+			}
+			batched = true
+		}
 		for i, path := range []string{r.IPTables, r.IP6Tables} {
-			for _, table := range result.names[i] {
+			for index, table := range result.names[i] {
 				if ctx.Err() != nil {
 					return image{}, ctx.Err()
 				}
-				data, err := backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
-					return runner.RunBounded(leaf, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
-				})
+				var data []byte
+				var err error
+				if batched {
+					data = batch[i][index]
+				} else {
+					data, err = backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
+						return runner.RunBounded(leaf, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
+					})
+				}
 				if err != nil || ctx.Err() != nil {
 					return image{}, errors.Join(errBackendInventory, err, ctx.Err())
 				}

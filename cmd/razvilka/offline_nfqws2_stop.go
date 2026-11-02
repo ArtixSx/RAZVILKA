@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 type offlineNFQWS2StopPaths struct {
+	strategyLab                                     string
 	config, customServices, devices, stage, backups string
 	cloudflare, nodes, warp, dataplane, dns         string
 	componentState, componentBin, componentInit     string
@@ -76,7 +78,7 @@ func runOfflineNFQWS2StopCLI(ctx context.Context, paths offlineNFQWS2StopPaths) 
 	if err != nil {
 		return result, offlineNFQWS2StopFailed("existing-config", err)
 	}
-	manager, err := newDataplaneManager(paths.dataplane, engineconfig.New(paths.stage, paths.backups))
+	manager, err := newColdDataplaneManager(ctx, paths.dataplane, engineconfig.New(paths.stage, paths.backups), paths.config, componentManager)
 	if err != nil {
 		return result, offlineNFQWS2StopFailed("manager", err)
 	}
@@ -109,6 +111,10 @@ func runOfflineNFQWS2StopCLI(ctx context.Context, paths offlineNFQWS2StopPaths) 
 // protocol's actual lifetime lease in the same order as daemon startup, but
 // require idle metadata without recovering or opening any target Store.
 func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPaths) (*privateRecoveryLeases, *privaterestore.Coordinator, error) {
+	return openOfflineRuntimeLeases(ctx, paths, privaterestore.OpenForOfflineNFQWS2Stop)
+}
+
+func openOfflineRuntimeLeases(ctx context.Context, paths offlineNFQWS2StopPaths, open func(context.Context, privaterestore.Layout) (*privaterestore.Coordinator, error)) (*privateRecoveryLeases, *privaterestore.Coordinator, error) {
 	providerRoot, err := cloudflareStorePath(paths.config, paths.cloudflare)
 	if err != nil {
 		return nil, nil, err
@@ -121,7 +127,16 @@ func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPat
 	layout := privaterestore.Layout{Config: paths.config, CustomServices: paths.customServices, Devices: paths.devices, StageRoot: paths.stage, ProviderRoot: providerRoot}
 	leases := &privateRecoveryLeases{}
 	var current *privaterestore.Coordinator
-	for i, generation := range []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"} {
+	generations := []string{"private-restore", "private-restore-nodes-v1", "private-restore-native-v1", "private-restore-feeds-v1"}
+	if paths.strategyLab != "" {
+		generations = append(generations, "private-restore-strategylab-v1")
+	} else if _, err := os.Lstat(filepath.Join(base, "private-restore-strategylab-v1")); !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, errors.New("StrategyLab recovery binding required")
+	}
+	for i, generation := range generations {
+		if i >= 4 {
+			layout.StrategyLabPath = paths.strategyLab
+		}
 		layout.JournalRoot = filepath.Join(base, generation)
 		if i >= 1 {
 			layout.NodeRoot = nodeRoot
@@ -132,7 +147,7 @@ func openOfflineNFQWS2StopLeases(ctx context.Context, paths offlineNFQWS2StopPat
 		if i >= 3 {
 			layout.FeedRoot = filepath.Join(base, "subscriptions-private")
 		}
-		current, err = privaterestore.OpenForOfflineNFQWS2Stop(ctx, layout)
+		current, err = open(ctx, layout)
 		if err != nil {
 			return nil, nil, errors.Join(err, leases.Close())
 		}

@@ -1622,7 +1622,9 @@ async function manageComponentReviewed(id, requestedAction) {
   const action = requestedAction || (component.update_available ? 'update' : 'install');
   const verbs = { install: 'Установить', update: 'Обновить', remove: 'Удалить' };
   const verb = verbs[action] || 'Выполнить';
-  const source = component.provider === 'opkg'
+  const source = ['mihomo','hev-socks5-tunnel'].includes(component.id)
+    ? 'официальный закреплённый GitHub release с проверкой SHA-256 архива'
+    : component.provider === 'opkg'
     ? 'официальный/подключённый Entware feed'
     : 'официальный GitHub release с обязательной проверкой checksums.txt';
   let plan;
@@ -1640,7 +1642,7 @@ async function manageComponentReviewed(id, requestedAction) {
   }
   const operation = action === 'remove'
     ? 'Будет удалён только пакет/файл, принадлежащий RAZVILKA. Конфликты, активный процесс или зависимые сервисы блокируют действие.'
-    : `Источник: ${source}. После установки обход останется выключенным, пока вы явно не назначите сервисы и не выполните общий Apply.`;
+    : `Источник: ${source}. ${component.id==='mihomo'&&action==='update'?'Замена версии требует фактического отсутствия работающих обходов и прежнего процесса Mihomo; панель не останавливает их автоматически. ':''}После установки обход останется выключенным, пока вы явно не назначите сервисы и не выполните общий Apply.`;
   // The explicit Install click is consent for the reviewed package, not for routing.
   // Updating active runtimes and deletion retain their separate impact review.
   if (action !== 'install' && !await askConfirmation(`${verb} ${component.name}`, `${operation} План содержит ${plan.steps?.length || 0} проверяемых этапов, фиксирует версии до/после и не включает маршруты автоматически.`, verb)) return false;

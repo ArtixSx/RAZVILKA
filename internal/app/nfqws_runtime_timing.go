@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -45,6 +47,9 @@ func beginManagedNFQTimings(ctx context.Context) (context.Context, func(string, 
 			inner, reason = "none", "none"
 		}
 		log.Printf("Managed NFQ original timing outer=%s inner=%s reason=%s total_ms=%d", outer, inner, reason, time.Since(timings.started).Milliseconds())
+		if stages := dataplane.NFQWSExecutionFailureStages(err); len(stages) != 0 {
+			log.Printf("Managed NFQ original execution stages=%s", strings.Join(stages, "/"))
+		}
 		for kind, sample := range samples {
 			if sample.calls != 0 {
 				label := [...]string{"physical-acquire", "physical-verify", "wan-profile"}[kind]

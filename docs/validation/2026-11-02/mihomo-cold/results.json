@@ -1,0 +1,92 @@
+[
+  {
+    "mode": "normal",
+    "job": 125106300857,
+    "run": 41392355393,
+    "sha": "1f059b407ee094f03dee2fb5001dcb49c616f385",
+    "evidence": [
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:12:44.2695888Z     mihomo_cold_read_native_linux_test.go:87: actual original source/read-only ABI/revocation passed; no retirement or reboot claim",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:12:44.2697645Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.52s)",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:50.6288896Z     mihomo_live_cold_native_external_test.go:117: public offline retirement and repeat passed with actual current process/socket/kernel/source observations; historical old boot is modeled",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:50.6301913Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (66.25s)",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:29.5211838Z     mihomo_live_cold_native_linux_test.go:104: actual offline CLI entry, all five original private leases, unchanged config, complete current native absence and terminal publication passed; historical old boot modeled",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:29.5224772Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (38.67s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125106301053,
+    "run": 41392355393,
+    "sha": "1f059b407ee094f03dee2fb5001dcb49c616f385",
+    "evidence": [
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:14.6418339Z     mihomo_cold_read_native_linux_test.go:87: actual original source/read-only ABI/revocation passed; no retirement or reboot claim",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:14.6419053Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.57s)",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:35.0666247Z     mihomo_live_cold_native_external_test.go:117: public offline retirement and repeat passed with actual current process/socket/kernel/source observations; historical old boot is modeled",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:35.0702877Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (79.32s)",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3229158Z     mihomo_live_cold_native_linux_test.go:104: actual offline CLI entry, all five original private leases, unchanged config, complete current native absence and terminal publication passed; historical old boot modeled",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3262196Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (45.01s)"
+    ]
+  },
+  {
+    "mode": "normal",
+    "job": 125129182122,
+    "run": 41399878590,
+    "sha": "4bcb7d0df18be8d71a9f9f7a4d65a22d6e82a24f",
+    "scope": "Actual source/process/kernel and CLI observations with all five original private leases; historical old boot modeled, no physical reboot claim",
+    "evidence": [
+      "2026-11-02T06:28:38.1657321Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.39s)",
+      "2026-11-02T06:29:23.8199457Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (45.56s)",
+      "2026-11-02T06:29:50.5773465Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (26.57s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125129181826,
+    "run": 41399878590,
+    "sha": "4bcb7d0df18be8d71a9f9f7a4d65a22d6e82a24f",
+    "scope": "Actual source/process/kernel and CLI observations with all five original private leases; historical old boot modeled, no physical reboot claim",
+    "evidence": [
+      "2026-11-02T06:31:40.5886256Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.78s)",
+      "2026-11-02T06:33:52.8433946Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (131.11s)",
+      "2026-11-02T06:35:10.9086719Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (75.76s)"
+    ]
+  },
+  {
+    "mode": "normal",
+    "job": 125153190921,
+    "run": 41407641893,
+    "sha": "aa51116301e8c8c59137e62cd0082b91cd34c9ff",
+    "scope": "Actual forwarding producer format now included; actual current sources, five private leases and CLI. Historical old boot remains modeled; previous fixture omitted forwarding manifest. No same-boot or hardware acceptance.",
+    "raw_sha256": "0743b184698b3c804cbbce63ea4f65dcaa302df5c15cd15aa8ee401461f60e49",
+    "evidence": [
+      "2026-11-02T07:40:14.5286920Z --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip (0.00s)",
+      "2026-11-02T07:40:14.5287276Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/bare (0.00s)",
+      "2026-11-02T07:40:14.5287646Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/version (0.00s)",
+      "2026-11-02T07:40:14.5288021Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/policy (0.00s)",
+      "2026-11-02T07:40:14.5288411Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-table (0.00s)",
+      "2026-11-02T07:40:14.5288807Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/duplicate (0.00s)",
+      "2026-11-02T07:40:14.5289213Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-field (0.00s)",
+      "2026-11-02T07:42:25.7039267Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (51.67s)",
+      "2026-11-02T07:42:55.9827389Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (30.08s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125153191245,
+    "run": 41407641893,
+    "sha": "aa51116301e8c8c59137e62cd0082b91cd34c9ff",
+    "scope": "Actual forwarding producer format now included; actual current sources, five private leases and CLI. Historical old boot remains modeled; previous fixture omitted forwarding manifest. No same-boot or hardware acceptance.",
+    "raw_sha256": "732ea4b6ba10a17664c72e4bbab0cdfe484385008ce01713e1b009ddf6f30c90",
+    "evidence": [
+      "2026-11-02T07:41:44.0305747Z --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip (0.02s)",
+      "2026-11-02T07:41:44.0306385Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/bare (0.00s)",
+      "2026-11-02T07:41:44.0307050Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/version (0.00s)",
+      "2026-11-02T07:41:44.0307726Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/policy (0.00s)",
+      "2026-11-02T07:41:44.0308441Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-table (0.00s)",
+      "2026-11-02T07:41:44.0309154Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/duplicate (0.00s)",
+      "2026-11-02T07:41:44.0310098Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-field (0.00s)",
+      "2026-11-02T07:46:00.1196793Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (117.76s)",
+      "2026-11-02T07:47:10.8468379Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (68.43s)"
+    ]
+  }
+]

@@ -1,0 +1,87 @@
+{
+  "compatibility_session": {
+    "schema": 1,
+    "id": "22222222222222222222222222222222",
+    "active": "dry-run",
+    "dry_run": {
+      "command": {
+        "id": "11111111111111111111111111111111",
+        "session_id": "22222222222222222222222222222222",
+        "phase": "dry-run",
+        "boot_id": "01234567-89ab-cdef-0123-456789abcdef",
+        "parent_start": "123",
+        "parent_pid": 20,
+        "deadline": "2026-10-04T12:00:00Z",
+        "args": [
+          "--dry-run",
+          "--intercept=0",
+          "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-lib.lua",
+          "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-antidpi.lua",
+          "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-auto.lua",
+          "--blob=tls_clienthello:@/tmp/razvilka-pair-model/fake/quic_initial.bin",
+          "--filter-tcp=443",
+          "--lua-desync=circular:fails=2:time=300",
+          "--lua-desync=fake:blob=tls_clienthello"
+        ],
+        "review": {
+          "binary": {
+            "path": "/tmp/razvilka-pair-model/nfqws2",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "size": 1
+          },
+          "assets": [
+            {
+              "path": "/tmp/razvilka-pair-model/lua/zapret-lib.lua",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 2
+            },
+            {
+              "path": "/tmp/razvilka-pair-model/lua/zapret-antidpi.lua",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 2
+            },
+            {
+              "path": "/tmp/razvilka-pair-model/lua/zapret-auto.lua",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 2
+            },
+            {
+              "path": "/tmp/razvilka-pair-model/fake/quic_initial.bin",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 2
+            }
+          ],
+          "base_arguments": [
+            "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-lib.lua",
+            "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-antidpi.lua",
+            "--lua-init=@/tmp/razvilka-pair-model/lua/zapret-auto.lua",
+            "--blob=tls_clienthello:@/tmp/razvilka-pair-model/fake/quic_initial.bin"
+          ],
+          "control_path": "/tmp/razvilka-pair-model/control",
+          "installation_id": "33333333333333333333333333333333",
+          "sequence": 1
+        }
+      },
+      "command_sha256": "7010cd68e36663dc31b18e8de12e5aa14597ec55d5337f8a53f69e751ea5bd73",
+      "receipt": {
+        "state": "reaped",
+        "boot_id": "01234567-89ab-cdef-0123-456789abcdef",
+        "start": "124",
+        "command_sha256": "7010cd68e36663dc31b18e8de12e5aa14597ec55d5337f8a53f69e751ea5bd73",
+        "pid": 21,
+        "group": 21,
+        "child_pid": 22,
+        "reaped": 1,
+        "exit_code": 1,
+        "wait_echild": true,
+        "direct_reaped": true,
+        "started": true
+      },
+      "acknowledged": true
+    }
+  },
+  "schema_version": 5,
+  "candidates": {},
+  "evidence": [],
+  "selections": {}
+}

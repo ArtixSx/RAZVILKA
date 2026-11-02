@@ -1,0 +1,184 @@
+=== production full log; selected original evidence ===
+2026-11-02T03:30:29.6440703Z go version go1.26.5 linux/amd64
+2026-11-02T03:31:26.6360425Z [36;1mecho '=== BEFORE two-read runtime images plus observer; fresh extension EvalSymlinks each metadata check; same worker ==='[0m
+2026-11-02T03:31:26.6362798Z [36;1mecho '=== AFTER original acquisition-derived extension pathname; BOTH full named node/link checks and membership retained; same worker ==='[0m
+2026-11-02T03:31:26.6364753Z [36;1mecho "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"[0m
+2026-11-02T03:31:26.8484547Z === BEFORE two-read runtime images plus observer; fresh extension EvalSymlinks each metadata check; same worker ===
+2026-11-02T03:31:27.4109961Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:31:27.4133762Z go version go1.26.5 linux/amd64
+2026-11-02T03:31:27.4288204Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T03:32:00.9971263Z --- PASS: TestClassicReadBatchNativeMutation (1.04s)
+2026-11-02T03:32:00.9971697Z     --- PASS: TestClassicReadBatchNativeMutation/held-file (0.09s)
+2026-11-02T03:32:00.9972182Z     --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.09s)
+2026-11-02T03:32:00.9972712Z     --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.28s)
+2026-11-02T03:32:00.9973287Z     --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.29s)
+2026-11-02T03:32:00.9973869Z     --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.09s)
+2026-11-02T03:32:00.9974386Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.09s)
+2026-11-02T03:32:00.9974966Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.10s)
+2026-11-02T03:32:11.8237527Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:32:11.8241743Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:32:11.8242631Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:32:11.8243861Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.851421675s actual inventory ToolCheck calls 382 ToolCheck wall 4.639569673s
+2026-11-02T03:32:11.9281856Z --- PASS: TestManagedStrategyProbeNativeConsumer (10.83s)
+2026-11-02T03:32:21.9225749Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:32:21.9230346Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [107 107 246]
+2026-11-02T03:32:21.9231209Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 1575
+2026-11-02T03:32:21.9236067Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 8.75245844s actual inventory ToolCheck calls 242 ToolCheck wall 2.86337598s
+2026-11-02T03:32:25.7922393Z --- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (13.47s)
+2026-11-02T03:32:59.3455051Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 71772 5868796440
+2026-11-02T03:32:59.3457472Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 13.34978454s
+2026-11-02T03:32:59.3458227Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 7776
+2026-11-02T03:32:59.3458779Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [528 528 1164]
+2026-11-02T03:32:59.3600416Z --- PASS: TestManagedStrategyProbeNativeAppHTTP (33.20s)
+2026-11-02T03:33:09.8462584Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:33:09.8465216Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:33:09.8466094Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:33:09.8466850Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.243236053s actual inventory ToolCheck calls 382 ToolCheck wall 4.323819333s
+2026-11-02T03:33:09.9155648Z --- PASS: TestManagedStrategyProbeNativeClosingSource (10.08s)
+2026-11-02T03:33:20.3979984Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:33:20.3982643Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:33:20.3983144Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:33:20.3983681Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.299842272s actual inventory ToolCheck calls 382 ToolCheck wall 4.353236183s
+2026-11-02T03:33:20.4627437Z --- PASS: TestManagedStrategyProbeNativeClosingRuntime (10.16s)
+2026-11-02T03:33:31.1825332Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:33:31.1828516Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:33:31.1829054Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:33:31.1829616Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.43288629s actual inventory ToolCheck calls 382 ToolCheck wall 4.397098626s
+2026-11-02T03:33:31.2596505Z --- PASS: TestManagedStrategyProbeNativeClosingControl (10.42s)
+2026-11-02T03:33:41.5883054Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:33:41.5887503Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:33:41.5888398Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:33:41.5889252Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.108869033s actual inventory ToolCheck calls 382 ToolCheck wall 4.260027787s
+2026-11-02T03:33:41.6565749Z --- PASS: TestManagedStrategyProbeNativeClosingEnvironment (10.01s)
+2026-11-02T03:33:42.4684555Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:33:42.4705834Z go version go1.26.5 linux/amd64
+2026-11-02T03:33:42.4852233Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T03:33:46.4201080Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.51s)
+2026-11-02T03:34:48.5603341Z 2026/11/02 03:34:48 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (DEADLINE_EXCEEDED)
+2026-11-02T03:34:48.6304746Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 77616 6346660320
+2026-11-02T03:34:48.6306974Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 1697 wall 19.355196512s
+2026-11-02T03:34:48.6307456Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 12420
+2026-11-02T03:34:48.6308216Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [887 887 1689]
+2026-11-02T03:34:48.6516729Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (62.14s)
+2026-11-02T03:34:49.0563667Z === AFTER original acquisition-derived extension pathname; BOTH full named node/link checks and membership retained; same worker ===
+2026-11-02T03:34:49.5631290Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:34:49.5653662Z go version go1.26.5 linux/amd64
+2026-11-02T03:34:49.5811261Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T03:35:15.5635558Z === RUN   TestClassicReadBatchNativeMutation/inventory-extension-symlink
+2026-11-02T03:35:15.6494446Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-symlink change refused whole image; no hooks or packets, host tools unchanged
+2026-11-02T03:35:15.6515656Z --- PASS: TestClassicReadBatchNativeMutation (1.07s)
+2026-11-02T03:35:15.6516072Z     --- PASS: TestClassicReadBatchNativeMutation/held-file (0.09s)
+2026-11-02T03:35:15.6516587Z     --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.08s)
+2026-11-02T03:35:15.6516954Z     --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.27s)
+2026-11-02T03:35:15.6517502Z     --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.29s)
+2026-11-02T03:35:15.6518130Z     --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.08s)
+2026-11-02T03:35:15.6518583Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.09s)
+2026-11-02T03:35:15.6519090Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.09s)
+2026-11-02T03:35:15.6519612Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.09s)
+2026-11-02T03:35:25.2899938Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:35:25.2902541Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:35:25.2903028Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:35:25.2903555Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 8.789452066s actual inventory ToolCheck calls 382 ToolCheck wall 4.09560393s
+2026-11-02T03:35:25.3832485Z --- PASS: TestManagedStrategyProbeNativeConsumer (9.63s)
+2026-11-02T03:35:34.6127497Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:35:34.6132082Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [107 107 246]
+2026-11-02T03:35:34.6132936Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 1575
+2026-11-02T03:35:34.6133845Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 8.150500481s actual inventory ToolCheck calls 242 ToolCheck wall 2.644622772s
+2026-11-02T03:35:38.3621735Z --- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (12.63s)
+2026-11-02T03:36:10.0339579Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 71772 5868796440
+2026-11-02T03:36:10.0342210Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 12.602193217s
+2026-11-02T03:36:10.0342688Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 7776
+2026-11-02T03:36:10.0343204Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [528 528 1164]
+2026-11-02T03:36:10.0464715Z --- PASS: TestManagedStrategyProbeNativeAppHTTP (31.35s)
+2026-11-02T03:36:20.0492348Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:36:20.0496374Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:36:20.0497226Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:36:20.0498253Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 8.806884551s actual inventory ToolCheck calls 382 ToolCheck wall 4.1113506s
+2026-11-02T03:36:20.1142110Z --- PASS: TestManagedStrategyProbeNativeClosingSource (9.64s)
+2026-11-02T03:36:30.1737580Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:36:30.1740422Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:36:30.1740924Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:36:30.1741476Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 8.896093015s actual inventory ToolCheck calls 382 ToolCheck wall 4.175221093s
+2026-11-02T03:36:30.2371149Z --- PASS: TestManagedStrategyProbeNativeClosingRuntime (9.77s)
+2026-11-02T03:36:40.5753347Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:36:40.5757400Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:36:40.5758703Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:36:40.5759851Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.129439959s actual inventory ToolCheck calls 382 ToolCheck wall 4.265014712s
+2026-11-02T03:36:40.6410412Z --- PASS: TestManagedStrategyProbeNativeClosingControl (10.03s)
+2026-11-02T03:36:51.1112604Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T03:36:51.1115043Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [175 175 386]
+2026-11-02T03:36:51.1115580Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 2571
+2026-11-02T03:36:51.1116140Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 9.2836871s actual inventory ToolCheck calls 382 ToolCheck wall 4.353781805s
+2026-11-02T03:36:51.1791741Z --- PASS: TestManagedStrategyProbeNativeClosingEnvironment (10.16s)
+2026-11-02T03:36:51.9529810Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:36:51.9552510Z go version go1.26.5 linux/amd64
+2026-11-02T03:36:51.9704754Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T03:36:56.1033397Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.66s)
+2026-11-02T03:37:59.9957035Z 2026/11/02 03:37:59 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (SOURCE_MISSING)
+2026-11-02T03:38:00.0716850Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 77616 6346660320
+2026-11-02T03:38:00.0719907Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 1676 wall 20.092169681s
+2026-11-02T03:38:00.0720414Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 12223
+2026-11-02T03:38:00.0720958Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [874 874 1668]
+2026-11-02T03:38:00.0953759Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (63.89s)
+2026-11-02T03:38:00.5211913Z Actual native statuses before=0 before_lan=1 after=0 lan=1
+=== race full log; selected original evidence ===
+2026-11-02T03:30:32.1517809Z go version go1.26.5 linux/amd64
+2026-11-02T03:31:52.5164425Z [36;1mecho '=== BEFORE two-read runtime images plus observer; fresh extension EvalSymlinks each metadata check; same worker ==='[0m
+2026-11-02T03:31:52.5167817Z [36;1mecho '=== AFTER original acquisition-derived extension pathname; BOTH full named node/link checks and membership retained; same worker ==='[0m
+2026-11-02T03:31:52.5170659Z [36;1mecho "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"[0m
+2026-11-02T03:31:52.6790842Z === BEFORE two-read runtime images plus observer; fresh extension EvalSymlinks each metadata check; same worker ===
+2026-11-02T03:31:53.2334865Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:31:53.2356644Z go version go1.26.5 linux/amd64
+2026-11-02T03:31:53.2516762Z Actual CPU: model name	: Intel(R) Xeon(R) 6973P-C
+2026-11-02T03:32:53.7023657Z --- PASS: TestClassicReadBatchNativeMutation (1.52s)
+2026-11-02T03:32:53.7024289Z     --- PASS: TestClassicReadBatchNativeMutation/held-file (0.14s)
+2026-11-02T03:32:53.7024886Z     --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.13s)
+2026-11-02T03:32:53.7025440Z     --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.40s)
+2026-11-02T03:32:53.7025973Z     --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.42s)
+2026-11-02T03:32:53.7026494Z     --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.13s)
+2026-11-02T03:32:53.7027005Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.14s)
+2026-11-02T03:32:53.7027526Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.15s)
+2026-11-02T03:33:13.6163144Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 12865 1052211316
+2026-11-02T03:33:13.6168307Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [104 104 240]
+2026-11-02T03:33:13.6169589Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 1536
+2026-11-02T03:33:13.6170965Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 15.01321208s actual inventory ToolCheck calls 236 ToolCheck wall 3.711851759s
+2026-11-02T03:33:13.6565184Z --- FAIL: TestManagedStrategyProbeNativeConsumer (18.83s)
+2026-11-02T03:33:14.5418960Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:33:14.5439991Z go version go1.26.5 linux/amd64
+2026-11-02T03:33:14.5598757Z Actual CPU: model name	: Intel(R) Xeon(R) 6973P-C
+2026-11-02T03:33:20.1612990Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.66s)
+2026-11-02T03:33:42.4105246Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 12984 1061701680
+2026-11-02T03:33:42.4108610Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 256 wall 3.837954112s
+2026-11-02T03:33:42.4109751Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 1536
+2026-11-02T03:33:42.4110932Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [104 104 240]
+2026-11-02T03:33:42.4597077Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.18s)
+2026-11-02T03:33:42.8083511Z === AFTER original acquisition-derived extension pathname; BOTH full named node/link checks and membership retained; same worker ===
+2026-11-02T03:33:43.2254263Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:33:43.2275690Z go version go1.26.5 linux/amd64
+2026-11-02T03:33:43.2436608Z Actual CPU: model name	: Intel(R) Xeon(R) 6973P-C
+2026-11-02T03:34:28.0777744Z === RUN   TestClassicReadBatchNativeMutation/inventory-extension-symlink
+2026-11-02T03:34:28.2167504Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-symlink change refused whole image; no hooks or packets, host tools unchanged
+2026-11-02T03:34:28.2215970Z --- PASS: TestClassicReadBatchNativeMutation (1.63s)
+2026-11-02T03:34:28.2216731Z     --- PASS: TestClassicReadBatchNativeMutation/held-file (0.13s)
+2026-11-02T03:34:28.2217467Z     --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.13s)
+2026-11-02T03:34:28.2218032Z     --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.39s)
+2026-11-02T03:34:28.2218623Z     --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.41s)
+2026-11-02T03:34:28.2219308Z     --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.13s)
+2026-11-02T03:34:28.2219756Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.14s)
+2026-11-02T03:34:28.2220281Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.15s)
+2026-11-02T03:34:28.2220820Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.14s)
+2026-11-02T03:34:48.4627327Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute member-read attempts/returned-bytes 13080 1069551600
+2026-11-02T03:34:48.4632590Z     strategy_managed_probe_native_linux_test.go:519: native measured Execute actual version child Starts [iptables ip6tables IP] [105 105 244]
+2026-11-02T03:34:48.4633810Z     strategy_managed_probe_native_linux_test.go:520: native measured Execute original metadata traversal attempts 1563
+2026-11-02T03:34:48.4635198Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute 15.014476651s actual inventory ToolCheck calls 240 ToolCheck wall 3.672374409s
+2026-11-02T03:34:48.5012729Z --- FAIL: TestManagedStrategyProbeNativeConsumer (19.16s)
+2026-11-02T03:34:49.2956794Z Linux runnervm48cm3 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-02T03:34:49.2979107Z go version go1.26.5 linux/amd64
+2026-11-02T03:34:49.3143295Z Actual CPU: model name	: Intel(R) Xeon(R) 6973P-C
+2026-11-02T03:34:54.4238680Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.10s)
+2026-11-02T03:35:17.0603857Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP member-read attempts/returned-bytes 12432 1016564640
+2026-11-02T03:35:17.0607143Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP aggregate inventory ToolCheck calls 245 wall 3.919953241s
+2026-11-02T03:35:17.0607923Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP aggregate original metadata traversal attempts 1470
+2026-11-02T03:35:17.0608679Z     strategy_managed_probe_native_linux_test.go:464: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [102 102 228]
+2026-11-02T03:35:17.1057185Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.55s)
+2026-11-02T03:35:17.4539345Z Actual native statuses before=1 before_lan=1 after=1 lan=1

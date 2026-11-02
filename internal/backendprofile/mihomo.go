@@ -34,6 +34,21 @@ type MihomoResult struct {
 // TUN, listeners, hooks, provider URLs or external-controller settings.
 // A successful conversion is NOT native validation or service proof.
 func Mihomo(raw string, options MihomoOptions) (MihomoResult, error) {
+	return mihomoProfile(raw, options, "", netip.Addr{})
+}
+
+// MihomoPinnedForProbe compiles the same closed profile with an exact public
+// endpoint selected by the caller's current resolver. This is only config data,
+// not evidence that the resolver, process, route or service has been admitted.
+// The original TLS name and transport Host are retained across IP pinning.
+func MihomoPinnedForProbe(raw string, options MihomoOptions, originalHost string, endpoint netip.Addr) (MihomoResult, error) {
+	if !publicfetch.PublicAddress(endpoint) || !endpoint.Is4() || originalHost == "" {
+		return MihomoResult{}, ErrUnsupported
+	}
+	return mihomoProfile(raw, options, originalHost, endpoint)
+}
+
+func mihomoProfile(raw string, options MihomoOptions, originalHost string, endpoint netip.Addr) (MihomoResult, error) {
 	var result MihomoResult
 	if options.SOCKSPort < 1024 || options.SOCKSPort > 65535 {
 		return result, ErrUnsupported
@@ -73,6 +88,14 @@ func Mihomo(raw string, options MihomoOptions) (MihomoResult, error) {
 	if err != nil {
 		return result, err
 	}
+	if endpoint.IsValid() {
+		if str(node, "server") != originalHost {
+			return result, ErrUnsupported
+		}
+		if literal, err := netip.ParseAddr(originalHost); err == nil && literal != endpoint {
+			return result, ErrUnsupported
+		}
+	}
 	config := map[string]any{
 		"socks-port": options.SOCKSPort, "allow-lan": false, "bind-address": "127.0.0.1",
 		"mode": "rule", "log-level": "warning", "ipv6": false,
@@ -81,6 +104,13 @@ func Mihomo(raw string, options MihomoOptions) (MihomoResult, error) {
 		"sniffer": map[string]any{"enable": false},
 		"profile": map[string]any{"store-selected": false, "store-fake-ip": false},
 		"proxies": []any{node}, "rules": []string{"MATCH,rz-node"},
+	}
+	if endpoint.IsValid() {
+		// v1.19.33 resolver.LookupIPv4WithResolver consults DefaultHosts before
+		// any external/system resolver, including with its DNS server disabled.
+		// Keep the original server string: WS Host and gRPC authority may derive
+		// from it independently of TLS SNI. Rewriting it loses those semantics.
+		config["hosts"] = map[string]string{originalHost: endpoint.String()}
 	}
 	data, err := yaml.Marshal(config)
 	if err != nil {

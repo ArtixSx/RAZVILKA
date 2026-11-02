@@ -33,39 +33,11 @@ func (r nfqwsScopedRemoveRunner) Run(ctx context.Context, command string, args .
 	if index < 0 {
 		return nil, ErrNFQWSScopedOwner
 	}
-	if err := r.guard(ctx, index); err != nil {
+	if err := r.binding.observeProbeTools(ctx, r.scoped, func(observed context.Context) error { return r.beforeMutation(observed, index) }); err != nil {
 		return nil, err
 	}
-	if err := r.binding.cleanupBoundary(ctx, r.scoped, index); err != nil {
-		return nil, err
-	}
-	// Discard the bracket's image before its closing process/queue callbacks.
-	// A new whole image must prove the exact reverse prefix and references
-	// after all of those callbacks, immediately before the actual base RPC.
-	rules, err := r.binding.readFinalRules(ctx, r.scoped)
-	if err != nil {
-		return nil, err
-	}
-	counts, err := r.binding.ruleCountsImage(r.scoped, rules, nfqwsScopedCleanup)
-	if err != nil {
-		return nil, err
-	}
-	if err := r.scoped.deleteReady(rules.rules, counts, index); err != nil {
-		return nil, err
-	}
-	for i, count := range counts {
-		wanted := 0
-		if i <= index {
-			wanted = 1
-		}
-		if count != wanted {
-			return nil, ErrNFQWSScopedOwner
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	// CORE admission is still consumed by the original runner at Cmd.Start.
+	// The loan is revoked, every read joined and full closing SHA checked
+	// BEFORE the actual deletion. Never pass its derived context to effects.
 	out, err := r.base.Run(ctx, command, slices.Clone(r.plan.Effects[index].Delete)...)
 	if err != nil {
 		return nil, err // An error after mutation never acknowledges removal.
@@ -76,10 +48,49 @@ func (r nfqwsScopedRemoveRunner) Run(ctx context.Context, command string, args .
 	return out, nil
 }
 
+func (r nfqwsScopedRemoveRunner) beforeMutation(ctx context.Context, index int) error {
+	if err := r.guard(ctx, index); err != nil {
+		return err
+	}
+	if err := r.binding.cleanupBoundary(ctx, r.scoped, index); err != nil {
+		return err
+	}
+	// Discard the bracket's image before its closing process/queue callbacks.
+	// A new whole image must prove the exact reverse prefix and references
+	// after all of those callbacks, immediately before the actual base RPC.
+	rules, err := r.binding.readFinalRules(ctx, r.scoped)
+	if err != nil {
+		return err
+	}
+	counts, err := r.binding.ruleCountsImage(r.scoped, rules, nfqwsScopedCleanup)
+	if err != nil {
+		return err
+	}
+	if err := r.scoped.deleteReady(rules.rules, counts, index); err != nil {
+		return err
+	}
+	for i, count := range counts {
+		wanted := 0
+		if i <= index {
+			wanted = 1
+		}
+		if count != wanted {
+			return ErrNFQWSScopedOwner
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // One whole image within the exact inactive/ECHILD/ACK + empty queue bracket.
 // This boundary does not return an image or a count. BeforeDelete's caller
 // still performs its full ExactPresence, including absent-target settlement.
 func (b *NFQWSScopedBinding) cleanupBoundary(ctx context.Context, p *NFQWSScopedPlan, index int) error {
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error { return b.cleanupBoundaryObserved(observed, p, index) })
+}
+func (b *NFQWSScopedBinding) cleanupBoundaryObserved(ctx context.Context, p *NFQWSScopedPlan, index int) error {
 	if ctx == nil || p == nil || index < 0 || index >= len(p.mixed.Effects) {
 		return ErrNFQWSScopedOwner
 	}
@@ -136,6 +147,9 @@ func (p *NFQWSScopedPlan) deleteReady(rules nfqwsScopedRules, counts []int, inde
 // A fresh target-table observation acknowledges only this completed RPC. It
 // never replaces the common full post-delete ExactPresence or VerifyInactive.
 func (b *NFQWSScopedBinding) postDelete(ctx context.Context, p *NFQWSScopedPlan, tool PolicyEffectTool, index int) error {
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error { return b.postDeleteObserved(observed, p, tool, index) })
+}
+func (b *NFQWSScopedBinding) postDeleteObserved(ctx context.Context, p *NFQWSScopedPlan, tool PolicyEffectTool, index int) error {
 	if ctx == nil || p == nil || index < 0 || index >= len(p.mixed.Effects) || p.mixed.Effects[index].Tool != tool {
 		return ErrNFQWSScopedOwner
 	}

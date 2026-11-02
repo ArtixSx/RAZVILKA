@@ -28,6 +28,7 @@ type ServiceState struct {
 }
 
 type Config struct {
+	ProxySidecar                 string                             `json:"proxy_sidecar,omitempty"` // Explicit next-boot TUN backend; empty preserves sing-box.
 	NFQWSFirstStartRecipe        engineconfig.NFQWSFirstStartRecipe `json:"nfqws_first_start_recipe,omitempty"`
 	AppliedNFQWSFirstStartRecipe engineconfig.NFQWSFirstStartRecipe `json:"applied_nfqws_first_start_recipe,omitempty"`
 
@@ -471,6 +472,9 @@ func (s *Store) Save() error {
 }
 
 func (s *Store) saveLocked() error {
+	if err := ValidateProxySidecar(s.cfg.ProxySidecar); err != nil {
+		return err
+	}
 	if err := validateNFQWSFirstStartRecipes(s.cfg); err != nil {
 		return err
 	}

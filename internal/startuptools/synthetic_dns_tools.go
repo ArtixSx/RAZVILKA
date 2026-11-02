@@ -30,7 +30,7 @@ func (l *Lease) SyntheticDNSCommandTools() (dataplane.SyntheticDNSCommandTools, 
 	if !l.syntheticDNSIssued() {
 		return dataplane.SyntheticDNSCommandTools{}, at("SYNTHETIC_DNS_UNISSUED", nil)
 	}
-	return dataplane.SyntheticDNSCommandTools{IPTables: l.profile.aliases[0], ReviewSHA256: l.digest, Identity: l.identity, Provider: l.provider, Runner: &syntheticDNSRunner{l}}, nil
+	return dataplane.SyntheticDNSCommandTools{IP: l.profile.ipAlias, IPTables: l.profile.aliases[0], ReviewSHA256: l.digest, Identity: l.identity, Provider: l.provider, Runner: &syntheticDNSRunner{l}}, nil
 }
 
 func (l *Lease) syntheticDNSIssued() bool {
@@ -58,6 +58,12 @@ func (r *syntheticDNSRunner) RunSyntheticDNS(ctx context.Context, admission data
 // hashes never replace the original owner's exact reviewed command comparison.
 // Capture or any additional native ABI needs its own reviewed extension.
 func syntheticDNSArguments(args []string) bool {
+	if syntheticDomainBaselinePacketArguments(args) {
+		return true
+	}
+	if syntheticDomainCaptureArguments(args) {
+		return true
+	}
 	if !boundedArguments(args) || len(args) < 4 || args[0] != "-t" || args[1] != "nat" {
 		return false
 	}

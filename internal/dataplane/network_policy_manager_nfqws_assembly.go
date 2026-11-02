@@ -33,7 +33,10 @@ type nfqwsExecutionAssembly struct {
 }
 
 func nfqwsExecutionCommandMatches(command nfqws2ManagedProcessCommand, spec NFQWSScopedSpec) error {
-	if nfqws2ValidateManagedCommand(command) != nil || spec.Queue == 0 || spec.SessionID != command.ID ||
+	if err := nfqws2ValidateManagedCommand(command); err != nil {
+		return errors.Join(ErrNFQWSScopedOwner, fmt.Errorf("managed command validation: %w", err))
+	}
+	if spec.Queue == 0 || spec.SessionID != command.ID ||
 		spec.BootID != command.Parent.BootID || spec.CommandSHA256 != nfqws2ManagedCommandDigest(command) ||
 		spec.Candidate.ArgumentsSHA256 != components.NFQWSRuntimeArgumentsSHA256(command.Program.Path, command.Args) {
 		return ErrNFQWSScopedOwner
@@ -86,7 +89,7 @@ func newNFQWSExecutionAssembly(ctx context.Context, adapter *NFQWS2Adapter, comm
 		return nil, ErrNFQWSScopedOwner
 	}
 	if err := nfqwsExecutionCommandMatches(command, spec); err != nil {
-		return nil, err // Refuse wrong queue/argv before reservation or Start.
+		return nil, fmt.Errorf("match original process command: %w", err) // Before reservation or Start.
 	}
 	owner, err := adapter.owner()
 	if err != nil || adapter.StateRoot != command.StateRoot || owner != command.Owner {
@@ -115,7 +118,7 @@ func newNFQWSExecutionAssembly(ctx context.Context, adapter *NFQWS2Adapter, comm
 	})
 	e.resource, err = AcquireNFQWSExecutionResource(context.WithValue(bounded, nfqwsExecutionReadbackKey{}, readback), spec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("acquire original COMMON NFQWS resource: %w", err)
 	}
 	r := e.resource
 	e.binding = &NFQWSScopedBinding{Runner: runtime.Runner, Tools: runtime.Tools, ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard,
@@ -142,7 +145,7 @@ func (e *nfqwsExecutionAssembly) current(ctx context.Context, p *NFQWSScopedPlan
 // across LAN/all-capture preflight. Any failed/unknown observation fences the
 // attempt. This does not retry Start or the one-shot resource.Prepared.
 func nfqwsExecutionAwaitQueue(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, current func(context.Context, *NFQWSScopedPlan) error) error {
-	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.queueReadiness == nil {
+	if ctx == nil || b == nil || p == nil || current == nil || b.ProcessRunning == nil || b.network == nil && b.queueReadiness == nil {
 		return ErrNFQWSScopedOwner
 	}
 	if _, bounded := ctx.Deadline(); !bounded {
@@ -212,6 +215,17 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), 5*time.Second)
 	defer cancel()
+	probe, _ := e.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
+	if probe != nil {
+		if probe.self != probe || probe.resource != r || probe.binding != e.binding {
+			return errors.Join(runErr, ErrNFQWSScopedOwner)
+		}
+		if nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) && lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil {
+			copy := lease
+			probe.processResult = &copy
+		}
+		cleanupCtx = context.WithValue(cleanupCtx, nfqwsProbeCleanupKey{}, probe)
+	}
 	// Inspect is read-only and requires the existing common receipt/lock. A
 	// missing receipt never acquires a new deletion or synthetic unused grant.
 	status, cleanupErr := e.binding.Inspect(cleanupCtx, r.Plan(), r.Root())
@@ -231,6 +245,9 @@ func (e *nfqwsExecutionAssembly) run(action func(context.Context, *NFQWSExecutio
 		if err := r.SettleRemoved(cleanupCtx); err != nil {
 			cleanupErr = fmt.Errorf("NFQWS removed settlement: %w", err)
 		}
+	}
+	if cleanupErr == nil && probe != nil {
+		cleanupErr = probe.acknowledgeRemoved(cleanupCtx, lease)
 	}
 	if cleanupErr == nil && completed && e.ctx.Err() == nil && nfqwsScopedLeaseExecutionMatches(lease, r.Plan(), r.Binding()) &&
 		lease.Acknowledged && lease.Receipt.WaitECHILD && nfqws2ValidateManagedLease(lease) == nil && nfqwsExecutionOnlyCanceled(runErr, 0) {

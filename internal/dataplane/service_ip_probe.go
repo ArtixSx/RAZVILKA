@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/catalog"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/publicfetch"
 	xnetproxy "golang.org/x/net/proxy"
 )
@@ -30,6 +32,10 @@ func socksHTTPGetPinned(ctx context.Context, rawURL, address string, pinned neti
 // A test CA may be supplied here; production uses system roots. ServerName is
 // always derived from the original URL and verification cannot be disabled.
 func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned netip.Addr, roots *tls.Config) (*http.Response, func(), error) {
+	return socksHTTPGetPinnedObservedTLS(ctx, rawURL, address, pinned, roots, nil, nil)
+}
+
+func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, pinned netip.Addr, roots *tls.Config, service *catalog.Service, chain *[]string) (*http.Response, func(), error) {
 	if ctx == nil {
 		return nil, nil, errors.New("pinned service context is required")
 	}
@@ -78,15 +84,36 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 	transport := &http.Transport{
 		TLSClientConfig: config, TLSHandshakeTimeout: 5 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second, ForceAttemptHTTP2: true,
-		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
+		DialContext: func(transportCtx context.Context, network, target string) (net.Conn, error) {
+			// net/http detaches its dial context from the request deadline and
+			// cancellation for connection reuse. This isolated probe instead owns
+			// one request: keep its original finite context/values and join the
+			// transport's cancellation without granting a fresh observation budget.
+			dialCtx, cancelDial := context.WithCancel(requestCtx)
+			stopTransport := context.AfterFunc(transportCtx, cancelDial)
+			defer func() { stopTransport(); cancelDial() }()
+			current := func() error { return pinnedServiceContextError(requestCtx, transportCtx, dialCtx) }
+			if err := current(); err != nil {
+				return nil, err
+			}
 			host, port, err := net.SplitHostPort(target)
 			if err != nil || !samePinnedServiceHost(host, origin.Hostname()) || port != "443" || network != "tcp" && network != "tcp4" {
 				return nil, errors.New("pinned service transport target changed")
 			}
-			if err := checkNodeResource(ctx, host, pinned); err != nil {
+			if err := checkNodeResource(dialCtx, host, pinned); err != nil {
+				return nil, errors.Join(err, current())
+			}
+			if err := current(); err != nil {
 				return nil, err
 			}
-			return contextDialer.DialContext(ctx, "tcp", net.JoinHostPort(pinned.String(), "443"))
+			conn, err := contextDialer.DialContext(dialCtx, "tcp", net.JoinHostPort(pinned.String(), "443"))
+			if closingErr := current(); closingErr != nil {
+				if conn != nil {
+					err = errors.Join(err, conn.Close())
+				}
+				return nil, errors.Join(err, closingErr)
+			}
+			return conn, err
 		},
 	}
 	var once sync.Once
@@ -100,13 +127,18 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 	client := serviceProbeClient(&http.Client{Transport: transport, Timeout: 15 * time.Second}, rawURL)
 	previous := client.CheckRedirect
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
-		if err := checkNodeResource(request.Context(), request.URL.Hostname(), pinned); err != nil {
+		if err := checkNodeResourceURL(request.Context(), request.URL.String(), pinned); err != nil {
 			return err
 		}
 		if request.URL.Scheme != "https" || request.URL.User != nil || !samePinnedServiceHost(request.URL.Hostname(), origin.Hostname()) || request.URL.Port() != "" && request.URL.Port() != "443" {
 			return errors.New("pinned service redirect changed its origin")
 		}
 		return previous(request, via)
+	}
+	if service != nil && chain != nil {
+		selected := *service
+		selected.ProbeURL = rawURL
+		client = probecheck.RecordingClient(client, selected, chain)
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -123,4 +155,16 @@ func socksHTTPGetPinnedTLS(ctx context.Context, rawURL, address string, pinned n
 
 func samePinnedServiceHost(a, b string) bool {
 	return strings.EqualFold(strings.TrimSuffix(a, "."), strings.TrimSuffix(b, "."))
+}
+
+func pinnedServiceContextError(request, transport, dial context.Context) error {
+	requestErr := request.Err()
+	err := errors.Join(requestErr, transport.Err(), dial.Err())
+	// A socket's inherited read deadline may expire just before the context
+	// timer publishes Err. Preserve the original request's typed deadline in
+	// that race without treating an earlier network timeout as its expiry.
+	if deadline, finite := request.Deadline(); requestErr == nil && finite && !time.Now().Before(deadline) {
+		err = errors.Join(err, context.DeadlineExceeded)
+	}
+	return err
 }

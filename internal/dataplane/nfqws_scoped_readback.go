@@ -55,7 +55,11 @@ func nfqwsScopedBeforeStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p
 	}
 	readonly := *b
 	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
-	return readonly.CheckBeforeProcessStart(ctx, p)
+	// Lend from the original binding before making the deliberate readonly
+	// copy. The entire pre-start predicate is pure; Start remains outside.
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return readonly.CheckBeforeProcessStart(observed, p)
+	})
 }
 
 func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, root string, current func(context.Context, *NFQWSScopedPlan) error) error {
@@ -64,7 +68,11 @@ func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *N
 	}
 	readonly := *b
 	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
-	return readonly.VerifyPrepared(ctx, p, root)
+	// Keep the original tool bookends around the whole pure prepared
+	// comparison. The common registrar publishes capture-ready afterwards.
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return readonly.VerifyPrepared(observed, p, root)
+	})
 }
 
 // iptables -S quotes match arguments. Interpret quotes without shell expansion;
@@ -78,6 +86,9 @@ func nfqwsScopedTokens(line string) ([]string, error) {
 }
 
 func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
+	if b != nil && b.activeReadback != nil {
+		return b.readActiveRules(ctx, p)
+	}
 	if err := b.AdditionalReadback(ctx, p); err != nil {
 		return nfqwsScopedReadImage{}, err
 	}
@@ -178,7 +189,7 @@ func nfqwsScopedRuleKey(fields []string) string {
 			return unknown
 		}
 		switch key {
-		case "-i", "-j", "--dport", "--queue-num":
+		case "-i", "-j", "--sport", "--dport", "--queue-num":
 		case "-p":
 			if value == "6" {
 				value = "tcp"
@@ -188,6 +199,9 @@ func nfqwsScopedRuleKey(fields []string) string {
 			}
 		case "-s", "-d", "--mark":
 			value = strings.Split(lanClassifierChainKey([]string{key, value}), " ")[1]
+			if key == "--mark" && !strings.Contains(value, "/") {
+				value += "/0xffffffff"
+			}
 		case "--mac-source":
 			mac, err := net.ParseMAC(value)
 			if err != nil || len(mac) != 6 || mac[0]&1 != 0 || mac.String() == "00:00:00:00:00:00" || !strings.EqualFold(value, mac.String()) {
@@ -249,10 +263,10 @@ func (p *NFQWSScopedPlan) scopedRowCountsCompared(rules nfqwsScopedRules, compar
 				// This is a conservative global conflict policy. A different
 				// queue does not prove disjoint DPI processing of this scope.
 				for i, value := range fields {
-					if i == 1 && strings.HasPrefix(value, "RZQ_") && !owned {
+					if i == 1 && (strings.HasPrefix(value, "RZQ_") || strings.HasPrefix(value, "RZP_")) && !owned {
 						return nil, ErrNFQWSScopedOwner
 					}
-					if i > 1 && (value == "-j" || value == "-g") && i+1 < len(fields) && (fields[i+1] == "NFQUEUE" || fields[i+1] == "QUEUE" || strings.HasPrefix(fields[i+1], "RZQ_")) && !owned {
+					if i > 1 && (value == "-j" || value == "-g") && i+1 < len(fields) && (fields[i+1] == "NFQUEUE" || fields[i+1] == "QUEUE" || strings.HasPrefix(fields[i+1], "RZQ_") || strings.HasPrefix(fields[i+1], "RZP_")) && !owned {
 						return nil, ErrNFQWSScopedOwner
 					}
 					if (value == "--queue-num" || value == "--queue-balance" || value == "--queue-bypass" || value == "--queue-cpu-fanout") && !owned {
@@ -442,6 +456,12 @@ func (b *NFQWSScopedBinding) readback(ctx context.Context, p *NFQWSScopedPlan, m
 }
 
 func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return b.readbackPrefixObserved(observed, p, mode, index, prefix)
+	})
+}
+func (b *NFQWSScopedBinding) readbackPrefixObserved(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyReadback)()
 	if ctx == nil || p == nil {
 		return ErrNFQWSScopedOwner
 	}

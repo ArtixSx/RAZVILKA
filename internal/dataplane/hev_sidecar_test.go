@@ -17,6 +17,9 @@ func hevFixture(t *testing.T) *ProxyTunnelAdapter {
 	if e != nil {
 		t.Fatal(e)
 	}
+	a.Runner = hevVersionFixtureRunner(func(context.Context, string, ...string) ([]byte, error) {
+		return []byte("hev-socks5-tunnel CONFIG_PATH\nVersion: 2.17.1 fixture\n"), nil
+	})
 	return a
 }
 func TestHevAdapterBuildAndValidateDoesNotRunProcess(t *testing.T) {

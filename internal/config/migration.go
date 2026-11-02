@@ -110,6 +110,9 @@ func InspectBytes(b []byte) (Config, MigrationReport, error) {
 	if err := validateNFQWSFirstStartRecipes(cfg); err != nil {
 		return Config{}, report, err
 	}
+	if err := ValidateProxySidecar(cfg.ProxySidecar); err != nil {
+		return Config{}, report, err
+	}
 	if err := validateConfigServiceBindings(cfg); err != nil {
 		return Config{}, report, err
 	}

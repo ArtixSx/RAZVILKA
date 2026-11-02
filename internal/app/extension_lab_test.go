@@ -75,6 +75,35 @@ func TestExtensionMihomoRealHTTPAuthPreviewExportNoMutations(t *testing.T) {
 		t.Fatal("passive conversion altered automation/config")
 	}
 }
+func TestExtensionMihomoValidationRequiresReviewAndOriginalInstalledOwner(t *testing.T) {
+	a, send := awgAPITest(t)
+	before := a.Store.Get()
+	q := ext5Request()
+	w := send("POST", "/api/v1/extension-lab/mihomo", q)
+	var preview struct {
+		Review string `json:"review"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &preview) != nil || len(preview.Review) != 64 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	q["action"], q["review"] = "validate", preview.Review
+	if w = send("POST", "/api/v1/extension-lab/mihomo", q); w.Code != 400 {
+		t.Fatal("export confirmation admitted native process", w.Code)
+	}
+	q["confirm"], q["review"] = "VALIDATE_MIHOMO_CONFIG", strings.Repeat("0", 64)
+	if w = send("POST", "/api/v1/extension-lab/mihomo", q); w.Code != 409 || strings.Contains(w.Body.String(), "MIHOMO_NATIVE_VALIDATION_UNCONFIRMED") {
+		t.Fatal("stale review reached native owner", w.Code, w.Body.String())
+	}
+	q["review"] = preview.Review
+	w = send("POST", "/api/v1/extension-lab/mihomo", q)
+	if w.Code != 409 || !strings.Contains(w.Body.String(), "MIHOMO_NATIVE_VALIDATION_UNCONFIRMED") || strings.Contains(w.Body.String(), ext5Key) || strings.Contains(w.Body.String(), `"native_validated":true`) {
+		t.Fatal("absent original installed owner earned proof or leaked config", w.Code, w.Body.String())
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("validation changed settings")
+	}
+}
+
 func TestExtensionPackHTTPImportsOnlyReviewedCandidates(t *testing.T) {
 	a, send := awgAPITest(t)
 	path := filepath.Join(t.TempDir(), "strategies.json")

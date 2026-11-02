@@ -1,0 +1,108 @@
+=== production raw job log SHA256 278d310a2efcef408d640e6894845dbca3e948e72751eb667dab5eb8c25222ba ===
+2026-11-02T01:14:35.8976573Z echo "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"
+2026-11-02T01:14:36.0963909Z HEAD is now at ffb7f520 test: count actual version child starts in durable native comparison
+2026-11-02T01:14:36.6576358Z Actual native build mode: production
+2026-11-02T01:14:36.6808198Z Actual CPU: model name	: INTEL(R) XEON(R) PLATINUM 8573C
+2026-11-02T01:15:13.6044982Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [1 1 1]
+2026-11-02T01:15:13.8739465Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [1 1 1]
+2026-11-02T01:15:25.9403430Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [386 386 386]
+2026-11-02T01:15:25.9405331Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 3120
+2026-11-02T01:15:25.9407126Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.536094406s actual inventory ToolCheck calls 382 ToolCheck wall 5.021371352s
+2026-11-02T01:15:37.2493901Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [246 246 246]
+2026-11-02T01:15:37.2495809Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 1944
+2026-11-02T01:15:37.2497734Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 9.46033707s actual inventory ToolCheck calls 242 ToolCheck wall 3.168876186s
+2026-11-02T01:15:41.5775399Z --- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (15.17s)
+2026-11-02T01:16:20.3161998Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 15.607721494s
+2026-11-02T01:16:20.3163566Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 9420
+2026-11-02T01:16:20.3165283Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [1164 1164 1164]
+2026-11-02T01:16:20.3376011Z --- PASS: TestManagedStrategyProbeNativeAppHTTP (38.46s)
+2026-11-02T01:16:32.4133745Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [386 386 386]
+2026-11-02T01:16:32.4135366Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 3120
+2026-11-02T01:16:32.4137334Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.499154623s actual inventory ToolCheck calls 382 ToolCheck wall 5.029071083s
+2026-11-02T01:16:44.7779384Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [386 386 386]
+2026-11-02T01:16:44.7780404Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 3120
+2026-11-02T01:16:44.7781581Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.624734255s actual inventory ToolCheck calls 382 ToolCheck wall 5.072969538s
+2026-11-02T01:16:57.1763638Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [386 386 386]
+2026-11-02T01:16:57.1764770Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 3120
+2026-11-02T01:16:57.1766045Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.758107818s actual inventory ToolCheck calls 382 ToolCheck wall 5.152749685s
+2026-11-02T01:17:09.3563994Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [386 386 386]
+2026-11-02T01:17:09.3565916Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 3120
+2026-11-02T01:17:09.3567091Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.554026646s actual inventory ToolCheck calls 382 ToolCheck wall 5.047808202s
+2026-11-02T01:17:10.2472589Z Actual native build mode: production
+2026-11-02T01:17:10.2714596Z Actual CPU: model name	: INTEL(R) XEON(R) PLATINUM 8573C
+2026-11-02T01:17:58.0716608Z     strategy_managed_probe_native_linux_test.go:454: actual original LAN review 409 {"code":"MANAGED_NFQWS_REVIEW_REFUSED","error":"Состояние удерживаемого маршрута NFQWS не подтверждено. Проверьте журнал и исходную область маршрута.","ok":false,"service_health":"unverified"}
+2026-11-02T01:17:58.0719615Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 16.253006815s
+2026-11-02T01:17:58.0720659Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 9420
+2026-11-02T01:17:58.0721955Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [1164 1164 1164]
+2026-11-02T01:17:58.9027443Z Actual native build mode: production
+2026-11-02T01:17:58.9265212Z Actual CPU: model name	: INTEL(R) XEON(R) PLATINUM 8573C
+2026-11-02T01:18:30.2218694Z --- PASS: TestStaticVersionFactNativeScope (0.20s)
+2026-11-02T01:18:30.4389400Z     version_fact_native_fixture_linux_test.go:240: actual IP Start EAGAIN cleared retained fact; unfiltered original scope reran both aliases and IP; original exception preserved
+2026-11-02T01:18:30.4390694Z --- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.12s)
+2026-11-02T01:18:30.6433273Z --- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.10s)
+2026-11-02T01:18:30.9490739Z --- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.21s)
+2026-11-02T01:18:31.3166747Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-02T01:18:31.5903499Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-02T01:18:43.5023024Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [196 196 386]
+2026-11-02T01:18:43.5024212Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 2550
+2026-11-02T01:18:43.5025342Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.293026737s actual inventory ToolCheck calls 382 ToolCheck wall 4.592579319s
+2026-11-02T01:18:54.5793936Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [119 119 246]
+2026-11-02T01:18:54.5795078Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 1563
+2026-11-02T01:18:54.5796416Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 9.409662708s actual inventory ToolCheck calls 242 ToolCheck wall 2.837145879s
+2026-11-02T01:18:58.5628217Z --- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (14.58s)
+2026-11-02T01:19:37.0798818Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 14.457848654s
+2026-11-02T01:19:37.0800365Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 7710
+2026-11-02T01:19:37.0802204Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [594 594 1164]
+2026-11-02T01:19:37.0999695Z --- PASS: TestManagedStrategyProbeNativeAppHTTP (38.23s)
+2026-11-02T01:19:49.1431216Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [196 196 386]
+2026-11-02T01:19:49.1432210Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 2550
+2026-11-02T01:19:49.1433451Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.280937262s actual inventory ToolCheck calls 382 ToolCheck wall 4.607291908s
+2026-11-02T01:20:01.1437294Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [196 196 386]
+2026-11-02T01:20:01.1438465Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 2550
+2026-11-02T01:20:01.1440402Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.335423567s actual inventory ToolCheck calls 382 ToolCheck wall 4.62150662s
+2026-11-02T01:20:13.0723273Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [196 196 386]
+2026-11-02T01:20:13.0724501Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 2550
+2026-11-02T01:20:13.0725910Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.241395789s actual inventory ToolCheck calls 382 ToolCheck wall 4.595156952s
+2026-11-02T01:20:25.1690444Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [196 196 386]
+2026-11-02T01:20:25.1691390Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 2550
+2026-11-02T01:20:25.1692354Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 10.418814057s actual inventory ToolCheck calls 382 ToolCheck wall 4.693471643s
+2026-11-02T01:20:26.0540695Z Actual native build mode: production
+2026-11-02T01:20:26.0779717Z Actual CPU: model name	: INTEL(R) XEON(R) PLATINUM 8573C
+2026-11-02T01:21:12.6941333Z     strategy_managed_probe_native_linux_test.go:454: actual original LAN review 409 {"code":"MANAGED_NFQWS_REVIEW_REFUSED","error":"Состояние удерживаемого маршрута NFQWS не подтверждено. Проверьте журнал и исходную область маршрута.","ok":false,"service_health":"unverified"}
+2026-11-02T01:21:12.6944243Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 14.813995634s
+2026-11-02T01:21:12.6945189Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 7710
+2026-11-02T01:21:12.6946425Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [594 594 1164]
+2026-11-02T01:21:13.0366971Z Actual native statuses before=0 before_lan=1 after=0 lan=1
+=== race raw job log SHA256 b856ee5bab356b2421136e3e2d4ddd581e4ec59ada2d74a58a3cf7977f0c069d ===
+2026-11-02T01:14:25.6911021Z echo "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"
+2026-11-02T01:14:25.8682858Z HEAD is now at ffb7f520 test: count actual version child starts in durable native comparison
+2026-11-02T01:14:26.6623734Z Actual native build mode: race
+2026-11-02T01:14:26.6801049Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T01:15:23.9563422Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [1 1 1]
+2026-11-02T01:15:24.3733153Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [1 1 1]
+2026-11-02T01:15:45.1015066Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [137 136 136]
+2026-11-02T01:15:45.1015705Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 1015
+2026-11-02T01:15:45.1016345Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 15.010610019s actual inventory ToolCheck calls 136 ToolCheck wall 3.859462589s
+2026-11-02T01:15:46.0189394Z Actual native build mode: race
+2026-11-02T01:15:46.0365343Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T01:16:13.6517905Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 156 wall 4.502976244s
+2026-11-02T01:16:13.6518424Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 1018
+2026-11-02T01:16:13.6519045Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [137 137 137]
+2026-11-02T01:16:14.3909225Z Actual native build mode: race
+2026-11-02T01:16:14.4083476Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T01:16:51.2040436Z --- PASS: TestStaticVersionFactNativeScope (0.39s)
+2026-11-02T01:16:52.4935403Z     version_fact_native_fixture_linux_test.go:240: actual IP Start EAGAIN cleared retained fact; unfiltered original scope reran both aliases and IP; original exception preserved
+2026-11-02T01:16:52.4937642Z --- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.18s)
+2026-11-02T01:16:53.7767642Z --- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.17s)
+2026-11-02T01:16:55.2339764Z --- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.34s)
+2026-11-02T01:16:56.7724293Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-02T01:16:57.2383110Z     classic_batch_native_fixture_linux_test.go:308: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-02T01:17:18.3859977Z     strategy_managed_probe_native_linux_test.go:497: native measured Execute actual version child Starts [iptables ip6tables IP] [96 96 123]
+2026-11-02T01:17:18.3917518Z     strategy_managed_probe_native_linux_test.go:498: native measured Execute original metadata traversal attempts 821
+2026-11-02T01:17:18.3925950Z     strategy_managed_probe_native_linux_test.go:500: native measured Execute 15.010071027s actual inventory ToolCheck calls 122 ToolCheck wall 3.832816768s
+2026-11-02T01:17:19.2795176Z Actual native build mode: race
+2026-11-02T01:17:19.2990886Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-02T01:17:48.5024225Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate inventory ToolCheck calls 125 wall 4.590054312s
+2026-11-02T01:17:48.5025714Z     strategy_managed_probe_native_linux_test.go:447: native actual HTTP aggregate original metadata traversal attempts 697
+2026-11-02T01:17:48.5026527Z     strategy_managed_probe_native_linux_test.go:452: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [85 85 106]
+2026-11-02T01:17:48.8320570Z Actual native statuses before=1 before_lan=1 after=1 lan=1

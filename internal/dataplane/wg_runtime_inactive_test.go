@@ -50,8 +50,11 @@ func (r *wgInactiveRunner) Run(_ context.Context, name string, args ...string) (
 		if strings.Contains(cmd, "-6 ") {
 			family = 6
 		}
-		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 || r.cut == "missing-text-occupied" || r.cut == "missing-lookalike" || r.cut == "missing-wrong-family" || r.cut == "missing-oversized" {
+		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 || r.cut == "missing-text-occupied" || r.cut == "missing-lookalike" || r.cut == "missing-wrong-family" || r.cut == "missing-oversized" || r.cut == "missing-native-json" {
 			message := fmt.Sprintf("Error: ipv%d: FIB table does not exist.\nDump terminated", family)
+			if r.cut == "missing-native-json" {
+				message += "\n["
+			}
 			if r.cut == "missing-lookalike" {
 				message += "\nPermission denied"
 			}
@@ -76,7 +79,7 @@ func (r *wgInactiveRunner) Run(_ context.Context, name string, args ...string) (
 		if r.cut == "missing-text-occupied" {
 			return []byte("192.0.2.1 dev foreign proto kernel\n"), nil
 		}
-		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 {
+		if r.cut == "missing4" && family == 4 || r.cut == "missing6" && family == 6 || r.cut == "missing-native-json" {
 			return []byte(fmt.Sprintf("Error: ipv%d: FIB table does not exist.\nDump terminated", family)), errors.New("exit status 2")
 		}
 	}
@@ -84,7 +87,7 @@ func (r *wgInactiveRunner) Run(_ context.Context, name string, args ...string) (
 }
 
 func TestWGInactivityRequiresFreshCompleteAbsenceWithoutEffects(t *testing.T) {
-	for _, cut := range []string{"none", "missing4", "missing6", "missing-text-occupied", "missing-lookalike", "missing-wrong-family", "missing-oversized", "link", "candidate", "empty-inventory", "route", "selector", "foreign-priority", "unknown", "command", "process", "pending", "orphan"} {
+	for _, cut := range []string{"none", "missing4", "missing6", "missing-native-json", "missing-text-occupied", "missing-lookalike", "missing-wrong-family", "missing-oversized", "link", "candidate", "empty-inventory", "route", "selector", "foreign-priority", "unknown", "command", "process", "pending", "orphan"} {
 		t.Run(cut, func(t *testing.T) {
 			a := NewWireGuardAdapter(nil, t.TempDir())
 			a.IP = "ip"
@@ -111,7 +114,7 @@ func TestWGInactivityRequiresFreshCompleteAbsenceWithoutEffects(t *testing.T) {
 				}
 				return nil
 			})
-			if cut == "none" || cut == "missing4" || cut == "missing6" {
+			if cut == "none" || cut == "missing4" || cut == "missing6" || cut == "missing-native-json" {
 				if err != nil || count != 2 {
 					t.Fatal("fresh absence refused", count, err)
 				}

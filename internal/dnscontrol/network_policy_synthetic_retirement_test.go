@@ -79,6 +79,39 @@ func TestSyntheticDNSRetirementOriginalFinalPublicationAfterStopAndExpiry(t *tes
 	}
 }
 
+func TestSyntheticDNSObserveClosedAfterReleaseGrantsNoCleanupOrForward(t *testing.T) {
+	_, source, mapping, review, held, release := syntheticDNSRetirementModel(t)
+	if _, err := review.ObserveClosed(held); err == nil {
+		t.Fatal("live source observed as joined")
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if row, err := review.ObserveClosed(ctx); err != nil || row.QName != "service.example.com" {
+		t.Fatal(row, err)
+	}
+	if _, err := review.ClosedObservation(ctx); err == nil {
+		t.Fatal("observation recreated cleanup admission")
+	}
+	if mapping.Current(ctx) == nil {
+		t.Fatal("observation recreated forward mapping")
+	}
+	copy := *review
+	if _, err := copy.ObserveClosed(ctx); err == nil {
+		t.Fatal("copied review observed")
+	}
+	if _, err := review.ObserveClosed(context.Background()); err == nil {
+		t.Fatal("unbounded observation")
+	}
+	cancel()
+	if _, err := review.ObserveClosed(ctx); err == nil {
+		t.Fatal("cancelled observation")
+	}
+}
+
 func TestSyntheticDNSRetirementCopiesRootsLedgerAndLifetimeRefuse(t *testing.T) {
 	for _, change := range []string{"copy", "mapping-copy", "unbounded", "cancelled", "root", "ledger", "memory-coordinates", "close-not-joined", "control-closed"} {
 		t.Run(change, func(t *testing.T) {

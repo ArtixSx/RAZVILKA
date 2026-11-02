@@ -1,0 +1,11 @@
+mode,side,scenario,wall_s,inventory_check_calls,inventory_check_wall_s,in_process_total_alloc_bytes,in_process_malloc_objects,member_read_attempts,payload_returned_bytes,outcome,stage
+production,before,core Execute,13.094472209,382,5.640121055,5439873832,8768150,13260,1084270200,PASS,complete service flow and owned cleanup
+production,after,core Execute,12.334399823,382,5.621329866,3566881664,8608736,13260,1084270200,PASS,complete service flow and owned cleanup
+production,before,HTTP native test,30.78,,,14113282312,19860201,41976,3432377520,FAIL,probe1 deadline; known cleanup; recovery_required=false
+production,after,HTTP native test,29.37,,,10328240664,19541944,41976,3432377520,FAIL,probe1 deadline; known cleanup; recovery_required=false
+production,before,LAN HTTP native test,33.31,,,14227883792,20361824,41976,3432377520,FAIL,probe1 deadline; Apply not reached
+production,after,LAN HTTP native test,31.88,,,10441263640,20042872,41976,3432377520,FAIL,probe1 deadline; Apply not reached
+race,before,core Execute,15.010040214,108,3.32873371,4509797832,3362501,6996,572062920,FAIL,capture deadline; incomplete prefix
+race,after,core Execute,15.020807279,170,4.366477503,3207718720,4730714,9660,789898200,FAIL,capture deadline; incomplete larger prefix
+race,before,LAN HTTP native test,21.56,,,4634825736,3500779,7224,590706480,FAIL,probe0 deadline; recovery required
+race,after,LAN HTTP native test,21.92,,,3171727176,4756076,9576,783029520,FAIL,probe0 deadline; recovery required

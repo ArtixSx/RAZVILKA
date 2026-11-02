@@ -12,6 +12,30 @@ import (
 	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
+// No exported setter accepts this source. The ordinary constructor leaves it
+// nil; the alternate concrete implementation exists only in the native tag.
+type managedNFQListPhysicalSource interface {
+	original(*ManagedNFQWSListRuntime) bool
+	acquire(context.Context, *managedNFQWSListExecution, bool) error
+}
+
+func (e *managedNFQWSListExecution) acquirePhysical(c context.Context, packet bool) error {
+	r := e.runtime
+	if r == nil || !r.original() {
+		return dataplane.ErrNFQWSScopedOwner
+	}
+	if r.physicalSource != nil {
+		return r.physicalSource.acquire(c, e, packet)
+	}
+	var err error
+	if packet {
+		e.packetScope, err = NewReviewedStockNC1812NFQWSPacketScopeBinding(c, r.app, r.provider)
+	} else {
+		e.scope, err = NewReviewedStockNC1812ListScopeBinding(c, r.app, r.provider)
+	}
+	return err
+}
+
 // prepare uses original source, component and physical readers. Its plan is
 // comparison data; only the same retained owners may perform actual effects.
 func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protocol, family string) (compilation *DefaultRouteCompilation, err error) {
@@ -24,10 +48,8 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 		if protocol != "tcp" || family != "ipv4" {
 			return nil, ErrDefaultRouteCapability
 		}
-		e.packetScope, err = NewReviewedStockNC1812NFQWSPacketScopeBinding(c, r.app, r.provider)
-	} else {
-		e.scope, err = NewReviewedStockNC1812ListScopeBinding(c, r.app, r.provider)
 	}
+	err = e.acquirePhysical(c, packetPurpose)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +97,7 @@ func (e *managedNFQWSListExecution) prepare(c context.Context, serviceID, protoc
 	}
 	phase = "compile"
 	if packetPurpose {
-		compilation, err = CompileNFQWSIPv4LANPacketPolicy(cfg, packetSnapshot, services, snapshot.Paths, time.Now())
+		compilation, err = e.packetScope.compile(c, cfg, packetSnapshot, services, snapshot.Paths, time.Now())
 	} else {
 		compilation, err = CompileDefaultRoutePolicy(cfg, snapshot, services, time.Now())
 	}

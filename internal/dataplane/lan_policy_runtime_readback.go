@@ -235,7 +235,7 @@ func (r *LANPolicyRuntime) Verify(ctx context.Context, plan *LANPolicyRuntimePla
 				if (value == "lookup" || value == "table") && i+1 < len(f) {
 					for _, owner := range PolicyOwnershipSpecs() {
 						if f[i+1] == strconv.Itoa(owner.Table) {
-							if priority < 60 || priority > 72 || !strings.Contains(" "+strings.Join(f, " ")+" ", " fwmark 0x20000000/0x28000000 ") || !lanPolicyRuleIngress(f, p) {
+							if priority < owner.SharedPriorityBase || priority > owner.SharedPriorityEnd || !strings.Contains(" "+strings.Join(f, " ")+" ", " fwmark 0x20000000/0x28000000 ") || !lanPolicyRuleIngress(f, p) {
 								return ErrLANPolicyRuntime
 							}
 							ownedPositive = true

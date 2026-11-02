@@ -118,7 +118,7 @@ for BAD_PID in 0 1 invalid; do
     refuse_stop
 done
 
-for JOURNAL in razvilka/candidate/state/dataplane razvilka/candidate/state/usque-repair etc/razvilka-candidate/private-restore etc/razvilka-candidate/private-restore-nodes-v1 etc/razvilka-candidate/private-restore-native-v1 etc/razvilka-candidate/private-restore-feeds-v1; do
+for JOURNAL in razvilka/candidate/state/dataplane razvilka/candidate/state/usque-repair etc/razvilka-candidate/private-restore etc/razvilka-candidate/private-restore-nodes-v1 etc/razvilka-candidate/private-restore-native-v1 etc/razvilka-candidate/private-restore-feeds-v1 etc/razvilka-candidate/private-restore-strategylab-v1; do
     prepare "journal-$(printf '%s' "$JOURNAL" | tr '/' '-')"
     mkdir -p "$BASE/$JOURNAL"
     printf '%s\n' copied-production >"$BASE/$JOURNAL/record.json"

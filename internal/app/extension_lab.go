@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -40,16 +41,25 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var q struct {
-		Content string                       `json:"content"`
-		Options backendprofile.MihomoOptions `json:"options"`
-		Action  string                       `json:"action"`
-		Review  string                       `json:"review"`
-		Confirm string                       `json:"confirm"`
+		Content          string                       `json:"content"`
+		Options          backendprofile.MihomoOptions `json:"options"`
+		Action           string                       `json:"action"`
+		Review           string                       `json:"review"`
+		Confirm          string                       `json:"confirm"`
+		ServiceID        string                       `json:"service_id"`
+		ExpectedRevision *uint64                      `json:"expected_revision"`
 	}
 	if !extensionDecode(w, r, &q) {
 		return
 	}
-	if (q.Action != "preview" && q.Action != "export") || q.Confirm != "BUILD_MIHOMO_CONFIG" {
+	confirm := "BUILD_MIHOMO_CONFIG"
+	if q.Action == "validate" {
+		confirm = "VALIDATE_MIHOMO_CONFIG"
+	}
+	if q.Action == "probe" {
+		confirm = "PROBE_MIHOMO_SERVICE"
+	}
+	if (q.Action != "preview" && q.Action != "export" && q.Action != "validate" && q.Action != "probe") || q.Confirm != confirm {
 		writeJSON(w, 400, map[string]any{"error": "Подтвердите построение профиля Mihomo."})
 		return
 	}
@@ -60,7 +70,7 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 	}
 	h := sha256.Sum256([]byte(result.Config))
 	digest := hex.EncodeToString(h[:])
-	if q.Action == "export" && q.Review != digest {
+	if q.Action != "preview" && q.Review != digest {
 		writeJSON(w, 409, map[string]any{"error": "Параметры изменились. Повторите предпросмотр."})
 		return
 	}
@@ -68,10 +78,27 @@ func (a *App) extensionMihomo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
 		return
 	}
+	if q.Action == "probe" {
+		a.probeMihomo(w, r, q.Content, q.Options, digest, q.ServiceID, q.ExpectedRevision)
+		return
+	}
+	if q.Action == "validate" {
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		defer cancel()
+		validation, err := a.validateMihomo(ctx, q.Content, q.Options, digest)
+		if err != nil || ctx.Err() != nil || !a.Security.Authenticated(r) {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "Нативная проверка Mihomo не подтверждена. Проверьте установленный компонент и состояние восстановления.", "code": "MIHOMO_NATIVE_VALIDATION_UNCONFIRMED", "live_applied": false, "native_validated": false})
+			return
+		}
+		result.Config = ""
+		result.NativeValidated = true
+		writeJSON(w, http.StatusOK, map[string]any{"result": result, "validation": validation, "review": digest, "live_applied": false, "draft_persisted": false, "lifecycle": a.runtimeLifecycle("mihomo")})
+		return
+	}
 	if q.Action == "preview" {
 		result.Config = ""
 	}
-	writeJSON(w, 200, map[string]any{"result": result, "review": digest, "live_applied": false, "draft_persisted": false})
+	writeJSON(w, 200, map[string]any{"result": result, "review": digest, "live_applied": false, "draft_persisted": false, "lifecycle": a.runtimeLifecycle("mihomo")})
 }
 func (a *App) extensionHev(w http.ResponseWriter, r *http.Request) {
 	if !a.extensionAccess(w, r) {
@@ -101,7 +128,7 @@ func (a *App) extensionHev(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "Запрос отменён или сеанс завершён."})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "note": "JSON совместим с YAML. Профиль не создаёт TUN и не меняет маршруты до отдельного запуска. В RAZVILKA выбранный HEV-адаптер пока включается только на программном стенде."})
+	writeJSON(w, 200, map[string]any{"config": string(result), "live_applied": false, "native_validated": false, "lifecycle": a.runtimeLifecycle("hev"), "note": "JSON совместим с YAML. Экспорт профиля не запускает TUN и не меняет маршруты. Установленный HEV можно выбрать в настройках для следующего запуска; доступность зависит от проверки платформы и маршрута."})
 }
 func (a *App) strategyPacks(w http.ResponseWriter, r *http.Request) {
 	if !a.extensionAccess(w, r) {

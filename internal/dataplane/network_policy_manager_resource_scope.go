@@ -51,6 +51,19 @@ type executionResourceScope struct {
 	syntheticBaselineSource *syntheticBaselineCoordinator
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
+	xrayDomainTCP           map[string]*XrayDomainTCPExecutionResource
+	domainTCPCaptures       map[string]*domainTCPCaptureExecutionResource
+	domainTCPBaselines      map[string]*domainTCPBaselineExecutionResource
+	domainTCPOwner          *DomainTCPOriginalScope
+	domainTCPProof          bool                      // Only the original reader3-admitted temporary-check entry sets this.
+	domainSuccessor         *domainTCPGlobalSuccessor // Same original first writer; never reconstructed.
+	mihomoProof             bool                      // Only the original reader4-admitted finite check sets this.
+	mihomo                  *mihomoProbeResource
+	mihomoLive              *mihomoLiveResource
+	mihomoRetryRollback     func(context.Context) error
+	mihomoClosing           bool // Original terminal close cursor; never an effect grant.
+	domainDNS               *ScopedDNSAdapter
+	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
 	wgOwner                 *wgOperationOwner
 	wgRecords               *wgExecutionRecords
@@ -62,14 +75,18 @@ type executionResourceScope struct {
 }
 
 type executionTransitResource struct {
-	spec     NodeTransitSpec
-	root     string
-	relative string
-	anchor   os.FileInfo
-	digest   string
-	effects  string
-	readback networkPolicyTransitReadback
-	admitted bool
+	settlementReadback networkPolicyTransitReadbackMode // Actual original readback ACK, scope.mu; not serialized.
+	probe              *nodeRouterTransitReadback       // Exact original probe/lease, never reconstructed from the row.
+	finished           bool                             // Same original synchronous probe and deferred cleanup joined.
+	unusedSettled      bool                             // Original one-shot unused readback plus durable settlement ACK.
+	spec               NodeTransitSpec
+	root               string
+	relative           string
+	anchor             os.FileInfo
+	digest             string
+	effects            string
+	readback           networkPolicyTransitReadback
+	admitted           bool
 }
 
 func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adapter string, execution *Execution, root string) (*executionResourceScope, error) {
@@ -107,6 +124,8 @@ func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adap
 		root: root, owned: owned, anchor: anchor, ctx: child, cancel: cancel, guard: guard,
 		open: true, issued: map[string]*executionTransitResource{}, nfqws: map[string]*NFQWSExecutionResource{}, xraySelectedTCP: map[string]*XraySelectedTCPExecutionResource{}, registryGeneration: registryGeneration, networkIdentity: identity}
 	s.observationOpen.Store(true)
+	s.xrayDomainTCP = map[string]*XrayDomainTCPExecutionResource{}
+	s.domainTCPCaptures = map[string]*domainTCPCaptureExecutionResource{}
 	if a, ok := adapterOwner.(*WARPWireGuardAdapter); ok && a != nil && a.wgCommandTools != nil {
 		s.wgOwner, err = newWGOperationOwner(ctx, s)
 		if err == nil {
@@ -142,6 +161,7 @@ func (s *executionResourceScope) contextWith(ctx context.Context) context.Contex
 	ctx = context.WithValue(ctx, nodeTransitRegistrarKey{}, nodeTransitRegistrar(s.issueTransit))
 	ctx = context.WithValue(ctx, nfqwsExecutionRegistrarKey{}, nfqwsExecutionRegistrar(s.issueNFQWS))
 	ctx = context.WithValue(ctx, xraySelectedTCPRegistrarKey{}, xraySelectedTCPRegistrar(s.issueXraySelectedTCP))
+	ctx = context.WithValue(ctx, xrayDomainTCPRegistrarKey{}, xrayDomainTCPRegistrar(s.issueXrayDomainTCP))
 	return withSyntheticExecutionRegistrar(ctx, s)
 }
 
@@ -155,18 +175,27 @@ func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *exe
 // separately pre-issued NFQ cleanup capability may ignore that sticky error;
 // the final journal still remains fenced. Forward use always checks failure.
 func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resource *executionTransitResource, forward, originalNFQCleanup bool) error {
-	if !s.open || s.failure != nil && !originalNFQCleanup || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
+	if !s.open || s.failure != nil && !originalNFQCleanup && (forward || !domainTCPFailureCleanupOwner(ctx, s)) || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
 		return errors.Join(ErrNodeTransitUnavailable, s.failure)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if forward {
+		if c := s.domainSuccessor; c != nil {
+			if err := c.forwardCurrent(); err != nil {
+				return err
+			}
+		}
 		if s.pending {
 			return ErrNFQWSScopedOwner
 		}
 		if s.retained {
-			if s.retainedWGOwner != nil {
+			if s.mihomoLive != nil {
+				if err := s.checkRetainedMihomoOperation(ctx, true); err != nil {
+					return err
+				}
+			} else if s.retainedWGOwner != nil {
 				if err := s.checkRetainedWGOperation(ctx, true); err != nil {
 					return err
 				}
@@ -245,6 +274,13 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 		spec.PlanDigest != s.plan.Digest || spec.NetworkProfile != s.plan.NetworkProfileID || s.resourceCount() >= maxExecutionResources {
 		return nodeTransitRegistration{}, ErrNodeTransitUnavailable
 	}
+	var originalProbe *nodeRouterTransitReadback
+	if s.retained && s.mihomoLive != nil {
+		originalProbe, _ = ctx.Value(nodeRouterTransitOriginalReadbackKey{}).(*nodeRouterTransitReadback)
+		if originalProbe == nil || originalProbe.self != originalProbe || originalProbe.spec != spec || originalProbe.lease != nil || originalProbe.root != "" {
+			return nodeTransitRegistration{}, ErrNodeTransitUnavailable
+		}
+	}
 	compiled, err := CompileNodeTransit(spec)
 	if err != nil {
 		return nodeTransitRegistration{}, err
@@ -260,12 +296,18 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 	if err != nil {
 		return nodeTransitRegistration{}, executionJournalError(err)
 	}
+	if s.mihomoLive != nil {
+		if _, archived := s.mihomoLive.historyIDs[filepath.Base(relative)]; archived {
+			return nodeTransitRegistration{}, ErrExecutionJournal
+		}
+	}
 	anchor, err := s.owned.Stat(relative)
 	if err != nil {
 		return nodeTransitRegistration{}, executionJournalError(err)
 	}
 	resource := &executionTransitResource{spec: spec, root: filepath.Join(s.root, relative), relative: relative,
 		anchor: anchor, digest: compiled.Generation, effects: effects, readback: readback}
+	resource.probe = originalProbe
 	for _, path := range []string{resource.root, filepath.Dir(resource.root), s.root} {
 		opened, err := openJournalDirectory(path)
 		if err != nil {
@@ -278,7 +320,17 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 		}
 	}
 	s.issued[filepath.Base(relative)] = resource
+	var finished func() error
+	if s.mihomoLive != nil {
+		finished = func() error { return s.finishMihomoTransit(resource) }
+	}
+	var cleanupOperation func(context.Context) (context.Context, func(), error)
+	if s.retained && s.mihomoLive != nil {
+		cleanupOperation = s.mihomoLive.healthCleanupOperation
+	}
 	return nodeTransitRegistration{root: resource.root,
+		cleanupOperation: cleanupOperation,
+		finished:         finished,
 		register: func(c context.Context, got NodeTransitSpec, root, digest string) error {
 			return s.registerTransit(c, resource, got, root, digest)
 		},
@@ -309,6 +361,15 @@ func (s *executionResourceScope) resourceCount() int {
 	for id := range s.xraySelectedTCP {
 		ids[id] = true
 	}
+	for id := range s.xrayDomainTCP {
+		ids[id] = true
+	}
+	for id := range s.domainTCPCaptures {
+		ids[id] = true
+	}
+	for id := range s.domainTCPBaselines {
+		ids[id] = true
+	}
 	for _, resource := range s.execution.Resources {
 		ids[resource.ID] = true
 	}
@@ -333,6 +394,9 @@ func (s *executionResourceScope) matchingTransit(resource *executionTransitResou
 }
 
 func (s *executionResourceScope) persist() error {
+	if r := s.mihomoLive; r != nil && r.healthCheck != nil && (r.healthCheck.open || r.healthCheck.stopping) {
+		return r.healthCheck.publishLocked()
+	}
 	if s.retainedOwner != nil {
 		if err := s.retainedOwner.recordsCurrent(); err != nil {
 			s.failure = errors.Join(s.failure, err)
@@ -402,6 +466,11 @@ func (s *executionResourceScope) registerTransit(ctx context.Context, resource *
 }
 
 func (s *executionResourceScope) settleTransit(ctx context.Context, resource *executionTransitResource, spec NodeTransitSpec, root, digest string, mode networkPolicyTransitReadbackMode) error {
+	// Only a reader9 original health writer retains a consumed unused proof
+	// across its partial journal ACK. Generic/preexisting issuers stay unchanged.
+	if s.mihomoLive != nil && s.retained && s.mihomoLive.healthCheck != nil {
+		return s.settleMihomoCheckingTransit(ctx, resource, spec, root, digest, mode)
+	}
 	if err := func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -431,7 +500,11 @@ func (s *executionResourceScope) settleTransit(ctx context.Context, resource *ex
 		return err
 	}
 	s.execution.Resources[index].State = string(mode)
-	return s.persist()
+	err = s.persist()
+	if err == nil && mode == networkPolicyTransitUnused {
+		resource.unusedSettled = true
+	}
+	return err
 }
 
 func (s *executionResourceScope) close() error {
@@ -441,6 +514,71 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if c := s.domainSuccessor; c != nil && s.retainedXrayOwner == nil {
+		c.mu.Lock()
+		entered := c.actionStarted
+		c.mu.Unlock()
+		if entered || c.failedCustody.Load() {
+			c.failedCustody.Store(true)
+			s.pending = true
+			s.observationOpen.Store(false)
+			if s.cancel != nil {
+				s.cancel()
+			}
+			failure := s.failure
+			s.mu.Unlock()
+			// Join original actual Start and metadata publishers before the
+			// operation-local writer carrier revokes. Keep every original FD.
+			s.startMu.Lock()
+			s.mu.Lock()
+			s.mu.Unlock()
+			s.startMu.Unlock()
+			return errors.Join(ErrPolicyAdditionUnknown, failure)
+		}
+	}
+	if s.mihomoLive != nil && s.open {
+		if s.retained && !s.mihomoClosing {
+			s.observationOpen.Store(false)
+			s.cancel()
+			pending := s.pending
+			s.mu.Unlock()
+			if pending {
+				return ErrPolicyAdditionUnknown
+			}
+			return nil
+		}
+		terminal := validateExecutionResources(*s.execution, true) == nil
+		for _, row := range s.execution.Resources {
+			terminal = terminal && (row.State == "removed" || row.State == "unused")
+		}
+		if !terminal {
+			s.mu.Unlock()
+			return errors.Join(ErrPolicyAdditionUnknown, s.manager.retainOriginalMihomo(s, true))
+		}
+	}
+	if s.mihomo != nil && s.open {
+		s.observationOpen.Store(false)
+		s.cancel()
+		s.mu.Unlock()
+		return ErrMihomoProbe // The original finite wrapper finishes both writer FDs.
+	}
+	if owner := s.retainedXrayOwner; owner != nil && owner.self == owner && owner.scope == s && owner.standby != nil {
+		pending := owner.pending
+		s.observationOpen.Store(false)
+		s.cancel()
+		s.mu.Unlock()
+		err := owner.standby.current() // Original restorative-only custody retains the same anchors.
+		if pending {
+			return errors.Join(ErrPolicyAdditionUnknown, err)
+		}
+		return err
+	}
+	if probe, ok := s.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.open.Load() && probe.resource != nil && probe.resource.scope == s && !probe.finishing.Load() {
+		s.pending = true // Original cleanup only; retain anchored COMMON descriptors.
+		s.cancel()
+		s.mu.Unlock()
+		return errNFQWSProbeScopeRetained
+	}
 	if s.wgOwner != nil && s.wgOwner.mutationAttempted.Load() && !s.wgCleanupJoined {
 		s.mu.Unlock()
 		return ErrWGOperationOwner
@@ -478,7 +616,7 @@ func (s *executionResourceScope) close() error {
 	changed := false
 	for i := range s.execution.Resources {
 		resource := &s.execution.Resources[i]
-		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || s.syntheticBaselines[resource.ID] != nil && resource.State == "prepared" {
+		if (s.nfqws[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil) && (resource.State == "prepared" || resource.State == "active") || (s.syntheticBaselines[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil) && resource.State == "prepared" {
 			resource.State = "prepared"
 			resource.Phase = "closed"
 			changed = true
@@ -493,7 +631,7 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil {
+		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
@@ -505,6 +643,12 @@ func (s *executionResourceScope) close() error {
 	s.mu.Unlock()
 	for _, resource := range xrayResources {
 		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	for _, resource := range s.xrayDomainTCP {
+		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	if s.mihomoLive != nil {
+		err = errors.Join(err, s.mihomoLive.records.close())
 	}
 	if s.wgRecords != nil {
 		err = errors.Join(err, s.wgRecords.close())
@@ -536,16 +680,48 @@ func (m *Manager) WithExecutionResources(ctx context.Context, expected Plan, ada
 }
 
 func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error) error {
+	return m.withExecutionResourcesModeLocked(ctx, expected, adapter, action, false)
+}
+
+func (m *Manager) withExecutionResourcesModeLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof bool) error {
+	return m.withExecutionResourcesModesLocked(ctx, expected, adapter, action, domainProof, false)
+}
+
+func (m *Manager) withExecutionResourcesModesLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof, mihomoProof bool) error {
+	return m.withExecutionResourcesSuccessorLocked(ctx, expected, adapter, action, domainProof, mihomoProof, nil, nil)
+}
+
+func (m *Manager) withExecutionResourcesSuccessorLocked(ctx context.Context, expected Plan, adapter string, action func(context.Context) error, domainProof, mihomoProof bool, detached *DomainTCPDetachedStandby, admission *domainTCPContinuationAdmission) error {
+	ready := expected.Ready
+	if domainProof {
+		ready = adapter == "xray" && validateDomainTCPProofPlan(expected) == nil
+	}
+	if mihomoProof {
+		ready = !domainProof && adapter == "mihomo" && validateMihomoProbePlan(expected) == nil
+	}
 	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
 	if guard == nil || action == nil || !slices.Contains(expected.Adapters, adapter) || !validPlanID(expected.PlanID) ||
-		!validPlanDigest(expected.Digest) || expected.SchemaVersion != SchemaVersion || expected.SafeMode || !expected.Ready || expected.Noop ||
+		!validPlanDigest(expected.Digest) || expected.SchemaVersion != SchemaVersion || expected.SafeMode || !ready || expected.Noop ||
 		!filepath.IsAbs(m.StateRoot) || filepath.Clean(m.StateRoot) != m.StateRoot {
 		return ErrNodeTransitUnavailable
 	}
 	if _, exists := m.adapter(adapter); !exists {
 		return ErrNodeTransitUnavailable
 	}
-	if err := errors.Join(m.checkExecutionRecovery(), m.checkPlanNetwork(ctx, expected)); err != nil {
+	var pool *domainTCPStandbyPool
+	var recoveryErr error
+	if detached == nil {
+		recoveryErr = m.checkExecutionRecovery()
+	} else if domainProof && !mihomoProof && adapter == "xray" {
+		// This entry retains actual old owners, not the decoded marker. The
+		// public entry already admitted reader8 before reaching this operation.
+		if recoveryErr = admission.initial(ctx, m, expected, detached); recoveryErr == nil {
+			pool, recoveryErr = m.reserveDomainPool(ctx, expected, detached)
+		}
+	} else {
+		recoveryErr = ErrPolicyAdditionUnknown
+	}
+	if err := errors.Join(recoveryErr, m.checkPlanNetwork(ctx, expected)); err != nil {
 		return err
 	}
 	var nonce [16]byte
@@ -558,16 +734,65 @@ func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Pla
 	if err := m.prepareExecutionRoot(root); err != nil {
 		return err
 	}
-	if err := m.writeExecution(root, execution); err != nil {
-		return err
+	if pool == nil {
+		if err := m.writeExecution(root, execution); err != nil {
+			return err
+		}
 	}
 	scope, err := m.newExecutionResourceScope(ctx, expected, adapter, &execution, root)
 	if err != nil {
 		return err
 	}
+	scope.domainTCPProof = domainProof
+	scope.mihomoProof = mihomoProof
+	if pool != nil {
+		_, err := newDomainTCPGlobalSuccessor(ctx, pool, scope, admission)
+		if err != nil {
+			return errors.Join(err, scope.close())
+		}
+		if err := m.writeExecutionOwned(root, execution, scope); err != nil {
+			// No action has run, but latest may already be replaced. Keep SAME
+			// scope/cursor/FDs cleanup-only; never close them and reopen history.
+			scope.mu.Lock()
+			scope.pending = true
+			scope.failure = err
+			scope.mu.Unlock()
+			return domainTCPUnstartedFailure(scope.domainSuccessor, err)
+		}
+	}
+	return m.runScopedResourceAction(ctx, expected, action, domainProof, mihomoProof, scope)
+}
+
+func (m *Manager) runScopedResourceAction(ctx context.Context, expected Plan, action func(context.Context) error, domainProof, mihomoProof bool, scope *executionResourceScope) error {
+	execution, root := scope.execution, scope.root
+	if c := scope.domainSuccessor; c != nil {
+		if err := c.forwardCurrent(); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		if c.actionStarted {
+			c.mu.Unlock()
+			return ErrPolicyAdditionUnknown
+		}
+		c.actionStarted = true
+		c.mu.Unlock()
+	}
 	defer scope.close() // Revoke callbacks and anchored descriptors on panic too.
-	actionErr := action(scope.context())
-	err = errors.Join(actionErr, m.checkPlanNetwork(ctx, expected), scope.close())
+	actionErr := domainTCPActionWithCustody(scope, action)
+	if mihomoProof && scope.mihomo != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 12*time.Second)
+		defer cancel()
+		return scope.mihomo.finish(scope.contextWith(cleanup), actionErr)
+	}
+	if domainProof && scope.domainTCPOwner != nil {
+		if scope.domainSuccessor != nil && actionErr != nil {
+			actionErr = errors.Join(actionErr, scope.requestDomainFailureStandby(ctx))
+		}
+		if requested, handoffErr := scope.domainTCPOwner.finishStandbyHandoff(scope.contextWith(ctx), actionErr); requested {
+			return domainTCPFailureWithCustody(scope, errors.Join(actionErr, handoffErr, scope.close()))
+		}
+	}
+	err := errors.Join(actionErr, m.checkPlanNetwork(ctx, expected), scope.close())
 	execution.Steps[0].State = "passed"
 	if err != nil {
 		execution.Steps[0].State = "failed"
@@ -577,8 +802,14 @@ func (m *Manager) withExecutionResourcesLocked(ctx context.Context, expected Pla
 	execution.Steps[0].FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	execution.FinishedAt = execution.Steps[0].FinishedAt
 	execution.State = "temporary-complete"
-	if validateExecutionResources(execution, true) != nil {
+	if validateExecutionResources(*execution, true) != nil {
 		execution.State = "resource-failed"
 	}
-	return errors.Join(err, m.writeExecution(root, execution))
+	if probe, ok := scope.ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok && probe != nil && probe.self == probe && probe.resource != nil && probe.resource.scope == scope && probe.records != nil {
+		return errors.Join(err, m.writeExecutionOwned(root, *execution, scope))
+	}
+	if scope.domainSuccessor != nil {
+		return domainTCPFailureWithCustody(scope, errors.Join(err, m.writeExecutionOwned(root, *execution, scope)))
+	}
+	return errors.Join(err, m.writeExecution(root, *execution))
 }

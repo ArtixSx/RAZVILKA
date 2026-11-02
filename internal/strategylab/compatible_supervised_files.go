@@ -8,7 +8,24 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+// Byte storage only: every call still hashes the complete newly opened file.
+// No descriptor, digest, provenance or comparison survives a call.
+var compatibilityFileScratch sync.Pool
+
+func compatibilityFileCopy(dst io.Writer, src io.Reader) (int64, error) {
+	buffer, _ := compatibilityFileScratch.Get().(*[32 << 10]byte)
+	if buffer == nil {
+		buffer = new([32 << 10]byte)
+	}
+	defer func() {
+		clear(buffer[:])
+		compatibilityFileScratch.Put(buffer)
+	}()
+	return io.CopyBuffer(dst, src, buffer[:])
+}
 
 // Capture byte identity only after owner review. Hashing a file does not grant
 // provenance; the production helper separately checks protected Linux paths.
@@ -31,7 +48,7 @@ func compatibilityFileBindingAt(path string, limit int64) (compatibilityFileBind
 		return result, errors.New("compatibility file changed while opening")
 	}
 	hash := sha256.New()
-	n, err := io.Copy(hash, io.LimitReader(f, limit+1))
+	n, err := compatibilityFileCopy(hash, io.LimitReader(f, limit+1))
 	if err != nil || n != opened.Size() || n > limit {
 		return result, errors.New("compatibility file changed while hashing")
 	}

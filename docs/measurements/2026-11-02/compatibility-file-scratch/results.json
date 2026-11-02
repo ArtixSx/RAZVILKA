@@ -1,0 +1,43 @@
+{
+  "source_commit": "ef8df297",
+  "platform": "windows/amd64",
+  "go": "go1.26.5",
+  "cpu": "AMD Ryzen 7 7800X3D",
+  "benchmark": "BenchmarkCompatibilityFileCopyScratch",
+  "payload_bytes": 65537,
+  "before": [
+    {
+      "ns": 33675,
+      "bytes": 32968,
+      "allocs": 4
+    },
+    {
+      "ns": 33595,
+      "bytes": 32968,
+      "allocs": 4
+    },
+    {
+      "ns": 33805,
+      "bytes": 32968,
+      "allocs": 4
+    }
+  ],
+  "after": [
+    {
+      "ns": 30269,
+      "bytes": 200,
+      "allocs": 3
+    },
+    {
+      "ns": 29987,
+      "bytes": 201,
+      "allocs": 3
+    },
+    {
+      "ns": 30433,
+      "bytes": 200,
+      "allocs": 3
+    }
+  ],
+  "limits": "Same-process memory copy/hash microbenchmark; not total workflow, native file validation, router RAM, or readiness evidence."
+}

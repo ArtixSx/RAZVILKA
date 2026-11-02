@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -186,12 +187,12 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
 	path := filepath.Join(a.StateRoot, nfqws2LeaseFile)
-	if nfqws2ManagedProtected(path, true) != nil {
-		return zero, ErrNFQWSManagedProcessUnknown
+	if err := nfqws2ManagedProtected(path, true); err != nil {
+		return zero, fmt.Errorf("managed process protected parent: %w", err)
 	}
 	parent, err := os.Lstat(a.StateRoot)
 	if err != nil || !parent.IsDir() || parent.Mode().Perm()&0o077 != 0 {
-		return zero, ErrNFQWSManagedProcessUnknown
+		return zero, fmt.Errorf("managed process private parent: %w", errors.Join(ErrNFQWSManagedProcessUnknown, err))
 	}
 	var channel *nfqws2ManagedStartSocket
 	var endpoint *os.File
@@ -204,7 +205,7 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		binding = &frozen
 		// This callback must record pending before the producer intent or Start.
 		if err := admission.BeforeStart(ctx, frozen); err != nil {
-			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)
+			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, fmt.Errorf("managed process before Start: %w", err))
 		}
 	}
 	target, err := restorejournal.OpenFileTarget(path)
@@ -218,10 +219,20 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	}
 	store := nfqws2ManagedProcessStore{target: target, image: before, lease: nfqws2ManagedProcessLease{Version: 2, StateRoot: a.StateRoot, Owner: owner, Command: command, CommandSHA256: nfqws2ManagedCommandDigest(command), LaunchBinding: binding, Receipt: components.NFQWSSupervisionReceipt{State: "intent"}}}
 	err = store.publish(ctx)
+	var processRoot *nfqwsProbeProcessRoot
+	if err == nil && ctx.Value(nfqwsProbeExecutionKey{}) != nil {
+		processRoot, err = newNFQWSProbeProcessRoot(ctx, a.StateRoot, target)
+	}
 	store.close() // The helper takes this same filename's writer lease.
 	if err != nil {
 		return zero, err
 	}
+	keepProcessRoot := false
+	defer func() {
+		if processRoot != nil && !keepProcessRoot {
+			_ = processRoot.close()
+		}
+	}()
 	if helperPrefix == nil {
 		helperPrefix = []string{"nfqws-managed-process-supervisor"}
 	}
@@ -231,6 +242,16 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var identity components.NFQWSSupervisionIdentity
 	done := make(chan error, 1)
+	var probeWait *nfqwsProbeProcessWait
+	if probe, ok := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok {
+		if probe == nil || probe.self != probe || probe.processWait != nil || probe.resource == nil || binding == nil || *binding != probe.resource.binding || !reflect.DeepEqual(command, probe.command) {
+			return zero, ErrNFQWSScopedOwner
+		}
+		probeWait = &nfqwsProbeProcessWait{execution: probe, command: cmd, intent: store.lease, root: processRoot, done: make(chan struct{})}
+		probeWait.self = probeWait
+		probe.processWait = probeWait
+		keepProcessRoot = true
+	}
 	joined := false
 	// Exceptional completion must close the live channel and settle only the
 	// exact launched helper through the existing sole Wait owner. No ACK is
@@ -276,15 +297,39 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 			}
 			cmd.ExtraFiles = []*os.File{endpoint} // Fixed inherited descriptor 3.
 		}
-		startErr := operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
+		start := func() error {
+			return operationgate.WithSelfUpdateEffectAdmission(ctx, command.ControlRoot, command.ID, command.InstallationID, command.Sequence, "nfqws-managed-helper", cmd.Start)
+		}
+		if probe, ok := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution); ok {
+			if probe == nil || probe.self != probe || probe.consumption == nil || !reflect.DeepEqual(probe.command, command) {
+				return ErrNFQWSScopedOwner
+			}
+			admit := start
+			start = func() error { return probe.consumption.WithStart(ctx, admit) }
+		}
+		startErr := start()
 		if endpoint != nil {
 			_ = endpoint.Close()
 		}
 		if cmd.Process == nil {
 			return errors.Join(ErrNFQWSManagedProcessUnknown, startErr)
 		}
-		go func() { done <- cmd.Wait() }() // Exactly one parent helper wait owner.
 		identity, err = components.ReadNFQWSSupervisionProcessIdentity(cmd.Process.Pid)
+		if probeWait != nil {
+			probeWait.process = cmd.Process
+			probeWait.birth = identity
+			probeWait.birthKnown = err == nil && identity.PID == cmd.Process.Pid && identity.Group == identity.PID && identity.BootID == command.Parent.BootID
+		}
+		// Birth precedes the sole Wait: an un-reaped original child cannot be
+		// confused with a reused PID by a fast waiter. Always join even if birth
+		// failed; such a result remains unknown and can never acquire custody.
+		go func() {
+			waitErr := cmd.Wait()
+			if probeWait != nil {
+				probeWait.complete(waitErr)
+			}
+			done <- waitErr
+		}()
 		if startErr != nil || err != nil || identity.Group != identity.PID || identity.BootID != command.Parent.BootID {
 			return errors.Join(ErrNFQWSManagedProcessUnknown, startErr, err)
 		}
@@ -348,16 +393,23 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 		case waitErr = <-done:
 			joined = true
 		case <-timer.C:
-			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, ctx.Err())
+			return zero, errors.Join(ErrNFQWSManagedProcessUnknown, startErr, ctx.Err())
 		}
 	}
 	if waitErr != nil {
-		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, waitErr)
+		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, startErr, waitErr)
 	}
 	// ACK acknowledges ONLY kernel process settlement, even after Stop/cancel.
 	// It grants neither replay, managed selection nor kernel effect retirement.
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), nfqws2ManagedJoinGrace)
 	defer cancel()
+	if probeWait != nil {
+		actual, ackErr := probeWait.acknowledge(cleanupCtx)
+		if ackErr != nil {
+			return zero, ackErr
+		}
+		return actual, errors.Join(ctx.Err(), startErr)
+	}
 	target, err = restorejournal.OpenFileTarget(path)
 	if err != nil {
 		return zero, errors.Join(ErrNFQWSManagedProcessUnknown, err)

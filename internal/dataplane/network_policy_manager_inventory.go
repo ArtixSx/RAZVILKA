@@ -32,14 +32,14 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 	}
 	ctx, xrayScope, err := c.openXraySelectedTCPInventoryScope(ctx)
 	if err != nil {
-		return lanPolicyPreflightAt("inventory-consumer-open", err)
+		return lanPolicyPreflightAt("inventory-xray-scope-open", err)
 	}
 	if xrayScope != nil {
 		defer xrayScope.close()
 	}
 	ctx, prepared, err := c.openXraySelectedTCPPreparedInventoryScope(ctx)
 	if err != nil {
-		return lanPolicyPreflightAt("inventory-consumer-open", err)
+		return lanPolicyPreflightAt("inventory-xray-prepared-open", err)
 	}
 	if prepared != nil {
 		defer prepared.close()
@@ -49,7 +49,7 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		return lanPolicyPreflightAt("inventory-wg-open", err)
 	}
 	if xrayScope != nil && len(wg) != 0 {
-		return lanPolicyPreflightAt("inventory-consumer-open", ErrNetworkPolicyConsumers)
+		return lanPolicyPreflightAt("inventory-consumer-combination", ErrNetworkPolicyConsumers)
 	}
 	var finalImage BackendInventorySnapshot
 	err = lanPolicyPreflightAt("inventory-boundary", c.boundary(ctx, func(held context.Context) error {
@@ -58,16 +58,16 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 		}
 		stock, err := c.stockQueueExecution(held)
 		if err != nil {
-			return lanPolicyPreflightAt("inventory-consumer-open", err)
+			return lanPolicyPreflightAt("inventory-nfq-stock-open", err)
 		}
 		xrayStock, err := c.xraySelectedTCPStockExecution(held)
 		if err != nil || stock != nil && xrayStock != nil {
-			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			return lanPolicyPreflightAt("inventory-xray-stock-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		opening, err := c.proxyConsumers(held, lan)
 		defer closeNetworkPolicyProxyObservations(opening)
 		if err != nil {
-			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			return lanPolicyPreflightAt("inventory-proxy-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		openingNFQ, err := c.nfqConsumers(held, lan)
 		defer func() {
@@ -76,12 +76,12 @@ func (c *NetworkPolicyChecks) observeInventory(ctx context.Context, identity net
 			}
 		}()
 		if err != nil {
-			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			return lanPolicyPreflightAt("inventory-nfq-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		openingXray, err := c.xraySelectedTCPConsumers(held, lan)
 		defer closeNetworkPolicyXrayObservations(openingXray)
 		if err != nil || requireConsumer && len(opening)+len(openingNFQ)+len(openingXray)+len(wg) == 0 || xrayScope != nil && len(opening)+len(openingNFQ)+len(openingXray) != 0 {
-			return lanPolicyPreflightAt("inventory-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
+			return lanPolicyPreflightAt("inventory-xray-consumer-open", errors.Join(ErrNetworkPolicyConsumers, err))
 		}
 		first, err := c.read(held, identity)
 		if err != nil {

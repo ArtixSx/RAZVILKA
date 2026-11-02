@@ -80,9 +80,9 @@ func (p *xraySelectedTCPProcess) readProcess(ctx context.Context, proc *xraySele
 		return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
 	}
 	args := p.image.args
-	ownedFD := p.image.path == "/proc/self/fd/3" && len(p.image.extras) == 2 && len(args) == 4 && args[3] == "/proc/self/fd/4"
-	if len(args) != 4 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] || args[1] != "run" || args[2] != "-config" ||
-		!ownedFD && args[3] != filepath.Join(p.image.dir, "xray-redirect.json") {
+	ownedFD := p.image.path == "/proc/self/fd/3" && len(p.image.extras) == 2 && len(args) == 6 && args[1] == "run" && args[2] == "-format" && args[3] == "json" && args[4] == "-config" && args[5] == "stdin:" && p.cmd.Stdin == p.image.extras[1]
+	legacyNamed := len(args) == 4 && args[1] == "run" && args[2] == "-config" && args[3] == filepath.Join(p.image.dir, "xray-redirect.json") && p.image.path != "/proc/self/fd/3"
+	if len(args) == 0 || !filepath.IsAbs(args[0]) || filepath.Clean(args[0]) != args[0] || !ownedFD && !legacyNamed {
 		return xraySelectedTCPProcessObservation{}, errXraySelectedTCPRuntime
 	}
 	stat, err := proc.read(ctx, proc.child, "stat", 8192)
@@ -144,6 +144,15 @@ func (p *xraySelectedTCPProcess) readProcess(ctx context.Context, proc *xraySele
 }
 
 func (p *xraySelectedTCPProcess) readOriginalConfigFD(ctx context.Context, proc *xraySelectedTCPProc, named os.FileInfo, expectedHash string) error {
+	for _, name := range []string{"0", "4"} {
+		if err := p.readOriginalConfigFDAt(ctx, proc, named, expectedHash, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *xraySelectedTCPProcess) readOriginalConfigFDAt(ctx context.Context, proc *xraySelectedTCPProc, named os.FileInfo, expectedHash string, name string) error {
 	if len(p.image.extras) != 2 || p.image.extras[1] == nil || proc == nil || p.liveCurrent(ctx) != nil {
 		return errXraySelectedTCPRuntime
 	}
@@ -156,7 +165,10 @@ func (p *xraySelectedTCPProcess) readOriginalConfigFD(ctx context.Context, proc 
 		return err
 	}
 	defer unix.Close(directory)
-	fd, err := unix.Openat(directory, "4", unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0) // Follow only the SAME actual child's kernel FD4 magic link.
+	if name != "0" && name != "4" {
+		return errXraySelectedTCPRuntime
+	}
+	fd, err := unix.Openat(directory, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NONBLOCK, 0) // Follow only the SAME actual child's fixed kernel association.
 	if err != nil {
 		return errXraySelectedTCPRuntime
 	}
@@ -171,7 +183,8 @@ func (p *xraySelectedTCPProcess) readOriginalConfigFD(ctx context.Context, proc 
 	hash := sha256.Sum256(data)
 	after, statErr := f.Stat()
 	closing, originalErr := p.image.extras[1].Stat()
-	if err != nil || statErr != nil || originalErr != nil || len(data) == 0 || int64(len(data)) != original.Size() ||
+	childClosing, childErr := proc.domainConfigFDInfoAt(ctx, name)
+	if err != nil || statErr != nil || originalErr != nil || childErr != nil || !sameXrayDomainTCPFile(original, childClosing) || len(data) == 0 || int64(len(data)) != original.Size() ||
 		!os.SameFile(held, after) || !os.SameFile(original, closing) || after.Size() != held.Size() || after.Mode() != held.Mode() ||
 		!after.ModTime().Equal(held.ModTime()) || closing.Size() != original.Size() || !closing.ModTime().Equal(original.ModTime()) ||
 		hex.EncodeToString(hash[:]) != expectedHash || proc.current(ctx) != nil || p.liveCurrent(ctx) != nil {

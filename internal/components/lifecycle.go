@@ -435,6 +435,15 @@ func boundedOutput(out []byte) string {
 }
 
 func (m *Manager) removeExternal(spec Spec) (Result, error) {
+	if spec.ID == "mihomo" {
+		return Result{}, errors.New("Mihomo removal requires original runtime inactivity admission")
+	}
+	if spec.ID == "hev-socks5-tunnel" {
+		if err := m.hevReleaseIdle(); err != nil {
+			return Result{}, err
+		}
+		return Result{}, errors.New("HEV managed removal is not enabled while sidecar dependency admission is unavailable")
+	}
 	target := filepath.Join(defaultValue(m.BinDir, "/opt/bin"), spec.Binary)
 	receipt := externalReceiptPath(target)
 	version := externalReceiptVersion(target)

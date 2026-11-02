@@ -126,7 +126,13 @@
     if(error?.status || ['AbortError','AuthGenerationChanged'].includes(error?.name) || !/failed to fetch|networkerror|load failed|network request failed/i.test(text))return text;
     return mutation?'Нет связи с панелью. Результат действия не подтверждён. Обновите состояние перед повтором.':'Нет связи с панелью. Проверьте, что служба запущена, и обновите состояние.';
   }
-  const model={sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData,policyReadbackSnapshot,requestErrorText};
+  function capabilityPresentation(value) {
+    const capability=value?.capabilities?.schema===1?value.capabilities.availability?.automatic_initial_apply:null;
+    if(capability?.state==='blocked' && capability.available===false)return {state:'blocked',message:String(capability.message||'Автопилот приостановлен: требуется проверка условий запуска.')};
+    if(capability?.state==='requires-service-plan' && capability.available===null)return {state:'requires-service-plan',message:String(capability.message||'Для каждого сервиса нужны актуальные проверки узла, области и применения.')};
+    return {state:'unknown',message:'Доступность автоматического применения ещё не подтверждена. Обновите состояние панели.'};
+  }
+  const model={capabilityPresentation,sourceCard,sourceDate,sourceStatusLabel,maintenanceModeText,validatePolicy,validateWindow,websiteDefinition,minutes,splitValues,escapeHTML,stateLabels,policyConsentRequired,candidateCooldownText,panelAutonomyData,policyReadbackSnapshot,requestErrorText};
   if(typeof module==='object'&&module.exports) module.exports=model;
   root.RazvilkaAutonomyModel=model;
   if(typeof document==='undefined') return;
@@ -293,11 +299,12 @@
   function render() {
     const p=snapshot.policy,items=Object.values(snapshot.services||{}),runtimes=Object.entries(snapshot.runtime||{});
     renderQuickStart();
-    const active=presentationFresh&&p.enabled&&!snapshot.safe_mode&&!snapshot.manual&&!snapshot.stopped&&!snapshot.blocked;
+    const capability=capabilityPresentation(snapshot);
+    const active=presentationFresh&&capability.state==='requires-service-plan'&&p.enabled&&!snapshot.safe_mode&&!snapshot.manual&&!snapshot.stopped&&!snapshot.blocked;
     $('heroState').textContent=!presentationFresh?'Состояние обновляется':!p.setup_complete?'Нужна первоначальная настройка':active?'Автономный режим разрешён':'Автоматические изменения приостановлены';
     $('heroDot').classList.toggle('inactive',!active);
-    $('heroTitle').textContent=!presentationFresh?'Нужны свежие данные':!p.setup_complete?'Настройте автопилот':active?'Автопилот работает':'Автопилот приостановлен';
-    $('heroDescription').textContent=!presentationFresh?'Показаны последние сохранённые настройки. Текущее состояние автопилота ещё не подтверждено.':!p.setup_complete?'Выберите устройства, источники и расписания. Подбор начнётся после сохранения вашего согласия.':snapshot.safe_mode?'Автоматическое применение ещё не разрешено. Откройте «Область и разрешения» и сохраните выбранные условия запуска.':snapshot.stopped?'Собственные маршруты остановлены в основной панели. Мастер не снимает эту остановку автоматически.':snapshot.manual?'В основной панели включена ручная настройка. Автоматическое применение приостановлено.':!p.enabled?'Пауза останавливает автоматические изменения, но не удаляет применённые маршруты.':'Для каждого сервиса сохраняется пригодный путь. Новые кандидаты получают разрешение только после точной проверки.';
+    $('heroTitle').textContent=!presentationFresh?'Нужны свежие данные':!p.setup_complete?'Настройте автопилот':active?'Автопилот включён':capability.state==='unknown'?'Доступность не подтверждена':'Автопилот приостановлен';
+    $('heroDescription').textContent=!presentationFresh?'Показаны последние сохранённые настройки. Текущее состояние автопилота ещё не подтверждено.':!p.setup_complete?'Выберите устройства, источники и расписания. Подбор начнётся после сохранения вашего согласия.':capability.message;
     // Before the first setup the hero action opens the wizard instead of a disabled pause.
     $('pauseButton').disabled=!!pauseRequest||(p.setup_complete&&!presentationFresh&&!p.enabled);$('pauseButton').textContent=!p.setup_complete?'Начать настройку':p.enabled?'Пауза автоматики':'Возобновить автоматику';
     $('managedCount').textContent=items.length;

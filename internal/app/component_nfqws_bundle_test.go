@@ -65,6 +65,12 @@ func TestManagedNFQBundleHTTPReadAuthCSRFCASAndTrustInputsNeverInitializeSource(
 		{"POST", managedNFQBundleInstallPath, componentRecoveryToken, server.URL, map[string]any{"expected_revision": before.Revision, "manifest": map[string]any{"architecture": "arm64"}}, 400},
 		{"POST", managedNFQBundleInstallPath, componentRecoveryToken, server.URL, map[string]any{"expected_revision": before.Revision}, 409},
 		{"GET", managedNFQBundleInstallPath, componentRecoveryToken, server.URL, nil, 405},
+		{"POST", managedNFQBundleUpdatePath, "", server.URL, map[string]any{"expected_revision": before.Revision}, 401},
+		{"POST", managedNFQBundleUpdatePath, componentRecoveryToken, "https://foreign.example", map[string]any{"expected_revision": before.Revision}, 403},
+		{"POST", managedNFQBundleUpdatePath, componentRecoveryToken, server.URL, map[string]any{}, 400},
+		{"POST", managedNFQBundleUpdatePath, componentRecoveryToken, server.URL, map[string]any{"expected_revision": before.Revision, "manifest": map[string]any{"architecture": "arm64"}}, 400},
+		{"POST", managedNFQBundleUpdatePath, componentRecoveryToken, server.URL, map[string]any{"expected_revision": before.Revision}, 409},
+		{"GET", managedNFQBundleUpdatePath, componentRecoveryToken, server.URL, nil, 405},
 	} {
 		status, data := componentHTTP(t, server, request.method, request.path, request.body, request.token, request.origin)
 		if status != request.want {

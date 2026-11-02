@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	ManagedComponentReadVersion   = components.NFQWSInitialInstallSchema
+	ManagedComponentReadVersion   = components.MihomoReleaseReadVersion
 	managedComponentsState        = installpath.State + "/components"
 	managedNFQBundlePlanPath      = "/api/v1/components/nfqws2/managed-bundle/plan"
 	managedNFQBundleInstallPath   = "/api/v1/components/nfqws2/managed-bundle/install"
+	managedNFQBundleUpdatePath    = "/api/v1/components/nfqws2/managed-bundle/update"
 	managedNFQBundleInstalledPath = "/api/v1/components/nfqws2/managed-bundle/installed"
 )
 
@@ -125,7 +126,7 @@ func (a *App) configureManagedNFQCompatibility(ctx context.Context, control *ope
 
 // Main closes this retained descriptor only after HTTP/worker cleanup joins.
 func (a *App) CloseManagedNFQControl() error {
-	if a.strategyCompatibilityPending() || a.managedNFQListPending() {
+	if a.strategyCompatibilityPending() || a.managedNFQListPending() || a.managedStrategyProbePending() {
 		return strategylab.ErrCompatibilityQuiescenceUnknown
 	}
 	a.managedNFQBundle.mu.Lock()
@@ -157,7 +158,7 @@ func (a *App) managedNFQHistoryCurrent(ctx context.Context) error {
 	if err != nil || before > ManagedComponentReadVersion {
 		return errors.Join(components.ErrRecoveryAuthority, err)
 	}
-	if err := a.ComponentHistory.CheckWrite(ctx, ManagedComponentReadVersion); err != nil {
+	if err := a.ComponentHistory.CheckWrite(ctx, components.NFQWSInitialInstallSchema); err != nil {
 		return err
 	}
 	after, fresh, err := components.InspectRetainedManagedUpdateReadVersion(ctx, a.Components.StateDir)
@@ -276,6 +277,16 @@ func (a *App) managedNFQBundlePlan(w http.ResponseWriter, r *http.Request) {
 	if descriptor, readErr := a.managedNFQInstalled(ctx); readErr == nil {
 		plan["installed_idle"] = true
 		plan["installed"] = descriptor
+		digest, _ := manifest.Digest()
+		plan["update_available"] = descriptor["manifest_sha256"] != digest
+		plan["action"] = "update"
+		plan["reason"] = "Управляемый пакет прочитан. Обновление повторно проверит неактивность исходного владельца и сохранит предыдущую версию для восстановления."
+	} else if errors.Is(readErr, components.ErrManagedNFQWSReceiptAbsent) {
+		plan["action"] = "install"
+	} else {
+		plan["ready"] = false
+		plan["code"] = "MANAGED_NFQWS_INSTALLED_STATE_UNKNOWN"
+		plan["reason"] = "Не удалось подтвердить состояние установленного управляемого пакета. Проверьте журнал восстановления перед установкой или обновлением."
 	}
 	if errors.Join(a.managedNFQConfigCurrent(ctx, cfg), control.Current(ctx)) != nil {
 		plan["ready"] = false
@@ -321,6 +332,14 @@ func (a *App) managedNFQBundleInstalled(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *App) managedNFQBundleInstall(w http.ResponseWriter, r *http.Request) {
+	a.managedNFQBundleWrite(w, r, false)
+}
+
+func (a *App) managedNFQBundleUpdate(w http.ResponseWriter, r *http.Request) {
+	a.managedNFQBundleWrite(w, r, true)
+}
+
+func (a *App) managedNFQBundleWrite(w http.ResponseWriter, r *http.Request, update bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -376,9 +395,11 @@ func (a *App) managedNFQBundleInstall(w http.ResponseWriter, r *http.Request) {
 		a.writeManagedNFQBundleFailure(w, err, "history")
 		return
 	}
-	if err := a.StrategyLab.InitializeManagedCompatibilitySource(ctx, control); err != nil {
-		a.writeManagedNFQBundleFailure(w, err, "source_initialize")
-		return
+	if !update {
+		if err := a.StrategyLab.InitializeManagedCompatibilitySource(ctx, control); err != nil {
+			a.writeManagedNFQBundleFailure(w, err, "source_initialize")
+			return
+		}
 	}
 	inactive, err := a.StrategyLab.ReviewManagedCompatibilityInactive(ctx, control)
 	if err != nil {
@@ -392,7 +413,11 @@ func (a *App) managedNFQBundleInstall(w http.ResponseWriter, r *http.Request) {
 		a.writeManagedNFQBundleFailure(w, err, "bundle_preflight")
 		return
 	}
-	receipt, err := a.Components.InstallManagedBundle(ctx, manifest, cfg.Revision, a.managedNFQAuthority(cfg, control, inactive))
+	write := a.Components.InstallManagedBundle
+	if update {
+		write = a.Components.UpdateManagedBundle
+	}
+	receipt, err := write(ctx, manifest, cfg.Revision, a.managedNFQAuthority(cfg, control, inactive))
 	if err != nil {
 		a.writeManagedNFQBundleFailure(w, err, "bundle_install")
 		return

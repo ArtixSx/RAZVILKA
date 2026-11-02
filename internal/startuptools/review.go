@@ -22,19 +22,31 @@ type heldImage struct {
 	info os.FileInfo
 	hash [32]byte
 }
+
+// Acquisition-derived pathname only. Every use still observes the complete
+// named node/link graph twice and opens/lists the original directory freshly.
+type reviewedExtensionPath struct {
+	self             *reviewedExtensionPath
+	review           *heldReview
+	profile          profile
+	alias, canonical string
+	target           os.FileInfo
+}
+
 type heldReview struct {
-	profile     profile
-	images      map[string]*heldImage
-	nodes       map[string]heldNode
-	absent      map[string]bool
-	roles       map[string]map[imageRole]bool
-	directories []string
-	extensions  []string
-	entry       [2]*heldImage
-	ipEntry     *heldImage
-	wgEntry     [2]*heldImage
-	bytes       int64
-	edges       int
+	profile       profile
+	images        map[string]*heldImage
+	nodes         map[string]heldNode
+	absent        map[string]bool
+	roles         map[string]map[imageRole]bool
+	directories   []string
+	extensions    []string
+	extensionPath *reviewedExtensionPath
+	entry         [2]*heldImage
+	ipEntry       *heldImage
+	wgEntry       [2]*heldImage
+	bytes         int64
+	edges         int
 }
 
 func (r *heldReview) close() error {
@@ -47,13 +59,18 @@ func (r *heldReview) close() error {
 	return result
 }
 
+// Scratch storage only: no bytes or hashes are reused as observations. Each
+// call owns its buffer until every ReadAt and synchronous hash Write returns.
+var imageHashBuffers = sync.Pool{New: func() any { return new([32 << 10]byte) }}
+
 func hashImage(ctx context.Context, file *os.File, size int64) ([32]byte, error) {
 	var result [32]byte
 	if ctx == nil || file == nil || size <= 0 || size > maxImageBytes {
 		return result, at("HASH_INPUT", nil)
 	}
 	h := sha256.New()
-	buffer := make([]byte, 32<<10)
+	buffer := imageHashBuffers.Get().(*[32 << 10]byte)
+	defer imageHashBuffers.Put(buffer)
 	for off := int64(0); off < size; {
 		if err := ctx.Err(); err != nil {
 			return result, at("HASH_CONTEXT", err)

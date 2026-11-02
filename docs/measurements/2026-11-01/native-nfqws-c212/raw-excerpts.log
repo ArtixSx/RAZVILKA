@@ -1,0 +1,68 @@
+=== production original job log excerpt ===
+2026-11-01T03:57:59.7058052Z go version go1.26.5 linux/amd64
+2026-11-01T03:59:09.2363892Z [36;1mecho "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"[0m
+2026-11-01T03:59:09.9866457Z go version go1.26.5 linux/amd64
+2026-11-01T03:59:10.0083616Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-01T03:59:50.8801990Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 8
+2026-11-01T03:59:51.2061056Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 8
+2026-11-01T03:59:51.5476613Z --- PASS: TestClassicReadBatchNativeMutation (1.11s)
+2026-11-01T04:00:08.4562685Z     strategy_managed_probe_native_linux_test.go:486: native measured Execute original metadata traversal attempts 3548
+2026-11-01T04:00:08.4563927Z     strategy_managed_probe_native_linux_test.go:488: native measured Execute 15.34111191s actual inventory ToolCheck calls 381 ToolCheck wall 7.863359523s
+2026-11-01T04:00:08.4688879Z --- FAIL: TestManagedStrategyProbeNativeConsumer (16.81s)
+2026-11-01T04:00:09.1649786Z go version go1.26.5 linux/amd64
+2026-11-01T04:00:09.1872999Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-01T04:00:13.5120349Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.48s)
+2026-11-01T04:00:32.6674753Z 2026/11/01 04:00:32 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)
+2026-11-01T04:00:32.6701736Z     strategy_managed_probe_native_linux_test.go:445: native actual HTTP aggregate inventory ToolCheck calls 401 wall 8.404656025s
+2026-11-01T04:00:32.6703618Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate original metadata traversal attempts 3548
+2026-11-01T04:00:32.6867688Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (19.06s)
+2026-11-01T04:00:33.3158460Z go version go1.26.5 linux/amd64
+2026-11-01T04:00:33.3382015Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-01T04:01:06.3021416Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-01T04:01:06.6245800Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-01T04:01:06.9537486Z --- PASS: TestClassicReadBatchNativeMutation (0.97s)
+2026-11-01T04:01:23.1101365Z     strategy_managed_probe_native_linux_test.go:486: native measured Execute original metadata traversal attempts 3114
+2026-11-01T04:01:23.1103549Z     strategy_managed_probe_native_linux_test.go:488: native measured Execute 14.597642019s actual inventory ToolCheck calls 381 ToolCheck wall 7.232780854s
+2026-11-01T04:01:23.1214735Z --- FAIL: TestManagedStrategyProbeNativeConsumer (16.06s)
+2026-11-01T04:01:23.7111401Z go version go1.26.5 linux/amd64
+2026-11-01T04:01:23.7326311Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-01T04:01:28.3400126Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.76s)
+2026-11-01T04:01:46.9804853Z 2026/11/01 04:01:46 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)
+2026-11-01T04:01:46.9841956Z     strategy_managed_probe_native_linux_test.go:445: native actual HTTP aggregate inventory ToolCheck calls 401 wall 7.77254067s
+2026-11-01T04:01:46.9843206Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate original metadata traversal attempts 3114
+2026-11-01T04:01:46.9981190Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (18.55s)
+2026-11-01T04:01:47.3021470Z Actual native statuses before=1 before_lan=1 after=1 lan=1
+=== race original job log excerpt ===
+2026-11-01T03:57:59.0409370Z go version go1.26.5 linux/amd64
+2026-11-01T03:58:49.4417472Z [36;1mecho "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"[0m
+2026-11-01T03:58:50.2748999Z go version go1.26.5 linux/amd64
+2026-11-01T03:58:50.2925345Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-01T03:59:49.1303364Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 8
+2026-11-01T03:59:49.5380366Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 8
+2026-11-01T03:59:49.9732442Z --- PASS: TestClassicReadBatchNativeMutation (1.45s)
+2026-11-01T04:00:10.4763926Z     strategy_managed_probe_native_linux_test.go:486: native measured Execute original metadata traversal attempts 1010
+2026-11-01T04:00:10.4764613Z     strategy_managed_probe_native_linux_test.go:488: native measured Execute 15.010660849s actual inventory ToolCheck calls 128 ToolCheck wall 3.993842943s
+2026-11-01T04:00:10.5067232Z --- FAIL: TestManagedStrategyProbeNativeConsumer (19.42s)
+2026-11-01T04:00:11.2605347Z go version go1.26.5 linux/amd64
+2026-11-01T04:00:11.2765565Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-01T04:00:16.4689154Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.33s)
+2026-11-01T04:00:39.4635478Z 2026/11/01 04:00:39 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)
+2026-11-01T04:00:39.4665181Z     strategy_managed_probe_native_linux_test.go:445: native actual HTTP aggregate inventory ToolCheck calls 146 wall 4.684166069s
+2026-11-01T04:00:39.4666255Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate original metadata traversal attempts 994
+2026-11-01T04:00:39.4996531Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.91s)
+2026-11-01T04:00:40.1402103Z go version go1.26.5 linux/amd64
+2026-11-01T04:00:40.1552118Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-01T04:01:17.4862621Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-01T04:01:17.8824230Z     classic_batch_native_fixture_linux_test.go:289: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-01T04:01:18.2972607Z --- PASS: TestClassicReadBatchNativeMutation (1.22s)
+2026-11-01T04:01:38.7471825Z     strategy_managed_probe_native_linux_test.go:486: native measured Execute original metadata traversal attempts 1068
+2026-11-01T04:01:38.7472653Z     strategy_managed_probe_native_linux_test.go:488: native measured Execute 15.007755809s actual inventory ToolCheck calls 141 ToolCheck wall 3.937627901s
+2026-11-01T04:01:38.7769336Z --- FAIL: TestManagedStrategyProbeNativeConsumer (19.37s)
+2026-11-01T04:01:39.6098169Z go version go1.26.5 linux/amd64
+2026-11-01T04:01:39.6247380Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-01T04:01:44.8426649Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.47s)
+2026-11-01T04:02:07.7344584Z 2026/11/01 04:02:07 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)
+2026-11-01T04:02:07.7372955Z     strategy_managed_probe_native_linux_test.go:445: native actual HTTP aggregate inventory ToolCheck calls 152 wall 4.514144547s
+2026-11-01T04:02:07.7374158Z     strategy_managed_probe_native_linux_test.go:446: native actual HTTP aggregate original metadata traversal attempts 982
+2026-11-01T04:02:07.7690039Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.81s)
+2026-11-01T04:02:08.0093607Z Actual native statuses before=1 before_lan=1 after=1 lan=1

@@ -66,6 +66,7 @@ type Manager struct {
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
 	replacementXray    *xraySelectedTCPReplacement
+	domainPool         *domainTCPStandbyPool // Original bounded owners only; retainedXrayMu.
 	retainedWGMu       sync.Mutex
 	retainedWG         *retainedWGExecution
 	retainedSingMu     sync.Mutex
@@ -303,16 +304,19 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
-	ResourcePlanID   string              `json:"resource_plan_id,omitempty"`
-	Resources        []ExecutionResource `json:"resources,omitempty"`
-	PlanID           string              `json:"plan_id"`
-	Digest           string              `json:"digest"`
-	State            string              `json:"state"`
-	StartedAt        string              `json:"started_at"`
-	FinishedAt       string              `json:"finished_at,omitempty"`
-	Steps            []ExecutionStep     `json:"steps"`
-	Error            string              `json:"error,omitempty"`
-	RollbackVerified bool                `json:"rollback_verified,omitempty"`
+	MihomoLiveHealthOperation   *ExecutionMihomoLiveHealthOperation      `json:"mihomo_live_health_operation,omitempty"`
+	DomainDNSCoexistence        *ExecutionDomainDNSCoexistenceDefinition `json:"domain_dns_coexistence,omitempty"`
+	MihomoTransitHistoryArchive *MihomoTransitHistoryArchive             `json:"mihomo_transit_history_archive,omitempty"`
+	ResourcePlanID              string                                   `json:"resource_plan_id,omitempty"`
+	Resources                   []ExecutionResource                      `json:"resources,omitempty"`
+	PlanID                      string                                   `json:"plan_id"`
+	Digest                      string                                   `json:"digest"`
+	State                       string                                   `json:"state"`
+	StartedAt                   string                                   `json:"started_at"`
+	FinishedAt                  string                                   `json:"finished_at,omitempty"`
+	Steps                       []ExecutionStep                          `json:"steps"`
+	Error                       string                                   `json:"error,omitempty"`
+	RollbackVerified            bool                                     `json:"rollback_verified,omitempty"`
 }
 
 type PolicyRefresh struct {
@@ -545,13 +549,19 @@ func (m *Manager) Capable(id string) bool {
 	}
 	m.registryMu.RLock()
 	defer m.registryMu.RUnlock()
-	_, ok := m.Adapters[id]
-	return ok
+	adapter, ok := m.Adapters[id]
+	if _, probeOnly := adapter.(*MihomoProbeAdapter); probeOnly {
+		return false
+	}
+	return ok && adapter != nil
 }
 
 func (m *Manager) CanaryCapable(id string) bool {
 	adapter, ok := m.adapter(id)
 	if !ok {
+		return false
+	}
+	if _, probeOnly := adapter.(*MihomoProbeAdapter); probeOnly {
 		return false
 	}
 	_, ok = adapter.(CanaryAdapter)
@@ -583,6 +593,12 @@ func (m *Manager) ProbeCandidate(ctx context.Context, plan Plan, adapterID strin
 		return fmt.Errorf("dataplane adapter %q is unavailable", adapterID)
 	}
 	canary, ok := adapter.(CanaryAdapter)
+	if scoped, probe, present, err := nfqwsProbeAdapter(ctx, adapter, plan); present {
+		if err != nil {
+			return err
+		}
+		adapter, canary, ok = scoped, probe, true
+	}
 	if !ok {
 		return fmt.Errorf("dataplane adapter %q has no isolated canary", adapterID)
 	}
@@ -1306,7 +1322,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	if err := validateDomainTransportForExecution(plan); err != nil {
 		return execution, err
 	}
-	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil && pair == nil || m.retainedWGOwner() != nil {
+	if m.retainedNFQOwner() != nil || m.HasPendingManagedNFQWS() || m.retainedXrayOwner() != nil && pair == nil || m.retainedWGOwner() != nil || m.originalMihomoLive() != nil || m.mihomoPreparationPending() {
 		return execution, ErrNetworkPolicyReplacement // Join the original owner with explicit Stop first.
 	}
 	if err := m.checkManagedNFQWSApply(ctx, plan); err != nil {
@@ -1372,7 +1388,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		execution.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		return execution, err
 	}
-	var activeNFQScope, activeXrayScope, activeWGScope *executionResourceScope
+	var activeNFQScope, activeXrayScope, activeWGScope, activeMihomoScope *executionResourceScope
 	var pendingNFQClaim *nfqwsPendingScopeClaim
 	var xrayPreResource *xraySelectedTCPPreResource
 	if pair != nil {
@@ -1387,7 +1403,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	writeExecution := func() error {
 		count := 0
-		for _, candidate := range []*executionResourceScope{activeNFQScope, activeXrayScope, activeWGScope} {
+		for _, candidate := range []*executionResourceScope{activeNFQScope, activeXrayScope, activeWGScope, activeMihomoScope} {
 			if candidate != nil {
 				count++
 			}
@@ -1401,6 +1417,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		if activeWGScope != nil {
 			scope = activeWGScope
+		}
+		if activeMihomoScope != nil {
+			scope = activeMihomoScope
 		}
 		return m.writeExecutionOwned(transactionRoot, execution, scope)
 	}
@@ -1421,6 +1440,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	var retryNFQRollback func(context.Context) error
 	var retryXrayRollback func(context.Context) error
 	var retryWGRollback func(context.Context) error
+	var retryMihomoRollback func(context.Context) error
 	pairInResourceDefer = true
 	defer func() {
 		if pair != nil {
@@ -1431,6 +1451,20 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			pair.settleApply(ctx, &result, &resultErr)
 			if pair.pending.Load() {
 				return // Both actual issuers/compensation roots remain open.
+			}
+		}
+		if activeMihomoScope != nil && !activeMihomoScope.retained {
+			activeMihomoScope.mu.Lock()
+			activeMihomoScope.mihomoRetryRollback = retryMihomoRollback
+			activeMihomoScope.mu.Unlock()
+			if err := activeMihomoScope.close(); err != nil {
+				resultErr = errors.Join(resultErr, executionJournalError(err))
+				result.RollbackVerified = false
+			}
+			// Pending custody must never share slices with the returned DTO.
+			if activeMihomoScope.retained {
+				result.Resources = cloneExecutionResources(result.Resources)
+				result.Steps = slices.Clone(result.Steps)
 			}
 		}
 		if activeWGScope != nil && !activeWGScope.retained {
@@ -1508,6 +1542,19 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 				return err
 			}
 		}
+		if _, actualMihomo := adapter.(*MihomoProbeAdapter); actualMihomo && !restoring && activeMihomoScope == nil {
+			if activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil {
+				return ErrNetworkPolicyAuthority
+			}
+			var err error
+			activeMihomoScope, err = m.newExecutionResourceScope(ctx, plan, "mihomo", &execution, transactionRoot)
+			if err != nil {
+				return err
+			}
+		}
+		if activeMihomoScope != nil {
+			runCtx = activeMihomoScope.contextWith(networkPolicyConsumerContext(runCtx, activeMihomoScope.plan))
+		}
 		if xrayPreResource == nil && activeXrayScope == nil && !restoring && adapter.ID() == NetworkPolicyAdapterID &&
 			validPlanID(plan.PlanID) && ctx.Value(xraySelectedTCPExecutionKey{}) != nil {
 			var err error
@@ -1577,8 +1624,14 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		_, actualNFQ := adapter.(*NFQWS2Adapter)
 		actualXray, isXray := adapter.(*ProxyTunnelAdapter)
 		_, selectedXray, xrayErr := xraySelectedTCPExecutionFor(runCtx, actualXray, plan, adapterRoot)
-		if activeWGScope != nil {
-			err = action(runCtx, plan, adapterRoot)
+		if activeWGScope != nil || activeMihomoScope != nil {
+			actionPlan := plan
+			if restoring && activeMihomoScope != nil && adapter == activeMihomoScope.adapterOwner {
+				actionPlan, err = originalMihomoRestorationPlan(activeMihomoScope, adapter, plan)
+			}
+			if err == nil {
+				err = action(runCtx, actionPlan, adapterRoot)
+			}
 		} else if isXray && selectedXray {
 			if xrayErr != nil {
 				err = xrayErr
@@ -1806,7 +1859,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			// RollbackVerified, and it completes only before any commit.
 			verified = false
 			original, ok := gate.(*NetworkPolicyAdapter)
-			if !ok || undoCommit != nil || commitPublicationAttempted || activeXrayScope != nil || activeWGScope != nil {
+			if !ok || undoCommit != nil || commitPublicationAttempted || activeXrayScope != nil || activeWGScope != nil || activeMihomoScope != nil {
 				rollbackErr = errors.Join(rollbackErr, ErrNFQWSScopedOwner)
 			} else if consumersVerified && gateVerified && rollbackErr == nil {
 				var completionErr error
@@ -1861,9 +1914,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	retryNFQRollback = func(parent context.Context) error {
 		rollbackParent = parent
-		_ = rollback(ErrNFQWSScopedOwner)
+		retryErr := rollback(ErrNFQWSScopedOwner)
 		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {
-			return executionJournalError(ErrNFQWSScopedOwner)
+			return errors.Join(executionJournalError(ErrNFQWSScopedOwner), retryErr)
 		}
 		return nil
 	}
@@ -1883,6 +1936,15 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		return nil
 	}
+	retryMihomoRollback = func(parent context.Context) error {
+		rollbackParent = parent
+		_ = rollback(errMihomoLiveMaterial)
+		if execution.State != "rolled-back" || !execution.RollbackVerified && liveMutation || validateExecutionResources(execution, true) != nil {
+			return executionJournalError(errMihomoLiveMaterial)
+		}
+		return nil
+	}
+
 	rejectCanary := func(cause error) error {
 		plan.Ready = false
 		plan.State = "canary-failed"
@@ -1908,7 +1970,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return errors.Join(cause, executionJournalError(m.recordLocked(plan)), writeExecution())
 	}
 	settleRejectedDirectPreparation := func(cause error) (bool, error) {
-		if liveMutation || undoCommit != nil || commitPublicationAttempted || activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil || validateExecutionResources(execution, true) != nil {
+		if liveMutation || undoCommit != nil || commitPublicationAttempted || activeNFQScope != nil || activeXrayScope != nil || activeWGScope != nil || activeMihomoScope != nil || validateExecutionResources(execution, true) != nil {
 			return false, nil
 		}
 		for _, adapter := range prepared {
@@ -1948,7 +2010,20 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, failure
 	}
 	finishCommit := func() error {
+		if activeMihomoScope != nil {
+			// Final post-CAS HTTPS still creates and settles original temporary
+			// transit resources. Keep their nonterminal applying writer until
+			// that real check closes; committing must remain fully settled.
+			if err := activeMihomoScope.prepareActiveMihomo(ctx); err != nil {
+				return rollback(err)
+			}
+		}
 		execution.State = "committing"
+		if activeMihomoScope != nil {
+			if err := activeMihomoScope.mihomoLive.recordPhase(activeMihomoScope.contextWith(networkPolicyConsumerContext(ctx, plan)), "active", nil); err != nil {
+				return rollback(err)
+			}
+		}
 		if activeXrayScope != nil {
 			if err := activeXrayScope.prepareActiveXray(ctx); err != nil {
 				return rollback(err)
@@ -1983,6 +2058,11 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		}
 		if activeWGScope != nil {
 			if err := m.retainOriginalWG(activeWGScope.contextWith(ctx), activeWGScope, nil); err != nil {
+				return rollback(err)
+			}
+		}
+		if activeMihomoScope != nil {
+			if err := m.retainOriginalMihomo(activeMihomoScope, false); err != nil {
 				return rollback(err)
 			}
 		}
@@ -2101,7 +2181,7 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 			}
 			failure := rejectCanary(err)
 			if timeout := soleCanaryTimeout(failure); timeout != nil && !liveMutation && undoCommit == nil && !commitPublicationAttempted &&
-				activeNFQScope == nil && activeXrayScope == nil && activeWGScope == nil && pair == nil {
+				activeNFQScope == nil && activeXrayScope == nil && activeWGScope == nil && activeMihomoScope == nil && pair == nil {
 				// Only this completed pre-activation cycle can certify its live
 				// cleanup error. Journal state alone is never retry permission.
 				current, exists, readErr := m.committedLocked()

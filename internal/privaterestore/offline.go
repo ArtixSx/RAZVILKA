@@ -14,6 +14,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/privatebackup"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 	"github.com/ArtixSx/razvilka/internal/restorejournal"
+	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
 // Offline targets and live Store sessions build the same typed images.
@@ -37,6 +38,10 @@ type nativeBuilder interface {
 }
 type subscriptionBuilder interface {
 	MergeImage(context.Context, providerfeed.PrivateSnapshot) (restorejournal.Image, error)
+}
+
+type strategyLabBuilder interface {
+	RestoreImage(context.Context, strategylab.PrivateSnapshot) (restorejournal.Image, error)
 }
 
 // RestoreOffline is an internal pre-Load operation, NOT an HTTP or live restore
@@ -81,6 +86,12 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 		return nil, restorejournal.ErrInvalid
 	}
 	ids := []string{"config", "custom_services", "devices"}
+	if payload.StrategyLabSnapshot != nil {
+		if c.layout.StrategyLabPath == "" {
+			return nil, restorejournal.ErrInvalid
+		}
+		ids = append(ids, "strategy_lab")
+	}
 	if payload.SubscriptionSnapshot != nil {
 		if c.layout.FeedRoot == "" {
 			return nil, restorejournal.ErrInvalid
@@ -180,6 +191,12 @@ func (c *Coordinator) build(ctx context.Context, payload privatebackup.Payload, 
 	}
 	if payload.SubscriptionSnapshot != nil {
 		changes["subscriptions"], err = c.slots["subscriptions"].target.(subscriptionBuilder).MergeImage(ctx, *payload.SubscriptionSnapshot)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if payload.StrategyLabSnapshot != nil {
+		changes["strategy_lab"], err = c.slots["strategy_lab"].target.(strategyLabBuilder).RestoreImage(ctx, *payload.StrategyLabSnapshot)
 		if err != nil {
 			return nil, err
 		}

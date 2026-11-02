@@ -41,7 +41,7 @@ func (l *Lease) runPolicy(ctx context.Context, name string, args ...string) ([]b
 	if index < 2 && readArguments(frozen) || index == 2 && ipReadArguments(frozen) {
 		return l.policyRead(ctx, index, frozen)
 	}
-	if !effectArguments(index, frozen) {
+	if !effectArguments(index, frozen) && !mihomoLiveImplicitIPv4Effect(ctx, name, l.digest, index, frozen) && !mihomoSameBootImplicitIPv4Delete(ctx, name, l.digest, index, frozen) {
 		return nil, at("POLICY_ABI", nil)
 	}
 	return l.policyEffect(ctx, index, frozen)
@@ -81,6 +81,9 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 }
 
 func (l *Lease) policyEffect(original context.Context, index int, args []string) ([]byte, error) {
+	if err := readObservationEffectRefusal(original); err != nil {
+		return nil, err
+	}
 	c, cancel := context.WithTimeout(original, 25*time.Second)
 	defer cancel()
 	stop := context.AfterFunc(l.lifetime, cancel)
@@ -124,6 +127,7 @@ func (l *Lease) policyEffect(original context.Context, index int, args []string)
 				if err := command.Start(); err != nil {
 					return at("EFFECT_START", err)
 				}
+				domainNativeToolStarted("original-effect")
 				started = true
 				return nil
 			})

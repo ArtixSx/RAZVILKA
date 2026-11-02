@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
@@ -183,8 +184,24 @@ func (p *xraySelectedTCPReplacement) priorStructural(ctx context.Context) error 
 }
 
 func newXraySelectedTCPRecords(s *executionResourceScope) (*xraySelectedTCPExecutionRecords, error) {
-	if s == nil || s.manager == nil || s.managerRoot != s.manager.StateRoot || s.root != filepath.Join(s.managerRoot, "transactions", s.plan.PlanID) {
+	if s == nil || s.execution == nil || s.manager == nil || s.managerRoot != s.manager.StateRoot || !validPlanID(s.plan.PlanID) || !validPlanDigest(s.plan.Digest) || s.execution.Digest != s.plan.Digest {
 		return nil, ErrExecutionJournal
+	}
+	if s.execution.ResourcePlanID == "" {
+		if s.execution.PlanID != s.plan.PlanID {
+			return nil, ErrExecutionJournal
+		}
+	} else if s.execution.ResourcePlanID != s.plan.PlanID || !strings.HasPrefix(s.execution.PlanID, "dp-check-") || !validExecutionPlanID(s.execution.PlanID) {
+		return nil, ErrExecutionJournal
+	}
+	if s.root != filepath.Join(s.managerRoot, "transactions", s.execution.PlanID) {
+		return nil, ErrExecutionJournal
+	}
+	if c := s.domainSuccessor; c != nil {
+		if c.original() != nil || c.scope != s || c.records == nil || c.records.scope != s {
+			return nil, ErrExecutionJournal
+		}
+		return c.records, nil
 	}
 	d := &xraySelectedTCPExecutionRecords{scope: s}
 	var err error
@@ -256,6 +273,9 @@ func (p *xraySelectedTCPReplacement) publishWriter(s *executionResourceScope, d 
 		return ErrExecutionJournal
 	}
 	root, name := d.recordPath(index)
+	if err := d.publicationFailure(); err != nil {
+		return err
+	}
 	path := filepath.Join(s.root, name)
 	if index == 1 && s == p.scope {
 		path = filepath.Join(p.manager.StateRoot, "latest-execution.json")
@@ -268,11 +288,12 @@ func (p *xraySelectedTCPReplacement) publishWriter(s *executionResourceScope, d 
 	if err != nil {
 		return err
 	}
+	accepted := false
 	info, err := file.Stat()
 	if err == nil {
-		err = d.captureOriginalRecord(index, file, info, data, root, name)
+		accepted, err = d.captureOriginalRecord(index, file, info, data, root, name)
 	}
-	if err != nil {
+	if !accepted {
 		return errors.Join(err, file.Close())
 	}
 	if index == 1 {
@@ -282,7 +303,7 @@ func (p *xraySelectedTCPReplacement) publishWriter(s *executionResourceScope, d 
 			p.priorAlias.Store(true)
 		}
 	}
-	return nil
+	return err
 }
 
 func (p *xraySelectedTCPReplacement) publishPriorLatest() error {
@@ -304,15 +325,16 @@ func (p *xraySelectedTCPReplacement) publishPriorLatest() error {
 	if err != nil {
 		return err
 	}
+	accepted := false
 	info, err := file.Stat()
 	if err == nil {
-		err = d.captureOriginalRecord(1, file, info, data, d.root, "latest-execution.json")
+		accepted, err = d.captureOriginalRecord(1, file, info, data, d.root, "latest-execution.json")
 	}
-	if err != nil {
+	if !accepted {
 		return errors.Join(err, file.Close())
 	}
 	p.handedOver.Store(false)
-	return nil
+	return err
 }
 
 // Only after C's committed Store image and both actual journal ACKs. This

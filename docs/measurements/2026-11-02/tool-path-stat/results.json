@@ -1,0 +1,31 @@
+{
+  "commit": "05613c82f8bd46a45d7e85a4b2dffed4b7006da6",
+  "full_ci": {
+    "run": 41444434527,
+    "result": "success"
+  },
+  "native_run": 41444434457,
+  "job": 125273920291,
+  "same_process_benchmark": "BenchmarkFreshPathNode",
+  "before": {
+    "ns_per_op": [
+      1650,
+      1646,
+      1645
+    ],
+    "bytes_per_op": 224,
+    "allocations_per_op": 2
+  },
+  "after": {
+    "ns_per_op": [
+      1457,
+      1453,
+      1459
+    ],
+    "bytes_per_op": 16,
+    "allocations_per_op": 1
+  },
+  "native_full_lan_workflow": "failure",
+  "full_workflow_speedup_claimed": false,
+  "raw_log_sha256": "3088b504a2f024952086f7ad2b783f490d7fec0dae6438b60caec70b4e19db63"
+}

@@ -586,7 +586,19 @@ func BuildAt(input Input, now time.Time) (Plan, error) {
 				}
 				break
 			}
-			addProxyTunnelPreflight(&plan, adapter, input.Host)
+			if adapter == "xray" && restrictedDomainTCPIntent(input.DomainPolicy, input.SyntheticDNS, input.Routes) {
+				// This exact accepted-TCP domain proof uses no TUN/sidecar.
+				// Actual binary/config checks above and BOTH domain runtime
+				// blockers remain; this classification never enables Apply.
+				if !input.Host.IPCommand {
+					plan.Blockers = append(plan.Blockers, Blocker{Code: "IP_COMMAND_MISSING", Adapter: adapter, Message: "Команда ip не найдена"})
+				}
+				if !input.Host.IPTables || !input.Host.IP6Tables {
+					plan.Blockers = append(plan.Blockers, Blocker{Code: "DOMAIN_TCP_TOOLS_UNAVAILABLE", Adapter: adapter, Message: "Системные инструменты TCP-перехвата не подтверждены."})
+				}
+			} else {
+				addProxyTunnelPreflight(&plan, adapter, input.Host)
+			}
 			plan.Warnings = append(plan.Warnings, Warning{Code: "PROXY_LOOP_GUARD", Adapter: adapter, Message: "До активации требуется исключить endpoint узла и управляющий трафик из проксирования."})
 		}
 		for _, route := range input.Routes {
@@ -791,6 +803,8 @@ func adapterID(route string) string {
 		return "wireguard"
 	case route == "xray" || strings.HasPrefix(route, "xray:"):
 		return "xray"
+	case route == "mihomo" || strings.HasPrefix(route, "mihomo:"):
+		return "mihomo"
 	case route == "sing-box" || strings.HasPrefix(route, "sing-box:"):
 		return "sing-box"
 	default:
@@ -804,7 +818,7 @@ func AdapterID(route string) string { return adapterID(route) }
 
 // These adapters route by destination IP. A route that carries domains would
 // make one DNS answer the capture authority for every site on that address.
-var domainCaptureAdapters = []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard"}
+var domainCaptureAdapters = []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard", "mihomo"}
 
 // DomainFlowAuthority reports whether the executor of a public route value may
 // carry a service's domain list. NFQWS2 decides each connection by its own

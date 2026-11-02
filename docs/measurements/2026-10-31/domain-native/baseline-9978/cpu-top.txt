@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 09393d8a31158820c0fe23d1f440ee377b648fc7
+Type: cpu
+Time: 2026-11-01 00:49:36 UTC
+Duration: 12.92s, Total samples = 13.55s (104.85%)
+Showing nodes accounting for 12.51s, 92.32% of 13.55s total
+Dropped 381 nodes (cum <= 0.07s)
+Showing top 35 nodes out of 202
+      flat  flat%   sum%        cum   cum%
+     9.60s 70.85% 70.85%      9.60s 70.85%  crypto/internal/fips140/sha256.blockSHANI
+     2.51s 18.52% 89.37%      2.51s 18.52%  internal/runtime/syscall/linux.Syscall6
+     0.12s  0.89% 90.26%      0.13s  0.96%  runtime.tryDeferToSpanScan
+     0.07s  0.52% 90.77%      0.23s  1.70%  runtime.scanObject
+     0.05s  0.37% 91.14%      0.07s  0.52%  strings.Fields
+     0.02s  0.15% 91.29%      0.40s  2.95%  syscall.Lstat (inline)
+     0.01s 0.074% 91.37%      9.61s 70.92%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s 0.074% 91.44%      9.49s 70.04%  github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).hash
+     0.01s 0.074% 91.51%      0.17s  1.25%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+     0.01s 0.074% 91.59%      0.33s  2.44%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).Current
+     0.01s 0.074% 91.66%      0.12s  0.89%  github.com/ArtixSx/razvilka/internal/operationgate.readControlBytes
+     0.01s 0.074% 91.73%      1.19s  8.78%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+     0.01s 0.074% 91.81%      0.09s  0.66%  os.(*Root).Stat
+     0.01s 0.074% 91.88%      0.43s  3.17%  os.lstatNolog
+     0.01s 0.074% 91.96%      0.31s  2.29%  runtime.mallocgc
+     0.01s 0.074% 92.03%      0.10s  0.74%  runtime.mallocgcSmallNoscan
+     0.01s 0.074% 92.10%      0.10s  0.74%  runtime.scanSpan
+     0.01s 0.074% 92.18%      0.12s  0.89%  syscall.Fstat
+     0.01s 0.074% 92.25%      2.50s 18.45%  syscall.RawSyscall6
+     0.01s 0.074% 92.32%      1.89s 13.95%  syscall.Syscall6
+         0     0% 92.32%      9.60s 70.85%  crypto/internal/fips140/sha256.block
+         0     0% 92.32%     12.73s 93.95%  github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeAcceptedFlows.func9.2
+         0     0% 92.32%      0.07s  0.52%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithResourceExclusionObservation
+         0     0% 92.32%      0.07s  0.52%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation
+         0     0% 92.32%      0.07s  0.52%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation.func1
+         0     0% 92.32%      1.09s  8.04%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+         0     0% 92.32%     11.71s 86.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture
+         0     0% 92.32%     11.44s 84.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1
+         0     0% 92.32%      9.52s 70.26%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).Current
+         0     0% 92.32%      9.70s 71.59%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPXray).check
+         0     0% 92.32%      0.32s  2.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPXray).checkOriginalResource
+         0     0% 92.32%      0.32s  2.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPXray).checkSource
+         0     0% 92.32%      0.37s  2.73%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).CheckCapture
+         0     0% 92.32%     12.73s 93.95%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run
+         0     0% 92.32%     11.44s 84.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture

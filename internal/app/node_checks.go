@@ -64,6 +64,7 @@ type nodeCheckItem struct {
 }
 
 type nodeCheckJob struct {
+	Timing                  *nodeJobTiming            `json:"timing,omitempty"`
 	network                 string                    // Process-local epoch fingerprint; never replayed as proof.
 	Scope                   string                    `json:"scope,omitempty"`
 	ResultState             string                    `json:"result_state,omitempty"`
