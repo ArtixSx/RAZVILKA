@@ -253,7 +253,7 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
+		if resource.SyntheticBaseline != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {

@@ -385,19 +385,24 @@ func (e *nfqws2ActiveExecution) prepare(ctx context.Context) error {
 	return nil
 }
 
-func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
+func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) {
+	stage := "activate.issue"
+	defer func() { resultErr = nfqwsExecutionFailure(stage, resultErr) }()
 	seal, err := e.issueOriginalActivation(ctx)
 	if err != nil {
 		return err
 	}
+	stage = "activate.guards"
 	if e.committedGuard == nil || e.cleanupGuard == nil || e.cleanup == nil {
 		return preflightRefusalError{ErrNFQWSScopedOwner}
 	}
 	guards := nfqwsExecutionTransferGuards{committed: e.committedGuard, cleanup: e.cleanupGuard, originalCleanup: e.cleanup, control: e.material.control}
 	ctx = context.WithValue(ctx, nfqwsExecutionTransferGuardsKey{}, guards)
+	stage = "activate.consume"
 	if err := seal.consume(ctx, e); err != nil {
 		return preflightRefusalError{err}
 	}
+	stage = "activate.associate"
 	e.mu.Lock()
 	if e.started {
 		e.mu.Unlock()
@@ -447,6 +452,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	})
 	ctx = context.WithValue(ctx, nfqwsExecutionReadbackKey{}, readback)
 	ctx = context.WithValue(ctx, nfqwsExecutionActiveReadbackKey{}, activeReadback)
+	stage = "activate.resource"
 	r, err := AcquireNFQWSExecutionResource(ctx, e.spec.Clone())
 	if err != nil {
 		e.mu.Lock()
@@ -455,12 +461,14 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 		return err
 	}
 	e.resource = r
+	stage = "activate.configure"
 	if err := r.configureActive(ctx, e.material.command); err != nil {
 		e.mu.Lock()
 		e.preparationErr = err
 		e.mu.Unlock()
 		return err
 	}
+	stage = "activate.binding"
 	e.binding, err = NewTypedNFQWSScopedBinding(e.material.provider, &e.inventory, NFQWSScopedBinding{
 		Runner: e.runtimeFrozen.Runner, Tools: PolicyEffectTools{IPTables: e.inventory.reader.IPTables, IP6Tables: e.inventory.reader.IP6Tables},
 		ApplyGuard: r.ApplyGuard, CleanupGuard: r.CleanupGuard, VerifyLAN: e.verifyLAN, AdditionalReadback: e.additional,
@@ -509,6 +517,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	e.mu.Lock()
 	e.launchInvoked = true // Sticky even when the producer returns nil/unknown.
 	e.mu.Unlock()
+	stage = "activate.start"
 	p, startErr := e.material.adapter.startPreparedNFQWSProcess(ctx, e.panel, e.material.command, nil, admission)
 	e.mu.Lock()
 	if e.prepared == nil {
@@ -522,6 +531,7 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) error {
 	if startErr != nil || p == nil || p != original {
 		return errors.Join(ErrNFQWSScopedOwner, startErr)
 	}
+	stage = "activate.health"
 	return e.health(ctx)
 }
 
