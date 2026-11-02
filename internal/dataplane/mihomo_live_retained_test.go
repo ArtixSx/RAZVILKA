@@ -20,7 +20,11 @@ func mihomoLiveRecordModel(t *testing.T) (*Manager, *MihomoProbeAdapter, *mihomo
 	d.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}
 	digest, _ := d.FrozenDigest()
 	e := &Execution{PlanID: d.Plan.PlanID, Digest: d.Plan.Digest, State: "committed", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-	m := New(t.TempDir())
+	stateRoot := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(stateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := New(stateRoot)
 	a := &MihomoProbeAdapter{}
 	a.self = a
 	if err := m.Register(a); err != nil {
@@ -111,5 +115,29 @@ func TestMihomoLiveNewApplyCannotOverwriteOriginalLatest(t *testing.T) {
 	closing, statErr := os.Stat(path)
 	if err != nil || statErr != nil || !os.SameFile(info, closing) || !bytes.Equal(before, after) {
 		t.Fatal("refused Apply replaced original writer", err, statErr)
+	}
+}
+
+func TestMihomoLiveRetainedWireRoundTripStillRequiresOriginalInodes(t *testing.T) {
+	m, _, r, _ := mihomoLiveRecordModel(t)
+	if err := m.retainOriginalMihomo(r.scope, false); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(r.scope.execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Execution
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.checkRetainedMihomoRecord(decoded); err != nil {
+		t.Fatal("same original wire record rejected", err)
+	}
+	if err := r.records.root.WriteAtomic("latest-execution.json", raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.checkRetainedMihomoRecord(decoded); err == nil {
+		t.Fatal("equal-byte foreign inode adopted")
 	}
 }

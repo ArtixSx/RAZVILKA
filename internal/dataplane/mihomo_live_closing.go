@@ -75,7 +75,6 @@ func (c *mihomoLiveClosing) finish(ctx context.Context, cleanup *operationgate.E
 			return nil
 		},
 		r.closeNativeLeases,
-		r.closeCompiledFiles,
 		s.close,
 		r.source.Close,
 		func() error {
@@ -101,6 +100,8 @@ func (c *mihomoLiveClosing) finish(ctx context.Context, cleanup *operationgate.E
 		}
 		c.index++
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	r.adapter.mu.Lock()
 	defer r.adapter.mu.Unlock()
 	if c.pending && (r.adapter.livePending != r || r.adapter.liveActive != nil) || !c.pending && r.adapter.liveActive != r {
@@ -113,10 +114,8 @@ func (c *mihomoLiveClosing) finish(ctx context.Context, cleanup *operationgate.E
 	if r.adapter.liveActive == r {
 		r.adapter.liveActive = nil
 	}
-	s.mu.Lock()
 	s.retained, s.pending = false, false
 	s.mihomoRetryRollback = nil
-	s.mu.Unlock()
 	c.finished = true
 	if c.terminal != nil {
 		c.terminal.closed = true

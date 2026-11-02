@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/netip"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -112,7 +111,7 @@ func (d ExecutionMihomoLiveDefinition) validate() error {
 		found = found || address == d.Endpoint
 	}
 	service, err := FrozenProbeService(p.Routes[0])
-	if !found || err != nil || !reflect.DeepEqual(service, d.Service) || len(service.Domains) != 0 || !slices.Equal(sortedUnique(service.CIDRs), sortedUnique(p.Routes[0].CIDRs)) || sidecar.Kind != "sing-box" && sidecar.Kind != "hev" || !validPlanDigest(sidecar.BinarySHA256) || sidecar.BinarySize < 1 || sidecar.BinarySize > 256<<20 || !validPlanDigest(sidecar.ConfigSHA256) {
+	if !found || err != nil || nodeServiceProofDigest(service) != nodeServiceProofDigest(d.Service) || len(service.Domains) != 0 || !slices.Equal(sortedUnique(service.CIDRs), sortedUnique(p.Routes[0].CIDRs)) || sidecar.Kind != "sing-box" && sidecar.Kind != "hev" || !validPlanDigest(sidecar.BinarySHA256) || sidecar.BinarySize < 1 || sidecar.BinarySize > 256<<20 || !validPlanDigest(sidecar.ConfigSHA256) {
 		return ErrExecutionJournal
 	}
 	policy := d.Policy

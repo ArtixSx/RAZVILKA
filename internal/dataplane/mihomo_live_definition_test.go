@@ -1,6 +1,8 @@
 package dataplane
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/netip"
 	"strings"
 	"testing"
@@ -96,5 +98,35 @@ func TestMihomoLiveRecordsAreTypedIntentAndCannotAdoptActiveOwner(t *testing.T) 
 		if validateExecutionResources(e, false) == nil {
 			t.Fatal("mixed union accepted")
 		}
+	}
+}
+
+func TestMihomoLiveDefinitionStrictRoundTrip(t *testing.T) {
+	d := mihomoLiveDefinitionFixture(t)
+	data, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var after ExecutionMihomoLiveDefinition
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&after); err != nil {
+		t.Fatal("decode", err)
+	}
+	if err := after.validate(); err != nil {
+		t.Fatal("decoded definition invalid", err)
+	}
+}
+
+func TestMihomoLiveDefinitionCannotChangePersistedServiceProbe(t *testing.T) {
+	d := mihomoLiveDefinitionFixture(t)
+	data, _ := json.Marshal(d)
+	var after ExecutionMihomoLiveDefinition
+	if err := json.Unmarshal(data, &after); err != nil {
+		t.Fatal(err)
+	}
+	after.Service.ProbeURL = "https://9.9.9.9/"
+	if after.validate() == nil {
+		t.Fatal("different persisted service accepted")
 	}
 }

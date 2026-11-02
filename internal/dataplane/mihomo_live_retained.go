@@ -1,9 +1,10 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -91,7 +92,9 @@ func (m *Manager) checkRetainedMihomoRecord(record Execution) error {
 	s := r.scope
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.open || !s.retained || s.pending || s.mihomoLive != r || !reflect.DeepEqual(*s.execution, record) {
+	expected, expectedErr := json.Marshal(s.execution)
+	actual, actualErr := json.Marshal(record)
+	if !s.open || !s.retained || s.pending || s.mihomoLive != r || expectedErr != nil || actualErr != nil || !bytes.Equal(expected, actual) {
 		return errMihomoLiveMaterial
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
