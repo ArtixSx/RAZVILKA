@@ -39,6 +39,7 @@ type domainTCPGlobalSuccessor struct {
 	listener       atomic.Pointer[domainTCPPoolListenerWitness]
 	history        *updatecheck.ExecutionHistoryAdmission
 	failedCustody  atomic.Bool
+	cleanup        *domainTCPFailureCleanup // Serialized Manager cleanup; never a forward carrier.
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {
@@ -222,7 +223,16 @@ func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte
 	c.mu.Lock()
 	var admissionErr error
 	if retirement == nil {
-		admissionErr = c.admission.current(c, ctx)
+		if raw := ctx.Value(domainTCPFailureCleanupKey{}); raw != nil {
+			cleanup, ok := raw.(*domainTCPFailureCleanup)
+			if !ok || cleanup == nil || cleanup.cursor != c {
+				admissionErr = ErrPolicyAdditionUnknown
+			} else {
+				admissionErr = cleanup.local(ctx, cleanup.resource)
+			}
+		} else {
+			admissionErr = c.admission.current(c, ctx)
+		}
 	} else {
 		admissionErr = retirement.local(c, ctx)
 		if admissionErr == nil && (!bytes.Equal(data, retirement.image) || c.actionStarted || len(c.scope.execution.Resources) != 0 || c.scope.execution.State != "temporary-complete") {
@@ -308,7 +318,7 @@ func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte
 			return err
 		}
 	}
-	if retirement == nil {
+	if retirement == nil && ctx.Value(domainTCPFailureCleanupKey{}) == nil {
 		c.mu.Lock()
 		c.pending = false
 		c.mu.Unlock()

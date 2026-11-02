@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        initial: [none, transaction, global, never-issued, joined-failure]
+        initial: [none, transaction, global, never-issued, joined-failure, canceled-child]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -149,11 +149,13 @@ jobs:
           set -euo pipefail
           never_issued=0
           joined_failure=0
+          canceled_child=0
           case "$INITIAL_CUT" in
             none) initial_ack='' ;;
             transaction|global) initial_ack="$INITIAL_CUT" ;;
             never-issued) initial_ack=''; never_issued=1 ;;
             joined-failure) initial_ack=''; never_issued=1; joined_failure=1 ;;
+            canceled-child) initial_ack=''; canceled_child=1 ;;
             *) exit 2 ;;
           esac
           mkdir -p -m 700 artifacts/dns-coexistence
@@ -166,6 +168,7 @@ jobs:
             RAZVILKA_DOMAIN_INITIAL_ACK="$initial_ack" \
             RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR="$never_issued" \
             RAZVILKA_DOMAIN_JOINED_FAILURE="$joined_failure" \
+            RAZVILKA_DOMAIN_CANCELED_CHILD="$canceled_child" \
             RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-coexistence" \
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
       - name: Preserve actual two-operation diagnostics, including failures
