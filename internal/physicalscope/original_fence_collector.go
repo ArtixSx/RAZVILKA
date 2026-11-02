@@ -23,6 +23,7 @@ type fenceCollectorSource struct {
 	current func() error
 	receive func([]byte) (n int, empty bool, err error)
 	wait    func() error
+	wake    func() error // Optional nonblocking scheduling hint; never a read ACK.
 }
 
 type fenceCheckpoint struct {
@@ -46,12 +47,13 @@ type fenceCheckpointReply struct {
 // purpose (full, finite or IPv4 LAN structure); no event is coalesced. Packet
 // membership epochs are comparison metadata, never another scope authority.
 type originalFenceCollector struct {
-	source   fenceCollectorSource
-	checks   chan fenceCheckpoint
-	stop     chan struct{}
-	done     chan struct{}
-	stopOnce sync.Once
-	failure  error // Published by closing done; never read before that join.
+	source        fenceCollectorSource
+	checks        chan fenceCheckpoint
+	stop          chan struct{}
+	done          chan struct{}
+	stopOnce      sync.Once
+	failure       error // Published by closing done; never read before that join.
+	stopWakeError error // Published by stopOnce and read only after close returns.
 }
 
 var errFenceCollectorStopped = errors.New("original fence collector stopped")
@@ -59,7 +61,7 @@ var errFenceCollectorStopped = errors.New("original fence collector stopped")
 func newOriginalFenceCollector(source fenceCollectorSource) *originalFenceCollector {
 	r := &originalFenceCollector{
 		source: source,
-		checks: make(chan fenceCheckpoint),
+		checks: make(chan fenceCheckpoint, 1),
 		stop:   make(chan struct{}),
 		done:   make(chan struct{}),
 	}
@@ -135,6 +137,13 @@ func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceChec
 		return fail(r.completedError())
 	case r.checks <- req:
 	}
+	// Queue first, then wake: the original collector can never consume the
+	// hint before this exact request is visible. No helper receives netlink.
+	if r.source.wake != nil {
+		if err := r.source.wake(); err != nil {
+			return fail(err)
+		}
+	}
 	select {
 	case reply := <-req.reply:
 		return reply
@@ -148,7 +157,12 @@ func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceChec
 }
 
 func (r *originalFenceCollector) close() {
-	r.stopOnce.Do(func() { close(r.stop) })
+	r.stopOnce.Do(func() {
+		close(r.stop)
+		if r.source.wake != nil {
+			r.stopWakeError = r.source.wake()
+		}
+	})
 	<-r.done
 }
 

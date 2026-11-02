@@ -116,7 +116,10 @@ jobs:
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v
+            go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v
+      - name: Paired original collector scheduling benchmark (not end-to-end latency)
+        if: matrix.build-mode == 'production'
+        run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
       - name: Actual identity syscalls with strict pointer checks
         if: matrix.build-mode == 'production'
         run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v

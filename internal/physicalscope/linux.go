@@ -5,6 +5,7 @@ package physicalscope
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -210,6 +211,7 @@ type kernelFence struct {
 	// diagnostic metadata only, never proof that notification loss is impossible.
 	receiveBuffer int
 	reader        *originalFenceCollector
+	wake          *fenceWake
 	closeOnce     sync.Once
 	closeErr      error
 }
@@ -232,7 +234,11 @@ func openFence(ctx context.Context) (lifecycleFence, error) {
 		_ = unix.Close(fd)
 		return nil, at("fence.receive-buffer.read", err)
 	}
-	f := &kernelFence{fd: fd, pid: pid, cookie: cookie, receiveBuffer: actualBuffer}
+	wake, err := newFenceWake()
+	if err != nil {
+		return nil, errors.Join(err, unix.Close(fd))
+	}
+	f := &kernelFence{fd: fd, pid: pid, cookie: cookie, receiveBuffer: actualBuffer, wake: wake}
 	f.reader = newOriginalFenceCollector(fenceCollectorSource{
 		current: f.currentError,
 		receive: func(buf []byte) (int, bool, error) {
@@ -248,18 +254,8 @@ func openFence(ctx context.Context) (lifecycleFence, error) {
 			}
 			return n, false, nil
 		},
-		wait: func() error {
-			poll := []unix.PollFd{{Fd: int32(f.fd), Events: unix.POLLIN}}
-			if _, err := unix.Poll(poll, 20); err != nil && err != unix.EINTR {
-				return boundary("fence.poll.read", err)
-			}
-			if poll[0].Revents&(unix.POLLHUP|unix.POLLNVAL) != 0 {
-				return at("fence.poll.descriptor", nil)
-			}
-			// POLLERR wakes the sole reader, which must receive the actual
-			// socket error (including ENOBUFS); it is never muted or cleared.
-			return nil
-		},
+		wait: func() error { return wake.wait(f.fd) },
+		wake: wake.notify,
 	})
 	return f, nil
 }
@@ -289,12 +285,16 @@ func (f *kernelFence) currentError() error {
 }
 func (f *kernelFence) close() error {
 	f.closeOnce.Do(func() {
-		f.reader.close() // Cancel and join before touching the descriptor.
+		f.reader.close() // Cancel and join before touching either original descriptor.
+		f.closeErr = f.reader.stopWakeError
+		if f.wake != nil {
+			f.closeErr = errors.Join(f.closeErr, f.wake.close())
+		}
 		if err := f.currentError(); err != nil {
-			f.closeErr = boundary("fence.close.descriptor", err)
+			f.closeErr = errors.Join(f.closeErr, boundary("fence.close.descriptor", err))
 			return // Never close a replaced descriptor.
 		}
-		f.closeErr = unix.Close(f.fd)
+		f.closeErr = errors.Join(f.closeErr, unix.Close(f.fd))
 	})
 	return f.closeErr
 }
