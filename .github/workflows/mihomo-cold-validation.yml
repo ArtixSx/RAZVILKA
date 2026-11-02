@@ -1,7 +1,7 @@
 name: Mihomo offline cold recovery validation
 on:
   push:
-    branches: ['work/mihomo-cold-validation-20261102', 'work/bypass-integration-20261031']
+    branches: ['work/mihomo-cold-current-20261102', 'work/mihomo-cold-validation-20261102', 'work/bypass-integration-20261031']
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -43,7 +43,7 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             go test "${flags[@]}" ./internal/dataplane ./internal/components ./internal/operationgate ./internal/updatecheck ./cmd/razvilka \
-              -run 'TestDomainDNSDetached|TestExecutionHistory|TestMihomoLive|TestOriginalRecord|TestDomainStandbyConcurrent|TestDomainTCPStandby|TestControlEpoch.*Cleanup' -count=1 -v -timeout=10m
+              -run 'TestDomainDNSDetached|TestExecutionHistory|TestMihomoColdRuntime|TestMihomoLive|TestOriginalRecord|TestDomainStandbyConcurrent|TestDomainTCPStandby|TestControlEpoch.*Cleanup' -count=1 -v -timeout=10m
       - name: Original cold read source dependencies
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
       - name: Actual held source, bounded read ABI and revocation
