@@ -1,0 +1,9 @@
+mode,side,scenario,wall_s,tool_callbacks,callback_wall_s,metadata_attempts,version_ipv4_children,version_ipv6_children,ip_children,member_read_attempts,payload_returned_bytes,outcome,stage
+production,before,core Execute,9.851421675,382,4.639569673,2571,175,175,386,13260,1084270200,PASS,complete service flow and owned cleanup
+production,after,core Execute,8.789452066,382,4.095603930,2571,175,175,386,13260,1084270200,PASS,complete service flow and owned cleanup
+production,before,full HTTP,33.20,1172,13.349784540,7776,528,528,1164,71772,5868796440,PASS,three probes selection and manual source
+production,after,full HTTP,31.35,1172,12.602193217,7776,528,528,1164,71772,5868796440,PASS,three probes selection and manual source
+production,before,LAN HTTP and Apply,62.14,1697,19.355196512,12420,887,887,1689,,,FAIL,Apply inventory-consumer-close deadline
+production,after,LAN HTTP and Apply,63.89,,,,,,,,,FAIL,Apply inventory-consumer-close missing source
+race,before,core Execute,15.013212080,236,3.711851759,,,,,,,FAIL,capture deadline incomplete prefix
+race,after,core Execute,15.014476651,240,3.672374409,,,,,,,FAIL,capture deadline incomplete prefix
