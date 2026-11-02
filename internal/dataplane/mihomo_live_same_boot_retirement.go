@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -32,6 +31,7 @@ type mihomoSameBootRetirementCursor struct {
 	archive                                 *mihomoSameBootArchive
 	history                                 *updatecheck.ExecutionHistoryAdmission
 	plans                                   []*mihomoColdRecord
+	plansCaptured                           bool
 	intent                                  mihomoSameBootIntent
 	effectProxy                             *ProxyTunnelAdapter
 	sidecarDone, policyDone, forwardingDone bool
@@ -159,20 +159,10 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 		}
 	}
 	stage = "prepare-plans"
-	for _, name := range mihomoStoppedPlanNames {
-		r, err := openMihomoColdRecord(i.roots[0], name, nil)
-		if errors.Is(err, os.ErrNotExist) && name == "latest-committed-plan.json" {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		c.plans = append(c.plans, r)
-		c.intent.Plans[name] = bytes.Clone(r.data)
-	}
-	if err := validateMihomoColdPlans(i.definition.Plan, c.intent.Plans); err != nil {
+	if err := c.capturePlans(); err != nil {
 		return nil, err
 	}
+
 	stage = "prepare-terminal"
 	c.terminal, err = mihomoLiveRetirementTerminal(i.before, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -246,10 +236,8 @@ func (c *mihomoSameBootRetirementCursor) originalInputsCurrent() error {
 			return err
 		}
 	}
-	for _, r := range c.plans {
-		if err := r.current(); err != nil {
-			return err
-		}
+	if err := c.plansCurrent(); err != nil {
+		return err
 	}
 	return o.read.tools.Provider.WithCurrent(c.ctx, func(held context.Context, identity netidentity.Identity) error {
 		if identity != o.inputs.definition.NetworkIdentity {
