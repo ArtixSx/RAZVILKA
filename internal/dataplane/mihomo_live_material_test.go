@@ -24,6 +24,8 @@ func TestMihomoLiveIntentIsOneExplicitNodeAndIPv4ServiceOnly(t *testing.T) {
 		{"empty-cidrs", func(p *Plan) { p.Routes[0].CIDRs = nil }},
 		{"ipv6", func(p *Plan) { p.Routes[0].CIDRs = []string{"2606:4700::/32"} }},
 		{"default-route", func(p *Plan) { p.Routes[0].CIDRs = []string{"0.0.0.0/0"} }},
+		{"public-first-private-overlap", func(p *Plan) { p.Routes[0].CIDRs = []string{"8.0.0.0/6"} }},
+		{"private-extra-destination", func(p *Plan) { p.Routes[0].CIDRs = append(p.Routes[0].CIDRs, "192.168.0.0/16") }},
 		{"host-bits", func(p *Plan) { p.Routes[0].CIDRs = []string{"1.1.1.1/24"} }},
 		{"duplicate", func(p *Plan) { p.Routes[0].CIDRs = []string{"1.1.1.0/24", "1.1.1.0/24"} }},
 		{"auto-fallback", func(p *Plan) { p.Routes[0].Selected = "auto" }},

@@ -9,6 +9,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/backendprofile"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
+	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 var errMihomoLiveMaterial = errors.New("exact original Mihomo IPv4 node material is unavailable")
@@ -76,7 +77,7 @@ func mihomoLiveIntentNode(plan Plan) (string, error) {
 	seen := map[string]bool{}
 	for _, raw := range route.CIDRs {
 		prefix, err := netip.ParsePrefix(raw)
-		if err != nil || !prefix.Addr().Is4() || prefix != prefix.Masked() || prefix.String() != raw || prefix.Bits() == 0 || seen[raw] {
+		if err != nil || !prefix.Addr().Is4() || prefix != prefix.Masked() || prefix.String() != raw || prefix.Bits() == 0 || !publicfetch.PublicPrefix(prefix) || seen[raw] {
 			return "", errMihomoLiveMaterial
 		}
 		seen[raw] = true

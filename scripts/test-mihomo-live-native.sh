@@ -12,6 +12,9 @@ chmod 700 "$live_work"
 trap 'rm -rf -- "$live_work"' EXIT HUP INT TERM
 export TMPDIR="$live_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 export RAZVILKA_MIHOMO_LIVE_WORK="$live_work"
+cp "$live_repo/scripts/fixtures/mihomo-live-peer.py" "$live_work/physical-peer"
+chmod 500 "$live_work/physical-peer"
+export RAZVILKA_MIHOMO_LIVE_PEER="$live_work/physical-peer"
 python3 - <<'PY'
 import hashlib,json,os,pathlib,subprocess
 work=pathlib.Path(os.environ['RAZVILKA_MIHOMO_LIVE_WORK'])
