@@ -27,3 +27,22 @@ The [official binary](https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/ipt
 None changes `xshared.c`, the legacy version branch, or the legacy frontend initialization. `debian/rules` supplies ordinary build configuration (`--disable-libipq`, `--enable-devel`) and packaging of alternative command links. The [Ubuntu package record](https://packages.ubuntu.com/noble/iptables) identifies the same source release. This is a source/binary provenance check, not a reproducible-build claim.
 
 Required acceptance evidence remains separate: actual first/repeated alias Start counters, fresh IP Start counters, failed/partial batches, source/profile/environment drift, copied/late/revoked scopes, full closing-byte mutation refusal and unchanged physical cleanup. Native fixture classification remains explicit; no stock-router acceptance follows from this audit.
+
+## Actual paired native results, 2026-11-02 UTC
+
+[Focused run 41371321144](https://github.com/ArtixSx/RAZVILKA/actions/runs/41371321144) ran baseline `ffb7f5201f75f94eb0b1949ce9c076470cb7d639` and after `83ad781d0e1875b7ac308255541eedacd0e84c73` sequentially on the same worker in each build mode. Both include the same child-Start/metadata instrumentation, reviewed original directory-fsync publication fix `70ff2196` (the applicable three-file slice of main `9ce81c87`), Go 1.26.5, pinned actual native assets and unchanged 14s forward / 5s cleanup budgets. Production and race ran on different hardware and must not be compared to each other.
+
+| Same-worker scenario | Before | After | Outcome |
+| --- | --- | --- | --- |
+| Production core Execute | 10.536094406s | 10.293026737s | Both PASS complete flow and owned cleanup |
+| Production actual HTTP test | 38.46s | 38.23s | Both PASS three probes, selection/manual intent, original selected source |
+| Production actual LAN HTTP test | 43.68s | 42.46s | Both FAIL at review409, native-plan COMPILED_CAPABILITY_REFUSED after three probes/manual; no Apply |
+| Race core Execute | 15.010610019s | 15.010071027s | Both FAIL capture deadline; different incomplete prefixes; original unknown custody retained |
+
+Production job [125042203035](https://github.com/ArtixSx/RAZVILKA/actions/runs/41371321144/job/125042203035) used Intel Xeon Platinum 8573C. Its matched complete core performed 382 measured InventoryTools.Check callbacks on both sides: callback wall 5.021371352s → 4.592579319s, metadata traversal attempts 3120 → 2550, and actual successful child Starts `[iptables, ip6tables, IP]` `[386,386,386]` → `[196,196,386]`. Core wall improved 0.243067669s (2.307%) **in this single paired sample**. This does not establish a general speedup or completed LAN workflow. Callback wall includes only the existing InventoryTools.Check wrapper; whole Execute and CPU profiles include direct getters and other source checks as well.
+
+Race job [125042203013](https://github.com/ArtixSx/RAZVILKA/actions/runs/41371321144/job/125042203013) used AMD EPYC 9V45. Its before/after capture prefixes performed different amounts of work, so their counts or wall times do not support a speed claim. Both LAN physical-boundary tests passed; race LAN HTTP stopped at probe0 deadline with recovery required.
+
+All four actual static-fact tests passed in both modes: genuine fresh/nested/repeated/copy/expired/foreign source checks, actual IP Cmd.Start EAGAIN followed by fact retirement and full unfiltered original-scope batch recovery, partial IP-output mismatch refusing retention, and self/environment/profile/image-entry fingerprint refusal. The actual first/repeated batch Starts were `[1,1,1]` / `[0,0,1]`; a fresh source scope ran all three again. Existing five actual held-image/extension/lifecycle faults passed before and after in both modes; no data race was reported. Production late sole-Wait cleanup/retry and source/runtime/control/environment closing-revocation tests also passed on both sides. These are isolated native Linux results with modeled platform classification, not router acceptance.
+
+[results.csv](results.csv) preserves all measured rows and boundaries, including failures. [raw-excerpts.log](raw-excerpts.log) contains bounded original log lines; full raw job SHA256 values are `278d310a2efcef408d640e6894845dbca3e948e72751eb667dab5eb8c25222ba` (production) and `b856ee5bab356b2421136e3e2d4ddd581e4ec59ada2d74a58a3cf7977f0c069d` (race). Full focused jobs remain FAILURE because the LAN workflow and race consumer are incomplete.

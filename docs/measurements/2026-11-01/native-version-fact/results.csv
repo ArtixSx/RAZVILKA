@@ -1,0 +1,11 @@
+mode,side,scenario,wall_boundary,wall_s,inventory_check_calls,inventory_check_wall_s,metadata_attempts,iptables_child_starts,ip6tables_child_starts,IP_child_starts,outcome,stage
+production,before,core,Execute,10.536094406,382,5.021371352,3120,386,386,386,PASS,complete flow and cleanup
+production,after,core,Execute,10.293026737,382,4.592579319,2550,196,196,386,PASS,complete flow and cleanup
+production,before,HTTP,whole native test,38.46,1172,15.607721494,9420,1164,1164,1164,PASS,three probes; live preferred; frozen manual; selected-source bridge
+production,after,HTTP,whole native test,38.23,1172,14.457848654,7710,594,594,1164,PASS,three probes; live preferred; frozen manual; selected-source bridge
+production,before,LAN HTTP,whole native test,43.68,1172,16.253006815,9420,1164,1164,1164,FAIL,three probes/manual done; review409 native-plan COMPILED_CAPABILITY_REFUSED; Apply not reached
+production,after,LAN HTTP,whole native test,42.46,1172,14.813995634,7710,594,594,1164,FAIL,three probes/manual done; review409 native-plan COMPILED_CAPABILITY_REFUSED; Apply not reached
+race,before,core,Execute,15.010610019,136,3.859462589,1015,137,136,136,FAIL,capture deadline; incomplete prefix; retained unknown
+race,after,core,Execute,15.010071027,122,3.832816768,821,96,96,123,FAIL,capture deadline GETGEN_A; incomplete prefix; retained unknown
+race,before,LAN HTTP,whole native test,21.34,156,4.502976244,1018,137,137,137,FAIL,probe0 deadline recovery_required; Apply not reached
+race,after,LAN HTTP,whole native test,22.28,125,4.590054312,697,85,85,106,FAIL,probe0 deadline recovery_required; Apply not reached
