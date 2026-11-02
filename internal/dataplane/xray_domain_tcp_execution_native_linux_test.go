@@ -156,6 +156,22 @@ func TestXrayDomainTCPNativeHeldProcessLifecycle(t *testing.T) {
 	if !opening.same(observed.process) || observed.inode == 0 || observed.endpoint != endpoint {
 		t.Fatal("listener is not original child")
 	}
+	// An actual occupied loopback address cannot disappear behind a saved
+	// baseline or a merely present pool. Only a genuine successor witness may
+	// attribute it, and this explicit admission model has no such issuer.
+	scope.manager = New(t.TempDir())
+	if err := r.observeRetainedDomainListener(ctx); err == nil {
+		t.Fatal("unowned actual listener accepted without successor")
+	}
+	pool := &domainTCPStandbyPool{manager: scope.manager}
+	pool.self = pool
+	scope.manager.domainPool = pool
+	cursor := &domainTCPGlobalSuccessor{pool: pool}
+	cursor.self = cursor
+	pool.successor = cursor
+	if err := r.observeRetainedDomainListener(ctx); err == nil {
+		t.Fatal("empty cursor hid actual listener")
+	}
 	marker.open.Store(false)
 	if _, err := r.observeDomainListener(read); !errors.Is(err, ErrXrayDomainTCPOriginal) {
 		t.Fatal("closed interval accepted", err)

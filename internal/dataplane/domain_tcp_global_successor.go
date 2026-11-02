@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -34,6 +35,7 @@ type domainTCPGlobalSuccessor struct {
 	failure        error
 	initialFault   func(string) error // Error-only, configured on the SAME detached prior before construction.
 	continuation   *dnscontrol.SyntheticDNSLedgerContinuation
+	listener       atomic.Pointer[domainTCPPoolListenerWitness]
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {

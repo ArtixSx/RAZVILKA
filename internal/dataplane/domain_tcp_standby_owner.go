@@ -105,7 +105,7 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 	default:
 		return ErrXrayDomainTCPOriginal
 	}
-	if err := p.observeDomainListenerAbsent(ctx); err != nil {
+	if err := p.observeRetainedDomainListener(ctx); err != nil {
 		return err
 	}
 	session, err := o.binding.originalSyntheticSession(p.material.control)

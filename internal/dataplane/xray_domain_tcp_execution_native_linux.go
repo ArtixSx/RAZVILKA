@@ -29,6 +29,9 @@ func (r *XrayDomainTCPExecutionResource) startOriginalNative(ctx context.Context
 	defer cancel()
 	for {
 		if err := r.listenerCurrent(deadline); err == nil {
+			if err := r.retainPoolListenerWitness(deadline); err != nil {
+				return err
+			}
 			return r.phase("listener-ready", "prepared")
 		}
 		select {
