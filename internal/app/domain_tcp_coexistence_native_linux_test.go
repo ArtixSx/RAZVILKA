@@ -82,7 +82,7 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	deadline := time.Now().Add(30 * time.Second)
 	newAlias := observed.Synthetic.String()
 	if unpublished {
-		readinessCtx,cancelReadiness:=context.WithDeadline(ctx,deadline)
+		readinessCtx, cancelReadiness := context.WithDeadline(ctx, deadline)
 		defer cancelReadiness()
 		for {
 			if err := owner.CurrentSyntheticMapping(readinessCtx, mapping); err == nil {
