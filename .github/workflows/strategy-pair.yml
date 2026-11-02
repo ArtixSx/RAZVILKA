@@ -14,6 +14,8 @@ on:
       - 'internal/app/**'
       - 'internal/operationgate/**'
       - 'internal/startuptools/**'
+      - 'internal/physicalscope/**'
+      - 'internal/netidentity/**'
       - 'internal/nativecheckfixture/**'
       - 'scripts/test-managed-probe-native.sh'
       - 'scripts/test-managed-probe-lan-native.sh'

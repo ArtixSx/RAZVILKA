@@ -1,0 +1,87 @@
+{
+  "commit": "e87dd91850a41a9853760d9bea91cb6cbaef5116",
+  "full_push": {
+    "run": 41433805585,
+    "result": "success"
+  },
+  "full_pr": {
+    "run": 41433815756,
+    "result": "success"
+  },
+  "cold": {
+    "run": 41433805494,
+    "result": "success"
+  },
+  "health_history": {
+    "run": 41433805480,
+    "result": "success"
+  },
+  "focused": {
+    "run": 41433805483,
+    "result": "failure",
+    "passed": [
+      "strategy-pair (including actual restored panel)",
+      "wireguard-native",
+      "node-native-performance"
+    ],
+    "failed": [
+      "scoped-native selected DNS service",
+      "managed-probe-native production",
+      "managed-probe-native race"
+    ]
+  },
+  "warm": {
+    "run": 41433805451,
+    "result": "failure",
+    "postcas": {
+      "job": 125238606904,
+      "result": "success",
+      "duration_s": 76.98,
+      "status": 503,
+      "desired_exact_restored": true,
+      "state": "rolled-back",
+      "rollback_verified": true,
+      "original_pending": false
+    },
+    "lifecycle": {
+      "job": 125238606599,
+      "result": "failure",
+      "remaining": "original Check/Stop writer9 implementation"
+    }
+  },
+  "dns": {
+    "run": 41433805399,
+    "result": "failure",
+    "passed": [
+      "baseline",
+      "clean",
+      "alias0",
+      "alias1",
+      "global",
+      "foreign-history",
+      "registry"
+    ],
+    "registry_job": 125240228373,
+    "registry_duration_s": 44.86,
+    "failed": [
+      "generation transaction",
+      "generation none",
+      "generation global",
+      "generation never-issued",
+      "generation joined-failure"
+    ],
+    "diagnostic_windows_s": {
+      "publication": 30,
+      "client": 10
+    },
+    "production_windows_s": {
+      "publication": 12,
+      "client": 4
+    },
+    "selected_service_acceptance": false
+  },
+  "raw_logs": {
+    "dns-registry.log": "a3c8fe8a5530b4cbea91ce4bbb054c5c3c2dd64e7ce1a281bb30fe00fdd52c48",
+    "postcas.log": "83d4263c9d2630725dd80ccf3b56e43bc8b2baec5a226e8e0925d39ec9dbccc6"
+  }
+}
