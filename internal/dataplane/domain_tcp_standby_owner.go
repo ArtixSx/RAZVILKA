@@ -67,11 +67,17 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 	p, baseline, capture, kernel := o.process, o.baseline, o.captureResource, o.kernel
 	ready, closed := o.standbyReady, o.closed
 	detached := o.dnsDetachment
+	unpublished := o.unpublishedPreparation
 	o.mu.Unlock()
-	if !ready || !closed || p == nil || p.self != p || p.scope != o.binding.scope || p.material == nil || baseline == nil || baseline.self != baseline || capture == nil || capture.self != capture || capture.process != p || capture.mapping != baseline.mapping || kernel == nil || kernel.flow.Load() != nil {
+	if !ready || !closed || p == nil || p.self != p || p.scope != o.binding.scope || p.material == nil || baseline == nil || baseline.self != baseline || capture == nil || capture.self != capture || capture.process != p || capture.mapping != baseline.mapping || kernel == nil && unpublished == nil || kernel != nil && (unpublished != nil || kernel.flow.Load() != nil) {
 		return ErrDomainPolicyTCPConsumer
 	}
 	ctx = p.scope.contextWith(ctx)
+	if unpublished != nil {
+		if err := unpublished.current(ctx, o); err != nil {
+			return err
+		}
+	}
 	if transferring {
 		if _, err := p.originalContext(ctx, true); err != nil {
 			return err
@@ -125,7 +131,7 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 	s.mu.Lock()
 	standbyFound := false
 	for _, r := range s.execution.Resources {
-		phase := r.Phase == "capture-ready" || r.Phase == "standby-retained"
+		phase := r.Phase == "capture-ready" || r.Phase == "standby-retained" || unpublished != nil && r.Phase == "baseline-prepared"
 		if r.Phase == "standby-detached" {
 			phase = detached != nil && r.DomainDNSDetached != nil && reflect.DeepEqual(*r.DomainDNSDetached, detached.definition) && r.DomainDNSDetached.validate(s.execution.PlanID, r.SyntheticBaseline) == nil
 		}
@@ -176,7 +182,13 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 			return errors.Join(ErrDomainPolicyTCPConsumer, err)
 		}
 	}
-	return receipt.current()
+	if err := receipt.current(); err != nil {
+		return err
+	}
+	if unpublished != nil {
+		return unpublished.current(ctx, o)
+	}
+	return nil
 }
 
 // Read-only comparison after the actual listener and handlers joined. The

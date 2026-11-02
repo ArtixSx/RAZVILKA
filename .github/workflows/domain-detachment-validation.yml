@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        initial: [none, transaction, global, never-issued, joined-failure, canceled-child, canceled-ready, canceled-published, canceled-process-ack, canceled-capture-ack, canceled-standby-ack, canceled-alias-ack, canceled-capture-transaction-ack, canceled-standby-transaction-ack]
+        initial: [none, transaction, global, never-issued, joined-failure, canceled-child, canceled-ready, canceled-published, canceled-process-ack, canceled-capture-ack, canceled-standby-ack, canceled-alias-ack, canceled-capture-transaction-ack, canceled-standby-transaction-ack, preparation, preparation-capture-transaction-ack, preparation-standby-transaction-ack]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -153,11 +153,14 @@ jobs:
           canceled_ready=0
           failure_ack=''
           canceled_published=0
+          preparation_cut=0
           case "$INITIAL_CUT" in
             none) initial_ack='' ;;
             transaction|global) initial_ack="$INITIAL_CUT" ;;
             never-issued) initial_ack=''; never_issued=1 ;;
             joined-failure) initial_ack=''; never_issued=1; joined_failure=1 ;;
+            preparation) initial_ack=''; preparation_cut=1 ;;
+            preparation-capture-transaction-ack|preparation-standby-transaction-ack) initial_ack=''; preparation_cut=1; failure_ack="${INITIAL_CUT#preparation-}"; failure_ack="${failure_ack%-ack}" ;;
             canceled-child) initial_ack=''; canceled_child=1 ;;
             canceled-ready) initial_ack=''; canceled_child=1; canceled_ready=1 ;;
             canceled-published) initial_ack=''; canceled_child=1; canceled_ready=1; canceled_published=1 ;;
@@ -178,6 +181,7 @@ jobs:
             RAZVILKA_DOMAIN_CANCELED_READY="$canceled_ready" \
             RAZVILKA_DOMAIN_CANCELED_PUBLISHED="$canceled_published" \
             RAZVILKA_DOMAIN_FAILURE_ACK="$failure_ack" \
+            RAZVILKA_DOMAIN_PREPARATION_CUT="$preparation_cut" \
             RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-coexistence" \
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
       - name: Preserve actual two-operation diagnostics, including failures

@@ -49,8 +49,9 @@ func (o *DomainTCPOriginalScope) DetachPublishedStandby(ctx context.Context, cle
 	}
 	o.mu.Lock()
 	owner, existing, retiring := o.standbyOwner, o.dnsDetachment, o.standbyRetirement
+	unpublished := o.unpublishedPreparation
 	o.mu.Unlock()
-	if owner == nil || owner.self != owner || owner.original != o || owner.process == nil || owner.process.scope == nil || owner.process.material == nil || owner.process.material.control == nil || owner.process.material.binding == nil || owner.process.material.binding.adapter == nil || retiring != nil {
+	if owner == nil || owner.self != owner || owner.original != o || owner.process == nil || owner.process.scope == nil || owner.process.material == nil || owner.process.material.control == nil || owner.process.material.binding == nil || owner.process.material.binding.adapter == nil || retiring != nil || unpublished != nil {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
 	p, s := owner.process, owner.process.scope

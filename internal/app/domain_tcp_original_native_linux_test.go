@@ -90,6 +90,14 @@ func TestDomainTCPOriginalNativeCanceledChildCleanup(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeFailedPreparationRetirement(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_PREPARATION_CUT", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func TestDomainTCPOriginalNativeCanceledReadyRetirement(t *testing.T) {
 	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
 	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
@@ -117,13 +125,17 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
 	canceledChild := os.Getenv("RAZVILKA_DOMAIN_CANCELED_CHILD") == "1"
+	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
+	if preparationCut && (!coexist || canceledChild || joinedFailure || neverIssuedSuccessor || initialCut != "") {
+		t.Fatal("failed preparation requires its separate original successor case")
+	}
 	canceledReady := os.Getenv("RAZVILKA_DOMAIN_CANCELED_READY") == "1"
 	canceledPublished := os.Getenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED") == "1"
 	if canceledPublished && !canceledReady {
 		t.Fatal("published cancellation requires its ready case")
 	}
 	failedACK := os.Getenv("RAZVILKA_DOMAIN_FAILURE_ACK")
-	if failedACK != "" && (!canceledReady || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
+	if failedACK != "" && (!canceledReady && !preparationCut || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
 		t.Fatal("invalid failed generation ACK cut")
 	}
 	if canceledReady && !canceledChild {
@@ -923,12 +935,16 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				}
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
-			if canceledChild {
-				if !cancelRequested {
+			if canceledChild || preparationCut {
+				if !preparationCut && !cancelRequested {
 					t.Fatal("actual original child/readiness cancellation witness was not reached", err)
 				}
 				var failure *dataplane.DomainTCPCleanupFailure
-				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
+				expected := error(context.Canceled)
+				if preparationCut {
+					expected = dataplane.ErrNativeDomainPreparationCut
+				}
+				if !errors.Is(err, expected) || !errors.As(err, &failure) {
 					t.Fatal("original cancellation/custody capsule lost", err)
 				}
 				if failedACK != "" {
@@ -953,7 +969,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
 					t.Fatal("original child survived cleanup join")
 				}
-				if canceledReady {
+				if canceledReady || preparationCut {
 					retireErr := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure)
 					if failedACK != "" && failedACK != "process" {
 						if !errors.Is(retireErr, dataplane.ErrNativeDomainFailureACK) {
@@ -994,6 +1010,8 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 					}
 					if canceledPublished {
 						t.Log("actual published successor canceled; source/handler/native joins and capture Remove retain original restorative standby; actual cached late-SYN tuple preserved, published alias removal refused")
+					} else if preparationCut {
+						t.Log("actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved")
 					} else {
 						t.Log("actual ready but never-issued successor canceled; same original source/handler/native joins, capture Remove and restorative handoff, actual zero-issued baseline Remove→keeper and repeat ACK; old published alias remains original baseline")
 					}

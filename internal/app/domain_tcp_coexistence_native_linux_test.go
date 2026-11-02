@@ -86,6 +86,16 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	if err != nil {
 		return fmt.Errorf("successor original COMMON issuer: %w", err)
 	}
+	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
+	if preparationCut {
+		if captured == nil {
+			return errors.New("failed preparation requires original owner custody")
+		}
+		*captured = owner
+		if err := dataplane.ConfigureNativeDomainPreparationCut(ctx, owner); err != nil {
+			return err
+		}
+	}
 	stopMetrics := dataplane.StartDomainTCPNativeMeasurement()
 	defer func() {
 		t.Logf("successor original Run/join observations %+v; overlapping durations, not default12 performance", stopMetrics())
@@ -107,6 +117,17 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			}
 		}
 	}()
+	if preparationCut {
+		// Construction only: existing original operation deadline, no DNS
+		// polling/send, Ready claim, or actor deadline extension.
+		select {
+		case err := <-done:
+			joined = true
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	deadline := time.Now().Add(30 * time.Second)
 	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
 		if captured != nil {
