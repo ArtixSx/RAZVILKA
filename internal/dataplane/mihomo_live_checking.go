@@ -65,7 +65,21 @@ func (r *mihomoLiveResource) beginHealthCheck(ctx context.Context) (*mihomoLiveH
 	mihomoLiveHealthCheckingFixtureFaultLocked(r, c)
 	s.execution.State, s.execution.FinishedAt = mihomoActiveCheckingState, ""
 	s.execution.MihomoLiveHealthOperation = &h
-	return c, c.publishLocked()
+	return c, c.initialPublicationLocked()
+}
+
+// Scope.mu is held. The caller cannot yet install its returned cursor/defer:
+// retain custody here on BOTH an ordinary failed ACK and a publication panic.
+func (c *mihomoLiveHealthCheck) initialPublicationLocked() (err error) {
+	returned := false
+	defer func() {
+		if !returned || err != nil {
+			c.failLocked()
+		}
+	}()
+	err = c.publishLocked()
+	returned = true
+	return err
 }
 
 // Caller holds scope.mu. A publication failure retains this exact cursor and
@@ -91,6 +105,14 @@ func (c *mihomoLiveHealthCheck) fail() {
 	s := c.owner.scope
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	c.failLocked()
+}
+
+func (c *mihomoLiveHealthCheck) failLocked() {
+	if c == nil || c.self != c || c.owner == nil {
+		return
+	}
+	s := c.owner.scope
 	if c.owner.healthCheck == c {
 		c.open, c.failed, s.pending = false, true, true
 		s.execution.State, s.execution.FinishedAt = mihomoActiveCheckingState, ""
