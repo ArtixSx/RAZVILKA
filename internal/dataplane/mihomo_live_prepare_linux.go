@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -19,6 +20,12 @@ import (
 )
 
 func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root string) (result *mihomoLiveResource, resultErr error) {
+	stage := "original preparation binding"
+	defer func() {
+		if resultErr != nil {
+			resultErr = fmt.Errorf("mihomo preparation %s: %w", stage, resultErr)
+		}
+	}()
 	a.mu.Lock()
 	options, proxy := a.liveOptions, a.liveProxy
 	a.mu.Unlock()
@@ -43,9 +50,11 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 			resultErr = errors.Join(resultErr, a.closeLivePreparation(preparation))
 		}
 	}()
+	stage = "execution reader admission"
 	if err := options.History.CheckWrite(ctx, 6); err != nil {
 		return nil, err
 	}
+	stage = "original control reviews"
 	control, err := options.Gate.ReviewControlEpoch(ctx, options.ControlRoot)
 	preparation.control = control
 	if err != nil {
@@ -61,14 +70,17 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 		return nil, err
 	}
 	var source *components.MihomoLiveSource
+	stage = "fresh WAN profile"
 	profileID, err := options.FreshProfile(ctx)
 	if err != nil || profileID != plan.NetworkProfileID {
 		return nil, errors.Join(ErrNetworkChanged, err)
 	}
+	stage = "original selected node source"
 	node, err := ReviewNodeDefaultSource(ctx, options.Nodes, "mihomo:"+id)
 	if err != nil {
 		return nil, err
 	}
+	stage = "frozen service and resource exclusions"
 	service, err := FrozenProbeService(plan.Routes[0])
 	if err != nil {
 		return nil, err
@@ -76,6 +88,7 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	if err := options.ResourceGuard(ctx, plan, "", netip.Addr{}); err != nil {
 		return nil, err
 	}
+	stage = "selected VLESS TCP TLS content"
 	var host string
 	err = node.WithMaterial(ctx, func(material []byte) error {
 		profile, err := providerprofile.VLESSProfileFromJSON(material)
@@ -88,6 +101,7 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	if err != nil {
 		return nil, err
 	}
+	stage = "complete endpoint resolution and exclusions"
 	addresses, err := netresolve.LookupNetIP(ctx, "ip", host)
 	if err != nil || len(addresses) == 0 || len(addresses) > 64 {
 		return nil, errors.Join(errMihomoLiveMaterial, err)
@@ -102,11 +116,13 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	}
 	sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(addresses[j]) < 0 })
 	addresses = slices.Compact(addresses)
+	stage = "original component live source"
 	source, err = a.components.OpenMihomoLiveSource(ctx)
 	preparation.source = source
 	if err != nil {
 		return nil, err
 	}
+	stage = "held component profile review"
 	profile, err := reviewMihomoLiveProfile(ctx, node, source, addresses[0], proxy.SOCKSPort)
 	if err != nil {
 		return nil, err
@@ -115,10 +131,12 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	if err != nil {
 		return nil, err
 	}
+	stage = "fresh native network identity"
 	identity, err := a.provider.Observe(ctx)
 	if err != nil {
 		return nil, err
 	}
+	stage = "original sidecar profile and installed image"
 	var sidecarConfig []byte
 	if proxy.effectiveSidecar() == "hev" {
 		if proxy.hevInstalledCheck == nil {
@@ -146,6 +164,7 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	if err := errors.Join(statErr, hashErr, closeErr); err != nil {
 		return nil, err
 	}
+	stage = "frozen policy and forwarding compilation"
 	prefixes, rules, err := resolvePolicyRules(ctx, plan, "mihomo", nil)
 	if err != nil {
 		return nil, err
@@ -160,9 +179,11 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 		return nil, err
 	}
 	definition := ExecutionMihomoLiveDefinition{Schema: 1, Plan: cloneExecutionResourcePlan(plan), Source: source.Reference(), Node: node.Reference(), Profile: profileRef, Service: service, NetworkProfile: profileID, NetworkIdentity: identity, EndpointHost: host, Endpoint: addresses[0], EndpointAddresses: slices.Clone(addresses), Sidecar: MihomoLiveSidecarReference{Kind: proxy.effectiveSidecar(), BinarySHA256: hash, BinarySize: info.Size(), ConfigSHA256: nodeDefaultSourceMaterialHash(sidecarConfig)}, Policy: state}
+	stage = "closed live definition validation"
 	if err := definition.validate(); err != nil {
 		return nil, err
 	}
+	stage = "original two-writer live resource issue"
 	r, err := a.issueLive(ctx, source, node, profile, options.History, control, childControl, definition)
 	if r != nil {
 		r.mu.Lock()

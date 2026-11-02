@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -39,7 +40,10 @@ func (a *MihomoProbeAdapter) liveSnapshot(ctx context.Context, plan Plan, root s
 	if err != nil {
 		return err
 	}
-	return r.currentBeforeStart(ctx)
+	if err := r.currentBeforeStart(ctx); err != nil {
+		return fmt.Errorf("mihomo snapshot closing original source: %w", err)
+	}
+	return nil
 }
 func (r *mihomoLiveResource) sidecarImage() ([]byte, error) {
 	var data []byte
