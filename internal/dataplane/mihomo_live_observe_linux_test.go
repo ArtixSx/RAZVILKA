@@ -160,6 +160,7 @@ func TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease(t *testing.T) {
 	if first.pid != child.PID() || first.start == "" || first.listener == 0 {
 		t.Fatal("missing original kernel association")
 	}
+	testMihomoLiveBackendReadViewBindings(t, held, child, source, m, provider)
 	release()
 	after, err := observeMihomoLiveProcess(ctx, child, provider, identity)
 	if err != nil || !first.same(after) {

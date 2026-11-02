@@ -69,39 +69,50 @@ func observeOriginalMihomoProcess(ctx context.Context, child originalMihomoObser
 		return result, errMihomoProbeObservation
 	}
 	err = provider.WithCurrent(ctx, func(held context.Context, current netidentity.Identity) error {
-		if current != expected || child.Current(held) != nil {
+		if current != expected {
 			return errMihomoProbeObservation
 		}
-		proc, err := openXraySelectedTCPProc(held, child.PID())
-		if err != nil {
-			return err
-		}
-		defer proc.close()
-		before, err := readMihomoProbeProcess(held, proc, child, ref, current)
-		if err != nil {
-			return err
-		}
-		endpoint := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(ref.SOCKSPort))
-		inode, err := proc.domainListener(held, endpoint)
-		if err != nil || proc.socketFD(held, inode) != nil {
-			return errMihomoProbeObservation
-		}
-		after, err := readMihomoProbeProcess(held, proc, child, ref, current)
-		if err != nil || !before.same(after) {
-			return errMihomoProbeObservation
-		}
-		closing, err := proc.domainListener(held, endpoint)
-		if err != nil || inode != closing || proc.socketFD(held, closing) != nil || proc.current(held) != nil || child.Current(held) != nil {
-			return errMihomoProbeObservation
-		}
-		after.listener = closing
-		result = after
-		return nil
+		var err error
+		result, err = observeOriginalMihomoProcessInNetwork(held, child, ref, current)
+		return err
 	})
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}
 	return result, nil
+}
+
+// Only the local proc/FD/socket comparison body. Its callers bracket it with
+// the original provider outside the child read frame; no provider command,
+// resolver, runner, Dial or Start executes inside this body.
+func observeOriginalMihomoProcessInNetwork(ctx context.Context, child originalMihomoObservedChild, ref components.MihomoProbeReference, current netidentity.Identity) (mihomoProbeObservation, error) {
+	if xraySelectedTCPFinite(ctx) != nil || !originalMihomoObservedOwner(child) || current.Validate() != nil || ref.SOCKSPort < 1024 || ref.SOCKSPort > 65535 || ref.SOCKSPort == 8787 || child.Current(ctx) != nil {
+		return mihomoProbeObservation{}, errMihomoProbeObservation
+	}
+	proc, err := openXraySelectedTCPProc(ctx, child.PID())
+	if err != nil {
+		return mihomoProbeObservation{}, err
+	}
+	defer proc.close()
+	before, err := readMihomoProbeProcess(ctx, proc, child, ref, current)
+	if err != nil {
+		return mihomoProbeObservation{}, err
+	}
+	endpoint := netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(ref.SOCKSPort))
+	inode, err := proc.domainListener(ctx, endpoint)
+	if err != nil || proc.socketFD(ctx, inode) != nil {
+		return mihomoProbeObservation{}, errMihomoProbeObservation
+	}
+	after, err := readMihomoProbeProcess(ctx, proc, child, ref, current)
+	if err != nil || !before.same(after) {
+		return mihomoProbeObservation{}, errMihomoProbeObservation
+	}
+	closing, err := proc.domainListener(ctx, endpoint)
+	if err != nil || inode != closing || proc.socketFD(ctx, closing) != nil || proc.current(ctx) != nil || child.Current(ctx) != nil {
+		return mihomoProbeObservation{}, errMihomoProbeObservation
+	}
+	after.listener = closing
+	return after, nil
 }
 
 func readMihomoProbeProcess(ctx context.Context, proc *xraySelectedTCPProc, child originalMihomoObservedChild, ref components.MihomoProbeReference, network netidentity.Identity) (mihomoProbeObservation, error) {

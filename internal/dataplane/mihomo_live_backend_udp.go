@@ -11,15 +11,20 @@ import (
 // Private comparison role, issued only by the original running child. This is
 // neither a serialized socket exception nor a callback supplied by a caller.
 type mihomoLiveSOCKSUDPListener struct {
-	self    *mihomoLiveSOCKSUDPListener
-	owner   *mihomoLiveResource
-	child   *components.MihomoLiveProcess
-	source  *components.MihomoLiveSource
-	profile components.MihomoLiveProfileReference
-	pid     int
+	self     *mihomoLiveSOCKSUDPListener
+	owner    *mihomoLiveResource
+	child    *components.MihomoLiveProcess
+	source   *components.MihomoLiveSource
+	profile  components.MihomoLiveProfileReference
+	pid      int
+	readView *components.MihomoLiveObservation
 }
 
 func (r *mihomoLiveResource) reviewSOCKSUDPListener(ctx context.Context) (*mihomoLiveSOCKSUDPListener, error) {
+	return r.reviewSOCKSUDPListenerRead(ctx, nil)
+}
+
+func (r *mihomoLiveResource) reviewSOCKSUDPListenerRead(ctx context.Context, view *components.MihomoLiveObservation) (*mihomoLiveSOCKSUDPListener, error) {
 	if r == nil || r.self != r {
 		return nil, ErrNodeTransitUnavailable
 	}
@@ -29,7 +34,7 @@ func (r *mihomoLiveResource) reviewSOCKSUDPListener(ctx context.Context) (*mihom
 	if child == nil || source == nil {
 		return nil, ErrNodeTransitUnavailable
 	}
-	role := &mihomoLiveSOCKSUDPListener{owner: r, child: child, source: source, profile: r.definition.Profile, pid: child.PID()}
+	role := &mihomoLiveSOCKSUDPListener{owner: r, child: child, source: source, profile: r.definition.Profile, pid: child.PID(), readView: view}
 	role.self = role
 	if err := role.current(ctx, role.pid); err != nil {
 		return nil, err
@@ -47,6 +52,16 @@ func (role *mihomoLiveSOCKSUDPListener) current(ctx context.Context, pid int) er
 	r := role.owner
 	if !role.source.OwnedBy(r.adapter.components) || role.source.Reference() != r.definition.Source || role.source.Reference().Version != components.ReviewedMihomoVersion || role.profile != r.definition.Profile || role.profile.SOCKSPort < 1024 || role.profile.SOCKSPort > 65535 {
 		return ErrNodeTransitUnavailable
+	}
+	if role.readView != nil {
+		if !role.readView.BoundTo(role.child, role.source) {
+			return ErrNodeTransitUnavailable
+		}
+		profile, err := role.readView.ProfileReference(ctx)
+		if err != nil || profile != role.profile {
+			return errors.Join(ErrNodeTransitUnavailable, err)
+		}
+		return ctx.Err()
 	}
 	profile, err := role.child.ProfileReference(ctx)
 	if err != nil || profile != role.profile {

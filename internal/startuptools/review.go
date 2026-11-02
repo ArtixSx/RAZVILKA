@@ -59,13 +59,18 @@ func (r *heldReview) close() error {
 	return result
 }
 
+// Scratch storage only: no bytes or hashes are reused as observations. Each
+// call owns its buffer until every ReadAt and synchronous hash Write returns.
+var imageHashBuffers = sync.Pool{New: func() any { return new([32 << 10]byte) }}
+
 func hashImage(ctx context.Context, file *os.File, size int64) ([32]byte, error) {
 	var result [32]byte
 	if ctx == nil || file == nil || size <= 0 || size > maxImageBytes {
 		return result, at("HASH_INPUT", nil)
 	}
 	h := sha256.New()
-	buffer := make([]byte, 32<<10)
+	buffer := imageHashBuffers.Get().(*[32 << 10]byte)
+	defer imageHashBuffers.Put(buffer)
 	for off := int64(0); off < size; {
 		if err := ctx.Err(); err != nil {
 			return result, at("HASH_CONTEXT", err)

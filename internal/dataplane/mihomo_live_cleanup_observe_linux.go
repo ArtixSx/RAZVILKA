@@ -12,10 +12,18 @@ import (
 
 func observeMihomoLiveCleanupProcess(ctx context.Context, child *components.MihomoLiveProcess, cleanup *operationgate.ExclusiveCleanupReview, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
 	var result mihomoProbeObservation
-	err := child.WithCleanupReadObservation(ctx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
-		var err error
-		result, err = observeMihomoLiveCleanupObservation(held, view, provider, expected)
-		return err
+	if provider == nil {
+		return result, errMihomoProbeObservation
+	}
+	err := provider.WithCurrent(ctx, func(networkCtx context.Context, current netidentity.Identity) error {
+		if current != expected {
+			return errMihomoProbeObservation
+		}
+		return child.WithCleanupReadObservation(networkCtx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
+			var err error
+			result, err = observeMihomoLiveCleanupObservation(held, view, expected)
+			return err
+		})
 	})
 	if err != nil {
 		return mihomoProbeObservation{}, err
@@ -23,12 +31,12 @@ func observeMihomoLiveCleanupProcess(ctx context.Context, child *components.Miho
 	return result, nil
 }
 
-func observeMihomoLiveCleanupObservation(ctx context.Context, view *components.MihomoLiveCleanupObservation, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
+func observeMihomoLiveCleanupObservation(ctx context.Context, view *components.MihomoLiveCleanupObservation, expected netidentity.Identity) (mihomoProbeObservation, error) {
 	profile, err := view.ProfileReference(ctx)
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}
-	result, err := observeOriginalMihomoProcess(ctx, view, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, provider, expected)
+	result, err := observeOriginalMihomoProcessInNetwork(ctx, view, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, expected)
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}

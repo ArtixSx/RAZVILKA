@@ -11,15 +11,17 @@ import (
 
 // MihomoLiveObservation exists only inside one synchronous read callback.
 // It cannot start, stop, transfer or expose the retained child. Full source
-// and child byte comparisons bookend the callback; every nested Current still
-// checks the original native child, control, held executable and sealed files.
+// and child byte comparisons bookend the callback; every nested Current checks
+// the original native child, control, held executable fingerprint and sealed
+// profile. No source/native byte observation survives this pure read callback.
 type MihomoLiveObservation struct {
-	mu     sync.Mutex
-	self   *MihomoLiveObservation
-	child  *MihomoLiveProcess
-	source *MihomoLiveSource
-	ctx    context.Context
-	open   bool
+	mu          sync.Mutex
+	self        *MihomoLiveObservation
+	child       *MihomoLiveProcess
+	source      *MihomoLiveSource
+	ctx         context.Context
+	open        bool
+	fingerprint *mihomoLiveReadFingerprint
 }
 
 type mihomoLiveObservationKey struct{}
@@ -28,10 +30,11 @@ func (p *MihomoLiveProcess) WithReadObservation(ctx context.Context, read func(c
 	if read == nil {
 		return ErrMihomoLiveOwner
 	}
-	if err := p.Current(ctx); err != nil {
+	fingerprint, err := p.openReadFingerprint(ctx, nil)
+	if err != nil {
 		return err
 	}
-	v := &MihomoLiveObservation{child: p, source: p.source, open: true}
+	v := &MihomoLiveObservation{child: p, source: p.source, open: true, fingerprint: fingerprint}
 	v.self = v
 	v.ctx = context.WithValue(ctx, mihomoLiveObservationKey{}, v)
 	defer func() {
@@ -40,7 +43,7 @@ func (p *MihomoLiveProcess) WithReadObservation(ctx context.Context, read func(c
 		v.mu.Lock()
 		v.open = false
 		v.mu.Unlock()
-		result = errors.Join(result, p.Current(ctx))
+		result = errors.Join(result, p.closeReadFingerprint(ctx, nil, fingerprint))
 	}()
 	return read(v.ctx, v)
 }
@@ -90,10 +93,10 @@ func (v *MihomoLiveObservation) current(ctx context.Context, cleanup *operationg
 	if !valid {
 		return ErrMihomoLiveOwner
 	}
-	if cleanup != nil {
-		return p.native.currentForCleanup(ctx, cleanup)
+	if v.fingerprint == nil || v.fingerprint.child != p || v.fingerprint.native != p.native {
+		return ErrMihomoLiveOwner
 	}
-	return p.native.current(ctx)
+	return p.native.currentRead(ctx, cleanup, v.fingerprint)
 }
 
 // BoundTo compares only the original handles; it supplies no fresh verdict.

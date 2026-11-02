@@ -130,6 +130,17 @@ func (s *MihomoLiveSource) Current(ctx context.Context) error {
 	return s.currentLocked(ctx)
 }
 func (s *MihomoLiveSource) currentLocked(ctx context.Context) error {
+	if err := s.currentPrefixLocked(ctx); err != nil {
+		return err
+	}
+	actual, err := s.session.files["a_binary"].Read(ctx)
+	if err != nil || !sameMihomoImage(actual, s.image) {
+		return errors.Join(ErrMihomoLiveOwner, err)
+	}
+	return s.currentReceiptLocked(ctx)
+}
+
+func (s *MihomoLiveSource) currentPrefixLocked(ctx context.Context) error {
 	if err := mihomoLiveFinite(ctx); err != nil {
 		return err
 	}
@@ -155,15 +166,36 @@ func (s *MihomoLiveSource) currentLocked(ctx context.Context) error {
 	if err := s.session.j.RequireIdle(ctx); err != nil {
 		return err
 	}
-	actual, err := s.session.files["a_binary"].Read(ctx)
-	if err != nil || !sameMihomoImage(actual, s.image) {
-		return errors.Join(ErrMihomoLiveOwner, err)
-	}
+	return nil
+}
+
+func (s *MihomoLiveSource) currentReceiptLocked(ctx context.Context) error {
 	receipt, err := s.session.files["b_receipt"].Read(ctx)
 	if err != nil || !sameMihomoImage(receipt, s.receipt) {
 		return errors.Join(ErrMihomoLiveOwner, err)
 	}
 	return ctx.Err()
+}
+
+// Only read-frame boundaries use the actual same-invocation pool hash FD.
+// Ordinary Current and every native Start retain their existing full path.
+func (s *MihomoLiveSource) currentComparedLocked(ctx context.Context, compare func(context.Context, *restorejournal.ArtifactSourceComparison) error) error {
+	if err := s.currentPrefixLocked(ctx); err != nil {
+		return err
+	}
+	target, ok := s.session.files["a_binary"].(*restorejournal.ArtifactFileTarget)
+	if !ok || target == nil || compare == nil {
+		return ErrMihomoLiveOwner
+	}
+	return target.WithReadComparison(ctx, func(held context.Context, image restorejournal.Image, proof *restorejournal.ArtifactSourceComparison) error {
+		if !sameMihomoImage(image, s.image) {
+			return ErrMihomoLiveOwner
+		}
+		if err := s.currentReceiptLocked(held); err != nil {
+			return err
+		}
+		return compare(held, proof)
+	})
 }
 
 func mihomoLiveFinite(ctx context.Context) error {
