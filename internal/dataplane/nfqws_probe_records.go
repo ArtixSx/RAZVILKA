@@ -34,19 +34,7 @@ func (e *nfqwsProbeExecution) publishRecords(data []byte) error {
 	}
 	var result error
 	for i := range 2 {
-		root, name := d.recordPath(i)
-		file, err := root.WriteAtomicRetained(name, data, 0600)
-		if err == nil {
-			info, statErr := file.Stat()
-			err = statErr
-			if err == nil {
-				err = d.captureOriginalRecord(i, file, info, data, root, name)
-			}
-			if err != nil {
-				_ = file.Close()
-			}
-		}
-		result = errors.Join(result, err)
+		result = errors.Join(result, d.publishOriginalDurable(i, data, syncDataplaneJournalDirectory))
 	}
 	return result
 }
