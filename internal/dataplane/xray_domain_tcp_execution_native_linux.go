@@ -157,5 +157,8 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 	if err := r.observeDomainListenerAbsent(ctx); err != nil {
 		return fmt.Errorf("domain cleanup listener absence: %w", err)
 	}
-	return r.cleanupPhase(ctx, "removed", "removed")
+	if err := r.cleanupPhase(ctx, "removed", "removed"); err != nil {
+		return fmt.Errorf("domain cleanup terminal row: %w", err)
+	}
+	return nil
 }
