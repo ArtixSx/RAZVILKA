@@ -24,6 +24,9 @@ type mihomoProbeState struct {
 	components *components.Manager
 	provider   *netidentity.Provider
 	held       *mihomoProbeRetention
+	liveStopMu sync.Mutex
+	liveStop   *mihomoLiveStop
+	liveApply  *mihomoLiveApplyRetention
 }
 
 const mihomoProbeRecoveryPath = "/api/v1/extension-lab/mihomo/probe"

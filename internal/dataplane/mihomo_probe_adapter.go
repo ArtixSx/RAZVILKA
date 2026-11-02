@@ -19,12 +19,18 @@ import (
 // This registration supports a finite check only. None of the ordinary Apply
 // methods can launch a child, including with a forged Ready plan.
 type MihomoProbeAdapter struct {
-	self       *MihomoProbeAdapter
-	components *components.Manager
-	provider   *netidentity.Provider
-	mu         sync.Mutex
-	busy       bool
-	pending    *mihomoProbeResource
+	self          *MihomoProbeAdapter
+	components    *components.Manager
+	provider      *netidentity.Provider
+	mu            sync.Mutex
+	busy          bool
+	pending       *mihomoProbeResource
+	livePending   *mihomoLiveResource
+	liveActive    *mihomoLiveResource
+	liveProxy     *ProxyTunnelAdapter
+	liveManager   *Manager
+	liveOptions   *MihomoLiveOptions
+	livePreparing *mihomoLivePreparation
 }
 
 func NewMihomoProbeAdapter(manager *components.Manager, provider *netidentity.Provider) *MihomoProbeAdapter {
@@ -36,14 +42,32 @@ func NewMihomoProbeAdapter(manager *components.Manager, provider *netidentity.Pr
 	return a
 }
 
-func (*MihomoProbeAdapter) ID() string                                   { return "mihomo" }
-func (*MihomoProbeAdapter) Snapshot(context.Context, Plan, string) error { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Stage(context.Context, Plan, string) error    { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Validate(context.Context, Plan, string) error { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Activate(context.Context, Plan, string) error { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Health(context.Context, Plan, string) error   { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Commit(context.Context, Plan, string) error   { return ErrMihomoProbe }
-func (*MihomoProbeAdapter) Rollback(context.Context, Plan, string) error { return ErrMihomoProbe }
+func (*MihomoProbeAdapter) ID() string { return "mihomo" }
+func (a *MihomoProbeAdapter) Snapshot(c context.Context, p Plan, s string) error {
+	return a.liveSnapshot(c, p, s)
+}
+func (a *MihomoProbeAdapter) Stage(c context.Context, p Plan, s string) error {
+	return a.liveStage(c, p, s)
+}
+func (a *MihomoProbeAdapter) Validate(c context.Context, p Plan, s string) error {
+	return a.liveValidate(c, p, s)
+}
+func (a *MihomoProbeAdapter) Activate(c context.Context, p Plan, s string) error {
+	return a.liveActivate(c, p, s)
+}
+func (a *MihomoProbeAdapter) Health(c context.Context, p Plan, s string) error {
+	r, e := a.phaseResource(c, p, s)
+	if e != nil {
+		return e
+	}
+	return r.currentLive(r.resourceContext(c))
+}
+func (a *MihomoProbeAdapter) Commit(c context.Context, p Plan, s string) error {
+	return a.liveCommit(c, p, s)
+}
+func (a *MihomoProbeAdapter) Rollback(c context.Context, p Plan, s string) error {
+	return a.liveRollback(c, p, s)
+}
 
 // RegisteredWith is a read-only comparison of the actual registry slot, not
 // a cached startup flag or a claim that the installed runtime is available.

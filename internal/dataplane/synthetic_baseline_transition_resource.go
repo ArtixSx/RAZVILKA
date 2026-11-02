@@ -85,8 +85,15 @@ func validateExecutionSyntheticBaselineResource(execution Execution, resource Ex
 	if err != nil || digest != resource.EffectsDigest {
 		return ErrExecutionJournal
 	}
+	if detached := resource.DomainDNSDetached; detached != nil {
+		if resource.Phase != "standby-detached" && resource.Phase != "removed" || detached.validate(execution.PlanID, d) != nil {
+			return ErrExecutionJournal
+		}
+	} else if resource.Phase == "standby-detached" {
+		return ErrExecutionJournal
+	}
 	switch resource.Phase {
-	case "planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed", "standby-retained":
+	case "planned", "baseline-prepared", "capture-ready", "transfer-intent", "transfer-ack", "closed", "standby-retained", "standby-detached":
 		if resource.State != "prepared" {
 			return ErrExecutionJournal
 		}

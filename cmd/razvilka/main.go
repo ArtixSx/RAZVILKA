@@ -890,7 +890,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
 	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
-	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
+	mihomoProvider := a.Dataplane.MihomoLiveStartupProvider()
+	if mihomoProvider == nil {
+		mihomoProvider = netidentity.NewProcProvider()
+	}
+	if err := a.ConfigureMihomoProbe(mihomoProvider); err != nil {
 		log.Print("Isolated Mihomo service check unavailable: original registration refused")
 	}
 	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
@@ -926,6 +930,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if managedWGListErr != nil {
 		log.Printf("Managed WG startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedWGListErr))
 	}
+	mihomoLiveContext, cancelMihomoLive := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := a.ConfigureMihomoLive(mihomoLiveContext); err != nil {
+		log.Print("Persistent Mihomo runtime unavailable: original startup binding refused")
+	}
+	cancelMihomoLive()
 	managedNFQCloseAttempted := false
 	closeManagedNFQList := func(ctx context.Context) error {
 		if managedNFQCloseAttempted {

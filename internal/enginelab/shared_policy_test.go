@@ -10,11 +10,13 @@ import (
 )
 
 func TestSharedPolicySlotsRequireExactOwnershipEvenForOwnTable(t *testing.T) {
+	expectedBases := map[string]int{"warp-wg": 60, "usque": 62, "sing-box": 64, "xray": 66, "amneziawg": 68, "wireguard": 70, "mihomo": 78}
 	for _, spec := range dataplane.PolicyOwnershipSpecs() {
 		t.Run(spec.Adapter, func(t *testing.T) {
-			// Early shared slots 60–71 precede Keenetic firmware policy rules
-			// (observed from priority 100); each adapter owns exactly two.
-			if spec.SharedPriorityBase < 60 || spec.SharedPriorityEnd != spec.SharedPriorityBase+1 || spec.SharedPriorityEnd > 71 {
+			// Preserve every old pair; Mihomo uses its separate 78–79 pair.
+			// All remain before the observed firmware policy priority 100.
+			base, known := expectedBases[spec.Adapter]
+			if !known || spec.SharedPriorityBase != base || spec.SharedPriorityEnd != base+1 {
 				t.Fatalf("unexpected shared reservation: %+v", spec)
 			}
 			exclusion := fmt.Sprintf("%d: from 192.168.1.40 to 203.0.113.9 lookup main", spec.SharedPriorityBase)

@@ -15,6 +15,10 @@ import (
 )
 
 func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview) error {
+	return observeMihomoInactiveOriginal(ctx, provider, replacement, nil)
+}
+
+func observeMihomoInactiveOriginal(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview, live *mihomoLiveResource) error {
 	if xraySelectedTCPFinite(ctx) != nil || provider == nil {
 		return ErrRuntimeInactivity
 	}
@@ -23,6 +27,15 @@ func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provi
 	images := components.ReviewedMihomoRuntimeImages()
 	if len(images) == 0 {
 		return ErrRuntimeInactivity
+	}
+	if live != nil {
+		extra, err := live.originalSidecarImage(ctx)
+		if err != nil {
+			return err
+		}
+		if extra.Size > 0 {
+			images = append(images, extra)
+		}
 	}
 	return provider.WithCurrent(ctx, func(held context.Context, identity netidentity.Identity) error {
 		physical := netidentity.NewProcProvider()

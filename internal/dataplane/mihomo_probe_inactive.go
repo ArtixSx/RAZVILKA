@@ -18,7 +18,7 @@ func (a *MihomoProbeAdapter) VerifyRuntimeInactive(parent context.Context) error
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	a.mu.Lock()
-	if a.busy || a.pending != nil {
+	if a.busy || a.pending != nil || a.livePending != nil || a.liveActive != nil || a.livePreparing != nil {
 		a.mu.Unlock()
 		return ErrRuntimeInactivity
 	}
@@ -35,7 +35,15 @@ func (a *MihomoProbeAdapter) VerifyRuntimeInactive(parent context.Context) error
 		return errors.Join(ErrRuntimeInactivity, err)
 	}
 	a.mu.Lock()
-	unchanged := a.busy && a.pending == nil
+	liveProxy := a.liveProxy
+	a.mu.Unlock()
+	if liveProxy != nil {
+		if err := liveProxy.VerifyRuntimeInactive(ctx); err != nil {
+			return errors.Join(ErrRuntimeInactivity, err)
+		}
+	}
+	a.mu.Lock()
+	unchanged := a.busy && a.pending == nil && a.livePending == nil && a.liveActive == nil && a.livePreparing == nil && a.liveProxy == liveProxy
 	a.mu.Unlock()
 	if !unchanged {
 		return ErrRuntimeInactivity

@@ -114,7 +114,7 @@ func (a *ProxyTunnelAdapter) inactiveCoordinates() (PolicyOwnershipSpec, int, er
 		return refuse(nil)
 	}
 	switch a.ID() {
-	case "usque", "sing-box", "xray":
+	case "usque", "sing-box", "xray", "mihomo":
 	default:
 		return refuse(nil)
 	}
@@ -163,7 +163,7 @@ func (a *ProxyTunnelAdapter) inactiveProcessNames() ([]string, error) {
 		return nil, ErrProxyRuntimeInactive
 	}
 	switch a.ID() {
-	case "usque", "sing-box", "xray":
+	case "usque", "sing-box", "xray", "mihomo":
 	default:
 		return nil, ErrProxyRuntimeInactive
 	}

@@ -15,6 +15,7 @@ const maxExecutionResources = 256
 // path. Neither serialized metadata nor "removed"/"unused" grants effects or
 // cleanup: actual owner readback and the common receipt remain mandatory.
 type ExecutionResource struct {
+	DomainDNSDetached *ExecutionDomainDNSDetachedDefinition `json:"domain_dns_detached,omitempty"`
 	ID                string                                `json:"id"`
 	Kind              string                                `json:"kind"`
 	State             string                                `json:"state"` // prepared, removed, unused
@@ -28,6 +29,7 @@ type ExecutionResource struct {
 	XrayDomainTCP     *ExecutionXrayDomainTCPDefinition     `json:"xray_domain_tcp,omitempty"`
 	DomainTCPCapture  *ExecutionDomainTCPCaptureDefinition  `json:"domain_tcp_capture,omitempty"`
 	DomainTCPBaseline *ExecutionDomainTCPBaselineDefinition `json:"domain_tcp_baseline,omitempty"`
+	MihomoLive        *ExecutionMihomoLiveDefinition        `json:"mihomo_live,omitempty"`
 	MihomoProbe       *ExecutionMihomoProbeDefinition       `json:"mihomo_probe,omitempty"`
 }
 
@@ -44,6 +46,14 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		if result[i].DomainDNSDetached != nil {
+			d := result[i].DomainDNSDetached.Clone()
+			result[i].DomainDNSDetached = &d
+		}
+		if result[i].MihomoLive != nil {
+			d := result[i].MihomoLive.Clone()
+			result[i].MihomoLive = &d
+		}
 		if result[i].MihomoProbe != nil {
 			d := result[i].MihomoProbe.Clone()
 			result[i].MihomoProbe = &d
@@ -116,6 +126,8 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			prefix = "dc-"
 		} else if resource.Kind == "domain-tcp-baseline-flow" {
 			prefix = "bf-"
+		} else if resource.Kind == "mihomo-live" {
+			prefix = "ml-"
 		} else if resource.Kind == "mihomo-probe" {
 			prefix = "mp-"
 		}
@@ -123,6 +135,12 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.DomainDNSDetached != nil && resource.Kind != "synthetic-baseline" {
+			return ErrExecutionJournal
+		}
+		if resource.MihomoLive != nil && resource.Kind != "mihomo-live" {
+			return ErrExecutionJournal
+		}
 		if resource.MihomoProbe != nil && resource.Kind != "mihomo-probe" {
 			return ErrExecutionJournal
 		}
@@ -142,6 +160,10 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		switch resource.Kind {
+		case "mihomo-live":
+			if err := validateMihomoLiveExecutionResource(execution, resource, terminal); err != nil {
+				return err
+			}
 		case "mihomo-probe":
 			if err := validateMihomoProbeExecutionResource(execution, resource, terminal); err != nil {
 				return err
@@ -231,7 +253,7 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			}
 		case "removed", "unused":
 		case "active":
-			if (resource.Kind != "nfqws-scoped" && resource.Kind != "xray-selected-tcp") || resource.Phase != "active" {
+			if (resource.Kind != "nfqws-scoped" && resource.Kind != "xray-selected-tcp" && resource.Kind != "mihomo-live") || resource.Phase != "active" {
 				return ErrExecutionJournal
 			}
 		default:
