@@ -81,6 +81,15 @@ func sameBootInputsFixture(t *testing.T, use func(context.Context, *privateresto
 		}
 	}
 	if err := privaterestore.WithOfflineServiceControlSet(ctx, l.Config, cs, func(c context.Context, s *privaterestore.OfflineServiceControlSet) error {
+		for _, p := range []string{state, filepath.Dir(l.Config)} {
+			info, err := os.Lstat(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !proxyInactivePrivateDirectory(info) {
+				t.Fatalf("fixture original root is not private: mode=%v uid=%d euid=%d", info.Mode(), info.Sys().(*syscall.Stat_t).Uid, os.Geteuid())
+			}
+		}
 		use(c, s, state, e)
 		return nil
 	}); err != nil {
