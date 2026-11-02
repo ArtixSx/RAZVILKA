@@ -63,6 +63,8 @@ func (c *mihomoSameBootCommand) WithStart(ctx context.Context, name string, args
 }
 
 type mihomoSameBootCleanup struct {
+	planRecords                  []*mihomoColdRecord
+	planMissing                  []string
 	sidecar                      *mihomoSameBootSidecar
 	policy                       *mihomoSameBootPolicy
 	static                       *mihomoSameBootStatic
@@ -81,6 +83,9 @@ func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
 		return ErrMihomoLiveRetirement
 	}
 	if err := o.inputs.current(o.inputs.ctx); err != nil {
+		return err
+	}
+	if err := o.planInputsCurrent(); err != nil {
 		return err
 	}
 	if o.policy != nil && o.policy.closeErr != nil {
