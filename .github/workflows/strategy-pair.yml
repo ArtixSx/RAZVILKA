@@ -85,7 +85,7 @@ jobs:
           race_option=""
           if test "${{ matrix.build-mode }}" = race; then race_option="-race"; fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test $race_option -count=1 ./internal/startuptools ./internal/dataplane ./internal/components -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestVersionExtensionPath|^TestClassicReadBatch|^TestBackendInventoryBatch|^TestBackendInventoryObservation|^TestManagedNFQWSRuntimeImage|^TestManagedNFQWSRuntimeObserver' -v
+            go test $race_option -count=1 ./internal/startuptools ./internal/dataplane ./internal/components -run '^TestNFQWSActiveProcessDirectory|^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestVersionExtensionPath|^TestClassicReadBatch|^TestBackendInventoryBatch|^TestBackendInventoryObservation|^TestManagedNFQWSRuntimeImage|^TestManagedNFQWSRuntimeObserver' -v
       - name: Current managed core HTTP and full LAN (diagnostic, no speed comparison)
         shell: bash
         run: |

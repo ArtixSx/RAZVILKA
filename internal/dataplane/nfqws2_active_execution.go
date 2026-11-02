@@ -46,6 +46,7 @@ type nfqws2ActiveExecution struct {
 	activationAttempted    bool
 	activationSeal         *nfqws2ActiveActivationSeal
 	lanActivationAttempted bool
+	processDirectory       *nfqwsActiveProcessDirectory
 	preEffectLAN           *nfqwsPreEffectLANReview
 	directPreparation      *nfqwsDirectPreparationWitness
 }
@@ -197,6 +198,11 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 	nfqws2ActiveAdapterMu.Unlock()
 	if !associated {
 		return ErrNFQWSScopedOwner
+	}
+	if directory := e.originalProcessDirectory(); directory != nil {
+		if err := directory.current(ctx); err != nil {
+			return err
+		}
 	}
 	return e.material.provider.WithCurrent(ctx, func(c context.Context, identity netidentity.Identity) error {
 		if identity != e.material.intent.NetworkIdentity {
@@ -479,6 +485,13 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 			return e.process(c, p, true)
 		}})
 	if err != nil {
+		e.mu.Lock()
+		e.preparationErr = err
+		e.mu.Unlock()
+		return err
+	}
+	stage = "activate.process-directory"
+	if err := e.prepareOriginalProcessDirectory(ctx); err != nil {
 		e.mu.Lock()
 		e.preparationErr = err
 		e.mu.Unlock()
