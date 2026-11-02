@@ -907,6 +907,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			}
 			operationCtx := secondHeld
 			var cancelOriginal context.CancelFunc
+			cancelRequested := false // Set only by the actual post-observation callback below.
 			var canceledAlias string
 			if canceledChild {
 				operationCtx, cancelOriginal = context.WithCancel(secondHeld)
@@ -914,12 +915,18 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			}
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(operationCtx, control.Current), secondPlan, history, detached, func(original context.Context) error {
 				if canceledChild {
-					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, cancelOriginal)
+					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, context.CancelFunc(func() {
+						cancelRequested = true
+						cancelOriginal()
+					}))
 					original = context.WithValue(original, domainOriginalCanceledAliasKey{}, &canceledAlias)
 				}
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
 			if canceledChild {
+				if !cancelRequested {
+					t.Fatal("actual original child/readiness cancellation witness was not reached", err)
+				}
 				var failure *dataplane.DomainTCPCleanupFailure
 				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
 					t.Fatal("original cancellation/custody capsule lost", err)
