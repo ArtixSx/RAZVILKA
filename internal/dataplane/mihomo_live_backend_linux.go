@@ -30,7 +30,11 @@ func (r *mihomoLiveResource) backendDisjoint(ctx context.Context, source, pin ne
 	if err := r.nativeCurrent(ctx); err != nil {
 		return err
 	}
-	if err := inspectOriginalNodeRouterBackendSockets(ctx, child.PID(), source, pin, endpoints, r.nativeCurrent); err != nil {
+	role, err := r.reviewSOCKSUDPListener(ctx)
+	if err != nil {
+		return err
+	}
+	if err := inspectOriginalNodeRouterBackendSocketsWithSOCKSUDP(ctx, child.PID(), source, pin, endpoints, r.nativeCurrent, role); err != nil {
 		return fmt.Errorf("original Mihomo backend socket inventory: %w", err)
 	}
 	sidecar.mu.Lock()

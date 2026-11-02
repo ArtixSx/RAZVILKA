@@ -16,10 +16,23 @@ import (
 // Read-only bounded socket accounting. Only original process owners supply
 // current; no process, Start, cleanup or packet authority is returned.
 func inspectOriginalNodeRouterBackendSockets(ctx context.Context, pid int, source, pin netip.Addr, endpoints map[netip.Addr]bool, current func(context.Context) error) error {
+	return inspectOriginalNodeRouterBackendSocketsWithSOCKSUDP(ctx, pid, source, pin, endpoints, current, nil)
+}
+
+func inspectOriginalNodeRouterBackendSocketsWithSOCKSUDP(ctx context.Context, pid int, source, pin netip.Addr, endpoints map[netip.Addr]bool, current func(context.Context) error, role *mihomoLiveSOCKSUDPListener) error {
 	if ctx == nil || pid <= 1 || current == nil {
 		return ErrNodeTransitUnavailable
 	}
-	if err := current(ctx); err != nil {
+	observe := func(c context.Context) error {
+		if err := current(c); err != nil {
+			return err
+		}
+		if role != nil {
+			return role.current(c, pid)
+		}
+		return nil
+	}
+	if err := observe(ctx); err != nil {
 		return nodeTransitPhase("backend-process-initial", err)
 	}
 	proc := filepath.Join("/proc", strconv.Itoa(pid))
@@ -48,6 +61,7 @@ func inspectOriginalNodeRouterBackendSockets(ctx context.Context, pid int, sourc
 		}
 	}
 	found := map[string]bool{}
+	socksUDPFound := false
 	for _, kind := range []string{"tcp", "tcp6", "udp", "udp6"} {
 		raw, err := readNodeRouterProc(filepath.Join(proc, "net", kind), 1<<20)
 		if err != nil {
@@ -62,6 +76,11 @@ func inspectOriginalNodeRouterBackendSockets(ctx context.Context, pid int, sourc
 				return nodeTransitPhase("backend-duplicate-"+kind+"-inode", ErrNodeTransitUnavailable)
 			}
 			if strings.HasPrefix(kind, "udp") && socket.remote.Addr().IsUnspecified() {
+				if role != nil && role.matches(kind, socket, source, pin, socksUDPFound) {
+					socksUDPFound = true
+					found[socket.inode] = true
+					continue
+				}
 				bind := "other-bound"
 				if socket.local.Addr().IsLoopback() {
 					bind = "loopback-bound"
@@ -118,8 +137,11 @@ func inspectOriginalNodeRouterBackendSockets(ctx context.Context, pid int, sourc
 	if len(found) != len(inodes) {
 		return nodeTransitPhase("backend-inode-accounting", ErrNodeTransitUnavailable)
 	}
+	if role != nil && !socksUDPFound {
+		return nodeTransitPhase("backend-original-socks-udp-missing", ErrNodeTransitUnavailable)
+	}
 
-	if err := current(ctx); err != nil {
+	if err := observe(ctx); err != nil {
 		return nodeTransitPhase("backend-process-closing", err)
 	}
 	return ctx.Err()
