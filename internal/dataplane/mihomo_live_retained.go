@@ -269,7 +269,27 @@ func (m *Manager) CheckMihomoLive(ctx context.Context) error {
 		return err
 	}
 	defer end()
-	return r.currentLive(c)
+	if err := r.rotateMihomoTransit(c); err != nil {
+		return err
+	}
+	check, err := r.beginHealthCheck(c)
+	completed := false
+	defer func() {
+		if check != nil && !completed {
+			check.fail()
+		}
+	}()
+	if err != nil {
+		return err
+	}
+	if err := r.currentLive(c); err != nil {
+		return err
+	}
+	if err := check.complete(c); err != nil {
+		return err
+	}
+	completed = true
+	return nil
 }
 
 // A retry continues the SAME original Manager compensation closure. It never

@@ -75,16 +75,18 @@ type executionResourceScope struct {
 }
 
 type executionTransitResource struct {
-	finished      bool // Same original synchronous probe and deferred cleanup joined.
-	unusedSettled bool // Only original one-shot unused readback + durable settlement ACK.
-	spec          NodeTransitSpec
-	root          string
-	relative      string
-	anchor        os.FileInfo
-	digest        string
-	effects       string
-	readback      networkPolicyTransitReadback
-	admitted      bool
+	settlementReadback networkPolicyTransitReadbackMode // Actual original readback ACK, scope.mu; not serialized.
+	probe              *nodeRouterTransitReadback       // Exact original probe/lease, never reconstructed from the row.
+	finished           bool                             // Same original synchronous probe and deferred cleanup joined.
+	unusedSettled      bool                             // Original one-shot unused readback plus durable settlement ACK.
+	spec               NodeTransitSpec
+	root               string
+	relative           string
+	anchor             os.FileInfo
+	digest             string
+	effects            string
+	readback           networkPolicyTransitReadback
+	admitted           bool
 }
 
 func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adapter string, execution *Execution, root string) (*executionResourceScope, error) {
@@ -272,6 +274,13 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 		spec.PlanDigest != s.plan.Digest || spec.NetworkProfile != s.plan.NetworkProfileID || s.resourceCount() >= maxExecutionResources {
 		return nodeTransitRegistration{}, ErrNodeTransitUnavailable
 	}
+	var originalProbe *nodeRouterTransitReadback
+	if s.retained && s.mihomoLive != nil {
+		originalProbe, _ = ctx.Value(nodeRouterTransitOriginalReadbackKey{}).(*nodeRouterTransitReadback)
+		if originalProbe == nil || originalProbe.self != originalProbe || originalProbe.spec != spec || originalProbe.lease != nil || originalProbe.root != "" {
+			return nodeTransitRegistration{}, ErrNodeTransitUnavailable
+		}
+	}
 	compiled, err := CompileNodeTransit(spec)
 	if err != nil {
 		return nodeTransitRegistration{}, err
@@ -298,6 +307,7 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 	}
 	resource := &executionTransitResource{spec: spec, root: filepath.Join(s.root, relative), relative: relative,
 		anchor: anchor, digest: compiled.Generation, effects: effects, readback: readback}
+	resource.probe = originalProbe
 	for _, path := range []string{resource.root, filepath.Dir(resource.root), s.root} {
 		opened, err := openJournalDirectory(path)
 		if err != nil {
@@ -314,8 +324,13 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 	if s.mihomoLive != nil {
 		finished = func() error { return s.finishMihomoTransit(resource) }
 	}
+	var cleanupOperation func(context.Context) (context.Context, func(), error)
+	if s.retained && s.mihomoLive != nil {
+		cleanupOperation = s.mihomoLive.healthCleanupOperation
+	}
 	return nodeTransitRegistration{root: resource.root,
-		finished: finished,
+		cleanupOperation: cleanupOperation,
+		finished:         finished,
 		register: func(c context.Context, got NodeTransitSpec, root, digest string) error {
 			return s.registerTransit(c, resource, got, root, digest)
 		},
@@ -379,6 +394,9 @@ func (s *executionResourceScope) matchingTransit(resource *executionTransitResou
 }
 
 func (s *executionResourceScope) persist() error {
+	if r := s.mihomoLive; r != nil && r.healthCheck != nil && (r.healthCheck.open || r.healthCheck.stopping) {
+		return r.healthCheck.publishLocked()
+	}
 	if s.retainedOwner != nil {
 		if err := s.retainedOwner.recordsCurrent(); err != nil {
 			s.failure = errors.Join(s.failure, err)
@@ -448,6 +466,11 @@ func (s *executionResourceScope) registerTransit(ctx context.Context, resource *
 }
 
 func (s *executionResourceScope) settleTransit(ctx context.Context, resource *executionTransitResource, spec NodeTransitSpec, root, digest string, mode networkPolicyTransitReadbackMode) error {
+	// Only a reader9 original health writer retains a consumed unused proof
+	// across its partial journal ACK. Generic/preexisting issuers stay unchanged.
+	if s.mihomoLive != nil && s.retained && s.mihomoLive.healthCheck != nil {
+		return s.settleMihomoCheckingTransit(ctx, resource, spec, root, digest, mode)
+	}
 	if err := func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()

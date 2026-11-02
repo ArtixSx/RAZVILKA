@@ -150,6 +150,10 @@ func (r *mihomoLiveResource) prepareTransitArchiveLocked() (*mihomoTransitArchiv
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	archive := Execution{PlanID: "dp-check-" + strings.Repeat("0", 32), ResourcePlanID: s.execution.PlanID, Digest: s.execution.Digest, State: "temporary-complete", StartedAt: now, FinishedAt: now, Resources: cloneExecutionResources(rows), Steps: []ExecutionStep{{Adapter: "mihomo", Phase: "archive-joined-transit", State: "passed", StartedAt: now, FinishedAt: now}}}
+	if s.execution.MihomoLiveHealthOperation != nil {
+		h := *s.execution.MihomoLiveHealthOperation
+		archive.MihomoLiveHealthOperation = &h
+	}
 	marker := &MihomoTransitHistoryArchive{Schema: 1, OriginExecutionID: s.execution.PlanID, OriginPlanID: s.execution.PlanID, OriginDigest: s.execution.Digest, OriginBefore: bytes.Clone(before), OriginBeforeSHA256: nodeDefaultSourceMaterialHash(before), OriginAfterSHA256: nodeDefaultSourceMaterialHash(afterImage)}
 	archive.MihomoTransitHistoryArchive = marker
 	if err := marker.validate(archive); err != nil {

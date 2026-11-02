@@ -304,6 +304,7 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
+	MihomoLiveHealthOperation   *ExecutionMihomoLiveHealthOperation      `json:"mihomo_live_health_operation,omitempty"`
 	DomainDNSCoexistence        *ExecutionDomainDNSCoexistenceDefinition `json:"domain_dns_coexistence,omitempty"`
 	MihomoTransitHistoryArchive *MihomoTransitHistoryArchive             `json:"mihomo_transit_history_archive,omitempty"`
 	ResourcePlanID              string                                   `json:"resource_plan_id,omitempty"`

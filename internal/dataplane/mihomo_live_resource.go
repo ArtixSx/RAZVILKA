@@ -50,4 +50,5 @@ type mihomoLiveResource struct {
 	transitHistory   *mihomoTransitArchiveCursor // Serialized original Manager operation only.
 	historyIDs       map[string]struct{}         // Scope.mu; inert non-reuse tombstones.
 	healthHandoff    *mihomoLiveHealthHandoff    // One-use original Health -> Commit comparison only.
+	healthCheck      *mihomoLiveHealthCheck      // Original retained writer; scope.mu protects custody.
 }

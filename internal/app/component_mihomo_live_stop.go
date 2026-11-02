@@ -34,6 +34,16 @@ func (a *App) observeCommittedMihomo(ctx context.Context, expected dataplane.Pla
 	if a == nil || a.Dataplane == nil || expected.State != "committed" || !a.mihomoProbeRegistered() {
 		return true, dataplane.ErrReviewChanged
 	}
+	a.mihomoProbe.liveStopMu.Lock()
+	defer a.mihomoProbe.liveStopMu.Unlock()
+	if a.Store == nil || a.mihomoProbe.liveStop != nil || a.mihomoProbe.liveApply != nil {
+		return true, dataplane.ErrReviewChanged
+	}
+	manager, store := a.Dataplane, a.Store
+	before := store.Get()
+	if expected.Revision != before.AppliedRevision {
+		return true, dataplane.ErrReviewChanged
+	}
 	current, found, err := a.Dataplane.Committed()
 	if err != nil || !found || !reflect.DeepEqual(current, expected) {
 		return true, errors.Join(dataplane.ErrReviewChanged, err)
@@ -42,9 +52,34 @@ func (a *App) observeCommittedMihomo(ctx context.Context, expected dataplane.Pla
 	if err != nil {
 		return true, err
 	}
-	defer release()
-	if err = a.Dataplane.CheckMihomoLive(held); err != nil {
+	cleanup, err := a.Operations.ReviewExclusiveCleanup(held)
+	if err != nil {
+		release()
 		return true, err
+	}
+	keep := false
+	defer func() {
+		// The Manager's exception defer marks its original health cursor
+		// pending before this outer frame runs. Never release that admission
+		// or substitute the original Apply compensation for a failed Check.
+		if manager.HasPendingMihomoLive() {
+			cursor := &mihomoLiveStop{manager: manager, store: store, before: &before, context: context.WithoutCancel(held), cleanup: cleanup, release: release}
+			a.mihomoProbe.liveStop = cursor
+			keep = true
+			a.Operations.FenceJournal()
+		}
+		if !keep {
+			release()
+		}
+	}()
+	if a.Dataplane != manager || a.Store != store || !reflect.DeepEqual(store.Get(), before) {
+		return true, dataplane.ErrReviewChanged
+	}
+	if err = manager.CheckMihomoLive(held); err != nil {
+		return true, err
+	}
+	if a.Dataplane != manager || a.Store != store || !reflect.DeepEqual(store.Get(), before) {
+		return true, dataplane.ErrReviewChanged
 	}
 	current, found, err = a.Dataplane.Committed()
 	if err != nil || !found || !reflect.DeepEqual(current, expected) {

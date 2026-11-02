@@ -38,8 +38,9 @@ func (m *Manager) StopMihomoLive(ctx context.Context, cleanup *operationgate.Exc
 	}
 	r.scope.mu.Lock()
 	pending := r.scope.pending
+	healthPending := r.healthCheck != nil && r.healthCheck.self == r.healthCheck && r.healthCheck.owner == r && r.healthCheck.failed
 	r.scope.mu.Unlock()
-	if pending {
+	if pending && !healthPending {
 		return nil, ErrPolicyAdditionUnknown
 	}
 	c, end, err := r.operation(ctx, cleanup, false)
@@ -47,13 +48,16 @@ func (m *Manager) StopMihomoLive(ctx context.Context, cleanup *operationgate.Exc
 		return nil, err
 	}
 	defer end()
+	prepareErr := r.prepareLiveStop(c, cleanup)
 	// Unknown journal ownership must be repaired by its original writer before
 	// a Stop result may advertise durable completion. Native cleanup itself is
 	// allowed by the adapter's same-owner recovery lane on partial publication.
-	if err := r.records.current(c, true); err != nil {
+	journalErr := r.records.current(c, true)
+	cleanupErr := r.cleanupLive(c, cleanup)
+	if err := errors.Join(prepareErr, journalErr, cleanupErr); err != nil {
 		return nil, err
 	}
-	if err := r.cleanupLive(c, cleanup); err != nil {
+	if err := r.finishHealthStop(c); err != nil {
 		return nil, err
 	}
 	if err := r.observeLiveInactive(c, cleanup); err != nil {

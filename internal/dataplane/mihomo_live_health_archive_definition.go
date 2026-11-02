@@ -68,6 +68,9 @@ func (h MihomoTransitHistoryArchive) deriveAfter(archive Execution) (Execution, 
 	if err != nil || !bytes.Equal(canonical, h.OriginBefore) {
 		return refuse()
 	}
+	if !reflect.DeepEqual(archive.MihomoLiveHealthOperation, before.MihomoLiveHealthOperation) {
+		return refuse()
+	}
 	var live *ExecutionMihomoLiveDefinition
 	for _, row := range before.Resources {
 		if row.Kind == "mihomo-live" {

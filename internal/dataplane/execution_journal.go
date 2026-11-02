@@ -175,6 +175,15 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	if execution.State == mihomoActiveCheckingState {
+		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.healthCheck == nil {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		c := scope.mihomoLive.healthCheck
+		if c.self != c || c.owner != scope.mihomoLive || !c.open || !c.publishing {
+			return executionJournalError(ErrExecutionJournal)
+		}
+	}
 	// Reader8 documentary archives have an exclusive transaction-only writer.
 	// Neither generic writer may turn an archive into the current execution.
 	if execution.MihomoTransitHistoryArchive != nil {

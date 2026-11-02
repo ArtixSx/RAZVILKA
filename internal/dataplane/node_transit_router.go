@@ -210,7 +210,9 @@ func (a *ProxyTunnelAdapter) scopedNodeRouterHealth(ctx context.Context, plan Pl
 			return err
 		}
 		readback := &nodeRouterTransitReadback{spec: spec, owner: func(c context.Context) error { return verify(c, request, false) }}
+		readback.self = readback
 		operation := context.WithValue(ctx, networkPolicyTransitReadbackKey{}, networkPolicyTransitReadback(readback.readback))
+		operation = context.WithValue(operation, nodeRouterTransitOriginalReadbackKey{}, readback)
 		registration, err := issuer(operation, spec)
 		if err != nil {
 			return err
@@ -256,9 +258,20 @@ func (a *ProxyTunnelAdapter) runRegisteredNodeRouterProbe(ctx context.Context, s
 		return err
 	}
 	readback.lease = lease
+	readback.registration = registration
 	defer func() {
+		readback.resultErr = resultErr
 		cleanup, cancel := context.WithTimeout(context.WithValue(context.WithoutCancel(ctx), nodeTransitCleanupKey{}, true), 10*time.Second)
 		defer cancel()
+		if registration.cleanupOperation != nil {
+			bound, end, err := registration.cleanupOperation(cleanup)
+			if err != nil {
+				resultErr = errors.Join(resultErr, err)
+				return
+			}
+			defer end()
+			cleanup = bound
+		}
 		resultErr = finishRegisteredNodeRouterProbe(cleanup, spec, registration, lease, readback, resultErr)
 	}()
 	if err := lease.Apply(ctx); err != nil {
@@ -298,10 +311,15 @@ func finishRegisteredNodeRouterProbe(cleanup context.Context, spec NodeTransitSp
 		if err := registration.cleanupGuard(cleanup); err != nil {
 			return errors.Join(resultErr, err)
 		}
-		if err := lease.VerifyUnused(cleanup); err != nil {
-			return errors.Join(resultErr, err)
-		}
-		if !errors.As(resultErr, &readback.unused) || readback.unused == nil || readback.unused.lease != lease {
+		if !readback.unusedValidated {
+			if err := lease.VerifyUnused(cleanup); err != nil {
+				return errors.Join(resultErr, err)
+			}
+			if !errors.As(resultErr, &readback.unused) || readback.unused == nil || readback.unused.lease != lease {
+				return errors.Join(resultErr, ErrNodeTransitUnavailable)
+			}
+			readback.unusedValidated = true
+		} else if readback.lease != lease || readback.unused == nil || readback.unused.lease != lease || lease.effects.Load() {
 			return errors.Join(resultErr, ErrNodeTransitUnavailable)
 		}
 		if err := registration.settleUnused(cleanup, spec, registration.root, lease.digest); err != nil {
