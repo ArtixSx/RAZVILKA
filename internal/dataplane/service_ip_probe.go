@@ -92,7 +92,7 @@ func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, 
 			dialCtx, cancelDial := context.WithCancel(requestCtx)
 			stopTransport := context.AfterFunc(transportCtx, cancelDial)
 			defer func() { stopTransport(); cancelDial() }()
-			current := func() error { return errors.Join(requestCtx.Err(), transportCtx.Err(), dialCtx.Err()) }
+			current := func() error { return pinnedServiceContextError(requestCtx, transportCtx, dialCtx) }
 			if err := current(); err != nil {
 				return nil, err
 			}
@@ -155,4 +155,16 @@ func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, 
 
 func samePinnedServiceHost(a, b string) bool {
 	return strings.EqualFold(strings.TrimSuffix(a, "."), strings.TrimSuffix(b, "."))
+}
+
+func pinnedServiceContextError(request, transport, dial context.Context) error {
+	requestErr := request.Err()
+	err := errors.Join(requestErr, transport.Err(), dial.Err())
+	// A socket's inherited read deadline may expire just before the context
+	// timer publishes Err. Preserve the original request's typed deadline in
+	// that race without treating an earlier network timeout as its expiry.
+	if deadline, finite := request.Deadline(); requestErr == nil && finite && !time.Now().Before(deadline) {
+		err = errors.Join(err, context.DeadlineExceeded)
+	}
+	return err
 }

@@ -66,3 +66,35 @@ func TestPinnedServiceDialGuardCancellationCannotReachSOCKS(t *testing.T) {
 	default:
 	}
 }
+
+type pinnedServicePendingTimerContext struct {
+	context.Context
+	deadline time.Time
+}
+
+func (c pinnedServicePendingTimerContext) Deadline() (time.Time, bool) { return c.deadline, true }
+
+func TestPinnedServiceElapsedRequestDeadlineKeepsTypedCauseBeforeTimerPublishes(t *testing.T) {
+	base := context.Background()
+	pending := pinnedServicePendingTimerContext{Context: base, deadline: time.Now().Add(-time.Millisecond)}
+	if pending.Err() != nil {
+		t.Fatal("pending timer model already canceled")
+	}
+	if !errors.Is(pinnedServiceContextError(pending, base, base), context.DeadlineExceeded) {
+		t.Fatal("elapsed original deadline lost typed cause")
+	}
+	canceledOriginal, cancelOriginal := context.WithCancel(pending)
+	cancelOriginal()
+	if err := pinnedServiceContextError(canceledOriginal, base, base); !errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("published original cancellation changed to deadline", err)
+	}
+	pending.deadline = time.Now().Add(time.Second)
+	if pinnedServiceContextError(pending, base, base) != nil {
+		t.Fatal("future request deadline classified as expired network timeout")
+	}
+	canceled, stop := context.WithCancel(base)
+	stop()
+	if !errors.Is(pinnedServiceContextError(pending, canceled, base), context.Canceled) {
+		t.Fatal("transport cancellation cause lost")
+	}
+}
