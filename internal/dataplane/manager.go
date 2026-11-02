@@ -1624,7 +1624,13 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		actualXray, isXray := adapter.(*ProxyTunnelAdapter)
 		_, selectedXray, xrayErr := xraySelectedTCPExecutionFor(runCtx, actualXray, plan, adapterRoot)
 		if activeWGScope != nil || activeMihomoScope != nil {
-			err = action(runCtx, plan, adapterRoot)
+			actionPlan := plan
+			if restoring && activeMihomoScope != nil && adapter == activeMihomoScope.adapterOwner {
+				actionPlan, err = originalMihomoRestorationPlan(activeMihomoScope, adapter, plan)
+			}
+			if err == nil {
+				err = action(runCtx, actionPlan, adapterRoot)
+			}
 		} else if isXray && selectedXray {
 			if xrayErr != nil {
 				err = xrayErr

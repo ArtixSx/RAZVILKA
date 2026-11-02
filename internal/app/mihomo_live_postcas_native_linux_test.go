@@ -126,4 +126,7 @@ func assertMihomoLivePostCASFailure(t *testing.T, ctx context.Context, a *App, p
 		}
 	}
 	t.Logf("actual_postcas_service_rejection status=503 desired_exact_restored=true state=%s rollback_verified=%t original_pending=%t", execution.State, execution.RollbackVerified, a.Dataplane.HasPendingMihomoLive())
+	if unknown || execution.State != "rolled-back" || !execution.RollbackVerified {
+		t.Fatal("real service rejection stayed fenced but original rollback is not complete")
+	}
 }
