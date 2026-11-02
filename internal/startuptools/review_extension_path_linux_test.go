@@ -6,7 +6,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 )
 
 // Actual protected filesystem metadata; no executable or tool lease is issued.
@@ -64,6 +66,37 @@ func TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof(t *testing.T) {
 				t.Fatal("fresh graph proof changed", change, err)
 			}
 		})
+	}
+}
+
+func TestVersionExtensionPathAllowsOriginalCaptureMetadataRefresh(t *testing.T) {
+	dir, r := rootReviewFixture(t)
+	r.profile.extension = dir
+	canonical, err := r.resolve(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.retainExtensionPath(canonical); err != nil {
+		t.Fatal(err)
+	}
+	original := r.nodes[canonical].info
+	// Actual acquisition enumerates the directory and resolves its members,
+	// refreshing the same node. Atime/ctime changes do not change that original
+	// directory, just as in all existing directory sameNode comparisons.
+	if err := os.Chtimes(dir, time.Unix(1, 0), original.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.node(dir); err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(original, r.nodes[canonical].info) {
+		t.Fatal("fixture did not refresh actual metadata")
+	}
+	if path, err := r.versionExtensionPath(); err != nil || path != dir {
+		t.Fatal("original capture refreshed into a false refusal", path, err)
+	}
+	if err := r.versionMetadataCurrent(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

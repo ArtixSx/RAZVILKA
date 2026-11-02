@@ -22,6 +22,17 @@ type heldImage struct {
 	info os.FileInfo
 	hash [32]byte
 }
+
+// Acquisition-derived pathname only. Every use still observes the complete
+// named node/link graph twice and opens/lists the original directory freshly.
+type reviewedExtensionPath struct {
+	self             *reviewedExtensionPath
+	review           *heldReview
+	profile          profile
+	alias, canonical string
+	target           os.FileInfo
+}
+
 type heldReview struct {
 	profile       profile
 	images        map[string]*heldImage
