@@ -282,6 +282,7 @@ func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, ma
 	})
 }
 func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
+	domainTCPMeasureGuardRead(ctx, "mapping-current")
 	if err := o.baseCurrent(ctx); err != nil {
 		return err
 	}

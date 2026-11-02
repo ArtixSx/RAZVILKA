@@ -54,6 +54,7 @@ func (i *syntheticBaselineKernelInspector) read(ctx context.Context) (backendInv
 	if err := i.identity.check(ctx); err != nil {
 		return backendInventorySnapshot{}, err
 	}
+	domainTCPMeasureGuardRead(ctx, "backend-read")
 	view, err := i.backend.Read(ctx, i.identity.value)
 	if err != nil {
 		return backendInventorySnapshot{}, errors.Join(ErrSyntheticBaselineTransition, err)

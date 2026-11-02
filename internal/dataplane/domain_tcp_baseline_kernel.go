@@ -253,6 +253,7 @@ func (r *domainTCPBaselineKernelOwner) observe(ctx context.Context) (domainTCPBa
 	return r.observeWithFiles(ctx, nil)
 }
 func (r *domainTCPBaselineKernelOwner) observeWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) (path domainTCPBaselinePath, resultErr error) {
+	domainTCPMeasureGuardRead(ctx, "kernel-observe")
 	finishMeasure := domainTCPMeasure("kernel-observe")
 	defer func() {
 		finishMeasure(0)
@@ -283,6 +284,7 @@ func (r *domainTCPBaselineKernelOwner) observeReadWithFiles(ctx context.Context,
 		if err := domainTCPBaselineForwarding(ctx, r.capture.process.scope.networkIdentity); err != nil {
 			return path, fmt.Errorf("domain TCP baseline native forwarding/programs: %w", err)
 		}
+		domainTCPMeasureGuardRead(ctx, "ip-four-read")
 		image, err := r.reader.ReadDomainTCPBaseline(ctx, spec.Client.Address, spec.Xray.RealIP, spec.Client.Interface)
 		if err != nil {
 			return path, fmt.Errorf("domain TCP baseline original route read: %w", err)

@@ -257,6 +257,7 @@ func holdXrayDomainTCPExecutable(ctx context.Context, m *XrayDomainTCPOperationM
 }
 
 func (p *xrayDomainTCPExecutable) hash(ctx context.Context) (string, error) {
+	domainTCPMeasureGuardRead(ctx, "full-hash")
 	finishMeasure := domainTCPMeasure("whole-executable-hash")
 	var readBytes int64
 	defer func() { finishMeasure(readBytes) }()

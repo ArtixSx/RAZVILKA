@@ -230,6 +230,8 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending },
 		Guard: func(c context.Context, _ int) error {
 			defer domainTCPMeasure("standby-add-guard")(0)
+			c, finish := domainTCPMeasurePureGuard(c, "standby-guard")
+			defer finish()
 			return r.observeTools(c, r.current)
 		},
 	}

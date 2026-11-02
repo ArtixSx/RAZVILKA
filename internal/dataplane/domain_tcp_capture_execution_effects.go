@@ -115,6 +115,7 @@ func (r *domainTCPCaptureExecutionResource) readWithFiles(ctx context.Context, f
 	if err := r.currentWithFiles(ctx, files); err != nil {
 		return backendInventorySnapshot{}, err
 	}
+	domainTCPMeasureGuardRead(ctx, "backend-read")
 	view, err := r.backend.Read(ctx, r.tools.Identity)
 	if err != nil {
 		return backendInventorySnapshot{}, err
@@ -156,6 +157,8 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	r.started = true
 	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error {
 		defer domainTCPMeasure("capture-add-guard")(0)
+		c, finish := domainTCPMeasurePureGuard(c, "capture-guard")
+		defer finish()
 		return r.observeTools(c, func(observed context.Context) error {
 			return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
 				return errors.Join(r.currentWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))

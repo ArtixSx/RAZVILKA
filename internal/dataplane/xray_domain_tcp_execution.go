@@ -260,6 +260,7 @@ func (r *XrayDomainTCPExecutionResource) Current(ctx context.Context) error {
 }
 func (r *XrayDomainTCPExecutionResource) currentWithFiles(ctx context.Context, files *xrayDomainTCPFileObservation) error {
 	defer domainTCPMeasure("process-current")(0)
+	domainTCPMeasureGuardRead(ctx, "process-current")
 	if r == nil || r.self != r {
 		return ErrXrayDomainTCPOriginal
 	}
