@@ -119,6 +119,11 @@ func receive(fd int, buf []byte) (int, error) {
 	}
 	return n, nil
 }
+
+// Only receive scratch storage is reused. Every retained message below owns
+// its cloned payload; socket, sequence, dump and closure are always fresh.
+var routeDumpBuffers = sync.Pool{New: func() any { return new([1 << 20]byte) }}
+
 func dump(ctx context.Context, kind uint16, family byte) ([]message, error) {
 	fd, pid, err := routeSocket(0)
 	if err != nil {
@@ -143,7 +148,9 @@ func dump(ctx context.Context, kind uint16, family byte) ([]message, error) {
 	if err = unix.Sendto(fd, request, 0, &unix.SockaddrNetlink{Family: unix.AF_NETLINK}); err != nil {
 		return nil, err
 	}
-	buf := make([]byte, 1<<20)
+	buffer := routeDumpBuffers.Get().(*[1 << 20]byte)
+	defer routeDumpBuffers.Put(buffer)
+	buf := buffer[:]
 	total := 0
 	out := []message{}
 	for {
