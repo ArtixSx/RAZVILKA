@@ -97,6 +97,11 @@ func mihomoLiveReadArguments(index int, args []string) bool {
 			return true
 		case "show":
 			args = args[2:]
+			// Original forwarding compilation observes only the main table's
+			// defaults. This literal selector is read-only, not a free-form ABI.
+			if slices.Equal(args, []string{"table", "main", "default"}) {
+				return true
+			}
 			seen := map[string]bool{}
 			for len(args) > 0 {
 				if len(args) < 2 || seen[args[0]] {

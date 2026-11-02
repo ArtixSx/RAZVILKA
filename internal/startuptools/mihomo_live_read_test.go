@@ -21,3 +21,16 @@ func TestMihomoLiveReadABINeverAdmitsEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestMihomoLiveReadABIOriginalForwardingWANSelector(t *testing.T) {
+	for _, args := range [][]string{{"route", "show", "table", "main", "default"}, {"-6", "route", "show", "table", "main", "default"}, {"-4", "-N", "route", "show", "table", "main", "default"}} {
+		if !mihomoLiveReadArguments(2, args) {
+			t.Fatal("actual original forwarding read rejected", args)
+		}
+	}
+	for _, args := range [][]string{{"route", "show", "default"}, {"route", "show", "table", "all", "default"}, {"route", "show", "table", "main", "default", "dev", "eth0"}, {"route", "show", "table", "main", "default", "add"}, {"route", "show", "table", "main", "defaults"}, {"route", "add", "table", "main", "default"}} {
+		if mihomoLiveReadArguments(2, args) {
+			t.Fatal("unreviewed selector or effect accepted", args)
+		}
+	}
+}
