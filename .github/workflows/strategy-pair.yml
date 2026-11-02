@@ -166,7 +166,7 @@ jobs:
           go build -o /tmp/razvilka-current ./cmd/razvilka
           test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
           test "$(/tmp/razvilka-current -component-update-schema)" = 6
-          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 8
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 9
           test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
           git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
@@ -46,6 +47,22 @@ type mihomoSameBootRetirementCursor struct {
 	terminalPending                         [2]bool
 	terminalCloseErr                        error
 	terminalFault                           func(int) error // Refusal-only AFTER original publication ACK.
+}
+
+// The retained original intent determines the minimum even after both current
+// rows become terminal. A health header is never downgraded to archive v8.
+func (c *mihomoSameBootRetirementCursor) checkHistory() error {
+	if c == nil || c.self != c || c.manager == nil || c.owner == nil || c.owner.inputs == nil || c.history == nil {
+		return ErrMihomoLiveRetirement
+	}
+	wanted, err := MihomoLiveOfflineRetirementReadVersion(c.owner.inputs.before)
+	if err != nil {
+		return err
+	}
+	if wanted >= 9 && (c.manager.StateRoot != filepath.Join(installpath.State, "dataplane") || c.owner.inputs.statePath != c.manager.StateRoot) {
+		return ErrMihomoLiveRetirement
+	}
+	return c.history.CheckWrite(c.ctx, wanted)
 }
 
 // RetireMihomoLiveSameBoot is explicit offline maintenance under the five
@@ -176,7 +193,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err != nil || len(encoded) > bootRetirementLimit {
 		return nil, errors.Join(ErrMihomoLiveRetirement, err)
 	}
-	if err := history.CheckWrite(ctx, 8); err != nil {
+	if err := c.checkHistory(); err != nil {
 		return nil, err
 	}
 	stage = "prepare-archive"
@@ -260,7 +277,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := c.beforeSidecar(); err != nil {
 		return Execution{}, err
 	}
-	if err := c.history.CheckWrite(c.ctx, 8); err != nil {
+	if err := c.checkHistory(); err != nil {
 		return Execution{}, err
 	}
 	if err := c.publishArchive("retirement.json", c.intent, c.beforeSidecar); err != nil {
@@ -386,7 +403,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		if err := terminalCurrent(); err != nil {
 			return Execution{}, err
 		}
-		if err := c.history.CheckWrite(c.ctx, 8); err != nil {
+		if err := c.checkHistory(); err != nil {
 			return Execution{}, err
 		}
 		if err := c.publishTerminal(n, terminalCurrent); err != nil {

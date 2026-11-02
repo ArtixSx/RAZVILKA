@@ -2,7 +2,7 @@ name: Mihomo same boot original offline ownership validation
 
 on:
   push:
-    branches: [work/mihomo-same-boot-validation-20261102, work/mihomo-same-boot-source-20261102]
+    branches: [work/mihomo-same-boot-validation-20261102, work/mihomo-same-boot-source-20261102, work/bypass-integration-20261031]
   workflow_dispatch:
 
 permissions:
