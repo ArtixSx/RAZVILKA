@@ -1,0 +1,50 @@
+{
+  "commit": "9176b92623340689e195b86ef84c5d3e2292c0fc",
+  "full_push": {
+    "run": 41444440179,
+    "result": "success"
+  },
+  "full_pr": {
+    "run": 41444447479,
+    "job": 125273964124,
+    "result": "failure",
+    "cause": "aggregate dataplane package test timeout600s; current test age1s, no individual assertion failure"
+  },
+  "fix_prepared": {
+    "commit": "26ff5a20",
+    "package_test_timeout_seconds": 1200,
+    "individual_native_or_runtime_deadline_changed": false
+  },
+  "cold": {
+    "run": 41444440001,
+    "result": "success"
+  },
+  "health": {
+    "run": 41444439997,
+    "result": "success"
+  },
+  "focused": {
+    "run": 41444440227,
+    "passed": [
+      "strategy-pair",
+      "wireguard-native",
+      "node-native-performance"
+    ],
+    "failed": [
+      "scoped-native",
+      "managed-probe production",
+      "managed-probe race"
+    ]
+  },
+  "warm": {
+    "run": 41444440062,
+    "postcas_job": 125273939259,
+    "postcas": "success",
+    "lifecycle": "failure"
+  },
+  "domain": {
+    "run": 41444440168,
+    "result": "failure"
+  },
+  "router_acceptance": false
+}
