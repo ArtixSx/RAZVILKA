@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 4ebb18e725dc220379f9b1db839a72b4dbdbf534
+Type: cpu
+Time: 2026-11-02 06:09:31 UTC
+Duration: 37.45s, Total samples = 36790ms (98.23%)
+Showing nodes accounting for 35920ms, 97.64% of 36790ms total
+Dropped 460 nodes (cum <= 183.95ms)
+Showing top 35 nodes out of 200
+      flat  flat%   sum%        cum   cum%
+   29500ms 80.18% 80.18%    29500ms 80.18%  crypto/internal/fips140/sha256.blockSHANI
+    6240ms 16.96% 97.15%     6240ms 16.96%  internal/runtime/syscall/linux.Syscall6
+      40ms  0.11% 97.25%      250ms  0.68%  compress/flate.(*decompressor).huffmanBlock
+      40ms  0.11% 97.36%     1530ms  4.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+      40ms  0.11% 97.47%     6280ms 17.07%  syscall.RawSyscall6
+      10ms 0.027% 97.50%     1090ms  2.96%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+      10ms 0.027% 97.53%    17460ms 47.46%  io.copyBuffer
+      10ms 0.027% 97.55%     3110ms  8.45%  syscall.Read (inline)
+      10ms 0.027% 97.58%     3430ms  9.32%  syscall.Syscall
+      10ms 0.027% 97.61%     2910ms  7.91%  syscall.Syscall6
+      10ms 0.027% 97.64%      300ms  0.82%  syscall.fstatat
+         0     0% 97.64%      280ms  0.76%  compress/flate.(*decompressor).Read
+         0     0% 97.64%      280ms  0.76%  compress/gzip.(*Reader).Read
+         0     0% 97.64%    29500ms 80.18%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 97.64%    29500ms 80.18%  crypto/internal/fips140/sha256.block
+         0     0% 97.64%    34810ms 94.62%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0% 97.64%    34810ms 94.62%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+         0     0% 97.64%     1000ms  2.72%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply
+         0     0% 97.64%    34810ms 94.62%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.(*App).operationMiddleware.func9
+         0     0% 97.64%      640ms  1.74%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.func3
+         0     0% 97.64%    34810ms 94.62%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.func7
+         0     0% 97.64%      800ms  2.17%  github.com/ArtixSx/razvilka/internal/components.(*Manager).ApplyMihomoGuarded (inline)
+         0     0% 97.64%      290ms  0.79%  github.com/ArtixSx/razvilka/internal/components.(*Manager).OpenMihomoLiveSource
+         0     0% 97.64%      800ms  2.17%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded
+         0     0% 97.64%      450ms  1.22%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded.func2
+         0     0% 97.64%      260ms  0.71%  github.com/ArtixSx/razvilka/internal/components.(*Manager).installMihomoImageWithReplacement
+         0     0% 97.64%      450ms  1.22%  github.com/ArtixSx/razvilka/internal/components.(*Manager).stageMihomoArtifact
+         0     0% 97.64%     1670ms  4.54%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveCleanupObservation).Current
+         0     0% 97.64%     1000ms  2.72%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveCleanupObservation).ProfileReference
+         0     0% 97.64%     4930ms 13.40%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveObservation).Current (partial-inline)
+         0     0% 97.64%     2970ms  8.07%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveObservation).ProfileReference
+         0     0% 97.64%     6600ms 17.94%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveObservation).current
+         0     0% 97.64%     9530ms 25.90%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).Current
+         0     0% 97.64%     2640ms  7.18%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).CurrentForCleanup
+         0     0% 97.64%      320ms  0.87%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).PrepareNative

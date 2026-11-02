@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 597c013eb939886a96cab650de049916c65c86f0
+Type: cpu
+Time: 2026-11-02 06:36:40 UTC
+Duration: 42.52s, Total samples = 41480ms (97.54%)
+Showing nodes accounting for 40440ms, 97.49% of 41480ms total
+Dropped 547 nodes (cum <= 207.40ms)
+Showing top 35 nodes out of 206
+      flat  flat%   sum%        cum   cum%
+   33650ms 81.12% 81.12%    33650ms 81.12%  crypto/internal/fips140/sha256.blockSHANI
+    6370ms 15.36% 96.48%     6370ms 15.36%  internal/runtime/syscall/linux.Syscall6
+     160ms  0.39% 96.87%      210ms  0.51%  compress/flate.(*decompressor).huffSym
+     120ms  0.29% 97.16%      410ms  0.99%  compress/flate.(*decompressor).huffmanBlock
+      40ms 0.096% 97.25%     6390ms 15.41%  syscall.RawSyscall6
+      20ms 0.048% 97.30%     1500ms  3.62%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+      20ms 0.048% 97.35%     3640ms  8.78%  internal/poll.(*FD).Read
+      10ms 0.024% 97.37%     3400ms  8.20%  github.com/ArtixSx/razvilka/internal/restorejournal.artifactContextReader.Read
+      10ms 0.024% 97.40%     1980ms  4.77%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+      10ms 0.024% 97.42%     4070ms  9.81%  io.(*LimitedReader).Read
+      10ms 0.024% 97.44%     3620ms  8.73%  syscall.Read (inline)
+      10ms 0.024% 97.47%     4080ms  9.84%  syscall.Syscall
+      10ms 0.024% 97.49%      400ms  0.96%  syscall.fstatat
+         0     0% 97.49%      420ms  1.01%  compress/flate.(*decompressor).Read
+         0     0% 97.49%      420ms  1.01%  compress/gzip.(*Reader).Read
+         0     0% 97.49%    33650ms 81.12%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 97.49%    33650ms 81.12%  crypto/internal/fips140/sha256.block
+         0     0% 97.49%    38710ms 93.32%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0% 97.49%    38710ms 93.32%  github.com/ArtixSx/razvilka/internal/app.(*App).applyMihomoDataplane
+         0     0% 97.49%     1410ms  3.40%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply
+         0     0% 97.49%    38710ms 93.32%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.(*App).operationMiddleware.func9
+         0     0% 97.49%      910ms  2.19%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.func3
+         0     0% 97.49%    38710ms 93.32%  github.com/ArtixSx/razvilka/internal/app.TestMihomoLiveOriginalApplyStopAndFreshApply.func7
+         0     0% 97.49%     1120ms  2.70%  github.com/ArtixSx/razvilka/internal/components.(*Manager).ApplyMihomoGuarded (inline)
+         0     0% 97.49%      400ms  0.96%  github.com/ArtixSx/razvilka/internal/components.(*Manager).OpenMihomoLiveSource
+         0     0% 97.49%     1120ms  2.70%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded
+         0     0% 97.49%      640ms  1.54%  github.com/ArtixSx/razvilka/internal/components.(*Manager).applyMihomoGuarded.func2
+         0     0% 97.49%      360ms  0.87%  github.com/ArtixSx/razvilka/internal/components.(*Manager).installMihomoImageWithReplacement
+         0     0% 97.49%      640ms  1.54%  github.com/ArtixSx/razvilka/internal/components.(*Manager).stageMihomoArtifact
+         0     0% 97.49%    13140ms 31.68%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).Current
+         0     0% 97.49%     3550ms  8.56%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).CurrentForCleanup
+         0     0% 97.49%      450ms  1.08%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).PrepareNative
+         0     0% 97.49%     2500ms  6.03%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).ProfileReference
+         0     0% 97.49%     3630ms  8.75%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithCleanupReadObservation
+         0     0% 97.49%     1790ms  4.32%  github.com/ArtixSx/razvilka/internal/components.(*MihomoLiveProcess).WithCleanupReadObservation.func1

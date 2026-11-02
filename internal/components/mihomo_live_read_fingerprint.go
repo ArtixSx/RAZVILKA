@@ -43,10 +43,7 @@ func (f *mihomoLiveReadFingerprint) same(g *mihomoLiveReadFingerprint) bool {
 	return f != nil && g != nil && f.child == g.child && f.native == g.native && f.file == g.file
 }
 func (p *MihomoLiveProcess) currentReadBoundary(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
-	if cleanup != nil {
-		return p.CurrentForCleanup(ctx, cleanup)
-	}
-	return p.Current(ctx)
+	return p.currentNativeReadComparison(ctx, cleanup)
 }
 func (p *MihomoLiveProcess) openReadFingerprint(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) (*mihomoLiveReadFingerprint, error) {
 	before, err := p.readFingerprint(ctx)

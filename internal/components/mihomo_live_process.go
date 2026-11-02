@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/restorejournal"
 )
 
 // MihomoLiveProcess is reserved before any Start. The native implementation
@@ -32,6 +33,7 @@ type mihomoLiveNative interface {
 	current(context.Context) error
 	currentForCleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	currentRead(context.Context, *operationgate.ExclusiveCleanupReview, *mihomoLiveReadFingerprint) error
+	currentCompared(context.Context, *operationgate.ExclusiveCleanupReview, *restorejournal.ArtifactSourceComparison) error
 	readFingerprint(context.Context) (mihomoLiveReadFileID, error)
 	cleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	pid() int
