@@ -45,10 +45,13 @@ func nfqws2OriginalActivationDeadline(ctx context.Context, now time.Time) (time.
 
 // Every potentially expensive physical/source/COMMON read precedes the stamp.
 // Closing reads and native Start still consume the original fixed 15s window.
-func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (*nfqws2ActiveActivationSeal, error) {
+func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (_ *nfqws2ActiveActivationSeal, resultErr error) {
+	stage := "activation.prepare"
+	defer func() { resultErr = nfqwsExecutionFailure(stage, resultErr) }()
 	if err := e.prepare(ctx); err != nil {
 		return nil, err
 	}
+	stage = "activation.registrar"
 	s, ok := ctx.Value(nfqws2ActiveActivationRegistrarKey{}).(*executionResourceScope)
 	if !ok || s == nil || s.manager != e.material.manager || s.adapterOwner != e.material.adapter || s.adapter != "nfqws2" || !nfqws2ActiveSamePlan(s.plan, e.plan) {
 		return nil, preflightRefusalError{ErrNFQWSScopedOwner}
@@ -60,28 +63,35 @@ func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (*n
 	}
 	e.activationAttempted = true
 	e.mu.Unlock()
+	stage = "activation.scope"
 	s.mu.Lock()
 	err := s.check(ctx, nil, true)
 	s.mu.Unlock()
 	if err != nil {
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.lan"
 	if err := e.verifyLAN(ctx, e.plan.LAN); err != nil {
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.absence"
 	if err := e.preparedAbsence(ctx); err != nil {
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.parent"
 	parent, err := components.ReadNFQWSSupervisionIdentity()
 	if err != nil || parent != e.material.intent.Parent {
 		return nil, preflightRefusalError{errors.Join(ErrNFQWSScopedOwner, err)}
 	}
+	stage = "activation.forward"
 	if err := e.forward(ctx); err != nil {
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.lease-absence"
 	if _, err := os.Lstat(filepath.Join(e.material.intent.StateRoot, nfqws2LeaseFile)); !errors.Is(err, os.ErrNotExist) {
 		return nil, preflightRefusalError{errors.Join(ErrNFQWSScopedOwner, err)}
 	}
+	stage = "activation.material"
 	r := e.material
 	r.mu.Lock()
 	if r.closed || !r.executionBound || r.command.ID != "" {
@@ -97,6 +107,7 @@ func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (*n
 		r.mu.Unlock()
 		return nil, preflightRefusalError{ErrNFQWSScopedOwner}
 	}
+	stage = "activation.deadline"
 	deadline, err := nfqws2OriginalActivationDeadline(ctx, time.Now())
 	if err != nil {
 		r.mu.Unlock()
@@ -108,18 +119,22 @@ func (e *nfqws2ActiveExecution) issueOriginalActivation(ctx context.Context) (*n
 	if nfqws2ActiveCommandMatchesSpec(command, spec) != nil {
 		return nil, preflightRefusalError{ErrNFQWSScopedOwner}
 	}
+	stage = "activation.selection"
 	selection, err := ReviewNFQWSScopedSelection(ctx, r.source, r.reference, e.plan, spec, e.spec.Matches)
 	if err != nil {
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.forward"
 	if err := e.forward(ctx); err != nil {
 		_ = selection.Close()
 		return nil, preflightRefusalError{err}
 	}
+	stage = "activation.closing-deadline"
 	if !time.Now().Before(command.ActivationDeadline) {
 		_ = selection.Close()
 		return nil, preflightRefusalError{ErrNFQWSScopedOwner}
 	}
+	stage = "activation.retain-selection"
 	seal := &nfqws2ActiveActivationSeal{execution: e, scope: s, selection: selection, command: command, spec: selection.Spec()}
 	seal.self = seal
 	r.mu.Lock()

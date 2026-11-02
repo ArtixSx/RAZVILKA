@@ -74,18 +74,26 @@ jobs:
           work=$(mktemp -d /tmp/razvilka-mihomo-observation.XXXXXX)
           chmod 700 "$work"
           trap 'sudo rm -rf "$work"' EXIT
-          go test -c -o "$work/normal.test" ./internal/components
-          go test -race -c -o "$work/race.test" ./internal/components
-          chmod 555 "$work/normal.test" "$work/race.test"
+          for package in components dataplane; do
+            go test -c -o "$work/$package-normal.test" "./internal/$package"
+            go test -race -c -o "$work/$package-race.test" "./internal/$package"
+          done
+          chmod 555 "$work/"*.test
           failed=0
-          for mode in normal race; do
-            echo "actual_original_observation_mode=$mode fixture_budget_seconds=30"
-            timeout 90s sudo env \
-              RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
-              unshare --mount --net --fork --kill-child=KILL sh -eu -c '
-                mount --make-rprivate /
-                ip link set lo up
-                exec "$1" -test.run "^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$" -test.v -test.timeout 75s
-              ' sh "$work/$mode.test" || failed=1
+          for package in components dataplane; do
+            case "$package" in
+              components) pattern='^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$' ;;
+              dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$' ;;
+            esac
+            for mode in normal race; do
+              echo "actual_original_observation_package=$package mode=$mode fixture_budget_components=30s fixture_budget_dataplane=45s"
+              timeout 90s sudo env \
+                RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+                unshare --mount --net --fork --kill-child=KILL sh -eu -c '
+                  mount --make-rprivate /
+                  ip link set lo up
+                  exec "$1" -test.run "$2" -test.v -test.timeout 75s
+                ' sh "$work/$package-$mode.test" "$pattern" || failed=1
+            done
           done
           exit "$failed"

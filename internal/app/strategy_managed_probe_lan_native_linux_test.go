@@ -168,6 +168,17 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 	}
 	code, data = request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
 	if code != http.StatusOK {
+		status, statusErr := a.Dataplane.Status()
+		if statusErr != nil || status.Execution == nil {
+			t.Log("actual original LAN execution unavailable")
+		} else {
+			t.Logf("actual original LAN execution state=%s rollback_verified=%t", status.Execution.State, status.Execution.RollbackVerified)
+			for _, step := range status.Execution.Steps {
+				// Fixed protocol coordinates only; never print Detail or Error,
+				// which may contain a tool invocation or a private source path.
+				t.Logf("actual original LAN step adapter=%s phase=%s state=%s", step.Adapter, step.Phase, step.State)
+			}
+		}
 		t.Fatal("actual original LAN Apply", code, string(data))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

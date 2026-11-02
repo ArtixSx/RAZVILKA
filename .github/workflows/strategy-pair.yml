@@ -108,6 +108,12 @@ jobs:
           cache: false
       - name: Disposable native NFQUEUE fixture dependencies
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Original active directory custody and error classification
+        shell: bash
+        run: |
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -count=1 ./internal/dataplane -run '^TestNFQWSActiveProcessDirectory|^TestNFQWSExecutionDiagnostics' -v
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
         shell: bash
         run: |
