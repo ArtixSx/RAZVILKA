@@ -217,13 +217,24 @@ func (n *mihomoLiveNativeLinux) filesCurrent(ctx context.Context) error {
 }
 
 func (n *mihomoLiveNativeLinux) filesCurrentRead(ctx context.Context, read *mihomoLiveReadFingerprint) error {
+	return n.filesCurrentCompared(ctx, read, nil)
+}
+
+func (n *mihomoLiveNativeLinux) filesCurrentCompared(ctx context.Context, read *mihomoLiveReadFingerprint, comparison *restorejournal.ArtifactSourceComparison) error {
 	if err := mihomoLiveFinite(ctx); err != nil {
 		return err
 	}
 	if n.closed || n.closeErr != nil || n.owner == nil || n.owner.self != n.owner || n.binary == nil || n.profile == nil || n.directory == nil {
 		return ErrMihomoLiveOwner
 	}
-	if read == nil {
+	if comparison != nil {
+		if read != nil {
+			return ErrMihomoLiveOwner
+		}
+		if err := comparison.MatchHeld(ctx, n.binary); err != nil {
+			return errors.Join(ErrMihomoLiveOwner, err)
+		}
+	} else if read == nil {
 		hash, err := originHash(ctx, n.binary)
 		if err != nil || hash != n.owner.source.reference.BinarySHA256 {
 			return errors.Join(ErrMihomoLiveOwner, err)
@@ -243,6 +254,9 @@ func (n *mihomoLiveNativeLinux) filesCurrentRead(ctx context.Context, read *miho
 		return errors.Join(ErrMihomoLiveOwner, err)
 	}
 	homeErr := n.homeCurrent()
+	if comparison != nil {
+		return errors.Join(homeErr, comparison.MatchHeld(ctx, n.binary))
+	}
 	if read != nil {
 		actual, err := mihomoLiveReadFileFingerprint(n.binary)
 		if err != nil || actual != read.file {
@@ -283,6 +297,17 @@ func (n *mihomoLiveNativeLinux) currentRead(ctx context.Context, cleanup *operat
 }
 
 func (n *mihomoLiveNativeLinux) currentModeRead(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview, read *mihomoLiveReadFingerprint) error {
+	return n.currentModeCompared(ctx, cleanup, read, nil)
+}
+
+func (n *mihomoLiveNativeLinux) currentCompared(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview, comparison *restorejournal.ArtifactSourceComparison) error {
+	if comparison == nil {
+		return ErrMihomoLiveOwner
+	}
+	return n.currentModeCompared(ctx, cleanup, nil, comparison)
+}
+
+func (n *mihomoLiveNativeLinux) currentModeCompared(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview, read *mihomoLiveReadFingerprint, comparison *restorejournal.ArtifactSourceComparison) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	select {
@@ -310,7 +335,7 @@ func (n *mihomoLiveNativeLinux) currentModeRead(ctx context.Context, cleanup *op
 	if controlErr != nil {
 		return controlErr
 	}
-	return n.filesCurrentRead(ctx, read)
+	return n.filesCurrentCompared(ctx, read, comparison)
 }
 func (n *mihomoLiveNativeLinux) pid() int {
 	n.mu.Lock()
