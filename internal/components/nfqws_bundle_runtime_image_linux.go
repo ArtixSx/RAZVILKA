@@ -24,7 +24,7 @@ type managedRuntimeImageNode struct {
 
 // This bounded, callback-free image observation keeps original descriptors
 // until the whole graph closes. BOTH complete payload reads remain: the first
-// uses an exact bounded allocation; the second compares fixed 32KiB chunks
+// uses an exact bounded slice of exclusive scratch; the second compares 32KiB chunks
 // against those bytes, independent of timestamp granularity. No observed bytes
 // survive this call; every later Check hashes and compares all six members anew.
 // Original source/kernel/Start bookends and installer/recovery readers remain.
@@ -47,12 +47,17 @@ func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expe
 		return manifest, err
 	}
 	var nodes []*managedRuntimeImageNode
+	var scratch *managedRuntimePayloadScratch
 	defer func() {
 		for _, node := range nodes {
 			clear(node.content)
+			node.content = nil
 			resultErr = errors.Join(resultErr, node.file.Close())
 		}
 		resultErr = errors.Join(resultErr, root.Close())
+		// Only after the last descriptor closes and every slice is detached may
+		// another call acquire this zeroed byte storage. It holds no evidence.
+		releaseManagedRuntimePayloadScratch(scratch)
 		if resultErr != nil {
 			manifest = ManagedNFQWSManifest{}
 			resultErr = errors.Join(ErrManagedNFQWSBundle, resultErr)
@@ -135,9 +140,13 @@ func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expe
 		}
 		members = append(members, node)
 	}
+	scratch = acquireManagedRuntimePayloadScratch()
 	for i, node := range members {
 		member := manifest.Members[i]
-		data := make([]byte, member.RawSize+1)
+		data, err := scratch.member(i, member.RawSize)
+		if err != nil {
+			return manifest, err
+		}
 		count, err := io.ReadFull(managedRuntimeImageContextReader{ctx, io.LimitReader(node.file, member.RawSize+1)}, data)
 		node.content = data[:count]
 		noteManagedNFQWSPayloadRead(m, int64(count))
@@ -147,8 +156,7 @@ func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expe
 	}
 	// Preserve the second full byte comparison for manifest, notices and ALL
 	// six payloads. Metadata closing is additional, never a substitute for it.
-	buffer := make([]byte, 32<<10)
-	defer clear(buffer)
+	buffer := scratch.compare[:]
 	for _, node := range nodes {
 		if node.info.IsDir() {
 			continue

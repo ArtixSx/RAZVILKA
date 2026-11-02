@@ -309,7 +309,7 @@ func (a *audit) rawFile(parent int, name string, limit int) ([]byte, bool) {
 func boundedRead(ctx context.Context, fd, limit int) ([]byte, bool) {
 	// The limit is an admission bound, not the expected proc file size. Grow
 	// only for bytes actually read; keep every original read/EOF/call bound.
-	data := make([]byte, 0, min(limit, 4096))
+	data := make([]byte, 0)
 	buf := make([]byte, 4096)
 	for calls := 0; calls < limit/len(buf)+3; calls++ {
 		need := limit + 1 - len(data)

@@ -11,7 +11,7 @@ import (
 )
 
 func TestBoundedReadKeepsExactReadAndEOFBounds(t *testing.T) {
-	for _, size := range []int{0, 1, 4095, 4096, 4097, 65536} {
+	for _, size := range []int{0, 1, 63, 64, 65, 511, 512, 513, 4095, 4096, 4097, 65536} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			data := bytes.Repeat([]byte{0xa5}, size)
 			for _, limit := range []int{size, size + 1, 1 << 20, max(0, size-1)} {
