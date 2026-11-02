@@ -90,6 +90,13 @@ case "$probe_build_mode" in
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
   *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
 esac
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  if test "$probe_build_mode" = race; then
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  else
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  fi
+fi
 chmod 500 "$probe_work/app.test"
 # Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
 # private /opt mount; this diagnostic compiler work is not a probe budget.
@@ -116,12 +123,13 @@ fi
 # Separate genuine source admission diagnostic; it does not stand in for the
 # full NFQWS2 packet workflow or positive offline retirement.
 if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
-  probe_cases='TestStaticVersionFactNativeMihomoColdRead'
+  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent'
 fi
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
 case "$probe_case" in TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestMihomoLiveColdPublicNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;; esac
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /

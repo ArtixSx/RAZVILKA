@@ -49,7 +49,10 @@ func TestStaticVersionFactNativeMihomoColdRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	m := dataplane.New(root)
 	proxy, err := dataplane.NewProxyTunnelAdapter("sing-box", nil, root)
 	if err != nil {
