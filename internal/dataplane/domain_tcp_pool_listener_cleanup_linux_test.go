@@ -113,6 +113,7 @@ func TestDomainPoolCanceledWitnessOnlyReachesFreshGlobalAbsence(t *testing.T) {
 			r.self = r
 			material.resource = r
 			r.id = "xd-model"
+			r.definition.Domain = CloneDomainPolicyRuntimePlan(s.plan.DomainPolicy)
 			definition := r.definition.Clone()
 			s.execution.Resources = []ExecutionResource{{ID: r.id, Kind: "xray-domain-tcp", State: "prepared", Phase: "listener-ready", EffectsDigest: definition.ConfigSHA256, Generation: definition.Domain.Generation, XrayDomainTCP: &definition}}
 			publishModel := func() {
