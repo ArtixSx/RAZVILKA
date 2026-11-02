@@ -78,6 +78,8 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 	}
 	selected := "mihomo:" + imported.Nodes[0].ID
 	service := catalog.Service{ID: "live-listed", Name: "Native IPv4 service", Category: "fixture", Strategy: []string{"mihomo"}, CIDRs: []string{domainOriginalServer + "/32"}, ProbeURL: "https://service.example.com/", Probes: []catalog.Probe{{ID: "primary", URL: "https://service.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}, {ID: "required-second", URL: "https://unknown.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}}}
+	service.Probes[0].Label = "Primary native TLS"
+	service.Probes[1].Label = "Second mandatory native TLS"
 	if err = catalog.Validate(catalog.Catalog{Services: []catalog.Service{service}}); err != nil {
 		t.Fatal(err)
 	}

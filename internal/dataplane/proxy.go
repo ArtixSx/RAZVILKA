@@ -159,7 +159,7 @@ func NewProxyTunnelAdapter(id string, configs *engineconfig.Manager, stateRoot s
 	case "xray":
 		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18082, "rz-xray", "172.31.22.1/30", 204, 24000
 	case "mihomo":
-		a.SOCKSPort,a.Interface,a.TunnelCIDR,a.Table,a.Priority=18083,"rz-mihomo","172.31.23.1/30",207,31200
+		a.SOCKSPort, a.Interface, a.TunnelCIDR, a.Table, a.Priority = 18083, "rz-mihomo", "172.31.23.1/30", 207, 31200
 	default:
 		return nil, fmt.Errorf("unsupported proxy tunnel engine %q", id)
 	}
