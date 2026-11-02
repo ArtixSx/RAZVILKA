@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,10 +18,11 @@ import (
 // The complete closed runtime directory is retained as history. No serialized
 // filename is interpreted as a command or selected as an arbitrary move path.
 type mihomoColdRuntimeArchive struct {
-	Present     bool              `json:"present"`
-	Identity    string            `json:"identity,omitempty"`
-	Files       map[string][]byte `json:"files,omitempty"`
-	Directories map[string]string `json:"directories,omitempty"`
+	Present        bool              `json:"present"`
+	Identity       string            `json:"identity,omitempty"`
+	Files          map[string][]byte `json:"files,omitempty"`
+	FileIdentities map[string]string `json:"file_identities,omitempty"`
+	Directories    map[string]string `json:"directories,omitempty"`
 }
 
 func mihomoColdRuntimeNames(a *ProxyTunnelAdapter) map[string]bool {
@@ -58,6 +60,7 @@ func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (m
 	}
 	out.Present, out.Identity, out.Files = true, executionHistoryIdentity(info), map[string][]byte{}
 	out.Directories = map[string]string{}
+	out.FileIdentities = map[string]string{}
 	allowed := mihomoColdRuntimeNames(a)
 	total := 0
 	var walk func(string, int) error
@@ -109,11 +112,16 @@ func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (m
 			if err != nil {
 				return err
 			}
+			closing, err := dir.Lstat(child)
+			if err != nil || mihomoColdFileIdentity(info) != mihomoColdFileIdentity(closing) {
+				return ErrMihomoLiveRetirement
+			}
 			total += len(raw)
 			if total > bootRetirementLimit || len(out.Files) >= 512 {
 				return ErrMihomoLiveRetirement
 			}
 			out.Files[child] = raw
+			out.FileIdentities[child] = mihomoColdFileIdentity(info)
 		}
 		return nil
 	}
@@ -130,12 +138,12 @@ func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (m
 
 func validateMihomoColdRuntime(a *ProxyTunnelAdapter, d ExecutionMihomoLiveDefinition, r mihomoColdRuntimeArchive) error {
 	if !r.Present {
-		if r.Identity != "" || len(r.Files) != 0 || len(r.Directories) != 0 {
+		if r.Identity != "" || len(r.Files) != 0 || len(r.Directories) != 0 || len(r.FileIdentities) != 0 {
 			return ErrMihomoLiveRetirement
 		}
 		return nil
 	}
-	if r.Identity == "" || len(r.Files) > 512 || len(r.Directories) > 128 {
+	if r.Identity == "" || len(r.Files) > 512 || len(r.Directories) > 128 || len(r.FileIdentities) != len(r.Files) {
 		return ErrMihomoLiveRetirement
 	}
 	for name, identity := range r.Directories {
@@ -156,6 +164,9 @@ func validateMihomoColdRuntime(a *ProxyTunnelAdapter, d ExecutionMihomoLiveDefin
 	allowed := mihomoColdRuntimeNames(a)
 	total := 0
 	for name, raw := range r.Files {
+		if r.FileIdentities[name] == "" {
+			return ErrMihomoLiveRetirement
+		}
 		total += len(raw)
 		if total > bootRetirementLimit {
 			return ErrMihomoLiveRetirement
@@ -244,6 +255,13 @@ func validateMihomoColdRuntime(a *ProxyTunnelAdapter, d ExecutionMihomoLiveDefin
 		return ErrMihomoLiveRetirement
 	}
 	return nil
+}
+
+func mihomoColdFileIdentity(info os.FileInfo) string {
+	if info == nil || !executionHistoryOwner(info, false) {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d:%d:%d", executionHistoryIdentity(info), info.Size(), info.Mode(), info.ModTime().UnixNano())
 }
 
 func mihomoColdRelative(a *ProxyTunnelAdapter, path string) string {

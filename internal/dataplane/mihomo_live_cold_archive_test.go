@@ -30,7 +30,7 @@ func TestMihomoLiveColdArchiveBoundsKnownFilesAndDirectoryInventory(t *testing.T
 	if err := os.WriteFile(a.engineConfigPath(), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	generation := "123456789abcdef0123456789abcdef01"
+	generation := "123456789abcdef0123456789abcdef0"
 	if err := os.MkdirAll(filepath.Join(a.StateRoot, "policy-generations", generation), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -61,6 +61,11 @@ func TestMihomoLiveColdArchiveBoundsKnownFilesAndDirectoryInventory(t *testing.T
 func TestMihomoLiveColdArchiveRefusesAggregateOversize(t *testing.T) {
 	a := &ProxyTunnelAdapter{EngineID: "mihomo", StateRoot: filepath.Join(t.TempDir(), "mihomo"), SidecarKind: "hev"}
 	r := mihomoColdRuntimeArchive{Present: true, Identity: "test", Files: map[string][]byte{mihomoColdRelative(a, a.engineProcess().LogPath): make([]byte, 9<<20), mihomoColdRelative(a, a.sidecarProcess().LogPath): make([]byte, 9<<20)}}
+	r.Directories = map[string]string{"runtime": "model"}
+	r.FileIdentities = map[string]string{}
+	for name := range r.Files {
+		r.FileIdentities[name] = "model"
+	}
 	if validateMihomoColdRuntime(a, mihomoLiveDefinitionFixture(t), r) == nil {
 		t.Fatal("aggregate bound bypassed")
 	}
