@@ -16,5 +16,7 @@ const (
 	nfqwsProbePhaseActiveLAN
 	nfqwsProbePhaseActivate
 	nfqwsProbePhasePrepared
+	nfqwsProbePhaseActiveReadPair
+	nfqwsProbePhaseActiveInventory
 	nfqwsProbePhaseCount
 )

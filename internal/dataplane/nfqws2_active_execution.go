@@ -510,6 +510,10 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 		return err
 	}
 	stage = "activate.process-directory"
+	// This exact producer owns its additional inventory predicate. Removing
+	// the public callback makes mixed/replaced callbacks fail explicitly.
+	e.binding.AdditionalReadback = nil
+	e.binding.activeReadback = e
 	if err := e.prepareOriginalProcessDirectory(ctx); err != nil {
 		e.mu.Lock()
 		e.preparationErr = err

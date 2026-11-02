@@ -90,7 +90,7 @@ func NativeFixtureNFQWSActivePhases(material *NFQWSActiveMaterial) map[string]Na
 		return out
 	}
 	counts := value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)
-	for phase, name := range [...]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback", "active-lan", "activate", "prepared-active"} {
+	for phase, name := range [...]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback", "active-lan", "activate", "prepared-active", "active-read-pair", "active-inventory-capture"} {
 		count := &counts[phase]
 		out[name] = NativeFixtureNFQWSProbePhase{Started: count.started.Load(), Completed: count.completed.Load(), Wall: time.Duration(count.nanos.Load())}
 	}
