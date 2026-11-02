@@ -395,8 +395,8 @@ func (r *heldReview) pathsCurrent(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return at("CHECK_CONTEXT", ctx.Err())
 		}
-		info, err := os.Lstat(n.path)
-		if err != nil || !sameNode(n.info, info) {
+		same, err := freshPathNode(n.path, n.info)
+		if err != nil || !same {
 			return at("CHECK_PATH", err)
 		}
 		if n.link != "" {

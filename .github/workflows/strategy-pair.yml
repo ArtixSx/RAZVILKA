@@ -117,6 +117,10 @@ jobs:
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v
+      - name: Actual path metadata parity and paired allocation benchmark
+        run: |
+          go test ./internal/startuptools -run '^TestFreshPathNode' -count=1 -v
+          go test ./internal/startuptools -run '^$' -bench '^BenchmarkFreshPathNode$' -benchtime=1s -count=3 -benchmem
       - name: Paired original collector scheduling benchmark (not end-to-end latency)
         if: matrix.build-mode == 'production'
         run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
