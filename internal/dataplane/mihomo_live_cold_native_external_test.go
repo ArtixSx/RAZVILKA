@@ -30,10 +30,12 @@ func TestMihomoLiveColdPublicNativeHistoricalIntent(t *testing.T) {
 			t.Fatal("separate actual root namespace required", kind)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	lifetime, closeLifetime := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer closeLifetime()
+	ctx, cancel := context.WithTimeout(lifetime, 90*time.Second)
 	defer cancel()
 	provider := netidentity.NewProcProvider()
-	l, err := startuptools.AcquireNativeFixturePolicy(ctx, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
+	l, err := startuptools.AcquireNativeFixturePolicy(lifetime, provider, os.Getenv("RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW"))
 	if err != nil {
 		t.Fatal("original tool lease", err)
 	}
@@ -104,7 +106,12 @@ func TestMihomoLiveColdPublicNativeHistoricalIntent(t *testing.T) {
 	if json.Unmarshal(archive, &manifest) != nil || !bytes.Equal(manifest.Before, original) || !bytes.Equal(manifest.After, latest) {
 		t.Fatal("original history not retained")
 	}
-	if _, err := m.RetireMihomoLiveAfterBoot(ctx, historical.PlanID, historical.Digest, current); err != nil {
+	// A distinct retry has its own finite caller budget while retaining the
+	// SAME original source. Never renew the deadline of the first operation.
+	cancel()
+	retry, cancelRetry := context.WithTimeout(lifetime, 90*time.Second)
+	defer cancelRetry()
+	if _, err := m.RetireMihomoLiveAfterBoot(retry, historical.PlanID, historical.Digest, current); err != nil {
 		t.Fatal("idempotent public retry", err)
 	}
 	t.Log("public offline retirement and repeat passed with actual current process/socket/kernel/source observations; historical old boot is modeled")

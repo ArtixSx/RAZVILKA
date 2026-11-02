@@ -93,9 +93,15 @@ esac
 if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
   if test "$probe_build_mode" = race; then
     go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   else
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+    go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   fi
+  cp "$probe_work/tools.json" "$probe_work/runtime-native-tool-review.json"
+  chmod 600 "$probe_work/runtime-native-tool-review.json"
+  export RAZVILKA_RUNTIME_NATIVE_REVIEW="$probe_work/runtime-native-tool-review.json" RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD=3
+  exec 3</proc/self/ns/net
 fi
 chmod 500 "$probe_work/app.test"
 # Go 1.26 builds this builtin tool lazily. Warm it outside the packet actor and
@@ -123,13 +129,17 @@ fi
 # Separate genuine source admission diagnostic; it does not stand in for the
 # full NFQWS2 packet workflow or positive offline retirement.
 if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
-  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent'
+  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent'
+  probe_timeout=220s
 fi
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
 case "$probe_case" in TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
-case "$probe_case" in TestMihomoLiveColdPublicNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;; esac
+case "$probe_case" in
+  TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
+  TestMihomoLiveColdCLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
+esac
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /

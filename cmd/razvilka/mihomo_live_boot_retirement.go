@@ -94,7 +94,7 @@ func runMihomoLiveBootRetirementCLI(ctx context.Context, paths offlineNFQWS2Stop
 			if err := registerScopedDNS(manager, nil); err != nil {
 				return mihomoLiveBootFailed("dns-owner", err)
 			}
-			bound, closeSources, sourceErr := runtimeManagerSourcesBound(ctx, func() (*dataplane.Manager, error) { return manager, nil }, paths.dns)
+			bound, closeSources, sourceErr := mihomoColdRuntimeSourcesBound(ctx, func() (*dataplane.Manager, error) { return manager, nil }, paths.dns)
 			if closeSources != nil {
 				defer func() { err = errors.Join(err, closeSources()) }()
 			}
