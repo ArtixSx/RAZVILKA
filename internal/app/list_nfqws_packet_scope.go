@@ -274,11 +274,25 @@ func (b *NFQWSPacketScopeBinding) BindCompilation(ctx context.Context, c *Defaul
 	})
 }
 func (b *NFQWSPacketScopeBinding) ScopeCheck(ctx context.Context, p *dataplane.LANPolicyRuntimePlan) error {
-	return b.use(ctx, func(context.Context) error {
+	if b == nil || b.self != b || b.app == nil {
+		return ErrListScopeChanged
+	}
+	c, cancel, err := listScopeContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.app.Operations.WithExclusiveContext(c, func() error {
+		// Only compare immutable in-memory intent under the SAME lock and
+		// operation. No callback/effect separates it from the complete fresh
+		// currentLocked observation, which also runs for a rejected proposal.
+		var comparison error
 		if !b.boundOnce || b.bound == nil || dataplane.ValidateLANPolicyRuntime(p) != nil || !reflect.DeepEqual(p, b.bound) {
-			return ErrListScopeChanged
+			comparison = ErrListScopeChanged
 		}
-		return nil
+		return errors.Join(comparison, b.currentLocked(c))
 	})
 }
 func (b *NFQWSPacketScopeBinding) cleanupScopeCheck(ctx context.Context, p *dataplane.LANPolicyRuntimePlan) (result error) {
