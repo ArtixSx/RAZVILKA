@@ -31,6 +31,8 @@ type mihomoLiveNative interface {
 	start(context.Context, func(context.Context, func() error) error) error
 	current(context.Context) error
 	currentForCleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
+	currentRead(context.Context, *operationgate.ExclusiveCleanupReview, *mihomoLiveReadFingerprint) error
+	readFingerprint(context.Context) (mihomoLiveReadFileID, error)
 	cleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	pid() int
 	file(string, os.FileInfo) bool

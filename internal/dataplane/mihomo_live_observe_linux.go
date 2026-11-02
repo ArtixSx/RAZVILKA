@@ -15,10 +15,18 @@ import (
 // reconstructed from the returned observation or a detached reference.
 func observeMihomoLiveProcess(ctx context.Context, child *components.MihomoLiveProcess, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
 	var result mihomoProbeObservation
-	err := child.WithReadObservation(ctx, func(held context.Context, view *components.MihomoLiveObservation) error {
-		var err error
-		result, err = observeMihomoLiveObservation(held, view, provider, expected)
-		return err
+	if provider == nil {
+		return result, errMihomoProbeObservation
+	}
+	err := provider.WithCurrent(ctx, func(networkCtx context.Context, current netidentity.Identity) error {
+		if current != expected {
+			return errMihomoProbeObservation
+		}
+		return child.WithReadObservation(networkCtx, func(held context.Context, view *components.MihomoLiveObservation) error {
+			var err error
+			result, err = observeMihomoLiveObservation(held, view, expected)
+			return err
+		})
 	})
 	if err != nil {
 		return mihomoProbeObservation{}, err
@@ -26,12 +34,12 @@ func observeMihomoLiveProcess(ctx context.Context, child *components.MihomoLiveP
 	return result, nil
 }
 
-func observeMihomoLiveObservation(ctx context.Context, view *components.MihomoLiveObservation, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
+func observeMihomoLiveObservation(ctx context.Context, view *components.MihomoLiveObservation, expected netidentity.Identity) (mihomoProbeObservation, error) {
 	profile, err := view.ProfileReference(ctx)
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}
-	result, err := observeOriginalMihomoProcess(ctx, view, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, provider, expected)
+	result, err := observeOriginalMihomoProcessInNetwork(ctx, view, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, expected)
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}

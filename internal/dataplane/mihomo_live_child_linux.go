@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -28,18 +29,23 @@ func (r *mihomoLiveResource) nativeCurrent(ctx context.Context) error {
 	if err := errors.Join(r.control.ObserveCurrent(ctx), r.node.Current(ctx)); err != nil {
 		return err
 	}
-	return child.WithReadObservation(ctx, func(held context.Context, view *components.MihomoLiveObservation) error {
-		if !view.BoundTo(child, r.source) {
+	return r.adapter.provider.WithCurrent(ctx, func(networkCtx context.Context, current netidentity.Identity) error {
+		if current != r.definition.NetworkIdentity {
 			return errMihomoLiveMaterial
 		}
-		profile, err := view.ProfileReference(held)
-		if err != nil || profile != r.definition.Profile {
-			return errors.Join(errMihomoLiveMaterial, err)
-		}
-		if _, err := observeMihomoLiveObservation(held, view, r.adapter.provider, r.definition.NetworkIdentity); err != nil {
-			return err
-		}
-		return errors.Join(r.control.ObserveCurrent(held), r.node.Current(held))
+		return child.WithReadObservation(networkCtx, func(held context.Context, view *components.MihomoLiveObservation) error {
+			if !view.BoundTo(child, r.source) {
+				return errMihomoLiveMaterial
+			}
+			profile, err := view.ProfileReference(held)
+			if err != nil || profile != r.definition.Profile {
+				return errors.Join(errMihomoLiveMaterial, err)
+			}
+			if _, err := observeMihomoLiveObservation(held, view, r.definition.NetworkIdentity); err != nil {
+				return err
+			}
+			return errors.Join(r.control.ObserveCurrent(held), r.node.Current(held))
+		})
 	})
 }
 
@@ -56,17 +62,22 @@ func (r *mihomoLiveResource) nativeCleanupCurrent(ctx context.Context, cleanup *
 	if err := r.control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
 		return err
 	}
-	return child.WithCleanupReadObservation(ctx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
-		if !view.BoundTo(child, r.source, cleanup) {
+	return r.adapter.provider.WithCurrent(ctx, func(networkCtx context.Context, current netidentity.Identity) error {
+		if current != r.definition.NetworkIdentity {
 			return errMihomoLiveMaterial
 		}
-		profile, err := view.ProfileReference(held)
-		if err != nil || profile != r.definition.Profile {
-			return errors.Join(errMihomoLiveMaterial, err)
-		}
-		if _, err := observeMihomoLiveCleanupObservation(held, view, r.adapter.provider, r.definition.NetworkIdentity); err != nil {
-			return err
-		}
-		return r.control.CurrentForCleanupOperation(held, cleanup)
+		return child.WithCleanupReadObservation(networkCtx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
+			if !view.BoundTo(child, r.source, cleanup) {
+				return errMihomoLiveMaterial
+			}
+			profile, err := view.ProfileReference(held)
+			if err != nil || profile != r.definition.Profile {
+				return errors.Join(errMihomoLiveMaterial, err)
+			}
+			if _, err := observeMihomoLiveCleanupObservation(held, view, r.definition.NetworkIdentity); err != nil {
+				return err
+			}
+			return r.control.CurrentForCleanupOperation(held, cleanup)
+		})
 	})
 }

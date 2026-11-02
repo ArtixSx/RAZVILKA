@@ -82,7 +82,7 @@ jobs:
               unshare --mount --net --fork --kill-child=KILL sh -eu -c '
                 mount --make-rprivate /
                 ip link set lo up
-                exec "$1" -test.run "^TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup$" -test.v -test.timeout 75s
+                exec "$1" -test.run "^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$" -test.v -test.timeout 75s
               ' sh "$work/$mode.test" || failed=1
           done
           exit "$failed"
