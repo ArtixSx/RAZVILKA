@@ -102,6 +102,15 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		cancel()
 		return nil, err
 	}
+	if admission.execution != nil {
+		if directory := admission.execution.originalProcessDirectory(); directory != nil {
+			if err := directory.matchesTarget(activation, target); err != nil {
+				closeErr := target.Close()
+				cancel()
+				return nil, errors.Join(err, closeErr)
+			}
+		}
+	}
 	before, err := target.Read(activation)
 	if err != nil || before.Exists {
 		_ = target.Close()

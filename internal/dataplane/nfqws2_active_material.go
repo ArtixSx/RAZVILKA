@@ -223,6 +223,9 @@ func (r *NFQWSActiveMaterial) Close() error {
 		err = selection.Close()
 	}
 	if e != nil {
+		if directory := e.originalProcessDirectory(); directory != nil {
+			err = errors.Join(err, directory.close())
+		}
 		err = errors.Join(err, e.closePreEffectLAN())
 		// Read-only descriptors of already published files. A close error
 		// changes no file and must not keep a completed owner retained.

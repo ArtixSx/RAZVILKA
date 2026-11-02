@@ -1,7 +1,7 @@
 name: Strategy pair focused validation
 on:
   push:
-    branches: ['work/bypass-integration-20261031', 'work/bypass-validation-20261031']
+    branches: ['work/bypass-integration-20261031', 'work/bypass-validation-20261031', 'work/c-current-validation-20261102']
     paths:
       - 'internal/strategylab/**'
       - 'internal/privatebackup/**'
