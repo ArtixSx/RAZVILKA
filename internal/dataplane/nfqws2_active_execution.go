@@ -171,6 +171,7 @@ func nfqws2ActiveSamePlan(expected, actual Plan) bool {
 // Structural/typed owner checks also serve cleanup. They deliberately do not
 // query the forward source, selected scope or ready-only control after Stop.
 func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseOwners)()
 	if e == nil || e.self != e || e.material == nil || e.material.self != e.material || nfqws2ActiveOperation(ctx) != nil ||
 		e.material.manager == nil || e.material.manager.StateRoot != e.material.managerRoot || e.gate == nil || e.gate.Binding != e.lan ||
 		e.lan == nil || e.runtime == nil || e.lan.Runtime != e.runtime || e.material.adapter == nil || e.material.provider == nil || e.inventory.reader.CheckTools == nil ||
@@ -213,6 +214,7 @@ func (e *nfqws2ActiveExecution) owners(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) forward(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseCurrent)()
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
@@ -226,6 +228,7 @@ func (e *nfqws2ActiveExecution) forward(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) cleanupCurrent(ctx context.Context) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseCleanupCurrent)()
 	if e == nil || e.cleanup == nil || e.material == nil || e.material.control == nil {
 		return ErrNFQWSScopedOwner
 	}
@@ -348,6 +351,7 @@ func (e *nfqws2ActiveExecution) verifyLAN(ctx context.Context, lan *LANPolicyRun
 }
 
 func (e *nfqws2ActiveExecution) verifyLANObserved(ctx context.Context, lan *LANPolicyRuntimePlan) error {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseActiveLAN)()
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
@@ -406,6 +410,7 @@ func (e *nfqws2ActiveExecution) prepare(ctx context.Context) error {
 }
 
 func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) {
+	defer measureNFQWSActivePhase(e, nfqwsProbePhaseActivate)()
 	stage := "activate.issue"
 	defer func() { resultErr = nfqwsExecutionFailure(stage, resultErr) }()
 	seal, err := e.issueOriginalActivation(ctx)
@@ -537,8 +542,12 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 				return err
 			}
 			phase = "prepared.active"
-			if err := r.PreparedActive(c, b, obs); err != nil {
-				return err
+			preparedErr := func() error {
+				defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
+				return r.PreparedActive(c, b, obs)
+			}()
+			if preparedErr != nil {
+				return preparedErr
 			}
 			phase = "prepared.policy-apply"
 			if err := e.binding.Apply(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root()); err != nil {

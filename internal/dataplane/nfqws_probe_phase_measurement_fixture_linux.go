@@ -22,6 +22,10 @@ func measureNFQWSProbeContextPhase(ctx context.Context, phase nfqwsProbeMeasured
 	if ctx != nil {
 		e, _ = ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
 	}
+	if e == nil && ctx != nil {
+		active, _ := ctx.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution)
+		return measureNFQWSActivePhase(active, phase)
+	}
 	return measureNFQWSProbePhase(e, phase)
 }
 
@@ -57,6 +61,36 @@ func NativeFixtureNFQWSProbePhases(c *ManagedNFQWSProbeConsumer) map[string]Nati
 	}
 	counts := value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)
 	for phase, name := range [...]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback"} {
+		count := &counts[phase]
+		out[name] = NativeFixtureNFQWSProbePhase{Started: count.started.Load(), Completed: count.completed.Load(), Wall: time.Duration(count.nanos.Load())}
+	}
+	return out
+}
+
+var nfqwsActiveNativePhases sync.Map // Diagnostic process lifetime only.
+func measureNFQWSActivePhase(e *nfqws2ActiveExecution, phase nfqwsProbeMeasuredPhase) func() {
+	if e == nil || e.self != e || e.material == nil || e.material.self != e.material || phase >= nfqwsProbePhaseCount {
+		return func() {}
+	}
+	value, _ := nfqwsActiveNativePhases.LoadOrStore(e.material, new([nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts))
+	count := &value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)[phase]
+	count.started.Add(1)
+	start := time.Now()
+	return func() { count.nanos.Add(time.Since(start).Nanoseconds()); count.completed.Add(1) }
+}
+
+// Comparison output only: no callbacks, path data, state mutation or authority.
+func NativeFixtureNFQWSActivePhases(material *NFQWSActiveMaterial) map[string]NativeFixtureNFQWSProbePhase {
+	out := map[string]NativeFixtureNFQWSProbePhase{}
+	if material == nil || material.self != material {
+		return out
+	}
+	value, ok := nfqwsActiveNativePhases.Load(material)
+	if !ok {
+		return out
+	}
+	counts := value.(*[nfqwsProbePhaseCount]nfqwsProbeNativePhaseCounts)
+	for phase, name := range [...]string{"current", "owners", "environment", "epoch-source-runtime", "cleanup-current", "counter", "capture-current", "policy-apply", "policy-remove", "policy-readback", "active-lan", "activate", "prepared-active"} {
 		count := &counts[phase]
 		out[name] = NativeFixtureNFQWSProbePhase{Started: count.started.Load(), Completed: count.completed.Load(), Wall: time.Duration(count.nanos.Load())}
 	}

@@ -13,5 +13,8 @@ const (
 	nfqwsProbePhasePolicyApply
 	nfqwsProbePhasePolicyRemove
 	nfqwsProbePhasePolicyReadback
+	nfqwsProbePhaseActiveLAN
+	nfqwsProbePhaseActivate
+	nfqwsProbePhasePrepared
 	nfqwsProbePhaseCount
 )

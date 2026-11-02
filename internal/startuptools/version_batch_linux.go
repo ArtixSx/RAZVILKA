@@ -148,10 +148,19 @@ func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
 		return err
 	}
 	for _, image := range r.images {
+		// Both complete pathsCurrent passes observe this exact ORIGINAL
+		// canonical named node. There is no callback/effect between them;
+		// keep the actual held FD check, avoiding a third named-path stat.
+		if image == nil || image.file == nil || image.info == nil {
+			return at("CHECK_HELD_FILE", nil)
+		}
+		node, exists := r.nodes[image.path]
+		if !exists || node.path != image.path || node.info == nil || node.link != "" || !sameNode(image.info, node.info) {
+			return at("CHECK_HELD_FILE", nil)
+		}
 		info, err := image.file.Stat()
-		named, namedErr := os.Lstat(image.path)
-		if err != nil || namedErr != nil || !sameNode(image.info, info) || !sameNode(info, named) {
-			return at("CHECK_HELD_FILE", errors.Join(err, namedErr))
+		if err != nil || !sameNode(image.info, info) {
+			return at("CHECK_HELD_FILE", err)
 		}
 	}
 	canonical, err := r.versionExtensionPath()

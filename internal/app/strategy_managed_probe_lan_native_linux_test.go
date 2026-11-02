@@ -167,6 +167,15 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		t.Fatal(err)
 	}
 	code, data = request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
+	r.mu.Lock()
+	measured := r.active
+	if measured == nil {
+		measured = r.pending
+	}
+	r.mu.Unlock()
+	if measured != nil {
+		t.Log("actual active NFQ inclusive phases [started completed wall]", dataplane.NativeFixtureNFQWSActivePhases(measured.material))
+	}
 	if code != http.StatusOK {
 		status, statusErr := a.Dataplane.Status()
 		if statusErr != nil || status.Execution == nil {
