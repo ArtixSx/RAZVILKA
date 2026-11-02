@@ -198,6 +198,9 @@ func TestScopedListenerBoundedWorkersAndUnauthorizedClient(t *testing.T) {
 	defer connection.Close()
 	query := scopedQuery(t, "example.com", dnsmessage.TypeA)
 	for i := 0; i < 4; i++ {
+		// Distinct transactions fill the worker bound; an identical in-flight
+		// retransmit is intentionally dropped without another admission.
+		binary.BigEndian.PutUint16(query[:2], uint16(i+1))
 		_, _ = connection.Write(query)
 		select {
 		case <-entered:
@@ -205,6 +208,7 @@ func TestScopedListenerBoundedWorkersAndUnauthorizedClient(t *testing.T) {
 			t.Fatal("worker not started")
 		}
 	}
+	binary.BigEndian.PutUint16(query[:2], 5)
 	_, _ = connection.Write(query)
 	_ = connection.SetDeadline(time.Now().Add(2 * time.Second))
 	wire := make([]byte, 4096)
