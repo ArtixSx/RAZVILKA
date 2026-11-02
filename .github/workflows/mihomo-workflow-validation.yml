@@ -83,7 +83,7 @@ jobs:
           for package in components dataplane restorejournal; do
             case "$package" in
               components) pattern='^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$' ;;
-              dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$' ;;
+              dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$|^TestNodeTransitSharedOwner' ;;
               restorejournal) pattern='^TestArtifactComparison' ;;
             esac
             for mode in normal race; do

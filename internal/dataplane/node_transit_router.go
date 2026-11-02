@@ -246,8 +246,12 @@ func (a *ProxyTunnelAdapter) runRegisteredNodeRouterProbe(ctx context.Context, s
 		}
 		return verify(c, request, !cleanup)
 	}
-	lease, err := newNodeTransitLease(spec, registration.root, nodeTransitRuntime{runner: a.Runner, ip: a.ip(),
-		preflight: guard, guard: guard, beforeDelete: guard, register: registration.register})
+	runtime := nodeTransitRuntime{runner: a.Runner, ip: a.ip(), preflight: guard, guard: guard, beforeDelete: guard, register: registration.register}
+	if spec.Engine == "mihomo" {
+		runtime.preflight, runtime.guard, runtime.beforeDelete = nil, nil, nil
+		runtime.sharedOwner = newNodeTransitSharedOwner(spec, registration.root, guard)
+	}
+	lease, err := newNodeTransitLease(spec, registration.root, runtime)
 	if err != nil {
 		return err
 	}

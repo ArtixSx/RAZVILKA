@@ -1,0 +1,16 @@
+goos: windows
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/startuptools
+cpu: AMD Ryzen 7 7800X3D 8-Core Processor
+BenchmarkHashImage/32768-16         	   63489	     19000 ns/op	1724.64 MB/s	      33 B/op	       2 allocs/op
+BenchmarkHashImage/32768-16         	   63362	     19012 ns/op	1723.51 MB/s	      33 B/op	       2 allocs/op
+BenchmarkHashImage/32768-16         	   63450	     18932 ns/op	1730.86 MB/s	      33 B/op	       2 allocs/op
+BenchmarkHashImage/32768-16         	   63319	     18984 ns/op	1726.11 MB/s	      33 B/op	       2 allocs/op
+BenchmarkHashImage/32768-16         	   63158	     18863 ns/op	1737.12 MB/s	      33 B/op	       2 allocs/op
+BenchmarkHashImage/1048576-16       	    2244	    542180 ns/op	1934.00 MB/s	      48 B/op	       2 allocs/op
+BenchmarkHashImage/1048576-16       	    2228	    541779 ns/op	1935.43 MB/s	      48 B/op	       2 allocs/op
+BenchmarkHashImage/1048576-16       	    2179	    538203 ns/op	1948.29 MB/s	      34 B/op	       2 allocs/op
+BenchmarkHashImage/1048576-16       	    2233	    541765 ns/op	1935.48 MB/s	      48 B/op	       2 allocs/op
+BenchmarkHashImage/1048576-16       	    2143	    537862 ns/op	1949.52 MB/s	      34 B/op	       2 allocs/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/startuptools	12.618s

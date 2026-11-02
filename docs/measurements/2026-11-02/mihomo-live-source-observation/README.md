@@ -34,6 +34,12 @@ e33: все component/DP/library normal/race проверки выполнены
 
 Во всех дополнительных попытках mandatory TUN service/Commit/Stop/repeat по-прежнему не подтверждены. Новые raw профили сохранены отдельно; исходные файлы не переписывались.
 
+## Проверка общей исходной проверки NodeTransit
+
+`8485afd7`, [run41412080919](https://github.com/ArtixSx/RAZVILKA/actions/runs/41412080919): explicit original shared-owner callback/read model normal/race PASS; настоящий child 5.03/9.59 s, mutation 3.17/7.07 s, kernel owner 5.15/9.54 s PASS. Удалены только соседние повторные вызовы одной и той же проверки; открывающая и закрывающая проверки вокруг обоих actual family reads сохранены. Defaults/custom callbacks не меняются.
+
+Полный App впервые завершил начальный Health и вошёл в Commit, но завершился FAIL после 122.10 s wall / 120.41 s sampled parent CPU. Фактические flags: deadline_exceeded=false, canceled=true — исходный клиентский 110 s budget отменил серверный запрос. Полный Apply/Stop/repeat по-прежнему не подтверждён. Это другой пройденный префикс, поэтому сравнивать время с прежними ранними отказами как ускорение нельзя. Точные значения и hash журнала — [shared-owner-8485.json](shared-owner-8485.json).
+
 ## Воспроизведение и границы
 
 Workflow: `.github/workflows/mihomo-workflow-validation.yml` в указанных commits, ветка `work/mihomo-workflow-validation-20261102`. Он устанавливает официальные проверенные по SHA256 assets: Mihomo 1.19.33, HEV 2.17.1 и отдельный Xray 26.3.27 для настоящего TLS/VLESS peer. Публичные интернет-сервисы не используются как успешный ответ; peer работает в отдельной изолированной топологии. TLS-проверка включена.

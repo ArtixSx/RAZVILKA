@@ -64,6 +64,16 @@ func managedProbeNativeCPUProfile(t *testing.T, _ string) func() {
 			// The parent analyzes this AFTER leaving the private /opt mount,
 			// which intentionally hides the host Go compiler/toolchain.
 			t.Log("native measured CPU profile saved", filepath.Base(path))
+			memory, err := os.OpenFile(path+".alloc", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if err != nil {
+				t.Error("native allocation profile create", err)
+				return
+			}
+			writeErr := pprof.Lookup("allocs").WriteTo(memory, 0)
+			closeErr := memory.Close()
+			if writeErr != nil || closeErr != nil {
+				t.Error("native allocation profile write/close", writeErr, closeErr)
+			}
 		})
 	}
 }

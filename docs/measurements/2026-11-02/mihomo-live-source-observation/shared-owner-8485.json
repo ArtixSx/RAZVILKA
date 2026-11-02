@@ -1,0 +1,33 @@
+{
+  "commit": "8485afd7f39402695b4ca7a320a6b190556e9bed",
+  "run": 41412080919,
+  "job": 125167173114,
+  "raw_log_sha256": "c5898b1c33c8cd0116c7ceb56f00feaf96eeb0c03ba70add9a459ac5597b3e9a",
+  "shared_owner_tests": {
+    "normal": "PASS",
+    "race": "PASS",
+    "model": "Callback/read-dispatch model; actual owned child and kernel tests run separately."
+  },
+  "actual_child_seconds": {
+    "normal": 5.03,
+    "race": 9.59
+  },
+  "actual_mutation_seconds": {
+    "normal": 3.17,
+    "race": 7.07
+  },
+  "actual_kernel_owner_seconds": {
+    "normal": 5.15,
+    "race": 9.54
+  },
+  "full_apply": {
+    "result": "FAIL",
+    "wall_seconds": 122.1,
+    "sampled_parent_cpu_seconds": 120.41,
+    "deadline_exceeded": false,
+    "canceled": true,
+    "observation": "Initial Health completed, Commit entered; original client 110s cancellation. Full Apply/Stop/repeat not proven."
+  },
+  "change": "Only adjacent duplicate SAME original guard callbacks around actual both-family presence reads removed; opening and closing guards retained.",
+  "latency_improvement_claim": false
+}

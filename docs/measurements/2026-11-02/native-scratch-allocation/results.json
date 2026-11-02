@@ -1,0 +1,52 @@
+{
+  "samples": [
+    {
+      "label": "before",
+      "commit": "2b0a8df1dc9ea08600759ecaf146ede103d14d91",
+      "run": 41408371665,
+      "job": 125155485103,
+      "raw_log_sha256": "1bdb92c4ec33406e3b99fd05ccbb4d128262a08f3c27c73b08797dd5a7e63cb4",
+      "excerpt": "before-core.txt"
+    },
+    {
+      "label": "after",
+      "commit": "a24fac4ff56433ede1fb6b0afb96d0eb320eed36",
+      "run": 41409748096,
+      "job": 125159835232,
+      "raw_log_sha256": "fa11209fa71253173e9e31d5b9b841eae858049ad9fbcffecf6fd770945e2cb7",
+      "excerpt": "after-core.txt"
+    }
+  ],
+  "matched_work": {
+    "member_read_attempts": 13260,
+    "member_read_bytes": 1084270200,
+    "tool_checks": 382,
+    "version_child_starts": [
+      175,
+      175,
+      386
+    ],
+    "metadata_traversals": 2360
+  },
+  "before": {
+    "total_allocated_bytes": 3530642792,
+    "allocated_objects": 8236156,
+    "execute_wall_seconds": 9.900057282
+  },
+  "after": {
+    "total_allocated_bytes": 2129950744,
+    "allocated_objects": 8234076,
+    "execute_wall_seconds": 11.197411115
+  },
+  "interpretation": "Single completed matched-work pair. Lower cumulative Go allocations; no RSS/RAM or latency improvement established. Full LAN Apply remains failed.",
+  "native_guards": {
+    "run": 41409748096,
+    "normal_job": 125159835232,
+    "race_job": 125159835457,
+    "result": "PASS actual bounded read, concurrent scratch hashes, netlink payload independence, original mutation tests; full workflow FAIL"
+  },
+  "full_ci": {
+    "run": 41409748122,
+    "result": "SUCCESS"
+  }
+}
