@@ -120,7 +120,7 @@ func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceChec
 		return fail(at("fence.check.context", nil))
 	}
 	if err := ctx.Err(); err != nil {
-		return fail(boundary("fence.check.context", err))
+		return fail(r.unsubmittedRead(ctx))
 	}
 	if r.stopped() {
 		return fail(at("fence.check.closed", nil))
@@ -128,7 +128,7 @@ func (r *originalFenceCollector) checkRequest(ctx context.Context, req fenceChec
 	req.ctx, req.reply = ctx, make(chan fenceCheckpointReply, 1)
 	select {
 	case <-ctx.Done():
-		return fail(boundary("fence.check.context", ctx.Err()))
+		return fail(r.unsubmittedRead(ctx))
 	case <-r.stop:
 		return fail(at("fence.check.closed", nil))
 	case <-r.done:

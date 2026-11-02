@@ -17,6 +17,10 @@ import (
 
 type packetTestFence struct{ reader *originalFenceCollector }
 
+func (f *packetTestFence) ownsUnsubmittedRead(err error) bool {
+	return f.reader.ownsUnsubmittedRead(err)
+}
+
 func (f *packetTestFence) check(ctx context.Context, t ipv4LANPacketTopology) (uint64, error) {
 	return f.reader.checkPacket(ctx, t)
 }
