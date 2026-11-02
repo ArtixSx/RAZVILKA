@@ -29,7 +29,7 @@ func (m *Manager) ObserveCurrentManagedNFQWSRuntime(ctx context.Context) (NFQWSR
 	if readErr != nil || closeErr != nil || receipt == nil {
 		return NFQWSRuntimeDescriptor{}, errors.Join(ErrManagedNFQWSBundle, readErr, closeErr)
 	}
-	manifest, err := m.verifyManagedNFQWSTerminal(ctx, *receipt)
+	manifest, err := m.verifyManagedNFQWSRuntimeTerminal(ctx, *receipt)
 	if err != nil {
 		return NFQWSRuntimeDescriptor{}, err
 	}
