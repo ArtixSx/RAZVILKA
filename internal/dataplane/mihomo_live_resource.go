@@ -6,6 +6,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // Only an original operation binds this resource to the same registered
@@ -46,4 +47,8 @@ type mihomoLiveResource struct {
 	compiledRoot     *ownedfs.Root
 	compiledFiles    map[string]*mihomoLiveSidecarIdentityFile
 	healthHandoff    *mihomoLiveHealthHandoff // One-use original Health -> Commit comparison only.
+	historyAdmission *updatecheck.ExecutionHistoryAdmission
+	transitHistory   *mihomoTransitArchiveCursor
+	historyIDs       map[string]struct{}
+	healthCheck      *mihomoLiveHealthCheck // Original retained writer; scope.mu protects custody.
 }

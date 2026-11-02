@@ -170,6 +170,18 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	if execution.State == mihomoActiveCheckingState {
+		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.healthCheck == nil {
+			return executionJournalError(ErrExecutionJournal)
+		}
+		c := scope.mihomoLive.healthCheck
+		if c.self != c || c.owner != scope.mihomoLive || !c.open || !c.publishing {
+			return executionJournalError(ErrExecutionJournal)
+		}
+	}
+	if execution.MihomoTransitHistoryArchive != nil {
+		return executionJournalError(ErrExecutionJournal)
+	}
 	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
 		return executionJournalError(ErrExecutionJournal)
 	}

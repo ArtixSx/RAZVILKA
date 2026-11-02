@@ -98,6 +98,22 @@ func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource 
 }
 
 func validateExecutionResources(execution Execution, terminal bool) error {
+	if err := validateMihomoHealthOperation(execution); err != nil {
+		return err
+	}
+	if execution.State == mihomoActiveCheckingState {
+		if terminal {
+			return ErrExecutionJournal
+		}
+		if err := validateMihomoActiveCheckingExecution(execution); err != nil {
+			return err
+		}
+	}
+	if execution.MihomoTransitHistoryArchive != nil {
+		if err := execution.MihomoTransitHistoryArchive.validate(execution); err != nil {
+			return err
+		}
+	}
 	if len(execution.Resources) > maxExecutionResources {
 		return ErrExecutionJournal
 	}

@@ -24,7 +24,8 @@ import (
 // Version5 additionally reads source-issued Mihomo parent/death lineage.
 // Version6 additionally reads persistent original Mihomo runtime intent.
 // Version7 also reads an originally detached DNS owner with retained baseline.
-const ExecutionReadVersion = 7
+// Version9 additionally reads an original retained active-checking operation.
+const ExecutionReadVersion = 9
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -131,10 +132,21 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 		if name != "latest-execution.json" && filepath.Base(filepath.Dir(name)) != execution.PlanID {
 			return 0, "", ErrExecutionJournal
 		}
+		if execution.MihomoTransitHistoryArchive != nil && name == "latest-execution.json" {
+			return 0, "", ErrExecutionJournal
+		}
 		switch execution.State {
+		case mihomoActiveCheckingState:
+			required = max(required, 9)
 		case "applying", "checking", "resource-failed", "cancelled", "replacement-pending", "rejected", "journal-failed", "rolling-back", "rolled-back", "rollback-failed", "canary-failed", "network-stale", "committing", "committed", "temporary-complete":
 		default:
 			return 0, "", ErrExecutionJournal
+		}
+		if execution.MihomoLiveHealthOperation != nil {
+			required = max(required, 9)
+		}
+		if execution.MihomoTransitHistoryArchive != nil {
+			required = max(required, 8)
 		}
 		for _, resource := range execution.Resources {
 			if resource.DomainDNSDetached != nil {

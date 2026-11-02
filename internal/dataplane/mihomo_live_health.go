@@ -220,7 +220,9 @@ func (r *mihomoLiveResource) currentLiveObserved(ctx context.Context, handoff bo
 				return err
 			}
 			readback := &nodeRouterTransitReadback{spec: spec, owner: func(c context.Context) error { return verify(c, request, false) }}
+			readback.self = readback
 			operation := context.WithValue(ctx, networkPolicyTransitReadbackKey{}, networkPolicyTransitReadback(readback.readback))
+			operation = context.WithValue(operation, nodeRouterTransitOriginalReadbackKey{}, readback)
 			registration, err := issuer(operation, spec)
 			if err != nil {
 				return err

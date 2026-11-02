@@ -15,9 +15,11 @@ type nodeTransitRemovalKey struct{}
 type nodeTransitRegistrar func(context.Context, NodeTransitSpec) (nodeTransitRegistration, error)
 
 type nodeTransitRegistration struct {
-	root     string
-	register func(context.Context, NodeTransitSpec, string, string) error
-	settle   func(context.Context, NodeTransitSpec, string, string) error
+	cleanupOperation func(context.Context) (context.Context, func(), error)
+	finished         func() error // Original synchronous probe and deferred cleanup joined.
+	root             string
+	register         func(context.Context, NodeTransitSpec, string, string) error
+	settle           func(context.Context, NodeTransitSpec, string, string) error
 	// Optional only on a newly issued live resource. This settles Manager
 	// metadata after the issuer consumes the original successful live proof
 	// through its private context closure; it conveys no kernel deletion authority.

@@ -12,7 +12,7 @@ import (
 )
 
 func TestExecutionHistoryRequiresEveryRetainedController(t *testing.T) {
-	for _, version := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8} {
+	for _, version := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
 		i := componentAdmissionFixture(t)
 		componentAdmissionOldController(t, i)
 		a := NewExecutionHistoryAdmission(func(context.Context, string) (int, string, error) { return 1, "unchanged", nil })
@@ -25,9 +25,9 @@ func TestExecutionHistoryRequiresEveryRetainedController(t *testing.T) {
 }
 
 func TestExecutionHistoryRequestedFormatCannotBypassExistingHistory(t *testing.T) {
-	for _, retained := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-		for _, old := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
-			for _, wanted := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8} {
+	for _, retained := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
+		for _, old := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
+			for _, wanted := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
 				t.Run(fmt.Sprintf("history%d/old%d/wanted%d", retained, old, wanted), func(t *testing.T) {
 					i := componentAdmissionFixture(t)
 					componentAdmissionOldController(t, i)
@@ -80,7 +80,7 @@ func TestExecutionHistoryAdmissionRejectsBookendDrift(t *testing.T) {
 }
 
 func TestExecutionHistoryCandidateUsesExactFlagAndCompleteSeal(t *testing.T) {
-	for _, response := range []string{"1\n", "2\n", "3\n", "4\n", "5\n", "6\n", "7\n", "02\n", "2", "2\nextra"} {
+	for _, response := range []string{"1\n", "2\n", "3\n", "4\n", "5\n", "6\n", "7\n", "8\n", "9\n", "10\n", "02\n", "2", "2\nextra"} {
 		called := false
 		probe := func(_ context.Context, path, flag string) (string, error) {
 			called = true
@@ -91,7 +91,7 @@ func TestExecutionHistoryCandidateUsesExactFlagAndCompleteSeal(t *testing.T) {
 		}
 		inspect := func(context.Context, string) (int, string, error) { return 2, "same", nil }
 		err := checkExecutionHistoryCapability(context.Background(), "candidate", "root", probe, inspect)
-		if !called || (err == nil) != (response == "2\n" || response == "3\n" || response == "4\n" || response == "5\n" || response == "6\n" || response == "7\n") {
+		if !called || (err == nil) != (response == "2\n" || response == "3\n" || response == "4\n" || response == "5\n" || response == "6\n" || response == "7\n" || response == "8\n" || response == "9\n") {
 			t.Fatal(response, err)
 		}
 	}

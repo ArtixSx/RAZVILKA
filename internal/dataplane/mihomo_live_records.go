@@ -58,7 +58,7 @@ func (a *MihomoProbeAdapter) issueLive(ctx context.Context, source *components.M
 	if err != nil {
 		return nil, err
 	}
-	r := &mihomoLiveResource{adapter: a, scope: s, source: source, node: node, profile: profile, control: control, childControl: childControl, definition: definition.Clone(), id: "ml-" + hex.EncodeToString(nonce[:]), records: records}
+	r := &mihomoLiveResource{adapter: a, scope: s, source: source, node: node, profile: profile, control: control, childControl: childControl, definition: definition.Clone(), id: "ml-" + hex.EncodeToString(nonce[:]), records: records, historyAdmission: history}
 	r.self = r
 	s.startMu.RLock()
 	defer s.startMu.RUnlock()
@@ -226,6 +226,18 @@ func (r *mihomoLiveResource) publishRecords(data []byte) error {
 	}
 	var result error
 	for i := range 2 {
+		if c := r.healthCheck; i == 1 && c != nil && c.self == c && c.owner == r && c.publishing && c.fault != nil {
+			if err := c.fault("before-latest"); err != nil {
+				result = errors.Join(result, err)
+				continue
+			}
+		}
+		if c := r.transitHistory; i == 1 && c != nil && c.self == c && c.owner == r && c.publishing && c.fault != nil {
+			if err := c.fault("origin-before-latest"); err != nil {
+				result = errors.Join(result, err)
+				continue
+			}
+		}
 		result = errors.Join(result, d.publishOriginalDurable(i, data, syncDataplaneJournalDirectory))
 	}
 	return result
@@ -256,7 +268,7 @@ func validateMihomoLiveExecutionResource(execution Execution, r ExecutionResourc
 			return ErrExecutionJournal
 		}
 	case "active":
-		if r.State != "active" || d.validateActive() != nil || execution.State != "committing" && execution.State != "committed" && execution.State != "rolling-back" && execution.State != "rollback-failed" {
+		if r.State != "active" || d.validateActive() != nil || execution.State != "committing" && execution.State != "committed" && execution.State != "rolling-back" && execution.State != "rollback-failed" && execution.State != mihomoActiveCheckingState {
 			return ErrExecutionJournal
 		}
 	case "removed":

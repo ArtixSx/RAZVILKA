@@ -155,6 +155,7 @@ func (r *mihomoLiveResource) cleanupLive(ctx context.Context, cleanup *operation
 	} else {
 		journalErr = custodyErr
 	}
+	transitErr := r.cleanupHealthTransits(ctx)
 	var policyErr error
 	// Remove only actual owned selectors/forwarding before joining children.
 	if custodyErr == nil {
@@ -170,7 +171,7 @@ func (r *mihomoLiveResource) cleanupLive(ctx context.Context, cleanup *operation
 	// Each independently held native owner gets its own actual fresh cleanup,
 	// even when a journal publication or another original cleanup failed.
 	nativeErr := errors.Join(r.cleanupSidecarNative(ctx, cleanup), r.cleanupNative(ctx, cleanup))
-	if err := errors.Join(journalErr, policyErr, nativeErr); err != nil {
+	if err := errors.Join(journalErr, transitErr, policyErr, nativeErr); err != nil {
 		return err
 	}
 	if err := observeMihomoInactiveOriginal(ctx, r.adapter.provider, nil, r); err != nil {
