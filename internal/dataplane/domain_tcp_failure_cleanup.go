@@ -44,14 +44,23 @@ type domainTCPFailureCleanupKey struct{}
 // One fresh cleanup operation only. The original forward context stays
 // canceled; neither this cursor nor its context can issue Start or a flow.
 type domainTCPFailureCleanup struct {
-	self     *domainTCPFailureCleanup
-	cursor   *domainTCPGlobalSuccessor
-	resource *XrayDomainTCPExecutionResource
-	control  *operationgate.ControlEpochReview
-	cleanup  *operationgate.ExclusiveCleanupReview
-	ctx      context.Context
-	active   atomic.Bool
-	image    []byte // Exact first authored cleanup phase, retained across a lost ACK.
+	self            *domainTCPFailureCleanup
+	cursor          *domainTCPGlobalSuccessor
+	resource        *XrayDomainTCPExecutionResource
+	control         *operationgate.ControlEpochReview
+	cleanup         *operationgate.ExclusiveCleanupReview
+	ctx             context.Context
+	active          atomic.Bool
+	image           []byte // Exact first authored cleanup phase, retained across a lost ACK.
+	imageStage      string
+	imageACK        bool
+	capture         *domainTCPCaptureExecutionResource
+	captureDetached bool
+	standby         *domainTCPStandbyOwner
+	retained        *retainedXrayExecution
+	standbyImage    []byte
+	restored        bool // Protected by Manager.operation; no forward authority.
+	fault           func(string) error
 }
 
 func (r *domainTCPFailureCleanup) local(ctx context.Context, p *XrayDomainTCPExecutionResource) error {
@@ -106,11 +115,15 @@ func domainTCPFailureCleanupOwner(ctx context.Context, s *executionResourceScope
 	return r != nil && r.cursor == s.domainSuccessor && r.resource != nil && r.resource.scope == s && r.local(ctx, r.resource) == nil
 }
 
-// JoinFailedDomainTCPNative stops and joins only the original issued child.
-// Successful return acknowledges that child row, not DNS/capture retirement,
-// pool readiness, a new forward admission or release of retained FD custody.
+// JoinFailedDomainTCPNative joins the original child and its source/handlers.
+// Successful return acknowledges the child row and closed original source,
+// not capture-rule retirement, pool readiness or release of FD custody.
 func (m *Manager) JoinFailedDomainTCPNative(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview, history *updatecheck.ExecutionHistoryAdmission, failure *DomainTCPCleanupFailure) error {
-	if m == nil || ctx == nil || cleanup == nil || history == nil || failure == nil || failure.self != failure || failure.cursor == nil || failure.cursor.scope == nil || failure.cursor.scope.manager != m || xraySelectedTCPFinite(ctx) != nil {
+	return m.cleanupFailedDomainTCP(ctx, cleanup, history, failure, false, nil)
+}
+
+func (m *Manager) cleanupFailedDomainTCP(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview, history *updatecheck.ExecutionHistoryAdmission, failure *DomainTCPCleanupFailure, restore bool, result *domainTCPFailureRestoredHandles) error {
+	if m == nil || ctx == nil || cleanup == nil || history == nil || failure == nil || failure.self != failure || failure.cursor == nil || failure.cursor.scope == nil || failure.cursor.scope.manager != m || xraySelectedTCPFinite(ctx) != nil || restore && result == nil {
 		return ErrPolicyAdditionUnknown
 	}
 	if _, finite := ctx.Deadline(); !finite {
@@ -126,6 +139,38 @@ func (m *Manager) JoinFailedDomainTCPNative(ctx context.Context, cleanup *operat
 	c := failure.cursor
 	if err := c.original(); err != nil {
 		return err
+	}
+	if restore && c.cleanup != nil && c.cleanup.restored {
+		r := c.cleanup
+		if r.self != r || r.standby == nil || r.standby.process == nil || r.standby.process.material.control != r.control {
+			return ErrPolicyAdditionUnknown
+		}
+		if err := r.control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
+			return err
+		}
+		o := r.standby.original
+		o.mu.Lock()
+		retirement := o.standbyRetirement
+		validRetirement := retirement == nil || retirement.self == retirement && retirement.owner == r.standby
+		removed := retirement != nil && retirement.finished
+		o.mu.Unlock()
+		if !validRetirement {
+			return ErrPolicyAdditionUnknown
+		}
+		if removed {
+			if err := m.CheckExecutionRecovery(ctx); err != nil {
+				return err
+			}
+		} else if retirement == nil {
+			if err := o.RetainedStandbyCurrent(ctx); err != nil {
+				return err
+			}
+		}
+		// An original unfinished compensation intentionally has pending=true.
+		// Do not require a known-standby read before its SAME existing retry:
+		// RetireUnpublished rechecks removed receipt/kernel/original partial
+		// writers under a separate fresh operation and refuses unknown cleanup.
+		return r.copyRestoredHandles(result)
 	}
 	s := c.scope
 	s.mu.Lock()
@@ -144,13 +189,22 @@ func (m *Manager) JoinFailedDomainTCPNative(ctx context.Context, cleanup *operat
 	if !p.mu.TryLock() {
 		return ErrPolicyAdditionUnknown
 	} // No detached lock waiter.
-	defer p.mu.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			p.mu.Unlock()
+		}
+	}()
 	if err := p.failureNativeReturnedLocked(); err != nil {
 		return err
 	}
 	r := c.cleanup
 	if r == nil {
 		r = &domainTCPFailureCleanup{cursor: c, resource: p, control: p.material.control}
+		c.mu.Lock()
+		c.cleanupIssued.Store(true)
+		r.fault = c.cleanupFault
+		c.mu.Unlock()
 		r.self = r
 		c.cleanup = r
 	}
@@ -171,6 +225,19 @@ func (m *Manager) JoinFailedDomainTCPNative(ctx context.Context, cleanup *operat
 	// alone cannot do that because it is released during the callback.
 	if err := p.stopOriginalNative(r.ctx); err != nil {
 		return err
+	}
+	p.mu.Unlock()
+	locked = false
+	// DNS callbacks can themselves need resource.mu. Never hold that mutex
+	// while Close joins their actual publication barrier and socket session.
+	if _, err := r.closeOriginalDNS(r.ctx); err != nil {
+		return err
+	}
+	if restore {
+		if err := r.restoreOriginalStandby(r.ctx, history, failure.cause); err != nil {
+			return err
+		}
+		return r.copyRestoredHandles(result)
 	}
 	return errors.Join(c.records.current(r.ctx, true), c.comparePrior(r.ctx, true), r.control.CurrentForCleanupOperation(r.ctx, cleanup))
 }

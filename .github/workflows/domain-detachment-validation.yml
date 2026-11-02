@@ -35,7 +35,7 @@ jobs:
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
       - name: Original writer and typed reader regressions
-        run: RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray go test -race -count=1 ./internal/startuptools ./internal/netidentity ./internal/physicalscope ./internal/dnscontrol ./internal/dataplane -run 'TestHashImage|TestBoundedRead|TestDumpScratch|TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestSyntheticDNSRetiredContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose|TestDomainGlobalHistoricalFD|TestDomainGlobalSuccessor|TestDomainPool|TestDomainAction|TestDomainFailedClose|TestDomainKeeper|TestDomainRetiredKeeper|TestDomainInitialRetirement|TestDomainCoexistence|TestDomainDNSCoexistence|TestMihomoTransitArchive|TestXrayDomainTCPNativeHeldProcessLifecycle'
+        run: RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray go test -race -count=1 ./internal/startuptools ./internal/netidentity ./internal/physicalscope ./internal/dnscontrol ./internal/dataplane -run 'TestHashImage|TestBoundedRead|TestDumpScratch|TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestSyntheticDNSRetiredContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose|TestDomainGlobalHistoricalFD|TestDomainGlobalSuccessor|TestDomainPool|TestDomainAction|TestDomainFailure|TestDomainFailedClose|TestDomainKeeper|TestDomainRetiredKeeper|TestDomainInitialRetirement|TestDomainCoexistence|TestDomainDNSCoexistence|TestMihomoTransitArchive|TestXrayDomainTCPNativeHeldProcessLifecycle'
       - name: Actual DNS send, original Stop and cached-alias TLS
         shell: bash
         run: |
@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        initial: [none, transaction, global, never-issued, joined-failure, canceled-child]
+        initial: [none, transaction, global, never-issued, joined-failure, canceled-child, canceled-ready, canceled-published, canceled-process-ack, canceled-capture-ack, canceled-standby-ack, canceled-alias-ack, canceled-capture-transaction-ack, canceled-standby-transaction-ack]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -150,12 +150,18 @@ jobs:
           never_issued=0
           joined_failure=0
           canceled_child=0
+          canceled_ready=0
+          failure_ack=''
+          canceled_published=0
           case "$INITIAL_CUT" in
             none) initial_ack='' ;;
             transaction|global) initial_ack="$INITIAL_CUT" ;;
             never-issued) initial_ack=''; never_issued=1 ;;
             joined-failure) initial_ack=''; never_issued=1; joined_failure=1 ;;
             canceled-child) initial_ack=''; canceled_child=1 ;;
+            canceled-ready) initial_ack=''; canceled_child=1; canceled_ready=1 ;;
+            canceled-published) initial_ack=''; canceled_child=1; canceled_ready=1; canceled_published=1 ;;
+            canceled-process-ack|canceled-capture-ack|canceled-standby-ack|canceled-alias-ack|canceled-capture-transaction-ack|canceled-standby-transaction-ack) initial_ack=''; canceled_child=1; canceled_ready=1; failure_ack="${INITIAL_CUT#canceled-}"; failure_ack="${failure_ack%-ack}" ;;
             *) exit 2 ;;
           esac
           mkdir -p -m 700 artifacts/dns-coexistence
@@ -169,6 +175,9 @@ jobs:
             RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR="$never_issued" \
             RAZVILKA_DOMAIN_JOINED_FAILURE="$joined_failure" \
             RAZVILKA_DOMAIN_CANCELED_CHILD="$canceled_child" \
+            RAZVILKA_DOMAIN_CANCELED_READY="$canceled_ready" \
+            RAZVILKA_DOMAIN_CANCELED_PUBLISHED="$canceled_published" \
+            RAZVILKA_DOMAIN_FAILURE_ACK="$failure_ack" \
             RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-coexistence" \
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
       - name: Preserve actual two-operation diagnostics, including failures

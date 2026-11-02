@@ -1,7 +1,6 @@
 package dataplane
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -204,6 +203,9 @@ func (r *XrayDomainTCPExecutionResource) WithNative(ctx context.Context, consume
 	if r == nil || r.self != r || r.scope == nil || r.material == nil || r.material.binding == nil || r.material.binding.phase == nil || consume == nil {
 		return ErrXrayDomainTCPOriginal
 	}
+	if c := r.scope.domainSuccessor; c != nil && c.failedCustody.Load() {
+		return ErrPolicyAdditionUnknown
+	}
 	r.mu.Lock()
 	if r.nativeDone != nil {
 		select {
@@ -361,12 +363,13 @@ func (r *XrayDomainTCPExecutionResource) cleanupPhase(ctx context.Context, phase
 	if err != nil {
 		return err
 	}
-	if cleanup.image == nil {
-		cleanup.image = bytes.Clone(data)
-	} else if !bytes.Equal(cleanup.image, data) {
-		return ErrExecutionJournal
+	if cleanup.imageStage != "" && cleanup.imageStage != "process" {
+		// A later cleanup stage has already retained this child's terminal
+		// row. Repeat only its original joined/file proof, never replay an
+		// earlier image over a partially acknowledged capture publication.
+		return r.records.current(ctx, false)
 	}
-	return s.domainSuccessor.publish(ctx, data)
+	return cleanup.publishStageLocked(ctx, "process", r.id, data)
 }
 
 func (r *XrayDomainTCPExecutionResource) closeOriginalDescriptors() error {

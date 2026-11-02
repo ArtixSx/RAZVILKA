@@ -76,6 +76,7 @@ type domainTCPCaptureExecutionResource struct {
 	mu                     sync.Mutex
 	started                bool
 	failed                 error
+	retirementDetached     bool // Actual original inspector CAS, under r.mu; never reconstructed.
 }
 
 func (r *domainTCPCaptureExecutionResource) local(ctx context.Context) error {
@@ -94,7 +95,8 @@ func (r *domainTCPCaptureExecutionResource) local(ctx context.Context) error {
 		return ErrDomainPolicyTCPConsumer
 	}
 	if ctx.Value(domainTCPCaptureCleanupKey{}) == r {
-		if r.process.material.control.CurrentForCleanupOperation(ctx, r.process.material.cleanup) != nil {
+		review, err := r.process.cleanupReview(ctx)
+		if err != nil || r.process.material.control.CurrentForCleanupOperation(ctx, review) != nil {
 			return ErrDomainPolicyTCPConsumer
 		}
 	} else {
@@ -140,7 +142,13 @@ func (r *domainTCPCaptureExecutionResource) registered(ctx context.Context) erro
 	}
 	for _, record := range s.execution.Resources {
 		if record.ID == filepath.Base(r.relative) {
-			if validateDomainTCPCaptureExecutionResource(*s.execution, record, false) != nil || record.State != "prepared" || !reflect.DeepEqual(record.DomainTCPCapture, &r.definition) {
+			removedRetry := false
+			if cursor, err := r.process.failureCleanup(ctx); err != nil {
+				return err
+			} else if cursor != nil {
+				removedRetry = cursor.capturePublicationCurrent(ctx, r) && record.State == "removed" && record.Phase == "removed"
+			}
+			if validateDomainTCPCaptureExecutionResource(*s.execution, record, false) != nil || record.State != "prepared" && !removedRetry || !reflect.DeepEqual(record.DomainTCPCapture, &r.definition) {
 				return ErrDomainPolicyTCPConsumer
 			}
 			return nil

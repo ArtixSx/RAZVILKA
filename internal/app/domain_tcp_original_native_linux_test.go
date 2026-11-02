@@ -90,6 +90,25 @@ func TestDomainTCPOriginalNativeCanceledChildCleanup(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeCanceledReadyRetirement(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_CHILD", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_READY", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeCanceledPublishedStandby(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_CHILD", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_READY", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
@@ -98,6 +117,18 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
 	canceledChild := os.Getenv("RAZVILKA_DOMAIN_CANCELED_CHILD") == "1"
+	canceledReady := os.Getenv("RAZVILKA_DOMAIN_CANCELED_READY") == "1"
+	canceledPublished := os.Getenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED") == "1"
+	if canceledPublished && !canceledReady {
+		t.Fatal("published cancellation requires its ready case")
+	}
+	failedACK := os.Getenv("RAZVILKA_DOMAIN_FAILURE_ACK")
+	if failedACK != "" && (!canceledReady || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
+		t.Fatal("invalid failed generation ACK cut")
+	}
+	if canceledReady && !canceledChild {
+		t.Fatal("ready cancellation requires its separate canceled child case")
+	}
 	if canceledChild && (!coexist || joinedFailure || neverIssuedSuccessor || initialCut != "") {
 		t.Fatal("canceled child requires its separate successor case")
 	}
@@ -876,6 +907,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			}
 			operationCtx := secondHeld
 			var cancelOriginal context.CancelFunc
+			var canceledAlias string
 			if canceledChild {
 				operationCtx, cancelOriginal = context.WithCancel(secondHeld)
 				defer cancelOriginal()
@@ -883,6 +915,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(operationCtx, control.Current), secondPlan, history, detached, func(original context.Context) error {
 				if canceledChild {
 					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, cancelOriginal)
+					original = context.WithValue(original, domainOriginalCanceledAliasKey{}, &canceledAlias)
 				}
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
@@ -891,14 +924,71 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
 					t.Fatal("original cancellation/custody capsule lost", err)
 				}
-				if err := manager.JoinFailedDomainTCPNative(secondHeld, secondCleanup, history, failure); err != nil {
-					t.Fatal("fresh cleanup original child join/row publication", err)
+				if failedACK != "" {
+					if err := dataplane.ConfigureNativeDomainFailureACK(secondHeld, failure, failedACK); err != nil {
+						t.Fatal("configure same original cleanup ACK", err)
+					}
+				}
+				joinErr := manager.JoinFailedDomainTCPNative(secondHeld, secondCleanup, history, failure)
+				if failedACK == "process" {
+					if !errors.Is(joinErr, dataplane.ErrNativeDomainFailureACK) {
+						t.Fatal("actual process ACK cut missing", joinErr)
+					}
+					if err := manager.CheckExecutionRecovery(secondHeld); err == nil {
+						t.Fatal("lost cleanup ACK released original pending custody")
+					}
+				} else if joinErr != nil {
+					t.Fatal("fresh cleanup original child join/row publication", joinErr)
 				}
 				if err := manager.JoinFailedDomainTCPNative(secondHeld, secondCleanup, history, failure); err != nil {
 					t.Fatal("same original native terminal ACK retry", err)
 				}
 				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
 					t.Fatal("original child survived cleanup join")
+				}
+				if canceledReady {
+					retireErr := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure)
+					if failedACK != "" && failedACK != "process" {
+						if !errors.Is(retireErr, dataplane.ErrNativeDomainFailureACK) {
+							t.Fatal("actual failed retirement ACK cut missing", retireErr)
+						}
+						if err := manager.CheckExecutionRecovery(secondHeld); err == nil {
+							t.Fatal("partial failed retirement released custody")
+						}
+					} else if retireErr != nil {
+						t.Fatal("original failed ready generation retirement", retireErr)
+					}
+					if err := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure); err != nil {
+						t.Fatal("same original failed retirement ACK retry", err)
+					}
+					if err := manager.CheckExecutionRecovery(secondHeld); err != nil {
+						t.Fatal("failed original standby/keeper current", err)
+					}
+					if canceledPublished {
+						if neverIssuedOwner == nil || canceledAlias == "" {
+							t.Fatal("published original custody missing")
+						}
+						if err := neverIssuedOwner.RetainedStandbyCurrent(secondHeld); err != nil {
+							t.Fatal("failed published standby current", err)
+						}
+						if err := neverIssuedOwner.RetireUnpublishedStandby(secondHeld, secondCleanup); !errors.Is(err, dataplane.ErrDomainPolicyTCPCaptureRetirementPending) {
+							t.Fatal("published failed alias was removable", err)
+						}
+						late := peers.clientRequest(t, secondHeld, "selected", canceledAlias)
+						if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+							t.Fatal("failed published alias lost restorative tuple", late)
+						}
+					}
+					late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+					if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+						t.Fatal("failed retirement changed old alias tuple", late)
+					}
+					if canceledPublished {
+						t.Log("actual published successor canceled; source/handler/native joins and capture Remove retain original restorative standby; actual cached late-SYN tuple preserved, published alias removal refused")
+					} else {
+						t.Log("actual ready but never-issued successor canceled; same original source/handler/native joins, capture Remove and restorative handoff, actual zero-issued baseline Remove→keeper and repeat ACK; old published alias remains original baseline")
+					}
+					return
 				}
 				if err := manager.CheckExecutionRecovery(secondHeld); err == nil {
 					t.Fatal("child-only cleanup released unresolved DNS/capture custody")

@@ -6,10 +6,22 @@ import "context"
 // receipts/kernel readbacks bracket this actual collector image. No effect or
 // packet may accept the resulting rows as permission to skip an original gate.
 func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backend *BackendInventory, rows []backendInventoryRow) ([]backendInventoryRow, error) {
-	if backend == nil || c.forwardCurrent() != nil {
+	if c == nil || backend == nil || c.original() != nil {
 		return nil, ErrPolicyAdditionUnknown
 	}
-	if err := c.records.current(ctx, true); err != nil {
+	if c.forwardCurrent() != nil {
+		if !domainTCPFailureCleanupOwner(ctx, c.scope) {
+			return nil, ErrPolicyAdditionUnknown
+		}
+	}
+	allEqual := !domainTCPFailureCleanupOwner(ctx, c.scope)
+	if !allEqual {
+		r, _ := ctx.Value(domainTCPFailureCleanupKey{}).(*domainTCPFailureCleanup)
+		if err := r.control.CurrentForCleanupOperation(ctx, r.cleanup); err != nil {
+			return nil, err
+		}
+	}
+	if err := c.records.current(ctx, allEqual); err != nil {
 		return nil, err
 	}
 	entries, err := c.pool.originals()
@@ -35,8 +47,14 @@ func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backe
 	if err := c.comparePrior(ctx, true); err != nil {
 		return nil, err
 	}
-	if err := c.records.current(ctx, true); err != nil {
+	if err := c.records.current(ctx, allEqual); err != nil {
 		return nil, err
+	}
+	if !allEqual {
+		r, _ := ctx.Value(domainTCPFailureCleanupKey{}).(*domainTCPFailureCleanup)
+		if err := r.control.CurrentForCleanupOperation(ctx, r.cleanup); err != nil {
+			return nil, err
+		}
 	}
 	return filtered, nil
 }
