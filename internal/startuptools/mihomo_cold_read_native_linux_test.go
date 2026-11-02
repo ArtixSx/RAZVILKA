@@ -63,7 +63,7 @@ func TestStaticVersionFactNativeMihomoColdRead(t *testing.T) {
 	if err := m.BindRuntimeInactivitySources(ctx, first.Provider, inventory, filepath.Join(root, "dns.json")); err != nil {
 		t.Fatal("actual original inactivity source", nativeStages(err), err)
 	}
-	id, digest := "dp-"+strings.Repeat("a", 32), strings.Repeat("b", 64)
+	id, digest := "dp-"+strings.Repeat("a", 16), strings.Repeat("b", 64)
 	current := func(c context.Context) error { return l.Check(c, first.Identity) }
 	_, err = m.RetireMihomoLiveAfterBoot(ctx, id, digest, current)
 	if !errors.Is(err, os.ErrNotExist) {
