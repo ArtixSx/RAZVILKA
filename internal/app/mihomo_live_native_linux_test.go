@@ -42,6 +42,22 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 	defer cancel()
 	peers := domainOriginalPeers(t, lifetime)
 	startMihomoLiveNativeForwarder(t, lifetime)
+	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
+	if parentProducer {
+		private, e1 := os.Stat("/opt")
+		outside, e2 := os.Stat("/proc/1/root/opt")
+		if e1 != nil || e2 != nil || os.SameFile(private, outside) {
+			t.Fatal("original private /opt mount required before canonical fixture metadata")
+		}
+		// Establish the real canonical metadata parents BEFORE capturing the
+		// tool closure's ld.so.preload absence (including missing ancestors).
+		// Actual preload-file absence and every subsequent check stay strict.
+		for _, path := range []string{"/opt/etc/razvilka", "/opt/razvilka/state"} {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	provider := netidentity.NewProcProvider()
 	tools, err := startuptools.AcquireNativeFixturePolicy(lifetime, provider, os.Getenv("RAZVILKA_DOMAIN_TOOLS_REVIEW"))
 	if err != nil {
@@ -61,7 +77,6 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	nodesRoot := filepath.Join(peers.root, "live-nodes")
-	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
 	if parentProducer {
 		nodesRoot = "/opt/razvilka/state/nodes"
 		if err := os.MkdirAll(filepath.Dir(nodesRoot), 0700); err != nil {
