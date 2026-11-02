@@ -35,6 +35,13 @@ func (a *App) ConfigureMihomoLive(ctx context.Context) error {
 		if a.Store != store || a.Nodes != nodes || a.EngineConfigs != configs || a.Dataplane != manager || a.Components != components || !adapter.RegisteredWith(manager) || len(plan.Routes) != 1 {
 			return dataplane.ErrReviewChanged
 		}
+		if raw := c.Value(mihomoNodeBindingKey{}); raw != nil {
+			binding, ok := raw.(*mihomoNodeBinding)
+			if !ok {
+				return dataplane.ErrReviewChanged
+			}
+			return binding.resource(c, a, plan, host, address)
+		}
 		cfg := store.Get()
 		if cfg.Revision != plan.Revision {
 			return dataplane.ErrReviewChanged

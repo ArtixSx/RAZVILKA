@@ -234,7 +234,7 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		route := dataplane.Route{ServiceID: service.ID, LogicalServiceID: service.ID, Selected: selected, Resolved: selected, CIDRs: service.CIDRs, Sources: []string{domainOriginalClient + "/32"}, ProbeURL: service.ProbeURL, ProbeService: &service}
 		// These factual constructor facts come from the actual successfully bound
 		// startup adapter; public Capable remains closed until this test passes.
-		plan, err := dataplane.BuildAt(dataplane.Input{Revision: current.Revision, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "mihomo", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{IPCommand: true, TUN: true, IPTables: true, IP6Tables: true}}, time.Now().UTC())
+		plan, err := dataplane.BuildAt(dataplane.Input{Revision: current.Revision + 1, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "mihomo", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: dataplane.HostState{IPCommand: true, TUN: true, IPTables: true, IP6Tables: true}}, time.Now().UTC())
 		if err != nil || !plan.Ready {
 			release()
 			cancelApply()
@@ -242,13 +242,22 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		}
 		started := time.Now()
 		release()
+		frozenService, err := dataplane.FrozenProbeService(plan.Routes[0])
+		if err != nil {
+			cancelApply()
+			t.Fatal(err)
+		}
+		binding := &mihomoNodeBinding{app: a, store: store, node: source, before: current, catalog: mihomoNodeCatalogClone(a.catalogSnapshot()), plan: plan, service: frozenService, profile: plan.NetworkProfileID}
+		binding.self = binding
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
 		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			bounded, finish := context.WithTimeout(r.Context(), 110*time.Second)
 			defer finish()
+			bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
+			bounded = dataplane.WithReviewGuard(bounded, binding.current)
 			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
-				return store.ApplyDraftScopeAtRevisionWithRollback(config.DraftScopeAll, current.Revision)
+				return binding.commit(bounded)
 			})
 			detail := ""
 			status := http.StatusOK
