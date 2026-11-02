@@ -189,7 +189,7 @@ func (a *MihomoProbeAdapter) liveCommit(ctx context.Context, p Plan, root string
 		return err
 	}
 	ctx = r.resourceContext(ctx)
-	if err = r.currentLive(ctx); err != nil {
+	if err = r.verifyHealthHandoff(ctx); err != nil {
 		return err
 	}
 	if err = r.proxy.verifyCandidateReceipt(ctx, root, r.definition.Policy, true); err != nil {

@@ -60,7 +60,10 @@ func (a *MihomoProbeAdapter) Health(c context.Context, p Plan, s string) error {
 	if e != nil {
 		return e
 	}
-	return r.currentLive(r.resourceContext(c))
+	r.scope.mu.Lock()
+	initial := !r.scope.retained
+	r.scope.mu.Unlock()
+	return r.currentLiveObserved(r.resourceContext(c), initial)
 }
 func (a *MihomoProbeAdapter) Commit(c context.Context, p Plan, s string) error {
 	return a.liveCommit(c, p, s)

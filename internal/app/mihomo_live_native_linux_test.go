@@ -259,6 +259,13 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
 				return binding.commit(bounded)
 			})
+			for _, step := range execution.Steps {
+				start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
+				finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
+				if startErr == nil && finishErr == nil {
+					t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
+				}
+			}
 			detail := ""
 			status := http.StatusOK
 			if applyErr != nil {

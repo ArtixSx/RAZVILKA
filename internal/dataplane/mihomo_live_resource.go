@@ -45,4 +45,5 @@ type mihomoLiveResource struct {
 	filesMu          sync.Mutex
 	compiledRoot     *ownedfs.Root
 	compiledFiles    map[string]*mihomoLiveSidecarIdentityFile
+	healthHandoff    *mihomoLiveHealthHandoff // One-use original Health -> Commit comparison only.
 }

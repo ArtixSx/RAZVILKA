@@ -104,6 +104,15 @@ func (r *mihomoLiveResource) nodeTransitCleanupReview(ctx context.Context) (*ope
 // original scoped transit rules and cleanup. A finite SOCKS result, Running()
 // boolean or an adapter registration never enters this method as proof.
 func (r *mihomoLiveResource) currentLive(ctx context.Context) error {
+	return r.currentLiveObserved(ctx, false)
+}
+
+func (r *mihomoLiveResource) currentLiveObserved(ctx context.Context, handoff bool) error {
+	if handoff {
+		r.mu.Lock()
+		r.healthHandoff = nil
+		r.mu.Unlock()
+	}
 	ctx = r.resourceContext(ctx)
 	if err := r.compiledCurrent(true); err != nil {
 		return err
@@ -183,6 +192,7 @@ func (r *mihomoLiveResource) currentLive(ctx context.Context) error {
 		}
 		return c.Err()
 	}
+	observedDNS := make(map[string][]netip.Addr)
 	for _, probe := range mihomoRequiredProbes(r.definition.Service) {
 		service := cloneXraySelectedTCPService(r.definition.Service)
 		service.ProbeURL = probe.URL
@@ -231,9 +241,16 @@ func (r *mihomoLiveResource) currentLive(ctx context.Context) error {
 		if err != nil || !slices.Equal(addresses, closing) {
 			return errors.Join(ErrNodeEndpointChanged, err)
 		}
+		observedDNS[probe.URL] = slices.Clone(addresses)
 	}
 	if err := r.liveOwnersReadOnly(ctx, nil); err != nil {
 		return err
 	}
-	return r.currentBeforeStart(ctx)
+	if err := r.currentBeforeStart(ctx); err != nil {
+		return err
+	}
+	if handoff {
+		return r.issueHealthHandoff(ctx, policy, observedDNS)
+	}
+	return nil
 }
