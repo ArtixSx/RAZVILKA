@@ -8,6 +8,10 @@ jobs:
   live-native:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [lifecycle, postcas-failure]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -42,6 +46,7 @@ jobs:
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual registered Apply, native LAN TLS, Stop and retry
+        if: matrix.scenario == 'lifecycle'
         shell: bash
         run: |
           set -euo pipefail
@@ -57,14 +62,14 @@ jobs:
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-native.sh
       - name: Retain bounded native CPU evidence
-        if: always() && !cancelled()
+        if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mihomo-live-cpu-${{ github.sha }}
           path: artifacts/mihomo-live-profile
           if-no-files-found: warn
       - name: Actual post-CAS required TLS rejection and exact desired undo
-        if: always() && !cancelled()
+        if: always() && !cancelled() && matrix.scenario == 'postcas-failure'
         shell: bash
         run: |
           set -euo pipefail
@@ -75,7 +80,7 @@ jobs:
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-postcas-native.sh
       - name: Original read observation bookends with official child, normal and race
-        if: always() && !cancelled()
+        if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         shell: bash
         run: |
           set -euo pipefail
