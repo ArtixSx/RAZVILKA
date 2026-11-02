@@ -104,6 +104,9 @@ func TestDomainFailurePairModelRetriesOriginalFDImages(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				// The retained writer accepts only its original scope's current
+				// execution, just as the real metadata producer does.
+				*k.cursor.scope.execution = before
 				for i := range 2 {
 					if err := k.records.publishOriginalDurable(i, old, syncDataplaneJournalDirectory); err != nil {
 						t.Fatal(err)
@@ -120,6 +123,7 @@ func TestDomainFailurePairModelRetriesOriginalFDImages(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				*k.cursor.scope.execution = after
 				r := &domainTCPFailureCleanup{cursor: k.cursor, image: bytes.Clone(image), imageStage: stage}
 				r.self = r
 				k.records.mu.Lock()
