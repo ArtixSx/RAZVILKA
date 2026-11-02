@@ -350,6 +350,7 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 	if err != nil {
 		return err
 	}
+	accepted := false
 	info, err := file.Stat()
 	if err == nil {
 		d.mu.Lock()
@@ -367,13 +368,13 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 		owner.latestMu.Unlock()
 		d.files[1], d.infos[1], d.images[1] = nil, nil, nil
 		d.mu.Unlock()
-		err = d.captureOriginalRecord(1, file, info, data, d.transactionRoot, "standby-execution.json")
+		accepted, err = d.captureOriginalRecord(1, file, info, data, d.transactionRoot, "standby-execution.json")
 	}
-	if err != nil {
+	if !accepted {
 		return errors.Join(err, file.Close())
 	}
 	d.standbyAlias.Store(true)
-	return d.current(ctx, true)
+	return errors.Join(err, d.current(ctx, true))
 }
 
 // The known-owner exception is scoped to this SAME last global publication.

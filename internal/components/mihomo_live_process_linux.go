@@ -26,6 +26,10 @@ type mihomoLiveNativeLinux struct {
 	parent                       *ownedfs.Root
 	name                         string
 	homeInfo                     os.FileInfo
+	homeReceipt                  *os.File
+	homeReceiptInfo              os.FileInfo
+	homeReceiptRaw               []byte
+	homeRef                      MihomoLiveHomeReference
 	command                      *exec.Cmd
 	validation                   *exec.Cmd
 	validationDone               chan struct{}
@@ -80,6 +84,9 @@ func newMihomoLiveNative(ctx context.Context, p *MihomoLiveProcess) (mihomoLiveN
 	}
 	n.directory, err = n.parent.OpenFile(n.name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 	if err != nil {
+		return n, err
+	}
+	if err := n.createHomeReceipt(ctx); err != nil {
 		return n, err
 	}
 	return n, n.filesCurrent(ctx)
@@ -235,7 +242,7 @@ func (n *mihomoLiveNativeLinux) homeCurrent() error {
 	if err != nil || heldErr != nil || !os.SameFile(n.homeInfo, named) || !os.SameFile(n.homeInfo, held) || named.Mode() != n.homeInfo.Mode() || held.Mode() != n.homeInfo.Mode() {
 		return restorejournal.ErrConflict
 	}
-	return nil
+	return n.homeReceiptCurrent()
 }
 func (n *mihomoLiveNativeLinux) current(ctx context.Context) error {
 	return n.currentMode(ctx, nil)
@@ -393,7 +400,7 @@ func (n *mihomoLiveNativeLinux) cleanup(ctx context.Context, review *operationga
 		}
 		n.name = ""
 	}
-	for _, f := range []*os.File{n.binary, n.profile, n.directory} {
+	for _, f := range []*os.File{n.binary, n.profile, n.directory, n.homeReceipt} {
 		if f != nil {
 			n.closeErr = errors.Join(n.closeErr, f.Close())
 		}

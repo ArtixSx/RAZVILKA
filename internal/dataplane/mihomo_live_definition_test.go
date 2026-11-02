@@ -29,9 +29,15 @@ func mihomoLiveDefinitionFixture(t *testing.T) ExecutionMihomoLiveDefinition {
 	return d
 }
 
+func mihomoLiveHomeFixture(t *testing.T) *components.MihomoLiveHomeReference {
+	t.Helper()
+	return &components.MihomoLiveHomeReference{Schema: 1, Parent: t.TempDir(), Name: ".razvilka-mihomo-live-fixture", ParentDevice: 1, ParentInode: 2, Device: 1, Inode: 3, ReceiptSHA256: strings.Repeat("a", 64)}
+}
+
 func TestMihomoLiveDefinitionRejectsWidenedPolicyAndPreservesFrozenIdentity(t *testing.T) {
 	d := mihomoLiveDefinitionFixture(t)
 	digest, _ := d.FrozenDigest()
+	d.NativeHome = mihomoLiveHomeFixture(t)
 	d.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}
 	if got, err := d.FrozenDigest(); err != nil || got != digest || d.validateActive() != nil {
 		t.Fatal("actual observation changed immutable intent", got, err)
@@ -70,6 +76,9 @@ func TestMihomoLiveRecordsAreTypedIntentAndCannotAdoptActiveOwner(t *testing.T) 
 	d := mihomoLiveDefinitionFixture(t)
 	for _, phase := range []string{"reserved", "validation-pending", "process-pending", "listener-bound", "policy-pending", "closed", "active", "removed", "unused"} {
 		copy := d.Clone()
+		if phase != "reserved" && phase != "unused" {
+			copy.NativeHome = mihomoLiveHomeFixture(t)
+		}
 		state := "prepared"
 		if phase == "active" || phase == "sidecar-bound" || phase == "policy-pending" {
 			if phase == "active" {

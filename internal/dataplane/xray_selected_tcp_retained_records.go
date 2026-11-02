@@ -26,17 +26,18 @@ type xraySelectedTCPExecutionRecords struct {
 	infos             [2]os.FileInfo
 	images            [2][]byte
 	closed            bool
+	closeErr          error
 	replacement       atomic.Pointer[xraySelectedTCPReplacement]
 	standbyAlias      atomic.Bool
 }
 
 // Private sink called by CORE's actual two journal writers. Caller holds the
 // original scope metadata lock or the serialized original Manager operation.
-// FD ownership transfers only on success; a failed second publication retains
+// The accepted result records FD transfer independently of a close error; a failed second publication retains
 // the first actual authored inode rather than adopting a matching replacement.
-func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, file *os.File, info os.FileInfo, canonical []byte) error {
+func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, file *os.File, info os.FileInfo, canonical []byte) (bool, error) {
 	if s == nil || index < 0 || index > 1 || file == nil || info == nil || len(canonical) == 0 || len(canonical) > 16<<20 || len(s.xraySelectedTCP)+len(s.xrayDomainTCP) != 1 {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	var r *XraySelectedTCPExecutionResource
 	for _, resource := range s.xraySelectedTCP {
@@ -45,7 +46,7 @@ func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, f
 	if len(s.xrayDomainTCP) == 1 {
 		for _, resource := range s.xrayDomainTCP {
 			if resource == nil || resource.self != resource || resource.scope != s || resource.records == nil || resource.records.scope != s {
-				return ErrExecutionJournal
+				return false, ErrExecutionJournal
 			}
 			d := resource.records
 			root, name := d.recordPath(index)
@@ -53,7 +54,7 @@ func (s *executionResourceScope) captureOriginalXrayExecutionRecord(index int, f
 		}
 	}
 	if r == nil || r.self != r || r.scope != s || r.records == nil || r.records.scope != s {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	d := r.records
 	root, name := d.recordPath(index)
@@ -73,37 +74,49 @@ func (d *xraySelectedTCPExecutionRecords) recordPath(index int) (*ownedfs.Root, 
 	return d.root, "latest-execution.json"
 }
 
-func (d *xraySelectedTCPExecutionRecords) captureOriginalRecord(index int, file *os.File, info os.FileInfo, canonical []byte, root *ownedfs.Root, name string) error {
+func (d *xraySelectedTCPExecutionRecords) captureOriginalRecord(index int, file *os.File, info os.FileInfo, canonical []byte, root *ownedfs.Root, name string) (bool, error) {
 	if d == nil || d.scope == nil || root == nil || file == nil || info == nil || index < 0 || index > 1 {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.closed || d.root == nil {
-		return ErrExecutionJournal
+	if d.closed || d.root == nil || d.closeErr != nil {
+		return false, errors.Join(ErrExecutionJournal, d.closeErr)
 	}
 	expected, err := json.Marshal(d.scope.execution)
 	var compact bytes.Buffer
 	if err != nil || json.Compact(&compact, canonical) != nil || !bytes.Equal(expected, compact.Bytes()) {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	held, err := file.Stat()
 	named, statErr := root.Stat(name)
 	if err != nil || statErr != nil || !validNetworkPolicyReceiptFile(held) || !os.SameFile(info, held) || !os.SameFile(held, named) || held.Size() <= 0 || held.Size() > 16<<20 {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	data := make([]byte, int(held.Size()))
 	defer clear(data)
 	n, readErr := file.ReadAt(data, 0)
 	compact.Reset()
 	if readErr != nil || n != len(data) || json.Compact(&compact, data) != nil || !bytes.Equal(compact.Bytes(), expected) {
-		return ErrExecutionJournal
+		return false, ErrExecutionJournal
 	}
 	if d.files[index] != nil {
-		_ = d.files[index].Close()
+		d.closeErr = errors.Join(d.closeErr, d.files[index].Close())
 	}
 	d.files[index], d.infos[index], d.images[index] = file, held, bytes.Clone(expected)
-	return nil
+	return true, d.closeErr
+}
+
+func (d *xraySelectedTCPExecutionRecords) publicationFailure() error {
+	if d == nil {
+		return ErrExecutionJournal
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return errors.Join(ErrExecutionJournal, d.closeErr)
+	}
+	return d.closeErr
 }
 
 func (d *xraySelectedTCPExecutionRecords) current(ctx context.Context, complete bool) error {
@@ -141,8 +154,8 @@ func (d *xraySelectedTCPExecutionRecords) beforePublication() error {
 }
 
 func (d *xraySelectedTCPExecutionRecords) currentLocked(ctx context.Context, complete, allowMissing bool) error {
-	if d.closed {
-		return ErrExecutionJournal
+	if d.closed || d.closeErr != nil {
+		return errors.Join(ErrExecutionJournal, d.closeErr)
 	}
 	anchor, err := os.Lstat(d.scope.managerRoot)
 	if err != nil || !networkPolicyPrivateDirectory(anchor) || !os.SameFile(d.anchor, anchor) {
@@ -199,10 +212,10 @@ func (d *xraySelectedTCPExecutionRecords) close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
-		return nil
+		return d.closeErr
 	}
 	d.closed = true
-	var err error
+	err := d.closeErr
 	for _, file := range d.files {
 		if file != nil {
 			err = errors.Join(err, file.Close())
@@ -214,5 +227,6 @@ func (d *xraySelectedTCPExecutionRecords) close() error {
 	if d.transactionRoot != nil {
 		err = errors.Join(err, d.transactionRoot.Close())
 	}
+	d.closeErr = err
 	return err
 }

@@ -17,6 +17,7 @@ func TestMihomoLiveHistoryRequiresReader6ForEveryRetainedPhase(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := mihomoLiveDefinitionFixture(t)
+	d.NativeHome = mihomoLiveHomeFixture(t)
 	digest, _ := d.FrozenDigest()
 	e := Execution{PlanID: d.Plan.PlanID, Digest: d.Plan.Digest, State: "resource-failed", Resources: []ExecutionResource{{ID: "ml-" + strings.Repeat("a", 32), Kind: "mihomo-live", State: "prepared", Phase: "process-pending", Generation: d.Profile.ConfigSHA256, EffectsDigest: digest, MihomoLive: &d}}}
 	write := func(e Execution) {

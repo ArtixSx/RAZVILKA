@@ -40,4 +40,4 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             go test "${flags[@]}" ./internal/dataplane ./internal/components ./internal/operationgate ./internal/updatecheck \
-              -run 'TestDomainDNSDetached|TestExecutionHistory|TestMihomoLive|TestOriginalRecordDirectory|TestDomainStandbyConcurrent|TestDomainTCPStandby|TestControlEpoch.*Cleanup' -count=1 -v -timeout=10m
+              -run 'TestDomainDNSDetached|TestExecutionHistory|TestMihomoLive|TestOriginalRecord|TestDomainStandbyConcurrent|TestDomainTCPStandby|TestControlEpoch.*Cleanup' -count=1 -v -timeout=10m

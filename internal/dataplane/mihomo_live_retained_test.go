@@ -17,6 +17,7 @@ import (
 func mihomoLiveRecordModel(t *testing.T) (*Manager, *MihomoProbeAdapter, *mihomoLiveResource, *Execution) {
 	t.Helper()
 	d := mihomoLiveDefinitionFixture(t)
+	d.NativeHome = mihomoLiveHomeFixture(t)
 	d.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}
 	digest, _ := d.FrozenDigest()
 	e := &Execution{PlanID: d.Plan.PlanID, Digest: d.Plan.Digest, State: "committed", StartedAt: time.Now().UTC().Format(time.RFC3339Nano), FinishedAt: time.Now().UTC().Format(time.RFC3339Nano)}

@@ -33,6 +33,7 @@ type ExecutionMihomoLiveDefinition struct {
 	Sidecar           MihomoLiveSidecarReference            `json:"sidecar"`
 	Policy            PolicyState                           `json:"policy"`
 	Observation       *MihomoLiveRuntimeObservation         `json:"observation,omitempty"`
+	NativeHome        *components.MihomoLiveHomeReference   `json:"native_home,omitempty"`
 }
 
 // MihomoLiveSidecarReference describes the original compiled sidecar's files,
@@ -66,6 +67,10 @@ func (d ExecutionMihomoLiveDefinition) Clone() ExecutionMihomoLiveDefinition {
 	d.Service = cloneXraySelectedTCPService(d.Service)
 	d.EndpointAddresses = slices.Clone(d.EndpointAddresses)
 	d.Policy = cloneWGPolicyState(d.Policy)
+	if d.NativeHome != nil {
+		home := *d.NativeHome
+		d.NativeHome = &home
+	}
 	if d.Observation != nil {
 		observed := *d.Observation
 		d.Observation = &observed
@@ -75,6 +80,7 @@ func (d ExecutionMihomoLiveDefinition) Clone() ExecutionMihomoLiveDefinition {
 
 func (d ExecutionMihomoLiveDefinition) FrozenDigest() (string, error) {
 	d.Observation = nil
+	d.NativeHome = nil
 	data, err := json.Marshal(d)
 	if err != nil || len(data) > 1<<20 {
 		return "", ErrExecutionJournal
@@ -149,6 +155,9 @@ func (d ExecutionMihomoLiveDefinition) validate() error {
 		}
 	}
 	data, err := json.Marshal(d)
+	if d.NativeHome != nil && d.NativeHome.Validate() != nil {
+		return ErrExecutionJournal
+	}
 	if d.Observation != nil && (d.Observation.Schema != 1 || d.Observation.SidecarReceiptVersion != 1 || !validPlanDigest(d.Observation.SidecarReceiptSHA256)) {
 		return ErrExecutionJournal
 	}
@@ -162,7 +171,7 @@ func (d ExecutionMihomoLiveDefinition) validateActive() error {
 	if err := d.validate(); err != nil {
 		return err
 	}
-	if d.Observation == nil || d.Policy.Forwarding == nil || len(d.Policy.Forwarding.Rules) == 0 {
+	if d.NativeHome == nil || d.Observation == nil || d.Policy.Forwarding == nil || len(d.Policy.Forwarding.Rules) == 0 {
 		return ErrExecutionJournal
 	}
 	return nil

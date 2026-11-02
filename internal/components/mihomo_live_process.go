@@ -34,6 +34,7 @@ type mihomoLiveNative interface {
 	cleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	pid() int
 	file(string, os.FileInfo) bool
+	homeReference(context.Context) (MihomoLiveHomeReference, error)
 }
 
 // ReserveLiveChild transfers the dedicated control handle and creates only an
@@ -91,8 +92,12 @@ func (p *MihomoLiveProcess) StartAdmitted(ctx context.Context, admission func(co
 		return ErrMihomoLiveOwner
 	}
 	p.startUsed = true
-	native, err := newMihomoLiveNative(ctx, p)
-	p.native = native
+	native := p.native
+	var err error
+	if native == nil {
+		native, err = newMihomoLiveNative(ctx, p)
+		p.native = native
+	}
 	p.mu.Unlock()
 	if err != nil {
 		return err
