@@ -234,6 +234,9 @@ func (o *DomainTCPOriginalScope) currentSyntheticCaptureWithFiles(ctx context.Co
 	return r.checkPreparedWithFiles(ctx, files)
 }
 func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping) error {
+	return o.currentSyntheticMappingWithFiles(ctx, mapping, nil)
+}
+func (o *DomainTCPOriginalScope) currentSyntheticMappingWithFiles(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
 	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -242,6 +245,17 @@ func (o *DomainTCPOriginalScope) CurrentSyntheticMapping(ctx context.Context, ma
 	o.mu.Unlock()
 	if !open || closed {
 		return ErrDomainPolicyTCPConsumer
+	}
+	if files != nil {
+		finish := domainTCPMeasure("mapping-compare")
+		err := func() error {
+			defer finish(0)
+			return o.compareSyntheticMappingWithFiles(ctx, mapping, files)
+		}()
+		if err == nil {
+			domainTCPMeasure("mapping-compare-success")(0)
+		}
+		return err
 	}
 	return o.compareSyntheticMapping(ctx, mapping)
 }
@@ -359,6 +373,9 @@ func (l *domainTCPOriginalFlowLease) Binding() (*dnscontrol.SyntheticDNSMapping,
 	return l.mapping, l.flowID
 }
 func (l *domainTCPOriginalFlowLease) Guard(ctx context.Context, socket DomainPolicyTCPSocket) (autonomy.ScopeObservation, error) {
+	return l.guardWithFiles(ctx, socket, nil)
+}
+func (l *domainTCPOriginalFlowLease) guardWithFiles(ctx context.Context, socket DomainPolicyTCPSocket, files *xrayDomainTCPFileObservation) (autonomy.ScopeObservation, error) {
 	if l == nil || l.self != l || socket != l.socket || l.owner == nil {
 		return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
 	}
@@ -369,7 +386,7 @@ func (l *domainTCPOriginalFlowLease) Guard(ctx context.Context, socket DomainPol
 	if err := l.accepted.current(ctx, capture, socket); err != nil {
 		return autonomy.ScopeObservation{}, err
 	}
-	if err := o.CurrentSyntheticMapping(ctx, l.mapping); err != nil {
+	if err := o.currentSyntheticMappingWithFiles(ctx, l.mapping, files); err != nil {
 		return autonomy.ScopeObservation{}, err
 	}
 	// This is the immutable physical observation from the SAME reviewed plan;

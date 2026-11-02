@@ -35,7 +35,7 @@ jobs:
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
       - name: Original writer and typed reader regressions
-        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose'
+        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose|TestDomainGlobalHistoricalFD|TestDomainGlobalSuccessor|TestDomainPool|TestDomainCoexistence|TestDomainDNSCoexistence|TestMihomoTransitArchive'
       - name: Actual DNS send, original Stop and cached-alias TLS
         shell: bash
         run: |
@@ -113,4 +113,47 @@ jobs:
         with:
           name: dns-detachment-${{ matrix.cut }}-${{ github.sha }}
           path: artifacts/dns-detachment
+          if-no-files-found: warn
+  original-domain-coexistence:
+    name: Two original DNS generations / new selected TLS and old cached alias
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and disposable namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Original closed predecessor, successor writer, new flow and old late SYN
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/dns-coexistence
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/dns-coexistence' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 \
+            RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1 \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-coexistence" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
+      - name: Preserve actual two-operation diagnostics, including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dns-coexistence-${{ github.sha }}
+          path: artifacts/dns-coexistence
           if-no-files-found: warn

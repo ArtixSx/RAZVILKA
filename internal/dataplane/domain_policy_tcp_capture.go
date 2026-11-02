@@ -281,10 +281,7 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 			if current != original || id != flowID || !binding.matches(f) || !time.Now().Before(mapping.ExpiresAt) {
 				return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
 			}
-			if err := prepared.Current(c); err != nil {
-				return autonomy.ScopeObservation{}, err
-			}
-			return lease.Guard(c, socket)
+			return capture.guardPreparedFlow(c, original, prepared, lease, socket)
 		},
 		Lease: func(c context.Context, _ DomainPolicyTCPFlow, _ DomainPolicyDecision, forward func(context.Context) error) error {
 			return lease.WithFlow(c, socket, forward)

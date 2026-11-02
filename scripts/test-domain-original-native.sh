@@ -34,6 +34,7 @@ chmod 500 "$domain_work/app.test"
 timeout 50s go tool pprof -h > "$domain_work/pprof-prewarm.log" 2>&1 || true
 domain_status=0
 domain_case=TestDomainTCPOriginalNativeAcceptedFlows
+domain_test_timeout=180s
 case "${RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE:-0}" in
  0) ;;
  1) domain_case=TestDomainTCPOriginalNativeUnpublishedRetirement ;;
@@ -51,6 +52,18 @@ case "${RAZVILKA_DOMAIN_DNS_ONLY_NATIVE:-0}" in
   esac ;;
  *) exit 2 ;;
 esac
+case "${RAZVILKA_DOMAIN_DNS_COEXISTENCE:-0}" in
+ 0) ;;
+ 1)
+  test "${RAZVILKA_DOMAIN_DNS_ONLY_NATIVE:-0}" = 1 || exit 2
+  test "${RAZVILKA_DOMAIN_DNS_DETACH:-0}" = 1 || exit 2
+  test "${RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE:-0}" = 0 || exit 2
+  test -z "${RAZVILKA_DOMAIN_DNS_DETACH_ACK:-}" || exit 2
+  test -z "${RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY:-}" || exit 2
+  domain_case=TestDomainTCPOriginalNativeDNSCoexistence
+  domain_test_timeout=240s ;;
+ *) exit 2 ;;
+esac
 unshare --mount --net sh -eu -c '
  mount --make-rprivate /
  # Original tool/preload review must observe protected ancestors, not the
@@ -65,8 +78,8 @@ unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t nat -S >/dev/null
  /usr/sbin/iptables-legacy -t filter -S >/dev/null
  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
- exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout=180s
-' sh "$domain_work" "$domain_case" || domain_status=$?
+ exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout="$3"
+' sh "$domain_work" "$domain_case" "$domain_test_timeout" || domain_status=$?
 # Keep the child's result. CPU symbols and bounded top output contain no
 # profile/config credentials and are analyzed by the parent outside /opt.
 if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then

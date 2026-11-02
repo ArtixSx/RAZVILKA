@@ -125,6 +125,12 @@ func (r *domainTCPCaptureExecutionResource) readWithFiles(ctx context.Context, f
 	if view.Scope.Network != r.tools.Identity {
 		return backendInventorySnapshot{}, ErrDomainPolicyTCPConsumer
 	}
+	if c := r.process.scope.domainSuccessor; c != nil {
+		view.Rows, err = c.counterfactualRows(ctx, r.backend, view.Rows)
+		if err != nil {
+			return backendInventorySnapshot{}, err
+		}
+	}
 	return view, r.currentWithFiles(ctx, files)
 }
 

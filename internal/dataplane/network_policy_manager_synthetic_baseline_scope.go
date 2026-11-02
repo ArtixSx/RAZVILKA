@@ -121,6 +121,13 @@ func (s *executionResourceScope) reserveSyntheticBaseline(ctx context.Context, r
 	s.syntheticBaselines[id] = r
 	s.execution.Resources = append(s.execution.Resources, ExecutionResource{ID: id, Kind: "synthetic-baseline", State: "prepared", Phase: "planned",
 		Generation: r.effects.Generation, EffectsDigest: r.digest, SyntheticBaseline: cloneExecutionSyntheticBaselineDefinition(r.definition)})
+	if c := s.domainSuccessor; c != nil {
+		if c.original() != nil || c.definition.validate(s.execution.PlanID, r.definition) != nil {
+			return ErrPolicyAdditionUnknown
+		}
+		marker := c.definition.Clone()
+		s.execution.Resources[len(s.execution.Resources)-1].DomainDNSCoexistence = &marker
+	}
 	return s.persist() // Original durable planned intent precedes COMMON effects.
 }
 

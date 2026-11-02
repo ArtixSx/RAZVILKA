@@ -66,6 +66,7 @@ type Manager struct {
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
 	replacementXray    *xraySelectedTCPReplacement
+	domainPool         *domainTCPStandbyPool // Original bounded owners only; retainedXrayMu.
 	retainedWGMu       sync.Mutex
 	retainedWG         *retainedWGExecution
 	retainedSingMu     sync.Mutex
@@ -303,16 +304,18 @@ type ExecutionStep struct {
 }
 
 type Execution struct {
-	ResourcePlanID   string              `json:"resource_plan_id,omitempty"`
-	Resources        []ExecutionResource `json:"resources,omitempty"`
-	PlanID           string              `json:"plan_id"`
-	Digest           string              `json:"digest"`
-	State            string              `json:"state"`
-	StartedAt        string              `json:"started_at"`
-	FinishedAt       string              `json:"finished_at,omitempty"`
-	Steps            []ExecutionStep     `json:"steps"`
-	Error            string              `json:"error,omitempty"`
-	RollbackVerified bool                `json:"rollback_verified,omitempty"`
+	MihomoTransitHistoryArchive *MihomoTransitHistoryArchive             `json:"mihomo_transit_history_archive,omitempty"`
+	DomainDNSCoexistence        *ExecutionDomainDNSCoexistenceDefinition `json:"domain_dns_coexistence,omitempty"`
+	ResourcePlanID              string                                   `json:"resource_plan_id,omitempty"`
+	Resources                   []ExecutionResource                      `json:"resources,omitempty"`
+	PlanID                      string                                   `json:"plan_id"`
+	Digest                      string                                   `json:"digest"`
+	State                       string                                   `json:"state"`
+	StartedAt                   string                                   `json:"started_at"`
+	FinishedAt                  string                                   `json:"finished_at,omitempty"`
+	Steps                       []ExecutionStep                          `json:"steps"`
+	Error                       string                                   `json:"error,omitempty"`
+	RollbackVerified            bool                                     `json:"rollback_verified,omitempty"`
 }
 
 type PolicyRefresh struct {

@@ -212,6 +212,9 @@ func (m *Manager) CheckRetainedManagedXraySelectedTCP(ctx context.Context) error
 }
 
 func (m *Manager) HasPendingManagedXraySelectedTCP() bool {
+	if m.hasPendingDomainSuccessor() {
+		return true
+	}
 	if m.hasPendingXrayReplacement() {
 		return true
 	}

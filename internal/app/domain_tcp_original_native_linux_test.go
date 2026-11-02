@@ -51,16 +51,31 @@ func TestDomainTCPOriginalNativeDNSDetachment(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeDNSCoexistence(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
+	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
 	if detach != "" && detach != "1" || foreign != "" && foreign != "1" || (ack != "" || foreign != "") && detach != "1" || ack != "" && foreign != "" || detach == "1" && unpublished {
 		t.Fatal("invalid or combined isolated DNS detachment fixture cases")
 	}
 	if os.Getenv(domainOriginalNativeEnv) != "1" {
 		t.Skip("explicit disposable native original domain workflow")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	wholeBudget := 100 * time.Second
+	if coexist {
+		if detach != "1" || ack != "" || foreign != "" || unpublished || os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") != "30" {
+			t.Fatal("coexistence requires its distinct two-operation diagnostic case")
+		}
+		wholeBudget = 3 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wholeBudget)
 	defer cancel()
 	peers := domainOriginalPeers(t, ctx)
 	t.Cleanup(func() {
@@ -325,7 +340,14 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	var retainedPublishedAlias string
 	var retainedMapping *dnscontrol.SyntheticDNSMapping
 	originalPlanRaw, _ := json.Marshal(plan)
-	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(held, control.Current), plan, history, func(original context.Context) error {
+	firstOperation := held
+	if coexist {
+		var stopFirst context.CancelFunc
+		firstOperation, stopFirst = context.WithTimeout(held, 100*time.Second)
+		defer stopFirst()
+		t.Log("COEXISTENCE diagnostic: physical fixture3min; EACH original generation100s, fresh scope60s, publication30s/join15s unchanged; not default12s acceptance")
+	}
+	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(firstOperation, control.Current), plan, history, func(original context.Context) error {
 		binding, err := manager.BindSyntheticDNSExecution(original, dnsAdapter, plan)
 		if err != nil {
 			return fmt.Errorf("original DNS binding: %w", err)
@@ -723,6 +745,40 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			t.Fatal("DNS-only detach restarted a native runtime")
 		}
 		t.Log("reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority")
+		if coexist {
+			// End the first original admission before entering a genuinely new
+			// operation. The old closed source/baseline stays owned by the pool.
+			cleanupRelease()
+			secondCtx, stopSecond := context.WithTimeout(ctx, 100*time.Second)
+			defer stopSecond()
+			secondHeld, secondRelease, err := operations.ExclusiveContext(secondCtx)
+			if err != nil {
+				t.Fatal("new original successor admission", err)
+			}
+			defer secondRelease()
+			freshNow := time.Now().UTC()
+			scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+			secondDomain, err := dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secondTransport := dataplane.CloneSyntheticDNSTransportPlan(transport)
+			secondTransport.DomainPolicyDigest = secondDomain.Digest
+			secondPlan, err := dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: secondDomain, SyntheticDNS: secondTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+			if err != nil || secondPlan.Ready {
+				t.Fatal("new frozen blocked intent", err)
+			}
+			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
+				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias)
+			})
+			if err != nil {
+				t.Fatal("actual original successor/full selected workflow", err)
+			}
+			if version, _, err := dataplane.InspectRetainedExecutionReadVersion(secondHeld, manager.StateRoot); err != nil || version != 8 {
+				t.Fatal("coexistence requires actual reader8", version, err)
+			}
+			t.Log("actual two original generations: published old alias retained; successor DNS/native/capture/new selected TLS and old cached-alias TLS, both original tuples checked; no cold reconstruction or ordinary Apply grant")
+		}
 	}
 	if dnsOnly {
 		t.Log("DNS-only ownership scenario: actual precheck/Reserve/native/capture/kernel/DNS client publication, then original Stop+cached-alias TLS direct baseline with original tuple; selected-runtime service workflow NOT tested here; no new Apply/cache-retirement authority")
