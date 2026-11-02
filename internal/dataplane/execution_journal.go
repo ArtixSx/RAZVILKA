@@ -175,12 +175,15 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
-	if execution.State == mihomoActiveCheckingState {
-		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.healthCheck == nil {
+	if execution.State == mihomoActiveCheckingState || execution.MihomoLiveHealthOperation != nil {
+		if scope == nil || scope.mihomoLive == nil || scope.mihomoLive.self != scope.mihomoLive || scope.mihomoLive.scope != scope || scope.execution == nil || execution.MihomoLiveHealthOperation == nil || scope.execution.MihomoLiveHealthOperation == nil || *execution.MihomoLiveHealthOperation != *scope.execution.MihomoLiveHealthOperation {
 			return executionJournalError(ErrExecutionJournal)
 		}
-		c := scope.mihomoLive.healthCheck
-		if c.self != c || c.owner != scope.mihomoLive || !c.open || !c.publishing {
+		r := scope.mihomoLive
+		c, a := r.healthCheck, r.transitHistory
+		checking := c != nil && c.self == c && c.owner == r && (c.open || c.stopping) && c.publishing
+		archiving := a != nil && a.self == a && a.owner == r && a.publishing
+		if !checking && !archiving {
 			return executionJournalError(ErrExecutionJournal)
 		}
 	}

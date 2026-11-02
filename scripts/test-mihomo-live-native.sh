@@ -7,6 +7,7 @@ test "$(id -u)" = 0 || exit 2
 case "${RAZVILKA_MIHOMO_LIVE_TEST_CASE:-lifecycle}" in
  lifecycle) live_test=TestMihomoLiveOriginalApplyStopAndFreshApply;;
  postcas-failure) live_test=TestMihomoLiveOriginalPostCASServiceFailure;;
+ check-settlement) live_test=TestMihomoLiveOriginalFailedCheckSettlementStopRetry;;
  *) exit 2;;
 esac
 case "$RAZVILKA_XRAY_NATIVE:$RAZVILKA_MIHOMO_ARCHIVE:$RAZVILKA_HEV_NATIVE" in /*:/*:/*) ;; *) exit 2;; esac

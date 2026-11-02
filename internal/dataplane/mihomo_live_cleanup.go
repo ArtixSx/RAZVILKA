@@ -156,6 +156,13 @@ func (r *mihomoLiveResource) cleanupLive(ctx context.Context, cleanup *operation
 		journalErr = custodyErr
 	}
 	transitErr := r.cleanupHealthTransits(ctx)
+	// Original temporary cleanup still needs this exact live TUN/source and
+	// active policy for its independent readback. Retain those prerequisites
+	// across partial settlement ACKs; destroying them would strand the SAME
+	// strict retry owner. No Stop/absence acknowledgment is issued here.
+	if transitErr != nil {
+		return errors.Join(journalErr, transitErr)
+	}
 	var policyErr error
 	// Remove only actual owned selectors/forwarding before joining children.
 	if custodyErr == nil {

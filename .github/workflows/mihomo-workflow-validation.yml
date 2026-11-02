@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [lifecycle, postcas-failure]
+        scenario: [lifecycle, postcas-failure, check-settlement]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -82,6 +82,18 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-postcas-native.sh
+      - name: Original failed Check settlement, retained prerequisites and Stop retry
+        if: always() && !cancelled() && matrix.scenario == 'check-settlement'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo modprobe tun
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-check-settlement-native.sh
       - name: Original read observation bookends with official child, normal and race
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         shell: bash
@@ -99,7 +111,7 @@ jobs:
           for package in components dataplane restorejournal; do
             case "$package" in
               components) pattern='^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$' ;;
-              dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$|^TestNodeTransitSharedOwner|^TestNodeTransitPolicyRuntime|^TestMihomoHealthHandoff' ;;
+              dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$|^TestNodeTransitSharedOwner|^TestNodeTransitPolicyRuntime|^TestMihomoHealthHandoff|^TestMihomoActiveChecking|^TestMihomoRetainedCheck|^TestMihomoTransitArchive' ;;
               restorejournal) pattern='^TestArtifactComparison' ;;
             esac
             for mode in normal race; do
