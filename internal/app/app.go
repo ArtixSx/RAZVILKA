@@ -540,6 +540,8 @@ func (a *App) Handler(static http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/extension-lab/mihomo", a.extensionMihomo)
 	mux.HandleFunc("/api/v1/extension-lab/mihomo/probe", a.mihomoProbeRecovery)
+	mux.HandleFunc(mihomoNodePath, a.mihomoNodeAction)
+	mux.HandleFunc("/api/v1/mihomo/selection", a.mihomoNodeSelection)
 	mux.HandleFunc("/api/v1/extension-lab/hev", a.extensionHev)
 	mux.HandleFunc("/api/v1/runtime/proxy-sidecar", a.proxySidecar)
 	mux.HandleFunc("/api/v1/strategy-lab/packs", a.strategyPacks)
@@ -4020,6 +4022,22 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 		state := cfg.Services[service.ID]
 		if state.Enabled {
 			selected := selectedRoute(state)
+			_, mihomoNode := mihomoNodeRouteID(selected)
+			if strings.HasPrefix(selected, "mihomo:") {
+				if !mihomoNode || mihomoNodeServiceScope(cfg, service, state.Sources) != nil {
+					return dataplane.Plan{}, errMihomoNodeScope
+				}
+				if _, err := a.reviewMihomoNode(ctx, selected); err != nil {
+					return dataplane.Plan{}, err
+				}
+				if networkProfile == "" {
+					var err error
+					networkProfile, err = a.freshNetworkProfile(ctx)
+					if err != nil {
+						return dataplane.Plan{}, err
+					}
+				}
+			}
 			nodeEngine, nodeTarget, nodeRoute := routekind.ParseNodeRoute(selected)
 			if routekind.HasNodeRoutePrefix(selected) && (!nodeRoute || !routecatalog.ValidForServiceWithOptions(selected, service.ID, options)) {
 				return dataplane.Plan{}, a.routePlanDependency(cfg, service, selected, committedRoutes[service.ID])
@@ -4082,7 +4100,7 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 				Domains: service.Domains, CIDRs: service.CIDRs, SourceRefs: service.SourceRefs, Sources: append([]string(nil), state.Sources...), ProbeURL: service.ProbeURL, AppliedRoute: appliedRoute,
 			}
 			engine, target, exactNode := routekind.ParseNodeRoute(resolved)
-			if resolved == "usque" || exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
+			if resolved == "usque" || mihomoNode || exactNode && engine == "xray" && strings.HasPrefix(target, "node-") {
 				// The actual runtime consumes the catalog's complete service
 				// predicate. Keep it in the reviewed plan for ordinary Apply and
 				// autonomy alike, detached from later catalog/editor changes.
@@ -4115,11 +4133,17 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 	engines := make([]dataplane.Engine, 0, len(options))
 	nodeScopedEngines := map[string]bool{}
 	for _, route := range routes {
+		if _, ok := mihomoNodeRouteID(route.Resolved); ok {
+			nodeScopedEngines["mihomo"] = true
+		}
 		if engine, target, ok := routekind.ParseNodeRoute(route.Resolved); ok && strings.HasPrefix(target, "node-") {
 			nodeScopedEngines[engine] = true
 		}
 	}
 	for _, option := range options {
+		if option.ID == "mihomo" && nodeScopedEngines["mihomo"] {
+			continue // Exact registered source/receipt supplies this fact below.
+		}
 		if option.ID == "auto" || option.ID == "direct" {
 			continue
 		}
@@ -4131,6 +4155,13 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 			configured = true
 		}
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
+	}
+	if nodeScopedEngines["mihomo"] {
+		fact, err := a.mihomoNodeEngineFact(ctx)
+		if err != nil {
+			return dataplane.Plan{}, err
+		}
+		engines = append(engines, fact)
 	}
 	resourceConflicts := []dataplane.ResourceConflict{}
 	if a.EngineLab != nil {

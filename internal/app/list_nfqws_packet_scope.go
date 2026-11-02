@@ -281,7 +281,9 @@ func (b *NFQWSPacketScopeBinding) ScopeCheck(ctx context.Context, p *dataplane.L
 		return nil
 	})
 }
-func (b *NFQWSPacketScopeBinding) cleanupScopeCheck(ctx context.Context, p *dataplane.LANPolicyRuntimePlan) error {
+func (b *NFQWSPacketScopeBinding) cleanupScopeCheck(ctx context.Context, p *dataplane.LANPolicyRuntimePlan) (result error) {
+	stage := "packet-cleanup-owner"
+	defer func() { result = managedNFQFailureAt(stage, result) }()
 	if b == nil || b.self != b || b.app == nil {
 		return ErrListScopeChanged
 	}
@@ -292,17 +294,29 @@ func (b *NFQWSPacketScopeBinding) cleanupScopeCheck(ctx context.Context, p *data
 	defer cancel()
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.closed || b.app.Store != b.store || b.physical == nil || !b.boundOnce || b.bound == nil || dataplane.ValidateLANPolicyRuntime(p) != nil || !reflect.DeepEqual(p, b.bound) || !reflect.DeepEqual(b.snapshot.Facts, b.physical.PacketFacts()) {
+	stage = "packet-cleanup-binding"
+	if b.closed || b.app.Store != b.store || b.physical == nil || !b.boundOnce || b.bound == nil {
+		return ErrListScopeChanged
+	}
+	stage = "packet-cleanup-plan"
+	if dataplane.ValidateLANPolicyRuntime(p) != nil || !reflect.DeepEqual(p, b.bound) {
+		return ErrListScopeChanged
+	}
+	stage = "packet-cleanup-facts-open"
+	if !reflect.DeepEqual(b.snapshot.Facts, b.physical.PacketFacts()) {
 		return ErrListScopeChanged
 	}
 	// No ScopeReview/Store/intent read: an edited draft cannot strand original
 	// receipt-owned cleanup. Actual caller still needs its preissued capability.
+	stage = "packet-cleanup-physical"
 	if err := b.physical.RetainedCurrent(c); err != nil {
 		return errors.Join(ErrListScopeChanged, err)
 	}
+	stage = "packet-cleanup-facts-close"
 	if !reflect.DeepEqual(b.snapshot.Facts, b.physical.PacketFacts()) {
 		return ErrListScopeChanged
 	}
+	stage = "packet-cleanup-context"
 	return c.Err()
 }
 func (b *NFQWSPacketScopeBinding) AcceptCommitted(ctx context.Context, after config.Config, started, finished time.Time) error {

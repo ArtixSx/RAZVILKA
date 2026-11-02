@@ -153,7 +153,19 @@ func domainOriginalPeers(t *testing.T, ctx context.Context) *domainOriginalNativ
 	t.Setenv("HTTP_PROXY", "")
 	t.Setenv("ALL_PROXY", "")
 	p.localDoH(t)
-	command := exec.Command("ip", "netns", "exec", p.server, os.Args[0], "-test.run=^TestDomainTCPOriginalNativePeer$", "-test.v", "-test.timeout=4m")
+	peerBinary := os.Args[0]
+	peerArgs := []string{"-test.run=^TestDomainTCPOriginalNativePeer$", "-test.v", "-test.timeout=4m"}
+	if separate := os.Getenv("RAZVILKA_MIHOMO_LIVE_PEER"); separate != "" {
+		// Full live inactivity correctly refuses a second controller image,
+		// even in a foreign netns. This optional physical-only peer contains no
+		// controller code/API. The ordinary B fixture path remains unchanged.
+		info, err := os.Lstat(separate)
+		if os.Getenv("RAZVILKA_MIHOMO_LIVE_NATIVE") != "1" || !filepath.IsAbs(separate) || err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0500 {
+			t.Fatal("separate native peer must be an explicit private executable", err)
+		}
+		peerBinary, peerArgs = separate, nil
+	}
+	command := exec.Command("ip", append([]string{"netns", "exec", p.server, peerBinary}, peerArgs...)...)
 	command.Env = append(os.Environ(), "RAZVILKA_DOMAIN_NATIVE_PEER=server", "RAZVILKA_DOMAIN_NATIVE_ROOT="+p.root)
 	log, err := os.OpenFile(filepath.Join(p.root, "peer.log"), os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {

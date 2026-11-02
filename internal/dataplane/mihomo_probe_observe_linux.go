@@ -52,6 +52,10 @@ func originalMihomoObservedOwner(child originalMihomoObservedChild) bool {
 		return owner != nil
 	case *components.MihomoLiveProcess:
 		return owner != nil
+	case *components.MihomoLiveObservation:
+		return owner != nil
+	case *components.MihomoLiveCleanupObservation:
+		return owner != nil
 	default:
 		return false
 	}

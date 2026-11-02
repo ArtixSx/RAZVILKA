@@ -30,7 +30,7 @@ func (fabricatedMihomoObservedChild) PID() int                             { ret
 func (fabricatedMihomoObservedChild) MatchesFile(string, os.FileInfo) bool { return true }
 
 func TestMihomoLiveObservationCannotMintOriginalChild(t *testing.T) {
-	if originalMihomoObservedOwner(fabricatedMihomoObservedChild{}) || originalMihomoObservedOwner((*components.MihomoLiveProcess)(nil)) {
+	if originalMihomoObservedOwner(fabricatedMihomoObservedChild{}) || originalMihomoObservedOwner((*components.MihomoLiveProcess)(nil)) || originalMihomoObservedOwner((*components.MihomoLiveObservation)(nil)) || originalMihomoObservedOwner((*components.MihomoLiveCleanupObservation)(nil)) {
 		t.Fatal("fabricated comparison interface admitted")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -179,6 +179,13 @@ func TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease(t *testing.T) {
 	fresh, err := gate.ReviewExclusiveCleanup(stop)
 	if err != nil {
 		t.Fatal(err)
+	}
+	cleanupObservation, err := observeMihomoLiveCleanupProcess(stop, child, fresh, provider, identity)
+	if err != nil || !first.same(cleanupObservation) {
+		t.Fatal("stopped original kernel child lost cleanup-only comparison", err)
+	}
+	if _, err := observeMihomoLiveCleanupProcess(stop, child, cleanup, provider, identity); err == nil {
+		t.Fatal("released original cleanup review regained kernel comparison")
 	}
 	if err := child.Cleanup(stop, fresh); err != nil {
 		t.Fatal(err)

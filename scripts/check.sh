@@ -161,4 +161,5 @@ else
 fi
 sha256sum -c dist/SHA256SUMS
 sh ./scripts/test-entware-transaction.sh
+node scripts/test-mihomo-node-apply-ui.mjs
 echo "RAZVILKA checks: OK"

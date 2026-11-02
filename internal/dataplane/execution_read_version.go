@@ -22,7 +22,10 @@ import (
 // Version4 also reads retained restorative standby and scoped Mihomo intent;
 // interpreting these records never grants adoption, launch or cleanup.
 // Version5 additionally reads source-issued Mihomo parent/death lineage.
-const ExecutionReadVersion = 5
+// Version6 additionally reads persistent original Mihomo runtime intent.
+// Version7 also reads an originally detached DNS owner with retained baseline.
+// Version8 also reads retained coexistence and terminal health archives.
+const ExecutionReadVersion = 8
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -129,12 +132,28 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 		if name != "latest-execution.json" && filepath.Base(filepath.Dir(name)) != execution.PlanID {
 			return 0, "", ErrExecutionJournal
 		}
+		if execution.MihomoTransitHistoryArchive != nil && name == "latest-execution.json" {
+			return 0, "", ErrExecutionJournal
+		}
 		switch execution.State {
 		case "applying", "checking", "resource-failed", "cancelled", "replacement-pending", "rejected", "journal-failed", "rolling-back", "rolled-back", "rollback-failed", "canary-failed", "network-stale", "committing", "committed", "temporary-complete":
 		default:
 			return 0, "", ErrExecutionJournal
 		}
+		if execution.DomainDNSCoexistence != nil || execution.MihomoTransitHistoryArchive != nil {
+			required = max(required, 8)
+		}
 		for _, resource := range execution.Resources {
+			if resource.DomainDNSCoexistence != nil {
+				required = max(required, 8)
+			}
+
+			if resource.DomainDNSDetached != nil {
+				required = max(required, 7)
+			}
+			if resource.MihomoLive != nil || resource.NodeTransit != nil && resource.NodeTransit.Engine == "mihomo" {
+				required = max(required, 6)
+			}
 			if resource.DomainTCPCapture != nil || resource.XrayDomainTCP != nil || resource.NFQWS != nil && resource.NFQWS.Spec.Probe != nil {
 				required = max(required, 2)
 			}

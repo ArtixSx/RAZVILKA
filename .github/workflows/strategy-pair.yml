@@ -119,6 +119,13 @@ jobs:
         run: |
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh
+      - name: Explicit manual LAN Apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh
   strategy-pair:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -140,7 +147,7 @@ jobs:
           go build -o /tmp/razvilka-current ./cmd/razvilka
           test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
           test "$(/tmp/razvilka-current -component-update-schema)" = 6
-          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 5
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 8
           test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
           git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)

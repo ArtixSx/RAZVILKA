@@ -30,6 +30,10 @@ func TestManagedStrategyProbeNativeLANAppHTTP(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true, "lan")
 }
 
+func TestManagedStrategyProbeNativeLANManualApply(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
 func managedProbeNativeWANListener() (listener net.Listener, result error) {
 	runtime.LockOSThread()
 	unlock := true
@@ -120,7 +124,7 @@ func configureManagedProbeNativeLANBinding(lan *dataplane.LANPolicyRuntime, bind
 	}
 }
 
-func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error) {
+func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error, manualOnly ...bool) {
 	t.Helper()
 	r := a.managedNFQList
 	if r == nil || !r.original() {
@@ -198,7 +202,11 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 	// After removal both clients must still reach the distinct actual WAN.
 	managedProbeNativeLANRequest(t, ctx, "rzincluded")
 	managedProbeNativeLANRequest(t, ctx, "rzexcluded")
-	t.Log("actual authenticated three-pass probe/manual selection → SAME Review/Apply/COMMON/native consumer → included LAN counter positive/excluded negative → original Stop/empty inventory/recovered direct TLS; Home classification only modeled")
+	if len(manualOnly) > 0 && manualOnly[0] {
+		t.Log("explicit manual diagnostic: genuine native validation + authenticated manual intent → SAME Review/Apply/COMMON/native consumer → included positive/excluded negative → original Stop/direct recovery; no probe/automatic/service-health evidence; Home classification only modeled")
+	} else {
+		t.Log("actual authenticated three-pass probe/manual selection → SAME Review/Apply/COMMON/native consumer → included LAN counter positive/excluded negative → original Stop/empty inventory/recovered direct TLS; Home classification only modeled")
+	}
 }
 
 func managedProbeNativeLANRequest(t *testing.T, ctx context.Context, name string) {
@@ -418,7 +426,12 @@ func setupManagedProbeNativeLAN(t *testing.T, ctx context.Context) {
 	ip("-n", "rzwanpeer", "addr", "add", "8.8.8.8/24", "dev", "rzserver")
 	ip("-n", "rzwanpeer", "link", "set", "rzserver", "up")
 	ip("-n", "rzwanpeer", "route", "add", "192.168.77.0/24", "via", "8.8.8.1")
-	ip("link", "add", "rzhome", "type", "bridge")
+	// This disposable topology has no STP peers. Linux arms a forward-delay
+	// notification even for a forwarding port with STP disabled; configure the
+	// actual bridge before attaching ports so no setup timer crosses the later
+	// immutable physical capture. Production notification fences stay intact.
+	ip("link", "add", "rzhome", "type", "bridge", "stp_state", "0", "forward_delay", "0")
+	verifyManagedProbeNativeBridgeTimer(t, ctx)
 	ip("addr", "add", "192.168.77.1/24", "dev", "rzhome")
 	ip("link", "set", "rzhome", "up")
 	for i, name := range []string{"rzincluded", "rzexcluded"} {
@@ -490,5 +503,34 @@ func awaitManagedProbeNativeLANAddresses(t *testing.T, ctx context.Context) {
 			t.Fatal("actual fixture addresses remained tentative", settle.Err())
 		case <-time.After(25 * time.Millisecond):
 		}
+	}
+}
+
+// Observe the actual configured kernel bridge, never substitute classification
+// or manufacture a physical-scope snapshot.
+func verifyManagedProbeNativeBridgeTimer(t *testing.T, ctx context.Context) {
+	t.Helper()
+	read, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	raw, err := exec.CommandContext(read, "/usr/sbin/ip", "-d", "-j", "link", "show", "dev", "rzhome").Output()
+	if err != nil || len(raw) > 64<<10 {
+		t.Fatal("actual fixture bridge timer read", err)
+	}
+	var rows []struct {
+		IfName   string `json:"ifname"`
+		LinkInfo struct {
+			Kind string `json:"info_kind"`
+			Data struct {
+				STP          *uint64 `json:"stp_state"`
+				ForwardDelay *uint64 `json:"forward_delay"`
+			} `json:"info_data"`
+		} `json:"linkinfo"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil || len(rows) != 1 || rows[0].IfName != "rzhome" || rows[0].LinkInfo.Kind != "bridge" {
+		t.Fatal("actual fixture bridge identity", err)
+	}
+	d := rows[0].LinkInfo.Data
+	if d.STP == nil || d.ForwardDelay == nil || *d.STP != 0 || *d.ForwardDelay != 0 {
+		t.Fatal("actual fixture bridge retained a setup forwarding timer")
 	}
 }

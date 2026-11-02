@@ -125,16 +125,22 @@ func TestLegacyProxyDomainPlanHasPreflightBlocker(t *testing.T) {
 // adapter except NFQWS2 and direct is an IP-policy executor, and an unknown
 // route has no authority at all.
 func TestDomainFlowAuthorityCoversEveryIPPolicyAdapter(t *testing.T) {
-	for _, id := range append(routekind.PreferredIDs(), "direct") {
+	for _, id := range append(routekind.PreferredIDs(), "direct", "mihomo") {
 		ipPolicy := slices.Contains(domainCaptureAdapters, id)
 		if adapterID(id) != id || DomainFlowAuthority(id) == ipPolicy {
 			t.Fatalf("%s: ip-policy=%v authority=%v", id, ipPolicy, DomainFlowAuthority(id))
 		}
 	}
-	if len(domainCaptureAdapters) != routekind.PreferredCount-1 {
+	expected := []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard", "mihomo"}
+	for _, id := range expected {
+		if !slices.Contains(domainCaptureAdapters, id) {
+			t.Fatal("missing IP-policy domain blocker", id)
+		}
+	}
+	if len(domainCaptureAdapters) != len(expected) {
 		t.Fatal("an IP-policy adapter is missing from the domain blocker", domainCaptureAdapters)
 	}
-	for _, route := range []string{"", "auto", "mihomo", "direct-x", "nfqws2-x"} {
+	for _, route := range []string{"", "auto", "mihomo-x", "direct-x", "nfqws2-x"} {
 		if DomainFlowAuthority(route) {
 			t.Fatalf("unknown route %q gained domain authority", route)
 		}

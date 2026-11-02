@@ -26,6 +26,10 @@ type mihomoLiveNativeLinux struct {
 	parent                       *ownedfs.Root
 	name                         string
 	homeInfo                     os.FileInfo
+	homeReceipt                  *os.File
+	homeReceiptInfo              os.FileInfo
+	homeReceiptRaw               []byte
+	homeRef                      MihomoLiveHomeReference
 	command                      *exec.Cmd
 	validation                   *exec.Cmd
 	validationDone               chan struct{}
@@ -80,6 +84,9 @@ func newMihomoLiveNative(ctx context.Context, p *MihomoLiveProcess) (mihomoLiveN
 	}
 	n.directory, err = n.parent.OpenFile(n.name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
 	if err != nil {
+		return n, err
+	}
+	if err := n.createHomeReceipt(ctx); err != nil {
 		return n, err
 	}
 	return n, n.filesCurrent(ctx)
@@ -235,9 +242,18 @@ func (n *mihomoLiveNativeLinux) homeCurrent() error {
 	if err != nil || heldErr != nil || !os.SameFile(n.homeInfo, named) || !os.SameFile(n.homeInfo, held) || named.Mode() != n.homeInfo.Mode() || held.Mode() != n.homeInfo.Mode() {
 		return restorejournal.ErrConflict
 	}
-	return nil
+	return n.homeReceiptCurrent()
 }
 func (n *mihomoLiveNativeLinux) current(ctx context.Context) error {
+	return n.currentMode(ctx, nil)
+}
+func (n *mihomoLiveNativeLinux) currentForCleanup(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
+	if cleanup == nil {
+		return ErrMihomoLiveOwner
+	}
+	return n.currentMode(ctx, cleanup)
+}
+func (n *mihomoLiveNativeLinux) currentMode(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	select {
@@ -256,8 +272,14 @@ func (n *mihomoLiveNativeLinux) current(ctx context.Context) error {
 	if n.command.Path != "/proc/self/fd/3" || !slices.Equal(n.command.Args, []string{"mihomo", "-f", "/proc/self/fd/4", "-d", "/proc/self/fd/5"}) || len(n.command.Env) != 0 || n.command.Cancel != nil || len(n.command.ExtraFiles) != 3 || n.command.ExtraFiles[0] != n.binary || n.command.ExtraFiles[1] != n.profile || n.command.ExtraFiles[2] != n.directory || n.command.SysProcAttr == nil || n.command.SysProcAttr.Pdeathsig != syscall.SIGKILL {
 		return ErrMihomoLiveOwner
 	}
-	if err := n.owner.control.ObserveCurrent(ctx); err != nil {
-		return err
+	var controlErr error
+	if cleanup == nil {
+		controlErr = n.owner.control.ObserveCurrent(ctx)
+	} else {
+		controlErr = n.owner.control.CurrentForCleanupOperation(ctx, cleanup)
+	}
+	if controlErr != nil {
+		return controlErr
 	}
 	return n.filesCurrent(ctx)
 }
@@ -378,7 +400,7 @@ func (n *mihomoLiveNativeLinux) cleanup(ctx context.Context, review *operationga
 		}
 		n.name = ""
 	}
-	for _, f := range []*os.File{n.binary, n.profile, n.directory} {
+	for _, f := range []*os.File{n.binary, n.profile, n.directory, n.homeReceipt} {
 		if f != nil {
 			n.closeErr = errors.Join(n.closeErr, f.Close())
 		}

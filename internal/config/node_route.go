@@ -32,10 +32,17 @@ func (s *Store) applyNodeRouteWithRollback(id, route string, sources *[]string, 
 	if id == "" || !valid || !strings.HasPrefix(target, "node-") {
 		return nil, errors.New("invalid node route")
 	}
+	_, undo, err := s.commitNodeRouteWithImage(id, route, sources, revision)
+	return undo, err
+}
+
+// Callers validate their own concrete engine/selection syntax. The locked
+// service-only commit and rollback semantics remain shared by every caller.
+func (s *Store) commitNodeRouteWithImage(id, route string, sources *[]string, revision uint64) (Config, func() error, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cfg.Revision != revision || revision == ^uint64(0) || s.cfg.SafeMode {
-		return nil, ErrRevisionChanged
+		return Config{}, nil, ErrRevisionChanged
 	}
 	previous := cloneConfig(s.cfg)
 	desired, applied := s.cfg.Services[id], s.cfg.AppliedServices[id]
@@ -57,11 +64,11 @@ func (s *Store) applyNodeRouteWithRollback(id, route string, sources *[]string, 
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
-		return nil, err
+		return Config{}, nil, err
 	}
 	committed := cloneConfig(s.cfg)
 	used := false
-	return func() error {
+	return cloneConfig(committed), func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if used {

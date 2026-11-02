@@ -1,0 +1,7 @@
+child_exit_status=1
+profile_analysis_status=0
+profile_span=whole_original_native_test_process
+node_transit_budget_seconds=10
+apply_budget_seconds=110
+GOMAXPROCS=2
+claim=isolated_native_not_router

@@ -15,6 +15,10 @@ type nodeTransitRemovalKey struct{}
 type nodeTransitRegistrar func(context.Context, NodeTransitSpec) (nodeTransitRegistration, error)
 
 type nodeTransitRegistration struct {
+	// Original issuer only: called after the synchronous probe/cleanup returned.
+	// This is a local join acknowledgment, never a cleanup or effect grant.
+	finished func() error
+
 	root     string
 	register func(context.Context, NodeTransitSpec, string, string) error
 	settle   func(context.Context, NodeTransitSpec, string, string) error

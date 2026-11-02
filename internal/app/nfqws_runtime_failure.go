@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"strings"
 
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/physicalscope"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
 )
 
@@ -42,6 +44,13 @@ func managedNFQFailureDiagnostic(err error) (stage, reason string) {
 		stage = "lan-preflight-" + lanStage
 		if failure != nil && failure.stage != "native-apply" {
 			stage += "/" + failure.stage
+		}
+	}
+	// The physical source exposes only its bounded, closed diagnostic labels.
+	// Never render the underlying error, observed addresses or native argv.
+	if failure != nil && failure.stage == "packet-cleanup-physical" {
+		if labels := physicalscope.DiagnosticStages(err); len(labels) != 0 {
+			stage += "/" + strings.Join(labels, "/")
 		}
 	}
 	switch {

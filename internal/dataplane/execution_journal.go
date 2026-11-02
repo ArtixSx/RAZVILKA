@@ -57,6 +57,11 @@ func (m *Manager) checkExecutionRecovery() error {
 	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
+	// Until the original coexistence pool is bound, even a terminal/empty
+	// successor leaves prior real baseline footprints. Metadata cannot adopt them.
+	if latest.DomainDNSCoexistence != nil {
+		return executionJournalError(ErrPolicyAdditionUnknown)
+	}
 	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
 	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
@@ -92,6 +97,9 @@ func (m *Manager) checkExecutionRecovery() error {
 	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
+	if err := m.checkRetainedMihomoRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
 	if err := m.checkRetainedXrayRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
@@ -124,7 +132,7 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 		return false, nil
 	}
 	// A documentary ACTIVE row cannot reconstruct the original live owner.
-	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil {
+	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil || m.checkRetainedMihomoRecord(*latest) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {
@@ -167,6 +175,13 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	// Documentary transit archives have an exclusive transaction-only writer.
+	// They can never replace the current execution through the two-writer path.
+	if execution.MihomoTransitHistoryArchive != nil || execution.DomainDNSCoexistence != nil {
+		// Coexistence records require the original successor writer; this
+		// reader-only integration does not create that owner from a DTO.
+		return ErrExecutionJournal
+	}
 	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
 		return executionJournalError(ErrExecutionJournal)
 	}
@@ -253,6 +268,9 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	if scope != nil {
+		if scope.mihomoLive != nil {
+			return executionJournalError(scope.mihomoLive.publishRecords(data))
+		}
 		if scope.mihomo != nil {
 			return executionJournalError(scope.mihomo.publishRecords(data))
 		}
@@ -266,8 +284,11 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 }
 
 func executionHasNetworkIdentity(execution Execution) bool {
+	if execution.DomainDNSCoexistence != nil {
+		return true
+	}
 	for _, resource := range execution.Resources {
-		if resource.SyntheticBaseline != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
+		if resource.SyntheticBaseline != nil || resource.MihomoLive != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {

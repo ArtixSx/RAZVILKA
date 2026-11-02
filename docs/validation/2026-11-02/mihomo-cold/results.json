@@ -1,0 +1,30 @@
+[
+  {
+    "mode": "normal",
+    "job": 125106300857,
+    "run": 41392355393,
+    "sha": "1f059b407ee094f03dee2fb5001dcb49c616f385",
+    "evidence": [
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:12:44.2695888Z     mihomo_cold_read_native_linux_test.go:87: actual original source/read-only ABI/revocation passed; no retirement or reboot claim",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:12:44.2697645Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.52s)",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:50.6288896Z     mihomo_live_cold_native_external_test.go:117: public offline retirement and repeat passed with actual current process/socket/kernel/source observations; historical old boot is modeled",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:50.6301913Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (66.25s)",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:29.5211838Z     mihomo_live_cold_native_linux_test.go:104: actual offline CLI entry, all five original private leases, unchanged config, complete current native absence and terminal publication passed; historical old boot modeled",
+      "original-native (normal)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:29.5224772Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (38.67s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125106301053,
+    "run": 41392355393,
+    "sha": "1f059b407ee094f03dee2fb5001dcb49c616f385",
+    "evidence": [
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:14.6418339Z     mihomo_cold_read_native_linux_test.go:87: actual original source/read-only ABI/revocation passed; no retirement or reboot claim",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:13:14.6419053Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.57s)",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:35.0666247Z     mihomo_live_cold_native_external_test.go:117: public offline retirement and repeat passed with actual current process/socket/kernel/source observations; historical old boot is modeled",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:14:35.0702877Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (79.32s)",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3229158Z     mihomo_live_cold_native_linux_test.go:104: actual offline CLI entry, all five original private leases, unchanged config, complete current native absence and terminal publication passed; historical old boot modeled",
+      "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3262196Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (45.01s)"
+    ]
+  }
+]

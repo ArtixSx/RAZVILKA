@@ -159,13 +159,21 @@ func (s *Store) updateServiceControlLocked(mode *string, schedule *ServiceCheckS
 // CommitServiceRuntime changes only applied state after the owned dataplane
 // transaction succeeds. Desired services, policies and all editor files survive.
 func (s *Store) CommitServiceRuntime(stopped bool, resolved map[string]string, revision uint64) (func() error, error) {
+	_, undo, err := s.CommitServiceRuntimeWithImage(stopped, resolved, revision)
+	return undo, err
+}
+
+// CommitServiceRuntimeWithImage returns the exact newly saved image while
+// still holding the Store mutex. A later Get cannot identify this CAS result.
+// The returned image and the rollback comparison are separate deep clones.
+func (s *Store) CommitServiceRuntimeWithImage(stopped bool, resolved map[string]string, revision uint64) (Config, func() error, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cfg.Revision != revision || revision == ^uint64(0) {
-		return nil, ErrRevisionChanged
+		return Config{}, nil, ErrRevisionChanged
 	}
 	if s.cfg.SafeMode || s.cfg.ServiceControl.Stopped == stopped {
-		return nil, errors.New("runtime transition is unavailable")
+		return Config{}, nil, errors.New("runtime transition is unavailable")
 	}
 	previous := cloneConfig(s.cfg)
 	c := cloneServiceControl(s.cfg.ServiceControl)
@@ -179,12 +187,12 @@ func (s *Store) CommitServiceRuntime(stopped bool, resolved map[string]string, r
 			}
 		}
 		if len(c.SuspendedRoutes) == 0 {
-			return nil, errors.New("no applied routes to stop")
+			return Config{}, nil, errors.New("no applied routes to stop")
 		}
 		s.cfg.AppliedServices = map[string]ServiceState{}
 	} else {
 		if len(c.SuspendedServices) == 0 || len(s.cfg.AppliedServices) != 0 {
-			return nil, errors.New("no unchanged resume snapshot")
+			return Config{}, nil, errors.New("no unchanged resume snapshot")
 		}
 		s.cfg.AppliedServices = cloneServices(c.SuspendedServices)
 		c.SuspendedServices, c.SuspendedRoutes = nil, nil
@@ -192,7 +200,7 @@ func (s *Store) CommitServiceRuntime(stopped bool, resolved map[string]string, r
 	c.Stopped = stopped
 	if err := validateServiceControl(c); err != nil {
 		s.cfg = previous
-		return nil, err
+		return Config{}, nil, err
 	}
 	s.cfg.ServiceControl = c
 	s.cfg.Revision++
@@ -200,10 +208,10 @@ func (s *Store) CommitServiceRuntime(stopped bool, resolved map[string]string, r
 	s.cfg.LastAppliedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := s.saveLocked(); err != nil {
 		s.cfg = previous
-		return nil, err
+		return Config{}, nil, err
 	}
 	committed := cloneConfig(s.cfg)
-	return func() error {
+	return cloneConfig(committed), func() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if !reflect.DeepEqual(s.cfg, committed) {

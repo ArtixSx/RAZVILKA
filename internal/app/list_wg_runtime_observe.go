@@ -90,6 +90,9 @@ func (a *App) observeManagedWGComponent(ctx context.Context, expected dataplane.
 }
 
 func (a *App) executeManagedServiceRuntime(ctx context.Context, action string, revision uint64) (bool, serviceRuntimeOutcome) {
+	if handled, outcome := a.executeMihomoServiceRuntime(ctx, action, revision); handled {
+		return true, outcome
+	}
 	if handled, outcome := a.executeManagedWGServiceRuntime(ctx, action, revision); handled {
 		return true, outcome
 	}

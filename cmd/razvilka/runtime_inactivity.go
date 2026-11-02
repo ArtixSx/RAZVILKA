@@ -112,6 +112,17 @@ func runtimeManagerSourcesBound(ctx context.Context, create func() (*dataplane.M
 // lifetime. Each subsequent observation still supplies its own finite context
 // and rechecks the held tool images and network identity; Close revokes all.
 func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBoundTools(ctx, lifetime, create, dnsPath, false)
+}
+
+// Offline Mihomo additionally reads RPDB/routes through the original reviewed
+// IP image. Ordinary inactivity callers retain their existing xtables profile.
+// Selecting the richer protected image set grants no command Start admission.
+func mihomoColdRuntimeSourcesBound(ctx context.Context, create func() (*dataplane.Manager, error), dnsPath string) (*dataplane.Manager, func() error, error) {
+	return runtimeManagerSourcesBoundTools(ctx, ctx, create, dnsPath, true)
+}
+
+func runtimeManagerSourcesBoundTools(ctx, lifetime context.Context, create func() (*dataplane.Manager, error), dnsPath string, coldIP bool) (*dataplane.Manager, func() error, error) {
 	if ctx == nil || ctx.Err() != nil {
 		var cause error
 		if ctx != nil {
@@ -164,6 +175,10 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 	var tools *startuptools.Lease
 	if fixture != nil {
 		tools, err = fixture.Acquire(lifetime, provider)
+	} else if coldIP && platform == selfUpdateRuntimeStockNC1812 {
+		tools, err = startuptools.AcquireReviewedStockNC1812Policy(lifetime, provider)
+	} else if coldIP {
+		tools, err = startuptools.AcquireUbuntuLegacyPolicy(lifetime, provider)
 	} else if platform == selfUpdateRuntimeStockNC1812 {
 		tools, err = startuptools.AcquireReviewedStockNC1812(lifetime, provider)
 	} else {
@@ -177,6 +192,12 @@ func runtimeManagerSourcesBoundLifetime(ctx, lifetime context.Context, create fu
 			cause = errors.Join(cause, errSelfUpdateRuntimeSourceClose, closeErr)
 		}
 		return nil, nil, selfUpdateRuntimeSourceFailed(stage, cause)
+	}
+	if coldIP {
+		original, descriptor, _, err := tools.MihomoColdReadTools()
+		if err != nil || original != tools || descriptor.Provider != provider {
+			return closeRefused("tools-inventory", err)
+		}
 	}
 	backendTools, err := tools.InventoryTools()
 	if err != nil {

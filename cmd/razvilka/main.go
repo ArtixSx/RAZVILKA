@@ -343,6 +343,26 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 			return
 		}
 	}
+	if mihomoLiveBootRetirementCLIRequested() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, err := runMihomoLiveBootRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
+			config: *cfgPath, customServices: *customServicesPath, devices: *devicesPath,
+			stage: *stagePath, backups: *backupPath, cloudflare: *cloudflareStatePath,
+			nodes: *nodeStatePath, warp: *warpStatePath, dataplane: *dataplaneStatePath, dns: *dnsStatePath,
+			componentState: *componentState, componentBin: *componentBin, componentInit: *componentInit,
+			componentRepo: *componentRepo, componentInfo: *componentInfo,
+		})
+		cancel()
+		if err != nil {
+			log.Print(dataplane.ErrMihomoLiveRetirement)
+			return 1
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			log.Print("Mihomo live retirement result could not be written")
+			return 1
+		}
+		return
+	}
 	if mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		result, err := runMihomoRetirementCLI(ctx, offlineNFQWS2StopPaths{strategyLab: *strategyLabStatePath,
@@ -890,7 +910,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	}
 	a.ComponentHistory = updatecheck.NewComponentHistoryAdmission(app.ManagedComponentReadVersion)
 	a.ExecutionHistory = updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
-	if err := a.ConfigureMihomoProbe(netidentity.NewProcProvider()); err != nil {
+	mihomoProvider := a.Dataplane.MihomoLiveStartupProvider()
+	if mihomoProvider == nil {
+		mihomoProvider = netidentity.NewProcProvider()
+	}
+	if err := a.ConfigureMihomoProbe(mihomoProvider); err != nil {
 		log.Print("Isolated Mihomo service check unavailable: original registration refused")
 	}
 	componentReadContext, cancelComponentRead := context.WithTimeout(context.Background(), 10*time.Second)
@@ -926,6 +950,11 @@ func mainWithSelfUpdateJournalRoots(journalRoots selfUpdateJournalRoots) (exitCo
 	if managedWGListErr != nil {
 		log.Printf("Managed WG startup owner is unavailable at %s; scoped activation remains closed", app.ManagedListStartupFailureStage(managedWGListErr))
 	}
+	mihomoLiveContext, cancelMihomoLive := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := a.ConfigureMihomoLive(mihomoLiveContext); err != nil {
+		log.Print("Persistent Mihomo runtime unavailable: original startup binding refused")
+	}
+	cancelMihomoLive()
 	managedNFQCloseAttempted := false
 	closeManagedNFQList := func(ctx context.Context) error {
 		if managedNFQCloseAttempted {
