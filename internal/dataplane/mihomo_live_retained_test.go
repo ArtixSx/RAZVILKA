@@ -46,7 +46,9 @@ func mihomoLiveRecordModel(t *testing.T) (*Manager, *MihomoProbeAdapter, *mihomo
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &mihomoLiveResource{adapter: a, scope: s, definition: d, id: "ml-" + strings.Repeat("1", 32), records: records}
+	// Match issueLive's exact frozen constructor image, including canonical
+	// nil/empty slice normalization performed by Definition.Clone.
+	r := &mihomoLiveResource{adapter: a, scope: s, definition: d.Clone(), id: "ml-" + strings.Repeat("1", 32), records: records}
 	r.self = r
 	s.mihomoLive = r
 	a.livePending = r
