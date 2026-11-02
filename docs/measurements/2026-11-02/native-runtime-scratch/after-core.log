@@ -1,0 +1,16 @@
+2026-11-02T09:34:07.4350035Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 1157043240 7482215
+2026-11-02T09:34:07.4351704Z     strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T09:34:07.4355587Z     strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 2.038392939s} cleanup-current:{75 75 1.57307305s} counter:{3 3 2.16388888s} current:{153 153 5.317467271s} environment:{153 153 315.849209ms} epoch-source-runtime:{153 153 2.238689151s} owners:{228 228 4.315600894s} policy-apply:{1 1 3.434690028s} policy-readback:{23 23 4.025329851s} policy-remove:{1 1 3.06987432s}]
+2026-11-02T09:34:07.4359250Z     strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+2026-11-02T09:34:07.4360810Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2312
+2026-11-02T09:34:07.4362487Z     strategy_managed_probe_native_linux_test.go:524: native measured Execute 11.715606522s actual inventory ToolCheck calls 382 ToolCheck wall 5.069449986s
+2026-11-02T09:34:07.5781135Z --- PASS: TestManagedStrategyProbeNativeConsumer (12.93s)
+2026-11-02T09:34:19.5584936Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 871226752 5309382
+2026-11-02T09:34:19.5586014Z     strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+2026-11-02T09:34:19.5589070Z     strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 2.052366847s} cleanup-current:{0 0 0s} counter:{3 3 2.182061415s} current:{153 153 5.315689652s} environment:{153 153 318.141273ms} epoch-source-runtime:{153 153 2.22878494s} owners:{153 153 2.756237031s} policy-apply:{1 1 3.356537927s} policy-readback:{16 16 3.562691389s} policy-remove:{1 1 386.152µs}]
+2026-11-02T09:34:19.5591058Z     strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [95 95 246]
+2026-11-02T09:34:19.5592061Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 1388
+2026-11-02T09:34:19.5593113Z     strategy_managed_probe_native_linux_test.go:524: native measured Execute 10.131617059s actual inventory ToolCheck calls 242 ToolCheck wall 3.134257423s
+2026-11-02T09:34:52.6905839Z --- FAIL: TestManagedStrategyProbeNativeAppHTTP (27.72s)
+2026-11-02T09:35:28.9809478Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (30.21s)
+2026-11-02T09:36:08.2219669Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (32.76s)
