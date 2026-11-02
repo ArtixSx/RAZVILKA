@@ -60,7 +60,7 @@ func (m *Manager) checkExecutionRecovery() error {
 	// A completed new attempt can still retain its original predecessors.
 	// Documentary bytes never reconstruct that multi-owner pool after restart.
 	if latest.DomainDNSCoexistence != nil {
-		return executionJournalError(ErrPolicyAdditionUnknown)
+		return executionJournalError(m.checkKnownDomainKeeperRecord(*latest))
 	}
 	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
@@ -179,6 +179,16 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	// Neither generic writer may turn an archive into the current execution.
 	if execution.MihomoTransitHistoryArchive != nil {
 		return ErrExecutionJournal
+	}
+	// A documentary keeper does not allow an unrelated writer to hide the
+	// original baselines. Only the next actual successor may replace latest.
+	if execution.DomainDNSCoexistence == nil {
+		m.retainedXrayMu.Lock()
+		hasPool := m.domainPool != nil
+		m.retainedXrayMu.Unlock()
+		if hasPool {
+			return ErrDomainPolicyTCPCaptureRetirementPending
+		}
 	}
 	if execution.DomainDNSCoexistence != nil && (scope == nil || scope.domainSuccessor == nil || scope.domainSuccessor.scope != scope || scope.domainSuccessor.original() != nil) {
 		return ErrExecutionJournal

@@ -58,10 +58,21 @@ func TestDomainTCPOriginalNativeDNSCoexistence(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeUnstartedKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
 	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
+	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
+	if initialCut != "" && (!coexist || initialCut != "transaction" && initialCut != "global") {
+		t.Fatal("invalid initial publication cut case")
+	}
 	if detach != "" && detach != "1" || foreign != "" && foreign != "1" || (ack != "" || foreign != "") && detach != "1" || ack != "" && foreign != "" || detach == "1" && unpublished {
 		t.Fatal("invalid or combined isolated DNS detachment fixture cases")
 	}
@@ -767,6 +778,59 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			secondPlan, err := dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: secondDomain, SyntheticDNS: secondTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
 			if err != nil || secondPlan.Ready {
 				t.Fatal("new frozen blocked intent", err)
+			}
+			if initialCut != "" {
+				if err := dataplane.ConfigureNativeDomainInitialACK(secondHeld, detached, initialCut); err != nil {
+					t.Fatal("configure original initial ACK", err)
+				}
+				initialCleanup, err := control.ReviewExclusiveCleanup(secondHeld)
+				if err != nil {
+					t.Fatal(err)
+				}
+				calls := 0
+				failed := manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(context.Context) error { calls++; return errors.New("unstarted action unexpectedly entered") })
+				var originalFailure *dataplane.DomainTCPUnstartedFailure
+				if calls != 0 || !errors.Is(failed, dataplane.ErrNativeDomainInitialACK) || !errors.As(failed, &originalFailure) {
+					t.Fatal("actual initial publication failure/capsule", calls, failed)
+				}
+				if err := manager.RetireUnstartedDomainTCPContinuation(secondHeld, initialCleanup, history, originalFailure); err != nil {
+					t.Fatal("same original unstarted retirement", err)
+				}
+				if err := manager.RetireUnstartedDomainTCPContinuation(secondHeld, initialCleanup, history, originalFailure); err != nil {
+					t.Fatal("same actual terminal ACK retry", err)
+				}
+				if err := manager.CheckExecutionRecovery(secondHeld); err != nil {
+					t.Fatal("documentary keeper/current originals", err)
+				}
+				late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+				if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+					t.Fatal("unstarted retirement changed prior baseline", late)
+				}
+				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+					t.Fatal("metadata retirement started native child")
+				}
+				t.Log("actual failed initial publication retired via SAME captured journal FDs; original action never entered; old cached alias still serves exact tuple; no native/new-service proof from documentary keeper")
+				secondRelease()
+				thirdCtx, stopThird := context.WithTimeout(ctx, 100*time.Second)
+				defer stopThird()
+				thirdHeld, thirdRelease, err := operations.ExclusiveContext(thirdCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer thirdRelease()
+				secondHeld = thirdHeld
+				freshNow = time.Now().UTC()
+				scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+				secondDomain, err = dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+				if err != nil {
+					t.Fatal(err)
+				}
+				secondTransport = dataplane.CloneSyntheticDNSTransportPlan(transport)
+				secondTransport.DomainPolicyDigest = secondDomain.Digest
+				secondPlan, err = dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: secondDomain, SyntheticDNS: secondTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+				if err != nil || secondPlan.Ready {
+					t.Fatal("fresh post-keeper blocked intent", err)
+				}
 			}
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias)

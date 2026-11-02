@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"sync"
 
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
@@ -20,6 +21,9 @@ type domainTCPGlobalSuccessor struct {
 	scope          *executionResourceScope
 	records        *xraySelectedTCPExecutionRecords
 	admission      *domainTCPContinuationAdmission
+	previous       *domainTCPGlobalHistory
+	previousKeeper *domainTCPGlobalKeeper
+	terminal       *domainTCPInitialRetirement
 	definition     ExecutionDomainDNSCoexistenceDefinition
 	request        context.Context // SAME still-live request may retry a pre-action ACK.
 	actionStarted  bool
@@ -27,10 +31,11 @@ type domainTCPGlobalSuccessor struct {
 	globalAccepted bool
 	sealed         bool
 	failure        error
+	initialFault   func(string) error // Error-only, configured on the SAME detached prior before construction.
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {
-	if pool == nil || pool.self != pool || s == nil || s.manager != pool.manager || !s.domainTCPProof || s.execution == nil || s.domainSuccessor != nil || s.networkIdentity == nil || validateDomainTCPProofPlan(s.plan) != nil || admission == nil {
+	if pool == nil || pool.self != pool || s == nil || s.manager != pool.manager || !s.domainTCPProof || s.execution == nil || s.domainSuccessor != nil || s.networkIdentity == nil || s.owned == nil || s.anchor == nil || validateDomainTCPProofPlan(s.plan) != nil || admission == nil {
 		return nil, ErrPolicyAdditionUnknown
 	}
 	entries, err := pool.originals()
@@ -40,9 +45,19 @@ func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool
 	if err := admission.initial(ctx, pool.manager, s.plan, entries[len(entries)-1].detached); err != nil {
 		return nil, err
 	}
+	pool.mu.Lock()
+	keeper := pool.keeper
+	pool.mu.Unlock()
+	previous := entries[len(entries)-1].history
+	if keeper != nil {
+		previous, err = borrowDomainTCPKeeperHistory(ctx, keeper)
+		if err != nil {
+			return nil, err
+		}
+	}
 	d := ExecutionDomainDNSCoexistenceDefinition{Schema: 1, NewPlanID: s.plan.PlanID, NewPlanDigest: s.plan.Digest, NewDomainDigest: s.plan.DomainPolicy.Digest, NewDefinition: s.plan.SyntheticDNS.Definition, NewNetworkIdentity: s.networkIdentity.value}
 	for i, entry := range entries {
-		if err := entry.current(ctx, pool.manager, s.plan, i != len(entries)-1); err != nil {
+		if err := entry.current(ctx, pool.manager, s.plan, keeper != nil || i != len(entries)-1); err != nil {
 			return nil, err
 		}
 		d.Prior = append(d.Prior, entry.definition)
@@ -55,12 +70,25 @@ func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool
 	if err != nil {
 		return nil, err
 	}
-	c := &domainTCPGlobalSuccessor{pool: pool, scope: s, records: records, admission: admission, definition: d, request: ctx, pending: true}
+	scopeInfo, scopeErr := s.owned.RootInfo()
+	recordInfo, recordErr := records.transactionRoot.RootInfo()
+	if scopeErr != nil || recordErr != nil || !networkPolicyPrivateDirectory(scopeInfo) || !networkPolicyPrivateDirectory(recordInfo) || !os.SameFile(s.anchor, scopeInfo) || !os.SameFile(records.transactionAnchor, recordInfo) || !os.SameFile(scopeInfo, recordInfo) {
+		return nil, errors.Join(ErrPolicyAdditionUnknown, scopeErr, recordErr, records.close())
+	}
+	c := &domainTCPGlobalSuccessor{pool: pool, scope: s, records: records, admission: admission, previous: previous, previousKeeper: keeper, definition: d, request: ctx, pending: true}
+	prior := entries[len(entries)-1].detached
+	prior.mu.Lock()
+	c.initialFault = prior.initialFault
+	prior.mu.Unlock()
 	c.self = c
 	pool.manager.retainedXrayMu.Lock()
 	pool.mu.Lock()
 	priorCursor := pool.successor
-	if pool.manager.domainPool != pool || priorCursor != nil && (priorCursor.self != priorCursor || priorCursor.scope != entries[len(entries)-1].retained.scope || priorCursor.forwardCurrentState() != nil) || pool.manager.retainedXray != entries[len(entries)-1].retained {
+	validPrior := keeper == nil && pool.manager.retainedXray == entries[len(entries)-1].retained && (priorCursor == nil || priorCursor.self == priorCursor && priorCursor.scope == entries[len(entries)-1].retained.scope && priorCursor.forwardCurrentState() == nil)
+	if keeper != nil {
+		validPrior = pool.keeper == keeper && keeper.ready.Load() && !keeper.closed.Load() && priorCursor == keeper.cursor && pool.manager.retainedXray == nil
+	}
+	if pool.manager.domainPool != pool || !validPrior {
 		pool.mu.Unlock()
 		pool.manager.retainedXrayMu.Unlock()
 		return nil, errors.Join(ErrPolicyAdditionUnknown, records.close())
@@ -98,7 +126,7 @@ func (c *domainTCPGlobalSuccessor) comparePrior(ctx context.Context, after bool)
 		return err
 	}
 	for i, entry := range entries {
-		if err := entry.current(ctx, c.pool.manager, c.scope.plan, after || i != len(entries)-1); err != nil {
+		if err := entry.current(ctx, c.pool.manager, c.scope.plan, c.previousKeeper != nil || after || i != len(entries)-1); err != nil {
 			return err
 		}
 	}
@@ -166,6 +194,13 @@ func (m *Manager) originalDomainPublicationRetry(ctx context.Context, plan Plan,
 // Caller holds the original serialized Manager operation (and may hold the
 // new scope metadata mutex). Never reenter that scope's mutex from this leaf.
 func (c *domainTCPGlobalSuccessor) publish(ctx context.Context, data []byte) error {
+	return c.publishFrame(ctx, data, nil)
+}
+
+// A cleanup frame is accepted only by the SAME active initial-retirement
+// cursor, and can contain no issued resources. Neither carrier grants native
+// Start, flow, DNS publication or removal authority.
+func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte, retirement *domainTCPInitialRetirement) error {
 	if err := c.original(); err != nil {
 		return err
 	}
@@ -173,12 +208,20 @@ func (c *domainTCPGlobalSuccessor) publish(ctx context.Context, data []byte) err
 		return ErrPolicyAdditionUnknown
 	}
 	c.mu.Lock()
-	admission := c.admission
-	if err := admission.current(c, ctx); err != nil {
-		c.mu.Unlock()
-		return err
+	var admissionErr error
+	if retirement == nil {
+		admissionErr = c.admission.current(c, ctx)
+	} else {
+		admissionErr = retirement.local(c, ctx)
+		if admissionErr == nil && (!bytes.Equal(data, retirement.image) || c.actionStarted || len(c.scope.execution.Resources) != 0 || c.scope.execution.State != "temporary-complete") {
+			admissionErr = ErrPolicyAdditionUnknown
+		}
 	}
-	failure, sealed, accepted := c.failure, c.sealed, c.globalAccepted
+	if admissionErr != nil {
+		c.mu.Unlock()
+		return admissionErr
+	}
+	failure, sealed, accepted, started := c.failure, c.sealed, c.globalAccepted, c.actionStarted
 	c.pending = true
 	c.mu.Unlock()
 	if failure != nil {
@@ -215,6 +258,11 @@ func (c *domainTCPGlobalSuccessor) publish(ctx context.Context, data []byte) err
 	if err := c.records.publishOriginalDurable(0, data, syncDataplaneJournalDirectory); err != nil {
 		return err
 	}
+	if retirement == nil && c.initialFault != nil && !started {
+		if err := c.initialFault("transaction"); err != nil {
+			return err
+		}
+	}
 	if err := c.comparePrior(ctx, sealed); err != nil {
 		return err
 	}
@@ -232,15 +280,27 @@ func (c *domainTCPGlobalSuccessor) publish(ctx context.Context, data []byte) err
 	if err != nil {
 		return err
 	}
+	if retirement == nil && c.initialFault != nil && !started {
+		if err := c.initialFault("global"); err != nil {
+			return err
+		}
+	}
 	if err := c.records.current(ctx, true); err != nil {
 		return err
 	}
 	if err := c.comparePrior(ctx, true); err != nil {
 		return err
 	}
-	c.mu.Lock()
-	c.pending = false
-	c.mu.Unlock()
+	if c.previousKeeper != nil {
+		if err := c.previousKeeper.closeForSuccessor(ctx, c); err != nil {
+			return err
+		}
+	}
+	if retirement == nil {
+		c.mu.Lock()
+		c.pending = false
+		c.mu.Unlock()
+	}
 	return nil
 }
 
@@ -260,11 +320,7 @@ func (c *domainTCPGlobalSuccessor) sealAcceptedGlobal(ctx context.Context) error
 	if err := c.records.current(ctx, true); err != nil {
 		return err
 	}
-	entries, err := c.pool.originals()
-	if err != nil {
-		return err
-	}
-	last := entries[len(entries)-1].history
+	last := c.previous
 	if last == nil {
 		return ErrPolicyAdditionUnknown
 	}

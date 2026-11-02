@@ -61,6 +61,11 @@ case "${RAZVILKA_DOMAIN_DNS_COEXISTENCE:-0}" in
   test -z "${RAZVILKA_DOMAIN_DNS_DETACH_ACK:-}" || exit 2
   test -z "${RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY:-}" || exit 2
   domain_case=TestDomainTCPOriginalNativeDNSCoexistence
+  case "${RAZVILKA_DOMAIN_INITIAL_ACK:-}" in
+   '') ;;
+   transaction|global) domain_case=TestDomainTCPOriginalNativeUnstartedKeeper ;;
+   *) exit 2 ;;
+  esac
   domain_test_timeout=240s ;;
  *) exit 2 ;;
 esac

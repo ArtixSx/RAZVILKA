@@ -18,6 +18,7 @@ type domainTCPStandbyPool struct {
 	manager   *Manager
 	entries   []*domainTCPStandbyPoolEntry
 	successor *domainTCPGlobalSuccessor
+	keeper    *domainTCPGlobalKeeper
 }
 
 type domainTCPStandbyPoolEntry struct {
@@ -43,6 +44,7 @@ func (m *Manager) hasPendingDomainSuccessor() bool {
 	}
 	pool.mu.Lock()
 	c := pool.successor
+	keeper := pool.keeper
 	count := len(pool.entries)
 	pool.mu.Unlock()
 	if count < 1 || count > 2 {
@@ -58,7 +60,8 @@ func (m *Manager) hasPendingDomainSuccessor() bool {
 	pending := c.pending || c.failure != nil
 	c.mu.Unlock()
 	c.scope.mu.Lock()
-	pending = pending || c.scope.pending || c.scope.failure != nil || !c.scope.open
+	closedKnown := keeper != nil && keeper.cursor == c && keeper.ready.Load() && !keeper.closed.Load()
+	pending = pending || c.scope.pending || c.scope.failure != nil || !c.scope.open && !closedKnown
 	c.scope.mu.Unlock()
 	return pending
 }
@@ -127,6 +130,31 @@ func (m *Manager) reserveDomainPool(ctx context.Context, plan Plan, detached *Do
 	s := detached.owner.process.scope
 	if s == nil || s.manager != m {
 		return nil, ErrPolicyAdditionUnknown
+	}
+	m.retainedXrayMu.Lock()
+	existingPool, slot := m.domainPool, m.retainedXray
+	m.retainedXrayMu.Unlock()
+	if slot == nil && existingPool != nil {
+		entries, err := existingPool.originals()
+		if err != nil {
+			return nil, err
+		}
+		existingPool.mu.Lock()
+		keeper := existingPool.keeper
+		cursor := existingPool.successor
+		existingPool.mu.Unlock()
+		if keeper == nil || keeper.cursor != cursor || entries[len(entries)-1].detached != detached {
+			return nil, ErrPolicyAdditionUnknown
+		}
+		for _, entry := range entries {
+			if err := entry.current(ctx, m, plan, true); err != nil {
+				return nil, err
+			}
+		}
+		if err := keeper.current(ctx); err != nil {
+			return nil, err
+		}
+		return existingPool, nil
 	}
 	detached.mu.Lock()
 	finished, registryDone := detached.finished, detached.registryDone

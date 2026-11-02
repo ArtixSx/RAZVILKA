@@ -34,6 +34,7 @@ type DomainTCPDetachedStandby struct {
 	finished        bool               // mu
 	failure         error              // Sticky ambiguous actual descriptor close; Manager serializes.
 	fault           func(string) error // Only private durability/registry ACK fault injection.
+	initialFault    func(string) error // CI-only refusal after original successor durability ACK.
 }
 
 func (*DomainTCPDetachedStandby) String() string   { return "[original detached DNS standby]" }

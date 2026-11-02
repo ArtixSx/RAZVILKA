@@ -133,7 +133,7 @@ func (m *Manager) WithDomainTCPContinuationResources(ctx context.Context, p Plan
 			c.admission = admission
 			c.mu.Unlock()
 			if err := m.writeExecutionOwned(c.scope.root, *c.scope.execution, c.scope); err != nil {
-				return err
+				return domainTCPUnstartedFailure(c, err)
 			}
 			// Only a zero-resource initial ACK failure is cleared. No callback has
 			// run and the SAME live request/guard/plan still owns this scope.

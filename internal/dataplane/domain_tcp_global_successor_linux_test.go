@@ -36,7 +36,7 @@ func TestDomainGlobalSuccessorRecoversOnlyAcceptedOriginalFD(t *testing.T) {
 			pool := &domainTCPStandbyPool{manager: m, entries: []*domainTCPStandbyPoolEntry{{history: old}}}
 			pool.self = pool
 			m.domainPool = pool
-			c := &domainTCPGlobalSuccessor{pool: pool, scope: s, records: records, pending: true}
+			c := &domainTCPGlobalSuccessor{pool: pool, scope: s, records: records, previous: old, pending: true}
 			c.self = c
 			s.domainSuccessor = c
 			pool.successor = c

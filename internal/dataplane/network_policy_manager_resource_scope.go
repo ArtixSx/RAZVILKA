@@ -696,7 +696,7 @@ func (m *Manager) withExecutionResourcesSuccessorLocked(ctx context.Context, exp
 			scope.pending = true
 			scope.failure = err
 			scope.mu.Unlock()
-			return err
+			return domainTCPUnstartedFailure(scope.domainSuccessor, err)
 		}
 	}
 	return m.runScopedResourceAction(ctx, expected, action, domainProof, mihomoProof, scope)

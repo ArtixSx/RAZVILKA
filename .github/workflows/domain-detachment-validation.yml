@@ -35,7 +35,7 @@ jobs:
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
       - name: Original writer and typed reader regressions
-        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose|TestDomainGlobalHistoricalFD|TestDomainGlobalSuccessor|TestDomainPool|TestDomainCoexistence|TestDomainDNSCoexistence|TestMihomoTransitArchive'
+        run: go test -race -count=1 ./internal/startuptools ./internal/dnscontrol ./internal/dataplane -run 'TestVersionExtensionPath|TestDomainBaselineScopedRead|TestDomainBaselineObservedRead|TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose|TestDomainGlobalHistoricalFD|TestDomainGlobalSuccessor|TestDomainPool|TestDomainKeeper|TestDomainInitialRetirement|TestDomainCoexistence|TestDomainDNSCoexistence|TestMihomoTransitArchive'
       - name: Actual DNS send, original Stop and cached-alias TLS
         shell: bash
         run: |
@@ -115,9 +115,13 @@ jobs:
           path: artifacts/dns-detachment
           if-no-files-found: warn
   original-domain-coexistence:
-    name: Two original DNS generations / new selected TLS and old cached alias
+    name: Original DNS generations / initial ACK ${{ matrix.initial }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        initial: [none, transaction, global]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -139,8 +143,15 @@ jobs:
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
       - name: Original closed predecessor, successor writer, new flow and old late SYN
         shell: bash
+        env:
+          INITIAL_CUT: ${{ matrix.initial }}
         run: |
           set -euo pipefail
+          case "$INITIAL_CUT" in
+            none) initial_ack='' ;;
+            transaction|global) initial_ack="$INITIAL_CUT" ;;
+            *) exit 2 ;;
+          esac
           mkdir -p -m 700 artifacts/dns-coexistence
           trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/dns-coexistence' EXIT
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
@@ -148,12 +159,13 @@ jobs:
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 \
             RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1 \
+            RAZVILKA_DOMAIN_INITIAL_ACK="$initial_ack" \
             RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-coexistence" \
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-coexistence/native.log
       - name: Preserve actual two-operation diagnostics, including failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dns-coexistence-${{ github.sha }}
+          name: dns-coexistence-${{ matrix.initial }}-${{ github.sha }}
           path: artifacts/dns-coexistence
           if-no-files-found: warn
