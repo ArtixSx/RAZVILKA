@@ -20,7 +20,7 @@ func mihomoColdCompletion(raw []byte) []byte {
 // Documentary recognition only. It prevents replay of the retired committed
 // plan, never grants native absence or a new Apply. A genuine later commit
 // supersedes its exact old committed bytes; previews cannot supersede it.
-func (m *Manager) completedMihomoLiveRetirement() (bool, string, error) {
+func (m *Manager) completedMihomoLiveRetirement() (retired bool, retiredID string, resultErr error) {
 	refuse := func() (bool, string, error) { return true, "", ErrMihomoLiveRetirement }
 	if _, err := os.Lstat(filepath.Join(m.StateRoot, "mihomo-live-retirements")); errors.Is(err, os.ErrNotExist) {
 		return false, "", nil
@@ -31,7 +31,12 @@ func (m *Manager) completedMihomoLiveRetirement() (bool, string, error) {
 	if err != nil {
 		return refuse()
 	}
-	defer root.Close()
+	defer func() {
+		if err := root.Close(); err != nil {
+			retired, retiredID = true, ""
+			resultErr = errors.Join(ErrMihomoLiveRetirement, resultErr, err)
+		}
+	}()
 	dir, err := root.Open("mihomo-live-retirements")
 	if err != nil {
 		return refuse()
@@ -63,6 +68,9 @@ func (m *Manager) completedMihomoLiveRetirement() (bool, string, error) {
 		}
 		before, d, err := decodeMihomoLiveRetirementIntent(manifest.Before)
 		if err != nil || before.PlanID != entry.Name() || manifest.Observed.BootID == d.NetworkIdentity.BootID || validateMihomoColdPlans(d.Plan, manifest.Plans) != nil {
+			return refuse()
+		}
+		if (d.NativeHome == nil) != (manifest.Home == nil) || manifest.Home != nil && validateMihomoColdHomeArchive(d, *manifest.Home) != nil {
 			return refuse()
 		}
 		old, hadCommitted := manifest.Plans["latest-committed-plan.json"]

@@ -21,6 +21,11 @@ import (
 func mihomoLiveColdRetirementFixture(t *testing.T) (*Manager, *ProxyTunnelAdapter, Execution, []byte, context.Context, netidentity.Identity) {
 	t.Helper()
 	e := mihomoColdIntentFixture(t)
+	home, _, _, _, _ := mihomoColdHomeFixture(t)
+	// Real private native home/receipt; complete process/kernel absence remains
+	// explicitly modeled below. No serialized reference becomes an owner.
+	e.Resources[0].MihomoLive.NativeHome = home.NativeHome
+
 	m := New(filepath.Join(t.TempDir(), "private"))
 	if err := os.MkdirAll(filepath.Join(m.StateRoot, "transactions", e.PlanID), 0700); err != nil {
 		t.Fatal(err)

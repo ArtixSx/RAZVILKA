@@ -20,6 +20,7 @@ type mihomoColdManifest struct {
 	Plans    map[string][]byte        `json:"plans"`
 	Runtime  mihomoColdRuntimeArchive `json:"runtime"`
 	Observed netidentity.Identity     `json:"observed"`
+	Home     *mihomoColdHomeArchive   `json:"home,omitempty"`
 }
 
 // This is explicit offline maintenance, before workers or HTTP startup. The
@@ -30,12 +31,7 @@ func (m *Manager) RetireMihomoLiveAfterBoot(ctx context.Context, id, digest stri
 	if m == nil {
 		return Execution{}, ErrMihomoLiveRetirement
 	}
-	registered, ok := m.adapter("mihomo")
-	a, typed := registered.(*MihomoProbeAdapter)
-	if !ok || !typed || a == nil {
-		return Execution{}, ErrMihomoLiveRetirement
-	}
-	proxy, err := a.originalLiveProxy(m)
+	proxy, provider, err := m.mihomoColdProxy(ctx)
 	if err != nil {
 		return Execution{}, err
 	}
@@ -44,14 +40,14 @@ func (m *Manager) RetireMihomoLiveAfterBoot(ctx context.Context, id, digest stri
 		return Execution{}, err
 	}
 	return m.retireMihomoLiveMetadata(ctx, id, digest, proxy, offlineCurrent, func(c context.Context, d ExecutionMihomoLiveDefinition) (netidentity.Identity, error) {
-		identity, err := observeMihomoLiveColdProcesses(c, a.provider, d, m.StateRoot)
+		identity, err := observeMihomoLiveColdProcesses(c, provider, d, m.StateRoot)
 		if err != nil || identity.BootID == d.NetworkIdentity.BootID {
 			return netidentity.Identity{}, errors.Join(ErrMihomoLiveRetirement, err)
 		}
 		if err := observeBootRetirement(c, proxy, proof); err != nil {
 			return netidentity.Identity{}, err
 		}
-		closing, err := observeMihomoLiveColdProcesses(c, a.provider, d, m.StateRoot)
+		closing, err := observeMihomoLiveColdProcesses(c, provider, d, m.StateRoot)
 		if err != nil || closing != identity {
 			return netidentity.Identity{}, errors.Join(ErrMihomoLiveRetirement, err)
 		}
@@ -133,6 +129,9 @@ func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest strin
 	if err != nil || before.PlanID != id || before.Digest != digest {
 		return result, ErrMihomoLiveRetirement
 	}
+	if exists && ((d.NativeHome == nil) != (manifest.Home == nil) || manifest.Home != nil && validateMihomoColdHomeArchive(d, *manifest.Home) != nil) {
+		return result, ErrMihomoLiveRetirement
+	}
 	if err := validateMihomoColdRuntime(a, d, manifest.Runtime); err != nil {
 		return result, err
 	}
@@ -185,6 +184,49 @@ func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest strin
 	if err := observe(); err != nil {
 		return result, err
 	}
+	// This is documentary scratch history; it never deletes the temporary home.
+	// Every real observation still brackets bytes with complete native absence.
+	var runHome []byte
+	homeCurrent := func() error {
+		if d.NativeHome == nil {
+			return nil
+		}
+		observed, e := observeMihomoColdHome(ctx, d, func(c context.Context) (netidentity.Identity, error) {
+			identity, e := absent(c, d)
+			if e != nil || identity != runIdentity {
+				return netidentity.Identity{}, errors.Join(ErrMihomoLiveRetirement, e)
+			}
+			return identity, nil
+		})
+		if e != nil {
+			return e
+		}
+		data, e := json.Marshal(observed)
+		if e != nil {
+			return e
+		}
+		if runHome != nil {
+			if !bytes.Equal(runHome, data) {
+				return ErrMihomoLiveRetirement
+			}
+			return nil
+		}
+		if exists {
+			prior, _ := json.Marshal(manifest.Home)
+			// A later real reboot may clear the original temporary home. Preserve
+			// its old archived bytes, and record no new ownership or deletion grant.
+			if !bytes.Equal(prior, data) && !(observed.State == "absent" && manifest.Observed.BootID != runIdentity.BootID) {
+				return ErrMihomoLiveRetirement
+			}
+		} else {
+			manifest.Home = &observed
+		}
+		runHome = data
+		return nil
+	}
+	if err := homeCurrent(); err != nil {
+		return result, err
+	}
 	if err := mkdirBootRetirement(state, archiveName); err != nil {
 		return result, err
 	}
@@ -235,6 +277,9 @@ func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest strin
 			if err := r.current(); err != nil {
 				return err
 			}
+		}
+		if err := homeCurrent(); err != nil {
+			return err
 		}
 		if err := checkMihomoColdRuntimePair(state, archive, a, manifest.Runtime); err != nil {
 			return err
