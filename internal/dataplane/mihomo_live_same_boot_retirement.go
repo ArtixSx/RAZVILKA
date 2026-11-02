@@ -41,6 +41,11 @@ type mihomoSameBootRetirementCursor struct {
 	terminal                                Execution
 	closed                                  bool
 	closeErr, unknown                       error
+	retryArchive                            string
+	retryTerminal                           int // Slot+1, only SAME retained authored writer ACK.
+	terminalPending                         [2]bool
+	terminalCloseErr                        error
+	terminalFault                           func(int) error // Refusal-only AFTER original publication ACK.
 }
 
 // RetireMihomoLiveSameBoot is explicit offline maintenance under the five
@@ -51,23 +56,26 @@ type mihomoSameBootRetirementCursor struct {
 // before the first terminal publication. Any close/unknown result clears the
 // returned terminal acknowledgment.
 func (m *Manager) RetireMihomoLiveSameBoot(ctx context.Context, id, digest string, set *privaterestore.OfflineServiceControlSet, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, controlRoot string, history *updatecheck.ExecutionHistoryAdmission) (result Execution, resultErr error) {
-	c, err := m.prepareMihomoSameBootRetirement(ctx, id, digest, set, control, cleanup, controlRoot, history)
-	if err != nil {
-		return result, err
+	resultErr = m.WithMihomoSameBootRetirement(ctx, id, digest, set, control, cleanup, controlRoot, history, func(original context.Context, h *MihomoSameBootRetirement) error {
+		var err error
+		result, err = h.Run(original)
+		return err
+	})
+	if resultErr != nil {
+		result = Execution{}
 	}
-	defer func() {
-		resultErr = errors.Join(resultErr, c.close())
-		if resultErr != nil {
-			result = Execution{}
-		}
-	}()
-	return c.run()
+	return result, resultErr
 }
 
 // This synchronous original cursor owns Manager.operation through Close. It
 // is never rebuilt from serialized data and cannot outlive the five private
 // callback lifetimes. The public CLI connection waits for native acceptance.
 func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, digest string, set *privaterestore.OfflineServiceControlSet, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, controlRoot string, history *updatecheck.ExecutionHistoryAdmission) (_ *mihomoSameBootRetirementCursor, resultErr error) {
+	stage := "prepare-context"
+	defer func() { resultErr = mihomoSameBootStageError(stage, resultErr) }()
+	if err := xraySelectedTCPFinite(ctx); err != nil {
+		return nil, errors.Join(ErrMihomoLiveRetirement, err)
+	}
 	if m == nil || control == nil || cleanup == nil || history == nil || !filepath.IsAbs(controlRoot) || filepath.Clean(controlRoot) != controlRoot || !control.MatchesControlRoot(controlRoot) {
 		return nil, ErrMihomoLiveRetirement
 	}
@@ -85,12 +93,14 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if m.retainedNFQOwner() != nil || m.retainedXrayOwner() != nil || m.retainedWGOwner() != nil || m.HasPendingManagedNFQWS() || m.HasPendingMihomoLive() || m.originalMihomoLive() != nil {
 		return nil, ErrMihomoLiveRetirement
 	}
+	stage = "prepare-inputs"
 	i, err := holdMihomoSameBootInputs(ctx, set, m.StateRoot, id, digest)
 	if err != nil {
 		return nil, err
 	}
 	c.owner = &mihomoSameBootCleanup{inputs: i, control: control, cleanup: cleanup, controlRoot: controlRoot}
 	c.owner.self = c.owner
+	stage = "prepare-proxy"
 	a, _, err := m.mihomoColdProxy(ctx)
 	if err != nil {
 		return nil, err
@@ -103,6 +113,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := c.beforeSidecar(); err != nil {
 		return nil, err
 	}
+	stage = "prepare-runtime"
 	before, err := readMihomoColdRuntime(i.roots[0], "mihomo", a)
 	if err != nil || !before.Present {
 		return nil, errors.Join(ErrMihomoLiveRetirement, err)
@@ -110,6 +121,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := validateMihomoColdRuntime(a, i.definition, before); err != nil {
 		return nil, err
 	}
+	stage = "prepare-static"
 	c.owner.static, err = holdMihomoSameBootStatic(ctx, i, a, before)
 	if err != nil {
 		return nil, err
@@ -117,6 +129,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := c.beforeSidecar(); err != nil {
 		return nil, err
 	}
+	stage = "prepare-runtime-closing"
 	closing, err := readMihomoColdRuntime(i.roots[0], "mihomo", a)
 	if err != nil {
 		return nil, err
@@ -127,6 +140,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 		return nil, ErrMihomoLiveRetirement
 	}
 	c.intent = mihomoSameBootIntent{Schema: 1, Before: bytes.Clone(i.records[0].data), Configuration: bytes.Clone(i.records[2].data), RuntimeBefore: before, Plans: map[string][]byte{}}
+	stage = "prepare-policy"
 	if i.candidate {
 		if _, err := holdMihomoSameBootCandidatePolicy(ctx, c.owner); err != nil {
 			return nil, err
@@ -144,6 +158,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 			return nil, err
 		}
 	}
+	stage = "prepare-plans"
 	for _, name := range mihomoStoppedPlanNames {
 		r, err := openMihomoColdRecord(i.roots[0], name, nil)
 		if errors.Is(err, os.ErrNotExist) && name == "latest-committed-plan.json" {
@@ -158,6 +173,7 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := validateMihomoColdPlans(i.definition.Plan, c.intent.Plans); err != nil {
 		return nil, err
 	}
+	stage = "prepare-terminal"
 	c.terminal, err = mihomoLiveRetirementTerminal(i.before, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -173,10 +189,12 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := history.CheckWrite(ctx, 8); err != nil {
 		return nil, err
 	}
+	stage = "prepare-archive"
 	c.archive, err = newMihomoSameBootArchive(i)
 	if err != nil {
 		return nil, err
 	}
+	stage = "prepare-effect-proxy"
 	c.effectProxy, err = NewProxyTunnelAdapter("mihomo", nil, m.StateRoot)
 	if err != nil {
 		return nil, err
@@ -188,6 +206,9 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 	if err := c.beforeSidecar(); err != nil {
 		return nil, err
 	}
+	if err := installMihomoSameBootNativeACKCut(ctx, c); err != nil {
+		return nil, err
+	}
 	keep = true
 	return c, nil
 }
@@ -195,8 +216,18 @@ func (m *Manager) prepareMihomoSameBootRetirement(ctx context.Context, id, diges
 // Parent-gone plus exact same network identity precede even a pidfd signal.
 // No controller or interface absence is inferred from serialized metadata.
 func (c *mihomoSameBootRetirementCursor) beforeSidecar() error {
-	if c == nil || c.self != c || c.closed || c.owner == nil || c.owner.read == nil || c.unknown != nil {
+	if c != nil && c.unknown != nil {
+		return errors.Join(ErrMihomoLiveRetirement, c.unknown)
+	}
+	return c.originalInputsCurrent()
+}
+
+func (c *mihomoSameBootRetirementCursor) originalInputsCurrent() error {
+	if c == nil || c.self != c || c.closed || c.owner == nil || c.owner.read == nil {
 		return errors.Join(ErrMihomoLiveRetirement, sameBootRetirementError(c))
+	}
+	if c.terminalCloseErr != nil {
+		return errors.Join(ErrMihomoLiveRetirement, c.terminalCloseErr)
 	}
 	o := c.owner
 	if o.inputs.configPath != o.read.original.settings || o.inputs.statePath != o.read.original.root {
@@ -244,7 +275,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	if err := c.history.CheckWrite(c.ctx, 8); err != nil {
 		return Execution{}, err
 	}
-	if err := c.archive.publish("retirement.json", c.intent, c.beforeSidecar); err != nil {
+	if err := c.publishArchive("retirement.json", c.intent, c.beforeSidecar); err != nil {
 		return Execution{}, err
 	}
 	if err := mihomoSameBootNativeStage(c.ctx, c, "intent", c.beforeSidecar); err != nil {
@@ -253,8 +284,8 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 	o := c.owner
 	if !c.sidecarDone {
 		if err := stopMihomoSameBootSidecar(c.ctx, o); err != nil {
-			c.unknown = err
-			return Execution{}, err
+			c.unknown = c.sidecarFailureAfterAttempt(err)
+			return Execution{}, c.unknown
 		}
 		c.sidecarDone = true
 	}
@@ -325,7 +356,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		}
 		return c.homeCurrent()
 	}
-	if err := c.archive.publish("runtime-history", struct {
+	if err := c.publishArchive("runtime-history", struct {
 		Schema  int
 		Runtime mihomoColdRuntimeArchive
 		Home    *mihomoColdHomeArchive
@@ -361,7 +392,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		return Execution{}, err
 	}
 	for n := range 2 {
-		if bytes.Equal(o.inputs.records[n].data, c.intent.After) {
+		if bytes.Equal(o.inputs.records[n].data, c.intent.After) && !c.terminalPending[n] {
 			continue
 		}
 		if err := terminalCurrent(); err != nil {
@@ -370,7 +401,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		if err := c.history.CheckWrite(c.ctx, 8); err != nil {
 			return Execution{}, err
 		}
-		if err := o.inputs.records[n].publish(c.intent.After, terminalCurrent); err != nil {
+		if err := c.publishTerminal(n, terminalCurrent); err != nil {
 			return Execution{}, err
 		}
 		stage := "terminal-transaction"
@@ -381,7 +412,7 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 			return Execution{}, err
 		}
 	}
-	if err := c.archive.publish("completed.json", struct {
+	if err := c.publishArchive("completed.json", struct {
 		Schema                    int
 		BeforeSHA256, AfterSHA256 string
 	}{1, nodeDefaultSourceMaterialHash(c.intent.Before), nodeDefaultSourceMaterialHash(c.intent.After)}, terminalCurrent); err != nil {
@@ -415,6 +446,9 @@ func (c *mihomoSameBootRetirementCursor) close() error {
 	if !c.closed {
 		c.closed = true
 		if c.owner != nil {
+			if c.owner.sidecar != nil {
+				c.closeErr = errors.Join(c.closeErr, c.owner.sidecar.close())
+			}
 			if c.owner.policy != nil {
 				c.closeErr = errors.Join(c.closeErr, c.owner.policy.close())
 			}
@@ -436,5 +470,5 @@ func (c *mihomoSameBootRetirementCursor) close() error {
 		}
 		c.manager.endOperation()
 	}
-	return c.closeErr
+	return errors.Join(c.closeErr, c.terminalCloseErr)
 }

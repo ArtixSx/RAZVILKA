@@ -31,6 +31,10 @@ export RAZVILKA_RUNTIME_NATIVE_REVIEW="$work/runtime-native-tool-review.json"
 export RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD=3
 export RAZVILKA_DOMAIN_ORIGINAL_NATIVE=1 RAZVILKA_MIHOMO_LIVE_NATIVE=1
 export RAZVILKA_MANAGED_PROBE_NATIVE=1 RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$work/tools.json"
+case "${RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT:-}" in
+ ''|retirement.json|runtime-history|completed.json|terminal-transaction|terminal-global) ;;
+ *) exit 2 ;;
+esac
 cd "$repo"
 case "${RAZVILKA_NATIVE_RACE:-0}" in
  0) go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/app.test" ./internal/app

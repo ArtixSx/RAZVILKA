@@ -3,6 +3,7 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -55,6 +56,13 @@ func mihomoSameBootNativeStage(ctx context.Context, c *mihomoSameBootRetirementC
 	}
 	if (stage == "terminal-transaction" || stage == "terminal-global") && !c.owner.effectsClosed {
 		return ErrMihomoLiveRetirement
+	}
+	if c.owner != nil && c.owner.inputs != nil {
+		for n := 0; n < 2; n++ {
+			if bytes.Equal(c.owner.inputs.records[n].data, c.intent.After) && !c.owner.effectsClosed {
+				return ErrMihomoLiveRetirement
+			}
+		}
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -63,6 +63,7 @@ func (c *mihomoSameBootCommand) WithStart(ctx context.Context, name string, args
 }
 
 type mihomoSameBootCleanup struct {
+	sidecar                      *mihomoSameBootSidecar
 	policy                       *mihomoSameBootPolicy
 	static                       *mihomoSameBootStatic
 	controlRoot                  string
