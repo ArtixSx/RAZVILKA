@@ -82,8 +82,10 @@ jobs:
       - name: Version batch metadata and invocation refusal regressions
         shell: bash
         run: |
+          race_option=""
+          if test "${{ matrix.build-mode }}" = race; then race_option="-race"; fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -count=1 ./internal/startuptools ./internal/dataplane -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestClassicReadBatch|^TestBackendInventoryBatch' -v
+            go test $race_option -count=1 ./internal/startuptools ./internal/dataplane -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestClassicReadBatch|^TestBackendInventoryBatch|^TestBackendInventoryObservation' -v
       - name: Actual native phase diagnostics and complete LAN workflow
         shell: bash
         run: |
