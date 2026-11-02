@@ -15,21 +15,27 @@ import (
 )
 
 type domainTCPStandbyRetirement struct {
-	self            *domainTCPStandbyRetirement
-	owner           *domainTCPStandbyOwner
-	cleanup         *operationgate.ExclusiveCleanupReview
-	receipt         networkPolicyReceiptObservation
-	open            atomic.Bool
-	cleaned         bool // Only actual removed receipt AND whole-kernel absence set this.
-	before          *Execution
-	publicationDone bool
-	globalPublished bool
-	closeIndex      int
-	closeErr        error
-	finished        bool
-	closeFault      func(int) error           // Private deterministic pre-close fault seam.
-	publishFault    func(int) error           // Same original writer, before a publication.
-	syncDirectory   func(*ownedfs.Root) error // Private durability fault seam; nil uses actual sync.
+	self                 *domainTCPStandbyRetirement
+	owner                *domainTCPStandbyOwner
+	cleanup              *operationgate.ExclusiveCleanupReview
+	receipt              networkPolicyReceiptObservation
+	open                 atomic.Bool
+	cleaned              bool // Only actual removed receipt AND whole-kernel absence set this.
+	before               *Execution
+	publicationDone      bool
+	globalPublished      bool
+	closeIndex           int
+	closeErr             error
+	finished             bool
+	keeper               *domainTCPGlobalKeeper
+	poolRemoved          *networkPolicyReceiptObservation
+	poolCapture          *networkPolicyReceiptObservation
+	poolReceiptClose     int
+	poolRegistryDone     bool
+	poolAliasTransferred bool
+	closeFault           func(int) error           // Private deterministic pre-close fault seam.
+	publishFault         func(int) error           // Same original writer, before a publication.
+	syncDirectory        func(*ownedfs.Root) error // Private durability fault seam; nil uses actual sync.
 }
 type domainTCPStandbyRetirementKey struct{}
 
@@ -56,6 +62,17 @@ func (o *DomainTCPOriginalScope) RetireUnpublishedStandby(ctx context.Context, c
 		return err
 	}
 	defer m.endOperation()
+	if owner.process.scope.domainSuccessor != nil {
+		o.mu.Lock()
+		history := o.standbyHistory
+		o.mu.Unlock()
+		if history == nil {
+			return ErrPolicyAdditionUnknown
+		}
+		if err := history.CheckWrite(ctx, 8); err != nil {
+			return err
+		}
+	}
 	if previous != nil {
 		if previous.self != previous || previous.owner != owner || !previous.cleaned {
 			return ErrPolicyAdditionUnknown
@@ -135,7 +152,11 @@ func (o *DomainTCPOriginalScope) RetireUnpublishedStandby(ctx context.Context, c
 		return err
 	}
 	removed, err := observeNetworkPolicyEffects(ctx, plan, owner.baseline.root, policyAdditionOptions{})
-	defer removed.close()
+	defer func() {
+		if r.poolRemoved != &removed {
+			removed.close()
+		}
+	}()
 	if err != nil || !removed.status.Removed || removed.status.Unknown {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
@@ -153,6 +174,9 @@ func (o *DomainTCPOriginalScope) RetireUnpublishedStandby(ctx context.Context, c
 		return err
 	}
 	r.cleaned = true
+	if owner.process.scope.domainSuccessor != nil {
+		r.poolRemoved = &removed
+	}
 	if err := r.guard(ctx); err != nil {
 		return err
 	}
@@ -410,6 +434,9 @@ func (r *domainTCPStandbyRetirement) publishRemoved(ctx context.Context, retaine
 }
 
 func (r *domainTCPStandbyRetirement) closeOriginalCustody(ctx context.Context, retained *retainedXrayExecution) error {
+	if r.owner.process.scope.domainSuccessor != nil {
+		return r.closePoolCustody(ctx, retained)
+	}
 	o, s := r.owner, r.owner.process.scope
 	p := o.process
 	if err := r.retireDNSOwnerRecord(ctx); err != nil {

@@ -46,13 +46,33 @@ func (*SyntheticDNSLedgerContinuation) GoString() string {
 // It supplies no DNS owner replacement, baseline, publication or alias reuse
 // authority. The adapter must independently detach its original DNS ownership.
 func (r *SyntheticDNSRetirementReview) ReviewContinuation(ctx context.Context) (*SyntheticDNSLedgerContinuation, error) {
-	if _, err := r.ObserveClosed(ctx); err != nil {
+	return r.reviewContinuation(ctx, false)
+}
+
+// ReviewRetiredContinuation retains the complete original closed prefix for
+// a never-issued reservation, including an exhausted 256-row ledger. A full
+// token is documentary only: bind still refuses it before another mapping.
+// Ordinary continuation admission keeps its original strict <256 bound.
+func (r *SyntheticDNSRetirementReview) ReviewRetiredContinuation(ctx context.Context) (*SyntheticDNSLedgerContinuation, error) {
+	return r.reviewContinuation(ctx, true)
+}
+
+func (r *SyntheticDNSRetirementReview) reviewContinuation(ctx context.Context, retired bool) (*SyntheticDNSLedgerContinuation, error) {
+	closed, err := r.ObserveClosed(ctx)
+	if err != nil {
 		return nil, err
+	}
+	if retired && closed.PossiblyIssued {
+		return nil, ErrSyntheticDNSTransitionPending
 	}
 	s := r.source
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.ledger.Reservations) < 1 || len(s.ledger.Reservations) >= syntheticDNSMaxReservations {
+	limit := syntheticDNSMaxReservations - 1
+	if retired {
+		limit = syntheticDNSMaxReservations
+	}
+	if len(s.ledger.Reservations) < 1 || len(s.ledger.Reservations) > limit {
 		return nil, ErrSyntheticDNSTransitionPending
 	}
 	if s.lineage == nil {

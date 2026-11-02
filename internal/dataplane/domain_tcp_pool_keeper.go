@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 )
 
 // Original documentary custody after an UNSTARTED generation is retired.
@@ -16,22 +18,24 @@ import (
 // Its actual transaction/global FDs remain available to the NEXT original
 // writer; a disk record or a newly opened matching file cannot create one.
 type domainTCPGlobalKeeper struct {
-	self     *domainTCPGlobalKeeper
-	closeMu  sync.Mutex
-	pool     *domainTCPStandbyPool
-	cursor   *domainTCPGlobalSuccessor
-	records  *xraySelectedTCPExecutionRecords
-	image    []byte
-	digest   [32]byte
-	ready    atomic.Bool
-	closed   atomic.Bool
-	closeErr error // closeMu; an actual close error is sticky.
+	self         *domainTCPGlobalKeeper
+	closeMu      sync.Mutex
+	pool         *domainTCPStandbyPool
+	cursor       *domainTCPGlobalSuccessor
+	records      *xraySelectedTCPExecutionRecords
+	image        []byte
+	digest       [32]byte
+	ready        atomic.Bool
+	closed       atomic.Bool
+	closeErr     error // closeMu; an actual close error is sticky.
+	retirement   *domainTCPStandbyRetirement
+	continuation *dnscontrol.SyntheticDNSLedgerContinuation
 }
 
 // Read-only recognition of the SAME completed metadata holder. A restart,
 // saved marker, or equal-byte replacement cannot create this exception.
 func (m *Manager) checkKnownDomainKeeperRecord(record Execution) error {
-	if m == nil || record.DomainDNSCoexistence == nil || record.State != "temporary-complete" || len(record.Resources) != 0 || validateExecutionResources(record, true) != nil {
+	if m == nil || record.DomainDNSCoexistence == nil || record.State != "temporary-complete" || validateExecutionResources(record, true) != nil {
 		return ErrPolicyAdditionUnknown
 	}
 	m.retainedXrayMu.Lock()
@@ -63,7 +67,12 @@ func (m *Manager) checkKnownDomainKeeperRecord(record Execution) error {
 }
 
 func (k *domainTCPGlobalKeeper) original() error {
-	if k == nil || k.self != k || k.pool == nil || k.pool.self != k.pool || k.cursor == nil || k.cursor.self != k.cursor || k.cursor.pool != k.pool || k.records == nil || k.cursor.records != k.records || k.records.scope != k.cursor.scope || k.cursor.terminal == nil || k.cursor.terminal.keeper != k || len(k.image) == 0 || len(k.image) > 4<<20 {
+	if k == nil || k.self != k || k.pool == nil || k.pool.self != k.pool || k.cursor == nil || k.cursor.self != k.cursor || k.cursor.pool != k.pool || k.records == nil || k.cursor.records != k.records || k.records.scope != k.cursor.scope || len(k.image) == 0 || len(k.image) > 4<<20 {
+		return ErrPolicyAdditionUnknown
+	}
+	initial := k.cursor.terminal != nil && k.cursor.terminal.keeper == k
+	retired := k.retirement != nil && k.retirement.self == k.retirement && k.retirement.keeper == k && k.retirement.owner != nil && k.retirement.owner.process != nil && k.retirement.owner.process.scope == k.cursor.scope && k.retirement.owner.process.records == k.records && k.continuation != nil
+	if initial == retired {
 		return ErrPolicyAdditionUnknown
 	}
 	return nil
@@ -78,7 +87,18 @@ func (k *domainTCPGlobalKeeper) current(ctx context.Context) error {
 	if !k.ready.Load() || k.closed.Load() || k.closeErr != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, k.closeErr)
 	}
-	return k.compareFiles(ctx)
+	if k.retirement != nil {
+		if err := k.retirement.retiredPoolCurrent(ctx); err != nil {
+			return err
+		}
+	}
+	if err := k.compareFiles(ctx); err != nil {
+		return err
+	}
+	if k.retirement != nil {
+		return k.retirement.retiredPoolCurrent(ctx)
+	}
+	return ctx.Err()
 }
 
 func (k *domainTCPGlobalKeeper) compareFiles(ctx context.Context) error {
@@ -156,6 +176,11 @@ func (k *domainTCPGlobalKeeper) historicalCurrent(ctx context.Context, b *domain
 	if err := b.currentHistorical(ctx); err != nil {
 		return err
 	}
+	if k.retirement != nil {
+		if err := k.retirement.retiredPoolCurrent(ctx); err != nil {
+			return err
+		}
+	}
 	d := k.records
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -198,6 +223,12 @@ func (k *domainTCPGlobalKeeper) closeForSuccessor(ctx context.Context, c *domain
 		if err := k.records.close(); err != nil {
 			k.closeErr = errors.Join(ErrPolicyAdditionUnknown, err)
 			return k.closeErr
+		}
+		if k.retirement != nil {
+			if err := k.retirement.closePoolReceipts(); err != nil {
+				k.closeErr = errors.Join(ErrPolicyAdditionUnknown, err)
+				return k.closeErr
+			}
 		}
 		k.closed.Store(true)
 		k.ready.Store(false)

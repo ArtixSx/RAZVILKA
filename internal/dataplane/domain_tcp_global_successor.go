@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
@@ -32,6 +33,7 @@ type domainTCPGlobalSuccessor struct {
 	sealed         bool
 	failure        error
 	initialFault   func(string) error // Error-only, configured on the SAME detached prior before construction.
+	continuation   *dnscontrol.SyntheticDNSLedgerContinuation
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {
@@ -79,7 +81,11 @@ func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool
 	prior := entries[len(entries)-1].detached
 	prior.mu.Lock()
 	c.initialFault = prior.initialFault
+	c.continuation = prior.continuation
 	prior.mu.Unlock()
+	if keeper != nil {
+		c.continuation = keeper.continuation
+	}
 	c.self = c
 	pool.manager.retainedXrayMu.Lock()
 	pool.mu.Lock()

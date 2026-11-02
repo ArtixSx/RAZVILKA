@@ -146,6 +146,9 @@ func (m *Manager) reserveDomainPool(ctx context.Context, plan Plan, detached *Do
 		if keeper == nil || keeper.cursor != cursor || entries[len(entries)-1].detached != detached {
 			return nil, ErrPolicyAdditionUnknown
 		}
+		if keeper.continuation == nil || keeper.continuation.Reference().Count >= 256 {
+			return nil, ErrDomainPolicyTCPCaptureRetirementPending
+		}
 		for _, entry := range entries {
 			if err := entry.current(ctx, m, plan, true); err != nil {
 				return nil, err

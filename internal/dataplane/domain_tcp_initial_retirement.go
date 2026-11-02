@@ -123,7 +123,7 @@ func (m *Manager) RetireUnstartedDomainTCPContinuation(ctx context.Context, clea
 	if r == nil {
 		r = &domainTCPInitialRetirement{cursor: c, control: control}
 		r.self = r
-		r.keeper = &domainTCPGlobalKeeper{pool: c.pool, cursor: c, records: c.records}
+		r.keeper = &domainTCPGlobalKeeper{pool: c.pool, cursor: c, records: c.records, continuation: c.continuation}
 		r.keeper.self = r.keeper
 		c.terminal = r
 	}

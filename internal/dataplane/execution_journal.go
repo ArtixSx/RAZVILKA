@@ -60,7 +60,7 @@ func (m *Manager) checkExecutionRecovery() error {
 	// A completed new attempt can still retain its original predecessors.
 	// Documentary bytes never reconstruct that multi-owner pool after restart.
 	if latest.DomainDNSCoexistence != nil {
-		return executionJournalError(m.checkKnownDomainKeeperRecord(*latest))
+		return executionJournalError(m.checkKnownDomainPoolRecord(*latest))
 	}
 	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {

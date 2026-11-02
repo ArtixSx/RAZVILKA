@@ -163,7 +163,7 @@ func TestSyntheticDNSContinuationFailedAdmissionCannotConsumeToken(t *testing.T)
 // Typed history model written through the SAME actual original ledger writer;
 // the added documentary rows have no live mapping or packet authority.
 func TestSyntheticDNSContinuationRefusesActualLedgerCapacity(t *testing.T) {
-	_, s, _, review, held, _ := syntheticDNSRetirementModel(t)
+	f, s, _, review, held, _ := syntheticDNSRetirementModel(t)
 	s.mu.Lock()
 	base := s.ledger.Reservations[0]
 	for i := 1; i < syntheticDNSMaxReservations; i++ {
@@ -185,5 +185,52 @@ func TestSyntheticDNSContinuationRefusesActualLedgerCapacity(t *testing.T) {
 	}
 	if c, err := review.ReviewContinuation(held); err == nil || c != nil {
 		t.Fatal("full256 prefix issued append permission", err)
+	}
+	retired, err := review.ReviewRetiredContinuation(held)
+	if err != nil || retired.Reference().Count != syntheticDNSMaxReservations {
+		t.Fatal("exhausted original retirement lost documentary prefix", err)
+	}
+	if next, err := NewNetworkPolicyDNSSyntheticResolverWithContinuation(held, context.Background(), f.r, f.control, f.root, f.definition, nil, retired); err == nil {
+		next.Close()
+		t.Fatal("retired full prefix admitted another source")
+	}
+	if retired.used {
+		t.Fatal("failed exhausted constructor consumed original token")
+	}
+}
+
+func TestSyntheticDNSRetiredContinuationRequiresNeverIssuedJoinedSource(t *testing.T) {
+	for _, issued := range []bool{false, true} {
+		t.Run(fmt.Sprint(issued), func(t *testing.T) {
+			f, s, _, review, held, _ := syntheticDNSRetirementModel(t)
+			if _, err := review.ReviewRetiredContinuation(held); err == nil {
+				t.Fatal("live source issued retired prefix")
+			}
+			if issued {
+				if err := s.Publish(held, f.client, scopedQuery(t, "service.example.com", dnsmessage.TypeA), func([]byte) error { return nil }); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			c, err := review.ReviewRetiredContinuation(held)
+			if issued {
+				if err == nil || c != nil {
+					t.Fatal("published alias entered never-issued path")
+				}
+				return
+			}
+			if err != nil || c.Reference().Count != 1 {
+				t.Fatal("original never-issued prefix unavailable", err)
+			}
+			next, err := NewNetworkPolicyDNSSyntheticResolverWithContinuation(held, context.Background(), f.r, f.control, f.root, f.definition, nil, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := next.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

@@ -43,7 +43,7 @@ func (o *DomainTCPOriginalScope) StartDNSContinuing(ctx context.Context, resolve
 		return ErrDomainPolicyTCPConsumer
 	}
 	entries, err := c.pool.originals()
-	if err != nil || len(entries) == 0 || entries[len(entries)-1].detached != prior || prior.continuation == nil {
+	if err != nil || len(entries) == 0 || entries[len(entries)-1].detached != prior || c.continuation == nil {
 		return errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
 	if err := errors.Join(o.baseCurrent(ctx), c.comparePrior(ctx, true), control.Current(ctx)); err != nil {
@@ -52,7 +52,7 @@ func (o *DomainTCPOriginalScope) StartDNSContinuing(ctx context.Context, resolve
 	a := o.binding.adapter
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.startSyntheticDNSContinuingLocked(ctx, o.binding, resolver, control, o, prior.continuation)
+	return a.startSyntheticDNSContinuingLocked(ctx, o.binding, resolver, control, o, c.continuation)
 }
 
 func (o *DomainTCPOriginalScope) Reserve(ctx context.Context, client netip.Addr, query []byte) (*dnscontrol.SyntheticDNSMapping, error) {

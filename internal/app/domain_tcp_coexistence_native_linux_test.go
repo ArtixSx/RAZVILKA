@@ -22,7 +22,7 @@ import (
 // No source/runtime callback is fabricated: this receives the first genuine
 // closed source's opaque handoff and uses public original Manager factories.
 // Native clocks are per-operation, matching the unchanged finite producer.
-func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domainOriginalNativePeers, manager *dataplane.Manager, dnsAdapter *dataplane.ScopedDNSAdapter, backend *dataplane.BackendInventory, xray *dataplane.ProxyTunnelAdapter, nodeSource *dataplane.NodeDefaultSourceReview, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, history *updatecheck.ExecutionHistoryAdmission, plan dataplane.Plan, service catalog.Service, nodeID string, prior *dataplane.DomainTCPDetachedStandby, oldAlias string) (resultErr error) {
+func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domainOriginalNativePeers, manager *dataplane.Manager, dnsAdapter *dataplane.ScopedDNSAdapter, backend *dataplane.BackendInventory, xray *dataplane.ProxyTunnelAdapter, nodeSource *dataplane.NodeDefaultSourceReview, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, history *updatecheck.ExecutionHistoryAdmission, plan dataplane.Plan, service catalog.Service, nodeID string, prior *dataplane.DomainTCPDetachedStandby, oldAlias string, unpublished bool, captured **dataplane.DomainTCPOriginalScope) (resultErr error) {
 	t.Helper()
 	binding, err := manager.BindSyntheticDNSExecution(ctx, dnsAdapter, plan)
 	if err != nil {
@@ -80,31 +80,57 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 		}
 	}()
 	deadline := time.Now().Add(30 * time.Second)
-	published := peers.clientRequest(t, ctx, "dns-wait", deadline.UTC().Format(time.RFC3339Nano))
-	if published.Answer != observed.Synthetic.String() {
-		domainOriginalPublicationDiagnostics(t, manager.StateRoot)
-		return errors.New("actual successor DNS publication unavailable or returned prior alias")
-	}
-	lookup, err := owner.LookupPublished(ctx, transport.Definition.Client, observed.Synthetic)
-	if err != nil || lookup != mapping {
-		return errors.Join(errors.New("successor response lacks original published mapping"), err)
-	}
-	old := peers.clientRequest(t, ctx, "selected", oldAlias)
-	if old.Source != domainOriginalClient || old.SourcePort == "" || old.SourcePort != old.ClientPort || old.Marker != "native-domain-service" {
-		return fmt.Errorf("new capture changed old cached-alias tuple: %+v", old)
-	}
-	selected := peers.clientRequest(t, ctx, "selected", published.Answer)
-	if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
-		return fmt.Errorf("successor selected TLS did not use genuine native VLESS: %+v", selected)
-	}
-	for _, mode := range []string{"mismatch", "opaque"} {
-		flow := peers.clientRequest(t, ctx, mode, published.Answer)
-		marker := "native-domain-service"
-		if mode == "opaque" {
-			marker = "opaque-native-baseline"
+	newAlias := observed.Synthetic.String()
+	if unpublished {
+		readinessCtx,cancelReadiness:=context.WithDeadline(ctx,deadline)
+		defer cancelReadiness()
+		for {
+			if err := owner.CurrentSyntheticMapping(readinessCtx, mapping); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				return errors.New("actual never-issued successor readiness unavailable")
+			}
+			select {
+			case err := <-done:
+				joined = true
+				return errors.Join(errors.New("never-issued successor ended before readiness"), err)
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(250 * time.Millisecond):
+			}
 		}
-		if flow.Source != domainOriginalClient || flow.SourcePort == "" || flow.SourcePort != flow.ClientPort || flow.Marker != marker {
-			return fmt.Errorf("successor %s changed original baseline tuple: %+v", mode, flow)
+		actual, err := mapping.Observation(ctx)
+		if err != nil || actual.PossiblyIssued {
+			return errors.Join(errors.New("never-issued successor acquired publication"), err)
+		}
+	} else {
+		published := peers.clientRequest(t, ctx, "dns-wait", deadline.UTC().Format(time.RFC3339Nano))
+		if published.Answer != observed.Synthetic.String() {
+			domainOriginalPublicationDiagnostics(t, manager.StateRoot)
+			return errors.New("actual successor DNS publication unavailable or returned prior alias")
+		}
+		lookup, err := owner.LookupPublished(ctx, transport.Definition.Client, observed.Synthetic)
+		if err != nil || lookup != mapping {
+			return errors.Join(errors.New("successor response lacks original published mapping"), err)
+		}
+		old := peers.clientRequest(t, ctx, "selected", oldAlias)
+		if old.Source != domainOriginalClient || old.SourcePort == "" || old.SourcePort != old.ClientPort || old.Marker != "native-domain-service" {
+			return fmt.Errorf("new capture changed old cached-alias tuple: %+v", old)
+		}
+		selected := peers.clientRequest(t, ctx, "selected", published.Answer)
+		if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
+			return fmt.Errorf("successor selected TLS did not use genuine native VLESS: %+v", selected)
+		}
+		for _, mode := range []string{"mismatch", "opaque"} {
+			flow := peers.clientRequest(t, ctx, mode, published.Answer)
+			marker := "native-domain-service"
+			if mode == "opaque" {
+				marker = "opaque-native-baseline"
+			}
+			if flow.Source != domainOriginalClient || flow.SourcePort == "" || flow.SourcePort != flow.ClientPort || flow.Marker != marker {
+				return fmt.Errorf("successor %s changed original baseline tuple: %+v", mode, flow)
+			}
 		}
 	}
 	stopRun()
@@ -120,7 +146,11 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
 		return errors.New("successor Stop retained native child")
 	}
-	for _, alias := range []string{oldAlias, published.Answer} {
+	lateAliases := []string{oldAlias}
+	if !unpublished {
+		lateAliases = append(lateAliases, newAlias)
+	}
+	for _, alias := range lateAliases {
 		late := peers.clientRequest(t, ctx, "selected", alias)
 		if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
 			return fmt.Errorf("cached alias %s lost original late-SYN tuple: %+v", alias, late)
@@ -128,6 +158,9 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	}
 	if err := owner.RetainStandby(ctx, history); err != nil {
 		return fmt.Errorf("successor same-owner standby handoff: %w", err)
+	}
+	if captured != nil {
+		*captured = owner
 	}
 	return nil
 }

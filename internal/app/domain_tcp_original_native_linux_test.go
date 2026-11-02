@@ -65,11 +65,23 @@ func TestDomainTCPOriginalNativeUnstartedKeeper(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeNeverIssuedKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
 	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
 	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
+	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
+	if neverIssuedSuccessor && (!coexist || initialCut != "") {
+		t.Fatal("never-issued successor requires distinct coexistence case")
+	}
 	if initialCut != "" && (!coexist || initialCut != "transaction" && initialCut != "global") {
 		t.Fatal("invalid initial publication cut case")
 	}
@@ -832,14 +844,63 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 					t.Fatal("fresh post-keeper blocked intent", err)
 				}
 			}
+			var neverIssuedOwner *dataplane.DomainTCPOriginalScope
+			secondCleanup, err := control.ReviewExclusiveCleanup(secondHeld)
+			if err != nil {
+				t.Fatal(err)
+			}
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
-				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias)
+				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
 			if err != nil {
 				t.Fatal("actual original successor/full selected workflow", err)
 			}
 			if version, _, err := dataplane.InspectRetainedExecutionReadVersion(secondHeld, manager.StateRoot); err != nil || version != 8 {
 				t.Fatal("coexistence requires actual reader8", version, err)
+			}
+			if neverIssuedSuccessor {
+				if neverIssuedOwner == nil {
+					t.Fatal("original never-issued owner missing")
+				}
+				if err := neverIssuedOwner.RetireUnpublishedStandby(secondHeld, secondCleanup); err != nil {
+					t.Fatal("actual never-issued successor COMMON retirement", err)
+				}
+				if err := neverIssuedOwner.RetireUnpublishedStandby(secondHeld, secondCleanup); err != nil {
+					t.Fatal("same actual retired ACK", err)
+				}
+				if err := manager.CheckExecutionRecovery(secondHeld); err != nil {
+					t.Fatal("retired successor keeper fresh absence", err)
+				}
+				late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+				if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+					t.Fatal("retirement changed original published alias", late)
+				}
+				secondRelease()
+				thirdCtx, stopThird := context.WithTimeout(ctx, 100*time.Second)
+				defer stopThird()
+				thirdHeld, thirdRelease, err := operations.ExclusiveContext(thirdCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer thirdRelease()
+				freshNow = time.Now().UTC()
+				scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+				thirdDomain, err := dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+				if err != nil {
+					t.Fatal(err)
+				}
+				thirdTransport := dataplane.CloneSyntheticDNSTransportPlan(transport)
+				thirdTransport.DomainPolicyDigest = thirdDomain.Digest
+				thirdPlan, err := dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: thirdDomain, SyntheticDNS: thirdTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+				if err != nil || thirdPlan.Ready {
+					t.Fatal("fresh post-retirement intent", err)
+				}
+				if err := manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(thirdHeld, control.Current), thirdPlan, history, detached, func(original context.Context) error {
+					return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, thirdPlan, service, nodeID, detached, retainedPublishedAlias, false, nil)
+				}); err != nil {
+					t.Fatal("original next source after never-issued suffix", err)
+				}
+				t.Log("actual never-issued successor source never sent DNS; SAME original COMMON Remove/receipts/kernel absence and metadata keeper; new original source continues closed full suffix, new selected service and old cached-alias baseline")
 			}
 			t.Log("actual two original generations: published old alias retained; successor DNS/native/capture/new selected TLS and old cached-alias TLS, both original tuples checked; no cold reconstruction or ordinary Apply grant")
 		}

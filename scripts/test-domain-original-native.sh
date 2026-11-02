@@ -66,6 +66,11 @@ case "${RAZVILKA_DOMAIN_DNS_COEXISTENCE:-0}" in
    transaction|global) domain_case=TestDomainTCPOriginalNativeUnstartedKeeper ;;
    *) exit 2 ;;
   esac
+  case "${RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR:-0}" in
+   0) ;;
+   1) test -z "${RAZVILKA_DOMAIN_INITIAL_ACK:-}" || exit 2; domain_case=TestDomainTCPOriginalNativeNeverIssuedKeeper ;;
+   *) exit 2 ;;
+  esac
   domain_test_timeout=240s ;;
  *) exit 2 ;;
 esac
