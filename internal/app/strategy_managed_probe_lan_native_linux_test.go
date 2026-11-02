@@ -426,7 +426,12 @@ func setupManagedProbeNativeLAN(t *testing.T, ctx context.Context) {
 	ip("-n", "rzwanpeer", "addr", "add", "8.8.8.8/24", "dev", "rzserver")
 	ip("-n", "rzwanpeer", "link", "set", "rzserver", "up")
 	ip("-n", "rzwanpeer", "route", "add", "192.168.77.0/24", "via", "8.8.8.1")
-	ip("link", "add", "rzhome", "type", "bridge")
+	// This disposable topology has no STP peers. Linux arms a forward-delay
+	// notification even for a forwarding port with STP disabled; configure the
+	// actual bridge before attaching ports so no setup timer crosses the later
+	// immutable physical capture. Production notification fences stay intact.
+	ip("link", "add", "rzhome", "type", "bridge", "stp_state", "0", "forward_delay", "0")
+	verifyManagedProbeNativeBridgeTimer(t, ctx)
 	ip("addr", "add", "192.168.77.1/24", "dev", "rzhome")
 	ip("link", "set", "rzhome", "up")
 	for i, name := range []string{"rzincluded", "rzexcluded"} {
@@ -498,5 +503,34 @@ func awaitManagedProbeNativeLANAddresses(t *testing.T, ctx context.Context) {
 			t.Fatal("actual fixture addresses remained tentative", settle.Err())
 		case <-time.After(25 * time.Millisecond):
 		}
+	}
+}
+
+// Observe the actual configured kernel bridge, never substitute classification
+// or manufacture a physical-scope snapshot.
+func verifyManagedProbeNativeBridgeTimer(t *testing.T, ctx context.Context) {
+	t.Helper()
+	read, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	raw, err := exec.CommandContext(read, "/usr/sbin/ip", "-d", "-j", "link", "show", "dev", "rzhome").Output()
+	if err != nil || len(raw) > 64<<10 {
+		t.Fatal("actual fixture bridge timer read", err)
+	}
+	var rows []struct {
+		IfName   string `json:"ifname"`
+		LinkInfo struct {
+			Kind string `json:"info_kind"`
+			Data struct {
+				STP          *uint64 `json:"stp_state"`
+				ForwardDelay *uint64 `json:"forward_delay"`
+			} `json:"info_data"`
+		} `json:"linkinfo"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil || len(rows) != 1 || rows[0].IfName != "rzhome" || rows[0].LinkInfo.Kind != "bridge" {
+		t.Fatal("actual fixture bridge identity", err)
+	}
+	d := rows[0].LinkInfo.Data
+	if d.STP == nil || d.ForwardDelay == nil || *d.STP != 0 || *d.ForwardDelay != 0 {
+		t.Fatal("actual fixture bridge retained a setup forwarding timer")
 	}
 }
