@@ -88,7 +88,10 @@ func TestDomainTCPStandbyGlobalReadRefusesInPlaceContentWithRestoredMetadata(t *
 // Real original journal writers/FD handoff, isolated from native authority.
 // This protocol fixture intentionally issues no original standby owner.
 func TestDomainTCPStandbyAliasRetainsOriginalGlobalWriter(t *testing.T) {
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "private-original")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	transaction := filepath.Join(root, "transactions", "dp-aaaaaaaaaaaaaaaa")
 	if err := os.MkdirAll(transaction, 0700); err != nil {
 		t.Fatal(err)

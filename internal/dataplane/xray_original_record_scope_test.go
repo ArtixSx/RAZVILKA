@@ -10,7 +10,10 @@ import (
 func TestXrayOriginalRecordsBindFiniteExecutionToOriginalPlan(t *testing.T) {
 	for _, kind := range []string{"apply", "finite", "foreign-resource-plan", "foreign-digest", "foreign-root", "missing-execution", "noncheck-resource"} {
 		t.Run(kind, func(t *testing.T) {
-			root := t.TempDir()
+			root := filepath.Join(t.TempDir(), "private-original")
+			if err := os.Mkdir(root, 0700); err != nil {
+				t.Fatal(err)
+			}
 			plan := Plan{PlanID: "dp-" + strings.Repeat("a", 16), Digest: strings.Repeat("a", 64)}
 			e := &Execution{PlanID: plan.PlanID, Digest: plan.Digest}
 			if kind != "apply" {

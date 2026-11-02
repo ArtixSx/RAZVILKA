@@ -126,13 +126,13 @@ func (m *Manager) CheckRetiredManagedNFQWSAbsence(ctx context.Context, cleanup *
 func (c *NetworkPolicyChecks) retiredNFQConsumer(ctx context.Context, a *NFQWS2Adapter, e *nfqws2ActiveExecution) error {
 	stock, err := c.stockQueueExecution(ctx)
 	if err != nil || stock == nil || stock.execution != e || e.material.adapter != a {
-		return errors.Join(ErrNetworkPolicyConsumers, err)
+		return lanPolicyPreflightAt("retire-nfq-stock", errors.Join(ErrNetworkPolicyConsumers, err))
 	}
 	e.mu.Lock()
 	retired, invoked, prepared, failure := e.retired, e.launchInvoked, e.prepared, e.preparationErr
 	e.mu.Unlock()
 	if !retired || errors.Is(failure, ErrExecutionJournal) {
-		return ErrNetworkPolicyConsumers
+		return lanPolicyPreflightAt("retire-nfq-terminal", ErrNetworkPolicyConsumers)
 	}
 	r := e.resource
 	if r != nil {

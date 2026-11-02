@@ -31,6 +31,8 @@ func LANPolicyPreflightFailureStage(err error) string {
 		return ""
 	}
 	switch failure.stage {
+	case "retire-nfq-stock", "retire-nfq-terminal":
+		return failure.stage
 	case "scope-open", "scope-close", "rpdb-read", "rpdb-syntax", "rpdb-reserved-priority", "rpdb-goto-anchor", "rpdb-gate-mark", "rpdb-owned-table", "table-read", "table-owned-chain", "table-gate-mark", "table-connmark":
 		return failure.stage
 	case "runtime-plan", "runtime-tools", "runtime-scope-missing", "boundary-identity", "boundary-plan", "boundary-physical", "boundary-apply", "boundary-cleanup", "boundary-retire", "boundary-inventory":
