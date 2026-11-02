@@ -57,11 +57,26 @@ func (r *XrayDomainTCPExecutionResource) retainPoolListenerWitness(ctx context.C
 }
 
 func (w *domainTCPPoolListenerWitness) original(old *XrayDomainTCPExecutionResource) error {
-	if w == nil || w.self != w || w.cursor == nil || w.cursor.listener.Load() != w || w.cursor.original() != nil || w.resource == nil || w.resource.self != w.resource || w.resource.scope != w.cursor.scope || w.resource.records != w.cursor.records || w.resource.material == nil || w.resource.material.self != w.resource.material || w.resource.material.resource != w.resource || w.resource.material.control != w.control || w.control == nil || w.resource.child != w.process || w.process == nil || w.process.self != w.process || w.resource.birth != w.birth || w.birth == nil || !w.frozenBirth.same(*w.birth) || w.resource.executable == nil || w.resource.executable.file != w.executable || w.resource.config != w.config || w.ctx == nil || !sameNetworkPolicyDependency(w.ctx, w.cursor.scope.ctx) || w.ctx.Err() != nil || w.resource.definition.PrivateEndpoint != w.endpoint || w.inode == 0 || w.resource.descriptorsClosed.Load() || old == nil || old.self != old || old == w.resource || old.child == nil || old.child == w.process || old.scope == nil || old.scope.manager != w.cursor.pool.manager || old.definition.PrivateEndpoint != w.endpoint || old.definition.NetworkIdentity != w.resource.definition.NetworkIdentity {
+	return w.originalAssociation(old, nil, nil)
+}
+
+// Failed cleanup may compare immutable original association after its forward
+// operation ended. It cannot revive that admission or attribute a live socket.
+func (w *domainTCPPoolListenerWitness) originalAssociation(old *XrayDomainTCPExecutionResource, ctx context.Context, cleanup *domainTCPFailureCleanup) error {
+	if w == nil || w.self != w || w.cursor == nil || w.cursor.listener.Load() != w || w.cursor.original() != nil || w.resource == nil || w.resource.self != w.resource || w.resource.scope != w.cursor.scope || w.resource.records != w.cursor.records || w.resource.material == nil || w.resource.material.self != w.resource.material || w.resource.material.resource != w.resource || w.resource.material.control != w.control || w.control == nil || w.resource.child != w.process || w.process == nil || w.process.self != w.process || w.resource.birth != w.birth || w.birth == nil || !w.frozenBirth.same(*w.birth) || w.resource.executable == nil || w.resource.executable.file != w.executable || w.resource.config != w.config || w.ctx == nil || !sameNetworkPolicyDependency(w.ctx, w.cursor.scope.ctx) || w.resource.definition.PrivateEndpoint != w.endpoint || w.inode == 0 || w.resource.descriptorsClosed.Load() || old == nil || old.self != old || old == w.resource || old.child == nil || old.child == w.process || old.scope == nil || old.scope.manager != w.cursor.pool.manager || old.definition.PrivateEndpoint != w.endpoint || old.definition.NetworkIdentity != w.resource.definition.NetworkIdentity {
 		return ErrXrayDomainTCPOriginal
 	}
-	if w.cursor.admission == nil || w.cursor.admission.current(w.cursor, w.cursor.scope.ctx) != nil {
+	if cleanup == nil {
+		if w.ctx.Err() != nil || w.cursor.admission == nil || w.cursor.admission.current(w.cursor, w.cursor.scope.ctx) != nil {
+			return ErrXrayDomainTCPOriginal
+		}
+	} else if cleanup.cursor != w.cursor || cleanup.resource != w.resource || cleanup.local(ctx, w.resource) != nil {
 		return ErrXrayDomainTCPOriginal
+	} else {
+		a := w.cursor.admission
+		if a == nil || a.self != a || a.cursor != w.cursor || a.manager != w.cursor.scope.manager || a.digest != w.cursor.scope.plan.Digest || !sameNetworkPolicyDependency(a.request, w.cursor.request) {
+			return ErrXrayDomainTCPOriginal
+		}
 	}
 	if w.resource.definition.NetworkIdentity.Validate() != nil || w.frozenBirth.network != w.resource.definition.NetworkIdentity || old.birth == nil || old.birth.network != old.definition.NetworkIdentity || old.child.self != old.child {
 		return ErrXrayDomainTCPOriginal
@@ -85,6 +100,42 @@ func (w *domainTCPPoolListenerWitness) original(old *XrayDomainTCPExecutionResou
 		return ErrXrayDomainTCPOriginal
 	}
 	return nil
+}
+
+// Only this original failed cleanup can use an expired witness to reach an
+// actual GLOBAL absence read after the exact child's sole Wait. No positive
+// listener attribution, forward operation or native effect accepts this path.
+func (w *domainTCPPoolListenerWitness) cleanupAbsent(ctx context.Context, old *XrayDomainTCPExecutionResource) error {
+	if w == nil || w.resource == nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	cleanup, err := w.resource.failureCleanup(ctx)
+	if err != nil || cleanup == nil {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	check := func() error {
+		if err := w.originalAssociation(old, ctx, cleanup); err != nil {
+			return err
+		}
+		if err := w.process.Joined(ctx); err != nil {
+			return err
+		}
+		s, m := w.resource.scope, w.resource.scope.manager
+		m.registryMu.RLock()
+		registered := m.registryGeneration == s.registryGeneration && sameNetworkPolicyDependency(m.Adapters[s.adapter], s.adapterOwner) && s.adapterOwner == w.resource.material.adapter
+		m.registryMu.RUnlock()
+		if !registered || m.executionNetworkIdentity() != s.networkIdentity {
+			return ErrXrayDomainTCPOriginal
+		}
+		w.resource.material.mu.Lock()
+		err := w.resource.material.metadataIdentityCurrentLocked()
+		w.resource.material.mu.Unlock()
+		return errors.Join(err, w.resource.filesCurrent(ctx), w.cursor.records.current(ctx, false), w.authoredProcessRecordForCleanup(ctx, cleanup), cleanup.control.CurrentForCleanupOperation(ctx, cleanup.cleanup), ctx.Err())
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	return errors.Join(old.observeDomainListenerAbsent(ctx), check())
 }
 
 func (w *domainTCPPoolListenerWitness) current(ctx context.Context, old *XrayDomainTCPExecutionResource) error {
@@ -137,7 +188,17 @@ func (w *domainTCPPoolListenerWitness) current(ctx context.Context, old *XrayDom
 // Both images are from the actual original sink. Allow the publisher's own
 // partial phase transition, never a reopened path or another resource record.
 func (w *domainTCPPoolListenerWitness) authoredProcessRecord() error {
+	return w.authoredProcessRecordForCleanup(nil, nil)
+}
+
+func (w *domainTCPPoolListenerWitness) authoredProcessRecordForCleanup(ctx context.Context, cleanup *domainTCPFailureCleanup) error {
+	if w == nil || w.self != w || w.cursor == nil || w.cursor.records == nil || w.resource == nil || w.resource.self != w.resource {
+		return ErrExecutionJournal
+	}
 	d, r := w.cursor.records, w.resource
+	if cleanup != nil && (cleanup.cursor != w.cursor || cleanup.resource != r || cleanup.local(ctx, r) != nil) {
+		return ErrExecutionJournal
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	wanted, err := json.Marshal(r.definition)
@@ -153,7 +214,11 @@ func (w *domainTCPPoolListenerWitness) authoredProcessRecord() error {
 		for _, row := range e.Resources {
 			if row.ID == r.id {
 				actual, e := json.Marshal(row.XrayDomainTCP)
-				if e != nil || row.Kind != "xray-domain-tcp" || row.State != "prepared" || row.Phase != "process-pending" && row.Phase != "listener-ready" || row.EffectsDigest != r.definition.ConfigSHA256 || row.Generation != r.definition.Domain.Generation || !bytes.Equal(wanted, actual) {
+				phase := row.State == "prepared" && (row.Phase == "process-pending" || row.Phase == "listener-ready")
+				if cleanup != nil && row.State == "removed" && row.Phase == "removed" {
+					phase = true // SAME original child already joined; still no listener attribution.
+				}
+				if e != nil || row.Kind != "xray-domain-tcp" || !phase || row.EffectsDigest != r.definition.ConfigSHA256 || row.Generation != r.definition.Domain.Generation || !bytes.Equal(wanted, actual) {
 					return ErrExecutionJournal
 				}
 				found++
@@ -188,6 +253,9 @@ func (p *XrayDomainTCPExecutionResource) observeRetainedDomainListener(ctx conte
 	w := c.listener.Load()
 	if w == nil || w.resource == p || w.endpoint != p.definition.PrivateEndpoint {
 		return p.observeDomainListenerAbsent(ctx)
+	}
+	if domainTCPFailureCleanupOwner(ctx, c.scope) {
+		return w.cleanupAbsent(ctx, p)
 	}
 	if err := w.original(p); err != nil {
 		return err
