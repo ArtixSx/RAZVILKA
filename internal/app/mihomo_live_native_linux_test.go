@@ -439,6 +439,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
 		}
 		if !handled || !outcome.LiveApplied || a.mihomoProbe.liveStop != nil {
+			if cursor := a.mihomoProbe.liveStop; cursor != nil {
+				t.Logf("native_stop_failure app_phase=%s phases=%v canceled=%t deadline=%t source_owner_unavailable=%t", cursor.stage, dataplane.MihomoLiveStopFailurePhases(cursor.lastFailure), errors.Is(cursor.lastFailure, context.Canceled), errors.Is(cursor.lastFailure, context.DeadlineExceeded), errors.Is(cursor.lastFailure, components.ErrMihomoLiveOwner))
+			}
 			cancelStop()
 			t.Fatal("actual original Stop/retry", outcome)
 		}
