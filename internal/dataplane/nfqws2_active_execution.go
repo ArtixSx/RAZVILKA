@@ -330,10 +330,15 @@ func (e *nfqws2ActiveExecution) process(ctx context.Context, p *NFQWSScopedPlan,
 }
 
 func (e *nfqws2ActiveExecution) verifyLAN(ctx context.Context, lan *LANPolicyRuntimePlan) error {
-	if e == nil || e.binding == nil || e.resource == nil || !reflect.DeepEqual(lan, e.plan.LAN) {
+	if e == nil || !reflect.DeepEqual(lan, e.plan.LAN) {
 		return ErrNFQWSScopedOwner
 	}
 	ctx = networkPolicyConsumerContext(ctx, e.plan)
+	// Activation's pre-Acquire LAN review precedes the original binding.
+	// Keep its full existing observation path until that producer exists.
+	if e.binding == nil || e.resource == nil {
+		return e.verifyLANObserved(ctx, lan)
+	}
 	// Prepared-owner verification uses a deliberate readonly binding copy.
 	// Borrow only from this execution's original binding around these pure
 	// receipt/LAN/inventory reads; no result crosses the enclosing callback.
