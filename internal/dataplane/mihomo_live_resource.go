@@ -6,6 +6,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // Only an original operation binds this resource to the same registered
@@ -45,4 +46,7 @@ type mihomoLiveResource struct {
 	filesMu          sync.Mutex
 	compiledRoot     *ownedfs.Root
 	compiledFiles    map[string]*mihomoLiveSidecarIdentityFile
+	historyAdmission *updatecheck.ExecutionHistoryAdmission
+	transitHistory   *mihomoTransitArchiveCursor // Serialized original Manager operation only.
+	historyIDs       map[string]struct{}         // Scope.mu; inert non-reuse tombstones.
 }

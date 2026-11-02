@@ -74,14 +74,16 @@ type executionResourceScope struct {
 }
 
 type executionTransitResource struct {
-	spec     NodeTransitSpec
-	root     string
-	relative string
-	anchor   os.FileInfo
-	digest   string
-	effects  string
-	readback networkPolicyTransitReadback
-	admitted bool
+	finished      bool // Same original synchronous probe and deferred cleanup joined.
+	unusedSettled bool // Only original one-shot unused readback + durable settlement ACK.
+	spec          NodeTransitSpec
+	root          string
+	relative      string
+	anchor        os.FileInfo
+	digest        string
+	effects       string
+	readback      networkPolicyTransitReadback
+	admitted      bool
 }
 
 func (m *Manager) newExecutionResourceScope(ctx context.Context, plan Plan, adapter string, execution *Execution, root string) (*executionResourceScope, error) {
@@ -279,6 +281,11 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 	if err != nil {
 		return nodeTransitRegistration{}, executionJournalError(err)
 	}
+	if s.mihomoLive != nil {
+		if _, archived := s.mihomoLive.historyIDs[filepath.Base(relative)]; archived {
+			return nodeTransitRegistration{}, ErrExecutionJournal
+		}
+	}
 	anchor, err := s.owned.Stat(relative)
 	if err != nil {
 		return nodeTransitRegistration{}, executionJournalError(err)
@@ -297,7 +304,12 @@ func (s *executionResourceScope) issueTransit(ctx context.Context, spec NodeTran
 		}
 	}
 	s.issued[filepath.Base(relative)] = resource
+	var finished func() error
+	if s.mihomoLive != nil {
+		finished = func() error { return s.finishMihomoTransit(resource) }
+	}
 	return nodeTransitRegistration{root: resource.root,
+		finished: finished,
 		register: func(c context.Context, got NodeTransitSpec, root, digest string) error {
 			return s.registerTransit(c, resource, got, root, digest)
 		},
@@ -459,7 +471,11 @@ func (s *executionResourceScope) settleTransit(ctx context.Context, resource *ex
 		return err
 	}
 	s.execution.Resources[index].State = string(mode)
-	return s.persist()
+	err = s.persist()
+	if err == nil && mode == networkPolicyTransitUnused {
+		resource.unusedSettled = true
+	}
+	return err
 }
 
 func (s *executionResourceScope) close() error {

@@ -33,6 +33,9 @@ func (m *Manager) StopMihomoLive(ctx context.Context, cleanup *operationgate.Exc
 	if r == nil || r.self != r || r.scope == nil {
 		return nil, errMihomoLiveMaterial
 	}
+	if err := r.resumeTransitArchive(ctx, cleanup); err != nil {
+		return nil, err
+	}
 	r.scope.mu.Lock()
 	pending := r.scope.pending
 	r.scope.mu.Unlock()

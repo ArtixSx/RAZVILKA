@@ -254,6 +254,15 @@ func (m *Manager) CheckMihomoLive(ctx context.Context) error {
 	if r == nil {
 		return errMihomoLiveMaterial
 	}
+	if r.transitHistory != nil {
+		cleanup, err := r.control.ReviewExclusiveCleanup(ctx)
+		if err != nil {
+			return err
+		}
+		if err := r.resumeTransitArchive(ctx, cleanup); err != nil {
+			return err
+		}
+	}
 	c, end, err := r.operation(ctx, nil, true)
 	if err != nil {
 		return err

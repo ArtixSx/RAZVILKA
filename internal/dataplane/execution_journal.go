@@ -57,6 +57,11 @@ func (m *Manager) checkExecutionRecovery() error {
 	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
+	// Until the original coexistence pool is bound, even a terminal/empty
+	// successor leaves prior real baseline footprints. Metadata cannot adopt them.
+	if latest.DomainDNSCoexistence != nil {
+		return executionJournalError(ErrPolicyAdditionUnknown)
+	}
 	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
 	case "committed", "rolled-back", "canary-failed", "network-stale", "temporary-complete":
@@ -170,6 +175,11 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
+	// Documentary transit archives have an exclusive transaction-only writer.
+	// They can never replace the current execution through the two-writer path.
+	if execution.MihomoTransitHistoryArchive != nil {
+		return ErrExecutionJournal
+	}
 	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
 		return executionJournalError(ErrExecutionJournal)
 	}
@@ -272,6 +282,9 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 }
 
 func executionHasNetworkIdentity(execution Execution) bool {
+	if execution.DomainDNSCoexistence != nil {
+		return true
+	}
 	for _, resource := range execution.Resources {
 		if resource.SyntheticBaseline != nil || resource.MihomoLive != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true

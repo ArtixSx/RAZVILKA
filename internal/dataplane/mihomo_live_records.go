@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/netip"
 	"reflect"
 	"time"
@@ -19,11 +20,20 @@ import (
 // original owners independently of both journal files.
 func (a *MihomoProbeAdapter) issueLive(ctx context.Context, source *components.MihomoLiveSource, node *NodeDefaultSourceReview, profile *components.MihomoLiveProfile, history *updatecheck.ExecutionHistoryAdmission, control, childControl *operationgate.ControlEpochReview, definition ExecutionMihomoLiveDefinition) (*mihomoLiveResource, error) {
 	if a == nil || a.self != a || xraySelectedTCPFinite(ctx) != nil || source == nil || node == nil || profile == nil || history == nil || control == nil || childControl == nil || control == childControl || control.Reference() != childControl.Reference() {
-		return nil, errMihomoLiveMaterial
+		return nil, fmt.Errorf("live issuer argument/control binding: %w", errMihomoLiveMaterial)
 	}
 	s, ok := ctx.Value(syntheticExecutionRegistrarKey{}).(*executionResourceScope)
-	if !ok || s == nil || s.mihomoProof || s.adapterOwner != a || s.adapter != "mihomo" || definition.validate() != nil || definition.Observation != nil || definition.NativeHome != nil || !reflect.DeepEqual(s.plan, definition.Plan) || !source.OwnedBy(a.components) || source.Reference() != definition.Source || node.Reference() != definition.Node {
-		return nil, errMihomoLiveMaterial
+	if !ok || s == nil || s.mihomoProof || s.adapterOwner != a || s.adapter != "mihomo" {
+		return nil, fmt.Errorf("live issuer original scope binding: %w", errMihomoLiveMaterial)
+	}
+	if definition.validate() != nil || definition.Observation != nil || definition.NativeHome != nil {
+		return nil, fmt.Errorf("live issuer frozen definition: %w", errMihomoLiveMaterial)
+	}
+	if !reflect.DeepEqual(s.plan, definition.Plan) {
+		return nil, fmt.Errorf("live issuer frozen plan comparison: %w", errMihomoLiveMaterial)
+	}
+	if !source.OwnedBy(a.components) || source.Reference() != definition.Source || node.Reference() != definition.Node {
+		return nil, fmt.Errorf("live issuer original source references: %w", errMihomoLiveMaterial)
 	}
 	// Admit the typed reader before the first journal containing its intent.
 	if err := history.CheckWrite(ctx, 6); err != nil {
@@ -48,19 +58,22 @@ func (a *MihomoProbeAdapter) issueLive(ctx context.Context, source *components.M
 	if err != nil {
 		return nil, err
 	}
-	r := &mihomoLiveResource{adapter: a, scope: s, source: source, node: node, profile: profile, control: control, childControl: childControl, definition: definition.Clone(), id: "ml-" + hex.EncodeToString(nonce[:]), records: records}
+	r := &mihomoLiveResource{adapter: a, scope: s, source: source, node: node, profile: profile, control: control, childControl: childControl, definition: definition.Clone(), id: "ml-" + hex.EncodeToString(nonce[:]), records: records, historyAdmission: history}
 	r.self = r
 	s.startMu.RLock()
 	defer s.startMu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.mihomoLive != nil || s.mihomo != nil || s.resourceCount() != 0 || s.checkOriginalOwner(ctx, nil, true, false) != nil {
-		return nil, errors.Join(errMihomoLiveMaterial, records.close())
+	if s.mihomoLive != nil || s.mihomo != nil || s.resourceCount() != 0 {
+		return nil, fmt.Errorf("live issuer existing scope slot: %w", errors.Join(errMihomoLiveMaterial, records.close()))
+	}
+	if s.checkOriginalOwner(ctx, nil, true, false) != nil {
+		return nil, fmt.Errorf("live issuer closing original scope: %w", errors.Join(errMihomoLiveMaterial, records.close()))
 	}
 	a.mu.Lock()
 	if a.pending != nil || a.livePending != nil || a.liveActive != nil {
 		a.mu.Unlock()
-		return nil, errors.Join(errMihomoLiveMaterial, records.close())
+		return nil, fmt.Errorf("live issuer existing adapter slot: %w", errors.Join(errMihomoLiveMaterial, records.close()))
 	}
 	a.livePending = r
 	a.mu.Unlock()
@@ -213,6 +226,12 @@ func (r *mihomoLiveResource) publishRecords(data []byte) error {
 	}
 	var result error
 	for i := range 2 {
+		if c := r.transitHistory; i == 1 && c != nil && c.self == c && c.owner == r && c.publishing && c.fault != nil {
+			if err := c.fault("origin-before-latest"); err != nil {
+				result = errors.Join(result, err)
+				continue // Refusal only; actual first writer ACK stays retained.
+			}
+		}
 		result = errors.Join(result, d.publishOriginalDurable(i, data, syncDataplaneJournalDirectory))
 	}
 	return result

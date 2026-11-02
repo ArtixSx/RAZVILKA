@@ -114,6 +114,11 @@ func (r *mihomoLiveResource) currentLive(ctx context.Context) error {
 	if err := r.currentBeforeStart(ctx); err != nil {
 		return err
 	}
+	// Do not consume more live rows while an already-full cohort cannot be
+	// archived (for example, a retained controller still has reader7).
+	if err := r.rotateMihomoTransit(ctx); err != nil {
+		return err
+	}
 	if err := r.liveOwnersReadOnly(ctx, nil); err != nil {
 		return err
 	}
@@ -233,6 +238,9 @@ func (r *mihomoLiveResource) currentLive(ctx context.Context) error {
 		}
 	}
 	if err := r.liveOwnersReadOnly(ctx, nil); err != nil {
+		return err
+	}
+	if err := r.rotateMihomoTransit(ctx); err != nil {
 		return err
 	}
 	return r.currentBeforeStart(ctx)

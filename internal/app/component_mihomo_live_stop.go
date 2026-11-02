@@ -132,7 +132,7 @@ func (a *App) executeMihomoServiceRuntime(parent context.Context, action string,
 		keep = false
 		return fail("SERVICE_RUNTIME_CHANGED", "Исходная транзакция возвращена. Обновите состояние перед следующим действием.")
 	}
-	if a.Dataplane.HasPendingMihomoLive() && a.mihomoProbe.liveStop == nil {
+	if a.Dataplane.HasPendingMihomoLive() && a.mihomoProbe.liveStop == nil && !a.Dataplane.HasPendingMihomoTransitHistory() {
 		return fail("SERVICE_RUNTIME_CHANGED", "Исходная операция возврата не сохранена. Требуется проверка восстановления после перезапуска.")
 	}
 	cursor := a.mihomoProbe.liveStop

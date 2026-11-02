@@ -255,46 +255,7 @@ func (a *ProxyTunnelAdapter) runRegisteredNodeRouterProbe(ctx context.Context, s
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithValue(context.WithoutCancel(ctx), nodeTransitCleanupKey{}, true), 10*time.Second)
 		defer cancel()
-		if isNodeTransitBeforeEffects(resultErr) {
-			// Only this live lease's one-shot proof permits metadata-only
-			// settlement. A crash, absent file, unknown ACK or new lease cannot.
-			if registration.settleUnused == nil {
-				return
-			}
-			if err := registration.cleanupGuard(cleanup); err != nil {
-				resultErr = errors.Join(resultErr, err)
-				return
-			}
-			if err := lease.VerifyUnused(cleanup); err != nil {
-				resultErr = errors.Join(resultErr, err)
-				return
-			}
-			if !errors.As(resultErr, &readback.unused) || readback.unused == nil || readback.unused.lease != lease {
-				resultErr = errors.Join(resultErr, ErrNodeTransitUnavailable)
-				return
-			}
-			if err := registration.settleUnused(cleanup, spec, registration.root, lease.digest); err != nil {
-				resultErr = errors.Join(resultErr, err)
-			}
-			return
-		}
-		if err := lease.Remove(cleanup); err != nil {
-			resultErr = errors.Join(resultErr, err)
-			return
-		}
-		status, err := lease.Inspect(cleanup)
-		if err != nil || !status.Removed || status.Unknown {
-			resultErr = errors.Join(resultErr, ErrNodeTransitUnavailable, err)
-			return
-		}
-		count, err := lease.presence(cleanup)
-		if err != nil || count != 0 {
-			resultErr = errors.Join(resultErr, ErrNodeTransitUnavailable, err)
-			return
-		}
-		if err := registration.settle(cleanup, spec, registration.root, lease.digest); err != nil {
-			resultErr = errors.Join(resultErr, err)
-		}
+		resultErr = finishRegisteredNodeRouterProbe(cleanup, spec, registration, lease, readback, resultErr)
 	}()
 	if err := lease.Apply(ctx); err != nil {
 		return err
@@ -318,4 +279,51 @@ func (a *ProxyTunnelAdapter) runRegisteredNodeRouterProbe(ctx context.Context, s
 		return err
 	}
 	return verify(ctx, request, true)
+}
+
+// Invoked only by the synchronous original probe's defer, after its HTTPS
+// body has returned. A negative service result remains negative; this ACK
+// retires only joined original cleanup callbacks, never service evidence.
+func finishRegisteredNodeRouterProbe(cleanup context.Context, spec NodeTransitSpec, registration nodeTransitRegistration, lease *nodeTransitLease, readback *nodeRouterTransitReadback, resultErr error) error {
+	if isNodeTransitBeforeEffects(resultErr) {
+		// Only this live lease's one-shot proof permits metadata-only
+		// settlement. A crash, absent file, unknown ACK or new lease cannot.
+		if registration.settleUnused == nil {
+			return resultErr
+		}
+		if err := registration.cleanupGuard(cleanup); err != nil {
+			return errors.Join(resultErr, err)
+		}
+		if err := lease.VerifyUnused(cleanup); err != nil {
+			return errors.Join(resultErr, err)
+		}
+		if !errors.As(resultErr, &readback.unused) || readback.unused == nil || readback.unused.lease != lease {
+			return errors.Join(resultErr, ErrNodeTransitUnavailable)
+		}
+		if err := registration.settleUnused(cleanup, spec, registration.root, lease.digest); err != nil {
+			return errors.Join(resultErr, err)
+		}
+		if registration.finished != nil {
+			resultErr = errors.Join(resultErr, registration.finished())
+		}
+		return resultErr
+	}
+	if err := lease.Remove(cleanup); err != nil {
+		return errors.Join(resultErr, err)
+	}
+	status, err := lease.Inspect(cleanup)
+	if err != nil || !status.Removed || status.Unknown {
+		return errors.Join(resultErr, ErrNodeTransitUnavailable, err)
+	}
+	count, err := lease.presence(cleanup)
+	if err != nil || count != 0 {
+		return errors.Join(resultErr, ErrNodeTransitUnavailable, err)
+	}
+	if err := registration.settle(cleanup, spec, registration.root, lease.digest); err != nil {
+		return errors.Join(resultErr, err)
+	}
+	if registration.finished != nil {
+		resultErr = errors.Join(resultErr, registration.finished())
+	}
+	return resultErr
 }
