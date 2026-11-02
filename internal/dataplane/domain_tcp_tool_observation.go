@@ -77,3 +77,28 @@ func (r *syntheticBaselineExecutionResource) observeOriginalFiles(ctx context.Co
 	}
 	return process.withCurrentFileObservation(ctx, use)
 }
+
+// Only the pure standby Guard uses this narrower byte bracket. currentWithFiles
+// already performs BOTH original capture/process Currents, including their
+// independent material/control/metadata/config/listener reads. Share only the
+// immutable executable SHA across those same two calls, never a Start/effect.
+func (r *syntheticBaselineExecutionResource) currentInOriginalFileObservation(ctx context.Context) error {
+	if err := r.local(ctx); err != nil {
+		return err
+	}
+	if r.capture == nil || r.capture.xray == nil || r.capture.xray.resource == nil {
+		return r.current(ctx) // Existing modeled/generic producers keep full path.
+	}
+	capture, xray := r.capture, r.capture.xray
+	process := xray.resource
+	if capture.self != capture || process.self != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
+		return ErrSyntheticBaselineTransition
+	}
+	result := process.withFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+		return r.currentWithFiles(ctx, files)
+	})
+	if r.capture != capture || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
+		return errors.Join(result, ErrSyntheticBaselineTransition)
+	}
+	return result
+}

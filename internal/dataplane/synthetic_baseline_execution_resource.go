@@ -232,7 +232,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 			defer domainTCPMeasure("standby-add-guard")(0)
 			c, finish := domainTCPMeasurePureGuard(c, "standby-guard")
 			defer finish()
-			return r.observeTools(c, r.current)
+			return r.observeTools(c, r.currentInOriginalFileObservation)
 		},
 	}
 	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
