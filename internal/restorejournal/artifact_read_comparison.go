@@ -30,6 +30,7 @@ type ArtifactSourceComparison struct {
 	ctx           context.Context
 	open          bool
 	hashed        *os.File
+	managedHeld   *os.File // Optional exact managed hash FD, retained by expected-image reader.
 	poolName      string
 	pool, managed artifactReadFileID
 }
@@ -180,6 +181,13 @@ func (p *ArtifactSourceComparison) currentLocked() error {
 	managedID, managedIDErr := artifactReadFingerprint(managed)
 	poolID, poolIDErr := artifactReadFingerprint(pool)
 	hashID, hashIDErr := artifactReadFingerprint(hashed)
+	if p.managedHeld != nil {
+		held, err := p.managedHeld.Stat()
+		id, idErr := artifactReadFingerprint(held)
+		if err != nil || idErr != nil || id != p.managed {
+			return errors.Join(ErrConflict, err, idErr)
+		}
+	}
 	if managedErr != nil || poolErr != nil || hashErr != nil || managedIDErr != nil || poolIDErr != nil || hashIDErr != nil || managedID != p.managed || poolID != p.pool || hashID != p.pool || !existingOwner(managed, false) || !existingOwner(pool, false) || !existingOwner(hashed, false) {
 		return errors.Join(ErrConflict, managedErr, poolErr, hashErr, managedIDErr, poolIDErr, hashIDErr)
 	}
