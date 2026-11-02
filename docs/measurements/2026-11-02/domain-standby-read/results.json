@@ -1,0 +1,53 @@
+{
+  "claim": "Within each pure standby Guard, full executable hash attempts reduced from four to two; both original process Current observations remain. Failed selected publication timings are not a workflow speedup. Native classification modeled, actual Linux source and process checks.",
+  "rows": [
+    {
+      "phase": "before",
+      "commit": "92a27d44ed68e8b8d1304af812dc944c51b46789",
+      "run": 41399605475,
+      "job": 125128340277,
+      "raw_sha256": "3f6a0ec8e56989e97a6401d25b1f4da8278a5651d1007f4f7a5ea1148a1ac2cb",
+      "observations": [
+        {
+          "full_hash_attempts_each": 4,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        },
+        {
+          "full_hash_attempts_each": 4,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        },
+        {
+          "full_hash_attempts_each": 4,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        }
+      ]
+    },
+    {
+      "phase": "after",
+      "commit": "ac6760f88d7b5a19daa7be817fa2b6d109e4b3d9",
+      "run": 41402716832,
+      "job": 125137837588,
+      "raw_sha256": "980469cece018484b90c73e9891d333d0aaf2b0b018e538134f02028566c829e",
+      "observations": [
+        {
+          "full_hash_attempts_each": 2,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        },
+        {
+          "full_hash_attempts_each": 2,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        },
+        {
+          "full_hash_attempts_each": 2,
+          "process_current_attempts_each": 2,
+          "guard_count": 13
+        }
+      ]
+    }
+  ]
+}

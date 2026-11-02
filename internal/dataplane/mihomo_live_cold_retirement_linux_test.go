@@ -49,6 +49,15 @@ func mihomoLiveColdRetirementFixture(t *testing.T) (*Manager, *ProxyTunnelAdapte
 	if err := os.WriteFile(a.engineProcess().LogPath, []byte("original native log retained"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// Exercise the actual producer wrapper in metadata archival too. This
+	// writes only the historical manifest; native absence is still modeled.
+	lease := proxyForwardingLease{Version: 1, Policy: e.Resources[0].MihomoLive.Policy}
+	for _, table := range proxyFirewallTables(lease.Policy) {
+		lease.Created = append(lease.Created, proxyFirewallTableKey(table))
+	}
+	if err := a.writeForwardingLease(lease); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	t.Cleanup(cancel)
 	identity := e.Resources[0].MihomoLive.NetworkIdentity

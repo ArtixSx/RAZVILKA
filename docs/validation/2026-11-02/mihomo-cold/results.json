@@ -50,5 +50,43 @@
       "2026-11-02T06:33:52.8433946Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (131.11s)",
       "2026-11-02T06:35:10.9086719Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (75.76s)"
     ]
+  },
+  {
+    "mode": "normal",
+    "job": 125153190921,
+    "run": 41407641893,
+    "sha": "aa51116301e8c8c59137e62cd0082b91cd34c9ff",
+    "scope": "Actual forwarding producer format now included; actual current sources, five private leases and CLI. Historical old boot remains modeled; previous fixture omitted forwarding manifest. No same-boot or hardware acceptance.",
+    "raw_sha256": "0743b184698b3c804cbbce63ea4f65dcaa302df5c15cd15aa8ee401461f60e49",
+    "evidence": [
+      "2026-11-02T07:40:14.5286920Z --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip (0.00s)",
+      "2026-11-02T07:40:14.5287276Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/bare (0.00s)",
+      "2026-11-02T07:40:14.5287646Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/version (0.00s)",
+      "2026-11-02T07:40:14.5288021Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/policy (0.00s)",
+      "2026-11-02T07:40:14.5288411Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-table (0.00s)",
+      "2026-11-02T07:40:14.5288807Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/duplicate (0.00s)",
+      "2026-11-02T07:40:14.5289213Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-field (0.00s)",
+      "2026-11-02T07:42:25.7039267Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (51.67s)",
+      "2026-11-02T07:42:55.9827389Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (30.08s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125153191245,
+    "run": 41407641893,
+    "sha": "aa51116301e8c8c59137e62cd0082b91cd34c9ff",
+    "scope": "Actual forwarding producer format now included; actual current sources, five private leases and CLI. Historical old boot remains modeled; previous fixture omitted forwarding manifest. No same-boot or hardware acceptance.",
+    "raw_sha256": "732ea4b6ba10a17664c72e4bbab0cdfe484385008ce01713e1b009ddf6f30c90",
+    "evidence": [
+      "2026-11-02T07:41:44.0305747Z --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip (0.02s)",
+      "2026-11-02T07:41:44.0306385Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/bare (0.00s)",
+      "2026-11-02T07:41:44.0307050Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/version (0.00s)",
+      "2026-11-02T07:41:44.0307726Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/policy (0.00s)",
+      "2026-11-02T07:41:44.0308441Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-table (0.00s)",
+      "2026-11-02T07:41:44.0309154Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/duplicate (0.00s)",
+      "2026-11-02T07:41:44.0310098Z     --- PASS: TestMihomoColdRuntimeActualForwardingProducerRoundtrip/unknown-field (0.00s)",
+      "2026-11-02T07:46:00.1196793Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (117.76s)",
+      "2026-11-02T07:47:10.8468379Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (68.43s)"
+    ]
   }
 ]
