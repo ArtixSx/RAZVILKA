@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,10 @@ import (
 // Only the WAN label/platform classification are modeled; no service/health,
 // command ACK, process ownership, routing result or cleanup is injected.
 func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
+	runMihomoLiveOriginalNativeWorkflow(t, false)
+}
+
+func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if os.Getenv("RAZVILKA_MIHOMO_LIVE_NATIVE") != "1" {
 		t.Skip("disposable original live native workflow")
 	}
@@ -87,6 +92,13 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 	cfg := config.Default()
 	cfg.SafeMode = false
 	cfg.Services = map[string]config.ServiceState{service.ID: {Enabled: true, Route: selected, Sources: []string{domainOriginalClient + "/32"}}}
+	if degradeAfterCAS {
+		// The failed manual selection must restore a genuinely different old
+		// desired route, not just roll back its revision/timestamp metadata.
+		before := cfg.Services[service.ID]
+		before.Route, before.Mode = "direct", "direct"
+		cfg.Services[service.ID] = before
+	}
 	cfgPath := filepath.Join(peers.root, "live-config.json")
 	raw, _ := json.Marshal(cfg)
 	if err = os.WriteFile(cfgPath, raw, 0600); err != nil {
@@ -212,7 +224,11 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 	if baseline.Source != domainOriginalClient {
 		t.Fatal("physical baseline source", baseline)
 	}
-	for round := 0; round < 2; round++ {
+	rounds := 2
+	if degradeAfterCAS {
+		rounds = 1
+	}
+	for round := 0; round < rounds; round++ {
 		apply, cancelApply := context.WithTimeout(lifetime, 110*time.Second)
 		actual, release, err := a.Operations.ExclusiveContext(apply)
 		if err != nil {
@@ -249,6 +265,7 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		}
 		binding := &mihomoNodeBinding{app: a, store: store, node: source, before: current, catalog: mihomoNodeCatalogClone(a.catalogSnapshot()), plan: plan, service: frozenService, profile: plan.NetworkProfileID}
 		binding.self = binding
+		var actualCAS atomic.Bool
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
 		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -257,7 +274,12 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 			bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
 			bounded = dataplane.WithReviewGuard(bounded, binding.current)
 			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
-				return binding.commit(bounded)
+				undo, err := binding.commit(bounded)
+				if err == nil && degradeAfterCAS {
+					err = mihomoLiveNativeDegradeAfterCAS(peers, binding)
+					actualCAS.Store(err == nil)
+				}
+				return undo, err
 			})
 			for _, step := range execution.Steps {
 				start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
@@ -298,6 +320,10 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		response.Body.Close()
 		server.Close()
 		cancelApply()
+		if degradeAfterCAS {
+			assertMihomoLivePostCASFailure(t, lifetime, a, peers, cfgPath, current, binding, actualCAS.Load(), reply.Execution, reply.Error, response.StatusCode, decodeErr)
+			return
+		}
 		if decodeErr != nil || response.StatusCode != http.StatusOK || reply.Execution.State != "committed" {
 			t.Fatal("actual native App admission/Apply", reply.Execution, reply.Error, response.StatusCode, decodeErr)
 		}

@@ -63,6 +63,17 @@ jobs:
           name: mihomo-live-cpu-${{ github.sha }}
           path: artifacts/mihomo-live-profile
           if-no-files-found: warn
+      - name: Actual post-CAS required TLS rejection and exact desired undo
+        if: always() && !cancelled()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-postcas-native.sh
       - name: Original read observation bookends with official child, normal and race
         if: always() && !cancelled()
         shell: bash

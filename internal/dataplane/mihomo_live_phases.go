@@ -201,7 +201,10 @@ func (a *MihomoProbeAdapter) liveCommit(ctx context.Context, p Plan, root string
 	if err = r.proxy.savePolicyJournal(r.definition.Policy, true); err != nil {
 		return err
 	}
-	return r.currentLive(ctx)
+	// The original Manager still performs mandatory TUN HTTPS in
+	// prepareActiveMihomo AFTER config CAS and before ACTIVE/publication.
+	// Do not issue or reuse service evidence across that callback.
+	return r.currentPromotedStructure(ctx)
 }
 func (a *MihomoProbeAdapter) liveRollback(ctx context.Context, p Plan, root string) error {
 	r, err := a.phaseResource(ctx, p, root)
