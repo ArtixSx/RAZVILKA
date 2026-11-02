@@ -950,12 +950,14 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 					retireErr := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure)
 					if failedACK != "" && failedACK != "process" {
 						if !errors.Is(retireErr, dataplane.ErrNativeDomainFailureACK) {
+							domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 							t.Fatal("actual failed retirement ACK cut missing", retireErr)
 						}
 						if err := manager.CheckExecutionRecovery(secondHeld); err == nil {
 							t.Fatal("partial failed retirement released custody")
 						}
 					} else if retireErr != nil {
+						domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 						t.Fatal("original failed ready generation retirement", retireErr)
 					}
 					if err := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure); err != nil {

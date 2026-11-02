@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 )
 
@@ -50,7 +51,7 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 		cursor.capture = r
 	}
 	if err := r.cleanupCurrent(ctx); err != nil {
-		return err
+		return fmt.Errorf("domain capture cleanup opening: %w", err)
 	}
 	if err := r.capture.retirement.Joined(ctx); err != nil {
 		return err
@@ -91,7 +92,7 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 		return receipt.current()
 	}
 	if err := checkStandby(ctx); err != nil {
-		return err
+		return fmt.Errorf("domain capture restorative dependency: %w", err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -121,7 +122,7 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 			return checkStandby(c)
 		}}
 	if err := RemovePolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
-		return err
+		return fmt.Errorf("domain capture original removal: %w", err)
 	}
 	receipt, err := observeNetworkPolicyEffects(ctx, r.effects, r.root, policyAdditionOptions{})
 	defer receipt.close()

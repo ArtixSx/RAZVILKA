@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -70,11 +71,11 @@ func (r *domainTCPFailureCleanup) restoreOriginalStandby(ctx context.Context, hi
 	// capture removal. A remembered standbyReady bit is never a substitute.
 	if r.standby == nil {
 		if err := o.finishCapture(ctx, p); err != nil && err != dnscontrol.ErrSyntheticDNSTransitionPending {
-			return err
+			return fmt.Errorf("domain restore original source/capture: %w", err)
 		}
 	}
 	if err := o.standbyCurrent(ctx); err != nil {
-		return err
+		return fmt.Errorf("domain restore joined standby: %w", err)
 	}
 	if r.standby == nil {
 		owner := &domainTCPStandbyOwner{original: o, process: p, baseline: o.baseline}
