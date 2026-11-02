@@ -83,21 +83,21 @@ jobs:
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test -count=1 ./internal/startuptools ./internal/dataplane -run '^TestVersionReadBatch|^TestVersionBatch|^TestClassicReadBatch|^TestBackendInventoryBatch' -v
+            go test -count=1 ./internal/startuptools ./internal/dataplane -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestClassicReadBatch|^TestBackendInventoryBatch' -v
       - name: Same worker before and after actual managed consumer
         shell: bash
         run: |
           set -euo pipefail
           before_source="$RUNNER_TEMP/managed-probe-before"
-          git worktree add --detach "$before_source" b0d6db98be420e581909e439fb6ab53b10b8b102
+          git worktree add --detach "$before_source" ffb7f5201f75f94eb0b1949ce9c076470cb7d639
           before_status=0
-          echo '=== BEFORE5415 plus identical metadata attempt instrumentation; same worker ==='
+          echo '=== BEFORE static-fact; identical actual-child instrumentation and reviewed directory sync; same worker ==='
           (cd "$before_source" && sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh) || before_status=$?
           before_lan_status=0
           echo '=== BEFORE actual isolated full LAN workflow; same worker ==='
           (cd "$before_source" && sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh) || before_lan_status=$?
           after_status=0
-          echo '=== AFTER scoped duplicate-metadata removal; same worker ==='
+          echo '=== AFTER two static aliases inside original readonly source; fresh IP and kernel reads; same worker ==='
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh || after_status=$?
           lan_status=0
           echo '=== Actual Linux LAN topology/source boundary; separate private namespaces ==='
