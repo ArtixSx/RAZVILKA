@@ -60,7 +60,7 @@ func (a *ProxyTunnelAdapter) verifyRuntimeInactive(parent context.Context, proof
 	// Resource coordinates and commands are local startup intent, never loaded
 	// from a historical receipt. Custom or changed coordinates have no proof.
 	frozen := *a
-	owner, transitPriority, err := frozen.inactiveCoordinates()
+	owner, transitPriority, err := a.inactiveCoordinates()
 	if err != nil {
 		return refuse("adapter coordinates", err)
 	}
@@ -145,7 +145,11 @@ func (a *ProxyTunnelAdapter) inactiveCoordinates() (PolicyOwnershipSpec, int, er
 		return refuse(err)
 	}
 	for _, spec := range []ProcessSpec{a.engineProcess(), a.sidecarProcess()} {
-		if err := validateProxyInactiveProcessScope(spec); err != nil {
+		validate := validateProxyInactiveProcessScope
+		if a.ID() == "mihomo" {
+			validate = a.validateMihomoInactiveProcessScope
+		}
+		if err := validate(spec); err != nil {
 			return refuse(err)
 		}
 	}
@@ -197,6 +201,10 @@ func (a *ProxyTunnelAdapter) inactiveProcessNames() ([]string, error) {
 // absence into permission to activate. Only trusted startup constructors supply
 // these specs; process identities are checked separately above.
 func validateProxyInactiveProcessScope(spec ProcessSpec) error {
+	return validateProxyInactiveProcessArgument(spec, spec.MatchArg)
+}
+
+func validateProxyInactiveProcessArgument(spec ProcessSpec, profileArgument string) error {
 	if spec.ID == "" || strings.ContainsAny(spec.ID, "/\\\x00\r\n") || !filepath.IsAbs(spec.Dir) ||
 		filepath.Clean(spec.Dir) != spec.Dir || spec.Dir == filepath.VolumeName(spec.Dir)+string(filepath.Separator) ||
 		len(spec.Args) == 0 || len(spec.Args) > 256 {
@@ -214,7 +222,7 @@ func validateProxyInactiveProcessScope(spec ProcessSpec) error {
 		if arg == "" || strings.ContainsRune(arg, '\x00') || bytes > 64<<10 {
 			return ErrProxyRuntimeInactive
 		}
-		matched = matched || arg == spec.MatchArg
+		matched = matched || arg == profileArgument
 	}
 	if !matched {
 		return ErrProxyRuntimeInactive

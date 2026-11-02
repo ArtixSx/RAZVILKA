@@ -37,6 +37,10 @@ func TestMihomoLiveHistoryRequiresReader6ForEveryRetainedPhase(t *testing.T) {
 		}
 	}
 	for _, phase := range []string{"reserved", "validation-pending", "process-pending", "listener-bound", "sidecar-pending", "closed", "removed", "unused"} {
+		d.NativeHome = mihomoLiveHomeFixture(t)
+		if phase == "unused" {
+			d.NativeHome = nil
+		}
 		e.Resources[0].Phase = phase
 		e.Resources[0].State = "prepared"
 		if phase == "removed" || phase == "unused" {
