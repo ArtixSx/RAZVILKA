@@ -276,7 +276,7 @@ func (l *nodeTransitLease) guard(ctx context.Context) error {
 
 func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 	return PolicyEffectRuntime{Runner: l.runtime.runner, Tools: PolicyEffectTools{IP: l.runtime.ip},
-		Guard: func(ctx context.Context, _ int) error { return l.guard(ctx) },
+		Guard: func(ctx context.Context, _ int) error { return nodeTransitPhase("effect-guard", l.guard(ctx)) },
 		Preflight: func(ctx context.Context) error {
 			if owner := l.runtime.sharedOwner; owner != nil {
 				if !owner.validFor(l) {
@@ -304,11 +304,21 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 			if index != 0 {
 				return 0, ErrNodeTransitUnavailable
 			}
-			return l.presence(ctx)
+			count, err := l.presence(ctx)
+			return count, nodeTransitPhase("effect-presence", err)
 		},
 		BeforeDelete: func(ctx context.Context, index int) error {
 			if index != 0 {
 				return ErrNodeTransitUnavailable
+			}
+			if owner := l.runtime.sharedOwner; owner != nil {
+				if !owner.validFor(l) {
+					return ErrNodeTransitUnavailable
+				}
+				// These roles are the same original check. There is no IO or
+				// callback between beforeDelete and guard; guard also keeps
+				// the actual boot/interface identity comparison.
+				return l.guard(ctx)
 			}
 			if err := l.runtime.beforeDelete(ctx, l.spec); err != nil {
 				return err
@@ -389,9 +399,24 @@ func (l *nodeTransitLease) Apply(ctx context.Context) error {
 	if err := applyPolicyEffects(ctx, runtime, l.plan, l.root, policyAdditionOptions{boot: l.options.boot, fault: l.options.fault}); err != nil {
 		return err
 	}
+	return l.verifyAppliedPresence(ctx)
+}
+
+func (l *nodeTransitLease) verifyAppliedPresence(ctx context.Context) error {
+	if owner := l.runtime.sharedOwner; owner != nil && !owner.validFor(l) {
+		return ErrNodeTransitUnavailable
+	}
 	count, err := l.presence(ctx)
 	if err != nil || count != 1 {
 		return errors.Join(ErrPolicyAdditionUnknown, ErrNodeTransitUnavailable, err)
+	}
+	if owner := l.runtime.sharedOwner; owner != nil {
+		if !owner.validFor(l) {
+			return ErrNodeTransitUnavailable
+		}
+		// presence has just completed this same full original guard after
+		// both-family reads. Only the count comparison intervenes here.
+		return ctx.Err()
 	}
 	return l.guard(ctx)
 }
