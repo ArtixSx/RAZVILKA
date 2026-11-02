@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,13 +241,46 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 			t.Fatal("genuine closed plan", plan.Blockers, err)
 		}
 		started := time.Now()
-		execution, err := a.applyDataplane(actual, plan, func() (func() error, error) {
-			return store.ApplyDraftScopeAtRevisionWithRollback(config.DraftScopeAll, current.Revision)
-		})
 		release()
+		// Exercise the real App operationScope/restoreAdmission borrower, rather
+		// than a bare Gate context that cannot transfer request ownership.
+		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			execution, applyErr := a.applyDataplane(r.Context(), plan, func() (func() error, error) {
+				return store.ApplyDraftScopeAtRevisionWithRollback(config.DraftScopeAll, current.Revision)
+			})
+			detail := ""
+			status := http.StatusOK
+			if applyErr != nil {
+				detail = applyErr.Error()
+				status = http.StatusConflict
+			}
+			writeJSON(w, status, struct {
+				Execution dataplane.Execution `json:"execution"`
+				Error     string              `json:"error"`
+			}{execution, detail})
+		})))
+		request, err := http.NewRequestWithContext(apply, http.MethodPost, server.URL+"/api/v1/apply", nil)
+		if err != nil {
+			server.Close()
+			cancelApply()
+			t.Fatal(err)
+		}
+		response, err := server.Client().Do(request)
+		if err != nil {
+			server.Close()
+			cancelApply()
+			t.Fatal(err)
+		}
+		var reply struct {
+			Execution dataplane.Execution `json:"execution"`
+			Error     string              `json:"error"`
+		}
+		decodeErr := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&reply)
+		response.Body.Close()
+		server.Close()
 		cancelApply()
-		if err != nil || execution.State != "committed" {
-			t.Fatal("actual native Apply", execution, err)
+		if decodeErr != nil || response.StatusCode != http.StatusOK || reply.Execution.State != "committed" {
+			t.Fatal("actual native App admission/Apply", reply.Execution, reply.Error, response.StatusCode, decodeErr)
 		}
 		t.Logf("actual_mihomo_live round=%d apply=%s mandatory_probes=2", round, time.Since(started))
 		check, cancelCheck := context.WithTimeout(lifetime, 110*time.Second)
