@@ -230,7 +230,7 @@ func (c *mihomoSameBootRetirementCursor) originalInputsCurrent() error {
 		return errors.Join(ErrMihomoLiveRetirement, c.terminalCloseErr)
 	}
 	o := c.owner
-	if o.inputs.configPath != o.read.original.settings || o.inputs.statePath != o.read.original.root {
+	if !o.sourceCoordinatesCurrent() || o.read.original.manager != c.manager {
 		return ErrMihomoLiveRetirement
 	}
 	if err := errors.Join(o.inputs.current(o.inputs.ctx), o.read.current(c.ctx), o.control.CurrentForCleanupOperation(c.ctx, o.cleanup)); err != nil {
