@@ -178,8 +178,21 @@ func TestDomainPoolCanceledWitnessOnlyReachesFreshGlobalAbsence(t *testing.T) {
 			case "registry":
 				s.manager.registryGeneration++
 			case "config":
-				if _, err := config.WriteAt([]byte("changed"), 0); err != nil {
+				// The original retained FD is deliberately readonly. This test
+				// mutator is never substituted for its actual read custody.
+				mutator, err := s.owned.OpenFile(xrayDomainTCPConfigName, os.O_WRONLY, 0600)
+				if err != nil {
 					t.Fatal(err)
+				}
+				info, err := mutator.Stat()
+				if err != nil || !os.SameFile(info, configInfo) {
+					_ = mutator.Close()
+					t.Fatal("config mutator lost original inode", err)
+				}
+				_, writeErr := mutator.WriteAt([]byte("changed"), 0)
+				closeErr := mutator.Close()
+				if writeErr != nil || closeErr != nil {
+					t.Fatal(writeErr, closeErr)
 				}
 			case "journal-definition":
 				s.execution.Resources[0].XrayDomainTCP.ConfigSHA256 = nodeDefaultSourceMaterialHash([]byte("foreign definition"))
