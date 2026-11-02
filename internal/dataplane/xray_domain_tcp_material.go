@@ -250,7 +250,16 @@ func (m *XrayDomainTCPOperationMaterial) Current(ctx context.Context) error {
 }
 
 func (m *XrayDomainTCPOperationMaterial) metadataCurrentLocked() error {
-	if m.closed || m.ctx == nil || m.ctx.Err() != nil || m.manager == nil || m.adapter == nil || m.registration == nil || m.nodeSource == nil ||
+	if m.closed || m.ctx == nil || m.ctx.Err() != nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	return m.metadataIdentityCurrentLocked()
+}
+
+// Original immutable runtime/source association only. Fresh cleanup may
+// compare it after cancellation; it never renews Current or node selection.
+func (m *XrayDomainTCPOperationMaterial) metadataIdentityCurrentLocked() error {
+	if m.closed || m.manager == nil || m.adapter == nil || m.registration == nil || m.nodeSource == nil ||
 		m.manager.StateRoot != m.managerRoot || m.adapter.StateRoot != m.adapterRoot || m.adapter.EngineID != "xray" || !m.adapter.xrayPlanDispatch || !m.adapter.nodeRouterVerifier || m.adapter.scopedXray || m.adapter.xrayOperation ||
 		m.adapter.EngineBin != m.binaryField || m.adapter.engineBinary() != m.binary || !sameNetworkPolicyDependency(m.processes, m.adapter.Processes) || m.adapter.SOCKSPort != int(m.private.Port()) {
 		return ErrXrayDomainTCPOriginal

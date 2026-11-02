@@ -22,6 +22,8 @@ import (
 
 var errDomainOriginalJoinedFailure = errors.New("native fixture callback failed after actual original Run and join")
 
+type domainOriginalCancelAfterStartKey struct{}
+
 func domainOriginalOnlyJoinedFailure(err error) bool {
 	if err == errDomainOriginalJoinedFailure {
 		return true
@@ -105,6 +107,28 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 		}
 	}()
 	deadline := time.Now().Add(30 * time.Second)
+	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
+		// Observe the genuine issued child before canceling its ORIGINAL
+		// forward request. No ready bit or process observation is fabricated.
+		for {
+			if err := resource.Current(ctx); err == nil {
+				t.Log("actual original successor child/listener observed; canceling original request before native cleanup publication")
+				cancelOriginal()
+				return context.Canceled
+			}
+			select {
+			case err := <-done:
+				joined = true
+				return errors.Join(errors.New("native child ended before cancellation witness"), err)
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+			if time.Now().After(deadline) {
+				return errors.New("actual child/listener cancellation witness unavailable")
+			}
+		}
+	}
 	newAlias := observed.Synthetic.String()
 	if unpublished {
 		readinessCtx, cancelReadiness := context.WithDeadline(ctx, deadline)

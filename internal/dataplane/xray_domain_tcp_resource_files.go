@@ -25,6 +25,7 @@ const xrayDomainTCPExecutableLimit = 128 << 20
 type XrayDomainTCPExecutionResource struct {
 	self              *XrayDomainTCPExecutionResource
 	mu                sync.Mutex
+	nativeDone        chan struct{} // Entire original WithNative phase/callback/cleanup returned.
 	scope             *executionResourceScope
 	material          *XrayDomainTCPOperationMaterial
 	definition        ExecutionXrayDomainTCPDefinition

@@ -82,6 +82,14 @@ func TestDomainTCPOriginalNativeJoinedFailureKeeper(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeCanceledChildCleanup(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_CANCELED_CHILD", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
@@ -89,6 +97,10 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
+	canceledChild := os.Getenv("RAZVILKA_DOMAIN_CANCELED_CHILD") == "1"
+	if canceledChild && (!coexist || joinedFailure || neverIssuedSuccessor || initialCut != "") {
+		t.Fatal("canceled child requires its separate successor case")
+	}
 	if joinedFailure && !neverIssuedSuccessor {
 		t.Fatal("joined error requires distinct never-issued successor")
 	}
@@ -862,9 +874,42 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
+			operationCtx := secondHeld
+			var cancelOriginal context.CancelFunc
+			if canceledChild {
+				operationCtx, cancelOriginal = context.WithCancel(secondHeld)
+				defer cancelOriginal()
+			}
+			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(operationCtx, control.Current), secondPlan, history, detached, func(original context.Context) error {
+				if canceledChild {
+					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, cancelOriginal)
+				}
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
+			if canceledChild {
+				var failure *dataplane.DomainTCPCleanupFailure
+				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
+					t.Fatal("original cancellation/custody capsule lost", err)
+				}
+				if err := manager.JoinFailedDomainTCPNative(secondHeld, secondCleanup, history, failure); err != nil {
+					t.Fatal("fresh cleanup original child join/row publication", err)
+				}
+				if err := manager.JoinFailedDomainTCPNative(secondHeld, secondCleanup, history, failure); err != nil {
+					t.Fatal("same original native terminal ACK retry", err)
+				}
+				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+					t.Fatal("original child survived cleanup join")
+				}
+				if err := manager.CheckExecutionRecovery(secondHeld); err == nil {
+					t.Fatal("child-only cleanup released unresolved DNS/capture custody")
+				}
+				late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+				if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+					t.Fatal("child cleanup changed old alias tuple", late)
+				}
+				t.Log("actual canceled-after-Start original child joined under fresh cleanup; same two original journal ACKs; pending DNS/capture custody retained, no pool retirement or forward grant")
+				return
+			}
 			if joinedFailure {
 				if !domainOriginalOnlyJoinedFailure(err) || neverIssuedOwner == nil {
 					t.Fatal("original callback error changed or cleanup error hidden", err)

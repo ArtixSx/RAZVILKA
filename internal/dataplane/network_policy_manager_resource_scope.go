@@ -173,7 +173,7 @@ func (s *executionResourceScope) checkCurrent(ctx context.Context, resource *exe
 // separately pre-issued NFQ cleanup capability may ignore that sticky error;
 // the final journal still remains fenced. Forward use always checks failure.
 func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resource *executionTransitResource, forward, originalNFQCleanup bool) error {
-	if !s.open || s.failure != nil && !originalNFQCleanup || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
+	if !s.open || s.failure != nil && !originalNFQCleanup && (forward || !domainTCPFailureCleanupOwner(ctx, s)) || s.guard == nil || ctx == nil || s.manager.StateRoot != s.managerRoot || s.manager.executionNetworkIdentity() != s.networkIdentity {
 		return errors.Join(ErrNodeTransitUnavailable, s.failure)
 	}
 	if err := ctx.Err(); err != nil {
@@ -766,7 +766,7 @@ func (m *Manager) runScopedResourceAction(ctx context.Context, expected Plan, ac
 			actionErr = errors.Join(actionErr, scope.requestDomainFailureStandby(ctx))
 		}
 		if requested, handoffErr := scope.domainTCPOwner.finishStandbyHandoff(scope.contextWith(ctx), actionErr); requested {
-			return errors.Join(actionErr, handoffErr, scope.close())
+			return domainTCPFailureWithCustody(scope, errors.Join(actionErr, handoffErr, scope.close()))
 		}
 	}
 	err := errors.Join(actionErr, m.checkPlanNetwork(ctx, expected), scope.close())
@@ -786,7 +786,7 @@ func (m *Manager) runScopedResourceAction(ctx context.Context, expected Plan, ac
 		return errors.Join(err, m.writeExecutionOwned(root, *execution, scope))
 	}
 	if scope.domainSuccessor != nil {
-		return errors.Join(err, m.writeExecutionOwned(root, *execution, scope))
+		return domainTCPFailureWithCustody(scope, errors.Join(err, m.writeExecutionOwned(root, *execution, scope)))
 	}
 	return errors.Join(err, m.writeExecution(root, *execution))
 }

@@ -102,11 +102,20 @@ func (r *XrayDomainTCPExecutionResource) launchOriginalNative(ctx context.Contex
 }
 
 func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context) error {
+	cleanup, cleanupErr := r.failureCleanup(ctx)
+	if cleanupErr != nil {
+		return cleanupErr
+	}
+	if cleanup != nil {
+		if _, err := r.originalContext(ctx, true); err != nil {
+			return err
+		}
+	}
 	if r.child == nil {
 		if r.startUsed {
-			return r.phase("removed", "removed")
+			return r.cleanupPhase(ctx, "removed", "removed")
 		}
-		return r.phase("unused", "unused")
+		return r.cleanupPhase(ctx, "unused", "unused")
 	}
 	if _, err := r.originalContext(ctx, true); err != nil {
 		return err
@@ -127,7 +136,11 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 		if observeErr != nil || r.birth == nil || !r.birth.same(observed) {
 			return errors.Join(ErrXrayDomainTCPOriginal, observeErr)
 		}
-		if err := r.material.control.WithCleanupStart(ctx, r.material.cleanup, func() error {
+		review, err := r.cleanupReview(ctx)
+		if err != nil {
+			return err
+		}
+		if err := r.material.control.WithCleanupStart(ctx, review, func() error {
 			err := p.child.Signal(syscall.SIGTERM)
 			if errors.Is(err, os.ErrProcessDone) {
 				return nil
@@ -143,5 +156,5 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 	if err := r.observeDomainListenerAbsent(ctx); err != nil {
 		return err
 	}
-	return r.phase("removed", "removed")
+	return r.cleanupPhase(ctx, "removed", "removed")
 }

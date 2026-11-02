@@ -1,7 +1,9 @@
 package dataplane
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
@@ -130,8 +132,19 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 		return nil, ErrXrayDomainTCPOriginal
 	}
 	if cleanup {
-		if r.material.control.CurrentForCleanupOperation(ctx, r.material.cleanup) != nil {
+		review, reviewErr := r.cleanupReview(ctx)
+		if reviewErr != nil || r.material.control.CurrentForCleanupOperation(ctx, review) != nil {
 			return nil, ErrXrayDomainTCPOriginal
+		}
+		if cursor, err := r.failureCleanup(ctx); err != nil {
+			return nil, err
+		} else if cursor != nil {
+			r.material.mu.Lock()
+			err := r.material.metadataIdentityCurrentLocked()
+			r.material.mu.Unlock()
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else if err := r.material.metadataCurrent(ctx); err != nil {
 		return nil, err
@@ -145,7 +158,15 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 	if err != nil {
 		return nil, err
 	}
-	if err := r.records.current(ctx, true); err != nil {
+	allEqual := true
+	if cleanup, cleanupErr := r.failureCleanup(ctx); cleanupErr != nil {
+		return nil, cleanupErr
+	} else if cleanup != nil {
+		// Only the SAME active cleanup writer can resume its retained partial
+		// images. Every inode and its actual authored bytes remain checked.
+		allEqual = false
+	}
+	if err := r.records.current(ctx, allEqual); err != nil {
 		return nil, err
 	}
 	if err := r.filesCurrentForObservation(ctx, files); err != nil {
@@ -183,6 +204,19 @@ func (r *XrayDomainTCPExecutionResource) WithNative(ctx context.Context, consume
 	if r == nil || r.self != r || r.scope == nil || r.material == nil || r.material.binding == nil || r.material.binding.phase == nil || consume == nil {
 		return ErrXrayDomainTCPOriginal
 	}
+	r.mu.Lock()
+	if r.nativeDone != nil {
+		select {
+		case <-r.nativeDone:
+		default:
+			r.mu.Unlock()
+			return ErrXrayDomainTCPOriginal
+		}
+	}
+	done := make(chan struct{})
+	r.nativeDone = done
+	r.mu.Unlock()
+	defer close(done) // After the whole phase callback and its native cleanup, including panic.
 	return r.material.binding.phase.withDomainNativeActivity(ctx, func(held context.Context) error { return r.withNativeInPhase(held, consume) })
 }
 
@@ -299,6 +333,40 @@ func (r *XrayDomainTCPExecutionResource) phase(phase, state string) error {
 	}
 	r.scope.execution.Resources[i].Phase, r.scope.execution.Resources[i].State = phase, state
 	return r.scope.persist()
+}
+
+func (r *XrayDomainTCPExecutionResource) cleanupPhase(ctx context.Context, phase, state string) error {
+	cleanup, err := r.failureCleanup(ctx)
+	if err != nil {
+		return err
+	}
+	if cleanup == nil {
+		return r.phase(phase, state)
+	}
+	if phase != "removed" && phase != "unused" || phase != state {
+		return ErrPolicyAdditionUnknown
+	}
+	s := r.scope
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, err := r.matching()
+	if err != nil {
+		return err
+	}
+	if err := cleanup.local(ctx, r); err != nil {
+		return err
+	}
+	s.execution.Resources[i].Phase, s.execution.Resources[i].State = phase, state
+	data, err := json.Marshal(s.execution)
+	if err != nil {
+		return err
+	}
+	if cleanup.image == nil {
+		cleanup.image = bytes.Clone(data)
+	} else if !bytes.Equal(cleanup.image, data) {
+		return ErrExecutionJournal
+	}
+	return s.domainSuccessor.publish(ctx, data)
 }
 
 func (r *XrayDomainTCPExecutionResource) closeOriginalDescriptors() error {
