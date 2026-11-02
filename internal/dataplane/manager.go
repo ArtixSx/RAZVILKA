@@ -1907,9 +1907,9 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 	}
 	retryNFQRollback = func(parent context.Context) error {
 		rollbackParent = parent
-		_ = rollback(ErrNFQWSScopedOwner)
+		retryErr := rollback(ErrNFQWSScopedOwner)
 		if execution.State != "rolled-back" || !execution.RollbackVerified && noEffectNFQCompletion == nil && noEffectLANPreparation == nil {
-			return executionJournalError(ErrNFQWSScopedOwner)
+			return errors.Join(executionJournalError(ErrNFQWSScopedOwner), retryErr)
 		}
 		return nil
 	}
