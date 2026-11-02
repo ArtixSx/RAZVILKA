@@ -152,7 +152,7 @@ func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
 			return at("CHECK_HELD_FILE", errors.Join(err, namedErr))
 		}
 	}
-	canonical, err := r.resolveExisting(r.profile.extension)
+	canonical, err := r.versionExtensionPath()
 	if err != nil {
 		return err
 	}
