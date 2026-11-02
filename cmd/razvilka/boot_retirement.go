@@ -21,8 +21,12 @@ var retireMihomoParentPlan = new(string)
 var retireMihomoParentDigest = new(string)
 var retireMihomoLiveBootPlan = new(string)
 var retireMihomoLiveBootDigest = new(string)
+var retireMihomoLiveParentPlan = new(string)
+var retireMihomoLiveParentDigest = new(string)
 
 func registerBootRetirementFlags(flags *flag.FlagSet) {
+	flags.StringVar(retireMihomoLiveParentPlan, "retire-mihomo-live-after-parent-plan", "", "retire the exact same-boot Mihomo live route after its original parent exited, with all private stores idle")
+	flags.StringVar(retireMihomoLiveParentDigest, "retire-mihomo-live-after-parent-digest", "", "reviewed digest required with retire-mihomo-live-after-parent-plan")
 	flags.StringVar(retireMihomoLiveBootPlan, "retire-mihomo-live-after-boot-plan", "", "archive intact old-boot Mihomo live metadata after complete native absence, with panel stopped; never confirms service health")
 	flags.StringVar(retireMihomoLiveBootDigest, "retire-mihomo-live-after-boot-digest", "", "reviewed digest required with retire-mihomo-live-after-boot-plan")
 	flags.StringVar(retireMihomoParentPlan, "retire-mihomo-probe-after-parent-plan", "", "retire finite Mihomo metadata after its original parent exited; requires intact origin and complete native absence, panel stopped")
@@ -34,7 +38,11 @@ func registerBootRetirementFlags(flags *flag.FlagSet) {
 }
 
 func bootRetirementCLIRequested() bool {
-	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() || mihomoLiveBootRetirementCLIRequested()
+	return *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() || mihomoLiveBootRetirementCLIRequested() || mihomoLiveParentRetirementCLIRequested()
+}
+
+func mihomoLiveParentRetirementCLIRequested() bool {
+	return *retireMihomoLiveParentPlan != "" || *retireMihomoLiveParentDigest != ""
 }
 
 func mihomoLiveBootRetirementCLIRequested() bool {
@@ -50,6 +58,14 @@ func mihomoBootRetirementCLIRequested() bool {
 }
 
 func bootRetirementCLIFlagError() error {
+	if mihomoLiveParentRetirementCLIRequested() {
+		if (*retireMihomoLiveParentPlan == "") != (*retireMihomoLiveParentDigest == "") {
+			return errors.New("Mihomo live parent retirement requires both reviewed plan and digest")
+		}
+		if *retireRollbackBootPlan != "" || *retireRollbackBootDigest != "" || mihomoBootRetirementCLIRequested() || mihomoParentRetirementCLIRequested() || mihomoLiveBootRetirementCLIRequested() {
+			return errors.New("Mihomo live parent retirement and other retirement modes are mutually exclusive")
+		}
+	}
 	if mihomoLiveBootRetirementCLIRequested() {
 		if (*retireMihomoLiveBootPlan == "") != (*retireMihomoLiveBootDigest == "") {
 			return errors.New("Mihomo live post-reboot retirement requires both reviewed plan and digest")

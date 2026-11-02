@@ -61,6 +61,13 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	nodesRoot := filepath.Join(peers.root, "live-nodes")
+	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
+	if parentProducer {
+		nodesRoot = "/opt/razvilka/state/nodes"
+		if err := os.MkdirAll(filepath.Dir(nodesRoot), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err = os.Mkdir(nodesRoot, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -85,9 +92,18 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Default()
+	if parentProducer {
+		cfg.ProxySidecar = "hev"
+	}
 	cfg.SafeMode = false
 	cfg.Services = map[string]config.ServiceState{service.ID: {Enabled: true, Route: selected, Sources: []string{domainOriginalClient + "/32"}}}
 	cfgPath := filepath.Join(peers.root, "live-config.json")
+	if parentProducer {
+		cfgPath = "/opt/etc/razvilka/config.json"
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	raw, _ := json.Marshal(cfg)
 	if err = os.WriteFile(cfgPath, raw, 0600); err != nil {
 		t.Fatal(err)
@@ -135,6 +151,9 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 	}
 	a := &App{Store: store, Nodes: nodes, Components: cm, Dataplane: manager, EngineConfigs: configs, Catalog: catalog.Catalog{Services: []catalog.Service{service}}, FreshProfile: fresh, ProxySidecarBoot: "hev", ExecutionHistory: updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion), ComponentHistory: updatecheck.NewComponentHistoryAdmission(components.MihomoReleaseReadVersion)}
 	controlRoot := filepath.Join(peers.root, "live-control")
+	if parentProducer {
+		controlRoot = "/opt/razvilka/state/self-update-stop"
+	}
 	a.SelfUpdateFiles = &SelfUpdateFiles{ControlRoot: controlRoot}
 	if _, err = operationgate.InitializeSelfUpdateControl(lifetime, controlRoot); err != nil {
 		t.Fatal(err)
@@ -259,6 +278,13 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
 				return binding.commit(bounded)
 			})
+			for _, step := range execution.Steps {
+				start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
+				finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
+				if startErr == nil && finishErr == nil {
+					t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
+				}
+			}
 			detail := ""
 			status := http.StatusOK
 			if applyErr != nil {

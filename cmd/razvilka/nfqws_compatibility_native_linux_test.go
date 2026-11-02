@@ -32,6 +32,9 @@ import (
 // production early CLI dispatch. No provider test prefix or asset approval is
 // introduced; all other invocations use the ordinary Go test runner.
 func TestMain(m *testing.M) {
+	if handled, code := runExecutionReadCommand(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	if len(os.Args) == 2 && os.Args[1] == "-node-history-read-version" {
 		os.Exit(mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots()))
 	}

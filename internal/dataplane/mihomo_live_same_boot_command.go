@@ -3,10 +3,12 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -43,7 +45,7 @@ func OriginalMihomoSameBootCommand(ctx context.Context, admission MihomoSameBoot
 	return c.matches(ctx, name, args, review)
 }
 func (c *mihomoSameBootCommand) matches(ctx context.Context, name string, args []string, review string) bool {
-	return c.open && !c.used && ctx.Err() == nil && c.owner != nil && c.owner.self == c.owner && c.owner.control != nil && c.owner.cleanup != nil && c.name == name && c.review == review && validPlanDigest(review) && slices.Equal(c.args, args)
+	return c.open && !c.used && ctx.Err() == nil && c.owner != nil && c.owner.self == c.owner && !c.owner.effectsClosed && !c.owner.effectUnknown && c.owner.control != nil && c.owner.cleanup != nil && c.name == name && c.review == review && validPlanDigest(review) && slices.Equal(c.args, args)
 }
 func (c *mihomoSameBootCommand) WithStart(ctx context.Context, name string, args []string, review string, begin func() error) error {
 	if c == nil || c.self != c || ctx == nil || ctx.Value(mihomoSameBootCommandKey{}) != c {
@@ -61,19 +63,35 @@ func (c *mihomoSameBootCommand) WithStart(ctx context.Context, name string, args
 }
 
 type mihomoSameBootCleanup struct {
-	self    *mihomoSameBootCleanup
-	inputs  *mihomoSameBootInputs
-	read    *mihomoColdReadRunner
-	control *operationgate.ControlEpochReview
-	cleanup *operationgate.ExclusiveCleanupReview
+	policy                       *mihomoSameBootPolicy
+	static                       *mihomoSameBootStatic
+	controlRoot                  string
+	effectsClosed, effectUnknown bool
+	self                         *mihomoSameBootCleanup
+	inputs                       *mihomoSameBootInputs
+	read                         *mihomoColdReadRunner
+	control                      *operationgate.ControlEpochReview
+	cleanup                      *operationgate.ExclusiveCleanupReview
 }
 
 func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
-	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil {
+	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || o.read.original.root != o.inputs.statePath || o.read.original.settings != o.inputs.configPath || o.effectUnknown {
 		return ErrMihomoLiveRetirement
 	}
 	if err := o.inputs.current(o.inputs.ctx); err != nil {
 		return err
+	}
+	if o.policy != nil && o.policy.closeErr != nil {
+		return o.policy.closeErr
+	}
+	if o.static != nil {
+		if !o.effectsClosed {
+			if err := o.static.current(); err != nil {
+				return err
+			}
+		} else if o.static.closeErr != nil {
+			return o.static.closeErr
+		}
 	}
 	if err := errors.Join(o.read.current(ctx), o.control.CurrentForCleanupOperation(ctx, o.cleanup)); err != nil {
 		return err
@@ -83,6 +101,23 @@ func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
 		return errors.Join(ErrMihomoLiveRetirement, err)
 	}
 	return errors.Join(o.inputs.current(o.inputs.ctx), o.read.current(ctx), o.control.CurrentForCleanupOperation(ctx, o.cleanup))
+}
+
+func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identity, error) {
+	if err := o.current(ctx); err != nil {
+		return netidentity.Identity{}, err
+	}
+	proof, err := proxyInactivePlatformProof()
+	if err != nil {
+		return netidentity.Identity{}, err
+	}
+	if err := observeBootRetirement(ctx, o.read.proxy, proof); err != nil {
+		return netidentity.Identity{}, err
+	}
+	if err := o.current(ctx); err != nil {
+		return netidentity.Identity{}, err
+	}
+	return o.inputs.definition.NetworkIdentity, nil
 }
 
 func (o *mihomoSameBootCleanup) Run(ctx context.Context, name string, args ...string) (data []byte, resultErr error) {
@@ -96,6 +131,9 @@ func (o *mihomoSameBootCleanup) Run(ctx context.Context, name string, args ...st
 	if !mihomoLiveEffectCommand(name == o.read.tools.IP, args) {
 		return o.read.Run(ctx, name, args...)
 	}
+	if o.effectsClosed {
+		return nil, ErrMihomoLiveRetirement
+	}
 	allowed, err := o.deleteCommand(ctx, name, args)
 	if err != nil || !allowed {
 		return nil, errors.Join(ErrMihomoLiveRetirement, err)
@@ -104,6 +142,12 @@ func (o *mihomoSameBootCleanup) Run(ctx context.Context, name string, args ...st
 	call.self = call
 	defer func() { call.mu.Lock(); call.open = false; call.mu.Unlock() }()
 	data, resultErr = base.RunMihomoSameBootCleanup(context.WithValue(ctx, mihomoSameBootCommandKey{}, call), call, name, args...)
+	call.mu.Lock()
+	used := call.used
+	call.mu.Unlock()
+	if resultErr != nil && used {
+		o.effectUnknown = true
+	}
 	if closing := o.current(ctx); closing != nil {
 		data = nil
 		resultErr = errors.Join(resultErr, closing)

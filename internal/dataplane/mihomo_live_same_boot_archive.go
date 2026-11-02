@@ -17,6 +17,8 @@ type mihomoSameBootArchive struct {
 	self             *mihomoSameBootArchive
 	inputs           *mihomoSameBootInputs
 	parent, root     *os.Root
+	history          *os.Root
+	historyInfo      os.FileInfo
 	parentInfo, info os.FileInfo
 	relative         string
 	records          map[string]*mihomoColdRecord
@@ -106,6 +108,13 @@ func (c *mihomoSameBootArchive) current() error {
 			return err
 		}
 	}
+	if c.history != nil {
+		named, e1 := c.root.Lstat("runtime-history")
+		held, e2 := c.history.Stat(".")
+		if e1 != nil || e2 != nil || !networkPolicyPrivateDirectory(named) || !networkPolicyPrivateDirectory(held) || !os.SameFile(named, c.historyInfo) || !os.SameFile(held, c.historyInfo) {
+			return errors.Join(ErrMihomoLiveRetirement, e1, e2)
+		}
+	}
 	return nil
 }
 func cCloseErr(c *mihomoSameBootArchive) error {
@@ -119,7 +128,7 @@ func cCloseErr(c *mihomoSameBootArchive) error {
 // authored FD is installed in the cursor even when publication/fsync reports
 // an error; retry then repeats the real durability ACK on that SAME inode.
 func (c *mihomoSameBootArchive) publish(name string, value any, current func() error) error {
-	if c == nil || c.self != c || name != "retirement.json" && name != "completed.json" || current == nil {
+	if c == nil || c.self != c || name != "retirement.json" && name != "completed.json" && name != "runtime-history" || current == nil {
 		return ErrMihomoLiveRetirement
 	}
 	data, err := json.Marshal(value)
@@ -129,17 +138,35 @@ func (c *mihomoSameBootArchive) publish(name string, value any, current func() e
 	if err := errors.Join(c.current(), current()); err != nil {
 		return err
 	}
+	root, leaf := c.root, name
+	if name == "runtime-history" {
+		if c.history == nil {
+			if err := mkdirBootRetirement(c.root, "runtime-history"); err != nil {
+				return err
+			}
+			var err error
+			c.history, err = openRetirementChild(c.root, "runtime-history")
+			if err != nil {
+				return err
+			}
+			c.historyInfo, err = c.history.Stat(".")
+			if err != nil {
+				return err
+			}
+		}
+		root, leaf = c.history, "retirement.json"
+	}
 	if prior := c.records[name]; prior != nil {
 		if !bytes.Equal(prior.data, data) {
 			return ErrMihomoLiveRetirement
 		}
-		return errors.Join(prior.current(), prior.file.Sync(), syncBootRetirementDirectory(c.root, "."), c.current(), current())
+		return errors.Join(prior.current(), prior.file.Sync(), syncBootRetirementDirectory(root, "."), c.current(), current())
 	}
-	f, err := writeMihomoColdRetained(c.root, name, data, func() error { return errors.Join(c.current(), current()) })
+	f, err := writeMihomoColdRetained(root, leaf, data, func() error { return errors.Join(c.current(), current()) })
 	if f != nil {
 		info, statErr := f.Stat()
-		c.records[name] = &mihomoColdRecord{root: c.root, name: name, file: f, info: info, data: bytes.Clone(data)}
-		err = errors.Join(err, statErr, syncBootRetirementDirectory(c.root, "."), c.records[name].current())
+		c.records[name] = &mihomoColdRecord{root: root, name: leaf, file: f, info: info, data: bytes.Clone(data)}
+		err = errors.Join(err, statErr, syncBootRetirementDirectory(root, "."), c.records[name].current())
 		if c.fault != nil {
 			err = errors.Join(err, c.fault(name))
 		}
@@ -155,6 +182,9 @@ func (c *mihomoSameBootArchive) close() error {
 		for _, r := range c.records {
 			c.closeErr = errors.Join(c.closeErr, r.file.Close())
 			clear(r.data)
+		}
+		if c.history != nil {
+			c.closeErr = errors.Join(c.closeErr, c.history.Close())
 		}
 		if c.root != nil {
 			c.closeErr = errors.Join(c.closeErr, c.root.Close())

@@ -27,6 +27,27 @@ import (
 // receive a signal. Files, policy and journals stay intact until the separate
 // complete absence/retirement protocol proves the entire footprint settled.
 func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provider, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, spec ProcessSpec, d ExecutionMihomoLiveDefinition) (result error) {
+	return stopMihomoLiveColdSidecarOriginal(ctx, provider, control, cleanup, spec, d, nil)
+}
+
+func stopMihomoSameBootSidecar(ctx context.Context, o *mihomoSameBootCleanup) error {
+	if o == nil || o.self != o || o.static == nil || o.static.self != o.static || o.static.closed || o.static.dirs["runtime"] == nil {
+		return ErrMihomoLiveRetirement
+	}
+	if err := o.static.current(); err != nil {
+		return err
+	}
+	return stopMihomoLiveColdSidecarOriginal(ctx, o.read.tools.Provider, o.control, o.cleanup, o.read.proxy.sidecarProcess(), o.inputs.definition, o.static)
+}
+
+func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentity.Provider, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, spec ProcessSpec, d ExecutionMihomoLiveDefinition, original *mihomoSameBootStatic) (result error) {
+	var originalRoot *os.Root
+	if original != nil {
+		if original.self != original || original.closed || original.dirs["runtime"] == nil {
+			return errMihomoLiveMaterial
+		}
+		originalRoot = original.dirs["runtime"]
+	}
 	if xraySelectedTCPFinite(ctx) != nil || provider == nil || control == nil || cleanup == nil || d.validate() != nil || d.Observation == nil || !spec.RouteProof || spec.ID != "mihomo-tun" || validateProcessSpec(spec) != nil || filepath.Clean(spec.Dir) != spec.Dir || !filepath.IsAbs(spec.Dir) || spec.PIDPath != filepath.Join(spec.Dir, "sidecar.pid") || spec.MatchArg != filepath.Join(spec.Dir, "sidecar.json") || spec.LogPath != filepath.Join(spec.Dir, "sidecar.log") {
 		return errMihomoLiveMaterial
 	}
@@ -46,11 +67,39 @@ func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provid
 	if err != nil {
 		return err
 	}
-	pidRaw, err := bootRetirementRead(root, "sidecar.pid")
+	originalRootCurrent := func() error {
+		if originalRoot == nil {
+			return nil
+		}
+		originalInfo, e1 := originalRoot.Stat(".")
+		held, e2 := root.Stat(".")
+		named, e3 := os.Lstat(spec.Dir)
+		if e1 != nil || e2 != nil || e3 != nil || !networkPolicyPrivateDirectory(originalInfo) || !networkPolicyPrivateDirectory(held) || !networkPolicyPrivateDirectory(named) || !os.SameFile(originalInfo, anchor) || !os.SameFile(originalInfo, held) || !os.SameFile(originalInfo, named) {
+			return errors.Join(errMihomoLiveMaterial, e1, e2, e3)
+		}
+		return original.signalRecordsCurrent()
+	}
+	if err := originalRootCurrent(); err != nil {
+		return err
+	}
+	readInput := func(name string) ([]byte, error) {
+		if original == nil {
+			return bootRetirementRead(root, name)
+		}
+		r := original.sidecarRecord(name)
+		if r == nil {
+			return nil, errMihomoLiveMaterial
+		}
+		if err := errors.Join(r.current(), sameBootPolicyRecordIdentity(r)); err != nil {
+			return nil, err
+		}
+		return bytes.Clone(r.data), nil
+	}
+	pidRaw, err := readInput("sidecar.pid")
 	if err != nil {
 		return err
 	}
-	raw, err := bootRetirementRead(root, "sidecar.pid"+routeidentity.ReceiptSuffix)
+	raw, err := readInput("sidecar.pid" + routeidentity.ReceiptSuffix)
 	if err != nil || len(raw) > 16<<10 || routeidentity.Hash(raw) != d.Observation.SidecarReceiptSHA256 {
 		return errMihomoLiveMaterial
 	}
@@ -64,17 +113,30 @@ func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provid
 	if err != nil || !bytes.Equal(canonical, raw) {
 		return errMihomoLiveMaterial
 	}
-	checkPID, closePID, err := pinBootRetirementFile(root, "sidecar.pid", pidRaw)
+	pinInput := func(name string, expected []byte) (func() error, func(), error) {
+		if original == nil {
+			return pinBootRetirementFile(root, name, expected)
+		}
+		r := original.sidecarRecord(name)
+		if r == nil || !bytes.Equal(r.data, expected) {
+			return nil, nil, errMihomoLiveMaterial
+		}
+		return func() error { return errors.Join(r.current(), sameBootPolicyRecordIdentity(r)) }, func() {}, nil
+	}
+	checkPID, closePID, err := pinInput("sidecar.pid", pidRaw)
 	if err != nil {
 		return err
 	}
 	defer closePID()
-	checkReceipt, closeReceipt, err := pinBootRetirementFile(root, "sidecar.pid"+routeidentity.ReceiptSuffix, raw)
+	checkReceipt, closeReceipt, err := pinInput("sidecar.pid"+routeidentity.ReceiptSuffix, raw)
 	if err != nil {
 		return err
 	}
 	defer closeReceipt()
 	check := func() error {
+		if err := originalRootCurrent(); err != nil {
+			return err
+		}
 		if err := control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
 			return err
 		}
@@ -144,7 +206,12 @@ func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provid
 	if err := current(); err != nil {
 		return err
 	}
-	if err := control.WithCleanupStart(ctx, cleanup, func() error { return unix.PidfdSendSignal(fd, unix.SIGTERM, nil, 0) }); err != nil && !errors.Is(err, unix.ESRCH) {
+	if err := control.WithCleanupStart(ctx, cleanup, func() error {
+		if err := originalRootCurrent(); err != nil {
+			return err
+		}
+		return unix.PidfdSendSignal(fd, unix.SIGTERM, nil, 0)
+	}); err != nil && !errors.Is(err, unix.ESRCH) {
 		return err
 	}
 	deadline := time.Now().Add(4 * time.Second)
@@ -171,7 +238,12 @@ func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provid
 			if err := current(); err != nil {
 				return err
 			}
-			if err := control.WithCleanupStart(ctx, cleanup, func() error { return unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0) }); err != nil && !errors.Is(err, unix.ESRCH) {
+			if err := control.WithCleanupStart(ctx, cleanup, func() error {
+				if err := originalRootCurrent(); err != nil {
+					return err
+				}
+				return unix.PidfdSendSignal(fd, unix.SIGKILL, nil, 0)
+			}); err != nil && !errors.Is(err, unix.ESRCH) {
 				return err
 			}
 			killed = true

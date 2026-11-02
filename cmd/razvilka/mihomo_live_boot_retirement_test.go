@@ -16,7 +16,7 @@ import (
 
 func preserveMihomoLiveRetirementFlags(t *testing.T) {
 	t.Helper()
-	pointers := []*string{retireRollbackBootPlan, retireRollbackBootDigest, retireMihomoBootPlan, retireMihomoBootDigest, retireMihomoParentPlan, retireMihomoParentDigest, retireMihomoLiveBootPlan, retireMihomoLiveBootDigest}
+	pointers := []*string{retireRollbackBootPlan, retireRollbackBootDigest, retireMihomoBootPlan, retireMihomoBootDigest, retireMihomoParentPlan, retireMihomoParentDigest, retireMihomoLiveBootPlan, retireMihomoLiveBootDigest, retireMihomoLiveParentPlan, retireMihomoLiveParentDigest}
 	values := make([]string, len(pointers))
 	for i, pointer := range pointers {
 		values[i] = *pointer
