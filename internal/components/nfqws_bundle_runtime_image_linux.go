@@ -24,7 +24,7 @@ type managedRuntimeImageNode struct {
 
 // This bounded, callback-free image observation keeps original descriptors
 // until the whole graph closes. BOTH complete payload reads remain: the first
-// uses an exact bounded allocation; the second compares fixed 32KiB chunks
+// uses an exact bounded slice of exclusive scratch; the second compares 32KiB chunks
 // against those bytes, independent of timestamp granularity. No observed bytes
 // survive this call; every later Check hashes and compares all six members anew.
 // Original source/kernel/Start bookends and installer/recovery readers remain.
