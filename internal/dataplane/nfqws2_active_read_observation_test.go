@@ -101,3 +101,52 @@ func TestNFQWSActiveReadObservationPreservesReadonlyCopyAndBareFallback(t *testi
 		t.Fatal("bare fallback changed", err)
 	}
 }
+
+// The model only proves dispatch at the original/copy boundary. Native tests
+// separately require actual file, process, kernel and mutation observations.
+type registrarReadMarker struct{}
+type registrarReadDispatchModel struct {
+	called  int
+	closing error
+}
+
+func (*registrarReadDispatchModel) Run(context.Context, string, ...string) ([]byte, error) {
+	return nil, ErrNFQWSScopedOwner
+}
+func (m *registrarReadDispatchModel) WithReadOnlyToolObservation(c context.Context, _ netidentity.Identity, _ string, f func(context.Context) error) error {
+	m.called++
+	return errors.Join(f(context.WithValue(c, registrarReadMarker{}, m)), m.closing)
+}
+func TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan(t *testing.T) {
+	for _, prepared := range []bool{false, true} {
+		t.Run(map[bool]string{false: "before-start", true: "prepared"}[prepared], func(t *testing.T) {
+			e, c := nfqwsActiveCommandFixture(t)
+			binding, scoped, _ := nfqwsScopedBindingFixture(t)
+			// Explicit model plan/binding: the first original guard refuses,
+			// so no modeled kernel or process success is consumed.
+			e.binding, e.resource.plan = binding, scoped.p
+			e.material.execution, e.material.executionBound = e, true
+			closing := errors.New("original observation closing refusal")
+			model := &registrarReadDispatchModel{closing: closing}
+			e.inventory.reader.Runner = model
+			sentinel := errors.New("original current refusal")
+			calls := 0
+			current := func(got context.Context, p *NFQWSScopedPlan) error {
+				calls++
+				if got.Value(registrarReadMarker{}) != model || p != e.resource.Plan() {
+					t.Fatal("readonly registrar lost original observation")
+				}
+				return sentinel
+			}
+			var err error
+			if prepared {
+				err = nfqwsScopedPreparedCurrent(c, e.binding, e.resource.Plan(), e.resource.Root(), current)
+			} else {
+				err = nfqwsScopedBeforeStartCurrent(c, e.binding, e.resource.Plan(), current)
+			}
+			if model.called != 1 || calls != 1 || !errors.Is(err, sentinel) || !errors.Is(err, closing) {
+				t.Fatal("original read/closing failure not preserved", model.called, calls, err)
+			}
+		})
+	}
+}
