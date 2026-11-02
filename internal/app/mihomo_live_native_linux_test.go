@@ -262,6 +262,7 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 			detail := ""
 			status := http.StatusOK
 			if applyErr != nil {
+				t.Logf("native_apply_failure deadline_exceeded=%t canceled=%t live_owner_unavailable=%t parent_origin_unavailable=%t", errors.Is(applyErr, context.DeadlineExceeded), errors.Is(applyErr, context.Canceled), errors.Is(applyErr, components.ErrMihomoLiveOwner), errors.Is(applyErr, components.ErrMihomoProbeOrigin))
 				detail = applyErr.Error()
 				status = http.StatusConflict
 			}
