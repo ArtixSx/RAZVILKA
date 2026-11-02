@@ -4,6 +4,9 @@ package dataplane
 // observer independently checks executable bytes, birth, argv, FD contents and
 // sockets; an FD spelling never supplies ownership or an inactivity result.
 func (a *ProxyTunnelAdapter) validateMihomoInactiveProcessScope(spec ProcessSpec) error {
+	if a != nil && a.ID() == "mihomo" && a.mihomoOwner == nil {
+		return a.validateMihomoColdInactiveProcessScope(spec)
+	}
 	if a == nil || a.ID() != "mihomo" || a.mihomoOwner == nil {
 		return ErrProxyRuntimeInactive
 	}

@@ -11,7 +11,7 @@ import (
 // fixed startup runtime directory into its fixed archive child. Nothing from
 // serialized filenames is passed to Rename; an existing destination is never
 // replaced. Resumption recognizes the entire original inode/content inventory.
-func moveMihomoColdRuntime(state, archive *os.Root, a *ProxyTunnelAdapter, expected mihomoColdRuntimeArchive, current func() error, fault func(string) error) error {
+func moveMihomoColdRuntime(state, archive *os.Root, a *ProxyTunnelAdapter, expected mihomoColdRuntimeArchive, current func() error, fault func(string) error) (resultErr error) {
 	if state == nil || archive == nil || a == nil || current == nil {
 		return ErrMihomoLiveRetirement
 	}
@@ -56,12 +56,12 @@ func moveMihomoColdRuntime(state, archive *os.Root, a *ProxyTunnelAdapter, expec
 		if err != nil {
 			return err
 		}
-		defer from.Close()
+		defer func() { resultErr = errors.Join(resultErr, from.Close()) }()
 		to, err := archive.Open(".")
 		if err != nil {
 			return err
 		}
-		defer to.Close()
+		defer func() { resultErr = errors.Join(resultErr, to.Close()) }()
 		if _, err := check(); err != nil {
 			return err
 		}
@@ -92,4 +92,34 @@ func moveMihomoColdRuntime(state, archive *os.Root, a *ProxyTunnelAdapter, expec
 		return errors.Join(ErrMihomoLiveRetirement, err)
 	}
 	return err
+}
+
+func checkMihomoColdRuntimePair(state, archive *os.Root, a *ProxyTunnelAdapter, expected mihomoColdRuntimeArchive) error {
+	from, err := readMihomoColdRuntime(state, "mihomo", a)
+	if err != nil {
+		return err
+	}
+	to, err := readMihomoColdRuntime(archive, "runtime", a)
+	if err != nil {
+		return err
+	}
+	if !expected.Present {
+		if from.Present || to.Present {
+			return ErrMihomoLiveRetirement
+		}
+		return nil
+	}
+	if from.Present == to.Present {
+		return ErrMihomoLiveRetirement
+	}
+	actual := from
+	if to.Present {
+		actual = to
+	}
+	left, e1 := json.Marshal(actual)
+	right, e2 := json.Marshal(expected)
+	if e1 != nil || e2 != nil || !bytes.Equal(left, right) {
+		return ErrMihomoLiveRetirement
+	}
+	return nil
 }
