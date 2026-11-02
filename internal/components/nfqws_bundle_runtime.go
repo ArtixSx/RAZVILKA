@@ -144,7 +144,7 @@ func (o *managedNFQWSRuntimeOwner) check(ctx context.Context) error {
 	if err != nil || r == nil || *r != o.receipt {
 		return errors.Join(ErrManagedNFQWSBundle, err)
 	}
-	_, err = o.manager.verifyManagedNFQWSTerminal(ctx, o.receipt)
+	_, err = o.manager.verifyManagedNFQWSRuntimeTerminal(ctx, o.receipt)
 	return err
 }
 
