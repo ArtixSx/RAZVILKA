@@ -41,7 +41,7 @@ func (l *Lease) runPolicy(ctx context.Context, name string, args ...string) ([]b
 	if index < 2 && readArguments(frozen) || index == 2 && ipReadArguments(frozen) {
 		return l.policyRead(ctx, index, frozen)
 	}
-	if !effectArguments(index, frozen) && !mihomoLiveImplicitIPv4Effect(ctx, name, l.digest, index, frozen) {
+	if !effectArguments(index, frozen) && !mihomoLiveImplicitIPv4Effect(ctx, name, l.digest, index, frozen) && !mihomoSameBootImplicitIPv4Delete(ctx, name, l.digest, index, frozen) {
 		return nil, at("POLICY_ABI", nil)
 	}
 	return l.policyEffect(ctx, index, frozen)
