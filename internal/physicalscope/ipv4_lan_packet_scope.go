@@ -320,7 +320,7 @@ func (p *IPv4LANPacketScope) current(ctx context.Context, retained bool) error {
 		}
 	}
 	if _, err := p.capture(c, p.facts.Intent, &p.topology, retained); err != nil {
-		if !errors.Is(err, operationgate.ErrSelfUpdateStopped) {
+		if !errors.Is(err, operationgate.ErrSelfUpdateStopped) && !packetReadNotSubmitted(p.fence, err) {
 			p.physicalBad = true
 		}
 		p.forwardBad = true

@@ -11,6 +11,10 @@ import (
 
 type ipv4LANPacketKernelFence struct{ original *kernelFence }
 
+func (f *ipv4LANPacketKernelFence) ownsUnsubmittedRead(err error) bool {
+	return f != nil && f.original != nil && f.original.reader != nil && f.original.reader.ownsUnsubmittedRead(err)
+}
+
 func (f *ipv4LANPacketKernelFence) check(ctx context.Context, t ipv4LANPacketTopology) (uint64, error) {
 	if f == nil || f.original == nil || f.original.reader == nil {
 		return 0, at("packet.fence.original", nil)
