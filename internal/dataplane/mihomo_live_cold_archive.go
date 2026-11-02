@@ -251,11 +251,24 @@ func validateMihomoColdRuntime(a *ProxyTunnelAdapter, d ExecutionMihomoLiveDefin
 		}
 	}
 	if raw, exists := r.Files[filepath.Base(a.forwardingPath())]; exists {
-		var f ProxyForwardingState
+		var f proxyForwardingLease
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.DisallowUnknownFields()
-		if nfqws2ManagedUniqueJSON(raw) != nil || decoder.Decode(&f) != nil || decoder.Decode(new(any)) != io.EOF || !reflect.DeepEqual(&f, d.Policy.Forwarding) {
+		if nfqws2ManagedUniqueJSON(raw) != nil || decoder.Decode(&f) != nil || decoder.Decode(new(any)) != io.EOF || f.Version != 1 || !reflect.DeepEqual(f.Policy, d.Policy) {
 			return ErrMihomoLiveRetirement
+		}
+		allowed, seen := map[string]bool{}, map[string]bool{}
+		for _, table := range proxyFirewallTables(d.Policy) {
+			allowed[proxyFirewallTableKey(table)] = true
+		}
+		if len(f.Created) > len(allowed) {
+			return ErrMihomoLiveRetirement
+		}
+		for _, key := range f.Created {
+			if !allowed[key] || seen[key] {
+				return ErrMihomoLiveRetirement
+			}
+			seen[key] = true
 		}
 	}
 	if raw, exists := r.Files[mihomoColdRelative(a, a.sidecarProcess().PIDPath)+routeidentity.ReceiptSuffix]; exists && d.Observation != nil && routeidentity.Hash(raw) != d.Observation.SidecarReceiptSHA256 {
