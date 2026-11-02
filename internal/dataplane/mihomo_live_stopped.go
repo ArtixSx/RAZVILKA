@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"reflect"
 	"time"
@@ -102,11 +103,24 @@ func (m *Manager) publishRetiredMihomoPlan(ctx context.Context, terminal *Mihomo
 		if err != nil {
 			return Plan{}, err
 		}
+		// Freeze the exact shape of OUR encoded target, not an independently
+		// canonicalized compiler value. Committed will decode these same bytes
+		// after the first ACK, including omitempty nil/empty slice semantics.
+		var published Plan
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&published) != nil || decoder.Decode(new(any)) != io.EOF {
+			return Plan{}, ErrExecutionJournal
+		}
 		root, anchor, err := openNetworkPolicyObservationRoot(m.StateRoot)
 		if err != nil {
 			return Plan{}, err
 		}
-		p = &mihomoStoppedPlanPublication{terminal: terminal, manager: m, root: root, path: m.StateRoot, anchor: anchor, before: cloneExecutionResourcePlan(current), plan: plan, data: data}
+		// Committed decoded this independent document for this caller. Keep its
+		// exact nil/empty wire shape: the general compiler clone canonicalizes
+		// some service slices, which would fail the immediate exact comparison.
+		// This private before image is neither mutated nor returned to callers.
+		p = &mihomoStoppedPlanPublication{terminal: terminal, manager: m, root: root, path: m.StateRoot, anchor: anchor, before: current, plan: published, data: data}
 		terminal.stopped = p
 	}
 	if p.terminal != terminal || p.manager != m || p.plan.Revision != revision {
