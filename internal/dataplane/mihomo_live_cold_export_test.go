@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,12 @@ func MihomoColdHistoricalFixtureForExternalTest(t *testing.T) (*Manager, Executi
 // Emits only inert modeled history for the subsequent standalone CLI test.
 // No process, provider, callback or original descriptor crosses this boundary.
 func TestMihomoLiveColdExportNativeHistoricalIntent(t *testing.T) {
+	exportMihomoColdNativeHistory(t, false)
+}
+func TestMihomoLiveColdHealth9ExportNativeHistoricalIntent(t *testing.T) {
+	exportMihomoColdNativeHistory(t, true)
+}
+func exportMihomoColdNativeHistory(t *testing.T, health9 bool) {
 	if os.Getenv("RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE") != "1" {
 		t.Skip("explicit disposable export only")
 	}
@@ -26,7 +33,7 @@ func TestMihomoLiveColdExportNativeHistoricalIntent(t *testing.T) {
 	if !filepath.IsAbs(work) || filepath.Clean(work) != os.TempDir() {
 		t.Fatal("private fixture workspace required")
 	}
-	m, _, _, _, _, _ := mihomoLiveColdRetirementFixture(t)
+	m, _, original, _, _, _ := mihomoLiveColdRetirementFixture(t)
 	files := map[string][]byte{}
 	for _, name := range []string{"latest-execution.json", "latest-plan.json"} {
 		data, err := os.ReadFile(filepath.Join(m.StateRoot, name))
@@ -35,11 +42,35 @@ func TestMihomoLiveColdExportNativeHistoricalIntent(t *testing.T) {
 		}
 		files[name] = data
 	}
+	name := "mihomo-cold-history.json"
+	if health9 {
+		// Historical settled operation is documentary model input only.
+		original.State, original.FinishedAt = "committed", original.StartedAt
+		original.Resources[0].State, original.Resources[0].Phase = "active", "active"
+		original.Resources[0].MihomoLive.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}
+		for n := range original.Steps {
+			original.Steps[n].State = "passed"
+			original.Steps[n].FinishedAt = original.StartedAt
+		}
+		before, err := json.Marshal(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original.MihomoLiveHealthOperation = &ExecutionMihomoLiveHealthOperation{Schema: 1, ID: strings.Repeat("b", 64), PlanID: original.PlanID, PlanDigest: original.Digest, BeforeSHA256: nodeDefaultSourceMaterialHash(before), Phase: "settled"}
+		if err := validateExecutionResources(original, true); err != nil {
+			t.Fatal("modeled settled9 history", err)
+		}
+		files["latest-execution.json"], err = json.Marshal(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name = "mihomo-cold-health9-history.json"
+	}
 	raw, err := json.Marshal(files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := os.OpenFile(filepath.Join(work, "mihomo-cold-history.json"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := os.OpenFile(filepath.Join(work, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}

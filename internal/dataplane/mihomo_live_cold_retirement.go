@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 type mihomoColdManifest struct {
@@ -52,12 +54,12 @@ func (m *Manager) RetireMihomoLiveAfterBoot(ctx context.Context, id, digest stri
 			return netidentity.Identity{}, errors.Join(ErrMihomoLiveRetirement, err)
 		}
 		return identity, nil
-	}, nil)
+	}, updatecheck.NewExecutionHistoryAdmission(InspectRetainedExecutionReadVersion), nil)
 }
 
 // Private fixture seam supplies negative observations only. Production above
 // always uses the actual original provider and complete native inventories.
-func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest string, a *ProxyTunnelAdapter, offlineCurrent func(context.Context) error, absent func(context.Context, ExecutionMihomoLiveDefinition) (netidentity.Identity, error), fault func(string) error) (result Execution, resultErr error) {
+func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest string, a *ProxyTunnelAdapter, offlineCurrent func(context.Context) error, absent func(context.Context, ExecutionMihomoLiveDefinition) (netidentity.Identity, error), history *updatecheck.ExecutionHistoryAdmission, fault func(string) error) (result Execution, resultErr error) {
 	if m == nil || a == nil || a.ID() != "mihomo" || a.StateRoot != filepath.Join(m.StateRoot, "mihomo") || !validPlanID(id) || !validPlanDigest(digest) || offlineCurrent == nil || absent == nil || xraySelectedTCPFinite(ctx) != nil {
 		return result, ErrMihomoLiveRetirement
 	}
@@ -207,6 +209,17 @@ func (m *Manager) retireMihomoLiveMetadata(ctx context.Context, id, digest strin
 		held, e2 := state.Stat(".")
 		if e1 != nil || e2 != nil || !networkPolicyPrivateDirectory(info) || !executionHistoryOwner(info, true) || !os.SameFile(info, held) {
 			return ErrMihomoLiveRetirement
+		}
+		if before.MihomoLiveHealthOperation != nil {
+			// The original health header survives retirement. Bind the real fleet
+			// scanner to this installation and admit reader9 at EVERY publication
+			// bookend; old controllers may not become viable after terminalizing it.
+			if history == nil || m.StateRoot != filepath.Join(installpath.State, "dataplane") {
+				return ErrMihomoLiveRetirement
+			}
+			if err := history.CheckWrite(ctx, 9); err != nil {
+				return err
+			}
 		}
 		return errors.Join(checkMihomoColdDirectory(state, "transactions", transactions), checkMihomoColdDirectory(transactions, id, transaction), offlineCurrent(ctx), ctx.Err())
 	}

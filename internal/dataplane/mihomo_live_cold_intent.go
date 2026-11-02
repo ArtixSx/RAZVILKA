@@ -22,6 +22,11 @@ func decodeMihomoLiveRetirementIntent(raw []byte) (Execution, ExecutionMihomoLiv
 	if len(raw) == 0 || len(raw) > 4<<20 || nfqws2ManagedUniqueJSON(raw) != nil || decoder.Decode(&e) != nil || decoder.Decode(new(any)) != io.EOF || !validPlanID(e.PlanID) || e.ResourcePlanID != "" || validateExecutionResources(e, false) != nil {
 		return e, d, ErrMihomoLiveRetirement
 	}
+	// Reader9 in-flight health/Stop has its own original writer and cleanup
+	// protocol. A cold metadata reader cannot turn it into a settled operation.
+	if h := e.MihomoLiveHealthOperation; h != nil && h.Phase != "settled" && h.Phase != "retired" {
+		return e, d, ErrMihomoLiveRetirement
+	}
 	// An interrupted commit retains its separate publication protocol. Offline
 	// retirement may not turn a finalizing transaction into an acknowledged one.
 	switch e.State {
@@ -58,7 +63,15 @@ func mihomoLiveRetirementTerminal(before Execution, finished string) (Execution,
 	if _, _, err := decodeMihomoLiveRetirementIntent(raw); err != nil {
 		return Execution{}, err
 	}
+	if h := before.MihomoLiveHealthOperation; h != nil && h.Phase != "settled" {
+		return Execution{}, ErrMihomoLiveRetirement
+	}
 	after := before
+	if h := before.MihomoLiveHealthOperation; h != nil {
+		copy := *h
+		copy.Phase = "retired"
+		after.MihomoLiveHealthOperation = &copy
+	}
 	after.Resources = cloneExecutionResources(before.Resources)
 	after.Steps = append([]ExecutionStep(nil), before.Steps...)
 	for i := range after.Resources {
@@ -79,4 +92,21 @@ func mihomoLiveRetirementTerminal(before Execution, finished string) (Execution,
 	after.RollbackVerified = false
 	after.Steps = append(after.Steps, ExecutionStep{Adapter: "mihomo", Phase: "close-retire-mihomo", State: "passed", StartedAt: finished, FinishedAt: finished, Detail: mihomoLiveRetirementDetail})
 	return after, validateExecutionResources(after, true)
+}
+
+// Documentary minimum only, never an offline proof or publication authority.
+// Actual callers must still admit this version with their original fleet
+// reader before writing the derived offline terminal/history image.
+func MihomoLiveOfflineRetirementReadVersion(before Execution) (int, error) {
+	raw, err := json.Marshal(before)
+	if err != nil {
+		return 0, err
+	}
+	if _, _, err := decodeMihomoLiveRetirementIntent(raw); err != nil {
+		return 0, err
+	}
+	if before.MihomoLiveHealthOperation != nil {
+		return 9, nil
+	}
+	return 8, nil
 }

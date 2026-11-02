@@ -79,7 +79,7 @@ func TestMihomoLiveColdRetirementResumesEveryDurableBoundary(t *testing.T) {
 			}
 			guard := func(c context.Context) error { return c.Err() }
 			cutErr := errors.New("lost native publication ACK")
-			out, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, func(stage string) error {
+			out, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil, func(stage string) error {
 				if stage == cut {
 					return cutErr
 				}
@@ -94,7 +94,7 @@ func TestMihomoLiveColdRetirementResumesEveryDurableBoundary(t *testing.T) {
 				}
 				identity.BootID = "22222222-3333-4444-8555-666666666666"
 				m = New(m.StateRoot)
-				out, err = m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil)
+				out, err = m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil, nil)
 			}
 			if err != nil || out.RollbackVerified || out.State != "rolled-back" || out.Resources[0].Phase != "removed" || out.Steps[0].State != "failed" || observations < 2 {
 				t.Fatal(out, err, observations)
@@ -113,7 +113,7 @@ func TestMihomoLiveColdRetirementResumesEveryDurableBoundary(t *testing.T) {
 			if json.Unmarshal(raw, &manifest) != nil || !bytes.Equal(manifest.Before, before) {
 				t.Fatal("original history changed")
 			}
-			if _, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil); err != nil {
+			if _, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil, nil); err != nil {
 				t.Fatal("idempotent explicit retry", err)
 			}
 			// A preview cannot make the retired runtime eligible for replay.
@@ -177,7 +177,7 @@ func TestMihomoLiveColdRetirementRefusesChangedNegativeProof(t *testing.T) {
 				}
 				return identity, nil
 			}
-			if out, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil); err == nil || out.PlanID != "" {
+			if out, err := m.retireMihomoLiveMetadata(ctx, e.PlanID, e.Digest, a, guard, observe, nil, nil); err == nil || out.PlanID != "" {
 				t.Fatal("changed proof accepted", out, err)
 			}
 			raw, err := os.ReadFile(filepath.Join(m.StateRoot, "transactions", e.PlanID, "execution.json"))

@@ -25,6 +25,9 @@ func validateMihomoHealthOperation(e Execution) error {
 		}
 		return nil
 	}
+	if e.DomainDNSCoexistence != nil {
+		return ErrExecutionJournal
+	}
 	planID := e.PlanID
 	if e.ResourcePlanID != "" {
 		planID = e.ResourcePlanID

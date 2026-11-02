@@ -135,7 +135,7 @@ fi
 # Separate genuine source admission diagnostic; it does not stand in for the
 # full NFQWS2 packet workflow or positive offline retirement.
 if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
-  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent'
+  probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent TestMihomoLiveColdHealth9ExportNativeHistoricalIntent TestMihomoLiveColdHealth9CLINativeHistoricalIntent'
   probe_timeout=220s
 fi
 for probe_case in $probe_cases; do
@@ -143,10 +143,16 @@ probe_status=0
 probe_program=/opt/bin/razvilka
 case "$probe_case" in TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
-  TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
-  TestMihomoLiveColdCLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
+  TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
+  TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
 esac
+RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/app.test"
+if test "$probe_case" = TestMihomoLiveColdHealth9CLINativeHistoricalIntent; then
+  RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/controller.test"
+fi
+export RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER
 unshare --mount --net sh -c '
+
   set -eu
   mount --make-rprivate /
   mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
@@ -155,7 +161,7 @@ unshare --mount --net sh -c '
   mkdir -m 755 /opt/bin
   touch /opt/bin/razvilka
   chmod 500 /opt/bin/razvilka
-  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_WORK/app.test" /opt/bin/razvilka
+  mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER" /opt/bin/razvilka
   # Production LookupNetIP uses the real resolver and this private mount;
   # no supplied address/lookup callback bypasses catalogue DNS selection.
   mount --bind "$RAZVILKA_MANAGED_PROBE_FIXTURE_WORK/hosts" /etc/hosts

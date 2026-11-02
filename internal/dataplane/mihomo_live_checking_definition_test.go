@@ -39,6 +39,7 @@ func TestMihomoActiveCheckingStrictOriginalDefinition(t *testing.T) {
 			e.Resources = append(e.Resources, ExecutionResource{ID: "foreign", Kind: "future"})
 		},
 		"receipt missing":   func(e *Execution) { e.Resources[0].MihomoLive.Observation = nil },
+		"mixed DNS owner":   func(e *Execution) { e.DomainDNSCoexistence = &ExecutionDomainDNSCoexistenceDefinition{} },
 		"missing header":    func(e *Execution) { e.MihomoLiveHealthOperation = nil },
 		"future header":     func(e *Execution) { e.MihomoLiveHealthOperation.Schema = 2 },
 		"unknown phase":     func(e *Execution) { e.MihomoLiveHealthOperation.Phase = "unknown" },

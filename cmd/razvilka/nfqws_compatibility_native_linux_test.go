@@ -21,6 +21,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/app"
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/security"
@@ -32,6 +33,9 @@ import (
 // production early CLI dispatch. No provider test prefix or asset approval is
 // introduced; all other invocations use the ordinary Go test runner.
 func TestMain(m *testing.M) {
+	if handled, code := runExecutionReadCommand(os.Args[1:]); handled {
+		os.Exit(code)
+	}
 	if len(os.Args) == 2 && os.Args[1] == "-node-history-read-version" {
 		os.Exit(mainWithSelfUpdateJournalRoots(productionSelfUpdateJournalRoots()))
 	}
@@ -46,6 +50,19 @@ func TestMain(m *testing.M) {
 		os.Exit(code)
 	}
 	os.Exit(m.Run())
+}
+
+func TestNativeTestBinaryExecutionHistoryMetadataDispatch(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, self, "-dataplane-execution-read-version").Output()
+	if err != nil || string(output) != strconv.Itoa(dataplane.ExecutionReadVersion)+"\n" {
+		t.Fatal("actual test controller did not dispatch production execution metadata", err)
+	}
 }
 
 func TestNativeTestBinaryNodeHistoryMetadataDispatch(t *testing.T) {

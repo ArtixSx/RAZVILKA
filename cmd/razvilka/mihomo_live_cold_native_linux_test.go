@@ -13,13 +13,18 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/privaterestore"
 )
 
 // Actual offline CLI entry, original five private leases, held config and
 // production source assembly. Historical prior boot is inert model input;
 // native platform classification uses the existing explicitly tagged fixture.
-func TestMihomoLiveColdCLINativeHistoricalIntent(t *testing.T) {
+func TestMihomoLiveColdCLINativeHistoricalIntent(t *testing.T) { runMihomoColdNativeCLI(t, false) }
+func TestMihomoLiveColdHealth9CLINativeHistoricalIntent(t *testing.T) {
+	runMihomoColdNativeCLI(t, true)
+}
+func runMihomoColdNativeCLI(t *testing.T, health9 bool) {
 	if os.Getenv("RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE") != "1" {
 		t.Skip("explicit disposable CLI fixture only")
 	}
@@ -27,7 +32,11 @@ func TestMihomoLiveColdCLINativeHistoricalIntent(t *testing.T) {
 	if !filepath.IsAbs(work) || filepath.Clean(work) != os.TempDir() || os.Geteuid() != 0 {
 		t.Fatal("private native workspace required")
 	}
-	raw, err := os.ReadFile(filepath.Join(work, "mihomo-cold-history.json"))
+	name := "mihomo-cold-history.json"
+	if health9 {
+		name = "mihomo-cold-health9-history.json"
+	}
+	raw, err := os.ReadFile(filepath.Join(work, name))
 	if err != nil || len(raw) > 1<<20 {
 		t.Fatal("modeled historical input", err)
 	}
@@ -44,6 +53,9 @@ func TestMihomoLiveColdCLINativeHistoricalIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := offlineStopTestPaths(base)
+	if health9 {
+		paths.dataplane = filepath.Join(installpath.State, "dataplane")
+	}
 	write := func(path string, data []byte) {
 		t.Helper()
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -83,6 +95,16 @@ func TestMihomoLiveColdCLINativeHistoricalIntent(t *testing.T) {
 	}
 	if result.State != "rolled-back" || result.RollbackVerified || result.PlanID != original.PlanID {
 		t.Fatal("wrong terminal result", result.State)
+	}
+	if health9 {
+		got, before := result.MihomoLiveHealthOperation, original.MihomoLiveHealthOperation
+		if got == nil || before == nil || got.Phase != "retired" || got.ID != before.ID || got.BeforeSHA256 != before.BeforeSHA256 || got.PlanID != before.PlanID || got.PlanDigest != before.PlanDigest {
+			t.Fatal("offline9 header anchors not retained")
+		}
+		if version, _, err := dataplane.InspectRetainedExecutionReadVersion(ctx, paths.dataplane); err != nil || version != 9 {
+			t.Fatal("actual offline terminal scanner lost reader9", version, err)
+		}
+		t.Log("actual fleet admission + all five CLI leases + fresh native absence + terminal reader9 history passed; original old boot and settled health are modeled")
 	}
 	current, err := os.ReadFile(paths.config)
 	if err != nil || !bytes.Equal(current, configImage) {
