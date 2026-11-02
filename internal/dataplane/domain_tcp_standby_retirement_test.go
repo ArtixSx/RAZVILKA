@@ -244,6 +244,50 @@ func TestDomainTCPStandbyFinalizationRetryKeepsOriginalCustody(t *testing.T) {
 	}
 }
 
+// Actual authored FD and sync ordering only; kernel cleanup is a model input.
+func TestDomainTCPStandbyDurabilityFailureKeepsAuthoredDescriptors(t *testing.T) {
+	for _, cut := range []int{0, 1, 2} {
+		t.Run(string(rune('0'+cut)), func(t *testing.T) {
+			r, retained, ctx := standbyRetirementPublicationModel(t)
+			witness := errors.New("directory durability ACK failure")
+			calls := 0
+			r.syncDirectory = func(root *ownedfs.Root) error {
+				if err := syncDataplaneJournalDirectory(root); err != nil {
+					return err
+				}
+				index := calls
+				calls++
+				if index == cut {
+					return witness
+				}
+				return nil
+			}
+			if err := r.publishRemoved(ctx, retained); !errors.Is(err, witness) {
+				t.Fatal("durability failure lost", err)
+			}
+			if r.publicationDone || r.finished || retained.scope.manager.retainedXrayOwner() != retained {
+				t.Fatal("failed durability ACK released original owner")
+			}
+			d := retained.records
+			if err := d.current(ctx, false); err != nil {
+				t.Fatal("failed durability ACK closed accepted descriptor", err)
+			}
+			if cut == 2 {
+				if !r.globalPublished || r.owner.globalRecordCurrent(retained.scope.managerRoot, *retained.scope.execution) != nil {
+					t.Fatal("global durability failure lost SAME authored inode")
+				}
+			}
+			r.syncDirectory = nil
+			if err := r.publishRemoved(ctx, retained); err != nil {
+				t.Fatal("same original owner could not resume durability", err)
+			}
+			if !r.finished {
+				t.Fatal("known finalization not completed")
+			}
+		})
+	}
+}
+
 func TestDomainTCPStandbyDNSOwnerRetirementRefusesChangedInputs(t *testing.T) {
 	for _, change := range []string{"foreign-destination", "equal-image-replacement", "same-inode-mutation"} {
 		t.Run(change, func(t *testing.T) {
