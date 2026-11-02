@@ -55,10 +55,13 @@ func nfqws2ActiveRetirementTerminal(ctx context.Context, o *nfqws2ActiveOwner) (
 	return settled, nil
 }
 
-func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveOwner, p *NFQWSPreparedHandle, h *NFQWSActiveHandle, verifyCommon func(context.Context, NFQWSExecutionBinding, NFQWSScopedProcessProof) error) error {
+func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveOwner, p *NFQWSPreparedHandle, h *NFQWSActiveHandle, verifyCommon func(context.Context, NFQWSExecutionBinding, NFQWSScopedProcessProof) error) (result error) {
+	stage := "retire.owner"
+	defer func() { result = nfqwsExecutionFailure(stage, result) }()
 	if a == nil || o == nil || o.adapter != a || verifyCommon == nil || nfqws2ActiveOperation(ctx) != nil {
 		return ErrNFQWSManagedProcessUnknown
 	}
+	stage = "retire.original-state"
 	nfqws2ActiveAdapterMu.Lock()
 	o.mu.Lock()
 	valid := a.activeProcess == o && a.StateRoot == o.command.StateRoot && !o.retirementStarted && o.stopRequested &&
@@ -76,6 +79,7 @@ func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveO
 	if !valid {
 		return ErrNFQWSManagedProcessUnknown
 	}
+	stage = "retire.terminal"
 	settled, err := nfqws2ActiveRetirementTerminal(ctx, o)
 	if err != nil {
 		return err
@@ -88,7 +92,7 @@ func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveO
 			return errors.Join(ErrNFQWSManagedProcessUnknown, err)
 		}
 		if err = verifyCommon(ctx, binding, settled.proof()); err != nil {
-			return err
+			return nfqwsExecutionFailure("retire.common", err)
 		}
 		after, err := nfqws2ActiveRetirementTerminal(ctx, o)
 		if err != nil || !reflect.DeepEqual(after, settled) {
@@ -96,9 +100,11 @@ func (a *NFQWS2Adapter) retireNFQWSProcess(ctx context.Context, o *nfqws2ActiveO
 		}
 		return ctx.Err()
 	}}
+	stage = "retire.native-common"
 	if err = once.invoke(func(common func() error) error { return retire(ctx, settled, common) }); err != nil {
 		return errors.Join(ErrNFQWSManagedProcessUnknown, err)
 	}
+	stage = "retire.closing"
 	if nfqws2ActiveOperation(ctx) != nil {
 		return ErrNFQWSManagedProcessUnknown
 	}
