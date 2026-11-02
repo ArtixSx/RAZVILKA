@@ -803,6 +803,8 @@ func adapterID(route string) string {
 		return "wireguard"
 	case route == "xray" || strings.HasPrefix(route, "xray:"):
 		return "xray"
+	case route == "mihomo" || strings.HasPrefix(route, "mihomo:"):
+		return "mihomo"
 	case route == "sing-box" || strings.HasPrefix(route, "sing-box:"):
 		return "sing-box"
 	default:
@@ -816,7 +818,7 @@ func AdapterID(route string) string { return adapterID(route) }
 
 // These adapters route by destination IP. A route that carries domains would
 // make one DNS answer the capture authority for every site on that address.
-var domainCaptureAdapters = []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard"}
+var domainCaptureAdapters = []string{"sing-box", "xray", "usque", "warp-wg", "amneziawg", "wireguard", "mihomo"}
 
 // DomainFlowAuthority reports whether the executor of a public route value may
 // carry a service's domain list. NFQWS2 decides each connection by its own

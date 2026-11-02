@@ -133,6 +133,9 @@ func TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup(t *testing.T) 
 	if err := child.Cleanup(ctx, cleanup); err == nil {
 		t.Fatal("released Apply cleanup review reactivated")
 	}
+	if err := child.CurrentForCleanup(ctx, cleanup); err == nil {
+		t.Fatal("released old cleanup review supplied a native comparison")
+	}
 	if _, err := operationgate.RequestSelfUpdateStop(ctx, controlRoot, "11111111111111111111111111111111", 7); err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +151,24 @@ func TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := child.CurrentForCleanup(stop, fresh); err != nil {
+		t.Fatal("actual stopped original child lost cleanup-only comparison", err)
+	}
+	foreignGate := &operationgate.Gate{}
+	foreignHeld, releaseForeign, err := foreignGate.ExclusiveContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := foreignGate.ReviewExclusiveCleanup(foreignHeld)
+	if err != nil {
+		releaseForeign()
+		t.Fatal(err)
+	}
+	if err := child.CurrentForCleanup(stop, foreign); err == nil {
+		releaseForeign()
+		t.Fatal("foreign cleanup minted original child comparison")
+	}
+	releaseForeign()
 	if err := child.Cleanup(stop, fresh); err != nil {
 		t.Fatal("fresh actual cleanup did not retire same child", err)
 	}

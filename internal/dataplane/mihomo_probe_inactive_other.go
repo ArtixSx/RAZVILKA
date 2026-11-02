@@ -12,3 +12,6 @@ import (
 func observeMihomoProbeInactive(context.Context, *netidentity.Provider, *components.MihomoReplacementReview) error {
 	return ErrRuntimeInactivity
 }
+func observeMihomoInactiveOriginal(context.Context, *netidentity.Provider, *components.MihomoReplacementReview, *mihomoLiveResource) error {
+	return ErrRuntimeInactivity
+}

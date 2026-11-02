@@ -180,6 +180,13 @@ func TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cleanupObservation, err := observeMihomoLiveCleanupProcess(stop, child, fresh, provider, identity)
+	if err != nil || !first.same(cleanupObservation) {
+		t.Fatal("stopped original kernel child lost cleanup-only comparison", err)
+	}
+	if _, err := observeMihomoLiveCleanupProcess(stop, child, cleanup, provider, identity); err == nil {
+		t.Fatal("released original cleanup review regained kernel comparison")
+	}
 	if err := child.Cleanup(stop, fresh); err != nil {
 		t.Fatal(err)
 	}

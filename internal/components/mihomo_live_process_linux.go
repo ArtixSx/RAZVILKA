@@ -238,6 +238,15 @@ func (n *mihomoLiveNativeLinux) homeCurrent() error {
 	return nil
 }
 func (n *mihomoLiveNativeLinux) current(ctx context.Context) error {
+	return n.currentMode(ctx, nil)
+}
+func (n *mihomoLiveNativeLinux) currentForCleanup(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
+	if cleanup == nil {
+		return ErrMihomoLiveOwner
+	}
+	return n.currentMode(ctx, cleanup)
+}
+func (n *mihomoLiveNativeLinux) currentMode(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	select {
@@ -256,8 +265,14 @@ func (n *mihomoLiveNativeLinux) current(ctx context.Context) error {
 	if n.command.Path != "/proc/self/fd/3" || !slices.Equal(n.command.Args, []string{"mihomo", "-f", "/proc/self/fd/4", "-d", "/proc/self/fd/5"}) || len(n.command.Env) != 0 || n.command.Cancel != nil || len(n.command.ExtraFiles) != 3 || n.command.ExtraFiles[0] != n.binary || n.command.ExtraFiles[1] != n.profile || n.command.ExtraFiles[2] != n.directory || n.command.SysProcAttr == nil || n.command.SysProcAttr.Pdeathsig != syscall.SIGKILL {
 		return ErrMihomoLiveOwner
 	}
-	if err := n.owner.control.ObserveCurrent(ctx); err != nil {
-		return err
+	var controlErr error
+	if cleanup == nil {
+		controlErr = n.owner.control.ObserveCurrent(ctx)
+	} else {
+		controlErr = n.owner.control.CurrentForCleanupOperation(ctx, cleanup)
+	}
+	if controlErr != nil {
+		return controlErr
 	}
 	return n.filesCurrent(ctx)
 }

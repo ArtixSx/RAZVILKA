@@ -30,6 +30,7 @@ func (*MihomoLiveProcess) GoString() string { return "[private original live Mih
 type mihomoLiveNative interface {
 	start(context.Context, func(context.Context, func() error) error) error
 	current(context.Context) error
+	currentForCleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	cleanup(context.Context, *operationgate.ExclusiveCleanupReview) error
 	pid() int
 	file(string, os.FileInfo) bool
@@ -118,6 +119,30 @@ func (p *MihomoLiveProcess) Current(ctx context.Context) error {
 		return err
 	}
 	return p.native.current(ctx)
+}
+
+// CurrentForCleanup is a read-only comparison of this same retained child,
+// bound to a fresh genuine cleanup operation. It cannot earn service evidence,
+// revive forward health or issue Start after durable Stop.
+func (p *MihomoLiveProcess) CurrentForCleanup(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
+	if p == nil || p.self != p || cleanup == nil {
+		return ErrMihomoLiveOwner
+	}
+	if err := mihomoLiveFinite(ctx); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed || p.closeErr != nil || p.native == nil {
+		return ErrMihomoLiveOwner
+	}
+	if err := p.control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
+		return err
+	}
+	if err := p.source.Current(ctx); err != nil {
+		return err
+	}
+	return p.native.currentForCleanup(ctx, cleanup)
 }
 func (p *MihomoLiveProcess) PID() int {
 	if p == nil || p.self != p {

@@ -216,5 +216,13 @@ func (m *Manager) HasPendingManagedXraySelectedTCP() bool {
 		return true
 	}
 	o := m.retainedXrayOwner()
-	return o != nil && o.self == o && o.pending
+	if o == nil || o.self != o {
+		return false
+	}
+	if o.scope == nil {
+		return true // An original slot with missing lifetime cannot confirm idle.
+	}
+	o.scope.mu.Lock()
+	defer o.scope.mu.Unlock()
+	return o.pending
 }

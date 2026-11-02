@@ -58,6 +58,9 @@ type executionResourceScope struct {
 	domainTCPProof          bool // Only the original reader3-admitted temporary-check entry sets this.
 	mihomoProof             bool // Only the original reader4-admitted finite check sets this.
 	mihomo                  *mihomoProbeResource
+	mihomoLive              *mihomoLiveResource
+	mihomoRetryRollback     func(context.Context) error
+	mihomoClosing           bool // Original terminal close cursor; never an effect grant.
 	domainDNS               *ScopedDNSAdapter
 	domainDNSBinding        *SyntheticDNSExecutionBinding
 	retainedXrayOwner       *retainedXrayExecution
@@ -178,7 +181,11 @@ func (s *executionResourceScope) checkOriginalOwner(ctx context.Context, resourc
 			return ErrNFQWSScopedOwner
 		}
 		if s.retained {
-			if s.retainedWGOwner != nil {
+			if s.mihomoLive != nil {
+				if err := s.checkRetainedMihomoOperation(ctx, true); err != nil {
+					return err
+				}
+			} else if s.retainedWGOwner != nil {
 				if err := s.checkRetainedWGOperation(ctx, true); err != nil {
 					return err
 				}
@@ -462,6 +469,26 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if s.mihomoLive != nil && s.open {
+		if s.retained && !s.mihomoClosing {
+			s.observationOpen.Store(false)
+			s.cancel()
+			pending := s.pending
+			s.mu.Unlock()
+			if pending {
+				return ErrPolicyAdditionUnknown
+			}
+			return nil
+		}
+		terminal := validateExecutionResources(*s.execution, true) == nil
+		for _, row := range s.execution.Resources {
+			terminal = terminal && (row.State == "removed" || row.State == "unused")
+		}
+		if !terminal {
+			s.mu.Unlock()
+			return errors.Join(ErrPolicyAdditionUnknown, s.manager.retainOriginalMihomo(s, true))
+		}
+	}
 	if s.mihomo != nil && s.open {
 		s.observationOpen.Store(false)
 		s.cancel()
@@ -552,6 +579,9 @@ func (s *executionResourceScope) close() error {
 	}
 	for _, resource := range s.xrayDomainTCP {
 		err = errors.Join(err, resource.closeOriginalDescriptors())
+	}
+	if s.mihomoLive != nil {
+		err = errors.Join(err, s.mihomoLive.records.close())
 	}
 	if s.wgRecords != nil {
 		err = errors.Join(err, s.wgRecords.close())

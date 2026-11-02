@@ -22,7 +22,8 @@ import (
 // Version4 also reads retained restorative standby and scoped Mihomo intent;
 // interpreting these records never grants adoption, launch or cleanup.
 // Version5 additionally reads source-issued Mihomo parent/death lineage.
-const ExecutionReadVersion = 5
+// Version6 additionally reads persistent original Mihomo runtime intent.
+const ExecutionReadVersion = 6
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -135,6 +136,9 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 			return 0, "", ErrExecutionJournal
 		}
 		for _, resource := range execution.Resources {
+			if resource.MihomoLive != nil {
+				required = max(required, 6)
+			}
 			if resource.DomainTCPCapture != nil || resource.XrayDomainTCP != nil || resource.NFQWS != nil && resource.NFQWS.Spec.Probe != nil {
 				required = max(required, 2)
 			}

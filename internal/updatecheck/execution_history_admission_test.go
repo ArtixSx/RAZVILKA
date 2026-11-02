@@ -12,7 +12,7 @@ import (
 )
 
 func TestExecutionHistoryRequiresEveryRetainedController(t *testing.T) {
-	for _, version := range []int{0, 1, 2, 3, 4, 5, 6} {
+	for _, version := range []int{0, 1, 2, 3, 4, 5, 6, 7} {
 		i := componentAdmissionFixture(t)
 		componentAdmissionOldController(t, i)
 		a := NewExecutionHistoryAdmission(func(context.Context, string) (int, string, error) { return 1, "unchanged", nil })
@@ -25,9 +25,9 @@ func TestExecutionHistoryRequiresEveryRetainedController(t *testing.T) {
 }
 
 func TestExecutionHistoryRequestedFormatCannotBypassExistingHistory(t *testing.T) {
-	for _, retained := range []int{1, 2, 3, 4, 5, 6} {
-		for _, old := range []int{1, 2, 3, 4, 5, 6} {
-			for _, wanted := range []int{0, 1, 2, 3, 4, 5, 6} {
+	for _, retained := range []int{1, 2, 3, 4, 5, 6, 7} {
+		for _, old := range []int{1, 2, 3, 4, 5, 6, 7} {
+			for _, wanted := range []int{0, 1, 2, 3, 4, 5, 6, 7} {
 				t.Run(fmt.Sprintf("history%d/old%d/wanted%d", retained, old, wanted), func(t *testing.T) {
 					i := componentAdmissionFixture(t)
 					componentAdmissionOldController(t, i)
@@ -91,7 +91,7 @@ func TestExecutionHistoryCandidateUsesExactFlagAndCompleteSeal(t *testing.T) {
 		}
 		inspect := func(context.Context, string) (int, string, error) { return 2, "same", nil }
 		err := checkExecutionHistoryCapability(context.Background(), "candidate", "root", probe, inspect)
-		if !called || (err == nil) != (response == "2\n" || response == "3\n" || response == "4\n" || response == "5\n") {
+		if !called || (err == nil) != (response == "2\n" || response == "3\n" || response == "4\n" || response == "5\n" || response == "6\n") {
 			t.Fatal(response, err)
 		}
 	}

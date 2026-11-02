@@ -19,12 +19,16 @@ import (
 // This registration supports a finite check only. None of the ordinary Apply
 // methods can launch a child, including with a forged Ready plan.
 type MihomoProbeAdapter struct {
-	self       *MihomoProbeAdapter
-	components *components.Manager
-	provider   *netidentity.Provider
-	mu         sync.Mutex
-	busy       bool
-	pending    *mihomoProbeResource
+	self        *MihomoProbeAdapter
+	components  *components.Manager
+	provider    *netidentity.Provider
+	mu          sync.Mutex
+	busy        bool
+	pending     *mihomoProbeResource
+	livePending *mihomoLiveResource
+	liveActive  *mihomoLiveResource
+	liveProxy   *ProxyTunnelAdapter
+	liveManager *Manager
 }
 
 func NewMihomoProbeAdapter(manager *components.Manager, provider *netidentity.Provider) *MihomoProbeAdapter {

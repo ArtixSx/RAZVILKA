@@ -12,17 +12,12 @@ import (
 
 func TestNodeTransitReservationsFollowCompleteSharedRegistry(t *testing.T) {
 	owners, transit := PolicyOwnershipSpecs(), NodeTransitOwnershipSpecs()
-	end := 0
-	for _, owner := range owners {
-		if owner.SharedPriorityEnd > end {
-			end = owner.SharedPriorityEnd
-		}
-	}
+	stable := map[string]int{"warp-wg": 72, "usque": 73, "sing-box": 74, "xray": 75, "amneziawg": 76, "wireguard": 77, "mihomo": 80}
 	if len(transit) != len(owners) {
 		t.Fatal("transit reservation inventory omitted an adapter")
 	}
 	for i, slot := range transit {
-		if slot.Engine != owners[i].Adapter || slot.Interface != owners[i].Interface || slot.Table != owners[i].Table || slot.Priority != end+i+1 || slot.Table == 219 || slot.Priority == 18050 {
+		if slot.Engine != owners[i].Adapter || slot.Interface != owners[i].Interface || slot.Table != owners[i].Table || slot.Priority != stable[slot.Engine] || slot.Table == 219 || slot.Priority == 18050 {
 			t.Fatal("transit allocator reused canary/foreign coordinates", slot)
 		}
 		for _, owner := range owners {
@@ -32,7 +27,7 @@ func TestNodeTransitReservationsFollowCompleteSharedRegistry(t *testing.T) {
 		}
 	}
 	transit[0].Priority = 1
-	if NodeTransitOwnershipSpecs()[0].Priority != end+1 {
+	if NodeTransitOwnershipSpecs()[0].Priority != 72 {
 		t.Fatal("caller mutated the central inventory")
 	}
 }

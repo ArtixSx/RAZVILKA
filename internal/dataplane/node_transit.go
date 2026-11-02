@@ -52,23 +52,38 @@ type NodeTransitOwnershipSpec struct {
 
 func NodeTransitOwnershipSpecs() []NodeTransitOwnershipSpec {
 	owners := PolicyOwnershipSpecs()
-	end := 0
-	for _, owner := range owners {
-		if owner.SharedPriorityEnd > end {
-			end = owner.SharedPriorityEnd
-		}
-	}
-	if end < 1 || len(owners) == 0 || len(owners) > 64 || end > (1<<31-1)-len(owners) {
+	if len(owners) == 0 || len(owners) > 64 {
 		return nil
 	}
 	result := make([]NodeTransitOwnershipSpec, len(owners))
 	for i, owner := range owners {
-		priority := end + i + 1
+		// These slots are retained in existing execution records. Deriving all
+		// of them from a growing shared-priority maximum would reinterpret old
+		// journals and collide with existing owners when an adapter is added.
+		priority := 0
+		switch owner.Adapter {
+		case "warp-wg":
+			priority = 72
+		case "usque":
+			priority = 73
+		case "sing-box":
+			priority = 74
+		case "xray":
+			priority = 75
+		case "amneziawg":
+			priority = 76
+		case "wireguard":
+			priority = 77
+		case "mihomo":
+			priority = 80
+		default:
+			return nil
+		}
 		if owner.Adapter == "" || !proxyFirewallInterface.MatchString(owner.Interface) || owner.Table < 1 || owner.Table > 252 {
 			return nil
 		}
 		for j, other := range owners {
-			if priority >= other.PriorityBase && priority <= other.PriorityEnd || priority == other.EndpointPriority || j != i && (owner.Adapter == other.Adapter || owner.Interface == other.Interface || owner.Table == other.Table) {
+			if priority >= other.PriorityBase && priority <= other.PriorityEnd || priority >= other.SharedPriorityBase && priority <= other.SharedPriorityEnd || priority == other.EndpointPriority || j != i && (owner.Adapter == other.Adapter || owner.Interface == other.Interface || owner.Table == other.Table) {
 				return nil
 			}
 		}

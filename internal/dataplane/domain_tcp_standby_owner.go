@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -20,7 +21,8 @@ type domainTCPStandbyOwner struct {
 	original   *DomainTCPOriginalScope
 	process    *XrayDomainTCPExecutionResource
 	baseline   *syntheticBaselineExecutionResource
-	latest     *os.File // SAME original global writer inode, retained across alias handoff.
+	latestMu   sync.Mutex // Serializes the original global FD, metadata and its close.
+	latest     *os.File   // SAME original global writer inode, retained across alias handoff.
 	latestInfo os.FileInfo
 }
 
@@ -351,11 +353,18 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 	info, err := file.Stat()
 	if err == nil {
 		d.mu.Lock()
+		if owner == nil || owner.self != owner {
+			d.mu.Unlock()
+			return errors.Join(ErrExecutionJournal, file.Close())
+		}
+		owner.latestMu.Lock()
 		if owner == nil || owner.self != owner || owner.process.records != d || owner.latest != nil || d.files[1] == nil {
+			owner.latestMu.Unlock()
 			d.mu.Unlock()
 			return errors.Join(ErrExecutionJournal, file.Close())
 		}
 		owner.latest, owner.latestInfo = d.files[1], d.infos[1]
+		owner.latestMu.Unlock()
 		d.files[1], d.infos[1], d.images[1] = nil, nil, nil
 		d.mu.Unlock()
 		err = d.captureOriginalRecord(1, file, info, data, d.transactionRoot, "standby-execution.json")
@@ -372,11 +381,18 @@ func (d *xraySelectedTCPExecutionRecords) detachStandbyAlias(ctx context.Context
 // hide an unknown transaction behind the retained baseline's older document.
 func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
 	owner := m.retainedXrayOwner()
-	if owner == nil || owner.self != owner || owner.standby == nil || owner.pending || owner.scope == nil || owner.scope.manager != m {
+	if owner == nil || owner.self != owner || owner.standby == nil || owner.scope == nil || owner.scope.manager != m {
 		return ErrPolicyAdditionUnknown
 	}
 	standby := owner.standby
-	if standby.self != standby || standby.latest == nil || standby.latestInfo == nil {
+	owner.scope.mu.Lock()
+	pending := owner.pending
+	sealed := !pending && standby.self == standby
+	owner.scope.mu.Unlock()
+	if pending {
+		return ErrPolicyAdditionUnknown
+	}
+	if !sealed {
 		return ErrExecutionJournal
 	}
 	check := func() error {
@@ -384,8 +400,12 @@ func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
 			return err
 		}
 		owner.scope.mu.Lock()
-		same := owner.scope.retained && owner.scope.retainedXrayOwner == owner && reflect.DeepEqual(*owner.scope.execution, record)
+		pending := owner.pending
+		same := !pending && owner.scope.retained && owner.scope.retainedXrayOwner == owner && reflect.DeepEqual(*owner.scope.execution, record)
 		owner.scope.mu.Unlock()
+		if pending {
+			return ErrPolicyAdditionUnknown
+		}
 		if !same {
 			return ErrExecutionJournal
 		}
@@ -402,7 +422,12 @@ func (m *Manager) checkKnownDomainStandbyRecord(record Execution) error {
 
 // Original FD and bytes only. This comparison cannot issue a standby owner.
 func (standby *domainTCPStandbyOwner) globalRecordCurrent(root string, record Execution) error {
-	if standby == nil || standby.self != standby || standby.latest == nil || standby.latestInfo == nil {
+	if standby == nil || standby.self != standby {
+		return ErrExecutionJournal
+	}
+	standby.latestMu.Lock()
+	defer standby.latestMu.Unlock()
+	if standby.latest == nil || standby.latestInfo == nil {
 		return ErrExecutionJournal
 	}
 	held, err := standby.latest.Stat()
@@ -426,4 +451,31 @@ func (standby *domainTCPStandbyOwner) globalRecordCurrent(root string, record Ex
 		return errors.Join(ErrExecutionJournal, afterErr, closingErr)
 	}
 	return nil
+}
+
+func (o *domainTCPStandbyOwner) globalRecordNamed(info os.FileInfo) bool {
+	o.latestMu.Lock()
+	defer o.latestMu.Unlock()
+	return o.latestInfo != nil && info != nil && os.SameFile(o.latestInfo, info)
+}
+
+// Transfer before durability ACK; sync failure must retain this exact inode.
+func (o *domainTCPStandbyOwner) replaceGlobalRecord(file *os.File, info os.FileInfo) error {
+	o.latestMu.Lock()
+	defer o.latestMu.Unlock()
+	old := o.latest
+	o.latest, o.latestInfo = file, info
+	if old != nil {
+		return old.Close()
+	}
+	return nil
+}
+
+func (o *domainTCPStandbyOwner) closeGlobalRecord() error {
+	o.latestMu.Lock()
+	defer o.latestMu.Unlock()
+	if o.latest == nil {
+		return nil
+	}
+	return o.latest.Close()
 }

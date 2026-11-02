@@ -92,6 +92,9 @@ func (m *Manager) checkExecutionRecovery() error {
 	if err := m.checkRetainedNFQWSRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
+	if err := m.checkRetainedMihomoRecord(*latest); err != nil {
+		return executionJournalError(err)
+	}
 	if err := m.checkRetainedXrayRecord(*latest); err != nil {
 		return executionJournalError(err)
 	}
@@ -124,7 +127,7 @@ func (m *Manager) settleCommittedPublication() (bool, error) {
 		return false, nil
 	}
 	// A documentary ACTIVE row cannot reconstruct the original live owner.
-	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil {
+	if m.checkRetainedNFQWSRecord(*latest) != nil || m.checkRetainedXrayRecord(*latest) != nil || m.checkRetainedMihomoRecord(*latest) != nil {
 		return false, nil
 	}
 	for _, step := range latest.Steps {
@@ -242,6 +245,9 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	if scope != nil {
+		if scope.mihomoLive != nil {
+			return executionJournalError(scope.mihomoLive.publishRecords(data))
+		}
 		if scope.mihomo != nil {
 			return executionJournalError(scope.mihomo.publishRecords(data))
 		}
@@ -256,7 +262,7 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 
 func executionHasNetworkIdentity(execution Execution) bool {
 	for _, resource := range execution.Resources {
-		if resource.SyntheticBaseline != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
+		if resource.SyntheticBaseline != nil || resource.MihomoLive != nil || resource.MihomoProbe != nil || resource.XraySelectedTCP != nil || resource.XrayDomainTCP != nil || resource.DomainTCPCapture != nil || resource.DomainTCPBaseline != nil {
 			return true
 		}
 		if resource.NFQWS != nil && (resource.NFQWS.NetworkIdentity != nil || resource.NFQWS.Spec.NetworkIdentity != nil) {
