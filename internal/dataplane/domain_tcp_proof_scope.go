@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"slices"
 	"time"
@@ -87,4 +88,65 @@ func (m *Manager) WithDomainTCPProofResources(ctx context.Context, p Plan, histo
 		return ErrDomainPolicyTCPCaptureRetirementPending
 	}
 	return m.withExecutionResourcesModeLocked(ctx, p, "xray", action, true)
+}
+
+// WithDomainTCPContinuationResources retains up to TWO original detached
+// baselines alongside ONE new finite domain execution. Neither the marker nor
+// the passed standby can be reconstructed from saved comparison history.
+func (m *Manager) WithDomainTCPContinuationResources(ctx context.Context, p Plan, history *updatecheck.ExecutionHistoryAdmission, prior *DomainTCPDetachedStandby, action func(context.Context) error) error {
+	if m == nil || ctx == nil || history == nil || prior == nil || prior.self != prior || action == nil || validateDomainTCPProofPlan(p) != nil {
+		return ErrDomainTransportRuntime
+	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded || time.Until(deadline) <= 0 || time.Until(deadline) > 2*time.Minute {
+		return ErrDomainTransportRuntime
+	}
+	if err := history.CheckWrite(ctx, 8); err != nil {
+		return err
+	}
+	if err := m.beginOperation(ctx); err != nil {
+		return err
+	}
+	defer m.endOperation()
+	if err := history.CheckWrite(ctx, 8); err != nil {
+		return err
+	}
+	guard, _ := ctx.Value(reviewGuardKey{}).(func(context.Context) error)
+	if guard == nil {
+		return ErrPolicyAdditionUnknown
+	}
+	if err := guard(ctx); err != nil {
+		return err
+	}
+	return withDomainContinuationAdmission(ctx, m, p, prior, func(admission *domainTCPContinuationAdmission) error {
+		admission.history = history
+		if c, err := m.originalDomainPublicationRetry(ctx, p, prior); err != nil {
+			return err
+		} else if c != nil {
+			if c.scope.guard == nil {
+				return ErrPolicyAdditionUnknown
+			}
+			if err := errors.Join(c.scope.guard(ctx), m.checkPlanNetwork(ctx, p)); err != nil {
+				return err
+			}
+			admission.cursor = c
+			c.mu.Lock()
+			c.admission = admission
+			c.mu.Unlock()
+			if err := m.writeExecutionOwned(c.scope.root, *c.scope.execution, c.scope); err != nil {
+				return domainTCPUnstartedFailure(c, err)
+			}
+			// Only a zero-resource initial ACK failure is cleared. No callback has
+			// run and the SAME live request/guard/plan still owns this scope.
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			c.scope.mu.Lock()
+			c.scope.failure = nil
+			c.scope.pending = false
+			c.scope.mu.Unlock()
+			return m.runScopedResourceAction(ctx, p, action, true, false, c.scope)
+		}
+		return m.withExecutionResourcesSuccessorLocked(ctx, p, "xray", action, true, false, prior, admission)
+	})
 }

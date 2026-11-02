@@ -19,6 +19,7 @@ type domainTCPGlobalHistory struct {
 	mu       sync.Mutex
 	self     *domainTCPGlobalHistory
 	owner    *domainTCPStandbyOwner
+	keeper   *domainTCPGlobalKeeper // Exact original documentary producer, never a synthetic standby.
 	process  *XrayDomainTCPExecutionResource
 	records  *xraySelectedTCPExecutionRecords
 	file     *os.File
@@ -66,7 +67,14 @@ func borrowDomainTCPGlobalHistory(ctx context.Context, owner *domainTCPStandbyOw
 }
 
 func (b *domainTCPGlobalHistory) currentRoot() error {
-	if b == nil || b.self != b || b.root == nil || b.owner == nil || b.owner.self != b.owner || b.owner.process != b.process || b.process == nil || b.process.records != b.records || b.records == nil || b.records.root != b.root {
+	if b == nil || b.self != b || b.root == nil || b.records == nil || b.records.root != b.root {
+		return ErrExecutionJournal
+	}
+	if b.keeper != nil {
+		if b.owner != nil || b.process != nil || b.keeper.historyBinding(b) != nil {
+			return ErrExecutionJournal
+		}
+	} else if b.owner == nil || b.owner.self != b.owner || b.owner.process != b.process || b.process == nil || b.process.records != b.records {
 		return ErrExecutionJournal
 	}
 	held, e1 := b.root.RootInfo()
@@ -74,9 +82,12 @@ func (b *domainTCPGlobalHistory) currentRoot() error {
 	if e1 != nil || e2 != nil || !domainTCPGlobalRootSame(b.rootInfo, held) || !domainTCPGlobalRootSame(held, named) {
 		return errors.Join(ErrExecutionJournal, e1, e2)
 	}
-	b.owner.latestMu.Lock()
-	same := b.owner.latest == b.file
-	b.owner.latestMu.Unlock()
+	same := true
+	if b.owner != nil {
+		b.owner.latestMu.Lock()
+		same = b.owner.latest == b.file
+		b.owner.latestMu.Unlock()
+	}
 	if !same {
 		return ErrExecutionJournal
 	}

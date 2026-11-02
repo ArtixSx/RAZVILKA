@@ -1,6 +1,8 @@
 package dataplane
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +19,33 @@ func TestDomainDNSDetachedDefinitionBindsOriginalClosedComparison(t *testing.T) 
 	if err := d.validate(e.PlanID, baseline); err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []string{"owner", "digest", "count", "unissued", "mapping", "ttl", "future"} {
+	// A JSON round trip preserves the wire's null/[] distinction in both
+	// compared observations; it cannot silently rebind an original prefix.
+	for _, chain := range [][]string{nil, {}, {"alias.example.com"}} {
+		wireModel := struct {
+			Baseline ExecutionSyntheticBaselineDefinition
+			Detached ExecutionDomainDNSDetachedDefinition
+		}{Baseline: *baseline, Detached: d.Clone()}
+		wireModel.Baseline.Mapping.CNAMEChain = chain
+		wireModel.Detached.ClosedMapping.CNAMEChain = chain
+		wire, err := json.Marshal(wireModel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(wire))
+		decoder.DisallowUnknownFields()
+		var restored struct {
+			Baseline ExecutionSyntheticBaselineDefinition
+			Detached ExecutionDomainDNSDetachedDefinition
+		}
+		if err := decoder.Decode(&restored); err != nil {
+			t.Fatal(err)
+		}
+		if err := restored.Detached.validate(e.PlanID, &restored.Baseline); err != nil {
+			t.Fatal("typed wire roundtrip changed comparison", err)
+		}
+	}
+	for _, change := range []string{"owner", "digest", "count", "count-overflow", "unissued", "mapping", "ttl", "future"} {
 		t.Run(change, func(t *testing.T) {
 			copy := d.Clone()
 			switch change {
@@ -27,6 +55,8 @@ func TestDomainDNSDetachedDefinitionBindsOriginalClosedComparison(t *testing.T) 
 				copy.LedgerPrefixSHA256 = strings.Repeat("0", 63)
 			case "count":
 				copy.LedgerCount = 0
+			case "count-overflow":
+				copy.LedgerCount = 257
 			case "unissued":
 				copy.ClosedMapping.PossiblyIssued = false
 			case "mapping":

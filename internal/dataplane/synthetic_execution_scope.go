@@ -202,6 +202,7 @@ func (b *SyntheticDNSExecutionBinding) baselineInspector(ctx context.Context, or
 	if err != nil {
 		return nil, err
 	}
+	i.successor = b.scope.domainSuccessor
 	if err := b.Current(ctx); err != nil {
 		return nil, err
 	}

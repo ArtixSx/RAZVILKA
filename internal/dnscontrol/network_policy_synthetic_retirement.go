@@ -141,7 +141,7 @@ func (r *SyntheticDNSRetirementReview) readClosed(ctx context.Context) (observat
 	wire, err := owned.ReadLimited(syntheticDNSLedgerName, 1<<20)
 	disk, decodeErr := decodeSyntheticDNSLedger(wire)
 	after, statErr := os.Lstat(r.root)
-	if err != nil || decodeErr != nil || statErr != nil || !os.SameFile(r.anchor, after) || syntheticDNSProtectedRoot(r.root) != nil || !reflect.DeepEqual(disk, s.ledger) || ctx.Err() != nil {
+	if err != nil || decodeErr != nil || statErr != nil || !os.SameFile(r.anchor, after) || syntheticDNSProtectedRoot(r.root) != nil || !s.closedLedgerMatches(disk) || ctx.Err() != nil {
 		return SyntheticDNSMappingObservation{}, errors.Join(ErrSyntheticDNSMapping, err, decodeErr, statErr, ctx.Err())
 	}
 	row.CNAMEChain = slices.Clone(row.CNAMEChain)

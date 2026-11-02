@@ -57,10 +57,10 @@ func (m *Manager) checkExecutionRecovery() error {
 	if latest == nil || latest.PlanID == "" || !filepath.IsLocal(latest.PlanID) || filepath.Base(latest.PlanID) != latest.PlanID || strings.ContainsAny(latest.PlanID, "/\\:") || latest.Digest == "" || latest.FinishedAt == "" {
 		return executionJournalError(errors.New("unfinished or invalid execution record"))
 	}
-	// Until the original coexistence pool is bound, even a terminal/empty
-	// successor leaves prior real baseline footprints. Metadata cannot adopt them.
+	// A completed new attempt can still retain its original predecessors.
+	// Documentary bytes never reconstruct that multi-owner pool after restart.
 	if latest.DomainDNSCoexistence != nil {
-		return executionJournalError(ErrPolicyAdditionUnknown)
+		return executionJournalError(m.checkKnownDomainPoolRecord(*latest))
 	}
 	knownStandby := latest.State == "resource-failed" && m.checkKnownDomainStandbyRecord(*latest) == nil
 	switch latest.State {
@@ -175,11 +175,22 @@ func (m *Manager) writeExecution(root string, execution Execution) error {
 // scope is the actual original issuer passed by the serialized Manager
 // operation or scope.persist. A decoded resource never locates this receiver.
 func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *executionResourceScope) error {
-	// Documentary transit archives have an exclusive transaction-only writer.
-	// They can never replace the current execution through the two-writer path.
-	if execution.MihomoTransitHistoryArchive != nil || execution.DomainDNSCoexistence != nil {
-		// Coexistence records require the original successor writer; this
-		// reader-only integration does not create that owner from a DTO.
+	// Reader8 documentary archives have an exclusive transaction-only writer.
+	// Neither generic writer may turn an archive into the current execution.
+	if execution.MihomoTransitHistoryArchive != nil {
+		return ErrExecutionJournal
+	}
+	// A documentary keeper does not allow an unrelated writer to hide the
+	// original baselines. Only the next actual successor may replace latest.
+	if execution.DomainDNSCoexistence == nil {
+		m.retainedXrayMu.Lock()
+		hasPool := m.domainPool != nil
+		m.retainedXrayMu.Unlock()
+		if hasPool {
+			return ErrDomainPolicyTCPCaptureRetirementPending
+		}
+	}
+	if execution.DomainDNSCoexistence != nil && (scope == nil || scope.domainSuccessor == nil || scope.domainSuccessor.scope != scope || scope.domainSuccessor.original() != nil) {
 		return ErrExecutionJournal
 	}
 	if scope != nil && (scope.manager != m || scope.root != root || scope.managerRoot != m.StateRoot || scope.execution == nil || scope.execution.PlanID != execution.PlanID || scope.execution.Digest != execution.Digest) {
@@ -200,6 +211,13 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	}
 	if err != nil {
 		return executionJournalError(err)
+	}
+	if scope != nil && scope.domainSuccessor != nil {
+		// Only the still-live finite producer uses generic scope.persist.
+		// Retained DNS detachment/retirement publish through their own SAME
+		// original holders with actual fresh cleanup contexts; cancellation
+		// here must not be converted into fresh forward admission.
+		return executionJournalError(scope.domainSuccessor.publish(scope.ctx, data))
 	}
 	m.retainedXrayMu.Lock()
 	pair := m.replacementXray

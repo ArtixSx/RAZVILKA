@@ -11,6 +11,10 @@ import (
 // Reader8 documentary links only. Each prior baseline still needs its SAME
 // original closed DNS/kernel/receipt/file owners. These values cannot issue
 // a successor, restore an owner after restart, or settle cached client data.
+// The global marker survives every new-baseline phase: planned,
+// baseline-prepared, capture-ready, transfer-intent, transfer-ack, closed,
+// standby-retained, standby-detached, removed AND unused. Settling or refusing
+// the new mapping never erases any prior retained footprint from history.
 type ExecutionDomainDNSCoexistenceDefinition struct {
 	Schema             int                                  `json:"schema"`
 	NewPlanID          string                               `json:"new_plan_id"`

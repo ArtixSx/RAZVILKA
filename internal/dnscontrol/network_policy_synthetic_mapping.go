@@ -82,6 +82,8 @@ type NetworkPolicyDNSSyntheticResolver struct {
 	ledger      syntheticDNSLedger
 	mappings    map[netip.Addr]*SyntheticDNSMapping
 	publication NetworkPolicyDNSSyntheticPublicationOwner
+	lineage     *syntheticDNSLedgerLineage
+	prefixCount int
 }
 
 type syntheticDNSLedger struct {
@@ -134,6 +136,10 @@ func ValidateSyntheticDNSDefinition(d SyntheticDNSDefinition) error {
 // No Ready flag or mapping snapshot is accepted. Missing coordinator permits
 // real baseline answers/reservations only; it cannot publish a synthetic A.
 func NewNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolver *NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, root string, definition SyntheticDNSDefinition, publication NetworkPolicyDNSSyntheticPublicationOwner) (*NetworkPolicyDNSSyntheticResolver, error) {
+	return newNetworkPolicyDNSSyntheticResolver(ctx, lifetime, resolver, control, root, definition, publication, nil)
+}
+
+func newNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolver *NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, root string, definition SyntheticDNSDefinition, publication NetworkPolicyDNSSyntheticPublicationOwner, continuation *SyntheticDNSLedgerContinuation) (*NetworkPolicyDNSSyntheticResolver, error) {
 	if ctx == nil || lifetime == nil || lifetime.Err() != nil || resolver == nil || resolver.operations == nil || control == nil || !filepath.IsAbs(root) || filepath.Clean(root) != root || !validSyntheticDNSDefinition(definition) {
 		return nil, ErrSyntheticDNSMapping
 	}
@@ -188,7 +194,7 @@ func NewNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolve
 			return nil, err
 		}
 		for _, record := range s.ledger.Reservations {
-			if record.PossiblyIssued {
+			if record.PossiblyIssued && continuation == nil {
 				return nil, ErrSyntheticDNSTransitionPending
 			}
 		}
@@ -197,6 +203,11 @@ func NewNetworkPolicyDNSSyntheticResolver(ctx, lifetime context.Context, resolve
 	}
 	if err := s.current(ctx); err != nil {
 		return nil, err
+	}
+	if continuation != nil {
+		if err := continuation.bind(s); err != nil {
+			return nil, err
+		}
 	}
 	keep = true
 	return s, nil
@@ -293,6 +304,13 @@ func (s *NetworkPolicyDNSSyntheticResolver) current(ctx context.Context) error {
 }
 
 func (s *NetworkPolicyDNSSyntheticResolver) writeLedger(ctx context.Context) error {
+	if s.lineage != nil {
+		s.lineage.mu.Lock()
+		defer s.lineage.mu.Unlock()
+		if s.lineage.active != s || !syntheticDNSLedgerPrefixEqual(s.ledger, s.lineage.ledger, s.prefixCount) {
+			return ErrSyntheticDNSMapping
+		}
+	}
 	data, err := json.Marshal(s.ledger)
 	if err != nil || len(data) > 1<<20 {
 		return ErrSyntheticDNSMapping
@@ -301,6 +319,8 @@ func (s *NetworkPolicyDNSSyntheticResolver) writeLedger(ctx context.Context) err
 	if err != nil {
 		s.invalid.Store(true)
 		s.cancel()
+	} else if s.lineage != nil {
+		s.lineage.ledger = cloneSyntheticDNSLedger(s.ledger)
 	}
 	return err
 }

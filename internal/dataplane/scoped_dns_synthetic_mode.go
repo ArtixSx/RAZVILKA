@@ -35,6 +35,10 @@ type scopedDNSSyntheticState struct {
 // original coordinator before Manager can open its execution path. Opening
 // these listeners itself grants none of those effects or publication readiness.
 func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding *SyntheticDNSExecutionBinding, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, publication dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner) error {
+	return a.startSyntheticDNSContinuingLocked(ctx, binding, resolver, control, publication, nil)
+}
+
+func (a *ScopedDNSAdapter) startSyntheticDNSContinuingLocked(ctx context.Context, binding *SyntheticDNSExecutionBinding, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, publication dnscontrol.NetworkPolicyDNSSyntheticPublicationOwner, continuation *dnscontrol.SyntheticDNSLedgerContinuation) error {
 	if a == nil || binding == nil || binding.self != binding || binding.adapter != a || a.live != nil || resolver == nil || control == nil {
 		return ErrDomainTransportRuntime
 	}
@@ -69,7 +73,12 @@ func (a *ScopedDNSAdapter) startSyntheticDNSLocked(ctx context.Context, binding 
 		}
 	}()
 	owner := &scopedDNSSyntheticPublication{binding: binding, original: publication}
-	source, err := dnscontrol.NewNetworkPolicyDNSSyntheticResolver(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner)
+	var source *dnscontrol.NetworkPolicyDNSSyntheticResolver
+	if continuation == nil {
+		source, err = dnscontrol.NewNetworkPolicyDNSSyntheticResolver(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner)
+	} else {
+		source, err = dnscontrol.NewNetworkPolicyDNSSyntheticResolverWithContinuation(ctx, life, resolver, control, a.StateRoot, binding.transport.Definition, owner, continuation)
+	}
 	if err != nil {
 		return err
 	}

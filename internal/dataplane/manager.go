@@ -66,6 +66,7 @@ type Manager struct {
 	retainedXrayMu     sync.Mutex
 	retainedXray       *retainedXrayExecution
 	replacementXray    *xraySelectedTCPReplacement
+	domainPool         *domainTCPStandbyPool // Original bounded owners only; retainedXrayMu.
 	retainedWGMu       sync.Mutex
 	retainedWG         *retainedWGExecution
 	retainedSingMu     sync.Mutex

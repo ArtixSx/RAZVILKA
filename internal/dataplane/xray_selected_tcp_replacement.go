@@ -197,6 +197,12 @@ func newXraySelectedTCPRecords(s *executionResourceScope) (*xraySelectedTCPExecu
 	if s.root != filepath.Join(s.managerRoot, "transactions", s.execution.PlanID) {
 		return nil, ErrExecutionJournal
 	}
+	if c := s.domainSuccessor; c != nil {
+		if c.original() != nil || c.scope != s || c.records == nil || c.records.scope != s {
+			return nil, ErrExecutionJournal
+		}
+		return c.records, nil
+	}
 	d := &xraySelectedTCPExecutionRecords{scope: s}
 	var err error
 	d.root, d.anchor, err = openNetworkPolicyObservationRoot(s.managerRoot)

@@ -56,12 +56,17 @@ func (o *DomainTCPOriginalScope) standbyCurrent(ctx context.Context) error {
 }
 
 func (o *DomainTCPOriginalScope) compareStandby(ctx context.Context, transferring bool) error {
+	return o.compareStandbyForDetachment(ctx, transferring, nil)
+}
+
+func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context, transferring bool, cursor *DomainTCPDetachedStandby) error {
 	if o == nil || o.self != o || xraySelectedTCPFinite(ctx) != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
 	o.mu.Lock()
 	p, baseline, capture, kernel := o.process, o.baseline, o.captureResource, o.kernel
 	ready, closed := o.standbyReady, o.closed
+	detached := o.dnsDetachment
 	o.mu.Unlock()
 	if !ready || !closed || p == nil || p.self != p || p.scope != o.binding.scope || p.material == nil || baseline == nil || baseline.self != baseline || capture == nil || capture.self != capture || capture.process != p || capture.mapping != baseline.mapping || kernel == nil || kernel.flow.Load() != nil {
 		return ErrDomainPolicyTCPConsumer
@@ -78,7 +83,14 @@ func (o *DomainTCPOriginalScope) compareStandby(ctx context.Context, transferrin
 		if err != nil {
 			return err
 		}
-		if err := p.records.current(ctx, true); err != nil {
+		allEqual := true
+		if cursor != nil {
+			if cursor != detached || cursor.self != cursor || cursor.original != o || cursor.owner == nil || cursor.owner.process != p {
+				return ErrDomainPolicyTCPConsumer
+			}
+			allEqual = false // SAME original partial writer only; no forward grant.
+		}
+		if err := p.records.current(ctx, allEqual); err != nil {
 			return err
 		}
 		if err := p.filesCurrent(ctx); err != nil {
@@ -93,10 +105,13 @@ func (o *DomainTCPOriginalScope) compareStandby(ctx context.Context, transferrin
 	default:
 		return ErrXrayDomainTCPOriginal
 	}
-	if err := p.observeDomainListenerAbsent(ctx); err != nil {
+	if err := p.observeRetainedDomainListener(ctx); err != nil {
 		return err
 	}
 	session, err := o.binding.originalSyntheticSession(p.material.control)
+	if detached != nil && detached.registryDetached() {
+		session, err = detached.originalClosedSession(ctx)
+	}
 	if err != nil || session != p.material.session || session.inactiveJoined() != nil {
 		return errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
@@ -110,7 +125,11 @@ func (o *DomainTCPOriginalScope) compareStandby(ctx context.Context, transferrin
 	s.mu.Lock()
 	standbyFound := false
 	for _, r := range s.execution.Resources {
-		if r.ID == filepath.Base(baseline.relative) && s.syntheticBaselines[r.ID] == baseline && r.SyntheticBaseline != nil && r.State == "prepared" && (r.Phase == "capture-ready" || r.Phase == "standby-retained") {
+		phase := r.Phase == "capture-ready" || r.Phase == "standby-retained"
+		if r.Phase == "standby-detached" {
+			phase = detached != nil && r.DomainDNSDetached != nil && reflect.DeepEqual(*r.DomainDNSDetached, detached.definition) && r.DomainDNSDetached.validate(s.execution.PlanID, r.SyntheticBaseline) == nil
+		}
+		if r.ID == filepath.Base(baseline.relative) && s.syntheticBaselines[r.ID] == baseline && r.SyntheticBaseline != nil && r.State == "prepared" && phase {
 			standbyFound = true
 			continue
 		}
@@ -314,6 +333,9 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 	}
 	retained.pending = false
 	s.mu.Unlock()
+	if s.domainSuccessor != nil {
+		s.domainSuccessor.failedCustody.Store(false)
+	}
 	return true, nil
 }
 

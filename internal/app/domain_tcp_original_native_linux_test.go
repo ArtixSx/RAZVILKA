@@ -40,11 +40,78 @@ func TestDomainTCPOriginalNativeUnpublishedRetirement(t *testing.T) {
 	runDomainTCPOriginalNative(t, true)
 }
 
+func TestDomainTCPOriginalNativePublishedDNSStandby(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeDNSDetachment(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeDNSCoexistence(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeUnstartedKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeNeverIssuedKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
+func TestDomainTCPOriginalNativeJoinedFailureKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR", "1")
+	t.Setenv("RAZVILKA_DOMAIN_JOINED_FAILURE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
+	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
+	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
+	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
+	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
+	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
+	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
+	if joinedFailure && !neverIssuedSuccessor {
+		t.Fatal("joined error requires distinct never-issued successor")
+	}
+	if neverIssuedSuccessor && (!coexist || initialCut != "") {
+		t.Fatal("never-issued successor requires distinct coexistence case")
+	}
+	if initialCut != "" && (!coexist || initialCut != "transaction" && initialCut != "global") {
+		t.Fatal("invalid initial publication cut case")
+	}
+	if detach != "" && detach != "1" || foreign != "" && foreign != "1" || (ack != "" || foreign != "") && detach != "1" || ack != "" && foreign != "" || detach == "1" && unpublished {
+		t.Fatal("invalid or combined isolated DNS detachment fixture cases")
+	}
 	if os.Getenv(domainOriginalNativeEnv) != "1" {
 		t.Skip("explicit disposable native original domain workflow")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	wholeBudget := 100 * time.Second
+	if coexist {
+		if detach != "1" || ack != "" || foreign != "" || unpublished || os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") != "30" {
+			t.Fatal("coexistence requires its distinct two-operation diagnostic case")
+		}
+		wholeBudget = 3 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wholeBudget)
 	defer cancel()
 	peers := domainOriginalPeers(t, ctx)
 	t.Cleanup(func() {
@@ -306,9 +373,17 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	history := updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion)
 	succeeded := false
 	var retainedOwner *dataplane.DomainTCPOriginalScope
+	var retainedPublishedAlias string
 	var retainedMapping *dnscontrol.SyntheticDNSMapping
 	originalPlanRaw, _ := json.Marshal(plan)
-	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(held, control.Current), plan, history, func(original context.Context) error {
+	firstOperation := held
+	if coexist {
+		var stopFirst context.CancelFunc
+		firstOperation, stopFirst = context.WithTimeout(held, 100*time.Second)
+		defer stopFirst()
+		t.Log("COEXISTENCE diagnostic: physical fixture3min; EACH original generation100s, fresh scope60s, publication30s/join15s unchanged; not default12s acceptance")
+	}
+	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(firstOperation, control.Current), plan, history, func(original context.Context) error {
 		binding, err := manager.BindSyntheticDNSExecution(original, dnsAdapter, plan)
 		if err != nil {
 			return fmt.Errorf("original DNS binding: %w", err)
@@ -460,6 +535,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		if err != nil || same != mapping {
 			return fmt.Errorf("published original mapping: %w", err)
 		}
+		retainedPublishedAlias = published.Answer
 		excluded := peers.clientRequest(t, original, "dns-other-client", "")
 		if strings.HasPrefix(excluded.Answer, "198.") {
 			return errors.New("unselected client received managed synthetic mapping")
@@ -468,17 +544,19 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		if len(children) != 1 {
 			return fmt.Errorf("expected actual original Xray child, got%d", len(children))
 		}
-		selected := peers.clientRequest(t, original, "selected", published.Answer)
-		if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
-			return fmt.Errorf("selected actual TLS flow not through native VLESS: %+v", selected)
-		}
-		mismatch := peers.clientRequest(t, original, "mismatch", published.Answer)
-		if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.SourcePort != mismatch.ClientPort || mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
-			return fmt.Errorf("mismatched SNI changed original baseline tuple: %+v", mismatch)
-		}
-		opaque := peers.clientRequest(t, original, "opaque", published.Answer)
-		if opaque.SourcePort == "" || opaque.SourcePort == "0" || opaque.SourcePort != opaque.ClientPort || opaque.Source != domainOriginalClient || opaque.Marker != "opaque-native-baseline" {
-			return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
+		if !dnsOnly {
+			selected := peers.clientRequest(t, original, "selected", published.Answer)
+			if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
+				return fmt.Errorf("selected actual TLS flow not through native VLESS: %+v", selected)
+			}
+			mismatch := peers.clientRequest(t, original, "mismatch", published.Answer)
+			if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.SourcePort != mismatch.ClientPort || mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
+				return fmt.Errorf("mismatched SNI changed original baseline tuple: %+v", mismatch)
+			}
+			opaque := peers.clientRequest(t, original, "opaque", published.Answer)
+			if opaque.SourcePort == "" || opaque.SourcePort == "0" || opaque.SourcePort != opaque.ClientPort || opaque.Source != domainOriginalClient || opaque.Marker != "opaque-native-baseline" {
+				return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
+			}
 		}
 		stopRun()
 		select {
@@ -628,7 +706,231 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	if err != nil || string(afterRefusal) != string(data) || retainedOwner.RetainedStandbyCurrent(ctx) != nil {
 		t.Fatal("published-alias refusal changed original retained custody", err)
 	}
-	t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
+	// Separate reader7 protocol validation only. The existing finite/reader4
+	// scenario and its clocks remain unchanged unless this explicit case runs.
+	if os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH") == "1" {
+		if os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY") == "1" {
+			path := filepath.Join(dnsAdapter.StateRoot, "retired-"+execution.PlanID+"-owner.json")
+			foreign := []byte("native fixture reserved foreign DNS history")
+			file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := file.Write(foreign); err != nil {
+				file.Close()
+				t.Fatal(err)
+			}
+			info, err := file.Stat()
+			if err != nil {
+				file.Close()
+				t.Fatal(err)
+			}
+			if _, err := retainedOwner.DetachPublishedStandby(cleanupCtx, cleanup, history); err == nil {
+				file.Close()
+				t.Fatal("foreign reserved DNS history overwritten")
+			}
+			after, err := os.ReadFile(path)
+			latest, e2 := os.ReadFile(filepath.Join(manager.StateRoot, "latest-execution.json"))
+			named, e3 := os.Lstat(path)
+			if err != nil || e2 != nil || e3 != nil || !os.SameFile(info, named) || string(after) != string(foreign) || string(latest) != string(data) || !manager.HasPendingManagedXraySelectedTCP() {
+				file.Close()
+				t.Fatal("refused original handoff lost foreign history or custody", err, e2, e3)
+			}
+			// Remove only this fixture's unchanged reserved file while the SAME
+			// original exclusive operation remains held; production never removes it.
+			if err := os.Remove(path); err != nil {
+				file.Close()
+				t.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if fault := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"); fault != "" {
+			if err := dataplane.ConfigureNativeDomainDNSDetachmentACK(cleanupCtx, retainedOwner, fault); err != nil {
+				t.Fatal("original isolated lost-ACK fixture", err)
+			}
+			if _, err := retainedOwner.DetachPublishedStandby(cleanupCtx, cleanup, history); !errors.Is(err, dataplane.ErrNativeDomainDNSDetachmentACK) {
+				t.Fatal("lost actual detachment ACK exception", err)
+			}
+			if !manager.HasPendingManagedXraySelectedTCP() {
+				t.Fatal("lost detachment ACK released pending custody")
+			}
+		}
+		detached, err := retainedOwner.DetachPublishedStandby(cleanupCtx, cleanup, history)
+		if err != nil || detached == nil {
+			t.Fatal("original published DNS-only handoff", err)
+		}
+		if _, err := retainedOwner.DetachPublishedStandby(cleanupCtx, cleanup, history); err != nil {
+			t.Fatal("same original handoff reobservation", err)
+		}
+		if err := retainedOwner.RetainedStandbyCurrent(ctx); err != nil {
+			t.Fatal("detached original baseline not current", err)
+		}
+		if err := manager.CheckExecutionRecovery(cleanupCtx); err != nil {
+			t.Fatal("detached original known custody lost", err)
+		}
+		if v, _, err := dataplane.InspectRetainedExecutionReadVersion(ctx, manager.StateRoot); err != nil || v != 7 {
+			t.Fatal("detached history reader", v, err)
+		}
+		late := peers.clientRequest(t, cleanupCtx, "selected", retainedPublishedAlias)
+		if late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Source != domainOriginalClient || late.Marker != "native-domain-service" {
+			t.Fatal("DNS-only detach changed cached-alias baseline tuple", late)
+		}
+		if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+			t.Fatal("DNS-only detach restarted a native runtime")
+		}
+		t.Log("reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority")
+		if coexist {
+			// End the first original admission before entering a genuinely new
+			// operation. The old closed source/baseline stays owned by the pool.
+			cleanupRelease()
+			secondCtx, stopSecond := context.WithTimeout(ctx, 100*time.Second)
+			defer stopSecond()
+			secondHeld, secondRelease, err := operations.ExclusiveContext(secondCtx)
+			if err != nil {
+				t.Fatal("new original successor admission", err)
+			}
+			defer secondRelease()
+			freshNow := time.Now().UTC()
+			scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+			secondDomain, err := dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secondTransport := dataplane.CloneSyntheticDNSTransportPlan(transport)
+			secondTransport.DomainPolicyDigest = secondDomain.Digest
+			secondPlan, err := dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: secondDomain, SyntheticDNS: secondTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+			if err != nil || secondPlan.Ready {
+				t.Fatal("new frozen blocked intent", err)
+			}
+			if initialCut != "" {
+				if err := dataplane.ConfigureNativeDomainInitialACK(secondHeld, detached, initialCut); err != nil {
+					t.Fatal("configure original initial ACK", err)
+				}
+				initialCleanup, err := control.ReviewExclusiveCleanup(secondHeld)
+				if err != nil {
+					t.Fatal(err)
+				}
+				calls := 0
+				failed := manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(context.Context) error { calls++; return errors.New("unstarted action unexpectedly entered") })
+				var originalFailure *dataplane.DomainTCPUnstartedFailure
+				if calls != 0 || !errors.Is(failed, dataplane.ErrNativeDomainInitialACK) || !errors.As(failed, &originalFailure) {
+					t.Fatal("actual initial publication failure/capsule", calls, failed)
+				}
+				if err := manager.RetireUnstartedDomainTCPContinuation(secondHeld, initialCleanup, history, originalFailure); err != nil {
+					t.Fatal("same original unstarted retirement", err)
+				}
+				if err := manager.RetireUnstartedDomainTCPContinuation(secondHeld, initialCleanup, history, originalFailure); err != nil {
+					t.Fatal("same actual terminal ACK retry", err)
+				}
+				if err := manager.CheckExecutionRecovery(secondHeld); err != nil {
+					t.Fatal("documentary keeper/current originals", err)
+				}
+				late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+				if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+					t.Fatal("unstarted retirement changed prior baseline", late)
+				}
+				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
+					t.Fatal("metadata retirement started native child")
+				}
+				t.Log("actual failed initial publication retired via SAME captured journal FDs; original action never entered; old cached alias still serves exact tuple; no native/new-service proof from documentary keeper")
+				secondRelease()
+				thirdCtx, stopThird := context.WithTimeout(ctx, 100*time.Second)
+				defer stopThird()
+				thirdHeld, thirdRelease, err := operations.ExclusiveContext(thirdCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer thirdRelease()
+				secondHeld = thirdHeld
+				freshNow = time.Now().UTC()
+				scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+				secondDomain, err = dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+				if err != nil {
+					t.Fatal(err)
+				}
+				secondTransport = dataplane.CloneSyntheticDNSTransportPlan(transport)
+				secondTransport.DomainPolicyDigest = secondDomain.Digest
+				secondPlan, err = dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: secondDomain, SyntheticDNS: secondTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+				if err != nil || secondPlan.Ready {
+					t.Fatal("fresh post-keeper blocked intent", err)
+				}
+			}
+			var neverIssuedOwner *dataplane.DomainTCPOriginalScope
+			secondCleanup, err := control.ReviewExclusiveCleanup(secondHeld)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
+				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
+			})
+			if joinedFailure {
+				if !domainOriginalOnlyJoinedFailure(err) || neverIssuedOwner == nil {
+					t.Fatal("original callback error changed or cleanup error hidden", err)
+				}
+				if err := neverIssuedOwner.RetainedStandbyCurrent(secondHeld); err != nil {
+					t.Fatal("failed action did not retain genuinely current original standby", err)
+				}
+				t.Log("original callback error preserved; genuine joined native/receipt/kernel proof retained only restorative standby, failed step remains failed")
+			} else if err != nil {
+				t.Fatal("actual original successor/full selected workflow", err)
+			}
+			if version, _, err := dataplane.InspectRetainedExecutionReadVersion(secondHeld, manager.StateRoot); err != nil || version != 8 {
+				t.Fatal("coexistence requires actual reader8", version, err)
+			}
+			if neverIssuedSuccessor {
+				if neverIssuedOwner == nil {
+					t.Fatal("original never-issued owner missing")
+				}
+				if err := neverIssuedOwner.RetireUnpublishedStandby(secondHeld, secondCleanup); err != nil {
+					t.Fatal("actual never-issued successor COMMON retirement", err)
+				}
+				if err := neverIssuedOwner.RetireUnpublishedStandby(secondHeld, secondCleanup); err != nil {
+					t.Fatal("same actual retired ACK", err)
+				}
+				if err := manager.CheckExecutionRecovery(secondHeld); err != nil {
+					t.Fatal("retired successor keeper fresh absence", err)
+				}
+				late := peers.clientRequest(t, secondHeld, "selected", retainedPublishedAlias)
+				if late.Source != domainOriginalClient || late.SourcePort == "" || late.SourcePort != late.ClientPort || late.Marker != "native-domain-service" {
+					t.Fatal("retirement changed original published alias", late)
+				}
+				secondRelease()
+				thirdCtx, stopThird := context.WithTimeout(ctx, 100*time.Second)
+				defer stopThird()
+				thirdHeld, thirdRelease, err := operations.ExclusiveContext(thirdCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer thirdRelease()
+				freshNow = time.Now().UTC()
+				scope.ObservedAt, scope.FreshUntil = freshNow, freshNow.Add(60*time.Second)
+				thirdDomain, err := dataplane.FreezeDomainPolicyRuntimePlan(domain.Generation, policy, scope, nil, []dataplane.DomainPolicyService{{ID: service.ID, Route: "xray:" + nodeID, Selected: true, Domains: service.Domains}}, freshNow)
+				if err != nil {
+					t.Fatal(err)
+				}
+				thirdTransport := dataplane.CloneSyntheticDNSTransportPlan(transport)
+				thirdTransport.DomainPolicyDigest = thirdDomain.Digest
+				thirdPlan, err := dataplane.BuildAt(dataplane.Input{Revision: store.Get().Revision, DomainPolicy: thirdDomain, SyntheticDNS: thirdTransport, NetworkProfileID: "wan-0123456789ab", Routes: []dataplane.Route{route}, Engines: []dataplane.Engine{{ID: "xray", Installed: true, Configured: true, Activatable: true, Canary: true}}, Host: plan.Host}, freshNow)
+				if err != nil || thirdPlan.Ready {
+					t.Fatal("fresh post-retirement intent", err)
+				}
+				if err := manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(thirdHeld, control.Current), thirdPlan, history, detached, func(original context.Context) error {
+					return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, thirdPlan, service, nodeID, detached, retainedPublishedAlias, false, nil)
+				}); err != nil {
+					t.Fatal("original next source after never-issued suffix", err)
+				}
+				t.Log("actual never-issued successor source never sent DNS; SAME original COMMON Remove/receipts/kernel absence and metadata keeper; new original source continues closed full suffix, new selected service and old cached-alias baseline")
+			}
+			t.Log("actual two original generations: published old alias retained; successor DNS/native/capture/new selected TLS and old cached-alias TLS, both original tuples checked; no cold reconstruction or ordinary Apply grant")
+		}
+	}
+	if dnsOnly {
+		t.Log("DNS-only ownership scenario: actual precheck/Reserve/native/capture/kernel/DNS client publication, then original Stop+cached-alias TLS direct baseline with original tuple; selected-runtime service workflow NOT tested here; no new Apply/cache-retirement authority")
+	} else {
+		t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
+	}
 }
 
 func domainOriginalPublicationDiagnostics(t *testing.T, root string) {
