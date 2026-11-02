@@ -12,43 +12,44 @@ import (
 // Only an original operation binds this resource to the same registered
 // Mihomo adapter and COMMON writer. A decoded definition cannot construct it.
 type mihomoLiveResource struct {
-	mu               sync.Mutex
-	validationUsed   bool
-	startUsed        bool
-	self             *mihomoLiveResource
-	adapter          *MihomoProbeAdapter
-	scope            *executionResourceScope
-	source           *components.MihomoLiveSource
-	node             *NodeDefaultSourceReview
-	profile          *components.MihomoLiveProfile
-	control          *operationgate.ControlEpochReview
-	childControl     *operationgate.ControlEpochReview
-	cleanup          *operationgate.ExclusiveCleanupReview
-	child            *components.MihomoLiveProcess
-	definition       ExecutionMihomoLiveDefinition
-	id               string
-	records          *xraySelectedTCPExecutionRecords
-	active           bool
-	pending          bool
-	closed           bool
-	closeErr         error
-	reserveAttempted bool
-	nativeUnused     bool
-	proxy            *ProxyTunnelAdapter
-	sidecar          *mihomoLiveSidecar
-	sidecarAttempted bool
-	sidecarUnused    bool
-	tunIndex         int
-	terminal         *MihomoLiveTerminal
-	closing          *mihomoLiveClosing
-	nativeCloseCut   *int // Refusal-only tagged native fixture.
-	retired          bool
-	filesMu          sync.Mutex
-	compiledRoot     *ownedfs.Root
-	compiledFiles    map[string]*mihomoLiveSidecarIdentityFile
-	healthHandoff    *mihomoLiveHealthHandoff // One-use original Health -> Commit comparison only.
-	historyAdmission *updatecheck.ExecutionHistoryAdmission
-	transitHistory   *mihomoTransitArchiveCursor
-	historyIDs       map[string]struct{}
-	healthCheck      *mihomoLiveHealthCheck // Original retained writer; scope.mu protects custody.
+	mu                        sync.Mutex
+	validationUsed            bool
+	startUsed                 bool
+	self                      *mihomoLiveResource
+	adapter                   *MihomoProbeAdapter
+	scope                     *executionResourceScope
+	source                    *components.MihomoLiveSource
+	node                      *NodeDefaultSourceReview
+	profile                   *components.MihomoLiveProfile
+	control                   *operationgate.ControlEpochReview
+	childControl              *operationgate.ControlEpochReview
+	cleanup                   *operationgate.ExclusiveCleanupReview
+	child                     *components.MihomoLiveProcess
+	definition                ExecutionMihomoLiveDefinition
+	id                        string
+	records                   *xraySelectedTCPExecutionRecords
+	active                    bool
+	pending                   bool
+	closed                    bool
+	closeErr                  error
+	reserveAttempted          bool
+	nativeUnused              bool
+	proxy                     *ProxyTunnelAdapter
+	sidecar                   *mihomoLiveSidecar
+	sidecarAttempted          bool
+	sidecarUnused             bool
+	tunIndex                  int
+	terminal                  *MihomoLiveTerminal
+	closing                   *mihomoLiveClosing
+	nativeCloseCut            *int // Refusal-only tagged native fixture.
+	retired                   bool
+	filesMu                   sync.Mutex
+	compiledRoot              *ownedfs.Root
+	compiledFiles             map[string]*mihomoLiveSidecarIdentityFile
+	healthHandoff             *mihomoLiveHealthHandoff // One-use original Health -> Commit comparison only.
+	historyAdmission          *updatecheck.ExecutionHistoryAdmission
+	transitHistory            *mihomoTransitArchiveCursor
+	historyIDs                map[string]struct{}
+	healthCheck               *mihomoLiveHealthCheck     // Original retained writer; scope.mu protects custody.
+	nativeHealthSettlementCut *mihomoLiveHealthNativeCut // Refusal-only tagged original fixture; scope.mu.
 }

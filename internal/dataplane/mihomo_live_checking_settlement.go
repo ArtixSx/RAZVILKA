@@ -59,6 +59,12 @@ func (s *executionResourceScope) settleMihomoCheckingTransit(ctx context.Context
 		return err
 	}
 	s.execution.Resources[index].State = string(mode)
+	c := s.mihomoLive.healthCheck
+	if c == nil || c.self != c || c.owner != s.mihomoLive {
+		return ErrExecutionJournal
+	}
+	c.settling = resource
+	defer func() { c.settling = nil }()
 	err = s.persist()
 	if err == nil && mode == networkPolicyTransitUnused {
 		resource.unusedSettled = true

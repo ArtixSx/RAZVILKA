@@ -40,6 +40,10 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 }
 
 func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
+	settlementRetry := os.Getenv("RAZVILKA_MIHOMO_CHECK_SETTLEMENT_NATIVE") == "1"
+	if settlementRetry && degradeAfterCAS {
+		t.Fatal("distinct native scenarios required")
+	}
 	if os.Getenv("RAZVILKA_MIHOMO_LIVE_NATIVE") != "1" {
 		t.Skip("disposable original live native workflow")
 	}
@@ -225,7 +229,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		t.Fatal("physical baseline source", baseline)
 	}
 	rounds := 2
-	if degradeAfterCAS {
+	if degradeAfterCAS || settlementRetry {
 		rounds = 1
 	}
 	for round := 0; round < rounds; round++ {
@@ -329,14 +333,35 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		}
 		t.Logf("actual_mihomo_live round=%d apply=%s mandatory_probes=2", round, time.Since(started))
 		check, cancelCheck := context.WithTimeout(lifetime, 110*time.Second)
+		var settlementFixture *dataplane.MihomoLiveHealthSettlementNativeFixture
+		if settlementRetry {
+			arm, releaseArm, err := a.Operations.ExclusiveContext(check)
+			if err != nil {
+				cancelCheck()
+				t.Fatal(err)
+			}
+			settlementFixture, err = dataplane.ArmMihomoLiveHealthSettlementNativeFixture(arm, manager)
+			releaseArm()
+			if err != nil {
+				cancelCheck()
+				t.Fatal(err)
+			}
+		}
 		committed, found, err := manager.Committed()
 		if err != nil || !found {
 			cancelCheck()
 			t.Fatal(err)
 		}
-		if handled, err := a.observeCommittedMihomo(check, committed); !handled || err != nil {
+		handledCheck, checkErr := a.observeCommittedMihomo(check, committed)
+		if settlementRetry {
+			if !handledCheck || !errors.Is(checkErr, dataplane.ErrMihomoLiveNativeSettlementCut) || a.mihomoProbe.liveStop == nil {
+				cancelCheck()
+				t.Fatal("original Check settlement cut missing", checkErr)
+			}
+			mihomoLiveObserveSettlementFixture(t, a, settlementFixture, 1)
+		} else if !handledCheck || checkErr != nil {
 			cancelCheck()
-			t.Fatal("fresh runtime check after Apply release", err)
+			t.Fatal("fresh runtime check after Apply release", checkErr)
 		}
 		native := mihomoLiveNativeLANRequest(t, check, peers)
 		if native.Source != domainOriginalServer {
@@ -360,6 +385,18 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		}
 		stopStart := time.Now()
 		handled, outcome := a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		if settlementRetry {
+			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || a.mihomoProbe.liveStop.closing {
+				cancelStop()
+				t.Fatal("first Stop settlement ACK did not retain original prerequisites", outcome)
+			}
+			mihomoLiveObserveSettlementFixture(t, a, settlementFixture, 2)
+			if live := mihomoLiveNativeLANRequest(t, stopped, peers); live.Source != domainOriginalServer {
+				cancelStop()
+				t.Fatal("failed temporary ACK destroyed native policy/TUN prerequisites", live)
+			}
+			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		}
 		if round == 1 {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || !a.mihomoProbe.liveStop.closing {
 				cancelStop()
@@ -370,6 +407,21 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		if !handled || !outcome.LiveApplied || a.mihomoProbe.liveStop != nil {
 			cancelStop()
 			t.Fatal("actual original Stop/retry", outcome)
+		}
+		if settlementRetry {
+			raw, err := os.ReadFile(filepath.Join(manager.StateRoot, "latest-execution.json"))
+			var retired dataplane.Execution
+			if err != nil || json.Unmarshal(raw, &retired) != nil || retired.State != "rolled-back" || retired.MihomoLiveHealthOperation == nil || retired.MihomoLiveHealthOperation.Phase != "retired" {
+				cancelStop()
+				t.Fatal("reader9 original retirement not acknowledged", err)
+			}
+			for _, row := range retired.Resources {
+				if row.State != "removed" && row.State != "unused" {
+					cancelStop()
+					t.Fatal("unfinished original temporary row after Stop", row.Kind, row.State)
+				}
+			}
+			t.Log("actual_check_settlement_retry cuts=2 original_child_sidecar_tun_preserved=true retired_header_reader=9 all_original_rows_terminal=true")
 		}
 		t.Logf("actual_mihomo_live round=%d stop=%s closing_retry=%t", round, time.Since(stopStart), round == 1)
 		baseline = mihomoLiveNativeLANRequest(t, stopped, peers)

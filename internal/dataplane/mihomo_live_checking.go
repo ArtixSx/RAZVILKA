@@ -21,7 +21,8 @@ type mihomoLiveHealthCheck struct {
 	before                             []byte
 	header                             ExecutionMihomoLiveHealthOperation
 	open, failed, publishing, stopping bool
-	fault                              func(string) error // Refusal-only private model cuts; never an admission.
+	fault                              func(string) error        // Refusal-only private model cuts; never an admission.
+	settling                           *executionTransitResource // Scope.mu; only around actual original settlement persistence.
 }
 
 func (r *mihomoLiveResource) beginHealthCheck(ctx context.Context) (*mihomoLiveHealthCheck, error) {
@@ -61,6 +62,7 @@ func (r *mihomoLiveResource) beginHealthCheck(ctx context.Context) (*mihomoLiveH
 	c := &mihomoLiveHealthCheck{owner: r, cleanup: cleanup, open: true, before: before, header: h}
 	c.self = c
 	r.healthCheck = c // Before the first possible partial two-writer ACK.
+	mihomoLiveHealthCheckingFixtureFaultLocked(r, c)
 	s.execution.State, s.execution.FinishedAt = mihomoActiveCheckingState, ""
 	s.execution.MihomoLiveHealthOperation = &h
 	return c, c.publishLocked()
@@ -217,7 +219,7 @@ func (r *mihomoLiveResource) cleanupHealthTransits(ctx context.Context) error {
 	var result error
 	for _, resource := range resources {
 		b := resource.probe
-		if b.self != b || b.lease == nil || b.spec != resource.spec || b.root != resource.root || b.lease.digest != resource.digest {
+		if b.self != b || b.lease == nil || b.spec != resource.spec || b.root != resource.root || b.lease.digest != resource.digest || b.registration.root != b.root || b.registration.settle == nil || b.registration.settleUnused == nil || b.registration.finished == nil {
 			result = errors.Join(result, ErrNodeTransitUnavailable)
 			continue
 		}
@@ -227,8 +229,30 @@ func (r *mihomoLiveResource) cleanupHealthTransits(ctx context.Context) error {
 		if isNodeTransitBeforeEffects(b.resultErr) {
 			body = b.resultErr
 		}
-		err := finishRegisteredNodeRouterProbe(context.WithValue(ctx, nodeTransitCleanupKey{}, true), b.spec, b.registration, b.lease, b, body)
-		if resource.finished {
+		cleanup := context.WithValue(ctx, nodeTransitCleanupKey{}, true)
+		s.mu.Lock()
+		ack := resource.settlementReadback
+		s.mu.Unlock()
+		var err error
+		if ack == networkPolicyTransitRemoved || ack == networkPolicyTransitUnused {
+			// Kernel cleanup/unused validation already has the original live
+			// readback ACK. Repeat its full read-only comparison and repair only
+			// the metadata; never register a new effect against a removed row.
+			if ack == networkPolicyTransitRemoved {
+				err = b.registration.settle(cleanup, b.spec, b.root, b.lease.digest)
+			} else {
+				err = b.registration.settleUnused(cleanup, b.spec, b.root, b.lease.digest)
+			}
+			if err == nil && b.registration.finished != nil {
+				err = b.registration.finished()
+			}
+		} else {
+			err = finishRegisteredNodeRouterProbe(cleanup, b.spec, b.registration, b.lease, b, body)
+		}
+		s.mu.Lock()
+		finished := resource.finished
+		s.mu.Unlock()
+		if finished {
 			err = nil
 		} // Body refusal remains negative; cleanup ACK is independent.
 		result = errors.Join(result, err)
