@@ -204,6 +204,14 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 			var result [2][][]byte
 			var readErr error
 			read := func(observed context.Context) error {
+				if strings.HasPrefix(kind, "observation-") {
+					if err := lease.Check(observed, lease.identity); err != nil {
+						return err
+					}
+					if err := lease.Check(observed, lease.identity); err != nil {
+						return err
+					}
+				}
 				var err error
 				result, err = lease.ReadBoundedClassicTables(observed, lease.identity, lease.digest, lease.profile.aliases, 1<<20, [2][]string{{"mangle"}, {"mangle"}})
 				return err
@@ -283,10 +291,21 @@ func readObservationNativeLifecycle(t *testing.T, ctx context.Context, lease *Le
 	err := lease.WithReadOnlyToolObservation(ctx, lease.identity, lease.digest, func(observed context.Context) error {
 		escaped = observed
 		metadataBefore := NativeFixtureVersionMetadataCount(lease)
+		childrenBefore := NativeFixtureVersionChildCount(lease)
 		if err := lease.Check(observed, lease.identity); err != nil {
 			return err
 		}
 		t.Log("native completed scoped three-version Check original metadata traversal attempts", NativeFixtureVersionMetadataCount(lease)-metadataBefore)
+		firstChildren := NativeFixtureVersionChildCount(lease)
+		if err := lease.Check(observed, lease.identity); err != nil {
+			return err
+		}
+		repeatedChildren := NativeFixtureVersionChildCount(lease)
+		for i := range repeatedChildren {
+			repeatedChildren[i] -= firstChildren[i]
+			firstChildren[i] -= childrenBefore[i]
+		}
+		t.Log("native actual version child Starts first/repeated [iptables ip6tables IP]", firstChildren, repeatedChildren)
 		original, _ := readObservationMarker(observed)
 		copied := &toolReadObservation{self: original, lease: lease, review: original.review, identity: original.identity, digest: original.digest, ctx: original.ctx, deadline: original.deadline, active: true}
 		if err := lease.Check(context.WithValue(observed, toolReadObservationKey{}, copied), lease.identity); !errors.Is(err, ErrUnknown) {

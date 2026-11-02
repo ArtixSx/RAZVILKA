@@ -19,6 +19,7 @@ import (
 )
 
 func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseCounter)()
 	if err := e.captureCurrent(ctx); err != nil {
 		return 0, fmt.Errorf("probe counter opening capture: %w", err)
 	}
@@ -45,6 +46,7 @@ func (e *nfqwsProbeExecution) counter(ctx context.Context) (uint64, error) {
 }
 
 func (e *nfqwsProbeExecution) captureCurrent(ctx context.Context) error {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseCaptureCurrent)()
 	return e.observeTools(ctx, e.captureCurrentObserved)
 }
 func (e *nfqwsProbeExecution) captureCurrentObserved(ctx context.Context) error {
