@@ -192,7 +192,7 @@ func (w *domainTCPPoolListenerWitness) authoredProcessRecord() error {
 }
 
 func (w *domainTCPPoolListenerWitness) authoredProcessRecordForCleanup(ctx context.Context, cleanup *domainTCPFailureCleanup) error {
-	if w == nil || w.self != w || w.cursor == nil || w.cursor.records == nil || w.resource == nil || w.resource.self != w.resource {
+	if w == nil || w.self != w || w.cursor == nil || w.cursor.records == nil || w.resource == nil || w.resource.self != w.resource || w.resource.definition.Domain == nil {
 		return ErrExecutionJournal
 	}
 	d, r := w.cursor.records, w.resource
