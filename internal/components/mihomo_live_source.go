@@ -187,7 +187,7 @@ func (s *MihomoLiveSource) currentComparedLocked(ctx context.Context, compare fu
 	if !ok || target == nil || compare == nil {
 		return ErrMihomoLiveOwner
 	}
-	return target.WithReadComparison(ctx, func(held context.Context, image restorejournal.Image, proof *restorejournal.ArtifactSourceComparison) error {
+	return target.WithExpectedReadComparison(ctx, s.image, func(held context.Context, image restorejournal.Image, proof *restorejournal.ArtifactSourceComparison) error {
 		if !sameMihomoImage(image, s.image) {
 			return ErrMihomoLiveOwner
 		}

@@ -112,12 +112,13 @@ jobs:
             case "$package" in
               components) pattern='^TestMihomoLiveOriginal(ReadFingerprintNativeMutation|ChildSurvivesApplyAndNeedsFreshCleanup)$|^TestMihomoLiveReadFingerprintIncludesActualIdentityAndCTime$' ;;
               dataplane) pattern='^TestMihomoLiveOfficialOriginalKernelOwnerAcrossApplyRelease$|^TestNodeTransitSharedOwner|^TestNodeTransitPolicyRuntime|^TestMihomoHealthHandoff|^TestMihomoActiveChecking|^TestMihomoRetainedCheck|^TestMihomoTransitArchive' ;;
-              restorejournal) pattern='^TestArtifactComparison' ;;
+              restorejournal) pattern='^TestArtifactComparison|^TestArtifactExpectedReadComparison' ;;
             esac
             for mode in normal race; do
               echo "actual_original_observation_package=$package mode=$mode fixture_budget_components=30s fixture_budget_dataplane=45s"
               timeout 90s sudo env \
                 RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+                RAZVILKA_ARTIFACT_EXPECTED_TIMING=1 \
                 unshare --mount --net --fork --kill-child=KILL sh -eu -c '
                   mount --make-rprivate /
                   ip link set lo up
