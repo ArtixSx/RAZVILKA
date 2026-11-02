@@ -1,6 +1,6 @@
 # Сборки и поддержка запуска
 
-Состояние рабочих исходников на 01.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
+Состояние рабочих исходников на 02.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
 списков и исключений и часовая проверка Telegram через VLESS ещё не завершены.
 Готовность выпуска фиксируется в [текущем статусе](CURRENT_STATUS_RU.md).
 
@@ -67,7 +67,7 @@ Entware. Совпадения только архитектуры ARM64 или �
 исходного аудита и ограничения обновления сведены в
 [матрице обходов](BYPASS_REVIEW_2026-10-31_RU.md#повторная-сверка-контрактов-31102026).
 
-## Сверка работающих путей на 01.11.2026
+## Сверка работающих путей на 02.11.2026
 
 Матрица описывает регистрацию исполнителей в исходниках, а не готовность
 сервиса на конкретном роутере. `/api/v1/engines` и инвентарь панели используют
@@ -86,6 +86,7 @@ Entware. Совпадения только архитектуры ARM64 или �
 | Scoped DNS | Исходные Manager/ScopedDNSAdapter, control epoch, резервирование и публикация DNS данных связаны с исходным capture владельцем. | Непубликованный источник не становится готовым от регистрации. Реальные capture, baseline, маршрутизация и исключения должны пройти свои проверки. |
 | HEV SOCKS5 TUN | Доверенная установка закреплённого `2.17.1`, бинарник + receipt через CAS/журнал; пользователь выбирает HEV для следующего запуска вместо существующего TUN backend. Холодное recovery сохраняет этот выбор. | Это зависимость маршрутов Xray/USQUE, а не самостоятельный маршрут. При регистрации исходного parent + component owner API показывает `runtime_preflight`, `sidecar_runtime`, `sidecar_recovery`; доступность остаётся неизвестной до допуска. `--version`/receipt preflight не называется native проверкой конфига: отдельной такой команды у HEV нет. |
 | Mihomo | Закреплённый1.19.33 installer/reinstall, component reader6, binary/receipt/state CAS и package recovery API/UI. Native validation VLESS Reality/HY2/TUIC/SS/WS/gRPC PASS. Реальный HTTP preview→review→VLESS→обязательные TLS predicates→COMMON cleanup PASS наd1877b0d/job124719152402: полный HTTP2.275607154с, adapter1883мс. Actual fallback при сохранённом reader4 PASS2.794947656с: старый бинарник не меняется, новый parent lineage в формат4 не записывается. Failure/exclusion/panic не дают положительного evidence; same-owner cleanup retry работает. Actual parent-death/held-pidfd PASS. | Это конечная сервисная проверка с live_applied=false; она сохраняет Store. API/UI включают её по фактической регистрации исходного adapter. Post-boot retirement прошёл normal/race (старый boot моделируется, текущая socket absence реальна). На97b228ce actual idle observer PASS0.92с и HTTP package update1.19.32→1.19.33 PASS7.488544279с; negative receipt/hash/size и исходный переименованный процесс не обходят отказ. Positive update пока проверен с Mihomo-only registry; ordinary Main/default HTTPS проверен как безопасный отказ неподдержанного профиля. На07f0c096 actual same-boot cold CLI и восстановленная panel admission PASS после создания настоящей local process group: parent/Pdeath, foreign PID namespace/copy/lease и exact archive/CAS проверены. Tagged полный Main registry проверяется отдельно; production platform admission не расширен. Live Apply/health остаются в реализации. Неизвестный runtime сохраняет отказ. CI не подтверждает аппаратную готовность. |
+| Mihomo: постоянный маршрут и восстановление | На `4bcb7d0d` интегрированы исходный child/HEV/TUN lifecycle, ручной `mihomo:node-*` preview/apply API/UI, точные CIDR выбранного сервиса и приватные IPv4 sources, CAS и encrypted import с повторным чтением Store. Reader6/7/8 различает persistent intent, detached DNS и завершённые архивы health. Post-boot CLI удерживает все пять исходных private generations, неизменный config и current native sources. | Native warm Apply доходит до health, где исходный deadline ещё истекает; публичная live readiness остаётся false. Доменные, смешанные и whole-home маршруты этим путём не разрешены. Integrated cold normal/race41399878590 и health archive normal/race41399878588 PASS; в cold старая загрузка моделируется, в archive terminal probe rows моделируются. Same-boot очистка persistent route после смерти панели реализуется отдельно. История/наличие пакета не дают service health. [Доказательства и очередь](ROADMAP.md#общая-очередь-реализации-31102026) |
 
 Проекция HEV проверена регрессиями
 [`sidecar_lifecycle_capabilities_test.go`](../internal/dataplane/sidecar_lifecycle_capabilities_test.go),

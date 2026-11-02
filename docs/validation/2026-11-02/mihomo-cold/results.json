@@ -26,5 +26,29 @@
       "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3229158Z     mihomo_live_cold_native_linux_test.go:104: actual offline CLI entry, all five original private leases, unchanged config, complete current native absence and terminal publication passed; historical old boot modeled",
       "original-native (race)\tActual held source, bounded read ABI and revocation\t2026-11-02T05:15:22.3262196Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (45.01s)"
     ]
+  },
+  {
+    "mode": "normal",
+    "job": 125129182122,
+    "run": 41399878590,
+    "sha": "4bcb7d0df18be8d71a9f9f7a4d65a22d6e82a24f",
+    "scope": "Actual source/process/kernel and CLI observations with all five original private leases; historical old boot modeled, no physical reboot claim",
+    "evidence": [
+      "2026-11-02T06:28:38.1657321Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.39s)",
+      "2026-11-02T06:29:23.8199457Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (45.56s)",
+      "2026-11-02T06:29:50.5773465Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (26.57s)"
+    ]
+  },
+  {
+    "mode": "race",
+    "job": 125129181826,
+    "run": 41399878590,
+    "sha": "4bcb7d0df18be8d71a9f9f7a4d65a22d6e82a24f",
+    "scope": "Actual source/process/kernel and CLI observations with all five original private leases; historical old boot modeled, no physical reboot claim",
+    "evidence": [
+      "2026-11-02T06:31:40.5886256Z --- PASS: TestStaticVersionFactNativeMihomoColdRead (0.78s)",
+      "2026-11-02T06:33:52.8433946Z --- PASS: TestMihomoLiveColdPublicNativeHistoricalIntent (131.11s)",
+      "2026-11-02T06:35:10.9086719Z --- PASS: TestMihomoLiveColdCLINativeHistoricalIntent (75.76s)"
+    ]
   }
 ]

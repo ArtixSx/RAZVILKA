@@ -38,6 +38,7 @@
 | DNS и долгоживущий cache | Получить ответ до переключения/Stop и использовать его после завершения capture | Старый synthetic address не указывает на чужой сервис; baseline/retirement сохраняются до подтверждённого безопасного завершения |
 | VLESS full latency | Не менее12 повторов single/selected/all; записать enqueue/start/cleanup/HTTP return, CPU/RSS и browser paint отдельно | Полное время включает очередь и cleanup; сравнение одинаковых scope/сервиса/WAN, ошибки не смешиваются с успешными измерениями |
 | Компоненты | Установка/поддержанное обновление/отказ при активном старом процессе/rollback; отдельные native проверки HEV и Mihomo | Точные pinned bytes и receipts; исходный живой процесс блокирует замену; пакетный успех не подменяет сервисную готовность |
+| Mihomo live post-boot | После отдельно разрешённого настоящего reboot сохранить исходные plan/digest/config/state/component пути; при остановленной панели выполнить штатный offline retirement с `-retire-mihomo-live-after-boot-plan` и парным `-retire-mihomo-live-after-boot-digest` | Все пять private leases удерживаются до closing наблюдений; текущие процессы/socket/kernel отсутствуют; архив и обе терминальные записи подтверждены; повтор безопасен; config/manual selection не меняются и не получают health |
 | Reboot/WAN/power-loss | Только после отдельного разрешения, на предусмотренных фазах и с внешним способом восстановления | Холодная панель доступна; неподтверждённая история не даёт новой authority; исходные чужие маршруты и исключения сохранены |
 
 Для неподдержанного в обычном startup сценария результат — «не допущен», с точным
@@ -56,6 +57,14 @@
   не заменяет обычную проверку12с.
 - `scripts/check-node-native-performance.sh`: полные Check и App queue измерения.
 - `scripts/test-mihomo-cold-native.sh`: actual parent death, cold CLI, restored panel.
+- `.github/workflows/mihomo-cold-validation.yml`: persistent-route post-boot metadata
+  и настоящий CLI; старый boot в программном fixture моделируется, текущие native
+  наблюдения реальны. Включает `RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE=1` для
+  `scripts/test-managed-probe-native.sh`, пять original leases и повтор retirement.
+- `.github/workflows/mihomo-health-validation.yml`: реальные исходные файлы/Gate,
+  частичная публикация и повтор архива; terminal service rows моделируются.
+- `scripts/test-mihomo-live-native.sh`: реальный Apply/health/Stop/repeat и
+  ограниченный CPU profile; пока неуспешный health не считается готовностью.
 - `scripts/test-mihomo-main-native.sh`: обычный Main, отказ неподдержанного профиля.
 - `scripts/test-mihomo-main-bound-native.sh`: tagged classification для полного
   factory registry с настоящими tool/namespace источниками; это не роутерный допуск.

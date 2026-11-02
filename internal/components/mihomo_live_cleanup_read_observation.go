@@ -21,10 +21,11 @@ func (p *MihomoLiveProcess) WithCleanupReadObservation(ctx context.Context, clea
 	if read == nil || cleanup == nil {
 		return ErrMihomoLiveOwner
 	}
-	if err := p.CurrentForCleanup(ctx, cleanup); err != nil {
+	fingerprint, err := p.openReadFingerprint(ctx, cleanup)
+	if err != nil {
 		return err
 	}
-	inner := &MihomoLiveObservation{child: p, source: p.source, open: true}
+	inner := &MihomoLiveObservation{child: p, source: p.source, open: true, fingerprint: fingerprint}
 	inner.self = inner
 	inner.ctx = context.WithValue(ctx, mihomoLiveObservationKey{}, inner)
 	v := &MihomoLiveCleanupObservation{inner: inner, cleanup: cleanup}
@@ -33,7 +34,7 @@ func (p *MihomoLiveProcess) WithCleanupReadObservation(ctx context.Context, clea
 		inner.mu.Lock()
 		inner.open = false
 		inner.mu.Unlock()
-		result = errors.Join(result, p.CurrentForCleanup(ctx, cleanup))
+		result = errors.Join(result, p.closeReadFingerprint(ctx, cleanup, fingerprint))
 	}()
 	return read(inner.ctx, v)
 }
