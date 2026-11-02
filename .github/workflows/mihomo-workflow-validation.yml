@@ -46,9 +46,20 @@ jobs:
         run: |
           set -euo pipefail
           sudo modprobe tun
+          mkdir -p artifacts/mihomo-live-profile
+          chmod 700 artifacts/mihomo-live-profile
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/mihomo-live-profile' EXIT
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/mihomo-live-profile" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-native.sh
+      - name: Retain bounded native CPU evidence
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-live-cpu-${{ github.sha }}
+          path: artifacts/mihomo-live-profile
+          if-no-files-found: warn
