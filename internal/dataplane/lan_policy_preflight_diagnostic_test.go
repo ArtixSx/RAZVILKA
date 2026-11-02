@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 )
@@ -45,5 +46,26 @@ func TestLANPolicyPreflightDiagnosticIdentifiesClosedRefusalWithoutChangingGuard
 	}
 	if LANPolicyPreflightFailureStage(&lanPolicyPreflightFailure{stage: "private unknown label", cause: ErrLANPolicyRuntime}) != "" {
 		t.Fatal("non-closed stage exposed")
+	}
+}
+
+func TestLANPolicyInventoryDiagnosticPreservesNestedOriginalCaptureFailure(t *testing.T) {
+	for _, stage := range []string{"inventory-xray-scope-open", "inventory-xray-prepared-open", "inventory-consumer-combination", "inventory-nfq-stock-open", "inventory-xray-stock-open", "inventory-proxy-consumer-open", "inventory-nfq-consumer-open", "inventory-xray-consumer-open"} {
+		inner := lanPolicyPreflightAt(stage, errors.Join(ErrNetworkPolicyConsumers, fs.ErrNotExist))
+		wrapped := lanPolicyPreflightAt("inventory-boundary", inner)
+		if LANPolicyPreflightFailureStage(wrapped) != stage || !errors.Is(wrapped, fs.ErrNotExist) || !errors.Is(wrapped, ErrNetworkPolicyConsumers) {
+			t.Fatal("outer boundary masked original consumer stage/cause", stage, wrapped)
+		}
+	}
+	for _, stage := range []string{"SCOPE", "TOOLS_A", "TOOLS_B", "CLASSIC", "CLOSE", "untrusted/private/path"} {
+		original := backendInventoryAt(stage, fs.ErrNotExist)
+		wrapped := lanPolicyPreflightAt("inventory-read-close", original)
+		expected := "inventory-read-close"
+		if stage != "untrusted/private/path" {
+			expected += "-" + strings.ToLower(stage)
+		}
+		if got := LANPolicyPreflightFailureStage(wrapped); got != expected || !errors.Is(wrapped, fs.ErrNotExist) {
+			t.Fatal("capture diagnostic changed cause or leaked input", stage, got, wrapped)
+		}
 	}
 }

@@ -26,7 +26,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
-	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close", "inventory-held-file", "inventory-extension-membership"} {
+	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close", "inventory-held-file", "inventory-extension-membership", "inventory-extension-symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -193,6 +193,15 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 					}
 					_, err = file.Write([]byte{0})
 					complete(errors.Join(err, file.Close()))
+					return
+				}
+				if strings.HasSuffix(kind, "extension-symlink") {
+					path := filepath.Join(private, "libxt_comment.so")
+					if err := os.Remove(path); err != nil {
+						complete(err)
+						return
+					}
+					complete(os.Symlink("libxt_tcp.so", path))
 					return
 				}
 				// A newly enumerated extension is never loaded by the fixed rule.

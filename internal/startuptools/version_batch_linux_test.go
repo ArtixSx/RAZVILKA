@@ -109,6 +109,9 @@ func TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift(t *testing.T
 				t.Fatal(err)
 			}
 			r := &heldReview{profile: profile{extension: ext}, nodes: map[string]heldNode{path: {path: path, info: info}, ext: {path: ext, info: extInfo}}, images: map[string]*heldImage{path: {path: path, file: file, info: info}}}
+			if err := r.retainExtensionPath(ext); err != nil {
+				t.Fatal(err)
+			}
 			if err := r.versionMetadataCurrent(context.Background()); err != nil {
 				t.Fatal("baseline", err)
 			}

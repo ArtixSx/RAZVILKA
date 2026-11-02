@@ -38,7 +38,7 @@ func (r *syntheticDNSRunner) ReadDomainTCPBaseline(ctx context.Context, client, 
 		{[]string{"-4", "-j", "route", "get", real.String(), "from", client.String(), "iif", ingress}, &image.Lookup},
 	}
 	for _, command := range commands {
-		data, err := l.policyRead(ctx, 2, command.args)
+		data, err := l.domainBaselineRead(ctx, command.args)
 		if err != nil {
 			return dataplane.DomainTCPBaselineReadImage{}, err
 		}
