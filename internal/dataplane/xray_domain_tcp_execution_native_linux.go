@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"time"
@@ -108,7 +109,7 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 	}
 	if cleanup != nil {
 		if _, err := r.originalContext(ctx, true); err != nil {
-			return err
+			return fmt.Errorf("domain cleanup opening owner: %w", err)
 		}
 	}
 	if r.child == nil {
@@ -118,11 +119,11 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 		return r.cleanupPhase(ctx, "unused", "unused")
 	}
 	if _, err := r.originalContext(ctx, true); err != nil {
-		return err
+		return fmt.Errorf("domain cleanup child owner: %w", err)
 	}
 	p := r.child
 	if p.commandCurrent() != nil || p.child == nil {
-		return ErrXrayDomainTCPOriginal
+		return fmt.Errorf("domain cleanup retained command: %w", ErrXrayDomainTCPOriginal)
 	}
 	select {
 	case <-p.done:
@@ -151,10 +152,10 @@ func (r *XrayDomainTCPExecutionResource) stopOriginalNative(ctx context.Context)
 		}
 	}
 	if err := p.Joined(ctx); err != nil {
-		return err
+		return fmt.Errorf("domain cleanup sole wait: %w", err)
 	}
 	if err := r.observeDomainListenerAbsent(ctx); err != nil {
-		return err
+		return fmt.Errorf("domain cleanup listener absence: %w", err)
 	}
 	return r.cleanupPhase(ctx, "removed", "removed")
 }
