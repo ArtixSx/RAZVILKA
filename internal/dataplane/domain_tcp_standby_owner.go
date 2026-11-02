@@ -333,6 +333,9 @@ func (o *DomainTCPOriginalScope) finishStandbyHandoff(ctx context.Context, actio
 	}
 	retained.pending = false
 	s.mu.Unlock()
+	if s.domainSuccessor != nil {
+		s.domainSuccessor.failedCustody.Store(false)
+	}
 	return true, nil
 }
 

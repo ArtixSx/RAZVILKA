@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/ownedfs"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // One original writer link, reserved BEFORE replacing latest. Its records are
@@ -36,6 +37,8 @@ type domainTCPGlobalSuccessor struct {
 	initialFault   func(string) error // Error-only, configured on the SAME detached prior before construction.
 	continuation   *dnscontrol.SyntheticDNSLedgerContinuation
 	listener       atomic.Pointer[domainTCPPoolListenerWitness]
+	history        *updatecheck.ExecutionHistoryAdmission
+	failedCustody  atomic.Bool
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {
@@ -89,6 +92,7 @@ func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool
 		c.continuation = keeper.continuation
 	}
 	c.self = c
+	c.history = admission.history
 	pool.manager.retainedXrayMu.Lock()
 	pool.mu.Lock()
 	priorCursor := pool.successor
@@ -155,7 +159,7 @@ func (c *domainTCPGlobalSuccessor) forwardCurrentState() error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.pending || c.failure != nil || !c.globalAccepted || !c.sealed {
+	if c.pending || c.failure != nil || c.failedCustody.Load() || !c.globalAccepted || !c.sealed {
 		return errors.Join(ErrPolicyAdditionUnknown, c.failure)
 	}
 	return nil

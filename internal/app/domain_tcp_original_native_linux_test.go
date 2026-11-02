@@ -73,12 +73,25 @@ func TestDomainTCPOriginalNativeNeverIssuedKeeper(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeJoinedFailureKeeper(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR", "1")
+	t.Setenv("RAZVILKA_DOMAIN_JOINED_FAILURE", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
 	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
 	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
+	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
+	if joinedFailure && !neverIssuedSuccessor {
+		t.Fatal("joined error requires distinct never-issued successor")
+	}
 	if neverIssuedSuccessor && (!coexist || initialCut != "") {
 		t.Fatal("never-issued successor requires distinct coexistence case")
 	}
@@ -852,7 +865,15 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(secondHeld, control.Current), secondPlan, history, detached, func(original context.Context) error {
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
-			if err != nil {
+			if joinedFailure {
+				if !domainOriginalOnlyJoinedFailure(err) || neverIssuedOwner == nil {
+					t.Fatal("original callback error changed or cleanup error hidden", err)
+				}
+				if err := neverIssuedOwner.RetainedStandbyCurrent(secondHeld); err != nil {
+					t.Fatal("failed action did not retain genuinely current original standby", err)
+				}
+				t.Log("original callback error preserved; genuine joined native/receipt/kernel proof retained only restorative standby, failed step remains failed")
+			} else if err != nil {
 				t.Fatal("actual original successor/full selected workflow", err)
 			}
 			if version, _, err := dataplane.InspectRetainedExecutionReadVersion(secondHeld, manager.StateRoot); err != nil || version != 8 {

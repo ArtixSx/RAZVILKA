@@ -3,6 +3,8 @@ package dataplane
 import (
 	"context"
 	"sync/atomic"
+
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // Private operation-local documentary writer association. The public entry
@@ -17,6 +19,7 @@ type domainTCPContinuationAdmission struct {
 	digest  string
 	cursor  *domainTCPGlobalSuccessor
 	active  atomic.Bool
+	history *updatecheck.ExecutionHistoryAdmission // SAME public entry's actual admitted readonly source.
 }
 
 // Caller already holds Manager.operation and has completed fleet/guard reads.

@@ -119,6 +119,7 @@ func (m *Manager) WithDomainTCPContinuationResources(ctx context.Context, p Plan
 		return err
 	}
 	return withDomainContinuationAdmission(ctx, m, p, prior, func(admission *domainTCPContinuationAdmission) error {
+		admission.history = history
 		if c, err := m.originalDomainPublicationRetry(ctx, p, prior); err != nil {
 			return err
 		} else if c != nil {

@@ -475,6 +475,28 @@ func (s *executionResourceScope) close() error {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	s.mu.Lock()
+	if c := s.domainSuccessor; c != nil && s.retainedXrayOwner == nil {
+		c.mu.Lock()
+		entered := c.actionStarted
+		c.mu.Unlock()
+		if entered || c.failedCustody.Load() {
+			c.failedCustody.Store(true)
+			s.pending = true
+			s.observationOpen.Store(false)
+			if s.cancel != nil {
+				s.cancel()
+			}
+			failure := s.failure
+			s.mu.Unlock()
+			// Join original actual Start and metadata publishers before the
+			// operation-local writer carrier revokes. Keep every original FD.
+			s.startMu.Lock()
+			s.mu.Lock()
+			s.mu.Unlock()
+			s.startMu.Unlock()
+			return errors.Join(ErrPolicyAdditionUnknown, failure)
+		}
+	}
 	if s.mihomoLive != nil && s.open {
 		if s.retained && !s.mihomoClosing {
 			s.observationOpen.Store(false)
@@ -717,13 +739,16 @@ func (m *Manager) runScopedResourceAction(ctx context.Context, expected Plan, ac
 		c.mu.Unlock()
 	}
 	defer scope.close() // Revoke callbacks and anchored descriptors on panic too.
-	actionErr := action(scope.context())
+	actionErr := domainTCPActionWithCustody(scope, action)
 	if mihomoProof && scope.mihomo != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 12*time.Second)
 		defer cancel()
 		return scope.mihomo.finish(scope.contextWith(cleanup), actionErr)
 	}
 	if domainProof && scope.domainTCPOwner != nil {
+		if scope.domainSuccessor != nil && actionErr != nil {
+			actionErr = errors.Join(actionErr, scope.requestDomainFailureStandby(ctx))
+		}
 		if requested, handoffErr := scope.domainTCPOwner.finishStandbyHandoff(scope.contextWith(ctx), actionErr); requested {
 			return errors.Join(actionErr, handoffErr, scope.close())
 		}

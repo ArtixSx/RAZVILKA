@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"testing"
 	"time"
 
@@ -18,6 +19,30 @@ import (
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 	"golang.org/x/net/dns/dnsmessage"
 )
+
+var errDomainOriginalJoinedFailure = errors.New("native fixture callback failed after actual original Run and join")
+
+func domainOriginalOnlyJoinedFailure(err error) bool {
+	if err == errDomainOriginalJoinedFailure {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		all := joined.Unwrap()
+		if len(all) == 0 {
+			return false
+		}
+		for _, e := range all {
+			if !domainOriginalOnlyJoinedFailure(e) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return domainOriginalOnlyJoinedFailure(wrapped.Unwrap())
+	}
+	return false
+}
 
 // No source/runtime callback is fabricated: this receives the first genuine
 // closed source's opaque handoff and uses public original Manager factories.
@@ -156,11 +181,25 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			return fmt.Errorf("cached alias %s lost original late-SYN tuple: %+v", alias, late)
 		}
 	}
-	if err := owner.RetainStandby(ctx, history); err != nil {
-		return fmt.Errorf("successor same-owner standby handoff: %w", err)
-	}
 	if captured != nil {
 		*captured = owner
 	}
+	if unpublished && os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1" {
+		return errDomainOriginalJoinedFailure
+	}
+	if err := owner.RetainStandby(ctx, history); err != nil {
+		return fmt.Errorf("successor same-owner standby handoff: %w", err)
+	}
 	return nil
+}
+
+func TestDomainOriginalJoinedFailureCannotMaskOtherErrors(t *testing.T) {
+	if !domainOriginalOnlyJoinedFailure(errors.Join(errDomainOriginalJoinedFailure)) {
+		t.Fatal("actual cause lost")
+	}
+	for _, err := range []error{nil, context.Canceled, errors.Join(errDomainOriginalJoinedFailure, context.Canceled), errors.Join(errDomainOriginalJoinedFailure, dataplane.ErrPolicyAdditionUnknown)} {
+		if domainOriginalOnlyJoinedFailure(err) {
+			t.Fatal("unrelated failure masked", err)
+		}
+	}
 }

@@ -57,7 +57,7 @@ func (m *Manager) hasPendingDomainSuccessor() bool {
 		return true
 	}
 	c.mu.Lock()
-	pending := c.pending || c.failure != nil
+	pending := c.pending || c.failure != nil || c.failedCustody.Load()
 	c.mu.Unlock()
 	c.scope.mu.Lock()
 	closedKnown := keeper != nil && keeper.cursor == c && keeper.ready.Load() && !keeper.closed.Load()
