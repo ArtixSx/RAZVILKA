@@ -113,6 +113,11 @@ if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP'
   probe_timeout=240s
 fi
+# Separate genuine source admission diagnostic; it does not stand in for the
+# full NFQWS2 packet workflow or positive offline retirement.
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  probe_cases='TestStaticVersionFactNativeMihomoColdRead'
+fi
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
