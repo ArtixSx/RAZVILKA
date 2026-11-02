@@ -147,6 +147,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	}
 	if lan {
 		setupManagedProbeNativeLAN(t, ctx)
+		traceManagedProbeNativeLinks(t, ctx)
 	} else {
 		command("link", "set", "lo", "up")
 		command("addr", "add", "8.8.8.8/32", "dev", "lo")
