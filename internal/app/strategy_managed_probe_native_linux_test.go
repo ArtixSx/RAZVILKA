@@ -397,12 +397,15 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Fatal(err)
 		}
 	}
-	service := catalog.Service{ID: "native", Name: "Native isolated TLS", Domains: []string{"managed-probe.example"}, ProbeURL: "https://managed-probe.example/", Probes: []catalog.Probe{{ID: "primary", URL: "https://managed-probe.example/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"owned-native-service"}}}}}
+	service := catalog.Service{ID: "native", Name: "Native isolated TLS", Category: "native-fixture", Strategy: []string{"nfqws2", "direct"}, Domains: []string{"managed-probe.example"}, ProbeURL: "https://managed-probe.example/", Probes: []catalog.Probe{{ID: "primary", Label: "Owned native HTTPS", URL: "https://managed-probe.example/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, BodyContains: []string{"owned-native-service"}}}}}
 	if lan {
 		service.Domains = nil
 		service.CIDRs = []string{"8.8.8.8/32"}
 	}
 	a.Catalog = catalog.Catalog{Services: []catalog.Service{service}}
+	if err := catalog.Validate(a.Catalog); err != nil {
+		t.Fatal("fixture must satisfy the SAME complete catalog predicate before validation/probe/Apply", err)
+	}
 	if appHTTP {
 		checks, err := manager.BindNetworkPolicyChecks(gate, inventory)
 		if err != nil {
@@ -443,6 +446,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
 		defer stopHTTPProfile()
 		defer func() {
+			t.Log("native actual HTTP inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
 			t.Log("native actual HTTP aggregate original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
 			children := startuptools.NativeFixtureVersionChildCount(tools)
@@ -490,6 +494,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
 	versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
+	t.Log("native measured Execute inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 	versionChildren := startuptools.NativeFixtureVersionChildCount(tools)
 	for i := range versionChildren {
 		versionChildren[i] -= versionChildrenStarted[i]

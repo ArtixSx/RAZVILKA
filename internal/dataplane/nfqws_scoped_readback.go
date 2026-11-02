@@ -450,6 +450,7 @@ func (b *NFQWSScopedBinding) readbackPrefix(ctx context.Context, p *NFQWSScopedP
 	})
 }
 func (b *NFQWSScopedBinding) readbackPrefixObserved(ctx context.Context, p *NFQWSScopedPlan, mode nfqwsScopedReadMode, index, prefix int) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyReadback)()
 	if ctx == nil || p == nil {
 		return ErrNFQWSScopedOwner
 	}

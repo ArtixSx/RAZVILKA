@@ -152,6 +152,10 @@ if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -cum -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
+  # Filter ancestors/runtime leaves to expose actual source/controller costs.
+  if ! timeout 50s go tool pprof -top -cum -nodecount=40 -show="github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|components|app)" "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
 fi
 test "$probe_status" = 0 || exit "$probe_status"
 done

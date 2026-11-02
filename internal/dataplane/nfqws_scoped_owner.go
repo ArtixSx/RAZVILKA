@@ -554,6 +554,7 @@ func cloneNFQWSScopedEffect(e PolicyEffect) PolicyEffect {
 // fresh exact running process/queue/LAN check. root is the common Execution's
 // retained participant receipt root; this binding creates no second ledger.
 func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyApply)()
 	r, plan, err := b.prepare(p, false)
 	if err != nil {
 		return err
@@ -574,6 +575,7 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 }
 
 func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyRemove)()
 	r, plan, err := b.prepare(p, true)
 	if err != nil {
 		return err
