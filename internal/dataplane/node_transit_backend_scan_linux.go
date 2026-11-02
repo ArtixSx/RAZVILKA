@@ -58,8 +58,17 @@ func inspectOriginalNodeRouterBackendSockets(ctx context.Context, pid int, sourc
 			return nodeTransitPhase("backend-ip-table-parse", err)
 		}
 		for _, socket := range sockets {
-			if found[socket.inode] || strings.HasPrefix(kind, "udp") && socket.remote.Addr().IsUnspecified() {
-				return nodeTransitPhase("backend-ip-tuple", ErrNodeTransitUnavailable)
+			if found[socket.inode] {
+				return nodeTransitPhase("backend-duplicate-"+kind+"-inode", ErrNodeTransitUnavailable)
+			}
+			if strings.HasPrefix(kind, "udp") && socket.remote.Addr().IsUnspecified() {
+				bind := "other-bound"
+				if socket.local.Addr().IsLoopback() {
+					bind = "loopback-bound"
+				} else if socket.local.Addr().IsUnspecified() {
+					bind = "wildcard-bound"
+				}
+				return nodeTransitPhase("backend-unconnected-"+kind+"-"+bind, ErrNodeTransitUnavailable)
 			}
 			found[socket.inode] = true
 			if err := nodeRouterSocketDisjoint(socket, source, pin, endpoints); err != nil {

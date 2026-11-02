@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 )
 
@@ -30,7 +31,7 @@ func (r *mihomoLiveResource) backendDisjoint(ctx context.Context, source, pin ne
 		return err
 	}
 	if err := inspectOriginalNodeRouterBackendSockets(ctx, child.PID(), source, pin, endpoints, r.nativeCurrent); err != nil {
-		return err
+		return fmt.Errorf("original Mihomo backend socket inventory: %w", err)
 	}
 	sidecar.mu.Lock()
 	if sidecar.self != sidecar || sidecar.owner != r || sidecar.command == nil || sidecar.command.Process == nil {
@@ -39,5 +40,8 @@ func (r *mihomoLiveResource) backendDisjoint(ctx context.Context, source, pin ne
 	}
 	pid := sidecar.command.Process.Pid
 	sidecar.mu.Unlock()
-	return inspectOriginalNodeRouterBackendSockets(ctx, pid, source, pin, endpoints, sidecar.current)
+	if err := inspectOriginalNodeRouterBackendSockets(ctx, pid, source, pin, endpoints, sidecar.current); err != nil {
+		return fmt.Errorf("original Mihomo sidecar socket inventory: %w", err)
+	}
+	return nil
 }
