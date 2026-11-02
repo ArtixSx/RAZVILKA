@@ -233,6 +233,7 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 	if err != nil {
 		return nil, err
 	}
+	stage = "StartPrepared.queue"
 	// Only positively readable empty-to-exact-owner queue transition may wait.
 	for {
 		ready, e := nfqws2ActiveAdmissionQueueObserve(activation, admission, &o.child)
@@ -250,13 +251,16 @@ func (a *NFQWS2Adapter) startPreparedNFQWSProcess(request, panel context.Context
 		case <-time.After(15 * time.Millisecond):
 		}
 	}
+	stage = "StartPrepared.observe"
 	l, err := o.observe(activation, true)
 	if err != nil {
 		return nil, err
 	}
+	stage = "StartPrepared.prepared-callback"
 	if err = admission.Prepared(context.WithValue(activation, nfqws2ActivePreparedKey{}, p), admission.Binding, l.observation()); err != nil {
 		return nil, err
 	}
+	stage = "StartPrepared.closing-observe"
 	l, err = o.observe(activation, true)
 	if err != nil || l.Transfer != "none" || activation.Err() != nil {
 		return nil, errors.Join(ErrNFQWSManagedProcessUnknown, err, activation.Err())

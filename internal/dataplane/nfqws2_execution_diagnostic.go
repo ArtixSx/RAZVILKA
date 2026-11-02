@@ -38,7 +38,8 @@ func NFQWSExecutionFailureStages(err error) []string {
 		switch label {
 		case "activation.prepare", "activation.registrar", "activation.scope", "activation.lan", "activation.absence", "activation.parent", "activation.forward", "activation.lease-absence", "activation.material", "activation.deadline", "activation.selection", "activation.closing-deadline", "activation.retain-selection",
 			"activate.issue", "activate.guards", "activate.consume", "activate.associate", "activate.resource", "activate.configure", "activate.process-directory", "activate.binding", "activate.start", "activate.health",
-			"StartPrepared.admission", "StartPrepared.panel-lifetime", "StartPrepared.activation-context", "StartPrepared.network-identity", "StartPrepared.adapter-owner", "StartPrepared.parent-files-control", "StartPrepared.executable", "StartPrepared.state-root", "StartPrepared.before-start", "StartPrepared.intent", "StartPrepared.transport", "StartPrepared.native-launch",
+			"StartPrepared.admission", "StartPrepared.panel-lifetime", "StartPrepared.activation-context", "StartPrepared.network-identity", "StartPrepared.adapter-owner", "StartPrepared.parent-files-control", "StartPrepared.executable", "StartPrepared.state-root", "StartPrepared.before-start", "StartPrepared.intent", "StartPrepared.transport", "StartPrepared.native-launch", "StartPrepared.queue", "StartPrepared.observe", "StartPrepared.prepared-callback", "StartPrepared.closing-observe",
+			"prepared.owner-opening", "prepared.bind", "prepared.active", "prepared.policy-apply", "prepared.owner-closing",
 			"READY", "PERMIT", "STARTED", "TRANSFER", "TRANSFER ACK", "provisional BOTH", "FINALIZE", "final ACTIVE ACK", "execution.activation-seal", "prepared Observe", "prepared owner proof", "prepared Stop", "CommitPrepared", "active owner proof", "active cleanup proof", "Current", "active Stop", "retired owner proof", "retire prepared", "retire active":
 			stages = append(stages, label)
 		}

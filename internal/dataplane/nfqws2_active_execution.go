@@ -504,7 +504,9 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 			}
 			return e.current(c, r.Plan())
 		}, WithTransfer: r.WithTransfer, PublishTransferACK: r.PublishTransferACK,
-		Prepared: func(c context.Context, b NFQWSExecutionBinding, obs NFQWSActiveObservation) error {
+		Prepared: func(c context.Context, b NFQWSExecutionBinding, obs NFQWSActiveObservation) (result error) {
+			phase := "prepared.owner-opening"
+			defer func() { result = nfqwsExecutionFailure(phase, result) }()
 			p := nfqws2ActivePreparedFromContext(c)
 			if p == nil || b != r.Binding() || p.VerifyOwnerObservation(c, obs) != nil {
 				return ErrNFQWSScopedOwner
@@ -516,15 +518,19 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 			}
 			e.prepared = p
 			e.mu.Unlock()
+			phase = "prepared.bind"
 			if err := r.bindPrepared(c, p, obs); err != nil {
 				return err
 			}
+			phase = "prepared.active"
 			if err := r.PreparedActive(c, b, obs); err != nil {
 				return err
 			}
+			phase = "prepared.policy-apply"
 			if err := e.binding.Apply(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root()); err != nil {
 				return err
 			}
+			phase = "prepared.owner-closing"
 			return p.VerifyOwnerObservation(c, obs)
 		}}
 	e.mu.Lock()
