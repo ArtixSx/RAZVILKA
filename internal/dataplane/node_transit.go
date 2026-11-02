@@ -123,6 +123,7 @@ func nodeTransitSpecDigest(spec NodeTransitSpec) (string, error) {
 // Cleanup uses its caller's separate authority; cancel detachment cannot renew
 // a revoked review because the same context-aware guard remains mandatory.
 type nodeTransitRuntime struct {
+	sharedOwner                    *nodeTransitSharedOwner
 	runner                         NFQWS2Runner
 	ip                             string
 	preflight, guard, beforeDelete func(context.Context, NodeTransitSpec) error
@@ -221,6 +222,15 @@ func newNodeTransitLease(spec NodeTransitSpec, root string, runtime nodeTransitR
 
 func newNodeTransitLeaseWithOptions(spec NodeTransitSpec, root string, runtime nodeTransitRuntime, options nodeTransitOptions) (*nodeTransitLease, error) {
 	plan, err := CompileNodeTransit(spec)
+	shared := runtime.sharedOwner
+	if shared != nil {
+		if shared.self != shared || shared.check == nil || shared.spec != spec || shared.root != root || shared.lease.Load() != nil || runtime.preflight != nil || runtime.guard != nil || runtime.beforeDelete != nil {
+			return nil, ErrNodeTransitUnavailable
+		}
+		// The constructor, not a function-pointer guess or caller flag, sets all
+		// roles to one retained original check on this exact lease/spec/root.
+		runtime.preflight, runtime.guard, runtime.beforeDelete = shared.check, shared.check, shared.check
+	}
 	if err != nil || !filepath.IsAbs(root) || filepath.Clean(root) != root || runtime.runner == nil || runtime.ip == "" || strings.ContainsAny(runtime.ip, "\x00\r\n") ||
 		runtime.preflight == nil || runtime.guard == nil || runtime.beforeDelete == nil || runtime.register == nil {
 		return nil, errors.Join(ErrNodeTransitUnavailable, err)
@@ -228,7 +238,15 @@ func newNodeTransitLeaseWithOptions(spec NodeTransitSpec, root string, runtime n
 	if options.boot == nil {
 		options.boot = func() (string, error) { return (&ProxyTunnelAdapter{}).currentBootIdentity() }
 	}
-	return &nodeTransitLease{spec: spec, plan: plan, digest: plan.Generation, root: root, runtime: runtime, options: options}, nil
+	lease := &nodeTransitLease{spec: spec, plan: plan, digest: plan.Generation, root: root, runtime: runtime, options: options}
+	if shared != nil {
+		if !shared.lease.CompareAndSwap(nil, lease) {
+			return nil, ErrNodeTransitUnavailable
+		}
+		check := func(ctx context.Context, spec NodeTransitSpec) error { return shared.run(lease, ctx, spec) }
+		lease.runtime.preflight, lease.runtime.guard, lease.runtime.beforeDelete = check, check, check
+	}
+	return lease, nil
 }
 
 func (l *nodeTransitLease) identity(ctx context.Context) error {
@@ -260,6 +278,19 @@ func (l *nodeTransitLease) effectRuntime() PolicyEffectRuntime {
 	return PolicyEffectRuntime{Runner: l.runtime.runner, Tools: PolicyEffectTools{IP: l.runtime.ip},
 		Guard: func(ctx context.Context, _ int) error { return l.guard(ctx) },
 		Preflight: func(ctx context.Context) error {
+			if owner := l.runtime.sharedOwner; owner != nil {
+				if !owner.validFor(l) {
+					return ErrNodeTransitUnavailable
+				}
+				// presence already calls the SAME full ownership guard before
+				// and after both-family actual reads. The otherwise adjacent
+				// duplicate opening/closing callbacks contain no intervening IO.
+				count, err := l.presence(ctx)
+				if err != nil || count != 0 {
+					return nodeTransitPhase("preflight-presence", errors.Join(ErrNodeTransitUnavailable, err))
+				}
+				return nil
+			}
 			if err := l.runtime.preflight(ctx, l.spec); err != nil {
 				return nodeTransitPhase("preflight-owner", err)
 			}
