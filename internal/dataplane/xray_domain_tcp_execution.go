@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"time"
@@ -132,8 +133,11 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 	}
 	if cleanup {
 		review, reviewErr := r.cleanupReview(ctx)
-		if reviewErr != nil || r.material.control.CurrentForCleanupOperation(ctx, review) != nil {
-			return nil, ErrXrayDomainTCPOriginal
+		if reviewErr != nil {
+			return nil, fmt.Errorf("domain cleanup review: %w", errors.Join(ErrXrayDomainTCPOriginal, reviewErr))
+		}
+		if err := r.material.control.CurrentForCleanupOperation(ctx, review); err != nil {
+			return nil, fmt.Errorf("domain cleanup control: %w", errors.Join(ErrXrayDomainTCPOriginal, err))
 		}
 		if cursor, err := r.failureCleanup(ctx); err != nil {
 			return nil, err
@@ -142,7 +146,7 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 			err := r.material.metadataIdentityCurrentLocked()
 			r.material.mu.Unlock()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("domain cleanup material identity: %w", err)
 			}
 		}
 	} else if err := r.material.metadataCurrent(ctx); err != nil {
@@ -155,6 +159,9 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 	}
 	r.scope.mu.Unlock()
 	if err != nil {
+		if cleanup {
+			return nil, fmt.Errorf("domain cleanup scope row: %w", err)
+		}
 		return nil, err
 	}
 	allEqual := true
@@ -169,6 +176,9 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 		return nil, err
 	}
 	if err := r.filesCurrentForObservation(ctx, files); err != nil {
+		if cleanup {
+			return nil, fmt.Errorf("domain cleanup held files: %w", err)
+		}
 		return nil, err
 	}
 	return ctx, nil
