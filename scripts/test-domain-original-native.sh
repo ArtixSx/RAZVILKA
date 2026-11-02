@@ -39,6 +39,18 @@ case "${RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE:-0}" in
  1) domain_case=TestDomainTCPOriginalNativeUnpublishedRetirement ;;
  *) exit 2 ;;
 esac
+case "${RAZVILKA_DOMAIN_DNS_ONLY_NATIVE:-0}" in
+ 0) ;;
+ 1)
+  test "${RAZVILKA_DOMAIN_UNPUBLISHED_NATIVE:-0}" = 0 || exit 2
+  domain_case=TestDomainTCPOriginalNativePublishedDNSStandby
+  case "${RAZVILKA_DOMAIN_DNS_DETACH:-0}" in
+   0) ;;
+   1) domain_case=TestDomainTCPOriginalNativeDNSDetachment ;;
+   *) exit 2 ;;
+  esac ;;
+ *) exit 2 ;;
+esac
 unshare --mount --net sh -eu -c '
  mount --make-rprivate /
  # Original tool/preload review must observe protected ancestors, not the

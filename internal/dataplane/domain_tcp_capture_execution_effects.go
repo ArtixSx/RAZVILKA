@@ -182,14 +182,22 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 		ExactPresence: func(c context.Context, i int) (int, error) {
 			count := 0
 			err := r.observeTools(c, func(observed context.Context) error {
-				view, err := r.read(observed)
-				if err != nil {
+				// readWithFiles already bookends every actual kernel read with
+				// the original complete process/material Current. Share only its
+				// immutable executable bytes across those SAME two observations.
+				return r.process.withFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+					view, err := r.readWithFiles(observed, files)
+					if err != nil {
+						return err
+					}
+					count, err = domainTCPCapturePresence(view.Rows, r.effects, i)
 					return err
-				}
-				count, err = domainTCPCapturePresence(view.Rows, r.effects, i)
-				return err
+				})
 			})
-			return count, err
+			if err != nil {
+				return 0, err // No positive count survives a closing proof failure.
+			}
+			return count, nil
 		},
 		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending }}
 	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {

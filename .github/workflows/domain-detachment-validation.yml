@@ -1,0 +1,116 @@
+name: Original DNS detachment ownership validation
+on:
+  push:
+    branches: ['work/domain-detachment-validation-20261102']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: domain-detachment-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  GOTOOLCHAIN: local
+jobs:
+  published-dns-standby:
+    name: DNS-only publication and cached-alias baseline (no selected service claim)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Original writer and typed reader regressions
+        run: go test -race -count=1 ./internal/dnscontrol ./internal/dataplane -run 'TestSyntheticDNSContinuation|TestDomainDNSDetached|TestDomainStandbyConcurrent|TestOriginalRecordClose'
+      - name: Actual DNS send, original Stop and cached-alias TLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/dns-only-standby
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/dns-only-standby' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-only-standby" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-only-standby/native.log
+      - name: Preserve actual diagnostic clocks and CPU samples
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dns-only-standby-${{ github.sha }}
+          path: artifacts/dns-only-standby
+          if-no-files-found: warn
+  detached-dns-ownership:
+    name: DNS-only original detachment / ${{ matrix.cut }}
+    needs: published-dns-standby
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cut: [clean, alias0, alias1, global, registry, foreign-history]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Original DNS handoff and same-owner retry
+        shell: bash
+        env:
+          CUT: ${{ matrix.cut }}
+        run: |
+          set -euo pipefail
+          ack=''
+          foreign=''
+          case "$CUT" in
+            clean) ;;
+            alias0|alias1|global|registry) ack="$CUT" ;;
+            foreign-history) foreign=1 ;;
+            *) exit 2 ;;
+          esac
+          mkdir -p -m 700 artifacts/dns-detachment
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/dns-detachment' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 \
+            RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_DETACH_ACK="$ack" \
+            RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY="$foreign" \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/dns-detachment" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/dns-detachment/native.log
+      - name: Preserve original custody observations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dns-detachment-${{ matrix.cut }}-${{ github.sha }}
+          path: artifacts/dns-detachment
+          if-no-files-found: warn

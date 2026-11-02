@@ -216,18 +216,29 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 			}
 		}
 		publish := func(index int, path string) error {
+			for _, resource := range scope.xraySelectedTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
+			for _, resource := range scope.xrayDomainTCP {
+				if err := resource.records.publicationFailure(); err != nil {
+					return err
+				}
+			}
 			file, err := writeDataplaneJournalRetained(path, data)
 			if err != nil {
 				return err
 			}
+			accepted := false
 			info, err := file.Stat()
 			if err == nil {
-				err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
+				accepted, err = scope.captureOriginalXrayExecutionRecord(index, file, info, data)
 			}
-			if err != nil {
+			if !accepted {
 				return errors.Join(err, file.Close())
 			}
-			return nil // Original sink accepted ownership of this writer's FD.
+			return err // Original sink owns the new FD even when the old close failed.
 		}
 		transactionErr := publish(0, filepath.Join(root, "execution.json"))
 		latestErr := publish(1, filepath.Join(m.StateRoot, "latest-execution.json"))
