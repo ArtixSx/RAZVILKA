@@ -86,6 +86,9 @@ func nfqwsScopedTokens(line string) ([]string, error) {
 }
 
 func (b *NFQWSScopedBinding) readRules(ctx context.Context, p *NFQWSScopedPlan) (nfqwsScopedReadImage, error) {
+	if b != nil && b.activeReadback != nil {
+		return b.readActiveRules(ctx, p)
+	}
 	if err := b.AdditionalReadback(ctx, p); err != nil {
 		return nfqwsScopedReadImage{}, err
 	}

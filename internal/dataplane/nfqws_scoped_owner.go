@@ -485,6 +485,7 @@ type NFQWSScopedBinding struct {
 	// Checks other kernel backends (including nftables) and the exact physical
 	// namespace of Runner. Unknown or overlapping foreign capture must refuse.
 	AdditionalReadback func(context.Context, *NFQWSScopedPlan) error
+	activeReadback     *nfqws2ActiveExecution // Original active producer; mutually exclusive with callback.
 	// Only the private after-Start phase observes empty -> exact ready owned.
 	// Strict pre-Start, Prepared, Apply and cleanup still use QueueCheck.
 	queueReadiness func(context.Context, string, uint16, *components.NFQWSRuntimeProcessIdentity) (bool, error)
@@ -493,7 +494,7 @@ type NFQWSScopedBinding struct {
 }
 
 func (b *NFQWSScopedBinding) prepare(p *NFQWSScopedPlan, cleanup bool) (PolicyEffectRuntime, PolicyEffectPlan, error) {
-	if b == nil || p == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || (b.network == nil && b.QueueCheck == nil) || b.AdditionalReadback == nil || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
+	if b == nil || p == nil || b.Runner == nil || b.ApplyGuard == nil || b.CleanupGuard == nil || b.VerifyLAN == nil || b.ProcessRunning == nil || b.ProcessInactive == nil || (b.network == nil && b.QueueCheck == nil) || (b.AdditionalReadback == nil) == (b.activeReadback == nil) || b.Tools.IPTables == "" || b.Tools.IP6Tables == "" {
 		return PolicyEffectRuntime{}, PolicyEffectPlan{}, ErrNFQWSScopedOwner
 	}
 	if (p.resources.NetworkIdentity != nil) != (b.network != nil) {
