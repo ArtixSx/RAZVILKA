@@ -76,6 +76,7 @@ type mihomoSameBootCleanup struct {
 }
 
 func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
+	defer mihomoSameBootNativeOwnerTiming(o, "source-current")()
 	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || !o.sourceCoordinatesCurrent() || o.effectUnknown {
 		return ErrMihomoLiveRetirement
 	}
@@ -105,6 +106,7 @@ func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
 }
 
 func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identity, error) {
+	defer mihomoSameBootNativeOwnerTiming(o, "absence")()
 	if err := o.current(ctx); err != nil {
 		return netidentity.Identity{}, err
 	}

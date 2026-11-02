@@ -38,6 +38,7 @@ func WithMihomoSameBootNativeWitness(ctx context.Context, witness func(context.C
 	return use(context.WithValue(ctx, mihomoSameBootNativeWitnessKey{}, w))
 }
 func mihomoSameBootNativeStage(ctx context.Context, c *mihomoSameBootRetirementCursor, stage string, book func() error) error {
+	defer mihomoSameBootNativeTiming(c, "native-stage")()
 	if ctx == nil {
 		return ErrMihomoLiveRetirement
 	}
@@ -72,6 +73,7 @@ func mihomoSameBootNativeStage(ctx context.Context, c *mihomoSameBootRetirementC
 	if err := book(); err != nil {
 		return err
 	}
-	err := w.use(ctx, stage)
+	var err error
+	func() { defer mihomoSameBootNativeTiming(c, "native-witness-callback")(); err = w.use(ctx, stage) }()
 	return errors.Join(err, book())
 }
