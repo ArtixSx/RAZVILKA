@@ -15,6 +15,7 @@ const maxExecutionResources = 256
 // path. Neither serialized metadata nor "removed"/"unused" grants effects or
 // cleanup: actual owner readback and the common receipt remain mandatory.
 type ExecutionResource struct {
+	DomainDNSDetached *ExecutionDomainDNSDetachedDefinition `json:"domain_dns_detached,omitempty"`
 	ID                string                                `json:"id"`
 	Kind              string                                `json:"kind"`
 	State             string                                `json:"state"` // prepared, removed, unused
@@ -45,6 +46,10 @@ type ExecutionNFQWSDefinition struct {
 func cloneExecutionResources(resources []ExecutionResource) []ExecutionResource {
 	result := slices.Clone(resources)
 	for i := range result {
+		if result[i].DomainDNSDetached != nil {
+			d := result[i].DomainDNSDetached.Clone()
+			result[i].DomainDNSDetached = &d
+		}
 		if result[i].MihomoLive != nil {
 			d := result[i].MihomoLive.Clone()
 			result[i].MihomoLive = &d
@@ -130,6 +135,9 @@ func validateExecutionResources(execution Execution, terminal bool) error {
 			return ErrExecutionJournal
 		}
 		seen[resource.ID] = true
+		if resource.DomainDNSDetached != nil && resource.Kind != "synthetic-baseline" {
+			return ErrExecutionJournal
+		}
 		if resource.MihomoLive != nil && resource.Kind != "mihomo-live" {
 			return ErrExecutionJournal
 		}

@@ -1,0 +1,17 @@
+package dataplane
+
+type nfqwsProbeMeasuredPhase uint8
+
+const (
+	nfqwsProbePhaseCurrent nfqwsProbeMeasuredPhase = iota
+	nfqwsProbePhaseOwners
+	nfqwsProbePhaseEnvironment
+	nfqwsProbePhaseEpoch
+	nfqwsProbePhaseCleanupCurrent
+	nfqwsProbePhaseCounter
+	nfqwsProbePhaseCaptureCurrent
+	nfqwsProbePhasePolicyApply
+	nfqwsProbePhasePolicyRemove
+	nfqwsProbePhasePolicyReadback
+	nfqwsProbePhaseCount
+)

@@ -179,6 +179,7 @@ func (r *ManagedNFQWSProbeConsumer) ScopeCurrent(ctx context.Context, generation
 }
 
 func (e *nfqwsProbeExecution) owners(ctx context.Context) error {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseOwners)()
 	if e == nil || e.self != e || !e.open.Load() || ctx == nil || ctx.Err() != nil || e.consumer == nil || e.consumer.self != e.consumer {
 		return ErrNFQWSScopedOwner
 	}
@@ -211,15 +212,17 @@ func (e *nfqwsProbeExecution) owners(ctx context.Context) error {
 }
 
 func (e *nfqwsProbeExecution) current(ctx context.Context) error {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseCurrent)()
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
 	if err := e.consumer.control.Current(ctx); err != nil {
 		return err
 	}
-	if err := e.guard(ctx); err != nil {
+	if err := e.measuredEnvironmentCurrent(ctx); err != nil {
 		return err
 	}
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseEpoch)()
 	return e.epoch.WithProbeReferenceCurrent(ctx, e.source, e.runtime, e.consumer.control, func(ref strategylab.CandidateProbeReference) error {
 		if !reflect.DeepEqual(ref, e.reference) || !reflect.DeepEqual(e.runtime.Descriptor(), e.descriptor) {
 			return ErrNFQWSScopedOwner
@@ -228,7 +231,13 @@ func (e *nfqwsProbeExecution) current(ctx context.Context) error {
 	})
 }
 
+func (e *nfqwsProbeExecution) measuredEnvironmentCurrent(ctx context.Context) error {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseEnvironment)()
+	return e.guard(ctx)
+}
+
 func (e *nfqwsProbeExecution) cleanupCurrent(ctx context.Context) error {
+	defer measureNFQWSProbePhase(e, nfqwsProbePhaseCleanupCurrent)()
 	if e == nil || e.cleanup == nil || e.socket == nil {
 		return ErrNFQWSScopedOwner
 	}

@@ -23,7 +23,8 @@ import (
 // interpreting these records never grants adoption, launch or cleanup.
 // Version5 additionally reads source-issued Mihomo parent/death lineage.
 // Version6 additionally reads persistent original Mihomo runtime intent.
-const ExecutionReadVersion = 6
+// Version7 also reads an originally detached DNS owner with retained baseline.
+const ExecutionReadVersion = 7
 
 // InspectRetainedExecutionReadVersion reads every retained execution, including
 // older transactions. Its seal is comparison data, never cleanup authority.
@@ -136,6 +137,9 @@ func InspectRetainedExecutionReadVersion(ctx context.Context, path string) (vers
 			return 0, "", ErrExecutionJournal
 		}
 		for _, resource := range execution.Resources {
+			if resource.DomainDNSDetached != nil {
+				required = max(required, 7)
+			}
 			if resource.MihomoLive != nil {
 				required = max(required, 6)
 			}

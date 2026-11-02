@@ -33,7 +33,7 @@ func (d ExecutionDomainDNSDetachedDefinition) Clone() ExecutionDomainDNSDetached
 func (d ExecutionDomainDNSDetachedDefinition) validate(executionPlanID string, baseline *ExecutionSyntheticBaselineDefinition) error {
 	finiteID := strings.TrimPrefix(executionPlanID, "dp-check-")
 	finite := strings.HasPrefix(executionPlanID, "dp-check-") && len(finiteID) == 32 && strings.Trim(finiteID, "0123456789abcdef") == ""
-	if d.Schema != 1 || !validPlanID(executionPlanID) && !finite || d.OwnerName != "retired-"+executionPlanID+"-owner.json" || !validPlanDigest(d.OwnerSHA256) || !validPlanDigest(d.LedgerPrefixSHA256) || d.LedgerCount < 1 || d.LedgerCount > 1024 {
+	if d.Schema != 1 || !validPlanID(executionPlanID) && !finite || d.OwnerName != "retired-"+executionPlanID+"-owner.json" || !validPlanDigest(d.OwnerSHA256) || !validPlanDigest(d.LedgerPrefixSHA256) || d.LedgerCount < 1 || d.LedgerCount > 256 {
 		return ErrExecutionJournal
 	}
 	if _, err := syntheticBaselineDefinitionEffects(baseline); err != nil {

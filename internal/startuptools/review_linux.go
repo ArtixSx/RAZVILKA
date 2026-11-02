@@ -441,9 +441,10 @@ func (r *heldReview) resolveExisting(path string) (string, error) {
 
 func (l *Lease) current(ctx context.Context, expected netidentity.Identity, versions bool) error {
 	if l.review == nil || l.provider == nil || expected != l.identity || !l.profile.acceptsIdentity(expected) {
+		l.forgetVersionFact(ctx)
 		return at("CHECK_IDENTITY", nil)
 	}
-	return l.provider.WithCurrent(ctx, func(held context.Context, actual netidentity.Identity) error {
+	err := l.provider.WithCurrent(ctx, func(held context.Context, actual netidentity.Identity) error {
 		if actual != expected || l.closed.Load() || l.lifetime.Err() != nil {
 			return at("CHECK_IDENTITY", nil)
 		}
@@ -452,4 +453,11 @@ func (l *Lease) current(ctx context.Context, expected netidentity.Identity, vers
 		}
 		return l.review.unchanged(held)
 	})
+	if err == nil && versions {
+		err = l.rememberVersionFact(ctx)
+	}
+	if err != nil {
+		l.forgetVersionFact(ctx)
+	}
+	return err
 }

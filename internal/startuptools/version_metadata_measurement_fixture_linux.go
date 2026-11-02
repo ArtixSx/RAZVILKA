@@ -7,11 +7,24 @@ import (
 	"sync/atomic"
 )
 
-var nativeVersionMetadataAttempts sync.Map // SAME original *heldReview → *atomic.Uint64.
+type nativeVersionCounts struct {
+	metadata atomic.Uint64
+	children [3]atomic.Uint64
+}
+
+var nativeVersionMetadataAttempts sync.Map // SAME original *heldReview → *nativeVersionCounts.
 
 func noteVersionMetadataAttempt(r *heldReview) {
-	count, _ := nativeVersionMetadataAttempts.LoadOrStore(r, new(atomic.Uint64))
-	count.(*atomic.Uint64).Add(1)
+	count, _ := nativeVersionMetadataAttempts.LoadOrStore(r, new(nativeVersionCounts))
+	count.(*nativeVersionCounts).metadata.Add(1)
+}
+
+func noteVersionChildStart(r *heldReview, index int) {
+	if index < 0 || index > 2 {
+		return
+	}
+	count, _ := nativeVersionMetadataAttempts.LoadOrStore(r, new(nativeVersionCounts))
+	count.(*nativeVersionCounts).children[index].Add(1)
 }
 
 // NativeFixtureVersionMetadataCount reports attempted complete metadata
@@ -26,5 +39,20 @@ func NativeFixtureVersionMetadataCount(l *Lease) uint64 {
 	if !ok {
 		return 0
 	}
-	return count.(*atomic.Uint64).Load()
+	return count.(*nativeVersionCounts).metadata.Load()
+}
+
+// NativeFixtureVersionChildCount counts actual successful Start events for
+// the two fixed aliases and IP, including children whose Wait later failed.
+func NativeFixtureVersionChildCount(l *Lease) [3]uint64 {
+	var out [3]uint64
+	if l == nil || l.review == nil {
+		return out
+	}
+	if count, ok := nativeVersionMetadataAttempts.Load(l.review); ok {
+		for i := range out {
+			out[i] = count.(*nativeVersionCounts).children[i].Load()
+		}
+	}
+	return out
 }

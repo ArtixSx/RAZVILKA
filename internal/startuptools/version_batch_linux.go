@@ -36,9 +36,25 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 	b := &versionReadBatch{lease: l, ctx: scoped, active: true}
 	b.self = b
 	defer func() { b.active = false }()
+	fact, err := l.retainedVersionFact(scoped)
+	if err != nil {
+		return err
+	}
+	if fact != nil {
+		// Reobserve the whole graph for this byte-only fact. No callback or
+		// child occurs between the two static alias projections below.
+		if err := l.review.versionMetadataCurrent(scoped); err != nil {
+			return err
+		}
+	}
 	var observed error
 	for i := range l.profile.aliases {
-		if observed = b.read(scoped, l, i); observed != nil {
+		if fact != nil {
+			observed = b.retainStatic(scoped, l, i, fact)
+		} else {
+			observed = b.read(scoped, l, i)
+		}
+		if observed != nil {
 			break
 		}
 	}
@@ -52,6 +68,18 @@ func (l *Lease) versionBatchCurrent(ctx context.Context) error {
 		closing = errors.Join(closing, at("VERSION_BATCH_SCOPE", nil))
 	}
 	return errors.Join(observed, closing, ctx.Err())
+}
+
+func (b *versionReadBatch) retainStatic(ctx context.Context, l *Lease, index int, f *scopedVersionFact) error {
+	if b == nil || b.self != b || !b.active || b.lease != l || ctx != b.ctx || index != b.next || index < 0 || index > 1 {
+		return at("VERSION_FACT_SCOPE", nil)
+	}
+	current, err := l.retainedVersionFact(ctx)
+	if err != nil || current != f || f == nil {
+		return at("VERSION_FACT_SCOPE", err)
+	}
+	b.next++
+	return nil
 }
 
 // Under the SAME original readonly observation, each actual child's complete
@@ -91,6 +119,9 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
 	runErr := l.runObservedRead(c, command)
+	if command.Process != nil {
+		noteVersionChildStart(l.review, index)
+	}
 	var observed error
 	if runErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		observed = commandResultFailure("COMMAND_RESULT", runErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)

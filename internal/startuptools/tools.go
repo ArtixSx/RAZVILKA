@@ -53,7 +53,8 @@ type Lease struct {
 	closed      atomic.Bool
 	retainMu    sync.Mutex
 	retained    sync.WaitGroup
-	readRelease func() // Guarded by the original gate; released only by unlock.
+	readRelease func()             // Guarded by the original gate; released only by unlock.
+	versionFact *scopedVersionFact // Guarded by the original gate; last original scope only.
 }
 
 // AcquireUbuntuLegacy selects only the reviewed Ubuntu AMD64 1.8.11 legacy

@@ -107,7 +107,7 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-probe_cases='TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_cases='TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP'
@@ -116,7 +116,7 @@ fi
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-if test "$probe_case" = TestClassicReadBatchNativeMutation; then probe_program="$probe_work/startuptools.test"; fi
+case "$probe_case" in TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 unshare --mount --net sh -c '
   set -eu
   mount --make-rprivate /
@@ -150,6 +150,10 @@ if test -f "$probe_work/$probe_case.pprof"; then
   # Cumulative callers attribute syscall/SHA cost to the original producer;
   # flat runtime leaves alone cannot distinguish tools from runtime assets.
   if ! timeout 50s go tool pprof -top -cum -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  # Filter ancestors/runtime leaves to expose actual source/controller costs.
+  if ! timeout 50s go tool pprof -top -cum -nodecount=40 -show="github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|components|app)" "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi
