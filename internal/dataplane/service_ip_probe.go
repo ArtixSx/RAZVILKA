@@ -84,15 +84,36 @@ func socksHTTPGetPinnedObservedTLS(ctx context.Context, rawURL, address string, 
 	transport := &http.Transport{
 		TLSClientConfig: config, TLSHandshakeTimeout: 5 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second, ForceAttemptHTTP2: true,
-		DialContext: func(ctx context.Context, network, target string) (net.Conn, error) {
+		DialContext: func(transportCtx context.Context, network, target string) (net.Conn, error) {
+			// net/http detaches its dial context from the request deadline and
+			// cancellation for connection reuse. This isolated probe instead owns
+			// one request: keep its original finite context/values and join the
+			// transport's cancellation without granting a fresh observation budget.
+			dialCtx, cancelDial := context.WithCancel(requestCtx)
+			stopTransport := context.AfterFunc(transportCtx, cancelDial)
+			defer func() { stopTransport(); cancelDial() }()
+			current := func() error { return errors.Join(requestCtx.Err(), transportCtx.Err(), dialCtx.Err()) }
+			if err := current(); err != nil {
+				return nil, err
+			}
 			host, port, err := net.SplitHostPort(target)
 			if err != nil || !samePinnedServiceHost(host, origin.Hostname()) || port != "443" || network != "tcp" && network != "tcp4" {
 				return nil, errors.New("pinned service transport target changed")
 			}
-			if err := checkNodeResource(ctx, host, pinned); err != nil {
+			if err := checkNodeResource(dialCtx, host, pinned); err != nil {
+				return nil, errors.Join(err, current())
+			}
+			if err := current(); err != nil {
 				return nil, err
 			}
-			return contextDialer.DialContext(ctx, "tcp", net.JoinHostPort(pinned.String(), "443"))
+			conn, err := contextDialer.DialContext(dialCtx, "tcp", net.JoinHostPort(pinned.String(), "443"))
+			if closingErr := current(); closingErr != nil {
+				if conn != nil {
+					err = errors.Join(err, conn.Close())
+				}
+				return nil, errors.Join(err, closingErr)
+			}
+			return conn, err
 		},
 	}
 	var once sync.Once
