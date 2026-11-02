@@ -189,6 +189,7 @@ func TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup(t *testing.T) 
 	if err := child.Current(ctx); err != nil {
 		t.Fatal("old Apply cancellation killed or revoked original live comparison", err)
 	}
+	testMihomoLiveReadObservationOriginalBookends(t, ctx, child)
 	if err := child.Cleanup(ctx, cleanup); err == nil {
 		t.Fatal("released Apply cleanup review reactivated")
 	}

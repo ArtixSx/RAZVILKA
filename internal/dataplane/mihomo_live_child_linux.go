@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -24,17 +25,22 @@ func (r *mihomoLiveResource) nativeCurrent(ctx context.Context) error {
 	if r.source.Reference() != r.definition.Source || r.node.Reference() != r.definition.Node {
 		return errMihomoLiveMaterial
 	}
-	if err := errors.Join(r.control.ObserveCurrent(ctx), r.source.Current(ctx), r.node.Current(ctx)); err != nil {
+	if err := errors.Join(r.control.ObserveCurrent(ctx), r.node.Current(ctx)); err != nil {
 		return err
 	}
-	profile, err := child.ProfileReference(ctx)
-	if err != nil || profile != r.definition.Profile {
-		return errors.Join(errMihomoLiveMaterial, err)
-	}
-	if _, err := observeMihomoLiveProcess(ctx, child, r.adapter.provider, r.definition.NetworkIdentity); err != nil {
-		return err
-	}
-	return errors.Join(r.control.ObserveCurrent(ctx), r.source.Current(ctx), r.node.Current(ctx))
+	return child.WithReadObservation(ctx, func(held context.Context, view *components.MihomoLiveObservation) error {
+		if !view.BoundTo(child, r.source) {
+			return errMihomoLiveMaterial
+		}
+		profile, err := view.ProfileReference(held)
+		if err != nil || profile != r.definition.Profile {
+			return errors.Join(errMihomoLiveMaterial, err)
+		}
+		if _, err := observeMihomoLiveObservation(held, view, r.adapter.provider, r.definition.NetworkIdentity); err != nil {
+			return err
+		}
+		return errors.Join(r.control.ObserveCurrent(held), r.node.Current(held))
+	})
 }
 
 func (r *mihomoLiveResource) nativeCleanupCurrent(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
