@@ -218,6 +218,7 @@ func domainPolicyTCPSynchronousScope(parent context.Context, with func(func(cont
 // observe is private and injected only by socket-model tests. Production uses
 // the accepted *net.TCPConn's native SO_ORIGINAL_DST and actual RemoteAddr.
 func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.TCPConn, observe func(*net.TCPConn) (DomainPolicyTCPSocket, error)) (DomainPolicyDecision, error) {
+	defer domainTCPMeasure("accepted-handler")(0)
 	refused := DomainPolicyDecision{Kind: "refused", Reason: "SYNTHETIC_CAPTURE_AUTHORITY_REQUIRED"}
 	if conn == nil {
 		return refused, ErrDomainPolicyTCPConsumer
@@ -234,7 +235,10 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 		!socket.Source.IsValid() || socket.Source.Port() == 0 || (socket.OriginalDestination.Port() != 80 && socket.OriginalDestination.Port() != 443) {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
-	original, err := owner.LookupPublished(ctx, socket.Source.Addr(), socket.OriginalDestination.Addr())
+	original, err := func() (*dnscontrol.SyntheticDNSMapping, error) {
+		defer domainTCPMeasure("accepted-lookup")(0)
+		return owner.LookupPublished(ctx, socket.Source.Addr(), socket.OriginalDestination.Addr())
+	}()
 	if err != nil || original == nil {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
@@ -252,7 +256,10 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	ctx = flowCtx
 	stopFlow := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopFlow()
-	if err := prepared.Current(ctx); err != nil {
+	if err := func() error {
+		defer domainTCPMeasure("accepted-prepared")(0)
+		return prepared.Current(ctx)
+	}(); err != nil {
 		return refused, err
 	}
 	accepted := &domainAcceptedTCP{capture: capture, conn: conn, socket: socket}
@@ -260,7 +267,10 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	accepted.open.Store(true)
 	defer accepted.open.Store(false)
 	ctx = context.WithValue(ctx, domainAcceptedTCPKey{}, accepted)
-	lease, err := owner.AdmitTCP(ctx, socket)
+	lease, err := func() (DomainPolicyTCPFlowLease, error) {
+		defer domainTCPMeasure("accepted-admission")(0)
+		return owner.AdmitTCP(ctx, socket)
+	}()
 	if err != nil || lease == nil {
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
@@ -277,6 +287,7 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	runtime := DomainPolicyTCPRuntime{
 		Limits: spec.Limits,
 		Guard: func(c context.Context, f DomainPolicyTCPFlow) (autonomy.ScopeObservation, error) {
+			defer domainTCPMeasure("accepted-guard")(0)
 			current, id := lease.Binding()
 			if current != original || id != flowID || !binding.matches(f) || !time.Now().Before(mapping.ExpiresAt) {
 				return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer

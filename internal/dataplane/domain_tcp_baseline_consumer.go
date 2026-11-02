@@ -24,6 +24,7 @@ type domainTCPBaselineConn struct {
 // admitted lease. Original accepted FD -> durable BF intent -> COMMON -> native
 // transparent Connect -> closing proof all precede the first application byte.
 func dialDomainTCPBaseline(ctx context.Context, kernel *domainTCPBaselineKernelOwner, socket DomainPolicyTCPSocket, flow DomainPolicyTCPFlow, decision DomainPolicyDecision) (net.Conn, error) {
+	defer domainTCPMeasure("baseline-dial")(0)
 	if ctx == nil || kernel == nil || flow.synthetic == nil || !flow.synthetic.matches(flow) || flow.Source != socket.Source || flow.Destination != socket.OriginalDestination || decision.Kind != "baseline" || decision.Generation != flow.Generation {
 		return nil, ErrDomainTCPBaselineKernel
 	}

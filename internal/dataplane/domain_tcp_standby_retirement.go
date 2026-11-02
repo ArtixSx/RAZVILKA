@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/ownedfs"
 )
 
 type domainTCPStandbyRetirement struct {
@@ -26,8 +27,9 @@ type domainTCPStandbyRetirement struct {
 	closeIndex      int
 	closeErr        error
 	finished        bool
-	closeFault      func(int) error // Private deterministic pre-close fault seam.
-	publishFault    func(int) error // Same original writer, before a publication.
+	closeFault      func(int) error           // Private deterministic pre-close fault seam.
+	publishFault    func(int) error           // Same original writer, before a publication.
+	syncDirectory   func(*ownedfs.Root) error // Private durability fault seam; nil uses actual sync.
 }
 type domainTCPStandbyRetirementKey struct{}
 
@@ -356,24 +358,15 @@ func (r *domainTCPStandbyRetirement) publishRemoved(ctx context.Context, retaine
 				return err
 			}
 		}
-		root, name := d.recordPath(i)
-		file, err := root.WriteAtomicRetained(name, data, 0600)
-		if err != nil {
+		if err := d.publishOriginalDurable(i, data, r.syncOriginalDirectory); err != nil {
 			return err
-		}
-		info, err := file.Stat()
-		if err == nil {
-			err = d.captureOriginalRecord(i, file, info, data, root, name)
-		}
-		if err != nil {
-			return errors.Join(err, file.Close())
 		}
 	}
 	named, err := os.Lstat(filepath.Join(s.managerRoot, "latest-execution.json"))
 	if err != nil {
 		return err
 	}
-	if os.SameFile(o.latestInfo, named) {
+	if o.globalRecordNamed(named) {
 		if r.publishFault != nil {
 			if err := r.publishFault(2); err != nil {
 				return err
@@ -395,15 +388,18 @@ func (r *domainTCPStandbyRetirement) publishRemoved(ctx context.Context, retaine
 			if err != nil {
 				return errors.Join(err, file.Close())
 			}
-			old := o.latest
-			o.latest, o.latestInfo = file, info
+			closeErr := o.replaceGlobalRecord(file, info)
 			r.globalPublished = true
-			if err := old.Close(); err != nil {
-				return err
+			if closeErr != nil {
+				r.closeErr = errors.Join(ErrPolicyAdditionUnknown, closeErr)
+				return r.closeErr
 			}
-			if err := o.globalRecordCurrent(s.managerRoot, *s.execution); err != nil {
-				return err
-			}
+		}
+		if err := r.syncOriginalDirectory(d.root); err != nil {
+			return err
+		}
+		if err := o.globalRecordCurrent(s.managerRoot, *s.execution); err != nil {
+			return err
 		}
 	}
 	if err := d.current(ctx, true); err != nil {
@@ -445,7 +441,7 @@ func (r *domainTCPStandbyRetirement) closeOriginalCustody(ctx context.Context, r
 			return nil
 		},
 		p.records.close,
-		o.latest.Close,
+		o.closeGlobalRecord,
 		s.owned.Close,
 	}
 	for r.closeIndex < len(closers) {
@@ -483,6 +479,13 @@ func (r *domainTCPStandbyRetirement) closeOriginalCustody(ctx context.Context, r
 	r.finished = true
 	o.original.mu.Unlock()
 	return nil
+}
+
+func (r *domainTCPStandbyRetirement) syncOriginalDirectory(root *ownedfs.Root) error {
+	if r.syncDirectory != nil {
+		return r.syncDirectory(root)
+	}
+	return syncDataplaneJournalDirectory(root)
 }
 
 func (r *domainTCPStandbyRetirement) originalDNSMode() (*ScopedDNSAdapter, *scopedDNSSession, *scopedDNSSyntheticMode, error) {

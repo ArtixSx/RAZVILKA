@@ -281,6 +281,7 @@ func (x *DomainPolicyTCPXray) checkWithFiles(ctx context.Context, files *xrayDom
 }
 
 func (x *DomainPolicyTCPXray) dial(ctx context.Context, flow DomainPolicyTCPFlow, decision DomainPolicyDecision) (net.Conn, error) {
+	defer domainTCPMeasure("selected-dial")(0)
 	if flow.synthetic == nil || !flow.synthetic.matches(flow) || !flow.synthetic.acceptsDecision(decision) || !x.matches(flow.synthetic.spec) {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
