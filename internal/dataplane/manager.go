@@ -2003,9 +2003,17 @@ func (m *Manager) Apply(ctx context.Context, plan Plan, commit func() (func() er
 		return execution, failure
 	}
 	finishCommit := func() error {
+		if activeMihomoScope != nil {
+			// Final post-CAS HTTPS still creates and settles original temporary
+			// transit resources. Keep their nonterminal applying writer until
+			// that real check closes; committing must remain fully settled.
+			if err := activeMihomoScope.prepareActiveMihomo(ctx); err != nil {
+				return rollback(err)
+			}
+		}
 		execution.State = "committing"
 		if activeMihomoScope != nil {
-			if err := activeMihomoScope.prepareActiveMihomo(ctx); err != nil {
+			if err := activeMihomoScope.mihomoLive.recordPhase(activeMihomoScope.contextWith(networkPolicyConsumerContext(ctx, plan)), "active", nil); err != nil {
 				return rollback(err)
 			}
 		}

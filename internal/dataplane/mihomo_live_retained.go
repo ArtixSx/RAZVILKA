@@ -183,8 +183,9 @@ func (r *mihomoLiveResource) recordPhase(ctx context.Context, phase string, obse
 	return s.persist()
 }
 
-// The original writer can acknowledge ACTIVE only after the last real TUN
-// service check and all temporary transit owners have settled.
+// Finish the last real post-CAS TUN service check while temporary transit
+// owners can still publish nonterminal intent. The Manager acknowledges ACTIVE
+// only after this returns and it changes the execution to committing.
 func (s *executionResourceScope) prepareActiveMihomo(ctx context.Context) error {
 	if s == nil || s.mihomoLive == nil || s.mihomoLive.scope != s || s.retained {
 		return errMihomoLiveMaterial
@@ -195,7 +196,7 @@ func (s *executionResourceScope) prepareActiveMihomo(ctx context.Context) error 
 		return err
 	}
 	s.mu.Lock()
-	valid := s.execution.State == "committing"
+	valid := s.execution.State == "applying"
 	for _, row := range s.execution.Resources {
 		if row.ID != r.id {
 			valid = valid && (row.State == "removed" || row.State == "unused")
@@ -205,7 +206,7 @@ func (s *executionResourceScope) prepareActiveMihomo(ctx context.Context) error 
 	if !valid {
 		return ErrExecutionJournal
 	}
-	return r.recordPhase(ctx, "active", nil)
+	return nil
 }
 
 // These snapshots expose custody, not runtime health or cleanup evidence.
