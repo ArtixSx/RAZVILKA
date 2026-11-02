@@ -8,33 +8,31 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
-	"os"
 )
 
-type mihomoLiveCleanupObservedChild struct {
-	child   *components.MihomoLiveProcess
-	cleanup *operationgate.ExclusiveCleanupReview
-}
-
-func (c *mihomoLiveCleanupObservedChild) Current(ctx context.Context) error {
-	return c.child.CurrentForCleanup(ctx, c.cleanup)
-}
-func (c *mihomoLiveCleanupObservedChild) PID() int { return c.child.PID() }
-func (c *mihomoLiveCleanupObservedChild) MatchesFile(kind string, info os.FileInfo) bool {
-	return c.child.MatchesFile(kind, info)
-}
-
 func observeMihomoLiveCleanupProcess(ctx context.Context, child *components.MihomoLiveProcess, cleanup *operationgate.ExclusiveCleanupReview, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
-	profile, err := child.ProfileReferenceForCleanup(ctx, cleanup)
+	var result mihomoProbeObservation
+	err := child.WithCleanupReadObservation(ctx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
+		var err error
+		result, err = observeMihomoLiveCleanupObservation(held, view, provider, expected)
+		return err
+	})
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}
-	owner := &mihomoLiveCleanupObservedChild{child: child, cleanup: cleanup}
-	result, err := observeOriginalMihomoProcess(ctx, owner, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, provider, expected)
+	return result, nil
+}
+
+func observeMihomoLiveCleanupObservation(ctx context.Context, view *components.MihomoLiveCleanupObservation, provider *netidentity.Provider, expected netidentity.Identity) (mihomoProbeObservation, error) {
+	profile, err := view.ProfileReference(ctx)
 	if err != nil {
 		return mihomoProbeObservation{}, err
 	}
-	closing, err := child.ProfileReferenceForCleanup(ctx, cleanup)
+	result, err := observeOriginalMihomoProcess(ctx, view, components.MihomoProbeReference{SOCKSPort: profile.SOCKSPort, ConfigSHA256: profile.ConfigSHA256}, provider, expected)
+	if err != nil {
+		return mihomoProbeObservation{}, err
+	}
+	closing, err := view.ProfileReference(ctx)
 	if err != nil || closing != profile {
 		return mihomoProbeObservation{}, errors.Join(errMihomoProbeObservation, err)
 	}

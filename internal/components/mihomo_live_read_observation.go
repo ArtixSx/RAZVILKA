@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"sync"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 // MihomoLiveObservation exists only inside one synchronous read callback.
@@ -53,6 +55,10 @@ func (v *MihomoLiveObservation) validLocked(ctx context.Context) bool {
 }
 
 func (v *MihomoLiveObservation) Current(ctx context.Context) error {
+	return v.current(ctx, nil)
+}
+
+func (v *MihomoLiveObservation) current(ctx context.Context, cleanup *operationgate.ExclusiveCleanupReview) error {
 	if v == nil {
 		return ErrMihomoLiveOwner
 	}
@@ -84,6 +90,9 @@ func (v *MihomoLiveObservation) Current(ctx context.Context) error {
 	if !valid {
 		return ErrMihomoLiveOwner
 	}
+	if cleanup != nil {
+		return p.native.currentForCleanup(ctx, cleanup)
+	}
 	return p.native.current(ctx)
 }
 
@@ -101,6 +110,10 @@ func (v *MihomoLiveObservation) ProfileReference(ctx context.Context) (MihomoLiv
 	if err := v.Current(ctx); err != nil {
 		return MihomoLiveProfileReference{}, err
 	}
+	return v.profileReferenceRead(ctx)
+}
+
+func (v *MihomoLiveObservation) profileReferenceRead(ctx context.Context) (MihomoLiveProfileReference, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if !v.validLocked(ctx) {

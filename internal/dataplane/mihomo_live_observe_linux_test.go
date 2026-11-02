@@ -30,7 +30,7 @@ func (fabricatedMihomoObservedChild) PID() int                             { ret
 func (fabricatedMihomoObservedChild) MatchesFile(string, os.FileInfo) bool { return true }
 
 func TestMihomoLiveObservationCannotMintOriginalChild(t *testing.T) {
-	if originalMihomoObservedOwner(fabricatedMihomoObservedChild{}) || originalMihomoObservedOwner((*components.MihomoLiveProcess)(nil)) || originalMihomoObservedOwner((*components.MihomoLiveObservation)(nil)) {
+	if originalMihomoObservedOwner(fabricatedMihomoObservedChild{}) || originalMihomoObservedOwner((*components.MihomoLiveProcess)(nil)) || originalMihomoObservedOwner((*components.MihomoLiveObservation)(nil)) || originalMihomoObservedOwner((*components.MihomoLiveCleanupObservation)(nil)) {
 		t.Fatal("fabricated comparison interface admitted")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

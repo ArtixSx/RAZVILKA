@@ -228,6 +228,7 @@ func TestMihomoLiveOriginalChildSurvivesApplyAndNeedsFreshCleanup(t *testing.T) 
 		releaseForeign()
 		t.Fatal("foreign cleanup minted original child comparison")
 	}
+	testMihomoLiveCleanupReadObservationOriginalBookends(t, stop, child, fresh, cleanup, foreign)
 	releaseForeign()
 	if err := child.Cleanup(stop, fresh); err != nil {
 		t.Fatal("fresh actual cleanup did not retire same child", err)

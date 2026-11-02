@@ -53,13 +53,20 @@ func (r *mihomoLiveResource) nativeCleanupCurrent(ctx context.Context, cleanup *
 	if child == nil || !r.adapter.RegisteredWith(r.scope.manager) || r.source.Reference() != r.definition.Source {
 		return errMihomoLiveMaterial
 	}
-	if err := errors.Join(r.control.CurrentForCleanupOperation(ctx, cleanup), r.source.Current(ctx)); err != nil {
+	if err := r.control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
 		return err
 	}
-	profile, err := child.ProfileReferenceForCleanup(ctx, cleanup)
-	if err != nil || profile != r.definition.Profile {
-		return errors.Join(errMihomoLiveMaterial, err)
-	}
-	_, err = observeMihomoLiveCleanupProcess(ctx, child, cleanup, r.adapter.provider, r.definition.NetworkIdentity)
-	return err
+	return child.WithCleanupReadObservation(ctx, cleanup, func(held context.Context, view *components.MihomoLiveCleanupObservation) error {
+		if !view.BoundTo(child, r.source, cleanup) {
+			return errMihomoLiveMaterial
+		}
+		profile, err := view.ProfileReference(held)
+		if err != nil || profile != r.definition.Profile {
+			return errors.Join(errMihomoLiveMaterial, err)
+		}
+		if _, err := observeMihomoLiveCleanupObservation(held, view, r.adapter.provider, r.definition.NetworkIdentity); err != nil {
+			return err
+		}
+		return r.control.CurrentForCleanupOperation(held, cleanup)
+	})
 }
