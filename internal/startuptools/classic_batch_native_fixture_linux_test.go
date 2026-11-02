@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
@@ -25,7 +26,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
-	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close"} {
+	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close", "inventory-held-file", "inventory-extension-membership"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -202,8 +203,22 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				complete(err)
 			}()
 			var result [2][][]byte
+			inventoryRows := 0
 			var readErr error
 			read := func(observed context.Context) error {
+				if strings.HasPrefix(kind, "inventory-") {
+					tools, err := lease.InventoryTools()
+					if err != nil {
+						return err
+					}
+					inventory, err := dataplane.NewBackendInventory(provider, tools)
+					if err != nil {
+						return err
+					}
+					view, err := inventory.Read(observed, lease.identity)
+					inventoryRows = len(view.Rows)
+					return err
+				}
 				if strings.HasPrefix(kind, "observation-") {
 					if err := lease.Check(observed, lease.identity); err != nil {
 						return err
@@ -230,7 +245,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				t.Fatal("late fault injection: fixture did not mutate before the public batch returned; guard not evaluated", readErr)
 			}
 			stages := nativeStages(readErr)
-			if !errors.Is(readErr, ErrUnknown) || len(result[0]) != 0 || len(result[1]) != 0 || !strings.Contains(stages, "CHECK_PATH") && !strings.Contains(stages, "CHECK_HELD_FILE") && !strings.Contains(stages, "CHECK_BYTES") && !strings.Contains(stages, "CHECK_EXTENSION_SET") {
+			if !errors.Is(readErr, ErrUnknown) || len(result[0]) != 0 || len(result[1]) != 0 || inventoryRows != 0 || !strings.Contains(stages, "CHECK_PATH") && !strings.Contains(stages, "CHECK_HELD_FILE") && !strings.Contains(stages, "CHECK_BYTES") && !strings.Contains(stages, "CHECK_EXTENSION_SET") {
 				t.Fatal("changed actual held source issued an image", stages)
 			}
 			t.Log("actual protected first -S loaded held TCP extension;", kind, "change refused whole image; no hooks or packets, host tools unchanged")

@@ -159,7 +159,7 @@ func (r *backendInventoryReader) read(ctx context.Context, scope backendInventor
 			return errBackendInventory
 		}
 		var err error
-		result, err = r.capture(held, scope, platform, runner)
+		result, err = r.captureWithToolObservation(held, scope, platform, runner)
 		return err
 	})
 	if err != nil || ctx.Err() != nil || uses != 1 {
