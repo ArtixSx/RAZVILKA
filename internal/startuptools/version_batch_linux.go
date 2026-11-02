@@ -91,6 +91,9 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
 	runErr := l.runObservedRead(c, command)
+	if command.Process != nil {
+		noteVersionChildStart(l.review, index)
+	}
 	var observed error
 	if runErr != nil || stdout.overflow || stderr.overflow || len(stderr.data) != 0 || c.Err() != nil {
 		observed = commandResultFailure("COMMAND_RESULT", runErr, c.Err(), stdout.overflow, stderr.overflow, len(stderr.data) != 0)

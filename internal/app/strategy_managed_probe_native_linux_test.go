@@ -439,11 +439,17 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		}
 		release() // Each actual HTTP request must obtain its own new admission.
 		metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
+		versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
 		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
 		defer stopHTTPProfile()
 		defer func() {
 			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
 			t.Log("native actual HTTP aggregate original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
+			children := startuptools.NativeFixtureVersionChildCount(tools)
+			for i := range children {
+				children[i] -= versionChildrenStarted[i]
+			}
+			t.Log("native actual HTTP aggregate actual version child Starts [iptables ip6tables IP]", children)
 		}()
 		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan)
 		return
@@ -482,7 +488,13 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	toolCalls, toolNanos := toolMeasurements.calls.Load(), toolMeasurements.nanos.Load()
 	probeStarted := time.Now()
 	metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
+	versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
+	versionChildren := startuptools.NativeFixtureVersionChildCount(tools)
+	for i := range versionChildren {
+		versionChildren[i] -= versionChildrenStarted[i]
+	}
+	t.Log("native measured Execute actual version child Starts [iptables ip6tables IP]", versionChildren)
 	t.Log("native measured Execute original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
 	stopStackDiagnostic()
 	t.Log("native measured Execute", time.Since(probeStarted), "actual inventory ToolCheck calls", toolMeasurements.calls.Load()-toolCalls, "ToolCheck wall", time.Duration(toolMeasurements.nanos.Load()-toolNanos))

@@ -4,3 +4,5 @@ package startuptools
 
 // Ordinary builds collect no fixture metrics or state.
 func noteVersionMetadataAttempt(*heldReview) {}
+
+func noteVersionChildStart(*heldReview, int) {}
