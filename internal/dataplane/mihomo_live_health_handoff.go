@@ -8,26 +8,29 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 // This memory-only comparison belongs to one original Health/Commit pair.
 // It cannot establish fresh service health, survive a request or authorize an
 // effect. Commit still performs mandatory HTTPS again AFTER policy promotion.
 type mihomoLiveHealthHandoff struct {
-	self     *mihomoLiveHealthHandoff
-	owner    *mihomoLiveResource
-	scope    *executionResourceScope
-	child    *components.MihomoLiveProcess
-	sidecar  *mihomoLiveSidecar
-	context  context.Context
-	deadline time.Time
-	policy   *nodeTransitPolicyAuthority
-	dns      map[string][]netip.Addr
+	self         *mihomoLiveHealthHandoff
+	owner        *mihomoLiveResource
+	scope        *executionResourceScope
+	child        *components.MihomoLiveProcess
+	sidecar      *mihomoLiveSidecar
+	control      *operationgate.ControlEpochReview
+	scopeContext context.Context
+	context      context.Context
+	deadline     time.Time
+	policy       *nodeTransitPolicyAuthority
+	dns          map[string][]netip.Addr
 }
 
 func (r *mihomoLiveResource) issueHealthHandoff(ctx context.Context, policy *nodeTransitPolicyAuthority, dns map[string][]netip.Addr) error {
 	deadline, finite := ctx.Deadline()
-	if !finite || !time.Now().Before(deadline) || ctx.Err() != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope || policy == nil || !policy.candidate || len(dns) == 0 {
+	if !finite || !time.Now().Before(deadline) || ctx.Err() != nil || r.scope == nil || r.scope.ctx == nil || r.scope.ctx.Err() != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope || policy == nil || !policy.candidate || len(dns) == 0 {
 		return errors.Join(errMihomoLiveMaterial, ctx.Err())
 	}
 	if err := policy.verify(ctx, r.proxy); err != nil {
@@ -38,7 +41,7 @@ func (r *mihomoLiveResource) issueHealthHandoff(ctx context.Context, policy *nod
 	if r.self != r || r.closed || r.active || r.retired || r.child == nil || r.sidecar == nil || r.healthHandoff != nil {
 		return errMihomoLiveMaterial
 	}
-	h := &mihomoLiveHealthHandoff{owner: r, scope: r.scope, child: r.child, sidecar: r.sidecar, context: ctx, deadline: deadline, policy: policy, dns: make(map[string][]netip.Addr, len(dns))}
+	h := &mihomoLiveHealthHandoff{owner: r, scope: r.scope, child: r.child, sidecar: r.sidecar, control: r.control, scopeContext: r.scope.ctx, context: ctx, deadline: deadline, policy: policy, dns: make(map[string][]netip.Addr, len(dns))}
 	h.self = h
 	for url, addresses := range dns {
 		h.dns[url] = slices.Clone(addresses)
@@ -58,14 +61,31 @@ func (r *mihomoLiveResource) takeHealthHandoff(ctx context.Context) (*mihomoLive
 	h := r.healthHandoff
 	r.healthHandoff = nil
 	deadline, finite := ctx.Deadline()
-	if r.self != r || r.closed || r.active || r.retired || h == nil || h.self != h || h.owner != r || h.scope != r.scope || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope || h.child != r.child || h.sidecar != r.sidecar || h.context == nil || h.context.Err() != nil || !finite || !deadline.Equal(h.deadline) || !time.Now().Before(deadline) || ctx.Err() != nil {
+	if !h.ownerCurrentLocked(r) || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope || h.context.Err() != nil || h.scopeContext.Err() != nil || !finite || !time.Now().Before(deadline) || !time.Now().Before(h.deadline) || ctx.Err() != nil {
 		var prior error
 		if h != nil && h.context != nil {
 			prior = h.context.Err()
 		}
+		if h != nil && h.scopeContext != nil {
+			prior = errors.Join(prior, h.scopeContext.Err())
+		}
 		return nil, errors.Join(errMihomoLiveMaterial, prior, ctx.Err())
 	}
 	return h, nil
+}
+
+func (h *mihomoLiveHealthHandoff) ownerCurrentLocked(r *mihomoLiveResource) bool {
+	return h != nil && h.self == h && r != nil && r.self == r && !r.closed && !r.active && !r.retired && h.owner == r && r.scope != nil && h.scope == r.scope && h.child == r.child && h.sidecar == r.sidecar && h.control == r.control && h.context != nil && h.scopeContext != nil && h.scopeContext == r.scope.ctx
+}
+
+// Commit has an existing finite kernel-mutation shield with a different
+// deadline. The comparison cannot inherit that longer lifetime: cap it to
+// the ORIGINAL Health deadline and join cancellation of both original owners.
+func (h *mihomoLiveHealthHandoff) comparisonContext(ctx context.Context) (context.Context, func()) {
+	held, cancel := context.WithDeadline(ctx, h.deadline)
+	stopRequest := context.AfterFunc(h.context, cancel)
+	stopScope := context.AfterFunc(h.scopeContext, cancel)
+	return held, func() { stopRequest(); stopScope(); cancel() }
 }
 
 // Network guard callbacks between Health and Commit cannot refresh the marker.
@@ -79,6 +99,8 @@ func (r *mihomoLiveResource) verifyHealthHandoff(ctx context.Context) error {
 	if h.policy == nil || !h.policy.candidate || len(h.dns) == 0 {
 		return errMihomoLiveMaterial
 	}
+	ctx, finish := h.comparisonContext(ctx)
+	defer finish()
 	if err := r.compiledCurrent(true); err != nil {
 		return err
 	}
@@ -139,7 +161,22 @@ func (r *mihomoLiveResource) verifyHealthHandoff(ctx context.Context) error {
 	if err := errors.Join(h.policy.verify(ctx, a), a.verifyForwarding(ctx, state), verifyPolicyEvidence(ctx, a.Runner, a.ip(), state), r.liveOwnersReadOnly(ctx, nil)); err != nil {
 		return err
 	}
-	return r.currentBeforeStart(ctx)
+	if err := r.currentBeforeStart(ctx); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	current := h.ownerCurrentLocked(r)
+	r.mu.Unlock()
+	if !current {
+		return errMihomoLiveMaterial
+	}
+	if err := errors.Join(ctx.Err(), h.context.Err(), h.scopeContext.Err()); err != nil {
+		return err
+	}
+	if !time.Now().Before(h.deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
 }
 
 func mihomoHealthDNSMatches(observed map[string][]netip.Addr, url string, current []netip.Addr) bool {

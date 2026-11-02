@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 // These tests exercise the marker's comparison/lifetime only. The deliberately
@@ -16,18 +17,22 @@ func mihomoHealthMarkerFixture(t *testing.T) (*mihomoLiveResource, context.Conte
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	t.Cleanup(cancel)
-	r := &mihomoLiveResource{scope: &executionResourceScope{}, child: &components.MihomoLiveProcess{}, sidecar: &mihomoLiveSidecar{}}
+	return mihomoHealthMarkerForContext(ctx), ctx, cancel
+}
+
+func mihomoHealthMarkerForContext(ctx context.Context) *mihomoLiveResource {
+	r := &mihomoLiveResource{scope: &executionResourceScope{ctx: ctx}, child: &components.MihomoLiveProcess{}, sidecar: &mihomoLiveSidecar{}, control: &operationgate.ControlEpochReview{}}
 	r.self = r
-	ctx = context.WithValue(ctx, syntheticExecutionRegistrarKey{}, r.scope)
 	deadline, _ := ctx.Deadline()
-	h := &mihomoLiveHealthHandoff{owner: r, scope: r.scope, child: r.child, sidecar: r.sidecar, context: ctx, deadline: deadline}
+	h := &mihomoLiveHealthHandoff{owner: r, scope: r.scope, child: r.child, sidecar: r.sidecar, control: r.control, scopeContext: ctx, context: ctx, deadline: deadline}
 	h.self = h
 	r.healthHandoff = h
-	return r, ctx, cancel
+	return r
 }
 
 func TestMihomoHealthHandoffIsOriginalAndOneUse(t *testing.T) {
 	r, ctx, _ := mihomoHealthMarkerFixture(t)
+	ctx = r.scope.contextWith(ctx)
 	if _, err := r.takeHealthHandoff(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -37,9 +42,10 @@ func TestMihomoHealthHandoffIsOriginalAndOneUse(t *testing.T) {
 }
 
 func TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime(t *testing.T) {
-	for _, name := range []string{"copied-marker", "foreign-owner", "scope", "foreign-context", "child", "sidecar", "closed", "active", "retired", "deadline", "canceled-original", "canceled-current", "copied-resource"} {
+	for _, name := range []string{"copied-marker", "foreign-owner", "scope", "scope-lifetime", "control", "foreign-context", "child", "sidecar", "closed", "active", "retired", "deadline-expired", "canceled-original", "canceled-current", "copied-resource"} {
 		t.Run(name, func(t *testing.T) {
 			r, ctx, cancel := mihomoHealthMarkerFixture(t)
+			ctx = r.scope.contextWith(ctx)
 			switch name {
 			case "copied-marker":
 				copy := *r.healthHandoff
@@ -48,6 +54,10 @@ func TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime(t *testing.T) {
 				r.healthHandoff.owner = &mihomoLiveResource{}
 			case "scope":
 				r.scope = &executionResourceScope{}
+			case "scope-lifetime":
+				r.scope.ctx = context.Background()
+			case "control":
+				r.control = &operationgate.ControlEpochReview{}
 			case "foreign-context":
 				ctx = context.WithValue(ctx, syntheticExecutionRegistrarKey{}, &executionResourceScope{})
 			case "child":
@@ -60,9 +70,9 @@ func TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime(t *testing.T) {
 				r.active = true
 			case "retired":
 				r.retired = true
-			case "deadline":
+			case "deadline-expired":
 				var shorter context.CancelFunc
-				ctx, shorter = context.WithTimeout(ctx, time.Second)
+				ctx, shorter = context.WithDeadline(ctx, time.Now().Add(-time.Second))
 				defer shorter()
 			case "canceled-original":
 				cancel()
@@ -86,9 +96,95 @@ func TestMihomoHealthHandoffRefusesChangedOwnerAndLifetime(t *testing.T) {
 
 func TestMihomoHealthHandoffRetainsCancellationCause(t *testing.T) {
 	r, ctx, cancel := mihomoHealthMarkerFixture(t)
+	ctx = r.scope.contextWith(ctx)
 	cancel()
 	if _, err := r.takeHealthHandoff(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestMihomoHealthHandoffExistingShieldDoesNotRenewOriginalLifetime(t *testing.T) {
+	r, original, _ := mihomoHealthMarkerFixture(t)
+	shield, release := shieldLiveMutation(r.scope.contextWith(original))
+	defer release()
+	h, err := r.takeHealthHandoff(shield)
+	if err != nil {
+		t.Fatal("legitimate original mutation shield refused", err)
+	}
+	held, finish := h.comparisonContext(shield)
+	defer finish()
+	deadline, _ := held.Deadline()
+	if !deadline.Equal(h.deadline) {
+		t.Fatal("shield renewed original Health comparison lifetime")
+	}
+	for _, cause := range []string{"canceled", "expired"} {
+		t.Run(cause, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			if cause == "expired" {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			}
+			defer cancel()
+			r := mihomoHealthMarkerForContext(ctx)
+			shield, release := shieldLiveMutation(r.scope.contextWith(ctx))
+			defer release()
+			if cause == "canceled" {
+				cancel()
+			}
+			if shield.Err() != nil {
+				t.Fatal("fixture shield was not live")
+			}
+			_, err := r.takeHealthHandoff(shield)
+			wanted := context.Canceled
+			if cause == "expired" {
+				wanted = context.DeadlineExceeded
+			}
+			if !errors.Is(err, wanted) || r.healthHandoff != nil {
+				t.Fatal("shield reused dead original Health", err)
+			}
+		})
+	}
+}
+
+func TestMihomoHealthHandoffComparisonUsesEarlierIncomingDeadline(t *testing.T) {
+	r, original, _ := mihomoHealthMarkerFixture(t)
+	incoming, cancel := context.WithTimeout(r.scope.contextWith(original), time.Second)
+	defer cancel()
+	h, err := r.takeHealthHandoff(incoming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, finish := h.comparisonContext(incoming)
+	defer finish()
+	actual, _ := held.Deadline()
+	wanted, _ := incoming.Deadline()
+	if !actual.Equal(wanted) {
+		t.Fatal("comparison extended earlier incoming deadline")
+	}
+	cancel()
+	if !errors.Is(held.Err(), context.Canceled) {
+		t.Fatal("incoming cancellation was detached", held.Err())
+	}
+}
+
+func TestMihomoHealthHandoffComparisonJoinsOriginalCancellation(t *testing.T) {
+	r, original, cancelOriginal := mihomoHealthMarkerFixture(t)
+	shield, release := shieldLiveMutation(r.scope.contextWith(original))
+	defer release()
+	h, err := r.takeHealthHandoff(shield)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, finish := h.comparisonContext(shield)
+	defer finish()
+	cancelOriginal()
+	select {
+	case <-held.Done():
+	case <-time.After(time.Second):
+		t.Fatal("original cancellation did not join bounded comparison")
+	}
+	if !errors.Is(held.Err(), context.Canceled) || shield.Err() != nil {
+		t.Fatal("lost original cancellation or changed mutation shield", held.Err(), shield.Err())
 	}
 }
 
