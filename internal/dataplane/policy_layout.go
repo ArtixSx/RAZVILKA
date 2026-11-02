@@ -170,7 +170,7 @@ func readPolicyRules(ctx context.Context, runner NFQWS2Runner, ipCommand string,
 	}
 	output, err := runner.Run(ctx, ipCommand, args...)
 	if err != nil || len(output) > 1<<20 {
-		return nil, errors.New("kernel policy rule inspection unavailable")
+		return nil, errors.Join(errors.New("kernel policy rule inspection unavailable"), err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(lines) > 8192 {
