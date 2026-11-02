@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/dnscontrol"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
@@ -22,6 +24,64 @@ func TestDomainFailureCapsuleKeepsOriginalErrorAndCursor(t *testing.T) {
 	var failure *DomainTCPCleanupFailure
 	if !errors.As(err, &failure) || !errors.Is(err, cause) || failure.self != failure || failure.cursor != c {
 		t.Fatal("original failure/custody lost", err)
+	}
+}
+
+// Cursor/return ownership model only: deliberately inert control/ledger
+// values cannot issue native or cleanup permission. A later serialized retry
+// cannot mutate the handles already returned outside Manager.operation.
+func TestDomainFailureRestoredHandlesSurviveConcurrentCursorRepeat(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	m := New(t.TempDir())
+	owner := &DomainTCPOriginalScope{}
+	closed := &dnscontrol.SyntheticDNSRetirementReview{}
+	control := &operationgate.ControlEpochReview{}
+	p := &XrayDomainTCPExecutionResource{material: &XrayDomainTCPOperationMaterial{retirement: closed}}
+	r := &domainTCPFailureCleanup{resource: p, control: control, restored: true, standby: &domainTCPStandbyOwner{original: owner}}
+	r.self = r
+	r.standby.self = r.standby
+	var returned domainTCPFailureRestoredHandles
+	if err := m.beginOperation(ctx); err != nil {
+		t.Fatal(err)
+	}
+	err := r.copyRestoredHandles(&returned)
+	m.endOperation()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var joined sync.WaitGroup
+	for range 4 {
+		joined.Add(1)
+		go func() {
+			defer joined.Done()
+			for range 64 {
+				if returned.owner != owner || returned.closed != closed || returned.control != control {
+					t.Error("returned handles followed mutable cursor")
+					return
+				}
+			}
+		}()
+	}
+	for range 64 {
+		if err := m.beginOperation(ctx); err != nil {
+			t.Fatal(err)
+		}
+		r.ctx = context.WithValue(ctx, domainTCPFailureCleanupKey{}, r)
+		r.cleanup = &operationgate.ExclusiveCleanupReview{}
+		r.control = &operationgate.ControlEpochReview{}
+		r.standby = &domainTCPStandbyOwner{original: &DomainTCPOriginalScope{}}
+		r.standby.self = r.standby
+		var next domainTCPFailureRestoredHandles
+		err := r.copyRestoredHandles(&next)
+		m.endOperation()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	joined.Wait()
+	if _, err := returned.closed.ObserveClosed(ctx); err == nil {
+		t.Fatal("return comparison model manufactured original ledger")
 	}
 }
 
@@ -42,6 +102,24 @@ func TestDomainFailureNativeReturnIsNotInferredFromUnlockedResource(t *testing.T
 	close(p.nativeDone)
 	if err := p.failureNativeReturnedLocked(); err != nil {
 		t.Fatal("actual return channel refused", err)
+	}
+}
+
+func TestDomainFailureCannotReopenOriginalNativeReturnReservation(t *testing.T) {
+	c := &domainTCPGlobalSuccessor{}
+	c.failedCustody.Store(true)
+	s := &executionResourceScope{domainSuccessor: c}
+	m := &XrayDomainTCPOperationMaterial{binding: &SyntheticDNSExecutionBinding{phase: &syntheticBaselineExecutionPhase{}}}
+	p := &XrayDomainTCPExecutionResource{scope: s, material: m, nativeDone: make(chan struct{})}
+	p.self = p
+	close(p.nativeDone)
+	original := p.nativeDone
+	called := false
+	if err := p.WithNative(context.Background(), func(context.Context) error { called = true; return nil }); !errors.Is(err, ErrPolicyAdditionUnknown) {
+		t.Fatal("failed custody reopened native phase", err)
+	}
+	if called || p.nativeDone != original {
+		t.Fatal("failed custody changed original join reservation")
 	}
 }
 
@@ -117,6 +195,25 @@ func TestDomainFailureCleanupIsOriginalFiniteAndRevoked(t *testing.T) {
 	}
 	if _, err := p.cleanupReview(context.WithValue(held, domainTCPFailureCleanupKey{}, "forged")); err == nil {
 		t.Fatal("untyped marker fell back to original cleanup")
+	}
+	// These refusal-only stage checks have no writer or native definition.
+	// A lost ACK cannot be bypassed by requesting a later stage/new image.
+	r.imageStage = "process"
+	r.image = []byte("original pinned image")
+	r.imageACK = false
+	capture := &domainTCPCaptureExecutionResource{process: p, relative: "capture"}
+	capture.self = capture
+	r.capture = capture
+	for _, stage := range []string{"capture", "standby", "unknown"} {
+		if err := r.publishStageLocked(r.ctx, stage, "capture", []byte("next image")); err == nil {
+			t.Fatal("unacknowledged cleanup frame advanced", stage)
+		}
+	}
+	if err := r.publishStageLocked(r.ctx, "process", "process", []byte("different image")); err == nil {
+		t.Fatal("same stage replaced pinned bytes")
+	}
+	if string(r.image) != "original pinned image" || r.imageStage != "process" || r.imageACK {
+		t.Fatal("refused stage poisoned original cursor")
 	}
 	r.active.Store(false)
 	if _, err := p.cleanupReview(r.ctx); err == nil {

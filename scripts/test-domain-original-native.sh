@@ -81,6 +81,16 @@ case "${RAZVILKA_DOMAIN_DNS_COEXISTENCE:-0}" in
    1) test -z "${RAZVILKA_DOMAIN_INITIAL_ACK:-}" || exit 2; test "${RAZVILKA_DOMAIN_JOINED_FAILURE:-0}" = 0 || exit 2; test "${RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR:-0}" = 0 || exit 2; domain_case=TestDomainTCPOriginalNativeCanceledChildCleanup ;;
    *) exit 2 ;;
   esac
+  case "${RAZVILKA_DOMAIN_CANCELED_READY:-0}" in
+   0) ;;
+   1) test "${RAZVILKA_DOMAIN_CANCELED_CHILD:-0}" = 1 || exit 2; domain_case=TestDomainTCPOriginalNativeCanceledReadyRetirement ;;
+   *) exit 2 ;;
+  esac
+  case "${RAZVILKA_DOMAIN_CANCELED_PUBLISHED:-0}" in
+   0) ;;
+   1) test "${RAZVILKA_DOMAIN_CANCELED_READY:-0}" = 1 || exit 2; domain_case=TestDomainTCPOriginalNativeCanceledPublishedStandby ;;
+   *) exit 2 ;;
+  esac
   domain_test_timeout=240s ;;
  *) exit 2 ;;
 esac

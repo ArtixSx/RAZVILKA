@@ -23,6 +23,7 @@ import (
 var errDomainOriginalJoinedFailure = errors.New("native fixture callback failed after actual original Run and join")
 
 type domainOriginalCancelAfterStartKey struct{}
+type domainOriginalCanceledAliasKey struct{}
 
 func domainOriginalOnlyJoinedFailure(err error) bool {
 	if err == errDomainOriginalJoinedFailure {
@@ -108,10 +109,33 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	}()
 	deadline := time.Now().Add(30 * time.Second)
 	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
+		if captured != nil {
+			*captured = owner
+		}
 		// Observe the genuine issued child before canceling its ORIGINAL
 		// forward request. No ready bit or process observation is fabricated.
 		for {
-			if err := resource.Current(ctx); err == nil {
+			var ready error
+			if os.Getenv("RAZVILKA_DOMAIN_CANCELED_READY") == "1" {
+				ready = owner.CurrentSyntheticMapping(ctx, mapping)
+			} else {
+				ready = resource.Current(ctx)
+			}
+			if ready == nil {
+				if os.Getenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED") == "1" {
+					actual := peers.clientRequest(t, ctx, "dns-wait", deadline.UTC().Format(time.RFC3339Nano))
+					if actual.Answer != observed.Synthetic.String() {
+						return errors.New("canceled published case lacks actual client answer")
+					}
+					if current, err := owner.LookupPublished(ctx, transport.Definition.Client, observed.Synthetic); err != nil || current != mapping {
+						return errors.Join(errors.New("canceled published case lacks original LookupPublished"), err)
+					}
+					if held, ok := ctx.Value(domainOriginalCanceledAliasKey{}).(*string); ok {
+						*held = actual.Answer
+					} else {
+						return errors.New("canceled published alias custody missing")
+					}
+				}
 				t.Log("actual original successor child/listener observed; canceling original request before native cleanup publication")
 				cancelOriginal()
 				return context.Canceled

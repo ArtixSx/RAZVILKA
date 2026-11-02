@@ -40,6 +40,8 @@ type domainTCPGlobalSuccessor struct {
 	history        *updatecheck.ExecutionHistoryAdmission
 	failedCustody  atomic.Bool
 	cleanup        *domainTCPFailureCleanup // Serialized Manager cleanup; never a forward carrier.
+	cleanupFault   func(string) error       // Private tagged error-only cut after actual cleanup ACK.
+	cleanupIssued  atomic.Bool
 }
 
 func newDomainTCPGlobalSuccessor(ctx context.Context, pool *domainTCPStandbyPool, s *executionResourceScope, admission *domainTCPContinuationAdmission) (*domainTCPGlobalSuccessor, error) {
@@ -210,9 +212,9 @@ func (c *domainTCPGlobalSuccessor) publish(ctx context.Context, data []byte) err
 	return c.publishFrame(ctx, data, nil)
 }
 
-// A cleanup frame is accepted only by the SAME active initial-retirement
-// cursor, and can contain no issued resources. Neither carrier grants native
-// Start, flow, DNS publication or removal authority.
+// Cleanup frames require the SAME active original cursor. Initial retirement
+// has no issued resources; failed-action cleanup retains only its originals.
+// Neither metadata carrier grants Start, flow, DNS send or removal authority.
 func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte, retirement *domainTCPInitialRetirement) error {
 	if err := c.original(); err != nil {
 		return err
@@ -222,6 +224,7 @@ func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte
 	}
 	c.mu.Lock()
 	var admissionErr error
+	var cleanupCut *domainTCPFailureCleanup
 	if retirement == nil {
 		if raw := ctx.Value(domainTCPFailureCleanupKey{}); raw != nil {
 			cleanup, ok := raw.(*domainTCPFailureCleanup)
@@ -229,6 +232,9 @@ func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte
 				admissionErr = ErrPolicyAdditionUnknown
 			} else {
 				admissionErr = cleanup.local(ctx, cleanup.resource)
+				if admissionErr == nil {
+					cleanupCut = cleanup
+				}
 			}
 		} else {
 			admissionErr = c.admission.current(c, ctx)
@@ -287,6 +293,14 @@ func (c *domainTCPGlobalSuccessor) publishFrame(ctx context.Context, data []byte
 	}
 	if err := c.comparePrior(ctx, sealed); err != nil {
 		return err
+	}
+	if cleanupCut != nil && cleanupCut.fault != nil {
+		if err := cleanupCut.local(ctx, cleanupCut.resource); err != nil {
+			return err
+		}
+		if err := cleanupCut.fault(cleanupCut.imageStage + "-transaction"); err != nil {
+			return err
+		}
 	}
 	// Capture always precedes the directory ACK. Once the old global loses its
 	// name, only the exact original cursor may seal the observed transition.

@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 )
@@ -15,7 +16,13 @@ func (r *domainTCPCaptureExecutionResource) cleanupCurrent(ctx context.Context) 
 	if err := r.registered(ctx); err != nil {
 		return err
 	}
-	if err := r.process.records.current(ctx, true); err != nil {
+	allEqual := true
+	if cursor, err := r.process.failureCleanup(ctx); err != nil {
+		return err
+	} else if cursor != nil {
+		allEqual = false
+	}
+	if err := r.process.records.current(ctx, allEqual); err != nil {
 		return err
 	}
 	if err := r.tools.Runner.CheckSyntheticDNS(ctx, r.tools.Identity); err != nil {
@@ -32,14 +39,30 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 		return ErrDomainPolicyTCPConsumer
 	}
 	ctx = context.WithValue(ctx, domainTCPCaptureCleanupKey{}, r)
+	cursor, err := r.process.failureCleanup(ctx)
+	if err != nil {
+		return err
+	}
+	if cursor != nil {
+		if cursor.capture != nil && cursor.capture != r {
+			return ErrDomainPolicyTCPConsumer
+		}
+		cursor.capture = r
+	}
 	if err := r.cleanupCurrent(ctx); err != nil {
 		return err
 	}
 	if err := r.capture.retirement.Joined(ctx); err != nil {
 		return err
 	}
-	if _, err := baseline.retirement.ClosedObservation(ctx); err != nil {
-		return err
+	if cursor != nil {
+		if _, err := baseline.retirement.ObserveClosed(ctx); err != nil {
+			return err
+		}
+	} else {
+		if _, err := baseline.retirement.ClosedObservation(ctx); err != nil {
+			return err
+		}
 	}
 	if kernel.flow.Load() != nil {
 		return ErrDomainTCPBaselineKernel
@@ -124,15 +147,35 @@ func (r *domainTCPCaptureExecutionResource) retire(ctx context.Context, baseline
 	for i := range s.execution.Resources {
 		record := &s.execution.Resources[i]
 		if record.ID == filepath.Base(r.relative) {
-			if record.State != "prepared" {
+			removedRetry := cursor != nil && cursor.capturePublicationCurrent(ctx, r) && record.State == "removed" && record.Phase == "removed"
+			if record.State != "prepared" && !removedRetry {
 				return ErrDomainPolicyTCPConsumer
 			}
 			record.State, record.Phase = "removed", "removed"
-			if err := s.persist(); err != nil {
-				return err
+			if cursor != nil {
+				image, err := json.Marshal(s.execution)
+				if err != nil {
+					return err
+				}
+				if err := cursor.publishStageLocked(ctx, "capture", record.ID, image); err != nil {
+					return err
+				}
+			} else {
+				if err := s.persist(); err != nil {
+					return err
+				}
 			}
-			if !baseline.inspector.capture.CompareAndSwap(r, nil) {
+			if r.retirementDetached {
+				if baseline.inspector.capture.Load() != nil {
+					return ErrDomainPolicyTCPConsumer
+				}
+			} else if !baseline.inspector.capture.CompareAndSwap(r, nil) {
 				return ErrDomainPolicyTCPConsumer
+			} else {
+				r.retirementDetached = true
+			}
+			if cursor != nil {
+				cursor.captureDetached = true
 			}
 			return nil
 		}
