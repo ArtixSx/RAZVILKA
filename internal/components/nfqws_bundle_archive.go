@@ -263,6 +263,7 @@ func (manager *Manager) verifyManagedNFQWSImage(ctx context.Context, path string
 			return m, err
 		}
 		data, err := root.ReadLimited(filepath.FromSlash(member.Destination), member.RawSize)
+		noteManagedNFQWSPayloadRead(manager, int64(len(data)))
 		if err != nil || int64(len(data)) != member.RawSize || digest(data) != member.RawSHA256 {
 			return m, ErrManagedNFQWSBundle
 		}
@@ -270,6 +271,9 @@ func (manager *Manager) verifyManagedNFQWSImage(ctx context.Context, path string
 	}
 	for name, expectedData := range files {
 		data, err := root.ReadLimited(filepath.FromSlash(name), 1<<20)
+		if name != "manifest.json" && name != "source-notices.json" {
+			noteManagedNFQWSPayloadRead(manager, int64(len(data)))
+		}
 		info, infoErr := root.Stat(filepath.FromSlash(name))
 		mode := os.FileMode(0444)
 		if name == "bin/rzv-nfqws2" {

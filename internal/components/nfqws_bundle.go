@@ -659,31 +659,40 @@ func (m *Manager) RecoverManagedBundle(ctx context.Context, transactionID, actio
 }
 
 func (m *Manager) verifyManagedNFQWSTerminal(ctx context.Context, receipt ManagedNFQWSBundleReceipt) (ManagedNFQWSManifest, error) {
-	var zero ManagedNFQWSManifest
+	path, err := m.managedNFQWSTerminalPath(receipt)
+	if err != nil {
+		return ManagedNFQWSManifest{}, err
+	}
+	return m.verifyManagedNFQWS(ctx, path, receipt.ManifestSHA256)
+}
+
+// Accepted journal/path comparison only, never a runtime lease or image grant.
+// Installer/recovery still call their original complete image verifier above.
+func (m *Manager) managedNFQWSTerminalPath(receipt ManagedNFQWSBundleReceipt) (string, error) {
 	if !validManagedNFQWSReceipt(receipt) {
-		return zero, ErrManagedNFQWSBundle
+		return "", ErrManagedNFQWSBundle
 	}
 	root, err := openUpdateRoot(m.updateJournalDir(), false)
 	if err != nil {
-		return zero, err
+		return "", err
 	}
 	defer root.Close()
 	data, err := root.ReadLimited(filepath.Join(receipt.TransactionID, "managed-"+UpdateAcceptedIdle+".json"), 64<<10)
 	var doc updateJournal
 	if err != nil || json.Unmarshal(data, &doc) != nil || validateManagedNFQWSJournal(doc) != nil || doc.Phase != UpdateAcceptedIdle || doc.ManagedNFQWS.After != receipt {
-		return zero, ErrManagedNFQWSBundle
+		return "", ErrManagedNFQWSBundle
 	}
 	canonical, _ := json.Marshal(doc)
 	if !bytes.Equal(data, canonical) {
-		return zero, ErrManagedNFQWSBundle
+		return "", ErrManagedNFQWSBundle
 	}
 	path, releases, err := m.managedNFQWSRoot(false)
 	if err != nil {
-		return zero, err
+		return "", err
 	}
 	releases.Close()
 	if filepath.Dir(receipt.GenerationPath) != path {
-		return zero, ErrManagedNFQWSBundle
+		return "", ErrManagedNFQWSBundle
 	}
-	return m.verifyManagedNFQWS(ctx, receipt.GenerationPath, receipt.ManifestSHA256)
+	return receipt.GenerationPath, nil
 }

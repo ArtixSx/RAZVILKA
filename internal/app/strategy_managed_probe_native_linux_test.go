@@ -24,7 +24,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
-	"runtime"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -443,9 +443,17 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		release() // Each actual HTTP request must obtain its own new admission.
 		metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
 		versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
+		payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
 		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
 		defer stopHTTPProfile()
+		var memoryBefore goruntime.MemStats
+		goruntime.ReadMemStats(&memoryBefore)
 		defer func() {
+			var memoryAfter goruntime.MemStats
+			goruntime.ReadMemStats(&memoryAfter)
+			t.Log("native actual HTTP in-process allocated-bytes/objects", memoryAfter.TotalAlloc-memoryBefore.TotalAlloc, memoryAfter.Mallocs-memoryBefore.Mallocs)
+			attempts, returnedBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
+			t.Log("native actual HTTP member-read attempts/returned-bytes", attempts-payloadAttempts, returnedBytes-payloadBytes)
 			t.Log("native actual HTTP inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
 			t.Log("native actual HTTP aggregate original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
@@ -490,10 +498,19 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	stopCPUProfile := managedProbeNativeCPUProfile(t, root)
 	defer stopCPUProfile()
 	toolCalls, toolNanos := toolMeasurements.calls.Load(), toolMeasurements.nanos.Load()
+	var memoryBefore goruntime.MemStats
+	goruntime.ReadMemStats(&memoryBefore)
 	probeStarted := time.Now()
 	metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
 	versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
+	payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
+	probeElapsed := time.Since(probeStarted)
+	var memoryAfter goruntime.MemStats
+	goruntime.ReadMemStats(&memoryAfter)
+	t.Log("native measured Execute in-process allocated-bytes/objects", memoryAfter.TotalAlloc-memoryBefore.TotalAlloc, memoryAfter.Mallocs-memoryBefore.Mallocs)
+	attempts, returnedBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
+	t.Log("native measured Execute member-read attempts/returned-bytes", attempts-payloadAttempts, returnedBytes-payloadBytes)
 	t.Log("native measured Execute inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 	versionChildren := startuptools.NativeFixtureVersionChildCount(tools)
 	for i := range versionChildren {
@@ -502,7 +519,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	t.Log("native measured Execute actual version child Starts [iptables ip6tables IP]", versionChildren)
 	t.Log("native measured Execute original metadata traversal attempts", startuptools.NativeFixtureVersionMetadataCount(tools)-metadataStarted)
 	stopStackDiagnostic()
-	t.Log("native measured Execute", time.Since(probeStarted), "actual inventory ToolCheck calls", toolMeasurements.calls.Load()-toolCalls, "ToolCheck wall", time.Duration(toolMeasurements.nanos.Load()-toolNanos))
+	t.Log("native measured Execute", probeElapsed, "actual inventory ToolCheck calls", toolMeasurements.calls.Load()-toolCalls, "ToolCheck wall", time.Duration(toolMeasurements.nanos.Load()-toolNanos))
 	stopCPUProfile()
 	if lateWait {
 		if err == nil || cleaned != nil || !consumer.Pending() {
@@ -644,7 +661,7 @@ func managedProbeNativeStackDeadline(t *testing.T) func() {
 	timer := time.AfterFunc(12*time.Second, func() {
 		defer close(done)
 		data := make([]byte, 64<<10)
-		used := runtime.Stack(data, true)
+		used := goruntime.Stack(data, true)
 		t.Log("native parent goroutine stacks before bounded probe deadline:\n" + string(data[:used]))
 	})
 	var once sync.Once
