@@ -27,7 +27,7 @@ import (
 // receive a signal. Files, policy and journals stay intact until the separate
 // complete absence/retirement protocol proves the entire footprint settled.
 func stopMihomoLiveColdSidecar(ctx context.Context, provider *netidentity.Provider, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, spec ProcessSpec, d ExecutionMihomoLiveDefinition) (result error) {
-	return stopMihomoLiveColdSidecarOriginal(ctx, provider, control, cleanup, spec, d, nil)
+	return stopMihomoLiveColdSidecarOriginal(ctx, provider, control, cleanup, spec, d, nil, nil)
 }
 
 func stopMihomoSameBootSidecar(ctx context.Context, o *mihomoSameBootCleanup) error {
@@ -37,10 +37,10 @@ func stopMihomoSameBootSidecar(ctx context.Context, o *mihomoSameBootCleanup) er
 	if err := o.static.current(); err != nil {
 		return err
 	}
-	return stopMihomoLiveColdSidecarOriginal(ctx, o.read.tools.Provider, o.control, o.cleanup, o.read.proxy.sidecarProcess(), o.inputs.definition, o.static)
+	return stopMihomoLiveColdSidecarOriginal(ctx, o.read.tools.Provider, o.control, o.cleanup, o.read.proxy.sidecarProcess(), o.inputs.definition, o.static, &o.sidecar)
 }
 
-func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentity.Provider, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, spec ProcessSpec, d ExecutionMihomoLiveDefinition, original *mihomoSameBootStatic) (result error) {
+func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentity.Provider, control *operationgate.ControlEpochReview, cleanup *operationgate.ExclusiveCleanupReview, spec ProcessSpec, d ExecutionMihomoLiveDefinition, original *mihomoSameBootStatic, retained **mihomoSameBootSidecar) (result error) {
 	var originalRoot *os.Root
 	if original != nil {
 		if original.self != original || original.closed || original.dirs["runtime"] == nil {
@@ -161,7 +161,17 @@ func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentit
 	if err != nil {
 		return errors.Join(errMihomoLiveMaterial, err)
 	}
-	defer func() { result = errors.Join(result, unix.Close(fd)) }()
+	var custody *mihomoSameBootSidecar
+	if retained == nil {
+		defer func() { result = errors.Join(result, unix.Close(fd)) }()
+	} else {
+		if original == nil || *retained != nil {
+			return errors.Join(ErrMihomoLiveRetirement, unix.Close(fd))
+		}
+		custody = &mihomoSameBootSidecar{original: original, file: os.NewFile(uintptr(fd), "original same-boot sidecar pidfd"), pid: receipt.PID, receipt: routeidentity.Hash(raw)}
+		custody.self = custody
+		*retained = custody // Transfer before any validation, signal or error.
+	}
 	processRoot := fmt.Sprintf("/proc/%d", receipt.PID)
 	current := func() error {
 		if err := check(); err != nil {
@@ -206,9 +216,15 @@ func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentit
 	if err := current(); err != nil {
 		return err
 	}
+	if custody != nil {
+		custody.validated = true
+	}
 	if err := control.WithCleanupStart(ctx, cleanup, func() error {
 		if err := originalRootCurrent(); err != nil {
 			return err
+		}
+		if custody != nil {
+			custody.attempted = true
 		}
 		return unix.PidfdSendSignal(fd, unix.SIGTERM, nil, 0)
 	}); err != nil && !errors.Is(err, unix.ESRCH) {
@@ -232,7 +248,13 @@ func stopMihomoLiveColdSidecarOriginal(ctx context.Context, provider *netidentit
 			if poll[0].Revents&unix.POLLIN == 0 {
 				return errMihomoLiveMaterial
 			}
-			return check() // Actual exit only; global absence is still mandatory.
+			if err := check(); err != nil {
+				return err
+			}
+			if custody != nil {
+				custody.terminal = true
+			}
+			return nil // Actual exit only; global absence is still mandatory.
 		}
 		if !killed && time.Now().After(deadline) {
 			if err := current(); err != nil {

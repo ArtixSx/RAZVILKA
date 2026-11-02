@@ -27,6 +27,19 @@ type mihomoSameBootArchive struct {
 	fault            func(string) error // Private refusal-only cut AFTER real publication; never an issuer.
 }
 
+// Only a retained original publisher can classify its own durability ACK.
+// A source/identity/Close failure never becomes this recoverable state.
+type mihomoSameBootArchiveACKError struct {
+	archive *mihomoSameBootArchive
+	name    string
+	cause   error
+}
+
+func (e *mihomoSameBootArchiveACKError) Error() string {
+	return "original archive durability acknowledgment remains unknown"
+}
+func (e *mihomoSameBootArchiveACKError) Unwrap() error { return e.cause }
+
 func newMihomoSameBootArchive(i *mihomoSameBootInputs) (out *mihomoSameBootArchive, resultErr error) {
 	if i == nil || i.self != i {
 		return nil, ErrMihomoLiveRetirement
@@ -160,16 +173,31 @@ func (c *mihomoSameBootArchive) publish(name string, value any, current func() e
 		if !bytes.Equal(prior.data, data) {
 			return ErrMihomoLiveRetirement
 		}
-		return errors.Join(prior.current(), prior.file.Sync(), syncBootRetirementDirectory(root, "."), c.current(), current())
+		readErr := prior.current()
+		syncErr := errors.Join(prior.file.Sync(), syncBootRetirementDirectory(root, "."))
+		closing := errors.Join(c.current(), current())
+		if readErr == nil && closing == nil && syncErr != nil {
+			return &mihomoSameBootArchiveACKError{archive: c, name: name, cause: syncErr}
+		}
+		return errors.Join(readErr, syncErr, closing)
 	}
 	f, err := writeMihomoColdRetained(root, leaf, data, func() error { return errors.Join(c.current(), current()) })
 	if f != nil {
+		writeErr := err
 		info, statErr := f.Stat()
 		c.records[name] = &mihomoColdRecord{root: root, name: leaf, file: f, info: info, data: bytes.Clone(data)}
-		err = errors.Join(err, statErr, syncBootRetirementDirectory(root, "."), c.records[name].current())
-		if c.fault != nil {
-			err = errors.Join(err, c.fault(name))
+		syncErr := syncBootRetirementDirectory(root, ".")
+		readErr := c.records[name].current()
+		closing := errors.Join(c.current(), current())
+		var faultErr error
+		if c.fault != nil && writeErr == nil && statErr == nil && syncErr == nil && readErr == nil && closing == nil {
+			faultErr = c.fault(name)
+			closing = errors.Join(c.current(), current())
 		}
+		if writeErr == nil && statErr == nil && readErr == nil && closing == nil && (syncErr != nil || faultErr != nil) {
+			return &mihomoSameBootArchiveACKError{archive: c, name: name, cause: errors.Join(syncErr, faultErr)}
+		}
+		return errors.Join(writeErr, statErr, syncErr, readErr, faultErr, closing)
 	}
 	return errors.Join(err, c.current(), current())
 }

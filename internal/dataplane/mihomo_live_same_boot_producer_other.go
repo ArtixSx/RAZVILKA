@@ -8,6 +8,10 @@ func mihomoSameBootNativeProducerPolicyACK(context.Context, *mihomoLiveResource,
 	return nil
 }
 
+func installMihomoSameBootNativeACKCut(context.Context, *mihomoSameBootRetirementCursor) error {
+	return nil
+}
+
 func mihomoSameBootNativeStage(context.Context, *mihomoSameBootRetirementCursor, string, func() error) error {
 	return nil
 }

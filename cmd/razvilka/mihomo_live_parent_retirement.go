@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -105,7 +106,17 @@ func runMihomoLiveParentRetirementCLI(ctx context.Context, paths offlineNFQWS2St
 		if sourceErr != nil || bound != manager || closeSources == nil {
 			return mihomoLiveBootFailed("cold-source", sourceErr)
 		}
-		result, err = manager.RetireMihomoLiveSameBoot(c, *retireMihomoLiveParentPlan, *retireMihomoLiveParentDigest, private, control, cleanup, controlRoot, history)
+		err = manager.WithMihomoSameBootRetirement(c, *retireMihomoLiveParentPlan, *retireMihomoLiveParentDigest, private, control, cleanup, controlRoot, history, func(original context.Context, recovery *dataplane.MihomoSameBootRetirement) error {
+			var attemptErr error
+			result, attemptErr = recovery.Run(original)
+			if errors.Is(attemptErr, dataplane.ErrMihomoSameBootRetainedRetry) && original.Err() == nil {
+				// Exactly one explicit original-owner retry, within the SAME
+				// aggregate deadline and five leases. Never retry generic errors.
+				log.Print("Mihomo same-boot: retrying retained cleanup acknowledgment")
+				result, attemptErr = recovery.Retry(original)
+			}
+			return attemptErr
+		})
 		return errors.Join(err, configuration.Current(c), control.CurrentForCleanupOperation(c, cleanup), history.CheckWrite(c, 8))
 	})
 	if err != nil {

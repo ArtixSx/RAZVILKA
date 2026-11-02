@@ -124,39 +124,75 @@ func TestMihomoSameBootCLINativeOriginalParent(t *testing.T) {
 	*retireMihomoLiveParentPlan, *retireMihomoLiveParentDigest = ready.PlanID, ready.Digest
 	var stages []string
 	expected := []string{"intent", "sidecar", "policy", "forwarding", "archive", "terminal-transaction", "terminal-global"}
+	cut := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT")
+	switch cut {
+	case "", "retirement.json", "runtime-history", "completed.json", "terminal-transaction", "terminal-global":
+	default:
+		t.Fatal("closed native ACK-cut case required")
+	}
+	visits := 0
 	var result dataplane.Execution
-	err = dataplane.WithMihomoSameBootNativeWitness(ctx, func(c context.Context, stage string) error {
-		if len(stages) >= len(expected) || stage != expected[len(stages)] {
-			return errors.New("native phase ordering changed")
-		}
-		stages = append(stages, stage)
-		childCtx, stop := context.WithTimeout(c, 15*time.Second)
-		defer stop()
-		command := exec.CommandContext(childCtx, "/opt/bin/razvilka", "-test.run=^TestMihomoSameBootUpdaterGuardChild$", "-test.v", "-test.count=1", "-test.timeout=12s")
-		command.Env = append(os.Environ(), "RAZVILKA_MIHOMO_SAME_BOOT_GUARD_CHILD=1")
-		var output sameBootNativeOutput
-		command.Stdout = &output
-		command.Stderr = &output
-		command.WaitDelay = 200 * time.Millisecond
-		if err := command.Run(); err != nil || output.overflow {
-			return errors.Join(errors.New("actual updater guard child failed"), err)
-		}
-		want := "guard=fenced"
-		if stage == "terminal-global" {
-			want = "guard=open"
-		}
-		if !strings.Contains(output.String(), want) {
-			return errors.New("actual updater guard did not retain original fence")
-		}
-		t.Log("actual updater guard phase", stage, want)
-		return nil
-	}, func(held context.Context) error {
-		var e error
-		result, e = runMihomoLiveParentRetirementCLI(held, paths, filepath.Join(installpath.State, "self-update-stop"))
-		return e
-	})
+	run := func(original context.Context) error {
+		return dataplane.WithMihomoSameBootNativeWitness(original, func(c context.Context, stage string) error {
+			visits++
+			if visits > 64 {
+				return errors.New("bounded original retry phases exceeded")
+			}
+			already := false
+			for _, seen := range stages {
+				already = already || seen == stage
+			}
+			if already && cut == "" || !already && (len(stages) >= len(expected) || stage != expected[len(stages)]) {
+				return errors.New("native phase ordering changed")
+			}
+			if !already {
+				stages = append(stages, stage)
+			}
+			childCtx, stop := context.WithTimeout(c, 15*time.Second)
+			defer stop()
+			command := exec.CommandContext(childCtx, "/opt/bin/razvilka", "-test.run=^TestMihomoSameBootUpdaterGuardChild$", "-test.v", "-test.count=1", "-test.timeout=12s")
+			command.Env = append(os.Environ(), "RAZVILKA_MIHOMO_SAME_BOOT_GUARD_CHILD=1")
+			var output sameBootNativeOutput
+			command.Stdout = &output
+			command.Stderr = &output
+			command.WaitDelay = 200 * time.Millisecond
+			if err := command.Run(); err != nil || output.overflow {
+				return errors.Join(errors.New("actual updater guard child failed"), err)
+			}
+			want := "guard=fenced"
+			if stage == "terminal-global" {
+				want = "guard=open"
+			}
+			if cut != "" {
+				latest, e1 := os.ReadFile(filepath.Join(paths.dataplane, "latest-execution.json"))
+				transaction, e2 := os.ReadFile(filepath.Join(paths.dataplane, "transactions", ready.PlanID, "execution.json"))
+				var current dataplane.Execution
+				if e1 != nil || e2 != nil || json.Unmarshal(latest, &current) != nil {
+					return errors.Join(e1, e2, errors.New("original retry pair unavailable"))
+				}
+				want = "guard=fenced"
+				if current.State == "rolled-back" && bytes.Equal(latest, transaction) {
+					want = "guard=open"
+				}
+			}
+			if !strings.Contains(output.String(), want) {
+				return errors.New("actual updater guard did not retain original fence")
+			}
+			t.Log("actual updater guard phase", stage, want)
+			return nil
+		}, func(held context.Context) error {
+			var e error
+			result, e = runMihomoLiveParentRetirementCLI(held, paths, filepath.Join(installpath.State, "self-update-stop"))
+			return e
+		})
+	}
+	if cut == "" {
+		err = run(ctx)
+	} else {
+		err = dataplane.WithMihomoSameBootNativeACKCut(ctx, cut, run)
+	}
 	if err != nil {
-		t.Fatal("actual sameboot CLI", err)
+		t.Fatalf("actual sameboot CLI %v prepare_stage=%s", err, dataplane.MihomoSameBootRetirementStage(err))
 	}
 	if result.State != "rolled-back" || result.RollbackVerified || len(stages) != len(expected) {
 		t.Fatal("unverified or incomplete terminal acknowledgment")
