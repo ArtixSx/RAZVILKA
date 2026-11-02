@@ -37,6 +37,9 @@ func TestMihomoSameBootCandidateRetainsBothPlanAbsences(t *testing.T) {
 			if c.plansCurrent() == nil {
 				t.Fatal("late plan appearance ignored", name)
 			}
+			if c.owner.planInputsCurrent() == nil {
+				t.Fatal("native owner missed late plan appearance", name)
+			}
 			if err := i.roots[0].Remove(name); err != nil {
 				t.Fatal(err)
 			}
@@ -100,6 +103,9 @@ func TestMihomoSameBootCommittedPlanCaptureStillPinsPresentAndAbsentNames(t *tes
 		}
 		if c.plansCurrent() == nil {
 			t.Fatal("same bytes foreign plan inode adopted")
+		}
+		if c.owner.planInputsCurrent() == nil {
+			t.Fatal("native owner adopted foreign original plan inode")
 		}
 	})
 }
