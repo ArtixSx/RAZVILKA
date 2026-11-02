@@ -330,10 +330,19 @@ func (e *nfqws2ActiveExecution) process(ctx context.Context, p *NFQWSScopedPlan,
 }
 
 func (e *nfqws2ActiveExecution) verifyLAN(ctx context.Context, lan *LANPolicyRuntimePlan) error {
-	if e == nil || !reflect.DeepEqual(lan, e.plan.LAN) {
+	if e == nil || e.binding == nil || e.resource == nil || !reflect.DeepEqual(lan, e.plan.LAN) {
 		return ErrNFQWSScopedOwner
 	}
 	ctx = networkPolicyConsumerContext(ctx, e.plan)
+	// Prepared-owner verification uses a deliberate readonly binding copy.
+	// Borrow only from this execution's original binding around these pure
+	// receipt/LAN/inventory reads; no result crosses the enclosing callback.
+	return e.binding.observeActiveTools(ctx, e.resource.Plan(), func(observed context.Context) error {
+		return e.verifyLANObserved(observed, lan)
+	})
+}
+
+func (e *nfqws2ActiveExecution) verifyLANObserved(ctx context.Context, lan *LANPolicyRuntimePlan) error {
 	if err := e.owners(ctx); err != nil {
 		return err
 	}
