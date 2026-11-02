@@ -85,20 +85,20 @@ jobs:
           race_option=""
           if test "${{ matrix.build-mode }}" = race; then race_option="-race"; fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test $race_option -count=1 ./internal/startuptools ./internal/dataplane ./internal/components -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestClassicReadBatch|^TestBackendInventoryBatch|^TestBackendInventoryObservation|^TestManagedNFQWSRuntimeImage|^TestManagedNFQWSRuntimeObserver' -v
-      - name: Same worker managed image allocation and full LAN comparison
+            go test $race_option -count=1 ./internal/startuptools ./internal/dataplane ./internal/components -run '^TestStaticVersion|^TestVersionReadBatch|^TestVersionBatch|^TestVersionExtensionPath|^TestClassicReadBatch|^TestBackendInventoryBatch|^TestBackendInventoryObservation|^TestManagedNFQWSRuntimeImage|^TestManagedNFQWSRuntimeObserver' -v
+      - name: Same worker extension pathname derivation and full LAN comparison
         shell: bash
         run: |
           set -euo pipefail
           before_source="$RUNNER_TEMP/managed-image-before"
-          git worktree add --detach "$before_source" 1e14b1c27e4286fceb6101f1e2b0ae779c1f9ce6
+          git worktree add --detach "$before_source" 5277d4f59180dbe156d2e86d044cd0d149de6bfd
           before_status=0
-          echo '=== BEFORE original two-read verifier; identical allocation/payload instrumentation; same worker ==='
+          echo '=== BEFORE two-read runtime images plus observer; fresh extension EvalSymlinks each metadata check; same worker ==='
           (cd "$before_source" && sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh) || before_status=$?
           before_lan_status=0
           (cd "$before_source" && sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh) || before_lan_status=$?
           after_status=0
-          echo '=== AFTER two complete payload reads with original FDs and fixed-buffer comparison; same worker ==='
+          echo '=== AFTER original acquisition-derived extension pathname; BOTH full named node/link checks and membership retained; same worker ==='
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh || after_status=$?
           lan_status=0
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh || lan_status=$?

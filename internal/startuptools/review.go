@@ -23,18 +23,19 @@ type heldImage struct {
 	hash [32]byte
 }
 type heldReview struct {
-	profile     profile
-	images      map[string]*heldImage
-	nodes       map[string]heldNode
-	absent      map[string]bool
-	roles       map[string]map[imageRole]bool
-	directories []string
-	extensions  []string
-	entry       [2]*heldImage
-	ipEntry     *heldImage
-	wgEntry     [2]*heldImage
-	bytes       int64
-	edges       int
+	profile       profile
+	images        map[string]*heldImage
+	nodes         map[string]heldNode
+	absent        map[string]bool
+	roles         map[string]map[imageRole]bool
+	directories   []string
+	extensions    []string
+	extensionPath *reviewedExtensionPath
+	entry         [2]*heldImage
+	ipEntry       *heldImage
+	wgEntry       [2]*heldImage
+	bytes         int64
+	edges         int
 }
 
 func (r *heldReview) close() error {
