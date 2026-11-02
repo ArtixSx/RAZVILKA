@@ -1,0 +1,33 @@
+name: Mihomo same boot original offline ownership validation
+
+on:
+  push:
+    branches: [work/mihomo-same-boot-validation-20261102]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original-private-set:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Actual five private journal leases and callback revocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          race_option=""
+          if test "${{ matrix.mode }}" = race; then race_option="-race"; fi
+          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore -run '^TestOfflineServiceControlSet' -v
