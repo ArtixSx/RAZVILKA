@@ -23,7 +23,9 @@ func TestMihomoSameBootOriginalActiveFenceSurvivesEveryNativePhaseAndPartialTerm
 		defer i.close()
 		assertActive := func(stage string) {
 			t.Helper()
-			if err := New(state).CheckExecutionRecovery(ctx); !errors.Is(err, errMihomoLiveMaterial) {
+			// The public journal fence is the contract. Which original-owner
+			// check detects this documentary ACTIVE row first is independent.
+			if err := New(state).CheckExecutionRecovery(ctx); !errors.Is(err, ErrExecutionJournal) {
 				t.Fatal("original active resource fence missing", stage, err)
 			}
 		}

@@ -30,17 +30,20 @@ export RAZVILKA_DOMAIN_TOOLS_REVIEW="$work/tools.json"
 export RAZVILKA_RUNTIME_NATIVE_REVIEW="$work/runtime-native-tool-review.json"
 export RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD=3
 export RAZVILKA_DOMAIN_ORIGINAL_NATIVE=1 RAZVILKA_MIHOMO_LIVE_NATIVE=1
+export RAZVILKA_MANAGED_PROBE_NATIVE=1 RAZVILKA_MANAGED_PROBE_TOOLS_REVIEW="$work/tools.json"
 cd "$repo"
 case "${RAZVILKA_NATIVE_RACE:-0}" in
  0) go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
-    go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka ;;
+    go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
+    go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
  1) go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
-    go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka ;;
+    go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
+    go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
  *) exit 2 ;;
 esac
 python3 - "$work" <<'PY'
 import pathlib,sys
-for name in ('app.test','cmd.test'):
+for name in ('app.test','cmd.test','startup.test'):
  p=pathlib.Path(sys.argv[1])/name
  if not 0<p.stat().st_size<=64*1024*1024: raise SystemExit('original binary reader bound exceeded')
  p.chmod(0o500)
@@ -60,5 +63,6 @@ timeout --foreground --kill-after=35s 300s unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t mangle -A RZMLF_BOOT -j NFQUEUE --queue-num 65000
  /usr/sbin/iptables-legacy -t mangle -D RZMLF_BOOT -j NFQUEUE --queue-num 65000
  /usr/sbin/iptables-legacy -t mangle -X RZMLF_BOOT
+ "$1/startup.test" -test.run="^TestStaticVersionFactNative(PolicyReadObservation|MihomoNumericReadObservation)$" -test.v -test.count=1 -test.timeout=50s
  exec python3 "$2/scripts/native-mihomo-same-boot.py" "$1"
 ' sh "$work" "$repo"
