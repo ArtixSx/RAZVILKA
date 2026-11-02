@@ -16,7 +16,6 @@ import (
 	"github.com/ArtixSx/razvilka/internal/components"
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
-	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root string) (result *mihomoLiveResource, resultErr error) {
@@ -103,13 +102,14 @@ func (a *MihomoProbeAdapter) prepareLive(ctx context.Context, plan Plan, root st
 	}
 	stage = "complete endpoint resolution and exclusions"
 	addresses, err := netresolve.LookupNetIP(ctx, "ip", host)
-	if err != nil || len(addresses) == 0 || len(addresses) > 64 {
+	if err != nil {
 		return nil, errors.Join(errMihomoLiveMaterial, err)
 	}
+	addresses, err = mihomoLiveResolvedIPv4(addresses)
+	if err != nil {
+		return nil, err
+	}
 	for _, address := range addresses {
-		if !address.Is4() || !publicfetch.PublicAddress(address) {
-			return nil, errMihomoLiveMaterial
-		}
 		if err := options.ResourceGuard(ctx, plan, host, address); err != nil {
 			return nil, err
 		}

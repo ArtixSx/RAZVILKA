@@ -11,7 +11,6 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/netresolve"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
-	"github.com/ArtixSx/razvilka/internal/publicfetch"
 )
 
 func (r *mihomoLiveResource) liveEndpointsCurrent(ctx context.Context) error {
@@ -22,13 +21,14 @@ func (r *mihomoLiveResource) liveEndpointsCurrent(ctx context.Context) error {
 		}
 	}
 	addresses, err := resolve(ctx, r.definition.EndpointHost)
-	if err != nil || len(addresses) == 0 || len(addresses) > 64 {
+	if err != nil {
 		return errors.Join(errMihomoLiveMaterial, err)
 	}
+	addresses, err = mihomoLiveResolvedIPv4(addresses)
+	if err != nil {
+		return err
+	}
 	for _, address := range addresses {
-		if !address.Is4() || !publicfetch.PublicAddress(address) {
-			return errMihomoLiveMaterial
-		}
 		if err := r.resourceBoundary(ctx, r.definition.EndpointHost, address); err != nil {
 			return err
 		}
