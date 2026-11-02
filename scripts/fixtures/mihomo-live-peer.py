@@ -24,17 +24,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         source, port = self.client_address
+        # Error-only physical fixture seam. The test authors this fixed file
+        # only AFTER its actual configuration CAS. It cannot fabricate a
+        # controller result, alter TLS/routing, or authorize any resource.
+        degraded = (self.path == "/" and self.headers.get("Host") == "service.example.com"
+                    and (root / "mihomo-service-degraded").exists())
         body = json.dumps({"Source": source, "SourcePort": str(port),
                            "Marker": "native-domain-service"}).encode()
         if self.path == "/cdn-cgi/trace":
             body = ("ip=" + source + "\nwarp=off\n").encode()
         elif self.headers.get("Host") == "api.ipify.org":
             body = source.encode()
-        self.send_response(200)
+        self.send_response(503 if degraded else 200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
+        if degraded:
+            event = json.dumps({"Host": "service.example.com", "Status": 503,
+                                "Source": source, "Marker": "physical-error-after-cas"}).encode() + b"\n"
+            fd = os.open(root / "mihomo-service-degraded-observed",
+                         os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+            try:
+                if os.fstat(fd).st_size > 8192:
+                    raise RuntimeError("bounded physical failure evidence exceeded")
+                os.write(fd, event)
+            finally:
+                os.close(fd)
 
     def log_message(self, *_):
         pass

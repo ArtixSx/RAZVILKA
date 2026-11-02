@@ -101,67 +101,7 @@ func (r *mihomoLiveResource) verifyHealthHandoff(ctx context.Context) error {
 	}
 	ctx, finish := h.comparisonContext(ctx)
 	defer finish()
-	if err := r.compiledCurrent(true); err != nil {
-		return err
-	}
-	if err := r.currentBeforeStart(ctx); err != nil {
-		return err
-	}
-	if err := r.liveOwnersReadOnly(ctx, nil); err != nil {
-		return err
-	}
-	a, state := r.proxy, r.definition.Policy
-	if proxyPolicyDigest(state) != h.policy.digest {
-		return ErrProxyPolicyUnknown
-	}
-	if err := errors.Join(h.policy.verify(ctx, a), a.verifyForwarding(ctx, state), verifyPolicyEvidence(ctx, a.Runner, a.ip(), state)); err != nil {
-		return err
-	}
-	prefix, err := netip.ParsePrefix(a.TunnelCIDR)
-	if err != nil || !prefix.Addr().Is4() {
-		return errMihomoLiveMaterial
-	}
-	r.mu.Lock()
-	index := r.tunIndex
-	r.mu.Unlock()
-	probes := mihomoRequiredProbes(r.definition.Service)
-	seen := make(map[string]bool, len(probes))
-	for _, probe := range probes {
-		addresses, err := resolveNodeServiceIPv4(ctx, probe.URL, a.Resolver)
-		if err != nil || !mihomoHealthDNSMatches(h.dns, probe.URL, addresses) {
-			return errors.Join(ErrNodeEndpointChanged, err)
-		}
-		seen[probe.URL] = true
-		for _, destination := range addresses {
-			if !nodeRouterPinInScope(destination, state.Prefixes) {
-				return ErrNodeResourceDenied
-			}
-			if err := checkNodeResourceURL(ctx, probe.URL, destination); err != nil {
-				return err
-			}
-			request := nodeRouterHTTPSRequest{Interface: a.Interface, IfIndex: index, Source: prefix.Addr(), Destination: destination}
-			if err := nodeRouterAssignedSource(ctx, request, nodeRouterHTTPSOptions{}); err != nil {
-				return err
-			}
-			if err := nodeRouterReturnPath(ctx, a.Interface); err != nil {
-				return err
-			}
-			if err := r.backendDisjoint(ctx, request.Source, request.Destination); err != nil {
-				return err
-			}
-		}
-		closing, err := resolveNodeServiceIPv4(ctx, probe.URL, a.Resolver)
-		if err != nil || !mihomoHealthDNSMatches(h.dns, probe.URL, closing) {
-			return errors.Join(ErrNodeEndpointChanged, err)
-		}
-	}
-	if len(seen) != len(h.dns) {
-		return ErrNodeEndpointChanged
-	}
-	if err := errors.Join(h.policy.verify(ctx, a), a.verifyForwarding(ctx, state), verifyPolicyEvidence(ctx, a.Runner, a.ip(), state), r.liveOwnersReadOnly(ctx, nil)); err != nil {
-		return err
-	}
-	if err := r.currentBeforeStart(ctx); err != nil {
+	if err := r.liveHealthStructure(ctx, h.policy, h.dns); err != nil {
 		return err
 	}
 	r.mu.Lock()
