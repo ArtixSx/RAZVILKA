@@ -113,7 +113,8 @@ func TestManagedStrategyProbeNativeClosingEnvironment(t *testing.T) {
 }
 
 func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool, revoke ...string) {
-	lan := appHTTP && len(revoke) == 1 && revoke[0] == "lan"
+	lan := appHTTP && len(revoke) == 1 && (revoke[0] == "lan" || revoke[0] == "lan-manual")
+	manualOnly := lan && revoke[0] == "lan-manual"
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
@@ -463,7 +464,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			}
 			t.Log("native actual HTTP aggregate actual version child Starts [iptables ip6tables IP]", children)
 		}()
-		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan)
+		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan, manualOnly)
 		return
 	}
 	criteria, err := strategylab.ManagedProbeCriteriaDigest(service)

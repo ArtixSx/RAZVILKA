@@ -110,8 +110,14 @@ chmod 400 "$probe_work/hosts"
 probe_cases='TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
-  probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP'
+  case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
+    full) probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP' ;;
+    manual) probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANManualApply' ;;
+    *) exit 2 ;;
+  esac
   probe_timeout=240s
+elif test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" != full; then
+  exit 2
 fi
 for probe_case in $probe_cases; do
 probe_status=0

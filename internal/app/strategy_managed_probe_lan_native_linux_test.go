@@ -30,6 +30,10 @@ func TestManagedStrategyProbeNativeLANAppHTTP(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true, "lan")
 }
 
+func TestManagedStrategyProbeNativeLANManualApply(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
 func managedProbeNativeWANListener() (listener net.Listener, result error) {
 	runtime.LockOSThread()
 	unlock := true
@@ -120,7 +124,7 @@ func configureManagedProbeNativeLANBinding(lan *dataplane.LANPolicyRuntime, bind
 	}
 }
 
-func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error) {
+func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error, manualOnly ...bool) {
 	t.Helper()
 	r := a.managedNFQList
 	if r == nil || !r.original() {
@@ -198,7 +202,11 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 	// After removal both clients must still reach the distinct actual WAN.
 	managedProbeNativeLANRequest(t, ctx, "rzincluded")
 	managedProbeNativeLANRequest(t, ctx, "rzexcluded")
-	t.Log("actual authenticated three-pass probe/manual selection → SAME Review/Apply/COMMON/native consumer → included LAN counter positive/excluded negative → original Stop/empty inventory/recovered direct TLS; Home classification only modeled")
+	if len(manualOnly) > 0 && manualOnly[0] {
+		t.Log("explicit manual diagnostic: genuine native validation + authenticated manual intent → SAME Review/Apply/COMMON/native consumer → included positive/excluded negative → original Stop/direct recovery; no probe/automatic/service-health evidence; Home classification only modeled")
+	} else {
+		t.Log("actual authenticated three-pass probe/manual selection → SAME Review/Apply/COMMON/native consumer → included LAN counter positive/excluded negative → original Stop/empty inventory/recovered direct TLS; Home classification only modeled")
+	}
 }
 
 func managedProbeNativeLANRequest(t *testing.T, ctx context.Context, name string) {

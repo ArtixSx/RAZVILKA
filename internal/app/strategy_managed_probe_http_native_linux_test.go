@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/security"
 	"github.com/ArtixSx/razvilka/internal/strategylab"
@@ -63,6 +64,13 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 		if code != http.StatusUnauthorized && code != http.StatusForbidden {
 			t.Fatal("actual authentication/origin negative admitted", code, string(data))
 		}
+	}
+	if len(lan) > 1 && lan[1] {
+		if !lan[0] {
+			t.Fatal("manual diagnostic requires actual LAN source")
+		}
+		runManagedStrategyManualLANHTTP(t, a, candidate, before, func(method, path, body string) (int, []byte) { return request(method, path, body, server.URL, true) }, readEmpty)
+		return
 	}
 	for pass := 0; pass < strategylab.RequiredPasses; pass++ {
 		code, data := request(http.MethodPost, path, body, server.URL, true)
@@ -116,6 +124,33 @@ func runManagedStrategyProbeNativeHTTP(t *testing.T, a *App, candidate string, r
 		return // The LAN helper reports its actual Apply/Stop evidence.
 	}
 	t.Log("actual authenticated App HTTP: three native TLS/counter passes, current preferred selection/snapshot, explicit frozen manual choice, original selected source bridge; live routing unchanged; CI classification only, no router/LAN acceptance")
+}
+
+// A separate real supported operator path, not manufactured canary eligibility.
+// Existing three-pass/automatic tests above remain unchanged and independent.
+func runManagedStrategyManualLANHTTP(t *testing.T, a *App, candidate string, before config.Config, request func(string, string, string) (int, []byte), readEmpty func(context.Context) error) {
+	t.Helper()
+	body := `{"service_id":"native","protocol":"tcp","ip_family":"ipv4","candidate_id":"` + candidate + `","mode":"manual"}`
+	code, data := request(http.MethodPost, "/api/v1/strategy-lab/selections", body)
+	var selection strategylab.Selection
+	if code != http.StatusOK || json.Unmarshal(data, &selection) != nil || selection.CandidateID != candidate || selection.Mode != strategylab.ModeManual || !selection.Frozen || selection.Healthy {
+		t.Fatal("actual manual API contract refused or promoted health", code, string(data))
+	}
+	code, data = request(http.MethodGet, "/api/v1/strategy-lab", "")
+	var snapshot strategylab.Snapshot
+	if code != http.StatusOK || json.Unmarshal(data, &snapshot) != nil || len(snapshot.Evidence) != 0 || snapshot.QuiescenceUnknown {
+		t.Fatal("manual diagnostic fabricated probe evidence", code, string(data))
+	}
+	for _, summary := range snapshot.Summaries {
+		if summary.CandidateID == candidate && summary.Eligible {
+			t.Fatal("native validation became automatic probe eligibility")
+		}
+	}
+	if !reflect.DeepEqual(before, a.Store.Get()) || a.StrategyLab.Executor != nil {
+		t.Fatal("manual intent changed live config or enabled legacy executor")
+	}
+	assertManagedProbeNativeSelectedSource(t, a, candidate, strategylab.ModeManual)
+	runManagedProbeNativeLANApply(t, a, request, readEmpty, true)
 }
 
 func assertManagedProbeNativeSelectedSource(t *testing.T, a *App, candidate string, mode strategylab.AdaptiveMode) {

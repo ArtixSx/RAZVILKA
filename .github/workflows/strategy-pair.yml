@@ -104,6 +104,13 @@ jobs:
           sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh || lan_status=$?
           echo "Actual native statuses before=$before_status before_lan=$before_lan_status after=$after_status lan=$lan_status"
           test "$before_status" = 0 && test "$before_lan_status" = 0 && test "$after_status" = 0 && test "$lan_status" = 0
+      - name: Explicit native manual LAN Apply diagnostic (no automatic health claim)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh
   strategy-pair:
     runs-on: ubuntu-latest
     timeout-minutes: 20
