@@ -24,8 +24,11 @@ func (b *NFQWSScopedBinding) observeProbeTools(ctx context.Context, p *NFQWSScop
 	if ctx == nil || use == nil {
 		return ErrNFQWSScopedOwner
 	}
-	if p == nil || p.spec.Probe == nil {
+	if p == nil {
 		return use(ctx)
+	}
+	if p.spec.Probe == nil {
+		return b.observeActiveTools(ctx, p, use)
 	}
 	e, _ := ctx.Value(nfqwsProbeExecutionKey{}).(*nfqwsProbeExecution)
 	// Bare models and deliberate readonly binding copies retain their previous

@@ -113,7 +113,11 @@ jobs:
         run: |
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
-          go test "${race_flag[@]}" -count=1 ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSExecutionDiagnostics' -v
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${race_flag[@]}" -count=1 ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSExecutionDiagnostics' -v
+      - name: Actual identity syscalls with strict pointer checks
+        if: matrix.build-mode == 'production'
+        run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
         shell: bash
         run: |

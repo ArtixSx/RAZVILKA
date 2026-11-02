@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "kind": "single separate-run native comparison; not causal speed proof",
+  "samples": [
+    {
+      "label": "before",
+      "commit": "b2138139741e052e08a79a6fd6910a3a9ab4a2b5",
+      "run": 41413955470,
+      "job": 125173184568,
+      "original_log_sha256": "ad5ba8ab3c9f8b20b49fb931bd59fc151c1ac372b178ee2d17b30d2c25b5b3cb",
+      "core_pass": true,
+      "core_test_wall_seconds": 12.42,
+      "execute_seconds": 11.294915711,
+      "allocated_bytes": 2112230624,
+      "allocated_objects": 8103838,
+      "http_three_probe_pass": true,
+      "http_test_wall_seconds": 40.75,
+      "member_reads": 13260,
+      "member_bytes": 1084270200,
+      "tool_checks": 382,
+      "version_child_starts": [
+        163,
+        163,
+        386
+      ],
+      "metadata_traversals": 2312
+    },
+    {
+      "label": "after",
+      "commit": "7038cdd4c05a2f110f273db21ef7b5ec1c6c0c31",
+      "run": 41417804693,
+      "job": 125185814196,
+      "original_log_sha256": "17e2f21120e2e7ea0c60cf0d8946620bc1b8eddf57c875c2be249e6cd8a4e645",
+      "core_pass": true,
+      "core_test_wall_seconds": 8.36,
+      "execute_seconds": 7.632065091,
+      "allocated_bytes": 2031138832,
+      "allocated_objects": 7493694,
+      "http_three_probe_pass": true,
+      "http_test_wall_seconds": 27.13,
+      "member_reads": 13260,
+      "member_bytes": 1084270200,
+      "tool_checks": 382,
+      "version_child_starts": [
+        163,
+        163,
+        386
+      ],
+      "metadata_traversals": 2312
+    }
+  ],
+  "limitations": [
+    "Different CI runner allocations; hardware/load equivalence not established",
+    "One sample per revision; no p50/p95 or RAM claim",
+    "Full LAN Apply and race remain failing",
+    "Old b213 manual test hit GC fatal; 703 syscall GC/checkptr passed and no fatal reproduced; cause unresolved"
+  ]
+}

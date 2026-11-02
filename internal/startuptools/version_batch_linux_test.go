@@ -84,7 +84,7 @@ func TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift(t *testing.T
 	if os.Geteuid() != 0 {
 		t.Skip("protected metadata requires root")
 	}
-	for _, change := range []string{"same-bytes-new-ctime", "named-replacement", "new-extension"} {
+	for _, change := range []string{"same-bytes-new-ctime", "named-replacement", "new-extension", "missing-named-node", "different-named-node", "foreign-held-descriptor"} {
 		t.Run(change, func(t *testing.T) {
 			dir := t.TempDir()
 			ext := filepath.Join(dir, "extensions")
@@ -116,6 +116,21 @@ func TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift(t *testing.T
 				t.Fatal("baseline", err)
 			}
 			switch change {
+			case "missing-named-node":
+				delete(r.nodes, path)
+			case "different-named-node":
+				r.nodes[path] = heldNode{path: ext, info: extInfo}
+			case "foreign-held-descriptor":
+				foreign := filepath.Join(dir, "foreign")
+				if err := os.WriteFile(foreign, []byte("original"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				other, err := os.Open(foreign)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer other.Close()
+				r.images[path].file = other
 			case "same-bytes-new-ctime":
 				if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
 					t.Fatal(err)

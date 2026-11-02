@@ -55,7 +55,11 @@ func nfqwsScopedBeforeStartCurrent(ctx context.Context, b *NFQWSScopedBinding, p
 	}
 	readonly := *b
 	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
-	return readonly.CheckBeforeProcessStart(ctx, p)
+	// Lend from the original binding before making the deliberate readonly
+	// copy. The entire pre-start predicate is pure; Start remains outside.
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return readonly.CheckBeforeProcessStart(observed, p)
+	})
 }
 
 func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *NFQWSScopedPlan, root string, current func(context.Context, *NFQWSScopedPlan) error) error {
@@ -64,7 +68,11 @@ func nfqwsScopedPreparedCurrent(ctx context.Context, b *NFQWSScopedBinding, p *N
 	}
 	readonly := *b
 	readonly.ApplyGuard = func(c context.Context, got *NFQWSScopedPlan, _ PolicyEffect) error { return current(c, got) }
-	return readonly.VerifyPrepared(ctx, p, root)
+	// Keep the original tool bookends around the whole pure prepared
+	// comparison. The common registrar publishes capture-ready afterwards.
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		return readonly.VerifyPrepared(observed, p, root)
+	})
 }
 
 // iptables -S quotes match arguments. Interpret quotes without shell expansion;
