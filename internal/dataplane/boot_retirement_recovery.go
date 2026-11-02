@@ -15,6 +15,9 @@ import (
 // absence, or grants activation. A completed retirement makes the old committed
 // DTO historical; only a newly reviewed Apply may replace that history.
 func (m *Manager) completedBootRetirement() (bool, string, error) {
+	if retired, id, err := m.completedMihomoLiveRetirement(); retired || err != nil {
+		return retired, id, err
+	}
 	var latest *Execution
 	exists, err := readOptionalJournal(filepath.Join(m.StateRoot, "latest-execution.json"), &latest)
 	if err != nil {

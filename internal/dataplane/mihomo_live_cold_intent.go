@@ -68,7 +68,8 @@ func mihomoLiveRetirementTerminal(before Execution, finished string) (Execution,
 		}
 	}
 	for i := range after.Steps {
-		if after.Steps[i].State != "passed" && after.Steps[i].State != "skipped" {
+		_, finishedErr := time.Parse(time.RFC3339Nano, after.Steps[i].FinishedAt)
+		if after.Steps[i].State != "passed" || finishedErr != nil {
 			after.Steps[i].State = "failed"
 			after.Steps[i].FinishedAt = finished
 			after.Steps[i].Detail = mihomoLiveRetirementDetail

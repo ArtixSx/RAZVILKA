@@ -40,8 +40,7 @@ func mihomoColdRuntimeNames(a *ProxyTunnelAdapter) map[string]bool {
 	return names
 }
 
-func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (mihomoColdRuntimeArchive, error) {
-	var out mihomoColdRuntimeArchive
+func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (out mihomoColdRuntimeArchive, resultErr error) {
 	info, err := root.Lstat(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return out, nil
@@ -53,7 +52,15 @@ func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (m
 	if err != nil {
 		return out, err
 	}
-	defer dir.Close()
+	defer func() {
+		resultErr = errors.Join(resultErr, dir.Close())
+		if resultErr != nil {
+			for _, data := range out.Files {
+				clear(data)
+			}
+			out = mihomoColdRuntimeArchive{}
+		}
+	}()
 	held, err := dir.Stat(".")
 	if err != nil || !os.SameFile(info, held) {
 		return out, ErrMihomoLiveRetirement
@@ -108,7 +115,7 @@ func readMihomoColdRuntime(root *os.Root, name string, a *ProxyTunnelAdapter) (m
 			if !validNetworkPolicyReceiptFile(info) || !executionHistoryOwner(info, false) || !allowed[child] && !(depth == 2 && filepath.Dir(parent) == "policy-generations" && slices.Contains([]string{policyAdditionFile, policyAdditionLock, "policy-state.json"}, entry.Name())) {
 				return ErrMihomoLiveRetirement
 			}
-			raw, err := bootRetirementRead(dir, child)
+			raw, err := readMihomoColdFileAt(dir, child, info)
 			if err != nil {
 				return err
 			}
