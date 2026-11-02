@@ -14,6 +14,9 @@ func (d *xraySelectedTCPExecutionRecords) publishOriginalDurable(index int, data
 	if d == nil || index < 0 || index > 1 || syncDirectory == nil {
 		return ErrExecutionJournal
 	}
+	if err := d.publicationFailure(); err != nil {
+		return err
+	}
 	root, name := d.recordPath(index)
 	if root == nil {
 		return ErrExecutionJournal
@@ -22,13 +25,14 @@ func (d *xraySelectedTCPExecutionRecords) publishOriginalDurable(index int, data
 	if err != nil {
 		return err
 	}
+	accepted := false
 	info, err := file.Stat()
 	if err == nil {
-		err = d.captureOriginalRecord(index, file, info, data, root, name)
+		accepted, err = d.captureOriginalRecord(index, file, info, data, root, name)
 	}
-	if err != nil {
+	if !accepted {
 		return errors.Join(err, file.Close())
 	}
 	// captureOriginalRecord owns file even when the following sync fails.
-	return syncDirectory(root)
+	return errors.Join(err, syncDirectory(root))
 }
