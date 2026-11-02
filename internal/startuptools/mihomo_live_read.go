@@ -8,6 +8,27 @@ import (
 	"strings"
 )
 
+// CORE's numeric RPDB observer also emits implicit IPv4 and -N-first IPv6.
+// Freeze their identical explicit-family spelling before original held-FD
+// execution, so a pure observation uses the existing fixed policy read ABI.
+// This changes no selector, parser, effect grammar or read output semantics.
+func mihomoLiveCanonicalReadArguments(index int, args []string) []string {
+	if index == 2 {
+		for _, family := range []string{"-4", "-6"} {
+			if slices.Equal(args, []string{"-N", family, "rule", "show"}) {
+				return []string{family, "-N", "rule", "show"}
+			}
+		}
+		if slices.Equal(args, []string{"-N", "rule", "show"}) {
+			return []string{"-4", "-N", "rule", "show"}
+		}
+		if slices.Equal(args, []string{"rule", "show"}) {
+			return []string{"-4", "rule", "show"}
+		}
+	}
+	return slices.Clone(args)
+}
+
 // Separate read-only ABI. No effect word, batch file, shell, namespace switch
 // or external hostname can pass this projection of the original held tools.
 func mihomoLiveReadArguments(index int, args []string) bool {

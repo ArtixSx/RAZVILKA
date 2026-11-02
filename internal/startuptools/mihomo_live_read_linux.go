@@ -41,6 +41,7 @@ func (l *Lease) runMihomoLiveRead(original context.Context, name string, args ..
 	if !mihomoLiveReadArguments(index, frozen) {
 		return nil, at("MIHOMO_READ_ABI", nil)
 	}
+	frozen = mihomoLiveCanonicalReadArguments(index, frozen)
 	if err = l.lock(c); err != nil {
 		return nil, err
 	}

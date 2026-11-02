@@ -58,3 +58,49 @@ func TestStaticVersionFactNativePolicyReadObservation(t *testing.T) {
 	}
 	t.Log("actual original IPv4/IPv6 rule read output unchanged; foreign/expired original loan and mutation refused")
 }
+
+func TestStaticVersionFactNativeMihomoNumericReadObservation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	l := staticFactNativeLease(t, ctx)
+	tools, runner, err := l.PolicyRuntimeTools()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, ok := runner.(*policyRunner)
+	if !ok {
+		t.Fatal("original protected policy runner unavailable")
+	}
+	actualArgs := [][]string{{"-N", "rule", "show"}, {"-N", "-6", "rule", "show"}}
+	var expected [2][]byte
+	for n, family := range []string{"-4", "-6"} {
+		expected[n], err = runner.Run(ctx, tools.IP, family, "-N", "rule", "show")
+		if err != nil {
+			t.Fatal("original policy baseline", nativeStages(err))
+		}
+	}
+	var expired context.Context
+	err = l.WithReadOnlyToolObservation(ctx, l.identity, l.digest, func(observed context.Context) error {
+		expired = observed
+		for n, args := range actualArgs {
+			data, err := read.RunMihomoLiveRead(observed, tools.IP, args...)
+			if err != nil {
+				return err
+			}
+			if !bytes.Equal(data, expected[n]) {
+				t.Fatal("same actual IPv4/IPv6 RPDB changed across numeric spelling")
+			}
+		}
+		if _, err := read.RunMihomoLiveRead(observed, tools.IP, "rule", "del", "priority", "207"); !errors.Is(err, ErrUnknown) {
+			t.Fatal("effect crossed original read projection", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal("actual Mihomo numeric RPDB observation", nativeStages(err))
+	}
+	if _, err := read.RunMihomoLiveRead(expired, tools.IP, actualArgs[0]...); !errors.Is(err, ErrUnknown) {
+		t.Fatal("expired original read marker reused", err)
+	}
+	t.Log("actual original Mihomo CORE implicit IPv4/-N-first IPv6 read bytes match canonical policy ABI; effect and late read refused")
+}

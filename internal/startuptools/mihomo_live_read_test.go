@@ -1,6 +1,36 @@
 package startuptools
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
+
+func TestMihomoLiveNumericReadKeepsActualFamiliesAndSelectors(t *testing.T) {
+	for _, pair := range []struct{ input, expected []string }{
+		{[]string{"-N", "rule", "show"}, []string{"-4", "-N", "rule", "show"}},
+		{[]string{"-N", "-4", "rule", "show"}, []string{"-4", "-N", "rule", "show"}},
+		{[]string{"-N", "-6", "rule", "show"}, []string{"-6", "-N", "rule", "show"}},
+		{[]string{"rule", "show"}, []string{"-4", "rule", "show"}},
+		{[]string{"-6", "rule", "show"}, []string{"-6", "rule", "show"}},
+		{[]string{"-4", "-N", "rule", "show"}, []string{"-4", "-N", "rule", "show"}},
+		{[]string{"-N", "route", "show", "table", "main"}, []string{"-N", "route", "show", "table", "main"}},
+		{[]string{"-N", "rule", "show", "table", "207"}, []string{"-N", "rule", "show", "table", "207"}},
+		{[]string{"rule", "del", "priority", "1"}, []string{"rule", "del", "priority", "1"}},
+	} {
+		original := slices.Clone(pair.input)
+		got := mihomoLiveCanonicalReadArguments(2, pair.input)
+		if !slices.Equal(got, pair.expected) || !slices.Equal(pair.input, original) {
+			t.Fatal("read family/selector changed", pair.input, got)
+		}
+		got[0] = "changed caller copy"
+		if !slices.Equal(pair.input, original) {
+			t.Fatal("canonical read shares caller arguments")
+		}
+		if !slices.Equal(mihomoLiveCanonicalReadArguments(0, pair.input), original) {
+			t.Fatal("firewall ABI was rewritten")
+		}
+	}
+}
 
 func TestMihomoLiveReadABINeverAdmitsEffects(t *testing.T) {
 	accepted := [][]string{{"-4", "-N", "rule", "show"}, {"-6", "-j", "route", "show", "table", "all"}, {"-j", "link", "show"}, {"-j", "addr", "show", "dev", "rz-mihomo"}, {"route", "get", "1.1.1.1", "from", "192.168.1.2", "iif", "eth1", "mark", "0x20000000"}, {"route", "show", "table", "main", "match", "192.168.1.2/32"}}
