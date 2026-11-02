@@ -30,4 +30,4 @@ jobs:
           set -euo pipefail
           race_option=""
           if test "${{ matrix.mode }}" = race; then race_option="-race"; fi
-          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot' -v
+          GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot|^TestMihomoColdRuntime|^TestMihomoLiveColdRetirement' -v
