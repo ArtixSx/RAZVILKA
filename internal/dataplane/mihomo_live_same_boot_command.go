@@ -76,7 +76,7 @@ type mihomoSameBootCleanup struct {
 }
 
 func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
-	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || o.read.original.root != o.inputs.statePath || o.read.original.settings != o.inputs.configPath || o.effectUnknown {
+	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || !o.sourceCoordinatesCurrent() || o.effectUnknown {
 		return ErrMihomoLiveRetirement
 	}
 	if err := o.inputs.current(o.inputs.ctx); err != nil {
@@ -221,4 +221,16 @@ func (o *mihomoSameBootCleanup) deleteCommand(ctx context.Context, name string, 
 		}
 	}
 	return false, nil
+}
+
+// RuntimeInactivitySourceReview.settings belongs to the original DNS manager,
+// not the configuration Store. Its genuine CheckCurrent separately verifies
+// that DNS association. Configuration is pinned by the original five-set and
+// input FD; equating these distinct paths refuses every correctly wired CLI.
+func (o *mihomoSameBootCleanup) sourceCoordinatesCurrent() bool {
+	if o == nil || o.inputs == nil || o.read == nil || o.read.original == nil {
+		return false
+	}
+	r := o.read.original
+	return r.self == r && r.manager != nil && r.root == o.inputs.statePath && r.manager.StateRoot == o.inputs.statePath
 }
