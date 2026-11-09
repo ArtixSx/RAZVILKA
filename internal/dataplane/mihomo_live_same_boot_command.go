@@ -112,6 +112,12 @@ func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
 
 func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identity, error) {
 	defer mihomoSameBootNativeOwnerTiming(o, "absence")()
+	return o.observeOriginalAbsence(ctx)
+}
+
+// The same ordered source/process/interface/kernel/source observations are
+// used with or without an original tool read scope. No result survives it.
+func (o *mihomoSameBootCleanup) absentUnscoped(ctx context.Context) (netidentity.Identity, error) {
 	if err := o.current(ctx); err != nil {
 		return netidentity.Identity{}, err
 	}

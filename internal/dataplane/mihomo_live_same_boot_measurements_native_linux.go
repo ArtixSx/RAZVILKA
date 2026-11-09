@@ -47,7 +47,7 @@ func mihomoSameBootMeasureContext(ctx context.Context, phase string) func() {
 		return func() {}
 	}
 	switch phase {
-	case "phase-opening", "phase-intent", "phase-sidecar", "phase-policy", "phase-forwarding", "phase-archive", "phase-terminal", "phase-completed", "prepare", "run", "source-before-sidecar", "source-current", "absence", "home-current", "native-stage", "native-witness-callback", "metadata-current":
+	case "phase-opening", "phase-intent", "phase-sidecar", "phase-policy", "phase-forwarding", "phase-archive", "phase-terminal", "phase-completed", "prepare", "run", "source-before-sidecar", "source-current", "absence", "absence-tool-read", "home-current", "native-stage", "native-witness-callback", "metadata-current":
 	default:
 		return func() {}
 	}
