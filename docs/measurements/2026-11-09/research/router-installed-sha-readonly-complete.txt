@@ -1,0 +1,19 @@
+architecture=aarch64
+sha_tool=/opt/bin/sha256sum
+binary_before=/opt/bin/razvilka 30277794 59152 81ed 0 0 801 277335 1 0 0 1793378803 1793378803 1793378803 4096
+sample=1
+030c9b185c1c313be609c9fb15d27c5c11ae9a96c724ac06285de0d669dd58ba  /opt/bin/razvilka
+real	0m 0.58s
+user	0m 0.57s
+sys	0m 0.00s
+sample=2
+030c9b185c1c313be609c9fb15d27c5c11ae9a96c724ac06285de0d669dd58ba  /opt/bin/razvilka
+real	0m 0.59s
+user	0m 0.56s
+sys	0m 0.01s
+sample=3
+030c9b185c1c313be609c9fb15d27c5c11ae9a96c724ac06285de0d669dd58ba  /opt/bin/razvilka
+real	0m 0.59s
+user	0m 0.58s
+sys	0m 0.00s
+binary_after=/opt/bin/razvilka 30277794 59152 81ed 0 0 801 277335 1 0 0 1793378803 1793378803 1793378803 4096
