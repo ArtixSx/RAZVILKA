@@ -163,14 +163,14 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error {
 		defer domainTCPMeasure("capture-add-guard")(0)
 		return r.observeTools(c, func(observed context.Context) error {
-			return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+			return r.observePreAddFiles(observed, true, func(files *xrayDomainTCPFileObservation) error {
 				return errors.Join(r.currentWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))
 			})
 		})
 	},
 		Preflight: func(c context.Context) error {
 			return r.observeTools(c, func(observed context.Context) error {
-				return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+				return r.observePreAddFiles(observed, true, func(files *xrayDomainTCPFileObservation) error {
 					view, err := r.readWithFiles(observed, files)
 					if err != nil {
 						return err
@@ -191,7 +191,7 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 				// readWithFiles already bookends every actual kernel read with
 				// the original complete process/material Current. Share only its
 				// immutable executable bytes across those SAME two observations.
-				return r.process.withFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+				return r.observePreAddFiles(observed, false, func(files *xrayDomainTCPFileObservation) error {
 					view, err := r.readWithFiles(observed, files)
 					if err != nil {
 						return err
@@ -206,14 +206,14 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 			return count, nil
 		},
 		BeforeDelete: func(context.Context, int) error { return dnscontrol.ErrSyntheticDNSTransitionPending }}
-	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
+	if err := applyDomainTCPOriginalEffects(ctx, runtime, r, baseline); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
 	// COMMON has returned from all actual mutations. This separate readonly
 	// closing comparison cannot lend its view to any command admission.
 	if err := r.observeTools(ctx, func(observed context.Context) error {
-		return r.process.withCurrentFileObservation(observed, func(files *xrayDomainTCPFileObservation) error {
+		return r.observePreAddFiles(observed, true, func(files *xrayDomainTCPFileObservation) error {
 			return errors.Join(r.checkPreparedWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))
 		})
 	}); err != nil {

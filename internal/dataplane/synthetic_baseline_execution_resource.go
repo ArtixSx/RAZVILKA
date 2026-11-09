@@ -233,7 +233,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 			return r.observeTools(c, r.currentInOriginalFileObservation)
 		},
 	}
-	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
+	if err := applyDomainTCPOriginalEffects(ctx, runtime, nil, r); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}

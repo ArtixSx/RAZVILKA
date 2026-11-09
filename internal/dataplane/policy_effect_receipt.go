@@ -164,6 +164,7 @@ type policyEffectSession struct {
 	hash                string
 	borrow              *policyEffectReceiptBorrow
 	nodeTransitPresence *nodeTransitPolicyRuntimeBinding
+	domainPreAdd        *domainTCPPreAddRead
 }
 
 func (s *policyEffectSession) save(ctx context.Context) (result error) {
@@ -320,6 +321,42 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	if err := s.fault("intent", index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
+	if err := s.observeBeforeAdd(ctx, runtime, index); err != nil {
+		return err
+	}
+	if s.domainPreAdd != nil {
+		if ctx.Value(domainTCPPreAddKey{}) != nil {
+			return ErrPolicyAdditionUnknown
+		}
+		// Fixture-only witness: the original command uses no borrowed read.
+		domainTCPMeasure("pre-add-original-command-boundary")(0)
+	}
+	effect := s.plan.Effects[index]
+	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	if err := s.fault("add", index); err != nil {
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	s.doc.Steps[index].State = "added"
+	if err := s.save(ctx); err != nil {
+		s.doc.Steps[index].State = "intent"
+		return errors.Join(ErrPolicyAdditionUnknown, err)
+	}
+	return s.fault("added", index)
+}
+
+// All four observations remain ordered after the durable intent and fault seam.
+// The private domain producer may share immutable original bytes across only
+// this synchronous read sequence. Its closing proof completes before Add.
+func (s *policyEffectSession) observeBeforeAdd(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
+	if s.domainPreAdd != nil {
+		return s.domainPreAdd.observe(ctx, s, runtime, index)
+	}
+	return s.observeBeforeAddUnshared(ctx, runtime, index)
+}
+
+func (s *policyEffectSession) observeBeforeAddUnshared(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
 	present, err := s.exactPresence(ctx, runtime, index)
 	if err != nil || present != 0 {
 		return errors.Join(ErrPolicyAdditionUnknown, ErrPolicyAdditionReceipt, err)
@@ -337,19 +374,7 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	if err := s.guardAfterPresence(ctx, runtime, index); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
-	effect := s.plan.Effects[index]
-	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	if err := s.fault("add", index); err != nil {
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	s.doc.Steps[index].State = "added"
-	if err := s.save(ctx); err != nil {
-		s.doc.Steps[index].State = "intent"
-		return errors.Join(ErrPolicyAdditionUnknown, err)
-	}
-	return s.fault("added", index)
+	return nil
 }
 
 // An earlier parent cannot be removed while any direct child remains active or
@@ -438,6 +463,10 @@ func ApplyPolicyEffectsWithReceipt(ctx context.Context, runtime PolicyEffectRunt
 }
 
 func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions) error {
+	return applyPolicyEffectsWithDomainRead(ctx, runtime, plan, root, options, nil)
+}
+
+func applyPolicyEffectsWithDomainRead(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions, domainRead *domainTCPPreAddRead) error {
 	runtime, presenceOwner, err := preparePolicyEffectRuntime(runtime, plan, root)
 	if err != nil {
 		return err
@@ -448,6 +477,7 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 	}
 	defer s.close()
 	s.nodeTransitPresence = presenceOwner
+	s.domainPreAdd = domainRead
 	if err := s.validateRuntime(runtime); err != nil {
 		return err
 	}

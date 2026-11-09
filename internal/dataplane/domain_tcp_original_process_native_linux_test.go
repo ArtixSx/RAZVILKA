@@ -181,8 +181,19 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 			return errors.New("panic retained live Guard view")
 		}
 		entered = true
-		cancelRequest()
-		<-active.Done()
+		// The pre-Add file loan never replaces the real child's closing Current.
+		// Cancel from its last callback, after a successful actual process read;
+		// no successful read may escape, and the existing cleanup still joins it.
+		loanErr := domainPreAddFileLoan(t, active, resource, func(scoped context.Context, baseline *syntheticBaselineExecutionResource, _ *domainTCPPreAddLoan) error {
+			return withDomainTCPPreAddFiles(scoped, resource, baseline, nil, true, func(*xrayDomainTCPFileObservation) error {
+				cancelRequest()
+				<-active.Done()
+				return nil
+			})
+		})
+		if loanErr == nil || !errors.Is(loanErr, context.Canceled) {
+			return errors.Join(errors.New("cancelled original child escaped pre-Add closing read"), loanErr)
+		}
 		return active.Err()
 	})
 	cancelRequest()

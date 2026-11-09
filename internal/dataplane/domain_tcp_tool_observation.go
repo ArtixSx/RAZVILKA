@@ -115,7 +115,7 @@ func (r *syntheticBaselineExecutionResource) compareInOriginalFileObservation(ct
 	if capture.self != capture || process.self != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
 		return ErrSyntheticBaselineTransition
 	}
-	result := process.withFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
+	result := withDomainTCPPreAddFiles(ctx, process, r, nil, false, func(files *xrayDomainTCPFileObservation) error {
 		return compare(ctx, files)
 	})
 	if r.capture != capture || capture.owner != owner || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
