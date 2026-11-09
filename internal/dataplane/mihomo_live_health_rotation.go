@@ -50,6 +50,20 @@ func (r *mihomoLiveResource) rotateMihomoTransit(ctx context.Context) error {
 		s.mu.Unlock()
 		return errors.Join(ErrExecutionJournal, err)
 	}
+	if s.execution.State == mihomoActiveCheckingState {
+		// Check rotated while committed, before opening this finite cursor.
+		// Its service-probe bookends cannot archive that in-flight journal;
+		// the next committed Check rotates any newly completed cohort. Only
+		// this same original open cursor may defer rotation, never a decoded
+		// checking header or a failed/stopping operation.
+		c, h := r.healthCheck, s.execution.MihomoLiveHealthOperation
+		valid := c != nil && c.self == c && c.owner == r && c.open && !c.failed && !c.stopping && !c.publishing && c.cleanup != nil && h != nil && *h == c.header && h.Phase == "checking"
+		s.mu.Unlock()
+		if !valid {
+			return ErrExecutionJournal
+		}
+		return ctx.Err()
+	}
 	cursor, err := r.prepareTransitArchiveLocked()
 	s.mu.Unlock()
 	if err != nil || cursor == nil {
