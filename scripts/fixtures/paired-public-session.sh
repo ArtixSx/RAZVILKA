@@ -88,10 +88,21 @@ export RAZVILKA_STATE_DIR=/opt/razvilka/state
 export RAZVILKA_RUN_DIR=/opt/razvilka/run
 export RAZVILKA_CACHE=/opt/razvilka/cache
 export RAZVILKA_LOG_DIR=/opt/razvilka/log
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
+ export SSL_CERT_FILE=/opt/etc/razvilka/history-ca.pem
+fi
 exec /opt/bin/sh /opt/etc/razvilka/source-init-0193 "$@"
 SOURCE_INIT
 chmod 755 /opt/etc/init.d/S99razvilka
 ip link set lo up
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
+ # Only this already-proven private mount namespace sees the synthetic catalog
+ # host. No outward link/default route exists; the peer is added by the test.
+ printf '127.0.0.1 localhost\n::1 localhost\n203.0.113.9 www.youtube.com\n' >/opt/etc/razvilka/history-hosts
+ chmod 600 /opt/etc/razvilka/history-hosts
+ mount --bind /opt/etc/razvilka/history-hosts /etc/hosts
+ "$work/cmd.test" -test.run '^TestNativePairedHistoryTLSMaterial$' -test.v -test.count=1 -test.timeout=30s
+fi
 /opt/bin/sh /opt/etc/init.d/S99razvilka start
 # tini is PID1 and joins the actual daemon after the public old-panel Stop.
 # Namespace teardown kills any remaining child on fixture failure.

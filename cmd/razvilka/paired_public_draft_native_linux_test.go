@@ -20,6 +20,7 @@ import (
 type nativePairedDraft struct {
 	candidate strategylab.Candidate
 	stateSHA  string
+	history   *nativePairedHistory
 }
 
 // Only the already running genuine old panel writes this draft. No state JSON,
@@ -30,6 +31,9 @@ func nativePairedPublicDraftBefore(t *testing.T) *nativePairedDraft {
 	if mode == "" {
 		return nil
 	}
+	if mode == "history" {
+		return nativePairedPublicHistoryBefore(t)
+	}
 	if mode != "draft" {
 		t.Fatal("unknown paired draft scenario")
 	}
@@ -38,23 +42,7 @@ func nativePairedPublicDraftBefore(t *testing.T) *nativePairedDraft {
 	if json.Unmarshal(before, &baseline) != nil || len(baseline.Candidates) != 0 || len(baseline.Evidence) != 0 || len(baseline.Selections) != 0 {
 		t.Fatal("old source draft baseline is not empty")
 	}
-	tokenPath := installpath.Config + "/admin.token"
-	info, err := os.Lstat(tokenPath)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() < 32 || info.Size() > 256 {
-		t.Fatal("private fixture source token unavailable")
-	}
-	file, err := os.Open(tokenPath)
-	if err != nil {
-		t.Fatal("private fixture source token unavailable")
-	}
-	data, readErr := io.ReadAll(io.LimitReader(file, 257))
-	after, statErr := file.Stat()
-	closeErr := file.Close()
-	if readErr != nil || statErr != nil || closeErr != nil || len(data) > 256 || int64(len(data)) != info.Size() || !os.SameFile(info, after) || after.Mode() != info.Mode() || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
-		t.Fatal("private fixture source token changed")
-	}
-	token := strings.TrimSpace(string(data))
-	clear(data)
+	token := nativePairedSourceToken(t)
 	// The bearer is held only in memory on a fixed loopback request; it is never
 	// added to process args/logs or passed to the candidate bootstrap executable.
 	body := []byte(`{"pool_id":"tcp-tls","name":"public paired retained draft","arguments":"--filter-tcp=443"}`)
@@ -74,6 +62,10 @@ func nativePairedPublicDraftBefore(t *testing.T) *nativePairedDraft {
 func nativePairedPublicDraftAfter(t *testing.T, draft *nativePairedDraft) {
 	t.Helper()
 	if draft == nil {
+		return
+	}
+	if draft.history != nil {
+		nativePairedPublicHistoryAfter(t, draft)
 		return
 	}
 	path := installpath.State + "/strategy-lab.json"
@@ -111,6 +103,15 @@ func nativePairedDraftSnapshot(t *testing.T, snapshot strategylab.Snapshot, want
 
 func nativePairedDraftHTTP(t *testing.T, method, path string, body []byte, token string) []byte {
 	t.Helper()
+	expected := http.StatusOK
+	if method == http.MethodPost {
+		expected = http.StatusCreated
+	}
+	return nativePairedSourceHTTP(t, method, path, body, token, expected, 5*time.Second)
+}
+
+func nativePairedSourceHTTP(t *testing.T, method, path string, body []byte, token string, expected int, limit time.Duration) []byte {
+	t.Helper()
 	request, err := http.NewRequest(method, "http://127.0.0.1:8787"+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal("fixture request construction failed")
@@ -123,19 +124,37 @@ func nativePairedDraftHTTP(t *testing.T, method, path string, body []byte, token
 	}
 	transport := &http.Transport{Proxy: nil}
 	defer transport.CloseIdleConnections()
-	client := http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := http.Client{Transport: transport, Timeout: limit, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal("actual old fixture request failed")
 	}
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
 	closeErr := response.Body.Close()
-	expected := http.StatusOK
-	if method == http.MethodPost {
-		expected = http.StatusCreated
-	}
 	if readErr != nil || closeErr != nil || len(data) > 64<<10 || response.StatusCode != expected {
 		t.Fatal("actual old fixture request refused", response.StatusCode)
 	}
 	return data
+}
+
+func nativePairedSourceToken(t *testing.T) string {
+	t.Helper()
+	tokenPath := installpath.Config + "/admin.token"
+	info, err := os.Lstat(tokenPath)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() < 32 || info.Size() > 256 {
+		t.Fatal("private fixture source token unavailable")
+	}
+	file, err := os.Open(tokenPath)
+	if err != nil {
+		t.Fatal("private fixture source token unavailable")
+	}
+	data, readErr := io.ReadAll(io.LimitReader(file, 257))
+	after, statErr := file.Stat()
+	closeErr := file.Close()
+	if readErr != nil || statErr != nil || closeErr != nil || len(data) > 256 || int64(len(data)) != info.Size() || !os.SameFile(info, after) || after.Mode() != info.Mode() || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
+		t.Fatal("private fixture source token changed")
+	}
+	token := strings.TrimSpace(string(data))
+	clear(data)
+	return token
 }

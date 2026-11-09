@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 umask 077
-case "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" in ""|draft) ;; *) exit 2 ;; esac
+case "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" in ""|draft|history) ;; *) exit 2 ;; esac
 export RAZVILKA_PAIRED_NATIVE_HISTORY
 test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64 && test "$(id -u)" = 0 || exit 2
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
@@ -66,8 +66,12 @@ grep -F -- '--- PASS: TestNativeConfiguredOld193PairLifecycle ' "$work/native.lo
 if grep -E '^[[:space:]]*--- SKIP:' "$work/native.log"; then exit 1; fi
 if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = draft; then
  grep -F 'actual_public_pair_retained_draft preserved=true original_old_http_writer=true current_reader=true old_live_compatibility=false manual_selection=false' "$work/native.log"
-else
+elif test -z "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}"; then
  printf 'PASS baseline empty configured pair; nonempty draft/history/selection are separate scenarios.\n'
+fi
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
+ grep -F 'actual_old193_history authored_http=true native_validation=true completed_probes=3 frozen_manual_selection=true real_queue_counter_cleanup=true synthetic_private_tls=true public_service_readiness=false' "$work/native.log"
+ grep -F 'actual_public_pair_retained_history preserved=true completed_probes=3 frozen_manual_selection=true original_old_http_writer=true current_reader=true legacy_readiness=false old_live_compatibility=false' "$work/native.log"
 fi
 printf 'PASS configured source0.19.3 -> genuine public bootstrap -> current durable Stop -> public offline restore. Tagged Ubuntu classification; no router/default legacy-layout or old live-reader claim.\n'
 # Only this exact private fixture directory is removed after all assertions.
