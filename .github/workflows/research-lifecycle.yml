@@ -199,3 +199,83 @@ jobs:
           name: research-managed-${{ matrix.build-mode }}-${{ github.sha }}
           path: artifacts/managed
           if-no-files-found: warn
+  domain-preparation-pair:
+    name: DNS preparation recovery pair (diagnostic 30s)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: c4399c948a5f65cf413c879b2b746f1bf80eefaa
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Identical real failure seam on preserved baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f  scripts/fixtures/domain-preparation-baseline.patch' | sha256sum --check --strict
+          git -C baseline apply --check "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"
+          git -C baseline apply "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"
+      - name: Reproduce refusal and prove same-owner cleanup including partial ACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          result=0
+          mkdir -p artifacts/preparation
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/preparation' EXIT
+          for sample in baseline:clean candidate:clean candidate:capture-transaction candidate:standby-transaction; do
+            revision="${sample%%:*}"
+            cut="${sample#*:}"
+            repo="$GITHUB_WORKSPACE"
+            if [ "$revision" = baseline ]; then repo="$GITHUB_WORKSPACE/baseline"; fi
+            ack="$cut"
+            if [ "$cut" = clean ]; then ack=''; fi
+            output="$GITHUB_WORKSPACE/artifacts/preparation/$revision-$cut"
+            mkdir -p "$output"
+            status=0
+            (
+              cd "$repo"
+              sudo env PATH="$PATH" GOTOOLCHAIN=local \
+                GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+                RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+                RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DNS_DETACH=1 \
+                RAZVILKA_DOMAIN_DNS_COEXISTENCE=1 RAZVILKA_DOMAIN_PREPARATION_CUT=1 \
+                RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 RAZVILKA_DOMAIN_FAILURE_ACK="$ack" \
+                RAZVILKA_DOMAIN_PROFILE_OUTPUT="$output" \
+                sh scripts/test-domain-original-native.sh
+            ) 2>&1 | tee "$output/native.log" || status=$?
+            printf 'revision=%s cut=%s exit=%s diagnostic_budget=30\n' "$revision" "$cut" "$status" > "$output/outcome.txt"
+            if ! grep -F 'ACTUAL_PREPARATION_CUT' "$output/native.log"; then result=1; fi
+            if grep -F -- '--- SKIP:' "$output/native.log"; then result=1; fi
+            if [ "$revision" = baseline ]; then
+              if [ "$status" = 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log"; then result=1; fi
+            else
+              if [ "$status" != 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || ! grep -F -- '--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement ' "$output/native.log"; then result=1; fi
+            fi
+          done
+          exit "$result"
+      - name: Retain both successful and failed original scopes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-preparation-${{ github.sha }}
+          path: artifacts/preparation
+          if-no-files-found: error

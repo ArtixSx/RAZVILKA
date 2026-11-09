@@ -19,30 +19,32 @@ import (
 // no process/capture/publication capability. Only the actual emitted capture
 // binds these fields; saved definitions and callback readiness cannot do so.
 type DomainTCPOriginalScope struct {
-	self               *DomainTCPOriginalScope
-	binding            *SyntheticDNSExecutionBinding
-	backend            *BackendInventory
-	gate               *NetworkPolicyAdapter
-	runtime            *LANPolicyRuntime
-	runner             NFQWS2Runner
-	tools              SyntheticDNSCommandTools
-	source             any
-	mu                 sync.Mutex
-	process            *XrayDomainTCPExecutionResource
-	capture            *DomainPolicyTCPCapture
-	baseline           *syntheticBaselineExecutionResource
-	captureResource    *domainTCPCaptureExecutionResource
-	prepared           *DomainPolicyTCPCaptureMapping
-	kernel             *domainTCPBaselineKernelOwner
-	closed             bool
-	cancel             context.CancelFunc
-	publicationOpen    bool // Only the completed original producer opens this phase.
-	standbyReady       bool // Only the actual joined capture finalizer sets this.
-	standbyHistory     *updatecheck.ExecutionHistoryAdmission
-	standbyOwner       *domainTCPStandbyOwner
-	standbyRetirement  *domainTCPStandbyRetirement
-	dnsDetachment      *DomainTCPDetachedStandby
-	dnsDetachmentFault func(string) error // Private CI-only lost-ACK seam; no grant.
+	self                   *DomainTCPOriginalScope
+	binding                *SyntheticDNSExecutionBinding
+	backend                *BackendInventory
+	gate                   *NetworkPolicyAdapter
+	runtime                *LANPolicyRuntime
+	runner                 NFQWS2Runner
+	tools                  SyntheticDNSCommandTools
+	source                 any
+	mu                     sync.Mutex
+	process                *XrayDomainTCPExecutionResource
+	capture                *DomainPolicyTCPCapture
+	baseline               *syntheticBaselineExecutionResource
+	captureResource        *domainTCPCaptureExecutionResource
+	prepared               *DomainPolicyTCPCaptureMapping
+	kernel                 *domainTCPBaselineKernelOwner
+	unpublishedPreparation *domainTCPUnpublishedPreparation
+	closed                 bool
+	cancel                 context.CancelFunc
+	publicationOpen        bool // Only the completed original producer opens this phase.
+	standbyReady           bool // Only the actual joined capture finalizer sets this.
+	standbyHistory         *updatecheck.ExecutionHistoryAdmission
+	standbyOwner           *domainTCPStandbyOwner
+	standbyRetirement      *domainTCPStandbyRetirement
+	dnsDetachment          *DomainTCPDetachedStandby
+	dnsDetachmentFault     func(string) error // Private CI-only lost-ACK seam; no grant.
+	preparationFault       func() error       // CI-only refusal after actual preparation, never readiness.
 }
 
 func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *SyntheticDNSExecutionBinding, backend *BackendInventory) (*DomainTCPOriginalScope, error) {
@@ -167,7 +169,13 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.mu.Lock()
 	o.prepared = prepared
 	resource := o.captureResource
+	fault := o.preparationFault
 	o.mu.Unlock()
+	if fault != nil {
+		if err := fault(); err != nil {
+			return err
+		}
+	}
 	kernel, err := newDomainTCPBaselineKernelOwner(ctx, resource, baseline)
 	if err != nil {
 		return err
