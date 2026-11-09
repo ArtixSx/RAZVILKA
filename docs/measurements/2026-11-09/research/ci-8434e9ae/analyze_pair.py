@@ -87,7 +87,7 @@ def summarize(rows, kind):
                             'rss_read_errors': sum(int(r['rss_read_errors']) for r in group)}
     return output
 
-result = {'run_id': 42634845740, 'baseline': BASE, 'candidate': CANDIDATE,
+result = {'run_id': 42655695626, 'baseline': BASE, 'candidate': CANDIDATE,
           'algorithm': 'current-reuse', 'quantile': 'nearest-rank; first sample excluded from repeated N12',
           'limitations': ['baseline then candidate fixed order', 'cold fixture is not cold OS cache',
                           'controlled loopback namespace and WAN identity, not router/LAN',
