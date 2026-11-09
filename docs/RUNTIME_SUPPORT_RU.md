@@ -14,7 +14,7 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На ea368 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
+| Mihomo | На ea368 все4 isolated lifecycle/manual/recovery PASS; sameboot2ecf normal/race baseline и7/10 ACK cuts PASS; availability остаётся tri-state | Три race ACK cuts превышают реальный120с бюджет; остальные restart/per-plan live readiness и физический LAN |
 | Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на2ecf public empty/draft offline update→restore PASS; история/ручной выбор и совместимый live запуск проверяются отдельно; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 

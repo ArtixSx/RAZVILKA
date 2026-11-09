@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 68d8eed938daf3804e61715622199f2c44fad3c8
+Type: cpu
+Time: 2026-11-09 18:37:30 UTC
+Duration: 18.73s, Total samples = 18.24s (97.40%)
+Showing nodes accounting for 14.77s, 80.98% of 18.24s total
+Dropped 666 nodes (cum <= 0.09s)
+Showing top 35 nodes out of 403
+      flat  flat%   sum%        cum   cum%
+     7.32s 40.13% 40.13%      7.32s 40.13%  crypto/internal/fips140/sha256.blockSHANI
+     5.78s 31.69% 71.82%      5.78s 31.69%  internal/runtime/syscall/linux.Syscall6
+     0.26s  1.43% 73.25%      0.30s  1.64%  runtime.tryDeferToSpanScan
+     0.15s  0.82% 74.07%      0.19s  1.04%  strings.Fields
+     0.14s  0.77% 74.84%      0.41s  2.25%  runtime.scanObject
+     0.11s   0.6% 75.44%      0.11s   0.6%  runtime.nextFreeFast (inline)
+     0.10s  0.55% 75.99%      0.10s  0.55%  runtime.futex
+     0.07s  0.38% 76.37%      0.33s  1.81%  runtime.mallocgcSmallScanNoHeader
+     0.07s  0.38% 76.75%      0.17s  0.93%  runtime.reentersyscall
+     0.06s  0.33% 77.08%      0.25s  1.37%  runtime.newobject
+     0.05s  0.27% 77.36%      0.14s  0.77%  encoding/json.(*Decoder).readValue
+     0.05s  0.27% 77.63%      0.11s   0.6%  encoding/json.appendCompact
+     0.05s  0.27% 77.91%      1.13s  6.20%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.04s  0.22% 78.12%      0.23s  1.26%  encoding/json.(*decodeState).object
+     0.04s  0.22% 78.34%      0.13s  0.71%  reflect.deepValueEqual
+     0.04s  0.22% 78.56%      0.10s  0.55%  runtime.(*sweepLocked).sweep
+     0.04s  0.22% 78.78%      3.81s 20.89%  syscall.Syscall6
+     0.03s  0.16% 78.95%      0.14s  0.77%  encoding/json.structEncoder.encode
+     0.03s  0.16% 79.11%      1.57s  8.61%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.03s  0.16% 79.28%      0.23s  1.26%  runtime.entersyscall
+     0.03s  0.16% 79.44%      0.10s  0.55%  runtime.mProf_FlushLocked
+     0.03s  0.16% 79.61%      0.68s  3.73%  runtime.mallocgc
+     0.03s  0.16% 79.77%      0.17s  0.93%  runtime.mallocgcSmallNoscan
+     0.03s  0.16% 79.93%      0.33s  1.81%  runtime.scanSpan
+     0.02s  0.11% 80.04%      0.10s  0.55%  github.com/ArtixSx/razvilka/internal/dataplane.copyPolicyEffectPlan
+     0.02s  0.11% 80.15%      0.21s  1.15%  os.(*File).readdir
+     0.02s  0.11% 80.26%      0.16s  0.88%  os.(*rawConn).Control
+     0.02s  0.11% 80.37%      0.24s  1.32%  runtime.growslice
+     0.02s  0.11% 80.48%      0.13s  0.71%  runtime.makeslice
+     0.02s  0.11% 80.59%      0.20s  1.10%  runtime.markroot
+     0.02s  0.11% 80.70%      0.10s  0.55%  runtime.sweepone
+     0.02s  0.11% 80.81%      5.71s 31.30%  syscall.RawSyscall6
+     0.01s 0.055% 80.87%      7.33s 40.19%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s 0.055% 80.92%      0.23s  1.26%  encoding/json.(*decodeState).value
+     0.01s 0.055% 80.98%      0.11s   0.6%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForObservation.func1

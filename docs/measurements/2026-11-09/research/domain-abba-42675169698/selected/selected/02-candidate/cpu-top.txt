@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 26db7ef6e7d4049c501898158c1e82393338a193
+Type: cpu
+Time: 2026-11-09 18:36:45 UTC
+Duration: 18.84s, Total samples = 16.89s (89.63%)
+Showing nodes accounting for 14.05s, 83.19% of 16.89s total
+Dropped 632 nodes (cum <= 0.08s)
+Showing top 35 nodes out of 420
+      flat  flat%   sum%        cum   cum%
+     6.45s 38.19% 38.19%      6.45s 38.19%  internal/runtime/syscall/linux.Syscall6
+     6.13s 36.29% 74.48%      6.13s 36.29%  crypto/internal/fips140/sha256.blockSHANI
+     0.21s  1.24% 75.73%      0.21s  1.24%  memeqbody
+     0.16s  0.95% 76.67%      0.23s  1.36%  strings.Fields
+     0.13s  0.77% 77.44%      0.13s  0.77%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.09s  0.53% 77.98%      0.09s  0.53%  runtime.rtsigprocmask
+     0.08s  0.47% 78.45%      0.09s  0.53%  runtime.(*mspan).writeHeapBitsSmall
+     0.08s  0.47% 78.92%      0.13s  0.77%  runtime.exitsyscall
+     0.06s  0.36% 79.28%      0.68s  4.03%  runtime.mallocgc
+     0.06s  0.36% 79.63%      0.28s  1.66%  runtime.newobject
+     0.05s   0.3% 79.93%      6.41s 37.95%  syscall.RawSyscall6
+     0.04s  0.24% 80.17%      0.12s  0.71%  encoding/json.structEncoder.encode
+     0.04s  0.24% 80.40%      0.18s  1.07%  reflect.deepValueEqual
+     0.04s  0.24% 80.64%      0.11s  0.65%  runtime.reentersyscall
+     0.04s  0.24% 80.88%      3.75s 22.20%  syscall.Syscall6
+     0.03s  0.18% 81.05%      0.13s  0.77%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.03s  0.18% 81.23%      1.47s  8.70%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.18% 81.41%      1.07s  6.34%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.03s  0.18% 81.59%      0.21s  1.24%  runtime.growslice
+     0.03s  0.18% 81.76%      0.38s  2.25%  runtime.mallocgcSmallScanNoHeader
+     0.02s  0.12% 81.88%      0.25s  1.48%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.02s  0.12% 82.00%      0.27s  1.60%  github.com/ArtixSx/razvilka/internal/dnscontrol.providersFor
+     0.02s  0.12% 82.12%      0.23s  1.36%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+     0.02s  0.12% 82.24%      1.71s 10.12%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.12% 82.36%      0.16s  0.95%  os.(*File).readdir
+     0.02s  0.12% 82.47%      0.23s  1.36%  os.(*rawConn).Control
+     0.02s  0.12% 82.59%      0.14s  0.83%  runtime.mallocgcSmallNoscan
+     0.02s  0.12% 82.71%      0.09s  0.53%  runtime.slicebytetostring
+     0.02s  0.12% 82.83%      1.03s  6.10%  syscall.read
+     0.01s 0.059% 82.89%      6.15s 36.41%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s 0.059% 82.95%      6.14s 36.35%  crypto/internal/fips140/sha256.block
+     0.01s 0.059% 83.01%      0.34s  2.01%  encoding/json.(*Decoder).Decode
+     0.01s 0.059% 83.07%      0.16s  0.95%  encoding/json.(*decodeState).literalStore
+     0.01s 0.059% 83.13%      0.23s  1.36%  encoding/json.(*decodeState).object
+     0.01s 0.059% 83.19%      0.55s  3.26%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation

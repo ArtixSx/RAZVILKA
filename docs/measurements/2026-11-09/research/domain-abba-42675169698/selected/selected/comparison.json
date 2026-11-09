@@ -1,0 +1,508 @@
+{
+  "baseline": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "candidate": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "scenario": "selected",
+  "samples": [
+    {
+      "sample": 1,
+      "side": "baseline",
+      "exit_status": 1,
+      "status": "fail",
+      "native_test_pass": false,
+      "original_status_valid": true,
+      "diagnostic_evidence_complete": true,
+      "descendant_boundary": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "5.867367413s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "873.41498ms"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "641.220446ms"
+        },
+        "process-current": {
+          "calls": 325,
+          "bytes": 0,
+          "elapsed": "4.311026362s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.23627255s"
+        },
+        "whole-executable-hash": {
+          "calls": 126,
+          "bytes": 4608753156,
+          "elapsed": "4.041837401s"
+        },
+        "observed_executable_io": {
+          "calls": 126,
+          "bytes": 4608753156
+        }
+      },
+      "first_dns_answer_observed": false,
+      "selected_tls_timeout": false,
+      "gen1_publication_failure": true,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.73s)"
+      ]
+    },
+    {
+      "sample": 2,
+      "side": "candidate",
+      "exit_status": 1,
+      "status": "fail",
+      "native_test_pass": false,
+      "original_status_valid": true,
+      "diagnostic_evidence_complete": true,
+      "descendant_boundary": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "5.375423991s"
+        },
+        "executable-image-capture": {
+          "calls": 48,
+          "bytes": 1755715488,
+          "elapsed": "1.661249354s"
+        },
+        "executable-image-compare": {
+          "calls": 47,
+          "bytes": 1719138082,
+          "elapsed": "333.903191ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "242.544\u00b5s"
+        },
+        "kernel-observe": {
+          "calls": 4,
+          "bytes": 0,
+          "elapsed": "1.542340964s"
+        },
+        "mapping-compare": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "1.622963634s"
+        },
+        "process-current": {
+          "calls": 375,
+          "bytes": 0,
+          "elapsed": "4.571987474s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "1.837479688s"
+        },
+        "whole-executable-hash": {
+          "calls": 34,
+          "bytes": 1243631804,
+          "elapsed": "1.081385645s"
+        },
+        "observed_executable_io": {
+          "calls": 129,
+          "bytes": 4718485374
+        }
+      },
+      "first_dns_answer_observed": false,
+      "selected_tls_timeout": false,
+      "gen1_publication_failure": true,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.48s)"
+      ]
+    },
+    {
+      "sample": 3,
+      "side": "candidate",
+      "exit_status": 1,
+      "status": "fail",
+      "native_test_pass": false,
+      "original_status_valid": true,
+      "diagnostic_evidence_complete": true,
+      "descendant_boundary": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "5.382335035s"
+        },
+        "executable-image-capture": {
+          "calls": 48,
+          "bytes": 1755715488,
+          "elapsed": "1.69263177s"
+        },
+        "executable-image-compare": {
+          "calls": 47,
+          "bytes": 1719138082,
+          "elapsed": "340.147894ms"
+        },
+        "executable-image-storage": {
+          "calls": 1,
+          "bytes": 36577406,
+          "elapsed": "199.159\u00b5s"
+        },
+        "kernel-observe": {
+          "calls": 4,
+          "bytes": 0,
+          "elapsed": "1.534211091s"
+        },
+        "mapping-compare": {
+          "calls": 3,
+          "bytes": 0,
+          "elapsed": "1.614086141s"
+        },
+        "process-current": {
+          "calls": 375,
+          "bytes": 0,
+          "elapsed": "4.592271133s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "1.889829106s"
+        },
+        "whole-executable-hash": {
+          "calls": 34,
+          "bytes": 1243631804,
+          "elapsed": "1.086073289s"
+        },
+        "observed_executable_io": {
+          "calls": 129,
+          "bytes": 4718485374
+        }
+      },
+      "first_dns_answer_observed": false,
+      "selected_tls_timeout": false,
+      "gen1_publication_failure": true,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.37s)"
+      ]
+    },
+    {
+      "sample": 4,
+      "side": "baseline",
+      "exit_status": 1,
+      "status": "fail",
+      "native_test_pass": false,
+      "original_status_valid": true,
+      "diagnostic_evidence_complete": true,
+      "descendant_boundary": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "joined": {
+        "capture-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "6.01259775s"
+        },
+        "kernel-observe": {
+          "calls": 2,
+          "bytes": 0,
+          "elapsed": "860.648141ms"
+        },
+        "mapping-compare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "639.225856ms"
+        },
+        "process-current": {
+          "calls": 325,
+          "bytes": 0,
+          "elapsed": "4.374590484s"
+        },
+        "standby-prepare": {
+          "calls": 1,
+          "bytes": 0,
+          "elapsed": "2.269740295s"
+        },
+        "whole-executable-hash": {
+          "calls": 126,
+          "bytes": 4608753156,
+          "elapsed": "4.02750376s"
+        },
+        "observed_executable_io": {
+          "calls": 126,
+          "bytes": 4608753156
+        }
+      },
+      "first_dns_answer_observed": false,
+      "selected_tls_timeout": false,
+      "gen1_publication_failure": true,
+      "native_outcomes": [
+        "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (20.38s)"
+      ]
+    }
+  ],
+  "all_candidate_samples_pass": false,
+  "evidence": {
+    "provenance.json": {
+      "bytes": 1261,
+      "sha256": "4ea1e157f10bc78cc00bc9ff3b726dbce4acc4c280960e709632a2c529d0281b"
+    },
+    "unchanged-fixtures.txt": {
+      "bytes": 445,
+      "sha256": "29fdcf37a3499e55dd3c6a5ecc2d844cae0f6d683b46bdbb6e41ea38a48756c9"
+    },
+    "01-baseline/status.txt": {
+      "bytes": 164,
+      "sha256": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548"
+    },
+    "01-baseline/log-capture.json": {
+      "bytes": 293,
+      "sha256": "07ed2898b3e1a9384545cacb636b23b249cb2d6337c28120f9d4afb9570426b7"
+    },
+    "01-baseline/native.log": {
+      "bytes": 39685,
+      "sha256": "21d5a0f9d58360b7b15d23bf103147e7ac3798783fcd31b6bd14c93860e2312e"
+    },
+    "01-baseline/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "01-baseline/supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "01-baseline/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "01-baseline/cpu-top.txt": {
+      "bytes": 3458,
+      "sha256": "7e1dac79a752b38d08545ba36209b032e9ede2bba594f78f164c3b18ae0650e6"
+    },
+    "01-baseline/original-run.cpu.pprof": {
+      "bytes": 80340,
+      "sha256": "0d3c3a14022d190ba93b6bca8455f0de61b599bc68e8849e10db7b6c3b04e184"
+    },
+    "01-baseline/supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "01-baseline/cpu-cumulative.txt": {
+      "bytes": 4767,
+      "sha256": "9c26fd84ad48f35e3ebe7c417568df135bef42184deb89b40696555612a03a58"
+    },
+    "04-baseline/status.txt": {
+      "bytes": 164,
+      "sha256": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548"
+    },
+    "04-baseline/log-capture.json": {
+      "bytes": 293,
+      "sha256": "d81bd4d0a57e0557368b2e1040e1daaeea88c0ba38c8278055e77d540bcd5a86"
+    },
+    "04-baseline/native.log": {
+      "bytes": 39362,
+      "sha256": "60a22a0af5c0e1c180ab462ad9ed8f527f8c76e4b1ab1b54122fc4f4a57045a3"
+    },
+    "04-baseline/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "04-baseline/supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "04-baseline/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "04-baseline/cpu-top.txt": {
+      "bytes": 2984,
+      "sha256": "1a64e722816127dec329ed7487814f2a570949d235c0f666e8460819e55cc986"
+    },
+    "04-baseline/original-run.cpu.pprof": {
+      "bytes": 81851,
+      "sha256": "87940fe9462ec8fe2f119d4ed100b18104d0a269c9411426e04a7b5f48b05a67"
+    },
+    "04-baseline/supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "04-baseline/cpu-cumulative.txt": {
+      "bytes": 4777,
+      "sha256": "4e3df53dfed62e7563534bb7416f6cd06571c4b7ce863bd7b82fb9a4b346ff28"
+    },
+    "03-candidate/status.txt": {
+      "bytes": 164,
+      "sha256": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548"
+    },
+    "03-candidate/log-capture.json": {
+      "bytes": 293,
+      "sha256": "9c9c36a162b653c920fe1e7115f9eab0f366944b09e5ad7ec5ee9b13c38da6c1"
+    },
+    "03-candidate/native.log": {
+      "bytes": 56708,
+      "sha256": "099eee599207369d8d0ff5d36bcb8177bb67ef40480dba14c6504da4eee158ab"
+    },
+    "03-candidate/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "03-candidate/supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "03-candidate/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "03-candidate/cpu-top.txt": {
+      "bytes": 3275,
+      "sha256": "650504641dd4178453396264735dc6fa676859cacca113691ee4bab902765410"
+    },
+    "03-candidate/original-run.cpu.pprof": {
+      "bytes": 79063,
+      "sha256": "a69b3499b08a60da2ae8027273fb1d09e8dfcad0490e17e5386de6ffc82c982a"
+    },
+    "03-candidate/supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "03-candidate/cpu-cumulative.txt": {
+      "bytes": 4772,
+      "sha256": "a6c18e3b3fe10fe1ade8c9833a6193e61096a21267fdc2a0c85117220f5ffbf2"
+    },
+    "control-failure/log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "control-failure/native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "control-failure/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "control-failure/supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "control-failure/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "control-orphan/log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "control-orphan/native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "control-orphan/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "control-orphan/supervisor.json": {
+      "bytes": 226,
+      "sha256": "d92d6dd58687ee276d477f97f6c9887b3b3722a74ff553547486bee593815455"
+    },
+    "control-orphan/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "02-candidate/status.txt": {
+      "bytes": 164,
+      "sha256": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548"
+    },
+    "02-candidate/log-capture.json": {
+      "bytes": 293,
+      "sha256": "b69254d6bf1a84b88c86d4889253b1f810a7bc38cebe366f8037c774a4fbc439"
+    },
+    "02-candidate/native.log": {
+      "bytes": 53524,
+      "sha256": "6adab5090e9204e4e31a807107d79254dac272959af2a194d454d6205ec75ca8"
+    },
+    "02-candidate/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "02-candidate/supervisor.json": {
+      "bytes": 226,
+      "sha256": "255e676123138a054bb5e69ba1c7ec0965a7b08573a80f9b9bc7f2fe294061a5"
+    },
+    "02-candidate/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "02-candidate/cpu-top.txt": {
+      "bytes": 3168,
+      "sha256": "cabf666853005cb2d49ba894b84a4f9911ab7d47329ac830e4c462aa682ffd92"
+    },
+    "02-candidate/original-run.cpu.pprof": {
+      "bytes": 78711,
+      "sha256": "e81a8d2f5e71ed7b1fb7ca5f0f942caa47ba81ff0aec12dafc6b9dae5b4a5c84"
+    },
+    "02-candidate/supervisor-status.txt": {
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    "02-candidate/cpu-cumulative.txt": {
+      "bytes": 4772,
+      "sha256": "1d109cf39c1662c02c9960edf580f0c69fab108204d1e9f3cec7fc8afdaaefe8"
+    },
+    "control-clean/log-capture.json": {
+      "bytes": 285,
+      "sha256": "3676db5e113333237a54957fec64f0e8e6bb24e56889e362c2875a750bc67aee"
+    },
+    "control-clean/native.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "control-clean/log-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "control-clean/supervisor.json": {
+      "bytes": 226,
+      "sha256": "e4fb57d71ca65d3e5c3a3970da30c9b77a94870c67ba483d290880816eb7ef46"
+    },
+    "control-clean/exit-status.txt": {
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  }
+}

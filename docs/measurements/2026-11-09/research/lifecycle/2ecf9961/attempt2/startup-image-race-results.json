@@ -1,0 +1,98 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "job_id": 129353748165,
+  "mode": "race",
+  "raw_sha256": "036fd05efbe3403ccc10bc050e724d6a278ed6cd4f6979cda89ef5cc486b4351",
+  "actual_images": 132,
+  "retained_bytes": 7819392,
+  "complete_pair_payload_bytes": 15638784,
+  "benchmark": {
+    "single/original_sha": {
+      "samples": [
+        {
+          "ns_per_op": 11899020,
+          "bytes_per_op": 1317499,
+          "allocs_per_op": 1655
+        },
+        {
+          "ns_per_op": 12013829,
+          "bytes_per_op": 1207360,
+          "allocs_per_op": 1652
+        },
+        {
+          "ns_per_op": 11681543,
+          "bytes_per_op": 1180078,
+          "allocs_per_op": 1652
+        }
+      ],
+      "median": {
+        "ns_per_op": 11899020,
+        "bytes_per_op": 1207360,
+        "allocs_per_op": 1652
+      }
+    },
+    "single/capture_sha_clear": {
+      "samples": [
+        {
+          "ns_per_op": 38598471,
+          "bytes_per_op": 9458469,
+          "allocs_per_op": 1952
+        },
+        {
+          "ns_per_op": 37735578,
+          "bytes_per_op": 9313648,
+          "allocs_per_op": 1946
+        },
+        {
+          "ns_per_op": 38676812,
+          "bytes_per_op": 9360165,
+          "allocs_per_op": 1949
+        }
+      ],
+      "median": {
+        "ns_per_op": 38598471,
+        "bytes_per_op": 9360165,
+        "allocs_per_op": 1949
+      }
+    },
+    "single/repeat_full_bytes": {
+      "samples": [
+        {
+          "ns_per_op": 18720286,
+          "bytes_per_op": 1132292,
+          "allocs_per_op": 1515
+        },
+        {
+          "ns_per_op": 19191295,
+          "bytes_per_op": 1286668,
+          "allocs_per_op": 1521
+        },
+        {
+          "ns_per_op": 18507888,
+          "bytes_per_op": 1170610,
+          "allocs_per_op": 1517
+        }
+      ],
+      "median": {
+        "ns_per_op": 18720286,
+        "bytes_per_op": 1170610,
+        "allocs_per_op": 1517
+      }
+    }
+  },
+  "pass_counts": {
+    "TestStartupImageMeasurementSourceParity": 3,
+    "TestStartupImageMeasurementActualParity": 3,
+    "TestStartupImageMeasurementFixedSlot": 0,
+    "TestStartupImageMeasurementConcurrentSlot": 0,
+    "TestStartupImageMeasurementPairStorageAndFallback": 0,
+    "TestStartupImageMeasurementPairFailureCleanup": 0
+  },
+  "limits": [
+    "Same-host warm actual132file full source reads; not whole-route speed, RSS, cold filesystem or router proof.",
+    "First-slot pair includes allocation/capture/compare/clear; warm pair excludes once retained backing allocation but includes capture/compare/clear.",
+    "Production remains unchanged pending both modes and independent lifetime review."
+  ]
+}

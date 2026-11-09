@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 26db7ef6e7d4049c501898158c1e82393338a193
+Type: cpu
+Time: 2026-11-09 18:37:08 UTC
+Duration: 18.72s, Total samples = 16.84s (89.95%)
+Showing nodes accounting for 14.25s, 84.62% of 16.84s total
+Dropped 631 nodes (cum <= 0.08s)
+Showing top 35 nodes out of 421
+      flat  flat%   sum%        cum   cum%
+     6.74s 40.02% 40.02%      6.74s 40.02%  internal/runtime/syscall/linux.Syscall6
+     6.13s 36.40% 76.43%      6.13s 36.40%  crypto/internal/fips140/sha256.blockSHANI
+     0.13s  0.77% 77.20%      0.13s  0.77%  memeqbody
+     0.13s  0.77% 77.97%      0.21s  1.25%  strings.Fields
+     0.12s  0.71% 78.68%      0.12s  0.71%  runtime.memclrNoHeapPointers
+     0.11s  0.65% 79.33%      0.11s  0.65%  runtime.nextFreeFast (inline)
+     0.09s  0.53% 79.87%      0.09s  0.53%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.09s  0.53% 80.40%      0.09s  0.53%  runtime.rtsigprocmask
+     0.07s  0.42% 80.82%      0.14s  0.83%  encoding/json.(*Decoder).readValue
+     0.07s  0.42% 81.24%      0.09s  0.53%  encoding/json.appendCompact
+     0.07s  0.42% 81.65%      0.09s  0.53%  reflect.Value.Field
+     0.05s   0.3% 81.95%      4.27s 25.36%  syscall.Syscall6
+     0.04s  0.24% 82.19%      0.15s  0.89%  reflect.deepValueEqual
+     0.04s  0.24% 82.42%      0.35s  2.08%  runtime.mallocgcSmallScanNoHeader
+     0.04s  0.24% 82.66%      0.15s  0.89%  runtime.reentersyscall
+     0.03s  0.18% 82.84%      1.63s  9.68%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.03s  0.18% 83.02%      0.18s  1.07%  runtime.growslice
+     0.03s  0.18% 83.19%      0.64s  3.80%  runtime.mallocgc
+     0.02s  0.12% 83.31%      6.15s 36.52%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.02s  0.12% 83.43%      0.13s  0.77%  encoding/json.(*decodeState).object
+     0.02s  0.12% 83.55%      0.24s  1.43%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+     0.02s  0.12% 83.67%      0.27s  1.60%  os.(*File).Stat
+     0.02s  0.12% 83.79%      0.18s  1.07%  runtime.mallocgcSmallNoscan
+     0.02s  0.12% 83.91%      0.25s  1.48%  runtime.newobject
+     0.02s  0.12% 84.03%      6.63s 39.37%  syscall.RawSyscall6
+     0.01s 0.059% 84.09%      0.10s  0.59%  encoding/json.structEncoder.encode
+     0.01s 0.059% 84.14%      5.35s 31.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).currentWithFiles
+     0.01s 0.059% 84.20%      0.28s  1.66%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+     0.01s 0.059% 84.26%      0.67s  3.98%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.01s 0.059% 84.32%      2.06s 12.23%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.01s 0.059% 84.38%      0.25s  1.48%  github.com/ArtixSx/razvilka/internal/nodestore.(*Store).load
+     0.01s 0.059% 84.44%      0.14s  0.83%  github.com/ArtixSx/razvilka/internal/nodestore.decodeKnownFields
+     0.01s 0.059% 84.50%      0.30s  1.78%  github.com/ArtixSx/razvilka/internal/operationgate.readControlCurrent
+     0.01s 0.059% 84.56%      0.13s  0.77%  github.com/ArtixSx/razvilka/internal/ownedfs.(*Root).ReadLimited
+     0.01s 0.059% 84.62%      0.15s  0.89%  github.com/ArtixSx/razvilka/internal/ownedfs.Open

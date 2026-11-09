@@ -1,0 +1,182 @@
+{
+  "sha": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "run_id": 42677249225,
+  "attempt": 1,
+  "job_id": 129361850160,
+  "mode": "race",
+  "raw_sha256": "186ad712c815b07e1d2fb6d48779faacf7e2e13084334608829a20bb3e4f0cdb",
+  "actual_images": 132,
+  "retained_bytes": 7819392,
+  "complete_pair_payload_bytes": 15638784,
+  "benchmark": {
+    "single/original_sha": {
+      "samples": [
+        {
+          "ns_per_op": 11138604,
+          "bytes_per_op": 1292013,
+          "allocs_per_op": 1655
+        },
+        {
+          "ns_per_op": 11363621,
+          "bytes_per_op": 1314778,
+          "allocs_per_op": 1656
+        },
+        {
+          "ns_per_op": 11319582,
+          "bytes_per_op": 1205553,
+          "allocs_per_op": 1652
+        }
+      ],
+      "median": {
+        "ns_per_op": 11319582,
+        "bytes_per_op": 1292013,
+        "allocs_per_op": 1655
+      }
+    },
+    "single/capture_sha_clear": {
+      "samples": [
+        {
+          "ns_per_op": 39379528,
+          "bytes_per_op": 9505074,
+          "allocs_per_op": 1955
+        },
+        {
+          "ns_per_op": 38735887,
+          "bytes_per_op": 9360077,
+          "allocs_per_op": 1948
+        },
+        {
+          "ns_per_op": 38568410,
+          "bytes_per_op": 9392845,
+          "allocs_per_op": 1949
+        }
+      ],
+      "median": {
+        "ns_per_op": 38735887,
+        "bytes_per_op": 9392845,
+        "allocs_per_op": 1949
+      }
+    },
+    "single/repeat_full_bytes": {
+      "samples": [
+        {
+          "ns_per_op": 18105635,
+          "bytes_per_op": 1258021,
+          "allocs_per_op": 1520
+        },
+        {
+          "ns_per_op": 17796074,
+          "bytes_per_op": 1249808,
+          "allocs_per_op": 1520
+        },
+        {
+          "ns_per_op": 17910968,
+          "bytes_per_op": 1215581,
+          "allocs_per_op": 1518
+        }
+      ],
+      "median": {
+        "ns_per_op": 17910968,
+        "bytes_per_op": 1249808,
+        "allocs_per_op": 1520
+      }
+    },
+    "pair/original_two_sha": {
+      "samples": [
+        {
+          "ns_per_op": 22538531,
+          "bytes_per_op": 2586665,
+          "allocs_per_op": 3311
+        },
+        {
+          "ns_per_op": 22353702,
+          "bytes_per_op": 2257200,
+          "allocs_per_op": 3300
+        },
+        {
+          "ns_per_op": 22086573,
+          "bytes_per_op": 2522681,
+          "allocs_per_op": 3308
+        }
+      ],
+      "median": {
+        "ns_per_op": 22353702,
+        "bytes_per_op": 2522681,
+        "allocs_per_op": 3308
+      }
+    },
+    "pair/first_slot_pair_clear": {
+      "samples": [
+        {
+          "ns_per_op": 60210834,
+          "bytes_per_op": 10532096,
+          "allocs_per_op": 3341
+        },
+        {
+          "ns_per_op": 60540728,
+          "bytes_per_op": 10540312,
+          "allocs_per_op": 3343
+        },
+        {
+          "ns_per_op": 60120268,
+          "bytes_per_op": 10491160,
+          "allocs_per_op": 3341
+        }
+      ],
+      "median": {
+        "ns_per_op": 60210834,
+        "bytes_per_op": 10532096,
+        "allocs_per_op": 3341
+      }
+    },
+    "pair/warm_slot_pair_clear": {
+      "samples": [
+        {
+          "ns_per_op": 50258932,
+          "bytes_per_op": 2646992,
+          "allocs_per_op": 3336
+        },
+        {
+          "ns_per_op": 49089462,
+          "bytes_per_op": 2328776,
+          "allocs_per_op": 3325
+        },
+        {
+          "ns_per_op": 50167582,
+          "bytes_per_op": 2547229,
+          "allocs_per_op": 3332
+        }
+      ],
+      "median": {
+        "ns_per_op": 50167582,
+        "bytes_per_op": 2547229,
+        "allocs_per_op": 3332
+      }
+    }
+  },
+  "pass_counts": {
+    "TestStartupImageMeasurementSourceParity": 3,
+    "TestStartupImageMeasurementActualParity": 3,
+    "TestStartupImageMeasurementFixedSlot": 3,
+    "TestStartupImageMeasurementConcurrentSlot": 3,
+    "TestStartupImageMeasurementPairStorageAndFallback": 3,
+    "TestStartupImageMeasurementPairFailureCleanup": 3
+  },
+  "limits": [
+    "Same-host warm actual132file full source reads; not whole-route speed, RSS, cold filesystem or router proof.",
+    "First-slot pair includes allocation/capture/compare/clear; warm pair excludes once retained backing allocation but includes capture/compare/clear.",
+    "Production remains unchanged pending both modes and independent lifetime review.",
+    "Each mode compares its own same-host pair; production AMD EPYC and race Intel Xeon are different hosts, so cross-mode delta is not isolated race-instrumentation cost."
+  ],
+  "pair_change_percent": {
+    "first_slot_pair_clear": 169.35508937177386,
+    "warm_slot_pair_clear": 124.42628071180337
+  },
+  "decision": "No production promotion: race full pair regresses strongly despite normal gain. Do not specialize away race evidence or claim whole-route improvement.",
+  "cpu_models": [
+    "INTEL(R) XEON(R) PLATINUM 8573C"
+  ],
+  "architectures": [
+    "amd64"
+  ]
+}

@@ -1,0 +1,1193 @@
+{
+  "attempt": 1,
+  "conclusion": "failure",
+  "headSha": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "jobs": [
+    {
+      "completedAt": "2026-11-09T18:52:43Z",
+      "conclusion": "failure",
+      "databaseId": 129361849756,
+      "name": "Domain native strict / canceled-ready",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:15Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:23Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:29Z",
+          "conclusion": "success",
+          "name": "Same pinned official binary and namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:22Z",
+          "conclusion": "success",
+          "name": "Actual held-file reads and mutation rejection",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:08Z",
+          "conclusion": "success",
+          "name": "Original child cancellation and held mount identity",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:11Z",
+          "conclusion": "success",
+          "name": "Full-byte observation storage and lifetime",
+          "number": 7,
+          "startedAt": "2026-11-09T18:51:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:15Z",
+          "conclusion": "success",
+          "name": "Fresh network namespace identity and mount boundary",
+          "number": 8,
+          "startedAt": "2026-11-09T18:51:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:25Z",
+          "conclusion": "failure",
+          "name": "Original scope and cleanup with unchanged production deadlines",
+          "number": 9,
+          "startedAt": "2026-11-09T18:51:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:25Z",
+          "conclusion": "success",
+          "name": "Bounded original CPU attribution (including failed scenarios)",
+          "number": 10,
+          "startedAt": "2026-11-09T18:52:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:39Z",
+          "conclusion": "success",
+          "name": "Measure complete mountinfo reads separately from route deadlines",
+          "number": 11,
+          "startedAt": "2026-11-09T18:52:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:39Z",
+          "conclusion": "skipped",
+          "name": "Complete pinned Xray hash reads and cancellation (measurement only)",
+          "number": 12,
+          "startedAt": "2026-11-09T18:52:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:40Z",
+          "conclusion": "success",
+          "name": "Preserve original clocks and failures",
+          "number": 13,
+          "startedAt": "2026-11-09T18:52:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:40Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 25,
+          "startedAt": "2026-11-09T18:52:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:40Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 26,
+          "startedAt": "2026-11-09T18:52:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:41Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 27,
+          "startedAt": "2026-11-09T18:52:40Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361849756"
+    },
+    {
+      "completedAt": "2026-11-09T18:50:07Z",
+      "conclusion": "failure",
+      "databaseId": 129361849964,
+      "name": "Configured old193 public paired restore / history",
+      "startedAt": "2026-11-09T18:48:07Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:15Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:22Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:31Z",
+          "conclusion": "success",
+          "name": "Install disposable namespace fixture dependencies",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:05Z",
+          "conclusion": "failure",
+          "name": "Actual configured old source bootstrap and public offline restore",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:05Z",
+          "conclusion": "success",
+          "name": "Preserve bounded public workflow evidence",
+          "number": 6,
+          "startedAt": "2026-11-09T18:50:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:05Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 11,
+          "startedAt": "2026-11-09T18:50:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:06Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 12,
+          "startedAt": "2026-11-09T18:50:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:06Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-11-09T18:50:06Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361849964"
+    },
+    {
+      "completedAt": "2026-11-09T18:53:57Z",
+      "conclusion": "failure",
+      "databaseId": 129361849985,
+      "name": "Domain native strict / selected",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:19Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:27Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:32Z",
+          "conclusion": "success",
+          "name": "Same pinned official binary and namespace tools",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:31Z",
+          "conclusion": "success",
+          "name": "Actual held-file reads and mutation rejection",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:29Z",
+          "conclusion": "success",
+          "name": "Original child cancellation and held mount identity",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:32Z",
+          "conclusion": "success",
+          "name": "Full-byte observation storage and lifetime",
+          "number": 7,
+          "startedAt": "2026-11-09T18:51:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:37Z",
+          "conclusion": "success",
+          "name": "Fresh network namespace identity and mount boundary",
+          "number": 8,
+          "startedAt": "2026-11-09T18:51:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:34Z",
+          "conclusion": "failure",
+          "name": "Original scope and cleanup with unchanged production deadlines",
+          "number": 9,
+          "startedAt": "2026-11-09T18:51:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:34Z",
+          "conclusion": "success",
+          "name": "Bounded original CPU attribution (including failed scenarios)",
+          "number": 10,
+          "startedAt": "2026-11-09T18:52:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:47Z",
+          "conclusion": "success",
+          "name": "Measure complete mountinfo reads separately from route deadlines",
+          "number": 11,
+          "startedAt": "2026-11-09T18:52:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:53Z",
+          "conclusion": "success",
+          "name": "Complete pinned Xray hash reads and cancellation (measurement only)",
+          "number": 12,
+          "startedAt": "2026-11-09T18:52:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:54Z",
+          "conclusion": "success",
+          "name": "Preserve original clocks and failures",
+          "number": 13,
+          "startedAt": "2026-11-09T18:53:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:54Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 25,
+          "startedAt": "2026-11-09T18:53:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:55Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 26,
+          "startedAt": "2026-11-09T18:53:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:55Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 27,
+          "startedAt": "2026-11-09T18:53:55Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361849985"
+    },
+    {
+      "completedAt": "2026-11-09T18:55:50Z",
+      "conclusion": "success",
+      "databaseId": 129361850059,
+      "name": "DNS preparation recovery pair (diagnostic 30s)",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:17Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:19Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:26Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:32Z",
+          "conclusion": "success",
+          "name": "Same pinned official binary and namespace tools",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:32Z",
+          "conclusion": "success",
+          "name": "Identical real failure seam on preserved baseline",
+          "number": 6,
+          "startedAt": "2026-11-09T18:48:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:46Z",
+          "conclusion": "success",
+          "name": "Reproduce refusal and prove same-owner cleanup including partial ACK",
+          "number": 7,
+          "startedAt": "2026-11-09T18:48:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:47Z",
+          "conclusion": "success",
+          "name": "Retain both successful and failed original scopes",
+          "number": 8,
+          "startedAt": "2026-11-09T18:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:47Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 14,
+          "startedAt": "2026-11-09T18:55:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:47Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 15,
+          "startedAt": "2026-11-09T18:55:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:47Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 16,
+          "startedAt": "2026-11-09T18:55:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:55:48Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "startedAt": "2026-11-09T18:55:48Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850059"
+    },
+    {
+      "completedAt": "2026-11-09T18:56:45Z",
+      "conclusion": "failure",
+      "databaseId": 129361850102,
+      "name": "managed-probe-native (production)",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:16Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:22Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:32Z",
+          "conclusion": "success",
+          "name": "Disposable native NFQUEUE fixture dependencies",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:23Z",
+          "conclusion": "success",
+          "name": "Original active directory custody and error classification",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:47Z",
+          "conclusion": "success",
+          "name": "Actual path metadata parity and paired allocation benchmark",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:57Z",
+          "conclusion": "success",
+          "name": "Paired original collector scheduling benchmark (not end-to-end latency)",
+          "number": 7,
+          "startedAt": "2026-11-09T18:49:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:03Z",
+          "conclusion": "success",
+          "name": "Actual identity syscalls with strict pointer checks",
+          "number": 8,
+          "startedAt": "2026-11-09T18:49:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:52Z",
+          "conclusion": "success",
+          "name": "Actual managed source, TLS flow, exact NFQUEUE counters and cleanup",
+          "number": 9,
+          "startedAt": "2026-11-09T18:50:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:53:38Z",
+          "conclusion": "failure",
+          "name": "Actual App LAN apply, exclusions and same-owner stop",
+          "number": 10,
+          "startedAt": "2026-11-09T18:52:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:54:03Z",
+          "conclusion": "failure",
+          "name": "Explicit manual LAN Apply, exclusions and same-owner stop",
+          "number": 11,
+          "startedAt": "2026-11-09T18:53:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:06Z",
+          "conclusion": "failure",
+          "name": "Original never-issued intent recovery and fresh manual Apply",
+          "number": 12,
+          "startedAt": "2026-11-09T18:54:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:41Z",
+          "conclusion": "success",
+          "name": "Original quarantine close failure retains permanent fence",
+          "number": 13,
+          "startedAt": "2026-11-09T18:56:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:42Z",
+          "conclusion": "success",
+          "name": "Preserve native managed outcomes",
+          "number": 14,
+          "startedAt": "2026-11-09T18:56:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:42Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T18:56:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:43Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T18:56:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:43Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T18:56:43Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850102"
+    },
+    {
+      "completedAt": "2026-11-09T18:52:46Z",
+      "conclusion": "success",
+      "databaseId": 129361850119,
+      "name": "Configured old193 public paired restore / draft",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:15Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:23Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:32Z",
+          "conclusion": "success",
+          "name": "Install disposable namespace fixture dependencies",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:43Z",
+          "conclusion": "success",
+          "name": "Actual configured old source bootstrap and public offline restore",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:44Z",
+          "conclusion": "success",
+          "name": "Preserve bounded public workflow evidence",
+          "number": 6,
+          "startedAt": "2026-11-09T18:52:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:44Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 11,
+          "startedAt": "2026-11-09T18:52:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:44Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 12,
+          "startedAt": "2026-11-09T18:52:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:44Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-11-09T18:52:44Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850119"
+    },
+    {
+      "completedAt": "2026-11-09T18:59:28Z",
+      "conclusion": "success",
+      "databaseId": 129361850139,
+      "name": "strategy-pair",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:17Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:24Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:30Z",
+          "conclusion": "success",
+          "name": "Install native fixture",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:55Z",
+          "conclusion": "success",
+          "name": "Actual reader binary compatibility",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:59:16Z",
+          "conclusion": "success",
+          "name": "Focused native and race checks",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:59:25Z",
+          "conclusion": "success",
+          "name": "Restored panel boot in isolated network namespace",
+          "number": 7,
+          "startedAt": "2026-11-09T18:59:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:59:25Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 13,
+          "startedAt": "2026-11-09T18:59:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:59:26Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 14,
+          "startedAt": "2026-11-09T18:59:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:59:26Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-11-09T18:59:26Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850139"
+    },
+    {
+      "completedAt": "2026-11-09T18:58:50Z",
+      "conclusion": "failure",
+      "databaseId": 129361850160,
+      "name": "managed-probe-native (race)",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:19Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:28Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:47Z",
+          "conclusion": "success",
+          "name": "Disposable native NFQUEUE fixture dependencies",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:50:42Z",
+          "conclusion": "success",
+          "name": "Original active directory custody and error classification",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:52Z",
+          "conclusion": "success",
+          "name": "Actual path metadata parity and paired allocation benchmark",
+          "number": 6,
+          "startedAt": "2026-11-09T18:50:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:52Z",
+          "conclusion": "skipped",
+          "name": "Paired original collector scheduling benchmark (not end-to-end latency)",
+          "number": 7,
+          "startedAt": "2026-11-09T18:51:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:51:52Z",
+          "conclusion": "skipped",
+          "name": "Actual identity syscalls with strict pointer checks",
+          "number": 8,
+          "startedAt": "2026-11-09T18:51:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:18Z",
+          "conclusion": "failure",
+          "name": "Actual managed source, TLS flow, exact NFQUEUE counters and cleanup",
+          "number": 9,
+          "startedAt": "2026-11-09T18:51:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:56:47Z",
+          "conclusion": "failure",
+          "name": "Actual App LAN apply, exclusions and same-owner stop",
+          "number": 10,
+          "startedAt": "2026-11-09T18:56:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:57:27Z",
+          "conclusion": "failure",
+          "name": "Explicit manual LAN Apply, exclusions and same-owner stop",
+          "number": 11,
+          "startedAt": "2026-11-09T18:56:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:46Z",
+          "conclusion": "failure",
+          "name": "Original never-issued intent recovery and fresh manual Apply",
+          "number": 12,
+          "startedAt": "2026-11-09T18:57:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:46Z",
+          "conclusion": "skipped",
+          "name": "Original quarantine close failure retains permanent fence",
+          "number": 13,
+          "startedAt": "2026-11-09T18:58:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:48Z",
+          "conclusion": "success",
+          "name": "Preserve native managed outcomes",
+          "number": 14,
+          "startedAt": "2026-11-09T18:58:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:48Z",
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 27,
+          "startedAt": "2026-11-09T18:58:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:48Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 28,
+          "startedAt": "2026-11-09T18:58:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:58:48Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 29,
+          "startedAt": "2026-11-09T18:58:48Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850160"
+    },
+    {
+      "completedAt": "2026-11-09T18:52:37Z",
+      "conclusion": "success",
+      "databaseId": 129361850191,
+      "name": "Configured old193 public paired restore / empty",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:16Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:24Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:34Z",
+          "conclusion": "success",
+          "name": "Install disposable namespace fixture dependencies",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:34Z",
+          "conclusion": "success",
+          "name": "Actual configured old source bootstrap and public offline restore",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:35Z",
+          "conclusion": "success",
+          "name": "Preserve bounded public workflow evidence",
+          "number": 6,
+          "startedAt": "2026-11-09T18:52:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:35Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 11,
+          "startedAt": "2026-11-09T18:52:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:35Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 12,
+          "startedAt": "2026-11-09T18:52:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:52:35Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-11-09T18:52:35Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850191"
+    },
+    {
+      "completedAt": "2026-11-09T18:49:25Z",
+      "conclusion": "success",
+      "databaseId": 129361850258,
+      "name": "Exact iptables 1.8.11 / production",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:19Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:25Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:36Z",
+          "conclusion": "success",
+          "name": "Install exact reviewed packages on their compatible distribution",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:25Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:19Z",
+          "conclusion": "success",
+          "name": "Public acquisition and actual inventory parity with lock custody",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:20Z",
+          "conclusion": "success",
+          "name": "Preserve actual pinned artifact evidence",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:20Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 11,
+          "startedAt": "2026-11-09T18:49:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:20Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 12,
+          "startedAt": "2026-11-09T18:49:20Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:20Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-11-09T18:49:20Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850258"
+    },
+    {
+      "completedAt": "2026-11-09T18:49:52Z",
+      "conclusion": "success",
+      "databaseId": 129361850737,
+      "name": "Exact iptables 1.8.11 / race",
+      "startedAt": "2026-11-09T18:48:08Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-09T18:48:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-09T18:48:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:16Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-11-09T18:48:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:24Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 3,
+          "startedAt": "2026-11-09T18:48:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:48:34Z",
+          "conclusion": "success",
+          "name": "Install exact reviewed packages on their compatible distribution",
+          "number": 4,
+          "startedAt": "2026-11-09T18:48:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:47Z",
+          "conclusion": "success",
+          "name": "Public acquisition and actual inventory parity with lock custody",
+          "number": 5,
+          "startedAt": "2026-11-09T18:48:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:49Z",
+          "conclusion": "success",
+          "name": "Preserve actual pinned artifact evidence",
+          "number": 6,
+          "startedAt": "2026-11-09T18:49:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:49Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "number": 11,
+          "startedAt": "2026-11-09T18:49:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:49Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 12,
+          "startedAt": "2026-11-09T18:49:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-09T18:49:49Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-11-09T18:49:49Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/42677249225/job/129361850737"
+    }
+  ],
+  "status": "completed"
+}

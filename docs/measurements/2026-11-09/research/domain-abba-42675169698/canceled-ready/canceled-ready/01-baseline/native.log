@@ -1,0 +1,453 @@
+CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+go: downloading golang.org/x/sys v0.47.0
+go: downloading golang.org/x/net v0.56.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading github.com/quic-go/quic-go v0.61.0
+go: downloading golang.org/x/crypto v0.54.0
+go: downloading golang.org/x/text v0.40.0
+go: downloading github.com/quic-go/qpack v0.6.0
+=== RUN   TestDomainTCPOriginalNativeCanceledReadyRetirement
+    domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication12s/join15s; diagnostic=false
+    domain_tcp_original_native_linux_test.go:595: actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:2.907661734s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:7.028µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:2.772870368s} capture-prepare:{Calls:1 Bytes:0 Elapsed:5.608182216s} coordinator-original-read:{Calls:3 Bytes:0 Elapsed:316.346476ms} coordinator-original-read-complete:{Calls:3 Bytes:0 Elapsed:1.593µs} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.229117ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:206.382405ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:236.319273ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.676441ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.437455ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:88.760322ms} hash-stack/after-opening-scope/coordinator-read:{Calls:2 Bytes:73154812 Elapsed:59.323763ms} hash-stack/after-opening-scope/coordinator-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.572791ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:29.491267ms} hash-stack/after-opening-scope/mapping-compare:{Calls:2 Bytes:73154812 Elapsed:59.38568ms} hash-stack/after-opening-scope/other:{Calls:4 Bytes:146309624 Elapsed:118.162415ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:208.710965ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:118.345818ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.617573ms} hash-stack/after-opening-scope/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.674318ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.494784ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:29.491467ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:29.638315ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:118.293634ms} hash-stack/after-opening-scope/standby-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.505209ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:207.159433ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:207.96127ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.416558ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.586259ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.574282ms} hash-stack/direct/other:{Calls:7 Bytes:256041842 Elapsed:207.893107ms} hash-stack/direct/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.576231ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.28888ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:236.918105ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.263813ms} hash-stack/file-opening-wrapper/coordinator-read:{Calls:2 Bytes:73154812 Elapsed:59.232852ms} hash-stack/file-opening-wrapper/coordinator-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.487167ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:29.566481ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:89.07654ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:29.485152ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:209.138508ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:118.043809ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.633762ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:30.565117ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:29.451828ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:29.44674ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:119.955304ms} hash-stack/file-opening-wrapper/standby-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.565729ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:207.015725ms} kernel-observe:{Calls:3 Bytes:0 Elapsed:1.292485873s} kernel-observe-success:{Calls:3 Bytes:0 Elapsed:817ns} mapping-compare:{Calls:2 Bytes:0 Elapsed:1.259388811s} mapping-compare-success:{Calls:2 Bytes:0 Elapsed:1.281µs} mapping-original-tool-closing:{Calls:2 Bytes:0 Elapsed:1.279µs} mapping-original-tool-read:{Calls:2 Bytes:0 Elapsed:1.093221119s} native-hash-attribution:{Calls:125 Bytes:0 Elapsed:5.120151ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.485µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:3.318918016s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:6.838µs} process-current:{Calls:367 Bytes:0 Elapsed:4.635841586s} publication-gate:{Calls:11 Bytes:0 Elapsed:9.342µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:782.529476ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.158656648s} whole-executable-hash:{Calls:125 Bytes:4572175750 Elapsed:3.704815664s}]
+    domain_tcp_original_native_linux_test.go:596: original publication blocked; bounded goroutine stacks:
+        goroutine 21 [running]:
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPublicationDiagnostics(0x3508b55ee908, {0x1e31600, 0x1d})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:1119 +0x6a
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11({0x1f88188, 0x3508b566ad50})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:596 +0x1965
+        github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody(0x14?, 0x3508b5abf770)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_action_failure.go:9 +0xda
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3508b5a422d0, 0x0, 0x3508b59f5180, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_policy_manager_resource_scope.go:791 +0x18f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3508b5a422d0, 0x0, 0x3508b59f5180, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_policy_manager_resource_scope.go:773 +0x10b5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked(...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_policy_manager_resource_scope.go:701
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked(...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_policy_manager_resource_scope.go:697
+        github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).WithDomainTCPProofResources(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x3508b5a422d0, 0x0, 0x3508b59f5180, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_proof_scope.go:90 +0x34c
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative(0x3508b55ee908, 0x0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:458 +0x45d2
+        github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeCanceledReadyRetirement(0x3508b55ee908)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:107 +0xc8
+        testing.tRunner(0x3508b55ee908, 0x1f5ea90)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        created by testing.(*T).Run in goroutine 1
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x4c5
+        
+        goroutine 1 [chan receive]:
+        testing.(*T).Run(0x3508b55ee6c8, {0x1e71398?, 0x0?}, 0x1f5ea90)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0x4e5
+        testing.runTests.func1(0x3508b55ee6c8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x3e
+        testing.tRunner(0x3508b55ee6c8, 0x3508b597fb70)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        testing.runTests({0x1e2a4bd, 0x1b}, {0x1e546ea, 0x28}, 0x3508b55ae3d8, {0x2d593e0, 0x4a8, 0x4a8}, {0xc2b4a2bc9a02ec27, 0x37e16aae8a, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x505
+        testing.(*M).Run(0x3508b56aa0a0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0x6ac
+        github.com/ArtixSx/razvilka/internal/app.TestMain(0x3508b56aa0a0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x379
+        main.main()
+        	_testmain.go:2430 +0xa5
+        
+        goroutine 97 [syscall]:
+        runtime/pprof.readProfile()
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/cpuprof.go:251 +0x4a
+        runtime/pprof.profileWriter({0x1f7e900?, 0x3508b54dc228?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:930 +0x45
+        created by runtime/pprof.StartCPUProfile in goroutine 21
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:911 +0x1a5
+        
+        goroutine 86 [select]:
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS({0x1f881c0, 0x3508b5511ae0}, 0x3508b54dc848, 0x3508b59db800, {0x3508b56b4430?, 0x0?, 0x0?, 0x3508b56b4440?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:228 +0x685
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Serve(0x3508b5aa4b00, {0x1f881c0, 0x3508b5511ae0}, 0x3508b54dc848, 0x3508b59db800)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:194 +0x185
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSession).serve(0x3508b5a1efd0?, {0x1f881c0?, 0x3508b5511ae0?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_inactive_lifecycle.go:69 +0xfd
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*ScopedDNSAdapter).startSyntheticDNSContinuingLocked in goroutine 21
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_synthetic_mode.go:145 +0xf9f
+        
+        goroutine 128 [IO wait]:
+        internal/poll.runtime_pollWait(0x7fa0020f8000, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3508b5a1b900?, 0x424645?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x3508b5a1b900)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x3508b5a1b900)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x3508b59db800)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).AcceptTCP(0x3508b59db800)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:374 +0x30
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func2()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:171 +0xa5
+        created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 86
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:169 +0x60a
+        
+        goroutine 148 [syscall]:
+        syscall.Syscall6(0xf7, 0x3, 0xa7, 0x3508b5a1ce40, 0x4, 0x3508b55faa20, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        internal/syscall/unix.Waitid(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0x3508b59d6980)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+        os.(*Process).wait(0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0x3508b557f520)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+        github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).wait(0x3508b5727340)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_selected_tcp_runtime_process.go:183 +0x25
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).beginReservedWait in goroutine 146
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_selected_tcp_runtime_process.go:163 +0x118
+        
+        goroutine 146 [IO wait]:
+        internal/poll.runtime_pollWait(0x7fa0020f8200, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3508b5884b00?, 0x417aab?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x3508b5884b00)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x3508b5884b00)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x3508b59dafc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).AcceptTCP(0x3508b59dafc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:374 +0x30
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func2({0x1f881c0?, 0x3508b5dca0a0?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture.go:144 +0x245
+        github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope.func1({0x1f881c0?, 0x3508b5dca050?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture.go:191 +0x25b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture(_, {_, _}, {{{0x3508b5ac2e40, 0x40}, {0x1e0b57b, 0x10}, {0x1dfaaed, 0x7}, {0x3508b551c230, ...}, ...}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:213 +0x8f9
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1(0xc?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture.go:122 +0x9a
+        github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope({0x1f881f8, 0x3508b5634000}, 0x3508b5afd838, 0x3508b57e6060)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture.go:173 +0x193
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture(_, {_, _}, {{{0x3508b5ac2e40, 0x40}, {0x1e0b57b, 0x10}, {0x1dfaaed, 0x7}, {0x3508b551c230, ...}, ...}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture.go:121 +0x2b3
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1({0x1f881f8, 0x3508b5634000})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_resource_consumer.go:37 +0x51f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withNativeInPhase(0x3508b57bb088, {0x1f881f8, 0x3508b5634000}, 0x3508b5afdf10)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_execution.go:296 +0x242
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative.func1({0x1f881f8?, 0x3508b5634000?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_execution.go:232 +0x2e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).withDomainNativeActivity(0x3508b55e27e0, {0x1f881c0, 0x3508b5510640}, 0x3508b552fea8)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_execution.go:265 +0x395
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative(0x3508b57bb088, {0x1f881c0, 0x3508b5510640}, 0x3508b552ff10)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_execution.go:232 +0x22a
+        github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource(0x3508b55eed88, {0x1f881c0, 0x3508b5510640}, 0x3508b57bb088, {0x1f8dbd0, 0x3508b5aa4000})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_resource_consumer.go:22 +0x195
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run(0x3508b5aa4000, {0x1f881c0, 0x3508b5510640}, 0x3508b57bb088)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:135 +0x177
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11.3()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:531 +0x2c
+        created by github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11 in goroutine 21
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_linux_test.go:531 +0x146f
+        
+        goroutine 68 [IO wait]:
+        internal/poll.runtime_pollWait(0x7fa0020f8600, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3508b55fe400?, 0x3508b56b7000?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).ReadFromInet4(0x3508b55fe400, {0x3508b56b7000, 0x1000, 0x1000}, 0x3508b5a9bcc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+        net.(*netFD).readFromInet4(0x3508b55fe400, {0x3508b56b7000?, 0x3508b54f3c00?, 0x0?}, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+        net.(*UDPConn).readFrom(0x30?, {0x3508b56b7000?, 0x0?, 0x0?}, 0x3508b5ac0ed0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:52 +0x19b
+        net.(*UDPConn).readFromUDP(0x3508b54dc310, {0x3508b56b7000?, 0x0?, 0x25?}, 0x3508b5a9bf10?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:146 +0x30
+        net.(*UDPConn).ReadFrom(0x3508b54dc310, {0x3508b56b7000, 0x1000, 0x1000})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:155 +0x4a
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func4()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:260 +0x7c
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:257 +0x1ff
+        
+        goroutine 69 [IO wait]:
+        internal/poll.runtime_pollWait(0x7fa0020f8a00, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3508b55fe480?, 0x427945?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x3508b55fe480)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x3508b55fe480)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x3508b556a780)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).Accept(0x3508b556a780)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x30
+        crypto/tls.(*listener).Accept(0x3508b55ae618)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x24
+        net/http.(*Server).Serve(0x3508b59f0000, {0x1f86260, 0x3508b55ae618})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x30c
+        net/http.(*Server).ServeTLS(0x3508b59f0000, {0x1f87260, 0x3508b556a780}, {0x3508b55843f0, 0x6c}, {0x3508b5584460, 0x6d})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3503 +0x406
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func7()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:295 +0x109
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:294 +0x35e
+        
+        goroutine 70 [syscall]:
+        syscall.Syscall6(0xf7, 0x3, 0xd, 0x3508b5542648, 0x4, 0x3508b5528990, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        internal/syscall/unix.Waitid(0x3508b5584ee0?, 0x3508b59824d0?, 0x3508b5542738?, 0x3508b58f38f0?, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0x3508b556a7c0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+        os.(*Process).wait(0x3508b5542798?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0x3508b59876c0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers.func4()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x25
+        created by github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers in goroutine 21
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x1f73
+        
+        goroutine 127 [IO wait]:
+        internal/poll.runtime_pollWait(0x7fa0020f8800, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x3508b5a1b880?, 0x3508b5d6eec5?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).ReadFromInet4(0x3508b5a1b880, {0x3508b5bd4ec5, 0x1001, 0x1001}, 0x3508b5bd4d90)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+        net.(*netFD).readFromInet4(0x3508b5a1b880, {0x3508b5d6eec5?, 0x3508b5b0e808?, 0x0?}, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+        net.(*UDPConn).readFromAddrPort(0x3508b5d6ee20?, {0x3508b5d6eec5?, 0x88?, 0x491dd2?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:78 +0x152
+        net.(*UDPConn).ReadFromUDPAddrPort(0x3508b54dc848, {0x3508b5d6eec5?, 0x3508b55ae0c0?, 0x3508b5a28f04?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:172 +0x30
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func1()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:98 +0xf2
+        created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 86
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:95 +0x4e9
+        
+        goroutine 1885 [select]:
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping.func3()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture_mapping.go:180 +0xd4
+        created by github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping in goroutine 146
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_policy_tcp_capture_mapping.go:178 +0xe4f
+        
+        goroutine 2337 [runnable, locked to thread]:
+        syscall.Syscall6(0x10b, 0xffffffffffffff9c, 0x3508b5846390, 0x3508b5a5ff00, 0x80, 0x0, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        syscall.readlinkat(0xffffffffffffff9c, {0x3508b5847bf0?, 0x0?}, {0x3508b5a5ff00, 0x80, 0x6609146f?})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/zsyscall_linux_amd64.go:130 +0xad
+        syscall.Readlink(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:311
+        os.readlink.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_unix.go:432
+        os.ignoringEINTR2[...](...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:273
+        os.readlink({0x3508b5847bf0, 0x25})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_unix.go:431 +0xc5
+        os.Readlink(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file.go:447
+        github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent(0x3508b5656700, {0x1f88188, 0x3508b59015f0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/review_linux.go:403 +0x13b
+        github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent(0x3508b5656700, {0x1f88188, 0x3508b59015f0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/version_batch_linux.go:147 +0x65
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).readClassicSaveFamily(0x3508b5a3e000, {0x1f881c0, 0x3508b56ad090}, 0x3508b5900150, 0x3508b58e9a80, 0x1, 0xff060)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/classic_save_linux.go:179 +0xd39
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).ReadBoundedClassicInventory.func1({0x1f881c0, 0x3508b56ad090}, {0x1, {0x1e06005, 0xe}, {0x3508b5978570, 0x24}, 0xf00001ac, {0x0, 0x0}})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/classic_save_linux.go:131 +0x3c7
+        github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent(0x3508b59cda10, {0x1f881c0?, 0x3508b56acff0?}, 0x3508b5af7c68)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/netidentity/provider.go:159 +0x3c2
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).ReadBoundedClassicInventory(0x3508b5a3e000, {0x1f881f8, 0x3508b563dd50}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/classic_save_linux.go:113 +0xabc
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic.func1()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:389 +0x7f3
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic(0x3508b5af9480?, {0x1f881f8, 0x3508b563dd50}, {{0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:475 +0x34d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture(_, {_, _}, {{0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:273 +0x848
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2({0x1f881c0, 0x3508b55b3e00})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory_observation.go:78 +0x427
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3508b5a3e000, {0x1f881c0, 0x3508b55b3e00}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/read_observation_linux.go:37 +0x2b1
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation(_, {_, _}, {{0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory_observation.go:56 +0x5f0
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1({0x1f881c0, 0x3508b55b3db0}, {0x1, {0x1e06005, 0xe}, {0x3508b56bbad0, 0x24}, 0xf00001ac, {0x0, 0x0}})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:168 +0x2eb
+        github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent(0x3508b59cda10, {0x1f881f8?, 0x3508b563dc70?}, 0x3508b5a5c0a0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/netidentity/provider.go:159 +0x3c2
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read(_, {_, _}, {{0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:159 +0x78b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read(_, {_, _}, {{0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory.go:133 +0x196
+        github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read(_, {_, _}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/network_backend_inventory_api.go:69 +0x16a
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).readWithFiles(0x3508b5890608, {0x1f88188, 0x3508b5911470}, 0x3508b595a000)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_capture_execution_effects.go:118 +0x15e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPBaselineKernelOwner).observeReadWithFiles.func1({0x1f88188?, 0x3508b5911470?}, 0x13940c6?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_baseline_kernel.go:293 +0x99
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles.func1({0x1f88188?, 0x3508b5911470?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:38 +0x229
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3508b5a3e000, {0x1f88188, 0x3508b5911470}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/read_observation_linux.go:37 +0x2b1
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeTools(0x3508b5890608, {0x1f88188, 0x3508b5911470}, 0x3508b5a7f410)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:27 +0x13d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles(0x3508b5890608, {0x1f88188, 0x3508b5911470}, 0x3508b595a000, 0x3508b57940a8)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:36 +0xc5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPBaselineKernelOwner).observeReadWithFiles(0x3508b54fca00, {0x1f88188, 0x3508b5911470}, 0x3508b595a000)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_baseline_kernel.go:291 +0x36d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPBaselineKernelOwner).observeWithFiles.func2({0x1f88188?, 0x3508b5911470?}, 0x13940c6?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_baseline_kernel.go:271 +0x4b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles.func1({0x1f88188?, 0x3508b5911470?})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:38 +0x229
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3508b5a3e000, {0x1f88188, 0x3508b5911470}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/read_observation_linux.go:37 +0x2b1
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeTools(0x3508b5890608, {0x1f88188, 0x3508b5911470}, 0x3508b566bc50)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:27 +0x13d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles(0x3508b5890608, {0x1f88188, 0x3508b5911470}, 0x3508b595a000, 0x3508b55ae360)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:36 +0xc5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPBaselineKernelOwner).observeWithFiles(0x3508b54fca00, {0x1f88188, 0x3508b5911470}, 0x3508b595a000)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_baseline_kernel.go:269 +0x133
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPBaselineKernelOwner).currentWithFiles(0x3508b54fca00, {0x1f88188?, 0x3508b5911470?}, 0x3508b595a000?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_baseline_kernel.go:329 +0x37
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).compareSyntheticMappingWithFiles.func2.1(...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:340
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).compareSyntheticMappingWithFiles.func2({0x1f88188, 0x3508b5911470}, 0x3508b595a000)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:344 +0x8d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles.func1({0x1f88188, 0x3508b5911470})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:45 +0x143
+        github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0x3508b5a3e000, {0x1f881c0, 0x3508b5dca280}, {0x1, {0x1e06005, 0xe}, {0x3508b5846ff0, 0x24}, 0xf00001ac, {0x0, ...}}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/startuptools/read_observation_linux.go:61 +0x7c8
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeTools(0x3508b5890608, {0x1f881c0, 0x3508b5dca280}, 0x3508b5900ab0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:27 +0x13d
+        github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeToolsWithFiles(0x3508b5890608, {0x1f881c0, 0x3508b5dca280}, 0x3508b595bc20, 0x3508b5900a80)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_tool_observation.go:36 +0xc5
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).compareSyntheticMappingWithFiles(0x3508b5aa4000, {0x1f881c0, 0x3508b5dca280}, 0x3508b59da880, 0x3508b595bc20)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:335 +0x3fe
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).compareSyntheticMapping.func2(0x3508b57bb088?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:299 +0x29
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withCurrentFileObservation.func1(0x3508b595bc20)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_file_observation.go:121 +0x7b
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpening(0x3508b57bb088, {0x1f881c0, 0x3508b5dca280}, 0x0?, 0x3508b5d209b0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_file_observation.go:52 +0x25e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservation(0x3508b57bb088, {0x1f881c0, 0x3508b5dca280}, 0x3508b5d209b0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_file_observation.go:35 +0x5e
+        github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withCurrentFileObservation(0x3508b5aa4000?, {0x1f881c0?, 0x3508b5dca280?}, 0x3508b568ad88?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/xray_domain_tcp_file_observation.go:117 +0x47
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).compareSyntheticMapping(0x3508b5aa4000, {0x1f881c0, 0x3508b5dca280}, 0x3508b59da880)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:298 +0x185
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).currentSyntheticMappingWithFiles(0x3508b5aa4000, {0x1f881c0, 0x3508b5dca280}, 0x3508b59da880, 0x0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:276 +0x199
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).CurrentSyntheticMapping(0x3508b55df608?, {0x1f881c0?, 0x3508b5dca280?}, 0x3508b56993b0?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:253 +0x1f
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSyntheticPublication).CurrentSyntheticMapping(0x3508b54ec318, {0x1f881c0, 0x3508b5dca280}, 0x3508b59da880)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_synthetic_mode.go:243 +0xb7
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Publish.func1.2.1({0x1f881c0, 0x3508b5dca280})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:88 +0xf0
+        github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation.func1()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_operations.go:55 +0x29
+        github.com/ArtixSx/razvilka/internal/operationgate.(*Gate).WithExclusiveContext(0x3508b5510c80, {0x1f881c0, 0x3508b5dca280}, 0x3508b5d21000)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/operationgate/exclusive_context.go:86 +0x1e6
+        github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation({0x1f881f8?, 0x3508b566d570?}, 0x3508b5510c80, 0x3508b5afd128)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_operations.go:55 +0xf0
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Publish.func1.2({0x1f881f8, 0x3508b5634af0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:84 +0x430
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSyntheticPublication).WithSyntheticPublication.func1({0x1f881f8, 0x3508b5634af0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_synthetic_mode.go:231 +0x72
+        github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithSyntheticPublication(0x3508b5aa4000, {0x1f881f8, 0x3508b5634af0}, 0x3508b59da880, 0x3508b54ecd80)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/domain_tcp_original_coordinator.go:368 +0x11c
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSyntheticPublication).WithSyntheticPublication(0x3508b54ec318, {0x1f881f8, 0x3508b5634af0}, 0x3508b59da880, 0x3508b5a46280)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_synthetic_mode.go:227 +0x12b
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Publish.func1({0x1f881f8, 0x3508b5634af0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:58 +0x60c
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).withSyntheticRequestPhase.func1({0x1f881f8, 0x3508b56342a0})
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_phase.go:58 +0x3e8
+        github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).WithRequest(0x3508b55e27e0, {0x1f881f8, 0x3508b5634150}, 0x3508b59853e0)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/synthetic_baseline_execution_phase.go:69 +0x413
+        github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSyntheticPublication).WithSyntheticRequestPhase(0xc?, {0x1f881f8?, 0x3508b5634150?}, 0x504722?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dataplane/scoped_dns_synthetic_mode.go:214 +0x3b
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).withSyntheticRequestPhase(0x3508b5aa4b00, {0x1f881f8, 0x3508b5634150}, 0x3508b5dca910)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_phase.go:28 +0x1e2
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).withRequest(0x3508b5aa4b00, {0x1f881c0?, 0x3508b56ac230?}, 0x3508b5dca910)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_mapping.go:363 +0x1b8
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Publish(0x3508b5aa4b00, {0x1f881c0, 0x3508b56ac230}, {{0x3508b5d9cdd8?, 0x3508b5d9cdd8?}, {0x3508b55ae0c0?}}, {0x3508b58805a0, 0x25, 0x30}, 0x3508b5985380)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:23 +0x11f
+        github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Serve.func2({0x1f881c0?, 0x3508b56ac230?}, {{0x1?, 0x3508b5d9ce60?}, {0x3508b55ae0c0?}}, {0x3508b58805a0?, 0x3508b56b830a?, 0x3508b56b83f0?}, 0x3508b5d9cf38?)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/network_policy_synthetic_publish.go:199 +0x50
+        github.com/ArtixSx/razvilka/internal/dnscontrol.exchangeScopedDNS({0x1f881c0, 0x3508b56ac230}, {0x3508b56b4430?, 0x0?, 0x0?, 0x3508b56b4440?}, {{0x3508b5d9cf50?, 0x419df7?}, {0x3508b55ae0c0?}}, {0x3508b58805a0, ...}, ...)
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:249 +0x193
+        github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func1.3()
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:140 +0x238
+        created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func1 in goroutine 127
+        	/tmp/razvilka-domain-image.9J6yV8/baseline/internal/dnscontrol/scoped_listener.go:137 +0x8df
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=xray-domain-tcp state=prepared phase=listener-ready
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=synthetic-baseline state=prepared phase=capture-ready
+    domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared
+    domain_tcp_original_native_linux_test.go:1143: actual generated runtime transactions/dp-check-71a62d9cab0889a531e1ae6334ca8935/execution-resources/xd-a48ffbef8aace7b34a7974187043f827/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 18:35:48.434589 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+        2026/11/09 18:35:48.438168 [Warning] core: Xray 26.3.27 started
+    domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:2.907661734s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:7.028µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:2.772870368s} capture-prepare:{Calls:1 Bytes:0 Elapsed:5.608182216s} coordinator-original-read:{Calls:3 Bytes:0 Elapsed:316.346476ms} coordinator-original-read-complete:{Calls:3 Bytes:0 Elapsed:1.593µs} dns-send:{Calls:1 Bytes:0 Elapsed:386.721997ms} hash-stack/after-opening-scope/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.229117ms} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:206.382405ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:236.319273ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.676441ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.437455ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:3 Bytes:109732218 Elapsed:88.760322ms} hash-stack/after-opening-scope/coordinator-read:{Calls:2 Bytes:73154812 Elapsed:59.323763ms} hash-stack/after-opening-scope/coordinator-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.572791ms} hash-stack/after-opening-scope/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:29.491267ms} hash-stack/after-opening-scope/mapping-compare:{Calls:2 Bytes:73154812 Elapsed:59.38568ms} hash-stack/after-opening-scope/other:{Calls:5 Bytes:182887030 Elapsed:147.714204ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:208.710965ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:118.345818ms} hash-stack/after-opening-scope/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.617573ms} hash-stack/after-opening-scope/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.674318ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.494784ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:29.491467ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:29.638315ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:118.293634ms} hash-stack/after-opening-scope/standby-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.505209ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:207.159433ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:207.96127ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.416558ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.586259ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:29.574282ms} hash-stack/direct/other:{Calls:9 Bytes:329196654 Elapsed:267.036281ms} hash-stack/direct/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.576231ms} hash-stack/file-opening-wrapper/capture-closing/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.28888ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:236.918105ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:59.263813ms} hash-stack/file-opening-wrapper/coordinator-read:{Calls:2 Bytes:73154812 Elapsed:59.232852ms} hash-stack/file-opening-wrapper/coordinator-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.487167ms} hash-stack/file-opening-wrapper/initial-kernel:{Calls:1 Bytes:36577406 Elapsed:29.566481ms} hash-stack/file-opening-wrapper/mapping-compare:{Calls:3 Bytes:109732218 Elapsed:89.07654ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:58.977762ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:209.138508ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:118.043809ms} hash-stack/file-opening-wrapper/standby-capture:{Calls:1 Bytes:36577406 Elapsed:29.633762ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:30.565117ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:29.451828ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:29.44674ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:119.955304ms} hash-stack/file-opening-wrapper/standby-read/standby-issue:{Calls:1 Bytes:36577406 Elapsed:29.565729ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:207.015725ms} kernel-observe:{Calls:4 Bytes:0 Elapsed:1.517593687s} kernel-observe-success:{Calls:3 Bytes:0 Elapsed:817ns} mapping-compare:{Calls:3 Bytes:0 Elapsed:1.643462462s} mapping-compare-success:{Calls:2 Bytes:0 Elapsed:1.281µs} mapping-original-tool-closing:{Calls:2 Bytes:0 Elapsed:1.279µs} mapping-original-tool-read:{Calls:3 Bytes:0 Elapsed:1.433152505s} native-hash-attribution:{Calls:129 Bytes:0 Elapsed:5.223615ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:1.485µs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:3.318918016s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:6.838µs} process-current:{Calls:368 Bytes:0 Elapsed:4.635842316s} publication-gate:{Calls:12 Bytes:0 Elapsed:1.035231794s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:782.529476ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.158656648s} whole-executable-hash:{Calls:129 Bytes:4718485374 Elapsed:3.823003237s}] actual_tool_starts=map[original-effect:18 original-read:28 original-read-classic-save:588]; overlapping cumulative durations, not wall speed
+    domain_tcp_original_native_linux_test.go:668: full original domain native workflow: actual DNS publication did not become available
+        dataplane transaction journal is unavailable
+        policy addition or cleanup result unknown; reconciliation required blockers=[{Code:DOMAIN_POLICY_RUNTIME_UNAVAILABLE Adapter:dns-scoped Message:Для доменного маршрута ещё не подключён проверенный runtime. Resolution:Повторите план после подключения владельцев DNS и транспорта.} {Code:DOMAIN_FLOW_AUTHORITY_REQUIRED Adapter:xray Message:Сервис «service» задан доменами, а VPN или прокси выбирает трафик по IP-адресам: на тех же адресах работают чужие сайты, и они тоже ушли бы в обход. Resolution:Выберите для этого сервиса NFQWS2 или замените его вариантом только с IP-сетями (например, «Telegram · через VPN или прокси» из каталога) и примените.}]
+    domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+        Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 18:35:46.516421 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.72o0ll/TestDomainTCPOriginalNativeCanceledReadyRetirement2125622722/001/server.json Format:json}
+        2026/11/09 18:35:46.517998 [Debug] app/log: Logger started
+        2026/11/09 18:35:46.519233 [Info] app/dns: DNS: created localhost client
+        2026/11/09 18:35:46.519360 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+        2026/11/09 18:35:46.519488 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+        2026/11/09 18:35:46.520011 [Warning] core: Xray 26.3.27 started
+        2026/11/09 18:35:46.520306 [Info] [2386500265] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 18:35:46.923079 [Info] [900386844] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 18:35:46.949888 [Info] [2077775087] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 18:35:46.949918 [Info] [2077775087] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 18:35:46.949921 [Info] [2077775087] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 18:35:46.949927 [Info] [2077775087] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.949933 [Debug] [2077775087] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.950047 [Info] [2077775087] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:45661, remote endpoint 1.1.1.2:443
+        2026/11/09 18:35:46.950062 [Debug] [2077775087] proxy: CopyRawConn (maybe) readv
+        2026/11/09 18:35:46.951281 [Info] [2077775087] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:41414: use of closed network connection
+        2026/11/09 18:35:46.953175 [Info] [273906735] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 18:35:46.953189 [Info] [273906735] proxy/vless/inbound: received request for tcp:service.example.com:443
+        2026/11/09 18:35:46.953193 [Info] [273906735] app/dispatcher: default route for tcp:service.example.com:443
+        2026/11/09 18:35:46.953227 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+        2026/11/09 18:35:46.953232 [Info] [273906735] proxy/freedom: dialing to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.953235 [Info] [273906735] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.953239 [Debug] [273906735] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.953251 [Info] [273906735] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:43875, remote endpoint 1.1.1.2:443
+        2026/11/09 18:35:46.953255 [Debug] [273906735] proxy: CopyRawConn (maybe) readv
+        2026/11/09 18:35:46.955050 [Info] [273906735] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:41418: use of closed network connection
+        2026/11/09 18:35:46.956820 [Info] [1141167872] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 18:35:46.956855 [Info] [1141167872] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 18:35:46.956860 [Info] [1141167872] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 18:35:46.956863 [Info] [1141167872] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.956866 [Debug] [1141167872] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 18:35:46.956872 [Info] [1141167872] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:46529, remote endpoint 1.1.1.2:443
+        2026/11/09 18:35:46.956875 [Debug] [1141167872] proxy: CopyRawConn (maybe) readv
+        2026/11/09 18:35:46.958465 [Info] [1141167872] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:41424: use of closed network connection
+--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (20.30s)
+FAIL

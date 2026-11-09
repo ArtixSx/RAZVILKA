@@ -1,0 +1,60 @@
+{
+  "commit": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "attempt": 2,
+  "job_id": 129353748165,
+  "conclusion": "failure",
+  "core_consumer": "FAIL19.26s",
+  "full_lan": "FAIL21.93s",
+  "manual": "FAIL32.38s, native24414ms lan-preflight-inventory-consumer-close SOURCE_MISSING",
+  "intent_and_sync_recovery": "not reached",
+  "classic_save_child_benchmark": {
+    "before": {
+      "samples": [
+        [
+          2064810182,
+          165357,
+          145
+        ],
+        [
+          2065087698,
+          164458,
+          142
+        ],
+        [
+          2066854903,
+          164541,
+          143
+        ]
+      ],
+      "median_ns": 2065087698,
+      "median_bytes": 164541
+    },
+    "after": {
+      "samples": [
+        [
+          2066352197,
+          66698,
+          143
+        ],
+        [
+          2065882010,
+          67421,
+          145
+        ],
+        [
+          2065960459,
+          88712,
+          142
+        ]
+      ],
+      "median_ns": 2065960459,
+      "median_bytes": 67421
+    }
+  },
+  "log_sha256": "036fd05efbe3403ccc10bc050e724d6a278ed6cd4f6979cda89ef5cc486b4351",
+  "limits": [
+    "Race timing is not production performance",
+    "No full-route proof or recovered cut claim from this job"
+  ]
+}

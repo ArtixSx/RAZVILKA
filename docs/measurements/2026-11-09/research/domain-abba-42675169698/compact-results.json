@@ -1,0 +1,288 @@
+{
+  "selected": {
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "candidate": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+    "baseline": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+    "samples": [
+      {
+        "sample": 1,
+        "side": "baseline",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.867367413,
+        "standby_s": 2.23627255,
+        "native_sha256": "21d5a0f9d58360b7b15d23bf103147e7ac3798783fcd31b6bd14c93860e2312e",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 126,
+        "test_seconds": 20.73
+      },
+      {
+        "sample": 2,
+        "side": "candidate",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.375423991,
+        "standby_s": 1.837479688,
+        "native_sha256": "6adab5090e9204e4e31a807107d79254dac272959af2a194d454d6205ec75ca8",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 129,
+        "test_seconds": 20.48
+      },
+      {
+        "sample": 3,
+        "side": "candidate",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.382335035,
+        "standby_s": 1.889829106,
+        "native_sha256": "099eee599207369d8d0ff5d36bcb8177bb67ef40480dba14c6504da4eee158ab",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 129,
+        "test_seconds": 20.37
+      },
+      {
+        "sample": 4,
+        "side": "baseline",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 6.01259775,
+        "standby_s": 2.269740295,
+        "native_sha256": "60a22a0af5c0e1c180ab462ad9ed8f527f8c76e4b1ab1b54122fc4f4a57045a3",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 126,
+        "test_seconds": 20.38
+      }
+    ],
+    "controls": {
+      "control-clean": {
+        "subreaper": true,
+        "initial_exit_status": 0,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "control-failure": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "control-orphan": {
+        "subreaper": true,
+        "initial_exit_status": 0,
+        "adopted_children_reaped": 1,
+        "descendants_absent": true,
+        "forced_cleanup": true,
+        "no_overlap_boundary": false,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    },
+    "same_completed_phase_medians": {
+      "baseline": {
+        "capture_s": 5.939982581500001,
+        "standby_s": 2.2530064225
+      },
+      "candidate": {
+        "capture_s": 5.378879512999999,
+        "standby_s": 1.863654397
+      }
+    },
+    "limitation": "Two samples/side, warm page cache; combined candidate changes; phase medians are not full workflow PASS or isolated image-optimization causality. All candidate statuses FAIL retained."
+  },
+  "canceled-ready": {
+    "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "candidate": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+    "baseline": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+    "samples": [
+      {
+        "sample": 1,
+        "side": "baseline",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.608182216,
+        "standby_s": 2.158656648,
+        "native_sha256": "4771aba4ca485000394fbe99d3aedc0ae26081c4df75ee0bd22745b4eeefa05c",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 129,
+        "test_seconds": 20.3
+      },
+      {
+        "sample": 2,
+        "side": "candidate",
+        "exit_status": 1,
+        "first_dns_answer_observed": true,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": false,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.175158582,
+        "standby_s": 1.779425996,
+        "native_sha256": "9d31756b80ada575b84007194c04e8aee2517a3372143c25f884dd169e1317ba",
+        "gen2_cancellation_witness_missing": true,
+        "reader7_detach_observed": true,
+        "full_reads_gen1_diagnostic": 137,
+        "test_seconds": 39.49
+      },
+      {
+        "sample": 3,
+        "side": "candidate",
+        "exit_status": 1,
+        "first_dns_answer_observed": true,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": false,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.133105072,
+        "standby_s": 1.78266148,
+        "native_sha256": "b3e599d06982be001385d57d1d654b3c97b8596a7a3c5c96d710500d6618cd76",
+        "gen2_cancellation_witness_missing": true,
+        "reader7_detach_observed": true,
+        "full_reads_gen1_diagnostic": 137,
+        "test_seconds": 39.36
+      },
+      {
+        "sample": 4,
+        "side": "baseline",
+        "exit_status": 1,
+        "first_dns_answer_observed": false,
+        "selected_tls_timeout": false,
+        "gen1_publication_failure": true,
+        "descendant_boundary": {
+          "subreaper": true,
+          "initial_exit_status": 1,
+          "adopted_children_reaped": 0,
+          "descendants_absent": true,
+          "forced_cleanup": false,
+          "no_overlap_boundary": true,
+          "original_cleanup_success": "not inferred from descendant absence"
+        },
+        "capture_s": 5.675685166,
+        "standby_s": 2.121705934,
+        "native_sha256": "6636d3d0405c5068425f82cd1bfebbac3f2d9a5270ac3e4d6dc3cb10f1c63666",
+        "gen2_cancellation_witness_missing": false,
+        "reader7_detach_observed": false,
+        "full_reads_gen1_diagnostic": 129,
+        "test_seconds": 19.91
+      }
+    ],
+    "controls": {
+      "control-clean": {
+        "subreaper": true,
+        "initial_exit_status": 0,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "control-failure": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      },
+      "control-orphan": {
+        "subreaper": true,
+        "initial_exit_status": 0,
+        "adopted_children_reaped": 1,
+        "descendants_absent": true,
+        "forced_cleanup": true,
+        "no_overlap_boundary": false,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    },
+    "same_completed_phase_medians": {
+      "baseline": {
+        "capture_s": 5.641933691,
+        "standby_s": 2.140181291
+      },
+      "candidate": {
+        "capture_s": 5.1541318270000005,
+        "standby_s": 1.7810437380000002
+      }
+    },
+    "limitation": "Two samples/side, warm page cache; combined candidate changes; phase medians are not full workflow PASS or isolated image-optimization causality. All candidate statuses FAIL retained."
+  }
+}

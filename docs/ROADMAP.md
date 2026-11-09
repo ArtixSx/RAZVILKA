@@ -47,7 +47,7 @@ refs и незакоммиченные файлы сохранены. Стары
 | P1: managed NFQWS2 (C) | nfq_completion; verification | Original consumer/history/manual intent, quarantine custody и joined cleanup | 344 consumer normal/closing PASS, fullLAN/manual и race FAIL; recovery cuts НЕ достигнуты. 8434 intent/sync/quarantine/cleanup-only closeRetry normal PASS остаётся отдельным результатом; subsequent Apply FAIL. FullSHA copy normal/race PASS:1MiB32952→184B normal, CPU близкий. Далее: measured active inventory costs без удаления checks. |
 | P1: capabilities/API/AUTO (E) | Ведущий после F | Registration отдельно от availability; scoped manual support отдельно от live service proof | Сохранены unknown и stale/WAN guards. Общий AUTO допуск не расширен. Проверить полный per-plan HTTP workflow и remaining recovery; generic не повышает router admission. |
 | P1: backup/update (A) | Ведущий; nfq_completion; verification | Snapshot3 binary/StrategyLab, encrypted backup, history/manual intent, fences | 344 modern pair/panel PASS; 2ecf public empty/draft полный offline flow PASS101.78/115.88с. Original-worker join исправлен с независимым review. Далее: actual completed history/frozen manual, compatible live panel, defaultlegacy и retained-stage retry; live downgrade не разрешён. |
-| P1: оставшаяся цена проверок | nfq_completion и dns_completion; после точной attribution | Сохранены все source bytes/metadata guards; syscall scratch не кэширует authority | 2ecf startup hashImage3.75/4.24CPUс; ordinary versionBatch2.34/2.82с. Измеренная startup image race-пара36.03мс против2SHA14.86мс хуже: production неизменён. Далее: normal measurement и test-only8MiBfixedslot completepair. Частичный GitHub scheduler failure подтверждён, повтор после восстановления идёт. |
+| P1: оставшаяся цена проверок | nfq_completion и dns_completion; после точной attribution | Сохранены все source bytes/metadata guards; syscall scratch не кэширует authority | 2ecf startup hashImage3.75/4.24CPUс; ordinary versionBatch2.34/2.82с. Измеренная startup image race-пара36.03мс против2SHA14.86мс хуже: production неизменён. Далее: normal measurement и test-only8MiBfixedslot completepair. После восстановления GitHub полная матрица2ecf выполнена. Fixed-slot completepair6b normal−28.4%, race+124.4%; startup production unchanged. |
 | P2: платформы/новые backend | Ведущий после P0/P1 | Pinned isolated fixtures; SSH/read-only NC-1812 profile подтверждён | Нужны согласованный LAN scope, конкретный candidate и явная авторизация изменения устройства. На роутере rc106/stock1.4.21, CI-unshare отсутствует; работающий NFQWS2 сохранён. WAN/reboot/power-loss и MIPS/OpenWrt отдельно. [Профиль](measurements/2026-11-09/research/router-readonly.md). |
 
 Первая волна источников и лицензии: [лабораторный журнал](RESEARCH_LAB_20261109.md).
@@ -68,8 +68,8 @@ DNS strict пропущен из-за исправленного assertion, diag
 На2ecf public empty/draft offline restore PASS; история/manual в реализации.
 Managed full manual остаётся FAIL. Classic-save race allocation167→68КБ/op,
 wall gain нет. Startup image race-пара медленнее2SHA: production не меняется.
-DNS strict GEN1 не достигнут за12с; полное ускорение маршрута не доказано. Следующий результат
-принимается только с точным SHA и полным исходным сценарием; [подробности](CURRENT_STATUS_RU.md#исходники-и-приёмка-на-09112026).
+DNS strict GEN1 не достигнут за12с; полное ускорение маршрута не доказано. Оба полных generic2ecf PASS; sameboot11/14 PASS, триracecuts120сFAIL.
+Следующий результат принимается только с точным SHA и полным исходным сценарием; [подробности](CURRENT_STATUS_RU.md#исходники-и-приёмка-на-09112026).
 Внешнего блокера для программных задач нет. Физический candidate/LAN-профиль
 требует отдельной авторизации изменения работающего роутера.
 

@@ -84,8 +84,10 @@
 
 ## Исходники и приёмка на 09.11.2026
 
-Актуальная проверяемая интеграция: `2ecf9961`, draft PR #25. CI этого SHA запущен;
-результаты предыдущих SHA не переносятся. На `ea36873e` полный PR CI прошёл,
+Опубликованная интеграция: `2ecf9961`, draft PR #25. Оба полных generic CI этого
+SHA прошли (push attempt2 и PR attempt3): normal/race, vet, shell/UI и четыре
+целевые сборки. Первые попытки не создали часть jobs из-за Internal server error
+GitHub; эти отказы сохранены отдельно. Native приёмка не подменяется generic CI. На `ea36873e` полный PR CI прошёл,
 а push CI остановился на нестабильной положительной WireGuard fixture (1 мс).
 Исправлена только fixture; в следующем CI оба сценария повторяются по 10 раз
 normal/race. Production handshake deadlines сохранены.
@@ -115,15 +117,31 @@ classic-save в normal manual case; два стандартных copy scratch �
 2.042590→2.043532 с — выигрыш памяти, без ускорения по времени. Полный startup
 image comparison остаётся только измерительным тестом: race-пара capture/compare/
 clear 36.03 мс против двух SHA 14.86 мс оказалась хуже. В production не перенесена.
-Нормальное измерение и отдельный тест ограниченного переиспользуемого буфера
-ещё нужны; отрицательный результат не отбрасывается.
+На отдельной проверочной ветке `6b120f8c` полный fixed-slot pair измерен:
+normal warm 10.137→7.256 мс, race 22.354→50.168 мс. Все проверки границ прошли,
+но продвижение startup image в production отклонено по совокупности результатов.
+Отдельный retained buffer и ухудшение race не скрываются.
+
+Совместимая современная pair/encrypted restore/restored-panel проверка повторно
+PASS на2ecf (панель0.19с). Sameboot полная матрица11/14 PASS: пять обычных cuts
+и race completed/history прошли; retirement/terminal-transaction/terminal-global
+race остаются FAIL на настоящем aggregate120с. Deadline не расширяется.
+На6b новый public history сценарий остановился до первой пробы из-за выбора
+nft-варианта iptables на legacy-стенде; исправлен только private fixture alias,
+повтор ещё нужен. Empty/draft снова PASS. Подготовлены независимо проверенные
+узкие original-scope reads для Mihomo table207 и NFQ RPDB, без пропуска реальных
+команд и без изменения общих исполнителей. Их runtime и полное время ещё не приняты.
 
 Следующие критерии: public history/manual и совместимый запуск, DNS GEN1/GEN2 и отмена на исходных
 12/4 с, matched ABBA на одном runner, managed NFQWS2 manual/recovery, оставшиеся
 Mihomo same-boot race cuts. Внешних блокеров для этих программных задач нет.
 На роутере выполнены только read-only измерения; новая сборка и LAN-профиль
 требуют отдельной авторизации изменений действующего устройства.
-[Последние native результаты](measurements/2026-11-09/research/lifecycle/2ecf9961/attempt1/),
+[Полный generic CI](measurements/2026-11-09/research/lifecycle/2ecf9961/generic/),
+[полная повторная native матрица](measurements/2026-11-09/research/lifecycle/2ecf9961/attempt2/),
+[ABBA](measurements/2026-11-09/research/domain-abba-42675169698/),
+[новая paired182 серия](measurements/2026-11-09/research/ci-2ecf9961/),
+[первая native попытка](measurements/2026-11-09/research/lifecycle/2ecf9961/attempt1/),
 [предыдущие raw и независимые проверки](measurements/2026-11-09/research/lifecycle/ea36873e/),
 [парные измерения](measurements/2026-11-09/research/ci-ea36873e/).
 

@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 01f6bc58aebcecd47099eabb24c81f6859411edd
+Type: cpu
+Time: 2026-11-09 18:35:48 UTC
+Duration: 18.41s, Total samples = 18.23s (99.04%)
+Showing nodes accounting for 14.87s, 81.57% of 18.23s total
+Dropped 655 nodes (cum <= 0.09s)
+Showing top 35 nodes out of 412
+      flat  flat%   sum%        cum   cum%
+     6.92s 37.96% 37.96%      6.92s 37.96%  crypto/internal/fips140/sha256.blockSHANI
+     6.08s 33.35% 71.31%      6.08s 33.35%  internal/runtime/syscall/linux.Syscall6
+     0.31s  1.70% 73.01%      0.31s  1.70%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.28s  1.54% 74.55%      0.37s  2.03%  runtime.tryDeferToSpanScan
+     0.26s  1.43% 75.97%      0.29s  1.59%  strings.Fields
+     0.15s  0.82% 76.80%      0.57s  3.13%  runtime.scanObject
+     0.11s   0.6% 77.40%      0.11s   0.6%  runtime.rtsigprocmask
+     0.08s  0.44% 77.84%      0.14s  0.77%  runtime.typePointers.next
+     0.06s  0.33% 78.17%      0.15s  0.82%  reflect.deepValueEqual
+     0.06s  0.33% 78.50%      0.75s  4.11%  runtime.mallocgc
+     0.06s  0.33% 78.83%      0.21s  1.15%  runtime.reentersyscall
+     0.06s  0.33% 79.16%      0.12s  0.66%  runtime.scanObjectsSmall
+     0.05s  0.27% 79.43%      0.10s  0.55%  encoding/json.appendCompact
+     0.05s  0.27% 79.70%      0.20s  1.10%  runtime.exitsyscall
+     0.03s  0.16% 79.87%      0.18s  0.99%  encoding/json.structEncoder.encode
+     0.02s  0.11% 79.98%      6.94s 38.07%  crypto/internal/fips140/sha256.block
+     0.02s  0.11% 80.09%      0.31s  1.70%  encoding/json.(*decodeState).object
+     0.02s  0.11% 80.20%      0.33s  1.81%  encoding/json.(*decodeState).value
+     0.02s  0.11% 80.31%      0.22s  1.21%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.02s  0.11% 80.42%      1.73s  9.49%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.11% 80.53%      0.27s  1.48%  runtime.growslice
+     0.02s  0.11% 80.64%      0.26s  1.43%  runtime.mallocgcSmallNoscan
+     0.02s  0.11% 80.75%      0.20s  1.10%  runtime.newobject
+     0.02s  0.11% 80.86%      0.11s   0.6%  runtime.slicebytetostring
+     0.02s  0.11% 80.97%      0.13s  0.71%  runtime.sweepone
+     0.02s  0.11% 81.08%      3.62s 19.86%  syscall.Syscall6
+     0.01s 0.055% 81.13%      0.10s  0.55%  encoding/json.(*decodeState).literalStore
+     0.01s 0.055% 81.18%      8.14s 44.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpening
+     0.01s 0.055% 81.24%      0.10s  0.55%  github.com/ArtixSx/razvilka/internal/dnscontrol.decodeSyntheticDNSLedger
+     0.01s 0.055% 81.29%      0.15s  0.82%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.01s 0.055% 81.35%     11.14s 61.11%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+     0.01s 0.055% 81.40%      0.17s  0.93%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).openDir
+     0.01s 0.055% 81.46%      1.52s  8.34%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.01s 0.055% 81.51%      0.13s  0.71%  github.com/ArtixSx/razvilka/internal/startuptools.freshHeldNode
+     0.01s 0.055% 81.57%      1.11s  6.09%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode

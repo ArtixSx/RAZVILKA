@@ -1,0 +1,45 @@
+{
+  "commit": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "run_id": 42677249225,
+  "jobs": [
+    {
+      "mode": "empty",
+      "job_id": 129361850191,
+      "conclusion": "success",
+      "complete_marker": true,
+      "log": "paired-empty.log",
+      "sha256": "510d90f757a4d2af75f32aee04b410b40c3060b3d66b479944acc0382c3e5e70",
+      "lifecycle_seconds": 144.07,
+      "bootstrap_seconds": 44.08,
+      "restore_seconds": 99.97
+    },
+    {
+      "mode": "draft",
+      "job_id": 129361850119,
+      "conclusion": "success",
+      "complete_marker": true,
+      "log": "paired-draft.log",
+      "sha256": "952b13acf2818ce4e1fcf71821f0402211f4b6d1e41b5d04df4701118f16bba9",
+      "lifecycle_seconds": 158.42,
+      "bootstrap_seconds": 56.35,
+      "restore_seconds": 102.05
+    },
+    {
+      "mode": "history",
+      "job_id": 129361849964,
+      "conclusion": "failure",
+      "complete_marker": false,
+      "log": "paired-history.log",
+      "sha256": "b33047d0e69b26b22171b75373ad075b95813709de287cc768ab559f77cce754",
+      "failed_before_probe": true,
+      "stage": "history fixture baseline first generic /usr/sbin/iptables read",
+      "observed": "process exit success with nonempty stderr; rejection preserved",
+      "followup": "a3d068d1: exact legacy baseline plus private original supported aliases, independent source approved; rerun pending"
+    }
+  ],
+  "limits": [
+    "Only configured Ubuntu tagged offline pair",
+    "History/manual selection native acceptance remains pending",
+    "No old live-reader or router readiness claim"
+  ]
+}
