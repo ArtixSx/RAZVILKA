@@ -187,17 +187,48 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
 		if mode == "settlement-sync" {
 			r.mu.Lock()
-			pending := r.pending != nil
+			pending := r.pending != nil && r.pending.pendingQuarantine != nil
 			r.mu.Unlock()
 			if !pending {
 				done()
 				t.Fatal("publication cut did not retain original pending operation")
 			}
-			releasePublicationFault() // Remove only the injected IO failure, no state mutation.
-			if err := r.Stop(cleanup); err != nil {
+			gate := a.Operations.Snapshot()
+			if !gate.Exclusive || gate.Fenced {
 				done()
-				t.Fatal("fresh original partial recovery Stop", err)
+				t.Fatal("original quarantine did not continuously retain exclusive admission", gate)
 			}
+			releasePublicationFault() // Remove only the injected IO failure, no state mutation.
+			stopErr := r.Stop(cleanup)
+			if os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1" {
+				gate = a.Operations.Snapshot()
+				r.mu.Lock()
+				retainedClosed := r.pending != nil && r.pending.pendingJoined && r.pending.pendingSourcesClosed
+				r.mu.Unlock()
+				if !errors.Is(stopErr, context.DeadlineExceeded) || !gate.Fenced || !gate.Exclusive || !retainedClosed {
+					done()
+					t.Fatal("real source-close cut lost original cleanup", stopErr, gate, retainedClosed)
+				}
+				done()
+				cleanup, done = context.WithTimeout(context.Background(), time.Minute)
+				stopErr = r.Stop(cleanup)
+				gate = a.Operations.Snapshot()
+				if stopErr != nil || !gate.Fenced || gate.Exclusive {
+					done()
+					t.Fatal("fresh Stop stranded or reopened permanently fenced original", stopErr, gate)
+				}
+			} else if stopErr != nil {
+				done()
+				t.Fatal("fresh original partial recovery Stop", stopErr)
+			}
+		}
+		if mode == "settlement-sync" {
+			gate := a.Operations.Snapshot()
+			if gate.Exclusive || gate.Fenced != (os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1") {
+				done()
+				t.Fatal("joined original quarantine did not release its own lease", gate)
+			}
+			t.Log("actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false")
 		}
 		if err := readEmpty(cleanup); err != nil {
 			done()
@@ -236,7 +267,15 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 			t.Fatal("partial recovery retained route owner or changed panel choice", retained)
 		}
 		stopped = true // The failed Apply has already joined its original owner.
-		t.Logf("actual_never_issued_recovered mode=%s intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true", mode)
+		t.Logf("actual_never_issued_recovered mode=%s intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=%t", mode, os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") != "1")
+		if os.Getenv("RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY") == "1" {
+			code, _ = request(http.MethodGet, "/api/v1/plan?scope=all", "")
+			if code == http.StatusOK {
+				t.Fatal("permanent fence was cleared by cleanup retry")
+			}
+			t.Log("actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true")
+			return
+		}
 		// Continue the SAME complete Apply/positive+excluded LAN/Stop scenario.
 		// A later forward failure still fails this test; recovery is not readiness.
 		code, data = request(http.MethodGet, "/api/v1/plan?scope=all", "")

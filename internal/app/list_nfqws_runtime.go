@@ -43,25 +43,30 @@ type ManagedNFQWSListRuntime struct {
 }
 
 type managedNFQWSListExecution struct {
-	self                                  *managedNFQWSListExecution
-	runtime                               *ManagedNFQWSListRuntime
-	mu                                    sync.RWMutex
-	expected                              config.Config
-	catalog                               string
-	scope                                 *ListScopeBinding
-	packetScope                           *NFQWSPacketScopeBinding
-	component                             *components.ManagedNFQWSRuntimeLease
-	source                                *strategylab.SelectedCandidateReview
-	material                              *dataplane.NFQWSActiveMaterial
-	selection                             *dataplane.NFQWSScopedSelection
-	lanAdmission                          *dataplane.LANPolicyCommandAdmission
-	plan                                  dataplane.Plan
-	compilation                           *DefaultRouteCompilation // original immutable comparison; never an execution grant
-	terminal                              *dataplane.NFQWSActiveHandle
-	terminalObservation                   dataplane.NFQWSActiveObservation
-	pendingContext                        context.Context
-	pendingCloseOperation, pendingRelease func()
-	pendingStop, retirementKnown          bool
+	self                                        *managedNFQWSListExecution
+	runtime                                     *ManagedNFQWSListRuntime
+	mu                                          sync.RWMutex
+	expected                                    config.Config
+	catalog                                     string
+	scope                                       *ListScopeBinding
+	packetScope                                 *NFQWSPacketScopeBinding
+	component                                   *components.ManagedNFQWSRuntimeLease
+	source                                      *strategylab.SelectedCandidateReview
+	material                                    *dataplane.NFQWSActiveMaterial
+	selection                                   *dataplane.NFQWSScopedSelection
+	lanAdmission                                *dataplane.LANPolicyCommandAdmission
+	plan                                        dataplane.Plan
+	compilation                                 *DefaultRouteCompilation // original immutable comparison; never an execution grant
+	terminal                                    *dataplane.NFQWSActiveHandle
+	terminalObservation                         dataplane.NFQWSActiveObservation
+	pendingContext                              context.Context
+	pendingCloseOperation, pendingRelease       func()
+	pendingStop, retirementKnown                bool
+	pendingQuarantine                           *dataplane.NFQWSPendingQuarantine
+	pendingJoined                               bool
+	pendingSourcesClosing, pendingSourcesClosed bool
+	pendingShutdownStop                         func() bool
+	pendingShutdownDone                         chan struct{}
 }
 
 type managedNFQWSListOperation struct {
@@ -365,7 +370,9 @@ func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, 
 	}
 	c = dataplane.WithReviewGuard(c, e.guard)
 	phase = "native-apply"
-	result, resultErr = r.app.applyDataplane(c, e.plan, func() (func() error, error) {
+	pendingFrame := &managedNFQPendingFrame{execution: e, original: c, closeOperation: closeOperation, release: release, take: func() { ownedOperation, keep = false, true }}
+	pendingFrame.self = pendingFrame
+	result, resultErr = r.app.applyDataplaneOriginal(c, e.plan, func() (func() error, error) {
 		if err := e.guard(c); err != nil {
 			return nil, err
 		}
@@ -390,13 +397,15 @@ func (r *ManagedNFQWSListRuntime) startReviewed(ctx context.Context, serviceID, 
 		e.expected = after
 		e.mu.Unlock()
 		return undo, e.guard(c)
-	})
+	}, pendingFrame)
 	if resultErr != nil {
 		if r.manager.HasPendingManagedNFQWS() {
 			e.pendingContext, e.pendingCloseOperation, e.pendingRelease = c, closeOperation, release
 			r.pending = e
 			ownedOperation, keep = false, true
-			r.app.Operations.FenceJournal()
+			if e.pendingQuarantine == nil {
+				r.app.Operations.FenceJournal()
+			}
 		} else if result.State == "rolled-back" && !result.RollbackVerified && dataplaneExecutionMutated(result) {
 			// Same rule as the default-route executor: a completed rollback
 			// of a mutation without its readback (for example the metadata-only
@@ -586,8 +595,20 @@ func (r *ManagedNFQWSListRuntime) joinPending(ctx context.Context) error {
 			}
 			e.retirementKnown = true
 		}
-	} else if err := r.manager.JoinPendingManagedNFQWS(c); err != nil {
-		return err
+	} else if !e.pendingJoined {
+		if err := r.manager.JoinPendingManagedNFQWS(c); err != nil {
+			if e.pendingQuarantine != nil {
+				e.pendingQuarantine.Revoke()
+				r.app.Operations.FenceJournal()
+			}
+			return err
+		}
+		if e.pendingQuarantine != nil {
+			e.pendingJoined = true
+		}
+	}
+	if e.pendingQuarantine != nil {
+		return r.finishPendingQuarantine(c, e, op)
 	}
 	if err := e.close(); err != nil {
 		return err

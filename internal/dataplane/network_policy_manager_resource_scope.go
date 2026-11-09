@@ -48,7 +48,8 @@ type executionResourceScope struct {
 	retainedOwner           *retainedNFQWSExecution
 	syntheticPhases         map[*syntheticBaselineExecutionPhase]struct{}
 	syntheticClosing        bool
-	pending                 bool // Original unknown Apply: cleanup only, never ACTIVE.
+	pending                 bool                    // Original unknown Apply: cleanup only, never ACTIVE.
+	nfqQuarantine           *NFQWSPendingQuarantine // Original pending writer, never decoded.
 	syntheticBaselineSource *syntheticBaselineCoordinator
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
@@ -658,6 +659,9 @@ func (s *executionResourceScope) close() error {
 	}
 	if s.wgRecords != nil {
 		err = errors.Join(err, s.wgRecords.close())
+	}
+	if s.nfqQuarantine != nil {
+		err = errors.Join(err, s.nfqQuarantine.scopeClosing())
 	}
 	if s.wgSnapshot != nil {
 		err = errors.Join(err, s.wgSnapshot.close())

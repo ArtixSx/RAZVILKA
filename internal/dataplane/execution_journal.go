@@ -298,6 +298,9 @@ func (m *Manager) writeExecutionOwned(root string, execution Execution, scope *e
 	// Attempt both records, including during cleanup. A successful UI record
 	// cannot compensate for a missing transaction record (or vice versa).
 	if scope != nil {
+		if scope.nfqQuarantine != nil {
+			return executionJournalError(scope.nfqQuarantine.publishExecution(data))
+		}
 		if scope.mihomoLive != nil {
 			return executionJournalError(scope.mihomoLive.publishRecords(data))
 		}
