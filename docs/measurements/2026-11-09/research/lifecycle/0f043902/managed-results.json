@@ -1,0 +1,916 @@
+{
+  "commit": "0f0439020d10e1bbb15a8310be360517bf45581f",
+  "run_id": 42630488013,
+  "router_tested": false,
+  "full_managed_workflow": "FAIL",
+  "completed_flow_acceleration_proven": false,
+  "jobs": {
+    "production": {
+      "job_id": 129205220019,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-production.log",
+      "sha256": "fd818a26378a9325adc12f90bb1c6cb659672fc976f55a40ab29144d05a3c2b3",
+      "tests": [
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/nil",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/copied",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/foreign-app",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/consumed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal/complete",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal/partial",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/same",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/content",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/unlinked",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/closed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineActualThreeWriterFDsSurviveScopeClose",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure",
+          "result": "PASS",
+          "seconds": 0.02
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/latest-plan.json",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/latest-execution.json",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/execution.json",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/state-root",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/transaction-root",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair",
+          "result": "PASS",
+          "seconds": 0.04
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/cancel",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/copy",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/unverified",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/nonterminal",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/stale-plan",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/journal-mismatch",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineExactParticipantsAndIssuerRefusal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineRevokedAdmissionStillFinishesOriginalCleanup",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/same",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/content",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/unlinked",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/closed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeActualRootNodes",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/uid",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/gid",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/ctime",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/mtime",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/device",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/inode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeInventoryParity",
+          "result": "PASS",
+          "seconds": 0.87
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody",
+          "result": "FAIL",
+          "seconds": 20.02
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/busy",
+          "result": "FAIL",
+          "seconds": 19.94
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/replacement",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/cancelled",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/fresh",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.1
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "seconds": 50.09
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.1
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 21.69
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.12
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 56.42
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.93
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 58.26
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.16
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "PASS",
+          "seconds": 40.19
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "PASS",
+          "seconds": 40.19
+        }
+      ],
+      "microbenchmarks": [
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 855.5,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 854.6,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 853.6,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 803.1,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 807.8,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 804.9,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1515.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1506.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1508.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1275.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1270.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1269.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        }
+      ]
+    },
+    "race": {
+      "job_id": 129205219746,
+      "status": "completed",
+      "conclusion": "failure",
+      "log": "managed-race.log",
+      "sha256": "efb118e1d98587a63dbe7a5f5c8cf3e00a573e2cb9408a07b6a35226bceb85c4",
+      "tests": [
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/nil",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/copied",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/foreign-app",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineForeignFrameCannotSuppressJournalFence/consumed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal/complete",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantinePartialSourceCloseNeverBecomesKnownTerminal/partial",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/same",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/content",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/unlinked",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/closed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineActualThreeWriterFDsSurviveScopeClose",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure",
+          "result": "PASS",
+          "seconds": 0.08
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/latest-plan.json",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/latest-execution.json",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/execution.json",
+          "result": "PASS",
+          "seconds": 0.02
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/state-root",
+          "result": "PASS",
+          "seconds": 0.03
+        },
+        {
+          "test": "TestNFQWSQuarantineNoNamedAdoptionAndStickyPublicationFailure/transaction-root",
+          "result": "PASS",
+          "seconds": 0.02
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair",
+          "result": "PASS",
+          "seconds": 0.13
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/cancel",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/copy",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/unverified",
+          "result": "PASS",
+          "seconds": 0.04
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/nonterminal",
+          "result": "PASS",
+          "seconds": 0.03
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/stale-plan",
+          "result": "PASS",
+          "seconds": 0.03
+        },
+        {
+          "test": "TestNFQWSQuarantineTerminalProofRefusesCancelCopyAndIncompletePair/journal-mismatch",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestNFQWSQuarantineExactParticipantsAndIssuerRefusal",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestNFQWSQuarantineRevokedAdmissionStillFinishesOriginalCleanup",
+          "result": "PASS",
+          "seconds": 0.01
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/same",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/content",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/unlinked",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeActualMutationAndClosedFileParity/closed",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshHeldNodeCloseRacesOriginalControl",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeActualRootNodes",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/ctime",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/mtime",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/device",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/inode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/mode",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/uid",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/gid",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestFreshPathNodeStatComparisonFields/size",
+          "result": "PASS",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeInventoryParity",
+          "result": "PASS",
+          "seconds": 1.18
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody",
+          "result": "FAIL",
+          "seconds": 20.0
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/busy",
+          "result": "FAIL",
+          "seconds": 19.9
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/replacement",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/cancelled",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestClassicSaveNativeLockCustody/fresh",
+          "result": "FAIL",
+          "seconds": 0.0
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.23
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANAppHTTP",
+          "result": "FAIL",
+          "seconds": 18.58
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 1.82
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 28.06
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.13
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 28.36
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANPhysical",
+          "result": "PASS",
+          "seconds": 2.12
+        },
+        {
+          "test": "TestManagedStrategyProbeNativeLANManualApply",
+          "result": "FAIL",
+          "seconds": 28.43
+        }
+      ],
+      "microbenchmarks": [
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 564.3,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 557.8,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/before_fileinfo-4",
+          "ns_op": 565.0,
+          "bytes_op": 208,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 520.9,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 528.4,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshHeldNode/after_fstat-4",
+          "ns_op": 518.5,
+          "bytes_op": 0,
+          "allocs_op": 0,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1200.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1203.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/fileinfo-4",
+          "ns_op": 1204.0,
+          "bytes_op": 224,
+          "allocs_op": 2,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1105.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1090.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        },
+        {
+          "name": "BenchmarkFreshPathNode/direct-stat-4",
+          "ns_op": 1098.0,
+          "bytes_op": 16,
+          "allocs_op": 1,
+          "binary_race_enabled": false
+        }
+      ]
+    }
+  },
+  "production": {
+    "classic_inventory_parity": "PASS",
+    "classic_lock_fixture": "FAIL busy child killed at20s; remaining cases parent context expired; core consumer cases not executed",
+    "whole_quarantine": "PASS original continuous gate, original joined journals, fresh plan",
+    "intent_recovery": "PASS then fresh Apply FAIL18279ms",
+    "sync_recovery": "PASS then fresh Apply FAIL18295ms",
+    "cleanup_only_second_stop": "PASS original owner released and permanent fence retained",
+    "manual_activation_seconds": 15.891143128,
+    "manual_native_apply_ms": 18324,
+    "manual_failure_phase": "lan-preflight-rpdb-read",
+    "manual_cpu_seconds": 16.45,
+    "manual_profile_wall_seconds": 18.67,
+    "manual_allocated_bytes": 2042728912,
+    "manual_allocated_objects": 15366725,
+    "manual_payload_reads": 7356,
+    "manual_payload_bytes": 601500120,
+    "manual_metadata_traversals": 7606,
+    "manual_version_starts": [
+      98,
+      98,
+      1575
+    ],
+    "manual_tool_checks": 1595,
+    "manual_tool_check_seconds": 6.856879766,
+    "manual_path_current_cpu_seconds": 4.72,
+    "manual_byte_slice_from_string_alloc_mb": 191.01
+  },
+  "race": {
+    "classic_inventory_parity": "PASS",
+    "classic_lock_fixture": "FAIL busy child killed at20s",
+    "manual_activation_seconds": 17.336910882,
+    "manual_native_apply_ms": 21627,
+    "manual_failure_phase": "lan-preflight-inventory-consumer-close",
+    "intent_and_sync": "FAIL before cut reached; no recovery witness",
+    "manual_allocated_bytes": 2581577536,
+    "manual_allocated_objects": 11577371
+  },
+  "next_actions": [
+    "Repair actual lock fixture without weakening lock custody (DNS owner)",
+    "Validate pooled fresh pathname argument allocation with unchanged syscall and focused normal/race/arm64 compile",
+    "Complete full managed LAN/manual/fresh Apply within original activation deadline; router validation separately"
+  ]
+}
