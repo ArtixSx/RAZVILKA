@@ -83,6 +83,9 @@ func TestNFQLANRPDBRefusesWrongOriginalOrSequence(t *testing.T) {
 			if err == nil {
 				t.Fatal("invalid original scope accepted", kind)
 			}
+			if kind == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal("original cancellation cause lost", err)
+			}
 		})
 	}
 }
@@ -117,5 +120,16 @@ func TestNFQLANRPDBRevokeJoinsReadersAndStockKeepsOldPath(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNFQLANRPDBRegistrationRetainsCancellationCause(t *testing.T) {
+	r, original := nfqRPDBScopeModel(t)
+	ctx, cancel := context.WithCancel(original)
+	cancel()
+	called := false
+	err := r.WithOriginalNFQWSLANRPDB(ctx, func(context.Context) error { called = true; return nil })
+	if called || !errors.Is(err, ErrUnknown) || !errors.Is(err, context.Canceled) {
+		t.Fatal("canceled original registration changed", called, err)
 	}
 }

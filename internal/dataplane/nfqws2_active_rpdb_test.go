@@ -34,9 +34,11 @@ func (m *activeRPDBModel) WithOriginalNFQWSLANRPDB(c context.Context, use func(c
 	return errors.Join(err, m.closing)
 }
 func TestNFQWSActiveRPDBOriginalSourceAndClosing(t *testing.T) {
-	for _, kind := range []string{"original", "foreign-runner", "closing-runner", "closing-source", "closing-plan", "closing-error", "callback-error"} {
+	for _, kind := range []string{"original", "foreign-runner", "closing-runner", "closing-source", "closing-plan", "closing-cancel", "closing-error", "callback-error"} {
 		t.Run(kind, func(t *testing.T) {
 			e, c := nfqwsActiveCommandFixture(t)
+			c, cancel := context.WithCancel(c)
+			defer cancel()
 			e.material.execution, e.material.executionBound = e, true
 			m := &activeRPDBModel{}
 			e.runtime.Runner = m
@@ -61,6 +63,8 @@ func TestNFQWSActiveRPDBOriginalSourceAndClosing(t *testing.T) {
 					e.material.execution = nil
 				case "closing-plan":
 					lan.Generation = "changed-original-intent"
+				case "closing-cancel":
+					cancel()
 				case "callback-error":
 					return sentinel
 				}
@@ -74,6 +78,9 @@ func TestNFQWSActiveRPDBOriginalSourceAndClosing(t *testing.T) {
 			}
 			if err == nil {
 				t.Fatal("original source change accepted", kind)
+			}
+			if kind == "closing-cancel" && !errors.Is(err, context.Canceled) {
+				t.Fatal("original cancellation lost", err)
 			}
 			if kind == "foreign-runner" && (called || m.calls != 0) {
 				t.Fatal("foreign runner dispatched")

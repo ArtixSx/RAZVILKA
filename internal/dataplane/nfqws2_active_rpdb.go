@@ -40,6 +40,9 @@ func (e *nfqws2ActiveExecution) observeLANRPDB(ctx context.Context, lan *LANPoli
 	aliases := [3]string{e.runtimeFrozen.IP, e.runtimeFrozen.IPTables, e.runtimeFrozen.IP6Tables}
 	same := func(current context.Context) error {
 		if current == nil || current.Err() != nil || e.self != e || current.Value(nfqws2ActiveExecutionKey{}) != e || e.material != material || material == nil || material.self != material || material.execution != e || !material.executionBound || e.resource != resource || e.binding != binding || e.runtime == nil || !sameNetworkPolicyDependency(runner, e.runtimeFrozen.Runner) || !sameNetworkPolicyDependency(runner, e.runtime.Runner) || !sameNetworkPolicyDependency(runner, binding.Runner) || aliases != [3]string{e.runtimeFrozen.IP, e.runtimeFrozen.IPTables, e.runtimeFrozen.IP6Tables} || aliases != [3]string{e.runtime.IP, e.runtime.IPTables, e.runtime.IP6Tables} || !reflect.DeepEqual(lan, expectedLAN) || !reflect.DeepEqual(expectedLAN, e.plan.LAN) {
+			if current != nil {
+				return errors.Join(ErrNFQWSScopedOwner, current.Err())
+			}
 			return ErrNFQWSScopedOwner
 		}
 		return nil

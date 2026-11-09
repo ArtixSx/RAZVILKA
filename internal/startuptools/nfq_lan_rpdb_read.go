@@ -29,14 +29,24 @@ func nfqLANRPDBMarker(ctx context.Context) (*nfqLANRPDBScope, bool) {
 	s, _ := v.(*nfqLANRPDBScope)
 	return s, true
 }
+func nfqLANRPDBContextErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
+}
 func (s *nfqLANRPDBScope) currentLocked(ctx context.Context, r *policyRunner) error {
 	if s == nil || s.self != s || !s.active || r == nil || s.runner != r || r.lease != s.lease || s.ctx == nil || s.ctx.Err() != nil || ctx == nil || ctx.Err() != nil || ctx.Value(nfqLANRPDBKey{}) != s {
-		return at("NFQ_LAN_RPDB_SCOPE", nil)
+		var original context.Context
+		if s != nil {
+			original = s.ctx
+		}
+		return at("NFQ_LAN_RPDB_SCOPE", errors.Join(nfqLANRPDBContextErr(ctx), nfqLANRPDBContextErr(original)))
 	}
 	if _, present := readObservationMarker(ctx); !present {
 		return at("NFQ_LAN_RPDB_SCOPE", nil)
 	}
-	return r.lease.readObservationCurrent(ctx)
+	return errors.Join(r.lease.readObservationCurrent(ctx), ctx.Err(), s.ctx.Err())
 }
 
 // The only producer is the original policy runner inside an already-held
@@ -54,7 +64,7 @@ func (r *policyRunner) WithOriginalNFQWSLANRPDB(ctx context.Context, use func(co
 	}
 	release, _, err := r.lease.registerReadObservation(ctx)
 	if err != nil {
-		return err
+		return errors.Join(err, ctx.Err())
 	}
 	defer release()
 	if r.lease.profile.stock {
