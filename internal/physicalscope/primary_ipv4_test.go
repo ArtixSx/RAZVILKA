@@ -7,7 +7,6 @@ import (
 	"net/netip"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
