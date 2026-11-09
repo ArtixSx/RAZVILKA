@@ -1,0 +1,31 @@
+{
+  "review": "APPROVED_FIXTURE_SCOPE_PENDING_NATIVE_CI",
+  "reviewer": "verification",
+  "date": "2026-11-09",
+  "files": {
+    "internal/app/mihomo_live_native_linux_test.go": "0231c02e3d250f76dfcb73efc654b41ca5f1c965058c432ba7c142cfe0af1c91",
+    "scripts/test-mihomo-live-native.sh": "8f8cb070b52a5f784e5639fa0245f5319d9909efbf2b09e0426b43253086809a"
+  },
+  "observed_failure": {
+    "commit": "441e97e49d84ea8b1dd64ae42c152a19329d0c46",
+    "test_duration_s": 300.4,
+    "round0_apply_s": 104.215127028,
+    "round0_stop_s": 6.028310024,
+    "round1_apply_s": 104.271617853,
+    "cause": "Both user cycles and original source/peers shared a single 300s parent fixture lifetime; second closing cut coincided with exact expiry."
+  },
+  "preserved": [
+    "original peers/tools/App/Manager remain same across cycles",
+    "first cycle deadline begins before setup",
+    "each cycle bounded300s; Apply/Check/Stop each110s",
+    "production default apply/stop timeout8min unchanged",
+    "source/ownership/freshness/cleanup/readers assertions unchanged",
+    "one-round scenarios keep lifetime300/hardtimeout360"
+  ],
+  "changed": "Two-cycle aggregate fixture lifetime600 and hard testtimeout660; per-cycle cancellation after verified Stop+physical baseline",
+  "limitations": [
+    "native result pending",
+    "no performance improvement claimed; SHA80.25% CPU cost remains",
+    "historical failure retained"
+  ]
+}

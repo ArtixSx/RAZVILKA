@@ -227,3 +227,30 @@ source lifetime600с и hard harness660с только для двух цикл�
 App, исходные владельцы и peers сохраняются между циклами. Независимое ревью
 PASS; native результат требуется повторить, ускорение не заявляется. Ошибка
 bfc material refusal и высокая цена SHA остаются отдельными наблюдениями.
+
+
+## Исходный writer и никогда не запущенный NFQ Add
+
+`c643b116` сохраняет исходный COMMON session, lock, marker и authored receipt FD
+только для intent до входа в runCommand. После исходного Stop/Wait два новых
+полных inventory подтверждают отсутствие целевого/поздних эффектов и точный
+ACKed prefix. Только этот intent становится removed; обычный строгий Remove
+обрабатывает подтверждённый prefix. Delete grant для неизвестного target не
+создаётся. Вход в runCommand отзывает это право до любых внутренних отказов;
+потерянный ACK, неизвестный Start, restart без исходного custodian остаются fenced.
+
+Ревью потребовало сохранить новый FD до Sync/error, ограничить borrowed reader
+одной попыткой с отзывом и завершением читателей, убрать чтение изменяемого writer
+документа из reader и отменять shutdown callback после закрытия. Ведущий нашёл
+дополнительную регрессию: ошибка до публикации intent могла удержать отличающийся
+in-memory документ при прежнем известном receipt. Исправление восстанавливает
+только private planned/checksum после проверки того же исходного FD/байтов и
+доказанного отсутствия попытки rename. После attempted/ambiguous publication
+такое восстановление запрещено. Отдельный non-root тест должен подтвердить
+реальный EACCES до rename, а не только искусственный fault.
+
+Code review одобрено; результаты11 новых функций unit/race и обоих настоящих
+native cuts intent/settlement-sync ожидают CI. Native требует не только recovered
+marker, но и полного следующего manual Apply → LAN/exclusions → Stop. Этот узкий
+путь не исправляет f842 отказ внутри уже начатого runCommand.
+[Точные file hashes и границы review](measurements/2026-11-09/research/reviews/nfq-never-issued-recovery-independent-review-20261109.json).

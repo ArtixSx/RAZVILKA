@@ -195,3 +195,17 @@ panel, DNS preparation diagnostic30 и paired VLESS подтверждены п�
 Strict DNS12/4 и managed NFQWS LAN/manual/race остаются FAIL; аппаратный
 admission не повышен. Общий CI b5a FAIL из-за отсутствующего StartedAt в общем
 fixture; однострочное исправление441e97e4 требует своего CI. [Evidence](measurements/2026-11-09/research/lifecycle/README.md#проверенный-b5a5f58e-и-продолжение-09112026).
+
+
+## Проверенный интегрированный f842e4dd
+
+| Уровень | Результат | Ограничение |
+| --- | --- | --- |
+| Generic CI | Оба push/PR SUCCESS: normal/race, vet, UI, четыре cross-builds, modeled Entware | Не аппаратная приёмка |
+| VLESS/Mihomo probes | Paired182 rows и actual Mihomo handler SUCCESS; VLESS N12 p50 400.529→310.368мс, selected2 2549→1365мс | Один runner/binary, fixed order; не cold OS cache, не router/LAN |
+| Mihomo полный native | Оба Apply/LAN/Stop, fresh Apply/closing retry, settlement и post-CAS PASS | Разделение fixture-cycle budgets не является ускорением; исторический material refusal не объяснён |
+| StrategyLab и DNS preparation | Compatible pair/restored panel и diagnostic30 original recovery PASS | Не произвольный downgrade/power-loss; не strict DNS publication |
+| Strict DNS / managed NFQWS LAN | FAIL на штатных deadlines; флаги неизвестного результата сохраняются | Это оставшаяся программная работа |
+| Следующие изменения | STATX held-FD audits и original never-issued NFQ recovery прошли code review | Собственные CI/native ещё обязательны; на kernel4.9 fallback с дополнительной попыткой syscall, аппаратный выигрыш не заявлен |
+
+[Измерения, первые/повторные samples, выбросы и raw](measurements/2026-11-09/research/lifecycle/README.md#интегрированный-f842e4dd-native-результаты).

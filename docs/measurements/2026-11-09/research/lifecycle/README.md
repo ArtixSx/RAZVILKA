@@ -430,3 +430,55 @@ bulkTestResult не заполнял верхний StartedAt, поэтому н
 корректно отказывал. 441e97e4 исправляет только fixture; прежние assertions
 и production guards сохранены, независимое ревью PASS. CI этого исправления
 оценивается отдельно; pending не считается успехом.
+
+
+## Интегрированный f842e4dd: native результаты
+
+[Mihomo42609998234](https://github.com/ArtixSx/RAZVILKA/actions/runs/42609998234)
+SUCCESS, все три jobs и normal/race original bookends. Два цикла завершены
+за274.15с: Apply93.994/93.742с, Stop6.025/6.013с, cycle136.066/135.716с;
+второй Stop включает closing retry, оба возвращают исходный путь клиента.
+Settlement115.85с с двумя cuts; post-CAS73.92с с требуемым HTTP503, точным
+возвратом desired и rollback_verified. Это изолированный namespace стенд,
+не физический роутер; исправление harness не считается ускорением.
+[Независимая проверка](f842e4dd/independent-review.json).
+
+[Lifecycle42609998397](https://github.com/ArtixSx/RAZVILKA/actions/runs/42609998397)
+имеет FAIL. DNS strict selected14.32с и canceled-ready14.21с не публикуют GEN1
+в12с. Новая настоящая pre-Add ветка выполнена: selected entered11/completed10/
+command-boundary10, canceled10/9/9; эффекты10/9. Это другой объём частично
+выполненной работы, поэтому уменьшение SHA не объявляется ускорением полного
+сценария. Новые unit/8→2 primitive и actual child cancel normal/race PASS.
+Diagnostic30 preparation: baseline CUT→REFUSED70.28с; candidate clean88.66с,
+capture ACK95.08с, standby ACK93.60с — CUT→COMPLETE→PASS без SKIP.
+
+Managed NFQWS production core/HTTP/closing PASS, LAN/manual FAIL:
+activation15.794/15.875с, active-LAN≈11с, policy Apply≈9.5–9.8с.
+Race consumer/Apply/manual тоже FAIL. Последующий retire.policy-remove
+сохраняет unknown. Новый узкий recovery до входа в runCommand не сможет
+объявить исход этого уже начатого RPC известным. Исходные отказы сохранены.
+[Raw и контрольные суммы](f842e4dd/archive-manifest.json).
+
+[Paired probes42609998331](https://github.com/ArtixSx/RAZVILKA/actions/runs/42609998331)
+SUCCESS,182 строки прошли анализ идентичности, verdict, cleanup и binary SHA.
+
+| Сценарий, N12 повторных | Baseline0e p50/p95, мс | f842 p50/p95, мс |
+| --- | ---: | ---: |
+| Full live Check | 400.529 / 408.493 | 310.368 / 396.600 |
+| Full cancellation | 360.327 / 403.366 | 269.289 / 341.493 |
+| Single queue completion | 724 / 744 | 627 / 677 |
+| Selected2 queue completion | 2549 / 2804 | 1365 / 1516 |
+| All2 queue completion | 2557 / 2650 | 1365 / 1376 |
+
+[Анализ](../ci-f842e4dd/paired-analysis.json) сохраняет первые samples отдельно.
+У candidate live sample6 runtime_start98мс, у dead-service sample1 cleanup500мс;
+выбросы не исключены. Baseline dead-service max876.386мс включаетconfiguration213
+и route_identity382мс. N12, fixed baseline-first order, один binary/runner;
+не холодный OS cache, не оценка медленного WAN и не router/LAN latency.
+
+Generic CI f842 SUCCESS: [push42609998255](https://github.com/ArtixSx/RAZVILKA/actions/runs/42609998255)
+и [PR42610007748](https://github.com/ArtixSx/RAZVILKA/actions/runs/42610007748).
+Normal/race, vet, UI, четыре Linux cross-builds и modeled Entware transaction
+пройдены. Это подтверждает исправление fixture441e без изменения production
+attribution. Общие441e jobs были отменены как superseded; их PASS не заявлялся.
+Новый STATX код15bb4108/bc2ea7c2 и NFQ recovery требуют собственного CI.

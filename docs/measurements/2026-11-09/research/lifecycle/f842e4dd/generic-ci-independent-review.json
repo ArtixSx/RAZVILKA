@@ -1,0 +1,39 @@
+{
+  "sha": "f842e4ddb89144a5310ea07f77018c60852c1fd0",
+  "push_run": 42609998255,
+  "push_conclusion": "success",
+  "pr_run": 42610007748,
+  "pr_conclusion": "success",
+  "pr_job": 129135834620,
+  "pr_full_check_seconds": 1416,
+  "checks": [
+    "Go normal and race full suites",
+    "UI checks",
+    "linux amd64/arm64/mips/mipsle cross-builds",
+    "Entware shell/S99/Main modeled-initializer transaction",
+    "RAZVILKA checks: OK"
+  ],
+  "sample_package_seconds": {
+    "app": {
+      "normal": 138.172,
+      "race": 377.386
+    },
+    "dataplane": {
+      "normal": 206.554,
+      "race": 564.822
+    },
+    "netidentity": {
+      "normal": 2.251,
+      "race": 3.607
+    }
+  },
+  "log": {
+    "file": "generic-pr-ci.log",
+    "bytes": 197398,
+    "sha256": "7c5f32e2edb49f43622f5a74e4d64f4707f58c4b70c14be73d69b19f192d6b19"
+  },
+  "limitations": [
+    "Exact f842 only; does not validate newer STATX or NFQ recovery.",
+    "Generic CI and modeled Entware initializer do not establish genuine clean-install, D11 journaled update/Resume, or router/LAN acceptance."
+  ]
+}

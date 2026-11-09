@@ -1,0 +1,42 @@
+{
+  "reviewer": "independent-verification",
+  "commit": "15bb410869f539e1f9c5467a41c13f2404fa2bd6",
+  "decision": "code-reviewed; runtime CI and performance results pending",
+  "mechanism": "Fresh STATX_MNT_ID via AT_EMPTY_PATH on original held FD; exact existing fdinfo fallback for unsupported/denied syscall. No caching or identity substitution.",
+  "primary_sources": [
+    "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/stat.c",
+    "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/proc/fd.c"
+  ],
+  "verified": [
+    "Both kernel sources return legacy real_mount(file->f_path.mnt)->mnt_id.",
+    "Mask and nonzero ID required; no UNIQUE mount ID.",
+    "Unexpected EBADF/EIO/EFAULT/ENOENT refuse; expected unsupported/denied errors require full original fdinfo proof.",
+    "Original procfs/root/child/source metadata bookends preserved.",
+    "Tests cover same FD rebind via Dup3, same inode/dev but different mount ID, fallback parity, cancellation, hard errors.",
+    "Old-kernel closed-FD test now requires rejection rather than unavailable-syscall EBADF cause."
+  ],
+  "limitations": [
+    "No Go build executed on storage-constrained host.",
+    "Native bindmount and race checks pending CI.",
+    "Linux4.9 compatibility is designed fallback; physical-router acceptance remains separate.",
+    "Primitive forced-fallback measurement excludes failed actual syscall overhead."
+  ],
+  "files": [
+    {
+      "path": "internal/dataplane/xray_selected_tcp_runtime_process_linux.go",
+      "sha256": "16552f4684f9d7dbdca4e498a45754f598feef56c30cfec37f84803a53ed7fec"
+    },
+    {
+      "path": "internal/dataplane/xray_selected_tcp_mount_id_linux.go",
+      "sha256": "578009d3ab94dc33edcbe11b599b069df0b4df36e581763ac99b5e4170729c6b"
+    },
+    {
+      "path": "internal/dataplane/xray_selected_tcp_mount_id_linux_test.go",
+      "sha256": "e66061f9e8e07ed6a043d91a116ad639ef9e76bf60d2dbbd7a5d53ebf9ddca7d"
+    },
+    {
+      "path": "internal/dataplane/xray_selected_tcp_mount_id_measurement_linux_test.go",
+      "sha256": "4bf8a16aa6004184bb5942115f77ad859729f6f552f659e25f208aeeb629259e"
+    }
+  ]
+}
