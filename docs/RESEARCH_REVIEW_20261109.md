@@ -190,3 +190,40 @@ admission. Положительный portable regression не считаетс�
 
 Полные сырые результаты, включая неудачные попытки, находятся в
 [lifecycle журнале](measurements/2026-11-09/research/lifecycle/README.md).
+
+
+## Последующее ревью finite reads — 09.11.2026
+
+`cc918208`: NFQWS current/health/original queue и точный COMMON ExactPresence
+получили ограниченный original tool read interval. Все проверки процессов,
+источников, inventory и счётчиков сохранены; closing refusal отменяет bool/count.
+Новый набор содержит13 отказных и fresh-count сценариев. Runtime effect,
+Start/Add/Delete и запись receipt выполняются вне интервала. Независимое
+code review PASS; normal/race и полный native workflow ещё должны проверить
+результат. Retire неизвестного частичного Add по-прежнему отказывает.
+
+`61afd346`: только исходный domain producer объединяет чтение байтов между
+ExactPresence→Guard→ExactPresence→Guard после сохранения intent/fault и до Add.
+Все четыре вызова, порядок и классификация ошибок сохранены. Private scope
+связан с original owner/process/capture/baseline/plan/runner, отзывается до Add;
+чужой, истёкший или производный context не выбирает fallback. Public/custom
+путь прежний. Reviewer потребовал точную owner.captureResource association
+и сохранение причины ранней отмены; исправления включены. Новые проверки
+mutation/cancel/order и actual-child cancellation добавлены, но до CI не
+считаются PASS. Native counters pre-add-original-read/complete/command-boundary
+отделяют вход в реальный factory от модели чтения файлов.
+
+Общий policy effect guard не ослаблялся. Успех модели или уменьшение числа SHA
+не закрывает strict DNS12/4, NFQWS LAN15с и восстановление частичного применения.
+
+
+Mihomo `441e97e4` повтор42607484456: оба Apply104.215/104.272с PASS,
+первый Stop6.028с PASS; второй closing cut завершился ровно на общем
+fixture lifetime300с (whole300.40с). Это независимые пользовательские циклы,
+но источники и peers ошибочно жили под одним сроком одного цикла. Исправление
+только стенда даёт каждому циклу300с, первым включая setup; общий original
+source lifetime600с и hard harness660с только для двух циклов. Один цикл
+сохраняет300/360с. Per-operation110с и production apply480с не изменены.
+App, исходные владельцы и peers сохраняются между циклами. Независимое ревью
+PASS; native результат требуется повторить, ускорение не заявляется. Ошибка
+bfc material refusal и высокая цена SHA остаются отдельными наблюдениями.
