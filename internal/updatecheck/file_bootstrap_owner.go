@@ -20,11 +20,12 @@ func bootstrapDecimal(value uint64) string { return strconv.FormatUint(value, 10
 // Bootstrap review4 has an explicit candidate helper owner. The old executable
 // remains the source/rollback image; its bytes never acquire a reader ABI.
 type fileBootstrapBinding struct {
-	Role          string `json:"role"`
-	Mode          string `json:"mode"`
-	HelperSHA256  string `json:"helper_sha256"`
-	ArchivePath   string `json:"archive_path"`
-	ArchiveSHA256 string `json:"archive_sha256"`
+	Role            string                         `json:"role"`
+	Mode            string                         `json:"mode"`
+	HelperSHA256    string                         `json:"helper_sha256"`
+	ArchivePath     string                         `json:"archive_path"`
+	ArchiveSHA256   string                         `json:"archive_sha256"`
+	OfflineStrategy *bootstrapOfflineStrategyProof `json:"offline_strategy,omitempty"`
 }
 
 func validFileReviewOwner(review fileReview, record updateRecord) bool {
@@ -42,7 +43,7 @@ func validFileReviewOwner(review fileReview, record updateRecord) bool {
 		validDigest("sha256:"+b.HelperSHA256) && b.HelperSHA256 == strings.TrimPrefix(record.Job.Release.Binary.Digest, "sha256:") &&
 		b.HelperSHA256 == record.Files["dist/"+record.Job.Release.Binary.Name] &&
 		filepath.IsAbs(b.ArchivePath) && filepath.Clean(b.ArchivePath) == b.ArchivePath &&
-		validDigest("sha256:"+b.ArchiveSHA256) && "sha256:"+b.ArchiveSHA256 == record.Job.Release.Archive.Digest && review.JournalReaders == nil
+		validDigest("sha256:"+b.ArchiveSHA256) && "sha256:"+b.ArchiveSHA256 == record.Job.Release.Archive.Digest && review.JournalReaders == nil && validBootstrapOfflineStrategy(review)
 }
 
 func fileInstallAuthority(review fileReview) string {

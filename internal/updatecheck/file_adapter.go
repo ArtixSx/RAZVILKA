@@ -538,7 +538,11 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 			return "", errors.Join(ErrFileProtocol, err)
 		}
 	}
-	review.StrategyPair, err = a.sealStrategyPair(ctx, review)
+	if bootstrap != nil {
+		review.Bootstrap.OfflineStrategy, err = a.sealBootstrapOfflineStrategy(ctx, record, review, preparation)
+	} else {
+		review.StrategyPair, err = a.sealStrategyPair(ctx, review)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -569,6 +573,15 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 	if preparation != nil {
 		if err := preparation.current(ctx); err != nil {
 			return "", externalBootstrapFailure("preparation-owner", err)
+		}
+		if hasBootstrapOfflineStrategy(review) {
+			image, schema, err := a.inspectOrdinaryStrategyState(ctx)
+			if err != nil {
+				return "", err
+			}
+			if err := a.checkBootstrapOfflineStrategy(ctx, review, image, schema); err != nil {
+				return "", err
+			}
 		}
 	}
 	if err = file.Close(); err != nil {
@@ -860,6 +873,9 @@ func (a *SelfUpdateFileAdapter) authorityAction(ctx context.Context, id string, 
 	}
 	if revision != review.Revision {
 		return ErrReviewChanged
+	}
+	if hasBootstrapOfflineStrategy(review) && (action == "start/live" || action == "replace-to-rollback") {
+		return ErrStrategyStateAdmission
 	}
 	root, err := ownedfs.Open(filepath.Dir(record.Deployment.Paths["config"]))
 	if err != nil {
