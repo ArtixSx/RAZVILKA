@@ -20,6 +20,7 @@ import (
 
 // The duplicated measurement body is mechanically checked against the real
 // producer below. It retains the old backing allocation for a paired baseline.
+//
 //go:embed observe_linux.go
 var auditCapacityProductionSource string
 
