@@ -361,8 +361,11 @@ func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, m
 	if send == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := o.CurrentSyntheticMapping(ctx, mapping); err != nil {
-		return err
+	finishOpening := domainTCPMeasure("dns-publication-opening")
+	openingErr := o.CurrentSyntheticMapping(ctx, mapping)
+	finishOpening(0)
+	if openingErr != nil {
+		return openingErr
 	}
 	finishSend := domainTCPMeasure("dns-send")
 	err := send(ctx)
@@ -370,9 +373,14 @@ func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, m
 	if err == nil {
 		domainTCPMeasure("dns-send-success")(0)
 	}
-	return errors.Join(err, o.CurrentSyntheticMapping(ctx, mapping))
+	finishClosing := domainTCPMeasure("dns-publication-closing")
+	closingErr := o.CurrentSyntheticMapping(ctx, mapping)
+	finishClosing(0)
+	return errors.Join(err, closingErr)
 }
 func (o *DomainTCPOriginalScope) LookupPublished(ctx context.Context, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {
+	finish := domainTCPMeasure("accepted-flow-lookup")
+	defer finish(0)
 	if err := o.baseCurrent(ctx); err != nil {
 		return nil, err
 	}

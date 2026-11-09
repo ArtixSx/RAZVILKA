@@ -525,6 +525,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		stopToolMetrics := startuptools.StartDomainNativeToolMeasurement()
 		defer func() {
 			t.Logf("actual Run through join observation counts: domain=%+v actual_tool_starts=%+v; overlapping cumulative durations, not wall speed", stopDomainMetrics(), stopToolMetrics())
+			t.Logf("completed tool gate timing: %+v; select wait and inclusive held durations overlap domain stages, native attribution overhead included, not readiness", startuptools.DomainNativeToolTimingSnapshot())
 		}()
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)
