@@ -6,6 +6,7 @@ Downloaded package bytes are pinned and bounded; ordinary production acquisition
 still performs its own original path/ELF/dependency/source/namespace checks.
 """
 
+import argparse
 import hashlib
 import io
 import json
@@ -22,7 +23,31 @@ def require(condition, message):
         raise SystemExit(message)
 
 
+def fetch_package(package, directory):
+    require(package["name"] in {"iptables", "libip4tc2", "libip6tc2", "libxtables12"},
+            "closed package name required")
+    url = package["url"]
+    require(url.startswith("https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/") and
+            0 < package["bytes"] < 1 << 20, "closed package provenance required")
+    with urllib.request.urlopen(url, timeout=30) as response:
+        body = response.read(package["bytes"] + 1)
+    require(len(body) == package["bytes"] and hashlib.sha256(body).hexdigest() == package["sha256"],
+            "official package archive differs: " + package["name"])
+    archive = directory / (package["name"] + ".deb")
+    # No existing file/symlink may be followed or replaced by preparation.
+    descriptor = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(body)
+        output.flush()
+        os.fsync(output.fileno())
+    return archive
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--download-dir", type=pathlib.Path,
+                        help="prepare four verified baseline .debs only; never install packages")
+    args = parser.parse_args()
     require(os.geteuid() == 0, "root disposable native fixture required")
     release = dict(
         line.split("=", 1) for line in pathlib.Path("/etc/os-release").read_text().splitlines()
@@ -35,23 +60,25 @@ def main():
     require(libc and libc.startswith("glibc ") and
             tuple(map(int, libc.split()[1].split("."))) >= (2, 42), "compatible native glibc required")
     manifest = json.loads((pathlib.Path(__file__).parent / "fixtures/classic-save-1.8.11.json").read_text())
+    if args.download_dir is not None:
+        directory = args.download_dir
+        info = directory.lstat()
+        require(directory.is_absolute() and directory.resolve(strict=True) == directory and
+                not directory.is_symlink() and directory.is_dir() and
+                info.st_uid == 0 and info.st_mode & 0o777 == 0o700 and not any(directory.iterdir()),
+                "fresh absolute root-owned 0700 package directory required")
+        archives = [str(fetch_package(package, directory)) for package in manifest["packages"]]
+        print("ACTUAL_PINNED_CLASSIC_1_8_11_ARCHIVES " + json.dumps(archives))
+        return
     observed = []
     with tempfile.TemporaryDirectory(prefix="razvilka-classic-provenance-") as temporary:
         for package in manifest["packages"]:
             version = subprocess.check_output(
-                ["dpkg-query", "-W", "-f=${Version}\t${Architecture}", package["name"]], text=True
+                ["dpkg-query", "-W", "-f=${Version}\t${Architecture}\t${Architecture-Variant}", package["name"]], text=True
             )
-            require(version == package["version"] + "\t" + package["architecture"],
-                    "installed package identity differs: " + package["name"])
-            url = package["url"]
-            require(url.startswith("https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/") and
-                    0 < package["bytes"] < 1 << 20, "closed package provenance required")
-            with urllib.request.urlopen(url, timeout=30) as response:
-                body = response.read(package["bytes"] + 1)
-            require(len(body) == package["bytes"] and hashlib.sha256(body).hexdigest() == package["sha256"],
-                    "official package archive differs: " + package["name"])
-            archive = pathlib.Path(temporary) / (package["name"] + ".deb")
-            archive.write_bytes(body)
+            require(version == package["version"] + "\t" + package["architecture"] + "\t",
+                    "installed baseline package/version/architecture/variant differs: " + package["name"] + " " + repr(version))
+            archive = fetch_package(package, pathlib.Path(temporary))
             # The exact verified archive is inspected without running scripts.
             payload = subprocess.check_output(["dpkg-deb", "--fsys-tarfile", str(archive)], timeout=20)
             require(len(payload) <= 8 << 20, "bounded package payload required")
@@ -70,7 +97,9 @@ def main():
                     with path.open("rb") as installed:
                         actual = installed.read(entry.size + 1)
                     require(len(expected) == entry.size and actual == expected,
-                            "installed package member bytes differ: " + relative)
+                            "installed package member bytes differ: " + relative +
+                            " expected=" + hashlib.sha256(expected).hexdigest() +
+                            " actual=" + hashlib.sha256(actual).hexdigest())
                     verified.append({"path": str(path), "sha256": hashlib.sha256(actual).hexdigest()})
             require(verified, "no actual package library/image members checked")
             for pinned in package["files"]:
