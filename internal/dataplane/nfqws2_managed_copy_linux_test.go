@@ -159,12 +159,21 @@ func TestNFQWSManagedCopyClearsScratch(t *testing.T) {
 
 func TestNFQWSManagedCopyFreshFiles(t *testing.T) {
 	root := t.TempDir()
+	// Go's numbered TempDir child uses 0777 masked by umask. The original
+	// managed-file contract requires every private /tmp descendant to be 0700.
+	// Change only this freshly owned child, never a shared ancestor.
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	program, asset := filepath.Join(root, "program"), filepath.Join(root, "asset")
 	payload := bytes.Repeat([]byte("actual fresh managed bytes\n"), 2000)
 	sum := sha256.Sum256(payload)
 	for _, path := range []string{program, asset} {
 		if err := os.WriteFile(path, payload, 0700); err != nil {
 			t.Fatal(err)
+		}
+		if err := nfqws2ManagedProtected(path, false); err != nil {
+			t.Fatal("fixture does not satisfy original protected-path contract", err)
 		}
 	}
 	command := nfqws2ManagedProcessCommand{Program: nfqws2ManagedFile{Path: program, SHA256: hex.EncodeToString(sum[:])}, Assets: []nfqws2ManagedFile{{Path: asset, SHA256: hex.EncodeToString(sum[:])}}}
