@@ -79,7 +79,11 @@ func acquireNativeFixturePolicy(ctx context.Context, provider *netidentity.Provi
 	if err != nil {
 		return nil, err
 	}
-	return acquire(ctx, provider, p)
+	l, err := acquire(ctx, provider, p)
+	if err != nil {
+		nativeFixtureAcquireDiagnostic(err)
+	}
+	return l, err
 }
 
 func nativeFixturePolicyProfile(reviewPath string) (profile, error) {
