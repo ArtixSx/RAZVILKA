@@ -1,0 +1,100 @@
+{
+  "jobs": [
+    {
+      "official_child_normal_race_bookends": "PASS",
+      "both_baselines_restored": true,
+      "id": 129177092736,
+      "rounds": [
+        {
+          "apply_seconds": 95.374945884,
+          "stop_seconds": 6.226341151,
+          "cycle_seconds": 138.250849103,
+          "closing_retry": false
+        },
+        {
+          "apply_seconds": 95.459498746,
+          "stop_seconds": 6.145068711,
+          "cycle_seconds": 138.269556235,
+          "closing_retry": true
+        }
+      ],
+      "test_seconds": 278.9,
+      "conclusion": "success",
+      "scenario": "lifecycle"
+    },
+    {
+      "conclusion": "success",
+      "test_seconds": 73.53,
+      "http_status": 503,
+      "desired_exact_restored": true,
+      "original_pending": false,
+      "scenario": "postcas-failure",
+      "id": 129177092651,
+      "rollback_verified": true
+    },
+    {
+      "id": 129177092505,
+      "preview": "PASS real original handler",
+      "reviewed_fix": "derive finite startup min(parent,2min), guard unchanged, not yet tested",
+      "root_cause": "HTTP server default Apply8min exceeds existing component ReserveLiveChild2min; client110s deadline is not propagated",
+      "test_seconds": 8.47,
+      "resource": "removed",
+      "scenario": "manual-http",
+      "rollback_verified": true,
+      "apply_phase": "validate",
+      "conclusion": "failure"
+    },
+    {
+      "stages_seconds": {
+        "commit_adapter": 3.736881,
+        "snapshot": 2.760515,
+        "health": 42.605249,
+        "validate": 3.342551,
+        "stage": 1.947077,
+        "canary": 2.800695,
+        "activate": 12.267793
+      },
+      "cause": "HTTP client110s deadline after commit-adapter; server canceled and rollback+verify passed",
+      "unresolved": "Strict full settlement scenario did not complete; startup fix does not explain this timeout",
+      "id": 129177092063,
+      "test_seconds": 116.41,
+      "conclusion": "failure",
+      "scenario": "check-settlement"
+    }
+  ],
+  "logs": [
+    {
+      "sha256": "7D33C491A48131B2A55990D602F18DCA2AA4E6B78D0A5C575F6DE3EB2FACEDA0",
+      "file": "mihomo-lifecycle.log"
+    },
+    {
+      "sha256": "D081850C8F542E31BC7B7EFADB4FB2A364102C483EB39ECBC94D362C4F320B96",
+      "file": "mihomo-postcas.log"
+    },
+    {
+      "sha256": "000324E1F5CA43DAADF558E7883E78DEFE816D2163018C145112D4C34E4047B9",
+      "file": "mihomo-settlement.log"
+    },
+    {
+      "sha256": "C04FAEDFD789FE05DF1641A54E215783F6F8A12CF7856DEA6C6600D422820C92",
+      "file": "mihomo-manual-http.log"
+    }
+  ],
+  "run": 42622252631,
+  "limitations": [
+    "No whole workflow PASS",
+    "Not physical router LAN acceptance",
+    "Cross-run timings not paired acceleration evidence",
+    "Native operation110s per-cycle300s production Apply480s preserved",
+    "Generic CI push and PR cancelled by next reviewed fix; not PASS"
+  ],
+  "sha": "dac23b293486bfd07292f0105fb4ce00e78f5211",
+  "conclusion": "failure",
+  "generic_ci": {
+    "pr_run": 42622259866,
+    "push_run": 42622252524,
+    "not_a_pass": true,
+    "conclusion": "cancelled",
+    "reason": "superseded by reviewed native-found startup deadline fix b9bb3c13"
+  }
+}

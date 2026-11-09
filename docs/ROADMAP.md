@@ -48,7 +48,7 @@ refs и незакоммиченные файлы сохранены. Стары
 | P1: managed NFQWS2 (C) | nfq_completion; verification; ведущий интегрирует | Изолированный probe, история, manual intent и generation guards есть | B726 actual LAN activation16.080с превышает15с, затем retire.policy-remove UNKNOWN; manual/race тоже FAIL. Active-LAN metadata/syscall cost подтверждён, snapshot14captures0.464с не главный источник. Наf842 новые tool-read scopes сохраняют guards, но LAN/manual/race всё ещё FAIL≈15.8с. Следующийbc2ea7c2 сокращает mount-ID syscalls; c643b116 добавляет original never-issued intent recovery. На363f non-root EACCES и recovery unit/race PASS; production cut очищает original NFQ receipt/rules, но последующий LAN rollback останавливается на WG_INACTIVITY_COMMAND. Full LAN/race по-прежнему FAIL; уже начатый неизвестный RPC не считается восстановленным. Завершить Apply → included/excluded traffic → Stop/recovery, сохранив все ownership/closing proofs и unknown/retirementStarted. Аппаратного блокера для этой программной работы нет. |
 | P1: capabilities/API/AUTO (E) | Ведущий после F | Общий gate AUTO/worker, registration отдельно от available:null; unknown process не показывается как stopped/running, job stages привязаны к service и freshness | Исправлен API telemetry scope и UI unknown precedence; новый screen cleanup failure fences после joined batch. Независимые regression PASS. Подтверждать per-plan lifecycle на HTTP API/UI; лабораторные результаты не повышают допуск router profile. |
 | P1: backup/update (A) | Ведущий после F; независимый review | Snapshot3 binary/StrategyLab pair, encrypted backup, история/manual intent, unknown/finalizing fences уже реализованы | Наa9f/a9bd/2924/b726 native/race совместимые пары и restored panel PASS; старый focused native PASS не переносить автоматически на другой SHA. |
-| P1: следующие причины длительности | Ведущий; после подтверждённого baseline этой волны | Общий wall/queue/start/ready/service/cleanup наблюдаем; private stage identity проверена | Отдельные DNS/connect/TLS/TTFB/body timings на каждый redirect ещё не реализованы. Cleanup≈101мс и оставшиеся≈333мс inter-check требуют собственного профиля; не убирать ownership/history checks. Минутные VLESS задержки на controlled fixture не воспроизведены; нужен соответствующий сценарий медленного WAN/CPU/flash. |
+| P1: следующие причины длительности | Ведущий; после подтверждённого baseline этой волны | Общий wall/queue/start/ready/service/cleanup наблюдаем; private stage identity проверена | CLI service exchange localDNS/SOCKS/TLS/TTFB/body timings реализованы4979 и требуютCI; API/UI детализация и WAN измерения ещё открыты. Cleanup≈101мс и оставшиеся≈333мс inter-check требуют собственного профиля; не убирать ownership/history checks. Минутные VLESS задержки на controlled fixture не воспроизведены; нужен соответствующий сценарий медленного WAN/CPU/flash. |
 | P2: измерения платформ и расширение | Ведущий после P0/P1 | Воспроизводимый Linux namespace стенд и router acceptance сценарий | NC-1812 ARM64/KeeneticOS 5.01.C.6.0-1/Entware + отдельный LAN клиент; холодный/повторный Apply, WAN/reboot/power-loss. MIPS/OpenWrt/другие платформы отдельно. SSH и профиль NC-1812 подтверждены read-only; работающий NFQWS2 сохранён. Нужны согласованный LAN scope и отдельная авторизация конкретного изменения действующего устройства; CI-unshare на нём недоступен. [Фактический профиль](measurements/2026-11-09/research/router-readonly.md). |
 
 Первая волна источников и лицензии: [лабораторный журнал](RESEARCH_LAB_20261109.md).
@@ -57,20 +57,29 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Интегрированное продолжение e685 → следующая волна
+### Интегрированное продолжение b9bb → следующая волна
 
-- Ведущий: cleanup paired363f→e685 PASS182строки; live p50 309→217мс,
-  selected2 1378→1172мс. Новый manual Mihomo HTTP58bec реализован и source-reviewed,
-  но native приёмка ещё ожидается. Общий AUTO допуск не расширен.
-- dns_completion:70fa/416 сохранили все эффектные границы; strict12 всё ещё FAIL.
-  496a добавляет раздельные cumulative snapshots до cleanup и stack-context
-  hash buckets. Это диагностика для следующей реализации, направление не закрыто.
-- nfq_completion:48620b56 объединяет оригинальное чтение tool bytes внутри
-  прежней четырёхcallback pre-Add последовательности; проверка actual producer
-  обязательна в native LAN/manual. Следующий шаг — исходная whole-transaction
-  custody для известного pending cleanup; Gate.FenceJournal не сбрасывается.
-- verification: независимое source review и точная привязка новых CI к SHA.
-  Программные препятствия DNS/NFQWS не объявляются аппаратными блокерами.
+- Ведущий: paired363f→e685 PASS182строки; live p50309→217мс,
+  cleanup101→11мс, selected2 1378→1172мс. Наb9bb actual manual HTTP Apply,
+  token replay refusal и LAN прошли; Stop401 выявил отсутствие fixture Bearer.
+  3810bec исправляет только тестовую авторизацию, anonymous Stop остаётся401.
+  Полный новый manual HTTP цикл ещё требует PASS. Общий AUTO допуск закрыт.
+- dns_completion: strict12 остаётся FAIL. Diagnostic30 first DNS answer
+  наdac23 имеет134 completed hashes, доStop140, послеjoin145; cleanup отделён.
+  7c09/66c5 добавляют целостное чтение classic inventory двумя save applets
+  вместо table children, сохраняя все внешние observations/lock/источник.
+  Native6pairs, точное равенство rows и actual20→4 children ещё требуют CI.
+- nfq_completion:757cf сохраняет исходную whole-transaction custody известного
+  pending rollback до полного cleanup/источников; Gate.FenceJournal не очищается.
+  Стандартный sync cut обязан завершить fresh Apply; отдельный post-source-close
+  cut проверяет освобождение исходного owner при сохранённом permanent fence.
+  Ddaa8823 сокращает allocation FileInfo через свежий Fstat с тем же FD lock;
+  syscall/metadata checks не удалены. Normal/race и alloc benchmark ожидаются.
+- Ведущий:4979ddfc добавляет bounded per-exchange localDNS/SOCKS/TLS/TTFB/body
+  в CLI и отдельный native profile pass. Свежесть/identity и semantic predicates
+  сохраняются; multiple/incomplete различаются. Адресная приёмка ещё требуется.
+- verification: новые результаты привязываются к SHA. Наb9bb оба generic CI SUCCESS. Lifecycle/settlement/postCAS native SUCCESS,
+  manual HTTP FAIL401 сохранён. DNS/NFQWS всё ещё программные открытые задачи.
 
 ### Текущие владельцы следующего шага
 

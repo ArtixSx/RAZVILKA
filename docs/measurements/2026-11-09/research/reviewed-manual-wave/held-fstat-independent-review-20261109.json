@@ -1,0 +1,45 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T13:37:08.7043813Z",
+  "base_head": "4979ddfc6509581396da7940296cf7d653453743",
+  "status": "source approved; remote normal/race parity and allocation benchmark pending",
+  "scope": "Replace one FileInfo-producing held image stat comparison with fresh Fstat under original os.File RawControl reference",
+  "preserved": [
+    "Actual fresh syscall per held image in same order and same source/bookend checks",
+    "RawControl incref/decref and runtime KeepAlive preserve original FD against concurrent Close/reuse",
+    "Identical EINTR retry and sameReviewedStat fields already covered by existing parity tests",
+    "Pool is exclusive scratch only, no file/FD/path/expected state; reset before and after synchronous Control",
+    "Closed/error paths refuse and preserve os.ErrClosed classification; no cached identity or observation"
+  ],
+  "sources_read": [
+    "C:/Projects/RAZVILKA/tools/go/src/os/rawconn.go",
+    "C:/Projects/RAZVILKA/tools/go/src/internal/poll/fd_posix.go",
+    "C:/Projects/RAZVILKA/tools/go/src/internal/poll/fd_unix.go",
+    "C:/Projects/RAZVILKA/tools/go/src/os/stat_unix.go"
+  ],
+  "tests_reviewed": [
+    "Actual inode content/size/mode/unlink/close comparison parity",
+    "Parallel independent pooled readers and closed-file replacement refusal",
+    "Bounded actual Close-versus-Control races permit only original observation or ErrClosed",
+    "Same held file before/after allocation benchmark"
+  ],
+  "limitations": [
+    "No local Go build/test by reviewer",
+    "No measured performance benefit yet; full lifecycle and router readiness separate",
+    "ReadDir-to-Readdirnames optimization withdrawn because it removed DT_UNKNOWN incidental lstat refusal"
+  ],
+  "files": [
+    {
+      "path": "internal/startuptools/held_stat_linux.go",
+      "sha256": "AFFD68D256C2578CF322EFC42CB0E38DEA7348A6D9977CBA95C97DC0CD089D6D"
+    },
+    {
+      "path": "internal/startuptools/held_stat_linux_test.go",
+      "sha256": "DD848BC2AD0D75C766B266B5BD9DC3D05A6B1CCF8C6CAA1B1A1F1B8F5463CC8E"
+    },
+    {
+      "path": "internal/startuptools/version_batch_linux.go",
+      "sha256": "068CA871FF55908365D5BEC69311C9588D23AB2495873DD674DD13DA6A6A707D"
+    }
+  ]
+}

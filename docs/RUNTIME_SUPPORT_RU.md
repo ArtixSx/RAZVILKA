@@ -223,3 +223,17 @@ fixture; однострочное исправление441e97e4 требует 
 
 `manual_node_apply_supported` обозначает поддержку отдельного ручного сценария,
 а не доказанную доступность сервиса/маршрута. Общий AUTO допуск не расширен.
+
+
+### Следующая проверяемая волна после b9bb3c13
+
+| Направление | Реализовано | Приёмка |
+| --- | --- | --- |
+| Manual Mihomo HTTP | scoped preview/token→actual Apply/LAN; authenticated Stop fixture | b9bb Apply/LAN проверены, Stop401; новый полный цикл после3810bec ещё ожидается |
+| Managed NFQ pending recovery | original whole transaction custody до источников/cleanup, permanent fence не снимается |757cf full freshApply и отдельный cleanup-only retry ещё ожидают CI |
+| Classic inventory | Ubuntu save applets из того же held binary; exact parser и lock | Native1.8.10 parity/latency ещё ожидаются; stock1.4.21 fallback unchanged; actual1.8.11 отдельно |
+| Сетевые стадии CLI | bounded localDNS/SOCKS/TLS/TTFB/body per exchange, fresh-only JSON | normal/race/actualSOCKS и отдельный profile pass ещё ожидаются; App UI детализация не реализована |
+| Метаданные инструмента | fresh Fstat под исходным FD lifetime lock, scratch reuse | normal/race Close parity и allocation benchmark ещё ожидаются |
+
+Общий CI b9bb SUCCESS отдельно от DNS/NFQ FAIL. Физический роутер и его NFQWS2
+не менялись; software/native успех не переносится автоматически на router/LAN.

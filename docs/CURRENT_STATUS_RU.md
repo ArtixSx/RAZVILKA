@@ -211,3 +211,18 @@ Strict DNS и полный managed NFQWS не прошли; это открыт�
 Source review и Node UI PASS; новый native HTTP/LAN сценарий требует собственного
 результата CI. Ни registration, ни preview не объявлены service proof;
 общий planner/AUTO не получают этот допуск. Физический роутер не изменялся.
+
+
+### Последняя завершённая общая проверка: b9bb3c13
+
+Оба generic CI42623923398/42623932233 SUCCESS: normal/race, UI, vet,
+четыре crossbuild и modeled Entware. Три исходных native Mihomo сценария
+также SUCCESS. Новый actual manual HTTP дошёл до commit/replay refusal/LAN,
+после чего Stop вернул401 из-за отсутствовавшей тестовой авторизации;
+3810bec исправляет fixture и сохраняет anonymous Stop refusal.
+[Точные результаты и журналы](measurements/2026-11-09/research/lifecycle/b9bb3c13/).
+
+Следующая интегрированная волна содержит NFQ quarantine757cf, service timing4979,
+classic-save7c09/66c5 и held-Fstatddaa. Source review пройден; её собственные CI,
+strictDNS, completeNFQ/manualHTTP и парные primitive measurements ещё ожидаются.
+Ни новое abstraction, ни сохранённый owner не закрывают полный workflow.

@@ -1,0 +1,80 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T13:38:40.2304310Z",
+  "base_head": "4979ddfc6509581396da7940296cf7d653453743",
+  "status": "source approved; actual native parity and failure tests pending",
+  "scope": "Exact original legacy multicall complete-family save inventory replaces per-table children on explicitly supported Ubuntu ABI only",
+  "preserved": [
+    "Original provider namespace, held SHA-reviewed executable, source opening/closing, fresh per-child metadata, sole Wait and bounded cancellation",
+    "Same actual nonblocking xtables lock retained across two family children; parent/path/inode validation at command boundaries; no lock FD inherited by child",
+    "Private original lease/lock/context/command predicate, no generic save command grant; unsupported before work only, partial failure cannot fall back",
+    "Complete expected registered tables, exact rule bytes/order conversion, strict bounded grammar, existing full-image double collection and registered table bookends",
+    "Shared output bound across stdout/stderr/both children; any error yields zero image; stock profile unchanged"
+  ],
+  "findings_resolved": [
+    "Native lock bind test now verifies actual private mount propagation before bind",
+    "Native parity fixture registers cleanup immediately after each own chain creation, including partial setup failure",
+    "Pre-entry Lease.lock refusal now joins derived context error, preserving errors.Is(context.Canceled) without changing admission"
+  ],
+  "required_validation": [
+    "Both normal/race actual -S/save equal full inventories and 20-to-4 original child witness",
+    "Actual same-lock exit 4, retained lock replacement refusal, canceled-before-start refusal and fresh retry",
+    "Actual cancellation after extension load must join all children; changed source bytes/membership/symlink must reject image",
+    "Generic grammar/fallback/budget tests and integrated DNS/NFQ lifecycle on exact new SHA"
+  ],
+  "limitations": [
+    "No local Go build/test by reviewer; native measurement has not run",
+    "Same-runner six paired fixture samples are not router readiness or an end-to-end speed claim",
+    "Native test profile covers researched 1.8.10/1.8.11; production profile remains existing pinned 1.8.11, stock does not opt in"
+  ],
+  "files": [
+    {
+      "sha256": "A2E14031631377D5DF662156591C1A2DBE03A371AFB5BCB6B75C6F259A32CB76",
+      "path": "internal/dataplane/network_backend_inventory.go"
+    },
+    {
+      "sha256": "02A17DF01BCBC463DB5F314B7733FA33FD4AAFB228FC2888F8F4297786FFD61A",
+      "path": "internal/dataplane/network_backend_classic_save.go"
+    },
+    {
+      "sha256": "4AC6EA29C86CDF3D9DDD4B4CE1D5BE4CC407FAACFCC4D900DF7497786217BD9F",
+      "path": "internal/dataplane/network_backend_classic_save_test.go"
+    },
+    {
+      "sha256": "57579906CC826F80AC3D66F23B360A8AA2066A6EC63F46977872042A16FF8BDF",
+      "path": "internal/startuptools/classic_save_linux.go"
+    },
+    {
+      "sha256": "C00B2C573B874C068E0F49376218E6B00FCE2F5781EAE41C87DC4D9CF1733B93",
+      "path": "internal/startuptools/classic_save_linux_test.go"
+    },
+    {
+      "sha256": "D7E842688197A2E701AD9C6B034AC95B24D57A103B119C5ABC764B9AEEE6302D",
+      "path": "internal/startuptools/classic_save_lock_linux.go"
+    },
+    {
+      "sha256": "A571AF497EF5C8E9E5FCC361D1DA21B354E41FCC04995EA78C4B6FC0DB742553",
+      "path": "internal/startuptools/classic_save_native_linux_test.go"
+    },
+    {
+      "sha256": "4A6771E753FB59AA0CBD72287861073611DB6C13A90D3C2631C0E1F179ACE58E",
+      "path": "internal/startuptools/classic_batch_native_fixture_linux_test.go"
+    },
+    {
+      "sha256": "2D201CBF1D4CF75AA41807AA8AFBE1C4576A0228A6FEC28D1B0210AF8E3E8A53",
+      "path": "internal/startuptools/native_fixture.go"
+    },
+    {
+      "sha256": "AC017CE34DD02A8B86D419D4F5271B5AB534D4CC04D88F2B80F9412839EA7604",
+      "path": "internal/startuptools/profile.go"
+    },
+    {
+      "sha256": "9C44716BD83C64463B3AD565385C35784212DA5B0C030048FC7BD5FCE0D1EDEC",
+      "path": "internal/startuptools/read_observation_linux.go"
+    },
+    {
+      "sha256": "1EA6657463C59264E2C1B0AB2FAA19E49B7F5887775C6BB316F15AC8BCAC9F03",
+      "path": "scripts/test-managed-probe-native.sh"
+    }
+  ]
+}

@@ -1,9 +1,15 @@
 {
   "files": {
     ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+    "classic-save-independent-review-20261109.json": "733a55449abab9fffba657a77433e98cc0de6d443500a35c207eed323f532a8d",
+    "classic-save-research.txt": "d0f80728e4183ac26ed9c81783d103f4236d36164cbc87db208a8f726d123974",
+    "classic-save-stat-workflow-independent-review-20261109.json": "298bbd8ac54e8ca39e2888fac697f88ca74b88bc6be82342139c32dec1140192",
     "domain-diagnostic-independent-review-20261109.json": "bb5130d0be1ed34540787dec30b4f671b8614f0672cbc830183bf6a95791472e",
     "exec-write-independent-review.json": "11355f4899b5853a09e7978fc1c666a7fd39f68a169ba6030fcac4683bf2d0b8",
     "exec-write-research.txt": "8f4f3795ed57cea10a0eb2e69fb8d65dccc8768968f5fcfda631241c1281bbb7",
+    "held-fstat-independent-review-20261109.json": "9f7ad85715c30a047f986c55e82f43c80eae2c21ac3a11848ad88df636409a3c",
+    "iptables-1.8.10-source-manifest.json": "902408c7bed69c73efd4e96c1c441b9b329fcaf3413f96ac6cacc77e5351af27",
+    "iptables-1.8.11-source-manifest.json": "18287b761070d0b7f2186af2ac7e0bec9007e32dcfda53fc70daafbb2986fe17",
     "mihomo-manual-http-independent-review-20261109.json": "ae777dd450d0dd9f331a2333957ae1212e4c938dbd661736ae0d7393949083d9",
     "mihomo-native-auth-independent-review-20261109.json": "e27cf3bca596744286a44d1bd26c72234ff2a6c52be12c6cbf62ec1e1ee9d9bd",
     "mihomo-start-deadline-independent-review-20261109.json": "1f5c81d8a593d8d415e9c579f1916612b6e6f17810b00cfda7cee7e7bb368cf1",

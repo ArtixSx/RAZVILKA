@@ -281,3 +281,33 @@ CLI nodeeval получает отдельные local resolver / SOCKS / TLS / 
 samples не получают telemetry overhead. Существующие service predicates,
 scope guards, таймауты и cleanup сохраняются. Нужны адресные normal/race и
 original pinned SOCKS/TLS проверки нового SHA; это не аппаратное доказательство.
+
+
+### Целостный classic inventory вместо отдельных table children
+
+Изучены официальные Netfilter iptables1.8.10/1.8.11, GPL-2.0-only;
+исходные версии, архивы, SHA и точные функции сохранены в
+[исследовании](measurements/2026-11-09/research/reviewed-manual-wave/classic-save-research.txt).
+Source code не копировался. Два фиксированных save applets используют тот же
+удерживаемый SHA-reviewed multicall image. Приватный nonblocking xtables lock
+остаётся удержан между двумя дочерними процессами; -w и альтернативного lock нет.
+Строгий parser сохраняет набор/порядок таблиц, цепочки, policy и rule bytes;
+счётчики и timestamps отсутствуют в прежнем -S и не выдаются за scope proof.
+Внешние fresh image/bookend/source/metadata/cleanup проверки сохранены.
+После частичной ошибки нет fallback к более слабому наблюдению.
+
+Это узкий Ubuntu1.8.11 fast path и явно классифицированный native1.8.10/1.8.11
+стенд. Stock NC-1812/1.4.21 продолжает прежний serial -S. Raw save headers и
+counters входят в неизменный1MiB лимит; крайний по размеру inventory может
+получить более ранний отказ. Native parity/6pairs/lock mutation/cancel нужны
+до заявления об ускорении; аппаратная готовность не следует из этого порта.
+
+Отклонены параллельные -S: официальный xtables берёт общий LOCK_EX|LOCK_NB и
+может вернуть новый exit4 при одновременном чтении. Также отвергнут переход
+ReadDir→Readdirnames: исчезает проверка lstat при DT_UNKNOWN между bookends.
+Вместо него ddaa8823 оставляет свежий Fstat под исходным os.File RawControl FD
+reference lock и EINTR loop, переиспользуя только обнулённый scratch, не metadata.
+Allocation benchmark и real concurrent Close parity ещё должны пройти CI.
+
+Actual native binary —1.8.10, а production Ubuntu profile отдельно pinned1.8.11.
+Identical save source не подменяет испытание actual1.8.11 artifact или stock роутера.
