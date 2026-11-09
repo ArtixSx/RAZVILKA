@@ -1031,7 +1031,10 @@ func (a *SelfUpdateFileAdapter) Live(ctx context.Context, id string, rollback bo
 	if err := a.liveFileRuntime(ctx, id, rollback); err != nil {
 		return err
 	}
-	return a.checkStop(ctx, id, "start/live")
+	if err := a.checkStop(ctx, id, "start/live"); err != nil {
+		return err
+	}
+	return nativeModernPairLiveFailure(ctx, a, id, rollback)
 }
 func (a *SelfUpdateFileAdapter) Startup(ctx context.Context, id string, pid int) error {
 	if pid <= 1 {

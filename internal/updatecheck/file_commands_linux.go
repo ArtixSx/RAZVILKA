@@ -688,6 +688,11 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		defer closeInterpreter()
 	}
 	cmd.Env = commandEnvironment()
+	closeModernInit, bindModernErr := bindNativeModernInit(ctx, a, cmd, id, command)
+	if bindModernErr != nil {
+		return bindModernErr
+	}
+	defer closeModernInit()
 	if command == "quiesce-old-runtime" {
 		closeNativeSource, bindErr := bindNativeRuntimeCommand(ctx, cmd, id, command)
 		if bindErr != nil {

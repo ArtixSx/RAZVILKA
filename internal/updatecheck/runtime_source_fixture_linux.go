@@ -19,6 +19,9 @@ import (
 // held outer namespace through actual original command workers. It supplies no
 // runtime/receipt/Stop authority. Every child constructs fresh original owners.
 func bindNativeRuntimeCommand(ctx context.Context, cmd *exec.Cmd, id, command string) (func(), error) {
+	if os.Getenv("RAZVILKA_MODERN_PAIR_NATIVE") != "" {
+		return bindNativeModernWorker(ctx, cmd, id, command)
+	}
 	noop := func() {}
 	review := os.Getenv("RAZVILKA_RUNTIME_NATIVE_REVIEW")
 	if review == "" && os.Getenv("RAZVILKA_RUNTIME_NATIVE_OUTER_NET_FD") == "" {
