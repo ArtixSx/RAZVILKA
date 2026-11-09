@@ -1,11 +1,38 @@
 package dataplane
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // Pure counterfactual only. All prior SAME owners and their whole actual
 // receipts/kernel readbacks bracket this actual collector image. No effect or
 // packet may accept the resulting rows as permission to skip an original gate.
 func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backend *BackendInventory, rows []backendInventoryRow) ([]backendInventoryRow, error) {
+	if ctx == nil || ctx.Value(domainTCPPreAddKey{}) == nil {
+		return c.counterfactualRowsWithSuccessorRead(ctx, backend, rows, nil)
+	}
+	read, err := c.originalSuccessorRead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if read != nil {
+		defer domainTCPMeasure("successor-listener-read-scope")(0)
+	}
+	return c.counterfactualRowsWithSuccessorRead(ctx, backend, rows, read)
+}
+func (c *domainTCPGlobalSuccessor) counterfactualRowsWithSuccessorRead(ctx context.Context, backend *BackendInventory, rows []backendInventoryRow, read *domainTCPSuccessorRead) (result []backendInventoryRow, resultErr error) {
+	if read != nil {
+		if err := read.rootCurrent(ctx); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err := read.rootCurrent(ctx); err != nil {
+				result = nil
+				resultErr = errors.Join(resultErr, err)
+			}
+		}()
+	}
 	if c == nil || backend == nil || c.original() != nil {
 		return nil, ErrPolicyAdditionUnknown
 	}
@@ -34,7 +61,7 @@ func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backe
 			return nil, ErrPolicyAdditionUnknown
 		}
 	}
-	if err := c.comparePrior(ctx, true); err != nil {
+	if err := c.comparePriorWithSuccessorRead(ctx, true, read); err != nil {
 		return nil, err
 	}
 	filtered := rows
@@ -44,7 +71,7 @@ func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backe
 			return nil, err
 		}
 	}
-	if err := c.comparePrior(ctx, true); err != nil {
+	if err := c.comparePriorWithSuccessorRead(ctx, true, read); err != nil {
 		return nil, err
 	}
 	if err := c.records.current(ctx, allEqual); err != nil {

@@ -60,6 +60,9 @@ func (o *DomainTCPOriginalScope) compareStandby(ctx context.Context, transferrin
 }
 
 func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context, transferring bool, cursor *DomainTCPDetachedStandby) error {
+	return o.compareStandbyWithSuccessorRead(ctx, transferring, cursor, nil)
+}
+func (o *DomainTCPOriginalScope) compareStandbyWithSuccessorRead(ctx context.Context, transferring bool, cursor *DomainTCPDetachedStandby, read *domainTCPSuccessorRead) error {
 	if o == nil || o.self != o || xraySelectedTCPFinite(ctx) != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -72,7 +75,18 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 	if !ready || !closed || p == nil || p.self != p || p.scope != o.binding.scope || p.material == nil || baseline == nil || baseline.self != baseline || capture == nil || capture.self != capture || capture.process != p || capture.mapping != baseline.mapping || kernel == nil && unpublished == nil || kernel != nil && (unpublished != nil || kernel.flow.Load() != nil) {
 		return ErrDomainPolicyTCPConsumer
 	}
-	ctx = p.scope.contextWith(ctx)
+	if read == nil {
+		ctx = p.scope.contextWith(ctx)
+	} else {
+		if transferring || cursor != nil {
+			return ErrDomainPolicyTCPConsumer
+		}
+		var err error
+		ctx, read, err = read.forPriorContext(ctx, p)
+		if err != nil {
+			return err
+		}
+	}
 	if unpublished != nil {
 		if err := unpublished.current(ctx, o); err != nil {
 			return err
@@ -111,7 +125,7 @@ func (o *DomainTCPOriginalScope) compareStandbyForDetachment(ctx context.Context
 	default:
 		return ErrXrayDomainTCPOriginal
 	}
-	if err := p.observeRetainedDomainListener(ctx); err != nil {
+	if err := p.observeRetainedDomainListenerWithSuccessorRead(ctx, read); err != nil {
 		return err
 	}
 	session, err := o.binding.originalSyntheticSession(p.material.control)

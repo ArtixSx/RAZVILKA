@@ -85,6 +85,9 @@ func (p *domainTCPStandbyPool) originals() ([]*domainTCPStandbyPoolEntry, error)
 }
 
 func (e *domainTCPStandbyPoolEntry) current(ctx context.Context, manager *Manager, plan Plan, historical bool) error {
+	return e.currentWithSuccessorRead(ctx, manager, plan, historical, nil)
+}
+func (e *domainTCPStandbyPoolEntry) currentWithSuccessorRead(ctx context.Context, manager *Manager, plan Plan, historical bool, read *domainTCPSuccessorRead) error {
 	if e == nil || e.detached == nil || e.detached.self != e.detached || e.history == nil || e.retained == nil || e.detached.owner == nil || e.detached.owner.process == nil {
 		return ErrPolicyAdditionUnknown
 	}
@@ -105,7 +108,7 @@ func (e *domainTCPStandbyPoolEntry) current(ctx context.Context, manager *Manage
 	if err := manager.checkPlanNetwork(ctx, plan); err != nil {
 		return err
 	}
-	if err := owner.original.compareStandby(ctx, false); err != nil {
+	if err := owner.original.compareStandbyWithSuccessorRead(ctx, false, nil, read); err != nil {
 		return err
 	}
 	var err error
