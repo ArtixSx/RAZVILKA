@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+// Exact categories, not merely a smaller SHA counter: each successful original
+// bracket either performs two ordinary hashes or one authenticated capture and
+// one complete byte comparison. Independent reads still require their own SHA.
+func requireDomainExecutableReadMeasurement(t *testing.T, metrics map[string]DomainTCPNativeMetric, independent, pairs int64, size int64) DomainTCPNativeMetric {
+	t.Helper()
+	hash := metrics["whole-executable-hash"]
+	capture := metrics["executable-image-capture"]
+	compare := metrics["executable-image-compare"]
+	if capture.Calls != 0 && capture.Calls != pairs || compare.Calls != capture.Calls || hash.Calls != independent+2*(pairs-capture.Calls) {
+		t.Fatalf("full-byte categories changed: independent=%d pairs=%d hash=%+v capture=%+v compare=%+v", independent, pairs, hash, capture, compare)
+	}
+	var total DomainTCPNativeMetric
+	for _, metric := range []DomainTCPNativeMetric{hash, capture, compare} {
+		if metric.Bytes != metric.Calls*size {
+			t.Fatalf("full-byte category omitted actual bytes: %+v size=%d", metric, size)
+		}
+		total.Calls += metric.Calls
+		total.Bytes += metric.Bytes
+		total.Elapsed += metric.Elapsed
+	}
+	return total
+}
+
 func TestDomainPreAddOriginalByteReadMeasurement(t *testing.T) {
 	process, ctx := domainFileObservationModel(t)
 	measure := func(shared bool) (DomainTCPNativeMetric, int) {
@@ -35,7 +58,11 @@ func TestDomainPreAddOriginalByteReadMeasurement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return stop()["whole-executable-hash"], calls
+		pairs := int64(4)
+		if shared {
+			pairs = 1
+		}
+		return requireDomainExecutableReadMeasurement(t, stop(), 0, pairs, process.executable.info.Size()), calls
 	}
 	before, beforeCalls := measure(false)
 	after, afterCalls := measure(true)

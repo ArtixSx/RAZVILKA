@@ -37,7 +37,11 @@ func TestDomainStandbyReadFileBracketMeasurement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return stop()["whole-executable-hash"]
+		independent, pairs := int64(reads), int64(0)
+		if shared {
+			independent, pairs = 0, 1
+		}
+		return requireDomainExecutableReadMeasurement(t, stop(), independent, pairs, r.executable.info.Size())
 	}
 	for _, reads := range []int{4, 8} {
 		before, after := measure(reads, false), measure(reads, true)
@@ -54,7 +58,7 @@ func TestDomainStandbyReadFileBracketMeasurement(t *testing.T) {
 	if err := r.filesCurrent(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if next := stop()["whole-executable-hash"]; next.Calls != 1 || next.Bytes != r.executable.info.Size() {
+	if next := requireDomainExecutableReadMeasurement(t, stop(), 1, 0, r.executable.info.Size()); next.Calls != 1 || next.Bytes != r.executable.info.Size() {
 		t.Fatalf("independent read reused revoked byte proof: %+v", next)
 	}
 }
