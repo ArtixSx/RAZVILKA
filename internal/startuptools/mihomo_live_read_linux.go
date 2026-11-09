@@ -51,7 +51,18 @@ func (l *Lease) runMihomoLiveRead(original context.Context, name string, args ..
 		if actual != l.identity || !l.profile.acceptsIdentity(actual) || l.closed.Load() || l.lifetime.Err() != nil {
 			return at("MIHOMO_READ_IDENTITY", nil)
 		}
-		if err := l.review.unchanged(held); err != nil {
+		// These four original table-207 reads already run inside the same
+		// synchronous pure observation. Its owner retains every descriptor,
+		// joins readers on revocation and closes the full SHA before success.
+		// Keep complete metadata around each actual child; all ordinary reads
+		// and every other Mihomo command retain their full-byte boundaries.
+		boundary := l.review.unchanged
+		if index == 2 && mihomoSameBootObservedTableRead(frozen) {
+			if _, present := readObservationMarker(held); present {
+				boundary = l.readObservationBytesCurrent
+			}
+		}
+		if err := boundary(held); err != nil {
 			return err
 		}
 		alias, image := l.commandImage(index)
@@ -69,7 +80,7 @@ func (l *Lease) runMihomoLiveRead(original context.Context, name string, args ..
 		command.Stdout, command.Stderr = combined, combined
 		command.WaitDelay = 100 * time.Millisecond
 		commandErr := l.runObservedRead(held, command)
-		closing := l.review.unchanged(held)
+		closing := boundary(held)
 		if combined.overflow || closing != nil || c.Err() != nil {
 			return at("MIHOMO_READ_RESULT", errors.Join(commandErr, closing, c.Err()))
 		}

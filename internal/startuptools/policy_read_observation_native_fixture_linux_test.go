@@ -132,5 +132,53 @@ func TestStaticVersionFactNativeMihomoNumericReadObservation(t *testing.T) {
 	if _, err := read.RunMihomoLiveRead(expired, tools.IP, tableArgs[0]...); !errors.Is(err, ErrUnknown) {
 		t.Fatal("expired table read marker reused")
 	}
-	t.Log("actual original Mihomo CORE implicit IPv4/-N-first IPv6 read bytes match canonical policy ABI; effect and late read refused")
+	// The real original child may return its ordinary failure diagnostics,
+	// but changing the held digest inside a pure group must still invalidate
+	// the group at its full-byte closing boundary. No host file is modified.
+	_, image := l.commandImage(2)
+	if image == nil {
+		t.Fatal("original IP image missing")
+	}
+	originalHash := image.hash
+	defer func() { image.hash = originalHash }()
+	err = l.WithReadOnlyToolObservation(ctx, l.identity, l.digest, func(observed context.Context) error {
+		image.hash[0] ^= 1
+		data, readErr := read.RunMihomoLiveRead(observed, tools.IP, tableArgs[0]...)
+		if exitStatus(readErr) != tableStatus[0] || !bytes.Equal(data, tableExpected[0]) {
+			t.Fatal("actual fixed child or combined failed-read bytes changed")
+		}
+		_, otherErr := read.RunMihomoLiveRead(observed, tools.IP, actualArgs[0]...)
+		var childExit *exec.ExitError
+		if !errors.Is(otherErr, ErrUnknown) || errors.As(otherErr, &childExit) {
+			t.Fatal("different Mihomo read borrowed table-only boundary", otherErr)
+		}
+		return nil
+	})
+	if !errors.Is(err, ErrUnknown) {
+		t.Fatal("outer full SHA accepted changed original digest", err)
+	}
+	_, ordinaryErr := read.RunMihomoLiveRead(ctx, tools.IP, tableArgs[0]...)
+	image.hash = originalHash
+	var ordinaryExit *exec.ExitError
+	if !errors.Is(ordinaryErr, ErrUnknown) || errors.As(ordinaryErr, &ordinaryExit) {
+		t.Fatal("ordinary table read lost original full SHA", ordinaryErr)
+	}
+	// Complete per-child metadata must also reject drift before accepting a
+	// read; only the test's in-memory descriptor metadata is faulted.
+	originalInfo := image.info
+	defer func() { image.info = originalInfo }()
+	err = l.WithReadOnlyToolObservation(ctx, l.identity, l.digest, func(observed context.Context) error {
+		image.info = nil
+		_, readErr := read.RunMihomoLiveRead(observed, tools.IP, tableArgs[0]...)
+		image.info = originalInfo
+		var childExit *exec.ExitError
+		if !errors.Is(readErr, ErrUnknown) || errors.As(readErr, &childExit) {
+			t.Fatal("metadata drift reached actual child or was accepted", readErr)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal("restored original fixture metadata changed the outer read", err)
+	}
+	t.Log("actual original Mihomo CORE read bytes/status unchanged; effect/late read/metadata drift refused and outer full SHA closing retained")
 }
