@@ -445,6 +445,8 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		release() // Each actual HTTP request must obtain its own new admission.
 		metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
 		versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
+		stopOriginalToolStarts := startuptools.StartDomainNativeToolMeasurement()
+		defer func() { t.Log("native actual HTTP original started tool children by kind", stopOriginalToolStarts()) }()
 		payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
 		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
 		defer stopHTTPProfile()
