@@ -30,6 +30,12 @@ func TestDomainNativeGateTimingActualWaitAndRelease(t *testing.T) {
 	if err := l.lock(ctx); err != nil {
 		t.Fatal(err)
 	}
+	locked := true
+	defer func() {
+		if locked {
+			l.unlock()
+		}
+	}()
 	released := false
 	l.readRelease = func() {
 		domainNativeGateMetrics.Lock()
@@ -41,6 +47,7 @@ func TestDomainNativeGateTimingActualWaitAndRelease(t *testing.T) {
 		released = true
 	}
 	base, cancelWait := context.WithCancel(ctx)
+	defer cancelWait()
 	waitCtx := &domainGateSelectContext{Context: base, selected: make(chan struct{})}
 	done := make(chan error, 1)
 	go func() { done <- l.lock(waitCtx) }()
@@ -59,6 +66,7 @@ func TestDomainNativeGateTimingActualWaitAndRelease(t *testing.T) {
 		t.Fatal("wait did not join")
 	}
 	l.unlock()
+	locked = false
 	if !released {
 		t.Fatal("original read release skipped")
 	}
