@@ -7,15 +7,27 @@ stage=$3
 case "$stage" in outer|inner) ;; *) exit 2 ;; esac
 # This script is entered only by the disposable unshare/tini harness. Check
 # original outer namespaces before the first mount, not just an environment bit.
-python3 - "$stage" <<'SCOPE'
-import fcntl,os,sys
+verify_scope() {
+python3 - "$stage" "$1" <<'SCOPE'
+import fcntl,json,os,sys
+identities=[]
 namespaces=[(3,'net',0x40000000),(4,'mnt',0x00020000)]
 if sys.argv[1]=='inner': namespaces.append((5,'pid',0x20000000))
 for fd,name,kind in namespaces:
     if fcntl.ioctl(fd,0xb703)!=kind: raise SystemExit('held original descriptor is not the required namespace')
     outer=os.fstat(fd);inner=os.stat('/proc/self/ns/'+name)
     if (outer.st_dev,outer.st_ino)==(inner.st_dev,inner.st_ino): raise SystemExit('fixture did not isolate '+name)
+    identities.append([name,outer.st_dev,outer.st_ino,inner.st_dev,inner.st_ino])
+if sys.argv[2]=='fresh-proc':
+    roots=[]
+    for line in open('/proc/self/mountinfo'):
+        fields=line.split(); separator=fields.index('-')
+        if fields[4]=='/proc': roots.append((fields[3],fields[separator+1]))
+    if roots!=[('/', 'proc')]: raise SystemExit('fixture requires one original proc root, without hidden overmounts')
+print(json.dumps(identities,separators=(',',':')))
 SCOPE
+}
+original_scope=$(verify_scope inherited-proc)
 mount --make-rprivate /
 if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
 if test "$stage" = outer; then
@@ -27,8 +39,15 @@ if test "$stage" = outer; then
  /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
  RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$work" python3 "$repo/scripts/native-managed-probe-queue-init.py"
- exec unshare --mount --pid --fork --mount-proc /usr/bin/tini -g -- /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" inner
+ exec unshare --mount --pid --fork /usr/bin/tini -g -- /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" inner
 fi
+# A stacked --mount-proc leaves a hidden /proc root which the original source
+# identity parser correctly refuses. Replace it only in the proven private
+# mount/PID namespace, retaining and rechecking all original namespace FDs.
+umount -l /proc
+mount -t proc proc /proc
+test "$(verify_scope fresh-proc)" = "$original_scope"
+if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
 mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
 mkdir -p /opt/bin /opt/sbin /opt/etc/init.d /opt/etc/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache /opt/root
 chmod 755 /opt/bin /opt/sbin /opt/etc /opt/etc/init.d /opt/razvilka
