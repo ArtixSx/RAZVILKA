@@ -59,6 +59,11 @@ func (r nfqwsScopedApplyRunner) Run(ctx context.Context, command string, args ..
 // next-effect permission. Both full ExactPresence calls and the full pre-RPC
 // proof remain fresh for every subsequent effect; Apply closes with COMPLETE.
 func (b *NFQWSScopedBinding) postAdd(ctx context.Context, p *NFQWSScopedPlan, tool PolicyEffectTool, index int) error {
+	// Only the fresh post-RPC observation borrows tools. The actual Add has
+	// finished, and this synchronous loan closes before ACK or another effect.
+	return b.observeProbeTools(ctx, p, func(observed context.Context) error { return b.postAddObserved(observed, p, tool, index) })
+}
+func (b *NFQWSScopedBinding) postAddObserved(ctx context.Context, p *NFQWSScopedPlan, tool PolicyEffectTool, index int) error {
 	if ctx == nil || p == nil || index < 0 || index >= len(p.mixed.Effects) || p.mixed.Effects[index].Tool != tool {
 		return ErrNFQWSScopedOwner
 	}
