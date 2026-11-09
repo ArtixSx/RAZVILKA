@@ -19,8 +19,7 @@ export TMPDIR="$probe_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 # 221d7dff24bfec0cd5ac0a5070b8acef2008af3d. The archive digest was checked
 # against the official release API's sha256 digest; every consumed member is
 # additionally pinned below. No unreviewed release, branch or latest lookup.
-curl --fail --location --retry 3 --output "$probe_work/release.tar.gz" \
-  https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz
+sh "$probe_repo/scripts/fetch-native-fixture.sh" zapret2-1.0.6 "$probe_work/release.tar.gz"
 echo "eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4  $probe_work/release.tar.gz" | sha256sum --check --strict
 tar -xzf "$probe_work/release.tar.gz" -C "$probe_work" \
   zapret2-v1.0.6/binaries/linux-x86_64/nfqws2 \

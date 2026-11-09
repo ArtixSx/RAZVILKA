@@ -6,6 +6,7 @@ on:
     branches: ['work/research-build-20261109']
     paths:
       - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
       - 'cmd/nodeeval/**'
       - '.github/workflows/research-probes.yml'
 
@@ -36,7 +37,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 util-linux unzip
-          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh candidate/scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
@@ -87,12 +88,12 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y ca-certificates curl unzip iproute2 util-linux
-          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
-          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual Mihomo HTTP handler, mandatory TLS and joined cleanup

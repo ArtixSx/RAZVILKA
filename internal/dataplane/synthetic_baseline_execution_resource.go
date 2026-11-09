@@ -194,7 +194,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 	if r.prepared {
 		return r.currentBaseline(ctx)
 	}
-	if err := r.current(ctx); err != nil {
+	if err := r.currentInOriginalFileObservation(ctx); err != nil {
 		return err
 	}
 	runtime := PolicyEffectRuntime{
@@ -202,7 +202,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 		Tools:  PolicyEffectTools{IPTables: r.tools.IPTables},
 		Preflight: func(c context.Context) error {
 			return r.observeTools(c, func(observed context.Context) error {
-				if err := r.current(observed); err != nil {
+				if err := r.currentInOriginalFileObservation(observed); err != nil {
 					return err
 				}
 				view, err := r.inspector.read(observed)
@@ -314,7 +314,7 @@ func (r *syntheticBaselineEffectRunner) Run(ctx context.Context, name string, ar
 	if r == nil || r.resource == nil || r.resource.self != r.resource {
 		return nil, ErrSyntheticBaselineTransition
 	}
-	if err := r.resource.current(ctx); err != nil {
+	if err := r.resource.currentInOriginalFileObservation(ctx); err != nil {
 		return nil, err
 	}
 	return r.resource.tools.Runner.RunSyntheticDNS(ctx, r, name, args...)

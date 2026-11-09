@@ -6,6 +6,7 @@ on:
     branches: ['work/research-build-20261109']
     paths:
       - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
       - 'cmd/razvilka/**'
       - 'scripts/test-domain-original-native.sh'
       - 'scripts/test-managed-probe*.sh'
@@ -86,11 +87,13 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
-          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Actual held-file reads and mutation rejection
+        run: go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainStandbyReadFileBracket' -count=1 -v
       - name: Original scope and cleanup with unchanged production deadlines
         shell: bash
         env:
@@ -224,7 +227,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
-          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures

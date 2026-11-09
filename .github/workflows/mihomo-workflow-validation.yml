@@ -4,6 +4,7 @@ on:
     branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031', 'work/research-build-20261109']
     paths:
       - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
       - 'cmd/razvilka/**'
       - 'scripts/test-mihomo-live*.sh'
       - '.github/workflows/mihomo-workflow-validation.yml'
@@ -34,7 +35,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
-          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.10.31 /tmp/xray.zip
           echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
@@ -42,15 +43,15 @@ jobs:
           /usr/local/lib/razvilka-fixtures/xray version
           # The real local CA fixture uses the compiler's reviewed 26.3.27.
           # 26.10.31 defaults to a bundled CA pool instead of system roots.
-          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
-          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          sh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/hev-socks5-tunnel
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
-          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual registered Apply, native LAN TLS, Stop and retry
