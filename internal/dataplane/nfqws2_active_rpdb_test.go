@@ -52,7 +52,7 @@ func TestNFQWSActiveRPDBOriginalSourceAndClosing(t *testing.T) {
 				m.closing = sentinel
 			}
 			called := false
-			err := e.verifyLANRPDB(c, lan, func(context.Context) error {
+			err := e.observeLANRPDB(c, lan, func(context.Context) error {
 				called = true
 				switch kind {
 				case "closing-runner":
@@ -101,7 +101,7 @@ func TestNFQWSActiveRPDBCustomIssuerCannotSkipOrHideVerify(t *testing.T) {
 			}
 			sentinel := errors.New("actual Verify refused")
 			calls := 0
-			err := e.verifyLANRPDB(c, lan, func(context.Context) error {
+			err := e.observeLANRPDB(c, lan, func(context.Context) error {
 				calls++
 				if mode == "swallow" {
 					return sentinel
@@ -120,6 +120,45 @@ func TestNFQWSActiveRPDBCustomIssuerCannotSkipOrHideVerify(t *testing.T) {
 			}
 			if mode == "swallow" && !errors.Is(err, sentinel) {
 				t.Fatal("swallowed Verify error", err)
+			}
+		})
+	}
+}
+
+func TestNFQWSActiveRPDBCapturesOriginalRuntimeBeforeIssuer(t *testing.T) {
+	for _, kind := range []string{"scope-check", "ip-alias"} {
+		t.Run(kind, func(t *testing.T) {
+			e, c := nfqwsActiveCommandFixture(t)
+			e.material.execution, e.material.executionBound = e, true
+			base := lanRuntimeFixture(t)
+			lan, err := CompileNFQWSDirectLANPolicyRuntime(base.Generation, base.Ingress)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.plan.LAN = lan
+			originalCalls, replacementCalls := 0, 0
+			sentinel := errors.New("original frozen ScopeCheck refusal")
+			m := &activeRPDBModel{}
+			e.runtime.IP = "/original/ip"
+			e.runtime.Runner = m
+			e.runtime.ScopeCheck = func(context.Context, *LANPolicyRuntimePlan) error { originalCalls++; return sentinel }
+			e.runtimeFrozen = *e.runtime
+			e.binding.Runner = m
+			m.before = func() {
+				e.runtimeFrozen.ScopeCheck = func(context.Context, *LANPolicyRuntimePlan) error { replacementCalls++; return nil }
+				if kind == "ip-alias" {
+					e.runtimeFrozen.IP = "/foreign/ip"
+				}
+			}
+			err = e.verifyLANRPDB(c, lan)
+			if err == nil || replacementCalls != 0 {
+				t.Fatal("optional issuer replaced original Verify", err, replacementCalls)
+			}
+			if kind == "scope-check" && (!errors.Is(err, sentinel) || originalCalls != 1) {
+				t.Fatal("original frozen runtime not invoked", err, originalCalls)
+			}
+			if kind == "ip-alias" && originalCalls != 0 {
+				t.Fatal("changed alias reached Verify")
 			}
 		})
 	}

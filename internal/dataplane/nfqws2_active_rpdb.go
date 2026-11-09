@@ -14,7 +14,17 @@ type nfqwsOriginalLANRPDBObserver interface {
 // Only this original NFQ execution lends the policy runner to its frozen
 // direct LAN Verify. Its enclosing verifyLAN observation still closes all
 // source bytes before any result succeeds; no effect crosses either scope.
-func (e *nfqws2ActiveExecution) verifyLANRPDB(ctx context.Context, lan *LANPolicyRuntimePlan, use func(context.Context) error) error {
+func (e *nfqws2ActiveExecution) verifyLANRPDB(ctx context.Context, lan *LANPolicyRuntimePlan) error {
+	if e == nil {
+		return ErrNFQWSScopedOwner
+	}
+	// Freeze the complete original runtime BEFORE invoking the optional issuer.
+	// A custom issuer cannot replace ScopeCheck or command aliases used by Verify.
+	runtime := e.runtimeFrozen
+	return e.observeLANRPDB(ctx, lan, func(observed context.Context) error { return runtime.Verify(observed, lan) })
+}
+
+func (e *nfqws2ActiveExecution) observeLANRPDB(ctx context.Context, lan *LANPolicyRuntimePlan, use func(context.Context) error) error {
 	if e == nil || use == nil {
 		return ErrNFQWSScopedOwner
 	}
@@ -27,8 +37,9 @@ func (e *nfqws2ActiveExecution) verifyLANRPDB(ctx context.Context, lan *LANPolic
 	}
 	material, resource, binding, runner := e.material, e.resource, e.binding, e.runtimeFrozen.Runner
 	expectedLAN := CloneLANPolicyRuntime(lan)
+	aliases := [3]string{e.runtimeFrozen.IP, e.runtimeFrozen.IPTables, e.runtimeFrozen.IP6Tables}
 	same := func(current context.Context) error {
-		if current == nil || current.Err() != nil || e.self != e || current.Value(nfqws2ActiveExecutionKey{}) != e || e.material != material || material == nil || material.self != material || material.execution != e || !material.executionBound || e.resource != resource || e.binding != binding || e.runtime == nil || !sameNetworkPolicyDependency(runner, e.runtimeFrozen.Runner) || !sameNetworkPolicyDependency(runner, e.runtime.Runner) || !sameNetworkPolicyDependency(runner, binding.Runner) || !reflect.DeepEqual(lan, expectedLAN) || !reflect.DeepEqual(expectedLAN, e.plan.LAN) {
+		if current == nil || current.Err() != nil || e.self != e || current.Value(nfqws2ActiveExecutionKey{}) != e || e.material != material || material == nil || material.self != material || material.execution != e || !material.executionBound || e.resource != resource || e.binding != binding || e.runtime == nil || !sameNetworkPolicyDependency(runner, e.runtimeFrozen.Runner) || !sameNetworkPolicyDependency(runner, e.runtime.Runner) || !sameNetworkPolicyDependency(runner, binding.Runner) || aliases != [3]string{e.runtimeFrozen.IP, e.runtimeFrozen.IPTables, e.runtimeFrozen.IP6Tables} || aliases != [3]string{e.runtime.IP, e.runtime.IPTables, e.runtime.IP6Tables} || !reflect.DeepEqual(lan, expectedLAN) || !reflect.DeepEqual(expectedLAN, e.plan.LAN) {
 			return ErrNFQWSScopedOwner
 		}
 		return nil
