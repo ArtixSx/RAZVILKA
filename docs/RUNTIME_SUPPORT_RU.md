@@ -287,3 +287,9 @@ Managed NFQWS2 consumer normal PASS, полный LAN/manual и DNS strict12
 проверки исправленного частного /proc стенда на3b27bd6e. Общий357 CI FAIL
 на форматировании, полный normal/race не запускался.
 [Подробности](CURRENT_STATUS_RU.md#проверка-35797378-и-продолжение-3b27bd6e).
+
+На3b27bd6e normal/race обоихgeneric PASS, go vet fixtureFAIL; downstream gates
+не исполнены. Mihomo lifecycle/settlement/postCAS PASS, manualHTTP110sFAIL.
+Public restore пока не достигнут. StrictDNS/fullNFQ/router admission не расширены.
+Следующий empty/draft сценарий подтверждает только retained draft/current reader,
+если пройдёт; old live compatibility и manual selection отдельно.

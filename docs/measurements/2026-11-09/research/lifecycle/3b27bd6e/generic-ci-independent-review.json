@@ -1,0 +1,72 @@
+{
+  "failure": {
+    "scope": "test structural foreign-pointer fixture",
+    "stage": "go vet ./...",
+    "line": 42,
+    "message": "assignment copies lock value: mihomoSameBootInputs contains sync.Mutex",
+    "reviewed_fix": "Fresh equal-value inputs struct with statePath only, no mutex copy; assertion unchanged.",
+    "file": "internal/dataplane/mihomo_live_same_boot_absence_read_test.go"
+  },
+  "limitations": [
+    "Not a complete CI PASS. Next exact SHA must pass vet and remaining release gate.",
+    "Package wall durations are not paired performance measurements.",
+    "Native router/LAN and workflow outcomes remain separately reported."
+  ],
+  "evidence": [
+    {
+      "sha256": "0f2643f4d5d64875b99e93130e309565f6c4d2521eda59c535c0004fac6cdd02",
+      "file": "generic-pr-ci.log"
+    },
+    {
+      "sha256": "cbf06f30a551b1962246d8c43fcb4a12cb921ed8839812fbb8f179669b91d1a4",
+      "file": "generic-push-ci.log"
+    }
+  ],
+  "conclusion": "BOTH FAILURE after normal/race PASS, at explicit go vet",
+  "runs": [
+    {
+      "normal_seconds": {
+        "app": 133.958,
+        "dataplane": 199.166,
+        "controller": 9.523,
+        "updatecheck": 98.969
+      },
+      "race_seconds": {
+        "app": 420.094,
+        "dataplane": 580.87,
+        "controller": 59.502,
+        "updatecheck": 574.512
+      },
+      "event": "pull_request",
+      "run": 42651560236,
+      "conclusion": "failure",
+      "job": 129278968839
+    },
+    {
+      "normal_seconds": {
+        "app": 114.873,
+        "dataplane": 183.524,
+        "controller": 8.679,
+        "updatecheck": 74.382
+      },
+      "race_seconds": {
+        "app": 271.448,
+        "dataplane": 459.779,
+        "controller": 55.136,
+        "updatecheck": 441.106
+      },
+      "event": "push",
+      "run": 42651543110,
+      "conclusion": "failure",
+      "job": 129278908499
+    }
+  ],
+  "validation": [
+    "Both focused normal gates and actual non-root permission test passed.",
+    "Both full go test ./... normal and -race completed successfully.",
+    "gofmt passed; explicit go vet failed. Subsequent shell/UI/cross-build release gates were not reached.",
+    "Neither run canceled or superseded."
+  ],
+  "sha": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+  "reviewer": "verification"
+}

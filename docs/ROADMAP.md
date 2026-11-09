@@ -56,6 +56,19 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
+### Актуальное продолжение после3b27bd6e
+
+Ведущий: normal/race обоихgeneric PASS, fixture mutex-copy vetFAIL исправлен;
+тот же vet теперь раньше runtime suites. Остальные downstream gates ещё не пройдены.
+NFQ/backup: exact composite diagnostics и output cap исправлены; public restore
+пока не достигнут. Empty/draft scenario проверяет настоящий старый HTTP writer
+и сохранённые байты через нынешний reader, без утверждения old live/manual.
+Mihomo: lifecycle/settlement/postCAS PASS, manual110sFAIL; следующий matched
+manual4cc baseline отделяет source regression от runner variability.
+DNS: большие ReadAt chunks отклонены по измерениям; strict12 не закрыт.
+Full metadata names allocation только измеряется. Все эти программные
+направления остаются в работе, внешнего аппаратного блокера для них нет.
+
 ### Последний60e0d4ba и конкретные исправления
 
 4cc обаgeneric/all4Mihomo PASS остаётся последней полной приёмкой. На60e обаgeneric

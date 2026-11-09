@@ -1,0 +1,27 @@
+=== RUN   TestXrayHashChunkActualParityAndCancellation
+    xray_domain_tcp_hash_measurement_native_linux_test.go:116: actual Xray full hash fixture bytes=36577406 sha256=8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed; warm file measurement, not cold/router proof
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=32768 sample=0 post_cancel_ns=43837 read_at_calls=62 bytes=2031616; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=32768 sample=1 post_cancel_ns=29739 read_at_calls=55 bytes=1802240; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=32768 sample=2 post_cancel_ns=19414 read_at_calls=56 bytes=1835008; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=65536 sample=0 post_cancel_ns=23125 read_at_calls=30 bytes=1966080; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=65536 sample=1 post_cancel_ns=71378 read_at_calls=30 bytes=1966080; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=65536 sample=2 post_cancel_ns=28758 read_at_calls=29 bytes=1900544; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=131072 sample=0 post_cancel_ns=18227 read_at_calls=13 bytes=1703936; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=131072 sample=1 post_cancel_ns=57451 read_at_calls=13 bytes=1703936; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=131072 sample=2 post_cancel_ns=10791 read_at_calls=13 bytes=1703936; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=262144 sample=0 post_cancel_ns=38749 read_at_calls=6 bytes=1572864; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=262144 sample=1 post_cancel_ns=81247 read_at_calls=6 bytes=1572864; blocked-read granularity is measured, not assumed equivalent
+    xray_domain_tcp_hash_measurement_native_linux_test.go:145: actual_hash_cancel chunk=262144 sample=2 post_cancel_ns=14091 read_at_calls=5 bytes=1310720; blocked-read granularity is measured, not assumed equivalent
+--- PASS: TestXrayHashChunkActualParityAndCancellation (0.27s)
+=== RUN   TestXrayHashChunkRefusesPartialAndChangedFiles
+=== RUN   TestXrayHashChunkRefusesPartialAndChangedFiles/32768
+=== RUN   TestXrayHashChunkRefusesPartialAndChangedFiles/65536
+=== RUN   TestXrayHashChunkRefusesPartialAndChangedFiles/131072
+=== RUN   TestXrayHashChunkRefusesPartialAndChangedFiles/262144
+--- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles (0.02s)
+    --- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles/32768 (0.01s)
+    --- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles/65536 (0.00s)
+    --- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles/131072 (0.01s)
+    --- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles/262144 (0.01s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	1.330s

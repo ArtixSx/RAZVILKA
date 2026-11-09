@@ -1,0 +1,21 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/dataplane
+cpu: AMD EPYC 9V74 80-Core Processor                
+BenchmarkXrayCompleteHashChunks/original32-4         	      12	  29428114 ns/op	1242.94 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/original32-4         	      12	  29449861 ns/op	1242.02 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/original32-4         	      12	  29472052 ns/op	1241.09 MB/s	      1117 read-at-calls/op	    1088 B/op	       9 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      12	  29770647 ns/op	1228.64 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      12	  29754666 ns/op	1229.30 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/32768-4              	      12	  29665001 ns/op	1233.02 MB/s	      1117 read-at-calls/op	   33856 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      12	  29233070 ns/op	1251.23 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      12	  29262103 ns/op	1249.99 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/65536-4              	      12	  29195200 ns/op	1252.86 MB/s	       559.0 read-at-calls/op	   66624 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      12	  28978041 ns/op	1262.25 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      12	  29054022 ns/op	1258.94 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/131072-4             	      12	  29121933 ns/op	1256.01 MB/s	       280.0 read-at-calls/op	  132160 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      12	  28966272 ns/op	1262.76 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      12	  29585999 ns/op	1236.31 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+BenchmarkXrayCompleteHashChunks/262144-4             	      12	  28915886 ns/op	1264.96 MB/s	       140.0 read-at-calls/op	  263232 B/op	      10 allocs/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	5.809s

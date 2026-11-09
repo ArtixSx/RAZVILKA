@@ -1,0 +1,32 @@
+{
+  "findings": [
+    "Shared closed membership predicate matches existing composed DNS and ordinary-role producer vocabulary.",
+    "Public recognizer retains exact prefix, suffix, newline and complete output reconstruction; unknown or contaminated output refused.",
+    "Error result, cause, inactivity authority, source checks and cleanup unchanged.",
+    "New regression exercises existing dynamic categories, source-close and adversarial whole-line contamination."
+  ],
+  "base_sha": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+  "validation": [
+    "Source and call-site inspection only; no local Go build under disk constraint."
+  ],
+  "files": [
+    {
+      "sha256": "f793f8ac5f91451717b819d2a45866bf2aa72c7d384255e6869f457f2a8ac8a5",
+      "path": "internal/updatecheck/external_bootstrap_preparation.go"
+    },
+    {
+      "sha256": "4a0c351738565f9229e868796776b6be2d0c85df5dacc11ef049efbffe9978db",
+      "path": "cmd/razvilka/external_bootstrap_command.go"
+    },
+    {
+      "sha256": "37d91403d243a66d6cb3d37dd23e474fd82629389bab4cf9a5aae25ea46caa5c",
+      "path": "cmd/razvilka/external_bootstrap_command_test.go"
+    }
+  ],
+  "decision": "APPROVE source; runtime tests pending",
+  "limitations": [
+    "Fix restores diagnostic detail; does not fix the underlying public bootstrap refusal.",
+    "Await exact-SHA focused/full/native CI."
+  ],
+  "reviewer": "verification"
+}

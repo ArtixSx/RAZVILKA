@@ -357,3 +357,37 @@ speedup не заявляется. Последняя полная generic и4Mi
 [Исходные результаты и SHA256](measurements/2026-11-09/research/lifecycle/35797378/)
 и [парные измерения](measurements/2026-11-09/research/ci-35797378/) сохранены.
 Аппаратная приёмка, выпуск и изменение действующего роутера не выполнялись.
+
+### Проверка 3b27bd6e и следующая исправленная интеграция
+
+Оба generic CI завершились: полный normal и race PASS, затем go vet обнаружил
+копирование mutex в тесте structural input identity. Это исправлено созданием
+отдельного объекта с теми же полями; assertion сохранён. Shell/UI/cross-build
+шаги на 3b27 не запускались. Следующий gate выполняет тот же go vet раньше
+полных тестов, сохраняя весь набор проверок.
+
+VLESS paired182 PASS: live p50/p95 317.644/321.353→228.483/230.573 мс;
+selected-batch 1465/1487→1285/1302 мс. Dead-node slightly worse
+8.905→9.114 мс, поэтому универсальное ускорение не заявляется.
+Mihomo lifecycle/settlement/postCAS PASS, manual HTTP FAIL на прежних110с.
+Lifecycle same-host candidate251.58с против4cc247.97с, ускорения нет.
+Следующая проверка отдельно сравнивает manual-http с4cc на том же runner,
+с теми же бинарниками и бюджетами; порядок candidate→baseline диагностический.
+
+Public configured-old193 всё ещё отказал до restore. Исправлена реальная
+ошибка классификатора: он не распознавал уже допустимые составные DNS причины.
+Добавлены actual pipe cap regressions и отдельный opt-in empty/draft matrix:
+настоящий старый HTTP API создаёт draft, после публичного restore проверяются
+исходный SHA состояния и нынешний production reader. Это не доказательство
+старого live reader, сохранения ручного выбора или default legacy-layout.
+
+Full managed NFQWS2 LAN/manual остаётся FAIL; original core normal и
+cleanup-only retry PASS. DNS strict12 FAIL, diagnostic30 все3recovery PASS.
+Увеличение Xray ReadAt блока отклонено: actual36577406B file,32KiB29.450мс,
+256KiB28.966мс (~1.64% warm), больше allocation и хуже отмена. Production32KiB
+сохранён. Новый names benchmark проверяет только стоимость полного прежнего
+metadata traversal с bounded backing slice; production алгоритм не менялся.
+
+[Raw и SHA256](measurements/2026-11-09/research/lifecycle/3b27bd6e/),
+[paired182](measurements/2026-11-09/research/ci-3b27bd6e/).
+Новые исправления и сценарии требуют своего CI; router/LAN не подтверждены.

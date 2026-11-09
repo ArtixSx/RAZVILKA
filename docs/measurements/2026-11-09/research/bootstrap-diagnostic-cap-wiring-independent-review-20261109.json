@@ -1,0 +1,22 @@
+{
+  "findings": [
+    "Generic focused gate adds cmd/razvilka and exact diagnostic/output test prefixes; existing checks retained.",
+    "Public native harness reuses compiled tagged cmd.test for the same fast tests before expensive namespace setup.",
+    "30s is only the focused test harness limit; production/public lifecycle deadlines and admission unchanged."
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "fee2485353fc588f59c9dddbb8ba5d5d5973476e1f33f8fa1d3c124d7dc445c0"
+    },
+    {
+      "path": "scripts/test-paired-public-native.sh",
+      "sha256": "47ec1ef025f24647609b8e13ad3eaf01284de69d553ede73ff56c2b5d3159d79"
+    }
+  ],
+  "decision": "APPROVE focused test wiring",
+  "validation": [
+    "Exact diff source review; Go tests pending CI."
+  ],
+  "reviewer": "verification"
+}

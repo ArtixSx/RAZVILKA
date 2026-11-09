@@ -1,0 +1,291 @@
+{
+  "sha": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+  "fixture_bytes": 36577406,
+  "measurements": {
+    "original32": [
+      {
+        "ns": 29428114.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 1088,
+        "allocs": 9
+      },
+      {
+        "ns": 29449861.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 1088,
+        "allocs": 9
+      },
+      {
+        "ns": 29472052.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 1088,
+        "allocs": 9
+      }
+    ],
+    "32768": [
+      {
+        "ns": 29770647.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 33856,
+        "allocs": 10
+      },
+      {
+        "ns": 29754666.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 33856,
+        "allocs": 10
+      },
+      {
+        "ns": 29665001.0,
+        "read_at_calls": 1117.0,
+        "bytes_per_op": 33856,
+        "allocs": 10
+      }
+    ],
+    "65536": [
+      {
+        "ns": 29233070.0,
+        "read_at_calls": 559.0,
+        "bytes_per_op": 66624,
+        "allocs": 10
+      },
+      {
+        "ns": 29262103.0,
+        "read_at_calls": 559.0,
+        "bytes_per_op": 66624,
+        "allocs": 10
+      },
+      {
+        "ns": 29195200.0,
+        "read_at_calls": 559.0,
+        "bytes_per_op": 66624,
+        "allocs": 10
+      }
+    ],
+    "131072": [
+      {
+        "ns": 28978041.0,
+        "read_at_calls": 280.0,
+        "bytes_per_op": 132160,
+        "allocs": 10
+      },
+      {
+        "ns": 29054022.0,
+        "read_at_calls": 280.0,
+        "bytes_per_op": 132160,
+        "allocs": 10
+      },
+      {
+        "ns": 29121933.0,
+        "read_at_calls": 280.0,
+        "bytes_per_op": 132160,
+        "allocs": 10
+      }
+    ],
+    "262144": [
+      {
+        "ns": 28966272.0,
+        "read_at_calls": 140.0,
+        "bytes_per_op": 263232,
+        "allocs": 10
+      },
+      {
+        "ns": 29585999.0,
+        "read_at_calls": 140.0,
+        "bytes_per_op": 263232,
+        "allocs": 10
+      },
+      {
+        "ns": 28915886.0,
+        "read_at_calls": 140.0,
+        "bytes_per_op": 263232,
+        "allocs": 10
+      }
+    ]
+  },
+  "scope": "warm complete-image hash including success metadata; logical ReadAt calls, not kernel syscall tracing; no route/router/cold proof",
+  "medians": {
+    "original32": 29449861.0,
+    "32768": 29754666.0,
+    "65536": 29233070.0,
+    "131072": 29054022.0,
+    "262144": 28966272.0
+  },
+  "cancel": {
+    "normal": [
+      {
+        "chunk": 32768,
+        "sample": 0,
+        "post_cancel_ns": 16119,
+        "read_at_calls": 81,
+        "bytes": 2654208
+      },
+      {
+        "chunk": 32768,
+        "sample": 1,
+        "post_cancel_ns": 8378,
+        "read_at_calls": 83,
+        "bytes": 2719744
+      },
+      {
+        "chunk": 32768,
+        "sample": 2,
+        "post_cancel_ns": 22089,
+        "read_at_calls": 82,
+        "bytes": 2686976
+      },
+      {
+        "chunk": 65536,
+        "sample": 0,
+        "post_cancel_ns": 24832,
+        "read_at_calls": 40,
+        "bytes": 2621440
+      },
+      {
+        "chunk": 65536,
+        "sample": 1,
+        "post_cancel_ns": 15229,
+        "read_at_calls": 41,
+        "bytes": 2686976
+      },
+      {
+        "chunk": 65536,
+        "sample": 2,
+        "post_cancel_ns": 11698,
+        "read_at_calls": 33,
+        "bytes": 2162688
+      },
+      {
+        "chunk": 131072,
+        "sample": 0,
+        "post_cancel_ns": 24608,
+        "read_at_calls": 21,
+        "bytes": 2752512
+      },
+      {
+        "chunk": 131072,
+        "sample": 1,
+        "post_cancel_ns": 14323,
+        "read_at_calls": 21,
+        "bytes": 2752512
+      },
+      {
+        "chunk": 131072,
+        "sample": 2,
+        "post_cancel_ns": 22745,
+        "read_at_calls": 21,
+        "bytes": 2752512
+      },
+      {
+        "chunk": 262144,
+        "sample": 0,
+        "post_cancel_ns": 20972,
+        "read_at_calls": 10,
+        "bytes": 2621440
+      },
+      {
+        "chunk": 262144,
+        "sample": 1,
+        "post_cancel_ns": 36215,
+        "read_at_calls": 10,
+        "bytes": 2621440
+      },
+      {
+        "chunk": 262144,
+        "sample": 2,
+        "post_cancel_ns": 25449,
+        "read_at_calls": 10,
+        "bytes": 2621440
+      }
+    ],
+    "normal_pass": true,
+    "race": [
+      {
+        "chunk": 32768,
+        "sample": 0,
+        "post_cancel_ns": 43837,
+        "read_at_calls": 62,
+        "bytes": 2031616
+      },
+      {
+        "chunk": 32768,
+        "sample": 1,
+        "post_cancel_ns": 29739,
+        "read_at_calls": 55,
+        "bytes": 1802240
+      },
+      {
+        "chunk": 32768,
+        "sample": 2,
+        "post_cancel_ns": 19414,
+        "read_at_calls": 56,
+        "bytes": 1835008
+      },
+      {
+        "chunk": 65536,
+        "sample": 0,
+        "post_cancel_ns": 23125,
+        "read_at_calls": 30,
+        "bytes": 1966080
+      },
+      {
+        "chunk": 65536,
+        "sample": 1,
+        "post_cancel_ns": 71378,
+        "read_at_calls": 30,
+        "bytes": 1966080
+      },
+      {
+        "chunk": 65536,
+        "sample": 2,
+        "post_cancel_ns": 28758,
+        "read_at_calls": 29,
+        "bytes": 1900544
+      },
+      {
+        "chunk": 131072,
+        "sample": 0,
+        "post_cancel_ns": 18227,
+        "read_at_calls": 13,
+        "bytes": 1703936
+      },
+      {
+        "chunk": 131072,
+        "sample": 1,
+        "post_cancel_ns": 57451,
+        "read_at_calls": 13,
+        "bytes": 1703936
+      },
+      {
+        "chunk": 131072,
+        "sample": 2,
+        "post_cancel_ns": 10791,
+        "read_at_calls": 13,
+        "bytes": 1703936
+      },
+      {
+        "chunk": 262144,
+        "sample": 0,
+        "post_cancel_ns": 38749,
+        "read_at_calls": 6,
+        "bytes": 1572864
+      },
+      {
+        "chunk": 262144,
+        "sample": 1,
+        "post_cancel_ns": 81247,
+        "read_at_calls": 6,
+        "bytes": 1572864
+      },
+      {
+        "chunk": 262144,
+        "sample": 2,
+        "post_cancel_ns": 14091,
+        "read_at_calls": 5,
+        "bytes": 1310720
+      }
+    ],
+    "race_pass": true
+  },
+  "recommendation": "Keep original32; maximum warm median gain about1.6% costs128-256KiB extra allocation and larger blocked-read granularity, not meaningful robust full-route gain."
+}
