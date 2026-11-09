@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
-	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -200,7 +199,7 @@ func TestClassicSaveNativeLockCustody(t *testing.T) {
 		})
 	}
 	// The stock profile has no new save authority even on this host.
-	if stockProfile().classicSaveABI || slices.Equal(stockProfile().aliases, l.profile.aliases) {
+	if stockProfile().classicSaveABI || stockProfile().aliases == l.profile.aliases {
 		t.Fatal("stock fallback profile changed")
 	}
 }
