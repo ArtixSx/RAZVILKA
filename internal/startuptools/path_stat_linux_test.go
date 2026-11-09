@@ -173,7 +173,7 @@ func TestFreshPathNodeStatComparisonFields(t *testing.T) {
 func BenchmarkFreshPathNode(b *testing.B) {
 	path := "/usr/bin/env"
 	before := mustPathInfo(b, path)
-	for _, mode := range []string{"fileinfo", "before_syscall_lstat", "direct-stat", "stack_candidate"} {
+	for _, mode := range []string{"fileinfo", "before_syscall_lstat", "direct-stat", "before_pooled"} {
 		b.Run(mode, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
@@ -191,8 +191,8 @@ func BenchmarkFreshPathNode(b *testing.B) {
 					if err == nil {
 						ok = sameReviewedStat(before.Sys().(*syscall.Stat_t), &after)
 					}
-				} else if mode == "stack_candidate" {
-					ok, err = freshPathNodeStackCandidate(path, before)
+				} else if mode == "before_pooled" {
+					ok, err = benchmarkPooledPathNode(path, before)
 				} else {
 					ok, err = freshPathNode(path, before)
 				}
@@ -204,10 +204,19 @@ func BenchmarkFreshPathNode(b *testing.B) {
 	}
 }
 
-// Measurement-only alternative: production remains the reviewed pooled helper.
-// The race runtime can discard Pool entries; measure stack scratch on the same
-// syscall/path before choosing an implementation, rather than assume escape cost.
-func freshPathNodeStackCandidate(path string, expected os.FileInfo) (bool, error) {
+// Exact previous pooled implementation retained only for paired measurements.
+// Production now uses the measured stack scratch; the race runtime can drop
+// Pool entries and make the original 4KiB pool allocate on repeated calls.
+// Only syscall argument/output scratch is pooled. Neither the named path nor
+// any metadata result survives a call; every observation still enters fstatat.
+type benchmarkPooledPathScratch struct {
+	path [4096]byte
+	stat syscall.Stat_t
+}
+
+var benchmarkPooledPathScratchPool = sync.Pool{New: func() any { return new(benchmarkPooledPathScratch) }}
+
+func benchmarkPooledPathNode(path string, expected os.FileInfo) (bool, error) {
 	if expected == nil {
 		return false, nil
 	}
@@ -215,19 +224,34 @@ func freshPathNodeStackCandidate(path string, expected os.FileInfo) (bool, error
 	if !ok || before == nil {
 		return false, nil
 	}
-	var after syscall.Stat_t
 	if len(path) >= 4096 || strings.IndexByte(path, 0) >= 0 {
+		// Preserve the original invalid/overlong argument behavior, including
+		// BytePtrFromString's EINVAL before the syscall for embedded NUL.
+		var after syscall.Stat_t
 		if err := syscall.Lstat(path, &after); err != nil {
 			return false, err
 		}
 		return sameReviewedStat(before, &after), nil
 	}
-	var argument [4096]byte
-	copy(argument[:], path)
-	_, _, errno := syscall.Syscall6(freshPathStatSyscall, ^uintptr(99),
-		uintptr(unsafe.Pointer(&argument[0])), uintptr(unsafe.Pointer(&after)), 0x100, 0, 0)
+	scratch := benchmarkPooledPathScratchPool.Get().(*benchmarkPooledPathScratch)
+	scratch.stat = syscall.Stat_t{}
+	copy(scratch.path[:], path)
+	scratch.path[len(path)] = 0
+	// Match syscall.Lstat on these architectures: AT_FDCWD (-100), no-follow,
+	// and exactly one Syscall6 (including its unchanged EINTR behavior). Keep
+	// pointer conversions in the syscall expression, as in Go's generated
+	// wrapper, and retain exclusive scratch until the synchronous call ends.
+	const atFDCWD = ^uintptr(99)
+	const atSymlinkNoFollow = 0x100
+	_, _, errno := syscall.Syscall6(freshPathStatSyscall, atFDCWD,
+		uintptr(unsafe.Pointer(&scratch.path[0])), uintptr(unsafe.Pointer(&scratch.stat)),
+		atSymlinkNoFollow, 0, 0)
+	same := errno == 0 && sameReviewedStat(before, &scratch.stat)
+	clear(scratch.path[:len(path)+1])
+	scratch.stat = syscall.Stat_t{}
+	benchmarkPooledPathScratchPool.Put(scratch)
 	if errno != 0 {
 		return false, errno
 	}
-	return sameReviewedStat(before, &after), nil
+	return same, nil
 }

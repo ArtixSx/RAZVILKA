@@ -5,19 +5,9 @@ package startuptools
 import (
 	"os"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 )
-
-// Only syscall argument/output scratch is pooled. Neither the named path nor
-// any metadata result survives a call; every observation still enters fstatat.
-type freshPathScratch struct {
-	path [4096]byte
-	stat syscall.Stat_t
-}
-
-var freshPathScratchPool = sync.Pool{New: func() any { return new(freshPathScratch) }}
 
 // Read the SAME named node on every pass without constructing an os.FileInfo.
 // No descriptor, path resolution or metadata result is retained here. Lstat
@@ -31,36 +21,24 @@ func freshPathNode(path string, expected os.FileInfo) (bool, error) {
 	if !ok || before == nil {
 		return false, nil
 	}
+	var after syscall.Stat_t
 	if len(path) >= 4096 || strings.IndexByte(path, 0) >= 0 {
-		// Preserve the original invalid/overlong argument behavior, including
-		// BytePtrFromString's EINVAL before the syscall for embedded NUL.
-		var after syscall.Stat_t
 		if err := syscall.Lstat(path, &after); err != nil {
 			return false, err
 		}
 		return sameReviewedStat(before, &after), nil
 	}
-	scratch := freshPathScratchPool.Get().(*freshPathScratch)
-	scratch.stat = syscall.Stat_t{}
-	copy(scratch.path[:], path)
-	scratch.path[len(path)] = 0
-	// Match syscall.Lstat on these architectures: AT_FDCWD (-100), no-follow,
-	// and exactly one Syscall6 (including its unchanged EINTR behavior). Keep
-	// pointer conversions in the syscall expression, as in Go's generated
-	// wrapper, and retain exclusive scratch until the synchronous call ends.
-	const atFDCWD = ^uintptr(99)
-	const atSymlinkNoFollow = 0x100
-	_, _, errno := syscall.Syscall6(freshPathStatSyscall, atFDCWD,
-		uintptr(unsafe.Pointer(&scratch.path[0])), uintptr(unsafe.Pointer(&scratch.stat)),
-		atSymlinkNoFollow, 0, 0)
-	same := errno == 0 && sameReviewedStat(before, &scratch.stat)
-	clear(scratch.path[:len(path)+1])
-	scratch.stat = syscall.Stat_t{}
-	freshPathScratchPool.Put(scratch)
+	// Go Syscall6 keeps these stack pointers live through its synchronous call.
+	// No pathname, FD or metadata survives this observation; every call still
+	// performs the original fstatat with the same no-follow/error semantics.
+	var argument [4096]byte
+	copy(argument[:], path)
+	_, _, errno := syscall.Syscall6(freshPathStatSyscall, ^uintptr(99),
+		uintptr(unsafe.Pointer(&argument[0])), uintptr(unsafe.Pointer(&after)), 0x100, 0, 0)
 	if errno != 0 {
 		return false, errno
 	}
-	return same, nil
+	return sameReviewedStat(before, &after), nil
 }
 
 // Equivalent owner/identity/mode/ctime/size/mtime checks to sameNode for
