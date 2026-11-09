@@ -641,22 +641,29 @@ func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	common := func(c context.Context, binding NFQWSExecutionBinding, proof NFQWSScopedProcessProof) error {
+	common := func(c context.Context, binding NFQWSExecutionBinding, proof NFQWSScopedProcessProof) (result error) {
+		stage := "retire.common-binding"
+		defer func() { result = nfqwsExecutionFailure(stage, result) }()
 		if binding != e.resource.Binding() || nfqwsScopedProcessProof(e.resource.Plan(), proof, true) != nil {
 			return ErrNFQWSScopedOwner
 		}
+		stage = "retire.cleanup-owner"
 		if err := e.cleanupCurrent(c); err != nil {
 			return err
 		}
+		stage = "retire.policy-remove"
 		if err := e.binding.Remove(c, e.resource.Plan(), e.resource.Root()); err != nil {
 			return err
 		}
+		stage = "retire.verify-inactive"
 		if err := e.binding.VerifyInactive(c, e.resource.Plan(), e.resource.Root()); err != nil {
 			return err
 		}
+		stage = "retire.settle-removed"
 		if err := e.resource.SettleRemoved(c); err != nil {
 			return err
 		}
+		stage = "retire.closing-owner"
 		return e.cleanupCurrent(c)
 	}
 	if final && h != nil {
