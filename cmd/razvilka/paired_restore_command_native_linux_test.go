@@ -147,6 +147,20 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 
 type nativePairedRestoreOutput struct{ bytes.Buffer }
 
+// Hide the embedded Buffer's promoted ReadFrom: exec's pipe copier must pass
+// every chunk through the same bounded Write, including unexpected stderr.
+func (out *nativePairedRestoreOutput) ReadFrom(reader io.Reader) (int64, error) {
+	return io.Copy(struct{ io.Writer }{out}, reader)
+}
+
+// Source WriterTo implementations may select io.StringWriter directly.
+func (out *nativePairedRestoreOutput) WriteString(data string) (int, error) {
+	if out.Len()+len(data) > 64<<10 {
+		return 0, io.ErrShortBuffer
+	}
+	return out.Buffer.WriteString(data)
+}
+
 func (out *nativePairedRestoreOutput) Write(data []byte) (int, error) {
 	if out.Len()+len(data) > 64<<10 {
 		return 0, io.ErrShortBuffer
