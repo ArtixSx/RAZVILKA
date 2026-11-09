@@ -142,6 +142,9 @@ fi
 case "$probe_cases:$probe_build_mode" in
   *TestFreshPathNode*:production)
     "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFresh(Path|Held)Node$' -test.benchtime=1s -test.count=3 -test.benchmem ;;
+  *TestFreshPathNode*:race)
+    printf 'Actual race-only path allocation benchmark; sync.Pool may discard scratch\n'
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFreshPathNode$' -test.benchtime=200ms -test.count=3 -test.benchmem ;;
 esac
 for probe_case in $probe_cases; do
 probe_status=0
