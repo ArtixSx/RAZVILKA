@@ -15,7 +15,7 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
 | Mihomo | На5289 lifecycle/settlement/post-CAS PASS; manual candidate и same-host baseline FAIL110с. Sameboot11/14 PASS; availability остаётся tri-state | Два producer sidecar startup refusals и один source-closing refusal; остальные restart/per-plan live readiness и физический LAN |
-| Backup/StrategyLab | Snapshot3/encrypted recovery, modern restored panel PASS; public empty/draft PASS2ecf/5289, genuine history + frozen manual selection PASS976fa47c; exact bytes и fences сохранены | Configured0.19.3 проверен offline; default legacy layout, старый live запуск, произвольный downgrade и аппаратный power-loss не подтверждены |
+| Backup/StrategyLab | Snapshot3/encrypted recovery, modern restored panel PASS; public empty/draft PASS2ecf/5289, genuine history + frozen manual selection PASS976fa47c; exact bytes и fences сохранены | Configured0.19.3 проверен offline; default legacy layout не поддержан по clean-install контракту; старый live запуск, произвольный downgrade и аппаратный power-loss не подтверждены |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
 ## Три бинарника Entware

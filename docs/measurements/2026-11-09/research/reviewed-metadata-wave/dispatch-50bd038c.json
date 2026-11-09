@@ -1,0 +1,15 @@
+{
+  "sha": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "full_lifecycle": 42684649742,
+  "sameboot": 42684649760,
+  "main_generic": [
+    42684870925,
+    42684857995
+  ],
+  "duplicate_cancel_requested": [
+    42684858129,
+    42684636724
+  ],
+  "reason": "Same SHA lifecycle already running on auxiliary ref; retain both main generic jobs. No acceptance failure hidden.",
+  "status": "pending; this record is dispatch provenance, not successful acceptance"
+}

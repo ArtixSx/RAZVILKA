@@ -84,7 +84,7 @@
 
 ## Исходники и приёмка на 09.11.2026
 
-Последняя интеграция с двумя полными generic PASS: `2ecf9961`, draft PR #25. Оба полных generic CI этого
+Последняя интеграция с двумя полными generic PASS: `5289a7d8`, draft PR #25. Оба полных generic CI этого
 SHA прошли (push attempt2 и PR attempt3): normal/race, vet, shell/UI и четыре
 целевые сборки. Первые попытки не создали часть jobs из-за Internal server error
 GitHub; эти отказы сохранены отдельно. Native приёмка не подменяется generic CI. На `ea36873e` полный PR CI прошёл,
@@ -154,10 +154,10 @@ DNS5289 selected дошёл до DNS, но service peer4с FAIL; canceled про
 successor listener; полная runtime-проверка ещё нужна. Новая sameboot диагностика
 фиксирует только закрытый перечень стадий, не изменяя ошибки и deadlines.
 
-Следующие критерии: совместимый live запуск и default legacy layout, DNS
+Следующие критерии: совместимый live запуск и отрицательная проверка default legacy layout, DNS
 GEN1/GEN2 и отмена на исходных12/4с, matched ABBA на одном runner, managed NFQWS2
 manual/recovery, оставшиеся Mihomo same-boot cuts. Внешних блокеров для этих
-программных задач нет. PR generic5289 PASS, push ещё выполняется; generic6b отдельно PASS.
+программных задач нет. Оба generic5289 полностью PASS; generic6b отдельно PASS. Новый PR HEAD50bd038c проверяется отдельно.
 [Результаты5289](measurements/2026-11-09/research/lifecycle/5289a7d8/),
 [history976 и независимое ревью](measurements/2026-11-09/research/lifecycle/976fa47c/),
 [generic6b](measurements/2026-11-09/research/lifecycle/6b120f8c/generic/).
