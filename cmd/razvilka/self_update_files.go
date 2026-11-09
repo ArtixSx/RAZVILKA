@@ -178,6 +178,13 @@ func selfUpdateRuntimeInactive(ctx context.Context, id string) (result error) {
 	if err != nil {
 		return errors.Join(dataplane.ErrRuntimeInactivity, err)
 	}
+	bootstrapAdapter, err := updatecheck.OriginalBootstrapInstallerControllerAdapter(ctx, id)
+	if err != nil || adapter != nil && bootstrapAdapter != nil {
+		return errors.Join(dataplane.ErrRuntimeInactivity, err)
+	}
+	if adapter == nil {
+		adapter = bootstrapAdapter
+	}
 	if adapter == nil {
 		var ok bool
 		adapter, ok = nativeSelfUpdateFileAdapter().(*updatecheck.SelfUpdateFileAdapter)

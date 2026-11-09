@@ -73,6 +73,15 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return refuse(err)
 	}
+	joined, err := bootstrapQuiesceJoinFor(ctx, a, command, os.Getpid())
+	if err != nil {
+		return refuse(err)
+	}
+	if joined != nil {
+		if err := bootstrapJoinedChildAbsent(ctx, command); err != nil {
+			return refuse(err)
+		}
+	}
 	var openingFileReceipt selfupdatejournal.Receipt
 	if command.State == "running" {
 		store, err := a.OpenFileJournal()
@@ -101,11 +110,13 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		return refuse(err)
 	}
 	caller, err := image.controllerAt(os.Getpid())
-	if err != nil || bootstrapControllerRole(review, record, identity, command, caller) == "" {
+	callerRole := bootstrapControllerRole(review, record, identity, command, caller)
+	if err != nil || callerRole == "" || joined != nil && callerRole != "quiesce-supervisor" {
 		return refuse(err)
 	}
 	peer, err := image.controllerAt(pid)
-	if err != nil || pid == caller.Process.PID || bootstrapControllerRole(review, record, identity, command, peer) == "" {
+	peerRole := bootstrapControllerRole(review, record, identity, command, peer)
+	if err != nil || pid == caller.Process.PID || peerRole == "" || joined != nil && peerRole == "quiesce-child" {
 		return refuse(err)
 	}
 	if command.State == "running" {
@@ -113,9 +124,11 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		if err != nil || bootstrapControllerRole(review, record, identity, command, supervisor) != "quiesce-supervisor" {
 			return refuse(err)
 		}
-		child, err := image.controllerAt(command.DirectPID)
-		if err != nil || bootstrapControllerRole(review, record, identity, command, child) != "quiesce-child" {
-			return refuse(err)
+		if joined == nil {
+			child, err := image.controllerAt(command.DirectPID)
+			if err != nil || bootstrapControllerRole(review, record, identity, command, child) != "quiesce-child" {
+				return refuse(err)
+			}
 		}
 		fresh, err := readFileCommand(root, id, "quiesce-old-runtime")
 		if err != nil || fresh != command {
@@ -142,8 +155,14 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		closing, present, readErr := store.Current()
 		store.Close()
 		fresh, commandErr := readFileCommand(root, id, "quiesce-old-runtime")
-		if readErr != nil || commandErr != nil || !present || !reflect.DeepEqual(closing, openingFileReceipt) || fresh != command {
-			return refuse(errors.Join(readErr, commandErr))
+		freshJoin, joinErr := bootstrapQuiesceJoinFor(ctx, a, fresh, os.Getpid())
+		if readErr != nil || commandErr != nil || joinErr != nil || freshJoin != joined || !present || !reflect.DeepEqual(closing, openingFileReceipt) || fresh != command {
+			return refuse(errors.Join(readErr, commandErr, joinErr))
+		}
+		if joined != nil {
+			if err := bootstrapJoinedChildAbsent(ctx, command); err != nil {
+				return refuse(err)
+			}
 		}
 	}
 	return ctx.Err()

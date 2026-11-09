@@ -20,6 +20,7 @@ import (
 // a Store (which could create a lock), repair a receipt or dump private data.
 func nativeExternalBootstrapFileLedger(t *testing.T, id string) {
 	t.Helper()
+	defer nativeExternalBootstrapCommandLedger(t, id)
 	path := filepath.Join(installpath.State, "self-update-files", id, "receipt.json")
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 16<<10 {
@@ -41,6 +42,77 @@ func nativeExternalBootstrapFileLedger(t *testing.T, id string) {
 	}
 	defer clear(raw)
 	t.Log(nativeExternalBootstrapLedgerDiagnostic(raw, id))
+}
+
+func nativeExternalBootstrapCommandLedger(t *testing.T, id string) {
+	t.Helper()
+	path := filepath.Join(installpath.State, "self-update", id, "quiesce-old-runtime.process.json")
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 4096 {
+		t.Log("actual_bootstrap_failure_command_ledger unavailable=true")
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Log("actual_bootstrap_failure_command_ledger unavailable=true")
+		return
+	}
+	opened, statErr := f.Stat()
+	raw, readErr := io.ReadAll(io.LimitReader(f, 4097))
+	closeErr := f.Close()
+	defer clear(raw)
+	if statErr != nil || readErr != nil || closeErr != nil || !os.SameFile(info, opened) || len(raw) > 4096 {
+		t.Log("actual_bootstrap_failure_command_ledger unavailable=true")
+		return
+	}
+	t.Log(nativeExternalBootstrapCommandDiagnostic(raw, id))
+}
+
+func nativeExternalBootstrapCommandDiagnostic(raw []byte, id string) string {
+	var command struct {
+		ID         string `json:"id"`
+		Command    string `json:"command"`
+		State      string `json:"state"`
+		Reaped     int    `json:"reaped"`
+		WaitECHILD bool   `json:"wait_echild"`
+		Cancelled  bool   `json:"cancelled"`
+		ExitCode   int    `json:"exit_code"`
+	}
+	if len(raw) > 4096 || json.Unmarshal(raw, &command) != nil || command.ID != id || command.Command != "quiesce-old-runtime" {
+		return "actual_bootstrap_failure_command_ledger invalid=true"
+	}
+	state := "unknown"
+	switch command.State {
+	case "intent", "armed", "running", "reaped", "not-started":
+		state = command.State
+	}
+	code, reaped := command.ExitCode, command.Reaped
+	if code < 0 || code > 255 {
+		code = -1
+	}
+	if reaped < 0 || reaped > 1024 {
+		reaped = -1
+	}
+	return fmt.Sprintf("actual_bootstrap_failure_command_ledger state=%s reaped=%d wait_echild=%t cancelled=%t exit_code=%d diagnostic_only=true", state, reaped, command.WaitECHILD, command.Cancelled, code)
+}
+
+func TestExternalBootstrapDiagnosticCommandLedgerIsClosedAndBounded(t *testing.T) {
+	id := strings.Repeat("a", 32)
+	raw := []byte(`{"id":"` + id + `","command":"quiesce-old-runtime","state":"reaped","reaped":1,"wait_echild":true,"cancelled":true,"exit_code":125,"parent":{"path":"private"}}`)
+	got := nativeExternalBootstrapCommandDiagnostic(raw, id)
+	if strings.Contains(got, "private") || !strings.Contains(got, "state=reaped reaped=1 wait_echild=true cancelled=true exit_code=125") {
+		t.Fatal("closed command status lost", got)
+	}
+	raw = []byte(`{"id":"` + id + `","command":"quiesce-old-runtime","state":"private/path","reaped":99999,"exit_code":999}`)
+	got = nativeExternalBootstrapCommandDiagnostic(raw, id)
+	if strings.Contains(got, "private") || strings.Contains(got, "999") || !strings.Contains(got, "state=unknown reaped=-1") {
+		t.Fatal("private command data escaped", got)
+	}
+	for _, raw := range [][]byte{nil, []byte("{}"), bytes.Repeat([]byte("x"), 4097)} {
+		if nativeExternalBootstrapCommandDiagnostic(raw, id) != "actual_bootstrap_failure_command_ledger invalid=true" {
+			t.Fatal("invalid command accepted")
+		}
+	}
 }
 
 func nativeExternalBootstrapLedgerDiagnostic(raw []byte, id string) string {

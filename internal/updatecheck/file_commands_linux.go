@@ -878,12 +878,16 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 			// Keep the original finite context and revoke the join after this
 			// synchronous observation; a process receipt cannot mint it.
 			inactiveCtx, releaseJoin = ordinaryJoinedQuiesceContext(a, ctx, launched, r.Reaped)
+		} else {
+			inactiveCtx, releaseJoin = bootstrapJoinedQuiesceContext(a, ctx, launched, r.Reaped)
 		}
 		inactiveErr := ErrFileProtocol
-		if a.runtimeInactive != nil {
-			inactiveErr = a.runtimeInactive(inactiveCtx, id)
-		}
-		releaseJoin()
+		func() {
+			defer releaseJoin()
+			if a.runtimeInactive != nil {
+				inactiveErr = a.runtimeInactive(inactiveCtx, id)
+			}
+		}()
 		if inactiveErr != nil {
 			code = 125
 			r.Cancelled = true
