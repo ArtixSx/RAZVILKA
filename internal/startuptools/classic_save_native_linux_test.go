@@ -31,6 +31,9 @@ func (r classicSaveNativeSerial) RunBounded(c context.Context, n string, b int, 
 func (r classicSaveNativeSerial) ReadBoundedClassicTables(c context.Context, id netidentity.Identity, rev string, p [2]string, b int, t [2][]string) ([2][][]byte, error) {
 	return r.l.ReadBoundedClassicTables(c, id, rev, p, b, t)
 }
+func (r classicSaveNativeSerial) WithReadOnlyToolObservation(c context.Context, id netidentity.Identity, review string, use func(context.Context) error) error {
+	return r.l.WithReadOnlyToolObservation(c, id, review, use)
+}
 
 func TestClassicSaveNativeInventoryParity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -169,7 +172,16 @@ func TestClassicSaveNativeLockCustody(t *testing.T) {
 				return
 			}
 			if kind == "busy" {
-				data, err := exec.CommandContext(ctx, l.profile.aliases[0], "-t", "mangle", "-S").CombinedOutput()
+				args := []string{"-t", "mangle", "-S"}
+				if l.profile.version == "1.8.10 (legacy)" {
+					// 1.8.10's lock code blocks even for wait=0; 1.8.11
+					// fixes that with LOCK_NB. Test the SAME actual lock
+					// under a finite wait, not identical busy semantics.
+					args = append([]string{"-w", "1"}, args...)
+				}
+				child, stopChild := context.WithTimeout(ctx, 2*time.Second)
+				data, err := exec.CommandContext(child, l.profile.aliases[0], args...).CombinedOutput()
+				stopChild()
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 4 || !strings.Contains(string(data), "lock") {
 					t.Fatal("parent does not hold SAME actual xtables lock", err, string(data))

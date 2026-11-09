@@ -119,7 +119,7 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-probe_cases='TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_cases='TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
@@ -137,10 +137,16 @@ if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
   probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent TestMihomoLiveColdHealth9ExportNativeHistoricalIntent TestMihomoLiveColdHealth9CLINativeHistoricalIntent'
   probe_timeout=220s
 fi
+# Use the already compiled native binary; benchmark only the default production
+# fixture, never each LAN/recovery invocation and never as a readiness claim.
+case "$probe_cases:$probe_build_mode" in
+  *TestFreshPathNode*:production)
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFresh(Path|Held)Node$' -test.benchtime=1s -test.count=3 -test.benchmem ;;
+esac
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-case "$probe_case" in TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
   TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
   TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
@@ -193,6 +199,9 @@ if test -f "$probe_work/$probe_case.pprof"; then
 fi
 if test -f "$probe_work/$probe_case.pprof.alloc"; then
   if ! timeout 50s go tool pprof -top -sample_index=alloc_space -nodecount=30 "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  if ! timeout 50s go tool pprof -sample_index=alloc_space -peek='io.copyBuffer' "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi
