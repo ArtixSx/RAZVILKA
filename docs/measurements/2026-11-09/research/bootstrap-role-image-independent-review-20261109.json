@@ -1,0 +1,41 @@
+{
+  "decision": "APPROVE source contract; measurements and native acceptance pending",
+  "limitations": [
+    "Actual group timing, full public bootstrap and generic normal/race remain pending.",
+    "No broad observation reuse across scanner callbacks or effects; no release/router approval."
+  ],
+  "resources": [
+    "At most63MiB image plus128KiB scratch and small owner per active call; >63MiB retains original streaming SHA fallback.",
+    "New memory cost versus prior streaming bootstrap path. Logical per-call bound is not process RSS: concurrent independent callers may multiply it and GC may retain cleared arrays after references dropped.",
+    "No hardware memory/readiness claim. Whole first SHA is noninterruptible but old fileProcessOf had no chunk cancellation; new reader adds checks around full reads."
+  ],
+  "tests": [
+    "Expected helper-versus-old digest, full-byte closing mutation+poison+zeroing, cancellation and explicit<=64MiB logical bound.",
+    "Actual /proc same-fact eight-occurrence comparison alternates before/after three samples; logs retained bytes/fallback, does not grant a role."
+  ],
+  "findings": [
+    "One fresh private executable image per bootstrap role group, expected digest from validated Bootstrap.HelperSHA256, never old193 image.",
+    "All eight successful group occurrences, sixteen complete executable reads including EOF, birth/parent/argv/device/inode checks retained; role predicates, source/header/control/journal opening and closing preserve order.",
+    "Existing byte-image implementation unchanged: first full occurrence SHA checked, later full bytes compared exactly; error/cancel poisons image and every group exit clears. Generic process and effect command readers unchanged.",
+    "Actual production path is synchronous Manager operation -> adapter iteration -> PID scan -> peer checks; no recursive role reader or escaped callback inside image lifetime found."
+  ],
+  "validation": [
+    "Exact diff and original fileProcessOf/controllerAt/production scanner callgraph inspected.",
+    "gofmt-l clean; no local Go execution."
+  ],
+  "files": [
+    {
+      "sha256": "fbf87220e22cb0efbb3e8e77d21d3a2f28fe4dd9bf0165cbf4efe861c601346d",
+      "path": "internal/updatecheck/file_bootstrap_role_linux.go"
+    },
+    {
+      "sha256": "5eac69724429464b9754118615355e954bd89747e0ff4759ec7febce0420eb46",
+      "path": "internal/updatecheck/file_ordinary_image_linux.go"
+    },
+    {
+      "sha256": "5f662ae0632bb105be59289105d852e8fdd08a446b6230b7db8e1bf4a9941120",
+      "path": "internal/updatecheck/file_bootstrap_image_linux_test.go"
+    }
+  ],
+  "reviewer": "verification"
+}

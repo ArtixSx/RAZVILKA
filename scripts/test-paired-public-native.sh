@@ -18,7 +18,7 @@ git archive "$old" | tar -xf - -C "$work/old-source"
 go build -ldflags='-s -w' -tags razvilka_native_fixture -o "$work/candidate" ./cmd/razvilka
 go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$work/cmd.test" ./cmd/razvilka
 "$work/cmd.test" -test.run '^TestExternalBootstrapDiagnostic|^TestNativePairedRestoreOutput' -test.count=1 -test.v -test.timeout=30s
-go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeRuntimeCommandForwarding' -count=1 -v
+go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeRuntimeCommandForwarding|^TestBootstrapOfflineStrategy|^TestBootstrapImage|^TestOrdinaryImage' -count=1 -v
 test "$("$work/old-controller" -version)" = 0.19.3
 test "$("$work/candidate" -version)" = 0.20.0
 chmod 500 "$work/old-controller" "$work/candidate" "$work/cmd.test"

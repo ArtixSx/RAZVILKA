@@ -84,6 +84,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-proxy-sidecar-ui.mjs
 node scripts/test-hev-recovery-ui.mjs
 node scripts/test-mihomo-recovery-ui.mjs
+  node scripts/test-mihomo-node-apply-ui.mjs
   node scripts/test-node-job-timing-ui.mjs
   node scripts/test-autonomy-ui.mjs
   node --check cmd/razvilka/web/app.js
@@ -164,5 +165,4 @@ else
 fi
 sha256sum -c dist/SHA256SUMS
 sh ./scripts/test-entware-transaction.sh
-node scripts/test-mihomo-node-apply-ui.mjs
 echo "RAZVILKA checks: OK"

@@ -1,0 +1,18 @@
+{
+  "status": "source-approved-measurement-only",
+  "file": "C:/Projects/RAZVILKA/research-build-20261109/internal/dataplane/xray_domain_tcp_hash_measurement_native_linux_test.go",
+  "sha256": "a9fc089166376ff007fcb96c8c6b75992b0ce41cdc3ef3c66c1e6acadc218135",
+  "checks": [
+    "No production code/interface change",
+    "Private full image captured with fresh SHA and original held/named metadata, authenticated digest bound to source pointer",
+    "Repeated observations still read all current bytes in original32KiB chunks; mismatch consumes remaining full image; cancellation/closing metadata errors refuse positive label",
+    "Actual same-size restored-mtime mutation, replacement, truncation, close, canceled partial reads and late closing replacement regressions",
+    "Separate actual original hash, capture+SHA+clear and repeated comparison benchmarks report memory and logical read calls"
+  ],
+  "limitations": [
+    "Native normal/race actual pinned-file tests and measurements pending",
+    "Retains full executable per fixture, no global memory/concurrency/revocation/production custody solution",
+    "Clear does not imply immediate GC/RSS reclamation",
+    "No router or end-to-end speed/readiness claim"
+  ]
+}

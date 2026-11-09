@@ -1,0 +1,68 @@
+{
+  "head_sha": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+  "pr": {
+    "run": 42655707310,
+    "job": 129293498743,
+    "conclusion": "success",
+    "checks": [
+      "non-root unpublished recovery",
+      "focused root normal critical tests",
+      "gofmt",
+      "go vet ./... early",
+      "go test ./... count1",
+      "go test -race ./... count1",
+      "shell syntax and shell/UI contract tests",
+      "linux amd64/arm64/mips/mipsle builds",
+      "actual manual Mihomo UI test"
+    ],
+    "normal_seconds": {
+      "controller": 9.831,
+      "updatecheck": 96.129,
+      "app": 132.717,
+      "dataplane": 195.146
+    },
+    "race_seconds": {
+      "controller": 62.513,
+      "updatecheck": 580.986,
+      "app": 413.893,
+      "dataplane": 572.127
+    },
+    "raw_log_sha256": "e6c67223f743c65437365761bea281dda07b5727db58d3f10ff9c74a5a84ec79"
+  },
+  "push": {
+    "run": 42655695807,
+    "job": 129293459912,
+    "conclusion": "success",
+    "checks": [
+      "non-root unpublished recovery",
+      "focused root normal critical tests",
+      "gofmt",
+      "go vet ./... early",
+      "go test ./... count1",
+      "go test -race ./... count1",
+      "shell syntax and shell/UI contract tests",
+      "linux amd64/arm64/mips/mipsle builds",
+      "actual manual Mihomo UI test"
+    ],
+    "normal_seconds": {
+      "updatecheck": 94.411,
+      "app": 145.009,
+      "controller": 9.952,
+      "dataplane": 213.353
+    },
+    "race_seconds": {
+      "updatecheck": 566.938,
+      "app": 440.121,
+      "controller": 64.125,
+      "dataplane": 598.694
+    },
+    "raw_log_sha256": "803a68207b6e326afa141031a8da5c69ecdf0acd776f41a7c19a65830bec1ade"
+  },
+  "findings": [
+    "Minimal test-build-targets fixture extracts check.sh build tail without set-e; appended manual UI call emits four MODULE_NOT_FOUND errors masked by final echo. Actual full check later executes real manual UI PASS; parent notified to move call into existing Node UI block before extraction marker."
+  ],
+  "limitations": [
+    "Generic tests and cross-builds do not establish native DNS/NFQ or router readiness",
+    "Both actual generic gates succeeded at8434; minimal build fixture masked diagnostic errors documented separately, corrected in next source wave"
+  ]
+}

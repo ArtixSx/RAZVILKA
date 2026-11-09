@@ -391,3 +391,44 @@ metadata traversal с bounded backing slice; production алгоритм не м
 [Raw и SHA256](measurements/2026-11-09/research/lifecycle/3b27bd6e/),
 [paired182](measurements/2026-11-09/research/ci-3b27bd6e/).
 Новые исправления и сценарии требуют своего CI; router/LAN не подтверждены.
+
+### Проверка 8434e9ae и следующая интеграция
+
+Оба общих CI (PR42655707310, push42655695807) SUCCESS на точном
+`8434e9ae2183ef926a123b1fe4217bc0114d214a`: normal/race, go vet, shell/UI,
+четыре Linux cross-builds. Это не закрывает отдельный native lifecycle workflow.
+В минимальной обвязке build-targets обнаружен скрытый лишний UI-вызов;
+его перенос в общий Node-блок и fail-fast дочернего shell проверены отдельно.
+
+- Paired baseline363f →8434: 182 строки, verdicts, identity, полная cleanup PASS.
+  Повторные N12, p50/p95: live315.190/317.779→228.505/236.826мс;
+  selected2 1456/1463→1287/1323мс; all1473/1489→1304/1341мс.
+  Dead-node8.232→9.079мс: общего ускорения всех сценариев не заявляем.
+- Все4Mihomo native jobs SUCCESS. Manual на одном runner: candidate288.01с,
+  preserved4cc287.93с; Apply~100с у обоих при прежнем110с deadline.
+  Lifecycle254.40с против251.50с. Ускорения нет, запас времени ограничен.
+  Отдельная полная same-boot/race/ACK-cut матрица остаётся незавершённой.
+- DNS strict12 FAIL; diagnostic30 все3recovery PASS. Actual iptables1.8.11
+  normal/race PASS. NFQ normal core/recovery/cleanup retry PASS, fullLAN/manual
+  и race FAIL. Сетевые ограничения и исходные deadlines сохранены.
+- Public empty bootstrap теперь даёт точную причину: 2с scoped DNS inactivity,
+  proc.installer-role-close. Draft достигает настоящего old193 HTTP writer,
+  затем корректно отказывает на обычном StrategyPair admission.
+
+Следующая интеграция прошла независимое source review, но ещё требует своего CI:
+первая SHA + повторные полные чтения executable внутри одного bootstrap-role call;
+отдельное offline сохранение неизменных schema1 StrategyLab bytes без приписывания
+old193 нового reader ABI; резервирование ограниченного names slice.
+Последнее экономит~4.4KiB/6–7alloc на обходе, wall ускорение не подтверждено.
+Offline proof не разрешает live downgrade или private replay; история/manual
+selection и восстановленный старый live panel не объявлены проверенными.
+Полный Xray image compare пока только измерительный тест: retained~37MB,
+первый capture/SHA/clear учитывается отдельно; production cache не добавлен.
+
+На действующем роутере только read-only: SHA256 установленного30.3MB бинарника
+занял0.58/0.59/0.59с, stat неизменен. Это внешний sha256sum прежнего rc106,
+не Go/candidate benchmark и не подтверждение нового LAN маршрута.
+[Профиль и raw](measurements/2026-11-09/research/router-readonly.md).
+[Native raw/review/SHA256](measurements/2026-11-09/research/lifecycle/8434e9ae/),
+[paired182](measurements/2026-11-09/research/ci-8434e9ae/),
+[offline-контракт](measurements/2026-11-09/research/bootstrap-offline-strategy-contract.md).

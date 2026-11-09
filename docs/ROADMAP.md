@@ -40,13 +40,13 @@ refs и незакоммиченные файлы сохранены. Стары
 
 | Приоритет / направление | Владелец и зависимость | Работающий сценарий / изменение | Критерий приёмки и оставшаяся работа |
 | --- | --- | --- | --- |
-| P0: VLESS startup/очередь/cleanup | Ведущий; verification | Свежий bounded SOCKS readiness, scheduler продолжает очередной шаг, ранние Stop polls внутри прежнего4с grace | 357 paired182rows PASS, live314→224мс, selected2 1454→1250мс; cleanup101→11мс подтверждён предыдущей парой. Первые и повторные samples отдельно. Минутная WAN задержка не воспроизведена; контролируемые WAN/CPU/flash и router/LAN измерения остаются. |
+| P0: VLESS startup/очередь/cleanup | Ведущий; verification | Свежий bounded SOCKS readiness, scheduler продолжает очередной шаг, ранние Stop polls внутри прежнего4с grace | 8434 paired182rows PASS, live315→229мс, selected2 1456→1287мс; cleanup101→11мс подтверждён предыдущей парой. Первые и повторные samples отдельно. Минутная WAN задержка не воспроизведена; контролируемые WAN/CPU/flash и router/LAN измерения остаются. |
 | P0: CLI/API/UI измерения | Ведущий; verification; зависит от точной identity | CLI4979 actual localDNS/SOCKS/TLS/TTFB/body; eb1 API/UI original invocation snapshot после RecordCheck | CLI/profile/paired6df и полный Go normal/race+UI PASS. <=32rows, нет URL/ошибок/response bytes; absent/incomplete/multiple отличаются, интервалы не сумма. Не service/LAN proof. |
-| P0: Mihomo lifecycle/recovery (F) | Ведущий; verification; до расширения AUTO | Actual Apply/LAN/Stop, manual preview, ownership/closing | 357 lifecycle PASS; manual/settlement/postCAS FAIL. Same-boot parent normal/race и5normal ACK cuts PASS; race retirement/history PASS, completed.json startupFAIL, terminalpair deadlineFAIL. Далее: native sidecar failure attribution и полная restart матрица. |
-| P0: DNS / точный scope (B) | dns_completion; verification | Scoped DNS recovery, strict capture/exclusions; fresh images/lock | 357 actual1.8.11 normal/race PASS:74rows,20→4children,57.252→20.439мс. Strict12 FAIL; diagnostic30 все3recovery PASS. SHA126/132/137, Current379/460/460. Далее: full-Xray read measurements и GEN1/GEN2 ready/cancel/retire/retry на прежних12/4с. |
-| P1: managed NFQWS2 (C) | nfq_completion; verification | Original consumer/history/manual intent, quarantine custody и joined cleanup | 357 consumer normal/closing PASS, fullLAN/manual и race FAIL. Intent/sync/quarantine/cleanup-only closeRetry normal PASS; subsequent Apply FAIL. FullSHA copy normal/race PASS:1MiB32952→184B normal, CPU близкий. Далее: measured active inventory costs без удаления checks. |
+| P0: Mihomo lifecycle/recovery (F) | Ведущий; verification; до расширения AUTO | Actual Apply/LAN/Stop, manual preview, ownership/closing | 8434 все4 lifecycle/manual/settlement/postCAS PASS; samehost manual~100с Apply у candidate/4cc, ускорения нет. Same-boot parent normal/race и5normal ACK cuts PASS; race retirement/history PASS, completed.json startupFAIL, terminalpair deadlineFAIL. Далее: native sidecar failure attribution и полная restart матрица. |
+| P0: DNS / точный scope (B) | dns_completion; verification | Scoped DNS recovery, strict capture/exclusions; fresh images/lock | 8434 actual1.8.11 normal/race PASS; ранее измерено:74rows,20→4children,57.252→20.439мс. Strict12 FAIL; diagnostic30 все3recovery PASS. SHA126/132/137, Current379/460/460. Далее: full-Xray read measurements и GEN1/GEN2 ready/cancel/retire/retry на прежних12/4с. |
+| P1: managed NFQWS2 (C) | nfq_completion; verification | Original consumer/history/manual intent, quarantine custody и joined cleanup | 8434 consumer normal/closing PASS, fullLAN/manual и race FAIL. Intent/sync/quarantine/cleanup-only closeRetry normal PASS; subsequent Apply FAIL. FullSHA copy normal/race PASS:1MiB32952→184B normal, CPU близкий. Далее: measured active inventory costs без удаления checks. |
 | P1: capabilities/API/AUTO (E) | Ведущий после F | Registration отдельно от availability; scoped manual support отдельно от live service proof | Сохранены unknown и stale/WAN guards. Общий AUTO допуск не расширен. Проверить полный per-plan HTTP workflow и remaining recovery; generic не повышает router admission. |
-| P1: backup/update (A) | Ведущий; nfq_completion; verification | Snapshot3 binary/StrategyLab, encrypted backup, history/manual intent, fences | 357 pair/panel PASS. Public configured-old193 проходит preparation, затем provider отказывает скрытому /proc mount;3b27 исправляет только privatefixture, ожидаетCI. Далее: полный public flow, nonempty publichistory/defaultlegacy, retained-stage retry по originalFD. |
+| P1: backup/update (A) | Ведущий; nfq_completion; verification | Snapshot3 binary/StrategyLab, encrypted backup, history/manual intent, fences | 8434 pair/panel PASS; public empty scopedDNS2sFAIL, old193 HTTP draft authored, затем ordinarypair guard. Новые reviewed per-call fullbytes и offline unchanged-state proof ожидают actual empty/draftCI. Далее: полный public flow, history/manual/defaultlegacy, retained-stage retry; live downgrade не разрешён. |
 | P1: оставшаяся цена проверок | nfq_completion и dns_completion; после точной attribution | Сохранены все source bytes/metadata guards; syscall scratch не кэширует authority | 1a50 profile CheckWrite75.42%CPU большого test image, не lockwait; не удалять SHA. Native CopyBuffer caller attribution в d762; изменение только после подтверждения. Нет внешнего блокера для программного профилирования. |
 | P2: платформы/новые backend | Ведущий после P0/P1 | Pinned isolated fixtures; SSH/read-only NC-1812 profile подтверждён | Нужны согласованный LAN scope, конкретный candidate и явная авторизация изменения устройства. На роутере rc106/stock1.4.21, CI-unshare отсутствует; работающий NFQWS2 сохранён. WAN/reboot/power-loss и MIPS/OpenWrt отдельно. [Профиль](measurements/2026-11-09/research/router-readonly.md). |
 
@@ -56,18 +56,16 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Актуальное продолжение после3b27bd6e
+### Актуальное продолжение после8434e9ae
 
-Ведущий: normal/race обоихgeneric PASS, fixture mutex-copy vetFAIL исправлен;
-тот же vet теперь раньше runtime suites. Остальные downstream gates ещё не пройдены.
-NFQ/backup: exact composite diagnostics и output cap исправлены; public restore
-пока не достигнут. Empty/draft scenario проверяет настоящий старый HTTP writer
-и сохранённые байты через нынешний reader, без утверждения old live/manual.
-Mihomo: lifecycle/settlement/postCAS PASS, manual110sFAIL; следующий matched
-manual4cc baseline отделяет source regression от runner variability.
-DNS: большие ReadAt chunks отклонены по измерениям; strict12 не закрыт.
-Full metadata names allocation только измеряется. Все эти программные
-направления остаются в работе, внешнего аппаратного блокера для них нет.
+Оба generic и все4Mihomo PASS; native DNS/NFQ/public pair остаются FAIL,
+точные причины и результаты — в [статусе](CURRENT_STATUS_RU.md#проверка-8434e9ae-и-следующая-интеграция).
+Ведущий интегрирует reviewed offline-state preservation и per-call executable
+comparison, запускает отдельный empty/draft public consumer. dns_completion
+измеряет full-image equality без production cache; names reserve принят только
+как memory improvement. verification независимо проверяет gates и границы proof.
+Внешнего блокера для этих программных задач нет. Физический candidate/LAN-профиль
+требует отдельной авторизации изменения работающего роутера.
 
 ### Последний60e0d4ba и конкретные исправления
 

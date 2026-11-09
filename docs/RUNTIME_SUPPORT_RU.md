@@ -14,8 +14,8 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На4cc все4 isolated lifecycle/manual/recovery PASS; sameboot normal/race и3normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
-| Backup/StrategyLab | Парный snapshot3 и encrypted recovery уже реализованы; сохранены fences | Любые произвольные версии downgrade и аппаратный power-loss |
+| Mihomo | На8434 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
+| Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на8434 public empty/draft ещё FAIL. Следующий offline unchanged-state proof reviewed, runtime pending; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
 ## Три бинарника Entware
@@ -293,3 +293,13 @@ Managed NFQWS2 consumer normal PASS, полный LAN/manual и DNS strict12
 Public restore пока не достигнут. StrictDNS/fullNFQ/router admission не расширены.
 Следующий empty/draft сценарий подтверждает только retained draft/current reader,
 если пройдёт; old live compatibility и manual selection отдельно.
+
+### Уточнение по8434e9ae
+
+Оба generic CI полностью PASS и все4Mihomo PASS; это не повышает аппаратный
+admission. DNS strict12 и NFQ fullLAN/manual/race не прошли. Actual1.8.11
+normal/race PASS относится только к изолированному Ubuntu-профилю.
+Offline StrategyLab preservation в следующей интеграции сохраняет точные bytes
+без старого reader ABI: не ordinary rollback pair, не live downgrade,
+не private snapshot replay. Его полный public consumer пока не принят.
+[Единая очередь и владельцы](ROADMAP.md), [доказательства](CURRENT_STATUS_RU.md#проверка-8434e9ae-и-следующая-интеграция).

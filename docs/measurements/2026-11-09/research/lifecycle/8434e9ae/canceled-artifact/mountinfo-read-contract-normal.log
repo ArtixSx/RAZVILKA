@@ -1,0 +1,104 @@
+=== RUN   TestAuditCapacityCandidateSourceParity
+--- PASS: TestAuditCapacityCandidateSourceParity (0.00s)
+=== RUN   TestAuditCapacityCandidateActualCleanup
+--- PASS: TestAuditCapacityCandidateActualCleanup (0.00s)
+=== RUN   TestMountLayoutStreamCandidateParity
+--- PASS: TestMountLayoutStreamCandidateParity (0.02s)
+=== RUN   TestMountUnescapePreservesExactByteSemantics
+--- PASS: TestMountUnescapePreservesExactByteSemantics (0.00s)
+=== RUN   TestProcMountinfoMeasurementReadBounds
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes0
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes1
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4095
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4096
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4097
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes32768
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes262144
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/bytes262145
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-entry
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-between-reads
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-at-eof
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/error
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/invalid-count
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk4096/short-read-call-bound
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes0
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes1
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4095
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4096
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4097
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes32768
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes262144
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/bytes262145
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-entry
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-between-reads
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-at-eof
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/error
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/invalid-count
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk16384/short-read-call-bound
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes0
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes1
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4095
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4096
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4097
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes32768
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes262144
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/bytes262145
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-entry
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-between-reads
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-at-eof
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/error
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/invalid-count
+=== RUN   TestProcMountinfoMeasurementReadBounds/chunk32768/short-read-call-bound
+--- PASS: TestProcMountinfoMeasurementReadBounds (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes0 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes1 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4095 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4096 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes4097 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes32768 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes262144 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/bytes262145 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-entry (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-between-reads (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/canceled-at-eof (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/error (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/invalid-count (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk4096/short-read-call-bound (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes0 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes1 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4095 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4096 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes4097 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes32768 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes262144 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/bytes262145 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-entry (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-between-reads (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/canceled-at-eof (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/error (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/invalid-count (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk16384/short-read-call-bound (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes0 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes1 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4095 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4096 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes4097 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes32768 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes262144 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/bytes262145 (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-entry (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-between-reads (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/canceled-at-eof (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/error (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/invalid-count (0.00s)
+    --- PASS: TestProcMountinfoMeasurementReadBounds/chunk32768/short-read-call-bound (0.00s)
+=== RUN   FuzzMountLayoutStreamCandidateParity
+=== RUN   FuzzMountLayoutStreamCandidateParity/seed#0
+=== RUN   FuzzMountLayoutStreamCandidateParity/seed#1
+=== RUN   FuzzMountLayoutStreamCandidateParity/seed#2
+--- PASS: FuzzMountLayoutStreamCandidateParity (0.00s)
+    --- PASS: FuzzMountLayoutStreamCandidateParity/seed#0 (0.00s)
+    --- PASS: FuzzMountLayoutStreamCandidateParity/seed#1 (0.00s)
+    --- PASS: FuzzMountLayoutStreamCandidateParity/seed#2 (0.00s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/netidentity	0.028s

@@ -1,0 +1,48 @@
+{
+  "measured_sha": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+  "decision": "APPROVE allocation-only promotion",
+  "validation": [
+    "Raw native logs independently checked; source-body comparison PASS; no local Go builds."
+  ],
+  "files": [
+    {
+      "path": "internal/startuptools/version_batch_linux.go",
+      "sha256": "d9153a0163720645432b1644bcb8edaad718c2d2420a9a9ba8d6113e7d72fb0d"
+    },
+    {
+      "path": "internal/startuptools/version_names_measurement_native_linux_test.go",
+      "sha256": "702e1cfefd4264a0c8123ccac08c512d200b4a7bca06023faf09cf7b1d7c5aab"
+    }
+  ],
+  "reviewer": "verification",
+  "measurements": {
+    "extensions": 122,
+    "normal": {
+      "before_ns": 893216,
+      "after_ns": 891464,
+      "after_bytes": 37786,
+      "before_bytes": 42226,
+      "after_allocs": 542,
+      "before_allocs": 548
+    },
+    "nodes": 166,
+    "race": {
+      "before_ns": 1686159,
+      "after_ns": 1689117,
+      "after_bytes": 46510,
+      "before_bytes": 50898,
+      "after_allocs": 609,
+      "before_allocs": 616
+    }
+  },
+  "findings": [
+    "Production change only reserves256 names slots after unchanged ReadDir257 and oversized-set refusal. All metadata/path/heldFD/membership/DT_UNKNOWN observations remain exact.",
+    "Test baseline retains old allocation; independent reverse normalized full-body comparison PASS.",
+    "Actual8434 normal/race source and full original metadata parity/cancel tests each pass3times."
+  ],
+  "limits": [
+    "Memory allocation reduction only; wall time effectively unchanged.",
+    "No stack storage, full-route latency or router readiness claim.",
+    "Promoted exact production path still requires next generic/native gates."
+  ]
+}
