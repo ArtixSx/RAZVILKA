@@ -269,16 +269,16 @@ write denial прежнего образа снимается, хотя PID/star
 Дополнительно изучен исходник поставляемого Go1.26.5
 `src/net/http/httptrace/trace.go` (BSD-style Go license): WithClientTrace
 составляет hooks, callback может исполниться асинхронно после возврата запроса.
-Новая optional telemetry использует этот стандартный API, mutex и закрываемый
+В4979 optional telemetry использует этот стандартный API, mutex и закрываемый
 bounded snapshot; чужой код не копируется. Продолжение существующего подхода
 blackbox-exporter к разделению сетевых стадий, без переноса его verdict в RAZVILKA.
 
 CLI nodeeval получает отдельные local resolver / SOCKS / TLS / TTFB / body
 наблюдения, привязанные к текущему node/service/profile result. Redirect —
 отдельный RoundTrip; multiple internal dial/TLS явно не изображаются одним
-измерением. Raw URL/error/body/certificate не попадают в JSON. Native queue
+измерением. Raw URL/error/body/certificate не попадают в JSON. В4979/1a50 native queue
 включает эти наблюдения только в отдельном CPU-profile проходе; обычные paired
-samples не получают telemetry overhead. Существующие service predicates,
+samples той ревизии не получают telemetry overhead. Вeb1 это изменено ниже. Существующие service predicates,
 scope guards, таймауты и cleanup сохраняются. Нужны адресные normal/race и
 original pinned SOCKS/TLS проверки нового SHA; это не аппаратное доказательство.
 
@@ -342,3 +342,16 @@ Fresh held Fstat normal/race и concurrent Close прошли на1a50;6samples 
 Classic-save6pair benchmark доe9 не дошёл: iptables запрещает DROP в nat;
 fixture исправлен на RETURN в неподключённой цепочке. Это не production изменение
 и не доказательство completed parity. Native1.8.10 != actual1.8.11/router.
+
+
+### Уточнение actual xtables lock ABI
+
+Native1.8.10 xshared.c при wait=0 использует blocking LOCK_EX и alarm(0);
+1.8.11 использует LOCK_NB. Поэтому actual1.8.10 busy test с прежним-S ждёт,
+а не немедленно возвращает4. D762 ограничивает только этот тест `-w1`/2с и
+проверяет тот же удерживаемый inode;1.8.11 fixture остаётся без-w. Production
+save lock по-прежнему собственный nonblocking, без изменений deadline/fallback.
+Source-identical save output не означает одинаковые busy semantics двух ABI.
+Fair serial/save comparison использует один original readonly observer с обеих
+сторон; прежние0f equal74rows/20→4children подтверждают parity, но цифры
+80–84→29–30мс пока предварительные из-за различавшихся wrapper bookends.
