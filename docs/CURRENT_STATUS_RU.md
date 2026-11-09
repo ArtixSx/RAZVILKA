@@ -127,6 +127,12 @@ original DNS successor preparation recovery впервые проходит clea
 он не изменяет production downloader. Точные результаты и следующие проверки:
 [lifecycle журнал](measurements/2026-11-09/research/lifecycle/README.md).
 
+На следующем `b7261e9f` Mihomo native lifecycle прошёл все три jobs:
+два Apply/Check/Stop с fresh Apply и closing retry, failed Check settlement
+и post-CAS rollback. Preparation recovery и StrategyLab pair повторно PASS.
+Strict DNS12с и managed NFQWS LAN остаются программными незавершёнными задачами;
+подробные причины и владельцы указаны в едином roadmap.
+
 ## История интеграции 31.10.2026: первоначальная защита обновления
 
 Рабочая ветка `work/bypass-integration-20261031` основана на `a36f5343`

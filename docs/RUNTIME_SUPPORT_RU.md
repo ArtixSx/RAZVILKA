@@ -160,3 +160,13 @@ Store/dispatcher/history admission: N=12, enqueue→server completion p50/p95
 
 Generic PR CI d5fd9774 — SUCCESS. Более новые SHA оцениваются отдельно;
 аппаратная матрица и публичный admission от этих результатов не повышаются.
+
+## Последующая native приёмка b7261e9f
+
+Mihomo full lifecycle42568035583 — SUCCESS: два Apply/Check/Stop, fresh Apply,
+closing retry, failed Check settlement и post-CAS rollback; original bookends
+normal/race PASS. Apply≈95.5с, Stop≈6.1с — функциональная приёмка, не ускорение.
+StrategyLab pair/restored panel и DNS preparation clean/2partialACK повторно PASS.
+Strict DNS12с оба сценария и managed NFQWS LAN/manual/race остаются FAIL.
+Подробности и raw evidence: [lifecycle журнал](measurements/2026-11-09/research/lifecycle/README.md).
+Эти стендовые результаты не меняют публичный допуск профилей или аппаратную матрицу.

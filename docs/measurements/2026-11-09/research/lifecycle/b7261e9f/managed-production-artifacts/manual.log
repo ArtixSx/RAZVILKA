@@ -1,0 +1,201 @@
+/tmp/razvilka-managed-probe.xKIY4o/release.tar.gz.download.3lKht1: OK
+/tmp/razvilka-managed-probe.xKIY4o/release.tar.gz: OK
+CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+Actual native build mode: production
+Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+go version go1.26.5 linux/amd64
+Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+Actual compiled reader/consumer bytes: 42885385
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestNativeFixturePhysicalSourceCopiesRefuse
+--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeLANPhysical
+    strategy_managed_probe_lan_native_linux_test.go:396: actual WAN peer + bridge + included/excluded clients + route/FDB/ARP + original Linux owners + real drift refusal; only Home classification modeled; no NFQ Apply/router acceptance
+--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.15s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeLANManualApply
+2026/11/09 05:40:41 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=19091
+2026/11/09 05:40:41 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/retire prepared/retire.native-common/retire.common/retire.policy-remove/retire.common/retire.policy-remove
+2026/11/09 05:40:41 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (DEADLINE_EXCEEDED)
+2026/11/09 05:40:41 Managed NFQ original physical refusal: context.deadline > context.deadline > context.deadline
+    strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.091186827s} active-inventory-capture:{14 14 464.702292ms} active-lan:{9 9 10.391496692s} active-read-pair:{7 7 827.558422ms} capture-current:{0 0 0s} cleanup-current:{3 3 86.627666ms} counter:{0 0 0s} current:{15 15 1.085762532s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{424 424 4.180005881s} policy-apply:{1 1 7.853862618s} policy-readback:{6 6 15.789412347s} policy-remove:{1 1 313.43262ms} prepared-active:{1 1 4.435879841s}]
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN execution state=rollback-failed rollback_verified=false
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=snapshot state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=snapshot state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=stage state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=stage state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=validate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=validate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=activate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=activate state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=verify-rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN Apply 409 {"code":"MANAGED_NFQWS_RUNTIME_REFUSED","error":"Состояние удерживаемого маршрута NFQWS не подтверждено. Проверьте журнал и исходную область маршрута.","ok":false,"service_health":"unverified"}
+        
+    strategy_managed_probe_lan_native_linux_test.go:139: retained original LAN cleanup dataplane transaction journal is unavailable: scoped NFQWS owner unavailable or mismatched
+        scoped NFQWS owner unavailable or mismatched
+        rollback failed: managed NFQWS active retire prepared
+        scoped NFQWS owner unavailable or mismatched
+        dataplane transaction journal is unavailable
+        policy addition or cleanup result unknown; reconciliation required
+        network policy consumers have not independently settled
+    strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 1879304352 14078093
+    strategy_managed_probe_native_linux_test.go:458: native actual HTTP member-read attempts/returned-bytes 7116 581875320
+    strategy_managed_probe_native_linux_test.go:459: native actual HTTP inclusive phase [started completed wall] map[]
+    strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 1218 wall 7.589772224s
+    strategy_managed_probe_native_linux_test.go:461: native actual HTTP aggregate original metadata traversal attempts 5984
+    strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [128 128 1198]
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeLANManualApply.pprof
+--- FAIL: TestManagedStrategyProbeNativeLANManualApply (22.53s)
+FAIL
+File: app.test
+Build ID: 47abca9f63c1800fda3639c5b003161645a7f65b
+Type: cpu
+Time: 2026-11-09 05:40:22 UTC
+Duration: 19.50s, Total samples = 17.68s (90.65%)
+Showing nodes accounting for 14.55s, 82.30% of 17.68s total
+Dropped 684 nodes (cum <= 0.09s)
+Showing top 20 nodes out of 433
+      flat  flat%   sum%        cum   cum%
+    10.99s 62.16% 62.16%     10.99s 62.16%  internal/runtime/syscall/linux.Syscall6
+     1.78s 10.07% 72.23%      1.78s 10.07%  crypto/internal/fips140/sha256.blockSHANI
+     0.15s  0.85% 73.08%      0.39s  2.21%  runtime.scanObject
+     0.15s  0.85% 73.93%      0.25s  1.41%  runtime.scanObjectsSmall
+     0.14s  0.79% 74.72%      0.14s  0.79%  runtime.memclrNoHeapPointers
+     0.13s  0.74% 75.45%      0.13s  0.74%  runtime.memmove
+     0.13s  0.74% 76.19%      0.19s  1.07%  strings.Fields
+     0.11s  0.62% 76.81%      0.11s  0.62%  indexbytebody
+     0.10s  0.57% 77.38%      0.12s  0.68%  runtime.exitsyscall
+     0.10s  0.57% 77.94%      0.10s  0.57%  runtime.rtsigprocmask
+     0.10s  0.57% 78.51%      0.11s  0.62%  runtime.typePointers.next
+     0.09s  0.51% 79.02%      0.09s  0.51%  runtime.futex
+     0.09s  0.51% 79.52%      0.09s  0.51%  runtime.nextFreeFast (inline)
+     0.09s  0.51% 80.03%      0.11s  0.62%  runtime.reentersyscall
+     0.09s  0.51% 80.54%      0.20s  1.13%  runtime.tryDeferToSpanScan
+     0.09s  0.51% 81.05%     10.86s 61.43%  syscall.RawSyscall6
+     0.06s  0.34% 81.39%      0.68s  3.85%  runtime.mallocgc
+     0.06s  0.34% 81.73%      5.10s 28.85%  syscall.Syscall
+     0.05s  0.28% 82.01%      4.18s 23.64%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.05s  0.28% 82.30%      0.16s   0.9%  runtime.mallocgcSmallNoscan
+File: app.test
+Build ID: 47abca9f63c1800fda3639c5b003161645a7f65b
+Type: cpu
+Time: 2026-11-09 05:40:22 UTC
+Duration: 19.50s, Total samples = 17.68s (90.65%)
+Showing nodes accounting for 11.09s, 62.73% of 17.68s total
+Dropped 684 nodes (cum <= 0.09s)
+Showing top 20 nodes out of 433
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     14.79s 83.65%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+     0.01s 0.057% 0.057%     12.50s 70.70%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+    10.99s 62.16% 62.22%     10.99s 62.16%  internal/runtime/syscall/linux.Syscall6
+     0.09s  0.51% 62.73%     10.86s 61.43%  syscall.RawSyscall6
+         0     0% 62.73%     10.19s 57.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+         0     0% 62.73%      9.95s 56.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools
+         0     0% 62.73%      9.63s 54.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func5
+         0     0% 62.73%      9.59s 54.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+         0     0% 62.73%      9.43s 53.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use.func1
+         0     0% 62.73%      9.37s 53.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 62.73%      9.37s 53.00%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func1
+         0     0% 62.73%      9.33s 52.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply
+         0     0% 62.73%      9.26s 52.38%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Preflight
+         0     0% 62.73%      9.16s 51.81%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).startReviewed
+         0     0% 62.73%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+         0     0% 62.73%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read
+         0     0% 62.73%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read
+         0     0% 62.73%      9.11s 51.53%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0% 62.73%      9.08s 51.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary
+         0     0% 62.73%      9.08s 51.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory
+File: app.test
+Build ID: 47abca9f63c1800fda3639c5b003161645a7f65b
+Type: cpu
+Time: 2026-11-09 05:40:22 UTC
+Duration: 19.50s, Total samples = 17.68s (90.65%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 0.85s, 4.81% of 17.68s total
+Dropped 156 nodes (cum <= 0.09s)
+Showing top 40 nodes out of 247
+      flat  flat%   sum%        cum   cum%
+     0.01s 0.057% 0.057%     12.50s 70.70%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0% 0.057%     10.19s 57.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+         0     0% 0.057%      9.95s 56.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools
+         0     0% 0.057%      9.63s 54.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func5
+     0.16s   0.9%  0.96%      9.59s 54.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+         0     0%  0.96%      9.43s 53.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use.func1
+         0     0%  0.96%      9.37s 53.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0%  0.96%      9.37s 53.00%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func1
+         0     0%  0.96%      9.33s 52.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply
+         0     0%  0.96%      9.26s 52.38%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Preflight
+         0     0%  0.96%      9.16s 51.81%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).startReviewed
+         0     0%  0.96%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+         0     0%  0.96%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read
+     0.66s  3.73%  4.69%      9.13s 51.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read
+         0     0%  4.69%      9.11s 51.53%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+         0     0%  4.69%      9.08s 51.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary
+         0     0%  4.69%      9.08s 51.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory
+         0     0%  4.69%      9.07s 51.30%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.func11
+         0     0%  4.69%      9.07s 51.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).InventoryCheck (inline)
+         0     0%  4.69%      9.07s 51.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary.func1
+         0     0%  4.69%      9.07s 51.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory.func1
+         0     0%  4.69%      8.90s 50.34%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func2
+         0     0%  4.69%      8.89s 50.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).check
+         0     0%  4.69%      8.88s 50.23%  github.com/ArtixSx/razvilka/internal/app.(*App).managedNFQApplyHTTP
+         0     0%  4.69%      8.61s 48.70%  github.com/ArtixSx/razvilka/internal/app.(*App).apply
+         0     0%  4.69%      8.52s 48.19%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+     0.01s 0.057%  4.75%      8.47s 47.91%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation
+         0     0%  4.75%      8.47s 47.91%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1
+         0     0%  4.75%      8.36s 47.29%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).verifyLANObserved
+         0     0%  4.75%      8.29s 46.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Verify
+         0     0%  4.75%      8.25s 46.66%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+         0     0%  4.75%      8.08s 45.70%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0%  4.75%      8.07s 45.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0%  4.75%      7.88s 44.57%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).activate
+         0     0%  4.75%      7.88s 44.57%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).verifyLAN.func1
+         0     0%  4.75%      7.87s 44.51%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+         0     0%  4.75%      7.69s 43.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).verifyLAN
+     0.01s 0.057%  4.81%      7.65s 43.27%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture
+         0     0%  4.81%      7.65s 43.27%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2
+         0     0%  4.81%      7.55s 42.70%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).Activate
+File: app.test
+Build ID: 47abca9f63c1800fda3639c5b003161645a7f65b
+Type: alloc_space
+Time: 2026-11-09 05:40:41 UTC
+Showing nodes accounting for 1702.44MB, 91.97% of 1851.16MB total
+Dropped 503 nodes (cum <= 9.26MB)
+Showing top 30 nodes out of 350
+      flat  flat%   sum%        cum   cum%
+  238.29MB 12.87% 12.87%   238.79MB 12.90%  io.copyBuffer
+  199.54MB 10.78% 23.65%   199.54MB 10.78%  os.(*File).Stat
+  149.51MB  8.08% 31.73%   149.51MB  8.08%  syscall.ByteSliceFromString
+  130.56MB  7.05% 38.78%   130.56MB  7.05%  io.ReadAll
+  125.52MB  6.78% 45.56%   142.52MB  7.70%  os.lstatNolog
+   97.53MB  5.27% 50.83%    97.53MB  5.27%  strings.Fields
+   80.32MB  4.34% 55.17%    81.32MB  4.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   71.70MB  3.87% 59.04%    71.70MB  3.87%  github.com/ArtixSx/razvilka/internal/physicalscope.init.func1
+   70.22MB  3.79% 62.84%    70.22MB  3.79%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   66.13MB  3.57% 66.41%    66.13MB  3.57%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   59.18MB  3.20% 69.61%    59.18MB  3.20%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   55.26MB  2.99% 72.59%    58.27MB  3.15%  encoding/json.Marshal
+   44.50MB  2.40% 74.99%       49MB  2.65%  os.newUnixDirent
+   43.50MB  2.35% 77.34%    57.01MB  3.08%  os.readlink
+   40.54MB  2.19% 79.53%    89.54MB  4.84%  os.(*File).readdir
+   40.12MB  2.17% 81.70%   134.14MB  7.25%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   32.55MB  1.76% 83.46%   547.65MB 29.58%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+      27MB  1.46% 84.92%       27MB  1.46%  strings.genSplit
+   24.36MB  1.32% 86.23%    24.36MB  1.32%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+      19MB  1.03% 87.26%       19MB  1.03%  strings.(*Builder).WriteByte (inline)
+   16.50MB  0.89% 88.15%    16.50MB  0.89%  os.newFile
+      14MB  0.76% 88.91%    15.50MB  0.84%  os.lstatatWithName
+      12MB  0.65% 89.56%    43.50MB  2.35%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+   11.57MB  0.62% 90.18%    11.57MB  0.62%  encoding/json.(*Decoder).refill
+    9.50MB  0.51% 90.70%     9.50MB  0.51%  github.com/ArtixSx/razvilka/internal/netidentity.kernelTuple
+       9MB  0.49% 91.18%    50.53MB  2.73%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+       8MB  0.43% 91.61%       10MB  0.54%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+       3MB  0.16% 91.78%    59.54MB  3.22%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+       2MB  0.11% 91.88%       11MB  0.59%  os/exec.(*Cmd).Start
+    1.50MB 0.081% 91.97%    75.71MB  4.09%  github.com/ArtixSx/razvilka/internal/physicalscope.dump

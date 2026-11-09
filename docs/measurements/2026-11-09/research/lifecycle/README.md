@@ -245,3 +245,58 @@ full live p50/p95 **403.157/405.602→312.937/316.020мс**, selected2 server
 completion **2604/2622→1423/1437мс**. Actual Mihomo service/common cleanup и
 HTTP handler также PASS без SKIP. Сигнал стабильного сокращения двух найденных
 простоев повторился; минутный WAN случай и router lifecycle не воспроизведены.
+
+## Native b7261e9f: полный Mihomo lifecycle принят на стенде
+
+[Mihomo42568035583](https://github.com/ArtixSx/RAZVILKA/actions/runs/42568035583)
+SUCCESS, все три jobs. [Полный вывод и профиль](b7261e9f/mihomo-native-conclusion.json):
+selected-LAN HTTPS и physical baseline assertions, два Apply/Check/Stop,
+включая fresh Apply и closing retry, завершены; official-child/identity mutation
+и observation bookends normal/race PASS.
+
+| Native сценарий | Проверено | Время |
+| --- | --- | --- |
+| Lifecycle round0 | Apply, Check + настоящий клиент, Stop | Apply95.494с, Stop6.063с |
+| Lifecycle fresh round1 | Повтор с исходной custody и closing retry | Apply95.558с, Stop6.092с |
+| Failed Check settlement | Два cut, исходные child/sidecar/TUN сохранены, повторный Stop и terminal reader9 | Тест134.97с, Apply102.145с, Stop9.998с |
+| Post-CAS required TLS failure | HTTP503, exact desired restored, rolled-back, rollback_verified, no original pending | Тест80.79с |
+
+Отдельного таймера чистого Check здесь нет: интервалы между Apply и Stop
+включают клиентский трафик и не выдаются за Check. Полный lifecycle test279.15с;
+CPU356.07с, SHA blockSHANI288.85с (81.12%), syscalls58.84с (16.52%). Это
+измеренная причина длительности данного пути. Hash/ownership proofs нельзя
+убрать ради ускорения. Положительный delay и≈3с probe — другой сценарий.
+Нет before/after speed claim для Apply; физический router/reboot не проверен.
+
+[Lifecycle42568035565](https://github.com/ArtixSx/RAZVILKA/actions/runs/42568035565)
+в целом FAIL. Strategy pair + restored panel и diagnostic preparation pair
+SUCCESS. Strict DNS selected14.09с/canceled-ready13.91с FAIL на GEN1; GEN2 не
+запущен. Настоящий byte primitive4→2 PASS, successive bracket заново хеширует,
+изменённые bytes с восстановленным mtime отвергаются. Selected192 full hashes,
+7.019GB,4.839с; такие показатели с другого runner не являются парной оценкой
+whole workflow. [Точные профили](b7261e9f/domain-results.json).
+
+Managed LAN теперь действительно запущен: activation16.080с превышает15с,
+первый отказ lan-preflight-inventory-read-close-scope, затем retire.policy-remove
+UNKNOWN. Production LAN test58.29с/manual22.53с, race core/LAN/manual FAIL.
+[Разбор](b7261e9f/managed-profile-conclusion.json): active-LAN9calls10.444с,
+snapshot14captures0.464с; manual CPU17.68с, syscalls10.99с (62.16%), SHA1.78с.
+Эти вложенные интервалы не суммируются. Existing active-tools observation уже
+разделяет hashes; ещё один wrapper не устраняет доказанную причину. Remaining
+software task — сократить повторные metadata observations с сохранением
+ownership/closing proofs и завершить same-owner cleanup. Дедлайн, unknown и
+retirementStarted не ослаблены; аппаратное отсутствие не является этой причиной.
+
+`44c1cd0b` дополнительно объединяет bytes только в двух standalone prepared
+baseline comparisons, сохраняя все четыре source/process чтения и реальные
+inventory/receipt bookends. Independent review, Windows focused0.247с и Linux
+crosscompile PASS; native приёмка8→2 и strict12 ожидается. Это отдельный
+следующий кандидат, не задним числом успешный результат b726.
+
+Парный probe [42568035625](https://github.com/ArtixSx/RAZVILKA/actions/runs/42568035625)
+SUCCESS, [182 строки и анализ](../ci-b7261e9f/paired-analysis.json). N12:
+full live p50/p95 **398.945/417.567→307.347/309.697мс**; selected2
+**2528/2746→1343/1553мс**. Single p50 **712→616мс**, но p95 хуже:
+**775→909мс**. Candidate sample11 содержит configuration111мс и startup209мс,
+cleanup101мс; этот выброс и положительное service/cleanup evidence сохранены.
+Универсальное ускорение всех метрик не заявляется.
