@@ -1,0 +1,1850 @@
+{
+  "run_id": 42634845740,
+  "baseline": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "candidate": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "algorithm": "current-reuse",
+  "quantile": "nearest-rank; first sample excluded from repeated N12",
+  "limitations": [
+    "baseline then candidate fixed order",
+    "cold fixture is not cold OS cache",
+    "controlled loopback namespace and WAN identity, not router/LAN",
+    "empty child RSS is missing observation, not zero memory"
+  ],
+  "files": {
+    "baseline\\check-current-reuse.csv": "9b21ef42c253dda2eb92a7cbaae3bfcc087e77185804ed19a61f2543e813452d",
+    "baseline\\environment.txt": "697bb1ed7a7c3d87350fa1f96e12fb3d13d36658a6e228882837f274caf8dbed",
+    "baseline\\native-performance.log": "01a159982902b15f07847e495fbc51a2e27d2259fa29442407eed3766e8fea6f",
+    "baseline\\queue-http-current.csv": "8fe3065ba17ed7206f7e22a02f50354013898e77f337facbb9d2fdddaf27bd86",
+    "baseline\\resource-helper.log": "4622f21fa45be29c727065afe56d0732406bd75ac2102c1f8d903768c7bf900b",
+    "candidate\\check-current-reuse.csv": "e1934eaf12324787bfb9493b3d2e98acc98ebf60500fc975460d308a08f54d21",
+    "candidate\\environment.txt": "3ef793ca5a9cec1e3e7d2c160a08c8cef8b86bc7331c29f606c995204b155ca7",
+    "candidate\\native-performance.log": "83aadcb8372a27b1221206745ac316e98d8b2294ad7141673d4f727fa17e1cd4",
+    "candidate\\queue-http-current.csv": "2f196148ed99b79511d7d3afc4cd808f87db811419b457007f84f56b224d99e1",
+    "candidate\\resource-helper.log": "93a75569b939a043a4a724b2509d8ba40a5344bfb066e2804f0ac335c9f60bd4"
+  },
+  "revisions": {
+    "baseline": {
+      "binary_sha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+      "check": {
+        "live": {
+          "n": 13,
+          "first_phase": "cold-fixture-first-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 320.41,
+              "repeated": {
+                "n": 12,
+                "p50": 316.126,
+                "p95": 463.944
+              }
+            },
+            "check_latency_ms": {
+              "first": 320.0,
+              "repeated": {
+                "n": 12,
+                "p50": 316.0,
+                "p95": 463.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 18.398,
+              "repeated": {
+                "n": 12,
+                "p50": 19.6,
+                "p95": 21.329
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 18.887,
+              "repeated": {
+                "n": 12,
+                "p50": 15.622,
+                "p95": 26.804
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 31.814,
+              "repeated": {
+                "n": 12,
+                "p50": 35.352,
+                "p95": 39.536
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 30.826,
+              "repeated": {
+                "n": 12,
+                "p50": 23.986,
+                "p95": 36.716
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 25556.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27120.0,
+                "p95": 27380.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33192.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32856.0,
+                "p95": 33360.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 37.285,
+              "repeated": {
+                "n": 12,
+                "p50": 35.049,
+                "p95": 46.72
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 62.64,
+              "repeated": {
+                "n": 12,
+                "p50": 60.963,
+                "p95": 62.303
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 99.925,
+              "repeated": {
+                "n": 12,
+                "p50": 95.974,
+                "p95": 109.023
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 19,
+              "p95": 31
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 146
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 0,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "egress": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "service": {
+              "n": 12,
+              "p50": 104,
+              "p95": 106
+            },
+            "service_ip": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 101,
+              "p95": 101
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "dead-service": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 316.644,
+              "repeated": {
+                "n": 12,
+                "p50": 316.588,
+                "p95": 322.368
+              }
+            },
+            "check_latency_ms": {
+              "first": 316.0,
+              "repeated": {
+                "n": 12,
+                "p50": 316.0,
+                "p95": 322.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 12.408,
+              "repeated": {
+                "n": 12,
+                "p50": 16.34,
+                "p95": 23.702
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 21.437,
+              "repeated": {
+                "n": 12,
+                "p50": 16.303,
+                "p95": 24.855
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 36.237,
+              "repeated": {
+                "n": 12,
+                "p50": 32.241,
+                "p95": 38.306
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 24.267,
+              "repeated": {
+                "n": 12,
+                "p50": 28.568,
+                "p95": 34.88
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 27544.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27784.0,
+                "p95": 28112.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 32752.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32888.0,
+                "p95": 33532.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 33.845,
+              "repeated": {
+                "n": 12,
+                "p50": 35.141,
+                "p95": 38.248000000000005
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 60.504000000000005,
+              "repeated": {
+                "n": 12,
+                "p50": 60.045,
+                "p95": 61.867999999999995
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 94.349,
+              "repeated": {
+                "n": 12,
+                "p50": 95.186,
+                "p95": 99.355
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 19,
+              "p95": 27
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 3
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 1,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "egress": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "service": {
+              "n": 12,
+              "p50": 104,
+              "p95": 106
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 101,
+              "p95": 101
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "cancel": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 276.434,
+              "repeated": {
+                "n": 12,
+                "p50": 276.142,
+                "p95": 278.282
+              }
+            },
+            "check_latency_ms": {
+              "first": 276.0,
+              "repeated": {
+                "n": 12,
+                "p50": 276.0,
+                "p95": 278.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 18.067,
+              "repeated": {
+                "n": 12,
+                "p50": 15.775,
+                "p95": 20.956
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 15.842,
+              "repeated": {
+                "n": 12,
+                "p50": 16.694,
+                "p95": 22.568
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 38.3,
+              "repeated": {
+                "n": 12,
+                "p50": 34.582,
+                "p95": 40.361
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 22.0,
+              "repeated": {
+                "n": 12,
+                "p50": 25.808,
+                "p95": 28.667
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 28048.0,
+              "repeated": {
+                "n": 12,
+                "p50": 28436.0,
+                "p95": 28604.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 32484.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32788.0,
+                "p95": 33284.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 33.909,
+              "repeated": {
+                "n": 12,
+                "p50": 33.189,
+                "p95": 34.054
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 60.3,
+              "repeated": {
+                "n": 12,
+                "p50": 59.75,
+                "p95": 61.397999999999996
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 94.209,
+              "repeated": {
+                "n": 12,
+                "p50": 93.11,
+                "p95": 94.767
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 19,
+              "p95": 21
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 2
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 1,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 65,
+              "p95": 65
+            },
+            "egress": {
+              "n": 12,
+              "p50": 65,
+              "p95": 65
+            },
+            "service": {
+              "n": 12,
+              "p50": 64,
+              "p95": 65
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 101,
+              "p95": 101
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "dead-node": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 9.515,
+              "repeated": {
+                "n": 12,
+                "p50": 8.472,
+                "p95": 9.201
+              }
+            },
+            "check_latency_ms": {
+              "first": 9.0,
+              "repeated": {
+                "n": 12,
+                "p50": 8.0,
+                "p95": 9.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 0.0,
+              "repeated": {
+                "n": 12,
+                "p50": 0.596,
+                "p95": 2.963
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 1.597,
+              "repeated": {
+                "n": 12,
+                "p50": 0.373,
+                "p95": 1.135
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 3.808,
+              "repeated": {
+                "n": 12,
+                "p50": 4.584,
+                "p95": 8.529
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 6.664,
+              "repeated": {
+                "n": 12,
+                "p50": 4.696,
+                "p95": 5.834
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 28604.0,
+              "repeated": {
+                "n": 12,
+                "p50": 28624.0,
+                "p95": 28668.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": null,
+              "repeated": {
+                "n": 0,
+                "p50": null,
+                "p95": null
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 1.597,
+              "repeated": {
+                "n": 12,
+                "p50": 1.044,
+                "p95": 3.043
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 10.472,
+              "repeated": {
+                "n": 12,
+                "p50": 9.297,
+                "p95": 10.028
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 12.068999999999999,
+              "repeated": {
+                "n": 12,
+                "p50": 10.37,
+                "p95": 13.071000000000002
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "rss_read_errors": 0
+        }
+      },
+      "queue": {
+        "single": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 625.261,
+              "repeated": {
+                "n": 12,
+                "p50": 663.074,
+                "p95": 675.436
+              }
+            },
+            "queue_wait_ms": {
+              "first": 26.0,
+              "repeated": {
+                "n": 12,
+                "p50": 26.0,
+                "p95": 38.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 624.0,
+              "repeated": {
+                "n": 12,
+                "p50": 661.0,
+                "p95": 673.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 0.35,
+              "repeated": {
+                "n": 12,
+                "p50": 0.425,
+                "p95": 1.18
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 264.686,
+              "repeated": {
+                "n": 12,
+                "p50": 276.224,
+                "p95": 287.749
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 94.832,
+              "repeated": {
+                "n": 12,
+                "p50": 89.959,
+                "p95": 99.517
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 36.443,
+              "repeated": {
+                "n": 12,
+                "p50": 40.431,
+                "p95": 47.754
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 39.744,
+              "repeated": {
+                "n": 12,
+                "p50": 34.521,
+                "p95": 40.922
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 31460.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33052.0,
+                "p95": 34076.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 32944.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33028.0,
+                "p95": 33468.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 359.518,
+              "repeated": {
+                "n": 12,
+                "p50": 370.13,
+                "p95": 373.472
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 76.187,
+              "repeated": {
+                "n": 12,
+                "p50": 76.366,
+                "p95": 78.94800000000001
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 435.705,
+              "repeated": {
+                "n": 12,
+                "p50": 446.871,
+                "p95": 449.83799999999997
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 0
+        },
+        "selected-batch": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 1434.806,
+              "repeated": {
+                "n": 12,
+                "p50": 1447.606,
+                "p95": 1464.074
+              }
+            },
+            "queue_wait_ms": {
+              "first": 26.0,
+              "repeated": {
+                "n": 12,
+                "p50": 26.0,
+                "p95": 38.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 1432.0,
+              "repeated": {
+                "n": 12,
+                "p50": 1445.0,
+                "p95": 1461.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 0.408,
+              "repeated": {
+                "n": 12,
+                "p50": 0.503,
+                "p95": 0.822
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 654.231,
+              "repeated": {
+                "n": 12,
+                "p50": 665.837,
+                "p95": 690.766
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 218.428,
+              "repeated": {
+                "n": 12,
+                "p50": 220.177,
+                "p95": 240.937
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 89.458,
+              "repeated": {
+                "n": 12,
+                "p50": 80.492,
+                "p95": 90.246
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 76.924,
+              "repeated": {
+                "n": 12,
+                "p50": 80.8,
+                "p95": 91.348
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 34196.0,
+              "repeated": {
+                "n": 12,
+                "p50": 35468.0,
+                "p95": 36604.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33396.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33092.0,
+                "p95": 35116.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 872.659,
+              "repeated": {
+                "n": 12,
+                "p50": 891.474,
+                "p95": 907.457
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 166.382,
+              "repeated": {
+                "n": 12,
+                "p50": 164.38400000000001,
+                "p95": 169.264
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 1039.041,
+              "repeated": {
+                "n": 12,
+                "p50": 1053.9070000000002,
+                "p95": 1076.721
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 0
+        },
+        "all-vless": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 1464.766,
+              "repeated": {
+                "n": 12,
+                "p50": 1469.753,
+                "p95": 1486.911
+              }
+            },
+            "queue_wait_ms": {
+              "first": 38.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27.0,
+                "p95": 38.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 1462.0,
+              "repeated": {
+                "n": 12,
+                "p50": 1468.0,
+                "p95": 1485.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 1.051,
+              "repeated": {
+                "n": 12,
+                "p50": 0.571,
+                "p95": 1.205
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 694.681,
+              "repeated": {
+                "n": 12,
+                "p50": 691.695,
+                "p95": 701.521
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 210.279,
+              "repeated": {
+                "n": 12,
+                "p50": 219.929,
+                "p95": 234.383
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 90.287,
+              "repeated": {
+                "n": 12,
+                "p50": 85.936,
+                "p95": 95.733
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 77.145,
+              "repeated": {
+                "n": 12,
+                "p50": 79.206,
+                "p95": 87.02
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 36448.0,
+              "repeated": {
+                "n": 12,
+                "p50": 37724.0,
+                "p95": 38244.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33244.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33064.0,
+                "p95": 37556.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 904.96,
+              "repeated": {
+                "n": 12,
+                "p50": 910.787,
+                "p95": 928.968
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 167.43200000000002,
+              "repeated": {
+                "n": 12,
+                "p50": 165.481,
+                "p95": 168.74599999999998
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 1072.392,
+              "repeated": {
+                "n": 12,
+                "p50": 1076.467,
+                "p95": 1097.714
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 0
+        }
+      }
+    },
+    "candidate": {
+      "binary_sha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+      "check": {
+        "live": {
+          "n": 13,
+          "first_phase": "cold-fixture-first-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 231.56,
+              "repeated": {
+                "n": 12,
+                "p50": 226.614,
+                "p95": 228.495
+              }
+            },
+            "check_latency_ms": {
+              "first": 231.0,
+              "repeated": {
+                "n": 12,
+                "p50": 226.0,
+                "p95": 228.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 12.645,
+              "repeated": {
+                "n": 12,
+                "p50": 16.375,
+                "p95": 20.524
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 18.758,
+              "repeated": {
+                "n": 12,
+                "p50": 16.76,
+                "p95": 21.652
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 36.613,
+              "repeated": {
+                "n": 12,
+                "p50": 34.701,
+                "p95": 39.541
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 21.176,
+              "repeated": {
+                "n": 12,
+                "p50": 25.585,
+                "p95": 33.85
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 25488.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27148.0,
+                "p95": 27692.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33324.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32972.0,
+                "p95": 33388.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 31.403,
+              "repeated": {
+                "n": 12,
+                "p50": 32.147,
+                "p95": 34.155
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 57.789,
+              "repeated": {
+                "n": 12,
+                "p50": 60.05,
+                "p95": 62.856
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 89.19200000000001,
+              "repeated": {
+                "n": 12,
+                "p50": 92.88000000000001,
+                "p95": 95.116
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 19,
+              "p95": 20
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 1
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 1,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "egress": {
+              "n": 12,
+              "p50": 65,
+              "p95": 66
+            },
+            "service": {
+              "n": 12,
+              "p50": 105,
+              "p95": 106
+            },
+            "service_ip": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "dead-service": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 226.949,
+              "repeated": {
+                "n": 12,
+                "p50": 227.705,
+                "p95": 228.858
+              }
+            },
+            "check_latency_ms": {
+              "first": 226.0,
+              "repeated": {
+                "n": 12,
+                "p50": 227.0,
+                "p95": 228.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 20.636,
+              "repeated": {
+                "n": 12,
+                "p50": 15.33,
+                "p95": 24.744
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 12.957,
+              "repeated": {
+                "n": 12,
+                "p50": 17.931,
+                "p95": 20.514
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 33.844,
+              "repeated": {
+                "n": 12,
+                "p50": 32.61,
+                "p95": 40.178
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 27.998,
+              "repeated": {
+                "n": 12,
+                "p50": 27.759,
+                "p95": 33.976
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 27744.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27788.0,
+                "p95": 28108.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 32764.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32920.0,
+                "p95": 33568.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 33.593,
+              "repeated": {
+                "n": 12,
+                "p50": 32.489,
+                "p95": 34.260000000000005
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 61.842,
+              "repeated": {
+                "n": 12,
+                "p50": 61.443,
+                "p95": 62.688
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 95.435,
+              "repeated": {
+                "n": 12,
+                "p50": 93.59100000000001,
+                "p95": 96.349
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 20,
+              "p95": 20
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 2
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 0,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 65,
+              "p95": 65
+            },
+            "egress": {
+              "n": 12,
+              "p50": 65,
+              "p95": 65
+            },
+            "service": {
+              "n": 12,
+              "p50": 105,
+              "p95": 106
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 11,
+              "p95": 11
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "cancel": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 186.64,
+              "repeated": {
+                "n": 12,
+                "p50": 184.522,
+                "p95": 186.994
+              }
+            },
+            "check_latency_ms": {
+              "first": 186.0,
+              "repeated": {
+                "n": 12,
+                "p50": 184.0,
+                "p95": 186.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 21.144,
+              "repeated": {
+                "n": 12,
+                "p50": 16.465,
+                "p95": 20.306
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 9.747,
+              "repeated": {
+                "n": 12,
+                "p50": 13.46,
+                "p95": 20.192
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 30.764,
+              "repeated": {
+                "n": 12,
+                "p50": 35.505,
+                "p95": 38.629
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 29.872,
+              "repeated": {
+                "n": 12,
+                "p50": 23.293,
+                "p95": 33.454
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 27768.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27916.0,
+                "p95": 28264.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33144.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32852.0,
+                "p95": 33280.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 30.891,
+              "repeated": {
+                "n": 12,
+                "p50": 29.613999999999997,
+                "p95": 33.414
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 60.635999999999996,
+              "repeated": {
+                "n": 12,
+                "p50": 59.065,
+                "p95": 61.657000000000004
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 91.52699999999999,
+              "repeated": {
+                "n": 12,
+                "p50": 88.549,
+                "p95": 93.72300000000001
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "tcp_connect": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "configuration": {
+              "n": 12,
+              "p50": 19,
+              "p95": 21
+            },
+            "runtime_start": {
+              "n": 12,
+              "p50": 1,
+              "p95": 4
+            },
+            "runtime_ready": {
+              "n": 12,
+              "p50": 11,
+              "p95": 12
+            },
+            "route_identity": {
+              "n": 12,
+              "p50": 1,
+              "p95": 1
+            },
+            "protocol": {
+              "n": 12,
+              "p50": 64,
+              "p95": 65
+            },
+            "egress": {
+              "n": 12,
+              "p50": 64,
+              "p95": 65
+            },
+            "service": {
+              "n": 12,
+              "p50": 64,
+              "p95": 64
+            },
+            "cleanup": {
+              "n": 12,
+              "p50": 10,
+              "p95": 11
+            }
+          },
+          "rss_read_errors": 0
+        },
+        "dead-node": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "wall_monotonic_ms": {
+              "first": 9.626,
+              "repeated": {
+                "n": 12,
+                "p50": 8.114,
+                "p95": 8.712
+              }
+            },
+            "check_latency_ms": {
+              "first": 9.0,
+              "repeated": {
+                "n": 12,
+                "p50": 8.0,
+                "p95": 8.0
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 1.067,
+              "repeated": {
+                "n": 12,
+                "p50": 0.5,
+                "p95": 2.092
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 1.021,
+              "repeated": {
+                "n": 12,
+                "p50": 0.62,
+                "p95": 1.338
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 4.156,
+              "repeated": {
+                "n": 12,
+                "p50": 4.532,
+                "p95": 8.09
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 6.235,
+              "repeated": {
+                "n": 12,
+                "p50": 4.531,
+                "p95": 6.469
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 27748.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27760.0,
+                "p95": 27864.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": null,
+              "repeated": {
+                "n": 0,
+                "p50": null,
+                "p95": null
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 2.088,
+              "repeated": {
+                "n": 12,
+                "p50": 1.022,
+                "p95": 2.989
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 10.391,
+              "repeated": {
+                "n": 12,
+                "p50": 9.062999999999999,
+                "p95": 9.704
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 12.479,
+              "repeated": {
+                "n": 12,
+                "p50": 10.101999999999999,
+                "p95": 11.561
+              }
+            }
+          },
+          "repeated_stages": {
+            "dns": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            },
+            "transport": {
+              "n": 12,
+              "p50": 0,
+              "p95": 0
+            }
+          },
+          "rss_read_errors": 0
+        }
+      },
+      "queue": {
+        "single": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 565.037,
+              "repeated": {
+                "n": 12,
+                "p50": 566.705,
+                "p95": 581.996
+              }
+            },
+            "queue_wait_ms": {
+              "first": 26.0,
+              "repeated": {
+                "n": 12,
+                "p50": 26.0,
+                "p95": 37.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 563.0,
+              "repeated": {
+                "n": 12,
+                "p50": 564.0,
+                "p95": 580.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 0.357,
+              "repeated": {
+                "n": 12,
+                "p50": 0.43,
+                "p95": 1.051
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 276.923,
+              "repeated": {
+                "n": 12,
+                "p50": 276.914,
+                "p95": 287.495
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 74.585,
+              "repeated": {
+                "n": 12,
+                "p50": 82.663,
+                "p95": 102.942
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 44.155,
+              "repeated": {
+                "n": 12,
+                "p50": 38.207,
+                "p95": 44.018
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 34.561,
+              "repeated": {
+                "n": 12,
+                "p50": 36.711,
+                "p95": 50.425
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 30960.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32664.0,
+                "p95": 33512.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33320.0,
+              "repeated": {
+                "n": 12,
+                "p50": 32656.0,
+                "p95": 33612.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 351.508,
+              "repeated": {
+                "n": 12,
+                "p50": 361.716,
+                "p95": 368.895
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 78.71600000000001,
+              "repeated": {
+                "n": 12,
+                "p50": 75.414,
+                "p95": 78.66
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 430.224,
+              "repeated": {
+                "n": 12,
+                "p50": 437.11899999999997,
+                "p95": 445.72499999999997
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 1
+        },
+        "selected-batch": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 1242.558,
+              "repeated": {
+                "n": 12,
+                "p50": 1265.855,
+                "p95": 1288.809
+              }
+            },
+            "queue_wait_ms": {
+              "first": 26.0,
+              "repeated": {
+                "n": 12,
+                "p50": 26.0,
+                "p95": 38.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 1240.0,
+              "repeated": {
+                "n": 12,
+                "p50": 1263.0,
+                "p95": 1286.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 0.451,
+              "repeated": {
+                "n": 12,
+                "p50": 0.799,
+                "p95": 1.326
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 649.738,
+              "repeated": {
+                "n": 12,
+                "p50": 668.215,
+                "p95": 711.939
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 201.164,
+              "repeated": {
+                "n": 12,
+                "p50": 203.356,
+                "p95": 232.633
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 94.298,
+              "repeated": {
+                "n": 12,
+                "p50": 85.738,
+                "p95": 94.705
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 70.921,
+              "repeated": {
+                "n": 12,
+                "p50": 79.908,
+                "p95": 95.447
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 33724.0,
+              "repeated": {
+                "n": 12,
+                "p50": 35008.0,
+                "p95": 35428.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 32684.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33092.0,
+                "p95": 33792.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 850.902,
+              "repeated": {
+                "n": 12,
+                "p50": 871.723,
+                "p95": 898.494
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 165.219,
+              "repeated": {
+                "n": 12,
+                "p50": 167.615,
+                "p95": 169.35899999999998
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 1016.1210000000001,
+              "repeated": {
+                "n": 12,
+                "p50": 1038.086,
+                "p95": 1066.988
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 1
+        },
+        "all-vless": {
+          "n": 13,
+          "first_phase": "first-scenario-check",
+          "metrics": {
+            "post_to_http_readback_monotonic_ms": {
+              "first": 1277.289,
+              "repeated": {
+                "n": 12,
+                "p50": 1289.651,
+                "p95": 1323.733
+              }
+            },
+            "queue_wait_ms": {
+              "first": 38.0,
+              "repeated": {
+                "n": 12,
+                "p50": 27.0,
+                "p95": 39.0
+              }
+            },
+            "enqueue_to_server_completion_ms": {
+              "first": 1275.0,
+              "repeated": {
+                "n": 12,
+                "p50": 1287.0,
+                "p95": 1321.0
+              }
+            },
+            "readback_http_ms": {
+              "first": 0.572,
+              "repeated": {
+                "n": 12,
+                "p50": 0.613,
+                "p95": 0.829
+              }
+            },
+            "cpu_self_user_ms": {
+              "first": 660.335,
+              "repeated": {
+                "n": 12,
+                "p50": 688.11,
+                "p95": 707.976
+              }
+            },
+            "cpu_self_system_ms": {
+              "first": 217.679,
+              "repeated": {
+                "n": 12,
+                "p50": 211.866,
+                "p95": 235.66
+              }
+            },
+            "cpu_joined_children_user_ms": {
+              "first": 88.655,
+              "repeated": {
+                "n": 12,
+                "p50": 87.594,
+                "p95": 106.567
+              }
+            },
+            "cpu_joined_children_system_ms": {
+              "first": 77.887,
+              "repeated": {
+                "n": 12,
+                "p50": 79.995,
+                "p95": 88.114
+              }
+            },
+            "observed_self_peak_rss_kib": {
+              "first": 35960.0,
+              "repeated": {
+                "n": 12,
+                "p50": 36848.0,
+                "p95": 37284.0
+              }
+            },
+            "observed_new_children_peak_rss_kib": {
+              "first": 33252.0,
+              "repeated": {
+                "n": 12,
+                "p50": 33108.0,
+                "p95": 36128.0
+              }
+            },
+            "derived_cpu_self_total_ms": {
+              "first": 878.014,
+              "repeated": {
+                "n": 12,
+                "p50": 898.159,
+                "p95": 922.747
+              }
+            },
+            "derived_cpu_joined_children_total_ms": {
+              "first": 166.542,
+              "repeated": {
+                "n": 12,
+                "p50": 167.589,
+                "p95": 185.678
+              }
+            },
+            "derived_cpu_self_and_joined_children_ms": {
+              "first": 1044.556,
+              "repeated": {
+                "n": 12,
+                "p50": 1063.546,
+                "p95": 1108.425
+              }
+            }
+          },
+          "repeated_stages": {},
+          "rss_read_errors": 0
+        }
+      }
+    }
+  },
+  "validation": "PASS"
+}

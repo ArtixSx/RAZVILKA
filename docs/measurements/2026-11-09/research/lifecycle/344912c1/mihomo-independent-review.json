@@ -1,0 +1,122 @@
+{
+  "head_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "run": 42660394432,
+  "conclusion": "success",
+  "jobs": {
+    "lifecycle": 129310093599,
+    "postcas_failure": 129310093768,
+    "check_settlement": 129310093184,
+    "manual_http": 129310093896
+  },
+  "candidate": {
+    "lifecycle": {
+      "apply_seconds": [
+        107.038269892,
+        106.888851734
+      ],
+      "physical_baseline_restored": true,
+      "second_closing_retry": true,
+      "stop_seconds": [
+        6.272790472,
+        6.285674035
+      ],
+      "test_seconds": 311.41
+    },
+    "postcas": {
+      "rollback_verified": true,
+      "original_pending": false,
+      "desired_exact_restored": true,
+      "test_seconds": 73.16,
+      "http_status": 503
+    },
+    "manual_http": {
+      "apply_seconds": [
+        72.766862915,
+        74.076701999
+      ],
+      "physical_baseline_restored": true,
+      "second_closing_retry": true,
+      "stop_seconds": [
+        4.31475758,
+        4.716270928
+      ],
+      "test_seconds": 212.89
+    },
+    "settlement": {
+      "apply_seconds": 72.323062854,
+      "physical_baseline_restored": true,
+      "stop_seconds": 7.236803041,
+      "test_seconds": 96.25
+    }
+  },
+  "same_host_baseline": {
+    "lifecycle": {
+      "apply_seconds": [
+        106.734729873,
+        106.416222256
+      ],
+      "physical_baseline_restored": true,
+      "second_closing_retry": true,
+      "stop_seconds": [
+        6.32036842,
+        6.302887666
+      ],
+      "test_seconds": 310.16
+    },
+    "sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+    "manual_http": {
+      "apply_seconds": [
+        77.706820168,
+        77.676996855
+      ],
+      "physical_baseline_restored": true,
+      "second_closing_retry": true,
+      "stop_seconds": [
+        4.889917996,
+        4.526880255
+      ],
+      "test_seconds": 224.05
+    },
+    "order": "candidate then baseline"
+  },
+  "bookends": {
+    "normal_and_race": "PASS",
+    "kernel_owner_seconds": [
+      5.74,
+      13.6
+    ],
+    "fingerprint_seconds": [
+      4.17,
+      11.17
+    ],
+    "original_child_fresh_cleanup_seconds": [
+      6.49,
+      13.52
+    ]
+  },
+  "limitations": [
+    "Four native fixture scenarios passed; no physical router validation from these jobs",
+    "Same-runner fixed-order two-cycle comparisons do not establish causal speedup",
+    "Lifecycle Apply only about3seconds below unchanged110secondoperation bound on this host; baseline nearly identical",
+    "No automatic deadline increase; other DNS/NFQ/public-old193 scenarios remain independent",
+    "Generic344912 full gates still running at report creation"
+  ],
+  "evidence": [
+    {
+      "file": "mihomo-lifecycle.log",
+      "sha256": "9f0f6d5ba26ef1f4acf45af141d4650febd79f4d5b25e8840165ee7e1dc3346a"
+    },
+    {
+      "file": "mihomo-manual-http.log",
+      "sha256": "3ffaa87edbb4f9663023e224dd5d974af8df01f45b2235122347e86f46014578"
+    },
+    {
+      "file": "mihomo-check-settlement.log",
+      "sha256": "444e4f2b1aa5f9fe2e95254e145bc74beb4617e358ada91855cf25205cfd0c6c"
+    },
+    {
+      "file": "mihomo-postcas-failure.log",
+      "sha256": "4d39e57f348e78eb6b4a9cea2b62fbb2a4eaee844ddf409cdc99108102a2baf7"
+    }
+  ]
+}

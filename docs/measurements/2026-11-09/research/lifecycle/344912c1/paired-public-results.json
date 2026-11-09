@@ -1,0 +1,93 @@
+{
+  "commit": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "run": 42660394031,
+  "readiness": false,
+  "jobs": [
+    {
+      "mode": "empty",
+      "job": 129310090601,
+      "conclusion": "failure",
+      "log_sha256": "9d15fd631784c7c41d9d83195e9637e7c2f7b447e286b1d5181e962a7dc97eb0",
+      "focused_bootstrap_image_offline_state": "PASS",
+      "failure": "external-bootstrap-refused (remaining file workflow stage not classified by this SHA)",
+      "public_restore": "NOT REACHED",
+      "reader_measurement": [
+        {
+          "sample": 0,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 186.423296,
+          "after_ms": 49.461312
+        },
+        {
+          "sample": 1,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 183.112017,
+          "after_ms": 49.679391
+        },
+        {
+          "sample": 2,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 186.381105,
+          "after_ms": 44.290066
+        }
+      ],
+      "reader_median_before_ms": 186.381105,
+      "reader_median_after_ms": 49.461312,
+      "measurement_limit": "Actual full executable/process reader only; no installer-role authority or whole bootstrap success claim",
+      "native": [
+        "2026-11-09T17:02:50.8373710Z     external_bootstrap_command_native_linux_test.go:78: actual public external producer refused; category=external-bootstrap-refused exit_code=3; retain isolated fixture",
+        "2026-11-09T17:02:50.8374886Z --- FAIL: TestNativeConfiguredOld193PairLifecycle (12.16s)",
+        "2026-11-09T17:02:50.8375803Z     --- FAIL: TestNativeConfiguredOld193PairLifecycle/actual-bootstrap (12.15s)"
+      ]
+    },
+    {
+      "mode": "draft",
+      "job": 129310090752,
+      "conclusion": "failure",
+      "log_sha256": "ad88b88a262b28c0ca1efd6c0543b606e45a3713dd02357319c53f0e3eab4b3b",
+      "focused_bootstrap_image_offline_state": "PASS",
+      "failure": "external-bootstrap-refused (remaining file workflow stage not classified by this SHA)",
+      "public_restore": "NOT REACHED",
+      "reader_measurement": [
+        {
+          "sample": 0,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 146.792121,
+          "after_ms": 42.996323
+        },
+        {
+          "sample": 1,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 149.001287,
+          "after_ms": 42.704924
+        },
+        {
+          "sample": 2,
+          "image_bytes": 13889801,
+          "retained_bytes": 14020969,
+          "streaming_fallback": false,
+          "before_ms": 146.774404,
+          "after_ms": 42.92794
+        }
+      ],
+      "reader_median_before_ms": 146.792121,
+      "reader_median_after_ms": 42.92794,
+      "measurement_limit": "Actual full executable/process reader only; no installer-role authority or whole bootstrap success claim",
+      "native": [
+        "2026-11-09T17:02:35.5152200Z     external_bootstrap_command_native_linux_test.go:78: actual public external producer refused; category=external-bootstrap-refused exit_code=3; retain isolated fixture",
+        "2026-11-09T17:02:35.5153182Z --- FAIL: TestNativeConfiguredOld193PairLifecycle (15.71s)",
+        "2026-11-09T17:02:35.5153980Z     --- FAIL: TestNativeConfiguredOld193PairLifecycle/actual-bootstrap (15.69s)"
+      ]
+    }
+  ]
+}

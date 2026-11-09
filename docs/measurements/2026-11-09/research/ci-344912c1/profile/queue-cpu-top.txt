@@ -1,0 +1,54 @@
+File: razvilka
+Build ID: e9ba5aef3e56af8406dd39de13ebb0722c9015f1
+Type: cpu
+Time: 2026-11-09 17:05:23 UTC
+Duration: 40.93s, Total samples = 26.95s (65.85%)
+Showing nodes accounting for 23.75s, 88.13% of 26.95s total
+Dropped 874 nodes (cum <= 0.13s)
+Showing top 45 nodes out of 153
+      flat  flat%   sum%        cum   cum%
+    15.87s 58.89% 58.89%     15.87s 58.89%  crypto/internal/fips140/sha256.blockSHANI
+     6.46s 23.97% 82.86%      6.46s 23.97%  internal/runtime/syscall/linux.Syscall6
+     0.18s  0.67% 83.53%      0.27s  1.00%  runtime.tryDeferToSpanScan
+     0.14s  0.52% 84.04%      0.36s  1.34%  encoding/json.(*Decoder).readValue
+     0.13s  0.48% 84.53%      0.21s  0.78%  runtime.scanObjectsSmall
+     0.13s  0.48% 85.01%      0.20s  0.74%  runtime.typePointers.next
+     0.09s  0.33% 85.34%      6.40s 23.75%  syscall.RawSyscall6
+     0.08s   0.3% 85.64%      0.27s  1.00%  runtime.mallocgcSmallScanNoHeader
+     0.08s   0.3% 85.94%      0.49s  1.82%  runtime.scanObject
+     0.05s  0.19% 86.12%      0.73s  2.71%  runtime.mallocgc
+     0.05s  0.19% 86.31%      0.24s  0.89%  runtime.mallocgcSmallNoscan
+     0.04s  0.15% 86.46%      4.21s 15.62%  internal/poll.(*FD).Read
+     0.03s  0.11% 86.57%      3.13s 11.61%  os.ReadFile
+     0.03s  0.11% 86.68%      0.65s  2.41%  os.newFile
+     0.03s  0.11% 86.79%      0.17s  0.63%  runtime.(*mcache).nextFree
+     0.03s  0.11% 86.90%      0.23s  0.85%  runtime.growslice
+     0.02s 0.074% 86.98%      0.48s  1.78%  encoding/json.(*Decoder).Token
+     0.02s 0.074% 87.05%      0.23s  0.85%  encoding/json.(*decodeState).literalStore
+     0.02s 0.074% 87.12%      0.24s  0.89%  encoding/json.(*decodeState).object
+     0.02s 0.074% 87.20%      0.20s  0.74%  encoding/json.stateEndValue
+     0.02s 0.074% 87.27%      0.93s  3.45%  os.readFileContents
+     0.02s 0.074% 87.35%      0.26s  0.96%  runtime.newobject
+     0.02s 0.074% 87.42%      0.41s  1.52%  syscall.SetNonblock
+     0.02s 0.074% 87.50%      5.39s 20.00%  syscall.Syscall
+     0.02s 0.074% 87.57%      4.10s 15.21%  syscall.read
+     0.01s 0.037% 87.61%      0.36s  1.34%  encoding/json.(*decodeState).value
+     0.01s 0.037% 87.64%      0.40s  1.48%  github.com/ArtixSx/razvilka/internal/app.(*App).nodeCandidateResourceAdmission
+     0.01s 0.037% 87.68%     19.21s 71.28%  io.copyBuffer
+     0.01s 0.037% 87.72%      4.20s 15.58%  os.(*File).Read
+     0.01s 0.037% 87.76%      0.46s  1.71%  os.(*file).close
+     0.01s 0.037% 87.79%      1.48s  5.49%  os.OpenFile
+     0.01s 0.037% 87.83%      0.84s  3.12%  os.open
+     0.01s 0.037% 87.87%      1.47s  5.45%  os.openFileNolog
+     0.01s 0.037% 87.90%      0.28s  1.04%  os.statOrZero
+     0.01s 0.037% 87.94%      0.96s  3.56%  runtime.gcBgMarkWorker.func2
+     0.01s 0.037% 87.98%      0.26s  0.96%  runtime.markroot
+     0.01s 0.037% 88.01%      0.27s  1.00%  runtime.scanSpan
+     0.01s 0.037% 88.05%      1.30s  4.82%  runtime.systemstack
+     0.01s 0.037% 88.09%      0.22s  0.82%  syscall.Fstat
+     0.01s 0.037% 88.13%      4.11s 15.25%  syscall.Read (inline)
+         0     0% 88.13%     15.87s 58.89%  crypto/internal/fips140/sha256.(*Digest).Write
+         0     0% 88.13%     15.87s 58.89%  crypto/internal/fips140/sha256.block
+         0     0% 88.13%      0.22s  0.82%  crypto/tls.(*Conn).HandshakeContext
+         0     0% 88.13%      0.22s  0.82%  crypto/tls.(*Conn).handshakeContext
+         0     0% 88.13%      0.73s  2.71%  encoding/json.(*Decoder).Decode

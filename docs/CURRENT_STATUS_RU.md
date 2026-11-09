@@ -432,3 +432,53 @@ selection и восстановленный старый live panel не объ�
 [Native raw/review/SHA256](measurements/2026-11-09/research/lifecycle/8434e9ae/),
 [paired182](measurements/2026-11-09/research/ci-8434e9ae/),
 [offline-контракт](measurements/2026-11-09/research/bootstrap-offline-strategy-contract.md).
+
+### Проверка 344912c1 и следующая интеграция
+
+Оба generic CI (PR42660413364, push42660394238) полностью SUCCESS на
+`344912c11f285a4c2dc0ac0eadd8ab64e6110160`: normal/race, vet, shell/UI,
+четыре cross-builds. Исправленная обвязка build-targets больше не печатает
+скрытые MODULE_NOT_FOUND. Все4Mihomo native SUCCESS; совместимая StrategyLab
+пара, encrypted backup/restore и изолированный restored-panel boot PASS.
+Public configured-old193 update→restore остаётся отдельным FAIL в empty/draft.
+
+- Paired182 PASS. Repeated N12 live p50/p95 316.126/463.944→226.614/228.495мс;
+  selected2 completion1445/1461→1263/1286мс; all1468/1485→1287/1321мс.
+  First engine runs сохранены отдельно; это не cold page-cache или WAN proof.
+- Mihomo same-runner lifecycle311.41с против preserved4cc310.16с;
+  Apply~107с у обоих, только~3с запаса к прежним110с. Manual212.89с против224.05с.
+  Порядок candidate→baseline фиксирован, мало повторов: causal speedup не доказан.
+- DNS selected впервые в этой паре дошёл до GEN1 publication, точной mapping,
+  исключённого клиента и единственного child, затем selected TLS timeout4с.
+  Canceled-ready не дошёл до GEN1 за12с. Diagnostic30s recovery все3 PASS.
+  CPU в разных jobs/runs различаются; продвижение нельзя приписать names reserve.
+- NFQ consumer normal/lateWait PASS; fullLAN/manual FAIL. В этой волне все3
+  recovery cuts не достигнуты: forward inventory-open deadline ещё до эффекта.
+  Прежний8434 recovery PASS не переносится. Race consumer/full также FAIL.
+- Names reserve повторно проверен normal/race:~4.4KiB меньше на обходе,
+  без заявления об ускорении всего маршрута. Exact1.8.11 обаnative PASS.
+- Bootstrap image actual13.89MB:16полныхчтений/8occurrences; медианы трёх
+  alternating samples empty186.38→49.46мс, draft146.79→42.93мс; retained14.02MB.
+  Full public flow пока FAIL, restore не достигнут. Отдельный opt-in ordinary
+  actual-fact test пропущен без env; его не считаем пройденным.
+
+По измерениям выбран следующий Xray outer-observation consumer: первый capture
+с SHA, затем полное побайтовое закрывающее чтение; данные не доступны callback,
+derived views или handoff. Storage один на процесс, nonwaiting, первая аллокация
+фиксирует capacity<=64MiB; больший файл/конкуренция используют прежний SHA путь.
+После начала capture fallback нет; clear и отказ по отмене/абсолютному deadline
+выполняются до успеха. Source review67f4557c пройден, runtime этой реализации
+ещё не подтверждён. Primitive37MB measurement: SHA18.08мс, повторное чтение/
+comparison2.89мс, первый capture+SHA+clear20.54мс; это не full-route speedup.
+Удерживаемая память и RSS не тождественны. Сравнение полного сценария планируется
+на одном runner с исходными12/4с и свежим процессом каждого запуска.
+
+Дополнительно исправлено окно отмены после bootstrap image clear; новый закрытый
+словарь стадий и ограниченное чтение receipt локализуют следующий public отказ.
+Ни один запрет scope/ownership/freshness не ослаблен. IP version child сохранён:
+в отличие от двух статических xtables strings, iproute2 может читать runtime
+libbpf сведения. Новые счётчики actual child starts и полного startup image
+payload проверят дальнейшие гипотезы; speculative production patch не добавлен.
+
+[Все raw/review/SHA256](measurements/2026-11-09/research/lifecycle/344912c1/),
+[paired182](measurements/2026-11-09/research/ci-344912c1/).

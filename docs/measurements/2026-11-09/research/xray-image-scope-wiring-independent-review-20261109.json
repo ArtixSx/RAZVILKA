@@ -1,0 +1,20 @@
+{
+  "status": "source-approved",
+  "scope": "Image scope focused generic and separate native-lifecycle normal/race process gates",
+  "checks": [
+    "Existing selectors retained; new TestXrayImageScope and TestXrayDomainFile included",
+    "Explicit required original closing and concurrent borrower PASS markers, any SKIP refuses",
+    "Separate go test process avoids priming actual pinned native producer singleton with small model fixture",
+    "Existing normal/race dataplane compilation from earlier step reused; no route operation deadlines or15minute job bound changed"
+  ],
+  "files": [
+    {
+      "sha256": "ae946e7485946bdff460a5ca60b15ea73abad8ffa077e9e036f862808e5b1579",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "sha256": "28bce0ba7c8d46881674cb15aaff5a40c047dd3d9356c1d5e7e86e95bf8f6f74",
+      "path": ".github/workflows/research-lifecycle.yml"
+    }
+  ]
+}

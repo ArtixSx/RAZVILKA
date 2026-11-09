@@ -14,8 +14,8 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На8434 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
-| Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на8434 public empty/draft ещё FAIL. Следующий offline unchanged-state proof reviewed, runtime pending; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
+| Mihomo | На344 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
+| Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на344 public empty/draft ещё FAIL; offline unchanged-state models и actual image reader PASS, fullconsumer pending; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
 ## Три бинарника Entware
@@ -303,3 +303,11 @@ Offline StrategyLab preservation в следующей интеграции со
 без старого reader ABI: не ordinary rollback pair, не live downgrade,
 не private snapshot replay. Его полный public consumer пока не принят.
 [Единая очередь и владельцы](ROADMAP.md), [доказательства](CURRENT_STATUS_RU.md#проверка-8434e9ae-и-следующая-интеграция).
+
+### Уточнение по344912c1
+
+Оба generic/all4Mihomo и compatible pair/restored-panel PASS. Selected DNS достиг
+публикации и проверки исключённого клиента, но не selected HTTPS4s; canceled
+GEN1/12s FAIL. NFQ fullLAN/manual/race и publicold193 flow не приняты.
+Scoped Xray image comparison67f4557c пока source-approved, не новое service/LAN
+доказательство. [Единые результаты](CURRENT_STATUS_RU.md#проверка-344912c1-и-следующая-интеграция).

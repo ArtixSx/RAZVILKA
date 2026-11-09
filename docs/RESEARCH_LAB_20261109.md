@@ -567,3 +567,17 @@ selection и восстановленный старый live panel не объ�
 [Native raw/review/SHA256](measurements/2026-11-09/research/lifecycle/8434e9ae/),
 [paired182](measurements/2026-11-09/research/ci-8434e9ae/),
 [offline-контракт](measurements/2026-11-09/research/bootstrap-offline-strategy-contract.md).
+
+### Контрольная точка344912c1
+
+[Актуальные результаты и ограничения](CURRENT_STATUS_RU.md#проверка-344912c1-и-следующая-интеграция).
+Оба generic, все4Mihomo, совместимая pair/restored-panel проверка PASS;
+strictDNS/NFQ/publiclegacy остаются незавершёнными. Xray primitive37MB:
+original18.08мс, firstcapture/SHA/clear20.54мс, repeat allbytes2.89мс.
+Решение67f4557c: один scoped outer image, фиксированный<=64MiB storage,
+полное чтение каждого original opening/closing; source review есть, full-runtime
+проверка нужна отдельно. Разные CPU CI исключают причинный вывод по соседним
+runs: новый matched plan использует A–B–B–A на одном runner, N2 на сторону,
+не смешивая build/harness wall, run-through-join profile и route readiness.
+IP -Version не оптимизируется статическим кэшем: исходный контракт учитывает
+runtime get_libbpf_version; actual Start и прежние metadata проверки сохранены.
