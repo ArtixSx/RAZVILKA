@@ -156,6 +156,11 @@ func mountLayoutOK(data []byte, rootID uint64, paths []string) bool {
 }
 
 func mountUnescape(s string) (string, bool) {
+	// Plain mount fields need no new storage. The only callers consume this
+	// immutable substring inside mountLayoutOK; they never retain it as state.
+	if !strings.Contains(s, "\\") {
+		return s, true
+	}
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' {
