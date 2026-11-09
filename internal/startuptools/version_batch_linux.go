@@ -176,7 +176,8 @@ func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
 	if readErr != nil && !errors.Is(readErr, io.EOF) || closeErr != nil || len(entries) > 256 {
 		return at("CHECK_EXTENSIONS", errors.Join(readErr, closeErr))
 	}
-	var names []string
+	var nameStorage [256]string
+	names := nameStorage[:0]
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}

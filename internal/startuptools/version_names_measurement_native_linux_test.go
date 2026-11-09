@@ -16,7 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
-// Exact measurement candidate only; production keeps its old allocation.
+// Retain the exact old allocation for paired measurements against production.
 //
 //go:embed version_batch_linux.go
 var versionNamesProductionSource string
@@ -24,7 +24,7 @@ var versionNamesProductionSource string
 //go:embed version_names_measurement_native_linux_test.go
 var versionNamesCandidateSource string
 
-func (r *heldReview) versionMetadataReservedNamesCandidate(ctx context.Context) error {
+func (r *heldReview) versionMetadataBeforeNamesReservation(ctx context.Context) error {
 	noteVersionMetadataAttempt(r)
 	if err := r.pathsCurrent(ctx); err != nil {
 		return err
@@ -58,8 +58,7 @@ func (r *heldReview) versionMetadataReservedNamesCandidate(ctx context.Context) 
 	if readErr != nil && !errors.Is(readErr, io.EOF) || closeErr != nil || len(entries) > 256 {
 		return at("CHECK_EXTENSIONS", errors.Join(readErr, closeErr))
 	}
-	var nameStorage [256]string
-	names := nameStorage[:0]
+	var names []string
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}
@@ -78,9 +77,9 @@ func TestVersionNamesCandidateSourceParity(t *testing.T) {
 		t.Fatal("original full metadata function absent")
 	}
 	expected := strings.TrimSpace(production[start:])
-	expected = strings.Replace(expected, "versionMetadataCurrent(", "versionMetadataReservedNamesCandidate(", 1)
-	expected = strings.Replace(expected, "var names []string", "var nameStorage [256]string\n\tnames := nameStorage[:0]", 1)
-	start = strings.Index(candidate, "func (r *heldReview) versionMetadataReservedNamesCandidate(")
+	expected = strings.Replace(expected, "versionMetadataCurrent(", "versionMetadataBeforeNamesReservation(", 1)
+	expected = strings.Replace(expected, "var nameStorage [256]string\n\tnames := nameStorage[:0]", "var names []string", 1)
+	start = strings.Index(candidate, "func (r *heldReview) versionMetadataBeforeNamesReservation(")
 	if start < 0 {
 		t.Fatal("candidate full metadata function absent")
 	}
@@ -124,12 +123,12 @@ func TestVersionNamesCandidateActualParity(t *testing.T) {
 		if err := l.review.versionMetadataCurrent(held); err != nil {
 			return err
 		}
-		if err := l.review.versionMetadataReservedNamesCandidate(held); err != nil {
+		if err := l.review.versionMetadataBeforeNamesReservation(held); err != nil {
 			return err
 		}
 		expired, stop := context.WithCancel(held)
 		stop()
-		if l.review.versionMetadataCurrent(expired) == nil || l.review.versionMetadataReservedNamesCandidate(expired) == nil {
+		if l.review.versionMetadataCurrent(expired) == nil || l.review.versionMetadataBeforeNamesReservation(expired) == nil {
 			return errors.New("canceled metadata traversal accepted")
 		}
 		return l.review.versionMetadataCurrent(held)
@@ -147,7 +146,7 @@ func BenchmarkVersionMetadataNamesCandidate(b *testing.B) {
 	for _, sample := range []struct {
 		name string
 		read func(context.Context) error
-	}{{"before_append", l.review.versionMetadataCurrent}, {"reserved_candidate", l.review.versionMetadataReservedNamesCandidate}} {
+	}{{"before_append", l.review.versionMetadataBeforeNamesReservation}, {"reserved_candidate", l.review.versionMetadataCurrent}} {
 		b.Run(sample.name, func(b *testing.B) {
 			// Enter the original source/provider interval on this subbenchmark's own
 			// goroutine. No namespace observation is borrowed across a spawned worker.
