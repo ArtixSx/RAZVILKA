@@ -11,9 +11,11 @@ import (
 	"syscall"
 )
 
-// This ordinary-only reader keeps every original process/FD/birth/argv read
-// from fileProcessOf and bootstrapControllerAt. Only identical full-byte SHA
-// work is replaced; the generic bootstrap and command readers are unchanged.
+// This private per-call reader keeps every original process/FD/birth/argv
+// read from fileProcessOf and bootstrapControllerAt. Ordinary and bootstrap
+// role callers each supply their own original expected helper digest. Only
+// repeated SHA over identical fully reread bytes is replaced; generic process
+// and command readers remain unchanged.
 func (r *ordinaryExecutableImage) processAt(pid int) (fileProcess, error) {
 	var process fileProcess
 	if err := r.current(); err != nil {

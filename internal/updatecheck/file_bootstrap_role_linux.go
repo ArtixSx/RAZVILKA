@@ -85,26 +85,34 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		}
 		openingFileReceipt = current
 	}
+	// One role call owns one fresh authenticated executable image. Every
+	// occurrence still reads all actual bytes+EOF and all process bookends;
+	// only repeated SHA work over identical bytes becomes exact comparison.
+	image, err := bootstrapExecutableImage(ctx, review)
+	if err != nil {
+		return refuse(err)
+	}
+	defer image.clear()
 	// Prove all live roles as a closed group. In particular an arbitrary
 	// outer caller cannot classify a recorded helper by borrowing its ID.
-	helper, err := bootstrapControllerAt(ctx, identity.Process.PID)
+	helper, err := image.controllerAt(identity.Process.PID)
 	if err != nil || bootstrapControllerRole(review, record, identity, command, helper) != externalOld193InstallerRole {
 		return refuse(err)
 	}
-	caller, err := bootstrapControllerAt(ctx, os.Getpid())
+	caller, err := image.controllerAt(os.Getpid())
 	if err != nil || bootstrapControllerRole(review, record, identity, command, caller) == "" {
 		return refuse(err)
 	}
-	peer, err := bootstrapControllerAt(ctx, pid)
+	peer, err := image.controllerAt(pid)
 	if err != nil || pid == caller.Process.PID || bootstrapControllerRole(review, record, identity, command, peer) == "" {
 		return refuse(err)
 	}
 	if command.State == "running" {
-		supervisor, err := bootstrapControllerAt(ctx, command.Supervisor.PID)
+		supervisor, err := image.controllerAt(command.Supervisor.PID)
 		if err != nil || bootstrapControllerRole(review, record, identity, command, supervisor) != "quiesce-supervisor" {
 			return refuse(err)
 		}
-		child, err := bootstrapControllerAt(ctx, command.DirectPID)
+		child, err := image.controllerAt(command.DirectPID)
 		if err != nil || bootstrapControllerRole(review, record, identity, command, child) != "quiesce-child" {
 			return refuse(err)
 		}
@@ -120,7 +128,7 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		return refuse(err)
 	}
 	for _, fact := range []bootstrapControllerFact{helper, caller, peer} {
-		after, err := bootstrapControllerAt(ctx, fact.Process.PID)
+		after, err := image.controllerAt(fact.Process.PID)
 		if err != nil || !reflect.DeepEqual(after, fact) {
 			return refuse(err)
 		}
@@ -138,4 +146,13 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 		}
 	}
 	return ctx.Err()
+}
+
+func bootstrapExecutableImage(ctx context.Context, review fileReview) (*ordinaryExecutableImage, error) {
+	if review.Bootstrap == nil {
+		return nil, ErrInstallerControllerRole
+	}
+	// The original old193 panel is a different binary. Never authenticate these
+	// actual candidate/helper occurrences against its old executable digest.
+	return newOrdinaryExecutableImage(ctx, review.Bootstrap.HelperSHA256)
 }
