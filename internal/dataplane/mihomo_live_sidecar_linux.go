@@ -221,13 +221,13 @@ func (n *mihomoLiveSidecar) currentLocked(ctx context.Context) error {
 	}
 	select {
 	case <-n.done:
-		return errMihomoLiveMaterial
+		return mihomoLiveSidecarDiagnostic("sidecar-child-exited", errMihomoLiveMaterial)
 	default:
 	}
-	if err := errors.Join(n.metadata(ctx), n.owner.control.ObserveCurrent(ctx)); err != nil {
+	if err := errors.Join(mihomoLiveSidecarDiagnostic("sidecar-metadata", n.metadata(ctx)), mihomoLiveSidecarDiagnostic("sidecar-control", n.owner.control.ObserveCurrent(ctx))); err != nil {
 		return err
 	}
-	return n.kernelCurrent(ctx)
+	return mihomoLiveSidecarDiagnostic("sidecar-kernel", n.kernelCurrent(ctx))
 }
 
 func (n *mihomoLiveSidecar) kernelCurrent(ctx context.Context) error {
