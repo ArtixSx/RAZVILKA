@@ -57,6 +57,21 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
+### Интегрированное продолжение e685 → следующая волна
+
+- Ведущий: cleanup paired363f→e685 PASS182строки; live p50 309→217мс,
+  selected2 1378→1172мс. Новый manual Mihomo HTTP58bec реализован и source-reviewed,
+  но native приёмка ещё ожидается. Общий AUTO допуск не расширен.
+- dns_completion:70fa/416 сохранили все эффектные границы; strict12 всё ещё FAIL.
+  496a добавляет раздельные cumulative snapshots до cleanup и stack-context
+  hash buckets. Это диагностика для следующей реализации, направление не закрыто.
+- nfq_completion:48620b56 объединяет оригинальное чтение tool bytes внутри
+  прежней четырёхcallback pre-Add последовательности; проверка actual producer
+  обязательна в native LAN/manual. Следующий шаг — исходная whole-transaction
+  custody для известного pending cleanup; Gate.FenceJournal не сбрасывается.
+- verification: независимое source review и точная привязка новых CI к SHA.
+  Программные препятствия DNS/NFQWS не объявляются аппаратными блокерами.
+
 ### Текущие владельцы следующего шага
 
 Продолжение после освобождения диска: `441e97e4` исправляет только StartedAt

@@ -1,0 +1,16 @@
+{
+  "files": {
+    ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+    "domain-canceled-ready.log": "5c2e36d44cd308ff9c76fcdb88bf0080b6b4d288275fd75c8274d66edbdce783",
+    "domain-results.json": "6a971a6e0390638594a429e0e9a2c57512665e51d8bad04af9de17aa660cbfc7",
+    "domain-selected.log": "596cb5247af859bff79c4e5018d5361d52a8fac3f13e1ccea4c06f2d9f435f24",
+    "managed-production.log": "225ff5fa59daed160d6d8fa4f2fb9610c16f5122dd5bb714e085ecd1b0b4785d",
+    "managed-race.log": "e8cfeaf763528677ebe6e7f29eeb5397155f6daa1e5d7184353df50f71b42b79",
+    "managed-results.json": "252e59220b7509b0c25dc5f41249cb48b68a3d11006cd57cbac654c33e470094",
+    "mihomo-independent-review.json": "cdbd8bbed178c92003b97a345f144b2986328695de53932aad46eb365187cbc9",
+    "mihomo-lifecycle.log": "428cba2a1a42eeca9f6421bcfaa16d6aa44989f542b86d772972173f44adb845",
+    "mihomo-postcas.log": "b9210e38097e01c7f79b915ea8c41d0a336483020c5cd332a3a0397b450d7b40",
+    "mihomo-settlement.log": "619df55bb0802b68297c1dbdab20cf5e779abdff7e92a8fabab739b75c7c3e80",
+    "preparation.log": "631cd1a9cf7f187b5231dc12c317b610fac71a6da2a8e4e6dcc98763faa86ed1"
+  }
+}

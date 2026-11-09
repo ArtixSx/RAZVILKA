@@ -196,3 +196,18 @@ panel PASS; строгий DNS и полный managed NFQWS LAN ещё FAIL.
 Следующие исправления проходят собственную приёмку; [текущий журнал](measurements/2026-11-09/research/lifecycle/README.md)
 содержит конкретные SHA, ограничения и сырые результаты. Готовность релиза
 и физического router/LAN этим не подтверждается.
+
+
+### Проверенный результат e685eb75 и следующий ручной workflow
+
+На e685eb75 оба общих CI42618633125/42618642475, paired probe42618632990
+и три original Mihomo native job42618633097 завершились SUCCESS.
+Cleanup на одном стенде101→11мс, полный VLESS live Check p50309→217мс;
+[данные, границы и оставшиеся FAIL](measurements/2026-11-09/research/README.md#изолированная-проверка-cleanup-на-e685eb75).
+Strict DNS и полный managed NFQWS не прошли; это открытые программные задачи.
+
+Следующий58becdc9 соединяет специальный ручной Mihomo preview/token/apply/stop
+с оригинальным runtime для одного поддержанного service/client scope.
+Source review и Node UI PASS; новый native HTTP/LAN сценарий требует собственного
+результата CI. Ни registration, ни preview не объявлены service proof;
+общий planner/AUTO не получают этот допуск. Физический роутер не изменялся.

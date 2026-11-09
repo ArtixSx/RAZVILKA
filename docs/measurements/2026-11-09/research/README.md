@@ -181,3 +181,47 @@ checker/очередь/cleanup в модели WAN; физический NC-1812
 ## Завершённый общий CI для кода 8c869c76
 
 Push [42559470926](https://github.com/ArtixSx/RAZVILKA/actions/runs/42559470926) и PR [42559473824](https://github.com/ArtixSx/RAZVILKA/actions/runs/42559473824) завершились SUCCESS. Normal/race, vet, UI, сборки и проверки Entware прошли. Native [42559470862](https://github.com/ArtixSx/RAZVILKA/actions/runs/42559470862) также SUCCESS. [Ответы API с SHA и jobs](ci-8c869c76/completed-runs.json). Это проверки указанного кода, не аппаратная приёмка и не автоматическое доказательство для будущих изменений.
+
+
+## Изолированная проверка cleanup на e685eb75
+
+[Run42618632990](https://github.com/ArtixSx/RAZVILKA/actions/runs/42618632990)
+завершён SUCCESS. Baseline363f и candidatee685 используют один pinned Xray,
+одинаковый current-reuse и один runner; изменения раннего Stop poll измеряются
+отдельно от прежнего изменения scheduler. [182 строки и проверка доказательств](ci-e685eb75/paired-analysis.json).
+
+| Повторный сценарий, N12, мс p50/p95 | Baseline363f | Candidatee685 |
+| --- | --- | --- |
+| Полный live Check | 308.677 /309.559 | 216.740 /217.652 |
+| Отмена с joined cleanup | 267.668 /470.437 | 175.515 /197.734 |
+| Single enqueue→server completion | 626 /975 | 526 /547 |
+| Selected2 enqueue→server completion | 1378 /1787 | 1172 /1607 |
+| All2 enqueue→server completion | 1365 /1377 | 1175 /1217 |
+
+Cleanup p50/p95 отдельно:101/101→11/11мс.
+Первый live sample311.514→217.654мс; первый single618→893мс отдельно:
+не все первые прогоны стали быстрее. Fixed baseline-first order, тёплый OS cache
+и различающаяся нагрузка runner ограничивают выводы; стенд не является роутером.
+Вердикты, identities, mandatory service request и verified cleanup проверены
+во всех исходных строках; guard/force-kill границы не сокращались.
+
+[Отдельный CPU-профиль](ci-e685eb75/profile/queue-cpu-cumulative.txt) снят в
+дополнительном прогоне и не включён в парную статистику:23.54с CPU/38.22с wall.
+NodeHistoryAdmission.CheckWrite занимает17.93с cumulative(76.17%),
+hashRegularFile17.32с(73.58%), SHA13.41с(56.97%). Эти вложенные значения не
+суммируются и не показывают lock/timer wait. На стенде controller — большой
+Go test executable; перенос абсолютной цены на production binary недоказан.
+Повторные проверки до probe и перед записью истории сохраняются; CPU-профиль
+не является разрешением cache/пропуска проверки совместимых rollback images.
+
+Native e685 Mihomo original lifecycle, settlement и post-CAS SUCCESS;
+[независимая сверка](lifecycle/e685eb75/mihomo-independent-review.json).
+Strict DNS12/4 и полный managed NFQWS всё ещё FAIL:
+[DNS](lifecycle/e685eb75/domain-results.json), [NFQWS](lifecycle/e685eb75/managed-results.json).
+Оба NFQ never-issued cut теперь подтверждают исходное удаление ресурсов и
+восстановленный direct LAN; fresh Apply после cleanup ещё не завершён.
+Whole Run through join DNS counts включают cleanup:145 SHA нельзя выдавать
+за145 hashes до DNS publication. Следующий tagged diagnostic разделяет фазы.
+Новый ручной Mihomo HTTP workflow58becdc9 ещё ожидает собственной native приёмки.
+
+Generic CI e685: [push42618633125](https://github.com/ArtixSx/RAZVILKA/actions/runs/42618633125) и [PR42618642475](https://github.com/ArtixSx/RAZVILKA/actions/runs/42618642475) завершились SUCCESS; это не подтверждает будущий58bec manual workflow.

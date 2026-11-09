@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+    "domain-diagnostic-independent-review-20261109.json": "bb5130d0be1ed34540787dec30b4f671b8614f0672cbc830183bf6a95791472e",
+    "exec-write-independent-review.json": "11355f4899b5853a09e7978fc1c666a7fd39f68a169ba6030fcac4683bf2d0b8",
+    "exec-write-research.txt": "8f4f3795ed57cea10a0eb2e69fb8d65dccc8768968f5fcfda631241c1281bbb7",
+    "mihomo-manual-http-independent-review-20261109.json": "ae777dd450d0dd9f331a2333957ae1212e4c938dbd661736ae0d7393949083d9",
+    "nfq-preadd-independent-review-20261109.json": "05326b5666ad427c4df467cbcc608c484cdda9a8d6c05483b0b938694c08bc32"
+  }
+}

@@ -209,3 +209,17 @@ fixture; однострочное исправление441e97e4 требует 
 | Следующие изменения | STATX held-FD audits и original never-issued NFQ recovery прошли code review | Собственные CI/native ещё обязательны; на kernel4.9 fallback с дополнительной попыткой syscall, аппаратный выигрыш не заявлен |
 
 [Измерения, первые/повторные samples, выбросы и raw](measurements/2026-11-09/research/lifecycle/README.md#интегрированный-f842e4dd-native-результаты).
+
+
+### Уточнение приёмки e685eb75 → ручной Mihomo HTTP
+
+| Возможность | Проверенный результат | Следующее действие |
+| --- | --- | --- |
+| VLESS полный Check и original queue | e685 paired SUCCESS; cleanup101→11мс, live309→217мс p50, N12 | Отдельные стадии WAN и физический LAN профиль |
+| Mihomo original Apply/LAN/Stop, settlement, post-CAS | e685 три native job SUCCESS | Новый специальный manual HTTP путь58bec требует отдельного native PASS |
+| Mihomo manual UI/API | Приватный plan compiler, fresh single-use review, original resource guards; Node UI/source review PASS | Фактический preview→Apply→TLS/LAN→HTTPStop в новом CI |
+| DNS strict publication | e685 FAIL до GEN1 | Фазовые измерения496a и устранение подтверждённых повторных reads |
+| Managed NFQWS recovery | e685 два cut очищают оригинальные ресурсы и возвращают direct LAN; fresh Apply ещё FAIL | Original pending custody, pre-Add486; complete LAN/manual/race |
+
+`manual_node_apply_supported` обозначает поддержку отдельного ручного сценария,
+а не доказанную доступность сервиса/маршрута. Общий AUTO допуск не расширен.
