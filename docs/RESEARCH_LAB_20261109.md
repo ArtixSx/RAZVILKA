@@ -311,3 +311,24 @@ Allocation benchmark и real concurrent Close parity ещё должны про�
 
 Actual native binary —1.8.10, а production Ubuntu profile отдельно pinned1.8.11.
 Identical save source не подменяет испытание actual1.8.11 artifact или stock роутера.
+
+
+### Повторная парная проверка 1a50bf07
+
+[Анализ182строк и raw](measurements/2026-11-09/research/ci-1a50bf07/paired-analysis.json)
+проверяет SHA исходников, одинаковый Xray hash, verdict/cleanup и точные
+service/profile/route identities. Baseline363f на том же runner, порядок фиксирован.
+N12 repeated p50/p95мс: live313.427/334.199→224.543/227.401;
+dead-service313.848/316.278→223.924/227.139; cancel274.007/277.347→184.391/188.019;
+selected2 completion1440/1461→1261/1280. Первые samples сохранены отдельно.
+Profile40.46wall/26.57CPUс: CheckWrite20.04с75.42%, hashRegularFile19.11с71.92%,
+SHA-NI16.15с60.78%. Это вложенные CPU доли большого тестового controller image,
+не lock wait, не production абсолютная стоимость и не основание убрать hashes.
+Actual per-exchange observations находятся в profile/native-performance.log;
+набор с профилированием не смешан с парным измерением.
+
+Fresh held Fstat normal/race и concurrent Close прошли на1a50;6samples median
+808.1→731.8ns,208B/1allocation→0/0. Полный NFQ Apply ещё FAIL по deadline.
+Classic-save6pair benchmark доe9 не дошёл: iptables запрещает DROP в nat;
+fixture исправлен на RETURN в неподключённой цепочке. Это не production изменение
+и не доказательство completed parity. Native1.8.10 != actual1.8.11/router.

@@ -222,7 +222,15 @@ Source review и Node UI PASS; новый native HTTP/LAN сценарий тр�
 3810bec исправляет fixture и сохраняет anonymous Stop refusal.
 [Точные результаты и журналы](measurements/2026-11-09/research/lifecycle/b9bb3c13/).
 
-Следующая интегрированная волна содержит NFQ quarantine757cf, service timing4979,
-classic-save7c09/66c5 и held-Fstatddaa. Source review пройден; её собственные CI,
-strictDNS, completeNFQ/manualHTTP и парные primitive measurements ещё ожидаются.
-Ни новое abstraction, ни сохранённый owner не закрывают полный workflow.
+На1a50bf07 парные VLESS/очередь и исходный двухцикловый Mihomo lifecycle PASS.
+Ручной HTTP Apply/LAN подтверждён, но Stop202 пошёл по self-update recovery
+из-за пустого Directory в fixture;0f043902 исправляет тестовую конфигурацию,
+не обходя production guard. Новый полный manual workflow ещё требует PASS.
+NFQ original quarantine и cleanup-only повторный Stop подтверждены;
+полный fresh Apply и strict DNS12/4 по-прежнему FAIL по времени.
+Fresh Fstat normal/race parity и microbenchmark прошли; end-to-end выигрыш
+не следует из уменьшения allocations. Classic-save работает в DNS fixture,
+но отдельный6pair parity setup исправленe9 и должен пройти новый запуск.
+Generic1a50 focused PASS, полный запуск CANCELLED; dee compile FAIL и его
+исправления сохранены в журнале. Это не заменяет последнего полного b9bb PASS.
+[Точные результаты](measurements/2026-11-09/research/lifecycle/1a50bf07/).

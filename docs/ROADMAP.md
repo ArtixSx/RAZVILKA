@@ -57,29 +57,33 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Интегрированное продолжение b9bb → следующая волна
+### Текущая интеграция: проверенный 1a50bf07 и исправления 0f043902
 
-- Ведущий: paired363f→e685 PASS182строки; live p50309→217мс,
-  cleanup101→11мс, selected2 1378→1172мс. Наb9bb actual manual HTTP Apply,
-  token replay refusal и LAN прошли; Stop401 выявил отсутствие fixture Bearer.
-  3810bec исправляет только тестовую авторизацию, anonymous Stop остаётся401.
-  Полный новый manual HTTP цикл ещё требует PASS. Общий AUTO допуск закрыт.
-- dns_completion: strict12 остаётся FAIL. Diagnostic30 first DNS answer
-  наdac23 имеет134 completed hashes, доStop140, послеjoin145; cleanup отделён.
-  7c09/66c5 добавляют целостное чтение classic inventory двумя save applets
-  вместо table children, сохраняя все внешние observations/lock/источник.
-  Native6pairs, точное равенство rows и actual20→4 children ещё требуют CI.
-- nfq_completion:757cf сохраняет исходную whole-transaction custody известного
-  pending rollback до полного cleanup/источников; Gate.FenceJournal не очищается.
-  Стандартный sync cut обязан завершить fresh Apply; отдельный post-source-close
-  cut проверяет освобождение исходного owner при сохранённом permanent fence.
-  Ddaa8823 сокращает allocation FileInfo через свежий Fstat с тем же FD lock;
-  syscall/metadata checks не удалены. Normal/race и alloc benchmark ожидаются.
-- Ведущий:4979ddfc добавляет bounded per-exchange localDNS/SOCKS/TLS/TTFB/body
-  в CLI и отдельный native profile pass. Свежесть/identity и semantic predicates
-  сохраняются; multiple/incomplete различаются. Адресная приёмка ещё требуется.
-- verification: новые результаты привязываются к SHA. Наb9bb оба generic CI SUCCESS. Lifecycle/settlement/postCAS native SUCCESS,
-  manual HTTP FAIL401 сохранён. DNS/NFQWS всё ещё программные открытые задачи.
+- Ведущий: paired363f→1a50 PASS182 строки, N12: live p50/p95
+  313/334→225/227мс; selected2 1440/1461→1261/1280мс; cleanup101→11мс.
+  Отдельный profile подтверждает localDNS/SOCKS/TLS/TTFB/body наблюдения.
+  Сетевые интервалы перекрываются и не доказывают доступность сервиса/LAN.
+- Mihomo: на1a50 два actual Apply/LAN/Stop PASS287.04с, Apply97.981/98.615с,
+  Stop6.314/6.440с. Manual HTTP Apply/LAN прошёл, Stop202 выявил ошибочную
+  конфигурацию self-update fixture, не завершение Mihomo Stop. 0f043902
+  задаёт абсолютный отсутствующий journal path, сохраняя production recovery
+  gate; добавлены native-only fixed-stage diagnostics для ранних activate refusals.
+  Полный manual HTTP, settlement и post-CAS требуют нового PASS.
+- dns_completion: strict12 selected/canceled FAIL14.03/14.09с; diagnostic30
+  три recovery сценария PASS. Original full inventory теперь688save children
+  вместо1720-S при неизменных145 SHA/460Currents; actual native6pair parity
+  пока не подтверждён: setup DROP в nat исправленe9caf84b на inert RETURN.
+  a7fedf84 сохраняет общий1MiB raw budget сразу для двух образов.
+- nfq_completion: original whole quarantine/continuous Gate и fresh plan
+  подтверждены; новый cleanup-only second Stop PASS45.79с освобождает owner,
+  permanent fence остаётся. Полный fresh Apply/manual/race ещё превышает deadline.
+  Fresh Fstat normal/race parity PASS;6 micro samples median808.1→731.8ns,
+  208B/1alloc→0/0. Это не ускорение полного Apply.
+- verification: последний полностью успешный generic — b9bb (push и PR).
+  dee compilation FAIL сохранён, исправлен17c3/1a50; на1a50 focused PASS,
+  полный generic отменён следующей исправленной волной, не SUCCESS.
+  [Raw и точные отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
+  Strict DNS/NFQ и оставшиеся Mihomo cuts — программные задачи без внешнего блокера.
 
 ### Текущие владельцы следующего шага
 

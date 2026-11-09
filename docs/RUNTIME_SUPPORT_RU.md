@@ -225,15 +225,18 @@ fixture; однострочное исправление441e97e4 требует 
 а не доказанную доступность сервиса/маршрута. Общий AUTO допуск не расширен.
 
 
-### Следующая проверяемая волна после b9bb3c13
+### Актуальная проверка 1a50bf07 → 0f043902
 
-| Направление | Реализовано | Приёмка |
+| Направление | Проверено на1a50 | Оставшееся действие |
 | --- | --- | --- |
-| Manual Mihomo HTTP | scoped preview/token→actual Apply/LAN; authenticated Stop fixture | b9bb Apply/LAN проверены, Stop401; новый полный цикл после3810bec ещё ожидается |
-| Managed NFQ pending recovery | original whole transaction custody до источников/cleanup, permanent fence не снимается |757cf full freshApply и отдельный cleanup-only retry ещё ожидают CI |
-| Classic inventory | Ubuntu save applets из того же held binary; exact parser и lock | Native1.8.10 parity/latency ещё ожидаются; stock1.4.21 fallback unchanged; actual1.8.11 отдельно |
-| Сетевые стадии CLI | bounded localDNS/SOCKS/TLS/TTFB/body per exchange, fresh-only JSON | normal/race/actualSOCKS и отдельный profile pass ещё ожидаются; App UI детализация не реализована |
-| Метаданные инструмента | fresh Fstat под исходным FD lifetime lock, scratch reuse | normal/race Close parity и allocation benchmark ещё ожидаются |
+| VLESS полный Check/очередь | Paired182 строки PASS; p50 live313→225мс, selected2 1440→1261мс, cleanup101→11мс | Router/WAN/LAN отдельно; fixed-order runner не cold OS cache |
+| Mihomo lifecycle | Два actual Apply/LAN/Stop и original normal/race bookends PASS | Manual HTTP Stop202 fixture исправлен0f; полный manual и новые settlement/post-CAS ещё обязательны |
+| Managed NFQ pending recovery | Original continuous lease, fresh plan; cleanup-only повторный Stop освобождает owner, permanent fence сохраняется | Full fresh Apply/manual/race deadline FAIL |
+| Classic inventory / DNS | Actual save path и три diagnostic30 recovery PASS; strict12 FAIL | Native6pair setup исправленe9, exact parity/lock приёмка ожидается; actual1.8.11 и stock1.4.21 отдельно |
+| Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection реализуется отдельно; service predicates не меняются |
+| Метаданные инструмента | Fresh Fstat normal/race parity,6sample median808.1→731.8ns и208→0B | Полный маршрут этим не подтверждён |
 
-Общий CI b9bb SUCCESS отдельно от DNS/NFQ FAIL. Физический роутер и его NFQWS2
-не менялись; software/native успех не переносится автоматически на router/LAN.
+Общий CI: b9bb оба SUCCESS; dee compile FAIL исправлен,1a50 focused PASS,
+full generic CANCELLED. Новая волна оценивается по своему SHA.
+Физический роутер и его NFQWS2 не менялись.
+[Raw и независимые отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).

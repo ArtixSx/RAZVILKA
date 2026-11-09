@@ -1,0 +1,13 @@
+go version go1.26.5 linux/amd64
+Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+A unified platform for anti-censorship.
+8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed  /usr/local/lib/razvilka-fixtures/xray
+1a50bf072c2c7cf7fe1fbd7bb9a4a0bc09ffd08b
+staging loopback-only namespace; stable WAN identity modeled; service delay40ms; N12 repeated plus first per scenario
+reference=current native production path with only per-Check literal observation hidden, not historical release binary
+App=current original queue only; controlled queue25ms before dispatch; HTTP delivery observed, browser paint unmeasured
+stage durations overlap; router/physical WAN/Internet/browser paint unmeasured
+resources schema linux-rusage-observed-rss-v1: RUSAGE_SELF+RUSAGE_CHILDREN user/system CPU deltas per full Check (both algorithms) or App POST-through-HTTP-readback job
+self CPU/RSS includes fixture TLS+DNS and sampler overhead; child CPU includes only reaped children during window incl native version/validation/client commands; preexisting peer subtree excluded from sampled child RSS
+RSS absolute observed peak from /proc/statm every10ms, not Maxrss delta; new children enumerated across Go OS threads; short-lived children may be missed; empty child peak means no child RSS sample, not zero memory use
