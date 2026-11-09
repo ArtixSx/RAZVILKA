@@ -26,7 +26,7 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
 		t.Skip("explicit isolated native fixture only")
 	}
-	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close", "inventory-held-file", "inventory-extension-membership", "inventory-extension-symlink"} {
+	for index, kind := range []string{"held-file", "extension-membership", "observation-held-file", "observation-extension-membership", "observation-close", "inventory-held-file", "inventory-extension-membership", "inventory-extension-symlink", "inventory-cancel"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -185,6 +185,11 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 					case <-time.After(100 * time.Microsecond):
 					}
 				}
+				if kind == "inventory-cancel" {
+					cancel()
+					complete(nil)
+					return
+				}
 				if strings.HasSuffix(kind, "held-file") {
 					file, err := os.OpenFile(filepath.Join(private, "libxt_comment.so"), os.O_WRONLY|os.O_APPEND, 0)
 					if err != nil {
@@ -254,10 +259,18 @@ func TestClassicReadBatchNativeMutation(t *testing.T) {
 				t.Fatal("late fault injection: fixture did not mutate before the public batch returned; guard not evaluated", readErr)
 			}
 			stages := nativeStages(readErr)
+			if kind == "inventory-cancel" {
+				if !errors.Is(readErr, context.Canceled) || inventoryRows != 0 {
+					t.Fatal("actual inventory child cancellation escaped", stages)
+				}
+				classicSaveNativeNoChildren(t)
+				t.Log("actual original inventory child canceled after loading TCP extension; joined before return")
+				return
+			}
 			if !errors.Is(readErr, ErrUnknown) || len(result[0]) != 0 || len(result[1]) != 0 || inventoryRows != 0 || !strings.Contains(stages, "CHECK_PATH") && !strings.Contains(stages, "CHECK_HELD_FILE") && !strings.Contains(stages, "CHECK_BYTES") && !strings.Contains(stages, "CHECK_EXTENSION_SET") {
 				t.Fatal("changed actual held source issued an image", stages)
 			}
-			t.Log("actual protected first -S loaded held TCP extension;", kind, "change refused whole image; no hooks or packets, host tools unchanged")
+			t.Log("actual protected first -S/save loaded held TCP extension;", kind, "change refused whole image; no hooks or packets, host tools unchanged")
 		})
 	}
 }
@@ -434,4 +447,21 @@ func readObservationNativeLifecycle(t *testing.T, ctx context.Context, lease *Le
 		t.Fatal("joined original source did not remain current", nativeStages(err))
 	}
 	t.Log("actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed")
+}
+
+func classicSaveNativeNoChildren(t *testing.T) {
+	t.Helper()
+	entries, err := os.ReadDir("/proc/self/task")
+	if err != nil || len(entries) > 256 {
+		t.Fatal("bounded child inventory", err)
+	}
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join("/proc/self/task", entry.Name(), "children"))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		} // A Go worker may exit.
+		if err != nil || len(data) > 4096 || len(strings.Fields(string(data))) != 0 {
+			t.Fatal("original read did not join child", entry.Name(), err, string(data))
+		}
+	}
 }

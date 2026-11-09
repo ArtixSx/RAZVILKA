@@ -9,6 +9,7 @@ type profile struct {
 	libraries                  []string
 	pins                       map[string][]string
 	stock                      bool
+	classicSaveABI             bool
 	ipAlias, ipMain, ipSHA     string
 	ipVersion                  string
 	wgAliases                  [2]string
@@ -36,9 +37,10 @@ func stockPolicyProfile() profile {
 func ubuntuProfile() profile {
 	return profile{
 		id: "ubuntu-amd64-iptables-legacy-1.8.11-v1", arch: "amd64", version: "1.8.11 (legacy)",
-		mainSHA: "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
-		aliases: [2]string{"/usr/sbin/iptables-legacy", "/usr/sbin/ip6tables-legacy"},
-		main:    "/usr/sbin/xtables-legacy-multi", loader: "/lib64/ld-linux-x86-64.so.2",
+		classicSaveABI: true,
+		mainSHA:        "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
+		aliases:        [2]string{"/usr/sbin/iptables-legacy", "/usr/sbin/ip6tables-legacy"},
+		main:           "/usr/sbin/xtables-legacy-multi", loader: "/lib64/ld-linux-x86-64.so.2",
 		extension: "/usr/lib/x86_64-linux-gnu/xtables",
 		libraries: []string{"/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu", "/lib", "/usr/lib"},
 	}

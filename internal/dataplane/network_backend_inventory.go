@@ -120,6 +120,12 @@ type backendInventoryClassicBatchRunner interface {
 	ReadBoundedClassicTables(context.Context, netidentity.Identity, string, [2]string, int, [2][]string) ([2][][]byte, error)
 }
 
+// A supported complete-family dump replaces only the literal table children.
+// Unsupported must be returned before any read; partial attempts never retry.
+type backendInventoryClassicSaveRunner interface {
+	ReadBoundedClassicInventory(context.Context, netidentity.Identity, string, [2]string, int, [2][]string) ([2][]byte, bool, error)
+}
+
 func (r *backendInventoryReader) Read(ctx context.Context, scope backendInventoryScope) (backendInventorySnapshot, error) {
 	if r == nil || r.Provider == nil {
 		return backendInventorySnapshot{}, errBackendInventory
@@ -373,7 +379,26 @@ func (r *backendInventoryReader) classic(ctx context.Context, scope backendInven
 		}
 		var batch [2][][]byte
 		batched := false
-		if original, ok := runner.(backendInventoryClassicBatchRunner); ok && len(result.names[0])+len(result.names[1]) > 0 {
+		if original, ok := runner.(backendInventoryClassicSaveRunner); ok && len(result.names[0])+len(result.names[1]) > 0 {
+			frozen := [2][]string{slices.Clone(result.names[0]), slices.Clone(result.names[1])}
+			raw, supported, err := original.ReadBoundedClassicInventory(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, backendClassicBytes-budget.bytes, frozen)
+			if err != nil || ctx.Err() != nil || !supported && (len(raw[0]) != 0 || len(raw[1]) != 0) {
+				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+			}
+			if supported {
+				if len(raw[0])+len(raw[1]) > backendClassicBytes-budget.bytes {
+					return image{}, errBackendInventory
+				}
+				for family := range raw {
+					batch[family], err = backendClassicSaveTables(raw[family], result.names[family], family)
+					if err != nil {
+						return image{}, err
+					}
+				}
+				batched = true
+			}
+		}
+		if original, ok := runner.(backendInventoryClassicBatchRunner); ok && !batched && len(result.names[0])+len(result.names[1]) > 0 {
 			frozen := [2][]string{slices.Clone(result.names[0]), slices.Clone(result.names[1])}
 			var err error
 			batch, err = original.ReadBoundedClassicTables(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, backendClassicBytes-budget.bytes, frozen)

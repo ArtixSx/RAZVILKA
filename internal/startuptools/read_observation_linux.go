@@ -110,7 +110,7 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 	if o == nil {
 		return at("READ_OBSERVATION_SCOPE", nil)
 	}
-	if !l.observedReadCommand(command) {
+	if !l.observedReadCommand(command) && !l.observedClassicSaveCommand(ctx, command) {
 		return at("READ_OBSERVATION_EFFECT", nil)
 	}
 	o.mu.Lock()

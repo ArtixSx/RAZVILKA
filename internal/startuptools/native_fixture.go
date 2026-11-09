@@ -98,6 +98,9 @@ func nativeFixturePolicyProfile(reviewPath string) (profile, error) {
 	p.mainSHA = review.XTablesSHA256
 	p.ipSHA = review.IPToolSHA256
 	p.version = review.Version
+	// Only these separately researched save ABIs participate in native parity.
+	// This tagged classification never enables another production profile.
+	p.classicSaveABI = review.Version == "1.8.10 (legacy)" || review.Version == "1.8.11 (legacy)"
 	p.ipVersion = review.IPVersion
 	return p, nil
 }
