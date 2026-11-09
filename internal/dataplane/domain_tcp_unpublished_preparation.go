@@ -13,23 +13,24 @@ import (
 // no publication and no baseline-flow issuer; it cannot supply a kernel owner,
 // publish DNS, admit a flow, or detach a published standby for continuation.
 type domainTCPUnpublishedPreparation struct {
-	self     *domainTCPUnpublishedPreparation
-	owner    *DomainTCPOriginalScope
-	cursor   *domainTCPFailureCleanup
-	process  *XrayDomainTCPExecutionResource
-	capture  *domainTCPCaptureExecutionResource
-	baseline *syntheticBaselineExecutionResource
-	closed   *dnscontrol.SyntheticDNSRetirementReview
-	source   *dnscontrol.NetworkPolicyDNSSyntheticResolver
-	control  *operationgate.ControlEpochReview
-	row      dnscontrol.SyntheticDNSMappingObservation
+	self           *domainTCPUnpublishedPreparation
+	owner          *DomainTCPOriginalScope
+	cursor         *domainTCPFailureCleanup
+	process        *XrayDomainTCPExecutionResource
+	capture        *domainTCPCaptureExecutionResource
+	baseline       *syntheticBaselineExecutionResource
+	closed         *dnscontrol.SyntheticDNSRetirementReview
+	materialClosed *dnscontrol.SyntheticDNSRetirementReview
+	source         *dnscontrol.NetworkPolicyDNSSyntheticResolver
+	control        *operationgate.ControlEpochReview
+	row            dnscontrol.SyntheticDNSMappingObservation
 }
 
 // No failed forward context is revived. Callers removing effects also require
 // the active original cleanup cursor and its fresh SAME-Gate review separately.
 func (o *DomainTCPOriginalScope) unpublishedInputsCurrent(ctx context.Context, p *XrayDomainTCPExecutionResource, capture *domainTCPCaptureExecutionResource, baseline *syntheticBaselineExecutionResource) (dnscontrol.SyntheticDNSMappingObservation, error) {
 	var zero dnscontrol.SyntheticDNSMappingObservation
-	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil || p == nil || p.self != p || p.scope == nil || p.material == nil || o.binding == nil || p.material.binding != o.binding || p.scope != o.binding.scope || capture == nil || capture.self != capture || capture.capture == nil || capture.process != p || baseline == nil || baseline.self != baseline || baseline.capture != capture.capture || baseline.mapping == nil || baseline.mapping != capture.mapping || baseline.retirement == nil || baseline.retirement != p.material.retirement || baseline.inspector == nil || baseline.inspector.self != baseline.inspector {
+	if o == nil || o.self != o || ctx == nil || ctx.Err() != nil || p == nil || p.self != p || p.scope == nil || p.material == nil || o.binding == nil || p.material.binding != o.binding || p.scope != o.binding.scope || capture == nil || capture.self != capture || capture.capture == nil || capture.process != p || baseline == nil || baseline.self != baseline || baseline.capture != capture.capture || baseline.mapping == nil || baseline.mapping != capture.mapping || baseline.retirement == nil || p.material.retirement == nil || baseline.binding != p.material.binding || baseline.mapping != p.material.mapping || baseline.control != p.material.control || baseline.inspector == nil || baseline.inspector.self != baseline.inspector {
 		return zero, ErrDomainPolicyTCPConsumer
 	}
 	o.mu.Lock()
@@ -48,8 +49,15 @@ func (o *DomainTCPOriginalScope) unpublishedInputsCurrent(ctx context.Context, p
 	if !same {
 		return zero, ErrDomainPolicyTCPConsumer
 	}
+	// The two original producers independently reviewed this SAME live mapping.
+	// Their opaque views are distinct allocations, not interchangeable owners.
+	// Observe both actual closed ledgers and preserve both pointers below.
 	row, err := baseline.retirement.ObserveClosed(ctx)
 	if err != nil || row.PossiblyIssued || !syntheticSettlementCoordinatesEqual(row, p.material.observation) {
+		return zero, errors.Join(ErrDomainPolicyTCPConsumer, err)
+	}
+	materialRow, err := p.material.retirement.ObserveClosed(ctx)
+	if err != nil || materialRow.PossiblyIssued || !syntheticSettlementCoordinatesEqual(materialRow, p.material.observation) || !syntheticSettlementCoordinatesEqual(row, materialRow) {
 		return zero, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
 	return row, ctx.Err()
@@ -72,7 +80,7 @@ func (r *domainTCPFailureCleanup) freezeUnpublishedPreparation(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	u := &domainTCPUnpublishedPreparation{owner: o, cursor: r, process: r.resource, capture: capture, baseline: baseline, closed: baseline.retirement, source: r.resource.material.dnsSource, control: r.resource.material.control, row: row}
+	u := &domainTCPUnpublishedPreparation{owner: o, cursor: r, process: r.resource, capture: capture, baseline: baseline, closed: baseline.retirement, materialClosed: r.resource.material.retirement, source: r.resource.material.dnsSource, control: r.resource.material.control, row: row}
 	u.self = u
 	u.row.CNAMEChain = append([]string(nil), row.CNAMEChain...)
 	o.mu.Lock()
@@ -85,7 +93,7 @@ func (r *domainTCPFailureCleanup) freezeUnpublishedPreparation(ctx context.Conte
 }
 
 func (u *domainTCPUnpublishedPreparation) current(ctx context.Context, o *DomainTCPOriginalScope) error {
-	if u == nil || u.self != u || u.owner != o || o == nil || u.cursor == nil || u.cursor.self != u.cursor || u.cursor.cursor == nil || u.cursor.resource != u.process || u.capture == nil || u.cursor.capture != u.capture || u.process == nil || u.process.scope == nil || u.process.material == nil || u.source == nil || u.process.material.dnsSource != u.source || u.control == nil || u.process.material.control != u.control || u.closed == nil || u.baseline == nil || u.baseline.inspector == nil || u.closed != u.baseline.retirement || u.row.PossiblyIssued {
+	if u == nil || u.self != u || u.owner != o || o == nil || u.cursor == nil || u.cursor.self != u.cursor || u.cursor.cursor == nil || u.cursor.resource != u.process || u.capture == nil || u.cursor.capture != u.capture || u.process == nil || u.process.scope == nil || u.process.material == nil || u.source == nil || u.process.material.dnsSource != u.source || u.control == nil || u.process.material.control != u.control || u.closed == nil || u.materialClosed == nil || u.materialClosed != u.process.material.retirement || u.baseline == nil || u.baseline.inspector == nil || u.closed != u.baseline.retirement || u.row.PossiblyIssued {
 		return ErrDomainPolicyTCPConsumer
 	}
 	o.mu.Lock()

@@ -28,13 +28,15 @@ func TestDomainFailureUnpublishedPreparationRejectsForeignComparison(t *testing.
 	r := &domainTCPFailureCleanup{cursor: c, resource: p, capture: capture}
 	r.self = r
 	closed := &dnscontrol.SyntheticDNSRetirementReview{}
+	materialClosed := &dnscontrol.SyntheticDNSRetirementReview{}
+	p.material.retirement = materialClosed
 	inspector := &syntheticBaselineKernelInspector{}
 	inspector.self = inspector
 	baseline := &syntheticBaselineExecutionResource{retirement: closed, inspector: inspector}
-	u := &domainTCPUnpublishedPreparation{owner: o, cursor: r, process: p, capture: capture, baseline: baseline, closed: closed, source: source, control: control}
+	u := &domainTCPUnpublishedPreparation{owner: o, cursor: r, process: p, capture: capture, baseline: baseline, closed: closed, materialClosed: materialClosed, source: source, control: control}
 	u.self = u
 	o.unpublishedPreparation = u
-	for _, mode := range []string{"copied", "foreign-owner", "foreign-source", "foreign-control", "foreign-ledger", "possibly-issued", "foreign-cursor", "no-native-ledger"} {
+	for _, mode := range []string{"copied", "foreign-owner", "foreign-source", "foreign-control", "foreign-ledger", "foreign-material-ledger", "possibly-issued", "foreign-cursor", "no-native-ledger"} {
 		t.Run(mode, func(t *testing.T) {
 			call, owner := *u, o
 			call.self = &call
@@ -49,6 +51,8 @@ func TestDomainFailureUnpublishedPreparationRejectsForeignComparison(t *testing.
 				call.control = &operationgate.ControlEpochReview{}
 			case "foreign-ledger":
 				call.closed = &dnscontrol.SyntheticDNSRetirementReview{}
+			case "foreign-material-ledger":
+				call.materialClosed = &dnscontrol.SyntheticDNSRetirementReview{}
 			case "possibly-issued":
 				call.row.PossiblyIssued = true
 			case "foreign-cursor":
