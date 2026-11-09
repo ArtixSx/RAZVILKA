@@ -21,7 +21,7 @@ func TestNodeServiceDTOClosedEgressDiagnosticsPreserveFailure(t *testing.T) {
 				ExpiresAt: now.Add(time.Minute), LatencyMS: 11000, TestLevel: "protocol", Stage: "egress",
 				Verdict: evidence.VerdictError, ErrorCode: "node-egress-failed", Message: "bounded failure",
 				DirectControl: "measured", ProxyEgressError: "dial_timeout", CleanupStatus: dataplane.NodeCleanupVerified,
-				Stages: []dataplane.NodeCheckStage{{ID: "transport", Status: "passed", Duration: 10, Message: "private endpoint token secret"}, {ID: "egress", Status: "failed", Duration: 10000}},
+				Stages: []dataplane.NodeCheckStage{{ID: "transport", Status: "passed", Duration: 10, Message: "private endpoint token secret"}, {ID: "egress", Status: "failed", Duration: 10000}, {ID: "runtime_start", Status: "passed", Duration: 3, Message: "private endpoint token secret"}, {ID: "runtime_ready", Status: "passed", Duration: 21}},
 			}
 			var checkErr error
 			switch mode {
@@ -49,7 +49,7 @@ func TestNodeServiceDTOClosedEgressDiagnosticsPreserveFailure(t *testing.T) {
 				}
 				return
 			}
-			if len(row.Stages) != 2 || row.Stages[0].Duration != 10 || row.Stages[1].Duration != 10000 || row.DirectControl != "measured" {
+			if len(row.Stages) != 4 || row.Stages[0].Duration != 10 || row.Stages[1].Duration != 10000 || row.Stages[2].Duration != 3 || row.Stages[3].Duration != 21 || row.DirectControl != "measured" {
 				t.Fatal("pre-service timings/control lost", row)
 			}
 			if mode == "hostile" {

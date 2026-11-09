@@ -184,12 +184,21 @@ func runMihomoOriginalNativeHTTP(t *testing.T, legacy bool) {
 	started := time.Now()
 	code, data = send(q, true, server.URL)
 	var response struct {
-		Probe dataplane.MihomoServiceProbe `json:"probe"`
-		Live  bool                         `json:"live_applied"`
+		Probe  dataplane.MihomoServiceProbe `json:"probe"`
+		Live   bool                         `json:"live_applied"`
+		Timing *mihomoProbeAttemptTiming    `json:"timing"`
 	}
 	if code != 200 || json.Unmarshal(data, &response) != nil || !response.Probe.ServiceVerified || !response.Probe.CleanupVerified || response.Probe.ReviewSHA256 != preview.Review || response.Live || response.Probe.LiveApplied {
 		t.Fatal("actual HTTP native service", code, string(data))
 	}
+	if response.Timing == nil || response.Timing.AdapterCheckMS == nil || response.Timing.PostcheckMS == nil || response.Timing.FinalizeMS == nil || response.Timing.HandlerElapsedMS < response.Probe.DurationMS || *response.Timing.AdapterCheckMS < response.Probe.DurationMS {
+		t.Fatal("actual HTTP timings omitted source review, adapter or finalization", string(data))
+	}
+	timingJSON, err := json.Marshal(response.Timing)
+	if err != nil {
+		t.Fatal("encode bounded native timing", err)
+	}
+	t.Logf("mihomo_handler_timing=%s", timingJSON)
 	if !reflect.DeepEqual(before, store.Get()) {
 		t.Fatal("temporary service check changed config")
 	}

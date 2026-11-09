@@ -33,6 +33,18 @@ RAZVILKA references the following engines and external datasets. Their own licen
 
 Before a public packaged release, exact bundled-vs-referenced license obligations must be reviewed for every component included in distribution artifacts.
 
+## Research wave 2026-11-09
+
+The [research ledger](docs/RESEARCH_LAB_20261109.md) pins ten upstream sources,
+their licenses and the files examined. Xray/mihomo/sing-box health checks,
+v2rayN and xray-knife batch evaluation, Toxiproxy fault injection,
+blackbox_exporter probe stages, Tailscale diagnostics, nfqws2-keenetic lifecycle
+and controller-runtime reconciliation are research references, not new bundled
+dependencies. Source checkouts and lab binaries stay outside the production tree.
+No upstream implementation is copied by this wave; license notices for existing
+bundled data remain unchanged. A newer research source revision is not an
+approval to replace the separately pinned runtime used by native fixtures.
+
 
 ## UX references
 

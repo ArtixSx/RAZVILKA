@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
@@ -37,5 +38,56 @@ func TestEarlyCheckerFailureReportsClosedReasonAndStops(t *testing.T) {
 				t.Fatal("early error lost classification, leaked data or continued", code, reports)
 			}
 		})
+	}
+}
+
+func TestEvaluationTimingsAreSafeAndIncludeCleanup(t *testing.T) {
+	store := privateStoreFixture(t, 2)
+	checker := &checkerFixture{engine: "xray"}
+	checker.check = func(_ context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		time.Sleep(12 * time.Millisecond) // Models the whole synchronous check, including cleanup.
+		result := positiveFixture(r, "xray")
+		result.Stages = []dataplane.NodeCheckStage{
+			{ID: "runtime_ready", Status: "passed", Duration: 7, Message: "private-node password"},
+			{ID: "cleanup", Status: "failed", Duration: 5, Message: "private-node password"},
+			{ID: "service", Status: "private-status", Duration: -1},
+			{ID: "private-node", Status: "passed", Duration: 99},
+		}
+		result.Stage, result.ErrorCode = "cleanup", "node-cleanup-failed"
+		return result, nil
+	}
+	var out bytes.Buffer
+	code := evaluate(context.Background(), context.Background(), store, checker, func(context.Context) (string, error) {
+		time.Sleep(3 * time.Millisecond)
+		return "wan-0123456789ab", nil
+	}, 2, json.NewEncoder(&out))
+	rows := decodeReports(t, out.Bytes())
+	if code != 1 || len(rows) != 2 || checker.checks != 1 || rows[0].HTTPSPass || rows[1].Finished {
+		t.Fatal("timings altered cleanup failure semantics", code, rows)
+	}
+	candidate := rows[0]
+	if candidate.PreparationMS < 3 || candidate.CheckMS < 12 || candidate.ElapsedMS < candidate.CheckMS || rows[1].ElapsedMS < candidate.ElapsedMS {
+		t.Fatal("wall timings omit preparation/check/cleanup", rows)
+	}
+	if len(candidate.Stages) != 2 || candidate.Stages[0].ID != "runtime_ready" || candidate.Stages[1].DurationMS != 5 || strings.Contains(out.String(), "private-") {
+		t.Fatal("unsafe or lost timing data", out.String())
+	}
+}
+
+func TestCandidateWaitIncludesPriorCheckAndTimingCountIsBounded(t *testing.T) {
+	store := privateStoreFixture(t, 2)
+	checker := &checkerFixture{engine: "xray", check: func(_ context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+		time.Sleep(10 * time.Millisecond)
+		result := positiveFixture(r, "xray")
+		for range 100 {
+			result.Stages = append(result.Stages, dataplane.NodeCheckStage{ID: "service", Status: "passed", Duration: 1})
+		}
+		return result, nil
+	}}
+	var out bytes.Buffer
+	code := evaluate(context.Background(), context.Background(), store, checker, func(context.Context) (string, error) { return "wan-0123456789ab", nil }, 2, json.NewEncoder(&out))
+	rows := decodeReports(t, out.Bytes())
+	if code != 0 || len(rows) != 3 || rows[1].WaitMS < rows[0].CheckMS || rows[0].CheckMS < 10 || len(rows[0].Stages) != 32 {
+		t.Fatal("sequential wait or bounded report failed", code, rows)
 	}
 }

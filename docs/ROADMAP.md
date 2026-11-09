@@ -29,7 +29,33 @@
 Исторические рабочие планы интеграции не являются инструкцией установки
 публичного выпуска. Успешные проверки на моделях не заменяют испытания на роутере.
 
-## Общая очередь реализации 31.10.2026
+## Активная очередь исследования и реализации — 09.11.2026
+
+База `0e2db5ab` сохраняет четыре неопубликованных коммита после PR #23
+(`a2d1c3c7`). Работа ведётся в `work/research-build-20261109`; прежние worktrees,
+refs и незакоммиченные файлы сохранены. Старые номера SHA в приложении не
+используются как разрешение откатить более новые исправления.
+Общий перечень ниже заменяет приоритеты старой очереди; исторические результаты
+31.10–02.11 сохранены ниже для проверки происхождения доказательств.
+
+| Приоритет / направление | Владелец и зависимость | Работающий сценарий / изменение | Критерий приёмки и оставшаяся работа |
+| --- | --- | --- | --- |
+| P0: VLESS startup и длительность | probe_performance; независимый independent_review | Приватный deadline готовности SOCKS; отдельные runtime_start/runtime_ready/route_identity без выдачи service proof | Поздний SOCKS greeting после 8с отвергается; cancel, joined cleanup и evidence TTL сохраняются. Парные native full Check и App queue на одном runner; холодный и повторный запуск отдельно. |
+| P0: CLI/API/UI измерения | lab_sources: cmd/nodeeval; ведущий: API/UI | Закрытый список стадий и полное время проверки/подготовки в JSONL; API/UI сохраняют новые стадии | Нет URI/логов/ошибок из внешнего checker; неверная идентичность не публикуется. Стадии не суммируются; CLI ожидание не называется очередью сервера, SOCKS readiness не называется LAN readiness. |
+| P0: Mihomo lifecycle / recovery (F) | Ведущий; review независимый; до per-plan readiness | Исходные Stop phases и exact wire images сохранены | Исправить следующий stopped-plan ACK, проверить повторный Stop и fresh Apply; same-boot race/ACK cuts, late metadata и ранний restart. Старый WIP из 76c67f32 переносить адресно. Это программные задачи, внешнего блокера нет. |
+| P0: DNS / точный scope (B) | Ведущий; независимый review; зависит от исходного cleanup | Scope/exclusions/native VPN guards действуют | Failed setup → cleanup → GEN2 ready/cancel/retire/retry в штатных 12с/4с; shared CDN и чужие DNS writers не расширяют capture. Старый f71db55f не достиг новой lane, PASS не заявлен. |
+| P1: managed NFQWS2 (C) | Ведущий после B/F; reviewer до принятия | Изолированный probe, история, manual intent и generation guards есть | Полный Apply → included/excluded traffic → Stop/recovery. Reviewed 098abc69 изучить отдельно; микроускорение batch не закрывает LAN workflow. |
+| P1: capabilities/API/AUTO (E) | Ведущий после F | Общий gate AUTO/worker, registration отдельно от available:null | Подтверждённый per-plan lifecycle на HTTP API и UI; до этого live readiness не повышать. Новые telemetry fields не меняют admission. |
+| P1: backup/update (A) | Ведущий после F; независимый review | Snapshot3 binary/StrategyLab pair, encrypted backup, история/manual intent, unknown/finalizing fences уже реализованы | Повторить совместимые пары и partial failure/panel recovery на конечном коде; старый focused native PASS не переносить автоматически на другой SHA. |
+| P2: измерения платформ и расширение | Ведущий после P0/P1 | Воспроизводимый Linux namespace стенд и router acceptance сценарий | NC-1812 ARM64/KeeneticOS 5.01.C.6.0-1/Entware + отдельный LAN клиент; холодный/повторный Apply, WAN/reboot/power-loss. MIPS/OpenWrt/другие платформы отдельно. Не хватает выделенного аппаратного стенда и явной авторизации его изменения. |
+
+Первая волна источников и лицензии: [лабораторный журнал](RESEARCH_LAB_20261109.md).
+Сверка возможностей и независимое ревью: [review](RESEARCH_REVIEW_20261109.md).
+Результаты текущего прохода: [измерения](measurements/2026-11-09/research/README.md).
+Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
+для своего SHA отдельно от native workflow и аппаратной приёмки.
+
+## Историческая очередь и доказательства 31.10–02.11.2026
 
 Ведущий интегрирует `work/bypass-integration-20261031` поверх PR #22/#23.
 Один файл редактирует один владелец; Review проверяет рискованные переходы.

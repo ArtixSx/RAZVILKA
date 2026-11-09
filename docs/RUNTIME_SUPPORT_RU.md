@@ -1,8 +1,22 @@
 # Сборки и поддержка запуска
 
-Состояние рабочих исходников на 02.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
+Состояние рабочих исходников на 09.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
 списков и исключений и часовая проверка Telegram через VLESS ещё не завершены.
 Готовность выпуска фиксируется в [текущем статусе](CURRENT_STATUS_RU.md).
+
+Исследовательская интеграция поверх `0e2db5ab` не расширяет платформенное
+разрешение. Новые стадии VLESS и JSONL nodeeval диагностические: TCP/SOCKS,
+engine delay, HTTPS и реальный LAN-маршрут остаются разными доказательствами.
+Текущая [сверка API/AUTO/реализаций](RESEARCH_REVIEW_20261109.md) отделяет
+регистрацию операции от live admission; [лабораторные результаты](measurements/2026-11-09/research/README.md)
+отделяют Windows loopback, Linux namespace и физический роутер.
+
+| Механизм | ПК / программное состояние этой волны | Что не подтверждено |
+| --- | --- | --- |
+| Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
+| Mihomo | Изолированный probe и lifecycle API существуют; availability остаётся tri-state | Полный повторный Stop/Apply, recovery cuts и live readiness |
+| Backup/StrategyLab | Парный snapshot3 и encrypted recovery уже реализованы; сохранены fences | Любые произвольные версии downgrade и аппаратный power-loss |
+| DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
 ## Три бинарника Entware
 
