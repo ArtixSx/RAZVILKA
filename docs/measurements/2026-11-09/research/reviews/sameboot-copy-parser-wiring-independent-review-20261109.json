@@ -1,0 +1,28 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved wiring",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "98A13A285EAC612F0B7087D5542ABB5D5D1A869D464255C52606DF93664CD578"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "1D5555AA2CC0935E862E96356B870811A3C1D6A023D23EA39CF33FBD3315AE28"
+    },
+    {
+      "path": "scripts/test-managed-probe-native.sh",
+      "sha256": "53FCB17DBD73467693ECFC0E6513B79B0917E1FEB0C0A6E4475B85917AABF016"
+    }
+  ],
+  "findings": [
+    "Generic focused normal tests include sameboot absence and managed-copy; unchanged full normal/race gate follows.",
+    "Managed native normal/race default cases select actual dataplane binary for managed-copy; actual-file before/after benchmark is outside operation clocks.",
+    "Mount parser candidate remains test-only: exact normal/race parity and fuzz seeds require PASS and no SKIP; paired captured-image benchmark does not change production parser.",
+    "Exact baseline four-archive install and unchanged public acquisition acceptance remain as separately reviewed ABI correction.",
+    "Final test-only audit capacity addition selects both source parity and actual cleanup normal/race with explicit PASS/noSKIP; actual capture benchmark separately outside route clocks."
+  ],
+  "limitations": [
+    "Remote execution pending; no generic/native/router PASS inferred from wiring."
+  ]
+}

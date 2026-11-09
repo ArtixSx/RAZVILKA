@@ -274,3 +274,22 @@ LAN/manual ещё FAIL; на6df fault-cut NFQ не достигнуты из-з�
 сохраняет все Start/Wait; coordinator readonly scope сохраняет все Current;
 actual1.8.11 и genuine configured-old193 public paired CLI получают отдельные
 native jobs. Ни новый harness, ни source review не являются native PASS.
+
+
+### Последняя полная проверка:4cc9f869
+
+Оба generic CI42642213704/42642229628 SUCCESS. Все4 Mihomo native job PASS,
+paired182rows PASS (live p50 320→229мс, selected2 1497→1300мс). Это собственные
+результаты4cc, не перенос предыдущего CI. Sameboot normal96.53с/race113.13с PASS;
+normal retirement/history/completed ACK cuts PASS, остальные7cuts FAIL120с.
+Strict DNS12 и полный NFQWS2 ещё FAIL; DNS diagnostic30 и production NFQ
+intent/sync/quarantine cleanup-only retry PASS. OutputReader снижает allocations
+actualchild83→28КБ, но его скорость6.424→6.589мс не улучшена.
+
+Public paired fixture остановился доproducer из-за BusyBox -O; actual1.8.11
+preflight корректно отказал при несовпадении установленных байтов. Reviewed
+1e4/af305 исправляют лабораторные prerequisites, сохраняя original guards.
+Следующая e75/a6fe серия проверяет original readonly absence и fresh fullSHA
+scratch. Дополнительные parser/audit capacity варианты пока только test-only.
+Новый commit требует собственного CI; router/release admission не изменён.
+[Доказательства](measurements/2026-11-09/research/lifecycle/4cc9f869/).

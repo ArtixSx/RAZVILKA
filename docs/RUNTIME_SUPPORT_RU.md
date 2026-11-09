@@ -14,7 +14,7 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На363f isolated native два Apply/Check/Stop и два проверенных recovery сценария PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
+| Mihomo | На4cc все4 isolated lifecycle/manual/recovery PASS; sameboot normal/race и3normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
 | Backup/StrategyLab | Парный snapshot3 и encrypted recovery уже реализованы; сохранены fences | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
@@ -254,3 +254,16 @@ manual HTTP ранний Acquire FAIL. Новая волна оценивает�
 | Public paired CLI | Prepared real old193/source/archive/producer+Stop+restore isolated harness, independent review | Native pending; configured layout only, не defaultlegacy/nonemptypublichistory/router |
 
 [Raw и независимое ревью](measurements/2026-11-09/research/lifecycle/6df3d753/).
+
+
+### Дополнительная native приёмка4cc9f869
+
+| Направление | Работающий сценарий | Остаток |
+| --- | --- | --- |
+| Mihomo | Все4lifecycle jobs PASS; sameboot parent SIGKILL/soleWait/offline cleanup normal+race PASS;3normal lostACK cuts PASS | Normal terminalpair и5race ACK cuts FAIL120с; e75 оптимизация original pure reads требует нового запуска |
+| DNS | Diagnostic30 три cleanupcuts PASS; coordinator -6wholeSHA при460Current; leaf decoder0alloc | Strict12 selected/cancel всё ещё FAIL; FieldsSeq только test-only candidate |
+| NFQWS2 | Production original intent/sync/quarantine cleanup-only retry PASS; actual output-copy normal/race correctness PASS | FullLAN/freshApply/manual/race FAIL; allocations gain не readiness |
+| Public paired update | Genuine queue initialization и forwarding negative tests PASS | Oldinit BusyBox-O ABI failure доproducer; исправлено1e4, собственный positiveCLI pending |
+| Actual1.8.11 | Exact installed bytes mismatch корректно остановил preflight | Проверить exact4baselinearchives install+прежний publicAcquire/normal/race, без сменыproductionpins |
+
+[Raw и измерения](measurements/2026-11-09/research/lifecycle/4cc9f869/).

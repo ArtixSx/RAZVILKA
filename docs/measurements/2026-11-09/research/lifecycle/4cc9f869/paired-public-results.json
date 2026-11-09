@@ -1,0 +1,13 @@
+{
+  "commit": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "run": 42642213655,
+  "job": 129245975718,
+  "conclusion": "failure",
+  "log_sha256": "13561e58f8fa8d0c820804bc0f57aedda9e0514b4eaf66be2f9a520ced95851c",
+  "forwarding_boundary_tests": "PASS",
+  "original_queue_init": "PASS: pinned no-hook child, pidfd TERM, sole Wait, empty original inventory",
+  "public_lifecycle": "NOT_REACHED",
+  "failure": "Ubuntu BusyBox start-stop-daemon rejects genuine old init -O logfile",
+  "safe_fix": "Use genuine installed dpkg start-stop-daemon with supported -O ABI in private tmpfs; original old binary/script/argv unchanged",
+  "router_acceptance": false
+}

@@ -396,3 +396,39 @@ before/after decoder benchmark назначены следующему CI. Эт�
 Сравнение между runs ubuntu-latest учитывает миграцию24.04→26.04; для
 выводов о скорости используются пары одного host/образа, а не разность wall time
 между разными CI. Dedicated1.8.11 закреплён на26.04.
+
+
+### Проверка4cc9f869 и очередная интеграция
+
+Paired363f→4cc:182rows/verdicts/cleanup/exactbinary PASS. Повторные N12:
+live p50/p95 319.681/323.445→229.028/231.712мс; selected2 server completion
+1497/1522→1300/1313мс. Fixed order/samehost; first samples отдельно, не cold OS cache.
+Все4 Mihomo native PASS. Sameboot42642470617: normal96.53с/race113.13с PASS;
+normal retirement/history/completed ACK PASS; normal terminalpair и5race cuts
+FAIL120с. Inclusive absence80calls/80.54с и source-current245/34.15с перекрываются.
+Reviewed e75 оборачивает только hardcoded absence в существующий original tool
+readonly scope, сохраняя Current/process/interfaces/kernel/Current, full cold-read
+SHA и каждый IPVersion. Callback count/ошибка/identity и frozen association
+проверяются до возврата; эффекты и публикации вне scope. Скорость ещё не измерена.
+
+4cc coordinator actual3/3: на одинаковых завершённых стадиях DNS firstanswer132→126,
+beforeStop138→132, joined143→137 SHA; все460Current сохранены. Strict12 ещё FAIL.
+Mount unescape actual48plainfields:2445→385.7ns,896→0B,72→0alloc; decoder-only.
+Production parser сохраняется; 4d310544 тестирует FieldsSeq candidate на exact
+Unicode/escaped grammar, limits и полном actual corpus прежде решения о promotion.
+
+OutputReader actualchild normal82976→27896B/op, но6.424→6.589мс (+2.6%,3x×3);
+race82656→38882B/op и~1.033с с runtime exit delay. Pure copy32840→88B/op normal.
+Это подтверждённое сокращение allocations, не ускорение полного маршрута.
+Managed profile отдельно показал nfqws2ManagedFilesCurrent io.Copy46.94MB; a6feb69d
+заменяет только scratch полного SHA-чтения, сохраняя реальныеbytes/limits/FD/path/
+close checks. Собственный paired actualfile benchmark назначен nextCI.
+
+Actual1.8.11 exact4cc preflight отказал: installed same-version member bytes
+не совпали с pinned archive. Возможная причина — Ubuntu amd64v3 variant; в failed
+run variant не был напечатан, поэтому это inference. af305 + workflow устанавливают
+ровно4verified baseline .deb на26.04, затем прежний полный preflight и public Acquire.
+Public pair4cc обнаружил реальный fixture ABI gap: genuine oldinit требует -O,
+которого нет в Ubuntu BusyBox. 1e4 копирует actual dpkg daemon после namespace guards,
+проверяет >=1.20.6/--output и совпадениеSHA. Old init/argv не меняются; nextCI pending.
+[Точные результаты](measurements/2026-11-09/research/lifecycle/4cc9f869/).

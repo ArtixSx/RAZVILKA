@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 701a17a9ca3b0010e2628380838b433881a551bd
+Type: cpu
+Time: 2026-11-09 15:16:26 UTC
+Duration: 12.17s, Total samples = 12.52s (102.85%)
+Showing nodes accounting for 10.19s, 81.39% of 12.52s total
+Dropped 545 nodes (cum <= 0.06s)
+Showing top 35 nodes out of 412
+      flat  flat%   sum%        cum   cum%
+     5.44s 43.45% 43.45%      5.44s 43.45%  internal/runtime/syscall/linux.Syscall6
+     3.27s 26.12% 69.57%      3.27s 26.12%  crypto/internal/fips140/sha256.blockSHANI
+     0.18s  1.44% 71.01%      0.29s  2.32%  runtime.tryDeferToSpanScan
+     0.11s  0.88% 71.88%      0.11s  0.88%  runtime.memclrNoHeapPointers
+     0.09s  0.72% 72.60%      0.09s  0.72%  runtime.heapArenaOf (inline)
+     0.09s  0.72% 73.32%      0.09s  0.72%  runtime.nextFreeFast (inline)
+     0.08s  0.64% 73.96%      0.10s   0.8%  runtime.exitsyscall
+     0.08s  0.64% 74.60%      0.38s  3.04%  runtime.scanObject
+     0.08s  0.64% 75.24%      0.08s  0.64%  runtime.typePointers.nextFast (inline)
+     0.07s  0.56% 75.80%      0.14s  1.12%  runtime.scanblock
+     0.06s  0.48% 76.28%      0.07s  0.56%  runtime.(*mspan).writeHeapBitsSmall
+     0.06s  0.48% 76.76%      0.18s  1.44%  runtime.scanObjectsSmall
+     0.05s   0.4% 77.16%      0.11s  0.88%  encoding/json.(*Decoder).readValue
+     0.05s   0.4% 77.56%      0.10s   0.8%  runtime.typePointers.next
+     0.04s  0.32% 77.88%      0.29s  2.32%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.04s  0.32% 78.19%      0.08s  0.64%  runtime.reentersyscall
+     0.04s  0.32% 78.51%      3.31s 26.44%  syscall.Syscall6
+     0.03s  0.24% 78.75%      0.11s  0.88%  encoding/json.(*decodeState).literalStore
+     0.03s  0.24% 78.99%      0.78s  6.23%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.03s  0.24% 79.23%      0.15s  1.20%  reflect.deepValueEqual
+     0.03s  0.24% 79.47%      0.60s  4.79%  runtime.mallocgc
+     0.03s  0.24% 79.71%      0.18s  1.44%  runtime.mallocgcSmallNoscan
+     0.02s  0.16% 79.87%      0.08s  0.64%  encoding/json.sliceEncoder.encode
+     0.02s  0.16% 80.03%      0.13s  1.04%  encoding/json.structEncoder.encode
+     0.02s  0.16% 80.19%      0.19s  1.52%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.02s  0.16% 80.35%      0.14s  1.12%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+     0.02s  0.16% 80.51%      1.29s 10.30%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.16% 80.67%      0.08s  0.64%  runtime.findObject
+     0.02s  0.16% 80.83%      0.29s  2.32%  runtime.growslice
+     0.02s  0.16% 80.99%      5.43s 43.37%  syscall.RawSyscall6
+     0.01s  0.08% 81.07%      0.07s  0.56%  encoding/json.arrayEncoder.encode
+     0.01s  0.08% 81.15%      2.78s 22.20%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).currentWithFiles
+     0.01s  0.08% 81.23%      0.07s  0.56%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPOperationMaterial).currentPinnedNodeEndpoint
+     0.01s  0.08% 81.31%      1.62s 12.94%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+     0.01s  0.08% 81.39%      0.07s  0.56%  github.com/ArtixSx/razvilka/internal/dataplane.copyPolicyEffectPlan
