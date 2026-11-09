@@ -1,0 +1,44 @@
+File: app.test
+Build ID: eeb01824e0daa91cab2cac17d34b3c9b12c3ba8d
+Type: cpu
+Time: 2026-11-09 17:50:44 UTC
+Duration: 26.47s, Total samples = 24.24s (91.58%)
+Showing nodes accounting for 20.15s, 83.13% of 24.24s total
+Dropped 765 nodes (cum <= 0.12s)
+Showing top 35 nodes out of 445
+      flat  flat%   sum%        cum   cum%
+    12.57s 51.86% 51.86%     12.57s 51.86%  internal/runtime/syscall/linux.Syscall6
+     5.42s 22.36% 74.22%      5.42s 22.36%  crypto/internal/fips140/sha256.blockSHANI
+     0.26s  1.07% 75.29%      0.26s  1.07%  runtime.nextFreeFast (inline)
+     0.21s  0.87% 76.16%      0.21s  0.87%  runtime.memclrNoHeapPointers
+     0.20s  0.83% 76.98%      0.29s  1.20%  strings.Fields
+     0.19s  0.78% 77.76%      0.19s  0.78%  memeqbody
+     0.13s  0.54% 78.30%      0.17s   0.7%  runtime.reentersyscall
+     0.11s  0.45% 78.75%      2.74s 11.30%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.10s  0.41% 79.17%      0.20s  0.83%  encoding/json.(*Decoder).readValue
+     0.07s  0.29% 79.46%      0.32s  1.32%  runtime.mallocgcSmallNoscan
+     0.07s  0.29% 79.74%     12.48s 51.49%  syscall.RawSyscall6
+     0.06s  0.25% 79.99%      0.47s  1.94%  os.(*File).readdir
+     0.06s  0.25% 80.24%      1.07s  4.41%  runtime.mallocgc
+     0.06s  0.25% 80.49%      0.53s  2.19%  runtime.mallocgcSmallScanNoHeader
+     0.06s  0.25% 80.73%      5.29s 21.82%  syscall.Syscall
+     0.06s  0.25% 80.98%      7.60s 31.35%  syscall.Syscall6
+     0.04s  0.17% 81.15%      0.13s  0.54%  encoding/json.(*decodeState).literalStore
+     0.04s  0.17% 81.31%      0.15s  0.62%  encoding/json.structEncoder.encode
+     0.04s  0.17% 81.48%      1.69s  6.97%  github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPImageRead).current
+     0.04s  0.17% 81.64%      0.22s  0.91%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.04s  0.17% 81.81%      0.58s  2.39%  internal/poll.(*FD).RawControl
+     0.03s  0.12% 81.93%      0.37s  1.53%  encoding/json.(*decodeState).object
+     0.03s  0.12% 82.05%      0.61s  2.52%  os.(*rawConn).Control
+     0.03s  0.12% 82.18%      0.27s  1.11%  runtime.growslice
+     0.03s  0.12% 82.30%      0.39s  1.61%  runtime.newobject
+     0.02s 0.083% 82.38%      0.83s  3.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).readDomainProcessWithFiles
+     0.02s 0.083% 82.47%      0.22s  0.91%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.02s 0.083% 82.55%      0.14s  0.58%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.02s 0.083% 82.63%      1.80s  7.43%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.02s 0.083% 82.71%      0.22s  0.91%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+     0.02s 0.083% 82.80%      0.66s  2.72%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkHeldOwner
+     0.02s 0.083% 82.88%      0.41s  1.69%  os.(*File).Stat
+     0.02s 0.083% 82.96%      0.71s  2.93%  os.rootStat.func1
+     0.02s 0.083% 83.04%      0.16s  0.66%  reflect.deepValueEqual
+     0.02s 0.083% 83.13%      0.18s  0.74%  runtime.(*mcache).refill

@@ -14,8 +14,8 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На344 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
-| Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на344 public empty/draft ещё FAIL; offline unchanged-state models и actual image reader PASS, fullconsumer pending; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
+| Mihomo | На ea368 все4 isolated lifecycle/manual/recovery PASS; sameboot на отдельном357 normal/race и5normal ACK cuts PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
+| Backup/StrategyLab | Парный snapshot3 и encrypted recovery реализованы; на ea368 public empty/draft FAIL до restore; original-worker join исправлен, новый fullconsumer на2ecf9961 ожидает CI; fences сохранены | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
 ## Три бинарника Entware

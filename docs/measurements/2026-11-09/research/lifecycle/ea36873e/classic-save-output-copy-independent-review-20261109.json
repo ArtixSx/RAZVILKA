@@ -1,0 +1,23 @@
+{
+  "status": "source_approved_pending_normal_race_native_measurement",
+  "reviewer": "/root/verification",
+  "files_sha256": {
+    "internal/startuptools/classic_save_linux.go": "1a6ee65ff6194dd34a3e017cc08dd0df3640530b1c55c67bc5b518376d520d9b",
+    "internal/startuptools/classic_save_output_linux_test.go": "50efe96ed9775db2f4e40fbf4cb697c15664f0b3b03afb27bb0a10ac3542083b"
+  },
+  "contract": [
+    "ReadFrom copies through classicSaveOutput own Write, preserving combined family/stdout/stderr budget debit, sink limits, cancellation and original errors.",
+    "Exclusive existing32KiB scratch is fully cleared on every normal/error/panic exit; exact LimitedReader initial sizing and source WriterTo precedence preserved.",
+    "No changes to child argv, Start/Wait, descriptors, source identity, complete inventories or cleanup."
+  ],
+  "validation": [
+    "Deterministic chunk/data/error/count/remaining-budget/overflow/cancellation parity before versus after.",
+    "WriterTo and strings.Reader cannot bypass wrapper budget; scratch error/panic clearing.",
+    "Actual two-family children with separate pipes, exact/overflow shared budget, cancellation after actual bytes and sole Wait.",
+    "Actual two-child paired allocation benchmark prepared; no local Go execution."
+  ],
+  "limits": [
+    "Measured1796 starts support allocation attribution, not a full latency improvement.",
+    "Normal/race tests and actual pinned native inventory/full workflow still required on new SHA."
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "status": "source_approved_measurement_only_pending_actual_native",
+  "reviewer": "/root/verification",
+  "file": "internal/startuptools/startup_image_measurement_native_linux_test.go",
+  "sha256": "2178bb339041b6e0e85bfc43f63a83963a959461eb22ed3cecc6f2db3ec617b1",
+  "contract": [
+    "Production code unchanged. Embedded exact-body guard permits only test method name/read-helper replacement in complete heldReview.unchanged.",
+    "Actual original Lease/pinned provider callback captures every held image with fresh SHA, exact acquired pointer/file/info/path/hash/size and aggregate64MiB bound.",
+    "Repeat reads every actual byte in original32KiB ReadAt geometry plus EOF, even on mismatch; source metadata/path/membership before and after preserved.",
+    "Private snapshot cleared; first capture+SHA+clear allocation measured separately from repeat comparison and original SHA.",
+    "Explicit actual short-read/tail-growth/partial-cancel/invalid opening SHA/revocation and metadata/graph/replacement refusal tests."
+  ],
+  "limitations": [
+    "This is not a production cache, lifetime, ownership or concurrency design.",
+    "Actual native132-image producer, normal/race negatives and benchmark remain pending; local source review does not prove performance.",
+    "Random map iteration, warm page cache and small sample affect timings; retained payload is not process RSS.",
+    "No local Go builds/tests."
+  ]
+}

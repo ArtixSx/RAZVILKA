@@ -56,15 +56,19 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Актуальное продолжение после344912c1
+### Актуальная интеграция 2ecf9961
 
-Оба generic и все4Mihomo PASS; native DNS/NFQ/public pair остаются FAIL,
-точные причины и результаты — в [статусе](CURRENT_STATUS_RU.md#проверка-344912c1-и-следующая-интеграция).
-Ведущий интегрирует reviewed offline-state preservation и per-call executable
-comparison, запускает отдельный empty/draft public consumer. dns_completion
-реализовал scoped full-image comparison67f4557c, ждёт native и matched fullscenario; names reserve принят только
-как memory improvement. verification независимо проверяет gates и границы proof.
-Внешнего блокера для этих программных задач нет. Физический candidate/LAN-профиль
+Владельцы и зависимости в общей очереди выше сохранены. Ведущий интегрировал
+bootstrap original-worker join и повторную проверку положительных scan fixtures;
+`nfq_completion` проверяет реальный public empty/draft, затем полный managed flow.
+`dns_completion` проверяет strict12/4, matched ABBA и измерение полного startup
+image. `verification` независимо проверяет общий CI и четыре Mihomo сценария.
+На ea368 PR CI PASS, push CI FAIL по исправленной fixture; все четыре Mihomo PASS.
+DNS strict пропущен из-за исправленного assertion, diagnostic30 все три PASS.
+Public restore не достигнут, managed full manual остаётся FAIL. Ускорение pooled
+classic-save и полного domain маршрута ещё не подтверждено. Следующий результат
+принимается только с точным SHA и полным исходным сценарием; [подробности](CURRENT_STATUS_RU.md#исходники-и-приёмка-на-09112026).
+Внешнего блокера для программных задач нет. Физический candidate/LAN-профиль
 требует отдельной авторизации изменения работающего роутера.
 
 ### Последний60e0d4ba и конкретные исправления

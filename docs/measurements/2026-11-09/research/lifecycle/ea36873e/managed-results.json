@@ -1,0 +1,53 @@
+{
+  "sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "run": 42667937599,
+  "production": {
+    "phase": "lan-preflight-inventory-consumer-close",
+    "nativeApplySeconds": 18.84,
+    "result": "FAIL",
+    "lateWaitCleanup": "PASS12.37s",
+    "manualCopyBufferFlatMiB": 111.93,
+    "manualClassicSaveNominalScratchBytes": 117702656,
+    "manualOtherReadChildren": 24,
+    "LANAppHTTP": "FAIL54.11s",
+    "settlementSync": "PASS recovered+continuous original Gate marker; fresh Apply FAIL",
+    "manualClassicSaveChildren": 1796,
+    "manualEffects": 1,
+    "intentRecovery": "PASS actual recovered marker; fresh Apply FAIL",
+    "logSHA256": "5996C12CB37989216380FD5A1641DE5619706B6FE1DDABA623662E4892187008",
+    "cleanupOnlyCloseRetry": "PASS45.35s; permanent fence retained, no fresh Apply",
+    "manual": "FAIL22.42s",
+    "activationSeconds": 16.061681443,
+    "coreConsumer": "PASS9.55s",
+    "job": 129336492624
+  },
+  "race": {
+    "manualClassicSaveNominalScratchBytes": 67633152,
+    "coreConsumer": "FAIL19.07s",
+    "manualClassicSaveChildren": 1032,
+    "manual": "FAIL32.30s",
+    "result": "FAIL",
+    "LANAppHTTP": "FAIL21.28s",
+    "job": 129336492304,
+    "activationSeconds": 17.93539149,
+    "logSHA256": "D9B0F5701F611AB3C5C28766720326DE3EE7E676FF50CE3ACA65B8F0182CBB87",
+    "recoveryCuts": "NOT_REACHED",
+    "manualOtherReadChildren": 18
+  },
+  "acquiredInventory": {
+    "normalAndRaceSamples": 3,
+    "nodes": 166,
+    "bytes": 7819392,
+    "largestBytes": 2129424,
+    "images": 132,
+    "twoPassPayloadBytes": 15638784,
+    "staticBudgetOnly": true
+  },
+  "interpretation": [
+    "All source freshness/ownership/child Starts and original deadlines retained",
+    "Actual child counters measure HTTP operation; alloc_space profile is cumulative process lifetime",
+    "Nominal scratch budget is save starts times two streams times32768, not process RSS",
+    "1796actual save children imply112.25MiB baseline copy scratch, consistent with111.93MiB sampled flat io.copyBuffer; candidate still requires paired benchmark",
+    "Whole managed LAN feature remains incomplete despite recovered cut markers"
+  ]
+}

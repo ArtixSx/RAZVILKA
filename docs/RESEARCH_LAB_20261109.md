@@ -581,3 +581,16 @@ runs: новый matched plan использует A–B–B–A на одном
 не смешивая build/harness wall, run-through-join profile и route readiness.
 IP -Version не оптимизируется статическим кэшем: исходный контракт учитывает
 runtime get_libbpf_version; actual Start и прежние metadata проверки сохранены.
+
+### Интеграция 2ecf9961 после ea36873e
+
+[Текущая приёмка и оставшиеся направления](CURRENT_STATUS_RU.md#исходники-и-приёмка-на-09112026).
+Независимые source reviews bootstrap join, classic-save copy, полного startup
+measurement, ABBA и CI wiring сохранены вместе с [точными ea368 raw](measurements/2026-11-09/research/lifecycle/ea36873e/).
+Команды нового измерения: `sh scripts/compare-domain-image-native.sh` через
+`domain-image-comparison.yml`; исходные strict бюджеты не изменяются.
+`sh scripts/test-managed-probe-native.sh` запускает actual-child classic-save
+benchmark и test-only full startup image measurement normal/race. Переиспользование
+буфера не пропускает общий Write budget. Cumulative allocation profile включает
+подготовку процесса; его нельзя выдавать за allocation delta одного HTTP-вызова.
+Первые и повторные VLESS samples, CPU/RSS и cleanup остаются раздельными.

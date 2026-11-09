@@ -1,0 +1,13 @@
+{
+  "status": "source_approved_test_only",
+  "reviewer": "/root/verification",
+  "file": "cmd/razvilka/external_bootstrap_ledger_native_linux_test.go",
+  "sha256": "7fd536ae1313bdc37f54793f4d63c614844e730bbf6e5caf082b42b847bf0653",
+  "contract": [
+    "Called only after actual bootstrap producer failure, no Store/lock/write/repair.",
+    "Fixed original command receipt path, regular held-file same-inode check, read limited4097 and max4096 bytes.",
+    "Output restricted to fixed state names, bounded exit/reaped numbers and booleans; no PID/path/raw private payload.",
+    "Status is explicitly diagnostic_only, never reconstructed join or cleanup authority."
+  ],
+  "validation": "Source inspected against commandRoot/readFileCommand path and shape; adversarial diagnostic test present, Linux execution pending."
+}

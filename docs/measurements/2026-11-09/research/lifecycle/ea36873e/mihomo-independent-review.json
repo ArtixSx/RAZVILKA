@@ -1,0 +1,184 @@
+{
+  "head_sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "run_id": 42667937753,
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 129336492212,
+      "name": "live-native (postcas-failure)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129336492495,
+      "name": "live-native (manual-http)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129336492536,
+      "name": "live-native (lifecycle)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129336492621,
+      "name": "live-native (check-settlement)",
+      "conclusion": "success"
+    }
+  ],
+  "scenarios": {
+    "lifecycle": {
+      "raw_file": "mihomo-lifecycle.log",
+      "sha256": "436efe3ca9a0a3410c58470c8877f8b0b135f0c84eb1524e65035f52d40ae831",
+      "actual_markers": [
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m35.243908525s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=6.031437346s closing_retry=false",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m17.884154302s fixture_elapsed=2m19.713813929s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m35.629954721s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=6.059654691s closing_retry=true",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m18.492348678s fixture_elapsed=4m38.206195047s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m34.756607276s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=6.035323137s closing_retry=false",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m17.045091172s fixture_elapsed=2m18.633640606s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m34.586519389s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=6.013096918s closing_retry=true",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=2m16.929870974s fixture_elapsed=4m35.563537709s restored_physical_baseline=true"
+      ],
+      "selected_test_pass": [
+        "--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (278.68s)",
+        "--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (276.04s)",
+        "--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (276.04s)"
+      ]
+    },
+    "manual-http": {
+      "raw_file": "mihomo-manual-http.log",
+      "sha256": "cf27e87dcd1777db1e1df35eb224a7d93d790f4298eb9e356e456660d121e2a9",
+      "actual_markers": [
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m18.017007217s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=5.00981333s closing_retry=false",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=1m51.949007222s fixture_elapsed=1m53.992185739s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m18.034176489s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=4.917640528s closing_retry=true",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=1m52.011915372s fixture_elapsed=3m46.004143485s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m18.111067454s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=4.903602814s closing_retry=false",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=1m51.935986173s fixture_elapsed=1m53.205374001s restored_physical_baseline=true",
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=1 apply=1m18.246775507s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=1 stop=4.89764755s closing_retry=true",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=1 cycle=1m51.41074487s fixture_elapsed=3m44.616163218s restored_physical_baseline=true"
+      ],
+      "selected_test_pass": [
+        "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (226.48s)",
+        "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (226.48s)",
+        "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (225.09s)",
+        "--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (225.09s)"
+      ]
+    },
+    "check-settlement": {
+      "raw_file": "mihomo-check-settlement.log",
+      "sha256": "ebb5d96c6a040039c74aad69358b98302f18f8c9ea5a39e948d71dad394aa93b",
+      "actual_markers": [
+        "mihomo_live_native_linux_test.go:419: actual_mihomo_live round=0 apply=1m36.122435275s mandatory_probes=2",
+        "mihomo_live_native_linux_test.go:521: actual_mihomo_live round=0 stop=9.523761572s closing_retry=false",
+        "mihomo_live_native_linux_test.go:528: actual_mihomo_live round=0 cycle=2m4.912921283s fixture_elapsed=2m6.837199443s restored_physical_baseline=true"
+      ],
+      "selected_test_pass": [
+        "--- PASS: TestMihomoLiveOriginalFailedCheckSettlementStopRetry (127.31s)"
+      ]
+    },
+    "postcas-failure": {
+      "raw_file": "mihomo-postcas-failure.log",
+      "sha256": "cd020087908b41a60fb186e3de4fb40a59b387661dd901eb999a30b2e07bdbe4",
+      "actual_markers": [
+        "mihomo_live_native_linux_test.go:413: actual_postcas_service_rejection status=503 desired_exact_restored=true state=rolled-back rollback_verified=true original_pending=false"
+      ],
+      "selected_test_pass": [
+        "--- PASS: TestMihomoLiveOriginalPostCASServiceFailure (80.75s)"
+      ]
+    }
+  },
+  "same_host_baseline": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "candidate_seconds": {
+    "lifecycle": {
+      "test": 278.68,
+      "apply": [
+        95.243908525,
+        95.629954721
+      ],
+      "stop": [
+        6.031437346,
+        6.059654691
+      ]
+    },
+    "manual-http": {
+      "test": 226.48,
+      "apply": [
+        78.017007217,
+        78.034176489
+      ],
+      "stop": [
+        5.00981333,
+        4.917640528
+      ]
+    },
+    "check-settlement": {
+      "test": 127.31,
+      "apply": [
+        96.122435275
+      ],
+      "stop": [
+        9.523761572
+      ]
+    },
+    "postcas-failure": {
+      "test": 80.75,
+      "http_status": 503,
+      "exact_desired_restored": true,
+      "rollback_verified": true,
+      "original_pending": false
+    }
+  },
+  "same_host_baseline_seconds": {
+    "lifecycle": {
+      "test": 276.04,
+      "apply": [
+        94.756607276,
+        94.586519389
+      ],
+      "stop": [
+        6.035323137,
+        6.013096918
+      ]
+    },
+    "manual-http": {
+      "test": 225.09,
+      "apply": [
+        78.111067454,
+        78.246775507
+      ],
+      "stop": [
+        4.903602814,
+        4.89764755
+      ]
+    }
+  },
+  "bookends_normal_race": {
+    "original_child_fresh_cleanup": [
+      4.75,
+      12.61
+    ],
+    "actual_fingerprint_mutation": [
+      2.92,
+      10.26
+    ],
+    "original_kernel_owner": [
+      4.48,
+      12.32
+    ]
+  },
+  "limits": [
+    "Exact ea368 native fixture evidence only, not physical router acceptance.",
+    "Lifecycle/manual each complete two original cycles, restored physical fixture baseline and second Stop closing retry.",
+    "Candidate followed by baseline on same runner, small fixed-order sample: no causal speed or universal latency claim.",
+    "Original operation110s, round300s and production Apply8min deadlines unchanged.",
+    "Generic full CI and other DNS/NFQ/public-pair workflows are separate and not implied by this successful Mihomo workflow."
+  ]
+}
