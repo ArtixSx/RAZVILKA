@@ -14,9 +14,9 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | На50bd все4 isolated lifecycle/manual/settlement/post-CAS PASS; sameboot10/14 PASS; availability остаётся tri-state | Normal terminal-transaction process inventory refusal, три race ACK cuts120с; остальные restart/per-plan live readiness и физический LAN |
-| Backup/StrategyLab | Snapshot3/encrypted recovery, modern restored panel PASS; public empty/draft PASS2ecf/5289, genuine history + frozen manual selection PASS976fa47c/50bd; exact bytes и fences сохранены | Configured0.19.3 проверен offline; default legacy layout не поддержан по clean-install контракту; старый live запуск, произвольный downgrade и аппаратный power-loss не подтверждены |
-| DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют; diagnostic30 проверил фактические successor borrowed reads на50bd | Strict DNS12/4с и полный managed NFQWS2 manual/recovery FAIL; diagnostic30 и microbench не подтверждают native readiness |
+| Mihomo | На50bd все4 isolated lifecycle/manual/settlement/post-CAS PASS; sameboot10/14 PASS; availability остаётся tri-state | На0470 все normal ACK cuts PASS, четыре race ACK cuts120с FAIL; остаются restart/per-plan live readiness и физический LAN |
+| Backup/StrategyLab | Snapshot3/encrypted recovery, modern restored panel PASS; public empty/draft PASS2ecf/5289, genuine history + frozen manual selection PASS976fa47c/50bd; exact bytes и fences сохранены | Configured0.19.3 проверен offline; default legacy layout не поддержан по clean-install контракту; actual default-layout refusal0470 PASS; modern live rollback690c ожидает native CI83a1; произвольный downgrade и аппаратный power-loss не подтверждены |
+| DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют; diagnostic30 проверил фактические successor borrowed reads на50bd/0470; ledger decode d7 normal/race PASS с экономией752Б–180КБ | Strict DNS12/4с и полный managed NFQWS2 manual/recovery FAIL; diagnostic30 и microbench не подтверждают native readiness |
 
 ## Три бинарника Entware
 

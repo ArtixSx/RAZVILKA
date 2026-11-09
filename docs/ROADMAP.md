@@ -56,28 +56,29 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Текущая интеграция50bd038c; следующая0470
+### Точка продолжения после сохранения этапа
 
-Владельцы и зависимости общей очереди выше сохранены. На50bd public
-empty/draft/history offline restore и все4Mihomo native сценария PASS.
-Full managed NFQWS2 manual/LAN/fresh Apply и strictDNS12/4с остаются FAIL;
-GEN2 successor view фактически проверен только в diagnostic30. Sameboot10/14
-PASS, ранний process inventory отказ и триracecuts120с отдельно расследуются.
-Последние два полных genericPASS —5289; generic50bd выполняется отдельно.
-Отрицательные complete-pair startup и2worker metadata measurements сохранены;
-оба prototype остались только тестовыми, без ускорения production по этим идеям.
+Владельцы общей очереди сохранены. Root интегрировал modern public rollback
+`690c0c30` и focused workflow `83a1a933`; nfq_completion владеет его12fixture
+файлами, verification — независимым ревью. Native42692078602 и generic42692078123
+ещё выполняются; сначала получить финальные логи, проверить actual PASS marker
+и отсутствие SKIP. Исправленный cancellation test9c прошёл30normal/race;
+полный generic42690593933 pending. Старые d7 generic FAIL нельзя считать PASS.
 
-Ведущий интегрирует исходные process/child-exit стадии и проверяет actual0470
-sameboot. `dns_completion` разбирает ожидание original tool gate и длительность
-flow guards; новые scopes без измерений не добавляются. `nfq_completion`
-проверяет реальный default-layout отказ, затем проектирует настоящий modern
-public update/known rollback с запуском восстановленной панели. Неподдержанный
-legacy-layout migration не включается скрытой перестановкой каталогов.
-`verification` независимо проверяет рискованные изменения и exact-SHA результаты.
-Следующий результат принимается с точным SHA и полным исходным сценарием;
-[подробности](CURRENT_STATUS_RU.md#исходники-и-приёмка-на-09112026).
-Внешнего блокера для программных задач нет. Физический candidate/LAN-профиль
-требует отдельной авторизации изменения работающего роутера.
+На0470 public empty/draft/history/default-layout refusal PASS; unsupported
+legacy upgrade не разрешён. Sameboot10/14, четыре race cuts120с FAIL.
+Наd7 ledger allocation parity normal/race PASS; экономия752Б–180КБ, без
+заявления route speedup. Strict DNS и полный NFQ LAN/manual ещё FAIL.
+`dns_completion` измерил gate wait0.8–1.8мс: очередь не подтверждена причиной.
+
+Следом: завершить modern rollback приёмку, retained-stage/stop-during-rollback,
+GEN1/GEN2 ready/cancel/retire/retry на исходных12/4с, managed NFQWS2 full flow,
+оставшиеся Mihomo cuts. Общие scope/ownership/evidence/cleanup guards сохранены.
+Неудачные startup-image/metadata-parallel prototypes не перенесены в production.
+Работа сохранена по просьбе пользователя из-за лимита, без новых экспериментов.
+Внешнего блокера программных задач нет. Router/LAN изменения требуют отдельной
+авторизации; отсутствие такой авторизации не блокирует лабораторную реализацию.
+[Актуальный статус и доказательства](CURRENT_STATUS_RU.md).
 
 ### Последний60e0d4ba и конкретные исправления
 

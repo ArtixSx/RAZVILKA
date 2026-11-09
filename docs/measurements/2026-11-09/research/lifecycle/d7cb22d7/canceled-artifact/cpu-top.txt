@@ -1,0 +1,44 @@
+File: app.test
+Build ID: c0c8eb8a7318b2eeb7f4ee72a8e66fb2a368763a
+Type: cpu
+Time: 2026-11-09 20:11:34 UTC
+Duration: 12.16s, Total samples = 11.84s (97.39%)
+Showing nodes accounting for 10.18s, 85.98% of 11.84s total
+Dropped 425 nodes (cum <= 0.06s)
+Showing top 35 nodes out of 424
+      flat  flat%   sum%        cum   cum%
+     6.40s 54.05% 54.05%      6.40s 54.05%  internal/runtime/syscall/linux.Syscall6
+     2.85s 24.07% 78.12%      2.85s 24.07%  crypto/internal/fips140/sha256.blockSHANI
+     0.13s  1.10% 79.22%      0.13s  1.10%  memeqbody
+     0.10s  0.84% 80.07%      0.10s  0.84%  runtime.memclrNoHeapPointers
+     0.07s  0.59% 80.66%      0.07s  0.59%  runtime.memmove
+     0.06s  0.51% 81.17%      0.08s  0.68%  runtime.reentersyscall
+     0.05s  0.42% 81.59%      0.06s  0.51%  reflect.Value.Field
+     0.05s  0.42% 82.01%      0.06s  0.51%  strings.Fields
+     0.04s  0.34% 82.35%      0.06s  0.51%  internal/filepathlite.Clean
+     0.03s  0.25% 82.60%      0.08s  0.68%  encoding/json.(*Decoder).readValue
+     0.03s  0.25% 82.85%      0.13s  1.10%  runtime.growslice
+     0.03s  0.25% 83.11%      0.19s  1.60%  runtime.mallocgcSmallScanNoHeader
+     0.03s  0.25% 83.36%      0.08s  0.68%  runtime.sweepone
+     0.02s  0.17% 83.53%      0.06s  0.51%  encoding/json.appendCompact
+     0.02s  0.17% 83.70%      0.15s  1.27%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.02s  0.17% 83.87%      0.26s  2.20%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+     0.02s  0.17% 84.04%      0.12s  1.01%  github.com/ArtixSx/razvilka/internal/operationgate.decodeControl
+     0.02s  0.17% 84.21%      1.16s  9.80%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.02s  0.17% 84.38%      0.94s  7.94%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.02s  0.17% 84.54%      0.09s  0.76%  runtime.(*mcentral).cacheSpan
+     0.02s  0.17% 84.71%      0.12s  1.01%  runtime.newobject
+     0.02s  0.17% 84.88%      2.79s 23.56%  syscall.Syscall
+     0.01s 0.084% 84.97%      0.08s  0.68%  encoding/json.(*decodeState).object
+     0.01s 0.084% 85.05%      0.28s  2.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*NodeDefaultSourceReview).Current
+     0.01s 0.084% 85.14%      3.50s 29.56%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).currentBaselineWithFiles
+     0.01s 0.084% 85.22%      0.09s  0.76%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current
+     0.01s 0.084% 85.30%      0.11s  0.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).procFile
+     0.01s 0.084% 85.39%      0.11s  0.93%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.01s 0.084% 85.47%      0.13s  1.10%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).bootID
+     0.01s 0.084% 85.56%      0.36s  3.04%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).openDir
+     0.01s 0.084% 85.64%      0.18s  1.52%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.01s 0.084% 85.73%      0.77s  6.50%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.01s 0.084% 85.81%      0.10s  0.84%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+     0.01s 0.084% 85.90%      0.08s  0.68%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+     0.01s 0.084% 85.98%      1.13s  9.54%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged

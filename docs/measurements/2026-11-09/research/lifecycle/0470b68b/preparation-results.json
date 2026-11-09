@@ -1,0 +1,824 @@
+{
+  "candidate_sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687051039,
+  "job_id": 129396561232,
+  "scenario": "diagnostic preparation recovery pair, not strict12 readiness",
+  "cases": {
+    "baseline-clean": {
+      "raw_sha256": "9a76bf12a691fb21525aa96c9f2050c6beda2a11a6e6ae60407a279c6a56acc0",
+      "test_results": [
+        [
+          "FAIL",
+          "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+          "95.21"
+        ]
+      ],
+      "successor_completed_metrics": [
+        {
+          "capture-add-guard": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "15.190127211s"
+          },
+          "capture-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "26.167433261s"
+          },
+          "process-current": {
+            "calls": 298,
+            "bytes": 0,
+            "elapsed": "7.810753734s"
+          },
+          "standby-add-guard": {
+            "calls": 13,
+            "bytes": 0,
+            "elapsed": "2.374547617s"
+          },
+          "standby-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "8.211393695s"
+          },
+          "whole-executable-hash": {
+            "calls": 603,
+            "bytes": 22056175818,
+            "elapsed": "15.851646898s"
+          }
+        }
+      ],
+      "profile_completions": []
+    },
+    "candidate-capture-transaction": {
+      "raw_sha256": "5673a2e8ca6ad06f40ca8c3d58bb78c4eb1165ac5c11e6707daaf402e4569fad",
+      "test_results": [
+        [
+          "PASS",
+          "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+          "101.21"
+        ]
+      ],
+      "successor_completed_metrics": [
+        {
+          "capture-add-guard": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.299045991s"
+          },
+          "capture-guard-original-closing": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "4.96µs"
+          },
+          "capture-guard-original-opening": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.159227867s"
+          },
+          "capture-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "13.617676801s"
+          },
+          "coordinator-original-read": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "272.76157ms"
+          },
+          "coordinator-original-read-complete": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "691ns"
+          },
+          "executable-image-capture": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "1.767062641s"
+          },
+          "executable-image-compare": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "336.407786ms"
+          },
+          "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.445503ms"
+          },
+          "hash-stack/after-opening-scope/capture-guard/capture-prepare": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "420.134028ms"
+          },
+          "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.42093ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/capture-closing": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.814246ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.170714ms"
+          },
+          "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+            "calls": 9,
+            "bytes": 329196654,
+            "elapsed": "235.741565ms"
+          },
+          "hash-stack/after-opening-scope/other": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "79.162323ms"
+          },
+          "hash-stack/after-opening-scope/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.764935ms"
+          },
+          "hash-stack/after-opening-scope/standby-issue": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.27589ms"
+          },
+          "hash-stack/after-opening-scope/standby-prepare/standby-capture": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.390468ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-issue": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.429792ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-prepare": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.474515ms"
+          },
+          "hash-stack/direct/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.767886ms"
+          },
+          "hash-stack/direct/capture-issue/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.803086ms"
+          },
+          "hash-stack/direct/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.331994ms"
+          },
+          "hash-stack/direct/capture-prepare/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.012661ms"
+          },
+          "hash-stack/direct/other": {
+            "calls": 19,
+            "bytes": 694970714,
+            "elapsed": "511.053735ms"
+          },
+          "hash-stack/direct/standby-capture": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "78.533669ms"
+          },
+          "hash-stack/direct/standby-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.408788ms"
+          },
+          "hash-stack/direct/standby-prepare/standby-capture": {
+            "calls": 5,
+            "bytes": 182887030,
+            "elapsed": "131.151765ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-guard/capture-prepare": {
+            "calls": 60,
+            "bytes": 2194644360,
+            "elapsed": "1.579637818s"
+          },
+          "hash-stack/file-opening-wrapper/capture-mapping/capture-closing": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "210.231219ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/capture-mapping": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "419.457201ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/pre-add": {
+            "calls": 28,
+            "bytes": 1024167368,
+            "elapsed": "738.325529ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-capture": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "210.169131ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/pre-add": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "420.645759ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.821032ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.815854ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-prepare": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.490529ms"
+          },
+          "native-hash-attribution": {
+            "calls": 247,
+            "bytes": 0,
+            "elapsed": "13.303069ms"
+          },
+          "pre-add-original-command-boundary": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "990ns"
+          },
+          "pre-add-original-read": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "8.65004524s"
+          },
+          "pre-add-original-read-complete": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "2.864µs"
+          },
+          "process-current": {
+            "calls": 276,
+            "bytes": 0,
+            "elapsed": "4.427044288s"
+          },
+          "standby-add-guard": {
+            "calls": 13,
+            "bytes": 0,
+            "elapsed": "805.19542ms"
+          },
+          "standby-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "3.9205995s"
+          },
+          "successor-listener-derived-complete": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "18.355µs"
+          },
+          "successor-listener-derived-read": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "16.011µs"
+          },
+          "successor-listener-read-scope": {
+            "calls": 36,
+            "bytes": 0,
+            "elapsed": "4.575698169s"
+          },
+          "whole-executable-hash": {
+            "calls": 247,
+            "bytes": 9034619282,
+            "elapsed": "6.504882565s"
+          }
+        }
+      ],
+      "profile_completions": [
+        "domain_tcp_successor_profile_native_linux_test.go:175: GEN2_CPU_PROFILE_COMPLETE bytes=86533 joined=true overflow=false output_error=false; successor preparation + Run through join attempt, profiling overhead included, not readiness or cleanup proof"
+      ]
+    },
+    "candidate-clean": {
+      "raw_sha256": "9b0d347934a797c81d3ae164712ac79a747e81e7439b402d3e2a8d008e008227",
+      "test_results": [
+        [
+          "PASS",
+          "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+          "94.45"
+        ]
+      ],
+      "successor_completed_metrics": [
+        {
+          "capture-add-guard": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.352179551s"
+          },
+          "capture-guard-original-closing": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "5.391µs"
+          },
+          "capture-guard-original-opening": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.212050605s"
+          },
+          "capture-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "13.688438761s"
+          },
+          "coordinator-original-read": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "271.811457ms"
+          },
+          "coordinator-original-read-complete": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "751ns"
+          },
+          "executable-image-capture": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "1.765691084s"
+          },
+          "executable-image-compare": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "331.652516ms"
+          },
+          "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.842706ms"
+          },
+          "hash-stack/after-opening-scope/capture-guard/capture-prepare": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "420.308684ms"
+          },
+          "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.687987ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/capture-closing": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.063485ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.133403ms"
+          },
+          "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+            "calls": 9,
+            "bytes": 329196654,
+            "elapsed": "236.506564ms"
+          },
+          "hash-stack/after-opening-scope/other": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "78.445085ms"
+          },
+          "hash-stack/after-opening-scope/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.867279ms"
+          },
+          "hash-stack/after-opening-scope/standby-issue": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.411702ms"
+          },
+          "hash-stack/after-opening-scope/standby-prepare/standby-capture": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.535648ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-issue": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.449317ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-prepare": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.465641ms"
+          },
+          "hash-stack/direct/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.85706ms"
+          },
+          "hash-stack/direct/capture-issue/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.614712ms"
+          },
+          "hash-stack/direct/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.183988ms"
+          },
+          "hash-stack/direct/capture-prepare/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.308803ms"
+          },
+          "hash-stack/direct/other": {
+            "calls": 19,
+            "bytes": 694970714,
+            "elapsed": "509.016811ms"
+          },
+          "hash-stack/direct/standby-capture": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "78.741523ms"
+          },
+          "hash-stack/direct/standby-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.786875ms"
+          },
+          "hash-stack/direct/standby-prepare/standby-capture": {
+            "calls": 5,
+            "bytes": 182887030,
+            "elapsed": "131.305157ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-guard/capture-prepare": {
+            "calls": 60,
+            "bytes": 2194644360,
+            "elapsed": "1.577386035s"
+          },
+          "hash-stack/file-opening-wrapper/capture-mapping/capture-closing": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "209.737635ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/capture-mapping": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "421.048162ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/pre-add": {
+            "calls": 28,
+            "bytes": 1024167368,
+            "elapsed": "739.602204ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-capture": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "209.968955ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/pre-add": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "420.127327ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.086225ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.587783ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-prepare": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.933487ms"
+          },
+          "native-hash-attribution": {
+            "calls": 247,
+            "bytes": 0,
+            "elapsed": "13.0711ms"
+          },
+          "pre-add-original-command-boundary": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "974ns"
+          },
+          "pre-add-original-read": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "8.684093617s"
+          },
+          "pre-add-original-read-complete": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "2.834µs"
+          },
+          "process-current": {
+            "calls": 276,
+            "bytes": 0,
+            "elapsed": "4.446579084s"
+          },
+          "standby-add-guard": {
+            "calls": 13,
+            "bytes": 0,
+            "elapsed": "804.651217ms"
+          },
+          "standby-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "3.91679038s"
+          },
+          "successor-listener-derived-complete": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "18.445µs"
+          },
+          "successor-listener-derived-read": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "16.697µs"
+          },
+          "successor-listener-read-scope": {
+            "calls": 36,
+            "bytes": 0,
+            "elapsed": "4.586273016s"
+          },
+          "whole-executable-hash": {
+            "calls": 247,
+            "bytes": 9034619282,
+            "elapsed": "6.502010243s"
+          }
+        }
+      ],
+      "profile_completions": [
+        "domain_tcp_successor_profile_native_linux_test.go:175: GEN2_CPU_PROFILE_COMPLETE bytes=83457 joined=true overflow=false output_error=false; successor preparation + Run through join attempt, profiling overhead included, not readiness or cleanup proof"
+      ]
+    },
+    "candidate-standby-transaction": {
+      "raw_sha256": "0120e00d04535ef519a788cc28aeecb2dfd0e45cbfd14d6f069138d2d7539233",
+      "test_results": [
+        [
+          "PASS",
+          "TestDomainTCPOriginalNativeFailedPreparationRetirement",
+          "94.16"
+        ]
+      ],
+      "successor_completed_metrics": [
+        {
+          "capture-add-guard": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.268709058s"
+          },
+          "capture-guard-original-closing": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "5.187µs"
+          },
+          "capture-guard-original-opening": {
+            "calls": 22,
+            "bytes": 0,
+            "elapsed": "7.12940621s"
+          },
+          "capture-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "13.56139315s"
+          },
+          "coordinator-original-read": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "271.289824ms"
+          },
+          "coordinator-original-read-complete": {
+            "calls": 3,
+            "bytes": 0,
+            "elapsed": "663ns"
+          },
+          "executable-image-capture": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "1.764323037s"
+          },
+          "executable-image-compare": {
+            "calls": 65,
+            "bytes": 2377531390,
+            "elapsed": "329.087727ms"
+          },
+          "hash-stack/after-opening-scope/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.064ms"
+          },
+          "hash-stack/after-opening-scope/capture-guard/capture-prepare": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "418.580724ms"
+          },
+          "hash-stack/after-opening-scope/capture-issue/capture-mapping": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.132531ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/capture-closing": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.110595ms"
+          },
+          "hash-stack/after-opening-scope/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.13735ms"
+          },
+          "hash-stack/after-opening-scope/capture-prepare/capture-mapping": {
+            "calls": 9,
+            "bytes": 329196654,
+            "elapsed": "235.182572ms"
+          },
+          "hash-stack/after-opening-scope/other": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "78.368086ms"
+          },
+          "hash-stack/after-opening-scope/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "105.098947ms"
+          },
+          "hash-stack/after-opening-scope/standby-issue": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.161394ms"
+          },
+          "hash-stack/after-opening-scope/standby-prepare/standby-capture": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.457048ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-issue": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.31776ms"
+          },
+          "hash-stack/after-opening-scope/standby-read/capture-prepare": {
+            "calls": 2,
+            "bytes": 73154812,
+            "elapsed": "52.718095ms"
+          },
+          "hash-stack/direct/capture-effect-admission/capture-prepare": {
+            "calls": 7,
+            "bytes": 256041842,
+            "elapsed": "183.227974ms"
+          },
+          "hash-stack/direct/capture-issue/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.583972ms"
+          },
+          "hash-stack/direct/capture-mapping/standby-capture": {
+            "calls": 1,
+            "bytes": 36577406,
+            "elapsed": "26.15399ms"
+          },
+          "hash-stack/direct/capture-prepare/capture-mapping": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.561592ms"
+          },
+          "hash-stack/direct/other": {
+            "calls": 19,
+            "bytes": 694970714,
+            "elapsed": "510.248529ms"
+          },
+          "hash-stack/direct/standby-capture": {
+            "calls": 3,
+            "bytes": 109732218,
+            "elapsed": "78.783629ms"
+          },
+          "hash-stack/direct/standby-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.606104ms"
+          },
+          "hash-stack/direct/standby-prepare/standby-capture": {
+            "calls": 5,
+            "bytes": 182887030,
+            "elapsed": "131.246047ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-guard/capture-prepare": {
+            "calls": 60,
+            "bytes": 2194644360,
+            "elapsed": "1.576906603s"
+          },
+          "hash-stack/file-opening-wrapper/capture-mapping/capture-closing": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "209.702749ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/capture-mapping": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "419.606163ms"
+          },
+          "hash-stack/file-opening-wrapper/capture-prepare/pre-add": {
+            "calls": 28,
+            "bytes": 1024167368,
+            "elapsed": "738.561497ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-capture": {
+            "calls": 8,
+            "bytes": 292619248,
+            "elapsed": "209.909221ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/pre-add": {
+            "calls": 16,
+            "bytes": 585238496,
+            "elapsed": "420.362732ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-prepare/standby-capture": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.680303ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-issue": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.919998ms"
+          },
+          "hash-stack/file-opening-wrapper/standby-read/capture-prepare": {
+            "calls": 4,
+            "bytes": 146309624,
+            "elapsed": "104.701502ms"
+          },
+          "native-hash-attribution": {
+            "calls": 247,
+            "bytes": 0,
+            "elapsed": "12.976987ms"
+          },
+          "pre-add-original-command-boundary": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "980ns"
+          },
+          "pre-add-original-read": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "8.609513918s"
+          },
+          "pre-add-original-read-complete": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "2.774µs"
+          },
+          "process-current": {
+            "calls": 276,
+            "bytes": 0,
+            "elapsed": "4.408885058s"
+          },
+          "standby-add-guard": {
+            "calls": 13,
+            "bytes": 0,
+            "elapsed": "808.691905ms"
+          },
+          "standby-prepare": {
+            "calls": 1,
+            "bytes": 0,
+            "elapsed": "3.916519255s"
+          },
+          "successor-listener-derived-complete": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "20.15µs"
+          },
+          "successor-listener-derived-read": {
+            "calls": 72,
+            "bytes": 0,
+            "elapsed": "15.732µs"
+          },
+          "successor-listener-read-scope": {
+            "calls": 36,
+            "bytes": 0,
+            "elapsed": "4.559138016s"
+          },
+          "whole-executable-hash": {
+            "calls": 247,
+            "bytes": 9034619282,
+            "elapsed": "6.494091707s"
+          }
+        }
+      ],
+      "profile_completions": [
+        "domain_tcp_successor_profile_native_linux_test.go:175: GEN2_CPU_PROFILE_COMPLETE bytes=85455 joined=true overflow=false output_error=false; successor preparation + Run through join attempt, profiling overhead included, not readiness or cleanup proof"
+      ]
+    }
+  }
+}

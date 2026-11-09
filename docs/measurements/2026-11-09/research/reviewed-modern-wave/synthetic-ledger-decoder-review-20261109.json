@@ -1,0 +1,23 @@
+{
+  "decision": "approved",
+  "files_sha256": {
+    "internal/dnscontrol/network_policy_synthetic_mapping.go": "14ecdf23a773512a95fc8af23f5169825451a3f91ad5cece0fc38e7ddf1a96ed",
+    "internal/dnscontrol/network_policy_synthetic_decoder_test.go": "03bff75e904d8af3f8b1bd0224edf370af42b1e190cfed0e677c145ba1c4df26"
+  },
+  "contract": [
+    "Only bytes.NewReader replaces strings.NewReader(string(wire))",
+    "All four production callers own freshly read bounded wire and decode synchronously",
+    "DisallowUnknownFields, exact EOF and complete validation unchanged",
+    "Differential partial-output/error/truncation parity and owned-read input mutation test"
+  ],
+  "limits": [
+    "No local Go execution",
+    "Modeled decode-only benchmark, no original runtime source or route authority",
+    "No measured allocation or wall improvement claimed before CI"
+  ],
+  "reviewed_commit": "ac744ba1276585087cd6c018b747dc0d9e0e7b78",
+  "git_blob_sha256": {
+    "internal/dnscontrol/network_policy_synthetic_mapping.go": "14ecdf23a773512a95fc8af23f5169825451a3f91ad5cece0fc38e7ddf1a96ed",
+    "internal/dnscontrol/network_policy_synthetic_decoder_test.go": "03bff75e904d8af3f8b1bd0224edf370af42b1e190cfed0e677c145ba1c4df26"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "decision": "approved",
+  "files_sha256": {
+    ".github/workflows/ci.yml": "87842a56a48ec332cd4200f0426c5f5c01e4623aa4b07eacad473cad1ff61776",
+    ".github/workflows/research-lifecycle.yml": "75f745d2989f63a650a60320c77a195b3b5a565f7204e96cab8f67bc0327d6b5"
+  },
+  "contract": [
+    "Both exact physical cancellation tests30 repetitions each normal/race; actual count PASS/noSKIP before full gate",
+    "Ledger tests and modeled full-decoder benchmark count3 normal/race selected scenario only, actual count PASS/noSKIP",
+    "No route clock or original test coverage/budget change"
+  ],
+  "limits": [
+    "Source review only; no local Go",
+    "Physical test authored by reviewer and independently approved by parent; parent workflow independently reviewed here"
+  ]
+}

@@ -16,6 +16,37 @@
 конкретной пары версий: такой переход требует отдельной приёмки. Если результат
 неизвестен, откройте журнал и проверьте причину перед повторной попыткой.
 
+## Последний сохранённый этап: 09.11.2026
+
+Код modern public update/known rollback интегрирован в `690c0c30`, отдельный
+CI workflow — в `83a1a933`. Независимое ревью пройдено; native run
+[42692078602](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078602)
+и generic [42692078123](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078123)
+на момент сохранения ещё выполняются. PASS не заявлен. Сценарий использует
+два настоящих main-бинарника из одного source, native fixture tag и synthetic
+release transport; это не проверка официального релиза и не router acceptance.
+
+На `d7cb22d7` оба generic CI остановились на неиспользуемом импорте `time`
+в тесте. Исправление `9c5fac0e` уже прошло focused cancellation gate по30
+повторов normal/race; полный generic42690593933 ещё выполняется.
+Последняя интеграция с двумя полными generic PASS остаётся `5289a7d8`.
+
+Проверено наd7: private ledger decode экономит752Б/1allocation для одной
+записи и около180КБ для256; normal/race parity по3повтора PASS. Ускорение
+маршрута этим измерением не подтверждено. Strict DNS selected/canceled FAIL,
+ожидание tool gate0.8–1.8мс не объясняет основной расход времени. Полный NFQ
+LAN/manual и часть Mihomo recovery/settlement остаются незавершёнными.
+
+На0470 public empty/draft/history и actual default old-layout refusal PASS;
+неподдержанный upgrade0.19.x остаётся закрыт. Modern rollback ожидает CI,
+далее нужны remaining rollback/recovery cuts и отдельная router/LAN приёмка.
+Работа остановлена по просьбе пользователя из-за лимита; объём задач и
+ожидание CI не объявлены внешними блокерами. Действующий роутер не изменён.
+
+[Raw0470](measurements/2026-11-09/research/lifecycle/0470b68b/),
+[rawd7](measurements/2026-11-09/research/lifecycle/d7cb22d7/),
+[ревью modern и исправлений](measurements/2026-11-09/research/reviewed-modern-wave/).
+
 ## Роутеры
 
 - Основная целевая конфигурация — Netcraze Ultra NC-1812, ARM64,
@@ -157,7 +188,7 @@ successor listener; полная runtime-проверка ещё нужна. Н�
 Следующие критерии: совместимый live запуск и отрицательная проверка default legacy layout, DNS
 GEN1/GEN2 и отмена на исходных12/4с, matched ABBA на одном runner, managed NFQWS2
 manual/recovery, оставшиеся Mihomo same-boot cuts. Внешних блокеров для этих
-программных задач нет. Оба generic5289 полностью PASS; generic6b отдельно PASS. Новый PR HEAD50bd038c проверяется отдельно.
+программных задач нет. Оба generic5289 полностью PASS; generic6b отдельно PASS. На50bd PR generic PASS, push generic FAIL из-за нестабильного теста отмены; дальнейший статус ниже.
 [Результаты5289](measurements/2026-11-09/research/lifecycle/5289a7d8/),
 [history976 и независимое ревью](measurements/2026-11-09/research/lifecycle/976fa47c/),
 [generic6b](measurements/2026-11-09/research/lifecycle/6b120f8c/generic/).
@@ -177,9 +208,8 @@ Managed NFQWS2 full/manual/fresh Apply также FAIL; original core/recovery c
 
 Test-only metadata parallel experiment отклонён: normal0.644→1.837мс,
 race1.179→4.897мс, рост CPU/alloc. Namespace/provider overhead включён;
-production traversal не менялся. Следующая aux0470 проверяет fixed process
-failure stages, реальные child exit codes, tool-gate wait и default-layout
-refusal. Это диагностика для следующего исправления, не завершение направлений.
+production traversal не менялся. На0470 диагностика выполнена: default-layout refusal PASS1.21с, sameboot10/14 PASS (все normal ACK cuts PASS; четыре race cuts120с FAIL).
+Это диагностика для следующего исправления, не завершение направлений.
 [Точные50bd результаты и независимые проверки](measurements/2026-11-09/research/lifecycle/50bd038c/),
 [ревью0470](measurements/2026-11-09/research/reviewed-0470-wave/).
 На роутере выполнены только read-only измерения; новая сборка и LAN-профиль

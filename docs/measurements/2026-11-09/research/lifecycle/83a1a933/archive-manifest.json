@@ -1,0 +1,17 @@
+{
+  "scope": "Exact-SHA results and bounded evidence; pending snapshots are not PASS",
+  "files": {
+    "modern-pending.json": {
+      "bytes": 2704,
+      "sha256": "fb6d4457d8ff2805ee189d3c5f11d6d1fd7b865939937a0d28d30964c358f757"
+    },
+    "run-42692078123-progress.json": {
+      "bytes": 2738,
+      "sha256": "19e82f1905f120f472d37eb4efd50f94a6355c3bc42d76b312fa74e67360e941"
+    },
+    "run-42692078602-progress.json": {
+      "bytes": 3673,
+      "sha256": "0bbfb364e06b59fa7ae304f6ce8c015e3d28447700e900df8376dab31e45e749"
+    }
+  }
+}

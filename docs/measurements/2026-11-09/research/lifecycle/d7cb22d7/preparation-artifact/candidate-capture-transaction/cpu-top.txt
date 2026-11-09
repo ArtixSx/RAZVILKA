@@ -1,0 +1,44 @@
+File: app.test
+Build ID: c0c8eb8a7318b2eeb7f4ee72a8e66fb2a368763a
+Type: cpu
+Time: 2026-11-09 20:11:16 UTC
+Duration: 21.69s, Total samples = 19.06s (87.89%)
+Showing nodes accounting for 15.73s, 82.53% of 19.06s total
+Dropped 701 nodes (cum <= 0.10s)
+Showing top 35 nodes out of 456
+      flat  flat%   sum%        cum   cum%
+     7.37s 38.67% 38.67%      7.37s 38.67%  internal/runtime/syscall/linux.Syscall6
+     6.73s 35.31% 73.98%      6.73s 35.31%  crypto/internal/fips140/sha256.blockSHANI
+     0.25s  1.31% 75.29%      0.25s  1.31%  memeqbody
+     0.17s  0.89% 76.18%      0.22s  1.15%  strings.Fields
+     0.13s  0.68% 76.86%      0.13s  0.68%  runtime.memclrNoHeapPointers
+     0.11s  0.58% 77.44%      0.11s  0.58%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.11s  0.58% 78.02%      0.11s  0.58%  runtime.rtsigprocmask
+     0.09s  0.47% 78.49%      0.17s  0.89%  encoding/json.(*Decoder).readValue
+     0.09s  0.47% 78.96%      0.33s  1.73%  runtime.mallocgcSmallScanNoHeader
+     0.07s  0.37% 79.33%      0.18s  0.94%  runtime.exitsyscall
+     0.05s  0.26% 79.59%      0.32s  1.68%  runtime.growslice
+     0.04s  0.21% 79.80%      0.14s  0.73%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.04s  0.21% 80.01%      1.91s 10.02%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.04s  0.21% 80.22%      1.16s  6.09%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.04s  0.21% 80.43%      0.28s  1.47%  os.rootStat.func1
+     0.04s  0.21% 80.64%      0.20s  1.05%  reflect.deepValueEqual
+     0.03s  0.16% 80.80%      0.23s  1.21%  runtime.newobject
+     0.03s  0.16% 80.95%      0.10s  0.52%  runtime.pcvalue
+     0.03s  0.16% 81.11%      0.14s  0.73%  runtime.reentersyscall
+     0.02s   0.1% 81.22%      6.75s 35.41%  crypto/internal/fips140/sha256.block
+     0.02s   0.1% 81.32%      0.27s  1.42%  encoding/json.(*decodeState).object
+     0.02s   0.1% 81.43%      0.54s  2.83%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithResourceExclusionObservation
+     0.02s   0.1% 81.53%      5.46s 28.65%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+     0.02s   0.1% 81.64%      4.87s 25.55%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+     0.02s   0.1% 81.74%      0.16s  0.84%  internal/poll.(*FD).RawControl
+     0.02s   0.1% 81.85%      0.29s  1.52%  os.(*File).readdir
+     0.02s   0.1% 81.95%      0.10s  0.52%  runtime.(*mheap).allocSpan
+     0.02s   0.1% 82.06%      0.65s  3.41%  runtime.mallocgc
+     0.02s   0.1% 82.16%      0.18s  0.94%  runtime.mallocgcSmallNoscan
+     0.02s   0.1% 82.27%      7.28s 38.20%  syscall.RawSyscall6
+     0.01s 0.052% 82.32%      0.22s  1.15%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).readDomainConfigFDAtWithFiles
+     0.01s 0.052% 82.37%      0.17s  0.89%  github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryThreadProc
+     0.01s 0.052% 82.42%      2.41s 12.64%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).observeLocked
+     0.01s 0.052% 82.48%      0.27s  1.42%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+     0.01s 0.052% 82.53%      0.29s  1.52%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkHeldOwner

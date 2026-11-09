@@ -1,0 +1,23 @@
+{
+  "review": "modern native workflow and ordinary no-op focused test",
+  "outcome": "approved",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "7859A37813CF5D06E246C8739200BAFB18D55EDDA7B224D8823FBEC1C04907D7"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "013D825EDB7601DCEED9490C746AAC5FD3E5F957BFA18D98E21AFE0B58ABB521"
+    }
+  ],
+  "findings": [
+    "modern-pair explicit dispatch executes new single native job and deliberately skips existing lanes",
+    "all/default pushes preserve prior lanes and add modern native lane; public-history excludes modern lane",
+    "Pinned checkout/setup-go/upload actions and Go1.26.5; same configured sudo cache/source setup",
+    "Original 40min fixture job and32m test aggregate only; no production operation budget changed",
+    "Pipeline pipefail retains harness failure; only native.log artifact, no private bundle or fixture root uploaded",
+    "Generic adds normal-build no-op test without removing existing selectors"
+  ],
+  "validation": "source inspection and author shell syntax; actual CI mandatory; no local Go execution"
+}

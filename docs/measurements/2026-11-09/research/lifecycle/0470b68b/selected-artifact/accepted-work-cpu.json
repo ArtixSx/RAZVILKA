@@ -1,0 +1,26 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run_id": 42687051039,
+  "job_id": 129396561240,
+  "profile_sha256": "82aaebc25a8e7548e2c7772ac4cd5a82a7cbf3d948123c9e168e134ab3c6ae50",
+  "profile_window": "GEN1 original Run through join attempt",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
+  "architecture": "linux/amd64",
+  "target_cumulative_cpu_seconds": {
+    "domainTCPBaselineKernelOwner).currentWithFiles": 4.61,
+    "LookupPublished": 2.27,
+    "AdmitTCP": 0.51,
+    "originalBaselineForCapture": 0.55,
+    "guardPreparedFlow": 0.98
+  },
+  "getter_nested_cpu_seconds": {
+    "netidentity.captureProc": 0.15,
+    "versionMetadataCurrent": 0.13,
+    "heldReview).pathsCurrent": 0.08,
+    "domainTCPBaselineKernelOwner).currentWithFiles": 0.38
+  },
+  "limitations": [
+    "Parent CPU excludes exec child CPU and wait; cumulative values overlap.",
+    "Getter semantic proposal is under review; CPU alone does not justify removal."
+  ]
+}

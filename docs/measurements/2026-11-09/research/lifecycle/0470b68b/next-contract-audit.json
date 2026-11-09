@@ -1,0 +1,39 @@
+{
+  "reviewed_sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "source_git_sha256": {
+    "internal/dataplane/domain_tcp_original_coordinator.go": "85a69ba000fe669fcef38b4da80a35527c58443de246ac4540873523610bba4a",
+    "internal/dataplane/domain_policy_tcp_capture_mapping.go": "2446667b761c6f50973853ce8d0bcb0437508c3650c588e4a84ae6365bbf6f29",
+    "internal/dnscontrol/network_policy_synthetic_mapping.go": "d4b0630ab9601f447ec51849e3a0c47ae286a12dc07315f16a1ae141e09bf961",
+    "internal/startuptools/domain_baseline_read_linux.go": "a02827510caca8ec17bd3248ed98b2bb49413925f4bacce7196786e40b8d2d18",
+    "internal/startuptools/domain_baseline_read_batch_linux.go": "9f2c0f538cb9822a7378dcb492d79fd2cee412c1461898349199b1b6453a17dc",
+    "internal/startuptools/read_observation_linux.go": "fe616170c273c62c13f28062662b65c0ac9badc9ff4d77b620459697aa373eaa",
+    "internal/netidentity/provider.go": "5998aa2812f37f7f1be27f5edb400f551de91c641bc00f4f0329fc6ce23bccb1"
+  },
+  "actual_selected_cpu": "AMD EPYC 9V45 96-Core Processor",
+  "actual_selected_failure": "GEN1 service HTTPS4s after first DNS success",
+  "actual_queue_seconds": 0.252711184,
+  "actual_gate_held_seconds": 11.712226809,
+  "decisions": [
+    {
+      "candidate": "Collapse four route-query Provider captures into one pinned outer interval",
+      "decision": "rejected",
+      "reason": "A fixed OS thread does not freeze shared mount/root/proc graph. Transient middle-command mutation can be missed by only outer captures; retaining inner captures removes proposed savings.",
+      "reviewer": "/root/verification"
+    },
+    {
+      "candidate": "Reuse private file view across two LookupPublished comparisons through context carrier",
+      "decision": "not approved; no implementation",
+      "reason": "Resolver admission/checkAnswer callbacks receive original context and may reenter public Current; count2 cannot identify two intended invocations. Both comparisons and final mapping.Current remain. enterFlow mutation is strictly outside any candidate readonly scope."
+    },
+    {
+      "candidate": "Avoid private ledger []byte-to-string copy before JSON decode",
+      "decision": "implemented ac744ba1 after independent source review; remote allocation measurement pending",
+      "reason": "All4 production callers own fresh bounded ReadLimited buffer for synchronous decode. EOF/unknown fields/full validation and all source readbacks retained.",
+      "claim": "allocation only; no measured route speed gain yet"
+    }
+  ],
+  "limitations": [
+    "Gate elapsed intervals overlap domain stages and include scheduling; not additive whole-route wall time.",
+    "No namespace boundary, kernel observation or process/control Current removed."
+  ]
+}
