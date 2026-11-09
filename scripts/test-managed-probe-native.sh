@@ -204,7 +204,9 @@ if test -f "$probe_work/$probe_case.pprof.alloc"; then
   if ! timeout 50s go tool pprof -top -sample_index=alloc_space -nodecount=30 "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
-  if ! timeout 50s go tool pprof -sample_index=alloc_space -peek='io.copyBuffer' "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
+  # Include the fixed wrapper/caller nodes: copyBuffer alone reports only
+  # io.Copy and cannot distinguish source hashing from os/exec pipe copies.
+  if ! timeout 50s go tool pprof -sample_index=alloc_space -peek='^io[.](Copy|copyBuffer)$|^os[.].*WriteTo$|^os/exec[.].*writerDescriptor|netidentity[.]imageHash$|StockNFQWSNativeReview[)].current$' "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi
