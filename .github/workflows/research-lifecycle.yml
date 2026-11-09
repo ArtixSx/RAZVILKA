@@ -8,6 +8,8 @@ on:
       - 'internal/**'
       - 'cmd/razvilka/**'
       - 'scripts/test-domain-original-native.sh'
+      - 'scripts/test-managed-probe*.sh'
+      - 'scripts/fixtures/domain-preparation-baseline.patch'
       - '.github/workflows/research-lifecycle.yml'
 
 permissions:
