@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -137,6 +138,33 @@ func TestVersionNamesCandidateActualParity(t *testing.T) {
 		t.Fatal("actual metadata/cancel parity", nativeStages(err))
 	}
 	t.Logf("actual metadata projection nodes=%d images=%d extensions=%d negative_paths=%d; original ReadDir257 and complete metadata passes retained", len(l.review.nodes), len(l.review.images), len(l.review.extensions), len(l.review.absent))
+	bytes, largest := versionNamesImageBudget(t, l.review)
+	t.Logf("actual acquired tool inventory held_images=%d held_image_bytes=%d largest_image_bytes=%d two_pass_payload_bytes=%d static_inventory_budget=true executed_read_count=false process_rss=false", len(l.review.images), bytes, largest, 2*bytes)
+}
+
+// This is only the immutable acquisition inventory's payload size. It does not
+// observe files, grant freshness, count executed reads or bound process RSS.
+// Call only after the original observation has completed its closing checks.
+func versionNamesImageBudget(tb testing.TB, review *heldReview) (bytes, largest int64) {
+	tb.Helper()
+	if review == nil || len(review.images) == 0 {
+		tb.Fatal("missing acquired image inventory")
+	}
+	for _, image := range review.images {
+		if image == nil || image.info == nil || image.info.Size() <= 0 {
+			tb.Fatal("invalid acquired image size")
+		}
+		size := image.info.Size()
+		if size > math.MaxInt64/2-bytes {
+			tb.Fatal("two-pass image budget overflow")
+		}
+		bytes += size
+		largest = max(largest, size)
+	}
+	if bytes != review.bytes {
+		tb.Fatal("acquired image sum differs from original review bytes")
+	}
+	return bytes, largest
 }
 
 func BenchmarkVersionMetadataNamesCandidate(b *testing.B) {
@@ -167,6 +195,13 @@ func BenchmarkVersionMetadataNamesCandidate(b *testing.B) {
 			}
 			b.ReportMetric(float64(len(l.review.extensions)), "extensions/op")
 			b.ReportMetric(float64(len(l.review.nodes)), "nodes/op")
+			bytes, largest := versionNamesImageBudget(b, l.review)
+			// Static inventory metrics, deliberately not bytes/op: the measured
+			// loop is metadata-only inside one original full-byte bracket.
+			b.ReportMetric(float64(len(l.review.images)), "held_images")
+			b.ReportMetric(float64(bytes), "held_image_bytes")
+			b.ReportMetric(float64(largest), "largest_image_bytes")
+			b.ReportMetric(float64(2*bytes), "two_pass_payload_bytes")
 		})
 	}
 }
