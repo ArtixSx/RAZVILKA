@@ -8,3 +8,5 @@ func mihomoSameBootNativeTiming(*mihomoSameBootRetirementCursor, string) func() 
 func mihomoSameBootNativeOwnerTiming(*mihomoSameBootCleanup, string) func()     { return func() {} }
 
 func mihomoSameBootNativeFailure(_ context.Context, _ string, err error) error { return err }
+
+func mihomoSameBootNativeProcFailure(_ context.Context, err error) error { return err }

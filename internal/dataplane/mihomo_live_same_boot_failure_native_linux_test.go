@@ -56,3 +56,48 @@ func TestMihomoSameBootNativeFailureBoundedAndPrivate(t *testing.T) {
 		}
 	}
 }
+
+func TestMihomoSameBootNativeProcFailurePrivateStage(t *testing.T) {
+	cause := &sameBootPrivateFailure{}
+	original := &scopedDNSInactiveProcFailure{stage: "proc.argv-recheck", cause: cause}
+	var typedNil *scopedDNSInactiveProcFailure
+	rows, err := WithMihomoSameBootNativeMeasurements(t.Context(), func(ctx context.Context) error {
+		if got := mihomoSameBootNativeProcFailure(ctx, original); got != original {
+			t.Fatal("original wrapper changed")
+		}
+		if got := mihomoSameBootNativeProcFailure(ctx, cause); got != cause {
+			t.Fatal("foreign error changed")
+		}
+		if got := mihomoSameBootNativeProcFailure(ctx, typedNil); got != typedNil {
+			t.Fatal("typed nil changed")
+		}
+		private := &scopedDNSInactiveProcFailure{stage: "private/path/token", cause: cause}
+		if got := mihomoSameBootNativeProcFailure(ctx, private); got != private {
+			t.Fatal("unknown original changed")
+		}
+		if got := mihomoSameBootNativeProcFailure(ctx, nil); got != nil {
+			t.Fatal("success changed")
+		}
+		return original
+	})
+	if err != original || len(rows) != 2 {
+		t.Fatal("unbounded stage or changed error")
+	}
+	for _, row := range rows {
+		switch row.Phase {
+		case "failure-process-inventory-proc.argv-recheck":
+			if row.Calls != 1 {
+				t.Fatal("known stage count")
+			}
+		case "failure-process-inventory-unknown":
+			if row.Calls != 2 {
+				t.Fatal("unknown count")
+			}
+		default:
+			t.Fatal("private stage exposed")
+		}
+		if row.Nanoseconds != 0 {
+			t.Fatal("unexpected timing")
+		}
+	}
+}

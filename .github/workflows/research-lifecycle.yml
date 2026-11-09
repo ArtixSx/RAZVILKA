@@ -206,6 +206,20 @@ jobs:
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
           go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Original tool gate timing custody and bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/startuptools \
+              -run '^TestDomainNativeGateTiming' -v | tee "artifacts/domain/gate-timing-$mode.log"
+            for case_name in ActualWaitAndRelease EpochAndBound; do
+              grep -F -- "--- PASS: TestDomainNativeGateTiming$case_name " "artifacts/domain/gate-timing-$mode.log"
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/gate-timing-$mode.log"; then exit 1; fi
+          done
       - name: Original successor read view ownership and revocation
         shell: bash
         run: |
