@@ -186,7 +186,7 @@ case "$probe_case" in
   TestStartupImageMeasurement*)
     # Measurement only, same actual held graph and original namespace.
     set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
-      -test.bench='^BenchmarkStartupImageMeasurement$' -test.benchtime=100ms -test.benchmem ;;
+      -test.bench='^BenchmarkStartupImage(Pair)?Measurement$' -test.benchtime=100ms -test.benchmem ;;
   TestVersionNamesCandidate*)
     # Same full metadata traversal and original namespace; not route latency.
     set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \

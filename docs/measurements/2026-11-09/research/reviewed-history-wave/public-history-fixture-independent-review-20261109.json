@@ -1,0 +1,31 @@
+{
+  "decision": "APPROVED test-only source; actual native history acceptance pending",
+  "files": {
+    "cmd/razvilka/paired_public_history_native_linux_test.go": "ac227c51ce29e355b3ad9e9a131149a2fefe9a96c3aa54fa762f4b508f3d8137",
+    "cmd/razvilka/paired_public_draft_native_linux_test.go": "08d8fa9ee56ff662b5aa8a7ace4f204235446eb709468130c89dacebf22b25bb",
+    "cmd/razvilka/paired_public_lifecycle_native_linux_test.go": "660a32d6b63484c0486314b6bab0b2ca7c0810103561d54e1886ceb617e89d92",
+    "scripts/fixtures/paired-public-session.sh": "76ad8dd76042db52540b78658c8855a54fd3ed0b0cb1d81b36ebf8e0d93eda14",
+    "scripts/test-paired-public-native.sh": "1150cf03e32de3cee326b0b1f5af5b854490129f6b45df75817a527c984d089c"
+  },
+  "source_contract": "genuine old817783493f0c2784ccc70aa73868cd64e9437634 app trusted main catalog youtube https://www.youtube.com/; required passes3; actual native validator/probe/Select endpoints",
+  "findings_resolved": [
+    "history no longer emits empty-mode PASS marker",
+    "actual selection response exact youtube/tcp/ipv4 scope required"
+  ],
+  "review": [
+    "all new Go paths native-tagged, original production source/bootstrap/restore unchanged",
+    "existing original outer net/mount/PID descriptors and private propagation/tmpfs checks precede fixture effects",
+    "private hosts bind and CA only old init process environment; exactHost/SNI/GETpath TLS handler, no proxy/redirect or caller URL override",
+    "pinned nfq binary copied exclusively and SHA checked; actual old HTTP Add/Validate/three probes/Select frozen, original route counter/success/cleanup stages mandatory",
+    "full10 table inventories, routes/rules, registered sets, emptyqueue and actualengineinode absence checked around every probe",
+    "TLS Shutdown+Serve join+activehandlers0; owned engine and syntheticaddress removed, original routing restored, privatehosts/CA removed before actualbootstrap",
+    "whole StrategyLab bytes and full candidate/evidence survive; frozen intent preserved, current derived health/eligibility explicitly false",
+    "token never logged or put in argv; fixedbounded child/HTTP output"
+  ],
+  "validation": "gofmt and diff-check only; no local Go/native execution; next CI must execute actual history mode",
+  "limitations": [
+    "synthetic private TLS target does not establish public YouTube readiness",
+    "configured old193 Ubuntu profile, not default legacy layout/router",
+    "restored source remains offline guarded; no old live-reader compatibility claim"
+  ]
+}

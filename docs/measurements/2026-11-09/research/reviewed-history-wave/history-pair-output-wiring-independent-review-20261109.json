@@ -1,0 +1,23 @@
+{
+  "decision": "APPROVED source/test wiring; actual CI pending",
+  "files": {
+    "cmd/razvilka/mihomo_live_same_boot_native_linux_test.go": "f1f851360d5bd7ee7c06d3d49a2186c4d8a4cd57b67d35dd19fc0749d12e9ae5",
+    "cmd/razvilka/mihomo_live_same_boot_output_native_linux_test.go": "40125708ea78c4f88a5612370dd672acf5e7066091a0417ef2c01966df94af7f",
+    "scripts/test-mihomo-same-boot-native.sh": "39f7120204b2af91185c87d97fa264e95e59f18b6d749c1508b9abd277aecf74",
+    ".github/workflows/research-lifecycle.yml": "b16b2a94a788d7a67423d0df0d78ea599798b2101ad920ead0ff8787380a5ee2",
+    "scripts/test-managed-probe-native.sh": "fdf7f0d7b82b5c342e3c52fa2f1489da1cdaba41f006a490f3662500b25961ae"
+  },
+  "changes": [
+    "sameboot named buffer removes promoted ReaderFrom/StringWriter bypass; original shared32768-byte Write retained",
+    "actual stdout/stderr/shared pipe overflow plus soleWait and finitectx regression; io.Copy exactlimit regression",
+    "sameboot existing normal/race binary fastgate before fixture startup, no runtime deadline changes",
+    "history thirdmatrix exact mode, empty blank remains; unique existingmode artifact naming",
+    "startup completepair benchmark added to same original native source fixture, old measurements retained"
+  ],
+  "validation": "source inspection and parent gofmt/bash-n/diffcheck; no local Go tests",
+  "limits": [
+    "actual CI required",
+    "no deadline extension or runtime admission change",
+    "sameboot previous deadline failures remain independent"
+  ]
+}

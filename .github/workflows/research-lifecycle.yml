@@ -77,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        history: [empty, draft]
+        history: [empty, draft, history]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -97,7 +97,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GIT_OPTIONAL_LOCKS=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            RAZVILKA_PAIRED_NATIVE_HISTORY="${{ matrix.history == 'draft' && 'draft' || '' }}" \
+            RAZVILKA_PAIRED_NATIVE_HISTORY="${{ matrix.history != 'empty' && matrix.history || '' }}" \
             sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
       - name: Preserve bounded public workflow evidence
         if: ${{ !cancelled() }}

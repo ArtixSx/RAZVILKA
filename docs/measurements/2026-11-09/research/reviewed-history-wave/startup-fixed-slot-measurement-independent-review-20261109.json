@@ -1,0 +1,20 @@
+{
+  "decision": "APPROVED measurement-only source; production promotion NOT approved",
+  "file": "C:\\Projects\\RAZVILKA\\research-build-20261109\\internal\\startuptools\\startup_image_measurement_native_linux_test.go",
+  "sha256": "7e1cb5d648b45e235438003f6610916619d5578135a08ee086e9ffa7bc240343",
+  "checks": [
+    "complete original two-SHA pair versus fresh capture+compare+clear; cold backing allocation included, warm fixed capacity separately reported",
+    "same original132-image held graph/provider context, all copied unchanged source checks remain",
+    "one local8MiB nonwaiting fixed-capacity slot, no global production state",
+    "no fallback after capture begins; byte/authentication/cancel/panic failures clear/release",
+    "self-bound stale/copied release and16 actual concurrent borrowers tested",
+    "post-clear cancellation and absolute deadline observed",
+    "copylocks issue fixed using explicit field-model copies and Load/Store, no atomic struct value copy"
+  ],
+  "validation": "gofmt/diff-check only; no local Go build; actual normal/race native tests and benchmark pending",
+  "limitations": [
+    "prior race132-allocation candidate negative remains valid",
+    "warm snapshot storage retained memory not RSS claim",
+    "no runtime admission/cache/source ownership change"
+  ]
+}
