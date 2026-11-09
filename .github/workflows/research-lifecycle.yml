@@ -213,6 +213,21 @@ jobs:
             grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' "artifacts/domain/preadd-child-$mode.log"
             if grep -F -- '--- SKIP:' "artifacts/domain/preadd-child-$mode.log"; then exit 1; fi
           done
+      - name: Full-byte observation storage and lifetime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=1 ./internal/dataplane \
+                -run '^TestXrayImageScope|^TestXrayDomainFile' -v | tee "artifacts/domain/image-scope-$mode.log"
+            grep -F -- '--- PASS: TestXrayImageScopeOriginalClosingAndEscapes ' "artifacts/domain/image-scope-$mode.log"
+            grep -F -- '--- PASS: TestXrayImageScopeConcurrentScratchHasOneBorrower ' "artifacts/domain/image-scope-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/image-scope-$mode.log"; then exit 1; fi
+          done
       - name: Fresh network namespace identity and mount boundary
         shell: bash
         run: |
