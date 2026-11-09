@@ -116,6 +116,17 @@ Scope, Stop/recovery, history/CAS/ownership, cancellation и joined cleanup
 сохранены. Это результат контролируемого стенда; аппаратная готовность и
 полный Mihomo/NFQWS/DNS lifecycle по-прежнему требуют отдельного завершения.
 
+Повтор `2924cd74` подтверждает сокращение full VLESS Check p50
+403.157→312.937мс и selected2 completion2604→1423мс на одном runner, N12.
+На этой же ревизии native snapshot3/StrategyLab и restored panel PASS;
+original DNS successor preparation recovery впервые проходит clean и два
+частичных ACK с проверкой прежнего alias. Это диагностический бюджет30с/10с;
+строгая DNS publication12с ещё не проходит. Mihomo lifecycle и managed LAN
+частично остановились до тестов на HTTP504 загрузки pinned fixtures.
+Подготовлен официальный Release Assets API fallback с неизменными SHA256;
+он не изменяет production downloader. Точные результаты и следующие проверки:
+[lifecycle журнал](measurements/2026-11-09/research/lifecycle/README.md).
+
 ## История интеграции 31.10.2026: первоначальная защита обновления
 
 Рабочая ветка `work/bypass-integration-20261031` основана на `a36f5343`

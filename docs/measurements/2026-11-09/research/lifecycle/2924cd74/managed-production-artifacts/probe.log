@@ -1,0 +1,1215 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:06 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:07 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:08 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:09 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0100 9335k  100 9335k    0     0   875k      0  0:00:10  0:00:10 --:--:-- 61.1M
+/tmp/razvilka-managed-probe.orHUJ5/release.tar.gz: OK
+CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+Actual native build mode: production
+Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+go version go1.26.5 linux/amd64
+Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+Actual compiled reader/consumer bytes: 42885385
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeClassicBatchBookends
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=0 children=2 metadata=4 elapsed_ms=5.529
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=1 children=2 metadata=4 elapsed_ms=5.860
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=2 children=2 metadata=4 elapsed_ms=5.496
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=3 children=2 metadata=4 elapsed_ms=5.433
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=4 children=2 metadata=4 elapsed_ms=5.776
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=5 children=2 metadata=4 elapsed_ms=5.535
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=6 children=2 metadata=4 elapsed_ms=5.451
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=7 children=2 metadata=4 elapsed_ms=5.383
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=8 children=2 metadata=4 elapsed_ms=5.624
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=9 children=2 metadata=4 elapsed_ms=5.353
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=10 children=2 metadata=4 elapsed_ms=5.346
+    classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=11 children=2 metadata=4 elapsed_ms=5.595
+--- PASS: TestStaticVersionFactNativeClassicBatchBookends (0.35s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativePolicyReadObservation
+    policy_read_observation_native_fixture_linux_test.go:59: actual original IPv4/IPv6 rule read output unchanged; foreign/expired original loan and mutation refused
+--- PASS: TestStaticVersionFactNativePolicyReadObservation (0.20s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeScope
+    version_fact_native_fixture_linux_test.go:68: actual version batch 0 0 metadata traversals 6
+    version_fact_native_fixture_linux_test.go:68: actual version batch 0 1 metadata traversals 2
+    version_fact_native_fixture_linux_test.go:68: actual version batch 1 0 metadata traversals 6
+    version_fact_native_fixture_linux_test.go:68: actual version batch 1 1 metadata traversals 2
+    version_fact_native_fixture_linux_test.go:101: actual first/fresh scope aliases=2 IP=1; repeated/nested aliases=0 IP=1; copied/expired refused
+--- PASS: TestStaticVersionFactNativeScope (0.19s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeFailedIPClearsFact
+    version_fact_native_fixture_linux_test.go:242: actual IP Start EAGAIN cleared retained fact; unfiltered original scope reran both aliases and IP; original exception preserved
+--- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.10s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativePartialBatchNeverRetained
+--- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.10s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestStaticVersionFactNativeOriginalFingerprint
+--- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.19s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestClassicReadBatchNativeMutation
+=== RUN   TestClassicReadBatchNativeMutation/held-file
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/extension-membership
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-held-file
+    classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+    classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+    classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-extension-membership
+    classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+    classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+    classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/observation-close
+    classic_batch_native_fixture_linux_test.go:151: actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors
+=== RUN   TestClassicReadBatchNativeMutation/inventory-held-file
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-held-file change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/inventory-extension-membership
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+=== RUN   TestClassicReadBatchNativeMutation/inventory-extension-symlink
+    classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-symlink change refused whole image; no hooks or packets, host tools unchanged
+--- PASS: TestClassicReadBatchNativeMutation (1.01s)
+    --- PASS: TestClassicReadBatchNativeMutation/held-file (0.09s)
+    --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.08s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.25s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.25s)
+    --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.08s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.09s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.09s)
+    --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.08s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeConsumer
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-2294012296/dataplane/runtime/nfqws2: no such file or directory
+2026/11/09 05:21:30 http: TLS handshake error from 8.8.8.8:58087: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 862096888 6299991
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.277553115s} cleanup-current:{75 75 1.047087151s} counter:{3 3 1.362854972s} current:{153 153 3.514749658s} environment:{153 153 204.372872ms} epoch-source-runtime:{153 153 1.441568991s} owners:{228 228 2.902775928s} policy-apply:{1 1 2.230349256s} policy-readback:{23 23 2.533330689s} policy-remove:{1 1 1.986690517s}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2016
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.670264005s actual inventory ToolCheck calls 382 ToolCheck wall 3.401449831s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeConsumer.pprof
+    strategy_managed_probe_native_linux_test.go:658: actual isolated consumer: managed native validation + held source socket + queue200 + wrong-source negative + exact counters + TLS/catalogue predicates + soleWait/ACK + COMMON cleanup; platform/WAN classification modeled; no router/LAN acceptance
+--- PASS: TestManagedStrategyProbeNativeConsumer (8.44s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:25 UTC
+Duration: 7.67s, Total samples = 7.11s (92.69%)
+Showing nodes accounting for 5.80s, 81.58% of 7.11s total
+Dropped 408 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 382
+      flat  flat%   sum%        cum   cum%
+     3.66s 51.48% 51.48%      3.66s 51.48%  internal/runtime/syscall/linux.Syscall6
+     1.64s 23.07% 74.54%      1.64s 23.07%  crypto/internal/fips140/sha256.blockSHANI
+     0.07s  0.98% 75.53%      0.14s  1.97%  runtime.scanObject
+     0.06s  0.84% 76.37%      0.13s  1.83%  runtime.mallocgcSmallNoscan
+     0.06s  0.84% 77.22%      0.09s  1.27%  runtime.tryDeferToSpanScan
+     0.05s   0.7% 77.92%      0.05s   0.7%  runtime.memclrNoHeapPointers
+     0.04s  0.56% 78.48%      0.04s  0.56%  runtime.(*bucket).mp
+     0.03s  0.42% 78.90%      0.33s  4.64%  os.(*File).Stat
+     0.03s  0.42% 79.32%      0.10s  1.41%  runtime.scanSpan
+     0.03s  0.42% 79.75%      2.55s 35.86%  syscall.Syscall6
+     0.02s  0.28% 80.03%      1.58s 22.22%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.28% 80.31%      0.07s  0.98%  os.newUnixDirent
+     0.02s  0.28% 80.59%      3.66s 51.48%  syscall.RawSyscall6
+     0.01s  0.14% 80.73%      0.05s   0.7%  encoding/json.(*Decoder).readValue
+     0.01s  0.14% 80.87%      0.04s  0.56%  encoding/json.arrayEncoder.encode
+     0.01s  0.14% 81.01%      0.04s  0.56%  github.com/ArtixSx/razvilka/internal/components.bundleHash
+     0.01s  0.14% 81.15%      0.08s  1.13%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.01s  0.14% 81.29%      0.42s  5.91%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.01s  0.14% 81.43%      0.06s  0.84%  github.com/ArtixSx/razvilka/internal/restorejournal.ReadFileImage
+     0.01s  0.14% 81.58%      1.33s 18.71%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:25 UTC
+Duration: 7.67s, Total samples = 7.11s (92.69%)
+Showing nodes accounting for 3.66s, 51.48% of 7.11s total
+Dropped 408 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 382
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.64s 93.39%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.64s 93.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.63s 93.25%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.61s 92.97%  testing.tRunner
+         0     0%     0%      6.52s 91.70%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.28s 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.28s 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.28s 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.28s 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.28s 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.26s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.23s 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.23s 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.23s 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      6.01s 84.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      5.05s 71.03%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%      4.07s 57.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.07s 57.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.76s 52.88%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     3.66s 51.48% 51.48%      3.66s 51.48%  internal/runtime/syscall/linux.Syscall6
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:25 UTC
+Duration: 7.67s, Total samples = 7110ms (92.69%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 1030ms, 14.49% of 7110ms total
+Dropped 81 nodes (cum <= 35.55ms)
+Showing top 40 nodes out of 222
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     6640ms 93.39%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%     6640ms 93.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%     6630ms 93.25%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+         0     0%     0%     6520ms 91.70%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%     6280ms 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%     6280ms 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%     6280ms 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%     6280ms 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%     6280ms 88.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%     6260ms 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%     6230ms 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%     6230ms 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%     6230ms 87.62%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%     6010ms 84.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%     4070ms 57.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%     4070ms 57.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%     3760ms 52.88%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%     3630ms 51.05%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%     0%     3220ms 45.29%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%     0%     3160ms 44.44%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%     0%     3070ms 43.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+     540ms  7.59%  7.59%     3010ms 42.33%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  7.59%     2940ms 41.35%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  7.59%     2940ms 41.35%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+         0     0%  7.59%     2940ms 41.35%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  7.59%     2820ms 39.66%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  7.59%     2800ms 39.38%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+     240ms  3.38% 10.97%     2490ms 35.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0% 10.97%     2470ms 34.74%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0% 10.97%     2470ms 34.74%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0% 10.97%     2240ms 31.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0% 10.97%     2120ms 29.82%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0% 10.97%     2000ms 28.13%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0% 10.97%     1920ms 27.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 10.97%     1870ms 26.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+     250ms  3.52% 14.49%     1860ms 26.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+         0     0% 14.49%     1800ms 25.32%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0% 14.49%     1700ms 23.91%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Remove
+         0     0% 14.49%     1670ms 23.49%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+         0     0% 14.49%     1600ms 22.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary.func2
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:21:33 UTC
+Showing nodes accounting for 837.92MB, 90.63% of 924.51MB total
+Dropped 389 nodes (cum <= 4.62MB)
+Showing top 30 nodes out of 333
+      flat  flat%   sum%        cum   cum%
+   96.88MB 10.48% 10.48%    96.88MB 10.48%  io.ReadAll
+   89.02MB  9.63% 20.11%    89.02MB  9.63%  os.(*File).Stat
+   77.88MB  8.42% 28.53%    77.88MB  8.42%  io.copyBuffer
+   76.51MB  8.28% 36.81%    90.01MB  9.74%  os.lstatNolog
+      70MB  7.57% 44.38%       70MB  7.57%  syscall.ByteSliceFromString
+   65.79MB  7.12% 51.50%    71.31MB  7.71%  encoding/json.Marshal
+   50.42MB  5.45% 56.95%    50.42MB  5.45%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   34.51MB  3.73% 60.68%    34.51MB  3.73%  strings.Fields
+   25.55MB  2.76% 63.45%    25.55MB  2.76%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   21.50MB  2.33% 65.77%       23MB  2.49%  os.lstatatWithName
+   19.68MB  2.13% 67.90%    19.68MB  2.13%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   19.50MB  2.11% 70.01%    24.50MB  2.65%  os.readlink
+   18.56MB  2.01% 72.02%    18.56MB  2.01%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   18.50MB  2.00% 74.02%    22.50MB  2.43%  os.newUnixDirent
+   18.01MB  1.95% 75.97%    41.02MB  4.44%  os.(*File).readdir
+   17.58MB  1.90% 77.87%    17.58MB  1.90%  encoding/json.(*Decoder).refill
+   15.55MB  1.68% 79.55%    15.55MB  1.68%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   14.04MB  1.52% 81.07%    46.05MB  4.98%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   13.50MB  1.46% 82.53%    13.50MB  1.46%  strings.genSplit
+   12.01MB  1.30% 83.83%    12.01MB  1.30%  reflect.growslice
+      12MB  1.30% 85.13%       12MB  1.30%  encoding/json.(*decodeState).literalStore
+   11.02MB  1.19% 86.32%   201.55MB 21.80%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+    8.50MB  0.92% 87.24%     8.50MB  0.92%  net/url.parse
+    7.38MB   0.8% 88.04%     7.38MB   0.8%  bytes.growSlice
+    6.50MB   0.7% 88.74%     6.50MB   0.7%  strings.(*Builder).WriteByte (inline)
+       5MB  0.54% 89.28%        5MB  0.54%  os.splitPathInRoot
+    4.50MB  0.49% 89.77%    23.01MB  2.49%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+       3MB  0.32% 90.09%     7.50MB  0.81%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithResourceExclusionObservation.func1
+       3MB  0.32% 90.42%    15.50MB  1.68%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+       2MB  0.22% 90.63%       12MB  1.30%  github.com/ArtixSx/razvilka/internal/components.managedRuntimeImageEntries
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeConsumerLateWaitCleanup
+2026/11/09 05:21:39 http: TLS handshake error from 8.8.8.8:39273: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 668633040 4605973
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.299847453s} cleanup-current:{0 0 0s} counter:{3 3 1.386536982s} current:{153 153 3.462590406s} environment:{153 153 197.595392ms} epoch-source-runtime:{153 153 1.417443751s} owners:{153 153 1.83964632s} policy-apply:{1 1 2.250189328s} policy-readback:{16 16 2.229617002s} policy-remove:{1 1 318.7µs}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [95 95 246]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 1216
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.344988971s actual inventory ToolCheck calls 242 ToolCheck wall 2.080177031s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeConsumerLateWaitCleanup.pprof
+    strategy_managed_probe_native_linux_test.go:554: actual late original helper exit: sole Wait custody + exact ACK CAS + same COMMON removal confirmed; runtime released; source unknown/finalizing preserved; no delayed PASS
+--- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (11.33s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:34 UTC
+Duration: 7.34s, Total samples = 4.97s (67.67%)
+Showing nodes accounting for 4.36s, 87.73% of 4.97s total
+Dropped 226 nodes (cum <= 0.02s)
+Showing top 20 nodes out of 381
+      flat  flat%   sum%        cum   cum%
+     2.80s 56.34% 56.34%      2.80s 56.34%  internal/runtime/syscall/linux.Syscall6
+     1.20s 24.14% 80.48%      1.20s 24.14%  crypto/internal/fips140/sha256.blockSHANI
+     0.05s  1.01% 81.49%      0.05s  1.01%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.03s   0.6% 82.09%      0.08s  1.61%  encoding/json.(*Decoder).readValue
+     0.03s   0.6% 82.70%      0.03s   0.6%  encoding/json.(*decodeState).rescanLiteral
+     0.03s   0.6% 83.30%      0.03s   0.6%  encoding/json.appendString[go.shape.string]
+     0.03s   0.6% 83.90%      0.03s   0.6%  encoding/json.stateInString
+     0.02s   0.4% 84.31%      0.09s  1.81%  encoding/json.(*decodeState).object
+     0.02s   0.4% 84.71%      0.10s  2.01%  runtime.mallocgc
+     0.02s   0.4% 85.11%      0.05s  1.01%  runtime.reentersyscall
+     0.02s   0.4% 85.51%      0.27s  5.43%  syscall.Fstat
+     0.02s   0.4% 85.92%      2.75s 55.33%  syscall.RawSyscall6
+     0.02s   0.4% 86.32%      1.83s 36.82%  syscall.Syscall6
+     0.01s   0.2% 86.52%      0.07s  1.41%  encoding/json.Marshal
+     0.01s   0.2% 86.72%      0.04s   0.8%  encoding/json.sliceEncoder.encode
+     0.01s   0.2% 86.92%      0.07s  1.41%  github.com/ArtixSx/razvilka/internal/ownedfs.(*Root).check
+     0.01s   0.2% 87.12%      0.82s 16.50%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.01s   0.2% 87.32%      0.07s  1.41%  os.(*Root).OpenFile
+     0.01s   0.2% 87.53%      0.03s   0.6%  os.fillFileStatFromSys
+     0.01s   0.2% 87.73%      0.06s  1.21%  runtime.entersyscall
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:34 UTC
+Duration: 7.34s, Total samples = 4.97s (67.67%)
+Showing nodes accounting for 0, 0% of 4.97s total
+Dropped 226 nodes (cum <= 0.02s)
+Showing top 20 nodes out of 381
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      4.72s 94.97%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      4.71s 94.77%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumerLateWaitCleanup
+         0     0%     0%      4.71s 94.77%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      4.70s 94.57%  testing.tRunner
+         0     0%     0%      4.59s 92.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      4.31s 86.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      3.77s 75.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%      3.24s 65.19%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%     0%      3.11s 62.58%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:34 UTC
+Duration: 7.34s, Total samples = 4.97s (67.67%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 0.39s, 7.85% of 4.97s total
+Dropped 40 nodes (cum <= 0.02s)
+Showing top 40 nodes out of 202
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      4.72s 94.97%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      4.71s 94.77%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumerLateWaitCleanup
+         0     0%     0%      4.71s 94.77%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      4.59s 92.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      4.34s 87.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      4.31s 86.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      4.28s 86.12%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      4.07s 81.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      3.77s 75.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     0.03s   0.6%   0.6%      3.24s 65.19%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%   0.6%      2.65s 53.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%   0.6%      2.53s 50.91%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%   0.6%      2.30s 46.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+         0     0%   0.6%      2.04s 41.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%   0.6%      1.94s 39.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0%   0.6%      1.85s 37.22%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0%   0.6%      1.76s 35.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+     0.24s  4.83%  5.43%      1.75s 35.21%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  5.43%      1.74s 35.01%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0%  5.43%      1.71s 34.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+         0     0%  5.43%      1.67s 33.60%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  5.43%      1.67s 33.60%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+         0     0%  5.43%      1.67s 33.60%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  5.43%      1.61s 32.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0%  5.43%      1.61s 32.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+     0.11s  2.21%  7.65%      1.56s 31.39%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  7.65%      1.51s 30.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  7.65%      1.51s 30.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  7.65%      1.43s 28.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0%  7.65%      1.43s 28.77%  github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent
+     0.01s   0.2%  7.85%      1.33s 26.76%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeService
+         0     0%  7.85%      1.26s 25.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).counter
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:21:42 UTC
+Showing nodes accounting for 663.22MB, 89.65% of 739.79MB total
+Dropped 345 nodes (cum <= 3.70MB)
+Showing top 30 nodes out of 327
+      flat  flat%   sum%        cum   cum%
+   97.60MB 13.19% 13.19%    98.10MB 13.26%  io.ReadAll
+   61.28MB  8.28% 21.48%    65.31MB  8.83%  encoding/json.Marshal
+   60.01MB  8.11% 29.59%    60.01MB  8.11%  os.(*File).Stat
+   57.01MB  7.71% 37.29%    65.01MB  8.79%  os.lstatNolog
+   50.02MB  6.76% 44.06%    50.02MB  6.76%  io.copyBuffer
+   46.38MB  6.27% 50.32%    46.38MB  6.27%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+      38MB  5.14% 55.46%       38MB  5.14%  syscall.ByteSliceFromString
+   24.50MB  3.31% 58.77%    24.50MB  3.31%  os.lstatatWithName
+   21.51MB  2.91% 61.68%    21.51MB  2.91%  strings.Fields
+   20.12MB  2.72% 64.40%    20.12MB  2.72%  encoding/json.(*Decoder).refill
+   18.56MB  2.51% 66.91%    18.56MB  2.51%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   15.55MB  2.10% 69.01%    15.55MB  2.10%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   15.03MB  2.03% 71.04%    15.03MB  2.03%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   13.51MB  1.83% 72.87%    13.51MB  1.83%  reflect.growslice
+      13MB  1.76% 74.63%       19MB  2.57%  os.newUnixDirent
+   12.50MB  1.69% 76.32%    12.50MB  1.69%  encoding/json.(*decodeState).literalStore
+   10.50MB  1.42% 77.74%    13.50MB  1.83%  os.readlink
+    9.57MB  1.29% 79.03%     9.57MB  1.29%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+    9.53MB  1.29% 80.32%    28.53MB  3.86%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+    9.01MB  1.22% 81.54%    30.02MB  4.06%  os.(*File).readdir
+    7.50MB  1.01% 82.55%     7.50MB  1.01%  net/url.parse
+    7.31MB  0.99% 83.54%     7.31MB  0.99%  bytes.growSlice
+       7MB  0.95% 84.49%        7MB  0.95%  os.newFile
+    6.01MB  0.81% 85.30%   111.04MB 15.01%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+       6MB  0.81% 86.11%        6MB  0.81%  os.(*File).lstatatNolog
+       6MB  0.81% 86.92%       13MB  1.76%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+    5.50MB  0.74% 87.66%     5.50MB  0.74%  strings.genSplit
+    5.20MB   0.7% 88.37%     5.20MB   0.7%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+       5MB  0.68% 89.04%        5MB  0.68%  strings.(*Builder).WriteByte (inline)
+    4.50MB  0.61% 89.65%     4.50MB  0.61%  encoding/hex.EncodeToString
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeAppHTTP
+2026/11/09 05:21:51 http: TLS handshake error from 8.8.8.8:57781: EOF
+2026/11/09 05:21:59 http: TLS handshake error from 8.8.8.8:45355: EOF
+2026/11/09 05:22:09 http: TLS handshake error from 8.8.8.8:40405: EOF
+    strategy_managed_probe_native_linux_test.go:468: actual authenticated App HTTP: three native TLS/counter passes, current preferred selection/snapshot, explicit frozen manual choice, original selected source bridge; live routing unchanged; CI classification only, no router/LAN acceptance
+    strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 3201110792 23343061
+    strategy_managed_probe_native_linux_test.go:458: native actual HTTP member-read attempts/returned-bytes 71772 5868796440
+    strategy_managed_probe_native_linux_test.go:459: native actual HTTP inclusive phase [started completed wall] map[capture-current:{18 18 4.855278469s} cleanup-current:{225 225 3.089771693s} counter:{9 9 5.109064652s} current:{459 459 13.623619206s} environment:{459 459 596.249746ms} epoch-source-runtime:{459 459 7.545931986s} owners:{684 684 8.53436456s} policy-apply:{3 3 7.529582358s} policy-readback:{69 69 9.256661268s} policy-remove:{3 3 5.797686413s}]
+    strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 1172 wall 10.152627232s
+    strategy_managed_probe_native_linux_test.go:461: native actual HTTP aggregate original metadata traversal attempts 6096
+    strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [492 492 1164]
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeAppHTTP.pprof
+--- PASS: TestManagedStrategyProbeNativeAppHTTP (27.06s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:46 UTC
+Duration: 26.32s, Total samples = 25.10s (95.36%)
+Showing nodes accounting for 20.65s, 82.27% of 25.10s total
+Dropped 727 nodes (cum <= 0.13s)
+Showing top 20 nodes out of 399
+      flat  flat%   sum%        cum   cum%
+    12.83s 51.12% 51.12%     12.83s 51.12%  internal/runtime/syscall/linux.Syscall6
+     6.48s 25.82% 76.93%      6.48s 25.82%  crypto/internal/fips140/sha256.blockSHANI
+     0.19s  0.76% 77.69%      0.31s  1.24%  runtime.tryDeferToSpanScan
+     0.19s  0.76% 78.45%     12.93s 51.51%  syscall.RawSyscall6
+     0.14s  0.56% 79.00%      0.14s  0.56%  runtime.futex
+     0.12s  0.48% 79.48%      0.39s  1.55%  runtime.scanObject
+     0.08s  0.32% 79.80%      0.18s  0.72%  encoding/json.checkValid
+     0.08s  0.32% 80.12%      8.49s 33.82%  syscall.Syscall6
+     0.07s  0.28% 80.40%      0.14s  0.56%  runtime.scanblock
+     0.07s  0.28% 80.68%      4.79s 19.08%  syscall.Syscall
+     0.06s  0.24% 80.92%      0.33s  1.31%  encoding/json.(*decodeState).object
+     0.05s   0.2% 81.12%      0.20s   0.8%  runtime.newobject
+     0.04s  0.16% 81.27%      3.97s 15.82%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.04s  0.16% 81.43%      4.59s 18.29%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.04s  0.16% 81.59%      0.93s  3.71%  os.(*File).Stat
+     0.04s  0.16% 81.75%      1.63s  6.49%  os.Lstat
+     0.04s  0.16% 81.91%      1.18s  4.70%  syscall.openat
+     0.03s  0.12% 82.03%      0.25s     1%  encoding/json.structEncoder.encode
+     0.03s  0.12% 82.15%      0.60s  2.39%  internal/syscall/unix.Openat
+     0.03s  0.12% 82.27%      0.50s  1.99%  os.(*File).readdir
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:46 UTC
+Duration: 26.32s, Total samples = 25.10s (95.36%)
+Showing nodes accounting for 0, 0% of 25.10s total
+Dropped 727 nodes (cum <= 0.13s)
+Showing top 20 nodes out of 399
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     23.40s 93.23%  github.com/ArtixSx/razvilka/internal/app.(*App).probeManagedStrategyCandidate
+         0     0%     0%     23.35s 93.03%  github.com/ArtixSx/razvilka/internal/app.(*App).strategyLabCandidateAction
+         0     0%     0%     23.29s 92.79%  net/http.HandlerFunc.ServeHTTP
+         0     0%     0%     23.18s 92.35%  net/http.(*ServeMux).ServeHTTP
+         0     0%     0%     23.06s 91.87%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+         0     0%     0%     23.04s 91.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%     22.75s 90.64%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+         0     0%     0%     22.50s 89.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%     22.15s 88.25%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+         0     0%     0%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%     21.55s 85.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%     21.14s 84.22%  net/http.serverHandler.ServeHTTP
+         0     0%     0%     20.70s 82.47%  net/http.(*conn).serve
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:21:46 UTC
+Duration: 26.32s, Total samples = 25.10s (95.36%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 2.43s, 9.68% of 25.10s total
+Dropped 147 nodes (cum <= 0.13s)
+Showing top 40 nodes out of 237
+      flat  flat%   sum%        cum   cum%
+     0.30s  1.20%  1.20%     23.40s 93.23%  github.com/ArtixSx/razvilka/internal/app.(*App).probeManagedStrategyCandidate
+         0     0%  1.20%     23.35s 93.03%  github.com/ArtixSx/razvilka/internal/app.(*App).strategyLabCandidateAction
+         0     0%  1.20%     23.06s 91.87%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+         0     0%  1.20%     23.04s 91.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%  1.20%     22.75s 90.64%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+         0     0%  1.20%     22.50s 89.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%  1.20%     22.15s 88.25%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+         0     0%  1.20%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%  1.20%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%  1.20%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%  1.20%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%  1.20%     21.65s 86.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%  1.20%     21.55s 85.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%  1.20%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%  1.20%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%  1.20%     21.44s 85.42%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%  1.20%     20.65s 82.27%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%  1.20%     14.88s 59.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%  1.20%     14.88s 59.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%  1.20%     13.67s 54.46%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     0.02s  0.08%  1.27%     12.80s 51.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+     0.01s  0.04%  1.31%     12.78s 50.92%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%  1.31%     12.01s 47.85%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%  1.31%     11.08s 44.14%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+         0     0%  1.31%      9.97s 39.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  1.31%      9.34s 37.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+     1.38s  5.50%  6.81%      8.54s 34.02%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  6.81%      8.41s 33.51%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  6.81%      8.41s 33.51%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+     0.01s  0.04%  6.85%      8.41s 33.51%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  6.85%      7.78s 31.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0%  6.85%      7.66s 30.52%  github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent
+     0.69s  2.75%  9.60%      7.35s 29.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  9.60%      7.26s 28.92%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0%  9.60%      7.15s 28.49%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+     0.02s  0.08%  9.68%      7.15s 28.49%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  9.68%      6.95s 27.69%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0%  9.68%      6.93s 27.61%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0%  9.68%      6.56s 26.14%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0%  9.68%      6.20s 24.70%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:22:13 UTC
+Showing nodes accounting for 2819.20MB, 90.09% of 3129.46MB total
+Dropped 524 nodes (cum <= 15.65MB)
+Showing top 30 nodes out of 333
+      flat  flat%   sum%        cum   cum%
+  368.65MB 11.78% 11.78%   368.65MB 11.78%  io.ReadAll
+  293.06MB  9.36% 21.14%   293.06MB  9.36%  os.(*File).Stat
+  263.05MB  8.41% 29.55%   319.05MB 10.20%  os.lstatNolog
+  261.14MB  8.34% 37.89%   268.67MB  8.59%  encoding/json.Marshal
+  224.88MB  7.19% 45.08%   224.88MB  7.19%  io.copyBuffer
+  221.01MB  7.06% 52.14%   221.01MB  7.06%  syscall.ByteSliceFromString
+  169.37MB  5.41% 57.56%   169.37MB  5.41%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+  106.02MB  3.39% 60.94%   112.52MB  3.60%  os.lstatatWithName
+   83.53MB  2.67% 63.61%    83.53MB  2.67%  strings.Fields
+   73.72MB  2.36% 65.97%    73.72MB  2.36%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   63.13MB  2.02% 67.99%    63.13MB  2.02%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   59.19MB  1.89% 69.88%    59.19MB  1.89%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+      58MB  1.85% 71.73%    96.01MB  3.07%  os.newUnixDirent
+   56.55MB  1.81% 73.54%   154.57MB  4.94%  os.(*File).readdir
+   55.81MB  1.78% 75.32%    55.81MB  1.78%  encoding/json.(*Decoder).refill
+   52.65MB  1.68% 77.00%   126.66MB  4.05%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   50.53MB  1.61% 78.62%    50.53MB  1.61%  reflect.growslice
+   48.01MB  1.53% 80.15%    61.01MB  1.95%  os.readlink
+   45.50MB  1.45% 81.61%    45.50MB  1.45%  encoding/json.(*decodeState).literalStore
+   38.83MB  1.24% 82.85%    39.33MB  1.26%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   37.51MB  1.20% 84.04%    38.01MB  1.21%  os.(*File).lstatatNolog
+   30.50MB  0.97% 85.02%    30.50MB  0.97%  strings.genSplit
+   26.04MB  0.83% 85.85%   527.15MB 16.84%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+      25MB   0.8% 86.65%       25MB   0.8%  net/url.parse
+      23MB  0.74% 87.39%       23MB  0.74%  os.newFile
+      23MB  0.73% 88.12%       23MB  0.73%  os.splitPathInRoot
+      19MB  0.61% 88.73%    51.50MB  1.65%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+   17.50MB  0.56% 89.29%    17.50MB  0.56%  encoding/hex.EncodeToString
+   16.50MB  0.53% 89.81%    34.01MB  1.09%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithResourceExclusionObservation.func1
+    8.50MB  0.27% 90.09%    67.51MB  2.16%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityProtectedPath
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeClosingSource
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-2751168113/dataplane/runtime/nfqws2: no such file or directory
+2026/11/09 05:22:18 http: TLS handshake error from 8.8.8.8:55453: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 872222016 6300197
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.296023239s} cleanup-current:{75 75 1.028983236s} counter:{3 3 1.380185101s} current:{153 153 3.420929649s} environment:{153 153 198.905763ms} epoch-source-runtime:{153 153 1.411845358s} owners:{228 228 2.827009268s} policy-apply:{1 1 2.109309255s} policy-readback:{23 23 2.484493508s} policy-remove:{1 1 1.930198365s}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2016
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.404942539s actual inventory ToolCheck calls 382 ToolCheck wall 3.313639802s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeClosingSource.pprof
+    strategy_managed_probe_native_linux_test.go:615: actual closing source revocation refused stale evidence; callback error retained; same physical cleanup confirmed
+--- PASS: TestManagedStrategyProbeNativeClosingSource (8.16s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:14 UTC
+Duration: 7.40s, Total samples = 6.94s (93.73%)
+Showing nodes accounting for 6.02s, 86.74% of 6.94s total
+Dropped 315 nodes (cum <= 0.03s)
+Showing top 20 nodes out of 391
+      flat  flat%   sum%        cum   cum%
+     3.47s 50.00% 50.00%      3.47s 50.00%  internal/runtime/syscall/linux.Syscall6
+     1.98s 28.53% 78.53%      1.98s 28.53%  crypto/internal/fips140/sha256.blockSHANI
+     0.09s  1.30% 79.83%      0.13s  1.87%  runtime.tryDeferToSpanScan
+     0.08s  1.15% 80.98%      0.08s  1.15%  runtime.futex
+     0.04s  0.58% 81.56%      0.05s  0.72%  encoding/json.appendString[go.shape.string]
+     0.04s  0.58% 82.13%      0.04s  0.58%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.04s  0.58% 82.71%      0.04s  0.58%  runtime.memclrNoHeapPointers
+     0.04s  0.58% 83.29%      0.06s  0.86%  strings.Fields
+     0.03s  0.43% 83.72%      0.09s  1.30%  encoding/json.structEncoder.encode
+     0.03s  0.43% 84.15%      0.04s  0.58%  runtime.(*mspan).writeHeapBitsSmall
+     0.03s  0.43% 84.58%      3.43s 49.42%  syscall.RawSyscall6
+     0.02s  0.29% 84.87%      0.39s  5.62%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.02s  0.29% 85.16%      0.05s  0.72%  github.com/ArtixSx/razvilka/internal/ownedfs.Open
+     0.02s  0.29% 85.45%      1.40s 20.17%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.29% 85.73%      0.04s  0.58%  runtime.reentersyscall
+     0.02s  0.29% 86.02%      0.12s  1.73%  runtime.scanObject
+     0.02s  0.29% 86.31%      1.39s 20.03%  syscall.fstatat
+     0.01s  0.14% 86.46%      0.12s  1.73%  encoding/json.(*decodeState).object
+     0.01s  0.14% 86.60%      0.10s  1.44%  github.com/ArtixSx/razvilka/internal/components.(*Manager).managedNFQWSRoot
+     0.01s  0.14% 86.74%      0.43s  6.20%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:14 UTC
+Duration: 7.40s, Total samples = 6.94s (93.73%)
+Showing nodes accounting for 0, 0% of 6.94s total
+Dropped 315 nodes (cum <= 0.03s)
+Showing top 20 nodes out of 391
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.53s 94.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.51s 93.80%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingSource
+         0     0%     0%      6.51s 93.80%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.50s 93.66%  testing.tRunner
+         0     0%     0%      6.41s 92.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.17s 88.90%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      5.92s 85.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      4.98s 71.76%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%      4.03s 58.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.03s 58.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.71s 53.46%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%      3.51s 50.58%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:14 UTC
+Duration: 7.40s, Total samples = 6.94s (93.73%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 2.44s, 35.16% of 6.94s total
+Dropped 70 nodes (cum <= 0.03s)
+Showing top 40 nodes out of 222
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.53s 94.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.51s 93.80%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingSource
+         0     0%     0%      6.51s 93.80%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.41s 92.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.20s 89.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.17s 88.90%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.14s 88.47%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      5.92s 85.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      4.03s 58.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.03s 58.07%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.71s 53.46%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%      3.51s 50.58%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+     0.02s  0.29%  0.29%      3.18s 45.82%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%  0.29%      3.06s 44.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%  0.29%         3s 43.23%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+     0.35s  5.04%  5.33%      2.89s 41.64%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  5.33%      2.82s 40.63%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  5.33%      2.82s 40.63%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+         0     0%  5.33%      2.82s 40.63%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  5.33%      2.71s 39.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  5.33%      2.70s 38.90%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+         0     0%  5.33%      2.54s 36.60%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  5.33%      2.54s 36.60%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+     0.20s  2.88%  8.21%      2.46s 35.45%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  8.21%      2.26s 32.56%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+     0.17s  2.45% 10.66%      2.09s 30.12%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+         0     0% 10.66%      2.05s 29.54%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0% 10.66%      1.91s 27.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 10.66%      1.89s 27.23%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0% 10.66%      1.83s 26.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0% 10.66%      1.71s 24.64%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+     1.70s 24.50% 35.16%      1.70s 24.50%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+         0     0% 35.16%      1.66s 23.92%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Remove
+         0     0% 35.16%      1.57s 22.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary.func2
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:22:21 UTC
+Showing nodes accounting for 873.80MB, 91.10% of 959.19MB total
+Dropped 418 nodes (cum <= 4.80MB)
+Showing top 30 nodes out of 335
+      flat  flat%   sum%        cum   cum%
+  103.24MB 10.76% 10.76%   103.24MB 10.76%  io.ReadAll
+   97.02MB 10.11% 20.88%    97.02MB 10.11%  os.(*File).Stat
+   77.51MB  8.08% 28.96%    94.52MB  9.85%  os.lstatNolog
+   75.31MB  7.85% 36.81%    75.31MB  7.85%  io.copyBuffer
+   63.30MB  6.60% 43.41%    67.81MB  7.07%  encoding/json.Marshal
+   62.50MB  6.52% 49.93%    62.50MB  6.52%  syscall.ByteSliceFromString
+   62.04MB  6.47% 56.39%    62.04MB  6.47%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   31.51MB  3.29% 59.68%    31.51MB  3.29%  strings.Fields
+   26.04MB  2.72% 62.39%    26.04MB  2.72%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   25.51MB  2.66% 65.05%    26.51MB  2.76%  os.lstatatWithName
+   23.57MB  2.46% 67.51%    23.57MB  2.46%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   22.56MB  2.35% 69.86%    22.56MB  2.35%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   21.52MB  2.24% 72.11%    48.52MB  5.06%  os.(*File).readdir
+      21MB  2.19% 74.30%    26.50MB  2.76%  os.newUnixDirent
+   19.50MB  2.03% 76.33%       25MB  2.61%  os.readlink
+   18.59MB  1.94% 78.27%    18.59MB  1.94%  encoding/json.(*Decoder).refill
+   15.96MB  1.66% 79.93%    16.46MB  1.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   15.04MB  1.57% 81.50%    45.55MB  4.75%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   14.50MB  1.51% 83.01%    14.50MB  1.51%  encoding/json.(*decodeState).literalStore
+   12.01MB  1.25% 84.26%    12.01MB  1.25%  reflect.growslice
+      12MB  1.25% 85.51%       12MB  1.25%  strings.genSplit
+    7.51MB  0.78% 86.30%   189.55MB 19.76%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+    6.81MB  0.71% 87.01%     6.81MB  0.71%  bytes.growSlice
+    6.50MB  0.68% 87.68%     6.50MB  0.68%  strings.(*Builder).WriteByte (inline)
+    6.24MB  0.65% 88.33%     6.24MB  0.65%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+       6MB  0.63% 88.96%        6MB  0.63%  os.newFile
+    5.50MB  0.57% 89.53%     5.50MB  0.57%  os.(*File).lstatatNolog
+    5.50MB  0.57% 90.11%     5.50MB  0.57%  net/url.parse
+       5MB  0.52% 90.63%        5MB  0.52%  os.joinPath
+    4.50MB  0.47% 91.10%    19.50MB  2.03%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeClosingRuntime
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-3410744565/dataplane/runtime/nfqws2: no such file or directory
+2026/11/09 05:22:27 http: TLS handshake error from 8.8.8.8:58401: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 862385184 6299732
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.274170455s} cleanup-current:{75 75 1.058017644s} counter:{3 3 1.359366249s} current:{153 153 3.43838518s} environment:{153 153 200.002887ms} epoch-source-runtime:{153 153 1.417590741s} owners:{228 228 2.866285411s} policy-apply:{1 1 2.193253012s} policy-readback:{23 23 2.558917352s} policy-remove:{1 1 2.047272397s}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2016
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.558901818s actual inventory ToolCheck calls 382 ToolCheck wall 3.380680655s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeClosingRuntime.pprof
+    strategy_managed_probe_native_linux_test.go:615: actual closing runtime revocation refused stale evidence; callback error retained; same physical cleanup confirmed
+--- PASS: TestManagedStrategyProbeNativeClosingRuntime (8.27s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:23 UTC
+Duration: 7.56s, Total samples = 7.05s (93.26%)
+Showing nodes accounting for 6.05s, 85.82% of 7.05s total
+Dropped 320 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 414
+      flat  flat%   sum%        cum   cum%
+     3.98s 56.45% 56.45%      3.98s 56.45%  internal/runtime/syscall/linux.Syscall6
+     1.58s 22.41% 78.87%      1.58s 22.41%  crypto/internal/fips140/sha256.blockSHANI
+     0.04s  0.57% 79.43%      0.04s  0.57%  encoding/json.stateInString
+     0.04s  0.57% 80.00%      1.42s 20.14%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.04s  0.57% 80.57%      0.04s  0.57%  runtime.heapArenaOf (inline)
+     0.04s  0.57% 81.13%      0.04s  0.57%  runtime.rtsigprocmask
+     0.04s  0.57% 81.70%      0.10s  1.42%  runtime.tryDeferToSpanScan
+     0.04s  0.57% 82.27%      0.04s  0.57%  runtime.typePointers.next
+     0.04s  0.57% 82.84%      3.97s 56.31%  syscall.RawSyscall6
+     0.03s  0.43% 83.26%      0.05s  0.71%  strings.Fields
+     0.03s  0.43% 83.69%      1.53s 21.70%  syscall.Syscall
+     0.02s  0.28% 83.97%      0.05s  0.71%  encoding/json.sliceEncoder.encode
+     0.02s  0.28% 84.26%      0.19s  2.70%  runtime.mallocgc
+     0.02s  0.28% 84.54%      0.11s  1.56%  runtime.scanObject
+     0.02s  0.28% 84.82%      0.44s  6.24%  syscall.Fstat
+     0.02s  0.28% 85.11%      2.54s 36.03%  syscall.Syscall6
+     0.02s  0.28% 85.39%      1.42s 20.14%  syscall.fstatat
+     0.01s  0.14% 85.53%      0.05s  0.71%  encoding/json.(*Decoder).readValue
+     0.01s  0.14% 85.67%      0.07s  0.99%  encoding/json.(*decodeState).object
+     0.01s  0.14% 85.82%      0.07s  0.99%  encoding/json.(*decodeState).value
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:23 UTC
+Duration: 7.56s, Total samples = 7.05s (93.26%)
+Showing nodes accounting for 4.02s, 57.02% of 7.05s total
+Dropped 320 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 414
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.71s 95.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.69s 94.89%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingRuntime
+         0     0%     0%      6.69s 94.89%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.64s 94.18%  testing.tRunner
+         0     0%     0%      6.58s 93.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.36s 90.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.34s 89.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      6.10s 86.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      5.08s 72.06%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%      4.10s 58.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.10s 58.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+     3.98s 56.45% 56.45%      3.98s 56.45%  internal/runtime/syscall/linux.Syscall6
+     0.04s  0.57% 57.02%      3.97s 56.31%  syscall.RawSyscall6
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:23 UTC
+Duration: 7.56s, Total samples = 7.05s (93.26%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 0.93s, 13.19% of 7.05s total
+Dropped 69 nodes (cum <= 0.04s)
+Showing top 40 nodes out of 225
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.71s 95.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.69s 94.89%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingRuntime
+         0     0%     0%      6.69s 94.89%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.58s 93.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.37s 90.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.36s 90.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.34s 89.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.31s 89.50%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      6.10s 86.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+     0.01s  0.14%  0.14%      4.10s 58.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%  0.14%      4.10s 58.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%  0.14%      3.79s 53.76%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%  0.14%      3.71s 52.62%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+     0.01s  0.14%  0.28%      3.22s 45.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%  0.28%      3.13s 44.40%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+         0     0%  0.28%      3.09s 43.83%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+     0.49s  6.95%  7.23%      2.87s 40.71%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  7.23%      2.82s 40.00%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  7.23%      2.80s 39.72%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  7.23%      2.80s 39.72%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+         0     0%  7.23%      2.80s 39.72%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  7.23%      2.77s 39.29%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+     0.28s  3.97% 11.21%      2.41s 34.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0% 11.21%      2.38s 33.76%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0% 11.21%      2.38s 33.76%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0% 11.21%      2.13s 30.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0% 11.21%      2.11s 29.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+         0     0% 11.21%      2.01s 28.51%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0% 11.21%      1.95s 27.66%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 11.21%      1.88s 26.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0% 11.21%      1.81s 25.67%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0% 11.21%      1.76s 24.96%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Remove
+     0.14s  1.99% 13.19%      1.73s 24.54%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+         0     0% 13.19%      1.69s 23.97%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+         0     0% 13.19%      1.63s 23.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:22:30 UTC
+Showing nodes accounting for 828.07MB, 89.45% of 925.69MB total
+Dropped 383 nodes (cum <= 4.63MB)
+Showing top 30 nodes out of 331
+      flat  flat%   sum%        cum   cum%
+  110.98MB 11.99% 11.99%   110.98MB 11.99%  io.ReadAll
+   99.52MB 10.75% 22.74%    99.52MB 10.75%  os.(*File).Stat
+   77.88MB  8.41% 31.15%    77.88MB  8.41%  io.copyBuffer
+      65MB  7.02% 38.18%       65MB  7.02%  syscall.ByteSliceFromString
+   63.01MB  6.81% 44.98%    77.01MB  8.32%  os.lstatNolog
+   62.29MB  6.73% 51.71%    64.29MB  6.95%  encoding/json.Marshal
+   39.58MB  4.28% 55.99%    39.58MB  4.28%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   30.51MB  3.30% 59.28%    30.51MB  3.30%  strings.Fields
+   28.09MB  3.03% 62.32%    28.09MB  3.03%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   24.58MB  2.65% 64.97%    24.58MB  2.65%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   21.50MB  2.32% 67.29%    22.50MB  2.43%  os.lstatatWithName
+   20.04MB  2.16% 69.46%    20.04MB  2.16%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   19.60MB  2.12% 71.58%    19.60MB  2.12%  encoding/json.(*Decoder).refill
+   19.50MB  2.11% 73.68%       25MB  2.70%  os.readlink
+      17MB  1.84% 75.52%       21MB  2.27%  os.newUnixDirent
+   16.01MB  1.73% 77.25%    39.03MB  4.22%  os.(*File).readdir
+   14.02MB  1.51% 78.76%   182.56MB 19.72%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+   14.01MB  1.51% 80.28%    14.01MB  1.51%  reflect.growslice
+   13.83MB  1.49% 81.77%    13.83MB  1.49%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   13.54MB  1.46% 83.23%    45.54MB  4.92%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+      13MB  1.40% 84.64%       13MB  1.40%  encoding/json.(*decodeState).literalStore
+       8MB  0.86% 85.50%        8MB  0.86%  strings.genSplit
+       7MB  0.76% 86.26%        7MB  0.76%  strings.(*Builder).WriteByte (inline)
+    6.32MB  0.68% 86.94%     6.32MB  0.68%  bytes.growSlice
+    5.67MB  0.61% 87.56%     5.67MB  0.61%  github.com/ArtixSx/razvilka/internal/startuptools.init.func1
+    5.16MB  0.56% 88.11%     5.16MB  0.56%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityFileCopy
+    4.41MB  0.48% 88.59%     4.94MB  0.53%  compress/flate.NewWriter
+       3MB  0.32% 88.91%    15.01MB  1.62%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+       3MB  0.32% 89.24%       12MB  1.30%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+    2.01MB  0.22% 89.45%     5.01MB  0.54%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPExecutionRecords).currentLocked
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeClosingControl
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-1636416575/dataplane/runtime/nfqws2: no such file or directory
+2026/11/09 05:22:36 http: TLS handshake error from 8.8.8.8:41945: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 863679504 6299977
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.258194068s} cleanup-current:{75 75 1.038185209s} counter:{3 3 1.340546426s} current:{153 153 3.40748583s} environment:{153 153 196.421112ms} epoch-source-runtime:{153 153 1.393365338s} owners:{228 228 2.842966413s} policy-apply:{1 1 2.106353096s} policy-readback:{23 23 2.479319576s} policy-remove:{1 1 1.97333776s}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2016
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.441723637s actual inventory ToolCheck calls 382 ToolCheck wall 3.32973496s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeClosingControl.pprof
+    strategy_managed_probe_native_linux_test.go:615: actual closing control revocation refused stale evidence; callback error retained; same physical cleanup confirmed
+--- PASS: TestManagedStrategyProbeNativeClosingControl (8.17s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:31 UTC
+Duration: 7.44s, Total samples = 6.93s (93.12%)
+Showing nodes accounting for 5.83s, 84.13% of 6.93s total
+Dropped 316 nodes (cum <= 0.03s)
+Showing top 20 nodes out of 407
+      flat  flat%   sum%        cum   cum%
+     3.60s 51.95% 51.95%      3.60s 51.95%  internal/runtime/syscall/linux.Syscall6
+     1.70s 24.53% 76.48%      1.70s 24.53%  crypto/internal/fips140/sha256.blockSHANI
+     0.06s  0.87% 77.34%      0.06s  0.87%  runtime.tryDeferToSpanScan
+     0.05s  0.72% 78.07%      0.05s  0.72%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.04s  0.58% 78.64%      0.04s  0.58%  encoding/json.checkValid
+     0.04s  0.58% 79.22%      0.09s  1.30%  encoding/json.structEncoder.encode
+     0.04s  0.58% 79.80%      0.04s  0.58%  runtime.(*mspan).writeHeapBitsSmall
+     0.04s  0.58% 80.38%      0.14s  2.02%  runtime.scanObject
+     0.03s  0.43% 80.81%         1s 14.43%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.03s  0.43% 81.24%      0.06s  0.87%  runtime.(*sweepLocked).sweep
+     0.03s  0.43% 81.67%      0.05s  0.72%  runtime.typePointers.next
+     0.03s  0.43% 82.11%      0.04s  0.58%  strings.Fields
+     0.03s  0.43% 82.54%      3.54s 51.08%  syscall.RawSyscall6
+     0.02s  0.29% 82.83%      0.57s  8.23%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.02s  0.29% 83.12%      0.24s  3.46%  os.(*File).Stat
+     0.02s  0.29% 83.41%      0.04s  0.58%  runtime.(*unwinder).resolveInternal
+     0.02s  0.29% 83.69%      0.08s  1.15%  runtime.entersyscall
+     0.01s  0.14% 83.84%      0.14s  2.02%  github.com/ArtixSx/razvilka/internal/components.(*Manager).verifyManagedNFQWSRuntimeImage.func2
+     0.01s  0.14% 83.98%      0.14s  2.02%  github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryThreadProc
+     0.01s  0.14% 84.13%      0.42s  6.06%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:31 UTC
+Duration: 7.44s, Total samples = 6.93s (93.12%)
+Showing nodes accounting for 3.60s, 51.95% of 6.93s total
+Dropped 316 nodes (cum <= 0.03s)
+Showing top 20 nodes out of 407
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingControl
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.47s 93.36%  testing.tRunner
+         0     0%     0%      6.36s 91.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.09s 87.88%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      5.83s 84.13%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      4.99s 72.01%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%      3.91s 56.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      3.91s 56.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.61s 52.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     3.60s 51.95% 51.95%      3.60s 51.95%  internal/runtime/syscall/linux.Syscall6
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:31 UTC
+Duration: 7.44s, Total samples = 6.93s (93.12%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 2.36s, 34.05% of 6.93s total
+Dropped 76 nodes (cum <= 0.03s)
+Showing top 40 nodes out of 218
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingControl
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.48s 93.51%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.36s 91.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.12s 88.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.09s 87.88%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.05s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      5.83s 84.13%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      3.91s 56.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      3.91s 56.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.61s 52.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     0.01s  0.14%  0.14%      3.46s 49.93%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%  0.14%      3.14s 45.31%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%  0.14%      3.08s 44.44%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%  0.14%      2.95s 42.57%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+     0.35s  5.05%  5.19%      2.72s 39.25%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  5.19%      2.68s 38.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  5.19%      2.66s 38.38%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  5.19%      2.66s 38.38%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+     0.01s  0.14%  5.34%      2.66s 38.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  5.34%      2.63s 37.95%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+     0.26s  3.75%  9.09%      2.49s 35.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  9.09%      2.37s 34.20%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  9.09%      2.37s 34.20%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  9.09%      2.23s 32.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0%  9.09%      1.99s 28.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+     0.22s  3.17% 12.27%      1.94s 27.99%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+         0     0% 12.27%      1.86s 26.84%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0% 12.27%      1.85s 26.70%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 12.27%      1.79s 25.83%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0% 12.27%      1.70s 24.53%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0% 12.27%      1.68s 24.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Remove
+         0     0% 12.27%      1.57s 22.66%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+     1.51s 21.79% 34.05%      1.51s 21.79%  github.com/ArtixSx/razvilka/internal/startuptools.hashImage
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:22:39 UTC
+Showing nodes accounting for 791.55MB, 89.61% of 883.36MB total
+Dropped 334 nodes (cum <= 4.42MB)
+Showing top 30 nodes out of 346
+      flat  flat%   sum%        cum   cum%
+   92.93MB 10.52% 10.52%    92.93MB 10.52%  io.ReadAll
+   87.68MB  9.93% 20.45%    87.68MB  9.93%  io.copyBuffer
+   74.51MB  8.44% 28.88%    74.51MB  8.44%  os.(*File).Stat
+   66.30MB  7.51% 36.39%    66.81MB  7.56%  encoding/json.Marshal
+   63.51MB  7.19% 43.58%    73.51MB  8.32%  os.lstatNolog
+      62MB  7.02% 50.60%       62MB  7.02%  syscall.ByteSliceFromString
+   46.56MB  5.27% 55.87%    46.56MB  5.27%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   30.51MB  3.45% 59.32%    30.51MB  3.45%  strings.Fields
+   27.50MB  3.11% 62.43%       33MB  3.74%  os.newUnixDirent
+   25.09MB  2.84% 65.27%    25.09MB  2.84%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   23.05MB  2.61% 67.88%    23.05MB  2.61%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   21.57MB  2.44% 70.32%    21.57MB  2.44%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   18.60MB  2.11% 72.43%    18.60MB  2.11%  encoding/json.(*Decoder).refill
+   18.50MB  2.09% 74.53%    25.50MB  2.89%  os.readlink
+   16.55MB  1.87% 76.40%    41.55MB  4.70%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   16.51MB  1.87% 78.27%    50.52MB  5.72%  os.(*File).readdir
+   15.96MB  1.81% 80.07%    16.46MB  1.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+      14MB  1.59% 81.66%       16MB  1.81%  os.lstatatWithName
+   11.50MB  1.30% 82.96%    11.50MB  1.30%  encoding/json.(*decodeState).literalStore
+   10.50MB  1.19% 84.15%    10.50MB  1.19%  strings.genSplit
+   10.01MB  1.13% 85.28%    10.01MB  1.13%  reflect.growslice
+    8.01MB  0.91% 86.19%   166.54MB 18.85%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+    5.50MB  0.62% 86.81%     5.50MB  0.62%  os.(*File).lstatatNolog
+       5MB  0.57% 87.38%       15MB  1.70%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+    4.68MB  0.53% 87.91%     4.68MB  0.53%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+    4.50MB  0.51% 88.42%     4.50MB  0.51%  net/url.parse
+    3.50MB   0.4% 88.81%    19.01MB  2.15%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+    2.50MB  0.28% 89.10%    68.13MB  7.71%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+    2.50MB  0.28% 89.38%    41.59MB  4.71%  github.com/ArtixSx/razvilka/internal/components.(*Manager).managedNFQWSTerminalPath
+       2MB  0.23% 89.61%    12.50MB  1.42%  github.com/ArtixSx/razvilka/internal/components.managedRuntimeImageEntries
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeClosingEnvironment
+    strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-1214000130/dataplane/runtime/nfqws2: no such file or directory
+2026/11/09 05:22:44 http: TLS handshake error from 8.8.8.8:35049: EOF
+    strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 854882728 6299700
+    strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 13260 1084270200
+    strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{6 6 1.338547895s} cleanup-current:{75 75 1.094592324s} counter:{3 3 1.427771512s} current:{153 153 3.55536288s} environment:{153 153 213.409506ms} epoch-source-runtime:{153 153 1.444435314s} owners:{228 228 2.977116374s} policy-apply:{1 1 2.235981002s} policy-readback:{23 23 2.606094934s} policy-remove:{1 1 2.053404268s}]
+    strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [163 163 386]
+    strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 2016
+    strategy_managed_probe_native_linux_test.go:524: native measured Execute 7.761941001s actual inventory ToolCheck calls 382 ToolCheck wall 3.507871981s
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeClosingEnvironment.pprof
+    strategy_managed_probe_native_linux_test.go:615: actual closing environment revocation refused stale evidence; callback error retained; same physical cleanup confirmed
+--- PASS: TestManagedStrategyProbeNativeClosingEnvironment (8.50s)
+PASS
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:40 UTC
+Duration: 7.76s, Total samples = 7.28s (93.79%)
+Showing nodes accounting for 6.16s, 84.62% of 7.28s total
+Dropped 352 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 381
+      flat  flat%   sum%        cum   cum%
+     3.77s 51.79% 51.79%      3.77s 51.79%  internal/runtime/syscall/linux.Syscall6
+     1.86s 25.55% 77.34%      1.86s 25.55%  crypto/internal/fips140/sha256.blockSHANI
+     0.08s  1.10% 78.43%      0.12s  1.65%  runtime.tryDeferToSpanScan
+     0.05s  0.69% 79.12%      0.05s  0.69%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.04s  0.55% 79.67%      0.04s  0.55%  runtime.rtsigprocmask
+     0.04s  0.55% 80.22%      0.19s  2.61%  runtime.scanObject
+     0.04s  0.55% 80.77%      0.05s  0.69%  runtime.typePointers.next
+     0.03s  0.41% 81.18%      0.04s  0.55%  internal/filepathlite.Clean
+     0.03s  0.41% 81.59%      0.24s  3.30%  os.(*File).Stat
+     0.03s  0.41% 82.01%      0.04s  0.55%  runtime.exitsyscall
+     0.03s  0.41% 82.42%      1.36s 18.68%  syscall.Syscall
+     0.02s  0.27% 82.69%      0.04s  0.55%  encoding/json.unquoteBytes
+     0.02s  0.27% 82.97%      0.17s  2.34%  github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryThreadProc
+     0.02s  0.27% 83.24%      0.50s  6.87%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.02s  0.27% 83.52%      0.05s  0.69%  runtime.mallocgcSmallNoscan
+     0.02s  0.27% 83.79%      0.06s  0.82%  runtime.reentersyscall
+     0.02s  0.27% 84.07%      3.77s 51.79%  syscall.RawSyscall6
+     0.02s  0.27% 84.34%      2.55s 35.03%  syscall.Syscall6
+     0.01s  0.14% 84.48%      0.09s  1.24%  encoding/json.(*decodeState).object
+     0.01s  0.14% 84.62%      0.05s  0.69%  encoding/json.checkValid
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:40 UTC
+Duration: 7.76s, Total samples = 7.28s (93.79%)
+Showing nodes accounting for 3.77s, 51.79% of 7.28s total
+Dropped 352 nodes (cum <= 0.04s)
+Showing top 20 nodes out of 381
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingEnvironment
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.76s 92.86%  testing.tRunner
+         0     0%     0%      6.70s 92.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.45s 88.60%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      6.19s 85.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      5.19s 71.29%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%      4.17s 57.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.17s 57.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.84s 52.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+     3.77s 51.79% 51.79%      3.77s 51.79%  internal/runtime/syscall/linux.Syscall6
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: cpu
+Time: 2026-11-09 05:22:40 UTC
+Duration: 7.76s, Total samples = 7.28s (93.79%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 0.88s, 12.09% of 7.28s total
+Dropped 80 nodes (cum <= 0.04s)
+Showing top 40 nodes out of 218
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeClosingEnvironment
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%     0%      6.80s 93.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+         0     0%     0%      6.70s 92.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked (inline)
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked (inline)
+         0     0%     0%      6.47s 88.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+         0     0%     0%      6.45s 88.60%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+         0     0%     0%      6.41s 88.05%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+         0     0%     0%      6.19s 85.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+         0     0%     0%      4.17s 57.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+         0     0%     0%      4.17s 57.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+         0     0%     0%      3.84s 52.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+         0     0%     0%      3.69s 50.69%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+     0.01s  0.14%  0.14%      3.42s 46.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+         0     0%  0.14%      3.35s 46.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+         0     0%  0.14%      3.19s 43.82%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+     0.36s  4.95%  5.08%         3s 41.21%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  5.08%      2.94s 40.38%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+         0     0%  5.08%      2.94s 40.38%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+     0.01s  0.14%  5.22%      2.94s 40.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  5.22%      2.88s 39.56%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0%  5.22%      2.83s 38.87%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+     0.30s  4.12%  9.34%      2.71s 37.23%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+         0     0%  9.34%      2.63s 36.13%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  9.34%      2.63s 36.13%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  9.34%      2.40s 32.97%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+         0     0%  9.34%      2.16s 29.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix (inline)
+     0.20s  2.75% 12.09%      2.05s 28.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+         0     0% 12.09%         2s 27.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+         0     0% 12.09%      1.95s 26.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+         0     0% 12.09%      1.92s 26.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback (inline)
+         0     0% 12.09%      1.80s 24.73%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+         0     0% 12.09%      1.76s 24.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Remove
+         0     0% 12.09%      1.70s 23.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary.func2
+         0     0% 12.09%      1.67s 22.94%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+File: app.test
+Build ID: b1839450afa92feb4894da753dd20f24cf946a70
+Type: alloc_space
+Time: 2026-11-09 05:22:48 UTC
+Showing nodes accounting for 801.16MB, 90.39% of 886.34MB total
+Dropped 382 nodes (cum <= 4.43MB)
+Showing top 30 nodes out of 325
+      flat  flat%   sum%        cum   cum%
+   95.17MB 10.74% 10.74%    95.17MB 10.74%  io.ReadAll
+   83.52MB  9.42% 20.16%    83.52MB  9.42%  os.(*File).Stat
+   77.88MB  8.79% 28.95%    77.88MB  8.79%  io.copyBuffer
+   68.01MB  7.67% 36.62%    78.51MB  8.86%  os.lstatNolog
+   63.50MB  7.16% 43.79%    63.50MB  7.16%  syscall.ByteSliceFromString
+   58.75MB  6.63% 50.41%    60.75MB  6.85%  encoding/json.Marshal
+   45.72MB  5.16% 55.57%    45.72MB  5.16%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   32.51MB  3.67% 59.24%    32.51MB  3.67%  strings.Fields
+   28.06MB  3.17% 62.40%    28.06MB  3.17%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+   25.08MB  2.83% 65.23%    25.08MB  2.83%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+   25.08MB  2.83% 68.06%    25.08MB  2.83%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+   23.03MB  2.60% 70.66%    52.05MB  5.87%  os.(*File).readdir
+      21MB  2.37% 73.03%    21.50MB  2.43%  os.lstatatWithName
+   20.50MB  2.31% 75.34%       26MB  2.93%  os.newUnixDirent
+   17.61MB  1.99% 77.33%    17.61MB  1.99%  encoding/json.(*Decoder).refill
+   14.50MB  1.64% 78.97%       15MB  1.69%  encoding/json.(*decodeState).literalStore
+   12.77MB  1.44% 80.41%    13.27MB  1.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+   12.04MB  1.36% 81.77%    40.04MB  4.52%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+   12.01MB  1.35% 83.12%    12.01MB  1.35%  reflect.growslice
+      11MB  1.24% 84.36%    13.50MB  1.52%  os.readlink
+      11MB  1.24% 85.60%       11MB  1.24%  strings.genSplit
+   10.01MB  1.13% 86.73%   174.56MB 19.69%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+    7.50MB  0.85% 87.58%     7.50MB  0.85%  os.newFile
+    5.50MB  0.62% 88.20%     5.50MB  0.62%  strings.(*Builder).WriteByte (inline)
+       5MB  0.56% 88.76%     5.50MB  0.62%  os.(*File).lstatatNolog
+    4.41MB   0.5% 89.26%     5.48MB  0.62%  compress/flate.NewWriter
+       4MB  0.45% 89.71%    19.51MB  2.20%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+    3.50MB  0.39% 90.11%    15.50MB  1.75%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+    1.50MB  0.17% 90.28%       10MB  1.13%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityProtectedPath
+       1MB  0.11% 90.39%    68.58MB  7.74%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged

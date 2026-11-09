@@ -1,0 +1,50 @@
+CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+=== RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+    domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+    domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+    domain_tcp_original_native_linux_test.go:651: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+    domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.804882921s} capture-prepare:{Calls:1 Bytes:0 Elapsed:8.162954623s} dns-send:{Calls:1 Bytes:0 Elapsed:941.191445ms} dns-send-success:{Calls:1 Bytes:0 Elapsed:491ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:5.249040333s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:3.233µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:6.605218898s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:2.136µs} process-current:{Calls:482 Bytes:0 Elapsed:8.074839792s} publication-gate:{Calls:16 Bytes:0 Elapsed:3.306238327s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:300ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:1.266708103s} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.749376762s} whole-executable-hash:{Calls:219 Bytes:8010451914 Elapsed:4.253763052s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed
+    domain_tcp_original_native_linux_test.go:840: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+    domain_tcp_original_native_linux_test.go:847: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+    domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:9.80764091s} capture-prepare:{Calls:1 Bytes:0 Elapsed:17.919226528s} process-current:{Calls:298 Bytes:0 Elapsed:5.691212711s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:1.315386692s} standby-prepare:{Calls:1 Bytes:0 Elapsed:5.485364925s} whole-executable-hash:{Calls:603 Bytes:22056175818 Elapsed:12.070123668s}]; overlapping durations, not default12 performance
+    domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+    domain_tcp_original_native_linux_test.go:1002: same original failed retirement ACK retry dataplane transaction journal is unavailable: original domain Xray TCP owner is unavailable or changed
+    domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+        Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 05:01:53.044061 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.PYUrj5/TestDomainTCPOriginalNativeFailedPreparationRetirement1256230459/001/server.json Format:json}
+        2026/11/09 05:01:53.045098 [Debug] app/log: Logger started
+        2026/11/09 05:01:53.046092 [Info] app/dns: DNS: created localhost client
+        2026/11/09 05:01:53.046111 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+        2026/11/09 05:01:53.046288 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+        2026/11/09 05:01:53.046518 [Warning] core: Xray 26.3.27 started
+        2026/11/09 05:01:53.049823 [Info] [33921159] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 05:01:53.215991 [Info] [1907006915] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 05:01:53.278832 [Info] [188972513] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 05:01:53.278855 [Info] [188972513] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 05:01:53.278858 [Info] [188972513] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 05:01:53.278867 [Info] [188972513] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.278870 [Debug] [188972513] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.278908 [Info] [188972513] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:33343, remote endpoint 1.1.1.2:443
+        2026/11/09 05:01:53.278934 [Debug] [188972513] proxy: CopyRawConn (maybe) readv
+        2026/11/09 05:01:53.279863 [Info] [188972513] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:55734: use of closed network connection
+        2026/11/09 05:01:53.281156 [Info] [3256796416] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 05:01:53.281162 [Info] [3256796416] proxy/vless/inbound: received request for tcp:service.example.com:443
+        2026/11/09 05:01:53.281164 [Info] [3256796416] app/dispatcher: default route for tcp:service.example.com:443
+        2026/11/09 05:01:53.281194 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+        2026/11/09 05:01:53.281196 [Info] [3256796416] proxy/freedom: dialing to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.281198 [Info] [3256796416] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.281200 [Debug] [3256796416] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.281206 [Info] [3256796416] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:34851, remote endpoint 1.1.1.2:443
+        2026/11/09 05:01:53.281208 [Debug] [3256796416] proxy: CopyRawConn (maybe) readv
+        2026/11/09 05:01:53.282431 [Info] [3256796416] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:55736: use of closed network connection
+        2026/11/09 05:01:53.283656 [Info] [2089174132] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 05:01:53.283668 [Info] [2089174132] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 05:01:53.283671 [Info] [2089174132] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 05:01:53.283673 [Info] [2089174132] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.283676 [Debug] [2089174132] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 05:01:53.283680 [Info] [2089174132] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:35887, remote endpoint 1.1.1.2:443
+        2026/11/09 05:01:53.283688 [Debug] [2089174132] proxy: CopyRawConn (maybe) readv
+        2026/11/09 05:01:53.284694 [Info] [2089174132] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:55750: use of closed network connection
+--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (100.77s)
+FAIL

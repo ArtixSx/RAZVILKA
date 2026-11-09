@@ -146,3 +146,17 @@ Store/dispatcher/history admission: N=12, enqueue→server completion p50/p95
 Эти результаты не меняют admission и не повышают live readiness незавершённых путей.
 
 Текущая lifecycle проверка и найденные ограничения по точным SHA: [результаты](measurements/2026-11-09/research/lifecycle/README.md). Новые private cleanup пути не повышают публичную live readiness до своей native приёмки.
+
+## Дополнение по native2924cd74
+
+| Возможность | Подтверждение | Оставшаяся граница |
+| --- | --- | --- |
+| VLESS full Check и durable queue | Повтор42566485696 attempt2 SUCCESS,182 строки; N12 live p50 403.157→312.937мс, selected2 2604→1423мс | Контролируемый Linux namespace; не медленный WAN и не router readiness |
+| StrategyLab binary/state pair | Job128993971089 SUCCESS: реальные совместимые readers, native/race, восстановленная панель | Конкретные поддержанные переходы; не произвольный downgrade/power-loss |
+| DNS original successor preparation recovery | Job128993971272 SUCCESS: genuine CUT, clean и2partialACK, joined cleanup и прежний alias; baseline отказывает | Diagnostic30/10; strict12/4 publication и generic GEN1 failure recovery ещё не завершены |
+| DNS strict publication | Selected дошёл до capture-ready, но FAIL по12с; canceled-ready не запускался из-за asset504 | Полный GEN2 ready/cancel/retire/retry не подтверждён |
+| Mihomo full lifecycle | Новые portable fixes проверены;2924 два native повтора не получили fixtures из-за504 | Apply/Check/Stop/fresh Apply требуется повторить с теми же проверенными бинарниками |
+| Managed NFQWS2 | Production core/HTTP/closing checks PASS; свежий post-Add readback проверен адресно | LAN/manual/race этой ревизии остановились на asset504; старый activation/retirement отказ d5 остаётся открытым |
+
+Generic PR CI d5fd9774 — SUCCESS. Более новые SHA оцениваются отдельно;
+аппаратная матрица и публичный admission от этих результатов не повышаются.

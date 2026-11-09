@@ -173,3 +173,20 @@ lease, один bounded шаг на turn, отсутствие wake/переза
 Stop/recovery/burst, отмена, WAN/busy и повторная проверка после restart.
 Это проверка scheduler с реальными Store/journal/operation gate и моделируемым
 checker. Полный native batch нового candidate и Linux race оцениваются отдельно.
+
+## Независимое ревью последующих lifecycle исправлений
+
+Все изменения ниже проверены отдельно от их автора; они сохраняют публичный
+admission. Положительный portable regression не считается native приёмкой.
+
+| Изменение | Проверенный контракт | Доказательство и ограничение |
+| --- | --- | --- |
+| Mihomo rotation и stopped wire (`94821d71`, `12879f78`) | Тот же original health cursor/header; compiler expected Plan приводится к собственной опубликованной wire shape, incoming документы не нормализуются | Before FAIL / after PASS; 20 mutations и обе ACK. Native d5 проходит прежние отказы, достигает terminal-close |
+| Closing scope (`2e613a61`) | Сохраняется ровно original owned Mihomo definition; reader9 header и raw journal checks остаются | Before FAIL / after PASS; vet PASS после устранения copied mutex в fixture. Native2924 первой попытки не выполнялся из-за HTTP504 |
+| DNS original capture read (`efe6cf3f`) | Каждый original resource.Current полный; callback-free closing associations, public/custom пути прежние; нет кэша между effects | Reviewer потребовал убрать callback из closing; принято исправление. Строгая native publication пока FAIL |
+| Два retirement views (`2f08886a`) | Каждый view совпадает со своим настоящим holder; обе closed observations и точные coordinates | Genuine factory выдаёт два разных view. Native d5 проходит это место, достигает listener restoration failure |
+| Восстановленный listener (`2924cd74`) | После обоих ACK, двух restored-standby проверок и original joined child отзывается CAS только точный witness; до снятия fences | Real-child regression PASS; Linux occupied-port test проверен и crosscompiled, выполняется generic Linux gate. Clean/две partial ACK проверяются отдельным native сценарием |
+| NFQWS post-Add (`02ca980d`) | Loan охватывает свежий readonly readback, сам Add снаружи; false/foreign/stale/error сохраняют Pending1/Added0/Unknown | До FAIL / после PASS, независимый run0.563с и vet PASS. Full LAN ускорение пока не подтверждено |
+
+Полные сырые результаты, включая неудачные попытки, находятся в
+[lifecycle журнале](measurements/2026-11-09/research/lifecycle/README.md).

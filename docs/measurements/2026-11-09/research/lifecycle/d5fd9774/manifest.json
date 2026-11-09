@@ -1,0 +1,64 @@
+{
+  "candidate": "d5fd9774dc8598a11da152f6ee34ef7f3ec2a3a7",
+  "generic_pr": {
+    "run": 42564590641,
+    "conclusion": "success"
+  },
+  "generic_push": {
+    "run": 42564585991,
+    "conclusion": "cancelled"
+  },
+  "native_probe": {
+    "run": 42564585882,
+    "conclusion": "success"
+  },
+  "native_lifecycle": {
+    "run": 42564585936,
+    "conclusion": "failure"
+  },
+  "native_mihomo": {
+    "run": 42564585866,
+    "conclusion": "failure"
+  },
+  "files": {
+    "closing-scope-before.txt": "40ed90e3a108f1141b8ebee55bc10158b4e7da8caa7e160e5144070256b09eb6",
+    "closing-scope-final-tests.txt": "966699050b8fb2026a5489318306ff1a3c644bc8c3c8c6c3325c19458ebcdd32",
+    "domain-canceled-ready-artifact\\cpu-top.txt": "637d6d1ce6b3501e404b6ce951f481cdeaeb940fdbb347b71a92f27d63556623",
+    "domain-canceled-ready-artifact\\native.log": "6536e497548d1d8a6fa731b550a84c8f4ce14ffb659021d497ab5d192481758a",
+    "domain-canceled-ready-artifact\\original-run.cpu.pprof": "7f635a4cc2338fb1ae334c6746ca9b41289631c04bf7653a360654a0491aff08",
+    "domain-canceled-ready-artifact\\status.txt": "425b06fa4aa4ecc7ff376e1586e7739736001fbb4dfa39780845b5bb7d89c01f",
+    "domain-comparison.json": "344d9a3bfbef54f0d3ab3e22899cf38bc24f999ce5a63541830c6f2dac2ebcbd",
+    "domain-selected-artifact\\cpu-top.txt": "87384ba75a29e06fe1a784b29b0800225d09ff9b0f9118b43915ddc1dc70928c",
+    "domain-selected-artifact\\native.log": "96eeab1bf55331737aaeeabc02ad2fe8b86434cea4747bb5c770effd83e8e01a",
+    "domain-selected-artifact\\original-run.cpu.pprof": "9868078e750267d3eb3cbee5ce54559aada98513b667f3492148d0d683add5ec",
+    "domain-selected-artifact\\status.txt": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548",
+    "managed-production.log": "6057c86b180986bcc8679547ccb4256d049dfcd84c7e46121328479939702755",
+    "managed-race.log": "3e1cb1adb7a1a645babc3d58a9a58fc3c78eea3e598f8ab90188ae67bad2c5ce",
+    "mihomo-lifecycle.log": "53ff6be9badebba493b01119009309dfb4f7da9c91946cf6b873cc18300ae9c5",
+    "mihomo-postcas.log": "0a9a9e6fea6ab4e96c54f7b73eeb596f7e0ca5cfd0632783525bb8e7cd209454",
+    "mihomo-settlement.log": "9de8e7dec26b6ae9e585fcb73a8c7ea35ea482e2301f5922c257c1c40d3e2ffd",
+    "postadd-observation-after.txt": "e493728686dcc4354832b50aaff635a9c30fc940f87eaa979149d7521adf2373",
+    "postadd-observation-before.txt": "f5d7bf582ecd505c3b21b19785e75eb6f098ac34ad90f69acb9d7107f38c2407",
+    "preparation\\baseline-clean\\cpu-top.txt": "4b087aa5c47b15d0f78738f7657db8272e6d1df36c5931f5cb7ad63c07560f7a",
+    "preparation\\baseline-clean\\native.log": "c50f6f6313a50295acf5dc679b7d5b85760a0652f34b2ef022826d5616898419",
+    "preparation\\baseline-clean\\original-run.cpu.pprof": "30055f3de75733e1c05d0e0b50fa6d4ad6f0fcf4da589eccedec94010fdbf37d",
+    "preparation\\baseline-clean\\outcome.txt": "99e23be37a0bb28ab27ce21821b7095a524fb9c71c0023a3a539953d562f453e",
+    "preparation\\baseline-clean\\status.txt": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "preparation\\candidate-capture-transaction\\cpu-top.txt": "39240d0abcf0b3a401c5343a2bb8f876297d6fc76851ebad11d20a6cc6f23b76",
+    "preparation\\candidate-capture-transaction\\native.log": "11da30a996a4040fc8199d3c92ebc4fb94068faf94c9dbb354841fc3bb3081b5",
+    "preparation\\candidate-capture-transaction\\original-run.cpu.pprof": "21c2bff30756197c87424e139a177f411b61ff193b2fec97650d51401c89696f",
+    "preparation\\candidate-capture-transaction\\outcome.txt": "4351c9a9dbcd5121e06dcfa3ae0cdc7cfee2ab1ab578d1f5363b96fd3efbf463",
+    "preparation\\candidate-capture-transaction\\status.txt": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "preparation\\candidate-clean\\cpu-top.txt": "c45c9331a8cd176cab4b756fc62adc0a82596ce43d2c348cfd9a501880027b58",
+    "preparation\\candidate-clean\\native.log": "eca42d13fb2977cc7b32b8c2a866c2afe2f120e0bf7dc5b8a69ffd8d70575896",
+    "preparation\\candidate-clean\\original-run.cpu.pprof": "55904bf87a975d9d56063af3b8d5f53ff110e89864941b7fd4b38717efb7040e",
+    "preparation\\candidate-clean\\outcome.txt": "4ebd57fae567953acc81af80a412403b46c99b0dfc56b0ca26d82932f5a01ad6",
+    "preparation\\candidate-clean\\status.txt": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "preparation\\candidate-standby-transaction\\cpu-top.txt": "8e4566dd6bd0110559115df49826a99498fd03cdef61659f267fab7687a05cb7",
+    "preparation\\candidate-standby-transaction\\native.log": "fcc4f4f660cfcc67abb0cb48dcc520913c75d4df35c55ec6afa6534af1e52b98",
+    "preparation\\candidate-standby-transaction\\original-run.cpu.pprof": "fed3d1eaa4fd16997ec43a38a7e332f5dc7a3f64a2b74db6f69fd786c73c41db",
+    "preparation\\candidate-standby-transaction\\outcome.txt": "9e6d940feaf8937b8d861dbee62086b3edb31d3c2073b31a105a61bf5c7a434b",
+    "preparation\\candidate-standby-transaction\\status.txt": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "preparation\\independent-review.json": "16741633989cf3106fede2a1f4ea8e89ec3600e62877dde40926614871304b8a"
+  }
+}
