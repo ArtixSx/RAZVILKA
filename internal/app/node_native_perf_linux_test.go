@@ -25,19 +25,31 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nativecheckfixture"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 // Embedding preserves actual Capacity/EngineID/ScreenTransport and Recover.
 // Only completed original Check observations are copied for CSV publication.
 type nativeMeasuredChecker struct {
+	measureNetwork bool
+	t              *testing.T
 	*dataplane.ExactNodeChecker
 	mu      sync.Mutex
 	results []dataplane.NodeCheckResult
 }
 
 func (c *nativeMeasuredChecker) Check(ctx context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+	var observations *probecheck.NetworkMeasurements
+	if c.measureNetwork {
+		ctx, observations = probecheck.WithNetworkMeasurements(ctx)
+		defer observations.Close()
+	}
 	result, err := c.ExactNodeChecker.Check(ctx, r)
+	if observations != nil {
+		raw, _ := json.Marshal(observations.Close())
+		c.t.Logf("actual_service_network_phases=%s diagnostic_only=true", raw)
+	}
 	c.mu.Lock()
 	c.results = append(c.results, result)
 	c.mu.Unlock()
@@ -82,7 +94,7 @@ func TestNativeVLESSQueueHTTPPerformance(t *testing.T) {
 		ids = append(ids, node.ID)
 	}
 	sort.Strings(ids)
-	checker := &nativeMeasuredChecker{ExactNodeChecker: dataplane.NewExactXrayNodeCheckerSlots(filepath.Join(fixture.Root, "client"), 1)}
+	checker := &nativeMeasuredChecker{measureNetwork: os.Getenv("RAZVILKA_NODE_PERF_QUEUE_PROFILE") == "1", t: t, ExactNodeChecker: dataplane.NewExactXrayNodeCheckerSlots(filepath.Join(fixture.Root, "client"), 1)}
 	checker.Binary, checker.Port = fixture.Binary, 29185
 	checker.FreshProfile = func(context.Context) (string, error) { return nativecheckfixture.Profile, nil }
 	history := updatecheck.NewNodeHistoryAdmission(nodestore.RequiredPrivateHistoryReadVersion, nodestore.ExactHistoryReadVersion)

@@ -129,3 +129,23 @@ the requested node. The locally observed preparation/check/wait wall timings
 remain available for rejected results. Missing stage rows therefore do not mean
 a zero-duration check. Cleanup failure still stops evaluation even when the
 returned diagnostic identity is stale or mismatched.
+
+
+`network_timings` records up to32 request-local service observations, only for a
+fresh matching checker result. `service-resolver` measures the actual local
+resolver call; `service-http` is one RoundTrip (including each redirect). Rows
+contain microsecond durations, numeric sequence, fixed statuses and flags only.
+No hostname, URL, certificate, error string or response content is retained.
+`later_rows_omitted` on the last row marks the bound, not successful completion.
+
+SOCKS connect includes local connection and SOCKS negotiation; remote TCP and
+proxy-side DNS cannot be separated by these observations. TTFB starts at
+RoundTrip entry and includes connection/TLS time. TLS and body measurements
+can be absent, incomplete or failed; reused connections need no new TLS.
+Multiple internal TLS/dial attempts are explicitly marked `multiple`, rather
+than collapsed into a misleading singleton duration. Body EOF is distinct
+from an early close/truncated sample. Even completed HTTP phases do not imply
+accepted service content: `https_pass` and existing evidence remain authoritative.
+Intervals overlap; these values are not additive. Snapshots freeze after checker
+return, and later transport callbacks cannot change the published result.
+This report does not measure Apply→LAN readiness or browser rendering.

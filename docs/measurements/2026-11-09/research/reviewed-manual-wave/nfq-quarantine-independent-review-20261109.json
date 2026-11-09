@@ -1,0 +1,94 @@
+{
+  "eligibility": [
+    "Only SAME original NFQ and LAN participant pair",
+    "No entered commit callback undo or committed publication attempt",
+    "No other active/retiring lane or direct-cycle uncertainty",
+    "Sticky Manager and scope journal publication failures exclude claim",
+    "Actual original never-entered COMMON writer plus current known ACK prefix and two fresh full inventories",
+    "Three actual retained publications latest-plan transaction-execution latest-execution; no named-file adoption",
+    "Claim compares exact pending execution and plan bytes"
+  ],
+  "base_sha": "b9bb3c13e02d91e441b6538f855e533a13e1ef15",
+  "lifetime": [
+    "App retains SAME original exclusive admission continuously",
+    "Final original rollback validates resources and all terminal publications before scope close",
+    "Authored journal FDs outlive original source closure",
+    "Closing errors permanently fence; actual cleanup may retry with fresh bounded context",
+    "Partial source close stays sticky and all original owners attempted",
+    "Panel shutdown revokes eligibility and fences; running callback is joined before release",
+    "No Gate reset or fence-clear API"
+  ],
+  "reviewer": "independent verification agent",
+  "date": "2026-11-09",
+  "decision": "source review approved; focused tests and actual native acceptance required",
+  "files": [
+    {
+      "sha256": "871EB289C49B92A1880F3989FA46F06C2B0018B743F96E9BB68F45DBAA096D06",
+      "path": "internal/app/dataplane_apply.go"
+    },
+    {
+      "sha256": "30BAD9C37C0A470274CFEBA481D2020CAC7C4735D49C40C0DE338B3277B81048",
+      "path": "internal/app/list_nfqws_runtime.go"
+    },
+    {
+      "sha256": "04DCCCE1F2CEC38CF941A55A272AF7F4BD7469307BD5C0D88C3CF6B69A945067",
+      "path": "internal/app/strategy_managed_probe_lan_native_linux_test.go"
+    },
+    {
+      "sha256": "528E02B7CA9E4D74E753A18928BF28C0E4DB45460065434B765ABC64C7C090F1",
+      "path": "internal/app/list_nfqws_pending_quarantine.go"
+    },
+    {
+      "sha256": "113AAA9516AB66519130692859842804C59E415F17C2A46EEB2F68B8EEE6CC81",
+      "path": "internal/app/list_nfqws_pending_quarantine_test.go"
+    },
+    {
+      "sha256": "CFE5BCDAE7996AAD4E1D4E48C8295C39CFBA151D2874B3BA3171EF4C75823D5A",
+      "path": "internal/app/list_nfqws_quarantine_fault_native_linux.go"
+    },
+    {
+      "sha256": "4EB4A437A8E32C4A87B134560ECD309A986B0016D603B861B2FEF7EC27338170",
+      "path": "internal/app/list_nfqws_quarantine_fault_other.go"
+    },
+    {
+      "sha256": "71E150BCCA98E857AB29BC502AAB30EEEB4F5BB674ACFEED7B60D18623AED0AA",
+      "path": "internal/dataplane/execution_journal.go"
+    },
+    {
+      "sha256": "DA89A3EA6232A442659FFA326F94FF2B5C4591A128B4A859F2734598C3C80165",
+      "path": "internal/dataplane/manager.go"
+    },
+    {
+      "sha256": "C84D17815B1878ABA457A7DAB5882E9EDCF0BE1FB8154A4E8A72970BE8CB89B4",
+      "path": "internal/dataplane/network_policy_manager_resource_scope.go"
+    },
+    {
+      "sha256": "5EA8226F8DADF1017C63107CB5752EF8AA37FE5FE2884D6AAB12705D435C181F",
+      "path": "internal/dataplane/nfqws_pending_quarantine.go"
+    },
+    {
+      "sha256": "250754A9F1CBFC9D691F040A06DFFF7F3152B94F0C8378D1AED3ACD6C4773BF8",
+      "path": "internal/dataplane/nfqws_pending_quarantine_records.go"
+    },
+    {
+      "sha256": "223555A46827B66ABE61A1DF5796139CAA0D60E4B37495B1F6D292F0EE9CC031",
+      "path": "internal/dataplane/nfqws_pending_quarantine_test.go"
+    }
+  ],
+  "limitations": [
+    "No local Go build or test due disk constraint",
+    "Modeled record fixture does not mint actual production quarantine authority",
+    "Native positive classifier/lease/source-closing proof not yet run",
+    "Full managed native workflow still has separate timing failures",
+    "No router acceptance or speed claim"
+  ],
+  "verification": [
+    "Independent complete source call graph and diff inspection",
+    "Actual retained-FD/root replacement, terminal/copy/cancel, participant, foreign-frame and partial-close tests inspected",
+    "Native existing settlement-sync mode requires unfenced retained lease then full fresh Apply/Stop",
+    "Separate native post-source-close cut requires permanent fence remains after second Stop and cleanup-only marker",
+    "git diff --check PASS"
+  ],
+  "resolved_finding": "Revoked quarantine eligibility originally stranded fresh cleanup retries; separate terminal cleanup-only verification now permits release under permanent fence without restoring admission",
+  "integrated_commit": "757cf79858b1c3ab3942086bcadaa6d83c8bf84a"
+}

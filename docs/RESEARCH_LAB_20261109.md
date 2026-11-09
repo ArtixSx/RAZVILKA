@@ -262,3 +262,22 @@ write denial прежнего образа снимается, хотя PID/star
 Это вывод из исходников, не выполненный native bypass эксперимент; ctime
 может отвергнуть конкретную модификацию раньше SHA. Проверки полных байтов не
 заменялись. Чужой GPL-код не копировался, runtime dependency не добавлялась.
+
+
+### Стадии одного HTTP обмена
+
+Дополнительно изучен исходник поставляемого Go1.26.5
+`src/net/http/httptrace/trace.go` (BSD-style Go license): WithClientTrace
+составляет hooks, callback может исполниться асинхронно после возврата запроса.
+Новая optional telemetry использует этот стандартный API, mutex и закрываемый
+bounded snapshot; чужой код не копируется. Продолжение существующего подхода
+blackbox-exporter к разделению сетевых стадий, без переноса его verdict в RAZVILKA.
+
+CLI nodeeval получает отдельные local resolver / SOCKS / TLS / TTFB / body
+наблюдения, привязанные к текущему node/service/profile result. Redirect —
+отдельный RoundTrip; multiple internal dial/TLS явно не изображаются одним
+измерением. Raw URL/error/body/certificate не попадают в JSON. Native queue
+включает эти наблюдения только в отдельном CPU-profile проходе; обычные paired
+samples не получают telemetry overhead. Существующие service predicates,
+scope guards, таймауты и cleanup сохраняются. Нужны адресные normal/race и
+original pinned SOCKS/TLS проверки нового SHA; это не аппаратное доказательство.
