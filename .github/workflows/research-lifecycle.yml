@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           mkdir -p -m 700 artifacts/paired-public
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
-            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GIT_OPTIONAL_LOCKS=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_PAIRED_NATIVE_HISTORY="${{ matrix.history == 'draft' && 'draft' || '' }}" \
             sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
