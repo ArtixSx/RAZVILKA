@@ -209,6 +209,12 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		controlRoot = "/opt/razvilka/state/self-update-stop"
 	}
 	a.SelfUpdateFiles = &SelfUpdateFiles{ControlRoot: controlRoot}
+	if manualHTTP {
+		a.SelfUpdateFiles.Directory = filepath.Join(peers.root, "absent-self-update-files")
+		if a.PendingSelfUpdateRecovery() {
+			t.Fatal("manual fixture has pending self-update before runtime operations")
+		}
+	}
 	if _, err = operationgate.InitializeSelfUpdateControl(lifetime, controlRoot); err != nil {
 		t.Fatal(err)
 	}

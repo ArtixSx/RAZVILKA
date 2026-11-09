@@ -164,6 +164,9 @@ func mihomoNativeManualReplayRefused(t *testing.T, ctx context.Context, a *App, 
 
 func mihomoNativeManualStop(t *testing.T, ctx context.Context, a *App) serviceRuntimeOutcome {
 	t.Helper()
+	if a.PendingSelfUpdateRecovery() {
+		t.Fatal("manual Stop entered self-update recovery instead of original runtime")
+	}
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
 	body, _ := json.Marshal(map[string]any{"action": "stop", "expected_revision": a.Store.Get().Revision, "confirm": "STOP_OWNED_ROUTES"})
