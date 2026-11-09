@@ -206,6 +206,22 @@ jobs:
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
           go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Private ledger decode parity and allocation measurement
+        if: ${{ matrix.scenario == 'selected' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=3 ./internal/dnscontrol \
+              -run '^TestSyntheticDNSLedgerDecoder' -bench '^BenchmarkSyntheticDNSLedgerDecoder$' \
+              -benchtime=100ms -benchmem -v | tee "artifacts/domain/ledger-decode-$mode.log"
+            for name in Parity OwnedReadIndependence; do
+              test "$(grep -Fc -- "--- PASS: TestSyntheticDNSLedgerDecoder$name " "artifacts/domain/ledger-decode-$mode.log")" -eq 3
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/ledger-decode-$mode.log"; then exit 1; fi
+          done
       - name: Original tool gate timing custody and bounds
         shell: bash
         run: |

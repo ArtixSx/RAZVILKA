@@ -69,6 +69,21 @@ jobs:
                 -run '^TestCloudflareScanRunner(OwnsTemporaryInterfacePolicyAndCleanup|FailsClosedWhenCleanupIsUnconfirmed)$' -v
           done
 
+      - name: Repeat original physical cancellation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=30 ./internal/physicalscope \
+              -run '^TestPhysicalPrimaryIPv4(OriginalBookendsAndStickyRefusal|PreCanceledCallerDoesNotPoisonOriginal)$' -v | tee "/tmp/physical-cancel-$mode.log"
+            for name in OriginalBookendsAndStickyRefusal PreCanceledCallerDoesNotPoisonOriginal; do
+              test "$(grep -Fc -- "--- PASS: TestPhysicalPrimaryIPv4$name " "/tmp/physical-cancel-$mode.log")" -eq 30
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "/tmp/physical-cancel-$mode.log"; then exit 1; fi
+          done
+
       - name: Full project checks
         shell: bash
         run: |
