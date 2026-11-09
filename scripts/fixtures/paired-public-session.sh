@@ -5,6 +5,8 @@ work=$1
 repo=$2
 stage=$3
 case "$stage" in outer|inner) ;; *) exit 2 ;; esac
+layout=${RAZVILKA_PAIRED_NATIVE_LAYOUT:-configured}
+case "$layout" in configured) ;; default-refusal) test -z "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" ;; *) exit 2 ;; esac
 # This script is entered only by the disposable unshare/tini harness. Check
 # original outer namespaces before the first mount, not just an environment bit.
 verify_scope() {
@@ -49,9 +51,14 @@ mount -t proc proc /proc
 test "$(verify_scope fresh-proc)" = "$original_scope"
 if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
 mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
-mkdir -p /opt/bin /opt/sbin /opt/etc/init.d /opt/etc/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache /opt/root
-chmod 755 /opt/bin /opt/sbin /opt/etc /opt/etc/init.d /opt/razvilka
-chmod 700 /opt/etc/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache /opt/root
+mkdir -p /opt/bin /opt/sbin /opt/etc/init.d /opt/etc/razvilka /opt/root
+chmod 755 /opt/bin /opt/sbin /opt/etc /opt/etc/init.d
+chmod 700 /opt/etc/razvilka /opt/root
+if test "$layout" = configured; then
+ mkdir -p /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache
+ chmod 755 /opt/razvilka
+ chmod 700 /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache
+fi
 cp "$(command -v busybox)" /opt/bin/busybox
 chmod 755 /opt/bin/busybox
 ln -s /opt/bin/busybox /opt/bin/sh
@@ -81,6 +88,12 @@ PY
 # The actual old source and old script are unmodified. Its existing supported
 # layout variables configure this explicit source scenario; no old-reader ABI
 # or default legacy-layout migration is inferred from that configuration.
+if test "$layout" = default-refusal; then
+ # Run the exact historical default layout, without a wrapper or runtime
+ # path overrides. The current installer is expected to refuse this source.
+ unset RAZVILKA_BASE RAZVILKA_BINARY RAZVILKA_APPDIR RAZVILKA_CACHE RAZVILKA_STATE_DIR RAZVILKA_LOG_DIR RAZVILKA_RUN_DIR RAZVILKA_PORT RAZVILKA_PID_FILE RAZVILKA_LOG_FILE RAZVILKA_START_STOP_DAEMON
+ cp "$work/old-source/scripts/S99razvilka" /opt/etc/init.d/S99razvilka
+else
 cat >/opt/etc/init.d/S99razvilka <<'SOURCE_INIT'
 #!/opt/bin/sh
 set -eu
@@ -93,6 +106,7 @@ if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
 fi
 exec /opt/bin/sh /opt/etc/razvilka/source-init-0193 "$@"
 SOURCE_INIT
+fi
 chmod 755 /opt/etc/init.d/S99razvilka
 ip link set lo up
 if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
@@ -106,4 +120,8 @@ fi
 /opt/bin/sh /opt/etc/init.d/S99razvilka start
 # tini is PID1 and joins the actual daemon after the public old-panel Stop.
 # Namespace teardown kills any remaining child on fixture failure.
-"$work/cmd.test" -test.run '^TestNativeConfiguredOld193PairLifecycle$' -test.v -test.count=1 -test.timeout=30m
+if test "$layout" = default-refusal; then
+ "$work/cmd.test" -test.run '^TestNativeDefaultOld193InstallRefusal$' -test.v -test.count=1 -test.timeout=3m
+else
+ "$work/cmd.test" -test.run '^TestNativeConfiguredOld193PairLifecycle$' -test.v -test.count=1 -test.timeout=30m
+fi

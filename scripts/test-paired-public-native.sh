@@ -74,5 +74,17 @@ if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = history; then
  grep -F 'actual_public_pair_retained_history preserved=true completed_probes=3 frozen_manual_selection=true original_old_http_writer=true current_reader=true legacy_readiness=false old_live_compatibility=false' "$work/native.log"
 fi
 printf 'PASS configured source0.19.3 -> genuine public bootstrap -> current durable Stop -> public offline restore. Tagged Ubuntu classification; no router/default legacy-layout or old live-reader claim.\n'
+# Reuse these exact built artifacts once for the documented unsupported
+# default-layout transition. A second original private namespace has no state
+# from the successful configured source scenario.
+if test -z "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}"; then
+ refusal_status=0
+ RAZVILKA_PAIRED_NATIVE_LAYOUT=default-refusal unshare --mount --net /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" outer >"$work/default-refusal.log" 2>&1 || refusal_status=$?
+ cat "$work/default-refusal.log"
+ test "$refusal_status" -eq 0
+ grep -F 'actual_default_old193_install_refused dry_run=true apply=true old_stopped_joined=true source_unchanged=true new_root_absent=true migration_supported=false' "$work/default-refusal.log"
+ grep -F -- '--- PASS: TestNativeDefaultOld193InstallRefusal ' "$work/default-refusal.log"
+ if grep -E '^[[:space:]]*--- SKIP:' "$work/default-refusal.log"; then exit 1; fi
+fi
 # Only this exact private fixture directory is removed after all assertions.
 case "$work" in /root/razvilka-paired-public.*) rm -rf -- "$work" ;; *) exit 2 ;; esac
