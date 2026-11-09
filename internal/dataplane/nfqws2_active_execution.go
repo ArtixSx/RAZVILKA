@@ -377,7 +377,7 @@ func (e *nfqws2ActiveExecution) verifyLANObserved(ctx context.Context, lan *LANP
 	if err != nil || !status.Complete || status.Unknown || status.Removed || status.Promoted {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	if err := e.runtimeFrozen.Verify(ctx, lan); err != nil {
+	if err := e.verifyLANRPDB(ctx, lan, func(observed context.Context) error { return e.runtimeFrozen.Verify(observed, lan) }); err != nil {
 		return err
 	}
 	after, err := e.gate.readOwner()
