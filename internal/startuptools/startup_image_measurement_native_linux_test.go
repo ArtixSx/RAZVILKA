@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -27,12 +29,13 @@ var startupImageProductionSource string
 var startupImageMeasurementSource string
 
 type startupImageEntry struct {
-	image  *heldImage
-	file   *os.File
-	info   os.FileInfo
-	path   string
-	digest [32]byte
-	data   []byte
+	image   *heldImage
+	file    *os.File
+	info    os.FileInfo
+	path    string
+	digest  [32]byte
+	data    []byte
+	started bool
 }
 
 type startupImageMeasurement struct {
@@ -119,10 +122,16 @@ func (s *startupImageMeasurement) read(ctx context.Context, image *heldImage, si
 		return zero, errors.New("image measurement binding")
 	}
 	if s.capturing {
-		if e.data != nil {
+		if e.started {
 			return zero, errors.New("duplicate image capture")
 		}
-		e.data = make([]byte, size)
+		e.started = true
+		if e.data == nil {
+			e.data = make([]byte, size)
+		}
+		if int64(len(e.data)) != size {
+			return zero, errors.New("image measurement storage")
+		}
 	} else if int64(len(e.data)) != size {
 		return zero, errors.New("image measurement missing bytes")
 	}
@@ -494,6 +503,347 @@ func TestStartupImageMeasurementReadBoundaries(t *testing.T) {
 			}
 			if mode == "tail_growth" && s.readBytes-before != image.info.Size()+1 {
 				t.Fatal("actual EOF growth not observed")
+			}
+		})
+	}
+}
+
+// This local test model is not shared by production. First successful capacity
+// is fixed, at most8MiB; all later oversize/contention attempts use original SHA.
+const startupImageSlotMeasurementCap = 8 << 20
+
+type startupImageSlotMeasurement struct {
+	active atomic.Bool
+	self   *startupImageSlotMeasurement
+	data   []byte
+}
+type startupImageSlotBorrow struct {
+	self   *startupImageSlotBorrow
+	slot   *startupImageSlotMeasurement
+	closed atomic.Bool
+}
+
+func (s *startupImageSlotMeasurement) borrow(size int64) *startupImageSlotBorrow {
+	if s == nil || size <= 0 || size > startupImageSlotMeasurementCap || !s.active.CompareAndSwap(false, true) {
+		return nil
+	}
+	if s.self == nil {
+		s.self = s
+	}
+	if s.self != s {
+		s.active.Store(false)
+		return nil
+	}
+	if s.data == nil {
+		s.data = make([]byte, size)
+	}
+	if int64(len(s.data)) < size {
+		s.active.Store(false)
+		return nil
+	}
+	b := &startupImageSlotBorrow{slot: s}
+	b.self = b
+	return b
+}
+func (b *startupImageSlotBorrow) release() {
+	if b == nil || b.self != b || b.slot == nil || !b.closed.CompareAndSwap(false, true) {
+		return
+	}
+	clear(b.slot.data)
+	b.slot.active.Store(false)
+}
+
+func startupImagePairMeasurement(ctx context.Context, r *heldReview, slot *startupImageSlotMeasurement) (used bool, result error) {
+	// Decline before attempting snapshot capture. The original two complete
+	// checks retain original short circuit order if no fixed storage is available.
+	if r == nil || ctx == nil {
+		return false, errors.New("pair review/context missing")
+	}
+	borrow := slot.borrow(r.bytes)
+	if borrow == nil {
+		if err := r.unchanged(ctx); err != nil {
+			return false, err
+		}
+		return false, r.unchanged(ctx)
+	}
+	var snapshot *startupImageMeasurement
+	defer func() {
+		// Revoke every local image reference before clearing and releasing storage.
+		if snapshot != nil {
+			snapshot.entries = nil
+			snapshot.paths = nil
+			snapshot.context = nil
+		}
+		borrow.release()
+		result = errors.Join(result, ctx.Err())
+		if deadline, finite := ctx.Deadline(); finite && !time.Now().Before(deadline) {
+			result = errors.Join(result, context.DeadlineExceeded)
+		}
+	}()
+	var err error
+	snapshot, err = newStartupImageMeasurement(ctx, r)
+	if err != nil {
+		return true, err
+	}
+	var offset int64
+	for _, entry := range snapshot.entries {
+		size := entry.info.Size()
+		entry.data = borrow.slot.data[offset : offset+size]
+		offset += size
+	}
+	if offset != r.bytes {
+		return true, errors.New("pair byte budget")
+	}
+	if err := snapshot.current(ctx); err != nil {
+		return true, err
+	}
+	snapshot.capturing = false
+	return true, snapshot.current(ctx)
+}
+
+func BenchmarkStartupImagePairMeasurement(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	l := versionNamesActualLease(b, ctx)
+	if l.review.bytes > startupImageSlotMeasurementCap {
+		b.Fatal("actual fixture exceeds model8MiB; do not mislabel fallback as snapshot")
+	}
+	for _, mode := range []string{"original_two_sha", "first_slot_pair_clear", "warm_slot_pair_clear"} {
+		b.Run(mode, func(b *testing.B) {
+			err := l.WithReadOnlyToolObservation(ctx, l.identity, l.digest, func(held context.Context) error {
+				var warm startupImageSlotMeasurement
+				if mode == "warm_slot_pair_clear" {
+					initial := warm.borrow(l.review.bytes)
+					if initial == nil {
+						return errors.New("warm model unavailable")
+					}
+					initial.release()
+				}
+				b.ReportAllocs()
+				b.SetBytes(2 * l.review.bytes)
+				b.ResetTimer()
+				for range b.N {
+					var err error
+					if mode == "original_two_sha" {
+						err = l.review.unchanged(held)
+						if err == nil {
+							err = l.review.unchanged(held)
+						}
+					} else {
+						var used bool
+						if mode == "first_slot_pair_clear" {
+							var first startupImageSlotMeasurement
+							used, err = startupImagePairMeasurement(held, l.review, &first)
+						} else {
+							used, err = startupImagePairMeasurement(held, l.review, &warm)
+						}
+						if err == nil && !used {
+							err = errors.New("snapshot benchmark silently fell back")
+						}
+					}
+					if err != nil {
+						b.StopTimer()
+						return err
+					}
+				}
+				b.StopTimer()
+				return nil
+			})
+			if err != nil {
+				b.Fatal("actual full source pair", nativeStages(err))
+			}
+			b.ReportMetric(float64(2*l.review.bytes), "payload_bytes/op")
+			if mode != "original_two_sha" {
+				b.ReportMetric(float64(l.review.bytes), "fixed_capacity_bytes")
+			}
+			b.ReportMetric(float64(len(l.review.images)), "images/op")
+		})
+	}
+}
+
+func TestStartupImageMeasurementFixedSlot(t *testing.T) {
+	var slot startupImageSlotMeasurement
+	if slot.borrow(startupImageSlotMeasurementCap+1) != nil || slot.data != nil {
+		t.Fatal("oversize allocated")
+	}
+	first := slot.borrow(17)
+	if first == nil {
+		t.Fatal("first slot")
+	}
+	copyLease := startupImageSlotBorrow{self: first.self, slot: first.slot}
+	copyLease.closed.Store(first.closed.Load())
+	copyLease.release()
+	if !slot.active.Load() {
+		t.Fatal("copied lease released original")
+	}
+	slot.data[0] = 9
+	if slot.borrow(17) != nil || slot.data[0] != 9 {
+		t.Fatal("contention disturbed owner")
+	}
+	first.release()
+	if slot.data[0] != 0 || slot.active.Load() {
+		t.Fatal("slot not cleared")
+	}
+	if slot.borrow(18) != nil || len(slot.data) != 17 {
+		t.Fatal("fixed capacity grew")
+	}
+	next := slot.borrow(17)
+	if next == nil {
+		t.Fatal("successor borrow")
+	}
+	slot.data[0] = 7
+	first.release()
+	copyLease.release()
+	if slot.data[0] != 7 || !slot.active.Load() {
+		t.Fatal("stale release disturbed successor")
+	}
+	next.release()
+	copySlot := startupImageSlotMeasurement{self: slot.self, data: slot.data}
+	copySlot.active.Store(slot.active.Load())
+	if copySlot.borrow(17) != nil {
+		t.Fatal("copied storage accepted")
+	}
+}
+
+func TestStartupImageMeasurementConcurrentSlot(t *testing.T) {
+	var slot startupImageSlotMeasurement
+	var winners atomic.Int32
+	start := make(chan struct{})
+	release := make(chan struct{})
+	ready := make(chan struct{}, 16)
+	var joined sync.WaitGroup
+	for range 16 {
+		joined.Add(1)
+		go func() {
+			defer joined.Done()
+			<-start
+			b := slot.borrow(128)
+			if b != nil {
+				winners.Add(1)
+				slot.data[0] = 73
+			}
+			ready <- struct{}{}
+			if b != nil {
+				<-release
+				b.release()
+			}
+		}()
+	}
+	close(start)
+	for range 16 {
+		<-ready
+	}
+	if winners.Load() != 1 {
+		close(release)
+		joined.Wait()
+		t.Fatal("exclusive slot", winners.Load())
+	}
+	close(release)
+	joined.Wait()
+	if slot.active.Load() || !bytes.Equal(slot.data, make([]byte, 128)) {
+		t.Fatal("slot not joined/cleared")
+	}
+}
+
+func TestStartupImageMeasurementPairStorageAndFallback(t *testing.T) {
+	r, image := startupImageLocalFixture(t)
+	ctx := t.Context()
+	var slot startupImageSlotMeasurement
+	used, err := startupImagePairMeasurement(ctx, r, &slot)
+	if err != nil || !used || slot.active.Load() || !bytes.Equal(slot.data, make([]byte, len(slot.data))) {
+		t.Fatal("actual full pair clear", err)
+	}
+	var tiny startupImageSlotMeasurement
+	initial := tiny.borrow(1)
+	initial.release()
+	used, err = startupImagePairMeasurement(ctx, r, &tiny)
+	if err != nil || used || len(tiny.data) != 1 {
+		t.Fatal("capacity fallback not original pair", err)
+	}
+	held := slot.borrow(r.bytes)
+	slot.data[0] = 77
+	used, err = startupImagePairMeasurement(ctx, r, &slot)
+	if err != nil || used || slot.data[0] != 77 || !slot.active.Load() {
+		t.Fatal("busy fallback changed owner", err)
+	}
+	held.release()
+	// Attempted authentication failure never falls back to a successful path.
+	image.hash[0] ^= 1
+	used, err = startupImagePairMeasurement(ctx, r, &slot)
+	if err == nil || !used || slot.active.Load() || !bytes.Equal(slot.data, make([]byte, len(slot.data))) {
+		t.Fatal("failed capture not cleared/refused")
+	}
+}
+
+type startupImagePairFaultContext struct {
+	context.Context
+	check   func() error
+	expired bool
+}
+
+func (c *startupImagePairFaultContext) Err() error {
+	if c.check != nil {
+		return c.check()
+	}
+	return c.Context.Err()
+}
+func (c *startupImagePairFaultContext) Deadline() (time.Time, bool) {
+	if c.expired {
+		return time.Now().Add(-time.Second), true
+	}
+	return c.Context.Deadline()
+}
+
+func TestStartupImageMeasurementPairFailureCleanup(t *testing.T) {
+	for _, mode := range []string{"late_cancel", "panic", "post_clear_cancel", "absolute_deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			r, _ := startupImageLocalFixture(t)
+			var slot startupImageSlotMeasurement
+			ctx := &startupImagePairFaultContext{Context: t.Context(), expired: mode == "absolute_deadline"}
+			observedBytes := false
+			ctx.check = func() error {
+				if bytes.IndexByte(slot.data, 0x63) >= 0 {
+					observedBytes = true
+					if mode == "late_cancel" {
+						return context.Canceled
+					}
+					if mode == "panic" {
+						panic("actual capture partial-read panic")
+					}
+				}
+				if mode == "post_clear_cancel" && observedBytes && !slot.active.Load() {
+					return context.Canceled
+				}
+				return nil
+			}
+			var used bool
+			var err error
+			var panicked any
+			func() {
+				defer func() { panicked = recover() }()
+				used, err = startupImagePairMeasurement(ctx, r, &slot)
+			}()
+			if slot.active.Load() || !bytes.Equal(slot.data, make([]byte, len(slot.data))) {
+				t.Fatal("pair failed to clear/release")
+			}
+			if !observedBytes {
+				t.Fatal("fault preceded actual capture bytes")
+			}
+			if mode == "panic" {
+				if panicked == nil {
+					t.Fatal("panic swallowed")
+				}
+				return
+			}
+			if panicked != nil || !used || err == nil {
+				t.Fatal("pair failure lost", panicked, err)
+			}
+			expected := error(context.Canceled)
+			if mode == "absolute_deadline" {
+				expected = context.DeadlineExceeded
+			}
+			if !errors.Is(err, expected) {
+				t.Fatal("pair failure cause", err)
 			}
 		})
 	}
