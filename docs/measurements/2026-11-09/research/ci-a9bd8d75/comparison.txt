@@ -1,0 +1,1 @@
+Actual baseline0e2db5ab versus candidate commit; algorithm=current-reuse in BOTH. Same runner and pinned binary, sequential baseline then candidate. Fixed order may bias warm caches/load; first and repeated samples are separate. The legacy environment.txt reference description is not a second algorithm in this run.

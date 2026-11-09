@@ -1,0 +1,114 @@
+{
+  "domain-canceled-ready.log": {
+    "sha256": "a203a8a8db840fb7099261655df000da0853f6185fa8c9a8de93930bf832f59a",
+    "bytes": 75892
+  },
+  "domain-selected.log": {
+    "sha256": "1295a5682d33e42113a01d9721fff4fc7431b7f4e380c9140069c6730e3329f5",
+    "bytes": 78171
+  },
+  "managed-production.log": {
+    "sha256": "001b661e861083348fb71513371918c8a02ad156e918a849e5512240820b5343",
+    "bytes": 277884
+  },
+  "managed-race.log": {
+    "sha256": "a8edebc38a505cb942563ff29b4b0e59a7a8c4d199a10d6dc36c7b680c5c2a6f",
+    "bytes": 181827
+  },
+  "mihomo-lifecycle.log": {
+    "sha256": "d0f014ad2fca3d020098409fcdf59256271d469833711e20e3cd1cbf632984ba",
+    "bytes": 144384
+  },
+  "mihomo-settlement.log": {
+    "sha256": "9a6f9e4a65db30a819866d02e36c56a732e2eed41f02944f67f2793c9d272a49",
+    "bytes": 40053
+  },
+  "nfq-common-diagnostics-tests.txt": {
+    "sha256": "b557b096a72e7e930db93140ef0a43aa58ac80f54d6bd39d485246873fa5d94d",
+    "bytes": 5242
+  },
+  "preparation\\independent-review.json": {
+    "sha256": "6a17fa34fb1a2dbc3e3343d018627a133f455c4cfebe0f5773c5ee65273ba9a1",
+    "bytes": 4349
+  },
+  "preparation\\baseline-clean\\cpu-top.txt": {
+    "sha256": "df35ec674a4e30fe12f6eb05b11ba8e236689ebfab6995954ec53983ec8d2367",
+    "bytes": 3038
+  },
+  "preparation\\baseline-clean\\native.log": {
+    "sha256": "416b5d048df13600d49d1b3f04eec9dc1f5ac1c58df5018507802112219f6cbf",
+    "bytes": 16874
+  },
+  "preparation\\baseline-clean\\original-run.cpu.pprof": {
+    "sha256": "f0c4a458e5c06f3f6d42958ee2b8b5ea71e5c0690fd978c73670caf5a9af1153",
+    "bytes": 136521
+  },
+  "preparation\\baseline-clean\\outcome.txt": {
+    "sha256": "99e23be37a0bb28ab27ce21821b7095a524fb9c71c0023a3a539953d562f453e",
+    "bytes": 56
+  },
+  "preparation\\baseline-clean\\status.txt": {
+    "sha256": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "bytes": 175
+  },
+  "preparation\\candidate-capture-transaction\\cpu-top.txt": {
+    "sha256": "747f0fe152d7358d4a215284c9fdf197f304520c2f61e3eb62e7dbf5aea009fa",
+    "bytes": 2945
+  },
+  "preparation\\candidate-capture-transaction\\native.log": {
+    "sha256": "2e6d3635c51e97b8ed85a963e8db45b1c8dd225c5c7bb4b76b1b259c5041620b",
+    "bytes": 16368
+  },
+  "preparation\\candidate-capture-transaction\\original-run.cpu.pprof": {
+    "sha256": "4258fda7a7f2aa110ae6a0bb6b4c1cc2f56a3b4d68561e556b0e12db27dbff6f",
+    "bytes": 136025
+  },
+  "preparation\\candidate-capture-transaction\\outcome.txt": {
+    "sha256": "4351c9a9dbcd5121e06dcfa3ae0cdc7cfee2ab1ab578d1f5363b96fd3efbf463",
+    "bytes": 71
+  },
+  "preparation\\candidate-capture-transaction\\status.txt": {
+    "sha256": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "bytes": 175
+  },
+  "preparation\\candidate-clean\\cpu-top.txt": {
+    "sha256": "fb276bab5da9edbff26841831a28dd522b5f0f29929e88236a297d981b719537",
+    "bytes": 2960
+  },
+  "preparation\\candidate-clean\\native.log": {
+    "sha256": "5e77e867925c6947d290904e8c520826ead19763940986093cc24fe2909e751f",
+    "bytes": 16550
+  },
+  "preparation\\candidate-clean\\original-run.cpu.pprof": {
+    "sha256": "5818f7e5c3ba3d400914ad435bb5e9db88df2b23db3c2204d01964f556c2eae2",
+    "bytes": 136900
+  },
+  "preparation\\candidate-clean\\outcome.txt": {
+    "sha256": "4ebd57fae567953acc81af80a412403b46c99b0dfc56b0ca26d82932f5a01ad6",
+    "bytes": 57
+  },
+  "preparation\\candidate-clean\\status.txt": {
+    "sha256": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "bytes": 175
+  },
+  "preparation\\candidate-standby-transaction\\cpu-top.txt": {
+    "sha256": "16bc521cc17d1007aff1639afa1b94a2a30f9812c309e3b1825878637f7f6197",
+    "bytes": 3206
+  },
+  "preparation\\candidate-standby-transaction\\native.log": {
+    "sha256": "b1b0256397b11c9c517bc425ee6454f755b5163064d7f87f82c9ed82776a382a",
+    "bytes": 16301
+  },
+  "preparation\\candidate-standby-transaction\\original-run.cpu.pprof": {
+    "sha256": "f087e97a3fc40c00150f0e9edb6edd6660daa65aa82519ef57dd30f2144adbc0",
+    "bytes": 137392
+  },
+  "preparation\\candidate-standby-transaction\\outcome.txt": {
+    "sha256": "9e6d940feaf8937b8d861dbee62086b3edb31d3c2073b31a105a61bf5c7a434b",
+    "bytes": 71
+  },
+  "preparation\\candidate-standby-transaction\\status.txt": {
+    "sha256": "754803e7d0aa22261172aff9f08940a676c5efdb2dbc641838b66a0481dce86f",
+    "bytes": 175
+  }
+}

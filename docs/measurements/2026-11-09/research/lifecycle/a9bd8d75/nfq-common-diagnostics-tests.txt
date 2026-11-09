@@ -1,0 +1,64 @@
+=== RUN   TestNFQWSRetiredObservationRequiresSuccessfulOriginalCloseAndNeverReadsDeletedLease
+--- PASS: TestNFQWSRetiredObservationRequiresSuccessfulOriginalCloseAndNeverReadsDeletedLease (0.01s)
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/close-unknown
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/cancelled
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/unbounded
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/wait-error
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/changed-result
+=== RUN   TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/replacement-process
+--- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion (0.03s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/close-unknown (0.00s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/cancelled (0.01s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/unbounded (0.00s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/wait-error (0.00s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/changed-result (0.00s)
+    --- PASS: TestNFQWSRetiredObservationRefusesUnknownCloseAndChangedCompletion/replacement-process (0.00s)
+=== RUN   TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers
+=== RUN   TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers/prepared
+=== RUN   TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers/active
+--- PASS: TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers (0.01s)
+    --- PASS: TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers/prepared (0.00s)
+    --- PASS: TestNFQWSActiveRetirementRequiresStopAndCommonAndOriginalPointers/active (0.00s)
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/common
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/readback
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/terminal-metadata
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/missing-wait
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/post-unlink
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/cancel-during-common
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/omit-common
+=== RUN   TestNFQWSActiveRetirementFailureRetainsFence/duplicate-common
+--- PASS: TestNFQWSActiveRetirementFailureRetainsFence (0.03s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/common (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/readback (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/terminal-metadata (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/missing-wait (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/post-unlink (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/cancel-during-common (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/omit-common (0.00s)
+    --- PASS: TestNFQWSActiveRetirementFailureRetainsFence/duplicate-common (0.00s)
+=== RUN   TestNFQWSActiveRetirementJoinsFailedTransferBeforeCommon
+--- PASS: TestNFQWSActiveRetirementJoinsFailedTransferBeforeCommon (0.00s)
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/nil-context
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/unbounded
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/cancelled
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/nil-common
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/wrong-spec
+=== RUN   TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/wrong-binding
+--- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon (0.02s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/nil-context (0.00s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/unbounded (0.00s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/cancelled (0.00s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/nil-common (0.00s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/wrong-spec (0.00s)
+    --- PASS: TestNFQWSActiveRetirementInvalidInputDoesNotConsumeCommon/wrong-binding (0.00s)
+=== RUN   TestNFQWSExecutionDiagnosticsPreserveOriginalPreflightClassification
+--- PASS: TestNFQWSExecutionDiagnosticsPreserveOriginalPreflightClassification (0.00s)
+=== RUN   TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages
+--- PASS: TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages (0.00s)
+=== RUN   TestNFQWSExecutionCommonDiagnosticsRetainUnknownAndOriginalCause
+--- PASS: TestNFQWSExecutionCommonDiagnosticsRetainUnknownAndOriginalCause (0.00s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	0.220s
