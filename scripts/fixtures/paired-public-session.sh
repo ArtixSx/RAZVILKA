@@ -36,7 +36,17 @@ chmod 700 /opt/etc/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/
 cp "$(command -v busybox)" /opt/bin/busybox
 chmod 755 /opt/bin/busybox
 ln -s /opt/bin/busybox /opt/bin/sh
-ln -s /opt/bin/busybox /opt/sbin/start-stop-daemon
+# The genuine old init requires -O. Ubuntu's BusyBox applet lacks that ABI;
+# use the actual dpkg helper, without rewriting the old command or its args.
+# This is the configured Ubuntu fixture, not an Entware helper equivalence.
+daemon_version=$(dpkg-query -W -f='${Version}' dpkg)
+dpkg --compare-versions "$daemon_version" ge 1.20.6
+/usr/sbin/start-stop-daemon --help | grep -F -- '--output' >/dev/null
+daemon_sha=$(sha256sum /usr/sbin/start-stop-daemon | cut -d ' ' -f 1)
+cp /usr/sbin/start-stop-daemon /opt/sbin/start-stop-daemon
+chmod 755 /opt/sbin/start-stop-daemon
+test "$(sha256sum /opt/sbin/start-stop-daemon | cut -d ' ' -f 1)" = "$daemon_sha"
+printf 'Actual dpkg start-stop-daemon version=%s source_and_copy_sha256=%s configured_ubuntu_fixture=true\n' "$daemon_version" "$daemon_sha"
 cp "$work/old-controller" /opt/bin/razvilka
 chmod 755 /opt/bin/razvilka
 cp "$work/old-source/scripts/S99razvilka" /opt/etc/razvilka/source-init-0193
