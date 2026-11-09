@@ -89,6 +89,14 @@ func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *Synthe
 }
 
 func (o *DomainTCPOriginalScope) baseCurrent(ctx context.Context) error {
+	if err := o.baseAssociationCurrent(); err != nil {
+		return err
+	}
+	return o.binding.Current(ctx)
+}
+
+// Callback-free owner/registry comparison; no source or runtime grant.
+func (o *DomainTCPOriginalScope) baseAssociationCurrent() error {
 	if o == nil || o.self != o || o.binding == nil || o.binding.scope == nil || o.backend == nil || o.gate == nil || o.gate.Binding == nil || o.gate.Binding.Runtime != o.runtime || !sameNetworkPolicyDependency(o.runtime.Runner, o.runner) || !sameNetworkPolicyDependency(o.source, o.backend.reader.Runner) {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -105,7 +113,7 @@ func (o *DomainTCPOriginalScope) baseCurrent(ctx context.Context) error {
 	if !same {
 		return ErrDomainPolicyTCPConsumer
 	}
-	return o.binding.Current(ctx)
+	return nil
 }
 
 // Run uses the original one-shot Xray process owner. No exported callback can
