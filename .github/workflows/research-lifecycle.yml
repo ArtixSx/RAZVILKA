@@ -125,3 +125,77 @@ jobs:
           name: research-domain-${{ matrix.scenario }}-${{ github.sha }}
           path: artifacts/domain
           if-no-files-found: error
+
+  managed-probe-native:
+    name: managed-probe-native (${{ matrix.build-mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native NFQUEUE fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Original active directory custody and error classification
+        shell: bash
+        run: |
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v
+      - name: Actual path metadata parity and paired allocation benchmark
+        run: |
+          go test ./internal/startuptools -run '^TestFreshPathNode' -count=1 -v
+          go test ./internal/startuptools -run '^$' -bench '^BenchmarkFreshPathNode$' -benchtime=1s -count=3 -benchmem
+      - name: Paired original collector scheduling benchmark (not end-to-end latency)
+        if: matrix.build-mode == 'production'
+        run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
+      - name: Actual identity syscalls with strict pointer checks
+        if: matrix.build-mode == 'production'
+        run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v
+      - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestStaticVersionFactNativeClassicBatchBookends ' artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeAppHTTP ' artifacts/managed/probe.log
+          if grep -F -- '--- SKIP:' artifacts/managed/probe.log; then exit 1; fi
+      - name: Actual App LAN apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/lan.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANAppHTTP ' artifacts/managed/lan.log
+          if grep -F -- '--- SKIP:' artifacts/managed/lan.log; then exit 1; fi
+      - name: Explicit manual LAN Apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/manual.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' artifacts/managed/manual.log
+          if grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi
+      - name: Preserve native managed outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-managed-${{ matrix.build-mode }}-${{ github.sha }}
+          path: artifacts/managed
+          if-no-files-found: warn

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -270,7 +271,7 @@ func (m *Manager) CheckMihomoLive(ctx context.Context) error {
 	}
 	defer end()
 	if err := r.rotateMihomoTransit(c); err != nil {
-		return err
+		return fmt.Errorf("Mihomo retained check history rotation: %w", err)
 	}
 	check, err := r.beginHealthCheck(c)
 	completed := false
@@ -280,13 +281,13 @@ func (m *Manager) CheckMihomoLive(ctx context.Context) error {
 		}
 	}()
 	if err != nil {
-		return err
+		return fmt.Errorf("Mihomo retained check begin: %w", err)
 	}
 	if err := r.currentLive(c); err != nil {
-		return err
+		return fmt.Errorf("Mihomo retained check runtime health: %w", err)
 	}
 	if err := check.complete(c); err != nil {
-		return err
+		return fmt.Errorf("Mihomo retained check settlement: %w", err)
 	}
 	completed = true
 	return nil

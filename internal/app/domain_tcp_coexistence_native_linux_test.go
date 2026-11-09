@@ -107,7 +107,7 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			}
 		}
 	}()
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(domainOriginalPublicationBudget(t))
 	if cancelOriginal, ok := ctx.Value(domainOriginalCancelAfterStartKey{}).(context.CancelFunc); ok {
 		if captured != nil {
 			*captured = owner
