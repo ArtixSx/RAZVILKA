@@ -19,6 +19,12 @@ go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeRu
 test "$("$work/old-controller" -version)" = 0.19.3
 test "$("$work/candidate" -version)" = 0.20.0
 chmod 500 "$work/old-controller" "$work/candidate" "$work/cmd.test"
+# Reuse the existing independently pinned no-hook queue initializer. It runs
+# and joins before the PID namespace, so its /proc/1 isolation check stays real.
+sh "$repo/scripts/fetch-native-fixture.sh" zapret2-1.0.6 "$work/nfqws-source.tar.gz"
+tar -xzf "$work/nfqws-source.tar.gz" -C "$work" zapret2-v1.0.6/binaries/linux-x86_64/nfqws2
+echo "25049b2bff954c02051e1102a06d34f2f0f946b069d350c9065a86ecd88267c1  $work/zapret2-v1.0.6/binaries/linux-x86_64/nfqws2" | sha256sum --check --strict
+chmod 500 "$work/zapret2-v1.0.6/binaries/linux-x86_64/nfqws2"
 mkdir -p "$work/package/RAZVILKA-0.20.0/dist"
 cp -R configs scripts "$work/package/RAZVILKA-0.20.0/"
 cp "$work/candidate" "$work/package/RAZVILKA-0.20.0/dist/razvilka-linux-amd64"
@@ -46,7 +52,7 @@ export RAZVILKA_RUNTIME_NATIVE_REVIEW="$work/runtime-native-tool-review.json" RA
 # Original namespace identities are retained before ANY isolation/mount action.
 exec 3</proc/self/ns/net 4</proc/self/ns/mnt 5</proc/self/ns/pid
 status=0
-unshare --mount --net --pid --fork --mount-proc /usr/bin/tini -g -- /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" >"$work/native.log" 2>&1 || status=$?
+unshare --mount --net /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" outer >"$work/native.log" 2>&1 || status=$?
 cat "$work/native.log"
 if test "$status" -ne 0; then
   printf 'Paired public fixture failed (%s); private artifacts retained only at %s\n' "$status" "$work" >&2

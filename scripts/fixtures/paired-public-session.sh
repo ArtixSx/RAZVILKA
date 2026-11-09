@@ -3,17 +3,32 @@ set -eu
 umask 077
 work=$1
 repo=$2
+stage=$3
+case "$stage" in outer|inner) ;; *) exit 2 ;; esac
 # This script is entered only by the disposable unshare/tini harness. Check
 # original outer namespaces before the first mount, not just an environment bit.
-python3 - <<'SCOPE'
-import fcntl,os
-for fd,name,kind in ((3,'net',0x40000000),(4,'mnt',0x00020000),(5,'pid',0x20000000)):
+python3 - "$stage" <<'SCOPE'
+import fcntl,os,sys
+namespaces=[(3,'net',0x40000000),(4,'mnt',0x00020000)]
+if sys.argv[1]=='inner': namespaces.append((5,'pid',0x20000000))
+for fd,name,kind in namespaces:
     if fcntl.ioctl(fd,0xb703)!=kind: raise SystemExit('held original descriptor is not the required namespace')
     outer=os.fstat(fd);inner=os.stat('/proc/self/ns/'+name)
     if (outer.st_dev,outer.st_ino)==(inner.st_dev,inner.st_ino): raise SystemExit('fixture did not isolate '+name)
 SCOPE
 mount --make-rprivate /
 if grep -E ' (shared|master|propagate_from):[0-9]+' /proc/self/mountinfo; then exit 2; fi
+if test "$stage" = outer; then
+ # Initialize actual per-network queue state while /proc/1 still names the
+ # outer PID namespace. No hook references this queue during its real Start.
+ /usr/sbin/iptables-legacy -t mangle -N RZV_CI_NFQ_BOOTSTRAP
+ /usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+ /usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
+ /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
+ /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
+ RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$work" python3 "$repo/scripts/native-managed-probe-queue-init.py"
+ exec unshare --mount --pid --fork --mount-proc /usr/bin/tini -g -- /bin/sh "$repo/scripts/fixtures/paired-public-session.sh" "$work" "$repo" inner
+fi
 mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
 mkdir -p /opt/bin /opt/sbin /opt/etc/init.d /opt/etc/razvilka /opt/razvilka/state /opt/razvilka/run /opt/razvilka/log /opt/razvilka/cache /opt/root
 chmod 755 /opt/bin /opt/sbin /opt/etc /opt/etc/init.d /opt/razvilka
@@ -48,13 +63,6 @@ exec /opt/bin/sh /opt/etc/razvilka/source-init-0193 "$@"
 SOURCE_INIT
 chmod 755 /opt/etc/init.d/S99razvilka
 ip link set lo up
-# Initialize then remove actual no-hook kernel state; never fabricate absence.
-/usr/sbin/iptables-legacy -t mangle -N RZV_CI_NFQ_BOOTSTRAP
-/usr/sbin/iptables-legacy -t mangle -A RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
-/usr/sbin/iptables-legacy -t mangle -D RZV_CI_NFQ_BOOTSTRAP -j NFQUEUE --queue-num 64611
-/usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
-/usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
-RAZVILKA_MANAGED_PROBE_FIXTURE_WORK="$work" python3 "$repo/scripts/native-managed-probe-queue-init.py"
 /opt/bin/sh /opt/etc/init.d/S99razvilka start
 # tini is PID1 and joins the actual daemon after the public old-panel Stop.
 # Namespace teardown kills any remaining child on fixture failure.
