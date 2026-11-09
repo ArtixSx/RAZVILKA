@@ -64,7 +64,9 @@ func captureProc(ctx context.Context) observation {
 		return r
 	}
 	r.KernelRelease, r.Machine = releaseBefore, machineBefore
-	a := &audit{fdinfo: -1, ctx: ctx}
+	// Reserve common descriptor storage; append still grows without a new cap.
+	var retained [16]heldFD
+	a := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}
 	defer a.close()
 	rootFD, err := syscall.Open("/proc", dirFlags, 0)
 	if err != nil {

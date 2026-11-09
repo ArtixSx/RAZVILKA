@@ -19,14 +19,14 @@ import (
 )
 
 // The duplicated measurement body is mechanically checked against the real
-// producer below. It changes only slice backing storage; production is unchanged.
+// producer below. It retains the old backing allocation for a paired baseline.
 //go:embed observe_linux.go
 var auditCapacityProductionSource string
 
 //go:embed audit_capacity_measurement_native_linux_test.go
 var auditCapacityCandidateSource string
 
-func captureProcReservedCandidate(ctx context.Context) observation {
+func captureProcBeforeReservation(ctx context.Context) observation {
 	r := observation{}
 	if ctx == nil || ctx.Err() != nil {
 		return r
@@ -44,8 +44,7 @@ func captureProcReservedCandidate(ctx context.Context) observation {
 		return r
 	}
 	r.KernelRelease, r.Machine = releaseBefore, machineBefore
-	var retained [16]heldFD
-	a := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}
+	a := &audit{fdinfo: -1, ctx: ctx}
 	defer a.close()
 	rootFD, err := syscall.Open("/proc", dirFlags, 0)
 	if err != nil {
@@ -235,9 +234,9 @@ func TestAuditCapacityCandidateSourceParity(t *testing.T) {
 		return strings.TrimSpace(source[from : from+to])
 	}
 	before := extract(auditCapacityProductionSource, "func captureProc(", "\nfunc (a *audit) close()")
-	after := extract(auditCapacityCandidateSource, "func captureProcReservedCandidate(", "\nfunc TestAuditCapacityCandidateSourceParity(")
-	before = strings.Replace(before, "func captureProc(", "func captureProcReservedCandidate(", 1)
-	before = strings.Replace(before, "a := &audit{fdinfo: -1, ctx: ctx}", "var retained [16]heldFD\n\ta := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}", 1)
+	after := extract(auditCapacityCandidateSource, "func captureProcBeforeReservation(", "\nfunc TestAuditCapacityCandidateSourceParity(")
+	before = strings.Replace(before, "func captureProc(", "func captureProcBeforeReservation(", 1)
+	before = strings.Replace(before, "// Reserve common descriptor storage; append still grows without a new cap.\n\tvar retained [16]heldFD\n\ta := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}", "a := &audit{fdinfo: -1, ctx: ctx}", 1)
 	if before != after {
 		t.Fatal("measurement body drifted beyond backing storage initializer")
 	}
@@ -261,8 +260,8 @@ func TestAuditCapacityCandidateActualCleanup(t *testing.T) {
 	defer runtime.UnlockOSThread()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	before := captureProc(ctx)
-	after := captureProcReservedCandidate(ctx)
+	before := captureProcBeforeReservation(ctx)
+	after := captureProc(ctx)
 	if !before.ObservationValid || !reflect.DeepEqual(before, after) {
 		t.Fatal("actual complete capture parity refused")
 	}
@@ -277,7 +276,7 @@ func TestAuditCapacityCandidateActualCleanup(t *testing.T) {
 	for i := 0; i < 16; i++ {
 		canceled, stop := context.WithCancel(ctx)
 		stop()
-		for _, read := range []func(context.Context) observation{captureProc, captureProcReservedCandidate} {
+		for _, read := range []func(context.Context) observation{captureProcBeforeReservation, captureProc} {
 			if read(canceled).ObservationValid {
 				t.Fatal("canceled entry accepted")
 			}
@@ -330,14 +329,14 @@ func BenchmarkProcAuditCapacityCandidate(b *testing.B) {
 	defer runtime.UnlockOSThread()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	before, after := captureProc(ctx), captureProcReservedCandidate(ctx)
+	before, after := captureProcBeforeReservation(ctx), captureProc(ctx)
 	if !before.ObservationValid || !reflect.DeepEqual(before, after) {
 		b.Fatal("actual complete capture parity refused")
 	}
 	for _, sample := range []struct {
 		name    string
 		capture func(context.Context) observation
-	}{{"before_append", captureProc}, {"reserved_candidate", captureProcReservedCandidate}} {
+	}{{"before_append", captureProcBeforeReservation}, {"reserved_candidate", captureProc}} {
 		b.Run(sample.name, func(b *testing.B) {
 			runtime.LockOSThread()
 			defer runtime.UnlockOSThread()
