@@ -15,7 +15,17 @@ import (
 // Documentary terminal/publication only: real original journal FDs and Gate,
 // but retirement is explicitly modeled. This issues no public native proof.
 func TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument(t *testing.T) {
-	m, _, r, e := mihomoLiveRecordModel(t)
+	t.Run("minimal-definition", func(t *testing.T) {
+		testMihomoStoppedOriginalCommittedDocument(t)
+	})
+	t.Run("actual-compiler", func(t *testing.T) {
+		original, _ := mihomoStoppedCompilerWireFixture(t)
+		testMihomoStoppedOriginalCommittedDocument(t, original)
+	})
+}
+
+func testMihomoStoppedOriginalCommittedDocument(t *testing.T, originalPlan ...Plan) {
+	m, _, r, e := mihomoLiveRecordModel(t, originalPlan...)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	root := filepath.Join(t.TempDir(), "control")
@@ -60,7 +70,7 @@ func TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument(t *testing.T) {
 	if err != nil || !found {
 		t.Fatal(err)
 	}
-	if !xraySelectedTCPSamePlan(r.definition.Plan, actual) {
+	if !mihomoStoppedOriginalPlanMatches(r.definition.Plan, actual) {
 		t.Fatal("current result does not match frozen intent before Stop publication")
 	}
 	result, err := m.publishRetiredMihomoPlan(held, terminal, cleanup, before.Revision+1)

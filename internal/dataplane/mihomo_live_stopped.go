@@ -90,7 +90,7 @@ func (m *Manager) publishRetiredMihomoPlan(ctx context.Context, terminal *Mihomo
 	}
 	p := terminal.stopped
 	if p == nil {
-		if current.State != "committed" || !xraySelectedTCPSamePlan(e.definition.Plan, current) {
+		if current.State != "committed" || !mihomoStoppedOriginalPlanMatches(e.definition.Plan, current) {
 			return Plan{}, ErrReviewChanged
 		}
 		plan, err := BuildAt(Input{Revision: revision, NetworkProfileID: e.definition.Plan.NetworkProfileID}, time.Now().UTC())
@@ -142,6 +142,23 @@ func (m *Manager) publishRetiredMihomoPlan(ctx context.Context, terminal *Mihomo
 		return Plan{}, err
 	}
 	return cloneExecutionResourcePlan(p.plan), e.control.CurrentForCleanupOperation(ctx, cleanup)
+}
+
+// Committed decodes the Manager's published plan. Derive its expected wire
+// shape only from this terminal owner's original frozen compiler intent:
+// omitempty drops empty compiler slices. Neither incoming documents nor the
+// retained before/target images are rewritten, and the ordinary exact intent
+// comparison still permits only its existing result-bookkeeping differences.
+func mihomoStoppedOriginalPlanMatches(original, current Plan) bool {
+	data, err := json.Marshal(original)
+	if err != nil {
+		return false
+	}
+	var expected Plan
+	if json.Unmarshal(data, &expected) != nil {
+		return false
+	}
+	return xraySelectedTCPSamePlan(cloneExecutionResourcePlan(expected), current)
 }
 
 func (p *mihomoStoppedPlanPublication) current(ctx context.Context) error {

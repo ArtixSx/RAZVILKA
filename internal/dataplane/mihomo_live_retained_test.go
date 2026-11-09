@@ -14,9 +14,15 @@ import (
 
 // A COMMON publication model with real directory/file owners. It cannot
 // supply a source, original process, control lease, TUN or service evidence.
-func mihomoLiveRecordModel(t *testing.T) (*Manager, *MihomoProbeAdapter, *mihomoLiveResource, *Execution) {
+func mihomoLiveRecordModel(t *testing.T, originalPlan ...Plan) (*Manager, *MihomoProbeAdapter, *mihomoLiveResource, *Execution) {
 	t.Helper()
 	d := mihomoLiveDefinitionFixture(t)
+	if len(originalPlan) > 1 {
+		t.Fatal("only one original compiler plan is allowed")
+	}
+	if len(originalPlan) == 1 {
+		d.Plan = cloneExecutionResourcePlan(originalPlan[0])
+	}
 	d.NativeHome = mihomoLiveHomeFixture(t)
 	d.Observation = &MihomoLiveRuntimeObservation{Schema: 1, SidecarReceiptVersion: 1, SidecarReceiptSHA256: strings.Repeat("a", 64)}
 	digest, _ := d.FrozenDigest()
