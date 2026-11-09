@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"unsafe"
 )
 
 func TestFreshPathNodeSyscallArgumentParity(t *testing.T) {
@@ -172,7 +173,7 @@ func TestFreshPathNodeStatComparisonFields(t *testing.T) {
 func BenchmarkFreshPathNode(b *testing.B) {
 	path := "/usr/bin/env"
 	before := mustPathInfo(b, path)
-	for _, mode := range []string{"fileinfo", "before_syscall_lstat", "direct-stat"} {
+	for _, mode := range []string{"fileinfo", "before_syscall_lstat", "direct-stat", "stack_candidate"} {
 		b.Run(mode, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
@@ -190,6 +191,8 @@ func BenchmarkFreshPathNode(b *testing.B) {
 					if err == nil {
 						ok = sameReviewedStat(before.Sys().(*syscall.Stat_t), &after)
 					}
+				} else if mode == "stack_candidate" {
+					ok, err = freshPathNodeStackCandidate(path, before)
 				} else {
 					ok, err = freshPathNode(path, before)
 				}
@@ -199,4 +202,32 @@ func BenchmarkFreshPathNode(b *testing.B) {
 			}
 		})
 	}
+}
+
+// Measurement-only alternative: production remains the reviewed pooled helper.
+// The race runtime can discard Pool entries; measure stack scratch on the same
+// syscall/path before choosing an implementation, rather than assume escape cost.
+func freshPathNodeStackCandidate(path string, expected os.FileInfo) (bool, error) {
+	if expected == nil {
+		return false, nil
+	}
+	before, ok := expected.Sys().(*syscall.Stat_t)
+	if !ok || before == nil {
+		return false, nil
+	}
+	var after syscall.Stat_t
+	if len(path) >= 4096 || strings.IndexByte(path, 0) >= 0 {
+		if err := syscall.Lstat(path, &after); err != nil {
+			return false, err
+		}
+		return sameReviewedStat(before, &after), nil
+	}
+	var argument [4096]byte
+	copy(argument[:], path)
+	_, _, errno := syscall.Syscall6(freshPathStatSyscall, ^uintptr(99),
+		uintptr(unsafe.Pointer(&argument[0])), uintptr(unsafe.Pointer(&after)), 0x100, 0, 0)
+	if errno != 0 {
+		return false, errno
+	}
+	return sameReviewedStat(before, &after), nil
 }
