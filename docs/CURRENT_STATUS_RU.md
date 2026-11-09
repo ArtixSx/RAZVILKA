@@ -21,8 +21,10 @@
 Код modern public update/known rollback интегрирован в `690c0c30`, отдельный
 CI workflow — в `83a1a933`. Независимое ревью пройдено; native run
 [42692078602](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078602)
-и generic [42692078123](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078123)
-на момент сохранения ещё выполняются. PASS не заявлен. Сценарий использует
+завершился FAIL2.75с: `ordinary-preparation-owner-refused` до обновления;
+три focused hook tests PASS. Release transport/rollback не достигнуты.
+Generic [42692078123](https://github.com/ArtixSx/RAZVILKA/actions/runs/42692078123)
+на момент сохранения ещё выполняется. PASS всего сценария не заявлен. Сценарий использует
 два настоящих main-бинарника из одного source, native fixture tag и synthetic
 release transport; это не проверка официального релиза и не router acceptance.
 
@@ -38,7 +40,7 @@ release transport; это не проверка официального рел�
 LAN/manual и часть Mihomo recovery/settlement остаются незавершёнными.
 
 На0470 public empty/draft/history и actual default old-layout refusal PASS;
-неподдержанный upgrade0.19.x остаётся закрыт. Modern rollback ожидает CI,
+неподдержанный upgrade0.19.x остаётся закрыт. Modern rollback требует разбора исходного preflight owner refusal,
 далее нужны remaining rollback/recovery cuts и отдельная router/LAN приёмка.
 Работа остановлена по просьбе пользователя из-за лимита; объём задач и
 ожидание CI не объявлены внешними блокерами. Действующий роутер не изменён.

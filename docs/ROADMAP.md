@@ -60,9 +60,9 @@ refs и незакоммиченные файлы сохранены. Стары
 
 Владельцы общей очереди сохранены. Root интегрировал modern public rollback
 `690c0c30` и focused workflow `83a1a933`; nfq_completion владеет его12fixture
-файлами, verification — независимым ревью. Native42692078602 и generic42692078123
-ещё выполняются; сначала получить финальные логи, проверить actual PASS marker
-и отсутствие SKIP. Исправленный cancellation test9c прошёл30normal/race;
+файлами, verification — независимым ревью. Native42692078602 FAIL2.75с на `ordinary-preparation-owner-refused` до
+обновления; три hooks PASS. Сначала разобрать исходный preflight owner отказ
+без ослабления admission. Generic42692078123 ещё выполняется. Исправленный cancellation test9c прошёл30normal/race;
 полный generic42690593933 pending. Старые d7 generic FAIL нельзя считать PASS.
 
 На0470 public empty/draft/history/default-layout refusal PASS; unsupported

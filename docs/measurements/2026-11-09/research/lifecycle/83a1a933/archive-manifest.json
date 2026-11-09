@@ -12,6 +12,14 @@
     "run-42692078602-progress.json": {
       "bytes": 3673,
       "sha256": "0bbfb364e06b59fa7ae304f6ce8c015e3d28447700e900df8376dab31e45e749"
+    },
+    "modern-final.log": {
+      "bytes": 9025,
+      "sha256": "74734e2a87a50b3642e9789fd1c7ae2f07d70b7ce57c3252b9b3e019909a04d9"
+    },
+    "modern-final.json": {
+      "bytes": 497,
+      "sha256": "1ed1c5ba7ccccf898b9c6f9b1d9515da49261ad5a14d2f222f2ed2ac5fe26729"
     }
   }
 }

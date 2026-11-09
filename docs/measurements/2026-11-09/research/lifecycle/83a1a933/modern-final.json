@@ -1,0 +1,11 @@
+{
+  "sha": "83a1a933e6d7b1ba1ba62acf17f342e00011a6f9",
+  "run_id": 42692078602,
+  "conclusion": "failure",
+  "focused_hooks": "3 PASS",
+  "actual_native_test": "FAIL 2.75s",
+  "stage": "failed preflight ordinary-preparation-owner-refused",
+  "release_transport": "not reached; request contract not observed",
+  "rollback_proven": false,
+  "next_action": "Trace original preparation owner refusal in isolated fixture; retain original admission checks. No further changes requested this session."
+}
