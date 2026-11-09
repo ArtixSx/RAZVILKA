@@ -82,33 +82,34 @@ const (
 // NodeCheckResult is deliberately safe for persistence and the Web API. Raw
 // process output, the remote endpoint and direct egress address are omitted.
 type NodeCheckResult struct {
-	SchemaVersion        int                    `json:"schema_version"`
-	ProbeID              string                 `json:"probe_id"`
-	NodeID               string                 `json:"node_id"`
-	ServiceID            string                 `json:"service_id"`
-	NetworkProfile       string                 `json:"network_profile"`
-	RoutePathID          string                 `json:"route_path_id"`
-	StartedAt            time.Time              `json:"started_at"`
-	FinishedAt           time.Time              `json:"finished_at"`
-	ExpiresAt            time.Time              `json:"expires_at"`
-	TestLevel            string                 `json:"test_level"`
-	Stage                string                 `json:"stage"`
-	Verdict              evidence.Verdict       `json:"verdict"`
-	Available            bool                   `json:"available"`
-	EgressIP             string                 `json:"egress_ip,omitempty"`
-	HTTPStatus           int                    `json:"http_status,omitempty"`
-	LatencyMS            int64                  `json:"latency_ms,omitempty"`
-	ErrorCode            string                 `json:"error_code,omitempty"`
-	Message              string                 `json:"message"`
-	DirectControl        string                 `json:"direct_control"`
-	CleanupStatus        NodeCleanupStatus      `json:"cleanup_status,omitempty"`
-	DirectLeak           bool                   `json:"direct_leak"`
-	ServiceErrorCategory string                 `json:"service_error_category,omitempty"`
-	DirectEgressError    string                 `json:"direct_egress_error,omitempty"`
-	ProxyEgressError     string                 `json:"proxy_egress_error,omitempty"`
-	RuntimeContract      string                 `json:"runtime_contract,omitempty"`
-	Stages               []NodeCheckStage       `json:"stages"`
-	Evidence             evidence.ProbeEvidence `json:"evidence"`
+	NetworkTimings       []probecheck.NetworkTiming `json:"network_timings,omitempty"` // Diagnostic only; not persisted in NodeStore.
+	SchemaVersion        int                        `json:"schema_version"`
+	ProbeID              string                     `json:"probe_id"`
+	NodeID               string                     `json:"node_id"`
+	ServiceID            string                     `json:"service_id"`
+	NetworkProfile       string                     `json:"network_profile"`
+	RoutePathID          string                     `json:"route_path_id"`
+	StartedAt            time.Time                  `json:"started_at"`
+	FinishedAt           time.Time                  `json:"finished_at"`
+	ExpiresAt            time.Time                  `json:"expires_at"`
+	TestLevel            string                     `json:"test_level"`
+	Stage                string                     `json:"stage"`
+	Verdict              evidence.Verdict           `json:"verdict"`
+	Available            bool                       `json:"available"`
+	EgressIP             string                     `json:"egress_ip,omitempty"`
+	HTTPStatus           int                        `json:"http_status,omitempty"`
+	LatencyMS            int64                      `json:"latency_ms,omitempty"`
+	ErrorCode            string                     `json:"error_code,omitempty"`
+	Message              string                     `json:"message"`
+	DirectControl        string                     `json:"direct_control"`
+	CleanupStatus        NodeCleanupStatus          `json:"cleanup_status,omitempty"`
+	DirectLeak           bool                       `json:"direct_leak"`
+	ServiceErrorCategory string                     `json:"service_error_category,omitempty"`
+	DirectEgressError    string                     `json:"direct_egress_error,omitempty"`
+	ProxyEgressError     string                     `json:"proxy_egress_error,omitempty"`
+	RuntimeContract      string                     `json:"runtime_contract,omitempty"`
+	Stages               []NodeCheckStage           `json:"stages"`
+	Evidence             evidence.ProbeEvidence     `json:"evidence"`
 }
 
 type NodeChecker interface {

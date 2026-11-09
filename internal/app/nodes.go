@@ -16,6 +16,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/providerprofile"
 	"github.com/ArtixSx/razvilka/internal/systemprobe"
 )
@@ -550,12 +551,21 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 	}
 	profile = current
 	record := false
+	var networkTimings []probecheck.NetworkTiming
+	var networkObservation nodeCheckObservation
 	err = a.Nodes.WithSecret(ctx, id, func(material []byte) error {
 		var checkErr error
 		if err := resourceGuard(checkCtx, "", netip.Addr{}); err != nil {
 			return err
 		}
-		result, record, checkErr = run(checkCtx, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: defaultRouteCloneCatalogService(service), NetworkProfile: profile})
+		measured, measurements := probecheck.WithNetworkMeasurements(checkCtx)
+		defer measurements.Close()
+		networkObservation = nodeCheckObservation{ServiceID: service.ID, StartedAt: time.Now().UTC()}
+		result, record, checkErr = run(measured, dataplane.NodeCheckRequest{NodeID: id, Outbound: material, Service: defaultRouteCloneCatalogService(service), NetworkProfile: profile})
+		networkObservation.FinishedAt = time.Now().UTC()
+		networkTimings = measurements.Close()
+		// Only our collector may supply this field, including error paths.
+		result.NetworkTimings = nil
 		return checkErr
 	})
 	if err != nil {
@@ -617,6 +627,9 @@ func (a *App) runAndRecordNode(ctx context.Context, engine, id string, service c
 	}
 	if err == nil {
 		a.rememberNodeMeasurement(result)
+		if !result.StartedAt.Before(networkObservation.StartedAt) && networkObservation.current(id, profile, engine, result) {
+			result.NetworkTimings = closedNodeNetworkTimings(networkTimings)
+		}
 	} else if errors.Is(err, config.ErrRevisionChanged) {
 		dataplane.RefuseNodeResourceResult(&result)
 		err = errors.Join(dataplane.ErrNodeResourceDenied, err)

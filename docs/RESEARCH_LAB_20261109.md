@@ -327,6 +327,16 @@ SHA-NI16.15с60.78%. Это вложенные CPU доли большого т�
 Actual per-exchange observations находятся в profile/native-performance.log;
 набор с профилированием не смешан с парным измерением.
 
+Следующая App API/UI реализация собирает до32 обменов и в обычной проверке.
+Поэтому следующие paired candidate samples включают стоимость штатной telemetry;
+это отличается от1a50, где collector в App включался лишь в profile pass.
+Не следует вычитать overhead или переносить результаты старого SHA автоматически.
+Original invocation collector закрывается, произвольное поле checker затирается,
+публикация происходит только после исходных resource/network/history/RecordCheck
+проверок и проверки времени именно этого вызова. Данные не входят в CheckRecord,
+ranking, capability или evidence. HTTP503 может иметь завершённый TLS/TTFB,
+но остаётся отказом сервиса; canceled/foreign/earlier results не получают эти времена.
+
 Fresh held Fstat normal/race и concurrent Close прошли на1a50;6samples median
 808.1→731.8ns,208B/1allocation→0/0. Полный NFQ Apply ещё FAIL по deadline.
 Classic-save6pair benchmark доe9 не дошёл: iptables запрещает DROP в nat;

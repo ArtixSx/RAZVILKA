@@ -24,3 +24,16 @@ assert.doesNotMatch(model.jobTiming({...job,timing:{...job.timing,queue_wait_ms:
 assert.match(model.jobTiming({...job,timing:{...job.timing,queue_wait_ms:0}},0),/До первого допуска: <1 мс/);
 assert.doesNotMatch(model.jobTiming({...job,timing:{...job.timing,total_ms:-1}},NaN),/завершения на сервере:|Чтение результата/);
 console.log('node job queue/total/readback timing: OK');
+const phases = [{sequence:1,kind:'service-http',status:'failed',tls:{observed:true,duration_us:1234,status:'complete'},ttfb:{observed:true,duration_us:3210,status:'incomplete'},socks_connect:{observed:true,duration_us:0,status:'multiple'},body_read:{observed:false,duration_us:0}}];
+const network = model.jobTiming({...job,results:[{network_timings:phases}]},null);
+assert.match(network,/TLS: 1.2 мс \(завершён\)/);
+assert.match(network,/До первого байта: 3.2 мс \(не завершён\)/);
+assert.match(network,/SOCKS: подключение и согласование: несколько попыток/);
+assert.match(network,/Чтение ответа: не наблюдалось/);
+assert.match(network,/не подтверждают работу сервиса или LAN/);
+assert.doesNotMatch(network,/SOCKS[^·]*0 мс/);
+assert.equal(model.networkTiming([{...phases[0],kind:'<private>'}]),'');
+assert.doesNotMatch(model.networkTiming([{...phases[0],tls:{observed:true,duration_us:Infinity,status:'<secret>'}}]),/secret|Infinity/);
+assert.equal((model.networkTiming(Array.from({length:40},(_,i)=>({...phases[0],sequence:i+1}))).match(/Обмен /g)||[]).length,32);
+assert.doesNotMatch(model.jobTiming({...job,mode:'connectivity',results:[{network_timings:phases}]},null),/Обмен/);
+console.log('node network timing: bounded original observations and incomplete/multiple/absent labels OK');

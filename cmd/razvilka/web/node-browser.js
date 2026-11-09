@@ -29,6 +29,25 @@ const nodeMeasurementModel = (() => {
     return candidates[0] || null;
   }
   function label(value) { const n=number(value); return n===null?'—':n===0?'<1 мс':`${n} мс`; }
+  function networkTiming(rows) {
+    const us = n => Number.isSafeInteger(n) && n >= 0 && n <= 600000000 ? n : null;
+    const status = {complete:'завершён',failed:'ошибка',incomplete:'не завершён',multiple:'несколько попыток'};
+    const names = {local_dns:'Локальный DNS',socks_connect:'SOCKS: подключение и согласование',tls:'TLS',ttfb:'До первого байта',body_read:'Чтение ответа'};
+    const output = [];
+    for (const row of (Array.isArray(rows) ? rows : []).slice(0,32)) {
+      if (!['service-http','service-resolver'].includes(row?.kind) || !['complete','failed','incomplete'].includes(row.status) || !Number.isSafeInteger(row.sequence) || row.sequence < 1 || row.sequence > 32) continue;
+      const phases = [];
+      for (const [key,name] of Object.entries(names)) {
+        if (row.kind === 'service-resolver' && key !== 'local_dns') continue;
+        const phase = row[key];
+        if (phase?.observed !== true || !Object.hasOwn(status,phase.status) || us(phase.duration_us) === null) { phases.push(`${name}: не наблюдалось`); continue; }
+        if (phase.status === 'multiple') { phases.push(`${name}: несколько попыток`); continue; }
+        phases.push(`${name}: ${phase.duration_us < 1000 ? '<1 мс' : `${(phase.duration_us/1000).toFixed(1)} мс`} (${status[phase.status]})`);
+      }
+      output.push(`Обмен ${row.sequence} (${status[row.status]}): ${phases.join(', ')}${row.connection_reused === true ? '; повторное соединение' : ''}${row.later_rows_omitted === true ? '; следующие обмены не показаны' : ''}`);
+    }
+    return output.length ? `${output.join(' · ')}. Интервалы перекрываются; SOCKS не измеряет TCP удалённого сервера. Эти времена не подтверждают работу сервиса или LAN-маршрута.` : '';
+  }
   function jobTiming(job, readbackMS) {
     const timing=job?.timing, parts=[];
     const batchNumber=value=>Number.isSafeInteger(value)&&value>=0&&value<=86400000?value:null;
@@ -44,6 +63,8 @@ const nodeMeasurementModel = (() => {
     const stages={dns:'DNS',tcp_connect:'TCP',transport:'Транспорт',configuration:'Validation/подготовка',runtime_start:'Запуск движка',runtime_ready:'Готовность SOCKS',route_identity:'Идентичность маршрута',egress:'Egress',service:'Сервис',service_ip:'IP сервиса',cleanup:'Очистка'};
     const observed=(Array.isArray(last?.stages)?last.stages:[]).filter(stage=>stages[stage?.id]&&number(stage.duration_ms)!==null).map(stage=>`${stages[stage.id]} ${label(stage.duration_ms)}`);
     if(observed.length)parts.push(`Этапы последнего узла (не сумма): ${observed.join(', ')}`);
+    const network = job?.mode === 'service' ? networkTiming(last?.network_timings) : '';
+    if(network)parts.push(network);
     if(number(readbackMS)!==null)parts.push(`Чтение результата в панели: ${label(readbackMS)} (отдельно от времени сервера)`);
     return parts.join(' · ');
   }
@@ -56,7 +77,7 @@ const nodeMeasurementModel = (() => {
     if(results[0].status==='rejected') throw results[0].reason;
     return {response:results[0].value, fallback:results[1].status==='fulfilled'?results[1].value:null, partial:results[1].status==='rejected'};
   }
-  return Object.freeze({measurement,tcp,label,readStatus,jobTiming});
+  return Object.freeze({measurement,tcp,label,readStatus,jobTiming,networkTiming});
 })();
 // END NODE MEASUREMENT MODEL
 

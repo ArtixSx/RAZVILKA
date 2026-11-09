@@ -17,6 +17,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/nodequality"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
@@ -38,6 +39,7 @@ type nodeCheckJobRequest struct {
 }
 
 type nodeCheckItem struct {
+	NetworkTimings       []probecheck.NetworkTiming  `json:"network_timings,omitempty"`
 	ServiceErrorCategory string                      `json:"service_error_category,omitempty"`
 	DirectEgressError    string                      `json:"direct_egress_error,omitempty"`
 	ProxyEgressError     string                      `json:"proxy_egress_error,omitempty"`
@@ -159,6 +161,9 @@ func (a *App) nodeCheckSnapshot() map[string]any {
 	if a.nodeChecks.job != nil {
 		copy := *a.nodeChecks.job
 		copy.Results = append([]nodeCheckItem{}, copy.Results...)
+		for i := range copy.Results {
+			copy.Results[i].NetworkTimings = closedNodeNetworkTimings(copy.Results[i].NetworkTimings)
+		}
 		if copy.Fetch != nil {
 			fetch := *copy.Fetch
 			fetch.NodeIDs = append([]string{}, fetch.NodeIDs...)

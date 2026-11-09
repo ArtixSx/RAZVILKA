@@ -566,6 +566,7 @@ func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResul
 	}
 	current := observation.current(id, profile, engine, result)
 	if current {
+		item.NetworkTimings = closedNodeNetworkTimings(result.NetworkTimings)
 		item.DirectEgressError = closedNodeEgressError(result.DirectEgressError)
 		item.ProxyEgressError = closedNodeEgressError(result.ProxyEgressError)
 		item.Stages = closedNodeCheckStages(result.Stages)
@@ -669,6 +670,9 @@ func (a *App) nodeBatchMemoryResults() map[uint64]nodeCheckJob {
 	for id, job := range a.nodeChecks.batchResults {
 		copy := *job
 		copy.Results = slices.Clone(job.Results)
+		for i := range copy.Results {
+			copy.Results[i].NetworkTimings = closedNodeNetworkTimings(copy.Results[i].NetworkTimings)
+		}
 		results[id] = copy
 	}
 	return results
