@@ -592,9 +592,11 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			time.Sleep(50 * time.Millisecond)
 		}
 		if !strings.HasPrefix(published.Answer, "198.") {
+			t.Logf("actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 			domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 			return errors.New("actual DNS publication did not become available")
 		}
+		t.Logf("actual first DNS answer completed-counter snapshot (post-send closing may still be in flight; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 		same, err := owner.LookupPublished(original, transport.Definition.Client, netip.MustParseAddr(published.Answer))
 		if err != nil || same != mapping {
 			return fmt.Errorf("published original mapping: %w", err)
@@ -622,6 +624,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
 			}
 		}
+		t.Logf("actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 		stopRun()
 		select {
 		case runErr := <-runDone:
