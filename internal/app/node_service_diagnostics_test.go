@@ -16,7 +16,7 @@ func TestNodeServiceDTOClosedEgressDiagnosticsPreserveFailure(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			now := time.Now().UTC()
 			result := dataplane.NodeCheckResult{
-				NodeID: "node-unit", NetworkProfile: "wan-unit", RoutePathID: "sing-box:node-unit",
+				NodeID: "node-unit", ServiceID: "service-unit", NetworkProfile: "wan-unit", RoutePathID: "sing-box:node-unit",
 				ProbeID: "node-check-0123456789abcdef01234567", StartedAt: now.Add(-11 * time.Second), FinishedAt: now,
 				ExpiresAt: now.Add(time.Minute), LatencyMS: 11000, TestLevel: "protocol", Stage: "egress",
 				Verdict: evidence.VerdictError, ErrorCode: "node-egress-failed", Message: "bounded failure",
@@ -39,7 +39,7 @@ func TestNodeServiceDTOClosedEgressDiagnosticsPreserveFailure(t *testing.T) {
 			case "cleanup":
 				result.Stage, result.ErrorCode, result.CleanupStatus = "cleanup", "node-cleanup-failed", dataplane.NodeCleanupFailed
 			}
-			row := nodeCheckItemFromResult("node-unit", "wan-unit", result, checkErr, "sing-box")
+			row := nodeCheckItemFromResult("node-unit", "wan-unit", result, checkErr, "sing-box", nodeCheckObservation{ServiceID: "service-unit", StartedAt: now.Add(-12 * time.Second), FinishedAt: now})
 			if row.Available || row.ConnectivityReady {
 				t.Fatal("diagnostics granted readiness", row)
 			}

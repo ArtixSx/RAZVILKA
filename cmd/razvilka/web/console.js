@@ -69,13 +69,16 @@ function consoleDate(value) {const d=new Date(value);return Number.isFinite(d.ge
 function consoleEngineState(id){
  const config=state.engineConfigs?.find(e=>e.id===id),component=state.components?.find(e=>e.id===id),engine=state.engines?.find(e=>e.id===id);
  const observationStale=typeof inventoryObservationStale==='function'&&inventoryObservationStale();
+ const runtimeUnknown=component?.runtime_observation==='unknown';
+ // Retain conservative running gates, but never present them as an observed
+ // process state when the original component explicitly reports uncertainty.
  const running=component?.running===true||engine?.running===true||config?.running===true;
  const installed=running||component?.installed===true||engine?.installed===true||config?.installed===true;
  const installedKnown=installed||(!component?.inventory_error&&[component,engine,config].some(e=>typeof e?.installed==='boolean'));
  const installedVersion=installed?(component?.installed_version||component?.runtime_version||engine?.version||''):'';
  const availableVersion=component?.available_version||'';
  const recovery=typeof componentRecoverySummary==='function'?componentRecoverySummary(id):null;
- return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,recovery,label:recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке'),tone:!observationStale&&recovery?.tone==='good'?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
+ return {config,component,engine,running,installed,installedKnown,installedVersion,availableVersion,observationStale,runtimeUnknown,recovery,label:runtimeUnknown?'Состояние процесса неизвестно':recovery?.label||(observationStale?'Состояние уточняется':running?'Процесс запущен':installed?'Установлен':installedKnown?'Не установлен':'Нет данных об установке'),tone:!runtimeUnknown&&!observationStale&&recovery?.tone==='good'?'good':'unknown',version:installedVersion|| (installed?'Версия не определена':availableVersion?`Доступна ${availableVersion}`:installedKnown?'Не установлен':'Нет данных о версии')};
 }
 function consoleEngineUpdateState(info){
  const c=info.component,load=state.dataLoad?.components;

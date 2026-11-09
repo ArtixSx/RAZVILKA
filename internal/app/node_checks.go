@@ -465,8 +465,17 @@ func (a *App) runNodeCheckItem(ctx context.Context, mode, id string, service cat
 		defer cancel()
 		// These rows never lead to Apply; check with the engine the node requires.
 		engine := a.checkOnlyNodeEngine(checkContext, id)
+		observation := nodeCheckObservation{ServiceID: service.ID, StartedAt: time.Now().UTC()}
+		if profile == "" {
+			var err error
+			profile, err = a.freshNetworkProfile(checkContext)
+			if err != nil {
+				return nodeCheckItemFromResult(id, profile, dataplane.NodeCheckResult{}, err, engine, observation)
+			}
+		}
 		result, _, err := a.checkAndRecordNodeForEngine(checkContext, engine, id, service, profile, 0)
-		return nodeCheckItemFromResult(id, profile, result, err, engine)
+		observation.FinishedAt = time.Now().UTC()
+		return nodeCheckItemFromResult(id, profile, result, err, engine, observation)
 	}
 	current, err := a.freshNetworkProfile(ctx)
 	if err != nil || current != profile {

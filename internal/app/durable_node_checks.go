@@ -404,15 +404,27 @@ func (a *App) runDurableNodeCheck(ctx context.Context, r serviceControlJobReques
 				eachNodeInParallel(len(batch), capacity, func(k int) {
 					i := batch[k]
 					engine := a.checkOnlyNodeEngine(checkCtx, ids[i])
+					observation := nodeCheckObservation{ServiceID: service.ID, StartedAt: time.Now().UTC()}
 					result, final, err := a.screenAndRecordNodeForEngine(checkCtx, engine, ids[i], service, profile)
+					observation.FinishedAt = time.Now().UTC()
+					if result.ErrorCode == "node-cleanup-failed" {
+						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, err, engine, observation), true
+						return
+					}
 					if err != nil {
 						return // A full check decides; it reports its own failure.
 					}
-					screened[i] = screenPing(ids[i], profile, result)
+					screened[i] = screenPing(ids[i], profile, result, engine, observation, final)
 					if final {
-						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil, engine), true
+						items[i], decided[i] = nodeCheckItemFromResult(ids[i], profile, result, nil, engine, observation), true
 					}
 				})
+				for _, i := range batch {
+					if items[i].ErrorCode == "node-cleanup-failed" {
+						a.Operations.FenceJournal()
+						return out, operationgate.ErrRecovery
+					}
+				}
 				for _, i := range batch {
 					if !decided[i] {
 						undecided++
@@ -525,13 +537,35 @@ func eachNodeInParallel(n, limit int, fn func(int)) {
 	wg.Wait()
 }
 
+// nodeCheckObservation binds displayed telemetry to the expected scope and a
+// caller-owned clock interval. Completed evidence keeps the history freshness
+// window; unfinished transport screens must belong to this invocation.
+type nodeCheckObservation struct {
+	ServiceID             string
+	StartedAt, FinishedAt time.Time
+}
+
+func (o nodeCheckObservation) identity(id, profile, engine string, result dataplane.NodeCheckResult) bool {
+	return (engine == "xray" || engine == "sing-box") && id != "" && profile != "" && o.ServiceID != "" &&
+		result.NodeID == id && result.ServiceID == o.ServiceID && result.NetworkProfile == profile && result.RoutePathID == engine+":"+id &&
+		!o.StartedAt.IsZero() && !o.FinishedAt.Before(o.StartedAt) &&
+		!result.StartedAt.IsZero() && !result.StartedAt.After(o.FinishedAt)
+}
+
+func (o nodeCheckObservation) current(id, profile, engine string, result dataplane.NodeCheckResult) bool {
+	return o.identity(id, profile, engine, result) && !result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(o.FinishedAt) &&
+		o.FinishedAt.Sub(result.FinishedAt) <= 5*time.Minute &&
+		result.ExpiresAt.After(o.FinishedAt) && result.ExpiresAt.Sub(result.FinishedAt) <= 24*time.Hour
+}
+
 // nodeCheckItemFromResult is the job row of a service check of a node.
-func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResult, err error, engine string) nodeCheckItem {
+func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResult, err error, engine string, observation nodeCheckObservation) nodeCheckItem {
 	item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC(), CleanupStatus: dataplane.NodeCleanupNotObserved}
 	if engine == "sing-box" || engine == "xray" {
 		item.Engine = engine // Selected executor, not proof that a process started.
 	}
-	if item.Engine != "" && result.NodeID == id && result.RoutePathID == engine+":"+id && (profile == "" || result.NetworkProfile == profile) {
+	current := observation.current(id, profile, engine, result)
+	if current {
 		item.DirectEgressError = closedNodeEgressError(result.DirectEgressError)
 		item.ProxyEgressError = closedNodeEgressError(result.ProxyEgressError)
 		item.Stages = closedNodeCheckStages(result.Stages)
@@ -561,6 +595,9 @@ func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResul
 			item.CheckedAt, item.ExpiresAt = result.FinishedAt, result.ExpiresAt
 		}
 	}
+	if err == nil && !current {
+		err = dataplane.ErrExactNodeUnavailable
+	}
 	if err == nil {
 		item.Available, item.DurationMS, item.Message = result.Available, result.LatencyMS, result.Message
 		item.Verdict, item.TestLevel, item.ErrorCode = string(result.Verdict), result.TestLevel, result.ErrorCode
@@ -582,12 +619,21 @@ func nodeCheckItemFromResult(id, profile string, result dataplane.NodeCheckResul
 // screenPing turns the transport stage of a screened node into the node's
 // TCP ping, so a service check fills the ping column as well. UDP nodes have
 // no TCP stage and no ping.
-func screenPing(id, profile string, result dataplane.NodeCheckResult) nodeCheckItem {
-	for _, stage := range result.Stages {
+func screenPing(id, profile string, result dataplane.NodeCheckResult, engine string, observation nodeCheckObservation, final bool) nodeCheckItem {
+	current := observation.current(id, profile, engine, result)
+	if !final {
+		// A successful transport screen is deliberately unfinished: it has no
+		// service result or expiry. Bind only its transport row to this call.
+		current = observation.identity(id, profile, engine, result) && !result.StartedAt.Before(observation.StartedAt) && result.FinishedAt.IsZero() && result.ExpiresAt.IsZero()
+	}
+	if !current || result.ErrorCode == "node-cleanup-failed" {
+		return nodeCheckItem{}
+	}
+	for _, stage := range closedNodeCheckStages(result.Stages) {
 		if stage.ID != "transport" || stage.Status == "skipped" {
 			continue
 		}
-		item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: time.Now().UTC()}
+		item := nodeCheckItem{NodeID: id, NetworkProfile: profile, CheckedAt: observation.FinishedAt}
 		if stage.Status == "passed" {
 			item.Reachable, item.LatencyMS, item.Message = true, max(stage.Duration, 1), "TCP-соединение установлено. Работу сервиса проверьте отдельно."
 		} else {
