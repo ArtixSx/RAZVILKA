@@ -126,7 +126,7 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-probe_cases='TestStartupImageMeasurement.* TestVersionNamesCandidate.* TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_cases='TestStaticVersionFactNativeNFQLANRPDB TestStartupImageMeasurement.* TestVersionNamesCandidate.* TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
@@ -183,6 +183,10 @@ fi
 export RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER
 set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout="$probe_timeout"
 case "$probe_case" in
+  TestStaticVersionFactNativeNFQLANRPDB)
+    # Same actual numeric RPDB children and full outer source boundaries.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkNFQLANRPDBPair$' -test.benchtime=300ms -test.benchmem ;;
   TestStartupImageMeasurement*)
     # Measurement only, same actual held graph and original namespace.
     set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \

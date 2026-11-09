@@ -196,6 +196,20 @@ jobs:
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
           go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Bounded successor profile ownership and lifetime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/app \
+              -run '^TestDomainSuccessorCPUProfile' -count=1 -v | tee "artifacts/domain/successor-profile-$mode.log"
+            for case_name in WriterBound OwnershipAndExclusiveName ActualCompletionAndNoOverlap RetainedDirectoryReplacement WriterFailureRetained; do
+              grep -F -- "--- PASS: TestDomainSuccessorCPUProfile$case_name " "artifacts/domain/successor-profile-$mode.log"
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/successor-profile-$mode.log"; then exit 1; fi
+          done
       - name: Original child cancellation and held mount identity
         shell: bash
         run: |
