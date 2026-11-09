@@ -60,7 +60,11 @@ func TestClassicSaveNativeInventoryParity(t *testing.T) {
 					}
 				}()
 			}
-			for _, args := range [][]string{{"-t", table, "-A", "RZV_SAVE_EQ", "-p", "tcp", "--dport", "443", "-m", "comment", "--comment", "quote \" slash \\ space", "-j", "RETURN"}, {"-t", table, "-A", "RZV_SAVE_EQ", "-p", "udp", "--dport", "53", "-j", "DROP"}} {
+			target := "DROP"
+			if table == "nat" {
+				target = "RETURN" // The native nat ABI rejects filtering targets.
+			}
+			for _, args := range [][]string{{"-t", table, "-A", "RZV_SAVE_EQ", "-p", "tcp", "--dport", "443", "-m", "comment", "--comment", "quote \" slash \\ space", "-j", "RETURN"}, {"-t", table, "-A", "RZV_SAVE_EQ", "-p", "udp", "--dport", "53", "-j", target}} {
 				if data, err := exec.CommandContext(ctx, path, args...).CombinedOutput(); err != nil {
 					t.Fatal("isolated parity rule setup", err, string(data))
 				}
