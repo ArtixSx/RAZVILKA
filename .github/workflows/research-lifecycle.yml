@@ -10,6 +10,8 @@ on:
       - 'cmd/razvilka/**'
       - 'scripts/test-domain-original-native.sh'
       - 'scripts/test-managed-probe*.sh'
+      - 'scripts/test-paired-public-native.sh'
+      - 'scripts/fixtures/paired-public-session.sh'
       - 'scripts/fixtures/domain-preparation-baseline.patch'
       - '.github/workflows/research-lifecycle.yml'
 
@@ -65,6 +67,37 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local RAZVILKA_PRIVATE_PANEL_NATIVE=1 \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
+  paired-public-cli:
+    name: Configured old193 public paired restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install disposable namespace fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential
+      - name: Actual configured old source bootstrap and public offline restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/paired-public
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
+      - name: Preserve bounded public workflow evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: paired-public-cli-${{ github.sha }}
+          path: artifacts/paired-public/native.log
+          if-no-files-found: error
   domain-native:
     name: Domain native strict / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
