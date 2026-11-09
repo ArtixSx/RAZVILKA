@@ -267,3 +267,12 @@ manual HTTP ранний Acquire FAIL. Новая волна оценивает�
 | Actual1.8.11 | Exact installed bytes mismatch корректно остановил preflight | Проверить exact4baselinearchives install+прежний publicAcquire/normal/race, без сменыproductionpins |
 
 [Raw и измерения](measurements/2026-11-09/research/lifecycle/4cc9f869/).
+
+
+Следующий60e0d4ba не принят: generic fixture modeFAIL; native managed coreNOTRUN
+(missingtestbinary), actual fullLAN FAIL; warm Mihomo lifecycle/manual deadlineFAIL,
+settlement/postCAS PASS; sameboot first-read ABI refusal, ACKcutsNOTRUN. Backup
+actualoldpanelPASS/preparationfingerprintFAIL, iptables exactarchivesSHA PASS/install
+refusal. Эти конкретные причины исправлены в подготовленной серии, но требуют
+нового CI; прежние4cc PASS не переносятся. FieldsSeq rejected, audit16 memory-only
+promotion reviewed. [Отчёты](measurements/2026-11-09/research/lifecycle/60e0d4ba/).

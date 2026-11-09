@@ -432,3 +432,26 @@ Public pair4cc обнаружил реальный fixture ABI gap: genuine oldi
 которого нет в Ubuntu BusyBox. 1e4 копирует actual dpkg daemon после namespace guards,
 проверяет >=1.20.6/--output и совпадениеSHA. Old init/argv не меняются; nextCI pending.
 [Точные результаты](measurements/2026-11-09/research/lifecycle/4cc9f869/).
+
+
+### Отрицательные измерения и фактические отказы60e0d4ba
+
+FieldsSeq candidate не переносится вproduction: actual24line parser5363→6555ns
+(другой paired runner5281→6573), хотя7296→3072B и26→2alloc. Audit16reserve
+прошёл normal/race realcapture/sourceparity/actualFDclose/cancel/fallback>16;
+48560→44240B/op и224→220alloc, время~311–312us без существенного изменения.
+Reviewed e30cfec1 переносит только эту инициализацию; append fallback/каждыйFD/
+все kernel reads/cleanup сохранены, stack placement не обещается.
+
+60e: sameboot firstabsence FAIL, exact route207 read отсутствовал в observed ABI;
+0cc сохраняет четыре исходные формы и проверяет native bytes+actual child exit.
+Generic новая fixture неправильно private-mode, managed default не собирал нужный
+dataplane.test; обе причины исправляются вfixture/build, productionguards unchanged.
+Public source config schema1 Inspect нормализует без сохранения; header раньше
+получал normalized fingerprint, а original guard видел rawtyped schema1. 7fb32e53
+разделяет physical-source fingerprint и migration semantics, originalbytes/SHA retained.
+Actual1.8.11 exactarchive install требует explicit --allow-downgrades; толькоdisposable4files.
+Warm Mihomo110s failures послеcommit-adapter требуют сравнения с4cc наsamehost;
+новый diagnostic baseline идёт послеcandidate, поэтому cache/order/noise сохранены
+как ограничения. Не меняется ни110с, ни120с sameboot acceptance.
+[Точные отчёты](measurements/2026-11-09/research/lifecycle/60e0d4ba/).

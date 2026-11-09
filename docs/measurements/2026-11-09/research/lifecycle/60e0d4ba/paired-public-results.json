@@ -1,0 +1,14 @@
+{
+  "commit": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+  "run": 42646788090,
+  "job": 129262073109,
+  "conclusion": "failure",
+  "log_sha256": "cc747119b4a0f6571f94e3cf1e1aaa4df3dc152bbf8742078eb3c62ea947b195",
+  "original_queue_init": "PASS",
+  "actual_dpkg_helper": "PASS 1.22.6ubuntu6.6 sha81faf821fdfdf1dc2991b71dfbd6a21116085f931bfeb0fd7b2623911a4831b4",
+  "old_panel": "PASS healthy actual0.19.3 PID51",
+  "public_producer": "FAIL preparation-owner exit3",
+  "public_restore": "NOT_REACHED",
+  "confirmed_source_gap": "Source schema1 is inspected as normalized schema2 then incorrectly used as header fingerprint; unchanged helper compares actual source typed config",
+  "fix": "7fb32e53: bind decoded source fingerprint after strict semantic validation, no source rewrite; independent review approved, runtime rerun pending"
+}

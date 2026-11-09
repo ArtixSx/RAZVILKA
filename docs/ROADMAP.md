@@ -56,6 +56,18 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
+### Последний60e0d4ba и конкретные исправления
+
+4cc обаgeneric/all4Mihomo PASS остаётся последней полной приёмкой. На60e обаgeneric
+остановились fixturemode; исправленоd4. Root исправил missingdataplane.test вdefault
+native suite. Sameboot e75 обнаружил точный readABI gap; 0cc восстанавливает только
+четыре исходных readonlytable207 формы. На60e warm lifecycle/manual110sFAIL;
+root проверяет preserved4cc samehost, deadline unchanged. Backup7fb исправляет
+physical-source schema1 fingerprint, не переписывая actual config. Exact1.8.11
+apt flag разрешён только4verifiedlocalarchives; sourcepins unchanged. Audit e30
+подтверждает -4320B/4alloc, FieldsSeq отклонён за замедление. Все эти направления
+требуют собственного следующего запуска; новых внешних программных блокеров нет.
+
 ### Проверенный6df3d753 и следующая интеграция
 
 - Ведущий: paired363f→6df PASS182строки с обычной App telemetry: live p50/p95

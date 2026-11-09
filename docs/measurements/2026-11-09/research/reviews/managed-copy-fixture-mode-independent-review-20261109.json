@@ -1,0 +1,14 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved fixture mode correction; execution pending",
+  "file": "internal/dataplane/nfqws2_managed_copy_linux_test.go",
+  "sha256": "F4C25CFDCC5986B78318A479DB7639F02E03C9B3135E0D9231B275D3D38FF74C",
+  "findings": [
+    "Observed60e both generic focused fresh-files test failure before hashing due original protected-path refusal.",
+    "Local Go1.26 testing.go1481 uses Mkdir0777 for numbered TempDir child; CI022 yields0755.",
+    "Only fresh test-owned TempDir child chmod0700; shared parent and production guards unchanged. Both original paths independently pass unchanged protected-path precondition before hashing."
+  ],
+  "limits": [
+    "No localGo tests/builds; next exactSHA generic/native execution required."
+  ]
+}

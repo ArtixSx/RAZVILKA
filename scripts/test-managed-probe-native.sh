@@ -89,12 +89,19 @@ case "$probe_build_mode" in
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
   *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
 esac
-if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+# Default managed-copy tests/benchmarks and cold-source tests both execute
+# dataplane.test. LAN-only actors do not need this extra test binary.
+if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" != 1 || test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
   if test "$probe_build_mode" = race; then
     go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
-    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   else
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  fi
+fi
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  if test "$probe_build_mode" = race; then
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
+  else
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   fi
   cp "$probe_work/tools.json" "$probe_work/runtime-native-tool-review.json"

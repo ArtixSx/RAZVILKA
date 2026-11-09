@@ -129,7 +129,7 @@ jobs:
           # Same version can select amd64v3. Only these four exact baseline
           # archives are reviewed; installed bytes are checked again below.
           sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$classic_packages"
-          sudo apt-get install --reinstall --no-install-recommends -y \
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
             "$classic_packages/iptables.deb" "$classic_packages/libip4tc2.deb" \
             "$classic_packages/libip6tc2.deb" "$classic_packages/libxtables12.deb"
       - name: Public acquisition and actual inventory parity with lock custody

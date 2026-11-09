@@ -1,0 +1,527 @@
+{
+  "baseline-clean": {
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "9.878021081s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "3.397281207s"
+      },
+      "process-current": {
+        "calls": 482,
+        "bytes": 0,
+        "elapsed": "8.065753238s"
+      },
+      "whole-executable-hash": {
+        "calls": 219,
+        "bytes": 8010451914,
+        "elapsed": "4.225566366s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.084108694s"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "6.268380862s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.587966486s"
+      }
+    },
+    "successor": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "19.118104776s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "5.928181079s"
+      },
+      "process-current": {
+        "calls": 298,
+        "bytes": 0,
+        "elapsed": "5.514030043s"
+      },
+      "whole-executable-hash": {
+        "calls": 603,
+        "bytes": 22056175818,
+        "elapsed": "11.643657926s"
+      }
+    },
+    "outcome": "--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (70.62s)"
+  },
+  "candidate-capture-transaction": {
+    "first-answer": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.926290885s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.77559717s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.894\u00b5s"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "4.01678043s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.376834453s"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "bytes": 0,
+        "elapsed": "1.672545399s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.758586407s"
+      }
+    },
+    "before-stop": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.926290885s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.77559717s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.894\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "4.878962894s"
+      },
+      "whole-executable-hash": {
+        "calls": 132,
+        "bytes": 4828217592,
+        "elapsed": "2.499095056s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "591.906201ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "3.447203114s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "4.18520415s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.926290885s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.77559717s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.894\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "4.878962894s"
+      },
+      "whole-executable-hash": {
+        "calls": 137,
+        "bytes": 5011104622,
+        "elapsed": "2.591684798s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "591.906201ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "3.447203114s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "4.18520415s"
+      }
+    },
+    "successor": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "12.226179537s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "3.699328104s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "941ns"
+      },
+      "process-current": {
+        "calls": 276,
+        "bytes": 0,
+        "elapsed": "3.065022439s"
+      },
+      "whole-executable-hash": {
+        "calls": 521,
+        "bytes": 19056828526,
+        "elapsed": "9.707214543s"
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (78.84s)"
+  },
+  "candidate-clean": {
+    "first-answer": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.980145324s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.750872781s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.151\u00b5s"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "4.18033535s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.369078832s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "709.595956ms"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "bytes": 0,
+        "elapsed": "2.001209965s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.10532279s"
+      }
+    },
+    "before-stop": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.980145324s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.750872781s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.151\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "5.193382933s"
+      },
+      "whole-executable-hash": {
+        "calls": 132,
+        "bytes": 4828217592,
+        "elapsed": "2.550878027s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "709.595956ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "4.071168367s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "5.134725217s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.980145324s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.750872781s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.151\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "5.193382933s"
+      },
+      "whole-executable-hash": {
+        "calls": 137,
+        "bytes": 5011104622,
+        "elapsed": "2.644253538s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "709.595956ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "4.071168367s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "5.134725217s"
+      }
+    },
+    "successor": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "12.831585351s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "3.822815627s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.433\u00b5s"
+      },
+      "process-current": {
+        "calls": 276,
+        "bytes": 0,
+        "elapsed": "3.184338884s"
+      },
+      "whole-executable-hash": {
+        "calls": 521,
+        "bytes": 19056828526,
+        "elapsed": "9.90739754s"
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (75.87s)"
+  },
+  "candidate-standby-transaction": {
+    "first-answer": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "5.215298262s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.768295532s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.712\u00b5s"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "4.153027875s"
+      },
+      "whole-executable-hash": {
+        "calls": 126,
+        "bytes": 4608753156,
+        "elapsed": "2.415981494s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "607.341654ms"
+      },
+      "kernel-observe": {
+        "calls": 4,
+        "bytes": 0,
+        "elapsed": "1.717283525s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.802432311s"
+      }
+    },
+    "before-stop": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "5.215298262s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.768295532s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.712\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "5.030402485s"
+      },
+      "whole-executable-hash": {
+        "calls": 132,
+        "bytes": 4828217592,
+        "elapsed": "2.532383618s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "607.341654ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "3.537775349s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "4.282487947s"
+      }
+    },
+    "joined": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "5.215298262s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "1.768295532s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "1.712\u00b5s"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "5.030402485s"
+      },
+      "whole-executable-hash": {
+        "calls": 137,
+        "bytes": 5011104622,
+        "elapsed": "2.62547643s"
+      },
+      "dns-send": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "607.341654ms"
+      },
+      "kernel-observe": {
+        "calls": 7,
+        "bytes": 0,
+        "elapsed": "3.537775349s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "4.282487947s"
+      }
+    },
+    "successor": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "12.850601501s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.108004898s"
+      },
+      "coordinator-original-read-complete": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.875\u00b5s"
+      },
+      "process-current": {
+        "calls": 276,
+        "bytes": 0,
+        "elapsed": "3.239582358s"
+      },
+      "whole-executable-hash": {
+        "calls": 521,
+        "bytes": 19056828526,
+        "elapsed": "10.029331029s"
+      }
+    },
+    "outcome": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (75.31s)"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved source/target fingerprint correction; native acceptance pending",
+  "files": [
+    {
+      "path": "internal/updatecheck/external_bootstrap.go",
+      "sha256": "BC0A767B275174767E1207DCFDBD0D91C64E112DFDC89854521C27817DD94E96"
+    },
+    {
+      "path": "internal/updatecheck/external_bootstrap_source_config_test.go",
+      "sha256": "C148E16F7839EF1BD2CB146B68785978D0F2A85E51C286A63FD7E4A0BF7D7825"
+    }
+  ],
+  "findings": [
+    "Original bootstrap used normalized InspectBytes config fingerprint for still-installed schema1 source; unchanged helperConfigMatches decodes raw source and rejects mismatch.",
+    "New private helper first performs strict existing InspectBytes, separately decodes same raw bytes, requires same nonzero revision, returns normalized semantic config plus raw typed source fingerprint.",
+    "Only initial header fingerprint changes. Semantic/offline mode continues using validated normalized config; FileReview complete source SHA and migration/exclusion/current checks unchanged.",
+    "Tests prove schema1 raw source helper match, normalized mismatch, source field/revision drift refusal, genuine staged config.Migrate without source/header changes, current schema equivalence and malformed/unknown schema/fields refusal."
+  ],
+  "limits": [
+    "No localGo tests/builds.",
+    "Native original old193 public bootstrap/paired restore still must pass next exactSHA; unit source fingerprint is not complete backup/restore acceptance.",
+    "No source rewrite or generic helper guard relaxation."
+  ]
+}

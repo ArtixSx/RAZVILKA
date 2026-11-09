@@ -1,0 +1,33 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved corrected native wiring",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "1CD664BF842D5830B5A1F2C65AC40B5FCFF6D4C6F9AFB59AC0F0654C845A5869"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "40A9E20A4AFD83B0FDA8050F947C36F98FBCF9CEDC6A2B1C313248654CB44D19"
+    },
+    {
+      "path": ".github/workflows/mihomo-workflow-validation.yml",
+      "sha256": "1C2AF62506E688B356A8613D117F504C96134000326942832C0D7239C76C08AA"
+    },
+    {
+      "path": "scripts/test-managed-probe-native.sh",
+      "sha256": "3B86D43B095BB9209C38A03F4040886E81328A06551AC75D7BF459FD6992D3B1"
+    }
+  ],
+  "findings": [
+    "Generic focused normal selection includes actual updatecheck package/source-config regression and exact sameboot table predicate; fullnormal/race gate unchanged.",
+    "Default managed-copy case now builds dataplane.test normal/race before selecting it; LAN-only actors avoid unused binary. Corrects missing-binary127 without changing route clocks.",
+    "PinnedUbuntu26 baseline4archive installation adds only allow-downgrades to exact local paths; installed-byte/publicAcquire tests unchanged.",
+    "Same-runner baseline checkout pins4cc fullSHA; candidate then baseline separate original two-cycle110s-operation script, separate logs/profile and explicitPASS/noSKIP.",
+    "Independent review caught baseline output mismatch; now exact baseline4cc/artifacts/mihomo-live-profile satisfies unchanged preserved4cc protected output guard and upload selects same directory. Existing normal/race bookends still run independently on failure."
+  ],
+  "limitations": [
+    "Same-runner candidate-then-baseline diagnostics have order/cache/noise effects; not formal causal speed estimate.",
+    "No localGo tests/builds; exact nextSHA native and generic pending."
+  ]
+}

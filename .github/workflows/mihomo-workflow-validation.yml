@@ -123,6 +123,41 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-check-settlement-native.sh
+      - name: Preserved4cc lifecycle baseline on the same runner
+        if: always() && !cancelled() && matrix.scenario == 'lifecycle'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 4cc9f869974713c9cebd833fccca383c03c102b7
+          path: baseline4cc
+          persist-credentials: false
+      - name: Compare original warm lifecycle without changing its deadline
+        if: always() && !cancelled() && matrix.scenario == 'lifecycle'
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$GITHUB_WORKSPACE/baseline4cc/artifacts/mihomo-live-profile"
+          mkdir -p "$output"
+          chmod 700 "$output"
+          trap 'sudo chown -R "$(id -u):$(id -g)" "$output"' EXIT
+          printf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s order=candidate-then-baseline diagnostic_only=true\n' "$GITHUB_SHA" > "$output/comparison.txt"
+          cd baseline4cc
+          test "$(git rev-parse HEAD)" = 4cc9f869974713c9cebd833fccca383c03c102b7
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$output" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-native.sh 2>&1 | tee "$output/native.log"
+          grep -F -- '--- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply ' "$output/native.log"
+          if grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi
+      - name: Retain same-runner preserved lifecycle baseline
+        if: always() && !cancelled() && matrix.scenario == 'lifecycle'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-baseline4cc-${{ github.sha }}
+          path: baseline4cc/artifacts/mihomo-live-profile
+          if-no-files-found: error
       - name: Original read observation bookends with official child, normal and race
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         shell: bash

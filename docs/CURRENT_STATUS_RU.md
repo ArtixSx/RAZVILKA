@@ -293,3 +293,30 @@ preflight корректно отказал при несовпадении ус
 scratch. Дополнительные parser/audit capacity варианты пока только test-only.
 Новый commit требует собственного CI; router/release admission не изменён.
 [Доказательства](measurements/2026-11-09/research/lifecycle/4cc9f869/).
+
+
+### Следующая проверка60e0d4ba: отказы сохранены, исправления подготовлены
+
+Generic обаFAIL в новом NFQ тесте: t.TempDir имел0755 вместо required0700;
+d4dace94 исправляет только test fixture. Full gate на60e не достигнут.
+Native managed core не запускался из-за отсутствующего dataplane.test; build
+script исправлен. Отдельные fullLAN/manual запускались и превышают deadline,
+production intent/sync/quarantine cleanup-only retry PASS, freshApply FAIL.
+
+Actual1.8.11 archives прошлиSHA, но apt отказал downgrade без явного флага;
+разрешение ограничено четырьмя exact local.deb в disposable26.04. Public bootstrap
+запустил настоящую старую панель, затем обнаружил fingerprint исходного schema1
+против мигрированной schema2 формы. 7fb32e53 связывает header с actual source config,
+не переписывая исходник; semantic/staged migration и все строгие checks сохранены.
+
+Sameboot normal/race отказали в первом absence: observed ABI не включал четыре
+исходных readonly table207 query. 0cc85f3a сохраняет именно эти argv, все SHA/Start/
+Wait и проверки результата, с actual bytes+exit-status parity тестом. ACK cuts не
+достигнуты. Warm Mihomo lifecycle/manual на60e тоже превысили110с; settlement и
+postCAS PASS. Это не доказанная причинная связь со sameboot изменением; следующий
+CI сравнивает actual lifecycle с preserved4cc на том же runner, deadline unchanged.
+
+Paired probes182rows PASS: live p50/p95307/329→221/287мс, selected2 1364/1521→
+1200/1467мс. У all2 p95 ухудшился1521→1568мс при p50 1384→1214; universal tail
+speedup не заявляется. Последняя полная generic и4Mihomo PASS остаётся4cc.
+[Raw/исправления](measurements/2026-11-09/research/lifecycle/60e0d4ba/).

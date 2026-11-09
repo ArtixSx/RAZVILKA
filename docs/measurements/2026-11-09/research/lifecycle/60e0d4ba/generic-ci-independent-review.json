@@ -1,0 +1,28 @@
+{
+  "reviewer": "verification",
+  "head_sha": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+  "conclusion": "FAILURE both generic runs in focused tests",
+  "runs": [
+    {
+      "event": "pull_request",
+      "run_id": 42646803787,
+      "job_id": 129262126714,
+      "log": "generic-pr-ci.log",
+      "sha256": "188AA0333B70F41FBE67BA87FDE1D95676CEDD2375A5DAACB21443A79BFB212B"
+    },
+    {
+      "event": "push",
+      "run_id": 42646788067,
+      "job_id": 129262070562,
+      "log": "generic-push-ci.log",
+      "sha256": "82BF27BAEB3885F9F0660F816609AA4D0AEAFB3B02D672D3A2BD786931FDA985"
+    }
+  ],
+  "failure": "TestNFQWSManagedCopyFreshFiles initial actual-file current refuses at line172 before mutation checks.",
+  "source_cause": "Go1.26 testing/testing.go1481 creates numbered TempDir child with0777, CI umask022 makes0755; existing nfqws2ManagedProtected correctly requires private0700 descendants under/tmp. Fixture correction pending; no production guard weakening.",
+  "limits": [
+    "Focused copy geometry/error/clear/concurrency tests passed, but fresh-files test failed.",
+    "Full generic normal/race gate not reached; do not claim success.",
+    "Mihomo and other native jobs evaluated separately and may still run."
+  ]
+}

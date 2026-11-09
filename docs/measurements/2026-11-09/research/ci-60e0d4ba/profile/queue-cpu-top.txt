@@ -1,0 +1,54 @@
+File: razvilka
+Build ID: 58141dab141204fd95b7017dd07e7ff1be8f8eea
+Type: cpu
+Time: 2026-11-09 15:43:17 UTC
+Duration: 40.06s, Total samples = 24.22s (60.46%)
+Showing nodes accounting for 21.62s, 89.27% of 24.22s total
+Dropped 821 nodes (cum <= 0.12s)
+Showing top 45 nodes out of 158
+      flat  flat%   sum%        cum   cum%
+    13.84s 57.14% 57.14%     13.84s 57.14%  crypto/internal/fips140/sha256.blockSHANI
+     6.73s 27.79% 84.93%      6.73s 27.79%  internal/runtime/syscall/linux.Syscall6
+     0.18s  0.74% 85.67%      0.27s  1.11%  runtime.tryDeferToSpanScan
+     0.08s  0.33% 86.00%      0.39s  1.61%  encoding/json.(*Decoder).readValue
+     0.08s  0.33% 86.33%      0.14s  0.58%  runtime.mallocgcTiny
+     0.07s  0.29% 86.62%      0.92s  3.80%  os.newFile
+     0.06s  0.25% 86.87%      0.14s  0.58%  runtime.mallocgcSmallNoscan
+     0.05s  0.21% 87.08%      0.26s  1.07%  encoding/json.stateEndValue
+     0.05s  0.21% 87.28%      4.25s 17.55%  internal/poll.(*FD).Read
+     0.05s  0.21% 87.49%      6.51s 26.88%  syscall.RawSyscall6
+     0.04s  0.17% 87.65%      0.64s  2.64%  runtime.mallocgc
+     0.04s  0.17% 87.82%      0.24s  0.99%  runtime.mallocgcSmallScanNoHeader
+     0.04s  0.17% 87.99%      0.38s  1.57%  runtime.scanObject
+     0.02s 0.083% 88.07%     13.86s 57.23%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.02s 0.083% 88.15%      0.36s  1.49%  internal/poll.(*SysFile).destroy (inline)
+     0.02s 0.083% 88.23%      0.19s  0.78%  internal/poll.runtime_pollOpen
+     0.02s 0.083% 88.32%      3.56s 14.70%  io.(*LimitedReader).Read
+     0.02s 0.083% 88.40%     17.38s 71.76%  io.copyBuffer
+     0.02s 0.083% 88.48%      0.22s  0.91%  runtime.growslice
+     0.02s 0.083% 88.56%      0.61s  2.52%  syscall.SetNonblock
+     0.02s 0.083% 88.65%      5.64s 23.29%  syscall.Syscall
+     0.02s 0.083% 88.73%      0.59s  2.44%  syscall.fcntl
+     0.01s 0.041% 88.77%      0.26s  1.07%  encoding/json.(*decodeState).array
+     0.01s 0.041% 88.81%      0.27s  1.11%  encoding/json.(*decodeState).object
+     0.01s 0.041% 88.85%      0.13s  0.54%  encoding/json.(*encodeState).reflectValue
+     0.01s 0.041% 88.89%      0.32s  1.32%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation
+     0.01s 0.041% 88.93%      0.55s  2.27%  github.com/ArtixSx/razvilka/internal/engine.processNamedOutside
+     0.01s 0.041% 88.98%      1.15s  4.75%  github.com/ArtixSx/razvilka/internal/nativecheckfixture.(*ResourceSample).sample
+     0.01s 0.041% 89.02%      0.48s  1.98%  github.com/ArtixSx/razvilka/internal/nodestore.ValidatePrivateSnapshot
+     0.01s 0.041% 89.06%      0.23s  0.95%  github.com/ArtixSx/razvilka/internal/restorejournal.readTarget
+     0.01s 0.041% 89.10%      0.23s  0.95%  os.(*File).Stat
+     0.01s 0.041% 89.14%      0.80s  3.30%  os.open
+     0.01s 0.041% 89.18%      0.23s  0.95%  os.statOrZero
+     0.01s 0.041% 89.22%      0.18s  0.74%  runtime.findRunnable
+     0.01s 0.041% 89.27%      4.19s 17.30%  syscall.Read (inline)
+         0     0% 89.27%     13.84s 57.14%  crypto/internal/fips140/sha256.block
+         0     0% 89.27%      0.13s  0.54%  crypto/tls.(*Conn).HandshakeContext
+         0     0% 89.27%      0.13s  0.54%  crypto/tls.(*Conn).handshakeContext
+         0     0% 89.27%      0.82s  3.39%  encoding/json.(*Decoder).Decode
+         0     0% 89.27%      0.50s  2.06%  encoding/json.(*Decoder).Token
+         0     0% 89.27%      0.30s  1.24%  encoding/json.(*decodeState).literalStore
+         0     0% 89.27%      0.46s  1.90%  encoding/json.(*decodeState).unmarshal
+         0     0% 89.27%      0.45s  1.86%  encoding/json.(*decodeState).value
+         0     0% 89.27%      0.13s  0.54%  encoding/json.(*encodeState).marshal
+         0     0% 89.27%      0.21s  0.87%  encoding/json.(*scanner).error (inline)
