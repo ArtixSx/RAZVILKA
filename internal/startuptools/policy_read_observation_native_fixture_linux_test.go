@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -79,6 +80,26 @@ func TestStaticVersionFactNativeMihomoNumericReadObservation(t *testing.T) {
 			t.Fatal("original policy baseline", nativeStages(err))
 		}
 	}
+	// The sameboot absence observer also reads its exact compiled table. An
+	// empty kernel table can return a genuine nonzero status and diagnostics;
+	// compare both bytes and actual exit status, never turn it into success.
+	tableArgs := [][]string{{"-N", "route", "show", "table", "207"}, {"-N", "-6", "route", "show", "table", "207"}, {"route", "show", "table", "207"}, {"-6", "route", "show", "table", "207"}}
+	exitStatus := func(err error) int {
+		if err == nil {
+			return 0
+		}
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			t.Fatal("actual table read did not reach original child", nativeStages(err))
+		}
+		return exit.ExitCode()
+	}
+	var tableExpected [4][]byte
+	var tableStatus [4]int
+	for n, args := range tableArgs {
+		data, err := read.RunMihomoLiveRead(ctx, tools.IP, args...)
+		tableExpected[n], tableStatus[n] = data, exitStatus(err)
+	}
 	var expired context.Context
 	err = l.WithReadOnlyToolObservation(ctx, l.identity, l.digest, func(observed context.Context) error {
 		expired = observed
@@ -91,6 +112,12 @@ func TestStaticVersionFactNativeMihomoNumericReadObservation(t *testing.T) {
 				t.Fatal("same actual IPv4/IPv6 RPDB changed across numeric spelling")
 			}
 		}
+		for n, args := range tableArgs {
+			data, err := read.RunMihomoLiveRead(observed, tools.IP, args...)
+			if exitStatus(err) != tableStatus[n] || !bytes.Equal(data, tableExpected[n]) {
+				t.Fatal("actual table read changed bytes or exit status under original observation")
+			}
+		}
 		if _, err := read.RunMihomoLiveRead(observed, tools.IP, "rule", "del", "priority", "207"); !errors.Is(err, ErrUnknown) {
 			t.Fatal("effect crossed original read projection", err)
 		}
@@ -101,6 +128,9 @@ func TestStaticVersionFactNativeMihomoNumericReadObservation(t *testing.T) {
 	}
 	if _, err := read.RunMihomoLiveRead(expired, tools.IP, actualArgs[0]...); !errors.Is(err, ErrUnknown) {
 		t.Fatal("expired original read marker reused", err)
+	}
+	if _, err := read.RunMihomoLiveRead(expired, tools.IP, tableArgs[0]...); !errors.Is(err, ErrUnknown) {
+		t.Fatal("expired table read marker reused")
 	}
 	t.Log("actual original Mihomo CORE implicit IPv4/-N-first IPv6 read bytes match canonical policy ABI; effect and late read refused")
 }

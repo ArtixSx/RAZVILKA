@@ -162,7 +162,7 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 			return readArguments(args) || !combined && slices.Equal(args, []string{"--version"})
 		}
 		if index == 2 {
-			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
+			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || mihomoSameBootObservedTableRead(args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
 		}
 		return !combined && slices.Equal(args, []string{"--version"})
 	}

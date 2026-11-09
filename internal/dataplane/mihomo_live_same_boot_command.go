@@ -119,17 +119,17 @@ func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identit
 // used with or without an original tool read scope. No result survives it.
 func (o *mihomoSameBootCleanup) absentUnscoped(ctx context.Context) (netidentity.Identity, error) {
 	if err := o.current(ctx); err != nil {
-		return netidentity.Identity{}, err
+		return netidentity.Identity{}, mihomoSameBootStageError("absence-source-opening", err)
 	}
 	proof, err := proxyInactivePlatformProof()
 	if err != nil {
 		return netidentity.Identity{}, err
 	}
 	if err := observeBootRetirement(ctx, o.read.proxy, proof); err != nil {
-		return netidentity.Identity{}, err
+		return netidentity.Identity{}, mihomoSameBootStageError("absence-process-kernel", err)
 	}
 	if err := o.current(ctx); err != nil {
-		return netidentity.Identity{}, err
+		return netidentity.Identity{}, mihomoSameBootStageError("absence-source-closing", err)
 	}
 	return o.inputs.definition.NetworkIdentity, nil
 }
