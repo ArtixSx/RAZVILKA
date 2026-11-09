@@ -3,10 +3,103 @@
 package startuptools
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"syscall"
 	"testing"
 )
+
+func TestFreshPathNodeSyscallArgumentParity(t *testing.T) {
+	before := mustPathInfo(t, "/usr")
+	for _, path := range []string{"", "/", "/usr", "/bin/sh", "/proc/self/exe", t.TempDir() + "/absent", "/usr\x00/ignored", strings.Repeat("x", 4095), strings.Repeat("x", 4096), strings.Repeat("x", 8192)} {
+		var stat syscall.Stat_t
+		wantErr := syscall.Lstat(path, &stat)
+		want := wantErr == nil && sameReviewedStat(before.Sys().(*syscall.Stat_t), &stat)
+		got, gotErr := freshPathNode(path, before)
+		if got != want || !errors.Is(gotErr, wantErr) {
+			t.Fatalf("path length=%d: got=%t/%v want=%t/%v", len(path), got, gotErr, want, wantErr)
+		}
+	}
+}
+
+func TestFreshPathNodeActualMutationAndSymlink(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("reviewed node authority requires root ownership")
+	}
+	dir := t.TempDir()
+	path := dir + "/node"
+	if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := mustPathInfo(t, path)
+	if same, err := freshPathNode(path, before); err != nil || !same {
+		t.Fatalf("original node %t/%v", same, err)
+	}
+	if err := os.WriteFile(path, []byte("changed length"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if same, err := freshPathNode(path, before); err != nil || same {
+		t.Fatalf("mutated node accepted %t/%v", same, err)
+	}
+	link := dir + "/link"
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	linkInfo := mustPathInfo(t, link)
+	if same, err := freshPathNode(link, linkInfo); err != nil || !same {
+		t.Fatalf("original symlink %t/%v", same, err)
+	}
+	if same, err := freshPathNode(link, mustPathInfo(t, path)); err != nil || same {
+		t.Fatalf("symlink followed %t/%v", same, err)
+	}
+	if err := os.Rename(path, dir+"/old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if same, err := freshPathNode(path, before); err != nil || same {
+		t.Fatalf("replacement inode accepted %t/%v", same, err)
+	}
+}
+
+func TestFreshPathNodeConcurrentArgumentsRemainExclusive(t *testing.T) {
+	paths := []string{"/", "/usr", "/bin", "/bin/sh", "/proc/self/exe"}
+	infos := make([]os.FileInfo, len(paths))
+	wants := make([]bool, len(paths))
+	for i, path := range paths {
+		infos[i] = mustPathInfo(t, path)
+		wants[i] = sameNode(infos[i], mustPathInfo(t, path))
+	}
+	missing := t.TempDir() + "/absent"
+	var workers sync.WaitGroup
+	errorsCh := make(chan error, 16)
+	for worker := range 16 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for iteration := range 100 {
+				i := (worker + iteration) % len(paths)
+				if got, err := freshPathNode(paths[i], infos[i]); err != nil || got != wants[i] {
+					errorsCh <- fmt.Errorf("original path %s = %t/%v", paths[i], got, err)
+					return
+				}
+				if got, err := freshPathNode(missing, infos[i]); got || !errors.Is(err, syscall.ENOENT) {
+					errorsCh <- fmt.Errorf("missing path = %t/%v", got, err)
+					return
+				}
+			}
+		}()
+	}
+	workers.Wait()
+	close(errorsCh)
+	for err := range errorsCh {
+		t.Error(err)
+	}
+}
 
 func TestFreshPathNodeActualRootNodes(t *testing.T) {
 	for _, path := range []string{"/", "/usr", "/bin", "/bin/sh", "/proc/self/exe"} {
@@ -79,7 +172,7 @@ func TestFreshPathNodeStatComparisonFields(t *testing.T) {
 func BenchmarkFreshPathNode(b *testing.B) {
 	path := "/usr/bin/env"
 	before := mustPathInfo(b, path)
-	for _, mode := range []string{"fileinfo", "direct-stat"} {
+	for _, mode := range []string{"fileinfo", "before_syscall_lstat", "direct-stat"} {
 		b.Run(mode, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
@@ -90,6 +183,12 @@ func BenchmarkFreshPathNode(b *testing.B) {
 					after, err = os.Lstat(path)
 					if err == nil {
 						ok = sameNode(before, after)
+					}
+				} else if mode == "before_syscall_lstat" {
+					var after syscall.Stat_t
+					err = syscall.Lstat(path, &after)
+					if err == nil {
+						ok = sameReviewedStat(before.Sys().(*syscall.Stat_t), &after)
 					}
 				} else {
 					ok, err = freshPathNode(path, before)
