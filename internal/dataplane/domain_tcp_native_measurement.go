@@ -69,6 +69,8 @@ func domainTCPNativeHashBucket() string {
 			label = "standby-prepare"
 		case "(*syntheticBaselineExecutionResource).compareInOriginalFileObservation":
 			label = "standby-read"
+		case "(*syntheticBaselineCoordinator).observeOriginalCapturePair":
+			label = "coordinator-read"
 		case "(*syntheticBaselineExecutionResource).prepareCapture":
 			label = "standby-capture"
 		case "issueDomainTCPCaptureResource":
