@@ -285,6 +285,25 @@ jobs:
           go test -tags razvilka_native_fixture ./internal/netidentity -run '^$' \
             -bench '^(BenchmarkProcMountinfoReadChunks|BenchmarkProcMountinfoUnescape|BenchmarkProcMountLayoutStreamCandidate|BenchmarkProcAuditCapacityCandidate)$' -benchtime=300ms -count=3 -benchmem \
             | tee artifacts/domain/mountinfo-read-measurement.log
+      - name: Complete pinned Xray hash reads and cancellation (measurement only)
+        if: ${{ !cancelled() && matrix.scenario == 'selected' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/domain
+          export RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/dataplane \
+              -run '^TestXrayHashChunk' -count=1 -v | tee "artifacts/domain/hash-chunks-$mode.log"
+            grep -F -- '--- PASS: TestXrayHashChunkActualParityAndCancellation ' "artifacts/domain/hash-chunks-$mode.log"
+            grep -F -- '--- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles ' "artifacts/domain/hash-chunks-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/hash-chunks-$mode.log"; then exit 1; fi
+          done
+          go test -tags razvilka_native_fixture ./internal/dataplane -run '^$' \
+            -bench '^BenchmarkXrayCompleteHashChunks$' -benchmem -count=3 -benchtime=300ms \
+            | tee artifacts/domain/hash-chunks-measurement.log
       - name: Preserve original clocks and failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
