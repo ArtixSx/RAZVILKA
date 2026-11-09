@@ -79,6 +79,14 @@ refs и незакоммиченные файлы сохранены. Стары
   permanent fence остаётся. Полный fresh Apply/manual/race ещё превышает deadline.
   Fresh Fstat normal/race parity PASS;6 micro samples median808.1→731.8ns,
   208B/1alloc→0/0. Это не ускорение полного Apply.
+- Ведущий: eb1fccb8 публикует original invocation network timings в App API/UI
+  только после всех прежних RecordCheck guards; <=32 immutable rows, отдельные
+  absent/incomplete/multiple. Actual TLS503/foreign/cancel/snapshot tests добавлены,
+  independent source review и UI PASS; Go normal/race ожидаются. Теперь ordinary
+  App paired candidate включает стоимость telemetry, исторические цифры не переносятся.
+- nfq_completion:1af9b7c5 сохраняет каждый свежий pathname fstatat, переиспользуя
+  только обнулённый аргумент/syscall scratch. Source review PASS; microbench,
+  normal/race и arm64 cross-build ожидаются, ускорение ещё не заявлено.
 - verification: последний полностью успешный generic — b9bb (push и PR).
   dee compilation FAIL сохранён, исправлен17c3/1a50; на1a50 focused PASS,
   полный generic отменён следующей исправленной волной, не SUCCESS.

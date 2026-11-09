@@ -233,7 +233,7 @@ fixture; однострочное исправление441e97e4 требует 
 | Mihomo lifecycle | Два actual Apply/LAN/Stop и original normal/race bookends PASS | Manual HTTP Stop202 fixture исправлен0f; полный manual и новые settlement/post-CAS ещё обязательны |
 | Managed NFQ pending recovery | Original continuous lease, fresh plan; cleanup-only повторный Stop освобождает owner, permanent fence сохраняется | Full fresh Apply/manual/race deadline FAIL |
 | Classic inventory / DNS | Actual save path и три diagnostic30 recovery PASS; strict12 FAIL | Native6pair setup исправленe9, exact parity/lock приёмка ожидается; actual1.8.11 и stock1.4.21 отдельно |
-| Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection реализуется отдельно; service predicates не меняются |
+| Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection eb1fccb8: source review/UI PASS, Go normal/race ожидаются; service predicates не меняются |
 | Метаданные инструмента | Fresh Fstat normal/race parity,6sample median808.1→731.8ns и208→0B | Полный маршрут этим не подтверждён |
 
 Общий CI: b9bb оба SUCCESS; dee compile FAIL исправлен,1a50 focused PASS,
