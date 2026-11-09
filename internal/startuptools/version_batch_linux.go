@@ -158,8 +158,8 @@ func (r *heldReview) versionMetadataCurrent(ctx context.Context) error {
 		if !exists || node.path != image.path || node.info == nil || node.link != "" || !sameNode(image.info, node.info) {
 			return at("CHECK_HELD_FILE", nil)
 		}
-		info, err := image.file.Stat()
-		if err != nil || !sameNode(image.info, info) {
+		same, err := freshHeldNode(image.file, image.info)
+		if err != nil || !same {
 			return at("CHECK_HELD_FILE", err)
 		}
 	}
