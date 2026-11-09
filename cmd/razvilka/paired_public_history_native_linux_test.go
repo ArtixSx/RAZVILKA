@@ -99,7 +99,7 @@ func nativePairedHistoryCommand(t *testing.T, name string, args ...string) []byt
 	out, stderr := &nativePairedRestoreOutput{}, &nativePairedRestoreOutput{}
 	command.Stdout, command.Stderr, command.WaitDelay = out, stderr, 100*time.Millisecond
 	if err := command.Run(); err != nil || command.ProcessState == nil || stderr.Len() != 0 {
-		t.Fatal("fixed private history command refused", name, err)
+		t.Fatalf("fixed private history command refused path=%s args=%q error=%v stderr=%q", name, args, err, stderr.Bytes()[:min(stderr.Len(), 256)])
 	}
 	return bytes.Clone(out.Bytes())
 }
@@ -107,7 +107,7 @@ func nativePairedHistoryCommand(t *testing.T, name string, args ...string) []byt
 func nativePairedHistoryKernel(t *testing.T, engine os.FileInfo) string {
 	t.Helper()
 	var state strings.Builder
-	for _, binary := range []string{"/usr/sbin/iptables", "/usr/sbin/ip6tables"} {
+	for _, binary := range []string{"/usr/sbin/iptables-legacy", "/usr/sbin/ip6tables-legacy"} {
 		for _, table := range []string{"filter", "nat", "mangle", "raw", "security"} {
 			state.WriteString(binary + "/" + table + "\n")
 			state.Write(nativePairedHistoryCommand(t, binary, "-t", table, "-S"))
@@ -281,6 +281,27 @@ func nativePairedPublicHistoryBefore(t *testing.T) *nativePairedDraft {
 	if targets != 1 {
 		t.Fatal("original trusted target is not unique")
 	}
+	// The old source's supported /opt aliases choose the same genuine legacy
+	// backend reviewed by the original native source. Never change host defaults.
+	aliases := map[string]struct {
+		target string
+		info   os.FileInfo
+	}{}
+	for _, name := range []string{"iptables", "ip6tables"} {
+		path, target := "/opt/sbin/"+name, "/usr/sbin/"+name+"-legacy"
+		if err := os.Symlink(target, path); err != nil {
+			t.Fatal("exclusive original legacy alias", err)
+		}
+		info, err := os.Lstat(path)
+		actual, linkErr := os.Readlink(path)
+		if err != nil || linkErr != nil || info.Mode()&os.ModeSymlink == 0 || actual != target {
+			t.Fatal("original legacy alias unavailable")
+		}
+		aliases[path] = struct {
+			target string
+			info   os.FileInfo
+		}{target, info}
+	}
 	originalKernel := nativePairedHistoryKernel(t, nil)
 	nativePairedHistoryCommand(t, "/usr/sbin/ip", "addr", "add", pairedHistoryAddress+"/32", "dev", "lo")
 	program := filepath.Join(filepath.Dir(os.Getenv("RAZVILKA_NATIVE_EXTERNAL_BOOTSTRAP_CANDIDATE")), "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2")
@@ -365,6 +386,16 @@ func nativePairedPublicHistoryBefore(t *testing.T) *nativePairedDraft {
 	nativePairedHistoryCommand(t, "/usr/sbin/ip", "addr", "del", pairedHistoryAddress+"/32", "dev", "lo")
 	if nativePairedHistoryKernel(t, nil) != originalKernel {
 		t.Fatal("history fixture did not restore original routing/rules")
+	}
+	for path, original := range aliases {
+		info, err := os.Lstat(path)
+		target, linkErr := os.Readlink(path)
+		if err != nil || linkErr != nil || info.Mode()&os.ModeSymlink == 0 || !os.SameFile(info, original.info) || target != original.target {
+			t.Fatal("original legacy alias changed during probes")
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal("original legacy alias cleanup", err)
+		}
 	}
 	nativePairedHistoryCommand(t, "/usr/bin/umount", "/etc/hosts")
 	for _, name := range []string{"history-hosts", "history-ca.pem", "history-cert.pem", "history-key.pem"} {
