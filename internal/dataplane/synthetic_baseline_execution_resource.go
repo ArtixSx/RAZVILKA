@@ -113,11 +113,11 @@ func (b *SyntheticDNSExecutionBinding) issueBaseline(ctx context.Context, mappin
 		// under this scope lock. Reuse only that exact source/reader/capture
 		// owner; a persistence failure keeps lookup fenced and cannot retry Add.
 		if existing, lookupErr := b.scope.lookupSyntheticBaseline(ctx, b, mapping, backend, capture); lookupErr == nil && existing != nil {
-			return existing, existing.current(ctx)
+			return existing, existing.currentInOriginalFileObservation(ctx)
 		}
 		return nil, err
 	}
-	return r, r.current(ctx)
+	return r, r.currentInOriginalFileObservation(ctx)
 }
 
 // Local immutable comparisons only, also safe under the tool's source locks.
