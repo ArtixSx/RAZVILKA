@@ -47,7 +47,13 @@ if unshare --net --mount sh -eu -c '
  cp "$RAZVILKA_XRAY_NATIVE" /opt/bin/xray
  chmod 0555 /opt/bin/xray
  export RAZVILKA_XRAY_NATIVE=/opt/bin/xray
- exec /opt/bin/razvilka -test.run "^TestNativeVLESSQueueHTTPPerformance$" -test.v -test.timeout=25m
+ set -- -test.run "^TestNativeVLESSQueueHTTPPerformance$" -test.v -test.timeout=25m
+ # Optional attribution run only; the ordinary paired measurements leave this
+ # disabled. Profiling samples CPU and cannot establish timer/lock wait time.
+ if [ "${RAZVILKA_NODE_PERF_QUEUE_PROFILE:-0}" = 1 ]; then
+  set -- "$@" "-test.cpuprofile=$RAZVILKA_NODE_PERF_OUTPUT/queue-cpu.pprof"
+ fi
+ exec /opt/bin/razvilka "$@"
 ' sh "$tmp" > "$RAZVILKA_NODE_PERF_OUTPUT/native-performance.log" 2>&1; then
  cat "$RAZVILKA_NODE_PERF_OUTPUT/native-performance.log"
 else

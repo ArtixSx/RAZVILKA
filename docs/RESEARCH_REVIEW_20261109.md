@@ -254,3 +254,29 @@ native cuts intent/settlement-sync ожидают CI. Native требует не
 marker, но и полного следующего manual Apply → LAN/exclusions → Stop. Этот узкий
 путь не исправляет f842 отказ внутри уже начатого runCommand.
 [Точные file hashes и границы review](measurements/2026-11-09/research/reviews/nfq-never-issued-recovery-independent-review-20261109.json).
+
+## Продолжение после363f: замеры и независимое ревью
+
+Оба generic CI363f SUCCESS; Mihomo все3 native jobs, StrategyLab pair и
+restored panel PASS. Strict DNS и full managed NFQ LAN остаются FAIL;
+[точные результаты и сырые данные](measurements/2026-11-09/research/lifecycle/README.md#363f4336-полная-программная-проверка-и-оставшиеся-отказы).
+
+- Capture guard70fa: удалено только повторное opening Current перед тем же
+  concrete readonly guard. Reviewer выявил и устранил потерю closing original
+  association: `(false,nil)` при закрытии теперь отказ, complete closing остаётся.
+- Mapping4164: одна original tool-byte область вокруг прежних prepared→kernel→
+  material чтений; каждый фактический read и source/process/SHA closing сохранён.
+- Stop1eec: ранние10/20/40/30мс перепроверки затем100мс; прежние predicates,
+  cancellation и4с bound. Это не новый sole-Wait контракт; цена до3 extra polls
+  при медленном выходе. Следующий paired baseline363f выделяет именно этот эффект.
+- WG88b: exact leading JSON fragment разрешает только прежнюю независимую
+  numeric text confirmation. Success с malformed JSON, чужая family, route bytes,
+  дополнительные diagnostics и неудачная confirmation остаются отказами.
+  Native diagnostic читает ограниченные escaped streams только после original
+  Wait и closing; production logging не расширено.
+- Отдельный candidate CPU profile не входит в paired samples. Reviewer нашёл
+  ошибку root-owned каталога результатов; runner создаёт каталог до sudo harness.
+  Shell syntax26 workflow blocks и2 scripts PASS, Go тесты выполняются в CI.
+
+[Source reviews](measurements/2026-11-09/research/reviews/) содержат точные
+SHA256 проверенных файлов. Наличие review не объявляет новые native тесты успешными.

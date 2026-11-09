@@ -1,0 +1,49 @@
+{
+  "reviewer": "independent-verification",
+  "sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "push": {
+    "run": 42614826404,
+    "job": 129151974024,
+    "conclusion": "success"
+  },
+  "pull_request": {
+    "run": 42614836438,
+    "job": 129152007663,
+    "conclusion": "success",
+    "full_checks_seconds": 1368
+  },
+  "checks": [
+    "Actual non-root unpublished-intent prewrite/cancel/EACCES and same-byte replacement regression, all PASS with no SKIP in non-root step",
+    "Focused ownership/recovery/netidentity regressions",
+    "Full Go normal and race suites",
+    "UI and installer/update guards",
+    "linux amd64/arm64/mips/mipsle cross-builds",
+    "Entware actual shell/S99/Main transaction with modeled native initializer",
+    "RAZVILKA checks: OK"
+  ],
+  "sample_package_seconds": {
+    "app": {
+      "normal": 137.54,
+      "race": 391.067
+    },
+    "dataplane": {
+      "normal": 211.022,
+      "race": 578.85
+    },
+    "netidentity": {
+      "normal": 2.236,
+      "race": 3.609
+    }
+  },
+  "expected_skip_note": "Root focused/full execution skips only non-root permission subcase; actual EACCES subcase separately passed in first non-root gate (0.02s).",
+  "log": {
+    "path": "generic-pr-ci.log",
+    "bytes": 213628,
+    "sha256": "0cfd9ad5ae7d02cc52f553c8b4569e27d4d95263bbf58d207732084d34687cfc"
+  },
+  "limits": [
+    "Exact363f only: newer Stop polling, DNS guards/mapping and WG framing changes require their own results.",
+    "Generic CI does not prove strict DNS or managed NFQ native acceptance: those separate363f scenarios failed.",
+    "Physical router/LAN and genuine clean-install/update/recovery gates remain separate."
+  ]
+}

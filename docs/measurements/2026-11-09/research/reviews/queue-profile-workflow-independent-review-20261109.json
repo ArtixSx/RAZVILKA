@@ -1,0 +1,42 @@
+{
+  "reviewer": "independent-verification",
+  "decision": "Source approved for CI; profile execution pending",
+  "scope": "Separate candidate CPU attribution and new focused guard/framing tests; prior Stop source review remains separately anchored.",
+  "verified": [
+    "Original paired baseline/candidate sampling does not enable CPU profile.",
+    "Separate candidate run uses exact existing fixture, original controllers and isolated namespace; results/profile is excluded from paired sample folders.",
+    "Runner creates results/profile before sudo harness, so later runner pprof report redirects have writable directory.",
+    "New test.cpuprofile flag affects only queue App fixture; no production scheduling/ownership change.",
+    "Domain CPU reports retain50s subprocess bound,35 rows and65536-byte cap; failed native scenarios still expose reports.",
+    "Focused generic and managed normal/race include exact WG framing regressions; capture guard test added.",
+    "Existing outcome checks and artifact preservation remain."
+  ],
+  "limitations": [
+    "CPU sampling does not establish timer or mutex wait duration.",
+    "Profile-run timing is not paired speedup evidence.",
+    "No local Go build or cache refill performed.",
+    "Shell syntax checks reported by parent; reviewer independently inspected full diff and git diff --check."
+  ],
+  "files": [
+    {
+      "path": "scripts/check-node-native-performance.sh",
+      "sha256": "5123c31c42904ddcf4a97b6d21ca263e3db207a53480c0ad916917f1e3543ef9"
+    },
+    {
+      "path": "scripts/test-domain-original-native.sh",
+      "sha256": "bc965f8e1a7cbdb483097733b8ca409f7b9cb572ea6b786dc978533dc7540a4b"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "f5db8446d209306ba28f763a76cffc181dc9267b36338e2bcd4d057e70daebff"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "6da3333ec9c407fa788a20e67f89439e5cc017c49ab2304464c580e3110b9203"
+    },
+    {
+      "path": ".github/workflows/research-probes.yml",
+      "sha256": "07f6a04dd16bd4530fadffc642ead13ad1a16c70b1cb486c6a56925a08c3883c"
+    }
+  ]
+}

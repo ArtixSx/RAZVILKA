@@ -188,3 +188,11 @@ recovery и startup пройдены. Более широкий Windows набо
 исходный платформенный отказ в NFQWS2 fixture: `/opt/...` не absolute Windows
 path; дефект воспроизведён также на 577ebe54. Runtime-проверки не ослаблялись.
 Полный Linux gate остаётся обязательным для каждого интегрированного commit.
+
+
+Последняя полностью проверенная исследовательская ревизия `363f4336`:
+оба generic CI и Mihomo isolated native lifecycle, StrategyLab pair/restored
+panel PASS; строгий DNS и полный managed NFQWS LAN ещё FAIL.
+Следующие исправления проходят собственную приёмку; [текущий журнал](measurements/2026-11-09/research/lifecycle/README.md)
+содержит конкретные SHA, ограничения и сырые результаты. Готовность релиза
+и физического router/LAN этим не подтверждается.

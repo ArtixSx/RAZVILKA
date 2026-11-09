@@ -62,6 +62,24 @@ jobs:
             ) || result=1
           done
           exit "$result"
+      - name: Separate candidate queue CPU attribution (not paired timing)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/candidate"
+          mkdir -p "$GITHUB_WORKSPACE/results/profile"
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$PWD" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_NODE_PERF_ALGORITHM=current-reuse \
+            RAZVILKA_NODE_PERF_QUEUE_PROFILE=1 \
+            RAZVILKA_NODE_PERF_OUTPUT="$GITHUB_WORKSPACE/results/profile" \
+            sh scripts/check-node-native-performance.sh
+          go tool pprof -top -nodecount=45 "$GITHUB_WORKSPACE/results/profile/queue-cpu.pprof" > "$GITHUB_WORKSPACE/results/profile/queue-cpu-top.txt"
+          go tool pprof -top -cum -nodecount=45 "$GITHUB_WORKSPACE/results/profile/queue-cpu.pprof" > "$GITHUB_WORKSPACE/results/profile/queue-cpu-cumulative.txt"
+          cat "$GITHUB_WORKSPACE/results/profile/queue-cpu-cumulative.txt"
       - name: Preserve raw samples even on failure
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

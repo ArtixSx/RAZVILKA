@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
-          go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+          go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
       - name: Original child cancellation and held mount identity
         shell: bash
         run: |
@@ -161,6 +161,14 @@ jobs:
           grep -Fx "native_case=$expected_case" artifacts/domain/status.txt
           grep -Fx 'publication_budget_seconds=12' artifacts/domain/status.txt
           grep -Fx 'diagnostic_only=false' artifacts/domain/status.txt
+      - name: Bounded original CPU attribution (including failed scenarios)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for report in artifacts/domain/cpu-top.txt artifacts/domain/cpu-cumulative.txt; do
+            if [ -s "$report" ]; then cat "$report"; fi
+          done
       - name: Preserve original clocks and failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -193,7 +201,7 @@ jobs:
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v
+            go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
       - name: Actual path metadata parity and paired allocation benchmark
         run: |
           go test ./internal/startuptools -run '^TestFreshPathNode' -count=1 -v

@@ -54,7 +54,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -count=1 ./internal/dataplane ./internal/netidentity \
-              -run '^TestDomainPreAdd|^TestNFQWS(NeverIssued|Recovery|Unpublished|ActivePurePredicates|ScopedExactPresenceObservation)|^Test(XraySelectedTCP|Proc)MountID' -v
+              -run '^TestDomainPreAdd|^TestDomainCaptureGuard|^TestNFQWS(NeverIssued|Recovery|Unpublished|ActivePurePredicates|ScopedExactPresenceObservation)|^Test(XraySelectedTCP|Proc)MountID|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
 
       - name: Full project checks
         shell: bash

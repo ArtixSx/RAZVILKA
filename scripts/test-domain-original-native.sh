@@ -123,6 +123,7 @@ if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
  if test -s "$domain_work/original-run.cpu.pprof"; then
   cp "$domain_work/original-run.cpu.pprof" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/"
   timeout 50s go tool pprof -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-top.txt" || true
+  timeout 50s go tool pprof -top -cum -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-cumulative.txt" || true
  fi
  domain_publication_budget=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-12}
  domain_diagnostic=${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-false}

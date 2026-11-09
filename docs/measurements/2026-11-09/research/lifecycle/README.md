@@ -482,3 +482,62 @@ Normal/race, vet, UI, четыре Linux cross-builds и modeled Entware transac
 пройдены. Это подтверждает исправление fixture441e без изменения production
 attribution. Общие441e jobs были отменены как superseded; их PASS не заявлялся.
 Новый STATX код15bb4108/bc2ea7c2 и NFQ recovery требуют собственного CI.
+
+## 363f4336: полная программная проверка и оставшиеся отказы
+
+[Mihomo42614826249](https://github.com/ArtixSx/RAZVILKA/actions/runs/42614826249)
+SUCCESS: полный цикл278.01с, Apply95.180/95.053с, Stop6.033/6.025с,
+оба исходных маршрута клиента восстановлены в изолированном namespace.
+Settlement125.53с, два cut и все9 original rows terminal; post-CAS90.60с,
+HTTP503, desired восстановлен точно, rollback_verified, original_pending=false.
+Это не парное доказательство ускорения и не аппаратная приёмка.
+
+[Lifecycle42614826250](https://github.com/ArtixSx/RAZVILKA/actions/runs/42614826250)
+FAIL: StrategyLab pair/readers/restored panel PASS, DNS preparation diagnostic30
+PASS (baseline CUT→REFUSED83.87с; candidate clean101.14с, captureACK107.93с,
+standbyACK101.73с — CUT→COMPLETE). Strict12 selected14.60с и canceled21.52с
+с cleanup не достигают GEN1 publication. Обе выполняют все11 capture pre-Add
+групп, но этого недостаточно для готового DNS/LAN маршрута. GEN2 не проверен.
+
+Fresh mount ID parity, exact fallback, bind-mount refusal и provider closing,
+actual child cancel проходят normal/race без SKIP. N1000 на том же дескрипторе:
+Xray fdinfo7.153мс→statx0.870мс, forced fallback7.434мс; netidentity7.183мс→0.875мс,
+fallback7.104мс. Это primitive, фиксированный порядок; forced fallback исключает
+цену неуспешного syscall. Ядро роутера4.9 требует прежнего fdinfo reader,
+поэтому восьмикратный micro gain не переносится на роутер или весь workflow.
+
+Managed production core/HTTP/closing PASS, полный LAN/manual/race FAIL.
+Обычный manual activation16.028с превышает15с. Два новых production cuts
+очищают собственные NFQ receipt/rules, но LAN rollback затем отказывает
+с WG_INACTIVITY_COMMAND; fresh Apply не достигнут. Race cuts не дошли до
+инъекции из-за более раннего deadline. Поэтому восстановление не объявлено
+завершённым. Исследование выявило несовпадение порядка stdout/stderr JSON
+фрагмента iproute2; 88b25ca3 добавляет точное format negotiation с прежним
+обязательным независимым текстовым чтением. Его фактический результат ждёт CI.
+
+[Raw, разбор и хеши](363f4336/archive-manifest.json) сохраняют все отказы.
+Generic363f SUCCESS: [push42614826404](https://github.com/ArtixSx/RAZVILKA/actions/runs/42614826404)
+и [PR42614836438](https://github.com/ArtixSx/RAZVILKA/actions/runs/42614836438).
+Actual non-root denied-write/no-SKIP, focused ownership/recovery и полный
+normal/race/vet/UI/cross-build/Entware gate пройдены. Следующие локальные
+70fa/1eec/4164/88b изменения этим результатом не покрываются.
+
+[Парный прогон42614826284](https://github.com/ArtixSx/RAZVILKA/actions/runs/42614826284)
+SUCCESS; [анализ182 строк](../ci-363f4336/paired-analysis.json) проверил binary,
+identity, verdict и cleanup. N12 повторных, p50/p95:
+
+| Сценарий | Baseline0e, мс | 363f, мс |
+| --- | ---: | ---: |
+| Full live Check | 406.622 / 487.322 | 315.772 / 317.722 |
+| Full cancellation | 365.540 / 369.550 | 274.460 / 280.467 |
+| Single queue completion | 754 / 770 | 657 / 673 |
+| Selected2 queue completion | 2615 / 2636 | 1453 / 1462 |
+| All2 queue completion | 2633 / 2656 | 1457 / 1477 |
+
+Первые samples отдельно; один runner/binary, baseline-first порядок. Cleanup
+у обеих ревизий p50=101мс; это подтверждённый источник следующей оптимизации.
+1eec28aa сохраняет predicates, deadlines и ownership, добавляя ранние Stop
+observations. Следующий paired baseline теперь363f, чтобы выделить эффект Stop;
+отдельный candidate CPU profile не входит в paired samples и не измеряет lock wait.
+DNS70fa78b3/41644895 сохраняют все closing/source/SHA observations; полного
+успеха новых изменений до собственного native прогона не заявляем.

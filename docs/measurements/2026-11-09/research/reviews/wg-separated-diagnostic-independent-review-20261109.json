@@ -1,0 +1,38 @@
+{
+  "reviewer": "independent-verification",
+  "base_sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "decision": "Source approved for CI; execution/native acceptance pending",
+  "claims": [
+    "Exact leading open-array/newline and known-family ENOENT diagnostic negotiates failed JSON only.",
+    "Same-original independent full plain table confirmation remains mandatory.",
+    "Occupied/failed confirmation, route bytes, duplicate framing, wrong family, extra diagnostics and successful malformed JSON remain refused.",
+    "Native-only diagnostic bounded to256 bytes per escaped stream after actual joined Wait and source closing; fixed original IP numeric-table read only.",
+    "Existing Nov1 native evidence confirms incomplete array; new native recovery outcome remains pending."
+  ],
+  "files": [
+    {
+      "path": "internal/dataplane/wg_missing_table_diagnostic.go",
+      "sha256": "a643d8d4428342f11feff810e9f5b74307eac98beca5f2f3f2d0485166afa855"
+    },
+    {
+      "path": "internal/dataplane/wg_endpoint_ip44_test.go",
+      "sha256": "3a80ce6eb421d7d32ec652ead31faa91c0bd47d242eca062bd2edac3fc80d35a"
+    },
+    {
+      "path": "internal/dataplane/wg_runtime_inactive_test.go",
+      "sha256": "a572195542a0391befddac36b8908aabaca03beb0d2ba9ae16242b4e3e7e285d"
+    },
+    {
+      "path": "internal/startuptools/wg_inactivity_run_linux.go",
+      "sha256": "d2d707b426bb269630d4255d213d77662662b7094173c6b6183dd834d2b63b60"
+    },
+    {
+      "path": "internal/startuptools/wg_inactivity_diagnostic_native_linux.go",
+      "sha256": "c24888d06f0c29c193266df4a6d3ab178a275105854ecdde4e5c9bf254836952"
+    },
+    {
+      "path": "internal/startuptools/wg_inactivity_diagnostic_other.go",
+      "sha256": "34a51431753c70b1489d829ba64be07fc4b6eed563a5cbce9623e03badda6607"
+    }
+  ]
+}

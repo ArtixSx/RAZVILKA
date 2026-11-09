@@ -14,7 +14,7 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Механизм | ПК / программное состояние этой волны | Что не подтверждено |
 | --- | --- | --- |
 | Exact VLESS/Xray/sing-box | Deadline SOCKS, отдельные startup/identity timings, строгий service gate и joined cleanup | Универсальное ускорение WAN и route-ready LAN |
-| Mihomo | Изолированный probe и lifecycle API существуют; availability остаётся tri-state | Полный повторный Stop/Apply, recovery cuts и live readiness |
+| Mihomo | На363f isolated native два Apply/Check/Stop и два проверенных recovery сценария PASS; availability остаётся tri-state | Остальные restart/race/ACK cuts, per-plan live readiness и физический LAN |
 | Backup/StrategyLab | Парный snapshot3 и encrypted recovery уже реализованы; сохранены fences | Любые произвольные версии downgrade и аппаратный power-loss |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют | Незавершённые full native workflows нельзя закрыть generic CI |
 
