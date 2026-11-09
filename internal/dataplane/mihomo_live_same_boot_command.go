@@ -80,34 +80,41 @@ type mihomoSameBootCleanup struct {
 func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
 	defer mihomoSameBootNativeOwnerTiming(o, "source-current")()
 	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || !o.sourceCoordinatesCurrent() || o.effectUnknown {
-		return ErrMihomoLiveRetirement
+		return mihomoSameBootNativeFailure(ctx, "owner", ErrMihomoLiveRetirement)
 	}
 	if err := o.inputs.current(o.inputs.ctx); err != nil {
-		return err
+		return mihomoSameBootNativeFailure(ctx, "inputs-opening", err)
 	}
 	if err := o.planInputsCurrent(); err != nil {
-		return err
+		return mihomoSameBootNativeFailure(ctx, "plan-inputs", err)
 	}
 	if o.policy != nil && o.policy.closeErr != nil {
-		return o.policy.closeErr
+		return mihomoSameBootNativeFailure(ctx, "policy-close", o.policy.closeErr)
 	}
 	if o.static != nil {
 		if !o.effectsClosed {
 			if err := o.static.current(); err != nil {
-				return err
+				return mihomoSameBootNativeFailure(ctx, "static-current", err)
 			}
 		} else if o.static.closeErr != nil {
-			return o.static.closeErr
+			return mihomoSameBootNativeFailure(ctx, "static-close", o.static.closeErr)
 		}
 	}
-	if err := errors.Join(o.read.current(ctx), o.control.CurrentForCleanupOperation(ctx, o.cleanup)); err != nil {
+	if err := errors.Join(
+		mihomoSameBootNativeFailure(ctx, "read-opening", o.read.current(ctx)),
+		mihomoSameBootNativeFailure(ctx, "control-opening", o.control.CurrentForCleanupOperation(ctx, o.cleanup)),
+	); err != nil {
 		return err
 	}
 	identity, err := observeMihomoLiveColdProcesses(ctx, o.read.tools.Provider, o.inputs.definition, o.inputs.statePath)
 	if err != nil || identity != o.inputs.definition.NetworkIdentity {
-		return errors.Join(ErrMihomoLiveRetirement, err)
+		return mihomoSameBootNativeFailure(ctx, "processes", errors.Join(ErrMihomoLiveRetirement, err))
 	}
-	return errors.Join(o.inputs.current(o.inputs.ctx), o.read.current(ctx), o.control.CurrentForCleanupOperation(ctx, o.cleanup))
+	return errors.Join(
+		mihomoSameBootNativeFailure(ctx, "inputs-closing", o.inputs.current(o.inputs.ctx)),
+		mihomoSameBootNativeFailure(ctx, "read-closing", o.read.current(ctx)),
+		mihomoSameBootNativeFailure(ctx, "control-closing", o.control.CurrentForCleanupOperation(ctx, o.cleanup)),
+	)
 }
 
 func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identity, error) {

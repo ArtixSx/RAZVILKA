@@ -82,3 +82,31 @@ func mihomoSameBootNativeOwnerTiming(o *mihomoSameBootCleanup, phase string) fun
 	}
 	return mihomoSameBootMeasureContext(o.inputs.ctx, phase)
 }
+
+// Refusal-only documentary counts. Never inspect Error/Is/Unwrap, execute a
+// callback or change the original error, read ordering, clocks or ownership.
+func mihomoSameBootNativeFailure(ctx context.Context, stage string, err error) error {
+	if err == nil || ctx == nil {
+		return err
+	}
+	switch stage {
+	case "owner", "inputs-opening", "plan-inputs", "policy-close", "static-current", "static-close", "read-opening", "control-opening", "processes", "inputs-closing", "read-closing", "control-closing":
+	default:
+		return err
+	}
+	m, _ := ctx.Value(mihomoSameBootMeasurementsKey{}).(*mihomoSameBootMeasurements)
+	if m == nil || m.self != m {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.active {
+		return err
+	}
+	phase := "failure-" + stage
+	r := m.rows[phase]
+	r.Phase = phase
+	r.Calls++
+	m.rows[phase] = r
+	return err
+}

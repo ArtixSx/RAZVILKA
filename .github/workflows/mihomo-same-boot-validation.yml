@@ -31,6 +31,9 @@ jobs:
           race_option=""
           if test "${{ matrix.mode }}" = race; then race_option="-race"; fi
           GOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot|^TestMihomoColdRuntime|^TestMihomoLiveColdRetirement' -v
+          GOTOOLCHAIN=local go test $race_option -tags razvilka_native_fixture -count=1 ./internal/dataplane -run '^TestMihomoSameBootNativeFailureBoundedAndPrivate$' -v | tee /tmp/sameboot-failure-diagnostic.log
+          grep -F -- '--- PASS: TestMihomoSameBootNativeFailureBoundedAndPrivate ' /tmp/sameboot-failure-diagnostic.log
+          if grep -F -- '--- SKIP:' /tmp/sameboot-failure-diagnostic.log; then exit 1; fi
 
   original-parent-native:
     runs-on: ubuntu-latest
