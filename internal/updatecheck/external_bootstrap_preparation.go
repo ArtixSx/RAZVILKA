@@ -332,6 +332,9 @@ func ExternalBootstrapFailureCategory(err error) string {
 // Recognition is diagnostic only; it neither proves inactivity nor grants an
 // operation. The static category list is not an exhaustive composition list.
 func ExternalBootstrapFailureCategoryKnown(category string) bool {
+	if knownExternalBootstrapFileFailure(category) {
+		return true
+	}
 	if strings.HasPrefix(category, "quiesce-") && knownRuntimeQuiesceFailure(strings.TrimPrefix(category, "quiesce-")) {
 		return true
 	}

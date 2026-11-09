@@ -71,6 +71,7 @@ func TestNativeExternalBootstrapPublicExecutableProducer(t *testing.T) {
 	stdout, stderr := &nativePairedRestoreOutput{}, &nativePairedRestoreOutput{}
 	command.Stdout, command.Stderr = stdout, stderr
 	if err := command.Run(); err != nil || stderr.Len() != 0 {
+		nativeExternalBootstrapFileLedger(t, id)
 		exitCode := -1
 		if command.ProcessState != nil {
 			exitCode = command.ProcessState.ExitCode()

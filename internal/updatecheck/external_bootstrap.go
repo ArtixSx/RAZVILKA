@@ -183,20 +183,23 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 	}
 	currentSelf, currentPanel, currentOldSHA, err := externalBootstrapProcesses(ctx, deployment)
 	if err != nil || currentSelf != self || currentPanel != panel || currentOldSHA != oldSHA || !helperConfigMatches(record) {
-		return result, errors.Join(ErrExternalBootstrap, err)
+		return result, externalBootstrapFileFailure("handoff-source", err)
 	}
 	record.Job.State, record.Job.Stage, record.Job.HelperPID = "restarting", "file-protocol", self.PID
 	record.Job.CanApply, record.Job.CanCancel = false, false
 	if err := publishExternalBootstrapHeader(ctx, root, &record, "preparing"); err != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+		return result, externalBootstrapFileFailure("handoff-header", err)
 	}
 	_, review, err := a.load(ctx, id)
-	if err != nil || sealFileHelperIdentity(a, id, review) != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+	if err != nil {
+		return result, externalBootstrapFileFailure("handoff-review", err)
+	}
+	if err := sealFileHelperIdentity(a, id, review); err != nil {
+		return result, externalBootstrapFileFailure("handoff-identity-seal", err)
 	}
 	identity, err := a.helperIdentity(id, review)
 	if err != nil || identity.Process != self || identity.OldPanel != panel || owner(ctx, id) != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+		return result, externalBootstrapFileFailure("handoff-identity-read", err)
 	}
 	if err := a.runExternalBootstrapFiles(ctx, id, review, owner); err != nil {
 		// A failed command is preserved as unknown. Never fabricate join,
@@ -211,39 +214,39 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 		wantedJoins = 3
 	}
 	if len(joins) != wantedJoins {
-		return result, errors.Join(ErrExternalBootstrap, ErrFileCommandUnsettled)
+		return result, externalBootstrapFileFailure("supervisor-count", ErrFileCommandUnsettled)
 	}
 	for _, join := range joins {
 		if err := join(ctx); err != nil {
-			return result, errors.Join(ErrExternalBootstrap, err)
+			return result, externalBootstrapFileFailure("supervisor-join", err)
 		}
 	}
 	if err := owner(ctx, id); err != nil {
-		return result, errors.Join(ErrExternalBootstrap, err)
+		return result, externalBootstrapFileFailure("final-owner", err)
 	}
 	result.State = "completed-awaiting-owner-retirement"
 	if mode == "offline" {
 		fresh, frozen, err := a.load(ctx, id)
 		if err != nil || fresh.Job.State != "restarting" || fresh.Job.Stage != "file-protocol" || fresh.Job.HelperPID != self.PID || fresh.ParentPID != panel.PID || fresh.FileReviewSHA256 != record.FileReviewSHA256 {
-			return result, errors.Join(ErrExternalBootstrap, err)
+			return result, externalBootstrapFileFailure("offline-final-review", err)
 		}
 		if err := a.Authority(ctx, id, frozen.Revision); err != nil {
-			return result, errors.Join(ErrExternalBootstrap, err)
+			return result, externalBootstrapFileFailure("offline-final-authority", err)
 		}
 		if err := a.Quiescence(ctx, id); err != nil {
-			return result, errors.Join(ErrExternalBootstrap, err)
+			return result, externalBootstrapFileFailure("offline-final-quiescence", err)
 		}
 		if err := a.runtimeInactive(ctx, id); err != nil {
-			return result, errors.Join(ErrExternalBootstrap, err)
+			return result, externalBootstrapFileFailure("offline-final-inactivity", err)
 		}
 		fresh.Job.State, fresh.Job.Stage, fresh.Job.Code = "requires-review", "installed-offline", "bootstrap-offline-installed"
 		fresh.Job.UpdatedAt = time.Now().UTC()
 		data, err := json.Marshal(fresh)
 		if err != nil {
-			return result, err
+			return result, externalBootstrapFileFailure("offline-final-encode", err)
 		}
 		if err := writeSelfUpdateRecord(root, data); err != nil {
-			return result, err
+			return result, externalBootstrapFileFailure("offline-final-publish", err)
 		}
 		result.State = "installed-offline-requires-review"
 	}
@@ -421,7 +424,13 @@ func sameExternalBootstrapFile(before, after os.FileInfo) bool {
 	return before != nil && after != nil && os.SameFile(before, after) && before.Mode() == after.Mode() && before.Size() == after.Size() && before.ModTime().Equal(after.ModTime())
 }
 
-func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, id string, review fileReview, owner SelfUpdateRuntimeObservation) error {
+func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, id string, review fileReview, owner SelfUpdateRuntimeObservation) (result error) {
+	stage := "journal-open"
+	defer func() {
+		if result != nil {
+			result = externalBootstrapFileFailure(stage, result)
+		}
+	}()
 	check := func(c context.Context) error {
 		if c != ctx || owner(c, id) != nil {
 			return ErrExternalBootstrap
@@ -443,12 +452,14 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 	if err != nil {
 		return err
 	}
+	stage = "prepare"
 	err = store.Prepare(ctx, id, review.Files, check, func(c context.Context) error { return a.Quiescence(c, id) })
 	store.Close()
 	if err != nil {
 		return err
 	}
 	for _, command := range []string{"stop-old-panel", "prepare-private-state", "quiesce-old-runtime"} {
+		stage = command
 		store, err := a.OpenFileJournal()
 		if err != nil {
 			return err
@@ -459,15 +470,18 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 			return err
 		}
 	}
+	stage = "prior-check"
 	if err := check(ctx); err != nil {
 		return err
 	}
 	if err := externalBootstrapLegacyControllersAbsent(ctx, filepath.Join(a.installation, "razvilka/state/update-backups"), a.owned); err != nil {
 		return err
 	}
+	stage = "prior-seal"
 	if err := a.SealPairedPriorState(ctx, id); err != nil {
 		return err
 	}
+	stage = "install"
 	store, err = a.OpenFileJournal()
 	if err != nil {
 		return err
@@ -480,14 +494,18 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 		return err
 	}
 	if review.Bootstrap.Mode == "offline" {
+		stage = "offline-authority"
 		if err := check(ctx); err != nil {
 			return err
 		}
+		stage = "offline-quiescence"
 		if err := a.Quiescence(ctx, id); err != nil {
 			return err
 		}
+		stage = "offline-inactivity"
 		return a.runtimeInactive(ctx, id)
 	}
+	stage = "live-start"
 	store, err = a.OpenFileJournal()
 	if err != nil {
 		return err
@@ -497,6 +515,7 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 	if err != nil {
 		return err
 	}
+	stage = "live-accept"
 	store, err = a.OpenFileJournal()
 	if err != nil {
 		return err
@@ -506,6 +525,7 @@ func (a *SelfUpdateFileAdapter) runExternalBootstrapFiles(ctx context.Context, i
 	if err != nil {
 		return err
 	}
+	stage = "live-finish"
 	if err := check(ctx); err != nil {
 		return err
 	}
