@@ -19,6 +19,7 @@ type nfqwsPolicyRecovery struct {
 	self            *nfqwsPolicyRecovery
 	mu              sync.Mutex
 	execution       *nfqws2ActiveExecution
+	preAdd          *nfqws2ActivePreAddRead
 	session         *policyEffectSession
 	index           int
 	entered         bool

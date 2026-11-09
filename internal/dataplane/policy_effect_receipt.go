@@ -357,11 +357,14 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 }
 
 // All four observations remain ordered after the durable intent and fault seam.
-// The private domain producer may share immutable original bytes across only
+// Private original producers may share immutable held bytes across only
 // this synchronous read sequence. Its closing proof completes before Add.
 func (s *policyEffectSession) observeBeforeAdd(ctx context.Context, runtime PolicyEffectRuntime, index int) error {
 	if s.domainPreAdd != nil {
 		return s.domainPreAdd.observe(ctx, s, runtime, index)
+	}
+	if s.nfqRecovery != nil && s.nfqRecovery.preAdd != nil {
+		return s.nfqRecovery.preAdd.observe(ctx, s, runtime, index)
 	}
 	return s.observeBeforeAddUnshared(ctx, runtime, index)
 }

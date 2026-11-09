@@ -16,6 +16,12 @@ func (b *NFQWSScopedBinding) applyOriginalPolicyEffects(ctx context.Context, p *
 	}
 	c := &nfqwsPolicyRecovery{execution: e, index: -1}
 	c.self = c
+	if _, originalReads := e.inventory.reader.Runner.(nfqwsProbeToolObserver); originalReads {
+		runtime, err = newNFQWSActivePreAddRead(e, b, p, runtime, plan, root, c)
+		if err != nil {
+			return err
+		}
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e.mu.Lock()
