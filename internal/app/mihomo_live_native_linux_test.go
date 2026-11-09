@@ -47,8 +47,19 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if os.Getenv("RAZVILKA_MIHOMO_LIVE_NATIVE") != "1" {
 		t.Skip("disposable original live native workflow")
 	}
-	lifetime, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	rounds := 2
+	if degradeAfterCAS || settlementRetry {
+		rounds = 1
+	}
+	const roundBudget = 5 * time.Minute
+	const operationBudget = 110 * time.Second
+	fixtureStarted := time.Now()
+	// Peers and original live owners span both independent user cycles. The
+	// first cycle still includes setup in its original five-minute budget;
+	// neither cycle may borrow time from the other's request deadlines.
+	lifetime, cancel := context.WithDeadline(context.Background(), fixtureStarted.Add(time.Duration(rounds)*roundBudget))
 	defer cancel()
+	t.Logf("native_fixture_budgets rounds=%d aggregate=%s round=%s operation=%s production_apply=%s", rounds, time.Duration(rounds)*roundBudget, roundBudget, operationBudget, defaultDataplaneApplyTimeout)
 	peers := domainOriginalPeers(t, lifetime)
 	startMihomoLiveNativeForwarder(t, lifetime)
 	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
@@ -189,7 +200,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if _, err = operationgate.InitializeSelfUpdateControl(lifetime, controlRoot); err != nil {
 		t.Fatal(err)
 	}
-	initial, done := context.WithTimeout(lifetime, 110*time.Second)
+	initial, done := context.WithTimeout(lifetime, operationBudget)
 	defer done()
 	held, release, err := a.Operations.ExclusiveContext(initial)
 	if err != nil {
@@ -262,12 +273,15 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if baseline.Source != domainOriginalClient {
 		t.Fatal("physical baseline source", baseline)
 	}
-	rounds := 2
-	if degradeAfterCAS || settlementRetry {
-		rounds = 1
-	}
 	for round := 0; round < rounds; round++ {
-		apply, cancelApply := context.WithTimeout(lifetime, 110*time.Second)
+		roundStarted := time.Now()
+		roundDeadline := roundStarted.Add(roundBudget)
+		if round == 0 {
+			roundDeadline = fixtureStarted.Add(roundBudget)
+		}
+		roundContext, cancelRound := context.WithDeadline(lifetime, roundDeadline)
+		defer cancelRound() // Includes fatal paths; original owner lifetime is separate.
+		apply, cancelApply := context.WithTimeout(roundContext, operationBudget)
 		actual, release, err := a.Operations.ExclusiveContext(apply)
 		if err != nil {
 			cancelApply()
@@ -307,7 +321,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
 		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			bounded, finish := context.WithTimeout(r.Context(), 110*time.Second)
+			bounded, finish := context.WithTimeout(r.Context(), operationBudget)
 			defer finish()
 			bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
 			bounded = dataplane.WithReviewGuard(bounded, binding.current)
@@ -359,14 +373,14 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		server.Close()
 		cancelApply()
 		if degradeAfterCAS {
-			assertMihomoLivePostCASFailure(t, lifetime, a, peers, cfgPath, current, binding, actualCAS.Load(), reply.Execution, reply.Error, response.StatusCode, decodeErr)
+			assertMihomoLivePostCASFailure(t, roundContext, a, peers, cfgPath, current, binding, actualCAS.Load(), reply.Execution, reply.Error, response.StatusCode, decodeErr)
 			return
 		}
 		if decodeErr != nil || response.StatusCode != http.StatusOK || reply.Execution.State != "committed" {
 			t.Fatal("actual native App admission/Apply", reply.Execution, reply.Error, response.StatusCode, decodeErr)
 		}
 		t.Logf("actual_mihomo_live round=%d apply=%s mandatory_probes=2", round, time.Since(started))
-		check, cancelCheck := context.WithTimeout(lifetime, 110*time.Second)
+		check, cancelCheck := context.WithTimeout(roundContext, operationBudget)
 		var settlementFixture *dataplane.MihomoLiveHealthSettlementNativeFixture
 		if settlementRetry {
 			arm, releaseArm, err := a.Operations.ExclusiveContext(check)
@@ -403,7 +417,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			t.Fatal("actual selected client did not traverse native proxy", native)
 		}
 		cancelCheck()
-		stopped, cancelStop := context.WithTimeout(lifetime, 110*time.Second)
+		stopped, cancelStop := context.WithTimeout(roundContext, operationBudget)
 		if round == 1 {
 			arm, releaseArm, err := a.Operations.ExclusiveContext(stopped)
 			if err != nil {
@@ -433,6 +447,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		}
 		if round == 1 {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || !a.mihomoProbe.liveStop.closing {
+				t.Logf("native_closing_cut_failure fixture_elapsed=%s round_elapsed=%s lifetime_error=%v round_error=%v stop_error=%v", time.Since(fixtureStarted), time.Since(roundStarted), lifetime.Err(), roundContext.Err(), stopped.Err())
 				cancelStop()
 				t.Fatal("original close cut did not retain App cursor", outcome)
 			}
@@ -467,6 +482,8 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			t.Fatal("Stop did not restore actual physical baseline", baseline)
 		}
 		cancelStop()
+		t.Logf("actual_mihomo_live round=%d cycle=%s fixture_elapsed=%s restored_physical_baseline=true", round, time.Since(roundStarted), time.Since(fixtureStarted))
+		cancelRound()
 	}
 }
 
