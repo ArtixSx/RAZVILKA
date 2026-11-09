@@ -12,6 +12,20 @@ import (
 // preparation, native life and known retirement. No compiled placeholder or
 // caller-supplied queue list is used before original command issuance.
 func (e *nfqws2ActiveExecution) observeOriginalQueue(ctx context.Context, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
+	if e == nil || e.binding == nil || e.resource == nil {
+		return e.observeOriginalQueueUnborrowed(ctx, child)
+	}
+	var ready bool
+	err := e.binding.observeActiveTools(ctx, e.resource.Plan(), func(observed context.Context) error {
+		var err error
+		ready, err = e.observeOriginalQueueUnborrowed(observed, child)
+		return err
+	})
+	// A closing source failure invalidates even a positively observed queue.
+	return ready && err == nil, err
+}
+
+func (e *nfqws2ActiveExecution) observeOriginalQueueUnborrowed(ctx context.Context, child *components.NFQWSRuntimeProcessIdentity) (bool, error) {
 	if err := e.owners(ctx); err != nil {
 		return false, err
 	}

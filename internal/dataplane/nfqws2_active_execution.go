@@ -278,10 +278,19 @@ func (e *nfqws2ActiveExecution) current(ctx context.Context, p *NFQWSScopedPlan)
 	if e == nil || e.resource == nil || p != e.resource.Plan() {
 		return ErrNFQWSScopedOwner
 	}
-	if err := e.forward(ctx); err != nil {
-		return err
+	read := func(observed context.Context) error {
+		if err := e.forward(observed); err != nil {
+			return err
+		}
+		return e.resource.Current(observed, e.resource.Binding())
 	}
-	return e.resource.Current(ctx, e.resource.Binding())
+	if e.binding == nil {
+		return read(ctx) // Before original binding issuance, retain the full path.
+	}
+	// Current performs only owner/source/journal reads. Reuse one original
+	// finite tool observation across its nested checks, never across Start,
+	// COMMON publication, or a policy effect.
+	return e.binding.observeActiveTools(ctx, p, read)
 }
 
 func (e *nfqws2ActiveExecution) owner() (*nfqws2ActiveOwner, error) {
@@ -586,6 +595,13 @@ func (e *nfqws2ActiveExecution) health(ctx context.Context) error {
 		return ErrNFQWSScopedOwner
 	}
 	ctx = networkPolicyConsumerContext(ctx, e.plan)
+	return e.binding.observeActiveTools(ctx, e.resource.Plan(), e.healthObserved)
+}
+
+// The full opening/closing owner checks and independent receipt/inventory
+// reads remain inside one synchronous read-only tool observation. Its result
+// is not accepted until the original tool source's closing byte check passes.
+func (e *nfqws2ActiveExecution) healthObserved(ctx context.Context) error {
 	if err := e.current(ctx, e.resource.Plan()); err != nil {
 		return err
 	}
