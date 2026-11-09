@@ -280,3 +280,19 @@ restored panel PASS. Strict DNS и full managed NFQ LAN остаются FAIL;
 
 [Source reviews](measurements/2026-11-09/research/reviews/) содержат точные
 SHA256 проверенных файлов. Наличие review не объявляет новые native тесты успешными.
+
+
+### Реальный HTTP-допуск Mihomo: обнаруженная граница startup
+
+Новый native manual HTTP dac23b29 реально прошёл preview, но получил409 на
+Validate: HTTP client110s не передаёт свой deadline серверу; server Apply8min
+отвергался оригинальным ReserveLiveChild(max2min). Это не проблема TLS или
+разрешения scope. Исправление сужает только startup context до min(parent,2min)
+после проверки конечности исходного контекста; component guard остаётся прежним.
+Оригинальный runtime child не CommandContext и живёт до своего cleanup/soleWait.
+Независимое ревью: [точный diff](measurements/2026-11-09/research/reviewed-manual-wave/mihomo-start-deadline-independent-review-20261109.json).
+Новый native результат обязателен; исходный FAIL сохраняется.
+
+На том же dac23 native lifecycle и post-CAS PASS; settlement FAILED на110s
+clientdeadline отдельно: pre-CAS health42.605с и оставшееся post-CAS наблюдение
+не уложились в бюджет. Startup исправление не объявляется решением этой цены.

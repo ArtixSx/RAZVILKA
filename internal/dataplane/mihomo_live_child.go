@@ -3,6 +3,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
@@ -14,6 +15,14 @@ func (r *mihomoLiveResource) startNative(ctx context.Context, cleanup *operation
 	if r == nil || r.self != r || r.adapter == nil || r.scope == nil || r.scope.manager == nil || r.control == nil || r.childControl == nil || r.childControl == r.control || r.source == nil || r.node == nil || r.profile == nil || !r.adapter.RegisteredWith(r.scope.manager) || !r.source.OwnedBy(r.adapter.components) {
 		return errMihomoLiveMaterial
 	}
+	// HTTP request deadlines are server-local: the outer Apply may allow eight
+	// minutes. Keep the component's two-minute startup boundary without changing
+	// the whole transaction budget or borrowing a deadline for an unbounded call.
+	ctx, cancel, err := mihomoLiveStartContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer cancel()
 	if err := r.node.Current(ctx); err != nil {
 		return err
 	}
@@ -87,4 +96,18 @@ func (r *mihomoLiveResource) cleanupNative(ctx context.Context, cleanup *operati
 		return nil
 	}
 	return child.Cleanup(ctx, cleanup)
+}
+
+func mihomoLiveStartContext(ctx context.Context) (context.Context, context.CancelFunc, error) {
+	if ctx == nil {
+		return nil, nil, errMihomoLiveMaterial
+	}
+	if _, finite := ctx.Deadline(); !finite {
+		return nil, nil, errMihomoLiveMaterial
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	bounded, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	return bounded, cancel, nil
 }
