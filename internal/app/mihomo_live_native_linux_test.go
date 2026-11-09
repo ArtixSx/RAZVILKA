@@ -201,6 +201,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		t.Fatal(err)
 	}
 	a := &App{Store: store, Nodes: nodes, Components: cm, Dataplane: manager, EngineConfigs: configs, Catalog: catalog.Catalog{Services: []catalog.Service{service}}, FreshProfile: fresh, ProxySidecarBoot: "hev", ExecutionHistory: updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion), ComponentHistory: updatecheck.NewComponentHistoryAdmission(components.MihomoReleaseReadVersion)}
+	if manualHTTP {
+		mihomoNativeManualAuthenticate(t, a)
+	}
 	controlRoot := filepath.Join(peers.root, "live-control")
 	if parentProducer {
 		controlRoot = "/opt/razvilka/state/self-update-stop"
@@ -380,6 +383,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			t.Fatal(err)
 		}
 		request.Header.Set("Content-Type", "application/json")
+		if manualHTTP {
+			request.Header.Set("Authorization", "Bearer "+mihomoNativeManualToken)
+		}
 		response, err := server.Client().Do(request)
 		if err != nil {
 			server.Close()

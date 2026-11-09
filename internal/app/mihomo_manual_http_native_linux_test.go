@@ -15,7 +15,19 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/catalog"
 	"github.com/ArtixSx/razvilka/internal/dataplane"
+	"github.com/ArtixSx/razvilka/internal/security"
 )
+
+const mihomoNativeManualToken = "native-mihomo-original-api-token-1234567890"
+
+func mihomoNativeManualAuthenticate(t *testing.T, a *App) {
+	t.Helper()
+	gate, err := security.NewGate(mihomoNativeManualToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Security = gate
+}
 
 func TestMihomoLiveOriginalManualHTTPApplyStop(t *testing.T) {
 	t.Setenv("RAZVILKA_MIHOMO_MANUAL_HTTP_NATIVE", "1")
@@ -24,11 +36,18 @@ func TestMihomoLiveOriginalManualHTTPApplyStop(t *testing.T) {
 
 func mihomoNativeHTTP(t *testing.T, ctx context.Context, server *httptest.Server, method, path string, body []byte) (int, []byte) {
 	t.Helper()
+	return mihomoNativeHTTPAuth(t, ctx, server, method, path, body, mihomoNativeManualToken)
+}
+func mihomoNativeHTTPAuth(t *testing.T, ctx context.Context, server *httptest.Server, method, path string, body []byte, token string) (int, []byte) {
+	t.Helper()
 	request, err := http.NewRequestWithContext(ctx, method, server.URL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
 	response, err := server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -148,6 +167,11 @@ func mihomoNativeManualStop(t *testing.T, ctx context.Context, a *App) serviceRu
 	server := httptest.NewServer(a.Handler(http.NotFoundHandler()))
 	defer server.Close()
 	body, _ := json.Marshal(map[string]any{"action": "stop", "expected_revision": a.Store.Get().Revision, "confirm": "STOP_OWNED_ROUTES"})
+	before := a.Store.Get()
+	code, _ := mihomoNativeHTTPAuth(t, ctx, server, http.MethodPost, "/api/v1/service-control/runtime", body, "")
+	if code != http.StatusUnauthorized || !reflect.DeepEqual(before, a.Store.Get()) {
+		t.Fatal("anonymous runtime Stop was not refused", code)
+	}
 	code, raw := mihomoNativeHTTP(t, ctx, server, http.MethodPost, "/api/v1/service-control/runtime", body)
 	var value struct {
 		OK      bool   `json:"ok"`
