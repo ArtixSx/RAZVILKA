@@ -113,3 +113,41 @@ Windows этого не подтверждает. Повторный запус�
 процесс: его нельзя обозначать как проверку уже прогретого runtime. Native
 изолированный service probe, generic CI и физический router/LAN acceptance
 остаются разными уровнями доказательств.
+
+## Текущий isolated native результат: 71b6f969
+
+Отдельная новая проверка относится к
+`71b6f969579833e3ba217b331dc3c1a24bb150f7`, а не к историческому a2d выше.
+[Job 128966328195 / run 42557481299](https://github.com/ArtixSx/RAZVILKA/actions/runs/42557481299/job/128966328195)
+завершился **SUCCESS**. Оба обязательных native теста реально выполнены без SKIP:
+
+- `TestMihomoOriginalNativeServiceAndCommonCleanup`: PASS, 12.61 с вместе с
+  complete, required-semantic-failure, excluded-required-scenario и
+  panic-after-listener. Успешный adapter Check отдельно занял 3010 мс.
+- `TestMihomoOriginalNativeHTTPServiceAndCleanup`: PASS, 5.14 с со всем setup.
+  Новые timing assertions и прежние проверки config/COMMON/custody пройдены.
+
+Один успешный HTTP probe на том же Linux runner:
+
+| Измерение | мс |
+| --- | ---: |
+| Handler до подготовки ответа | 3641 |
+| Preparation, включая source review | 631 |
+| Adapter Check, включая собственный cleanup | 3009 |
+| Closing environment guard | 0 |
+| Source/control finalization | 0 |
+| Клиент: запрос → прочитанный ответ | 3642.777 |
+
+Нули означают наблюдавшиеся длительности меньше 1 мс. Разница между суммой
+этапов и wall включает округление и код между границами; этапы не покрывают
+middleware queue. Это N=1, без парного сравнения до/после: **ускорение Mihomo
+по этим цифрам не заявляется**. Результат доказывает isolated HTTP/VLESS/TLS
+service check и его original cleanup на Linux; он не закрывает исторический
+live Apply→fresh Check blocker, физический WAN/LAN или готовность роутера.
+Статус всего Actions run следует оценивать отдельно от этого завершённого job.
+
+[Исходный журнал job](mihomo-handler-native.log), SHA-256:
+`7c2dc81eb9c261d2424627a927f69eb1039b4ce4027355dff162f7a73c91145b`.
+Журнал получен через Actions jobs/logs API, сохранён без изменения после
+проверки отсутствия открытых токенов/ключей. Идентификаторы и адреса native
+fixture не являются пользовательскими credentials.

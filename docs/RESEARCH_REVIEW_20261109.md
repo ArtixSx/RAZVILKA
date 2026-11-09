@@ -100,7 +100,8 @@ dead-node не смешиваются. App HTTP readback не является b
 но не доказывает холодный page cache ОС. Private readiness timeout исправляет
 поздний ответ; обычный healthy Check не обязан ускориться. CPU SELF/CHILD, observed
 RSS и стеночное время анализируются отдельно; пустой child RSS не означает ноль.
-Успех workflow и значения CSV ещё должны быть проверены по завершению CI.
+Это предварительное ревью workflow. Результат первого завершённого CI приведён
+ниже; последующие commits требуют отдельных результатов.
 
 ## Ревью измерений Mihomo handler
 
@@ -120,3 +121,55 @@ recovery не приобретают новые полномочия или вы
 assertions и сохраняет проверки `held == nil` и terminal `removed` после ответа.
 Модельный тест ошибки helper не является доказательством native cleanup; результат
 его настоящего Linux исполнения должен публиковаться отдельно.
+
+## Повторная проверка после первого native прогона
+
+Paired-native run `42557481299`, job `128966328426` завершился SUCCESS для
+candidate `71b6f969579833e3ba217b331dc3c1a24bb150f7`. Независимый анализ подтвердил
+52 Check и 39 queue строк каждой ревизии, один алгоритм `current-reuse`,
+совпадение Xray SHA, ожидаемые live/failure verdicts, cleanup и exact identities.
+Исходные артефакты и машинный анализ сохранены вне дерева в
+`C:/RAZVILKA-research-20261109/ci/42557481299`.
+
+Live repeated p50/p95 `407.049/411.030 → 406.042/407.920` мс не подтверждает
+существенного ускорения первой правки. В candidate сохранён dead-service выброс
+487.176 мс с configuration 100 мс; в all-vless sample 1 есть один RSS read error.
+Эти наблюдения не удалены из расчётов. Minute-scale delay на этом fixture не
+воспроизведён. Новый runtime_ready p50 101 мс отделён от runtime_start 1 мс и
+route_identity 0 мс, что обосновывает отдельное исследование начального polling.
+
+Повторное ревью nodeeval обнаружило неверную атрибуцию диагностических stages:
+чужой или устаревший result мог прикрепляться к NodeID текущего запроса при
+`fresh:false`. Исправление разрешает эти stages только после существующей exact
+identity/freshness проверки; собственные wall measurements wrapper сохраняются.
+Cleanup refusal остаётся обязательным независимо от происхождения результата.
+Независимый запуск семи mismatch cases — PASS (`go test ./cmd/nodeeval -run
+'^TestUnmatchedResultCannotAttributeStagesToRequestedNode$' -count=1`, 1.147 с).
+
+Проверено последующее предложение локальной cadence readiness:
+номинальные попытки 0/10/30/70/100/200 мс вместо 0/100/200. Добавляются только
+три ранние попытки, исходный восьмисекундный context, process checks, поздний
+отказ и cleanup сохранены. Реальная стоимость дополнительного I/O не нулевая;
+native сравнение нового candidate должно подтвердить итоговый выигрыш и CPU.
+Результаты `71b6f969` не являются результатами этой последующей оптимизации.
+
+## Ревью продолжения durable node-check
+
+Исходный секундный интервал подтверждён в `durable_service_jobs.go`: после
+успешного bounded шага очередь выставляла NotBefore и timer на одну секунду.
+При этом selector, recovery priority и ограничение durableBurst уже отдельно
+обеспечивали уступку управления. Новая правка делает успешное продолжение due
+сразу, но не запускает следующий checker рекурсивно и не удерживает прежнюю lease.
+
+Проверено: исходный worker возвращает только после joined cleanup/release;
+checkpoint сохраняется до wake; `r.mu` снимается до вызова `nudgeReconciler`.
+Wake-флаг остаётся false до успешного persist. Чужой CAS, ошибка writer admission,
+отмена родителя и blocked scheduler не превращаются в сигнал продолжения.
+Stop/recovery, aging, burst3, busy5с и WAN30с/60с backoff не изменены.
+
+Независимо выполнен `go test ./internal/app -run '^TestDurableNodeContinuation'
+-count=1`: PASS, 2.310 с на Windows. Проверены запись cursor, свободная исходная
+lease, один bounded шаг на turn, отсутствие wake/перезаписи при конфликте,
+Stop/recovery/burst, отмена, WAN/busy и повторная проверка после restart.
+Это проверка scheduler с реальными Store/journal/operation gate и моделируемым
+checker. Полный native batch нового candidate и Linux race оцениваются отдельно.

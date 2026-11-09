@@ -68,9 +68,54 @@ Fixed baseline-then-candidate order допускает влияние cache/load
 не является холодным запуском всей ОС. Пустой child RSS не означает ноль.
 Стадии перекрываются, их сумма не считается полным временем.
 
-Новые CI/native результаты будут добавлены после завершения соответствующего
-SHA. Исторический generic CI `a2d1c3c7` SUCCESS не относится автоматически к этой
-интеграции; его отдельные DNS/Mihomo failures остаются открытыми.
+Первый [native run42557481299](https://github.com/ArtixSx/RAZVILKA/actions/runs/42557481299)
+на `71b6f969579833e3ba217b331dc3c1a24bb150f7` завершён SUCCESS. Сырые CSV,
+environment, проверяющий анализатор и машинный отчёт сохранены в
+[ci-71b6f969](ci-71b6f969/paired-analysis.json): обе ревизии содержат ожидаемые
+52 Check и39 queue samples, exact verdicts/cleanup/идентичности проверены.
+
+| Сценарий, N=12 повторов | Baseline p50/p95, мс | 71b6f969 p50/p95, мс |
+| --- | ---: | ---: |
+| Полный live Check | 407.049 /411.030 | 406.042 /407.920 |
+| Single enqueue→server completion | 756 /769 | 752 /767 |
+| Selected batch enqueue→server completion | 2622 /2639 | 2617 /2630 |
+| All VLESS enqueue→server completion | 2637 /2656 | 2613 /2638 |
+
+Ускорение на этом этапе не доказано. Первый live sample: 409.803→407.337мс,
+не входит в N12. Dead-service p95 вырос414.192→487.176мс: sample2 configuration
+занял100мс; этот выброс сохранён. В all-vless sample1 есть один RSS read error;
+RAM gain не заявлен. На контролируемом стенде минутная задержка VLESS не
+воспроизведена. На71b p50 runtime_start=1мс, runtime_ready=101мс,
+route_identity=0мс: ожидание следующего readiness poll стало отдельной гипотезой
+для следующего парного измерения, а не поводом ослабить service gate.
+
+В том же run настоящий Mihomo handler и service/common cleanup PASS без SKIP.
+Handler3641мс: подготовка631мс, adapter3009мс, sub-ms closing/finalize;
+клиентский wall3642.777мс. N=1, не общий benchmark: [подробности](mihomo-context.md).
+Generic CI оценивается отдельно. Исторический `a2d1c3c7` SUCCESS не относится
+автоматически к этой интеграции; отдельные DNS/Mihomo failures остаются открытыми.
+
+## Вторая интеграция по результатам первого измерения
+
+Контролируемый [readiness опыт](cadence/README.md) сравнивает71b с ранними
+проверками: готовность через25мс наблюдается≈101→31.6мс, через80мс≈101→102.9мс.
+Это modeled process/native SOCKS, а не полный Xray. Паузы10/20/40/30мс дают
+только три дополнительных ранних наблюдения; затем остаётся100мс cadence и
+тот же8с deadline. Поздний greeting, cancel и cleanup регрессии проходят.
+
+Из UTC timestamps восстановлен inter-check gap≈1322мс:
+[данные](ci-71b6f969/queue-gap-analysis.json). Исходник подтверждает1с обязательного
+NotBefore после успешного непоследнего шага. Новая continuation не обходит
+планировщик: один bounded step, joined cleanup и свободная lease, успешный
+durable checkpoint, unlock, затем wake. Приоритет Stop/recovery, burst3,
+ошибочные WAN30с/busy5с, CAS/writer failure и restart подтверждены адресными
+проверками. Остальные≈322мс не объявляются лишними: history и source guards
+сохранены. Новый полный native benchmark ещё должен подтвердить выигрыш.
+
+Исправлено и происхождение стадий nodeeval: результат с чужим node/service/
+engine/profile или неверными start/end/expiry больше не отдаёт стадии текущего
+кандидата. Семь регрессий воспроизводили ошибку до исправления; после PASS.
+Самостоятельно измеренные wrapper wait/preparation/check wall сохраняются.
 
 ## Границы приёмки
 

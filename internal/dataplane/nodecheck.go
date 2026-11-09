@@ -1194,6 +1194,11 @@ func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSe
 	// only between attempts can both overrun the budget and accept late success.
 	readyCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
+	// Add three early observations for fast native startup, then retain the
+	// original 100ms cadence: nominal probes at 0/10/30/70/100/200/...ms.
+	// Actual process/socket checks also take time; the context bounds all of it.
+	readinessPauses := [...]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond, 30 * time.Millisecond, 100 * time.Millisecond}
+	retry := 0
 	for {
 		if err := readyCtx.Err(); err != nil {
 			return err
@@ -1207,8 +1212,9 @@ func (c *ExactNodeChecker) startSession(ctx context.Context, session exactNodeSe
 		select {
 		case <-readyCtx.Done():
 			return readyCtx.Err()
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(readinessPauses[min(retry, len(readinessPauses)-1)]):
 		}
+		retry++
 	}
 }
 

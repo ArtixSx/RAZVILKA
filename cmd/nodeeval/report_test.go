@@ -91,3 +91,50 @@ func TestCandidateWaitIncludesPriorCheckAndTimingCountIsBounded(t *testing.T) {
 		t.Fatal("sequential wait or bounded report failed", code, rows)
 	}
 }
+
+func TestUnmatchedResultCannotAttributeStagesToRequestedNode(t *testing.T) {
+	for _, mismatch := range []string{"node", "service", "engine", "profile", "stale", "future", "expired"} {
+		t.Run(mismatch, func(t *testing.T) {
+			store := privateStoreFixture(t, 2)
+			checker := &checkerFixture{engine: "xray", check: func(_ context.Context, r dataplane.NodeCheckRequest) (dataplane.NodeCheckResult, error) {
+				time.Sleep(5 * time.Millisecond)
+				result := positiveFixture(r, "xray")
+				result.Stages = []dataplane.NodeCheckStage{{ID: "service", Status: "passed", Duration: 12345}, {ID: "cleanup", Status: "passed", Duration: 12345}}
+				switch mismatch {
+				case "node":
+					result.NodeID = "node-" + strings.Repeat("f", 64)
+				case "service":
+					result.ServiceID = "different-service"
+				case "engine":
+					result.RoutePathID = "sing-box:" + r.NodeID
+				case "profile":
+					result.NetworkProfile = "different-profile"
+				case "stale":
+					result.StartedAt = result.StartedAt.Add(-time.Hour)
+				case "future":
+					result.FinishedAt = result.FinishedAt.Add(time.Hour)
+				case "expired":
+					result.ExpiresAt = result.ExpiresAt.Add(-2 * time.Hour)
+				}
+				return result, nil
+			}}
+			var out bytes.Buffer
+			code := evaluate(context.Background(), context.Background(), store, checker, func(context.Context) (string, error) {
+				time.Sleep(2 * time.Millisecond)
+				return "wan-0123456789ab", nil
+			}, 2, json.NewEncoder(&out))
+			rows := decodeReports(t, out.Bytes())
+			if code != 2 || len(rows) != 3 || !rows[2].Finished || rows[2].Passed != 0 {
+				t.Fatal("mismatched evidence affected completion or acceptance", code, rows)
+			}
+			for _, candidate := range rows[:2] {
+				if candidate.Fresh || candidate.HTTPSPass || len(candidate.Stages) != 0 || candidate.NodeID == "" || candidate.CheckMS < 5 || candidate.PreparationMS < 2 {
+					t.Fatal("foreign stages published or owned wrapper observations lost", candidate)
+				}
+			}
+			if rows[1].WaitMS < rows[0].CheckMS || strings.Contains(out.String(), `"stages":`) {
+				t.Fatal("foreign timing retained or sequential wait omitted", rows)
+			}
+		})
+	}
+}

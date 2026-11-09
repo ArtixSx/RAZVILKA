@@ -158,3 +158,49 @@ cleanup двух owned процессов/listeners/временной папк�
 завершения процессов (на Windows Mihomo держит свои файлы открытыми). Неуспешный
 cleanup не выдаётся за PASS. Параллельные запросы/namespace/ресурсы роутера здесь
 не измеряются. Пины engine не обновлены в production.
+
+
+## Повторная проверка ledger и минимальная приёмка оставшихся фаз
+
+Повторно проверены все 10 строк: локальный HEAD, чистота checkout, существование
+закреплённого файла, SHA256 каждой LICENSE и удалённый `refs/heads/<branch>` через
+`git ls-remote`. Все совпали с manifest на 2026-11-09. У v2rayN актуальная ветка
+`master`; Mihomo намеренно закреплён на `Meta`. В sing-box LICENSE подтверждены
+GPL-3.0-or-later **и** отдельное ограничение имени/подразумеваемой связи с проектом;
+это не записано как обычная лицензия GPL без дополнительных условий.
+
+Ниже — воспроизведение имеющимися средствами, не новый roadmap. Команды Linux
+предназначены исключительно для disposable host с Go1.26.5, namespace/mount
+правами и закреплёнными артефактами. Подготовка URL/SHA256/пакетов и точные
+команды sudo уже находятся в [.github/workflows/research-probes.yml](../.github/workflows/research-probes.yml).
+Не подставлять Windows research Xray26.10.31 вместо reviewed native26.3.27.
+
+| Фаза / сценарий | Существующая команда или документ | Минимальный критерий / статус этой лаборатории |
+|---|---|---|
+| DNS, TLS trust, HTTP через точный Xray | `RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray sh scripts/check-xray-native.sh` | Actual owned client, проверенный TLS, paired egress, hostname и literal-IP service path, cleanup. В Windows component опытах **не выполнено**; Linux CI оценивается по конкретному SHA, PASS не предполагается. |
+| Ошибочный transport/TLS name/path XHTTP | Предыдущая команда с `RAZVILKA_XHTTP_NATIVE=1` | Неверный материал отвергнут, правильный снова проходит; нет подмены transport. **Не выполнено** этой Windows лабораторией, это доступная software задача Linux CI. |
+| Общий Check, очереди и cleanup до/после | `RAZVILKA_NODE_PERF_ALGORITHM=current-reuse RAZVILKA_NODE_PERF_OUTPUT=/tmp/research-output RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray sh scripts/check-node-native-performance.sh` | Одинаковые baseline/candidate, binary, endpoints, live/dead-service/cancel/dead-node, cold отдельно от повторов; исходные CSV/resources и App HTTP readback. Результаты Root-owned workflow отдельно, не обещание ускорения. |
+| Mihomo service handler с TLS | `RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz sh scripts/test-mihomo-probe-native.sh` | Обе original native service/HTTP проверки должны завершиться PASS без SKIP; status503/delay опыт выше этого не заменяет. Проверка включена в отдельный Linux CI job. |
+| DNS ownership и настоящий путь domain scope в Linux | `scripts/test-domain-original-native.sh`; варианты DNS_ONLY/DNS_DETACH/DNS_COEXISTENCE заданы непосредственно в script | Новый namespace, exact scope/exclusions, отсутствие чужих mutation, подтверждённый retirement. Это доступная независимая software задача; **не выполнено** в этой компонентной лаборатории. Tagged platform classification не становится допуском ordinary router Apply. |
+| Managed NFQUEUE с LAN fixture | `sh scripts/test-managed-probe-lan-native.sh` | Pinned archive/member hashes, реальные namespace packet/FD/cleanup доказательства; требования пакетов/прав в delegated script `test-managed-probe-native.sh`. **Не выполнено** этой лабораторией; Linux CI остаётся доступным направлением. |
+| Реальный LAN-клиент и точный router profile | [ROUTER_ACCEPTANCE_RU.md](ROUTER_ACCEPTANCE_RU.md) | Отдельный физический профиль и явная авторизация стенда, before/after scope/native policies/маршрута, оригинальный владелец, counters/packet path, shutdown/recovery. **Не доказано** PC/CI результатами. |
+
+Отдельное измерение DNS/connect/TLS/TTFB/body на каждый redirect пока не добавлено
+в exact checker: существующие coarse stages и HTTP-status lab этого не дают.
+Blackbox `httptrace` — исследованный образец, а не выполненная интеграция. Это
+**не подтверждённая software возможность**, а не аппаратный блокер. Строгие
+DNS/TLS/service проверки нельзя смешивать с будущими отдельными duration полями.
+
+Для уже авторизованного LAN стенда готовый read-only клиент:
+
+```sh
+go build -trimpath -o telegram-soak ./scripts/telegram-soak
+./telegram-soak --lan-client 192.168.1.100 -duration 1h -interval 30s > telegram-lan-soak.json
+```
+
+Адрес здесь пример: нужен существующий адрес отдельного клиента. Этот sampler
+не меняет сеть и не выбирает VLESS; он требует предварительно проверенный
+Root-ом route/owner и не доказывает путь сам. Сначала принять профиль по аппаратному
+сценарию, потом запускать полное окно. MTProto/media/voice не следуют из HTTPS;
+опция `-mtproto` добавляет лишь unauthenticated resPQ, не account/server auth.
+Ни часовой прогон, ни изменение действующего роутера здесь не выполнялись.

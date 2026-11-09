@@ -708,7 +708,15 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		a.originalManagedXrayStopCompleted(runtimeOutcome.originalManagedXrayStop)
 	cancel()
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	continuationCandidate, wakeContinuation := false, false
+	defer func() {
+		r.mu.Unlock()
+		if wakeContinuation {
+			// Only schedule a new ordinary turn after the joined worker and its
+			// durable checkpoint. Admission and priority are checked again there.
+			a.nudgeReconciler()
+		}
+	}()
 	r.cancel = nil
 	r.activeJobID = 0
 	// Enqueue may prune old terminal records while the worker was running.
@@ -778,10 +786,11 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 		j.Reason = ""
 		if j.Cursor < len(request.NodeIDs) {
 			j.State, j.Phase = "queued", "waiting"
-			j.NotBefore = time.Now().Add(time.Second)
+			j.NotBefore = time.Now()
 			j.Attempts = 0 // Next item receives its own bounded retry budget.
-			// Continue after the pause instead of the next 5-second round.
-			time.AfterFunc(time.Second, a.nudgeReconciler)
+			// Yield this bounded step without imposing an idle one-second floor.
+			// Stop, recovery, aging and durableBurst still arbitrate the next turn.
+			continuationCandidate = true
 		} else {
 			finishDurableJob(j, "completed", "", time.Now())
 		}
@@ -841,6 +850,7 @@ func (a *App) runDurableServiceJob(ctx context.Context, now time.Time) bool {
 	if !errors.Is(err, operationgate.ErrBusy) && request.Kind != "stop" {
 		r.durableBurst++
 	}
+	wakeContinuation = continuationCandidate && persistErr == nil && !r.blocked && ctx.Err() == nil
 	return err == nil || !errors.Is(err, operationgate.ErrBusy)
 }
 

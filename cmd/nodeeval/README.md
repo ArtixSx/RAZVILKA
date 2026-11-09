@@ -121,3 +121,11 @@ route. A successful SOCKS readiness stage alone is not authenticated transport o
 service evidence. Each candidate remains tied to the report's engine, safe node
 identifier and sequence number; existing fresh exact identity checks still decide
 `fresh` and `https_pass`. Stage timing does not relax those checks.
+
+Stage rows are emitted only when the returned result matches the requested
+node, service, network profile, engine route path and current invocation time
+bounds (`fresh: true`). A stale or foreign result cannot attach its timings to
+the requested node. The locally observed preparation/check/wait wall timings
+remain available for rejected results. Missing stage rows therefore do not mean
+a zero-duration check. Cleanup failure still stops evaluation even when the
+returned diagnostic identity is stale or mismatched.

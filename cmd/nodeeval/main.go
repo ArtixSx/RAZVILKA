@@ -179,8 +179,15 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
 			!result.StartedAt.Before(started) && !result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(finished) && finished.Before(result.ExpiresAt)
 		ok := err == nil && ctx.Err() == nil && fresh && result.Available && result.Verdict == evidence.VerdictPass && result.TestLevel == "service" && result.ErrorCode == "" &&
 			!result.DirectLeak && result.HTTPStatus >= 200 && result.HTTPStatus < 300 && result.Stage != "cleanup"
-		entry := report{Kind: "candidate", ElapsedMS: time.Since(preparationStarted).Milliseconds(), WaitMS: waitMS, PreparationMS: preparationMS, CheckMS: checkMS, Stages: safeTimings(result.Stages), Engine: checker.EngineID(), NodeID: safeNodeID(node.ID), Candidate: checked, Stage: safeStage(result.Stage), Verdict: safeVerdict(result.Verdict),
+		entry := report{Kind: "candidate", ElapsedMS: time.Since(preparationStarted).Milliseconds(), WaitMS: waitMS, PreparationMS: preparationMS, CheckMS: checkMS, Engine: checker.EngineID(), NodeID: safeNodeID(node.ID), Candidate: checked, Stage: safeStage(result.Stage), Verdict: safeVerdict(result.Verdict),
 			Code: safeCheckCode(result.ErrorCode), HTTPSPass: ok, Fresh: fresh, DirectLeak: result.DirectLeak, HTTPStatus: min(max(result.HTTPStatus, 0), 599)}
+
+		// A returned timeline belongs to this candidate only after the same exact
+		// identity and freshness checks used by admission. Wrapper wall timings
+		// remain valid observations of our own invocation even after rejection.
+		if fresh {
+			entry.Stages = safeTimings(result.Stages)
+		}
 		if errors.Is(err, dataplane.ErrExactNodeUnsupported) {
 			entry.Stage, entry.Code, entry.Verdict = "unsupported", "node-profile-unsupported", "INCONCLUSIVE"
 		} else if err != nil && result.ErrorCode == "" {
