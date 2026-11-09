@@ -304,18 +304,51 @@ func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Co
 		return err
 	}
 	o.mu.Lock()
-	process, capture, prepared, kernel, closed := o.process, o.capture, o.prepared, o.kernel, o.closed
+	process, capture, prepared, kernel, resource, baseline := o.process, o.capture, o.prepared, o.kernel, o.captureResource, o.baseline
 	o.mu.Unlock()
-	if closed || process == nil || process.material.mapping != mapping || capture == nil || prepared == nil || kernel == nil {
+	if process == nil || resource == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := prepared.currentWithFiles(ctx, files); err != nil {
+	material, tools, backend, binding := process.material, resource.tools, resource.backend, o.binding
+	// Only this concrete original tuple may borrow the source's immutable
+	// tool bytes. Every process, mapping, journal and actual kernel read below
+	// still runs, in order, and publication/send stays outside this scope.
+	association := func() error {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		if o.closed || o.process != process || o.capture != capture || o.prepared != prepared ||
+			o.kernel != kernel || o.captureResource != resource || o.baseline != baseline ||
+			process.self != process || material == nil || process.material != material || material.mapping != mapping || material.binding != binding || o.binding != binding ||
+			capture == nil || capture.owner != o || capture.xray == nil || capture.xray.resource != process ||
+			prepared == nil || prepared.capture != capture || prepared.source != mapping ||
+			resource.self != resource || resource.capture != capture || resource.process != process || resource.mapping != mapping || resource.tools != tools || resource.backend != backend ||
+			baseline == nil || baseline.capture != capture || baseline.mapping != mapping || baseline.binding != binding || baseline.tools != tools || baseline.backend != backend ||
+			kernel == nil || kernel.self != kernel || kernel.capture != resource || kernel.baseline != baseline {
+			return ErrDomainPolicyTCPConsumer
+		}
+		return nil
+	}
+	if err := association(); err != nil {
 		return err
 	}
-	if err := kernel.currentWithFiles(ctx, files); err != nil {
-		return err
+	defer domainTCPMeasure("mapping-original-tool-read")(0)
+	err := resource.observeToolsWithFiles(ctx, files, func(observed context.Context, childFiles *xrayDomainTCPFileObservation) error {
+		result := func() error {
+			if err := prepared.currentWithFiles(observed, childFiles); err != nil {
+				return err
+			}
+			if err := kernel.currentWithFiles(observed, childFiles); err != nil {
+				return err
+			}
+			return material.Current(observed)
+		}()
+		return errors.Join(result, association(), observed.Err())
+	})
+	err = errors.Join(err, association(), ctx.Err())
+	if err == nil {
+		domainTCPMeasure("mapping-original-tool-closing")(0)
 	}
-	return process.material.Current(ctx)
+	return err
 }
 func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) (resultErr error) {
 	finishMeasure := domainTCPMeasure("publication-gate")
