@@ -335,7 +335,8 @@ func boundedRead(ctx context.Context, fd, limit int) ([]byte, bool) {
 	return nil, false
 }
 
-func (a *audit) mountID(fd int) (uint64, bool) {
+// Compatibility reader retained unchanged for unsupported or denied statx.
+func (a *audit) mountIDFromFDInfo(fd int) (uint64, bool) {
 	data, ok := a.rawFile(a.fdinfo, strconv.Itoa(fd), 4096)
 	if !ok {
 		return 0, false
