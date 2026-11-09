@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 0e2db5ab2120b20e249e3da7a8e861b558506550
+          ref: 363f433611620cda4d14db2d0a7ae2475b0278f1
           path: baseline
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -48,7 +48,7 @@ jobs:
           set -uo pipefail
           result=0
           mkdir -p "$GITHUB_WORKSPACE/results"
-          printf '%s\n' 'Actual baseline0e2db5ab versus candidate commit; algorithm=current-reuse in BOTH. Same runner and pinned binary, sequential baseline then candidate. Fixed order may bias warm caches/load; first and repeated samples are separate. The legacy environment.txt reference description is not a second algorithm in this run.' > "$GITHUB_WORKSPACE/results/comparison.txt"
+          printf '%s\n' 'Actual baseline363f4336 versus candidate commit, isolating early Stop observations; algorithm=current-reuse in BOTH. Same runner and pinned binary, sequential baseline then candidate. Fixed order may bias warm caches/load; first and repeated samples are separate. The legacy environment.txt reference description is not a second algorithm in this run.' > "$GITHUB_WORKSPACE/results/comparison.txt"
           for revision in baseline candidate; do
             (
               cd "$GITHUB_WORKSPACE/$revision"

@@ -1,0 +1,42 @@
+{
+  "reviewer": "independent-verification",
+  "base_sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "decision": "Source approved for CI; actual paired measurements and regression results pending.",
+  "change": "Keep existing managed Stop behavior, but perform early processMatches checks with10/20/40/30ms waits before returning to100ms cadence.",
+  "preserved": [
+    "ProcessSpec validation and owned paths",
+    "Route-proof invalidation before Stop",
+    "Every existing processMatches and PID-mismatch refusal",
+    "Original4s grace, parent cancellation and final Kill behavior",
+    "Existing Recover/session and ownership model"
+  ],
+  "cost": "A slow exiting child causes up to3 additional procfs identity checks in the first100ms; CPU/read cost must be measured.",
+  "limits": [
+    "No new sole-Wait or original-child custody guarantee is claimed.",
+    "A timer never proves absence: cleanup still follows the existing identity predicate.",
+    "Fixed baseline-first order may bias caches/load. First sample is not necessarily cold OS cache.",
+    "Native isolated fixtures and generic CI are separate from physical router/LAN acceptance."
+  ],
+  "comparison": {
+    "baseline_sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+    "algorithm_both": "current-reuse",
+    "same_runner_and_pinned_binary": true,
+    "harness_and_sample_counts_unchanged": true,
+    "description": "Incremental early Stop comparison replaces0e baseline in this workflow; historical0e results remain separate."
+  },
+  "files": [
+    {
+      "path": "internal/dataplane/process.go",
+      "sha256": "e6745a36314674c818850b98bf45b1e9d6d3f3b53761ee43c9aaa6f29fa1fe95"
+    },
+    {
+      "path": ".github/workflows/research-probes.yml",
+      "sha256": "babd1b11411c527fe79916f928d46bf12191be23bd064cfce53a0eafc07852a0"
+    }
+  ],
+  "required_evidence": [
+    "Full paired live/deadservice/cancel/queued scenarios with identical verdict/cleanup identities",
+    "Existing ownership and Stop regressions",
+    "Measured CPU and wall-clock cost before any speedup claim"
+  ]
+}
