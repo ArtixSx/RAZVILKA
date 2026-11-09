@@ -33,7 +33,8 @@
     "Inclusive CPU/timing values overlap and must not be summed",
     "Different CPUs and early termination preclude causal cross-SHA speed claims",
     "344 recovery cuts did not trigger; prior successful cuts cannot be transferred",
-    "io.copyBuffer flat109.35MB attributed to original exec pipes, not identified dynamic destination"
+    "io.copyBuffer flat109.35MB attributed to original exec pipes, not identified dynamic destination",
+    "CPU profile scopes HTTP, but allocs profile is cumulative process allocation;109.35MB copyBuffer is not baseline-subtracted HTTP attribution"
   ],
   "callgraph": [
     "verifyLAN already passes original read-only observation context over entire verifyLANObserved",
@@ -49,5 +50,23 @@
     "rationale": "Pinned iproute2 get_libbpf_version may inspect /proc/self/maps; not a static string observation",
     "existingEvidence": "docs/measurements/2026-11-01/native-version-fact/README.md:7",
     "conclusion": "94/94 versus1235 does not show lost context; alias fact is being reused"
+  },
+  "versionOutputCopy": {
+    "destination": "separate concrete *output for each stream, limits256; actual observed command requires these concrete types",
+    "mechanism": "Existing output.ReadFrom uses exclusive cleared32KiB scratch and delegates through own bounded Write, no missed dispatch",
+    "normalChildMedian": {
+      "afterBytes": 27970,
+      "beforeBytes": 82810,
+      "afterNs": 7812160,
+      "beforeNs": 7765453
+    },
+    "raceChildMedian": {
+      "afterBytes": 49821,
+      "beforeBytes": 83170,
+      "afterNs": 1033060443,
+      "beforeNs": 1032657357
+    },
+    "conclusion": "Measured allocation improvement already integrated; wall neutral, no further duplicate ReaderFrom needed",
+    "nextAttribution": "Existing child-kind counter2ebcfc51; distinguish HTTP interval from process cumulative allocation profile"
   }
 }

@@ -58,3 +58,14 @@ df, command-v, версиями инструментов, opkg list-installed, n
 [проверенный отчёт](router-installed-sha-readonly.json).
 Новый контроллер не устанавливался и не запускался; конфигурация, правила,
 маршруты и действующий NFQWS2 не изменялись.
+
+## Дополнительное измерение стоимости IP version
+
+Три последовательных read-only batches по100 вызовов существующего
+`/opt/sbin/ip -Version`:0.08/0.09/0.08с внутри router shell; среднее на вызов
+0.8/0.9/0.8мс включает цикл, не является p50/p95. SHA до/после совпадает.
+Версия `iproute2-ss4.4.0-11-entware` отличается от CI; полный metadata guard,
+загрузка нового candidate и LAN-сценарий здесь не выполнялись.
+В `/proc/cpuinfo` присутствует `sha2`; это не замер Go SHA, и внешние
+0.58–0.59с sha256sum нельзя автоматически переносить на реализацию Go.
+[Raw](router-ip-version-readonly-ordered.txt), [метаданные](router-ip-version-readonly.json).
