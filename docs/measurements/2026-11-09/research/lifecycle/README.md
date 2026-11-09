@@ -390,3 +390,43 @@ Cleanup failure остаётся обязательным даже для чуж
 Наличие устройства больше не является внешним блокером. Новая сборка на нём
 не устанавливалась; установленныйrc106, работающий NFQWS2, неподдержанные reader
 flags и отсутствие netns-интерфейса учтены отдельно от generic/Linux CI.
+
+
+## Проверенный b5a5f58e и продолжение 09.11.2026
+
+[Native Mihomo42575195592](https://github.com/ArtixSx/RAZVILKA/actions/runs/42575195592)
+SUCCESS: full lifecycle253.49с, Apply86.816/86.423с, Stop5.550/5.546с;
+settlement126.31с с двумя cuts, post-CAS58.71с с HTTP503 и verified rollback.
+Это непарные длительности; ускорение Apply не заявляется. Исторический ранний
+material refusal bfc остаётся неустановленной нестабильностью.
+
+[Lifecycle42575195644](https://github.com/ArtixSx/RAZVILKA/actions/runs/42575195644):
+StrategyLab pair/readers/restored panel PASS. DNS preparation diagnostic30:
+baseline CUT→REFUSED95.80с; candidate clean127.99с, capture-ACK135.15с,
+standby-ACK127.82с — CUT→COMPLETE→PASS без SKIP. Strict12 selected14.35с
+и canceled-ready14.24с FAIL на GEN1; GEN2 не выполнено. NFQWS production
+core/AppHTTP/closing PASS, LAN/manual/race FAIL: activation≈16.07с при15с,
+retire.policy-remove unknown. Это программные задачи, не отсутствие оборудования.
+[Raw и хеши](b5a5f58e/archive-manifest.json).
+
+[Paired42575195535](https://github.com/ArtixSx/RAZVILKA/actions/runs/42575195535)
+SUCCESS: независимо проверены182 строки, идентичность и cleanup.
+
+| Сценарий, N12 повторных | Baseline0e p50/p95, мс | b5a p50/p95, мс |
+| --- | ---: | ---: |
+| Full live Check | 406.085 / 410.389 | 316.558 / 320.662 |
+| Full cancellation | 365.892 / 370.049 | 275.748 / 294.211 |
+| Single queue completion | 752 / 768 | 657 / 670 |
+| Selected2 queue completion | 2627 / 2652 | 1442 / 1464 |
+| All2 queue completion | 2640 / 2657 | 1439 / 1460 |
+
+[Анализ и raw](../ci-b5a5f58e/paired-analysis.json): одна машина и binary,
+current-reuse в обеих ревизиях, baseline-first order; первые samples отдельно,
+не cold OS cache и не router/LAN готовность.
+
+Общий CI b5a FAIL: TestAllVLESSChecksEntireCatalogueSequentiallyAndBoundsMemory
+и TestDurableCatalogueFreezesAllPagesAndRetriesAfterHealthMutation. Общий
+bulkTestResult не заполнял верхний StartedAt, поэтому новый строгий attribution
+корректно отказывал. 441e97e4 исправляет только fixture; прежние assertions
+и production guards сохранены, независимое ревью PASS. CI этого исправления
+оценивается отдельно; pending не считается успехом.

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "managed-production.log",
+    "sha256": "37f4541614cfcc08846115405021b6d3055edd72444ed476aa3cb6cfa32469d2",
+    "bytes": 276012
+  },
+  {
+    "file": "managed-race.log",
+    "sha256": "8c2180be15944e0c47b9c936327ca829e92703c0b78edf579ee4dfdf52330251",
+    "bytes": 179359
+  },
+  {
+    "file": "mihomo-lifecycle.log",
+    "sha256": "27098f3fef0ef6a74935de60b3a0df1fc7c2c281b26ea38b8cdb51bb7f4e1159",
+    "bytes": 142418
+  },
+  {
+    "file": "mihomo-postcas.log",
+    "sha256": "429f00faaf6e0c499fdc52be3d6240c144689ab055a77a5a602a5191133a3d78",
+    "bytes": 37307
+  },
+  {
+    "file": "mihomo-settlement.log",
+    "sha256": "643050815db9aac9f5a965d44efda1a90eb03a8c9771f66c1fb0827cc1ef2cc6",
+    "bytes": 37190
+  },
+  {
+    "file": "native-conclusion.json",
+    "sha256": "f2740c24c28d98de3dae84833b151506f6d49895bd6714aea80e5842db92234c",
+    "bytes": 2476
+  }
+]

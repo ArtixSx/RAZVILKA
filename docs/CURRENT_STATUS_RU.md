@@ -144,6 +144,12 @@ SSH-профиль реального NC-1812 подтверждён тольк�
 и действующий NFQWS2 не менялись; наличие SSH не является аппаратной приёмкой
 текущего кода. [Фактический профиль](measurements/2026-11-09/research/router-readonly.md).
 
+На `b5a5f58e` Mihomo полный native lifecycle, StrategyLab pair/restored panel
+и paired VLESS повторно PASS. Общий CI нашёл два невалидных тестовых результата
+без StartedAt; fixture исправлен в `441e97e4` без изменения production guards,
+его CI проверяется отдельно. Strict DNS12с и managed NFQWS2 LAN остаются
+незавершёнными программными сценариями. [Подробности и сырые результаты](measurements/2026-11-09/research/lifecycle/README.md#проверенный-b5a5f58e-и-продолжение-09112026).
+
 ## История интеграции 31.10.2026: первоначальная защита обновления
 
 Рабочая ветка `work/bypass-integration-20261031` основана на `a36f5343`

@@ -186,3 +186,12 @@ Strict DNS12с оба сценария и managed NFQWS LAN/manual/race оста
 unknown runtime в карточках; cleanup refusal не теряется. Эти изменения не
 повышают публичный admission. [Точные результаты](measurements/2026-11-09/research/lifecycle/README.md)
 и [профиль устройства](measurements/2026-11-09/research/router-readonly.md).
+
+
+## Сверка следующей ревизии b5a5f58e
+
+Mihomo full native lifecycle, settlement/post-CAS, StrategyLab pair/restored
+panel, DNS preparation diagnostic30 и paired VLESS подтверждены повторно.
+Strict DNS12/4 и managed NFQWS LAN/manual/race остаются FAIL; аппаратный
+admission не повышен. Общий CI b5a FAIL из-за отсутствующего StartedAt в общем
+fixture; однострочное исправление441e97e4 требует своего CI. [Evidence](measurements/2026-11-09/research/lifecycle/README.md#проверенный-b5a5f58e-и-продолжение-09112026).

@@ -44,8 +44,8 @@ refs и незакоммиченные файлы сохранены. Стары
 | P0: CLI/API/UI измерения | lab_sources: cmd/nodeeval; ведущий: API/UI | Закрытый список стадий и полное время проверки/подготовки в JSONL; API/UI сохраняют новые стадии | Нет URI/логов/ошибок из внешнего checker; неверная идентичность не публикуется. Стадии не суммируются; CLI ожидание не называется очередью сервера, SOCKS readiness не называется LAN readiness. |
 | P0: продолжение очереди и первые readiness retries | lab_sources: scheduler; probe_performance: readiness; independent_review: проверка | После успешного checkpoint следующий ограниченный шаг будит обычный scheduler без секундного простоя; первые SOCKS polls добавлены внутри первых100мс | Адресные Stop/recovery, burst3, cancel/WAN/busy/restart и CAS PASS. Native8c run42559470862 PASS: full Check p50 404.777→314.996мс; selected2 completion2615→1444мс, N12. Медленный80мс startup имеет≈2мс дополнительной работы в PC fixture. Router/WAN повтор остаётся отдельным этапом. |
 | P0: Mihomo lifecycle / recovery (F) | probe_performance; independent_review; до per-plan readiness | Исправлены повторная rotation, собственный compiler/wire Plan и потеря original owned row при закрытии; Stop phases и exact wire images сохранены | Native b726 run42568035583 SUCCESS: два Apply/Check/Stop, fresh Apply/closing retry, failed Check settlement, post-CAS rollback и normal/race original bookends. Apply≈95.5с, SHA81.12% CPU whole-test; сокращение этой цены, остальные same-boot race/ACK cuts, late metadata и ранний restart ещё открыты. Старый WIP из 76c67f32 переносить адресно. Это программные задачи, внешнего блокера нет. |
-| P0: DNS / точный scope (B) | lab_sources; independent_review; зависит от исходного cleanup | Original successor preparation cleanup включает оба ACK и отзыв только исходного joined listener; scope/exclusions/native VPN guards действуют | Native2924/b726 diagnostic30 clean/2partialACK CUT→COMPLETE→PASS, прежний alias проверен. B726 strict12 оба GEN1 FAIL; standby primitive4→2 PASS. Следующие два prepared baseline чтения44c1cd0b требуют native8→2/strict12 проверки. Осталось GEN1 failure recovery и GEN2 ready/cancel/retire/retry в штатных12с/4с; shared CDN и чужие DNS writers не расширяют capture. Старый f71db55f не достиг новой lane, PASS не заявлен. |
-| P1: managed NFQWS2 (C) | Ведущий после B/F; reviewer до принятия | Изолированный probe, история, manual intent и generation guards есть | B726 actual LAN activation16.080с превышает15с, затем retire.policy-remove UNKNOWN; manual/race тоже FAIL. Active-LAN metadata/syscall cost подтверждён, snapshot14captures0.464с не главный источник. Завершить Apply → included/excluded traffic → Stop/recovery, сохранив все ownership/closing proofs и unknown/retirementStarted. Аппаратного блокера для этой программной работы нет. |
+| P0: DNS / точный scope (B) | dns_completion; verification; зависит от исходного cleanup | Original successor preparation cleanup включает оба ACK и отзыв только исходного joined listener; scope/exclusions/native VPN guards действуют | Native2924/b726 diagnostic30 clean/2partialACK CUT→COMPLETE→PASS, прежний alias проверен. B726 strict12 оба GEN1 FAIL; standby primitive4→2 PASS. Следующие два prepared baseline чтения44c1cd0b требуют native8→2/strict12 проверки. Осталось GEN1 failure recovery и GEN2 ready/cancel/retire/retry в штатных12с/4с; shared CDN и чужие DNS writers не расширяют capture. Старый f71db55f не достиг новой lane, PASS не заявлен. |
+| P1: managed NFQWS2 (C) | nfq_completion; verification; ведущий интегрирует | Изолированный probe, история, manual intent и generation guards есть | B726 actual LAN activation16.080с превышает15с, затем retire.policy-remove UNKNOWN; manual/race тоже FAIL. Active-LAN metadata/syscall cost подтверждён, snapshot14captures0.464с не главный источник. Завершить Apply → included/excluded traffic → Stop/recovery, сохранив все ownership/closing proofs и unknown/retirementStarted. Аппаратного блокера для этой программной работы нет. |
 | P1: capabilities/API/AUTO (E) | Ведущий после F | Общий gate AUTO/worker, registration отдельно от available:null; unknown process не показывается как stopped/running, job stages привязаны к service и freshness | Исправлен API telemetry scope и UI unknown precedence; новый screen cleanup failure fences после joined batch. Независимые regression PASS. Подтверждать per-plan lifecycle на HTTP API/UI; лабораторные результаты не повышают допуск router profile. |
 | P1: backup/update (A) | Ведущий после F; независимый review | Snapshot3 binary/StrategyLab pair, encrypted backup, история/manual intent, unknown/finalizing fences уже реализованы | Наa9f/a9bd/2924/b726 native/race совместимые пары и restored panel PASS; старый focused native PASS не переносить автоматически на другой SHA. |
 | P1: следующие причины длительности | Ведущий; после подтверждённого baseline этой волны | Общий wall/queue/start/ready/service/cleanup наблюдаем; private stage identity проверена | Отдельные DNS/connect/TLS/TTFB/body timings на каждый redirect ещё не реализованы. Cleanup≈101мс и оставшиеся≈333мс inter-check требуют собственного профиля; не убирать ownership/history checks. Минутные VLESS задержки на controlled fixture не воспроизведены; нужен соответствующий сценарий медленного WAN/CPU/flash. |
@@ -56,6 +56,25 @@ refs и незакоммиченные файлы сохранены. Стары
 Результаты текущего прохода: [измерения](measurements/2026-11-09/research/README.md).
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
+
+### Текущие владельцы следующего шага
+
+Продолжение после освобождения диска: `441e97e4` исправляет только StartedAt
+общего checker fixture; b5a общий CI FAIL не скрывается. Ведущий владеет
+документацией, workflow и интеграцией. dns_completion владеет domain-specific
+кодом; nfq_completion — NFQWS active execution/read observation. Общие helpers
+меняются только после согласования; verification независимо проверяет оба
+сетевых изменения и late mutation/ownership/cleanup контракты.
+
+Доказательства b5a: Mihomo full lifecycle, StrategyLab pair/restored panel,
+DNS preparation diagnostic30 и paired probes PASS; DNS strict12 и managed LAN
+остаются FAIL. Следующая приёмка требует прежних таймаутов и полного завершения
+сценариев, а не сокращения числа проверок состояния. [Точные результаты](measurements/2026-11-09/research/lifecycle/README.md#проверенный-b5a5f58e-и-продолжение-09112026).
+
+Для сохранения места на ПК сборки выполняются в удалённом CI. Локальные исходники,
+Git, история и непубликованная работа сохранены. Отсутствие места не считается
+блокером программной реализации; новые большие worktrees и бинарные архивы
+без необходимости не создаются.
 
 ## Историческая очередь и доказательства 31.10–02.11.2026
 
