@@ -1,0 +1,56 @@
+{
+  "reviewer": "verification",
+  "head_sha": "6df3d753761cf0ff6de3fb34799e596bee2ca3c2",
+  "pr_run": 42634856758,
+  "pr_job": 129220203106,
+  "pr_conclusion": "success",
+  "push_run": 42634845807,
+  "push_job": 129220172023,
+  "push_conclusion": "success",
+  "logs": [
+    {
+      "sha256": "FAA0609B7B56F36246840BAC6D645A4BC166862C460D56AC60C8AF2878DE263D",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-6df3d753/generic-pr-ci.log"
+    },
+    {
+      "sha256": "49F859DB627C3E5EA3BFA6FF48B7EBCA411287092053FA2B2297D280DE74E55B",
+      "path": "C:/RAZVILKA-research-20261109/lifecycle-6df3d753/generic-push-ci.log"
+    }
+  ],
+  "pr_normal_seconds": {
+    "probecheck": 0.011,
+    "app": 154.205,
+    "dataplane": 230.61,
+    "netidentity": 2.269
+  },
+  "pr_race_seconds": {
+    "probecheck": 1.041,
+    "app": 398.81,
+    "dataplane": 591.63,
+    "netidentity": 3.61
+  },
+  "push_normal_seconds": {
+    "probecheck": 0.013,
+    "app": 149.621,
+    "dataplane": 225.646,
+    "netidentity": 2.314
+  },
+  "push_race_seconds": {
+    "probecheck": 1.058,
+    "app": 447.291,
+    "dataplane": 604.866,
+    "netidentity": 3.622
+  },
+  "proofs": [
+    "Actual nonroot prewrite permission PASS0.02s; root focused skip is expected after separate proof.",
+    "Focused normal TestNodeNetworkTimingsActualHTTPOriginalInvocation PASS current/old/foreign-service/foreign-route/canceled/forged-only; ClosedCopyAndSnapshots PASS.",
+    "Full unfiltered go test -timeout20m -count1 ./... and corresponding -race gate PASS both runs; full app race includes timing tests.",
+    "Node network timing UI bounded/incomplete/multiple/absent label test PASS.",
+    "Linux amd64/arm64/mips/mipsle builds/checksums and modeled Entware shell checks PASS."
+  ],
+  "limitations": [
+    "Package elapsed times differ across runners and are not paired optimization measurements.",
+    "Native scenario/router readiness is separate; full lifecycle DNS/NFQ remains failed independently.",
+    "Later public-pair/stack-promotion/exact1.8.11 fixture commits are not covered by this SHA."
+  ]
+}

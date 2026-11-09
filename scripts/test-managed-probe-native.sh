@@ -119,7 +119,7 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-probe_cases='TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_cases='TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
@@ -146,10 +146,18 @@ case "$probe_cases:$probe_build_mode" in
     printf 'Actual race-only path allocation benchmark; sync.Pool may discard scratch\n'
     "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFreshPathNode$' -test.benchtime=200ms -test.count=3 -test.benchmem ;;
 esac
+# Same original output sink and actual child, outside route timing. Race runtime
+# exit delay is part of its own samples; never compare it to production latency.
+case "$probe_cases" in
+  *TestOutputReader*)
+    printf 'Actual bounded output copy benchmarks mode=%s; diagnostic_only=true\n' "$probe_build_mode"
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReader$' -test.benchtime=300ms -test.count=3 -test.benchmem
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReaderChild$' -test.benchtime=3x -test.count=3 -test.benchmem ;;
+esac
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-case "$probe_case" in TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
   TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
   TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;

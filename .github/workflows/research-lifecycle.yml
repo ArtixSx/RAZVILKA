@@ -12,6 +12,9 @@ on:
       - 'scripts/test-managed-probe*.sh'
       - 'scripts/test-paired-public-native.sh'
       - 'scripts/fixtures/paired-public-session.sh'
+      - 'scripts/test-classic-save-pinned-native.sh'
+      - 'scripts/check-classic-save-pinned-fixture.py'
+      - 'scripts/fixtures/classic-save-1.8.11.json'
       - 'scripts/fixtures/domain-preparation-baseline.patch'
       - '.github/workflows/research-lifecycle.yml'
 
@@ -81,7 +84,7 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Install disposable namespace fixture dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential curl
       - name: Actual configured old source bootstrap and public offline restore
         shell: bash
         run: |
@@ -97,6 +100,50 @@ jobs:
         with:
           name: paired-public-cli-${{ github.sha }}
           path: artifacts/paired-public/native.log
+          if-no-files-found: error
+  classic-save-pinned:
+    name: Exact iptables 1.8.11 / ${{ matrix.build-mode }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install exact reviewed packages on their compatible distribution
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables=1.8.11-2ubuntu3 libip4tc2=1.8.11-2ubuntu3 libip6tc2=1.8.11-2ubuntu3 libxtables12=1.8.11-2ubuntu3 iproute2 util-linux python3
+      - name: Public acquisition and actual inventory parity with lock custody
+        shell: bash
+        env:
+          BUILD_MODE: ${{ matrix.build-mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/classic-save-pinned
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="$BUILD_MODE" \
+            sh scripts/test-classic-save-pinned-native.sh 2>&1 | tee artifacts/classic-save-pinned/native.log
+          for expected in TestProductionStartupToolsNative TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestClassicReadBatchNativeMutation; do
+            grep -F -- "--- PASS: $expected (" artifacts/classic-save-pinned/native.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/classic-save-pinned/native.log; then exit 1; fi
+          grep -F 'ACTUAL_PINNED_CLASSIC_1_8_11_PROVENANCE ' artifacts/classic-save-pinned/native.log
+          grep -Fx "ACTUAL_PINNED_CLASSIC_1_8_11_NATIVE_COMPLETE mode=$BUILD_MODE" artifacts/classic-save-pinned/native.log
+          grep -E 'classic_save_actual sample=5 .*serial_children=20 save_children=4 equal_rows=[1-9][0-9]*' artifacts/classic-save-pinned/native.log
+      - name: Preserve actual pinned artifact evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: classic-save-pinned-${{ matrix.build-mode }}-${{ github.sha }}
+          path: artifacts/classic-save-pinned/native.log
           if-no-files-found: error
   domain-native:
     name: Domain native strict / ${{ matrix.scenario }}
@@ -212,13 +259,14 @@ jobs:
             race_flag=()
             if [ "$mode" = race ]; then race_flag=(-race); fi
             go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/netidentity \
-              -run '^TestProcMountinfoMeasurementReadBounds$' -count=1 -v \
+              -run '^Test(ProcMountinfoMeasurementReadBounds|MountUnescapePreservesExactByteSemantics)$' -count=1 -v \
               | tee "artifacts/domain/mountinfo-read-contract-$mode.log"
             grep -F -- '--- PASS: TestProcMountinfoMeasurementReadBounds ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestMountUnescapePreservesExactByteSemantics ' "artifacts/domain/mountinfo-read-contract-$mode.log"
             if grep -F -- '--- SKIP:' "artifacts/domain/mountinfo-read-contract-$mode.log"; then exit 1; fi
           done
           go test -tags razvilka_native_fixture ./internal/netidentity -run '^$' \
-            -bench '^BenchmarkProcMountinfoReadChunks$' -benchtime=300ms -count=3 -benchmem \
+            -bench '^BenchmarkProcMountinfo(ReadChunks|Unescape)$' -benchtime=300ms -count=3 -benchmem \
             | tee artifacts/domain/mountinfo-read-measurement.log
       - name: Preserve original clocks and failures
         if: ${{ !cancelled() }}

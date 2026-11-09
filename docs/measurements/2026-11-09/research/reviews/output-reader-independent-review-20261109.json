@@ -1,0 +1,28 @@
+{
+  "reviewer": "verification",
+  "source_commit": "8666866e5a927d534fae8f4191dfcb6f1bfb147f",
+  "status": "source-approved; normal/race and measurements pending",
+  "files": [
+    {
+      "sha256": "FD71B2DFF069AF599CE881213A34BBA88C7FC0C010D0702C679D0F319CFE11B1",
+      "path": "internal/startuptools/output_reader.go"
+    },
+    {
+      "sha256": "B9338C0F307701350EE0ED7683E069D8DE9ED318BBE81292CC841801E860D10F",
+      "path": "internal/startuptools/output_reader_test.go"
+    }
+  ],
+  "findings": [
+    "Private output.ReaderFrom only; original Write/overflow/cancel/Start/pipe custody/soleWait unchanged.",
+    "Go1.26 os.exec writerDescriptor, File.WriteTo/genericWriteTo, Linux pollfd refusal and io.copyBuffer source inspected.",
+    "writerOnly hides recursive ReaderFrom, keeps source WriterTo and LimitedReader initial chunk geometry; count/error precedence delegated unchanged.",
+    "Exclusive32KiB scratch fully cleared and returned with defer on success/error/panic; no source/FD/child retained.",
+    "Tests cover exact chunks/errors/overflow, actual separate stdout/stderr child streams/cancel/soleWait, concurrent shared writer, clear on panic and fast path."
+  ],
+  "limitations": [
+    "No local Go builds or tests.",
+    "Actual focused normal/race and subprocess benchmarks required before allocation/speed claim.",
+    "Race pool drops and zeroing cost can affect performance; source safety approval does not imply measured acceleration.",
+    "Profiled File.WriteTo allocation aggregate is not all attributable to these private pipes."
+  ]
+}

@@ -355,3 +355,44 @@ Source-identical save output не означает одинаковые busy sem
 Fair serial/save comparison использует один original readonly observer с обеих
 сторон; прежние0f equal74rows/20→4children подтверждают parity, но цифры
 80–84→29–30мс пока предварительные из-за различавшихся wrapper bookends.
+
+
+### Измеренный6df и следующая проверяемая реализация
+
+[Paired182rows](measurements/2026-11-09/research/ci-6df3d753/paired-analysis.json):
+live p50/p95 314.281/317.072→225.115/256.070мс; selected2 1445/1468→1261/1280мс.
+Обычный candidate App уже включает новую telemetry; это сохраняет общий выигрыш,
+но не изолирует её overhead. Cleanup101→11мс и все прежние verdict/identity/cleanup
+assertions сохранены. Cold sample не cold OS cache; fixedorder ограничение остаётся.
+
+Fair save1.8.10 normal/race: exact74rows,20→4children,44→12metadata; steady N5
+80.696→28.465мс normal и108.845→38.093мс race. Cold sample0 отдельно88.405→28.559мс.
+Package1.8.11-2ubuntu3 из официального Ubuntu pool содержит exact productionda62
+ELF; libc>=2.42 требуетubuntu26.04. [Provenance](measurements/2026-11-09/research/reviews/iptables-1.8.11/)
+сохраняет4deb hashes и distro patch series; это не воспроизводимая сборка пакета.
+[Официальный GA runner](https://github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration/)
+позволяет отдельную actual1.8.11 проверку без подмены библиотек24.04 илиpins.
+
+Mountinfo chunk4096/16K/32K: все варианты4reads/pair,5030bytes; median
+103.342/104.521/105.533µs и30,000/54,576/87,344B/op. Гипотеза ускорения отвергнута,
+production4096 оставлен. Pathname racepool2104ns/1216B, stack1454ns/0B; normal
+1583/1603ns и0B — ускорение normal не заявлено.5cb переносит measuredstack,
+сохраняя каждый fstatat/no-follow/error/metadata check; production parity нужен вновь.
+
+Go1.26 os/exec→io.Copy→os.File.WriteTo→genericWriteTo достигает private output.ReadFrom.
+866 переиспользует только очищаемый32KiB scratch, сохраняя output.Write/limits,
+WriterTo precedence, child Start/cancel/soleWait. Actualchild/alloc normal/race
+измерения ещё требуются. [Исходники/контракт](measurements/2026-11-09/research/reviews/output-reader-source-audit-20261109.md).
+IP version children намеренно НЕ убираются: get_libbpf_version читает /proc/self/maps;
+потери readonly context нет. [Аудит](measurements/2026-11-09/research/reviews/nfq-ip-version-fanout-audit-20261109.md).
+
+`cad54dba`: mountinfo unescape возвращает исходную immutable строку без builder,
+если в поле нет обратного слеша. Escaped decoder и точная byte/NUL/invalid UTF-8
+семантика сохранены; оба локальных потребителя не удерживают substring.
+Независимое source review PASS; normal/race parity и отдельный actual-corpus
+before/after decoder benchmark назначены следующему CI. Это не результат
+свежего kernel read и не доказательство ускорения маршрута.
+
+Сравнение между runs ubuntu-latest учитывает миграцию24.04→26.04; для
+выводов о скорости используются пары одного host/образа, а не разность wall time
+между разными CI. Dedicated1.8.11 закреплён на26.04.

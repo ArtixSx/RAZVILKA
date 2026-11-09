@@ -40,13 +40,13 @@ refs и незакоммиченные файлы сохранены. Стары
 
 | Приоритет / направление | Владелец и зависимость | Работающий сценарий / изменение | Критерий приёмки и оставшаяся работа |
 | --- | --- | --- | --- |
-| P0: VLESS startup/очередь/cleanup | Ведущий; verification | Свежий bounded SOCKS readiness, scheduler продолжает очередной шаг, ранние Stop polls внутри прежнего4с grace | 1a50 paired182rows PASS, live313→225мс, selected2 1440→1261мс, cleanup101→11мс. Первые и повторные samples отдельно. Минутная WAN задержка не воспроизведена; контролируемые WAN/CPU/flash и router/LAN измерения остаются. |
-| P0: CLI/API/UI измерения | Ведущий; verification; зависит от точной identity | CLI4979 actual localDNS/SOCKS/TLS/TTFB/body; eb1 API/UI original invocation snapshot после RecordCheck | CLI/profile1a50 и UI PASS; eb1 Go normal/race ожидаются. <=32rows, нет URL/ошибок/response bytes; absent/incomplete/multiple отличаются, интервалы не сумма. Не service/LAN proof. |
-| P0: Mihomo lifecycle/recovery (F) | Ведущий; verification; до расширения AUTO | Actual Apply/LAN/Stop, single-use manual preview, original ownership/closing | 0f lifecycle277.94с, settlement116.02с, postCAS62.59с PASS; manual отказал в Acquire до preview. Причину должен показать tagged diagnostic d590. Требуются полный manual HTTP two-cycle, remaining restart/ACK cuts и их recovery; программного внешнего блокера нет. |
-| P0: DNS / точный scope (B) | dns_completion; verification; после original cleanup | Scoped DNS original recovery, strict capture/exclusions; save inventory сохраняет fresh images/lock | 1a50 diagnostic30 три recovery PASS; 0f strict12 selected/cancel FAIL. Parity6pairs equal74rows PASS, но fair same-observer сравнение d762 и version-specific lock fixture ещё должны пройти. Завершить GEN1/GEN2 ready/cancel/retire/retry на штатных12/4с, без расширения shared-CDN scope. |
-| P1: managed NFQWS2 (C) | nfq_completion; verification | Original probe/history/manual intent; whole quarantine custody и joined cleanup | 1a/0f intent/sync cleanup, fresh plan, cleanup-only secondStop PASS при permanent fence. Full Apply/LAN/manual/race превышает deadline. Fresh Fstat parity и allocation microbench PASS;1af9 pathname scratch требует normal/race bench/arm64 compile, end-to-end gain не заявлен. |
+| P0: VLESS startup/очередь/cleanup | Ведущий; verification | Свежий bounded SOCKS readiness, scheduler продолжает очередной шаг, ранние Stop polls внутри прежнего4с grace | 6df paired182rows PASS, live314→225мс, selected2 1445→1261мс, cleanup101→11мс. Первые и повторные samples отдельно. Минутная WAN задержка не воспроизведена; контролируемые WAN/CPU/flash и router/LAN измерения остаются. |
+| P0: CLI/API/UI измерения | Ведущий; verification; зависит от точной identity | CLI4979 actual localDNS/SOCKS/TLS/TTFB/body; eb1 API/UI original invocation snapshot после RecordCheck | CLI/profile/paired6df и полный Go normal/race+UI PASS. <=32rows, нет URL/ошибок/response bytes; absent/incomplete/multiple отличаются, интервалы не сумма. Не service/LAN proof. |
+| P0: Mihomo lifecycle/recovery (F) | Ведущий; verification; до расширения AUTO | Actual Apply/LAN/Stop, single-use manual preview, original ownership/closing | 6df все4native PASS, включая два actual manual preview/Apply/LAN/HTTPStop и closing retry. Manual Apply90.281/90.219с, Stop5.539/5.551с. Remaining restart/ACK cuts и их recovery открыты; программного внешнего блокера нет. |
+| P0: DNS / точный scope (B) | dns_completion; verification; после original cleanup | Scoped DNS original recovery, strict capture/exclusions; save inventory сохраняет fresh images/lock | 6df diagnostic30 три recovery PASS; strict12 selected/cancel FAIL. 6df fair parity/lock/mutation PASS на1.8.10:80.696→28.465мс/74rows. Actual1.8.11 требует нового26.04 job. Coordinator828 сохраняет callbacks/Current и требует nextnative. Завершить GEN1/GEN2 ready/cancel/retire/retry на штатных12/4с, без расширения shared-CDN scope. |
+| P1: managed NFQWS2 (C) | nfq_completion; verification | Original probe/history/manual intent; whole quarantine custody и joined cleanup | 1a/0f intent/sync cleanup, fresh plan, cleanup-only secondStop PASS при permanent fence. Full Apply/LAN/manual/race превышает deadline. Fresh Fstat parity и benchmark PASS;6df выявил race pool1216B/op, stackcandidate0B/op;5cb переводит его вproduction, nextCI обязателен. OutputReader866 сохраняет все childStarts/Wait, allocation benchmark pending. |
 | P1: capabilities/API/AUTO (E) | Ведущий после F | Registration отдельно от availability; scoped manual support отдельно от live service proof | Сохранены unknown и stale/WAN guards. Общий AUTO допуск не расширен. Проверить полный per-plan HTTP workflow и remaining recovery; generic не повышает router admission. |
-| P1: backup/update (A) | Ведущий; nfq_completion read-only gap audit; independent review | Snapshot3 совместимой binary/StrategyLab пары, encrypted backup, history/manual intent, unknown/finalizing fences | Ранее native/race pair/restored panel PASS; exact нового SHA отдельно. Аудит оставшихся transitions/restart/partial-failure сценариев; physical power-loss требует отдельной авторизации и плана. |
+| P1: backup/update (A) | Ведущий; nfq_completion read-only gap audit; independent review | Snapshot3 совместимой binary/StrategyLab пары, encrypted backup, history/manual intent, unknown/finalizing fences | Pair/restored panel PASS повторно0f; следующий bbc/aa24 проверяет настоящий public configured-old193 bootstrap→Stop→offlineRestore в отдельных namespaces. Default legacy layout и nonempty public history этим не покрыты. Retained offline stage пока защитно блокирует retry; automatic settlement требует original FD custody. |
 | P1: оставшаяся цена проверок | nfq_completion и dns_completion; после точной attribution | Сохранены все source bytes/metadata guards; syscall scratch не кэширует authority | 1a50 profile CheckWrite75.42%CPU большого test image, не lockwait; не удалять SHA. Native CopyBuffer caller attribution в d762; изменение только после подтверждения. Нет внешнего блокера для программного профилирования. |
 | P2: платформы/новые backend | Ведущий после P0/P1 | Pinned isolated fixtures; SSH/read-only NC-1812 profile подтверждён | Нужны согласованный LAN scope, конкретный candidate и явная авторизация изменения устройства. На роутере rc106/stock1.4.21, CI-unshare отсутствует; работающий NFQWS2 сохранён. WAN/reboot/power-loss и MIPS/OpenWrt отдельно. [Профиль](measurements/2026-11-09/research/router-readonly.md). |
 
@@ -56,44 +56,32 @@ refs и незакоммиченные файлы сохранены. Стары
 Наличие плана, guard или draft PR не закрывает направление. Общий CI проверяется
 для своего SHA отдельно от native workflow и аппаратной приёмки.
 
-### Текущая интеграция: проверенный 1a50bf07 и исправления 0f043902
+### Проверенный6df3d753 и следующая интеграция
 
-- Ведущий: paired363f→1a50 PASS182 строки, N12: live p50/p95
-  313/334→225/227мс; selected2 1440/1461→1261/1280мс; cleanup101→11мс.
-  Отдельный profile подтверждает localDNS/SOCKS/TLS/TTFB/body наблюдения.
-  Сетевые интервалы перекрываются и не доказывают доступность сервиса/LAN.
-- Mihomo: на1a50 два actual Apply/LAN/Stop PASS287.04с, Apply97.981/98.615с,
-  Stop6.314/6.440с. Manual HTTP Apply/LAN прошёл, Stop202 выявил ошибочную
-  конфигурацию self-update fixture, не завершение Mihomo Stop. 0f043902
-  задаёт абсолютный отсутствующий journal path, сохраняя production recovery
-  gate; добавлены native-only fixed-stage diagnostics для ранних activate refusals.
-  Полный manual HTTP, settlement и post-CAS требуют нового PASS.
-- dns_completion: strict12 selected/canceled FAIL14.03/14.09с; diagnostic30
-  три recovery сценария PASS. Original full inventory теперь688save children
-  вместо1720-S при неизменных145 SHA/460Currents; actual native6pair parity
-  пока не подтверждён: setup DROP в nat исправленe9caf84b на inert RETURN.
-  a7fedf84 сохраняет общий1MiB raw budget сразу для двух образов.
-- nfq_completion: original whole quarantine/continuous Gate и fresh plan
-  подтверждены; новый cleanup-only second Stop PASS45.79с освобождает owner,
-  permanent fence остаётся. Полный fresh Apply/manual/race ещё превышает deadline.
-  Fresh Fstat normal/race parity PASS;6 micro samples median808.1→731.8ns,
-  208B/1alloc→0/0. Это не ускорение полного Apply.
-- Ведущий: eb1fccb8 публикует original invocation network timings в App API/UI
-  только после всех прежних RecordCheck guards; <=32 immutable rows, отдельные
-  absent/incomplete/multiple. Actual TLS503/foreign/cancel/snapshot tests добавлены,
-  independent source review и UI PASS; Go normal/race ожидаются. Теперь ordinary
-  App paired candidate включает стоимость telemetry, исторические цифры не переносятся.
-- nfq_completion:1af9b7c5 сохраняет каждый свежий pathname fstatat, переиспользуя
-  только обнулённый аргумент/syscall scratch. Source review PASS; microbench,
-  normal/race и arm64 cross-build ожидаются, ускорение ещё не заявлено.
-- verification: последний полностью успешный generic — 0f043902 (push42630488148 и PR42630498206).
-  dee compilation FAIL сохранён, исправлен17c3/1a50; на1a50 focused PASS,
-  полный generic отменён следующей исправленной волной, не SUCCESS. На0f normal/race,
-  nonroot permission, UI, vet,4crossbuild и modeled Entware завершились SUCCESS.
-  [Raw и точные отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
-  Strict DNS/NFQ и оставшиеся Mihomo cuts — программные задачи без внешнего блокера.
+- Ведущий: paired363f→6df PASS182строки с обычной App telemetry: live p50/p95
+  314/317→225/256мс, selected2 1445/1468→1261/1280мс, cleanup101→11мс.
+  API/UI actualTLS503/foreign/old/cancel/snapshot и full normal/race PASS.
+- Mihomo: все4 native SUCCESS; два real manual preview/token/Apply/LAN/HTTPStop,
+  оба physical baseline restored, closing retry, settlement и post-CAS rollback.
+  Manual Apply90.281/90.219с, Stop5.539/5.551с; общий AUTO остаётся закрыт.
+- dns_completion: strict12 FAIL; diagnostic30 три recoverycase PASS на6df.
+  7c3 сократил145→143 hashes при460 Current. Classic1.8.10 fair inventory
+  80.696→28.465мс,74equalrows/20→4children; lock/mutation normal/race PASS.
+  Actual1.8.11 получает отдельный pinned26.04 job, stock1.4.21 не меняется.
+  Coordinator828 сохраняет каждый Current/callback, новые6SHA savings — ещё гипотеза.
+- nfq_completion: fullLAN/manual FAIL; на6df faultcuts не достигнуты, поэтому
+  original quarantine/cleanup-only PASS1a/0f не переносится автоматически.
+  6df race pathnamepool2104ns/1216B→stack1454ns/0B; normal1583/1603ns/0B
+  без заявления ускорения.5cb переносит stack, original guards/syscall сохранены.
+  866 bounded output ReadFrom сохраняет каждый childStart/Wait, измерение pending.
+- backup: bbc/aa24 добавляют настоящую public configured-old193 producer→Stop→
+  offlineRestore проверку. Source-reviewed namespaces/privateopt/realreceipts;
+  actualCI pending. Nonempty publichistory/defaultlegacylayout не подразумеваются.
+- verification: последний полный generic6df оба SUCCESS, как и4Mihomo jobs.
+  Новые source reviews не подменяют собственные runtime tests.
+  [Raw](measurements/2026-11-09/research/lifecycle/6df3d753/).
 
-### Текущие владельцы следующего шага
+### Историческая отправная точка после441e97e4
 
 Продолжение после освобождения диска: `441e97e4` исправляет только StartedAt
 общего checker fixture; b5a общий CI FAIL не скрывается. Ведущий владеет

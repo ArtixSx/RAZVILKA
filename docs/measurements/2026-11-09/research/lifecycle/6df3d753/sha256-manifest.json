@@ -1,0 +1,18 @@
+{
+  ".gitattributes": "ffe82f3c5b968ed009c2577fa38f32c83be167799ee565d40a18e3440c57b342",
+  "domain-canceled.log": "ac30b8c4758968a54a6b8773c75ea20b6fcaabad0cd9db5260b3ecbd54013cd2",
+  "domain-preparation.log": "9de4b214d9c36dd9e72c5c06687e7b525f350e4f180514590a96762354492a33",
+  "domain-results.json": "acd40d7474fdc63ef477ebf3d7d3c2b71db66854f591004db23e737a75a1549d",
+  "domain-selected.log": "8a86cd69c2be39e762b465d2a6564c2119fff92ebca6778149f52878595df7f3",
+  "generic-ci-independent-review.json": "6c4a7ea2f7e9c63d5210d2278aef8a52bbcc00672be353e8a37d12f95dfb8f22",
+  "generic-pr-ci.log": "faa0609b7b56f36246840bac6d645a4bc166862c460d56ac60c8af2878de263d",
+  "generic-push-ci.log": "49f859db627c3e5ea3bfa6ff48b7ebca411287092053fa2b2297d280de74e55b",
+  "managed-production.log": "6a6cac4810aa1a4d885d198473b05289ab63918cbb013bbe0007c2995a2723c8",
+  "managed-race.log": "c643f4a62478a7c39b8c0633a7658d671b59bd4aef34477365a0d0f7f86035c4",
+  "mihomo-independent-review.json": "d92947558d1aa3d334736510fe822579cfc6e5d775cf612053f7b9355007a42d",
+  "mihomo-lifecycle.log": "0d54201c6c2ac11f1b0c4d5abd5b86ad05f9f73665d428006a8755215f654855",
+  "mihomo-manual-http.log": "561325bb86c0986ebd13fd20990f4538961b030d3c8a4b32d7a219314cc4f7d4",
+  "mihomo-postcas.log": "7d38730a0504ecd8e0397d75a4fde01d9672c6f5e9e34343126fa53aac14055c",
+  "mihomo-settlement.log": "77c616c05bbe43601e0cfbed50093b82385863406ddf760c190762386e905a9e",
+  "save-path-results.json": "cfb5189781183026b39a36b0f653dad4d64bfce94ca8232b20e31ff3142d9ed9"
+}

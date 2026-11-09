@@ -233,7 +233,7 @@ fixture; однострочное исправление441e97e4 требует 
 | Mihomo lifecycle | Два actual Apply/LAN/Stop и original normal/race bookends PASS | Manual HTTP Stop202 fixture исправлен0f; полный manual и новые settlement/post-CAS ещё обязательны |
 | Managed NFQ pending recovery | Original continuous lease, fresh plan; cleanup-only повторный Stop освобождает owner, permanent fence сохраняется | Full fresh Apply/manual/race deadline FAIL |
 | Classic inventory / DNS | Actual save path и три diagnostic30 recovery PASS; strict12 FAIL | Native6pair setup исправленe9, exact parity/lock приёмка ожидается; actual1.8.11 и stock1.4.21 отдельно |
-| Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection eb1fccb8: source review/UI PASS, Go normal/race ожидаются; service predicates не меняются |
+| Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection eb1fccb8: на6df полный Go normal/race/UI PASS; service predicates не меняются |
 | Метаданные инструмента | Fresh Fstat normal/race parity,6sample median808.1→731.8ns и208→0B | Полный маршрут этим не подтверждён |
 
 Общий CI: последний0f043902 оба SUCCESS; dee compile FAIL исправлен,1a50 focused PASS,
@@ -241,3 +241,16 @@ full generic CANCELLED. Native0f Mihomo lifecycle/settlement/postCAS и Strategy
 manual HTTP ранний Acquire FAIL. Новая волна оценивается по своему SHA.
 Физический роутер и его NFQWS2 не менялись.
 [Raw и независимые отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
+
+
+### Актуальное подтверждение 6df3d753
+
+| Сценарий | Проверено | Предел результата |
+| --- | --- | --- |
+| Generic/API/UI | Оба CI normal/race/UI/vet/4builds/Entware SUCCESS; scoped network timing actualTLS503/identity tests PASS | Timing не меняет service/evidence/AUTO admission |
+| Mihomo manual HTTP + lifecycle | Все4 native jobs SUCCESS, два preview/Apply/LAN/HTTPStop, replay/stale refusals, оба baseline restored | Физический router и remaining restart/ACK cuts отдельно |
+| Classic save1.8.10 | Fair exact74rows/20→4children, normal/race lock/mutation PASS;80.696→28.465мс | Actual1.8.11 новый job ожидается; stock1.4.21 unchanged |
+| DNS/NFQ | На6df diagnostic30 три DNS cleanupcase PASS, strict publication и full NFQ LAN FAIL | На6df NFQ faultcut не достигнут, не подменять0f успешным recovery |
+| Public paired CLI | Prepared real old193/source/archive/producer+Stop+restore isolated harness, independent review | Native pending; configured layout only, не defaultlegacy/nonemptypublichistory/router |
+
+[Raw и независимое ревью](measurements/2026-11-09/research/lifecycle/6df3d753/).

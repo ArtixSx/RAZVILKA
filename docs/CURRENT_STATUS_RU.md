@@ -236,7 +236,7 @@ Generic1a50 focused PASS, полный запуск CANCELLED; dee compile FAIL 
 [Точные результаты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
 
 
-### Последняя завершённая общая проверка: 0f043902
+### Завершённая общая проверка: 0f043902
 
 Оба generic CI42630488148/42630498206 SUCCESS: normal/race, actual nonroot
 permission refusal, UI, vet,4crossbuild, modeled Entware. Native Mihomo
@@ -250,3 +250,27 @@ Strict DNS и full NFQWS остаются FAIL; release/router admission не и
 Следующая волна включает reviewed App API/UI timing eb1, pathname scratch1af9,
 fair save comparison/lock fixture d762, baseline observation7c3 и отдельные
 measurement-only stack/mountinfo benchmarks. Собственный CI ещё обязателен.
+
+
+### Последняя завершённая интегрированная проверка: 6df3d753
+
+Оба generic CI42634856758/42634845807 SUCCESS, включая полный normal/race,
+UI, vet,4crossbuild и modeled Entware. API network timing прошёл actual TLS503,
+чужие/устаревшие/canceled результаты и независимость снимков; timing не повысил verdict.
+Все4 Mihomo job42634845791 SUCCESS: manual preview/token→Apply→LAN→HTTPStop
+дважды, повторный closing retry, lifecycle, failed-check settlement и post-CAS rollback.
+Manual Apply90.281/90.219с, Stop5.539/5.551с; оба физических baseline восстановлены.
+Это проверка изолированного Linux namespace, не изменения/приёмка действующего роутера.
+
+Classic save на actual1.8.10: normal/race parity,lock,source mutation/cancel PASS,
+одинаковые74строки,20→4 children; steady N5 median80.696→28.465мс normal,
+108.845→38.093мс race. First sample сохранён отдельно. Strict DNS12 и полный NFQ
+LAN/manual ещё FAIL; на6df fault-cut NFQ не достигнуты из-за раннего deadline,
+прежние0f recovery PASS не переносятся автоматически на6df.
+[Отчёты и raw](measurements/2026-11-09/research/lifecycle/6df3d753/).
+
+Следующие reviewed изменения требуют собственного CI: stack pathname scratch
+устраняет измеренную race pool allocation; bounded child output ReaderFrom
+сохраняет все Start/Wait; coordinator readonly scope сохраняет все Current;
+actual1.8.11 и genuine configured-old193 public paired CLI получают отдельные
+native jobs. Ни новый harness, ни source review не являются native PASS.

@@ -1,0 +1,30 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; CI and measurement pending",
+  "files": [
+    {
+      "path": "internal/netidentity/parse.go",
+      "sha256": "0E7C69A03AABE3460DB45AE361846DC060AEA89095D2090F573B1E354870BD05"
+    },
+    {
+      "path": "internal/netidentity/mount_unescape_test.go",
+      "sha256": "BA6D56FA63E73B735CAE2D7E8A63104D5B574DFD544F14461A3C35994CC2414F"
+    },
+    {
+      "path": "internal/netidentity/mount_unescape_native_linux_test.go",
+      "sha256": "2028316F556C6DFE4E6A0188F45F1A611475577FE90BA718695D6F2574AC8D55"
+    }
+  ],
+  "findings": [
+    "Only no-backslash fast path returns original immutable input; old escaped byte decoder unchanged.",
+    "Sole two production calls consume root/point locally inside mountLayoutOK; no returned substring persisted as state.",
+    "Raw empty/NUL/invalid UTF8/all non-backslash bytes and malformed escape behavior retained; explicit tests and old-decoder differential fuzz seeds.",
+    "Native benchmark uses same bounded actual mountinfo field corpus and reports decode-only allocation/cost, not kernel observation freshness."
+  ],
+  "limitations": [
+    "No local Go build/test.",
+    "Normal/race parser acceptance and before/after allocations await CI.",
+    "No file read, namespace, source, metadata, ownership or parser admission bounds changed."
+  ],
+  "source_commit": "cad54dbac4e0e5a5ab71c1abc4df40b206cdda1f"
+}
