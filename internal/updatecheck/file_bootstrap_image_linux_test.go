@@ -55,6 +55,56 @@ func TestBootstrapImageUsesOriginalHelperDigestAndRevokes(t *testing.T) {
 	}
 }
 
+type bootstrapCancelAfterClear struct {
+	context.Context
+	image *ordinaryExecutableImage
+}
+
+func (c *bootstrapCancelAfterClear) Err() error {
+	if c.image != nil && c.image.closed {
+		return context.Canceled
+	}
+	return c.Context.Err()
+}
+
+func TestBootstrapImageClosingRefusesCancellationDuringClear(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	for _, kind := range []string{"success", "cancel-after-clear", "deadline-without-timer", "body-error"} {
+		t.Run(kind, func(t *testing.T) {
+			closing := &bootstrapCancelAfterClear{Context: ctx}
+			data := ordinaryImageBytes(4097)
+			image, err := newOrdinaryExecutableImage(closing, digestBytes(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := image.verify(bytes.NewReader(data), int64(len(data))); err != nil {
+				t.Fatal(err)
+			}
+			owned := image.image
+			var body error
+			var finishContext context.Context = closing
+			want := context.Canceled
+			if kind == "deadline-without-timer" {
+				image.deadline = time.Now().Add(-time.Second)
+				finishContext, want = ctx, context.DeadlineExceeded
+			} else if kind != "success" {
+				closing.image = image
+			}
+			if kind == "body-error" {
+				body = errors.New("original closing read failed")
+			}
+			err = finishBootstrapExecutableImage(finishContext, image, body)
+			if kind == "success" && err != nil || kind != "success" && (!errors.Is(err, want) || !errors.Is(err, ErrInstallerControllerRole) || body != nil && !errors.Is(err, body)) {
+				t.Fatal("cleanup lost cancellation/deadline or original error", err)
+			}
+			if !image.closed || !bytes.Equal(owned, make([]byte, len(owned))) || !bytes.Equal(image.work[:], make([]byte, ordinaryImageChunk)) {
+				t.Fatal("closing returned before image/work clear")
+			}
+		})
+	}
+}
+
 // Actual same /proc/exe, parent/argv/birth/FD observations, not a granted role.
 // Every per-call image has a fresh SHA and is cleared before the next sample.
 // Positive installer authority is covered only by the public native workflow.

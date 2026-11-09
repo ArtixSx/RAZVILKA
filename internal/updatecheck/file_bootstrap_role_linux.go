@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
@@ -50,7 +51,7 @@ func bootstrapControllerAt(ctx context.Context, pid int) (bootstrapControllerFac
 	return bootstrapControllerFact{process, parent, args}, nil
 }
 
-func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Context, id string, pid int) error {
+func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Context, id string, pid int) (result error) {
 	refuse := func(err error) error { return errors.Join(ErrInstallerControllerRole, err) }
 	if a.checkStop(ctx, id, "read/observe") != nil {
 		return refuse(ErrFileProtocol)
@@ -92,7 +93,7 @@ func (a *SelfUpdateFileAdapter) verifyInstallerControllerRole(ctx context.Contex
 	if err != nil {
 		return refuse(err)
 	}
-	defer image.clear()
+	defer func() { result = finishBootstrapExecutableImage(ctx, image, result) }()
 	// Prove all live roles as a closed group. In particular an arbitrary
 	// outer caller cannot classify a recorded helper by borrowing its ID.
 	helper, err := image.controllerAt(identity.Process.PID)
@@ -155,4 +156,19 @@ func bootstrapExecutableImage(ctx context.Context, review fileReview) (*ordinary
 	// The original old193 panel is a different binary. Never authenticate these
 	// actual candidate/helper occurrences against its old executable digest.
 	return newOrdinaryExecutableImage(ctx, review.Bootstrap.HelperSHA256)
+}
+
+func finishBootstrapExecutableImage(ctx context.Context, image *ordinaryExecutableImage, result error) error {
+	deadline := image.deadline
+	image.clear()
+	// Clearing the privately retained image is part of this synchronous call.
+	// A successful body must not escape cancellation/deadline during cleanup.
+	closing := ctx.Err()
+	if !deadline.After(time.Now()) {
+		closing = errors.Join(closing, context.DeadlineExceeded)
+	}
+	if closing != nil {
+		return errors.Join(result, ErrInstallerControllerRole, closing)
+	}
+	return result
 }
