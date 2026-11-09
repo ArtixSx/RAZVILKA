@@ -52,6 +52,21 @@ func domainOriginalOnlyJoinedFailure(err error) bool {
 // Native clocks are per-operation, matching the unchanged finite producer.
 func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domainOriginalNativePeers, manager *dataplane.Manager, dnsAdapter *dataplane.ScopedDNSAdapter, backend *dataplane.BackendInventory, xray *dataplane.ProxyTunnelAdapter, nodeSource *dataplane.NodeDefaultSourceReview, resolver *dnscontrol.NetworkPolicyDNSResolver, control *operationgate.ControlEpochReview, history *updatecheck.ExecutionHistoryAdmission, plan dataplane.Plan, service catalog.Service, nodeID string, prior *dataplane.DomainTCPDetachedStandby, oldAlias string, unpublished bool, captured **dataplane.DomainTCPOriginalScope) (resultErr error) {
 	t.Helper()
+	// GEN1's profile ended with its original callback. This separate bounded
+	// GEN2 diagnostic includes preparation before Run/publication clock and stops after the
+	// existing joined-cleanup defer; no deadline or observer is substituted.
+	var successorProfile *domainSuccessorCPUProfile
+	// The GEN2 call supplies its owner destination; the separate later GEN3
+	// call deliberately does not. Never overwrite/adopt the GEN2 profile.
+	if captured != nil {
+		var profileErr error
+		successorProfile, profileErr = startDomainSuccessorCPUProfile()
+		if profileErr != nil {
+			return fmt.Errorf("successor CPU diagnostic start: %w", profileErr)
+		}
+	}
+	joined := false
+	defer func() { resultErr = errors.Join(resultErr, successorProfile.finish(t, joined)) }()
 	binding, err := manager.BindSyntheticDNSExecution(ctx, dnsAdapter, plan)
 	if err != nil {
 		return fmt.Errorf("successor original DNS binding: %w", err)
@@ -103,12 +118,12 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 	runCtx, stopRun := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() { done <- owner.Run(runCtx, resource) }()
-	joined := false
 	defer func() {
 		stopRun()
 		if !joined {
 			select {
 			case runErr := <-done:
+				joined = true // Diagnostic fact: the original Run result was received.
 				if !domainOriginalExpectedStopError(runErr) {
 					resultErr = errors.Join(resultErr, runErr)
 				}
