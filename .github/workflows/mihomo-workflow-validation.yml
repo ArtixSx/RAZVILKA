@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [lifecycle, postcas-failure, check-settlement]
+        scenario: [lifecycle, postcas-failure, check-settlement, manual-http]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -70,6 +70,29 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-native.sh
+      - name: Explicit manual preview, token Apply, LAN and HTTP Stop
+        if: matrix.scenario == 'manual-http'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo modprobe tun
+          mkdir -p artifacts/mihomo-manual-http
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MIHOMO_LIVE_TEST_CASE=manual-http \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-native.sh 2>&1 | tee artifacts/mihomo-manual-http/native.log
+          grep -F -- '--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop ' artifacts/mihomo-manual-http/native.log
+          if grep -F -- '--- SKIP:' artifacts/mihomo-manual-http/native.log; then exit 1; fi
+      - name: Retain actual manual HTTP result
+        if: always() && !cancelled() && matrix.scenario == 'manual-http'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-manual-http-${{ github.sha }}
+          path: artifacts/mihomo-manual-http
+          if-no-files-found: warn
       - name: Retain bounded native CPU evidence
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

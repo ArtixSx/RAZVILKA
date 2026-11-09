@@ -6,6 +6,7 @@ test "$(id -u)" = 0 || exit 2
 : "${RAZVILKA_HEV_NATIVE:?official pinned HEV2.17.1 binary required}"
 case "${RAZVILKA_MIHOMO_LIVE_TEST_CASE:-lifecycle}" in
  lifecycle) live_test=TestMihomoLiveOriginalApplyStopAndFreshApply; live_rounds=2;;
+ manual-http) live_test=TestMihomoLiveOriginalManualHTTPApplyStop; live_rounds=2;;
  postcas-failure) live_test=TestMihomoLiveOriginalPostCASServiceFailure; live_rounds=1;;
  check-settlement) live_test=TestMihomoLiveOriginalFailedCheckSettlementStopRetry; live_rounds=1;;
  *) exit 2;;

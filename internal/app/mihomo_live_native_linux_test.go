@@ -41,6 +41,10 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 
 func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	settlementRetry := os.Getenv("RAZVILKA_MIHOMO_CHECK_SETTLEMENT_NATIVE") == "1"
+	manualHTTP := os.Getenv("RAZVILKA_MIHOMO_MANUAL_HTTP_NATIVE") == "1"
+	if manualHTTP && (settlementRetry || degradeAfterCAS) {
+		t.Fatal("separate real HTTP scenario required")
+	}
 	if settlementRetry && degradeAfterCAS {
 		t.Fatal("distinct native scenarios required")
 	}
@@ -121,6 +125,11 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	}
 	selected := "mihomo:" + imported.Nodes[0].ID
 	service := catalog.Service{ID: "live-listed", Name: "Native IPv4 service", Category: "fixture", Strategy: []string{"mihomo"}, CIDRs: []string{domainOriginalServer + "/32"}, ProbeURL: "https://service.example.com/", Probes: []catalog.Probe{{ID: "primary", URL: "https://service.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}, {ID: "required-second", URL: "https://unknown.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}}}
+	if manualHTTP {
+		// Deliberately reverse lexical order: Build canonicalizes CIDRs, while
+		// the original complete catalogue/probe definition must stay exact.
+		service.CIDRs = []string{domainOriginalServer + "/32", "1.0.0.1/32"}
+	}
 	service.Probes[0].Label = "Primary native TLS"
 	service.Probes[1].Label = "Second mandatory native TLS"
 	if err = catalog.Validate(catalog.Catalog{Services: []catalog.Service{service}}); err != nil {
@@ -320,44 +329,57 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		var actualCAS atomic.Bool
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
-		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			bounded, finish := context.WithTimeout(r.Context(), operationBudget)
-			defer finish()
-			bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
-			bounded = dataplane.WithReviewGuard(bounded, binding.current)
-			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
-				undo, err := binding.commit(bounded)
-				if err == nil && degradeAfterCAS {
-					err = mihomoLiveNativeDegradeAfterCAS(peers, binding)
-					actualCAS.Store(err == nil)
-				}
-				return undo, err
-			})
-			for _, step := range execution.Steps {
-				start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
-				finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
-				if startErr == nil && finishErr == nil {
-					t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
-				}
+		server := func() *httptest.Server {
+			if manualHTTP {
+				return httptest.NewServer(a.Handler(http.NotFoundHandler()))
 			}
-			detail := ""
-			status := http.StatusOK
-			if applyErr != nil {
-				t.Logf("native_apply_failure deadline_exceeded=%t canceled=%t live_owner_unavailable=%t parent_origin_unavailable=%t", errors.Is(applyErr, context.DeadlineExceeded), errors.Is(applyErr, context.Canceled), errors.Is(applyErr, components.ErrMihomoLiveOwner), errors.Is(applyErr, components.ErrMihomoProbeOrigin))
-				detail = applyErr.Error()
-				status = http.StatusConflict
-			}
-			writeJSON(w, status, struct {
-				Execution dataplane.Execution `json:"execution"`
-				Error     string              `json:"error"`
-			}{execution, detail})
-		})))
-		request, err := http.NewRequestWithContext(apply, http.MethodPost, server.URL+"/api/v1/apply", nil)
+			return httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				bounded, finish := context.WithTimeout(r.Context(), operationBudget)
+				defer finish()
+				bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
+				bounded = dataplane.WithReviewGuard(bounded, binding.current)
+				execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
+					undo, err := binding.commit(bounded)
+					if err == nil && degradeAfterCAS {
+						err = mihomoLiveNativeDegradeAfterCAS(peers, binding)
+						actualCAS.Store(err == nil)
+					}
+					return undo, err
+				})
+				for _, step := range execution.Steps {
+					start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
+					finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
+					if startErr == nil && finishErr == nil {
+						t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
+					}
+				}
+				detail := ""
+				status := http.StatusOK
+				if applyErr != nil {
+					t.Logf("native_apply_failure deadline_exceeded=%t canceled=%t live_owner_unavailable=%t parent_origin_unavailable=%t", errors.Is(applyErr, context.DeadlineExceeded), errors.Is(applyErr, context.Canceled), errors.Is(applyErr, components.ErrMihomoLiveOwner), errors.Is(applyErr, components.ErrMihomoProbeOrigin))
+					detail = applyErr.Error()
+					status = http.StatusConflict
+				}
+				writeJSON(w, status, struct {
+					Execution dataplane.Execution `json:"execution"`
+					Error     string              `json:"error"`
+				}{execution, detail})
+			})))
+		}()
+		path := "/api/v1/apply"
+		var requestBody []byte
+		if manualHTTP {
+			var reviewed dataplane.Plan
+			reviewed, path, requestBody = mihomoNativeManualPreview(t, apply, a, server, imported.Nodes[0].ID, service, []string{domainOriginalClient + "/32"})
+			plan = reviewed
+		}
+		request, err := http.NewRequestWithContext(apply, http.MethodPost, server.URL+path, bytes.NewReader(requestBody))
 		if err != nil {
 			server.Close()
 			cancelApply()
 			t.Fatal(err)
 		}
+		request.Header.Set("Content-Type", "application/json")
 		response, err := server.Client().Do(request)
 		if err != nil {
 			server.Close()
@@ -370,6 +392,9 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		}
 		decodeErr := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&reply)
 		response.Body.Close()
+		if manualHTTP && response.StatusCode == http.StatusOK && decodeErr == nil {
+			mihomoNativeManualReplayRefused(t, apply, a, server, path, requestBody)
+		}
 		server.Close()
 		cancelApply()
 		if degradeAfterCAS {
@@ -432,7 +457,13 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			}
 		}
 		stopStart := time.Now()
-		handled, outcome := a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		stopOriginal := func() (bool, serviceRuntimeOutcome) {
+			if manualHTTP {
+				return true, mihomoNativeManualStop(t, stopped, a)
+			}
+			return a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		}
+		handled, outcome := stopOriginal()
 		if settlementRetry {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || a.mihomoProbe.liveStop.closing {
 				cancelStop()
@@ -443,7 +474,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 				cancelStop()
 				t.Fatal("failed temporary ACK destroyed native policy/TUN prerequisites", live)
 			}
-			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+			handled, outcome = stopOriginal()
 		}
 		if round == 1 {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || !a.mihomoProbe.liveStop.closing {
@@ -451,7 +482,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 				cancelStop()
 				t.Fatal("original close cut did not retain App cursor", outcome)
 			}
-			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+			handled, outcome = stopOriginal()
 		}
 		if !handled || !outcome.LiveApplied || a.mihomoProbe.liveStop != nil {
 			if cursor := a.mihomoProbe.liveStop; cursor != nil {
