@@ -71,9 +71,13 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
   paired-public-cli:
-    name: Configured old193 public paired restore
+    name: Configured old193 public paired restore / ${{ matrix.history }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        history: [empty, draft]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -93,12 +97,13 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_PAIRED_NATIVE_HISTORY="${{ matrix.history == 'draft' && 'draft' || '' }}" \
             sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
       - name: Preserve bounded public workflow evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: paired-public-cli-${{ github.sha }}
+          name: paired-public-cli-${{ matrix.history }}-${{ github.sha }}
           path: artifacts/paired-public/native.log
           if-no-files-found: error
   classic-save-pinned:

@@ -39,8 +39,8 @@ func TestMihomoSameBootAbsenceReadRejectsChangedAssociation(t *testing.T) {
 				copy := *o.read
 				o.read = &copy
 			case "input":
-				copy := *o.inputs
-				o.inputs = &copy
+				// Same fixture values, distinct identity; never copy its mutex.
+				o.inputs = &mihomoSameBootInputs{statePath: o.inputs.statePath}
 			case "provider":
 				o.read.tools.Provider = new(netidentity.Provider)
 			case "review":
