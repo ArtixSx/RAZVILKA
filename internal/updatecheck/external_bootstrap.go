@@ -82,7 +82,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 	}
 	oldConfig, err := configRoot.ReadLimited("config.json", 4<<20)
 	configRoot.Close()
-	cfg, _, inspectErr := config.InspectBytes(oldConfig)
+	cfg, sourceFingerprint, inspectErr := externalBootstrapSourceConfig(oldConfig)
 	if err != nil || inspectErr != nil || cfg.Revision == 0 {
 		return result, ErrExternalBootstrap
 	}
@@ -109,7 +109,7 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 	}
 	defer root.Close()
 	now := time.Now().UTC()
-	record := updateRecord{Owner: updaterOwner, Job: Job{Channel: "stable", ID: id, State: "preparing", Stage: "metadata", ConfigRevision: cfg.Revision, Verification: "verified-external-archive-sha256", StartedAt: now, UpdatedAt: now, CanCancel: true}, CurrentVersion: "0.19.3", ConfigFingerprint: ConfigFingerprint(cfg), ParentPID: panel.PID, Deployment: deployment}
+	record := updateRecord{Owner: updaterOwner, Job: Job{Channel: "stable", ID: id, State: "preparing", Stage: "metadata", ConfigRevision: cfg.Revision, Verification: "verified-external-archive-sha256", StartedAt: now, UpdatedAt: now, CanCancel: true}, CurrentVersion: "0.19.3", ConfigFingerprint: sourceFingerprint, ParentPID: panel.PID, Deployment: deployment}
 	// The first header is an exclusive claim. Two independent external entries
 	// cannot replace each other's preparing owner after seeing an empty root.
 	if err := writeInitialExternalBootstrap(root, record); err != nil {
@@ -248,6 +248,26 @@ func (a *SelfUpdateFileAdapter) BootstrapExternalOld193(ctx context.Context, id,
 		result.State = "installed-offline-requires-review"
 	}
 	return result, nil
+}
+
+// The preparing header describes the still-installed source, as consumed by
+// helperConfigMatches. InspectBytes validates and normalizes a separate value
+// for migration/intent checks; that future representation is not the source.
+// The original source bytes are never rewritten here. FileReview separately
+// retains their complete SHA before migration of the private staged copy.
+func externalBootstrapSourceConfig(raw []byte) (config.Config, string, error) {
+	validated, _, err := config.InspectBytes(raw)
+	if err != nil {
+		return config.Config{}, "", err
+	}
+	var source config.Config
+	if err := json.Unmarshal(raw, &source); err != nil {
+		return config.Config{}, "", err
+	}
+	if source.Revision == 0 || source.Revision != validated.Revision {
+		return config.Config{}, "", ErrExternalBootstrap
+	}
+	return validated, ConfigFingerprint(source), nil
 }
 
 func emptyExternalBootstrapNamespace(ctx context.Context, path string, owned func(string) error) error {
