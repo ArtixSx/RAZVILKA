@@ -1,0 +1,33 @@
+{
+  "sha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "run_id": 42680280990,
+  "job_id": 129372632104,
+  "profile_window": "GEN2 preparation+Run/join attempt",
+  "cpu": "AMD EPYC9V45",
+  "architecture": "linux/amd64",
+  "ordinary_xray_read_cpu_buckets_s": {
+    "old_standby_direct/other": 0.43,
+    "other/other": 0.51,
+    "old_standby_direct/counterfactualRows": 1.26,
+    "successor_listener_witness/counterfactualRows": 2.41
+  },
+  "selected_cumulative_cpu_s": {
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPGlobalSuccessor).comparePrior": 7.07,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).current": 4.61,
+    "github.com/ArtixSx/razvilka/internal/startuptools.hashImage": 0.97,
+    "github.com/ArtixSx/razvilka/internal/netidentity.captureProc": 1.68,
+    "github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent": 1.19,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPImageRead).current": 1.09,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPPoolListenerWitness).current": 3.09,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPGlobalSuccessor).counterfactualRows": 5.32,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPPoolListenerWitness).current.func2": 0.06,
+    "github.com/ArtixSx/razvilka/internal/netidentity.captureProc.func1": 0.02,
+    "github.com/ArtixSx/razvilka/internal/netidentity.captureProc.func2": 0.02,
+    "github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPImageRead).current.func2": 0.01
+  },
+  "limits": [
+    "Current includes bytes+metadata, not SHA-only cost.",
+    "Old vs successor attribution derives exact witness-current/compareStandby stack and source owner contract, not object addresses recorded in profile.",
+    "Parent CPU samples only; cumulative overlaps, not measured optimization gain."
+  ]
+}

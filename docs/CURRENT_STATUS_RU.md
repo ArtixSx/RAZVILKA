@@ -84,7 +84,7 @@
 
 ## Исходники и приёмка на 09.11.2026
 
-Опубликованная интеграция: `2ecf9961`, draft PR #25. Оба полных generic CI этого
+Последняя интеграция с двумя полными generic PASS: `2ecf9961`, draft PR #25. Оба полных generic CI этого
 SHA прошли (push attempt2 и PR attempt3): normal/race, vet, shell/UI и четыре
 целевые сборки. Первые попытки не создали часть jobs из-за Internal server error
 GitHub; эти отказы сохранены отдельно. Native приёмка не подменяется generic CI. На `ea36873e` полный PR CI прошёл,
@@ -105,10 +105,10 @@ Public empty/draft update→restore на `2ecf9961` впервые PASS цели
 restore восстановили точный старый executable; журналы, StrategyLab и fences
 сохранены. Черновик создан настоящим старым HTTP API, проверен текущим reader.
 Это offline-переход настроенного 0.19.3, без заявления о запуске старой панели
-с современным состоянием. Завершённая история и ручной выбор — следующий сценарий.
+с современным состоянием. История и ручной выбор отдельно прошли на976fa47c; подробности ниже.
 Совместимая современная пара, encrypted restore и restored-panel PASS на
-`344912c1` остаются отдельной приёмкой; текущий повтор был первоначально не создан
-из-за GitHub Internal server error и выполняется во второй попытке.
+`344912c1` остаются отдельной приёмкой; повтор на2ecf во второй попытке
+полностью PASS, включая настоящий запуск восстановленной панели.
 
 Managed NFQWS2 ещё не прошёл полный manual/LAN workflow. Измерено 1796 запусков
 classic-save в normal manual case; два стандартных copy scratch на запуск дают
@@ -126,15 +126,41 @@ normal warm 10.137→7.256 мс, race 22.354→50.168 мс. Все провер�
 PASS на2ecf (панель0.19с). Sameboot полная матрица11/14 PASS: пять обычных cuts
 и race completed/history прошли; retirement/terminal-transaction/terminal-global
 race остаются FAIL на настоящем aggregate120с. Deadline не расширяется.
-На6b новый public history сценарий остановился до первой пробы из-за выбора
-nft-варианта iptables на legacy-стенде; исправлен только private fixture alias,
-повтор ещё нужен. Empty/draft снова PASS. Подготовлены независимо проверенные
-узкие original-scope reads для Mihomo table207 и NFQ RPDB, без пропуска реальных
-команд и без изменения общих исполнителей. Их runtime и полное время ещё не приняты.
+Повтор VLESS на5289:182rows PASS, repeatedN12 live p50/p95
+312.846/314.178→222.224/224.104мс, selected queue1438/1452→1253/1284мс.
+Baseline→candidate на одном runner, фиксированный порядок; сравнивать внутри
+этой пары, не между разными машинами. Это не WAN/LAN-ready измерение.
+[Raw и воспроизводимый анализ](measurements/2026-11-09/research/ci-5289a7d8/).
 
-Следующие критерии: public history/manual и совместимый запуск, DNS GEN1/GEN2 и отмена на исходных
-12/4 с, matched ABBA на одном runner, managed NFQWS2 manual/recovery, оставшиеся
-Mihomo same-boot race cuts. Внешних блокеров для этих программных задач нет.
+Новая проверочная серия: опубликованный PR HEAD `5289a7d8`, затем focused
+history `976fa47c`. Public history полностью PASS165.09с: bootstrap58.46с,
+restore105.79с. Настоящий старый API создал три native-пробы и frozen manual
+selection; исходные state bytes, история, ручной выбор, cleanup и current reader
+проверены независимо. Legacy readiness остаётся false. Это configured0.19.3
+offline-пара, не запуск старой панели и не произвольный downgrade.
+
+На5289 original RPDB pair normal53.738→22.639мс, race90.661→44.300мс;
+все реальные команды и проверки ownership сохранены. Полный managed NFQWS2
+LAN/manual и fresh Apply ещё FAIL. Mihomo lifecycle, settlement и post-CAS PASS;
+manual у candidate и same-host4cc baseline FAIL на исходных110с. Sameboot11/14
+PASS, но три других отказа: normal retirement (sidecar-child-exited) и race terminal-transaction
+(sidecar-start/route-process-unavailable) до producer ACK; race completed на70.06с source-closing,
+до запрошенного cut. Это не успешное завершение всей recovery-матрицы.
+
+DNS5289 selected дошёл до DNS, но service peer4с FAIL; canceled прошёл GEN1
+и перешёл в GEN2, который не завершился. GEN2 CPU-профиль охватывает preparation
+и Run/join attempt:12.01 CPUс/12.745 wallс, не CPU дочерних процессов.
+Независимо проверенный7428 передаёт существующий pre-add read view только точному
+successor listener; полная runtime-проверка ещё нужна. Новая sameboot диагностика
+фиксирует только закрытый перечень стадий, не изменяя ошибки и deadlines.
+
+Следующие критерии: совместимый live запуск и default legacy layout, DNS
+GEN1/GEN2 и отмена на исходных12/4с, matched ABBA на одном runner, managed NFQWS2
+manual/recovery, оставшиеся Mihomo same-boot cuts. Внешних блокеров для этих
+программных задач нет. PR generic5289 PASS, push ещё выполняется; generic6b отдельно PASS.
+[Результаты5289](measurements/2026-11-09/research/lifecycle/5289a7d8/),
+[history976 и независимое ревью](measurements/2026-11-09/research/lifecycle/976fa47c/),
+[generic6b](measurements/2026-11-09/research/lifecycle/6b120f8c/generic/).
 На роутере выполнены только read-only измерения; новая сборка и LAN-профиль
 требуют отдельной авторизации изменений действующего устройства.
 [Полный generic CI](measurements/2026-11-09/research/lifecycle/2ecf9961/generic/),

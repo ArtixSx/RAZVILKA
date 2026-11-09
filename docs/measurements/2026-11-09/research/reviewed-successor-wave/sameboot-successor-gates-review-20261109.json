@@ -1,0 +1,14 @@
+{
+  "decision": "APPROVED normal/race diagnostic and successor-view gates",
+  "files": {
+    ".github/workflows/mihomo-same-boot-validation.yml": "0a7eb9530b6be48efff8e82e45bf81e33d9235fafdb0d50f8c7c9303a702646a",
+    ".github/workflows/research-lifecycle.yml": "dcae141a4a73594b1d15281d9b5020a29c483bb348d943f95d2fa46dda1a5534"
+  },
+  "checks": [
+    "Sameboot native tagged diagnostic exact test PASS/noSKIP in both existing normal/race private-set jobs",
+    "All5 successor-read tests exact PASS/noSKIP in normal/race, preexisting artifact dir; no source/runtime clock change",
+    "No removed selectors, broad fallback or false test-skip success"
+  ],
+  "source_review": "sameboot-refusal-diagnostics-review-20261109.json and domain-successor-view-independent-review-20261109.json",
+  "validation": "Exact workflow/source hunk review; no local Go"
+}

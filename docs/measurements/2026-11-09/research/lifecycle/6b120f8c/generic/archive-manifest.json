@@ -1,0 +1,17 @@
+{
+  "source": "C:\\RAZVILKA-research-20261109\\lifecycle-6b120f8c",
+  "files": {
+    "generic-ci-independent-review.json": {
+      "bytes": 1066,
+      "sha256": "e69ffdaf727684ff1b654aaafe4f92e62c07107a7728a8adfbfdf915cece2172"
+    },
+    "generic-push.json": {
+      "bytes": 2785,
+      "sha256": "85ab9e10ab84f1a9e862af229a8d65f9d0d745748a2b10a9e387c242f48462c6"
+    },
+    "generic-push.log": {
+      "bytes": 302914,
+      "sha256": "9687e9977d3692acb66481fb0aab170532aa978bf5a54c8c0cc52f0ecf6fe986"
+    }
+  }
+}

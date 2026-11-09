@@ -1,0 +1,23 @@
+{
+  "sha": "976fa47cb8475132065030ab187789bf742fbafa",
+  "run_id": 42681884058,
+  "job_id": 129378308359,
+  "conclusion": "success",
+  "case": "configured_old193_public_offline_history",
+  "source_sha": "817783493f0c2784ccc70aa73868cd64e9437634",
+  "old_http_authored": true,
+  "actual_nfqueue_probes": 3,
+  "frozen_manual_selection_preserved": true,
+  "complete_state_bytes_preserved": true,
+  "public_bootstrap_seconds": 58.46,
+  "public_offline_restore_seconds": 105.79,
+  "complete_lifecycle_seconds": 165.09,
+  "original_stop_retained": true,
+  "guards_preserved": true,
+  "tagged_ubuntu_classification": true,
+  "public_service_readiness": false,
+  "old_live_compatibility": false,
+  "router_acceptance": false,
+  "other_jobs": "intentionally skipped history-only wave",
+  "raw_sha256": "1468e44761835e324fa34ee6f5608f508186f62174d8b7cb1c9c42fac762c01d"
+}

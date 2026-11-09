@@ -594,3 +594,24 @@ benchmark и test-only full startup image measurement normal/race. Переис�
 буфера не пропускает общий Write budget. Cumulative allocation profile включает
 подготовку процесса; его нельзя выдавать за allocation delta одного HTTP-вызова.
 Первые и повторные VLESS samples, CPU/RSS и cleanup остаются раздельными.
+
+### Измерения5289 и public history976
+
+[Exact raw, CPU profiles и независимые выводы5289](measurements/2026-11-09/research/lifecycle/5289a7d8/)
+сохранены отдельно от [focused history976](measurements/2026-11-09/research/lifecycle/976fa47c/).
+History165.09с включает настоящий public bootstrap58.46с и public restore105.79с;
+три старые HTTP-пробы и ручной выбор создаются через старый API. Исправления
+fixture: точный legacy iptables alias в private namespace; JSON body `{}` для
+Validate (старый middleware требует Content-Type). Положительный тест не снимает
+unknown/finalizing и stale evidence guards. Команда воспроизведения:
+`gh workflow run research-lifecycle.yml --ref <exact-ref> -f focus=public-history`.
+Focus помечен в run-name и concurrency group; пропуски прочих jobs не означают PASS.
+
+NFQ original RPDB pair измерен на том же runner normal53.738→22.639мс,
+race90.661→44.300мс; fullLAN/manual всё ещё FAIL. DNS GEN2 current profile:
+12.01 CPUс/12.745 wallс, counterfactualRows5.32с cumulative, ordinary Xray Current
+4.61с, в том числе successor listener2.41с. Это failed-stage attribution, не
+готовность маршрута. GEN1 и полные exec-child CPU этим профилем не представлены.
+7428 передаёт только уже открытый exact pre-add file view successor listener,
+сохраняя независимые старые source reads и closing. Результат требует native run.
+[Независимое ревью изменений и gates](measurements/2026-11-09/research/reviewed-successor-wave/).

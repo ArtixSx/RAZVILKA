@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 822b9ee4d3ae751fea922dfd9ed4f226a4eb0327
+Type: cpu
+Time: 2026-11-09 19:10:44 UTC
+Duration: 18.37s, Total samples = 16.01s (87.18%)
+Showing nodes accounting for 13.69s, 85.51% of 16.01s total
+Dropped 555 nodes (cum <= 0.08s)
+Showing top 35 nodes out of 443
+      flat  flat%   sum%        cum   cum%
+     8.79s 54.90% 54.90%      8.79s 54.90%  internal/runtime/syscall/linux.Syscall6
+     3.87s 24.17% 79.08%      3.87s 24.17%  crypto/internal/fips140/sha256.blockSHANI
+     0.15s  0.94% 80.01%      0.15s  0.94%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.14s  0.87% 80.89%      8.83s 55.15%  syscall.RawSyscall6
+     0.09s  0.56% 81.45%      0.09s  0.56%  runtime.memmove
+     0.06s  0.37% 81.82%      0.21s  1.31%  runtime.mallocgcSmallScanNoHeader
+     0.06s  0.37% 82.20%      5.49s 34.29%  syscall.Syscall6
+     0.05s  0.31% 82.51%      0.09s  0.56%  encoding/json.(*Decoder).readValue
+     0.04s  0.25% 82.76%      0.48s  3.00%  runtime.mallocgc
+     0.04s  0.25% 83.01%      0.83s  5.18%  syscall.Fstat
+     0.03s  0.19% 83.20%      0.24s  1.50%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).reopenMatches
+     0.03s  0.19% 83.39%      0.14s  0.87%  runtime.mallocgcSmallNoscan
+     0.03s  0.19% 83.57%      0.10s  0.62%  runtime.sweepone
+     0.02s  0.12% 83.70%      0.09s  0.56%  encoding/json.(*decodeState).literalStore
+     0.02s  0.12% 83.82%      0.19s  1.19%  encoding/json.(*decodeState).object
+     0.02s  0.12% 83.95%      0.25s  1.56%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+     0.02s  0.12% 84.07%      1.96s 12.24%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.02s  0.12% 84.20%      0.28s  1.75%  golang.org/x/sys/unix.Statx
+     0.02s  0.12% 84.32%      0.14s  0.87%  runtime.reentersyscall
+     0.02s  0.12% 84.45%      0.82s  5.12%  syscall.Lstat (inline)
+     0.02s  0.12% 84.57%      0.68s  4.25%  syscall.pread
+     0.02s  0.12% 84.70%      1.42s  8.87%  syscall.read
+     0.01s 0.062% 84.76%      0.14s  0.87%  encoding/json.(*decodeState).array
+     0.01s 0.062% 84.82%      0.19s  1.19%  encoding/json.(*decodeState).value
+     0.01s 0.062% 84.88%      0.56s  3.50%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation
+     0.01s 0.062% 84.95%      0.18s  1.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*NodeDefaultSourceReview).readState
+     0.01s 0.062% 85.01%      1.14s  7.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPImageRead).current
+     0.01s 0.062% 85.07%      0.33s  2.06%  github.com/ArtixSx/razvilka/internal/dataplane.xraySelectedTCPReadBoundedFD
+     0.01s 0.062% 85.13%      0.09s  0.56%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.01s 0.062% 85.20%      0.45s  2.81%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).openDir
+     0.01s 0.062% 85.26%      1.27s  7.93%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.01s 0.062% 85.32%      0.35s  2.19%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+     0.01s 0.062% 85.38%      0.10s  0.62%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+     0.01s 0.062% 85.45%      0.10s  0.62%  github.com/ArtixSx/razvilka/internal/netidentity.selfMatches
+     0.01s 0.062% 85.51%      0.34s  2.12%  github.com/ArtixSx/razvilka/internal/ownedfs.(*Root).OpenFile
