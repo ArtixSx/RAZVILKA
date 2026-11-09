@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
@@ -65,6 +66,8 @@ func TestNativeExternalBootstrapPublicExecutableProducer(t *testing.T) {
 			command.Env = append(command.Env, value)
 		}
 	}
+	closeNativeSource := nativePairedRuntimeSource(t, command)
+	defer closeNativeSource()
 	stdout, stderr := &nativePairedRestoreOutput{}, &nativePairedRestoreOutput{}
 	command.Stdout, command.Stderr = stdout, stderr
 	if err := command.Run(); err != nil || stderr.Len() != 0 {
@@ -113,7 +116,7 @@ func TestNativeExternalBootstrapPublicExecutableProducer(t *testing.T) {
 		if err != nil || beforeConfig.SafeMode != afterConfig.SafeMode || !reflect.DeepEqual(beforeConfig.ServiceControl, afterConfig.ServiceControl) || !reflect.DeepEqual(beforeConfig.NetworkPolicy, afterConfig.NetworkPolicy) || !reflect.DeepEqual(beforeConfig.AppliedNetworkPolicy, afterConfig.AppliedNetworkPolicy) || !reflect.DeepEqual(beforeConfig.DefaultRouteConsent, afterConfig.DefaultRouteConsent) || !reflect.DeepEqual(beforeConfig.InactiveResourceExclusions, afterConfig.InactiveResourceExclusions) {
 			t.Fatal("offline installation changed stopped/safe routing intent", err)
 		}
-		if _, err := os.Lstat("/opt/var/run/razvilka.pid"); !errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Lstat(installpath.Run + "/razvilka.pid"); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("offline installation left a live panel PID")
 		}
 		if err := store.VerifyInstallation(ctx, id, false); err != nil {
@@ -122,7 +125,7 @@ func TestNativeExternalBootstrapPublicExecutableProducer(t *testing.T) {
 	} else if err := adapter.Inspect(ctx, id); err != nil {
 		t.Fatal("completed helper pair did not independently verify", err)
 	}
-	stop, present, err := operationgate.ReadSelfUpdateStop(ctx, "/opt/var/lib/razvilka/self-update-stop")
+	stop, present, err := operationgate.ReadSelfUpdateStop(ctx, installpath.State+"/self-update-stop")
 	if err != nil || !present || stop.Stopped {
 		t.Fatal("successful bootstrap has unavailable/revoked current control", err)
 	}

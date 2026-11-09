@@ -331,6 +331,11 @@ func (a *SelfUpdateFileAdapter) runFileCommand(ctx context.Context, id, command 
 	}
 	worker := exec.Command(controller, "self-update-command-helper", id, command)
 	worker.Env = commandEnvironment()
+	closeNativeSource, err := bindNativeRuntimeCommand(ctx, worker, id, command)
+	if err != nil {
+		return err
+	}
+	defer closeNativeSource()
 	worker.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -683,6 +688,13 @@ func runFileCommandWorker(a *SelfUpdateFileAdapter, id, command string) error {
 		defer closeInterpreter()
 	}
 	cmd.Env = commandEnvironment()
+	if command == "quiesce-old-runtime" {
+		closeNativeSource, bindErr := bindNativeRuntimeCommand(ctx, cmd, id, command)
+		if bindErr != nil {
+			return bindErr
+		}
+		defer closeNativeSource()
+	}
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	var diagnostic *fileQuiesceDiagnosticPipe

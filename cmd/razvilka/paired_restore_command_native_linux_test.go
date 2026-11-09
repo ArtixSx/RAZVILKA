@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/config"
+	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
@@ -64,12 +65,12 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 	if got := nativePairedRestoreFileHash(t, program); got != newSHA {
 		t.Fatal("actual executable caller is not the verified candidate")
 	}
-	control := selfUpdateDefaultPath("/opt/var/lib/razvilka/self-update-stop")
+	control := selfUpdateDefaultPath(installpath.State + "/self-update-stop")
 	stop, stopPresent, err := operationgate.ReadSelfUpdateStop(ctx, control)
 	if err != nil || !stopPresent || !stop.Stopped || stop.TransactionID != id {
 		t.Fatal("fixture lacks its actual matching durable Stop")
 	}
-	if _, err := os.Lstat(selfUpdateDefaultPath("/opt/var/run/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(selfUpdateDefaultPath(installpath.Run + "/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("old/candidate panel PID file remains; fixture must stop/join before restore")
 	}
 	cfgPath := selfUpdateDefaultPath("/opt/etc/razvilka/config.json")
@@ -83,10 +84,11 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 		t.Fatal("fixture has no canonical prepared producer review", err)
 	}
 	protected := []string{
-		"/opt/var/lib/razvilka/self-update", "/opt/var/lib/razvilka/self-update-files", control,
-		"/opt/var/lib/razvilka-offline-recovery/" + id,
-		"/opt/var/lib/razvilka/warp", "/opt/var/lib/razvilka/dataplane", "/opt/var/lib/razvilka/backups",
-		"/opt/var/lib/razvilka/components/update-journal", "/opt/var/lib/razvilka/components/operations", "/opt/var/lib/razvilka/components/rollback-packages",
+		installpath.State + "/self-update", installpath.State + "/self-update-files", control,
+		installpath.Root + "/state-offline-recovery/" + id,
+		installpath.State + "/warp", installpath.State + "/dataplane", installpath.State + "/backups",
+		installpath.State + "/strategy-lab.json", installpath.Config + "/private-restore-strategylab-v1",
+		installpath.State + "/components/update-journal", installpath.State + "/components/operations", installpath.State + "/components/rollback-packages",
 		"/opt/etc/razvilka/private-restore", "/opt/etc/razvilka/private-restore-nodes-v1", "/opt/etc/razvilka/private-restore-native-v1", "/opt/etc/razvilka/private-restore-feeds-v1", "/opt/etc/razvilka/cloudflare-private",
 	}
 	before := nativePairedRestoreEvidence(t, ctx, protected)
@@ -99,6 +101,8 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 			command.Env = append(command.Env, value)
 		}
 	}
+	closeNativeSource := nativePairedRuntimeSource(t, command)
+	defer closeNativeSource()
 	command.Stdout, command.Stderr = &stdout, &stderr
 	if err := command.Run(); err != nil {
 		t.Fatalf("public restore caller refused: %v (stdout=%d stderr=%d bytes; private output omitted)", err, stdout.Len(), stderr.Len())
@@ -135,7 +139,7 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 	if err != nil || !stopPresent || currentStop != stop {
 		t.Fatal("public restore changed the current Stop epoch")
 	}
-	if _, err := os.Lstat(selfUpdateDefaultPath("/opt/var/run/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(selfUpdateDefaultPath(installpath.Run + "/razvilka.pid")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("public restore manufactured a live panel PID")
 	}
 	t.Log("actual public candidate caller restored source offline; original Stop, journals, exclusions and guards verified")
