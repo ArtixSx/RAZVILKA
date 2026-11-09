@@ -204,3 +204,33 @@ Root-ом route/owner и не доказывает путь сам. Сначал
 сценарию, потом запускать полное окно. MTProto/media/voice не следуют из HTTPS;
 опция `-mtproto` добавляет лишь unauthenticated resPQ, не account/server auth.
 Ни часовой прогон, ни изменение действующего роутера здесь не выполнялись.
+
+
+## Linux held-FD mount identity: адресное исследование 09.11
+
+Профиль strict DNS показал значительную цену свежих procfs-наблюдений. Старый
+`xraySelectedTCPProc.mountID` каждый раз открывал fdinfo, проверял procfs/type,
+читал mount ID и закрывал descriptor. Все вызовы Current и проверки scope
+остаются необходимыми; заменяется только способ получить тот же mount ID.
+
+Первичные источники Linux v6.1, SHA
+`830b3c68c1fb1e9176028d02ef86f3cf76aa2476`:
+[fs/stat.c](https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/stat.c#L222)
+и [fs/proc/fd.c](https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/proc/fd.c#L57).
+Оба публикуют исходный `mnt_id` удерживаемого file path. Анализ GPL-2.0 исходников;
+чужой код не копировался. Локальная копия двух исходников находится вне проекта
+в `C:/RAZVILKA-research-20261109/sources/linux-v6.1-mount-id`.
+
+Новая реализация использует существующий golang.org/x/sys v0.47.0:
+STATX_MNT_ID + AT_EMPTY_PATH для исходного FD, свежий syscall при каждом вызове,
+проверка mask/nonzero и отмены. STATX_MNT_ID_UNIQUE не используется. При отсутствии
+поддержки или запрете syscall выполняется прежний защищённый fdinfo-путь;
+неожиданные ошибки не становятся успехом. Остальные proc/root/child/type и
+mount checks сохранены; новых зависимостей и cache нет.
+
+Независимое code review одобрено; native parity, bind поверх того же inode,
+замена исходного FD, ошибки/отмена и normal/race ещё требуют CI. Native N1000
+сравнивает fdinfo, statx и принудительный ENOSYS fallback отдельно от полного
+DNS сценария. На реальном NC-1812 с ядром4.9 будет прежний fallback: ускорение
+устройства этой правкой не заявляется. Это одиннадцатый адресный источник,
+а не новая обязательная runtime-компонента.

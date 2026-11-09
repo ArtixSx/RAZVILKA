@@ -97,8 +97,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
-          go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainStandbyReadFileBracket|^TestDomainPreAdd' -count=1 -v | tee artifacts/domain/read-primitives.log
-      - name: Original child cancellation inside finite file observation
+          go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Original child cancellation and held mount identity
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +108,11 @@ jobs:
             sudo env PATH="$PATH" GOTOOLCHAIN=local \
               GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
               RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
-              RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 \
+              RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_DOMAIN_MOUNT_ID_NATIVE=1 \
               go test "${race_flag[@]}" -count=1 ./internal/dataplane \
-                -run '^TestDomainTCPOriginalFactoryProcessCancellation$' -v | tee "artifacts/domain/preadd-child-$mode.log"
+                -run '^TestDomainTCPOriginalFactoryProcessCancellation$|^TestXraySelectedTCPMountID' -v | tee "artifacts/domain/preadd-child-$mode.log"
             grep -F -- '--- PASS: TestDomainTCPOriginalFactoryProcessCancellation ' "artifacts/domain/preadd-child-$mode.log"
+            grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' "artifacts/domain/preadd-child-$mode.log"
             if grep -F -- '--- SKIP:' "artifacts/domain/preadd-child-$mode.log"; then exit 1; fi
           done
       - name: Original scope and cleanup with unchanged production deadlines
