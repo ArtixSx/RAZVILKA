@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ff87e0abfa57e2824b13107d6bb530a7987f2a09
+Type: cpu
+Time: 2026-11-09 18:21:53 UTC
+Duration: 44.55s, Total samples = 44.98s (100.95%)
+Showing nodes accounting for 36.59s, 81.35% of 44.98s total
+Dropped 853 nodes (cum <= 0.22s)
+Showing top 35 nodes out of 434
+      flat  flat%   sum%        cum   cum%
+    22.37s 49.73% 49.73%     22.37s 49.73%  internal/runtime/syscall/linux.Syscall6
+     9.01s 20.03% 69.76%      9.01s 20.03%  crypto/internal/fips140/sha256.blockSHANI
+     0.68s  1.51% 71.28%      0.99s  2.20%  runtime.tryDeferToSpanScan
+     0.45s  1.00% 72.28%      0.45s  1.00%  runtime.(*bucket).mp
+     0.33s  0.73% 73.01%      1.60s  3.56%  runtime.scanObject
+     0.30s  0.67% 73.68%      0.35s  0.78%  runtime.typePointers.next
+     0.29s  0.64% 74.32%      0.58s  1.29%  runtime.scanObjectsSmall
+     0.28s  0.62% 74.94%      0.28s  0.62%  runtime.memclrNoHeapPointers
+     0.28s  0.62% 75.57%      0.28s  0.62%  runtime.nextFreeFast (inline)
+     0.25s  0.56% 76.12%      0.33s  0.73%  strings.Fields
+     0.21s  0.47% 76.59%      0.25s  0.56%  runtime.exitsyscall
+     0.20s  0.44% 77.03%      0.36s   0.8%  runtime.findObject
+     0.19s  0.42% 77.46%      0.91s  2.02%  runtime.mallocgcSmallScanNoHeader
+     0.18s   0.4% 77.86%      0.35s  0.78%  runtime.scanblock
+     0.17s  0.38% 78.23%      0.25s  0.56%  runtime.reentersyscall
+     0.14s  0.31% 78.55%      0.32s  0.71%  encoding/json.(*Decoder).readValue
+     0.14s  0.31% 78.86%      2.17s  4.82%  runtime.mallocgc
+     0.12s  0.27% 79.12%     22.27s 49.51%  syscall.RawSyscall6
+     0.12s  0.27% 79.39%     12.87s 28.61%  syscall.Syscall6
+     0.10s  0.22% 79.61%      3.95s  8.78%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.07s  0.16% 79.77%      6.74s 14.98%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.07s  0.16% 79.92%      1.33s  2.96%  os.(*File).Stat
+     0.07s  0.16% 80.08%      0.58s  1.29%  os.(*File).readdir
+     0.06s  0.13% 80.21%      0.48s  1.07%  reflect.deepValueEqual
+     0.06s  0.13% 80.35%      0.31s  0.69%  runtime.(*mcentral).cacheSpan
+     0.06s  0.13% 80.48%      0.56s  1.24%  runtime.mallocgcSmallNoscan
+     0.06s  0.13% 80.61%      0.43s  0.96%  syscall.ByteSliceFromString
+     0.05s  0.11% 80.72%      0.48s  1.07%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.05s  0.11% 80.84%      0.76s  1.69%  runtime.growslice
+     0.04s 0.089% 80.92%      0.35s  0.78%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.04s 0.089% 81.01%      1.28s  2.85%  os.rootStat.func1
+     0.04s 0.089% 81.10%      2.72s  6.05%  runtime.gcDrain
+     0.04s 0.089% 81.19%      0.23s  0.51%  strings.genSplit
+     0.04s 0.089% 81.28%     10.12s 22.50%  syscall.Syscall
+     0.03s 0.067% 81.35%      0.90s  2.00%  encoding/json.(*Decoder).Decode

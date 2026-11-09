@@ -1,0 +1,63 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010405,
+  "workflow_conclusion": "failure",
+  "cause": "GitHub Internal server error",
+  "correlation_id": "0093690d-ca88-44f6-8687-e9bc0d78dc4d",
+  "declared_cases": [
+    "lifecycle",
+    "manual-http",
+    "postcas-failure",
+    "check-settlement"
+  ],
+  "not_created_not_executed": [
+    "lifecycle",
+    "check-settlement"
+  ],
+  "jobs": {
+    "manual-http": {
+      "job_id": 129350130098,
+      "conclusion": "success",
+      "candidate_total_s": 206.04,
+      "candidate_apply_s": [
+        71.425507231,
+        71.416798576
+      ],
+      "candidate_stop_s": [
+        4.381659316,
+        4.363289236
+      ],
+      "baseline_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+      "same_host_baseline_total_s": 205.36,
+      "baseline_apply_s": [
+        71.387602939,
+        71.224554797
+      ],
+      "baseline_stop_s": [
+        4.30630062,
+        4.303859898
+      ],
+      "both_two_cycles_baseline_restored": true,
+      "second_closing_retry": true
+    },
+    "postcas-failure": {
+      "job_id": 129350123071,
+      "conclusion": "success",
+      "total_s": 60.68,
+      "http_status": 503,
+      "desired_exact_restored": true,
+      "rollback_verified": true,
+      "original_pending": false
+    }
+  },
+  "limitations": [
+    "Only two of four declared cases executed; workflow is not PASS",
+    "Fixed candidate-then-baseline ordering and two cycles; no causal speed claim",
+    "Isolated native Ubuntu LAN, not physical router"
+  ],
+  "raw": {
+    "mihomo-postcas.log": "b38a67dfc44d2048d608489c3f48f203ba25443ec7b17e6edab8b41d8809ba5e",
+    "mihomo-manual.log": "9a22e00d34e51cfb79a724ff3009c31aff14778d3e5b9c0e6942e78d6c743432",
+    "mihomo-run.json": "17619393618767df17afd8743ba1a782e16536bfa9126372a0785f202bb83f1d"
+  }
+}

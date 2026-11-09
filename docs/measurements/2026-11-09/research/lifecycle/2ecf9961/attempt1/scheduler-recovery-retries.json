@@ -1,0 +1,18 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "reason": "GitHub scheduler recovered: lifecycle attempt2 created all10 declared jobs; parent explicitly authorized one recovery retry",
+  "generic_pr": {
+    "run_id": 42673019667,
+    "prior_attempt2": "failure before jobs; Internal server error352d746d-a85c-4305-9640-bb95c584794b",
+    "new_attempt": 3,
+    "rerun_requested": true
+  },
+  "sameboot": {
+    "run_id": 42673420969,
+    "prior_attempt1": "Internal server error a837f697-fd53-49de-a7de-934d28f0c1a4; prerequisite jobs notcreated; ACK matrix skipped",
+    "new_attempt": 2,
+    "rerun_requested": true
+  },
+  "no_more_automatic_retries": true,
+  "running_push_generic_untouched": true
+}

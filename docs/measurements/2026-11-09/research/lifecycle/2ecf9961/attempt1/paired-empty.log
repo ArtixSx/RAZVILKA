@@ -1,0 +1,677 @@
+﻿2026-11-09T18:20:14.3462356Z Current runner version: '2.338.2'
+2026-11-09T18:20:14.3483169Z ##[group]Runner Image Provisioner
+2026-11-09T18:20:14.3483881Z Hosted Compute Agent
+2026-11-09T18:20:14.3484513Z Version: 20261028.624
+2026-11-09T18:20:14.3485068Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T18:20:14.3485737Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T18:20:14.3486324Z Worker ID: {bf45a441-61d0-4366-9211-17ba20cf2f6e}
+2026-11-09T18:20:14.3486922Z Region: westus3
+2026-11-09T18:20:14.3487469Z Cloud: Azure
+2026-11-09T18:20:14.3487892Z ##[endgroup]
+2026-11-09T18:20:14.3488908Z ##[group]Operating System
+2026-11-09T18:20:14.3489283Z Ubuntu
+2026-11-09T18:20:14.3489627Z 24.04.5
+2026-11-09T18:20:14.3489963Z LTS
+2026-11-09T18:20:14.3490276Z ##[endgroup]
+2026-11-09T18:20:14.3490590Z ##[group]Runner Image
+2026-11-09T18:20:14.3491166Z Image: ubuntu-24.04
+2026-11-09T18:20:14.3491568Z Version: 20261101.360.1
+2026-11-09T18:20:14.3492338Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T18:20:14.3493191Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T18:20:14.3493769Z ##[endgroup]
+2026-11-09T18:20:14.3494438Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T18:20:14.3495845Z Contents: read
+2026-11-09T18:20:14.3496191Z Metadata: read
+2026-11-09T18:20:14.3496595Z ##[endgroup]
+2026-11-09T18:20:14.3497890Z Secret source: Actions
+2026-11-09T18:20:14.3498444Z Cache mode: write
+2026-11-09T18:20:14.3498999Z Prepare workflow directory
+2026-11-09T18:20:14.3727719Z Prepare all required actions
+2026-11-09T18:20:14.3757363Z Getting action download info
+2026-11-09T18:20:14.6580126Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T18:20:14.7260838Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T18:20:15.3815101Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T18:20:15.5714195Z Complete job name: Configured old193 public paired restore / empty
+2026-11-09T18:20:15.6227817Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T18:20:15.6228338Z with:
+2026-11-09T18:20:15.6228582Z   fetch-depth: 0
+2026-11-09T18:20:15.6228853Z   persist-credentials: false
+2026-11-09T18:20:15.6229147Z   repository: ArtixSx/RAZVILKA
+2026-11-09T18:20:15.6231351Z   token: ***
+2026-11-09T18:20:15.6231592Z   ssh-strict: true
+2026-11-09T18:20:15.6231844Z   ssh-user: git
+2026-11-09T18:20:15.6232085Z   clean: true
+2026-11-09T18:20:15.6232343Z   sparse-checkout-cone-mode: true
+2026-11-09T18:20:15.6232641Z   fetch-tags: false
+2026-11-09T18:20:15.6232895Z   show-progress: true
+2026-11-09T18:20:15.6233157Z   lfs: false
+2026-11-09T18:20:15.6233399Z   submodules: false
+2026-11-09T18:20:15.6233654Z   set-safe-directory: true
+2026-11-09T18:20:15.6233960Z   allow-unsafe-pr-checkout: false
+2026-11-09T18:20:15.6234334Z env:
+2026-11-09T18:20:15.6234566Z   GOTOOLCHAIN: local
+2026-11-09T18:20:15.6234821Z ##[endgroup]
+2026-11-09T18:20:15.8444090Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T18:20:15.8445432Z ##[group]Getting Git version info
+2026-11-09T18:20:15.8445846Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T18:20:15.8446403Z [command]/usr/bin/git version
+2026-11-09T18:20:15.8532387Z git version 2.56.0
+2026-11-09T18:20:15.8544119Z ##[endgroup]
+2026-11-09T18:20:15.8550256Z Temporarily overriding HOME='/home/runner/work/_temp/4c702bfc-9c68-40c6-bba9-b9b19c238951' before making global git config changes
+2026-11-09T18:20:15.8551812Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T18:20:15.8554020Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T18:20:15.8591886Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T18:20:15.8606350Z ##[group]Determining repository object format
+2026-11-09T18:20:15.8611790Z ##[endgroup]
+2026-11-09T18:20:15.8612635Z ##[group]Initializing the repository
+2026-11-09T18:20:15.8613303Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T18:20:15.8710150Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T18:20:15.8711364Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T18:20:15.8712307Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T18:20:15.8713016Z hint: call:
+2026-11-09T18:20:15.8713381Z hint:
+2026-11-09T18:20:15.8713897Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T18:20:15.8714490Z hint:
+2026-11-09T18:20:15.8715036Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T18:20:15.8715900Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T18:20:15.8716673Z hint:
+2026-11-09T18:20:15.8717075Z hint: 	git branch -m <name>
+2026-11-09T18:20:15.8717526Z hint:
+2026-11-09T18:20:15.8718120Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T18:20:15.8723520Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T18:20:15.8729652Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T18:20:15.8874465Z ##[endgroup]
+2026-11-09T18:20:15.8875285Z ##[group]Disabling automatic garbage collection
+2026-11-09T18:20:15.8877148Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T18:20:15.8917867Z ##[endgroup]
+2026-11-09T18:20:15.8918788Z ##[group]Setting up auth
+2026-11-09T18:20:15.8919112Z Removing SSH command configuration
+2026-11-09T18:20:15.8920753Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T18:20:15.8965459Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T18:20:15.9262566Z Removing HTTP extra header
+2026-11-09T18:20:15.9266447Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T18:20:15.9301651Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T18:20:15.9484993Z Removing includeIf entries pointing to credentials config files
+2026-11-09T18:20:15.9488254Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T18:20:15.9524389Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T18:20:15.9707115Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T18:20:15.9744876Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:15.9780485Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:15.9816242Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:15.9851482Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:15.9885288Z ##[endgroup]
+2026-11-09T18:20:15.9885818Z ##[group]Fetching the repository
+2026-11-09T18:20:15.9889093Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-11-09T18:20:21.6728862Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T18:20:21.6730113Z  * [new branch]        chore/unified-branch-plan -> origin/chore/unified-branch-plan
+2026-11-09T18:20:21.6730664Z  * [new branch]        codex/v0.0.8-security-docs-main -> origin/codex/v0.0.8-security-docs-main
+2026-11-09T18:20:21.6731316Z  * [new branch]        codex/v0.0.8-security-gate -> origin/codex/v0.0.8-security-gate
+2026-11-09T18:20:21.6731943Z  * [new branch]        dependabot/github_actions/actions/attest-4.2.2 -> origin/dependabot/github_actions/actions/attest-4.2.2
+2026-11-09T18:20:21.6732673Z  * [new branch]        dependabot/github_actions/actions/setup-node-7.1.0 -> origin/dependabot/github_actions/actions/setup-node-7.1.0
+2026-11-09T18:20:21.6733436Z  * [new branch]        dependabot/go_modules/github.com/quic-go/quic-go-0.65.0 -> origin/dependabot/go_modules/github.com/quic-go/quic-go-0.65.0
+2026-11-09T18:20:21.6734227Z  * [new branch]        dependabot/go_modules/golang.org/x/sys-0.49.0 -> origin/dependabot/go_modules/golang.org/x/sys-0.49.0
+2026-11-09T18:20:21.6734732Z  * [new branch]        dev                     -> origin/dev
+2026-11-09T18:20:21.6735193Z  * [new branch]        feature/engine-registry-nfqws2 -> origin/feature/engine-registry-nfqws2
+2026-11-09T18:20:21.6735626Z  * [new branch]        main                    -> origin/main
+2026-11-09T18:20:21.6736023Z  * [new branch]        release/0.18.14         -> origin/release/0.18.14
+2026-11-09T18:20:21.6736437Z  * [new branch]        release/0.18.15         -> origin/release/0.18.15
+2026-11-09T18:20:21.6736834Z  * [new branch]        release/0.18.16         -> origin/release/0.18.16
+2026-11-09T18:20:21.6737388Z  * [new branch]        release/0.19.0          -> origin/release/0.19.0
+2026-11-09T18:20:21.6737918Z  * [new branch]        release/dc1-20260913    -> origin/release/dc1-20260913
+2026-11-09T18:20:21.6738329Z  * [new branch]        release/v0.12.0         -> origin/release/v0.12.0
+2026-11-09T18:20:21.6739050Z  * [new branch]        review/claude-20261016  -> origin/review/claude-20261016
+2026-11-09T18:20:21.6739502Z  * [new branch]        review/ext5-20260919    -> origin/review/ext5-20260919
+2026-11-09T18:20:21.6739980Z  * [new branch]        review/unified-lan-20260923 -> origin/review/unified-lan-20260923
+2026-11-09T18:20:21.6740312Z  * [new branch]        work/autonomy-r5-validation -> origin/work/autonomy-r5-validation
+2026-11-09T18:20:21.6740658Z  * [new branch]        work/autopilot-repair-20261027 -> origin/work/autopilot-repair-20261027
+2026-11-09T18:20:21.6741141Z  * [new branch]        work/bypass-cleanup-20261031 -> origin/work/bypass-cleanup-20261031
+2026-11-09T18:20:21.6741519Z  * [new branch]        work/bypass-integration-20261031 -> origin/work/bypass-integration-20261031
+2026-11-09T18:20:21.6741898Z  * [new branch]        work/bypass-validation-20261031 -> origin/work/bypass-validation-20261031
+2026-11-09T18:20:21.6742270Z  * [new branch]        work/bypass-validation-20261101 -> origin/work/bypass-validation-20261101
+2026-11-09T18:20:21.6742646Z  * [new branch]        work/c-current-validation-20261102 -> origin/work/c-current-validation-20261102
+2026-11-09T18:20:21.6743009Z  * [new branch]        work/chatgpt-repair-20261030 -> origin/work/chatgpt-repair-20261030
+2026-11-09T18:20:21.6743394Z  * [new branch]        work/control5-usque-audit-20260916 -> origin/work/control5-usque-audit-20260916
+2026-11-09T18:20:21.6743825Z  * [new branch]        work/dc1-audit-20260913 -> origin/work/dc1-audit-20260913
+2026-11-09T18:20:21.6744493Z  * [new branch]        work/domain-detachment-validation-20261102 -> origin/work/domain-detachment-validation-20261102
+2026-11-09T18:20:21.6744954Z  * [new branch]        work/domain-observation-validation-20261101 -> origin/work/domain-observation-validation-20261101
+2026-11-09T18:20:21.6745324Z  * [new branch]        work/human-ui-20260916  -> origin/work/human-ui-20260916
+2026-11-09T18:20:21.6745780Z  * [new branch]        work/mihomo-cold-current-20261102 -> origin/work/mihomo-cold-current-20261102
+2026-11-09T18:20:21.6746174Z  * [new branch]        work/mihomo-cold-validation-20261102 -> origin/work/mihomo-cold-validation-20261102
+2026-11-09T18:20:21.6746585Z  * [new branch]        work/mihomo-health-validation-20261102 -> origin/work/mihomo-health-validation-20261102
+2026-11-09T18:20:21.6746992Z  * [new branch]        work/mihomo-live-validation-20261101 -> origin/work/mihomo-live-validation-20261101
+2026-11-09T18:20:21.6747396Z  * [new branch]        work/mihomo-same-boot-source-20261102 -> origin/work/mihomo-same-boot-source-20261102
+2026-11-09T18:20:21.6747825Z  * [new branch]        work/mihomo-same-boot-validation-20261102 -> origin/work/mihomo-same-boot-validation-20261102
+2026-11-09T18:20:21.6748264Z  * [new branch]        work/mihomo-workflow-validation-20261102 -> origin/work/mihomo-workflow-validation-20261102
+2026-11-09T18:20:21.6748686Z  * [new branch]        work/panel-progress-20261031 -> origin/work/panel-progress-20261031
+2026-11-09T18:20:21.6748999Z  * [new branch]        work/plan-01-panel      -> origin/work/plan-01-panel
+2026-11-09T18:20:21.6749284Z  * [new branch]        work/plan-02-queue      -> origin/work/plan-02-queue
+2026-11-09T18:20:21.6749558Z  * [new branch]        work/plan-03-lan        -> origin/work/plan-03-lan
+2026-11-09T18:20:21.6749825Z  * [new branch]        work/plan-04-dns        -> origin/work/plan-04-dns
+2026-11-09T18:20:21.6750108Z  * [new branch]        work/plan-05-recovery   -> origin/work/plan-05-recovery
+2026-11-09T18:20:21.6750397Z  * [new branch]        work/plan-06-catalogs   -> origin/work/plan-06-catalogs
+2026-11-09T18:20:21.6750684Z  * [new branch]        work/plan-07-nfqws2     -> origin/work/plan-07-nfqws2
+2026-11-09T18:20:21.6750980Z  * [new branch]        work/plan-08-dns-ledger -> origin/work/plan-08-dns-ledger
+2026-11-09T18:20:21.6751407Z  * [new branch]        work/plan-09-components -> origin/work/plan-09-components
+2026-11-09T18:20:21.6751751Z  * [new branch]        work/plan-10-warp       -> origin/work/plan-10-warp
+2026-11-09T18:20:21.6752273Z  * [new branch]        work/plan-11-backends   -> origin/work/plan-11-backends
+2026-11-09T18:20:21.6752578Z  * [new branch]        work/plan-12-update-trust -> origin/work/plan-12-update-trust
+2026-11-09T18:20:21.6752897Z  * [new branch]        work/plan-13-auto-update -> origin/work/plan-13-auto-update
+2026-11-09T18:20:21.6753217Z  * [new branch]        work/plan-14-acceptance -> origin/work/plan-14-acceptance
+2026-11-09T18:20:21.6753537Z  * [new branch]        work/release-0200-20261027 -> origin/work/release-0200-20261027
+2026-11-09T18:20:21.6753879Z  * [new branch]        work/research-build-20261109 -> origin/work/research-build-20261109
+2026-11-09T18:20:21.6754215Z  * [new branch]        work/review-fixes-20261031 -> origin/work/review-fixes-20261031
+2026-11-09T18:20:21.6754618Z  * [new branch]        work/setup-warp-catalog-fixpack-20260915 -> origin/work/setup-warp-catalog-fixpack-20260915
+2026-11-09T18:20:21.6754998Z  * [new branch]        work/v2-all-internet    -> origin/work/v2-all-internet
+2026-11-09T18:20:21.6755367Z  * [new branch]        work/wg-native-validation-20261101 -> origin/work/wg-native-validation-20261101
+2026-11-09T18:20:21.6755698Z  * [new tag]           v0.0.8-security-gate    -> v0.0.8-security-gate
+2026-11-09T18:20:21.6755959Z  * [new tag]           v0.0.9-ui-layout        -> v0.0.9-ui-layout
+2026-11-09T18:20:21.6756200Z  * [new tag]           v0.15.0                 -> v0.15.0
+2026-11-09T18:20:21.6756421Z  * [new tag]           v0.15.1                 -> v0.15.1
+2026-11-09T18:20:21.6756659Z  * [new tag]           v0.16.0                 -> v0.16.0
+2026-11-09T18:20:21.6756907Z  * [new tag]           v0.17.0                 -> v0.17.0
+2026-11-09T18:20:21.6757124Z  * [new tag]           v0.18.0                 -> v0.18.0
+2026-11-09T18:20:21.6757351Z  * [new tag]           v0.18.1-rc.1            -> v0.18.1-rc.1
+2026-11-09T18:20:21.6757671Z  * [new tag]           v0.18.1-rc.2            -> v0.18.1-rc.2
+2026-11-09T18:20:21.6757904Z  * [new tag]           v0.18.10                -> v0.18.10
+2026-11-09T18:20:21.6758128Z  * [new tag]           v0.18.11                -> v0.18.11
+2026-11-09T18:20:21.6758342Z  * [new tag]           v0.18.12                -> v0.18.12
+2026-11-09T18:20:21.6758557Z  * [new tag]           v0.18.13                -> v0.18.13
+2026-11-09T18:20:21.6758770Z  * [new tag]           v0.18.14                -> v0.18.14
+2026-11-09T18:20:21.6758988Z  * [new tag]           v0.18.15                -> v0.18.15
+2026-11-09T18:20:21.6759200Z  * [new tag]           v0.18.16                -> v0.18.16
+2026-11-09T18:20:21.6759413Z  * [new tag]           v0.18.17                -> v0.18.17
+2026-11-09T18:20:21.6759629Z  * [new tag]           v0.18.18                -> v0.18.18
+2026-11-09T18:20:21.6759842Z  * [new tag]           v0.18.19                -> v0.18.19
+2026-11-09T18:20:21.6760062Z  * [new tag]           v0.18.2                 -> v0.18.2
+2026-11-09T18:20:21.6760287Z  * [new tag]           v0.18.2-rc.1            -> v0.18.2-rc.1
+2026-11-09T18:20:21.6760520Z  * [new tag]           v0.18.2-rc.2            -> v0.18.2-rc.2
+2026-11-09T18:20:21.6760748Z  * [new tag]           v0.18.2-rc.3            -> v0.18.2-rc.3
+2026-11-09T18:20:21.6760974Z  * [new tag]           v0.18.2-rc.4            -> v0.18.2-rc.4
+2026-11-09T18:20:21.6819242Z  * [new tag]           v0.18.2-rc.5            -> v0.18.2-rc.5
+2026-11-09T18:20:21.6819724Z  * [new tag]           v0.18.2-rc.6            -> v0.18.2-rc.6
+2026-11-09T18:20:21.6820099Z  * [new tag]           v0.18.3                 -> v0.18.3
+2026-11-09T18:20:21.6820477Z  * [new tag]           v0.18.4                 -> v0.18.4
+2026-11-09T18:20:21.6820850Z  * [new tag]           v0.18.5                 -> v0.18.5
+2026-11-09T18:20:21.6821407Z  * [new tag]           v0.18.6                 -> v0.18.6
+2026-11-09T18:20:21.6821765Z  * [new tag]           v0.18.9                 -> v0.18.9
+2026-11-09T18:20:21.6822132Z  * [new tag]           v0.19.0                 -> v0.19.0
+2026-11-09T18:20:21.6822489Z  * [new tag]           v0.19.1                 -> v0.19.1
+2026-11-09T18:20:21.6822983Z  * [new tag]           v0.19.2                 -> v0.19.2
+2026-11-09T18:20:21.6823209Z  * [new tag]           v0.19.3                 -> v0.19.3
+2026-11-09T18:20:21.6823432Z  * [new tag]           v0.20.0                 -> v0.20.0
+2026-11-09T18:20:21.6823683Z  * [new tag]           v0.20.0-rc.103          -> v0.20.0-rc.103
+2026-11-09T18:20:21.6823929Z  * [new tag]           v0.20.0-rc.62           -> v0.20.0-rc.62
+2026-11-09T18:20:21.6824236Z  * [new tag]           v0.20.0-rc.63           -> v0.20.0-rc.63
+2026-11-09T18:20:21.6824599Z  * [new tag]           v0.20.0-rc.64           -> v0.20.0-rc.64
+2026-11-09T18:20:21.6824947Z  * [new tag]           v0.20.0-rc.65           -> v0.20.0-rc.65
+2026-11-09T18:20:21.6825249Z  * [new tag]           v0.20.0-rc.66           -> v0.20.0-rc.66
+2026-11-09T18:20:21.6825483Z  * [new tag]           v0.20.0-rc.67           -> v0.20.0-rc.67
+2026-11-09T18:20:21.6825716Z  * [new tag]           v0.20.0-rc.68           -> v0.20.0-rc.68
+2026-11-09T18:20:21.6825950Z  * [new tag]           v0.20.0-rc.69           -> v0.20.0-rc.69
+2026-11-09T18:20:21.6826183Z  * [new tag]           v0.20.0-rc.70           -> v0.20.0-rc.70
+2026-11-09T18:20:21.6826419Z  * [new tag]           v0.20.0-rc.71           -> v0.20.0-rc.71
+2026-11-09T18:20:21.6826649Z  * [new tag]           v0.20.0-rc.72           -> v0.20.0-rc.72
+2026-11-09T18:20:21.6826878Z  * [new tag]           v0.20.0-rc.73           -> v0.20.0-rc.73
+2026-11-09T18:20:21.6827106Z  * [new tag]           v0.20.0-rc.96           -> v0.20.0-rc.96
+2026-11-09T18:20:21.6827335Z  * [new tag]           v0.20.0-rc.98           -> v0.20.0-rc.98
+2026-11-09T18:20:21.6828240Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T18:20:21.6828555Z   origin/work/research-build-20261109
+2026-11-09T18:20:21.6829032Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T18:20:21.6829402Z 2ecf9961ee9586381e7aae005de23bceed4986fd
+2026-11-09T18:20:21.6829888Z ##[endgroup]
+2026-11-09T18:20:21.6830175Z ##[group]Determining the checkout info
+2026-11-09T18:20:21.6830460Z ##[endgroup]
+2026-11-09T18:20:21.6832730Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T18:20:21.7416784Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T18:20:21.7645889Z ##[group]Checking out the ref
+2026-11-09T18:20:21.7648206Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T18:20:22.0818383Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T18:20:22.0822058Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T18:20:22.0856368Z ##[endgroup]
+2026-11-09T18:20:22.0906577Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T18:20:22.0937697Z 2ecf9961ee9586381e7aae005de23bceed4986fd
+2026-11-09T18:20:22.0945273Z ##[group]Removing auth
+2026-11-09T18:20:22.0945571Z Removing SSH command configuration
+2026-11-09T18:20:22.0948109Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T18:20:22.0983207Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T18:20:22.1169789Z Removing HTTP extra header
+2026-11-09T18:20:22.1171943Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T18:20:22.1205940Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T18:20:22.1393131Z Removing includeIf entries pointing to credentials config files
+2026-11-09T18:20:22.1398020Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T18:20:22.1432391Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T18:20:22.1433075Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T18:20:22.1433562Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T18:20:22.1433755Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T18:20:22.1439838Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T18:20:22.1474895Z /home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:22.1482504Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-f7a64b0d\-f9cf\-47b6\-98f3\-198986ccc5c7\.config
+2026-11-09T18:20:22.1520669Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T18:20:22.1552860Z /home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:22.1558542Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-f7a64b0d\-f9cf\-47b6\-98f3\-198986ccc5c7\.config
+2026-11-09T18:20:22.1596253Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T18:20:22.1627631Z /github/runner_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:22.1631897Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-f7a64b0d\-f9cf\-47b6\-98f3\-198986ccc5c7\.config
+2026-11-09T18:20:22.1668844Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T18:20:22.1698364Z /github/runner_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config
+2026-11-09T18:20:22.1703354Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-f7a64b0d\-f9cf\-47b6\-98f3\-198986ccc5c7\.config
+2026-11-09T18:20:22.1739941Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T18:20:22.1922294Z Removing credentials config '/home/runner/work/_temp/git-credentials-f7a64b0d-f9cf-47b6-98f3-198986ccc5c7.config'
+2026-11-09T18:20:22.1929354Z ##[endgroup]
+2026-11-09T18:20:22.2104228Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T18:20:22.2104427Z with:
+2026-11-09T18:20:22.2104536Z   go-version: 1.26.5
+2026-11-09T18:20:22.2104652Z   cache: false
+2026-11-09T18:20:22.2104766Z   check-latest: false
+2026-11-09T18:20:22.2105933Z   token: ***
+2026-11-09T18:20:22.2106034Z env:
+2026-11-09T18:20:22.2106143Z   GOTOOLCHAIN: local
+2026-11-09T18:20:22.2106255Z ##[endgroup]
+2026-11-09T18:20:22.2911647Z Setup go version spec 1.26.5
+2026-11-09T18:20:22.2920862Z Attempting to download 1.26.5...
+2026-11-09T18:20:23.2742493Z matching 1.26.5...
+2026-11-09T18:20:23.2757344Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T18:20:23.7745334Z Extracting Go...
+2026-11-09T18:20:23.7842702Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/7e59f238-cf78-474f-99bf-758fde4ff3a7 -f /home/runner/work/_temp/899c37a4-0a11-4680-a471-4263eb00b6e1
+2026-11-09T18:20:24.9205829Z Successfully extracted go to /home/runner/work/_temp/7e59f238-cf78-474f-99bf-758fde4ff3a7
+2026-11-09T18:20:24.9206111Z Adding to the cache ...
+2026-11-09T18:20:28.2165496Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T18:20:28.2166776Z Added go to the path
+2026-11-09T18:20:28.2168319Z Successfully set up Go version 1.26.5
+2026-11-09T18:20:28.2357437Z go version go1.26.5 linux/amd64
+2026-11-09T18:20:28.2357557Z 
+2026-11-09T18:20:28.2357741Z ##[group]go env
+2026-11-09T18:20:28.3402382Z AR='ar'
+2026-11-09T18:20:28.3402590Z CC='gcc'
+2026-11-09T18:20:28.3402761Z CGO_CFLAGS='-O2 -g'
+2026-11-09T18:20:28.3402947Z CGO_CPPFLAGS=''
+2026-11-09T18:20:28.3403122Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T18:20:28.3403305Z CGO_ENABLED='1'
+2026-11-09T18:20:28.3403451Z CGO_FFLAGS='-O2 -g'
+2026-11-09T18:20:28.3403565Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T18:20:28.3403677Z CXX='g++'
+2026-11-09T18:20:28.3403783Z GCCGO='gccgo'
+2026-11-09T18:20:28.3403893Z GO111MODULE=''
+2026-11-09T18:20:28.3404024Z GOAMD64='v1'
+2026-11-09T18:20:28.3404131Z GOARCH='amd64'
+2026-11-09T18:20:28.3404235Z GOAUTH='netrc'
+2026-11-09T18:20:28.3404337Z GOBIN=''
+2026-11-09T18:20:28.3404457Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T18:20:28.3404611Z GOCACHEPROG=''
+2026-11-09T18:20:28.3404717Z GODEBUG=''
+2026-11-09T18:20:28.3404837Z GOENV='/home/runner/.config/go/env'
+2026-11-09T18:20:28.3404981Z GOEXE=''
+2026-11-09T18:20:28.3405082Z GOEXPERIMENT=''
+2026-11-09T18:20:28.3405192Z GOFIPS140='off'
+2026-11-09T18:20:28.3405297Z GOFLAGS=''
+2026-11-09T18:20:28.3405651Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build3943794215=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T18:20:28.3406003Z GOHOSTARCH='amd64'
+2026-11-09T18:20:28.3406114Z GOHOSTOS='linux'
+2026-11-09T18:20:28.3406224Z GOINSECURE=''
+2026-11-09T18:20:28.3406360Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T18:20:28.3406535Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T18:20:28.3406678Z GONOPROXY=''
+2026-11-09T18:20:28.3406781Z GONOSUMDB=''
+2026-11-09T18:20:28.3406880Z GOOS='linux'
+2026-11-09T18:20:28.3406991Z GOPATH='/home/runner/go'
+2026-11-09T18:20:28.3407111Z GOPRIVATE=''
+2026-11-09T18:20:28.3407266Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T18:20:28.3407445Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T18:20:28.3407780Z GOSUMDB='sum.golang.org'
+2026-11-09T18:20:28.3407905Z GOTELEMETRY='local'
+2026-11-09T18:20:28.3408045Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T18:20:28.3408204Z GOTMPDIR=''
+2026-11-09T18:20:28.3408309Z GOTOOLCHAIN='local'
+2026-11-09T18:20:28.3408505Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T18:20:28.3408691Z GOVCS=''
+2026-11-09T18:20:28.3408796Z GOVERSION='go1.26.5'
+2026-11-09T18:20:28.3408909Z GOWORK=''
+2026-11-09T18:20:28.3409020Z PKG_CONFIG='pkg-config'
+2026-11-09T18:20:28.3409104Z 
+2026-11-09T18:20:28.3409311Z ##[endgroup]
+2026-11-09T18:20:28.3558408Z ##[group]Run sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential curl
+2026-11-09T18:20:28.3559016Z [36;1msudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential curl[0m
+2026-11-09T18:20:28.3578901Z shell: /usr/bin/bash -e {0}
+2026-11-09T18:20:28.3579049Z env:
+2026-11-09T18:20:28.3579155Z   GOTOOLCHAIN: local
+2026-11-09T18:20:28.3579274Z ##[endgroup]
+2026-11-09T18:20:28.4122384Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T18:20:28.4404055Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T18:20:28.4415775Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T18:20:28.4442946Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T18:20:28.4467597Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T18:20:28.5283215Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T18:20:28.5412364Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T18:20:28.5425416Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T18:20:28.5501731Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T18:20:28.5502709Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T18:20:28.5548030Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T18:20:28.5571931Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T18:20:28.5582727Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T18:20:28.6133735Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T18:20:28.6166357Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T18:20:28.6560544Z Get:22 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T18:20:28.6610051Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T18:20:28.6663156Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T18:20:28.6677641Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T18:20:28.6724356Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T18:20:28.6743164Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T18:20:28.6752338Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T18:20:28.6956107Z Get:23 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [678 kB]
+2026-11-09T18:20:28.7009795Z Get:24 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [747 kB]
+2026-11-09T18:20:31.3820439Z Fetched 13.0 MB in 1s (13.8 MB/s)
+2026-11-09T18:20:32.0237427Z Reading package lists...
+2026-11-09T18:20:32.0544825Z Reading package lists...
+2026-11-09T18:20:32.2059202Z Building dependency tree...
+2026-11-09T18:20:32.2064010Z Reading state information...
+2026-11-09T18:20:32.3203909Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T18:20:32.3204267Z busybox-static set to manually installed.
+2026-11-09T18:20:32.3204465Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T18:20:32.3204672Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T18:20:32.3204858Z iptables set to manually installed.
+2026-11-09T18:20:32.3205439Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T18:20:32.3205770Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T18:20:32.3206084Z curl is already the newest version (8.5.0-2ubuntu10.16).
+2026-11-09T18:20:32.3206376Z The following NEW packages will be installed:
+2026-11-09T18:20:32.3206636Z   build-essential tini
+2026-11-09T18:20:32.3358358Z 0 upgraded, 2 newly installed, 0 to remove and 28 not upgraded.
+2026-11-09T18:20:32.3358645Z Need to get 281 kB of archives.
+2026-11-09T18:20:32.3358838Z After this operation, 852 kB of additional disk space will be used.
+2026-11-09T18:20:32.3359065Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T18:20:32.4173587Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 build-essential amd64 12.10ubuntu1 [4928 B]
+2026-11-09T18:20:32.4633800Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 tini amd64 0.19.0-1 [276 kB]
+2026-11-09T18:20:32.6479446Z Fetched 281 kB in 0s (1994 kB/s)
+2026-11-09T18:20:32.6651959Z Selecting previously unselected package build-essential.
+2026-11-09T18:20:32.6873798Z (Reading database ... 
+2026-11-09T18:20:32.6874128Z (Reading database ... 5%
+2026-11-09T18:20:32.6874548Z (Reading database ... 10%
+2026-11-09T18:20:32.6874720Z (Reading database ... 15%
+2026-11-09T18:20:32.6874857Z (Reading database ... 20%
+2026-11-09T18:20:32.6874987Z (Reading database ... 25%
+2026-11-09T18:20:32.6875126Z (Reading database ... 30%
+2026-11-09T18:20:32.6875254Z (Reading database ... 35%
+2026-11-09T18:20:32.6875379Z (Reading database ... 40%
+2026-11-09T18:20:32.6875503Z (Reading database ... 45%
+2026-11-09T18:20:32.6875629Z (Reading database ... 50%
+2026-11-09T18:20:32.6917588Z (Reading database ... 55%
+2026-11-09T18:20:32.7820548Z (Reading database ... 60%
+2026-11-09T18:20:32.9206167Z (Reading database ... 65%
+2026-11-09T18:20:33.1679155Z (Reading database ... 70%
+2026-11-09T18:20:33.3192440Z (Reading database ... 75%
+2026-11-09T18:20:33.4220237Z (Reading database ... 80%
+2026-11-09T18:20:33.5648274Z (Reading database ... 85%
+2026-11-09T18:20:33.6847931Z (Reading database ... 90%
+2026-11-09T18:20:33.8202732Z (Reading database ... 95%
+2026-11-09T18:20:33.8202932Z (Reading database ... 100%
+2026-11-09T18:20:33.8203135Z (Reading database ... 215960 files and directories currently installed.)
+2026-11-09T18:20:33.8237099Z Preparing to unpack .../build-essential_12.10ubuntu1_amd64.deb ...
+2026-11-09T18:20:33.8255403Z Unpacking build-essential (12.10ubuntu1) ...
+2026-11-09T18:20:33.8452162Z Selecting previously unselected package tini.
+2026-11-09T18:20:33.8550769Z Preparing to unpack .../tini_0.19.0-1_amd64.deb ...
+2026-11-09T18:20:33.8557033Z Unpacking tini (0.19.0-1) ...
+2026-11-09T18:20:33.8985167Z Setting up tini (0.19.0-1) ...
+2026-11-09T18:20:33.9001522Z Setting up build-essential (12.10ubuntu1) ...
+2026-11-09T18:20:34.3577964Z 
+2026-11-09T18:20:34.3578493Z Running kernel seems to be up-to-date.
+2026-11-09T18:20:34.3578741Z 
+2026-11-09T18:20:34.3578868Z No services need to be restarted.
+2026-11-09T18:20:34.3579038Z 
+2026-11-09T18:20:34.3579133Z No containers need to be restarted.
+2026-11-09T18:20:34.3579277Z 
+2026-11-09T18:20:34.3579393Z No user sessions are running outdated binaries.
+2026-11-09T18:20:34.3579564Z 
+2026-11-09T18:20:34.3579740Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-11-09T18:20:34.9969571Z ##[group]Run set -euo pipefail
+2026-11-09T18:20:34.9969902Z [36;1mset -euo pipefail[0m
+2026-11-09T18:20:34.9970051Z [36;1mmkdir -p -m 700 artifacts/paired-public[0m
+2026-11-09T18:20:34.9970229Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T18:20:34.9970518Z [36;1m  GIT_OPTIONAL_LOCKS=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \[0m
+2026-11-09T18:20:34.9970831Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T18:20:34.9971274Z [36;1m  RAZVILKA_PAIRED_NATIVE_HISTORY="" \[0m
+2026-11-09T18:20:34.9971557Z [36;1m  sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log[0m
+2026-11-09T18:20:34.9988062Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T18:20:34.9988236Z env:
+2026-11-09T18:20:34.9988353Z   GOTOOLCHAIN: local
+2026-11-09T18:20:34.9988467Z ##[endgroup]
+2026-11-09T18:20:35.1262104Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T18:20:35.3521509Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T18:20:35.4293493Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T18:20:35.4620301Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T18:20:35.7278405Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T18:20:35.7287954Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T18:20:35.7599582Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T18:21:15.4549362Z === RUN   TestExternalBootstrapDiagnosticNeverPrintsUnknownData
+2026-11-09T18:21:15.4549894Z --- PASS: TestExternalBootstrapDiagnosticNeverPrintsUnknownData (0.00s)
+2026-11-09T18:21:15.4550447Z === RUN   TestExternalBootstrapDiagnosticRecognizesOriginalObservationDetails
+2026-11-09T18:21:15.4553048Z --- PASS: TestExternalBootstrapDiagnosticRecognizesOriginalObservationDetails (0.00s)
+2026-11-09T18:21:15.4553742Z === RUN   TestExternalBootstrapDiagnosticCommandLedgerIsClosedAndBounded
+2026-11-09T18:21:15.4554384Z --- PASS: TestExternalBootstrapDiagnosticCommandLedgerIsClosedAndBounded (0.00s)
+2026-11-09T18:21:15.4554973Z === RUN   TestExternalBootstrapDiagnosticFileLedgerIsClosedAndBounded
+2026-11-09T18:21:15.4555512Z --- PASS: TestExternalBootstrapDiagnosticFileLedgerIsClosedAndBounded (0.00s)
+2026-11-09T18:21:15.4568455Z === RUN   TestNativePairedRestoreOutputCopyLimit
+2026-11-09T18:21:15.4569684Z --- PASS: TestNativePairedRestoreOutputCopyLimit (0.00s)
+2026-11-09T18:21:15.4570074Z === RUN   TestNativePairedRestoreOutputChild
+2026-11-09T18:21:15.4570424Z --- PASS: TestNativePairedRestoreOutputChild (0.00s)
+2026-11-09T18:21:15.4570870Z === RUN   TestNativePairedRestoreOutputActualPipesRemainBounded
+2026-11-09T18:21:15.4571500Z === RUN   TestNativePairedRestoreOutputActualPipesRemainBounded/stdout
+2026-11-09T18:21:15.4626835Z === RUN   TestNativePairedRestoreOutputActualPipesRemainBounded/stderr
+2026-11-09T18:21:15.4677310Z --- PASS: TestNativePairedRestoreOutputActualPipesRemainBounded (0.01s)
+2026-11-09T18:21:15.4677944Z     --- PASS: TestNativePairedRestoreOutputActualPipesRemainBounded/stdout (0.01s)
+2026-11-09T18:21:15.4678574Z     --- PASS: TestNativePairedRestoreOutputActualPipesRemainBounded/stderr (0.01s)
+2026-11-09T18:21:15.4689013Z PASS
+2026-11-09T18:21:30.9738437Z === RUN   TestBootstrapOfflineStrategyPreservesExcludedImageAndDeniesReplay
+2026-11-09T18:21:31.0007584Z --- PASS: TestBootstrapOfflineStrategyPreservesExcludedImageAndDeniesReplay (0.03s)
+2026-11-09T18:21:31.0008187Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal
+2026-11-09T18:21:31.0008689Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/live
+2026-11-09T18:21:31.0139696Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/ordinary-pair
+2026-11-09T18:21:31.0259724Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/reader
+2026-11-09T18:21:31.0385780Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/helper
+2026-11-09T18:21:31.0515816Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/schema
+2026-11-09T18:21:31.0641361Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-bytes
+2026-11-09T18:21:31.0831644Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-missing
+2026-11-09T18:21:31.0957325Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-symlink
+2026-11-09T18:21:31.1083978Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/control
+2026-11-09T18:21:31.1211522Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/candidate
+2026-11-09T18:21:31.1335743Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/installed
+2026-11-09T18:21:31.1471539Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/retention
+2026-11-09T18:21:31.1741302Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/cancel
+2026-11-09T18:21:31.1860956Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/finalizing
+2026-11-09T18:21:31.1985727Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/unknown
+2026-11-09T18:21:31.2109489Z === RUN   TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/new-state-schema
+2026-11-09T18:21:31.2351861Z --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal (0.23s)
+2026-11-09T18:21:31.2352532Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/live (0.01s)
+2026-11-09T18:21:31.2368935Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/ordinary-pair (0.01s)
+2026-11-09T18:21:31.2369622Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/reader (0.01s)
+2026-11-09T18:21:31.2370213Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/helper (0.01s)
+2026-11-09T18:21:31.2370572Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/schema (0.01s)
+2026-11-09T18:21:31.2371307Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-bytes (0.02s)
+2026-11-09T18:21:31.2371964Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-missing (0.01s)
+2026-11-09T18:21:31.2372396Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/source-symlink (0.01s)
+2026-11-09T18:21:31.2372779Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/control (0.01s)
+2026-11-09T18:21:31.2373271Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/candidate (0.01s)
+2026-11-09T18:21:31.2373648Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/installed (0.01s)
+2026-11-09T18:21:31.2374017Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/retention (0.03s)
+2026-11-09T18:21:31.2374439Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/cancel (0.01s)
+2026-11-09T18:21:31.2374809Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/finalizing (0.01s)
+2026-11-09T18:21:31.2375181Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/unknown (0.01s)
+2026-11-09T18:21:31.2375572Z     --- PASS: TestBootstrapOfflineStrategyRefusesDriftAndMissingOriginal/new-state-schema (0.01s)
+2026-11-09T18:21:31.2375896Z === RUN   TestBootstrapOfflineStrategyNilWireAndOldReaderRefusal
+2026-11-09T18:21:31.2458151Z --- PASS: TestBootstrapOfflineStrategyNilWireAndOldReaderRefusal (0.01s)
+2026-11-09T18:21:31.2458999Z === RUN   TestBootstrapOfflineStrategyEmptyAndKnownReaderCompatibility
+2026-11-09T18:21:31.2812682Z --- PASS: TestBootstrapOfflineStrategyEmptyAndKnownReaderCompatibility (0.04s)
+2026-11-09T18:21:31.2821826Z === RUN   TestExternalBootstrapFileDiagnosticPreservesSpecificCause
+2026-11-09T18:21:31.2824528Z --- PASS: TestExternalBootstrapFileDiagnosticPreservesSpecificCause (0.00s)
+2026-11-09T18:21:31.2843271Z === RUN   TestBootstrapImageUsesOriginalHelperDigestAndRevokes
+2026-11-09T18:21:31.2843748Z --- PASS: TestBootstrapImageUsesOriginalHelperDigestAndRevokes (0.00s)
+2026-11-09T18:21:31.2845467Z === RUN   TestBootstrapImageClosingRefusesCancellationDuringClear
+2026-11-09T18:21:31.2846720Z === RUN   TestBootstrapImageClosingRefusesCancellationDuringClear/success
+2026-11-09T18:21:31.2847540Z === RUN   TestBootstrapImageClosingRefusesCancellationDuringClear/cancel-after-clear
+2026-11-09T18:21:31.2849820Z === RUN   TestBootstrapImageClosingRefusesCancellationDuringClear/deadline-without-timer
+2026-11-09T18:21:31.2851115Z === RUN   TestBootstrapImageClosingRefusesCancellationDuringClear/body-error
+2026-11-09T18:21:31.2857102Z --- PASS: TestBootstrapImageClosingRefusesCancellationDuringClear (0.00s)
+2026-11-09T18:21:31.2857685Z     --- PASS: TestBootstrapImageClosingRefusesCancellationDuringClear/success (0.00s)
+2026-11-09T18:21:31.2858334Z     --- PASS: TestBootstrapImageClosingRefusesCancellationDuringClear/cancel-after-clear (0.00s)
+2026-11-09T18:21:31.2859039Z     --- PASS: TestBootstrapImageClosingRefusesCancellationDuringClear/deadline-without-timer (0.00s)
+2026-11-09T18:21:31.2859714Z     --- PASS: TestBootstrapImageClosingRefusesCancellationDuringClear/body-error (0.00s)
+2026-11-09T18:21:31.2860190Z === RUN   TestBootstrapImageActualGroupParityAndMeasurement
+2026-11-09T18:21:31.4391919Z     file_bootstrap_image_linux_test.go:160: actual_bootstrap_role_image sample=0 controller_occurrences=8 full_exe_reads=16 image_bytes=13930761 retained_bytes=14061929 streaming_fallback=false before=111.806951ms after=26.904465ms no_role_grant=true
+2026-11-09T18:21:31.5755580Z     file_bootstrap_image_linux_test.go:160: actual_bootstrap_role_image sample=1 controller_occurrences=8 full_exe_reads=16 image_bytes=13930761 retained_bytes=14061929 streaming_fallback=false before=110.214135ms after=26.172986ms no_role_grant=true
+2026-11-09T18:21:31.7070128Z     file_bootstrap_image_linux_test.go:160: actual_bootstrap_role_image sample=2 controller_occurrences=8 full_exe_reads=16 image_bytes=13930761 retained_bytes=14061929 streaming_fallback=false before=109.3532ms after=22.028079ms no_role_grant=true
+2026-11-09T18:21:31.7070831Z --- PASS: TestBootstrapImageActualGroupParityAndMeasurement (0.42s)
+2026-11-09T18:21:31.7071276Z === RUN   TestBootstrapJoinedChildAbsenceRequiresActualReaping
+2026-11-09T18:21:31.7080833Z --- PASS: TestBootstrapJoinedChildAbsenceRequiresActualReaping (0.00s)
+2026-11-09T18:21:31.7081328Z === RUN   TestBootstrapOriginalAdapterRejectsReconstructedAndForeignOwners
+2026-11-09T18:21:31.7187141Z --- PASS: TestBootstrapOriginalAdapterRejectsReconstructedAndForeignOwners (0.01s)
+2026-11-09T18:21:31.7187885Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner
+2026-11-09T18:21:31.7271099Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/copy
+2026-11-09T18:21:31.7271600Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/other-adapter
+2026-11-09T18:21:31.7272270Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/parent-caller
+2026-11-09T18:21:31.7272706Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/child-caller
+2026-11-09T18:21:31.7273143Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/changed-command
+2026-11-09T18:21:31.7276350Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/reaped-receipt
+2026-11-09T18:21:31.7276689Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/released
+2026-11-09T18:21:31.7277109Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/cancelled
+2026-11-09T18:21:31.7277515Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/expired
+2026-11-09T18:21:31.7277812Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/wider-deadline
+2026-11-09T18:21:31.7278089Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/ordinary-join
+2026-11-09T18:21:31.7278376Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/ordinary-installer
+2026-11-09T18:21:31.7278657Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/nil-marker
+2026-11-09T18:21:31.7278927Z === RUN   TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/foreign-marker
+2026-11-09T18:21:31.7356103Z --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner (0.02s)
+2026-11-09T18:21:31.7356546Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/copy (0.00s)
+2026-11-09T18:21:31.7356895Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/other-adapter (0.00s)
+2026-11-09T18:21:31.7357248Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/parent-caller (0.00s)
+2026-11-09T18:21:31.7357596Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/child-caller (0.00s)
+2026-11-09T18:21:31.7357948Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/changed-command (0.00s)
+2026-11-09T18:21:31.7358304Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/reaped-receipt (0.00s)
+2026-11-09T18:21:31.7358648Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/released (0.00s)
+2026-11-09T18:21:31.7359163Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/cancelled (0.00s)
+2026-11-09T18:21:31.7359556Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/expired (0.00s)
+2026-11-09T18:21:31.7359893Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/wider-deadline (0.00s)
+2026-11-09T18:21:31.7360293Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/ordinary-join (0.00s)
+2026-11-09T18:21:31.7360768Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/ordinary-installer (0.00s)
+2026-11-09T18:21:31.7361357Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/nil-marker (0.00s)
+2026-11-09T18:21:31.7361705Z     --- PASS: TestBootstrapQuiesceJoinRequiresOriginalWaitOwner/foreign-marker (0.00s)
+2026-11-09T18:21:31.7362058Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext
+2026-11-09T18:21:31.7442040Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/nil
+2026-11-09T18:21:31.7444787Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/unbounded
+2026-11-09T18:21:31.7445353Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/no-wait
+2026-11-09T18:21:31.7445937Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/terminal-receipt
+2026-11-09T18:21:31.7446413Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/ordinary
+2026-11-09T18:21:31.7446751Z === RUN   TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/duplicate
+2026-11-09T18:21:31.7476326Z --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext (0.01s)
+2026-11-09T18:21:31.7477093Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/nil (0.00s)
+2026-11-09T18:21:31.7477931Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/unbounded (0.00s)
+2026-11-09T18:21:31.7478732Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/no-wait (0.00s)
+2026-11-09T18:21:31.7479490Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/terminal-receipt (0.00s)
+2026-11-09T18:21:31.7480291Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/ordinary (0.00s)
+2026-11-09T18:21:31.7481120Z     --- PASS: TestBootstrapQuiesceJoinCannotBeIssuedFromReceiptOrUnboundedContext/duplicate (0.00s)
+2026-11-09T18:21:31.7481625Z === RUN   TestOrdinaryImageNativeActualFactAndRepeatedRead
+2026-11-09T18:21:31.7482358Z     file_ordinary_image_linux_test.go:17: ROOT actual Linux dependency opt-in
+2026-11-09T18:21:31.7482830Z --- SKIP: TestOrdinaryImageNativeActualFactAndRepeatedRead (0.00s)
+2026-11-09T18:21:31.7483273Z === RUN   TestOrdinaryImageFullyReadsEveryOriginalOccurrenceAndClears
+2026-11-09T18:21:31.7507370Z --- PASS: TestOrdinaryImageFullyReadsEveryOriginalOccurrenceAndClears (0.00s)
+2026-11-09T18:21:31.7507888Z === RUN   TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime
+2026-11-09T18:21:31.7508510Z === RUN   TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/0
+2026-11-09T18:21:31.7516892Z === RUN   TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/131072
+2026-11-09T18:21:31.7524313Z === RUN   TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/262160
+2026-11-09T18:21:31.7531409Z --- PASS: TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime (0.00s)
+2026-11-09T18:21:31.7532145Z     --- PASS: TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/0 (0.00s)
+2026-11-09T18:21:31.7532885Z     --- PASS: TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/131072 (0.00s)
+2026-11-09T18:21:31.7533343Z     --- PASS: TestOrdinaryImageDetectsChangedPhysicalBytesWithSameInodeSizeAndMtime/262160 (0.00s)
+2026-11-09T18:21:31.7533998Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline
+2026-11-09T18:21:31.7534448Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/copy
+2026-11-09T18:21:31.7534940Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/nil
+2026-11-09T18:21:31.7538936Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/fault
+2026-11-09T18:21:31.7539443Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/cancel
+2026-11-09T18:21:31.7542404Z === RUN   TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/deadline
+2026-11-09T18:21:31.7843823Z --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline (0.03s)
+2026-11-09T18:21:31.7844380Z     --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/copy (0.00s)
+2026-11-09T18:21:31.7844778Z     --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/nil (0.00s)
+2026-11-09T18:21:31.7845132Z     --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/fault (0.00s)
+2026-11-09T18:21:31.7845491Z     --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/cancel (0.00s)
+2026-11-09T18:21:31.7845866Z     --- PASS: TestOrdinaryImageRefusesCopyNilFaultCancellationAndDeadline/deadline (0.03s)
+2026-11-09T18:21:31.7871590Z === RUN   TestOrdinaryImageOversizeUsesBoundedOriginalStreamingSHA
+2026-11-09T18:21:31.8750830Z --- PASS: TestOrdinaryImageOversizeUsesBoundedOriginalStreamingSHA (0.09s)
+2026-11-09T18:21:31.8815073Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated
+2026-11-09T18:21:31.8816251Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/path
+2026-11-09T18:21:31.8816714Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/command
+2026-11-09T18:21:31.8817152Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/id
+2026-11-09T18:21:31.8817630Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/argv
+2026-11-09T18:21:31.8818081Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/duplicate-env
+2026-11-09T18:21:31.8818518Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/extra-fd
+2026-11-09T18:21:31.8818924Z === RUN   TestNativeRuntimeCommandForwardingRefusesUnrelated/cancel
+2026-11-09T18:21:31.8819464Z --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated (0.00s)
+2026-11-09T18:21:31.8820014Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/path (0.00s)
+2026-11-09T18:21:31.8820593Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/command (0.00s)
+2026-11-09T18:21:31.8821244Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/id (0.00s)
+2026-11-09T18:21:31.8821828Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/argv (0.00s)
+2026-11-09T18:21:31.8822603Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/duplicate-env (0.00s)
+2026-11-09T18:21:31.8823193Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/extra-fd (0.00s)
+2026-11-09T18:21:31.8823894Z     --- PASS: TestNativeRuntimeCommandForwardingRefusesUnrelated/cancel (0.00s)
+2026-11-09T18:21:31.8840421Z PASS
+2026-11-09T18:21:31.8851246Z ok  	github.com/ArtixSx/razvilka/internal/updatecheck	0.916s
+2026-11-09T18:21:32.3343251Z /root/razvilka-paired-public.8cFTmI/nfqws-source.tar.gz.download.Oz22HK: OK
+2026-11-09T18:21:32.4381945Z /root/razvilka-paired-public.8cFTmI/zapret2-v1.0.6/binaries/linux-x86_64/nfqws2: OK
+2026-11-09T18:23:17.1254015Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T18:23:17.1254908Z Actual dpkg start-stop-daemon version=1.22.6ubuntu6.6 source_and_copy_sha256=81faf821fdfdf1dc2991b71dfbd6a21116085f931bfeb0fd7b2623911a4831b4 configured_ubuntu_fixture=true
+2026-11-09T18:23:17.1255589Z RAZVILKA healthy on http://127.0.0.1:8787/ (pid 57)
+2026-11-09T18:23:17.1255903Z === RUN   TestNativeConfiguredOld193PairLifecycle
+2026-11-09T18:23:17.1257587Z     paired_public_lifecycle_native_linux_test.go:74: configured_old193_layout=true source_commit=817783493f0c2784ccc70aa73868cd64e9437634 source_sha256=6161b8cfa163c7ff1e99570d64744fc1281b6a5ce89680303a25a33773bcd27e source_init_sha256=104e10f083f07dc15f759fd86b7efc91a8da4538c6d3cbdafb7799fdb92a8169 tagged_platform_classification=true baseline_offline_pair=true
+2026-11-09T18:23:17.1258919Z === RUN   TestNativeConfiguredOld193PairLifecycle/actual-bootstrap
+2026-11-09T18:23:17.1261381Z     external_bootstrap_command_native_linux_test.go:133: actual executable produced source0.19.3/candidate0.20.0 pair with source intent preserved; runtime acceptance is asserted only by the live branch, while actual App retirement and current-owner Stop/offline restore remain separate Root checks
+2026-11-09T18:23:17.1262432Z === RUN   TestNativeConfiguredOld193PairLifecycle/actual-paired-restore
+2026-11-09T18:23:17.1263286Z     paired_restore_command_native_linux_test.go:145: actual public candidate caller restored source offline; original Stop, journals, exclusions and guards verified
+2026-11-09T18:23:17.1263888Z === NAME  TestNativeConfiguredOld193PairLifecycle
+2026-11-09T18:23:17.1264848Z     paired_public_lifecycle_native_linux_test.go:102: actual_configured_old193_public_pair complete=true source_restored_offline=true original_stop_retained=true guards_preserved=true tagged_platform_classification=true
+2026-11-09T18:23:17.1265572Z --- PASS: TestNativeConfiguredOld193PairLifecycle (101.78s)
+2026-11-09T18:23:17.1265935Z     --- PASS: TestNativeConfiguredOld193PairLifecycle/actual-bootstrap (31.35s)
+2026-11-09T18:23:17.1266481Z     --- PASS: TestNativeConfiguredOld193PairLifecycle/actual-paired-restore (70.41s)
+2026-11-09T18:23:17.1266828Z PASS
+2026-11-09T18:23:17.1267824Z     paired_public_lifecycle_native_linux_test.go:102: actual_configured_old193_public_pair complete=true source_restored_offline=true original_stop_retained=true guards_preserved=true tagged_platform_classification=true
+2026-11-09T18:23:17.1273587Z --- PASS: TestNativeConfiguredOld193PairLifecycle (101.78s)
+2026-11-09T18:23:17.1283766Z PASS baseline empty configured pair; nonempty draft/history/selection are separate scenarios.
+2026-11-09T18:23:17.1284504Z PASS configured source0.19.3 -> genuine public bootstrap -> current durable Stop -> public offline restore. Tagged Ubuntu classification; no router/default legacy-layout or old live-reader claim.
+2026-11-09T18:23:17.2983292Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T18:23:17.2983526Z with:
+2026-11-09T18:23:17.2983705Z   name: paired-public-cli-empty-2ecf9961ee9586381e7aae005de23bceed4986fd
+2026-11-09T18:23:17.2983927Z   path: artifacts/paired-public/native.log
+2026-11-09T18:23:17.2984085Z   if-no-files-found: error
+2026-11-09T18:23:17.2984213Z   compression-level: 6
+2026-11-09T18:23:17.2984327Z   overwrite: false
+2026-11-09T18:23:17.2984445Z   include-hidden-files: false
+2026-11-09T18:23:17.2984570Z env:
+2026-11-09T18:23:17.2984670Z   GOTOOLCHAIN: local
+2026-11-09T18:23:17.2984782Z ##[endgroup]
+2026-11-09T18:23:17.4068930Z (node:62467) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T18:23:17.4069419Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T18:23:17.4099688Z With the provided path, there will be 1 file uploaded
+2026-11-09T18:23:17.4103383Z Artifact name is valid!
+2026-11-09T18:23:17.4112337Z Root directory input is valid!
+2026-11-09T18:23:17.7283952Z Beginning upload of artifact content to blob storage
+2026-11-09T18:23:17.7426024Z (node:62467) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T18:23:17.9456972Z Uploaded bytes 3047
+2026-11-09T18:23:17.9995122Z Finished uploading artifact content to blob storage!
+2026-11-09T18:23:17.9995615Z SHA256 digest of uploaded artifact zip is 16eeec0ab1590d46e31cc41fb9daa9f2d87f3089395fce202f326ab42532a37b
+2026-11-09T18:23:17.9997079Z Finalizing artifact upload
+2026-11-09T18:23:18.3767641Z Artifact paired-public-cli-empty-2ecf9961ee9586381e7aae005de23bceed4986fd.zip successfully finalized. Artifact ID 13699941134
+2026-11-09T18:23:18.3768649Z Artifact paired-public-cli-empty-2ecf9961ee9586381e7aae005de23bceed4986fd has been successfully uploaded! Final size is 3047 bytes. Artifact ID is 13699941134
+2026-11-09T18:23:18.3772642Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42673010546/artifacts/13699941134
+2026-11-09T18:23:18.3927428Z Post job cleanup.
+2026-11-09T18:23:18.4747615Z Post job cleanup.
+2026-11-09T18:23:18.5317703Z [command]/usr/bin/git version
+2026-11-09T18:23:18.5354648Z git version 2.56.0
+2026-11-09T18:23:18.5378164Z Temporarily overriding HOME='/home/runner/work/_temp/c15adf7a-472d-44e6-896d-0185bd7a0e86' before making global git config changes
+2026-11-09T18:23:18.5378658Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T18:23:18.5381340Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T18:23:18.5412058Z Removing SSH command configuration
+2026-11-09T18:23:18.5416364Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T18:23:18.5449433Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T18:23:18.5657762Z Removing HTTP extra header
+2026-11-09T18:23:18.5663455Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T18:23:18.5701947Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T18:23:18.5909145Z Removing includeIf entries pointing to credentials config files
+2026-11-09T18:23:18.5917505Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T18:23:18.5963470Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T18:23:18.6310408Z Cleaning up orphan processes
+2026-11-09T18:23:18.6563140Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
