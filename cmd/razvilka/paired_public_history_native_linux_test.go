@@ -337,7 +337,7 @@ func nativePairedPublicHistoryBefore(t *testing.T) *nativePairedDraft {
 	if json.Unmarshal(raw, &candidate) != nil || candidate.ID == "" {
 		t.Fatal("actual historical candidate creation")
 	}
-	raw = nativePairedSourceHTTP(t, http.MethodPost, "/api/v1/strategy-lab/candidates/"+candidate.ID+"/validate", nil, token, http.StatusOK, 12*time.Second)
+	raw = nativePairedSourceHTTP(t, http.MethodPost, "/api/v1/strategy-lab/candidates/"+candidate.ID+"/validate", []byte(`{}`), token, http.StatusOK, 12*time.Second)
 	if json.Unmarshal(raw, &candidate) != nil || !candidate.Validation.OK || !candidate.Validation.Native {
 		t.Fatal("genuine old native validation did not pass")
 	}
