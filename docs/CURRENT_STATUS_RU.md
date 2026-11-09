@@ -320,3 +320,40 @@ Paired probes182rows PASS: live p50/p95307/329→221/287мс, selected2 1364/152
 1200/1467мс. У all2 p95 ухудшился1521→1568мс при p50 1384→1214; universal tail
 speedup не заявляется. Последняя полная generic и4Mihomo PASS остаётся4cc.
 [Raw/исправления](measurements/2026-11-09/research/lifecycle/60e0d4ba/).
+
+### Проверка 35797378 и продолжение 3b27bd6e
+
+Общий CI 35797378 остановился на gofmt после успешных адресных тестов;
+полные normal/race не запускались. Форматирование исправлено в 3b27bd6e,
+его CI оценивается отдельно. Последняя полная общая проверка — 4cc9f869.
+
+- Парная проверка VLESS (182 строки, один стенд): live p50/p95
+  313.900/320.086→223.606/227.777 мс; selected-batch 1454/1465→1250/1263 мс.
+  Verdict, identity, отмена и joined cleanup проверены. Это не WAN/LAN-приёмка.
+- Настоящий iptables 1.8.11-2ubuntu3: public AcquireUbuntuLegacy, normal/race,
+  74 одинаковые строки, lock/mutation guards PASS. Медиана пяти повторов
+  57.252→20.439 мс (race 102.467→37.297), процессов 20→4. Все четыре архива
+  и установленные байты проверены. Entware stock1.4.21 этим не подтверждён.
+- Mihomo lifecycle, два Apply/Stop, восстановление baseline и normal/race
+  bookends PASS. На одном runner кандидат 214.56 с, preserved4cc 210.61 с:
+  ускорения нет. Manual/settlement превысили deadline, post-CAS остановился
+  на sidecar-start до намеченного сбоя. В 3b27 добавлены фиксированные стадии
+  диагностики без изменения ошибок, владения ресурсами и deadline.
+- Same-boot parent normal/race и все пять normal ACK cuts PASS; race
+  retirement/history PASS. Race completed.json не дошёл до ACK из-за
+  route-process-unavailable; terminal transaction/global достигли 120 с
+  при повторной проверке отсутствия ресурсов. Полная матрица не принята.
+- NFQWS2 consumer и closing guards normal PASS; full-copy normal/race PASS:
+  1 MiB normal 32952→184 B/op при близком времени полного SHA. Полный LAN/manual
+  и race consumer FAIL. Quarantine и cleanup-only retry normal PASS; новое
+  Apply не прошло. Защитные fences сохранены.
+- StrategyLab pair/restored panel PASS. Public configured-old193 прошёл
+  preparation, затем отказал на quiesce-network-provider. В 3b27 исправлен
+  скрытый второй /proc mount частного стенда; production provider не менялся.
+- DNS strict12 selected/canceled-ready FAIL; diagnostic30 все три recovery
+  PASS. Новая проверка измеряет полное чтение pinned Xray блоками
+  32/64/128/256 KiB. Production размер не изменён до измерения и ревью.
+
+[Исходные результаты и SHA256](measurements/2026-11-09/research/lifecycle/35797378/)
+и [парные измерения](measurements/2026-11-09/research/ci-35797378/) сохранены.
+Аппаратная приёмка, выпуск и изменение действующего роутера не выполнялись.

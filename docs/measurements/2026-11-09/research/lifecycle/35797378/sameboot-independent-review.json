@@ -1,0 +1,140 @@
+{
+  "reviewer": "verification",
+  "head_sha": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+  "run_id": 42649364239,
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "id": 129271221578,
+      "name": "original-parent-native (race)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129271221934,
+      "name": "original-parent-native (normal)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129271221995,
+      "name": "original-private-set (race)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129271222391,
+      "name": "original-private-set (normal)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274083865,
+      "name": "original-parent-native-ack-cuts (race, runtime-history)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274083920,
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274083941,
+      "name": "original-parent-native-ack-cuts (normal, terminal-transaction)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274083950,
+      "name": "original-parent-native-ack-cuts (race, completed.json)",
+      "conclusion": "failure"
+    },
+    {
+      "id": 129274083967,
+      "name": "original-parent-native-ack-cuts (race, terminal-transaction)",
+      "conclusion": "failure"
+    },
+    {
+      "id": 129274083986,
+      "name": "original-parent-native-ack-cuts (normal, runtime-history)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274084032,
+      "name": "original-parent-native-ack-cuts (normal, retirement.json)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274084076,
+      "name": "original-parent-native-ack-cuts (normal, completed.json)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274084118,
+      "name": "original-parent-native-ack-cuts (race, retirement.json)",
+      "conclusion": "success"
+    },
+    {
+      "id": 129274084167,
+      "name": "original-parent-native-ack-cuts (race, terminal-global)",
+      "conclusion": "failure"
+    }
+  ],
+  "logs": [
+    {
+      "path": "sameboot-normal-completed.log",
+      "sha256": "621FCA0EDA2A970A9D9ABECBCFEA940C59FD7F9DB71E64E3384DB7F310A8D7D1"
+    },
+    {
+      "path": "sameboot-normal-history.log",
+      "sha256": "754FB8211FE3D3953D94D6D909DBB2F0F98D7ED97D6C51E0AC4892301C4CC915"
+    },
+    {
+      "path": "sameboot-normal-retirement.log",
+      "sha256": "051B2FA9E765370BAC471C4463835165AC74EA91C5EACBBD3D0EA6B77078E210"
+    },
+    {
+      "path": "sameboot-normal-terminal-global.log",
+      "sha256": "F90BAB89889E165BBBA5194FEB4B1345809FBC72B60A9568C5739C1CC7B6A33B"
+    },
+    {
+      "path": "sameboot-normal-terminal-transaction.log",
+      "sha256": "A26E3BEDE848A65DEEFAB2F12970E69DF68FC5B1EF9FFD96E67210525F7028F9"
+    },
+    {
+      "path": "sameboot-normal.log",
+      "sha256": "A1FBED6D9054EF06B5CB6E076BFB854993729B90E58B1BC4494AF01E4EE2012A"
+    },
+    {
+      "path": "sameboot-race-completed.log",
+      "sha256": "3C2040C61ED574FD3D2E81CFA6652408EBE7CCCC020728AC54E0B8E861F331F2"
+    },
+    {
+      "path": "sameboot-race-history.log",
+      "sha256": "8442BBE000DA8F3868FE15F10B522444DBBE61A1B0C6D80604A56055E9C970FF"
+    },
+    {
+      "path": "sameboot-race-retirement.log",
+      "sha256": "AA1EA8FA2152A85812F62BB9AD010A59A5298804E9B15B1FAAA9D1D0F3260098"
+    },
+    {
+      "path": "sameboot-race-terminal-global.log",
+      "sha256": "346FF16C7EDE4342AA7652B5935D859AFE08A6843C3703E11FD9562AAA7841B2"
+    },
+    {
+      "path": "sameboot-race-terminal-transaction.log",
+      "sha256": "081773EE0F96BAE1B220BFE32E1B3D9D4D773E6ABC3D717127441BD2B79C885E"
+    },
+    {
+      "path": "sameboot-race.log",
+      "sha256": "D14462D39E6E3FE44BF2407A1AA5119CC3C3B8BD75FA4687B6A57295420F3F14"
+    }
+  ],
+  "findings": [
+    "Original baseline normal55.03s and race116.05s PASS. Private set normal/race jobs PASS separately.",
+    "All five normal ACK-cut cases PASS: retirement57.98s/history64.98s/terminalglobal68.32s/terminaltransaction76.90s/completed76.53s. Actual retained cleanup retry marker observed.",
+    "Race retirement98.48s and runtime-history114.76s PASS.",
+    "Race completed.json fails BEFORE actual policy ACK/cut: sidecar-start material=false, Activate3.472s route-process-unavailable, original rollback+verify PASS; producer fails25.20s. This is not completed-publication recovery evidence.",
+    "Race terminaltransaction/global reach retained acknowledgment retry, Run calls2, then120s deadline at absence-process-kernel. Respective82/98absence calls total77.828/79.789s; original source and kernel checks remain."
+  ],
+  "limitations": [
+    "No all-ACK completion claim. Two race consumer deadlines and one initial producer failure remain.",
+    "Cross-run baseline4cc versus357 timings use different runners and are not causal paired performance proof.",
+    "Native isolated namespace evidence, not real router."
+  ]
+}

@@ -1,0 +1,44 @@
+File: app.test
+Build ID: ec0a179444bd6aa116f4176ecfcb5f857c380c96
+Type: cpu
+Time: 2026-11-09 15:58:20 UTC
+Duration: 12.17s, Total samples = 12.48s (102.55%)
+Showing nodes accounting for 10.26s, 82.21% of 12.48s total
+Dropped 560 nodes (cum <= 0.06s)
+Showing top 35 nodes out of 413
+      flat  flat%   sum%        cum   cum%
+     5.23s 41.91% 41.91%      5.23s 41.91%  internal/runtime/syscall/linux.Syscall6
+     3.57s 28.61% 70.51%      3.57s 28.61%  crypto/internal/fips140/sha256.blockSHANI
+     0.15s  1.20% 71.71%      0.19s  1.52%  strings.Fields
+     0.13s  1.04% 72.76%      0.24s  1.92%  runtime.tryDeferToSpanScan
+     0.08s  0.64% 73.40%      0.08s  0.64%  encoding/json.stateInString
+     0.08s  0.64% 74.04%      0.08s  0.64%  runtime.heapArenaOf (inline)
+     0.08s  0.64% 74.68%      0.08s  0.64%  runtime.memmove
+     0.07s  0.56% 75.24%      0.07s  0.56%  runtime.memclrNoHeapPointers
+     0.07s  0.56% 75.80%      0.07s  0.56%  runtime.nextFreeFast (inline)
+     0.07s  0.56% 76.36%      0.31s  2.48%  runtime.scanObject
+     0.07s  0.56% 76.92%      0.18s  1.44%  runtime.scanObjectsSmall
+     0.06s  0.48% 77.40%      0.10s   0.8%  runtime.typePointers.next
+     0.05s   0.4% 77.80%      0.15s  1.20%  encoding/json.(*Decoder).readValue
+     0.05s   0.4% 78.21%      0.09s  0.72%  encoding/json.appendCompact
+     0.05s   0.4% 78.61%      0.44s  3.53%  runtime.mallocgc
+     0.04s  0.32% 78.93%      0.07s  0.56%  runtime.exitsyscall
+     0.04s  0.32% 79.25%      0.09s  0.72%  runtime.findObject
+     0.04s  0.32% 79.57%      0.20s  1.60%  syscall.Fstatfs
+     0.03s  0.24% 79.81%      0.12s  0.96%  os.(*File).readdir
+     0.03s  0.24% 80.05%      0.20s  1.60%  runtime.mallocgcSmallScanNoHeader
+     0.03s  0.24% 80.29%      0.08s  0.64%  runtime.scanblock
+     0.03s  0.24% 80.53%      5.22s 41.83%  syscall.RawSyscall6
+     0.03s  0.24% 80.77%      3.02s 24.20%  syscall.Syscall6
+     0.02s  0.16% 80.93%      0.07s  0.56%  encoding/json.(*decodeState).object
+     0.02s  0.16% 81.09%      2.50s 20.03%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.02s  0.16% 81.25%      0.23s  1.84%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+     0.02s  0.16% 81.41%      0.47s  3.77%  github.com/ArtixSx/razvilka/internal/restorejournal.readTarget
+     0.02s  0.16% 81.57%      0.82s  6.57%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.02s  0.16% 81.73%      0.50s  4.01%  os.rootStat.func1
+     0.01s  0.08% 81.81%      0.08s  0.64%  encoding/json.(*decodeState).value
+     0.01s  0.08% 81.89%      0.09s  0.72%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithResourceExclusionObservation.func1
+     0.01s  0.08% 81.97%      0.56s  4.49%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation.func1
+     0.01s  0.08% 82.05%      3.20s 25.64%  github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPExecutable).hash
+     0.01s  0.08% 82.13%      0.09s  0.72%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).mountID
+     0.01s  0.08% 82.21%      0.40s  3.21%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1

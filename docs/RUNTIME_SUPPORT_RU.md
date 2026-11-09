@@ -276,3 +276,14 @@ actualoldpanelPASS/preparationfingerprintFAIL, iptables exactarchivesSHA PASS/in
 refusal. Эти конкретные причины исправлены в подготовленной серии, но требуют
 нового CI; прежние4cc PASS не переносятся. FieldsSeq rejected, audit16 memory-only
 promotion reviewed. [Отчёты](measurements/2026-11-09/research/lifecycle/60e0d4ba/).
+
+### Уточнение по 35797378
+
+Actual Ubuntu iptables1.8.11 inventory/lock/mutation normal/race подтверждены;
+это не Entware stock1.4.21. Mihomo same-boot normal и все5normal ACK cuts
+прошли, race имеет3отказа. Lifecycle PASS, manual/settlement/postCAS FAIL.
+Managed NFQWS2 consumer normal PASS, полный LAN/manual и DNS strict12
+не приняты. StrategyLab pair/panel PASS; public configured-old193 ожидает
+проверки исправленного частного /proc стенда на3b27bd6e. Общий357 CI FAIL
+на форматировании, полный normal/race не запускался.
+[Подробности](CURRENT_STATUS_RU.md#проверка-35797378-и-продолжение-3b27bd6e).

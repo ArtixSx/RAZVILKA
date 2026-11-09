@@ -1,0 +1,389 @@
+/tmp/razvilka-managed-probe.opjt4L/release.tar.gz.download.LPoxOD: OK
+/tmp/razvilka-managed-probe.opjt4L/release.tar.gz: OK
+CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+Actual native build mode: production
+Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+go version go1.26.5 linux/amd64
+Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+Actual compiled reader/consumer bytes: 43356425
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestNativeFixturePhysicalSourceCopiesRefuse
+--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeLANPhysical
+    strategy_managed_probe_lan_native_linux_test.go:522: actual WAN peer + bridge + included/excluded clients + route/FDB/ARP + original Linux owners + real drift refusal; only Home classification modeled; no NFQ Apply/router acceptance
+--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.92s)
+PASS
+Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+=== RUN   TestManagedStrategyProbeNativeLANManualApply
+2026/11/09 16:03:32 actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true
+2026/11/09 16:03:38 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=19330
+2026/11/09 16:03:38 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply
+2026/11/09 16:03:38 Managed NFQ runtime apply refused at native-apply (LAN_CONSUMER_REFUSED)
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "206"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "213"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "205"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "212"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv4: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "-j" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="[" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=1 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-N" "-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+actual_wg_inactivity_read args=["-6" "route" "show" "table" "219"] exit=2 scope_ok=true stdout="" stderr="Error: ipv6: FIB table does not exist.\nDump terminated\n" stdout_bytes=0 stderr_bytes=55 overflow=false
+    strategy_managed_probe_native_linux_test.go:468: actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false
+    strategy_managed_probe_native_linux_test.go:468: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true
+2026/11/09 16:04:15 actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true
+2026/11/09 16:04:19 actual_nfq_pre_add_closed index=1 presence=2 guards=2 closing_ok=true
+2026/11/09 16:04:20 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=LAN_CONSUMER_REFUSED total_ms=18783
+2026/11/09 16:04:20 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/retire prepared/retire.native-common/retire.common/retire.policy-remove/retire.common/retire.policy-remove
+2026/11/09 16:04:20 Managed NFQ runtime apply refused at lan-preflight-inventory-consumer-close (LAN_CONSUMER_REFUSED)
+    strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 16.001078558s} active-inventory-capture:{20 20 492.685001ms} active-lan:{10 10 10.661147166s} active-read-pair:{10 10 706.444502ms} capture-current:{0 0 0s} cleanup-current:{3 3 79.083635ms} counter:{0 0 0s} current:{15 15 865.994912ms} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{490 490 3.466574979s} policy-apply:{1 1 8.930826494s} policy-readback:{8 8 17.672930633s} policy-remove:{1 1 288.978193ms} prepared-active:{1 1 3.921851362s}]
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN execution state=rollback-failed rollback_verified=false
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=snapshot state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=snapshot state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=stage state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=stage state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=validate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=validate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=activate state=passed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=activate state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=verify-rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=rollback state=failed
+    strategy_managed_probe_native_linux_test.go:468: actual original LAN Apply 409 {"code":"MANAGED_NFQWS_RUNTIME_REFUSED","error":"Состояние удерживаемого маршрута NFQWS не подтверждено. Проверьте журнал и исходную область маршрута.","ok":false,"service_health":"unverified"}
+        
+    strategy_managed_probe_lan_native_linux_test.go:139: retained original LAN cleanup dataplane transaction journal is unavailable: scoped NFQWS owner unavailable or mismatched
+        scoped NFQWS owner unavailable or mismatched
+        rollback failed: managed NFQWS active retire prepared
+        scoped NFQWS owner unavailable or mismatched
+        dataplane transaction journal is unavailable
+        policy addition or cleanup result unknown; reconciliation required
+        network policy consumers have not independently settled
+    strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 3838862728 26265994
+    strategy_managed_probe_native_linux_test.go:458: native actual HTTP member-read attempts/returned-bytes 14304 1169638080
+    strategy_managed_probe_native_linux_test.go:459: native actual HTTP inclusive phase [started completed wall] map[]
+    strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 3188 wall 17.477992154s
+    strategy_managed_probe_native_linux_test.go:461: native actual HTTP aggregate original metadata traversal attempts 18714
+    strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [811 811 3624]
+    strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeLANManualApply.pprof
+--- FAIL: TestManagedStrategyProbeNativeLANManualApply (63.97s)
+FAIL
+File: app.test
+Build ID: 40390743476785c002a9ef05a2781639d7086963
+Type: cpu
+Time: 2026-11-09 16:03:19 UTC
+Duration: 61.38s, Total samples = 54.61s (88.96%)
+Showing nodes accounting for 46.08s, 84.38% of 54.61s total
+Dropped 1046 nodes (cum <= 0.27s)
+Showing top 20 nodes out of 476
+      flat  flat%   sum%        cum   cum%
+    30.97s 56.71% 56.71%     30.97s 56.71%  internal/runtime/syscall/linux.Syscall6
+    11.53s 21.11% 77.82%     11.53s 21.11%  crypto/internal/fips140/sha256.blockSHANI
+     0.38s   0.7% 78.52%      0.56s  1.03%  runtime.tryDeferToSpanScan
+     0.38s   0.7% 79.22%      0.50s  0.92%  strings.Fields
+     0.37s  0.68% 79.89%     11.44s 20.95%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.32s  0.59% 80.48%      0.32s  0.59%  runtime.rtsigprocmask
+     0.31s  0.57% 81.05%      0.31s  0.57%  runtime.futex
+     0.31s  0.57% 81.62%      0.31s  0.57%  runtime.memclrNoHeapPointers
+     0.26s  0.48% 82.09%     30.72s 56.25%  syscall.RawSyscall6
+     0.18s  0.33% 82.42%      0.85s  1.56%  runtime.scanObject
+     0.15s  0.27% 82.70%      1.65s  3.02%  runtime.mallocgc
+     0.13s  0.24% 82.93%     10.70s 19.59%  syscall.Syscall
+     0.12s  0.22% 83.15%      0.34s  0.62%  runtime.scanObjectsSmall
+     0.12s  0.22% 83.37%     20.70s 37.91%  syscall.Syscall6
+     0.11s   0.2% 83.57%      1.57s  2.87%  os.(*File).readdir
+     0.10s  0.18% 83.76%     14.92s 27.32%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.10s  0.18% 83.94%      2.11s  3.86%  os.(*rawConn).Control
+     0.09s  0.16% 84.11%      0.72s  1.32%  runtime.mallocgcSmallScanNoHeader
+     0.08s  0.15% 84.25%     17.68s 32.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.07s  0.13% 84.38%      0.30s  0.55%  runtime.mProf_FlushLocked
+File: app.test
+Build ID: 40390743476785c002a9ef05a2781639d7086963
+Type: cpu
+Time: 2026-11-09 16:03:19 UTC
+Duration: 61.38s, Total samples = 54.61s (88.96%)
+Showing nodes accounting for 31.35s, 57.41% of 54.61s total
+Dropped 1046 nodes (cum <= 0.27s)
+Showing top 20 nodes out of 476
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     48.07s 88.02%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+         0     0%     0%     35.70s 65.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func6
+         0     0%     0%     33.38s 61.12%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func1
+    30.97s 56.71% 56.71%     30.97s 56.71%  internal/runtime/syscall/linux.Syscall6
+     0.26s  0.48% 57.19%     30.72s 56.25%  syscall.RawSyscall6
+         0     0% 57.19%     30.67s 56.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0% 57.19%     25.51s 46.71%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools
+         0     0% 57.19%     24.83s 45.47%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0% 57.19%     24.53s 44.92%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+         0     0% 57.19%     23.03s 42.17%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0% 57.19%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+         0     0% 57.19%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read
+         0     0% 57.19%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read
+         0     0% 57.19%     21.63s 39.61%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func7
+         0     0% 57.19%     21.50s 39.37%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0% 57.19%     21.19s 38.80%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation
+         0     0% 57.19%     21.19s 38.80%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1
+     0.12s  0.22% 57.41%     20.70s 37.91%  syscall.Syscall6
+         0     0% 57.41%     20.36s 37.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+         0     0% 57.41%     19.95s 36.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use.func1
+File: app.test
+Build ID: 40390743476785c002a9ef05a2781639d7086963
+Type: cpu
+Time: 2026-11-09 16:03:19 UTC
+Duration: 61.38s, Total samples = 54.61s (88.96%)
+Active filters:
+   show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+Showing nodes accounting for 6.70s, 12.27% of 54.61s total
+Dropped 290 nodes (cum <= 0.27s)
+Showing top 40 nodes out of 323
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%     35.70s 65.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func6
+         0     0%     0%     33.38s 61.12%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func1
+         0     0%     0%     30.67s 56.16%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+         0     0%     0%     25.51s 46.71%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools
+     3.33s  6.10%  6.10%     24.83s 45.47%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+         0     0%  6.10%     24.53s 44.92%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+         0     0%  6.10%     23.03s 42.17%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+         0     0%  6.10%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+         0     0%  6.10%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read
+     1.01s  1.85%  7.95%     22.20s 40.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read
+         0     0%  7.95%     21.63s 39.61%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func7
+         0     0%  7.95%     21.50s 39.37%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+         0     0%  7.95%     21.19s 38.80%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation
+         0     0%  7.95%     21.19s 38.80%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1
+     0.41s  0.75%  8.70%     20.36s 37.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+         0     0%  8.70%     19.95s 36.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use.func1
+     0.02s 0.037%  8.73%     19.81s 36.28%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+         0     0%  8.73%     19.44s 35.60%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func8
+         0     0%  8.73%     19.40s 35.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).JoinPendingManagedNFQWS
+         0     0%  8.73%     19.31s 35.36%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).joinPending
+         0     0%  8.73%     19.20s 35.16%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).Stop
+         0     0%  8.73%     19.18s 35.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary
+         0     0%  8.73%     19.15s 35.07%  github.com/ArtixSx/razvilka/internal/app.runManagedProbeNativeLANApply
+         0     0%  8.73%     19.11s 34.99%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary.func1
+         0     0%  8.73%     18.99s 34.77%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyManualLANHTTP
+         0     0%  8.73%     18.94s 34.68%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture
+         0     0%  8.73%     18.94s 34.68%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2
+         0     0%  8.73%     18.88s 34.57%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeHTTP
+         0     0%  8.73%     18.76s 34.35%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory
+         0     0%  8.73%     18.71s 34.26%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.func11
+         0     0%  8.73%     18.71s 34.26%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).InventoryCheck (inline)
+         0     0%  8.73%     18.70s 34.24%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+         0     0%  8.73%     18.70s 34.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory.func1
+         0     0%  8.73%     17.99s 32.94%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeLANManualApply
+     1.93s  3.53% 12.27%     17.68s 32.38%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+         0     0% 12.27%     17.66s 32.34%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+         0     0% 12.27%     17.63s 32.28%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Preflight
+         0     0% 12.27%     17.53s 32.10%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsScopedNetworkBinding).rules
+         0     0% 12.27%     17.17s 31.44%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func2
+         0     0% 12.27%     17.15s 31.40%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+File: app.test
+Build ID: 40390743476785c002a9ef05a2781639d7086963
+Type: alloc_space
+Time: 2026-11-09 16:04:20 UTC
+Showing nodes accounting for 3362.24MB, 90.57% of 3712.21MB total
+Dropped 697 nodes (cum <= 18.56MB)
+Showing top 30 nodes out of 457
+      flat  flat%   sum%        cum   cum%
+  422.58MB 11.38% 11.38%   488.58MB 13.16%  os.lstatNolog
+  277.60MB  7.48% 18.86%   277.60MB  7.48%  strings.Fields
+  266.96MB  7.19% 26.05%   266.96MB  7.19%  io.ReadAll
+  261.50MB  7.04% 33.10%   275.90MB  7.43%  io.copyBuffer
+  210.68MB  5.68% 38.77%   210.68MB  5.68%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+  196.80MB  5.30% 44.07%   200.80MB  5.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+  155.51MB  4.19% 48.26%   162.51MB  4.38%  os.newUnixDirent
+  146.03MB  3.93% 52.20%   146.03MB  3.93%  os.(*File).Stat
+  141.85MB  3.82% 56.02%   141.85MB  3.82%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+  139.64MB  3.76% 59.78%   302.65MB  8.15%  os.(*File).readdir
+  138.02MB  3.72% 63.50%   177.52MB  4.78%  os.readlink
+  127.22MB  3.43% 66.92%   127.22MB  3.43%  github.com/ArtixSx/razvilka/internal/physicalscope.init.func1
+  123.88MB  3.34% 70.26%   351.42MB  9.47%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+  123.58MB  3.33% 73.59%   128.59MB  3.46%  encoding/json.Marshal
+  114.51MB  3.08% 76.67%   114.51MB  3.08%  syscall.ByteSliceFromString
+  107.49MB  2.90% 79.57%   959.02MB 25.83%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+   81.12MB  2.19% 81.76%   770.32MB 20.75%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+   44.01MB  1.19% 82.94%    44.01MB  1.19%  strings.genSplit
+      38MB  1.02% 83.96%       38MB  1.02%  os.newFile
+   37.05MB     1% 84.96%    37.05MB     1%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+   36.01MB  0.97% 85.93%    38.51MB  1.04%  os.lstatatWithName
+   34.04MB  0.92% 86.85%    34.04MB  0.92%  github.com/ArtixSx/razvilka/internal/physicalscope.attrs
+   28.01MB  0.75% 87.60%   132.08MB  3.56%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+   27.15MB  0.73% 88.34%    27.15MB  0.73%  encoding/json.(*Decoder).refill
+      20MB  0.54% 88.87%       21MB  0.57%  github.com/ArtixSx/razvilka/internal/netidentity.kernelTuple
+   19.01MB  0.51% 89.39%    23.01MB  0.62%  github.com/ArtixSx/razvilka/internal/netidentity.holdNetPair
+      19MB  0.51% 89.90%       19MB  0.51%  encoding/json.(*decodeState).literalStore
+   10.52MB  0.28% 90.18%   365.81MB  9.85%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+    8.50MB  0.23% 90.41%    19.50MB  0.53%  github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryProcMountID
+       6MB  0.16% 90.57%       23MB  0.62%  os/exec.(*Cmd).Start
+File: app.test
+Build ID: 40390743476785c002a9ef05a2781639d7086963
+Type: alloc_space
+Time: 2026-11-09 16:04:20 UTC
+Showing nodes accounting for 3712.21MB, 100% of 3712.21MB total
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+                                          275.90MB   100% |   io.Copy
+  261.50MB  7.04%  7.04%   275.90MB  7.43%                | io.copyBuffer
+                                          275.90MB   100% |   os.(*File).WriteTo
+                                           13.39MB  4.85% |   github.com/ArtixSx/razvilka/internal/startuptools.(*output).ReadFrom
+                                            0.50MB  0.18% |   bytes.(*Buffer).ReadFrom
+                                            0.50MB  0.18% |   github.com/ArtixSx/razvilka/internal/startuptools.(*classicSaveOutput).Write
+----------------------------------------------------------+-------------
+                                            4.50MB 56.25% |   os/exec.(*Cmd).childStderr
+                                            3.50MB 43.75% |   os/exec.(*Cmd).childStdout
+    1.50MB  0.04%  7.08%        8MB  0.22%                | os/exec.(*Cmd).writerDescriptor
+                                            6.50MB 81.25% |   os.Pipe
+----------------------------------------------------------+-------------
+                                          275.90MB   100% |   os.genericWriteTo (inline)
+                                          275.90MB   100% |   os/exec.(*Cmd).writerDescriptor.func1 (inline)
+         0     0%  7.08%   275.90MB  7.43%                | io.Copy
+                                          275.90MB   100% |   io.copyBuffer
+----------------------------------------------------------+-------------
+                                          275.90MB   100% |   io.copyBuffer
+         0     0%  7.08%   275.90MB  7.43%                | os.(*File).WriteTo
+                                          275.90MB   100% |   os.genericWriteTo
+----------------------------------------------------------+-------------
+                                          275.90MB   100% |   os.(*File).WriteTo
+         0     0%  7.08%   275.90MB  7.43%                | os.genericWriteTo
+                                          275.90MB   100% |   io.Copy (inline)
+----------------------------------------------------------+-------------
+                                          275.90MB   100% |   os/exec.(*Cmd).Start.func2
+         0     0%  7.08%   275.90MB  7.43%                | os/exec.(*Cmd).writerDescriptor.func1
+                                          275.90MB   100% |   io.Copy (inline)
+----------------------------------------------------------+-------------
