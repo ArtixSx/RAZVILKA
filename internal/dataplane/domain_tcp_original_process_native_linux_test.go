@@ -149,6 +149,22 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 			return err
 		}
 
+		// An already invalid opening cannot run any later comparison callback.
+		// This is actual-process coverage, not a fabricated capture authority.
+		canceledEntry, cancelEntry := context.WithCancel(active)
+		cancelEntry()
+		laterEntered := false
+		entryErr := resource.withFileObservation(canceledEntry, func(files *xrayDomainTCPFileObservation) error {
+			if err := resource.currentWithFiles(canceledEntry, files); err != nil {
+				return err
+			}
+			laterEntered = true
+			return nil
+		})
+		if entryErr == nil || laterEntered {
+			return errors.New("invalid original process opening entered later comparison")
+		}
+
 		// Real source/child/kernel opening+closing, with explicit nested readonly
 		// views only. Callback failures and panic cannot become successful evidence.
 		witness := errors.New("original readonly Guard callback failed")

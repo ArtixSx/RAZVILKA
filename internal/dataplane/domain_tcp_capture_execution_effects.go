@@ -162,11 +162,7 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	r.started = true
 	runtime := PolicyEffectRuntime{Runner: &domainTCPCaptureEffectRunner{resource: r}, Tools: PolicyEffectTools{IPTables: r.tools.IPTables}, Guard: func(c context.Context, _ int) error {
 		defer domainTCPMeasure("capture-add-guard")(0)
-		return r.observeTools(c, func(observed context.Context) error {
-			return r.observePreAddFiles(observed, true, func(files *xrayDomainTCPFileObservation) error {
-				return errors.Join(r.currentWithFiles(observed, files), baseline.currentBaselineWithFiles(observed, files))
-			})
-		})
+		return r.guardOriginalBaseline(c, baseline)
 	},
 		Preflight: func(c context.Context) error {
 			return r.observeTools(c, func(observed context.Context) error {
