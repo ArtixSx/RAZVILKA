@@ -213,7 +213,7 @@ Source review и Node UI PASS; новый native HTTP/LAN сценарий тр�
 общий planner/AUTO не получают этот допуск. Физический роутер не изменялся.
 
 
-### Последняя завершённая общая проверка: b9bb3c13
+### Проверка b9bb3c13 и последующие исправления
 
 Оба generic CI42623923398/42623932233 SUCCESS: normal/race, UI, vet,
 четыре crossbuild и modeled Entware. Три исходных native Mihomo сценария
@@ -234,3 +234,19 @@ Fresh Fstat normal/race parity и microbenchmark прошли; end-to-end выи
 Generic1a50 focused PASS, полный запуск CANCELLED; dee compile FAIL и его
 исправления сохранены в журнале. Это не заменяет последнего полного b9bb PASS.
 [Точные результаты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
+
+
+### Последняя завершённая общая проверка: 0f043902
+
+Оба generic CI42630488148/42630498206 SUCCESS: normal/race, actual nonroot
+permission refusal, UI, vet,4crossbuild, modeled Entware. Native Mihomo
+lifecycle/settlement/postCAS PASS; manual HTTP отказал в Acquire до preview,
+диагностикаd590 ещё требует следующего запуска. StrategyLab pair/restored panel
+повторно PASS, но публичный executable paired restore ещё не был выбран workflow:
+готовится отдельный isolated harness с настоящим producer и old193 бинарником.
+Strict DNS и full NFQWS остаются FAIL; release/router admission не изменён.
+[Raw](measurements/2026-11-09/research/lifecycle/0f043902/).
+
+Следующая волна включает reviewed App API/UI timing eb1, pathname scratch1af9,
+fair save comparison/lock fixture d762, baseline observation7c3 и отдельные
+measurement-only stack/mountinfo benchmarks. Собственный CI ещё обязателен.

@@ -169,6 +169,24 @@ jobs:
           for report in artifacts/domain/cpu-top.txt artifacts/domain/cpu-cumulative.txt; do
             if [ -s "$report" ]; then cat "$report"; fi
           done
+      - name: Measure complete mountinfo reads separately from route deadlines
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/domain
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/netidentity \
+              -run '^TestProcMountinfoMeasurementReadBounds$' -count=1 -v \
+              | tee "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestProcMountinfoMeasurementReadBounds ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/mountinfo-read-contract-$mode.log"; then exit 1; fi
+          done
+          go test -tags razvilka_native_fixture ./internal/netidentity -run '^$' \
+            -bench '^BenchmarkProcMountinfoReadChunks$' -benchtime=300ms -count=3 -benchmem \
+            | tee artifacts/domain/mountinfo-read-measurement.log
       - name: Preserve original clocks and failures
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

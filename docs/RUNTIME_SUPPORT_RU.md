@@ -236,7 +236,8 @@ fixture; однострочное исправление441e97e4 требует 
 | Сетевые стадии CLI/profile | Bounded actual localDNS/SOCKS/TLS/TTFB/body; probe workflow SUCCESS | App API/UI projection eb1fccb8: source review/UI PASS, Go normal/race ожидаются; service predicates не меняются |
 | Метаданные инструмента | Fresh Fstat normal/race parity,6sample median808.1→731.8ns и208→0B | Полный маршрут этим не подтверждён |
 
-Общий CI: b9bb оба SUCCESS; dee compile FAIL исправлен,1a50 focused PASS,
-full generic CANCELLED. Новая волна оценивается по своему SHA.
+Общий CI: последний0f043902 оба SUCCESS; dee compile FAIL исправлен,1a50 focused PASS,
+full generic CANCELLED. Native0f Mihomo lifecycle/settlement/postCAS и StrategyLab pair/restored panel PASS,
+manual HTTP ранний Acquire FAIL. Новая волна оценивается по своему SHA.
 Физический роутер и его NFQWS2 не менялись.
 [Raw и независимые отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).

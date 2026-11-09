@@ -86,9 +86,10 @@ refs и незакоммиченные файлы сохранены. Стары
 - nfq_completion:1af9b7c5 сохраняет каждый свежий pathname fstatat, переиспользуя
   только обнулённый аргумент/syscall scratch. Source review PASS; microbench,
   normal/race и arm64 cross-build ожидаются, ускорение ещё не заявлено.
-- verification: последний полностью успешный generic — b9bb (push и PR).
+- verification: последний полностью успешный generic — 0f043902 (push42630488148 и PR42630498206).
   dee compilation FAIL сохранён, исправлен17c3/1a50; на1a50 focused PASS,
-  полный generic отменён следующей исправленной волной, не SUCCESS.
+  полный generic отменён следующей исправленной волной, не SUCCESS. На0f normal/race,
+  nonroot permission, UI, vet,4crossbuild и modeled Entware завершились SUCCESS.
   [Raw и точные отчёты](measurements/2026-11-09/research/lifecycle/1a50bf07/).
   Strict DNS/NFQ и оставшиеся Mihomo cuts — программные задачи без внешнего блокера.
 
