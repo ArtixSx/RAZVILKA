@@ -71,7 +71,8 @@ func TestNativeConfiguredOld193PairLifecycle(t *testing.T) {
 	if expected := os.Getenv("RAZVILKA_PAIRED_NATIVE_INIT_SHA"); expected == "" || expected != initSHA {
 		t.Fatal("configured source changed the actual old init script")
 	}
-	t.Logf("configured_old193_layout=true source_commit=817783493f0c2784ccc70aa73868cd64e9437634 source_sha256=%s source_init_sha256=%s tagged_platform_classification=true baseline_offline_pair=true", oldSHA, initSHA)
+	t.Logf("configured_old193_layout=true source_commit=817783493f0c2784ccc70aa73868cd64e9437634 source_sha256=%s source_init_sha256=%s tagged_platform_classification=true baseline_offline_pair=%t", oldSHA, initSHA, os.Getenv("RAZVILKA_PAIRED_NATIVE_HISTORY") == "")
+	draft := nativePairedPublicDraftBefore(t)
 	if !t.Run("actual-bootstrap", TestNativeExternalBootstrapPublicExecutableProducer) {
 		return
 	}
@@ -97,5 +98,6 @@ func TestNativeConfiguredOld193PairLifecycle(t *testing.T) {
 	if !t.Run("actual-paired-restore", TestNativePairedRestorePublicExecutableCaller) {
 		return
 	}
+	nativePairedPublicDraftAfter(t, draft)
 	t.Log("actual_configured_old193_public_pair complete=true source_restored_offline=true original_stop_retained=true guards_preserved=true tagged_platform_classification=true")
 }

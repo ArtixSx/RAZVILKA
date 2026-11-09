@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 umask 077
+case "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" in ""|draft) ;; *) exit 2 ;; esac
+export RAZVILKA_PAIRED_NATIVE_HISTORY
 test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64 && test "$(id -u)" = 0 || exit 2
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d /root/razvilka-paired-public.XXXXXX)
@@ -62,6 +64,11 @@ fi
 grep -F 'actual_configured_old193_public_pair complete=true source_restored_offline=true original_stop_retained=true guards_preserved=true tagged_platform_classification=true' "$work/native.log"
 grep -F -- '--- PASS: TestNativeConfiguredOld193PairLifecycle ' "$work/native.log"
 if grep -E '^[[:space:]]*--- SKIP:' "$work/native.log"; then exit 1; fi
-printf 'PASS configured source0.19.3 -> genuine public bootstrap -> current durable Stop -> public offline restore. Baseline offline pair only; nonempty StrategyLab history has separate tests. Tagged Ubuntu classification; no router/default legacy-layout claim.\n'
+if test "${RAZVILKA_PAIRED_NATIVE_HISTORY:-}" = draft; then
+ grep -F 'actual_public_pair_retained_draft preserved=true original_old_http_writer=true current_reader=true old_live_compatibility=false manual_selection=false' "$work/native.log"
+else
+ printf 'PASS baseline empty configured pair; nonempty draft/history/selection are separate scenarios.\n'
+fi
+printf 'PASS configured source0.19.3 -> genuine public bootstrap -> current durable Stop -> public offline restore. Tagged Ubuntu classification; no router/default legacy-layout or old live-reader claim.\n'
 # Only this exact private fixture directory is removed after all assertions.
 case "$work" in /root/razvilka-paired-public.*) rm -rf -- "$work" ;; *) exit 2 ;; esac
