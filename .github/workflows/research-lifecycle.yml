@@ -1,0 +1,127 @@
+name: Research lifecycle acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/research-build-20261109']
+    paths:
+      - 'internal/**'
+      - 'cmd/razvilka/**'
+      - 'scripts/test-domain-original-native.sh'
+      - '.github/workflows/research-lifecycle.yml'
+
+permissions:
+  contents: read
+concurrency:
+  group: research-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  GOTOOLCHAIN: local
+jobs:
+  strategy-pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install native fixture
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 util-linux
+      - name: Actual reader binary compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o /tmp/razvilka-current ./cmd/razvilka
+          test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
+          test "$(/tmp/razvilka-current -component-update-schema)" = 6
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 9
+          test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
+          git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
+          (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
+          if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
+          if /tmp/razvilka-old-binary -self-update-private-snapshot-read-version >/tmp/old-snapshot.txt 2>&1; then exit 1; fi
+          git worktree add --detach /tmp/razvilka-reader5 c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be
+          (cd /tmp/razvilka-reader5 && go build -o /tmp/razvilka-reader5-binary ./cmd/razvilka)
+          test "$(/tmp/razvilka-reader5-binary -strategy-lab-read-version)" = 5
+      - name: Focused native and race checks
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
+            RAZVILKA_STRATEGY_PAIR_V5_BINARY=/tmp/razvilka-reader5-binary \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app ./internal/dataplane ./internal/operationgate -run "TestStrategyPair|TestStrategyRollbackRetention|TestNativeCandidateStoppedCompletionTwoCuts|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance|TestExecutionHistory|TestExecutionReader|TestRetainedExecutionReader|TestManagedStrategyProbe|TestManagedSelection|TestControlEpochReadObservation"'
+      - name: Restored panel boot in isolated network namespace
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local RAZVILKA_PRIVATE_PANEL_NATIVE=1 \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
+  domain-native:
+    name: Domain native strict / ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [selected, canceled-ready]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Original scope and cleanup with unchanged production deadlines
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/domain
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain' EXIT
+          case "$SCENARIO" in
+            selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;
+            canceled-ready)
+              expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
+              export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1
+              export RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1
+              export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
+            *) exit 2 ;;
+          esac
+          sudo --preserve-env=RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+            env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain/native.log
+          grep -F -- "--- PASS: $expected_case " artifacts/domain/native.log
+          if grep -F -- '--- SKIP:' artifacts/domain/native.log; then exit 1; fi
+          grep -Fx 'child_exit_status=0' artifacts/domain/status.txt
+          grep -Fx "native_case=$expected_case" artifacts/domain/status.txt
+          grep -Fx 'publication_budget_seconds=12' artifacts/domain/status.txt
+          grep -Fx 'diagnostic_only=false' artifacts/domain/status.txt
+      - name: Preserve original clocks and failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-domain-${{ matrix.scenario }}-${{ github.sha }}
+          path: artifacts/domain
+          if-no-files-found: error

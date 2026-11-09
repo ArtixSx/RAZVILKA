@@ -1,7 +1,12 @@
 name: Mihomo actual LAN lifecycle
 on:
   push:
-    branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031']
+    branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031', 'work/research-build-20261109']
+    paths:
+      - 'internal/**'
+      - 'cmd/razvilka/**'
+      - 'scripts/test-mihomo-live*.sh'
+      - '.github/workflows/mihomo-workflow-validation.yml'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
