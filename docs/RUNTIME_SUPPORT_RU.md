@@ -133,7 +133,7 @@ Store/dispatcher/history admission: N=12, enqueue→server completion p50/p95
 Это подтверждает выигрыш одного контролируемого сценария с задержкой сервиса
 40 мс, а не аппаратное ускорение или готовность маршрутизатора.
 
-## Исследовательская ветка: проверенный код 8c869c76
+## Историческая первая проверка исследовательской ветки: 8c869c76
 
 | Уровень | Фактически проверено | Не подтверждено |
 | --- | --- | --- |
@@ -170,3 +170,19 @@ StrategyLab pair/restored panel и DNS preparation clean/2partialACK повто�
 Strict DNS12с оба сценария и managed NFQWS LAN/manual/race остаются FAIL.
 Подробности и raw evidence: [lifecycle журнал](measurements/2026-11-09/research/lifecycle/README.md).
 Эти стендовые результаты не меняют публичный допуск профилей или аппаратную матрицу.
+
+## Актуальная сверка bfc96dd2 и последующая диагностика
+
+| Уровень | Фактический итог | Граница подтверждения |
+| --- | --- | --- |
+| Generic CI bfc | Push42569258837 и PR42569263105 SUCCESS | Не заменяет native/router tests |
+| Native probe bfc | VLESS paired и Mihomo service/HTTP PASS | N12, isolated Linux; отдельный LAN Apply |
+| Native Mihomo bfc | Settlement/post-CAS PASS; полный lifecycle attempt2 PASS | Attempt1 material refusal сохранён как необъяснённая нестабильность |
+| Native DNS bfc | Original successor recovery clean/2partialACK PASS diagnostic30/10 | Strict publication12/4 FAIL на GEN1, GEN2 не выполнен |
+| Native NFQWS bfc | Core/HTTP production PASS | LAN/manual/race FAIL по budget/unknown cleanup; full workflow не принят |
+| Аппаратный профиль | SSH read-only: NC-1812/ARM64/5.01.C.6.0-1/Entware подтверждены | Новая сборка не установлена; router/LAN scope не принят, нужен отдельный допуск к изменению устройства |
+
+`0a72dfb8` сохраняет exact service/freshness при отображении stages и явный
+unknown runtime в карточках; cleanup refusal не теряется. Эти изменения не
+повышают публичный admission. [Точные результаты](measurements/2026-11-09/research/lifecycle/README.md)
+и [профиль устройства](measurements/2026-11-09/research/router-readonly.md).

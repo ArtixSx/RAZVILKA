@@ -300,3 +300,93 @@ full live p50/p95 **398.945/417.567→307.347/309.697мс**; selected2
 **775→909мс**. Candidate sample11 содержит configuration111мс и startup209мс,
 cleanup101мс; этот выброс и положительное service/cleanup evidence сохранены.
 Универсальное ускорение всех метрик не заявляется.
+
+## Итоговый программный кандидат bfc96dd2
+
+Код: `bfc96dd2de2e3e6fa8f21e75eab8dd1f1ca3a406` (последняя runtime дельта
+`44c1cd0b`, последующий коммит — исходные результаты). Строгие DNS jobs
+selected14.02с и canceled-ready14.10с FAIL: GEN1 не опубликована за12с,
+GEN2 не запускался. Primitive4→2 и8→2, отдельные последующие hashes,
+callback-error и closing mutation refusal PASS. На cut осталось9/8 COMMON
+effects; меньший счётчик hash при меньшем выполненном объёме не доказывает
+ускорения. Следующая задача — совокупная цена full source/process/inventory
+proofs, а не увеличение дедлайна.
+
+Native [lifecycle42569258820](https://github.com/ArtixSx/RAZVILKA/actions/runs/42569258820)
+в целом FAIL. Strategy pair job129002589739 SUCCESS, включая native/race и
+restored panel. Preparation pair job129002589536 SUCCESS:
+[независимый аудит](bfc96dd2/preparation/independent-review.json) подтверждает
+baseline CUT→REFUSED69.42с, candidate clean93.40с/capture-ACK97.86с/standby-ACK94.09с
+CUT→COMPLETE→точный PASS, без SKIP. Исходная custody, повтор recovery, отсутствие
+child и прежний alias проверены. Только diagnostic30/client10; не strict12/4.
+
+Managed production core/AppHTTP/closing PASS; LAN activation16.064с,
+manual16.104с превышают15с, cleanup остаётся UNKNOWN на retire.policy-remove.
+Race core/LAN/manual FAIL: closing counter proof не подтверждён до deadline,
+положительный HTTP response сам по себе не принимается. Полные причины и
+тайминги: [managed вывод](bfc96dd2/managed-native-conclusion.json).
+
+Mihomo attempt1: settlement PASS127.33с (Apply96.112с, Stop9.573с),
+post-CAS rollback PASS94.18с. Основной lifecycle отказал при round0 activation
+через2.932с с `exact original Mihomo IPv4 node material is unavailable`;
+rollback/verify-rollback PASS, HTTP409, whole test15.18с. До health-TTL этот
+путь не дошёл; generic sentinel не устанавливает точный компонент рассогласования.
+[Первый отказ сохранён](bfc96dd2/mihomo-attempt1-conclusion.json), полный
+runtime повторён на том же SHA без изменения fences или таймаутов.
+
+[Mihomo42569258846 attempt2](https://github.com/ArtixSx/RAZVILKA/actions/runs/42569258846/attempts/2)
+SUCCESS: full lifecycle279.06с, Apply95.398/95.522с, Stop6.151/6.252с,
+fresh Apply/closing retry и все original normal/race bookends PASS.
+[Вторая попытка](bfc96dd2/mihomo-attempt2-conclusion.json) хранится отдельно
+от первого отказа; одинаковое имя artifact не использовано для выбора:
+скачан точный новый artifact ID. Причина первого material refusal остаётся
+неустановленной и не исчезает из отчёта после успешного повтора.
+[Хеши сохранённых raw файлов](bfc96dd2/manifest.json).
+
+[Парные probe42569258831](https://github.com/ArtixSx/RAZVILKA/actions/runs/42569258831)
+SUCCESS, все182 строки проходят [анализ](../ci-bfc96dd2/paired-analysis.json).
+Actual Mihomo service/common cleanup и handler PASS без SKIP.
+
+| Одинаковый сценарий, N12 повторных | Baseline0e p50/p95, мс | Final bfc p50/p95, мс |
+| --- | ---: | ---: |
+| Full live Check, включая cleanup | 405.525 / 407.305 | 316.544 / 319.039 |
+| Full cancellation | 364.998 / 368.422 | 274.945 / 277.343 |
+| Single queue completion | 748 / 764 | 656 / 668 |
+| Selected2 queue completion | 2619 / 2628 | 1436 / 1462 |
+| All2 queue completion | 2624 / 2646 | 1452 / 1463 |
+
+Первые запуски отдельно: live404.718→322.122мс, selected2597→1413мс.
+Это не холодный OS cache. Алгоритм current-reuse в обеих ревизиях, тот же
+binary, один runner, fixed baseline-first order. Ранее обнаруженные tail
+выбросы a9bd и b726 не удалены; все результаты сохранены по точным SHA.
+Не подтверждены минутный WAN случай, ускорение RAM, применение на физическом
+роутере и готовность всего выпуска.
+
+Оба общих gate этого SHA завершены SUCCESS:
+[push42569258837](https://github.com/ArtixSx/RAZVILKA/actions/runs/42569258837),
+[PR42569263105](https://github.com/ArtixSx/RAZVILKA/actions/runs/42569263105).
+Это normal/race, vet, UI, cross-build и Entware; native FAIL выше не скрываются
+зелёным общим CI.
+
+## Последняя сверка API/UI и фактического оборудования
+
+`0a72dfb8` исправляет два подтверждённых несоответствия диагностики. API job
+раньше мог прикрепить stages и положительный cleanup-status к другому service
+или устаревшему результату при совпадении node/path/profile. Теперь ожидаемый
+service, точные identities и действующее временное окно проверяются до показа
+telemetry. Сохраняются принятые историей ранее завершённые свежие результаты;
+новый lower-bound StartedAt относительно вызова для них не вводится. Незавершённый
+transport screen проверяется отдельно, без выдуманного FinishedAt/ExpiresAt.
+Cleanup failure остаётся обязательным даже для чужого результата с ошибкой;
+после joined screen batch он ставит recovery fence до следующей группы/full check.
+
+Новые engine cards явно показывают runtime_observation=unknown вместо вывода
+«запущен»/«не запущен» по устаревшим booleans. Защитные running/can_* и lifecycle
+блокировки остаются. Before FAIL → after PASS, backend выбранный Node/Durable/DTO
+набор45.200с; независимые новые regression0.382с, component cards/engine flow/auth
+и build-interface check PASS. Общий CI следующего SHA оценивается отдельно.
+
+Роутер доступен по SSH: [фактический read-only профиль](../router-readonly.md).
+Наличие устройства больше не является внешним блокером. Новая сборка на нём
+не устанавливалась; установленныйrc106, работающий NFQWS2, неподдержанные reader
+flags и отсутствие netns-интерфейса учтены отдельно от generic/Linux CI.

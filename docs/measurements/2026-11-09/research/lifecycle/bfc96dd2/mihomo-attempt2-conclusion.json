@@ -1,0 +1,22 @@
+{
+  "head_sha":"bfc96dd2de2e3e6fa8f21e75eab8dd1f1ca3a406",
+  "run_id":42569258846,
+  "attempt":2,
+  "job":129004660371,
+  "conclusion":"success",
+  "lifecycle_test_seconds":279.06,
+  "rounds":[
+    {"round":0,"apply_seconds":95.397925455,"stop_seconds":6.151415724,"closing_retry":false},
+    {"round":1,"apply_seconds":95.522218346,"stop_seconds":6.251764239,"closing_retry":true}
+  ],
+  "check_wall_seconds":null,
+  "check_limit":"Fresh Check and selected-LAN HTTPS passed; no dedicated Check wall timer in this fixture. Do not equate the Apply-to-Stop log interval with pure Check latency.",
+  "normal_and_race_original_child_bookends":"PASS",
+  "settlement_and_postcas":"Passed on same SHA in attempt1; not rerun as new work in attempt2",
+  "unresolved":"Attempt1 early round0 activation refused original Mihomo material after15.18s; root cause remains unknown. Same-SHA full rerun success establishes nondeterminism, not resolution. No TTL, context, source or ownership check relaxed.",
+  "cpu_artifact_id":13652528428,
+  "cpu_artifact_warning":"GitHub has duplicate artifact names across attempts. This evidence was downloaded by exact artifact ID; selecting name alone returned attempt1.",
+  "cpu":{"wall_seconds":279.06,"cpu_sample_seconds":357.17,"sha256_flat_seconds":288.98,"sha256_flat_percent":80.91,"syscall_flat_seconds":59.12,"syscall_flat_percent":16.55,"span":"whole two-round test process"},
+  "evidence":["mihomo-lifecycle-attempt2.log","mihomo-cpu-attempt2-artifacts/status.txt","mihomo-cpu-attempt2-artifacts/cpu-top.txt","mihomo-cpu-attempt2-artifacts/live.cpu.pprof","mihomo-cpu-attempt2-13652528428.zip"],
+  "limitations":"Isolated Linux fixture only. No paired speedup claim, no blanket all-feature same-boot/restart/race or physical-router confirmation. Preserve attempt1 conclusion and failed raw/profile alongside this result."
+}
