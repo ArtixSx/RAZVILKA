@@ -102,7 +102,7 @@ func (l *Lease) ReadBoundedClassicInventory(ctx context.Context, expected netide
 	c, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	if err := l.lock(c); err != nil {
-		return zero, true, err
+		return zero, true, errors.Join(err, c.Err())
 	}
 	defer l.unlock()
 	stop := context.AfterFunc(l.lifetime, cancel)
