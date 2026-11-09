@@ -150,7 +150,7 @@ func (r *domainTCPCaptureExecutionResource) prepare(ctx context.Context, baselin
 	if r.failed != nil {
 		return r.failed
 	}
-	if err := baseline.currentBaseline(ctx); err != nil {
+	if err := baseline.currentBaselineInOriginalFileObservation(ctx); err != nil {
 		return err
 	}
 	if r.started {

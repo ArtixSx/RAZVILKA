@@ -9,18 +9,19 @@ import (
 )
 
 // Actual held-file reads only, not a successful source/process/standby model.
-// Standalone standby Current retains two complete process comparisons. Their
-// four executable-byte bookends can share one synchronous opening/closing;
+// Standalone standby Current retains two complete process comparisons, and
+// currentBaseline retains four. Their four/eight executable-byte bookends
+// can share one synchronous opening/closing;
 // every nested metadata/config comparison still executes. Native workflow
 // measurements separately establish whether that saves end-to-end time.
 func TestDomainStandbyReadFileBracketMeasurement(t *testing.T) {
 	r, ctx := domainFileObservationModel(t)
-	measure := func(shared bool) DomainTCPNativeMetric {
+	measure := func(reads int, shared bool) DomainTCPNativeMetric {
 		t.Helper()
 		stop := StartDomainTCPNativeMeasurement()
 		defer stop()
 		read := func(files *xrayDomainTCPFileObservation) error {
-			for range 4 {
+			for range reads {
 				if err := r.filesCurrentForObservation(ctx, files); err != nil {
 					return err
 				}
@@ -38,12 +39,15 @@ func TestDomainStandbyReadFileBracketMeasurement(t *testing.T) {
 		}
 		return stop()["whole-executable-hash"]
 	}
-	before, after := measure(false), measure(true)
-	if before.Calls != 4 || after.Calls != 2 || before.Bytes != 2*after.Bytes || after.Bytes != 2*r.executable.info.Size() {
-		t.Fatalf("actual byte reads before=%+v after=%+v", before, after)
-	}
-	if next := measure(true); next.Calls != 2 || next.Bytes != after.Bytes {
-		t.Fatalf("successive independent bracket reused prior proof: %+v", next)
+	for _, reads := range []int{4, 8} {
+		before, after := measure(reads, false), measure(reads, true)
+		if before.Calls != int64(reads) || after.Calls != 2 || before.Bytes != int64(reads/2)*after.Bytes || after.Bytes != 2*r.executable.info.Size() {
+			t.Fatalf("actual byte reads before=%+v after=%+v", before, after)
+		}
+		if next := measure(reads, true); next.Calls != 2 || next.Bytes != after.Bytes {
+			t.Fatalf("successive independent bracket reused prior proof: %+v", next)
+		}
+		t.Logf("primitive-only original byte reads before=%+v after=%+v; no native readiness or speed claim", before, after)
 	}
 	stop := StartDomainTCPNativeMeasurement()
 	defer stop()
@@ -53,11 +57,11 @@ func TestDomainStandbyReadFileBracketMeasurement(t *testing.T) {
 	if next := stop()["whole-executable-hash"]; next.Calls != 1 || next.Bytes != r.executable.info.Size() {
 		t.Fatalf("independent read reused revoked byte proof: %+v", next)
 	}
-	t.Logf("primitive-only original byte reads before=%+v after=%+v; no native readiness or speed claim", before, after)
 }
 
 func TestDomainStandbyReadFileBracketMutationCannotEscape(t *testing.T) {
 	r, ctx := domainFileObservationModel(t)
+	witness := errors.New("original inventory read failed")
 	err := r.withFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
 		if err := r.filesCurrentForObservation(ctx, files); err != nil {
 			return err
@@ -74,10 +78,10 @@ func TestDomainStandbyReadFileBracketMutationCannotEscape(t *testing.T) {
 			return err
 		}
 		// Equal metadata cannot replace the closing whole-byte proof.
-		return r.filesCurrentForObservation(ctx, files)
+		return errors.Join(witness, r.filesCurrentForObservation(ctx, files))
 	})
-	if !errors.Is(err, ErrXrayDomainTCPOriginal) {
-		t.Fatal("changed original bytes survived closing bracket", err)
+	if !errors.Is(err, ErrXrayDomainTCPOriginal) || !errors.Is(err, witness) {
+		t.Fatal("changed original bytes or callback error escaped closing bracket", err)
 	}
 	if err := r.filesCurrent(ctx); !errors.Is(err, ErrXrayDomainTCPOriginal) {
 		t.Fatal("independent read adopted changed bytes", err)
