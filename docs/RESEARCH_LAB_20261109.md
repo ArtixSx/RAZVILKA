@@ -615,3 +615,21 @@ race90.661→44.300мс; fullLAN/manual всё ещё FAIL. DNS GEN2 current pro
 7428 передаёт только уже открытый exact pre-add file view successor listener,
 сохраняя независимые старые source reads и closing. Результат требует native run.
 [Независимое ревью изменений и gates](measurements/2026-11-09/research/reviewed-successor-wave/).
+
+### Повтор50bd и измерение полной цены namespace workers
+
+[Полная bounded evidence серия50bd](measurements/2026-11-09/research/lifecycle/50bd038c/):
+public history повторёнPASS164.20с; все4Mihomo PASS, sameboot10/14PASS;
+strictDNS/NFQ полные сценарии FAIL. Native diagnostic30 отдельно достиг нового
+GEN2 file-view path36/72/72; этот более поздний cut прочитал377 полных images
+и не сравним с прежним незавершённым342-read strict сценарием как ускорение.
+
+Команда в исходном native namespace: compiled `startuptools.test`
+`-test.run '^TestMetadataParallel.*$' -test.count=3 -test.v -test.timeout=100s`
+`-test.bench '^BenchmarkMetadataParallelCostModel$' -test.benchtime=300ms -test.benchmem`.
+Нормальный serial0.644мс против2workers1.837мс; race1.179 против4.897мс.
+Полные original Provider/FD/thread boundaries и joins включены; CPU normal
+0.665→3.437мс, race1.233→8.876мс. Это отрицательный результат, production unchanged.
+Измерительный prototype сохраняется для воспроизводимости, не является новой
+возможностью продукта. Следующий actual0470 run измеряет ожидание существующей
+очереди инструмента отдельно от удержания и исполнения, без изменения admission.

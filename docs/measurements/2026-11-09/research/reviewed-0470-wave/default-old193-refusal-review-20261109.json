@@ -1,0 +1,22 @@
+{
+  "decision": "approved",
+  "reviewed_at_utc": "2026-11-09T19:37:38.5475908Z",
+  "base_head": "29799b6e4c672340d34e479ffa1d05bc64af7aea",
+  "files_sha256": {
+    "scripts/test-paired-public-native.sh": "d8a53ba66db3ca1dcafd0177fbbbfee7c2e1c32adb6a96a1e40df1b4e41a5366",
+    "cmd/razvilka/paired_public_default_native_linux_test.go": "5f00fe7066e266b43716c24e88637e90dae62b923e7d078290c3d3f70820f435",
+    "scripts/fixtures/paired-public-session.sh": "f8ae9f1bec85191f93576b03270c45a50601b8be39cadc5fe90ec116fa2e51a3"
+  },
+  "contract": [
+    "Actual pinned817 old binary and unmodified original init defaults",
+    "Separate private namespace and fixed tmpfs opt before any source effects",
+    "Original init Stop sole shell Wait plus old process absence before snapshot",
+    "Actual current bundle dry-run and apply must return1 with exact pre0.20 refusal",
+    "Stopped source names/type/mode/bytes unchanged; modern root absent; no restarted old PID"
+  ],
+  "limitations": [
+    "No local Go or native execution",
+    "Only stopped default-layout refusal, not migration or live-upgrade safety",
+    "Configured paired restore and retained-history acceptance remain separate"
+  ]
+}

@@ -161,6 +161,27 @@ manual/recovery, оставшиеся Mihomo same-boot cuts. Внешних бл
 [Результаты5289](measurements/2026-11-09/research/lifecycle/5289a7d8/),
 [history976 и независимое ревью](measurements/2026-11-09/research/lifecycle/976fa47c/),
 [generic6b](measurements/2026-11-09/research/lifecycle/6b120f8c/generic/).
+Повтор50bd038c: все4 Mihomo native сценария PASS, включая два настоящих
+manual HTTP Apply/Stop (210.65с; same-host4cc206.80с). Lifecycle280.58с против
+277.63с; ускорения нет. Public empty126.58с/draft149.67с/history164.20с снова
+PASS. История подтверждена вторым настоящим запуском, а не синтетическим JSON.
+Sameboot теперь10/14PASS: normal terminal-transaction59.94с отказал на исходном
+process inventory; race history/completed/terminal-transaction120с FAIL после
+настоящего ACK retry. Это отдельная незавершённая матрица восстановления.
+
+Strict DNS50bd оба GEN1 DNS FAIL. Диагностический30с сценарий отдельно достиг
+GEN2 и подтвердил36 original successor scopes,72 derived reads/72 completions;
+так проверено реальное применение7428, но штатный12с срок ещё не принят.
+Managed NFQWS2 full/manual/fresh Apply также FAIL; original core/recovery cuts
+и cleanup-only normal PASS. Все original budgets сохранены.
+
+Test-only metadata parallel experiment отклонён: normal0.644→1.837мс,
+race1.179→4.897мс, рост CPU/alloc. Namespace/provider overhead включён;
+production traversal не менялся. Следующая aux0470 проверяет fixed process
+failure stages, реальные child exit codes, tool-gate wait и default-layout
+refusal. Это диагностика для следующего исправления, не завершение направлений.
+[Точные50bd результаты и независимые проверки](measurements/2026-11-09/research/lifecycle/50bd038c/),
+[ревью0470](measurements/2026-11-09/research/reviewed-0470-wave/).
 На роутере выполнены только read-only измерения; новая сборка и LAN-профиль
 требуют отдельной авторизации изменений действующего устройства.
 [Полный generic CI](measurements/2026-11-09/research/lifecycle/2ecf9961/generic/),

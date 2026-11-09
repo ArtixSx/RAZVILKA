@@ -1,0 +1,25 @@
+{
+  "decision": "approved",
+  "reviewed_at_utc": "2026-11-09T19:36:54.6177421Z",
+  "base_head": "50bd038c27ed9694d916cd2522d1f12b3b2ee388",
+  "files_sha256": {
+    "internal/dataplane/mihomo_live_sidecar_exit_diagnostic.go": "26fa979269d4fd787759ca84b46fca80b50a779205010b6875ed312fd573a5f2",
+    "internal/dataplane/mihomo_live_sidecar_linux.go": "d1556132f186e5781fa5e8b050ef25b3766991e0a66f9296d481c539ad77bff9",
+    "internal/dataplane/mihomo_live_activation_diagnostic_native.go": "dacb61aa698dc56876d94edd21014c94c7d9eadae35362f396a361ae94ffa01b",
+    "internal/dataplane/mihomo_live_sidecar_exit_diagnostic_native_linux_test.go": "8c193406abbfe5c3843015bf51bf38d8eba325620f4361449c58eda9e58e4396",
+    "internal/dataplane/mihomo_live_sidecar_exit_diagnostic_native_linux.go": "d1dc3403720567ab5b51cf8fc949005d8a7068d00760f29a8833242b93a51455",
+    ".github/workflows/mihomo-same-boot-validation.yml": "0b8d074de4bf41c0e0292bf221f6d6e0d2b0d0a78111ea222956f8f683d9463f"
+  },
+  "contract": [
+    "Original check/effect/publication order and returned errors unchanged",
+    "Native exit status observed only after sole Wait done-channel publication",
+    "Fixed numeric exit/signal only; no PID, child output, or error strings",
+    "Nonnative diagnostic is no-op; no deadline or acceptance changes",
+    "Actual child normal/race diagnostic test explicitly required PASS and no SKIP"
+  ],
+  "limitations": [
+    "No local Go execution",
+    "Rel and root.Stat failures remain unlabelled",
+    "Native next-run evidence required; diagnostic cannot establish readiness"
+  ]
+}
