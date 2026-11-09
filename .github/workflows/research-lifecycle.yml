@@ -1,7 +1,14 @@
 name: Research lifecycle acceptance
+run-name: Research lifecycle / ${{ inputs.focus || 'all' }} / ${{ github.sha }}
 
 on:
   workflow_dispatch:
+    inputs:
+      focus:
+        description: 'All acceptance jobs, or only the actual public history scenario'
+        type: choice
+        options: [all, public-history]
+        default: all
   push:
     branches: ['work/research-build-20261109']
     paths:
@@ -21,12 +28,13 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: research-lifecycle-${{ github.ref }}
+  group: research-lifecycle-${{ github.ref }}-${{ inputs.focus || 'all' }}
   cancel-in-progress: true
 env:
   GOTOOLCHAIN: local
 jobs:
   strategy-pair:
+    if: ${{ inputs.focus != 'public-history' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -77,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        history: [empty, draft, history]
+        history: ${{ fromJSON(inputs.focus == 'public-history' && '["history"]' || '["empty","draft","history"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -107,6 +115,7 @@ jobs:
           path: artifacts/paired-public/native.log
           if-no-files-found: error
   classic-save-pinned:
+    if: ${{ inputs.focus != 'public-history' }}
     name: Exact iptables 1.8.11 / ${{ matrix.build-mode }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -164,6 +173,7 @@ jobs:
           path: artifacts/classic-save-pinned/native.log
           if-no-files-found: error
   domain-native:
+    if: ${{ inputs.focus != 'public-history' }}
     name: Domain native strict / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -347,6 +357,7 @@ jobs:
           if-no-files-found: error
 
   managed-probe-native:
+    if: ${{ inputs.focus != 'public-history' }}
     name: managed-probe-native (${{ matrix.build-mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -459,6 +470,7 @@ jobs:
           path: artifacts/managed
           if-no-files-found: warn
   domain-preparation-pair:
+    if: ${{ inputs.focus != 'public-history' }}
     name: DNS preparation recovery pair (diagnostic 30s)
     runs-on: ubuntu-latest
     timeout-minutes: 25
