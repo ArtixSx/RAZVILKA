@@ -108,6 +108,14 @@ downgrade и не доказательство сохранности при о�
 проверку сервиса. Положительный TCP/SOCKS/delay
 не становится доказательством HTTPS, MTProto или рабочего LAN-маршрута.
 
+На исследовательском `8c869c76` дополнительные первые readiness polls и
+продолжение успешного node-check через обычный scheduler убирают подтверждённые
+простои. В парном Linux опыте N12 full VLESS Check p50
+404.777→314.996мс, selected2 enqueue→server completion2615→1444мс.
+Scope, Stop/recovery, history/CAS/ownership, cancellation и joined cleanup
+сохранены. Это результат контролируемого стенда; аппаратная готовность и
+полный Mihomo/NFQWS/DNS lifecycle по-прежнему требуют отдельного завершения.
+
 ## История интеграции 31.10.2026: первоначальная защита обновления
 
 Рабочая ветка `work/bypass-integration-20261031` основана на `a36f5343`

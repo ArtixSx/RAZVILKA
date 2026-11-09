@@ -151,3 +151,31 @@ live Apply→fresh Check blocker, физический WAN/LAN или готов
 Журнал получен через Actions jobs/logs API, сохранён без изменения после
 проверки отсутствия открытых токенов/ключей. Идентификаторы и адреса native
 fixture не являются пользовательскими credentials.
+
+## Повторная проверка итогового кода: 8c869c76
+
+На `8c869c76caf36eb6194675b66cc9bb0d4cef7c69`
+[job 128972485358 / run 42559470862](https://github.com/ArtixSx/RAZVILKA/actions/runs/42559470862/job/128972485358)
+также завершился **SUCCESS**, оба обязательных native теста прошли без SKIP.
+`TestMihomoOriginalNativeServiceAndCommonCleanup` — 11.65 с вместе с четырьмя
+положительными/отрицательными сценариями; HTTP handler test — 4.77 с со всем setup.
+
+| Один успешный HTTP probe | мс |
+| --- | ---: |
+| Handler до подготовки ответа | 3331 |
+| Preparation | 577 |
+| Adapter Check с собственным cleanup | 2754 |
+| Closing environment guard | 0 |
+| Source/control finalization | 0 |
+| Клиент: запрос → прочитанный ответ | 3332.960 |
+
+Это проверка итогового кода и сохранности измерений, **не парный benchmark**
+с 71b6f969. Разницу между этими одиночными Mihomo запусками нельзя считать
+ускорением. Все ограничения isolated Linux probe выше сохраняются; full live
+Apply→fresh Check и физический router/LAN этим job не проверяются. Generic CI
+и остальные jobs текущего run оцениваются независимо.
+
+[Новый исходный журнал](mihomo-handler-native-8c869c76.log), SHA-256:
+`2c1fbd5368f52073d1c25778c04eac43d28f9ea79061d3fb694f2a329dd18a06`.
+Проверка на открытые токены/ключи пройдена; прежний журнал 71b6f969 сохранён
+отдельно без изменений.
