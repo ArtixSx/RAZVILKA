@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -36,6 +37,26 @@ type classicSaveBudget struct {
 type classicSaveOutput struct {
 	sink   *output
 	budget *classicSaveBudget
+}
+
+// Preserve the shared family/stream debit by copying through this wrapper's
+// Write, never through sink.ReadFrom. Storage is exclusive, cleared scratch;
+// actual child pipes, Start/Wait, source checks and output bounds are unchanged.
+func (w *classicSaveOutput) ReadFrom(r io.Reader) (int64, error) {
+	scratch := outputCopyScratch.Get().(*[32 * 1024]byte)
+	defer func() {
+		clear(scratch[:])
+		outputCopyScratch.Put(scratch)
+	}()
+	size := len(scratch)
+	if limited, ok := r.(*io.LimitedReader); ok && int64(size) > limited.N {
+		if limited.N < 1 {
+			size = 1
+		} else {
+			size = int(limited.N)
+		}
+	}
+	return io.CopyBuffer(outputWriterOnly{w}, r, scratch[:size])
 }
 
 func (w *classicSaveOutput) Write(p []byte) (int, error) {
