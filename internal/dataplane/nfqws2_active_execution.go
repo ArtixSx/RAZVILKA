@@ -49,6 +49,7 @@ type nfqws2ActiveExecution struct {
 	processDirectory       *nfqwsActiveProcessDirectory
 	preEffectLAN           *nfqwsPreEffectLANReview
 	directPreparation      *nfqwsDirectPreparationWitness
+	partialRecovery        *nfqwsPolicyRecovery
 }
 
 type nfqws2ActiveExecutionKey struct{}
@@ -619,7 +620,7 @@ func (e *nfqws2ActiveExecution) healthObserved(ctx context.Context) error {
 	return e.current(ctx, e.resource.Plan())
 }
 
-func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
+func (e *nfqws2ActiveExecution) rollbackOriginal(ctx context.Context) error {
 	e.mu.Lock()
 	started, unused, retired, p := e.started, e.unusedLaunch(), e.retired, e.prepared
 	e.mu.Unlock()
@@ -657,6 +658,9 @@ func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := e.settleNeverIssuedPolicy(ctx); err != nil {
+		return err
+	}
 	common := func(c context.Context, binding NFQWSExecutionBinding, proof NFQWSScopedProcessProof) (result error) {
 		stage := "retire.common-binding"
 		defer func() { result = nfqwsExecutionFailure(stage, result) }()
@@ -668,7 +672,7 @@ func (e *nfqws2ActiveExecution) rollback(ctx context.Context) error {
 			return err
 		}
 		stage = "retire.policy-remove"
-		if err := e.binding.Remove(c, e.resource.Plan(), e.resource.Root()); err != nil {
+		if err := e.removeOriginalPolicy(c); err != nil {
 			return err
 		}
 		stage = "retire.verify-inactive"

@@ -166,6 +166,93 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 	if err != nil {
 		t.Fatal(err)
 	}
+	if mode := os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE"); mode != "" {
+		witness, releasePublicationFault, err := dataplane.ArmNFQWSNeverIssuedNativeFixture(a.Dataplane, mode)
+		if err != nil {
+			t.Fatal("arm original never-issued writer cut", err)
+		}
+		failedCode, _ := request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
+		intentCut, publicationCut := witness()
+		if failedCode == http.StatusOK || !intentCut || publicationCut != (mode == "settlement-sync") {
+			t.Fatal("actual original fault was not reached", failedCode, intentCut, publicationCut)
+		}
+		if mode == "intent" {
+			status, err := a.Dataplane.Status()
+			if err != nil || status.Execution == nil || status.Execution.State != "rolled-back" || !status.Execution.RollbackVerified {
+				t.Fatal("original never-issued failure did not join and verify rollback", err, status.Execution)
+			}
+		}
+		// A new user operation uses original retained ownership, including retry
+		// of the actual post-sync cut. No test edits the journal or owner flags.
+		cleanup, done := context.WithTimeout(context.Background(), time.Minute)
+		if mode == "settlement-sync" {
+			r.mu.Lock()
+			pending := r.pending != nil
+			r.mu.Unlock()
+			if !pending {
+				done()
+				t.Fatal("publication cut did not retain original pending operation")
+			}
+			releasePublicationFault() // Remove only the injected IO failure, no state mutation.
+			if err := r.Stop(cleanup); err != nil {
+				done()
+				t.Fatal("fresh original partial recovery Stop", err)
+			}
+		}
+		if err := readEmpty(cleanup); err != nil {
+			done()
+			t.Fatal("partial recovery left actual rules/queue", err)
+		}
+		queue, err := os.ReadFile("/proc/net/netfilter/nfnetlink_queue")
+		if err != nil || strings.TrimSpace(string(queue)) != "" {
+			done()
+			t.Fatal("partial recovery retained original NFQUEUE registration", err)
+		}
+		for _, tool := range []string{"/usr/sbin/iptables-legacy", "/usr/sbin/ip6tables-legacy"} {
+			rules, err := exec.CommandContext(cleanup, tool, "-t", "mangle", "-S").Output()
+			if err != nil || strings.Contains(string(rules), "RZQ_") || strings.Contains(string(rules), "NFQUEUE") {
+				done()
+				t.Fatal("partial recovery retained original classifier body", err)
+			}
+		}
+		status, err := a.Dataplane.Status()
+		if err != nil || status.Execution == nil || !status.Execution.RollbackVerified || status.Execution.State != "rolled-back" {
+			done()
+			t.Fatal("fresh original cleanup did not finish resource retirement", err, status.Execution)
+		}
+		for _, row := range status.Execution.Resources {
+			if row.State != "removed" && row.State != "unused" {
+				done()
+				t.Fatal("partial recovery left resource custody", row.Kind, row.State)
+			}
+		}
+		managedProbeNativeLANRequest(t, cleanup, "rzincluded")
+		managedProbeNativeLANRequest(t, cleanup, "rzexcluded")
+		done()
+		r.mu.Lock()
+		retained := r.pending != nil || r.active != nil
+		r.mu.Unlock()
+		if retained || !reflect.DeepEqual(beforeConfig, a.Store.Get()) {
+			t.Fatal("partial recovery retained route owner or changed panel choice", retained)
+		}
+		stopped = true // The failed Apply has already joined its original owner.
+		t.Logf("actual_never_issued_recovered mode=%s intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true", mode)
+		// Continue the SAME complete Apply/positive+excluded LAN/Stop scenario.
+		// A later forward failure still fails this test; recovery is not readiness.
+		code, data = request(http.MethodGet, "/api/v1/plan?scope=all", "")
+		plan = struct {
+			Review      applyReview    `json:"review"`
+			Transaction dataplane.Plan `json:"transaction"`
+		}{}
+		if code != http.StatusOK || json.Unmarshal(data, &plan) != nil || !plan.Transaction.Ready || plan.Review.Digest == "" {
+			t.Fatal("fresh review after original partial recovery", code)
+		}
+		body, err = json.Marshal(plan.Review)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stopped = false
+	}
 	code, data = request(http.MethodPost, "/api/v1/apply?scope=all", string(body))
 	r.mu.Lock()
 	measured := r.active

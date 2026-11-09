@@ -650,6 +650,9 @@ func nfqwsScopedInspectReceipt(ctx context.Context, plan PolicyEffectPlan, path 
 	if ctx == nil || ctx.Err() != nil {
 		return zero, ErrNFQWSScopedOwner
 	}
+	if status, present, err := inspectNFQWSRecoveryReceipt(ctx, plan, path); present {
+		return status, err
+	}
 	plan, hash, err := copyPolicyEffectPlan(plan)
 	if err != nil {
 		return zero, err

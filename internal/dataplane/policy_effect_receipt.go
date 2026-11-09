@@ -165,9 +165,13 @@ type policyEffectSession struct {
 	borrow              *policyEffectReceiptBorrow
 	nodeTransitPresence *nodeTransitPolicyRuntimeBinding
 	domainPreAdd        *domainTCPPreAddRead
+	nfqRecovery         *nfqwsPolicyRecovery
 }
 
 func (s *policyEffectSession) save(ctx context.Context) (result error) {
+	if s.nfqRecovery != nil {
+		return s.nfqRecovery.save(ctx, s)
+	}
 	if s.borrow == nil {
 		return s.policyAdditionSession.save(ctx)
 	}
@@ -314,6 +318,9 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 	// Persist the whole-generation fence BEFORE inspecting this effect. A late
 	// preexisting attachment can already reference earlier acknowledged guards;
 	// it must not leave a "planned" child that cleanup would otherwise skip.
+	if s.nfqRecovery != nil {
+		s.nfqRecovery.intent(index)
+	}
 	s.doc.Steps[index].State = "intent"
 	if err := s.save(ctx); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
@@ -332,6 +339,9 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 		domainTCPMeasure("pre-add-original-command-boundary")(0)
 	}
 	effect := s.plan.Effects[index]
+	if s.nfqRecovery != nil {
+		s.nfqRecovery.entered = true // Before ALL runCommand paths, including refusals.
+	}
 	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
@@ -467,6 +477,10 @@ func applyPolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan P
 }
 
 func applyPolicyEffectsWithDomainRead(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions, domainRead *domainTCPPreAddRead) error {
+	return applyPolicyEffectsWithOriginalRecovery(ctx, runtime, plan, root, options, domainRead, nil)
+}
+
+func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, options policyAdditionOptions, domainRead *domainTCPPreAddRead, recovery *nfqwsPolicyRecovery) error {
 	runtime, presenceOwner, err := preparePolicyEffectRuntime(runtime, plan, root)
 	if err != nil {
 		return err
@@ -475,7 +489,11 @@ func applyPolicyEffectsWithDomainRead(ctx context.Context, runtime PolicyEffectR
 	if err != nil {
 		return err
 	}
-	defer s.close()
+	defer func() {
+		if recovery == nil || !recovery.retained {
+			s.close()
+		}
+	}()
 	s.nodeTransitPresence = presenceOwner
 	s.domainPreAdd = domainRead
 	if err := s.validateRuntime(runtime); err != nil {
@@ -493,8 +511,16 @@ func applyPolicyEffectsWithDomainRead(ctx context.Context, runtime PolicyEffectR
 	if err != nil {
 		return err
 	}
-	defer borrow.close()
+	defer func() {
+		if recovery == nil || !recovery.retained {
+			borrow.close()
+		}
+	}()
 	s.borrow = borrow
+	if recovery != nil {
+		s.nfqRecovery, recovery.session = recovery, s
+		defer recovery.finishApply()
+	}
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
 	if err := s.guard(ctx, runtime, 0); err != nil {
 		return err
@@ -659,6 +685,15 @@ func removePolicyEffects(ctx context.Context, runtime PolicyEffectRuntime, plan 
 	}
 	if err := checkDomainStandbyOriginalLoadedReceipt(ctx, borrow); err != nil {
 		return err
+	}
+	return s.removeKnownEffects(ctx, runtime)
+}
+
+// The original retained NFQ writer may enter this SAME strict cleanup only
+// after its never-issued intent has been settled. Unknown outcomes never pass.
+func (s *policyEffectSession) removeKnownEffects(ctx context.Context, runtime PolicyEffectRuntime) error {
+	if s.doc.Phase != "active" || s.status().Unknown {
+		return ErrPolicyAdditionUnknown
 	}
 	if err := s.inspectCleanupPlan(ctx, runtime); err != nil {
 		return err
