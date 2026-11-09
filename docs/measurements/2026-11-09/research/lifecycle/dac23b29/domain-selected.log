@@ -1,0 +1,995 @@
+﻿2026-11-09T13:04:27.4395333Z Current runner version: '2.338.2'
+2026-11-09T13:04:27.4424745Z ##[group]Runner Image Provisioner
+2026-11-09T13:04:27.4425901Z Hosted Compute Agent
+2026-11-09T13:04:27.4426808Z Version: 20261028.624
+2026-11-09T13:04:27.4427510Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T13:04:27.4429022Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T13:04:27.4430370Z Worker ID: {59fef5fb-01f3-4e6a-8c9a-572cc92b9f41}
+2026-11-09T13:04:27.4431687Z Region: westus3
+2026-11-09T13:04:27.4432777Z Cloud: Azure
+2026-11-09T13:04:27.4433783Z ##[endgroup]
+2026-11-09T13:04:27.4435773Z ##[group]Operating System
+2026-11-09T13:04:27.4436565Z Ubuntu
+2026-11-09T13:04:27.4437103Z 24.04.5
+2026-11-09T13:04:27.4437661Z LTS
+2026-11-09T13:04:27.4438204Z ##[endgroup]
+2026-11-09T13:04:27.4439195Z ##[group]Runner Image
+2026-11-09T13:04:27.4439899Z Image: ubuntu-24.04
+2026-11-09T13:04:27.4440487Z Version: 20261101.360.1
+2026-11-09T13:04:27.4441841Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T13:04:27.4443482Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T13:04:27.4444542Z ##[endgroup]
+2026-11-09T13:04:27.4445693Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T13:04:27.4448077Z Contents: read
+2026-11-09T13:04:27.4449163Z Metadata: read
+2026-11-09T13:04:27.4449860Z ##[endgroup]
+2026-11-09T13:04:27.4452101Z Secret source: Actions
+2026-11-09T13:04:27.4453025Z Cache mode: write
+2026-11-09T13:04:27.4454211Z Prepare workflow directory
+2026-11-09T13:04:27.4962871Z Prepare all required actions
+2026-11-09T13:04:27.5011113Z Getting action download info
+2026-11-09T13:04:27.8259514Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T13:04:27.9716956Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T13:04:28.5733370Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T13:04:28.8417417Z Complete job name: Domain native strict / selected
+2026-11-09T13:04:28.9343210Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T13:04:28.9344346Z with:
+2026-11-09T13:04:28.9344811Z   persist-credentials: false
+2026-11-09T13:04:28.9345346Z   repository: ArtixSx/RAZVILKA
+2026-11-09T13:04:28.9349686Z   token: ***
+2026-11-09T13:04:28.9350131Z   ssh-strict: true
+2026-11-09T13:04:28.9350571Z   ssh-user: git
+2026-11-09T13:04:28.9351004Z   clean: true
+2026-11-09T13:04:28.9351457Z   sparse-checkout-cone-mode: true
+2026-11-09T13:04:28.9351986Z   fetch-depth: 1
+2026-11-09T13:04:28.9352412Z   fetch-tags: false
+2026-11-09T13:04:28.9352854Z   show-progress: true
+2026-11-09T13:04:28.9353314Z   lfs: false
+2026-11-09T13:04:28.9353737Z   submodules: false
+2026-11-09T13:04:28.9354193Z   set-safe-directory: true
+2026-11-09T13:04:28.9354794Z   allow-unsafe-pr-checkout: false
+2026-11-09T13:04:28.9355727Z env:
+2026-11-09T13:04:28.9356162Z   GOTOOLCHAIN: local
+2026-11-09T13:04:28.9356620Z ##[endgroup]
+2026-11-09T13:04:29.4805847Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T13:04:29.4809936Z ##[group]Getting Git version info
+2026-11-09T13:04:29.4812071Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:04:29.4815146Z [command]/usr/bin/git version
+2026-11-09T13:04:29.5175402Z git version 2.56.0
+2026-11-09T13:04:29.5220945Z ##[endgroup]
+2026-11-09T13:04:29.5261604Z Temporarily overriding HOME='/home/runner/work/_temp/bce9cbf0-4938-4f32-b326-527cae273257' before making global git config changes
+2026-11-09T13:04:29.5279297Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:04:29.5283880Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:04:29.5367807Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:04:29.5396448Z ##[group]Determining repository object format
+2026-11-09T13:04:29.5401577Z ##[endgroup]
+2026-11-09T13:04:29.5406038Z ##[group]Initializing the repository
+2026-11-09T13:04:29.5410198Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:04:29.5619136Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T13:04:29.5623150Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T13:04:29.5626849Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T13:04:29.5630092Z hint: call:
+2026-11-09T13:04:29.5631701Z hint:
+2026-11-09T13:04:29.5633714Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T13:04:29.5636169Z hint:
+2026-11-09T13:04:29.5638944Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T13:04:29.5642852Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T13:04:29.5645967Z hint:
+2026-11-09T13:04:29.5647697Z hint: 	git branch -m <name>
+2026-11-09T13:04:29.5649835Z hint:
+2026-11-09T13:04:29.5652346Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T13:04:29.5656395Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T13:04:29.5683764Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:04:29.5743949Z ##[endgroup]
+2026-11-09T13:04:29.5746822Z ##[group]Disabling automatic garbage collection
+2026-11-09T13:04:29.5749544Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T13:04:29.5809405Z ##[endgroup]
+2026-11-09T13:04:29.5813521Z ##[group]Setting up auth
+2026-11-09T13:04:29.5815784Z Removing SSH command configuration
+2026-11-09T13:04:29.5818941Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:04:29.5875281Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:04:29.6362106Z Removing HTTP extra header
+2026-11-09T13:04:29.6370035Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:04:29.6422897Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:04:29.6687625Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:04:29.6692961Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:04:29.6756118Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:04:29.7027199Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T13:04:29.7086746Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:29.7151811Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:29.7202897Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:29.7253235Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:29.7303404Z ##[endgroup]
+2026-11-09T13:04:29.7306277Z ##[group]Fetching the repository
+2026-11-09T13:04:29.7315354Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +dac23b293486bfd07292f0105fb4ce00e78f5211:refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:04:32.2975700Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:04:32.2976780Z  * [new ref]         dac23b293486bfd07292f0105fb4ce00e78f5211 -> origin/work/research-build-20261109
+2026-11-09T13:04:32.2985523Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T13:04:32.3024883Z   origin/work/research-build-20261109
+2026-11-09T13:04:32.3034019Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:04:32.3070732Z dac23b293486bfd07292f0105fb4ce00e78f5211
+2026-11-09T13:04:32.3074987Z ##[endgroup]
+2026-11-09T13:04:32.3075676Z ##[group]Determining the checkout info
+2026-11-09T13:04:32.3076656Z ##[endgroup]
+2026-11-09T13:04:32.3082140Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T13:04:32.3149795Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T13:04:32.3193790Z ##[group]Checking out the ref
+2026-11-09T13:04:32.3199024Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:04:32.6501223Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T13:04:32.6506164Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T13:04:32.6530079Z ##[endgroup]
+2026-11-09T13:04:32.6619361Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T13:04:32.6634067Z dac23b293486bfd07292f0105fb4ce00e78f5211
+2026-11-09T13:04:32.6646615Z ##[group]Removing auth
+2026-11-09T13:04:32.6647257Z Removing SSH command configuration
+2026-11-09T13:04:32.6652468Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:04:32.6706384Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:04:32.6989679Z Removing HTTP extra header
+2026-11-09T13:04:32.6995618Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:04:32.7045157Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:04:32.7301520Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:04:32.7319743Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:04:32.7351684Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:04:32.7352819Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:04:32.7361875Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:04:32.7362864Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:04:32.7379767Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:04:32.7404257Z /home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:32.7424001Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-66f499aa\-603d\-45df\-9951\-f27ff0853b0e\.config
+2026-11-09T13:04:32.7477822Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:04:32.7530418Z /home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:32.7534002Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-66f499aa\-603d\-45df\-9951\-f27ff0853b0e\.config
+2026-11-09T13:04:32.7679182Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:04:32.7680885Z /github/runner_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:32.7683649Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-66f499aa\-603d\-45df\-9951\-f27ff0853b0e\.config
+2026-11-09T13:04:32.7692443Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:04:32.7730514Z /github/runner_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config
+2026-11-09T13:04:32.7742018Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-66f499aa\-603d\-45df\-9951\-f27ff0853b0e\.config
+2026-11-09T13:04:32.7792633Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:04:32.8054159Z Removing credentials config '/home/runner/work/_temp/git-credentials-66f499aa-603d-45df-9951-f27ff0853b0e.config'
+2026-11-09T13:04:32.8065831Z ##[endgroup]
+2026-11-09T13:04:32.8332711Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T13:04:32.8333129Z with:
+2026-11-09T13:04:32.8333332Z   go-version: 1.26.5
+2026-11-09T13:04:32.8333548Z   cache: false
+2026-11-09T13:04:32.8333760Z   check-latest: false
+2026-11-09T13:04:32.8336278Z   token: ***
+2026-11-09T13:04:32.8336479Z env:
+2026-11-09T13:04:32.8336669Z   GOTOOLCHAIN: local
+2026-11-09T13:04:32.8336883Z ##[endgroup]
+2026-11-09T13:04:32.9557386Z Setup go version spec 1.26.5
+2026-11-09T13:04:32.9574282Z Attempting to download 1.26.5...
+2026-11-09T13:04:33.9250137Z matching 1.26.5...
+2026-11-09T13:04:33.9292383Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T13:04:34.5058027Z Extracting Go...
+2026-11-09T13:04:34.5276937Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/7fb5e91b-52ca-42f9-a588-f91f8a93c256 -f /home/runner/work/_temp/e72996ac-b27c-45b3-899f-2725e32519e1
+2026-11-09T13:04:36.1284684Z Successfully extracted go to /home/runner/work/_temp/7fb5e91b-52ca-42f9-a588-f91f8a93c256
+2026-11-09T13:04:36.1285363Z Adding to the cache ...
+2026-11-09T13:04:40.9749859Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T13:04:40.9752769Z Added go to the path
+2026-11-09T13:04:40.9754990Z Successfully set up Go version 1.26.5
+2026-11-09T13:04:41.0041835Z go version go1.26.5 linux/amd64
+2026-11-09T13:04:41.0042068Z 
+2026-11-09T13:04:41.0042382Z ##[group]go env
+2026-11-09T13:04:41.5921911Z AR='ar'
+2026-11-09T13:04:41.5922276Z CC='gcc'
+2026-11-09T13:04:41.5922603Z CGO_CFLAGS='-O2 -g'
+2026-11-09T13:04:41.5922954Z CGO_CPPFLAGS=''
+2026-11-09T13:04:41.5923301Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T13:04:41.5923679Z CGO_ENABLED='1'
+2026-11-09T13:04:41.5923999Z CGO_FFLAGS='-O2 -g'
+2026-11-09T13:04:41.5924325Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T13:04:41.5924653Z CXX='g++'
+2026-11-09T13:04:41.5924948Z GCCGO='gccgo'
+2026-11-09T13:04:41.5925252Z GO111MODULE=''
+2026-11-09T13:04:41.5925596Z GOAMD64='v1'
+2026-11-09T13:04:41.5925945Z GOARCH='amd64'
+2026-11-09T13:04:41.5926301Z GOAUTH='netrc'
+2026-11-09T13:04:41.5926660Z GOBIN=''
+2026-11-09T13:04:41.5927055Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T13:04:41.5927552Z GOCACHEPROG=''
+2026-11-09T13:04:41.5928142Z GODEBUG=''
+2026-11-09T13:04:41.5928779Z GOENV='/home/runner/.config/go/env'
+2026-11-09T13:04:41.5929264Z GOEXE=''
+2026-11-09T13:04:41.5929612Z GOEXPERIMENT=''
+2026-11-09T13:04:41.5929977Z GOFIPS140='off'
+2026-11-09T13:04:41.5930378Z GOFLAGS=''
+2026-11-09T13:04:41.5931639Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build417005997=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T13:04:41.5932890Z GOHOSTARCH='amd64'
+2026-11-09T13:04:41.5933614Z GOHOSTOS='linux'
+2026-11-09T13:04:41.5934060Z GOINSECURE=''
+2026-11-09T13:04:41.5934554Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T13:04:41.5935211Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T13:04:41.5935709Z GONOPROXY=''
+2026-11-09T13:04:41.5936078Z GONOSUMDB=''
+2026-11-09T13:04:41.5936423Z GOOS='linux'
+2026-11-09T13:04:41.5936783Z GOPATH='/home/runner/go'
+2026-11-09T13:04:41.5937184Z GOPRIVATE=''
+2026-11-09T13:04:41.5937628Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T13:04:41.5938221Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T13:04:41.5939057Z GOSUMDB='sum.golang.org'
+2026-11-09T13:04:41.5939479Z GOTELEMETRY='local'
+2026-11-09T13:04:41.5939940Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T13:04:41.5940475Z GOTMPDIR=''
+2026-11-09T13:04:41.5940824Z GOTOOLCHAIN='local'
+2026-11-09T13:04:41.5941395Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T13:04:41.5942039Z GOVCS=''
+2026-11-09T13:04:41.5942390Z GOVERSION='go1.26.5'
+2026-11-09T13:04:41.5942756Z GOWORK=''
+2026-11-09T13:04:41.5943114Z PKG_CONFIG='pkg-config'
+2026-11-09T13:04:41.5943390Z 
+2026-11-09T13:04:41.5943889Z ##[endgroup]
+2026-11-09T13:04:41.6136388Z ##[group]Run set -euo pipefail
+2026-11-09T13:04:41.6136787Z [36;1mset -euo pipefail[0m
+2026-11-09T13:04:41.6137043Z [36;1msudo apt-get update[0m
+2026-11-09T13:04:41.6137563Z [36;1msudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3[0m
+2026-11-09T13:04:41.6138557Z [36;1msh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip[0m
+2026-11-09T13:04:41.6139666Z [36;1mecho '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict[0m
+2026-11-09T13:04:41.6140357Z [36;1munzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture[0m
+2026-11-09T13:04:41.6140778Z [36;1msudo install -d -m 0755 /usr/local/lib/razvilka-fixtures[0m
+2026-11-09T13:04:41.6141323Z [36;1msudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray[0m
+2026-11-09T13:04:41.6169146Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:04:41.6169542Z env:
+2026-11-09T13:04:41.6169747Z   GOTOOLCHAIN: local
+2026-11-09T13:04:41.6169971Z ##[endgroup]
+2026-11-09T13:04:41.7376219Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T13:04:41.7640680Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T13:04:41.7913816Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T13:04:41.7935425Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T13:04:41.8011762Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T13:04:41.8059259Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T13:04:41.9054781Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T13:04:41.9229061Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T13:04:42.0381886Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T13:04:42.0461916Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T13:04:42.0488258Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T13:04:42.0583446Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T13:04:42.0650815Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T13:04:42.0712960Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T13:04:42.0749223Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T13:04:42.0762545Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T13:04:42.1591841Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T13:04:42.1652043Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T13:04:42.2109838Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T13:04:42.2172065Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T13:04:42.2194461Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T13:04:42.2274853Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T13:04:42.2300536Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T13:04:42.2320889Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T13:04:47.7627701Z Fetched 13.0 MB in 1s (9435 kB/s)
+2026-11-09T13:04:48.9494299Z Reading package lists...
+2026-11-09T13:04:48.9894430Z Reading package lists...
+2026-11-09T13:04:49.2506288Z Building dependency tree...
+2026-11-09T13:04:49.2514222Z Reading state information...
+2026-11-09T13:04:49.4695591Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T13:04:49.4696384Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T13:04:49.4697002Z iptables set to manually installed.
+2026-11-09T13:04:49.4697601Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T13:04:49.4698436Z unzip is already the newest version (6.0-28ubuntu4.1).
+2026-11-09T13:04:49.4699161Z busybox-static is already the newest version (1:1.36.1-6ubuntu3.1).
+2026-11-09T13:04:49.4699829Z busybox-static set to manually installed.
+2026-11-09T13:04:49.4700438Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T13:04:49.4701192Z 0 upgraded, 0 newly installed, 0 to remove and 27 not upgraded.
+2026-11-09T13:04:49.8463091Z /tmp/xray-node.zip.download.awmSWP: OK
+2026-11-09T13:04:49.8661893Z /tmp/xray-node.zip: OK
+2026-11-09T13:04:49.8809585Z Archive:  /tmp/xray-node.zip
+2026-11-09T13:04:50.1493079Z   inflating: /tmp/xray-node-fixture/xray  
+2026-11-09T13:04:50.1822750Z ##[group]Run set -euo pipefail
+2026-11-09T13:04:50.1823091Z [36;1mset -euo pipefail[0m
+2026-11-09T13:04:50.1823363Z [36;1mmkdir -p -m 700 artifacts/domain[0m
+2026-11-09T13:04:50.1824867Z [36;1mgo test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log[0m
+2026-11-09T13:04:50.1846385Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:04:50.1846719Z env:
+2026-11-09T13:04:50.1846942Z   GOTOOLCHAIN: local
+2026-11-09T13:04:50.1847158Z ##[endgroup]
+2026-11-09T13:04:50.2904583Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T13:04:50.2905903Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T13:04:50.2972916Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T13:04:50.6753077Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T13:04:50.6799200Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T13:04:50.7211790Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T13:04:50.8187275Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T13:05:48.7750803Z === RUN   TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline
+2026-11-09T13:05:48.7752181Z --- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)
+2026-11-09T13:05:48.7772438Z === RUN   TestDomainNativeMeasurementSnapshotsRemainCumulative
+2026-11-09T13:05:48.7775499Z --- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)
+2026-11-09T13:05:48.7776284Z === RUN   TestDomainNativeHashBucketsPreserveAggregate
+2026-11-09T13:05:48.7777427Z --- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)
+2026-11-09T13:05:48.7778213Z === RUN   TestDomainPreAddOriginalByteReadMeasurement
+2026-11-09T13:05:48.7830883Z     domain_tcp_preadd_measurement_linux_test.go:49: pre-Add immutable-byte primitive before={Calls:8 Bytes:320 Elapsed:18.223µs} after={Calls:2 Bytes:80 Elapsed:3.967µs}; all4callbacks retained; full native readiness measured separately
+2026-11-09T13:05:48.7833292Z --- PASS: TestDomainPreAddOriginalByteReadMeasurement (0.01s)
+2026-11-09T13:05:48.7834161Z === RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure
+2026-11-09T13:05:48.7835190Z === RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1
+2026-11-09T13:05:48.7872743Z === RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1
+2026-11-09T13:05:48.7910492Z === RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2
+2026-11-09T13:05:48.7945464Z === RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2
+2026-11-09T13:05:48.7980757Z --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)
+2026-11-09T13:05:48.7981782Z     --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1 (0.00s)
+2026-11-09T13:05:48.7982825Z     --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1 (0.00s)
+2026-11-09T13:05:48.7983824Z     --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2 (0.00s)
+2026-11-09T13:05:48.7984825Z     --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2 (0.00s)
+2026-11-09T13:05:48.7985988Z === RUN   TestDomainPreAddLoanRejectsForeignAndEscapedReaders
+2026-11-09T13:05:48.8001028Z --- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)
+2026-11-09T13:05:48.8001776Z === RUN   TestDomainPreAddLoanClosingRejectsLateByteMutation
+2026-11-09T13:05:48.8021048Z --- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.00s)
+2026-11-09T13:05:48.8023545Z === RUN   TestDomainPreAddLoanCancellationRevokesFurtherReads
+2026-11-09T13:05:48.8041219Z --- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)
+2026-11-09T13:05:48.8042210Z === RUN   TestDomainPreAddCanceledEntryPreservesCause
+2026-11-09T13:05:48.8043456Z --- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)
+2026-11-09T13:05:48.8049229Z === RUN   TestDomainStandbyReadFileBracketMeasurement
+2026-11-09T13:05:48.8072662Z     domain_tcp_standby_read_measurement_linux_test.go:50: primitive-only original byte reads before={Calls:4 Bytes:160 Elapsed:11.06µs} after={Calls:2 Bytes:80 Elapsed:3.857µs}; no native readiness or speed claim
+2026-11-09T13:05:48.8080675Z     domain_tcp_standby_read_measurement_linux_test.go:50: primitive-only original byte reads before={Calls:8 Bytes:320 Elapsed:20.306µs} after={Calls:2 Bytes:80 Elapsed:3.806µs}; no native readiness or speed claim
+2026-11-09T13:05:48.8082997Z --- PASS: TestDomainStandbyReadFileBracketMeasurement (0.00s)
+2026-11-09T13:05:48.8084013Z === RUN   TestDomainStandbyReadFileBracketMutationCannotEscape
+2026-11-09T13:05:48.8103605Z --- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)
+2026-11-09T13:05:48.9252402Z === RUN   TestXraySelectedTCPMountIDMeasurement
+2026-11-09T13:05:48.9416109Z     xray_selected_tcp_mount_id_measurement_linux_test.go:43: same held proc FD mount ID samples=1000 fdinfo=7.597988ms statx=800.36µs forced-ENOSYS-fdinfo=7.564967ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim
+2026-11-09T13:05:48.9418786Z --- PASS: TestXraySelectedTCPMountIDMeasurement (0.02s)
+2026-11-09T13:05:48.9451298Z PASS
+2026-11-09T13:05:48.9466268Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	0.190s
+2026-11-09T13:05:49.1451058Z ##[group]Run set -euo pipefail
+2026-11-09T13:05:49.1451434Z [36;1mset -euo pipefail[0m
+2026-11-09T13:05:49.1451702Z [36;1mfor mode in normal race; do[0m
+2026-11-09T13:05:49.1451972Z [36;1m  race_flag=()[0m
+2026-11-09T13:05:49.1452439Z [36;1m  if [ "$mode" = race ]; then race_flag=(-race); fi[0m
+2026-11-09T13:05:49.1452819Z [36;1m  sudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T13:05:49.1453237Z [36;1m    GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:05:49.1453719Z [36;1m    RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \[0m
+2026-11-09T13:05:49.1454229Z [36;1m    RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_DOMAIN_MOUNT_ID_NATIVE=1 \[0m
+2026-11-09T13:05:49.1454721Z [36;1m    go test "${race_flag[@]}" -count=1 ./internal/dataplane \[0m
+2026-11-09T13:05:49.1455531Z [36;1m      -run '^TestDomainTCPOriginalFactoryProcessCancellation$|^TestXraySelectedTCPMountID' -v | tee "artifacts/domain/preadd-child-$mode.log"[0m
+2026-11-09T13:05:49.1456562Z [36;1m  grep -F -- '--- PASS: TestDomainTCPOriginalFactoryProcessCancellation ' "artifacts/domain/preadd-child-$mode.log"[0m
+2026-11-09T13:05:49.1457392Z [36;1m  grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' "artifacts/domain/preadd-child-$mode.log"[0m
+2026-11-09T13:05:49.1458074Z [36;1m  if grep -F -- '--- SKIP:' "artifacts/domain/preadd-child-$mode.log"; then exit 1; fi[0m
+2026-11-09T13:05:49.1458789Z [36;1mdone[0m
+2026-11-09T13:05:49.1478951Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:05:49.1479333Z env:
+2026-11-09T13:05:49.1479530Z   GOTOOLCHAIN: local
+2026-11-09T13:05:49.1479744Z ##[endgroup]
+2026-11-09T13:06:20.5384943Z === RUN   TestDomainTCPOriginalFactoryProcessCancellation
+2026-11-09T13:06:21.3511531Z     domain_tcp_original_process_native_linux_test.go:38: === RUN   TestDomainTCPOriginalFactoryProcessCancellation
+2026-11-09T13:06:21.3515871Z             domain_tcp_original_process_native_linux_test.go:244: genuine DNS Reserve→material→original authored journals→actual inherited-FD Xray→cancel→sole Wait→listener absence; no capture/publication/Apply grant
+2026-11-09T13:06:21.3518546Z         --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.79s)
+2026-11-09T13:06:21.3519357Z         PASS
+2026-11-09T13:06:21.3519716Z         
+2026-11-09T13:06:21.3520277Z --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.81s)
+2026-11-09T13:06:21.3932151Z === RUN   TestXraySelectedTCPMountIDActualParityAndFallback
+2026-11-09T13:06:21.3935852Z --- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)
+2026-11-09T13:06:21.3937020Z === RUN   TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation
+2026-11-09T13:06:21.3939251Z --- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)
+2026-11-09T13:06:21.3940052Z === RUN   TestXraySelectedTCPMountIDBindBoundary
+2026-11-09T13:06:21.4037273Z     xray_selected_tcp_mount_id_linux_test.go:108: === RUN   TestXraySelectedTCPMountIDBindBoundary
+2026-11-09T13:06:21.4038176Z         --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)
+2026-11-09T13:06:21.4038900Z         PASS
+2026-11-09T13:06:21.4039118Z         
+2026-11-09T13:06:21.4039402Z --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)
+2026-11-09T13:06:21.4049100Z PASS
+2026-11-09T13:06:21.4060541Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	0.881s
+2026-11-09T13:06:21.4557401Z         --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.79s)
+2026-11-09T13:06:21.4558697Z --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.81s)
+2026-11-09T13:06:21.4560952Z         --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)
+2026-11-09T13:06:21.4562076Z --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)
+2026-11-09T13:07:42.4316616Z === RUN   TestDomainTCPOriginalFactoryProcessCancellation
+2026-11-09T13:07:44.9378399Z     domain_tcp_original_process_native_linux_test.go:38: === RUN   TestDomainTCPOriginalFactoryProcessCancellation
+2026-11-09T13:07:44.9385621Z             domain_tcp_original_process_native_linux_test.go:244: genuine DNS Reserve→material→original authored journals→actual inherited-FD Xray→cancel→sole Wait→listener absence; no capture/publication/Apply grant
+2026-11-09T13:07:44.9388751Z         --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.47s)
+2026-11-09T13:07:44.9389567Z         PASS
+2026-11-09T13:07:44.9389916Z         
+2026-11-09T13:07:44.9390466Z --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.51s)
+2026-11-09T13:07:45.2017088Z === RUN   TestXraySelectedTCPMountIDActualParityAndFallback
+2026-11-09T13:07:45.2022183Z --- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)
+2026-11-09T13:07:45.2025030Z === RUN   TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation
+2026-11-09T13:07:45.2026369Z --- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)
+2026-11-09T13:07:45.2027623Z === RUN   TestXraySelectedTCPMountIDBindBoundary
+2026-11-09T13:07:46.2444821Z     xray_selected_tcp_mount_id_linux_test.go:108: === RUN   TestXraySelectedTCPMountIDBindBoundary
+2026-11-09T13:07:46.2445790Z         --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)
+2026-11-09T13:07:46.2446292Z         PASS
+2026-11-09T13:07:46.2446529Z         
+2026-11-09T13:07:46.2446931Z --- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)
+2026-11-09T13:07:46.2525173Z PASS
+2026-11-09T13:07:47.2569535Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	4.881s
+2026-11-09T13:07:47.4735547Z         --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.47s)
+2026-11-09T13:07:47.4736240Z --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.51s)
+2026-11-09T13:07:47.4749751Z         --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)
+2026-11-09T13:07:47.4750502Z --- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)
+2026-11-09T13:07:47.4816873Z ##[group]Run set -euo pipefail
+2026-11-09T13:07:47.4817443Z [36;1mset -euo pipefail[0m
+2026-11-09T13:07:47.4819112Z [36;1mgo test -tags razvilka_native_fixture ./internal/netidentity -run '^TestProcMountIDNativeMeasurement$' -count=1 -v | tee artifacts/domain/identity-mount-measurement.log[0m
+2026-11-09T13:07:47.4820549Z [36;1mfor mode in normal race; do[0m
+2026-11-09T13:07:47.4821032Z [36;1m  race_flag=()[0m
+2026-11-09T13:07:47.4821544Z [36;1m  if [ "$mode" = race ]; then race_flag=(-race); fi[0m
+2026-11-09T13:07:47.4822173Z [36;1m  sudo env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T13:07:47.4822890Z [36;1m    GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:07:47.4823811Z [36;1m    RAZVILKA_NETIDENTITY_MOUNT_ID_NATIVE=1 RAZVILKA_NETIDENTITY_NATIVE=1 \[0m
+2026-11-09T13:07:47.4824685Z [36;1m    go test "${race_flag[@]}" -count=1 ./internal/netidentity \[0m
+2026-11-09T13:07:47.4825974Z [36;1m      -run '^TestProcMountID|^TestNativeNetworkIdentityProcThreadAndClosing$' -v | tee "artifacts/domain/identity-mount-$mode.log"[0m
+2026-11-09T13:07:47.4827704Z [36;1m  grep -F -- '--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind ' "artifacts/domain/identity-mount-$mode.log"[0m
+2026-11-09T13:07:47.4829609Z [36;1m  grep -F -- '--- PASS: TestNativeNetworkIdentityProcThreadAndClosing ' "artifacts/domain/identity-mount-$mode.log"[0m
+2026-11-09T13:07:47.4830948Z [36;1m  if grep -F -- '--- SKIP:' "artifacts/domain/identity-mount-$mode.log"; then exit 1; fi[0m
+2026-11-09T13:07:47.4831731Z [36;1mdone[0m
+2026-11-09T13:07:47.4861594Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:07:47.4862178Z env:
+2026-11-09T13:07:47.4862503Z   GOTOOLCHAIN: local
+2026-11-09T13:07:47.4862877Z ##[endgroup]
+2026-11-09T13:07:48.0937081Z === RUN   TestProcMountIDNativeMeasurement
+2026-11-09T13:07:48.1099648Z     observe_mount_id_measurement_linux_test.go:37: netidentity same held proc FD mount ID samples=1000 fdinfo=7.666371ms statx=826.659µs forced-ENOSYS-fdinfo=7.472748ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim
+2026-11-09T13:07:48.1101398Z --- PASS: TestProcMountIDNativeMeasurement (0.02s)
+2026-11-09T13:07:48.1102252Z PASS
+2026-11-09T13:07:48.1109598Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	0.019s
+2026-11-09T13:07:48.7198888Z === RUN   TestProcMountIDActualParityAndFallback
+2026-11-09T13:07:48.7200549Z --- PASS: TestProcMountIDActualParityAndFallback (0.00s)
+2026-11-09T13:07:48.7201709Z === RUN   TestProcMountIDRejectsMalformedResultAndCancellation
+2026-11-09T13:07:48.7202651Z --- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)
+2026-11-09T13:07:48.7203386Z === RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+2026-11-09T13:07:48.7280069Z     observe_mount_id_linux_test.go:115: === RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+2026-11-09T13:07:48.7282181Z         --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)
+2026-11-09T13:07:48.7283414Z         PASS
+2026-11-09T13:07:48.7284142Z         
+2026-11-09T13:07:48.7285042Z --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)
+2026-11-09T13:07:48.7286407Z === RUN   TestNativeNetworkIdentityProcThreadAndClosing
+2026-11-09T13:07:48.7290395Z --- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)
+2026-11-09T13:07:48.7295456Z PASS
+2026-11-09T13:07:48.7302569Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	0.014s
+2026-11-09T13:07:48.7413237Z         --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)
+2026-11-09T13:07:48.7414596Z --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)
+2026-11-09T13:07:48.7429304Z --- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)
+2026-11-09T13:07:49.7256873Z === RUN   TestProcMountIDActualParityAndFallback
+2026-11-09T13:07:49.7264075Z --- PASS: TestProcMountIDActualParityAndFallback (0.00s)
+2026-11-09T13:07:49.7264789Z === RUN   TestProcMountIDRejectsMalformedResultAndCancellation
+2026-11-09T13:07:49.7266546Z --- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)
+2026-11-09T13:07:49.7267323Z === RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+2026-11-09T13:07:50.7465919Z     observe_mount_id_linux_test.go:115: === RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+2026-11-09T13:07:50.7467105Z         --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)
+2026-11-09T13:07:50.7467787Z         PASS
+2026-11-09T13:07:50.7468120Z         
+2026-11-09T13:07:50.7468721Z --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)
+2026-11-09T13:07:50.7470157Z === RUN   TestNativeNetworkIdentityProcThreadAndClosing
+2026-11-09T13:07:50.7501196Z --- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)
+2026-11-09T13:07:50.7524090Z PASS
+2026-11-09T13:07:51.7552012Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	2.043s
+2026-11-09T13:07:51.7657029Z         --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)
+2026-11-09T13:07:51.7657845Z --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)
+2026-11-09T13:07:51.7669733Z --- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)
+2026-11-09T13:07:51.7723101Z ##[group]Run set -euo pipefail
+2026-11-09T13:07:51.7723444Z [36;1mset -euo pipefail[0m
+2026-11-09T13:07:51.7723716Z [36;1mmkdir -p -m 700 artifacts/domain[0m
+2026-11-09T13:07:51.7724114Z [36;1mtrap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain' EXIT[0m
+2026-11-09T13:07:51.7724509Z [36;1mcase "$SCENARIO" in[0m
+2026-11-09T13:07:51.7724897Z [36;1m  selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;[0m
+2026-11-09T13:07:51.7725320Z [36;1m  canceled-ready)[0m
+2026-11-09T13:07:51.7725704Z [36;1m    expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement[0m
+2026-11-09T13:07:51.7726160Z [36;1m    export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1[0m
+2026-11-09T13:07:51.7726578Z [36;1m    export RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1[0m
+2026-11-09T13:07:51.7727123Z [36;1m    export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;[0m
+2026-11-09T13:07:51.7727532Z [36;1m  *) exit 2 ;;[0m
+2026-11-09T13:07:51.7727785Z [36;1mesac[0m
+2026-11-09T13:07:51.7728922Z [36;1msudo --preserve-env=RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \[0m
+2026-11-09T13:07:51.7730019Z [36;1m  env PATH="$PATH" GOTOOLCHAIN=local \[0m
+2026-11-09T13:07:51.7730419Z [36;1m  GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:07:51.7730879Z [36;1m  RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \[0m
+2026-11-09T13:07:51.7731371Z [36;1m  RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain" \[0m
+2026-11-09T13:07:51.7731941Z [36;1m  sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain/native.log[0m
+2026-11-09T13:07:51.7732509Z [36;1mgrep -F -- "--- PASS: $expected_case " artifacts/domain/native.log[0m
+2026-11-09T13:07:51.7732987Z [36;1mif grep -F -- '--- SKIP:' artifacts/domain/native.log; then exit 1; fi[0m
+2026-11-09T13:07:51.7733446Z [36;1mgrep -Fx 'child_exit_status=0' artifacts/domain/status.txt[0m
+2026-11-09T13:07:51.7733889Z [36;1mgrep -Fx "native_case=$expected_case" artifacts/domain/status.txt[0m
+2026-11-09T13:07:51.7734373Z [36;1mgrep -Fx 'publication_budget_seconds=12' artifacts/domain/status.txt[0m
+2026-11-09T13:07:51.7734871Z [36;1mgrep -Fx 'diagnostic_only=false' artifacts/domain/status.txt[0m
+2026-11-09T13:07:51.7754764Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:07:51.7755097Z env:
+2026-11-09T13:07:51.7755295Z   GOTOOLCHAIN: local
+2026-11-09T13:07:51.7755512Z   SCENARIO: selected
+2026-11-09T13:07:51.7755716Z ##[endgroup]
+2026-11-09T13:07:51.8485926Z CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:08:27.2583652Z === RUN   TestDomainTCPOriginalNativeAcceptedFlows
+2026-11-09T13:08:41.1718897Z     domain_tcp_original_native_linux_test.go:595: actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.605926263s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:11.502µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.456854463s} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:6 Bytes:219464436 Elapsed:159.89583ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.462344ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:27.745465ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.410074ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:53.043175ms} hash-stack/after-opening-scope/other:{Calls:8 Bytes:292619248 Elapsed:212.385446ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:188.925178ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.787549ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:132.333657ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.382932ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.834438ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.495714ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.810832ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.535941ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:6 Bytes:219464436 Elapsed:160.731612ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.352906ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.338339ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.535418ms} hash-stack/direct/other:{Calls:11 Bytes:402351466 Elapsed:292.354982ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.896949ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.890589ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.436383ms} hash-stack/file-opening-wrapper/other:{Calls:1 Bytes:36577406 Elapsed:26.452894ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.330112ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.791866ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.478622ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.52226ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.566707ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.557878ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.61357ms} native-hash-attribution:{Calls:116 Bytes:0 Elapsed:5.019337ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:983ns} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.357099896s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:7.335µs} process-current:{Calls:240 Bytes:0 Elapsed:4.649603715s} publication-gate:{Calls:12 Bytes:0 Elapsed:12.432µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:944.950144ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.654827852s} whole-executable-hash:{Calls:116 Bytes:4242979096 Elapsed:3.083899662s}]
+2026-11-09T13:08:41.1736153Z     domain_tcp_original_native_linux_test.go:596: original publication blocked; bounded goroutine stacks:
+2026-11-09T13:08:41.1737046Z         goroutine 21 [running]:
+2026-11-09T13:08:41.1738496Z         github.com/ArtixSx/razvilka/internal/app.domainOriginalPublicationDiagnostics(0x36b15fa6c908, {0x1e03ef4, 0x1d})
+2026-11-09T13:08:41.1740064Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:1119 +0x6a
+2026-11-09T13:08:41.1741014Z         github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11({0x1f5a048, 0x36b15fca30e0})
+2026-11-09T13:08:41.1742004Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:596 +0x1965
+2026-11-09T13:08:41.1742913Z         github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody(0x14?, 0x36b15fe77788)
+2026-11-09T13:08:41.1743828Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_action_failure.go:9 +0xda
+2026-11-09T13:08:41.1745241Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x36b15fc0c2d0, 0x0, 0x36b15fc18b40, ...}, ...)
+2026-11-09T13:08:41.1746447Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:787 +0x18f
+2026-11-09T13:08:41.1747753Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x36b15fc0c2d0, 0x0, 0x36b15fc18b40, ...}, ...)
+2026-11-09T13:08:41.1749354Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:769 +0x10b5
+2026-11-09T13:08:41.1750279Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked(...)
+2026-11-09T13:08:41.1751237Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:697
+2026-11-09T13:08:41.1752128Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked(...)
+2026-11-09T13:08:41.1753063Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:693
+2026-11-09T13:08:41.1754266Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).WithDomainTCPProofResources(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x36b15fc0c2d0, 0x0, 0x36b15fc18b40, ...}, ...)
+2026-11-09T13:08:41.1755525Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_proof_scope.go:90 +0x34c
+2026-11-09T13:08:41.1756339Z         github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative(0x36b15fa6c908, 0x0)
+2026-11-09T13:08:41.1757260Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:458 +0x45b2
+2026-11-09T13:08:41.1758165Z         github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeAcceptedFlows(0x36b15fa6c908?)
+2026-11-09T13:08:41.1759461Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:36 +0x15
+2026-11-09T13:08:41.1760069Z         testing.tRunner(0x36b15fa6c908, 0x1f30c78)
+2026-11-09T13:08:41.1760644Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+2026-11-09T13:08:41.1761130Z         created by testing.(*T).Run in goroutine 1
+2026-11-09T13:08:41.1761701Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x4c5
+2026-11-09T13:08:41.1762074Z         
+2026-11-09T13:08:41.1762336Z         goroutine 1 [chan receive]:
+2026-11-09T13:08:41.1762783Z         testing.(*T).Run(0x36b15fa6c6c8, {0x1e26bfd?, 0x0?}, 0x1f30c78)
+2026-11-09T13:08:41.1763402Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0x4e5
+2026-11-09T13:08:41.1763875Z         testing.runTests.func1(0x36b15fa6c6c8)
+2026-11-09T13:08:41.1764422Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x3e
+2026-11-09T13:08:41.1764924Z         testing.tRunner(0x36b15fa6c6c8, 0x36b15fdffb70)
+2026-11-09T13:08:41.1765499Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+2026-11-09T13:08:41.1766434Z         testing.runTests({0x1dfcdcd, 0x1b}, {0x1e26db5, 0x28}, 0x36b15fa2c3d8, {0x2d13260, 0x4a4, 0x4a4}, {0xc2b48f7fcf6081ce, 0x29e9300c8c, ...})
+2026-11-09T13:08:41.1767296Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x505
+2026-11-09T13:08:41.1767745Z         testing.(*M).Run(0x36b15fb2a0a0)
+2026-11-09T13:08:41.1768578Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0x6ac
+2026-11-09T13:08:41.1769192Z         github.com/ArtixSx/razvilka/internal/app.TestMain(0x36b15fb2a0a0)
+2026-11-09T13:08:41.1770021Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x379
+2026-11-09T13:08:41.1770554Z         main.main()
+2026-11-09T13:08:41.1770846Z         	_testmain.go:2422 +0xa5
+2026-11-09T13:08:41.1771089Z         
+2026-11-09T13:08:41.1771334Z         goroutine 147 [syscall]:
+2026-11-09T13:08:41.1771802Z         runtime/pprof.readProfile()
+2026-11-09T13:08:41.1772400Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/cpuprof.go:251 +0x4a
+2026-11-09T13:08:41.1773050Z         runtime/pprof.profileWriter({0x1f50860?, 0x36b15fa08798?})
+2026-11-09T13:08:41.1773687Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:930 +0x45
+2026-11-09T13:08:41.1774256Z         created by runtime/pprof.StartCPUProfile in goroutine 21
+2026-11-09T13:08:41.1774885Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:911 +0x1a5
+2026-11-09T13:08:41.1775268Z         
+2026-11-09T13:08:41.1775511Z         goroutine 109 [IO wait]:
+2026-11-09T13:08:41.1775913Z         internal/poll.runtime_pollWait(0x7f97e0637c00, 0x72)
+2026-11-09T13:08:41.1776508Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:08:41.1777105Z         internal/poll.(*pollDesc).wait(0x36b15fa7c180?, 0x36b15fdcb41c?, 0x0)
+2026-11-09T13:08:41.1777820Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:08:41.1778553Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:08:41.1779161Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:08:41.1779671Z         internal/poll.(*FD).Accept(0x36b15fa7c180)
+2026-11-09T13:08:41.1780416Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+2026-11-09T13:08:41.1780929Z         net.(*netFD).accept(0x36b15fa7c180)
+2026-11-09T13:08:41.1781441Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+2026-11-09T13:08:41.1781891Z         net.(*TCPListener).accept(0x36b15f998000)
+2026-11-09T13:08:41.1782453Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+2026-11-09T13:08:41.1783058Z         net.(*TCPListener).AcceptTCP(0x36b15f998000)
+2026-11-09T13:08:41.1783625Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:374 +0x30
+2026-11-09T13:08:41.1784237Z         github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func2()
+2026-11-09T13:08:41.1784992Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:171 +0xa5
+2026-11-09T13:08:41.1785778Z         created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 121
+2026-11-09T13:08:41.1786609Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:169 +0x60a
+2026-11-09T13:08:41.1787039Z         
+2026-11-09T13:08:41.1787279Z         goroutine 121 [select]:
+2026-11-09T13:08:41.1788490Z         github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS({0x1f5a080, 0x36b15f941d10}, 0x36b15f90c2a8, 0x36b15f998000, {0x36b15fb6a040?, 0x0?, 0x0?, 0x36b15fb6a050?})
+2026-11-09T13:08:41.1789602Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:228 +0x685
+2026-11-09T13:08:41.1790817Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).Serve(0x36b15f906c60, {0x1f5a080, 0x36b15f941d10}, 0x36b15f90c2a8, 0x36b15f998000)
+2026-11-09T13:08:41.1792009Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_synthetic_publish.go:194 +0x185
+2026-11-09T13:08:41.1793015Z         github.com/ArtixSx/razvilka/internal/dataplane.(*scopedDNSSession).serve(0x36b15f9c6fd0?, {0x1f5a080?, 0x36b15f941d10?})
+2026-11-09T13:08:41.1794006Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/scoped_dns_inactive_lifecycle.go:69 +0xfd
+2026-11-09T13:08:41.1795045Z         created by github.com/ArtixSx/razvilka/internal/dataplane.(*ScopedDNSAdapter).startSyntheticDNSContinuingLocked in goroutine 21
+2026-11-09T13:08:41.1797031Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/scoped_dns_synthetic_mode.go:145 +0xf9f
+2026-11-09T13:08:41.1797881Z         
+2026-11-09T13:08:41.1798698Z         goroutine 108 [IO wait]:
+2026-11-09T13:08:41.1799195Z         internal/poll.runtime_pollWait(0x7f97e0637800, 0x72)
+2026-11-09T13:08:41.1800027Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:08:41.1800654Z         internal/poll.(*pollDesc).wait(0x36b15fa7c100?, 0x36b1600b2ec5?, 0x0)
+2026-11-09T13:08:41.1801358Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:08:41.1801879Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:08:41.1802479Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:08:41.1803254Z         internal/poll.(*FD).ReadFromInet4(0x36b15fa7c100, {0x36b15f95aec5, 0x1001, 0x1001}, 0x36b15f95ad90)
+2026-11-09T13:08:41.1804031Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+2026-11-09T13:08:41.1804746Z         net.(*netFD).readFromInet4(0x36b15fa7c100, {0x36b1600b2ec5?, 0x36b15ff72808?, 0x0?}, 0x0?)
+2026-11-09T13:08:41.1805435Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+2026-11-09T13:08:41.1806102Z         net.(*UDPConn).readFromAddrPort(0x36b1600b2e20?, {0x36b1600b2ec5?, 0x88?, 0x491dd2?})
+2026-11-09T13:08:41.1806803Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:78 +0x152
+2026-11-09T13:08:41.1807537Z         net.(*UDPConn).ReadFromUDPAddrPort(0x36b15f90c2a8, {0x36b1600b2ec5?, 0x36b15fa2c0c0?, 0xb324?})
+2026-11-09T13:08:41.1808810Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:172 +0x30
+2026-11-09T13:08:41.1809440Z         github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS.func1()
+2026-11-09T13:08:41.1810403Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:98 +0xf2
+2026-11-09T13:08:41.1811201Z         created by github.com/ArtixSx/razvilka/internal/dnscontrol.ServeScopedDNS in goroutine 121
+2026-11-09T13:08:41.1812018Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_listener.go:95 +0x4e9
+2026-11-09T13:08:41.1812448Z         
+2026-11-09T13:08:41.1812702Z         goroutine 148 [runnable]:
+2026-11-09T13:08:41.1813078Z         reflect.resolveNameOff(0x1bed560?, 0xd33?)
+2026-11-09T13:08:41.1813648Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/runtime1.go:653 +0x27
+2026-11-09T13:08:41.1814095Z         reflect.(*rtype).nameOff(...)
+2026-11-09T13:08:41.1814574Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/reflect/type.go:586
+2026-11-09T13:08:41.1814999Z         reflect.(*rtype).String(0x1bed560)
+2026-11-09T13:08:41.1815513Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/reflect/type.go:602 +0x1b
+2026-11-09T13:08:41.1815943Z         reflect.(*rtype).Name(0x57db16?)
+2026-11-09T13:08:41.1816449Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/reflect/type.go:729 +0x25
+2026-11-09T13:08:41.1817029Z         encoding/json.indirect({0x1bed560?, 0x36b15fabf8f0?, 0x569097?}, 0x0)
+2026-11-09T13:08:41.1817695Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:450 +0x79
+2026-11-09T13:08:41.1818947Z         encoding/json.(*decodeState).literalStore(0x36b15fa88de8, {0x36b15fe8500a, 0x1, 0x1f6}, {0x1bed560?, 0x36b15fabf8f0?, 0x1?}, 0x0)
+2026-11-09T13:08:41.1819842Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:864 +0x1dd
+2026-11-09T13:08:41.1820551Z         encoding/json.(*decodeState).value(0x36b15fa88de8, {0x1bed560?, 0x36b15fabf8f0?, 0x6?})
+2026-11-09T13:08:41.1821279Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:394 +0x114
+2026-11-09T13:08:41.1822057Z         encoding/json.(*decodeState).object(0x36b15fa88de8, {0x1bc3d00?, 0x36b15fabf8f0?, 0x36b16011d1f0?})
+2026-11-09T13:08:41.1822819Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:767 +0xd65
+2026-11-09T13:08:41.1823569Z         encoding/json.(*decodeState).value(0x36b15fa88de8, {0x1bc3d00?, 0x36b15fabf8f0?, 0x36b16011d240?})
+2026-11-09T13:08:41.1824326Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:380 +0x3e
+2026-11-09T13:08:41.1825011Z         encoding/json.(*decodeState).unmarshal(0x36b15fa88de8, {0x1bc3d00?, 0x36b15fabf8f0?})
+2026-11-09T13:08:41.1825889Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/decode.go:183 +0x11e
+2026-11-09T13:08:41.1826543Z         encoding/json.(*Decoder).Decode(0x36b15fa88dc0, {0x1bc3d00, 0x36b15fabf8f0})
+2026-11-09T13:08:41.1827216Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/encoding/json/stream.go:75 +0x15f
+2026-11-09T13:08:41.1827986Z         github.com/ArtixSx/razvilka/internal/operationgate.decodeControl({0x36b15fe84e00, 0xe2, 0x200})
+2026-11-09T13:08:41.1829003Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/self_update_stop.go:140 +0x13a
+2026-11-09T13:08:41.1829763Z         github.com/ArtixSx/razvilka/internal/operationgate.readControlCurrent(0x4ae32d?)
+2026-11-09T13:08:41.1830577Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/self_update_stop.go:162 +0xd0
+2026-11-09T13:08:41.1831752Z         github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkWithMarkerMode(0x36b15fc1e420, {0x1f5a080, 0x36b15fd6a8c0}, 0x36b15f90c378, 0x0)
+2026-11-09T13:08:41.1832873Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/control_epoch_review.go:248 +0x105
+2026-11-09T13:08:41.1833730Z         github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkWithMarker(...)
+2026-11-09T13:08:41.1834581Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/control_epoch_review.go:235
+2026-11-09T13:08:41.1835481Z         github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).check(...)
+2026-11-09T13:08:41.1836305Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/control_epoch_review.go:231
+2026-11-09T13:08:41.1837098Z         github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).Current.func1()
+2026-11-09T13:08:41.1837958Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/control_epoch_review.go:117 +0x9e
+2026-11-09T13:08:41.1839187Z         github.com/ArtixSx/razvilka/internal/operationgate.(*Gate).WithExclusiveContext(0x36b15fa30320, {0x1f5a080, 0x36b15fd6a8c0}, 0x36b16011d760)
+2026-11-09T13:08:41.1840208Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/exclusive_context.go:86 +0x1e6
+2026-11-09T13:08:41.1841213Z         github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).Current(0x36b15fd26f30?, {0x1f5a080?, 0x36b15fd6a8c0?})
+2026-11-09T13:08:41.1842207Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/control_epoch_review.go:114 +0x55
+2026-11-09T13:08:41.1842997Z         github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation.func1()
+2026-11-09T13:08:41.1843846Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_operations.go:55 +0x29
+2026-11-09T13:08:41.1844913Z         github.com/ArtixSx/razvilka/internal/operationgate.(*Gate).WithExclusiveContext(0x36b15fa30320, {0x1f5a080, 0x36b15fd6a8c0}, 0x36b16011d9d0)
+2026-11-09T13:08:41.1845918Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/exclusive_context.go:86 +0x1e6
+2026-11-09T13:08:41.1847005Z         github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation({0x1f5a0b8?, 0x36b15fabf110?}, 0x36b15fa30320, 0x36b15fb2fca0)
+2026-11-09T13:08:41.1848061Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_operations.go:55 +0xf0
+2026-11-09T13:08:41.1849482Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*Manager).NewNetworkPolicyDNSResolverForPlanWithOperations.func1({0x1f5a0b8?, 0x36b15fabf110?})
+2026-11-09T13:08:41.1850578Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_operations.go:28 +0x25
+2026-11-09T13:08:41.1851715Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*ScopedDNSResolver).check(_, {_, _}, {{{0x1dcf681, 0x8}, {0x1dcf689, 0x8}, {0x0, 0x0}, {0x0, ...}, ...}, ...})
+2026-11-09T13:08:41.1852704Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/scoped_query.go:253 +0x6a
+2026-11-09T13:08:41.1854132Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSResolver).admission(0x36b15fd12288, {0x1f5a0b8, 0x36b15fabf110}, {{0x2?, 0x36b16011e518?}, {0x36b15fa2c0c0?}}, {0x0, 0x0})
+2026-11-09T13:08:41.1855273Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy.go:193 +0x87b
+2026-11-09T13:08:41.1856268Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).current.func1({0x1f5a0b8, 0x36b15fabf110})
+2026-11-09T13:08:41.1857332Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_synthetic_mapping.go:272 +0xb9
+2026-11-09T13:08:41.1858152Z         github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation.func1()
+2026-11-09T13:08:41.1859170Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_operations.go:55 +0x29
+2026-11-09T13:08:41.1860245Z         github.com/ArtixSx/razvilka/internal/operationgate.(*Gate).WithExclusiveContext(0x36b15fa30320, {0x1f5a0b8, 0x36b15fabf110}, 0x36b16011e890)
+2026-11-09T13:08:41.1861260Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/operationgate/exclusive_context.go:86 +0x1e6
+2026-11-09T13:08:41.1862329Z         github.com/ArtixSx/razvilka/internal/dnscontrol.networkPolicyDNSOperation({0x1f5a0b8?, 0x36b15faec0e0?}, 0x36b15fa30320, 0x36b16011ea00)
+2026-11-09T13:08:41.1863363Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_operations.go:55 +0xf0
+2026-11-09T13:08:41.1864588Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).current(0x36b15f906c60, {0x1f5a0b8, 0x36b15faec0e0})
+2026-11-09T13:08:41.1865686Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_synthetic_mapping.go:268 +0x2a5
+2026-11-09T13:08:41.1867422Z         github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).CheckAdapterBinding(0x36b15f906c60, {0x1f5a0b8, 0x36b15faec0e0}, 0x36b15f9da2a0, 0x36b15fd86360, 0x36b15fc1e420, {0x36b15fdb8180?, 0x45?}, {{{0x0, 0xffffc0a8012a}, ...}, ...})
+2026-11-09T13:08:41.1869117Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dnscontrol/network_policy_synthetic_adapter.go:48 +0x316
+2026-11-09T13:08:41.1870289Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPOperationMaterial).originalSourcesCurrent(0x36b15fb17b08, {0x1f5a0b8, 0x36b15faec0e0})
+2026-11-09T13:08:41.1871379Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_material.go:290 +0x296
+2026-11-09T13:08:41.1872423Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPOperationMaterial).Current(0x36b15fb17b08, {0x1f5a048, 0x36b15fcb6120})
+2026-11-09T13:08:41.1873427Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_material.go:249 +0x92a
+2026-11-09T13:08:41.1874620Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).originalContextWithFiles(0x36b15fba7088, {0x1f5a048, 0x36b15fcb6120}, 0x0, 0x0)
+2026-11-09T13:08:41.1875737Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:118 +0x54
+2026-11-09T13:08:41.1876625Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).originalContext(...)
+2026-11-09T13:08:41.1877513Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:111
+2026-11-09T13:08:41.1878942Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).originalProcessReadContext(0x36b15fba7088, {0x1f5a048?, 0x36b15fcb6120?}, 0x80?)
+2026-11-09T13:08:41.1880081Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:188 +0x3a
+2026-11-09T13:08:41.1881266Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).listenerCurrentWithFiles(0x36b15fba7088, {0x1f5a048?, 0x36b15fcb6120?}, 0x0?)
+2026-11-09T13:08:41.1882375Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:324 +0x65
+2026-11-09T13:08:41.1883633Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).currentWithFiles(0x36b15fba7088, {0x1f5a048, 0x36b15fcb6120}, 0x0)
+2026-11-09T13:08:41.1884717Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:314 +0xef
+2026-11-09T13:08:41.1885862Z         github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).currentWithFiles(0x36b16016e008, {0x1f5a048, 0x36b15fcb6120}, 0x0)
+2026-11-09T13:08:41.1886969Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution.go:170 +0xd2
+2026-11-09T13:08:41.1887841Z         github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).current(...)
+2026-11-09T13:08:41.1888988Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution.go:161
+2026-11-09T13:08:41.1890241Z         github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureEffectRunner).Run(0x36b15fa08480, {0x1f5a048, 0x36b15fcb6120}, {0x1df855a, 0x19}, {0x36b15fe55500, 0x17, 0x18})
+2026-11-09T13:08:41.1891462Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution_effects.go:267 +0x7c
+2026-11-09T13:08:41.1892905Z         github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).runCommand(0x36b15fdeeea0, {0x1f5a048, 0x36b15fca3920}, {0x0, {0x1f52920, 0x36b15fa08480}, {{0x0, 0x0}, {0x1df855a, 0x19}, ...}, ...}, ...)
+2026-11-09T13:08:41.1894320Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/policy_effect_command_invocation.go:33 +0x3f5
+2026-11-09T13:08:41.1895711Z         github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add(0x36b15fdeeea0, {0x1f5a048, 0x36b15fca3920}, {0x0, {0x1f52920, 0x36b15fa08480}, {{0x0, 0x0}, {0x1df855a, 0x19}, ...}, ...}, ...)
+2026-11-09T13:08:41.1896902Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/policy_effect_receipt.go:345 +0x4e7
+2026-11-09T13:08:41.1898443Z         github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithOriginalRecovery({0x1f5a080, 0x36b15fd6a050}, {0x0, {0x1f52920, 0x36b15fa08480}, {{0x0, 0x0}, {0x1df855a, 0x19}, {0x0, ...}}, ...}, ...)
+2026-11-09T13:08:41.1899672Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/policy_effect_receipt.go:557 +0xe85
+2026-11-09T13:08:41.1900479Z         github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithDomainRead(...)
+2026-11-09T13:08:41.1901283Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/policy_effect_receipt.go:483
+2026-11-09T13:08:41.1902640Z         github.com/ArtixSx/razvilka/internal/dataplane.applyDomainTCPOriginalEffects({0x1f5a080, 0x36b15fd6a050}, {0x0, {0x1f52920, 0x36b15fa08480}, {{0x0, 0x0}, {0x1df855a, 0x19}, {0x0, ...}}, ...}, ...)
+2026-11-09T13:08:41.1903873Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_preadd_observation.go:62 +0x52c
+2026-11-09T13:08:41.1905057Z         github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).prepare(0x36b16016e008, {0x1f5a080, 0x36b15fd6a050}, 0x36b15fe82b00)
+2026-11-09T13:08:41.1906221Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_capture_execution_effects.go:205 +0x459
+2026-11-09T13:08:41.1907524Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).PrepareSyntheticCapture(0x36b15f906000, {0x1f5a080, 0x36b15fd6a050}, 0x36b16017a820, 0x36b15f998bc0)
+2026-11-09T13:08:41.1908883Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:235 +0x20b
+2026-11-09T13:08:41.1910086Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping(0x36b16017a820, {0x1f5a0b8, 0x36b15fa60540}, 0x36b15f998bc0)
+2026-11-09T13:08:41.1911240Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture_mapping.go:152 +0xa22
+2026-11-09T13:08:41.1912516Z         github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture(0x36b15fe82b00, {0x1f5a0b8, 0x36b15fa60540})
+2026-11-09T13:08:41.1913655Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/synthetic_baseline_execution_resource.go:286 +0x4b
+2026-11-09T13:08:41.1915019Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture(_, {_, _}, {{{0x36b15febe340, 0x40}, {0x1dde108, 0x10}, {0x1dcd7cf, 0x7}, {0x36b15f948370, ...}, ...}, ...}, ...)
+2026-11-09T13:08:41.1916251Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:173 +0x473
+2026-11-09T13:08:41.1917167Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1(0xc?)
+2026-11-09T13:08:41.1918080Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:122 +0x9a
+2026-11-09T13:08:41.1919312Z         github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope({0x1f5a0b8, 0x36b15fa60540}, 0x36b16016b838, 0x36b15fcb7d10)
+2026-11-09T13:08:41.1920374Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:173 +0x193
+2026-11-09T13:08:41.1921739Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture(_, {_, _}, {{{0x36b15febe340, 0x40}, {0x1dde108, 0x10}, {0x1dcd7cf, 0x7}, {0x36b15f948370, ...}, ...}, ...}, ...)
+2026-11-09T13:08:41.1923095Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_policy_tcp_capture.go:121 +0x2b3
+2026-11-09T13:08:41.1924139Z         github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1({0x1f5a0b8, 0x36b15fa60540})
+2026-11-09T13:08:41.1925177Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_resource_consumer.go:37 +0x51f
+2026-11-09T13:08:41.1926370Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withNativeInPhase(0x36b15fba7088, {0x1f5a0b8, 0x36b15fa60540}, 0x36b15ff09f10)
+2026-11-09T13:08:41.1927480Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:296 +0x242
+2026-11-09T13:08:41.1928758Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative.func1({0x1f5a0b8?, 0x36b15fa60540?})
+2026-11-09T13:08:41.1929798Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:232 +0x2e
+2026-11-09T13:08:41.1931033Z         github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).withDomainNativeActivity(0x36b15fa601c0, {0x1f5a080, 0x36b15fa31630}, 0x36b15f95bea8)
+2026-11-09T13:08:41.1932181Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:265 +0x395
+2026-11-09T13:08:41.1933326Z         github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative(0x36b15fba7088, {0x1f5a080, 0x36b15fa31630}, 0x36b15f95bf10)
+2026-11-09T13:08:41.1934412Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_domain_tcp_execution.go:232 +0x22a
+2026-11-09T13:08:41.1935734Z         github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource(0x36b15fa6cd88, {0x1f5a080, 0x36b15fa31630}, 0x36b15fba7088, {0x1f5fa90, 0x36b15f906000})
+2026-11-09T13:08:41.1936948Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_resource_consumer.go:22 +0x195
+2026-11-09T13:08:41.1938012Z         github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run(0x36b15f906000, {0x1f5a080, 0x36b15fa31630}, 0x36b15fba7088)
+2026-11-09T13:08:41.1939333Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_original_coordinator.go:135 +0x177
+2026-11-09T13:08:41.1940137Z         github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11.3()
+2026-11-09T13:08:41.1941008Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:531 +0x2c
+2026-11-09T13:08:41.1942050Z         created by github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11 in goroutine 21
+2026-11-09T13:08:41.1943019Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_linux_test.go:531 +0x146f
+2026-11-09T13:08:41.1943512Z         
+2026-11-09T13:08:41.1943771Z         goroutine 135 [syscall]:
+2026-11-09T13:08:41.1944276Z         syscall.Syscall6(0xf7, 0x3, 0xa6, 0x36b15f9c7e40, 0x4, 0x36b15f954120, 0x0)
+2026-11-09T13:08:41.1944958Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+2026-11-09T13:08:41.1945763Z         internal/syscall/unix.Waitid(0x36b15f9c7e00?, 0x36b15f9c7f18?, 0x1205ca6?, 0x36b15fadb688?, 0x36b15fadb680?)
+2026-11-09T13:08:41.1946622Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+2026-11-09T13:08:41.1947149Z         os.(*Process).pidfdWait.func1(...)
+2026-11-09T13:08:41.1947657Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+2026-11-09T13:08:41.1948057Z         os.ignoringEINTR(...)
+2026-11-09T13:08:41.1948697Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+2026-11-09T13:08:41.1949155Z         os.(*Process).pidfdWait(0x36b15fa2f5c0)
+2026-11-09T13:08:41.1949845Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+2026-11-09T13:08:41.1950444Z         os.(*Process).wait(0x36b15fa31630?)
+2026-11-09T13:08:41.1950966Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+2026-11-09T13:08:41.1951370Z         os.(*Process).Wait(...)
+2026-11-09T13:08:41.1951811Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+2026-11-09T13:08:41.1952203Z         os/exec.(*Cmd).Wait(0x36b15fc0fd40)
+2026-11-09T13:08:41.1952815Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+2026-11-09T13:08:41.1953724Z         github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).wait(0x36b15fe0c620)
+2026-11-09T13:08:41.1954659Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_selected_tcp_runtime_process.go:183 +0x25
+2026-11-09T13:08:41.1955659Z         created by github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProcess).beginReservedWait in goroutine 148
+2026-11-09T13:08:41.1956671Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/xray_selected_tcp_runtime_process.go:163 +0x118
+2026-11-09T13:08:41.1957174Z         
+2026-11-09T13:08:41.1957418Z         goroutine 63 [IO wait]:
+2026-11-09T13:08:41.1957812Z         internal/poll.runtime_pollWait(0x7f97e0637e00, 0x72)
+2026-11-09T13:08:41.1958742Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:08:41.1959352Z         internal/poll.(*pollDesc).wait(0x36b15fd04380?, 0x36b15f9c5000?, 0x0)
+2026-11-09T13:08:41.1960053Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:08:41.1960562Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:08:41.1961155Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:08:41.1961918Z         internal/poll.(*FD).ReadFromInet4(0x36b15fd04380, {0x36b15f9c5000, 0x1000, 0x1000}, 0x36b15f9efcc0)
+2026-11-09T13:08:41.1962683Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+2026-11-09T13:08:41.1963603Z         net.(*netFD).readFromInet4(0x36b15fd04380, {0x36b15f9c5000?, 0x36b15fbdfc00?, 0x0?}, 0x0?)
+2026-11-09T13:08:41.1964287Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+2026-11-09T13:08:41.1964889Z         net.(*UDPConn).readFrom(0x30?, {0x36b15f9c5000?, 0x0?, 0x0?}, 0x36b15fe57aa0)
+2026-11-09T13:08:41.1965547Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:52 +0x19b
+2026-11-09T13:08:41.1966270Z         net.(*UDPConn).readFromUDP(0x36b15fa083f8, {0x36b15f9c5000?, 0x0?, 0x1f58030?}, 0x36b15fb6cbd0?)
+2026-11-09T13:08:41.1966962Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:146 +0x30
+2026-11-09T13:08:41.1967707Z         net.(*UDPConn).ReadFrom(0x36b15fa083f8, {0x36b15f9c5000, 0x1000, 0x1000})
+2026-11-09T13:08:41.1968643Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:155 +0x4a
+2026-11-09T13:08:41.1969378Z         github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func4()
+2026-11-09T13:08:41.1970338Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:260 +0x7c
+2026-11-09T13:08:41.1971301Z         created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+2026-11-09T13:08:41.1972290Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:257 +0x1ff
+2026-11-09T13:08:41.1972797Z         
+2026-11-09T13:08:41.1973044Z         goroutine 64 [IO wait]:
+2026-11-09T13:08:41.1973449Z         internal/poll.runtime_pollWait(0x7f97e0638200, 0x72)
+2026-11-09T13:08:41.1974043Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T13:08:41.1974598Z         internal/poll.(*pollDesc).wait(0x36b15fd04480?, 0x0?, 0x0)
+2026-11-09T13:08:41.1975264Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+2026-11-09T13:08:41.1975774Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T13:08:41.1976520Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T13:08:41.1977014Z         internal/poll.(*FD).Accept(0x36b15fd04480)
+2026-11-09T13:08:41.1977595Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+2026-11-09T13:08:41.1978068Z         net.(*netFD).accept(0x36b15fd04480)
+2026-11-09T13:08:41.1978760Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+2026-11-09T13:08:41.1979216Z         net.(*TCPListener).accept(0x36b15f998740)
+2026-11-09T13:08:41.1979779Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+2026-11-09T13:08:41.1980250Z         net.(*TCPListener).Accept(0x36b15f998740)
+2026-11-09T13:08:41.1980780Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x30
+2026-11-09T13:08:41.1981249Z         crypto/tls.(*listener).Accept(0x36b15fa2c360)
+2026-11-09T13:08:41.1981794Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x24
+2026-11-09T13:08:41.1982379Z         net/http.(*Server).Serve(0x36b15faba000, {0x1f58120, 0x36b15fa2c360})
+2026-11-09T13:08:41.1983019Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x30c
+2026-11-09T13:08:41.1983858Z         net/http.(*Server).ServeTLS(0x36b15faba000, {0x1f59120, 0x36b15f998740}, {0x36b15fa04230, 0x62}, {0x36b15fa042a0, 0x63})
+2026-11-09T13:08:41.1984653Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3503 +0x406
+2026-11-09T13:08:41.1985363Z         github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func7()
+2026-11-09T13:08:41.1986288Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:295 +0x109
+2026-11-09T13:08:41.1987234Z         created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+2026-11-09T13:08:41.1988217Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:294 +0x35e
+2026-11-09T13:08:41.1988866Z         
+2026-11-09T13:08:41.1989108Z         goroutine 65 [syscall]:
+2026-11-09T13:08:41.1989599Z         syscall.Syscall6(0xf7, 0x3, 0x9, 0x36b15f96fe48, 0x4, 0x36b15fa782d0, 0x0)
+2026-11-09T13:08:41.1990273Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+2026-11-09T13:08:41.1990930Z         internal/syscall/unix.Waitid(0x36b15fa08290?, 0x0?, 0x0?, 0x0?, 0x36b15f96fe78?)
+2026-11-09T13:08:41.1991685Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+2026-11-09T13:08:41.1992194Z         os.(*Process).pidfdWait.func1(...)
+2026-11-09T13:08:41.1992706Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+2026-11-09T13:08:41.1993475Z         os.ignoringEINTR(...)
+2026-11-09T13:08:41.1994076Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+2026-11-09T13:08:41.1994591Z         os.(*Process).pidfdWait(0x36b15f998780)
+2026-11-09T13:08:41.1995478Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+2026-11-09T13:08:41.1996093Z         os.(*Process).wait(0x36b15fa08290?)
+2026-11-09T13:08:41.1996807Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+2026-11-09T13:08:41.1997327Z         os.(*Process).Wait(...)
+2026-11-09T13:08:41.1997855Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+2026-11-09T13:08:41.1998602Z         os/exec.(*Cmd).Wait(0x36b15fab84e0)
+2026-11-09T13:08:41.1999237Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+2026-11-09T13:08:41.1999980Z         github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers.func4()
+2026-11-09T13:08:41.2012823Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x25
+2026-11-09T13:08:41.2014320Z         created by github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers in goroutine 21
+2026-11-09T13:08:41.2015582Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x1f73
+2026-11-09T13:08:41.2016774Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=xray-domain-tcp state=prepared phase=listener-ready
+2026-11-09T13:08:41.2017815Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=synthetic-baseline state=prepared phase=baseline-prepared
+2026-11-09T13:08:41.2019316Z     domain_tcp_original_native_linux_test.go:596: actual COMMON progress kind=domain-tcp-capture state=prepared phase=planned
+2026-11-09T13:08:41.2021030Z     domain_tcp_original_native_linux_test.go:1143: actual generated runtime transactions/dp-check-550c1df9f9b739967f4b1fd859bfc19d/execution-resources/xd-d4e12ee17eab4f7c38bd17e6f00c7327/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+2026-11-09T13:08:41.2022266Z         A unified platform for anti-censorship.
+2026-11-09T13:08:41.2022927Z         2026/11/09 13:08:29.240900 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+2026-11-09T13:08:41.2023559Z         2026/11/09 13:08:29.244389 [Warning] core: Xray 26.3.27 started
+2026-11-09T13:08:41.2904673Z     domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.605926263s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:11.502µs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.456854463s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.77295467s} hash-stack/after-opening-scope/capture-effect-admission/capture-prepare:{Calls:6 Bytes:219464436 Elapsed:159.89583ms} hash-stack/after-opening-scope/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.462344ms} hash-stack/after-opening-scope/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:27.745465ms} hash-stack/after-opening-scope/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.410074ms} hash-stack/after-opening-scope/capture-prepare/capture-mapping:{Calls:2 Bytes:73154812 Elapsed:53.043175ms} hash-stack/after-opening-scope/other:{Calls:9 Bytes:329196654 Elapsed:239.030256ms} hash-stack/after-opening-scope/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:188.925178ms} hash-stack/after-opening-scope/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.787549ms} hash-stack/after-opening-scope/standby-issue:{Calls:5 Bytes:182887030 Elapsed:132.333657ms} hash-stack/after-opening-scope/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.382932ms} hash-stack/after-opening-scope/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.834438ms} hash-stack/after-opening-scope/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.495714ms} hash-stack/after-opening-scope/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:105.810832ms} hash-stack/after-opening-scope/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.535941ms} hash-stack/direct/capture-effect-admission/capture-prepare:{Calls:6 Bytes:219464436 Elapsed:160.731612ms} hash-stack/direct/capture-issue/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.352906ms} hash-stack/direct/capture-mapping/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.338339ms} hash-stack/direct/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.535418ms} hash-stack/direct/other:{Calls:13 Bytes:475506278 Elapsed:345.835843ms} hash-stack/direct/standby-issue:{Calls:5 Bytes:182887030 Elapsed:131.896949ms} hash-stack/file-opening-wrapper/capture-guard/capture-prepare:{Calls:8 Bytes:292619248 Elapsed:212.890589ms} hash-stack/file-opening-wrapper/capture-prepare/capture-mapping:{Calls:1 Bytes:36577406 Elapsed:26.436383ms} hash-stack/file-opening-wrapper/other:{Calls:2 Bytes:73154812 Elapsed:53.683706ms} hash-stack/file-opening-wrapper/pre-add/capture-prepare:{Calls:7 Bytes:256041842 Elapsed:186.330112ms} hash-stack/file-opening-wrapper/pre-add/standby-prepare:{Calls:4 Bytes:146309624 Elapsed:105.791866ms} hash-stack/file-opening-wrapper/standby-prepare/standby-capture:{Calls:1 Bytes:36577406 Elapsed:26.478622ms} hash-stack/file-opening-wrapper/standby-read/capture-issue:{Calls:1 Bytes:36577406 Elapsed:26.52226ms} hash-stack/file-opening-wrapper/standby-read/capture-prepare:{Calls:1 Bytes:36577406 Elapsed:26.566707ms} hash-stack/file-opening-wrapper/standby-read/standby-effect-admission:{Calls:4 Bytes:146309624 Elapsed:106.557878ms} hash-stack/file-opening-wrapper/standby-read/standby-prepare:{Calls:7 Bytes:256041842 Elapsed:185.61357ms} native-hash-attribution:{Calls:120 Bytes:0 Elapsed:5.1808ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:983ns} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.357099896s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:7.335µs} process-current:{Calls:241 Bytes:0 Elapsed:4.659810181s} publication-gate:{Calls:12 Bytes:0 Elapsed:12.432µs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:944.950144ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.654827852s} whole-executable-hash:{Calls:120 Bytes:4389288720 Elapsed:3.191256145s}] actual_tool_starts=map[original-effect:10 original-read-classic-batch:500]; overlapping cumulative durations, not wall speed
+2026-11-09T13:08:41.2993801Z     domain_tcp_original_native_linux_test.go:668: full original domain native workflow: actual DNS publication did not become available
+2026-11-09T13:08:41.2994595Z         dataplane transaction journal is unavailable
+2026-11-09T13:08:41.2999842Z         policy addition or cleanup result unknown; reconciliation required blockers=[{Code:DOMAIN_POLICY_RUNTIME_UNAVAILABLE Adapter:dns-scoped Message:Для доменного маршрута ещё не подключён проверенный runtime. Resolution:Повторите план после подключения владельцев DNS и транспорта.} {Code:DOMAIN_FLOW_AUTHORITY_REQUIRED Adapter:xray Message:Сервис «service» задан доменами, а VPN или прокси выбирает трафик по IP-адресам: на тех же адресах работают чужие сайты, и они тоже ушли бы в обход. Resolution:Выберите для этого сервиса NFQWS2 или замените его вариантом только с IP-сетями (например, «Telegram · через VPN или прокси» из каталога) и примените.}]
+2026-11-09T13:08:41.3002678Z     domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+2026-11-09T13:08:41.3003727Z         Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+2026-11-09T13:08:41.3004234Z         A unified platform for anti-censorship.
+2026-11-09T13:08:41.3005727Z         2026/11/09 13:08:27.355235 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.NM2LBe/TestDomainTCPOriginalNativeAcceptedFlows2712783612/001/server.json Format:json}
+2026-11-09T13:08:41.3006902Z         2026/11/09 13:08:27.357035 [Debug] app/log: Logger started
+2026-11-09T13:08:41.3007744Z         2026/11/09 13:08:27.358486 [Info] app/dns: DNS: created localhost client
+2026-11-09T13:08:41.3008840Z         2026/11/09 13:08:27.358511 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+2026-11-09T13:08:41.3009884Z         2026/11/09 13:08:27.358749 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+2026-11-09T13:08:41.3011062Z         2026/11/09 13:08:27.359060 [Warning] core: Xray 26.3.27 started
+2026-11-09T13:08:41.3012246Z         2026/11/09 13:08:27.368297 [Info] [3198420912] app/proxyman/inbound: connection ends > EOF
+2026-11-09T13:08:41.3013035Z         2026/11/09 13:08:27.723675 [Info] [3078030884] app/proxyman/inbound: connection ends > EOF
+2026-11-09T13:08:41.3013896Z         2026/11/09 13:08:27.753133 [Info] [3351838784] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:08:41.3015055Z         2026/11/09 13:08:27.753189 [Info] [3351838784] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+2026-11-09T13:08:41.3015870Z         2026/11/09 13:08:27.753200 [Info] [3351838784] app/dispatcher: default route for tcp:1.1.1.2:443
+2026-11-09T13:08:41.3016659Z         2026/11/09 13:08:27.753206 [Info] [3351838784] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3017423Z         2026/11/09 13:08:27.753211 [Debug] [3351838784] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3018999Z         2026/11/09 13:08:27.753335 [Info] [3351838784] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:56939, remote endpoint 1.1.1.2:443
+2026-11-09T13:08:41.3019875Z         2026/11/09 13:08:27.753346 [Debug] [3351838784] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:08:41.3021553Z         2026/11/09 13:08:27.754796 [Info] [3351838784] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:33054: use of closed network connection
+2026-11-09T13:08:41.3022928Z         2026/11/09 13:08:27.756789 [Info] [706126886] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:08:41.3023767Z         2026/11/09 13:08:27.756801 [Info] [706126886] proxy/vless/inbound: received request for tcp:service.example.com:443
+2026-11-09T13:08:41.3024700Z         2026/11/09 13:08:27.756810 [Info] [706126886] app/dispatcher: default route for tcp:service.example.com:443
+2026-11-09T13:08:41.3025566Z         2026/11/09 13:08:27.756867 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+2026-11-09T13:08:41.3026316Z         2026/11/09 13:08:27.756879 [Info] [706126886] proxy/freedom: dialing to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3027286Z         2026/11/09 13:08:27.756884 [Info] [706126886] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3028449Z         2026/11/09 13:08:27.756889 [Debug] [706126886] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3029743Z         2026/11/09 13:08:27.756896 [Info] [706126886] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:51233, remote endpoint 1.1.1.2:443
+2026-11-09T13:08:41.3030920Z         2026/11/09 13:08:27.756901 [Debug] [706126886] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:08:41.3032577Z         2026/11/09 13:08:27.759038 [Info] [706126886] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:33064: use of closed network connection
+2026-11-09T13:08:41.3033969Z         2026/11/09 13:08:27.760956 [Info] [3147295121] proxy/vless/inbound: firstLen = 1186
+2026-11-09T13:08:41.3034966Z         2026/11/09 13:08:27.760971 [Info] [3147295121] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+2026-11-09T13:08:41.3035790Z         2026/11/09 13:08:27.760978 [Info] [3147295121] app/dispatcher: default route for tcp:1.1.1.2:443
+2026-11-09T13:08:41.3036919Z         2026/11/09 13:08:27.760983 [Info] [3147295121] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3037692Z         2026/11/09 13:08:27.760989 [Debug] [3147295121] transport/internet: dialing to tcp:1.1.1.2:443
+2026-11-09T13:08:41.3039105Z         2026/11/09 13:08:27.761049 [Info] [3147295121] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:41419, remote endpoint 1.1.1.2:443
+2026-11-09T13:08:41.3040005Z         2026/11/09 13:08:27.761056 [Debug] [3147295121] proxy: CopyRawConn (maybe) readv
+2026-11-09T13:08:41.3041675Z         2026/11/09 13:08:27.762877 [Info] [3147295121] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:33080: use of closed network connection
+2026-11-09T13:08:41.3079064Z --- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (14.05s)
+2026-11-09T13:08:41.3081553Z FAIL
+2026-11-09T13:08:41.6184157Z ##[error]Process completed with exit code 1.
+2026-11-09T13:08:41.6243460Z ##[group]Run set -euo pipefail
+2026-11-09T13:08:41.6243805Z [36;1mset -euo pipefail[0m
+2026-11-09T13:08:41.6244242Z [36;1mfor report in artifacts/domain/cpu-top.txt artifacts/domain/cpu-cumulative.txt; do[0m
+2026-11-09T13:08:41.6244748Z [36;1m  if [ -s "$report" ]; then cat "$report"; fi[0m
+2026-11-09T13:08:41.6245223Z [36;1mdone[0m
+2026-11-09T13:08:41.6265783Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:08:41.6266136Z env:
+2026-11-09T13:08:41.6266329Z   GOTOOLCHAIN: local
+2026-11-09T13:08:41.6266561Z ##[endgroup]
+2026-11-09T13:08:41.6323158Z File: app.test
+2026-11-09T13:08:41.6323678Z Build ID: 5de8ceada3b628c0265bde781467ab2d8856e81c
+2026-11-09T13:08:41.6324207Z Type: cpu
+2026-11-09T13:08:41.6324434Z Time: 2026-11-09 13:08:29 UTC
+2026-11-09T13:08:41.6324759Z Duration: 12.17s, Total samples = 12.44s (102.21%)
+2026-11-09T13:08:41.6325164Z Showing nodes accounting for 10.09s, 81.11% of 12.44s total
+2026-11-09T13:08:41.6325626Z Dropped 509 nodes (cum <= 0.06s)
+2026-11-09T13:08:41.6325984Z Showing top 35 nodes out of 382
+2026-11-09T13:08:41.6326390Z       flat  flat%   sum%        cum   cum%
+2026-11-09T13:08:41.6326899Z      5.63s 45.26% 45.26%      5.63s 45.26%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T13:08:41.6327490Z      3.28s 26.37% 71.62%      3.28s 26.37%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T13:08:41.6327989Z      0.14s  1.13% 72.75%      0.49s  3.94%  runtime.scanObject
+2026-11-09T13:08:41.6328815Z      0.13s  1.05% 73.79%      0.21s  1.69%  runtime.tryDeferToSpanScan
+2026-11-09T13:08:41.6329289Z      0.10s   0.8% 74.60%      0.13s  1.05%  strings.Fields
+2026-11-09T13:08:41.6329738Z      0.09s  0.72% 75.32%      0.18s  1.45%  runtime.scanObjectsSmall
+2026-11-09T13:08:41.6330223Z      0.08s  0.64% 75.96%      0.10s   0.8%  runtime.typePointers.next
+2026-11-09T13:08:41.6330703Z      0.07s  0.56% 76.53%      0.07s  0.56%  runtime.nextFreeFast (inline)
+2026-11-09T13:08:41.6331222Z      0.05s   0.4% 76.93%      0.11s  0.88%  encoding/json.(*Decoder).readValue
+2026-11-09T13:08:41.6331694Z      0.05s   0.4% 77.33%      0.45s  3.62%  runtime.mallocgc
+2026-11-09T13:08:41.6332128Z      0.05s   0.4% 77.73%      0.07s  0.56%  runtime.mallocgcTiny
+2026-11-09T13:08:41.6332565Z      0.04s  0.32% 78.05%      0.07s  0.56%  reflect.Value.Field
+2026-11-09T13:08:41.6333060Z      0.03s  0.24% 78.30%      0.20s  1.61%  encoding/json.(*decodeState).object
+2026-11-09T13:08:41.6333562Z      0.03s  0.24% 78.54%      0.21s  1.69%  golang.org/x/sys/unix.Statx
+2026-11-09T13:08:41.6334206Z      0.02s  0.16% 78.70%      0.19s  1.53%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+2026-11-09T13:08:41.6335046Z      0.02s  0.16% 78.86%      1.34s 10.77%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+2026-11-09T13:08:41.6336550Z      0.02s  0.16% 79.02%      1.66s 13.34%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+2026-11-09T13:08:41.6337281Z      0.02s  0.16% 79.18%      0.10s   0.8%  internal/poll.(*SysFile).destroy (inline)
+2026-11-09T13:08:41.6337749Z      0.02s  0.16% 79.34%      0.32s  2.57%  os.(*File).Stat
+2026-11-09T13:08:41.6338194Z      0.02s  0.16% 79.50%      0.18s  1.45%  runtime.growslice
+2026-11-09T13:08:41.6339034Z      0.02s  0.16% 79.66%      0.10s   0.8%  runtime.mallocgcSmallNoscan
+2026-11-09T13:08:41.6340065Z      0.02s  0.16% 79.82%      0.07s  0.56%  runtime.pcvalue
+2026-11-09T13:08:41.6340779Z      0.02s  0.16% 79.98%      0.24s  1.93%  runtime.scanSpan
+2026-11-09T13:08:41.6341485Z      0.02s  0.16% 80.14%      5.61s 45.10%  syscall.RawSyscall6
+2026-11-09T13:08:41.6341914Z      0.02s  0.16% 80.31%      3.24s 26.05%  syscall.Syscall6
+2026-11-09T13:08:41.6342379Z      0.01s  0.08% 80.39%      0.31s  2.49%  encoding/json.(*Decoder).Decode
+2026-11-09T13:08:41.6342918Z      0.01s  0.08% 80.47%      0.10s   0.8%  encoding/json.(*encodeState).reflectValue
+2026-11-09T13:08:41.6344039Z      0.01s  0.08% 80.55%      3.06s 24.60%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).currentOriginalResource
+2026-11-09T13:08:41.6345120Z      0.01s  0.08% 80.63%      3.32s 26.69%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).currentWithFiles
+2026-11-09T13:08:41.6346167Z      0.01s  0.08% 80.71%      0.57s  4.58%  github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSSyntheticResolver).current
+2026-11-09T13:08:41.6347160Z      0.01s  0.08% 80.79%      0.11s  0.88%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+2026-11-09T13:08:41.6347880Z      0.01s  0.08% 80.87%      0.14s  1.13%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).bootID
+2026-11-09T13:08:41.6348885Z      0.01s  0.08% 80.95%      0.08s  0.64%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).close
+2026-11-09T13:08:41.6349579Z      0.01s  0.08% 81.03%      0.11s  0.88%  github.com/ArtixSx/razvilka/internal/netidentity.linkAt
+2026-11-09T13:08:41.6350278Z      0.01s  0.08% 81.11%      0.18s  1.45%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+2026-11-09T13:08:41.6350738Z File: app.test
+2026-11-09T13:08:41.6350993Z Build ID: 5de8ceada3b628c0265bde781467ab2d8856e81c
+2026-11-09T13:08:41.6351290Z Type: cpu
+2026-11-09T13:08:41.6351491Z Time: 2026-11-09 13:08:29 UTC
+2026-11-09T13:08:41.6351775Z Duration: 12.17s, Total samples = 12.44s (102.21%)
+2026-11-09T13:08:41.6352133Z Showing nodes accounting for 5.65s, 45.42% of 12.44s total
+2026-11-09T13:08:41.6352464Z Dropped 509 nodes (cum <= 0.06s)
+2026-11-09T13:08:41.6352720Z Showing top 35 nodes out of 382
+2026-11-09T13:08:41.6353032Z       flat  flat%   sum%        cum   cum%
+2026-11-09T13:08:41.6353866Z          0     0%     0%     10.86s 87.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withNativeInPhase
+2026-11-09T13:08:41.6354988Z          0     0%     0%     10.75s 86.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative.func1
+2026-11-09T13:08:41.6356147Z          0     0%     0%     10.74s 86.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionPhase).withDomainNativeActivity
+2026-11-09T13:08:41.6357257Z          0     0%     0%     10.64s 85.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).WithNative
+2026-11-09T13:08:41.6358648Z          0     0%     0%     10.58s 85.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource.func1
+2026-11-09T13:08:41.6359795Z          0     0%     0%     10.56s 84.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*ProxyTunnelAdapter).RunDomainPolicyTCPResource
+2026-11-09T13:08:41.6360846Z          0     0%     0%     10.53s 84.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture
+2026-11-09T13:08:41.6361838Z          0     0%     0%     10.53s 84.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).WithCapture
+2026-11-09T13:08:41.6362893Z          0     0%     0%     10.50s 84.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicy).serveDomainPolicyTCPCapture.func1
+2026-11-09T13:08:41.6363870Z          0     0%     0%     10.47s 84.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).Run
+2026-11-09T13:08:41.6364798Z          0     0%     0%     10.46s 84.08%  github.com/ArtixSx/razvilka/internal/dataplane.domainPolicyTCPSynchronousScope
+2026-11-09T13:08:41.6365720Z          0     0%     0%     10.27s 82.56%  github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func11.3
+2026-11-09T13:08:41.6366761Z          0     0%     0%      9.75s 78.38%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).prepareCapture
+2026-11-09T13:08:41.6367796Z          0     0%     0%      8.74s 70.26%  github.com/ArtixSx/razvilka/internal/dataplane.applyDomainTCPOriginalEffects
+2026-11-09T13:08:41.6369275Z          0     0%     0%      8.74s 70.26%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithDomainRead (inline)
+2026-11-09T13:08:41.6370351Z          0     0%     0%      8.74s 70.26%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffectsWithOriginalRecovery
+2026-11-09T13:08:41.6371462Z          0     0%     0%      8.43s 67.77%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservation
+2026-11-09T13:08:41.6372829Z          0     0%     0%      8.14s 65.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).withFileObservationAfterOpening
+2026-11-09T13:08:41.6373869Z          0     0%     0%      7.95s 63.91%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+2026-11-09T13:08:41.6374824Z          0     0%     0%      7.92s 63.67%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+2026-11-09T13:08:41.6375891Z          0     0%     0%      7.30s 58.68%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainPolicyTCPCapture).PrepareSyntheticMapping
+2026-11-09T13:08:41.6376868Z          0     0%     0%      7.25s 58.28%  github.com/ArtixSx/razvilka/internal/dataplane.withDomainTCPPreAddFiles
+2026-11-09T13:08:41.6377886Z          0     0%     0%      7.23s 58.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*DomainTCPOriginalScope).PrepareSyntheticCapture
+2026-11-09T13:08:41.6379311Z          0     0%     0%      6.92s 55.63%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).prepare
+2026-11-09T13:08:41.6380256Z          0     0%     0%      6.80s 54.66%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+2026-11-09T13:08:41.6381265Z          0     0%     0%      5.65s 45.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*syntheticBaselineExecutionResource).observeTools
+2026-11-09T13:08:41.6382009Z      5.63s 45.26% 45.26%      5.63s 45.26%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T13:08:41.6382490Z      0.02s  0.16% 45.42%      5.61s 45.10%  syscall.RawSyscall6
+2026-11-09T13:08:41.6383387Z          0     0% 45.42%      5.48s 44.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observeTools
+2026-11-09T13:08:41.6384612Z          0     0% 45.42%      5.29s 42.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPCaptureExecutionResource).observePreAddFiles (inline)
+2026-11-09T13:08:41.6385682Z          0     0% 45.42%      4.70s 37.78%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPPreAddRead).observe
+2026-11-09T13:08:41.6386655Z          0     0% 45.42%      4.70s 37.78%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).observeBeforeAdd
+2026-11-09T13:08:41.6387780Z          0     0% 45.42%      4.59s 36.90%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).listenerCurrentWithFiles
+2026-11-09T13:08:41.6389213Z          0     0% 45.42%      4.52s 36.33%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).currentWithFiles
+2026-11-09T13:08:41.6390285Z          0     0% 45.42%      4.50s 36.17%  github.com/ArtixSx/razvilka/internal/dataplane.(*domainTCPPreAddRead).observe.func1
+2026-11-09T13:08:41.6478881Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T13:08:41.6479340Z with:
+2026-11-09T13:08:41.6479707Z   name: research-domain-selected-dac23b293486bfd07292f0105fb4ce00e78f5211
+2026-11-09T13:08:41.6480122Z   path: artifacts/domain
+2026-11-09T13:08:41.6480362Z   if-no-files-found: error
+2026-11-09T13:08:41.6480592Z   compression-level: 6
+2026-11-09T13:08:41.6480820Z   overwrite: false
+2026-11-09T13:08:41.6481033Z   include-hidden-files: false
+2026-11-09T13:08:41.6481263Z env:
+2026-11-09T13:08:41.6481448Z   GOTOOLCHAIN: local
+2026-11-09T13:08:41.6481650Z ##[endgroup]
+2026-11-09T13:08:41.8326664Z (node:13017) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T13:08:41.8328063Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T13:08:41.8521205Z With the provided path, there will be 11 files uploaded
+2026-11-09T13:08:41.8522235Z Artifact name is valid!
+2026-11-09T13:08:41.8522698Z Root directory input is valid!
+2026-11-09T13:08:42.2076987Z Beginning upload of artifact content to blob storage
+2026-11-09T13:08:42.2521645Z (node:13017) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T13:08:42.5714322Z Uploaded bytes 78586
+2026-11-09T13:08:42.6348624Z Finished uploading artifact content to blob storage!
+2026-11-09T13:08:42.6349615Z SHA256 digest of uploaded artifact zip is d08241258a97e08272595981be4a4b1d835d5b2c7972ff1f351abf0a86995d5d
+2026-11-09T13:08:42.6369562Z Finalizing artifact upload
+2026-11-09T13:08:43.0831001Z Artifact research-domain-selected-dac23b293486bfd07292f0105fb4ce00e78f5211.zip successfully finalized. Artifact ID 13676909142
+2026-11-09T13:08:43.0832765Z Artifact research-domain-selected-dac23b293486bfd07292f0105fb4ce00e78f5211 has been successfully uploaded! Final size is 78586 bytes. Artifact ID is 13676909142
+2026-11-09T13:08:43.0837325Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42622252528/artifacts/13676909142
+2026-11-09T13:08:43.1082329Z Post job cleanup.
+2026-11-09T13:08:43.2006524Z [command]/usr/bin/git version
+2026-11-09T13:08:43.2057093Z git version 2.56.0
+2026-11-09T13:08:43.2133543Z Temporarily overriding HOME='/home/runner/work/_temp/9c314b81-bd60-4ba8-afbb-a3e3ca359640' before making global git config changes
+2026-11-09T13:08:43.2135330Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:08:43.2141709Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:08:43.2190617Z Removing SSH command configuration
+2026-11-09T13:08:43.2199356Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:08:43.2248810Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:08:43.2559956Z Removing HTTP extra header
+2026-11-09T13:08:43.2571447Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:08:43.2633855Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:08:43.2931562Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:08:43.2941633Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:08:43.3000094Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:08:43.3445742Z Cleaning up orphan processes
+2026-11-09T13:08:43.3925085Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

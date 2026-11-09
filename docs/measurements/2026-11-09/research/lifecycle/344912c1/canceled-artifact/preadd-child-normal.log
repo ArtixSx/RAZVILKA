@@ -1,0 +1,19 @@
+=== RUN   TestDomainTCPOriginalFactoryProcessCancellation
+    domain_tcp_original_process_native_linux_test.go:38: === RUN   TestDomainTCPOriginalFactoryProcessCancellation
+            domain_tcp_original_process_native_linux_test.go:244: genuine DNS Reserve→material→original authored journals→actual inherited-FD Xray→cancel→sole Wait→listener absence; no capture/publication/Apply grant
+        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.81s)
+        PASS
+        
+--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.83s)
+=== RUN   TestXraySelectedTCPMountIDActualParityAndFallback
+--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)
+=== RUN   TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation
+--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)
+=== RUN   TestXraySelectedTCPMountIDBindBoundary
+    xray_selected_tcp_mount_id_linux_test.go:108: === RUN   TestXraySelectedTCPMountIDBindBoundary
+        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)
+        PASS
+        
+--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	0.898s

@@ -10,13 +10,14 @@ if [ -n "$unformatted" ]; then
   echo "$unformatted"
   exit 1
 fi
+# Fail early on static errors before either full runtime suite.
+go vet ./...
 # Always execute the release gate. The owned-filesystem tests produce large
 # file-access logs; caching those results can cost more than running the tests.
 # This bounds each aggregate package run; individual operation/native deadlines
 # remain enforced by their original test contexts.
 go test -timeout=20m -count=1 ./...
 go test -timeout=20m -race -count=1 ./...
-go vet ./...
 for script in scripts/*.sh scripts/S99razvilka build.sh; do
   case "$(head -n 1 "$script")" in
     '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
@@ -83,6 +84,7 @@ if command -v node >/dev/null 2>&1; then
   node scripts/test-proxy-sidecar-ui.mjs
 node scripts/test-hev-recovery-ui.mjs
 node scripts/test-mihomo-recovery-ui.mjs
+  node scripts/test-mihomo-node-apply-ui.mjs
   node scripts/test-node-job-timing-ui.mjs
   node scripts/test-autonomy-ui.mjs
   node --check cmd/razvilka/web/app.js
@@ -163,5 +165,4 @@ else
 fi
 sha256sum -c dist/SHA256SUMS
 sh ./scripts/test-entware-transaction.sh
-node scripts/test-mihomo-node-apply-ui.mjs
 echo "RAZVILKA checks: OK"

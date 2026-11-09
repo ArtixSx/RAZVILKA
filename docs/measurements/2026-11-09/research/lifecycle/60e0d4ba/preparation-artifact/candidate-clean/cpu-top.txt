@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 242ab2079811c5f0f1be59395d4599c421b7d1db
+Type: cpu
+Time: 2026-11-09 15:41:47 UTC
+Duration: 20.79s, Total samples = 19.37s (93.18%)
+Showing nodes accounting for 15.93s, 82.24% of 19.37s total
+Dropped 656 nodes (cum <= 0.10s)
+Showing top 35 nodes out of 452
+      flat  flat%   sum%        cum   cum%
+     9.40s 48.53% 48.53%      9.40s 48.53%  internal/runtime/syscall/linux.Syscall6
+     4.94s 25.50% 74.03%      4.94s 25.50%  crypto/internal/fips140/sha256.blockSHANI
+     0.31s  1.60% 75.63%      0.40s  2.07%  runtime.tryDeferToSpanScan
+     0.16s  0.83% 76.46%      0.23s  1.19%  strings.Fields
+     0.13s  0.67% 77.13%      0.47s  2.43%  runtime.scanObject
+     0.12s  0.62% 77.75%      0.12s  0.62%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.09s  0.46% 78.21%      0.15s  0.77%  reflect.Value.Field
+     0.06s  0.31% 78.52%      0.16s  0.83%  runtime.mProf_FlushLocked
+     0.06s  0.31% 78.83%      9.37s 48.37%  syscall.RawSyscall6
+     0.05s  0.26% 79.09%      0.11s  0.57%  runtime.exitsyscall
+     0.04s  0.21% 79.30%      2.25s 11.62%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.04s  0.21% 79.50%      0.30s  1.55%  os.(*File).Stat
+     0.04s  0.21% 79.71%      0.58s  2.99%  runtime.mallocgc
+     0.04s  0.21% 79.92%      0.11s  0.57%  runtime.scanblock
+     0.03s  0.15% 80.07%      2.92s 15.07%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.15% 80.23%      0.39s  2.01%  os.(*rawConn).Control
+     0.03s  0.15% 80.38%      0.13s  0.67%  runtime.mallocgcSmallNoscan
+     0.03s  0.15% 80.54%      0.16s  0.83%  runtime.newobject
+     0.03s  0.15% 80.69%      0.14s  0.72%  runtime.reentersyscall
+     0.03s  0.15% 80.85%      3.82s 19.72%  syscall.Syscall
+     0.02s   0.1% 80.95%      1.81s  9.34%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).readFile
+     0.02s   0.1% 81.05%      3.76s 19.41%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.02s   0.1% 81.16%      3.36s 17.35%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s   0.1% 81.26%      0.79s  4.08%  os.(*File).ReadAt
+     0.02s   0.1% 81.36%      0.30s  1.55%  os.(*File).readdir
+     0.02s   0.1% 81.47%      0.17s  0.88%  os.newFile
+     0.02s   0.1% 81.57%      0.12s  0.62%  runtime.(*mcache).refill
+     0.02s   0.1% 81.67%      0.22s  1.14%  runtime.growslice
+     0.02s   0.1% 81.78%      0.27s  1.39%  runtime.mallocgcSmallScanNoHeader
+     0.02s   0.1% 81.88%      0.22s  1.14%  runtime.scanSpan
+     0.02s   0.1% 81.98%      0.86s  4.44%  syscall.Fstat
+     0.02s   0.1% 82.09%      5.80s 29.94%  syscall.Syscall6
+     0.01s 0.052% 82.14%      0.20s  1.03%  encoding/json.(*decodeState).object
+     0.01s 0.052% 82.19%      2.16s 11.15%  github.com/ArtixSx/razvilka/internal/dataplane.(*SyntheticDNSExecutionBinding).Current
+     0.01s 0.052% 82.24%      2.73s 14.09%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).filesCurrentForObservation

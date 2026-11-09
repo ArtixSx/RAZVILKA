@@ -1,0 +1,18 @@
+{
+  "reviewer": "independent-verification",
+  "base_sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "decision": "Source approved for CI; execution/native acceptance pending",
+  "claims": [
+    "Frozen exact process/capture/prepared/kernel/resource/baseline/material/tools/backend/binding association before and after readonly body and source closing.",
+    "Original prepared.currentWithFiles then kernel.currentWithFiles then material.Current ordering and short-circuit retained.",
+    "Existing observeToolsWithFiles alone derives file-byte view; process/source/kernel/config checks retained.",
+    "No publication/send/phase mutation inside loan; outer executable SHA and complete process bookends unchanged.",
+    "Genuine producer metrics and strict full native acceptance still pending."
+  ],
+  "files": [
+    {
+      "path": "internal/dataplane/domain_tcp_original_coordinator.go",
+      "sha256": "c42ecb1e2650c7910ea8b6d017ac0413b7c40134eadbae66fbc0f673c22ec88a"
+    }
+  ]
+}

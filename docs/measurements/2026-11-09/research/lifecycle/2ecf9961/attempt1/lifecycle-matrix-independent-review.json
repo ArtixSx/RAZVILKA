@@ -1,0 +1,58 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "workflow_status": "completed",
+  "workflow_conclusion": "failure",
+  "declared_jobs": 10,
+  "actual_jobs": 7,
+  "missing_not_executed": [
+    "strategy-pair",
+    "managed-probe-native (production)",
+    "Exact iptables 1.8.11 / race"
+  ],
+  "internal_server_error_correlation_ids": [
+    "aab61754-e7c9-4cf7-803f-e25d12708c71"
+  ],
+  "jobs": [
+    {
+      "name": "Configured old193 public paired restore / draft",
+      "id": 129350123920,
+      "conclusion": "success"
+    },
+    {
+      "name": "Domain native strict / canceled-ready",
+      "id": 129350124267,
+      "conclusion": "failure"
+    },
+    {
+      "name": "managed-probe-native (race)",
+      "id": 129350124512,
+      "conclusion": "failure"
+    },
+    {
+      "name": "Configured old193 public paired restore / empty",
+      "id": 129350125047,
+      "conclusion": "success"
+    },
+    {
+      "name": "Exact iptables 1.8.11 / production",
+      "id": 129350125067,
+      "conclusion": "success"
+    },
+    {
+      "name": "Domain native strict / selected",
+      "id": 129350125180,
+      "conclusion": "failure"
+    },
+    {
+      "name": "DNS preparation recovery pair (diagnostic 30s)",
+      "id": 129350125219,
+      "conclusion": "success"
+    }
+  ],
+  "limitations": [
+    "Missing jobs are not skips or passes",
+    "Executed strict DNS and managed race failures remain software/native failures; infrastructure does not excuse them",
+    "Per-agent raw evidence required for individual scenario assertions"
+  ]
+}

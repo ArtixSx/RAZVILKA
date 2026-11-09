@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 1b7c9aabc800681eb24cfe229eff6b96431d2130
+Type: cpu
+Time: 2026-11-09 05:00:22 UTC
+Duration: 28.11s, Total samples = 26.78s (95.27%)
+Showing nodes accounting for 23s, 85.88% of 26.78s total
+Dropped 698 nodes (cum <= 0.13s)
+Showing top 35 nodes out of 409
+      flat  flat%   sum%        cum   cum%
+    13.93s 52.02% 52.02%     13.93s 52.02%  internal/runtime/syscall/linux.Syscall6
+     6.91s 25.80% 77.82%      6.91s 25.80%  crypto/internal/fips140/sha256.blockSHANI
+     0.36s  1.34% 79.16%      0.54s  2.02%  runtime.tryDeferToSpanScan
+     0.26s  0.97% 80.13%     14.05s 52.46%  syscall.RawSyscall6
+     0.24s   0.9% 81.03%      0.24s   0.9%  runtime.(*bucket).mp
+     0.20s  0.75% 81.78%      0.26s  0.97%  strings.Fields
+     0.14s  0.52% 82.30%      0.52s  1.94%  runtime.scanObject
+     0.07s  0.26% 82.56%      0.77s  2.88%  runtime.mallocgc
+     0.07s  0.26% 82.82%      8.20s 30.62%  syscall.Syscall6
+     0.06s  0.22% 83.05%      0.24s   0.9%  runtime.mallocgcSmallNoscan
+     0.06s  0.22% 83.27%      0.28s  1.05%  runtime.mallocgcSmallScanNoHeader
+     0.05s  0.19% 83.46%      4.82s 18.00%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.05s  0.19% 83.64%      3.28s 12.25%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.05s  0.19% 83.83%      0.21s  0.78%  runtime.entersyscall
+     0.04s  0.15% 83.98%      4.15s 15.50%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.04s  0.15% 84.13%      0.16s   0.6%  runtime.(*sweepLocked).sweep
+     0.04s  0.15% 84.28%      0.14s  0.52%  runtime.reentersyscall
+     0.04s  0.15% 84.43%      0.40s  1.49%  runtime.scanSpan
+     0.03s  0.11% 84.54%      0.15s  0.56%  encoding/json.(*decodeState).object
+     0.03s  0.11% 84.65%      6.13s 22.89%  github.com/ArtixSx/razvilka/internal/netidentity.captureProc
+     0.03s  0.11% 84.76%      0.84s  3.14%  os.(*File).Stat
+     0.03s  0.11% 84.88%      0.30s  1.12%  runtime.mProf_FlushLocked
+     0.03s  0.11% 84.99%      0.87s  3.25%  syscall.Close
+     0.02s 0.075% 85.06%      0.72s  2.69%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).mountID
+     0.02s 0.075% 85.14%      0.22s  0.82%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).procFile
+     0.02s 0.075% 85.21%      1.32s  4.93%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountsMatch
+     0.02s 0.075% 85.29%      2.50s  9.34%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.02s 0.075% 85.36%      0.23s  0.86%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+     0.02s 0.075% 85.44%      0.50s  1.87%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).checkHeldOwner
+     0.02s 0.075% 85.51%      0.21s  0.78%  internal/poll.(*FD).decref
+     0.02s 0.075% 85.59%      0.48s  1.79%  os.lstatatWithName
+     0.02s 0.075% 85.66%      0.15s  0.56%  runtime.(*mcache).nextFree
+     0.02s 0.075% 85.74%      0.27s  1.01%  runtime.growslice
+     0.02s 0.075% 85.81%      0.15s  0.56%  runtime.makeslicecopy
+     0.02s 0.075% 85.88%      0.24s   0.9%  runtime.newobject

@@ -131,6 +131,9 @@ func (l *Lease) runWGInactivityHeld(original context.Context, name string, args 
 	}
 	scopeErr = errors.Join(scopeErr, c.Err(), original.Err(), l.lifetime.Err())
 	data, err := wgInactivityReadResult(stdout, stderr, waitErr, scopeErr)
+	if index == 2 {
+		wgInactivityNativeDiagnostic(frozen, stdout, stderr, waitErr, scopeErr)
+	}
 	if err == nil && stockRead {
 		data, err = stockNumericRules(data)
 	}

@@ -1,0 +1,25 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved measured memory-only promotion",
+  "files": [
+    {
+      "path": "internal/netidentity/observe_linux.go",
+      "sha256": "A62FB30D580000D8A72CFEDC67B56542A363DB5CF3CF0F5C244D3CB9CDBF210F"
+    },
+    {
+      "path": "internal/netidentity/audit_capacity_measurement_native_linux_test.go",
+      "sha256": "89C29E5F466BBCA610FCF220459EA224D62DBE8AE968D9B14AB73C1B2E919EFB"
+    }
+  ],
+  "findings": [
+    "Production change only reserves16 heldFD storage; append remains unbounded by reservation. Every original open/take/read/current/closing check and defer close remains in identical order.",
+    "Native baseline copy now preserves exact old producer, source parity removes only new reservation initializer/comment; benchmark compares old copy against actual production.",
+    "60e complete actual capture measurements48560B224alloc→44240B220alloc; selected median312540→311543ns and canceled311501→311464ns do not establish material wall-speed gain.",
+    "Normal/race60e source parity and actual cleanup tests passed; all20 fallback adopted descriptors closed, canceled entry/late cancellation retained."
+  ],
+  "limits": [
+    "No stack allocation claim; reservation may escape. Early refusal allocation shape can differ within fixed16 storage.",
+    "New production placement still requires next exactSHA full/native verification.",
+    "No local Go build; no router or strict DNS readiness claim."
+  ]
+}

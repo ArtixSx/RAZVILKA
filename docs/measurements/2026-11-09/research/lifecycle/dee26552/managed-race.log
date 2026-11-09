@@ -1,0 +1,675 @@
+﻿2026-11-09T13:42:54.4553563Z Current runner version: '2.338.2'
+2026-11-09T13:42:54.4575260Z ##[group]Runner Image Provisioner
+2026-11-09T13:42:54.4575886Z Hosted Compute Agent
+2026-11-09T13:42:54.4576331Z Version: 20261028.624
+2026-11-09T13:42:54.4576719Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T13:42:54.4577188Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T13:42:54.4577619Z Worker ID: {9ed99fd1-64e8-4ae8-a653-327f041706d9}
+2026-11-09T13:42:54.4578085Z Region: centralus
+2026-11-09T13:42:54.4578823Z Cloud: Azure
+2026-11-09T13:42:54.4579169Z ##[endgroup]
+2026-11-09T13:42:54.4580083Z ##[group]Operating System
+2026-11-09T13:42:54.4580483Z Ubuntu
+2026-11-09T13:42:54.4580838Z 24.04.5
+2026-11-09T13:42:54.4581190Z LTS
+2026-11-09T13:42:54.4581514Z ##[endgroup]
+2026-11-09T13:42:54.4581842Z ##[group]Runner Image
+2026-11-09T13:42:54.4582261Z Image: ubuntu-24.04
+2026-11-09T13:42:54.4582650Z Version: 20261101.360.1
+2026-11-09T13:42:54.4583497Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T13:42:54.4584382Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T13:42:54.4584999Z ##[endgroup]
+2026-11-09T13:42:54.4585716Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T13:42:54.4587298Z Contents: read
+2026-11-09T13:42:54.4587698Z Metadata: read
+2026-11-09T13:42:54.4588094Z ##[endgroup]
+2026-11-09T13:42:54.4589943Z Secret source: Actions
+2026-11-09T13:42:54.4590550Z Cache mode: write
+2026-11-09T13:42:54.4591267Z Prepare workflow directory
+2026-11-09T13:42:54.4895487Z Prepare all required actions
+2026-11-09T13:42:54.4930116Z Getting action download info
+2026-11-09T13:42:54.7260694Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T13:42:54.8045056Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T13:42:55.2637464Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T13:42:55.4624634Z Complete job name: managed-probe-native (race)
+2026-11-09T13:42:55.5277728Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T13:42:55.5278507Z with:
+2026-11-09T13:42:55.5278787Z   persist-credentials: false
+2026-11-09T13:42:55.5279107Z   repository: ArtixSx/RAZVILKA
+2026-11-09T13:42:55.5281629Z   token: ***
+2026-11-09T13:42:55.5281895Z   ssh-strict: true
+2026-11-09T13:42:55.5282168Z   ssh-user: git
+2026-11-09T13:42:55.5282521Z   clean: true
+2026-11-09T13:42:55.5282797Z   sparse-checkout-cone-mode: true
+2026-11-09T13:42:55.5283115Z   fetch-depth: 1
+2026-11-09T13:42:55.5283382Z   fetch-tags: false
+2026-11-09T13:42:55.5283665Z   show-progress: true
+2026-11-09T13:42:55.5283941Z   lfs: false
+2026-11-09T13:42:55.5284204Z   submodules: false
+2026-11-09T13:42:55.5284502Z   set-safe-directory: true
+2026-11-09T13:42:55.5284812Z   allow-unsafe-pr-checkout: false
+2026-11-09T13:42:55.5285241Z env:
+2026-11-09T13:42:55.5285485Z   GOTOOLCHAIN: local
+2026-11-09T13:42:55.5285754Z ##[endgroup]
+2026-11-09T13:42:55.7685188Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T13:42:55.7686915Z ##[group]Getting Git version info
+2026-11-09T13:42:55.7687547Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:42:55.7688347Z [command]/usr/bin/git version
+2026-11-09T13:42:55.7784650Z git version 2.56.0
+2026-11-09T13:42:55.7801891Z ##[endgroup]
+2026-11-09T13:42:55.7820408Z Temporarily overriding HOME='/home/runner/work/_temp/e2b3bde2-2a36-4100-b547-e5b9689bfcca' before making global git config changes
+2026-11-09T13:42:55.7825124Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:42:55.7830353Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:42:55.7883804Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T13:42:55.7888986Z ##[group]Determining repository object format
+2026-11-09T13:42:55.7890158Z ##[endgroup]
+2026-11-09T13:42:55.7890927Z ##[group]Initializing the repository
+2026-11-09T13:42:55.7895308Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:42:55.7994572Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T13:42:55.7995642Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T13:42:55.7996276Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T13:42:55.7996743Z hint: call:
+2026-11-09T13:42:55.7997002Z hint:
+2026-11-09T13:42:55.7997600Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T13:42:55.7998888Z hint:
+2026-11-09T13:42:55.7999519Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T13:42:55.8000561Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T13:42:55.8006188Z hint:
+2026-11-09T13:42:55.8006794Z hint: 	git branch -m <name>
+2026-11-09T13:42:55.8007284Z hint:
+2026-11-09T13:42:55.8007919Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T13:42:55.8009761Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T13:42:55.8021115Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:42:55.8076746Z ##[endgroup]
+2026-11-09T13:42:55.8077588Z ##[group]Disabling automatic garbage collection
+2026-11-09T13:42:55.8079605Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T13:42:55.8124852Z ##[endgroup]
+2026-11-09T13:42:55.8126176Z ##[group]Setting up auth
+2026-11-09T13:42:55.8126832Z Removing SSH command configuration
+2026-11-09T13:42:55.8129393Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:42:55.8181652Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:42:55.8530070Z Removing HTTP extra header
+2026-11-09T13:42:55.8536381Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:42:55.8582227Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:42:55.8794623Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:42:55.8800220Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:42:55.8846668Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:42:55.9066180Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T13:42:55.9119772Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:55.9166612Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:55.9216149Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:55.9265748Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:55.9313798Z ##[endgroup]
+2026-11-09T13:42:55.9314655Z ##[group]Fetching the repository
+2026-11-09T13:42:55.9320696Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +dee26552fba5318ae44a10545432f64ac1ade3c9:refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:42:58.5126728Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T13:42:58.5127443Z  * [new ref]         dee26552fba5318ae44a10545432f64ac1ade3c9 -> origin/work/research-build-20261109
+2026-11-09T13:42:58.5134415Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T13:42:58.5174066Z   origin/work/research-build-20261109
+2026-11-09T13:42:58.5182153Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:42:58.5220520Z dee26552fba5318ae44a10545432f64ac1ade3c9
+2026-11-09T13:42:58.5229722Z ##[endgroup]
+2026-11-09T13:42:58.5304856Z ##[group]Determining the checkout info
+2026-11-09T13:42:58.5305333Z ##[endgroup]
+2026-11-09T13:42:58.5305669Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T13:42:58.5391728Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T13:42:58.5439115Z ##[group]Checking out the ref
+2026-11-09T13:42:58.5443350Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T13:42:58.7945368Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T13:42:58.7948895Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T13:42:58.7966278Z ##[endgroup]
+2026-11-09T13:42:58.8021973Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T13:42:58.8061584Z dee26552fba5318ae44a10545432f64ac1ade3c9
+2026-11-09T13:42:58.8071735Z ##[group]Removing auth
+2026-11-09T13:42:58.8072173Z Removing SSH command configuration
+2026-11-09T13:42:58.8075849Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:42:58.8119907Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:42:58.8360258Z Removing HTTP extra header
+2026-11-09T13:42:58.8364176Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:42:58.8411789Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:42:58.8628665Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:42:58.8633777Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:42:58.8676193Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:42:58.8676659Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:42:58.8676978Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:42:58.8677321Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:42:58.8685132Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T13:42:58.8723059Z /home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:58.8739021Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-68c98651\-ea96\-4d97\-992a\-1c29e36f257c\.config
+2026-11-09T13:42:58.8787418Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T13:42:58.8826641Z /home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:58.8833688Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-68c98651\-ea96\-4d97\-992a\-1c29e36f257c\.config
+2026-11-09T13:42:58.8882301Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T13:42:58.8921397Z /github/runner_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:58.8929310Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-68c98651\-ea96\-4d97\-992a\-1c29e36f257c\.config
+2026-11-09T13:42:58.8976686Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T13:42:58.9013016Z /github/runner_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config
+2026-11-09T13:42:58.9020333Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-68c98651\-ea96\-4d97\-992a\-1c29e36f257c\.config
+2026-11-09T13:42:58.9068007Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:42:58.9286999Z Removing credentials config '/home/runner/work/_temp/git-credentials-68c98651-ea96-4d97-992a-1c29e36f257c.config'
+2026-11-09T13:42:58.9296194Z ##[endgroup]
+2026-11-09T13:42:58.9517715Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T13:42:58.9517964Z with:
+2026-11-09T13:42:58.9518087Z   go-version: 1.26.5
+2026-11-09T13:42:58.9518473Z   cache: false
+2026-11-09T13:42:58.9518601Z   check-latest: false
+2026-11-09T13:42:58.9520394Z   token: ***
+2026-11-09T13:42:58.9520510Z env:
+2026-11-09T13:42:58.9520624Z   GOTOOLCHAIN: local
+2026-11-09T13:42:58.9520750Z ##[endgroup]
+2026-11-09T13:42:59.0433542Z Setup go version spec 1.26.5
+2026-11-09T13:42:59.0443400Z Attempting to download 1.26.5...
+2026-11-09T13:42:59.7520395Z matching 1.26.5...
+2026-11-09T13:42:59.7533073Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T13:43:00.3090248Z Extracting Go...
+2026-11-09T13:43:00.3211278Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/bf23a6cf-7263-4c53-b215-c27caef55274 -f /home/runner/work/_temp/42ed3e3d-b01e-47d1-b8c5-d8322d53ab10
+2026-11-09T13:43:01.5477597Z Successfully extracted go to /home/runner/work/_temp/bf23a6cf-7263-4c53-b215-c27caef55274
+2026-11-09T13:43:01.5477951Z Adding to the cache ...
+2026-11-09T13:43:05.0135655Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T13:43:05.0136635Z Added go to the path
+2026-11-09T13:43:05.0138576Z Successfully set up Go version 1.26.5
+2026-11-09T13:43:05.0387166Z go version go1.26.5 linux/amd64
+2026-11-09T13:43:05.0387333Z 
+2026-11-09T13:43:05.0387595Z ##[group]go env
+2026-11-09T13:43:05.1778259Z AR='ar'
+2026-11-09T13:43:05.1778505Z CC='gcc'
+2026-11-09T13:43:05.1778693Z CGO_CFLAGS='-O2 -g'
+2026-11-09T13:43:05.1778919Z CGO_CPPFLAGS=''
+2026-11-09T13:43:05.1779130Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T13:43:05.1779390Z CGO_ENABLED='1'
+2026-11-09T13:43:05.1779589Z CGO_FFLAGS='-O2 -g'
+2026-11-09T13:43:05.1779796Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T13:43:05.1779987Z CXX='g++'
+2026-11-09T13:43:05.1780165Z GCCGO='gccgo'
+2026-11-09T13:43:05.1780347Z GO111MODULE=''
+2026-11-09T13:43:05.1780539Z GOAMD64='v1'
+2026-11-09T13:43:05.1780714Z GOARCH='amd64'
+2026-11-09T13:43:05.1780891Z GOAUTH='netrc'
+2026-11-09T13:43:05.1781012Z GOBIN=''
+2026-11-09T13:43:05.1781153Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T13:43:05.1781327Z GOCACHEPROG=''
+2026-11-09T13:43:05.1781471Z GODEBUG=''
+2026-11-09T13:43:05.1781602Z GOENV='/home/runner/.config/go/env'
+2026-11-09T13:43:05.1781750Z GOEXE=''
+2026-11-09T13:43:05.1781858Z GOEXPERIMENT=''
+2026-11-09T13:43:05.1781988Z GOFIPS140='off'
+2026-11-09T13:43:05.1782107Z GOFLAGS=''
+2026-11-09T13:43:05.1782510Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build2001067702=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T13:43:05.1782903Z GOHOSTARCH='amd64'
+2026-11-09T13:43:05.1783274Z GOHOSTOS='linux'
+2026-11-09T13:43:05.1783396Z GOINSECURE=''
+2026-11-09T13:43:05.1783601Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T13:43:05.1783825Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T13:43:05.1783999Z GONOPROXY=''
+2026-11-09T13:43:05.1784117Z GONOSUMDB=''
+2026-11-09T13:43:05.1784228Z GOOS='linux'
+2026-11-09T13:43:05.1784347Z GOPATH='/home/runner/go'
+2026-11-09T13:43:05.1784510Z GOPRIVATE=''
+2026-11-09T13:43:05.1784682Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T13:43:05.1784883Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T13:43:05.1785070Z GOSUMDB='sum.golang.org'
+2026-11-09T13:43:05.1785209Z GOTELEMETRY='local'
+2026-11-09T13:43:05.1785409Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T13:43:05.1785609Z GOTMPDIR=''
+2026-11-09T13:43:05.1785734Z GOTOOLCHAIN='local'
+2026-11-09T13:43:05.1785925Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T13:43:05.1786137Z GOVCS=''
+2026-11-09T13:43:05.1786260Z GOVERSION='go1.26.5'
+2026-11-09T13:43:05.1786383Z GOWORK=''
+2026-11-09T13:43:05.1786503Z PKG_CONFIG='pkg-config'
+2026-11-09T13:43:05.1786593Z 
+2026-11-09T13:43:05.1786890Z ##[endgroup]
+2026-11-09T13:43:05.1973221Z ##[group]Run sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+2026-11-09T13:43:05.1974192Z [36;1msudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0[0m
+2026-11-09T13:43:05.1998426Z shell: /usr/bin/bash -e {0}
+2026-11-09T13:43:05.1998636Z env:
+2026-11-09T13:43:05.1998765Z   GOTOOLCHAIN: local
+2026-11-09T13:43:05.1998896Z ##[endgroup]
+2026-11-09T13:43:05.2709628Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T13:43:05.3170134Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T13:43:05.3179349Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T13:43:05.3295061Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T13:43:05.3316097Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T13:43:05.3333461Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T13:43:05.4389849Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T13:43:05.4562182Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T13:43:05.4725308Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T13:43:05.4792601Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T13:43:05.4850085Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T13:43:05.4899159Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T13:43:05.4919123Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T13:43:05.5024900Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T13:43:05.5031677Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T13:43:05.5039346Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T13:43:05.5744281Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T13:43:05.5794366Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T13:43:05.6238773Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T13:43:05.6289174Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T13:43:05.6319991Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T13:43:05.6372623Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T13:43:05.6392169Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T13:43:05.6396943Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T13:43:09.1644646Z Fetched 13.0 MB in 1s (12.3 MB/s)
+2026-11-09T13:43:10.0398429Z Reading package lists...
+2026-11-09T13:43:10.0744510Z Reading package lists...
+2026-11-09T13:43:10.3339329Z Building dependency tree...
+2026-11-09T13:43:10.3345411Z Reading state information...
+2026-11-09T13:43:10.5907803Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T13:43:10.5908559Z iptables set to manually installed.
+2026-11-09T13:43:10.5909003Z nftables is already the newest version (1.0.9-1ubuntu0.1).
+2026-11-09T13:43:10.5910196Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T13:43:10.5910752Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T13:43:10.5911307Z iputils-ping is already the newest version (3:20240117-1ubuntu0.1).
+2026-11-09T13:43:10.5911855Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T13:43:10.5912346Z curl is already the newest version (8.5.0-2ubuntu10.16).
+2026-11-09T13:43:10.5912852Z libnfnetlink0 is already the newest version (1.0.2-2build1).
+2026-11-09T13:43:10.5913308Z libnfnetlink0 set to manually installed.
+2026-11-09T13:43:10.5913764Z zlib1g is already the newest version (1:1.3.dfsg-3.1ubuntu2.3).
+2026-11-09T13:43:10.5914269Z libmnl0 is already the newest version (1.0.5-2build1).
+2026-11-09T13:43:10.5914680Z libmnl0 set to manually installed.
+2026-11-09T13:43:10.5915092Z The following additional packages will be installed:
+2026-11-09T13:43:10.5916537Z   libluajit-5.1-common
+2026-11-09T13:43:10.6171394Z The following NEW packages will be installed:
+2026-11-09T13:43:10.6179275Z   libluajit-5.1-2 libluajit-5.1-common libnetfilter-queue1 wireguard-tools
+2026-11-09T13:43:10.6184818Z The following packages will be upgraded:
+2026-11-09T13:43:10.6194789Z   ca-certificates
+2026-11-09T13:43:10.6412917Z 1 upgraded, 4 newly installed, 0 to remove and 26 not upgraded.
+2026-11-09T13:43:10.6413314Z Need to get 569 kB of archives.
+2026-11-09T13:43:10.6413633Z After this operation, 1219 kB of additional disk space will be used.
+2026-11-09T13:43:10.6414005Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T13:43:10.7304153Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 ca-certificates all 20260816ubuntu0.24.04.2 [140 kB]
+2026-11-09T13:43:10.7700920Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-common all 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [49.5 kB]
+2026-11-09T13:43:10.8089873Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-2 amd64 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [276 kB]
+2026-11-09T13:43:10.8484706Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnetfilter-queue1 amd64 1.0.5-4build1 [15.1 kB]
+2026-11-09T13:43:10.8871559Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 wireguard-tools amd64 1.0.20210914-1ubuntu4 [89.1 kB]
+2026-11-09T13:43:11.0897078Z Preconfiguring packages ...
+2026-11-09T13:43:11.4712518Z Fetched 569 kB in 0s (2204 kB/s)
+2026-11-09T13:43:11.5170315Z (Reading database ... 
+2026-11-09T13:43:11.5170646Z (Reading database ... 5%
+2026-11-09T13:43:11.5170825Z (Reading database ... 10%
+2026-11-09T13:43:11.5170979Z (Reading database ... 15%
+2026-11-09T13:43:11.5171122Z (Reading database ... 20%
+2026-11-09T13:43:11.5171260Z (Reading database ... 25%
+2026-11-09T13:43:11.5171735Z (Reading database ... 30%
+2026-11-09T13:43:11.5172231Z (Reading database ... 35%
+2026-11-09T13:43:11.5172382Z (Reading database ... 40%
+2026-11-09T13:43:11.5172531Z (Reading database ... 45%
+2026-11-09T13:43:11.5172685Z (Reading database ... 50%
+2026-11-09T13:43:11.5218094Z (Reading database ... 55%
+2026-11-09T13:43:11.6538290Z (Reading database ... 60%
+2026-11-09T13:43:11.7573172Z (Reading database ... 65%
+2026-11-09T13:43:12.0033763Z (Reading database ... 70%
+2026-11-09T13:43:12.1711856Z (Reading database ... 75%
+2026-11-09T13:43:12.3034323Z (Reading database ... 80%
+2026-11-09T13:43:12.5071957Z (Reading database ... 85%
+2026-11-09T13:43:12.6570230Z (Reading database ... 90%
+2026-11-09T13:43:12.7586140Z (Reading database ... 95%
+2026-11-09T13:43:12.7586455Z (Reading database ... 100%
+2026-11-09T13:43:12.7586679Z (Reading database ... 215960 files and directories currently installed.)
+2026-11-09T13:43:12.7626844Z Preparing to unpack .../ca-certificates_20260816ubuntu0.24.04.2_all.deb ...
+2026-11-09T13:43:12.7755368Z Unpacking ca-certificates (20260816ubuntu0.24.04.2) over (20260816ubuntu0.24.04.1) ...
+2026-11-09T13:43:12.8407179Z Selecting previously unselected package libluajit-5.1-common.
+2026-11-09T13:43:12.8528950Z Preparing to unpack .../libluajit-5.1-common_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_all.deb ...
+2026-11-09T13:43:12.8536950Z Unpacking libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T13:43:12.8956349Z Selecting previously unselected package libluajit-5.1-2:amd64.
+2026-11-09T13:43:12.9073258Z Preparing to unpack .../libluajit-5.1-2_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_amd64.deb ...
+2026-11-09T13:43:12.9090128Z Unpacking libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T13:43:12.9336709Z Selecting previously unselected package libnetfilter-queue1:amd64.
+2026-11-09T13:43:12.9451981Z Preparing to unpack .../libnetfilter-queue1_1.0.5-4build1_amd64.deb ...
+2026-11-09T13:43:12.9459075Z Unpacking libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T13:43:12.9696100Z Selecting previously unselected package wireguard-tools.
+2026-11-09T13:43:12.9812015Z Preparing to unpack .../wireguard-tools_1.0.20210914-1ubuntu4_amd64.deb ...
+2026-11-09T13:43:12.9819577Z Unpacking wireguard-tools (1.0.20210914-1ubuntu4) ...
+2026-11-09T13:43:13.0284218Z Setting up ca-certificates (20260816ubuntu0.24.04.2) ...
+2026-11-09T13:43:14.4169902Z Updating certificates in /etc/ssl/certs...
+2026-11-09T13:43:14.8046881Z 0 added, 0 removed; done.
+2026-11-09T13:43:14.8047302Z Running hooks in /etc/ca-certificates/update.d...
+2026-11-09T13:43:14.8678497Z /etc/ssl/certs/adoptium/cacerts successfully populated.
+2026-11-09T13:43:14.8680311Z done.
+2026-11-09T13:43:14.8948441Z Setting up libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T13:43:14.8967459Z Setting up wireguard-tools (1.0.20210914-1ubuntu4) ...
+2026-11-09T13:43:15.1043471Z wg-quick.target is a disabled or a static unit, not starting it.
+2026-11-09T13:43:15.1061227Z Setting up libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T13:43:15.1080057Z Setting up libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T13:43:15.1101914Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-11-09T13:43:15.1128575Z Not building database; man-db/auto-update is not 'true'.
+2026-11-09T13:43:15.1143805Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-11-09T13:43:15.8083570Z 
+2026-11-09T13:43:15.8084103Z Running kernel seems to be up-to-date.
+2026-11-09T13:43:15.8084347Z 
+2026-11-09T13:43:15.8084454Z No services need to be restarted.
+2026-11-09T13:43:15.8084613Z 
+2026-11-09T13:43:15.8084684Z No containers need to be restarted.
+2026-11-09T13:43:15.8084790Z 
+2026-11-09T13:43:15.8084872Z No user sessions are running outdated binaries.
+2026-11-09T13:43:15.8084996Z 
+2026-11-09T13:43:15.8085119Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-11-09T13:43:16.9760694Z ##[group]Run race_flag=()
+2026-11-09T13:43:16.9760903Z [36;1mrace_flag=()[0m
+2026-11-09T13:43:16.9761183Z [36;1mif [ "race" = race ]; then race_flag=(-race); fi[0m
+2026-11-09T13:43:16.9761491Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:43:16.9763636Z [36;1m  go test "${race_flag[@]}" -count=1 ./internal/app ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestNFQWSQuarantine|^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePreAdd|^TestNFQWSPreAddGenericAndProbe|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v[0m
+2026-11-09T13:43:16.9783136Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:43:16.9783339Z env:
+2026-11-09T13:43:16.9783457Z   GOTOOLCHAIN: local
+2026-11-09T13:43:16.9783593Z ##[endgroup]
+2026-11-09T13:43:17.0857972Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T13:43:17.1276101Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T13:43:17.1329941Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T13:43:17.6019785Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T13:43:17.6372789Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T13:43:17.6499474Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T13:43:17.7647590Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T13:43:44.9466124Z # github.com/ArtixSx/razvilka/internal/dataplane
+2026-11-09T13:43:44.9466701Z FAIL	github.com/ArtixSx/razvilka/internal/app [build failed]
+2026-11-09T13:43:44.9549789Z ##[error]internal/dataplane/proxy.go:2526:16: undefined: probecheck
+2026-11-09T13:43:44.9585893Z ##[error]internal/dataplane/proxy.go:2539:19: undefined: probecheck
+2026-11-09T13:43:48.3330874Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences
+2026-11-09T13:43:48.3331292Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged
+2026-11-09T13:43:48.3331699Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime
+2026-11-09T13:43:48.3332094Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte
+2026-11-09T13:43:48.3332444Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated
+2026-11-09T13:43:48.3332823Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd
+2026-11-09T13:43:48.3333166Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled
+2026-11-09T13:43:48.3333527Z --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences (0.01s)
+2026-11-09T13:43:48.3333973Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged (0.00s)
+2026-11-09T13:43:48.3334455Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime (0.00s)
+2026-11-09T13:43:48.3334918Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte (0.00s)
+2026-11-09T13:43:48.3335343Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated (0.00s)
+2026-11-09T13:43:48.3335763Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd (0.00s)
+2026-11-09T13:43:48.3336507Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled (0.00s)
+2026-11-09T13:43:48.3336866Z === RUN   TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier
+2026-11-09T13:43:48.3337344Z --- PASS: TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier (0.08s)
+2026-11-09T13:43:48.3337677Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift
+2026-11-09T13:43:48.3338012Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime
+2026-11-09T13:43:48.3338601Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode
+2026-11-09T13:43:48.3338968Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member
+2026-11-09T13:43:48.3339324Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced
+2026-11-09T13:43:48.3339685Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd
+2026-11-09T13:43:48.3340029Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled
+2026-11-09T13:43:48.3340354Z --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift (0.27s)
+2026-11-09T13:43:48.3340784Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime (0.06s)
+2026-11-09T13:43:48.3341256Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode (0.04s)
+2026-11-09T13:43:48.3341696Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member (0.05s)
+2026-11-09T13:43:48.3342127Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced (0.04s)
+2026-11-09T13:43:48.3342573Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd (0.04s)
+2026-11-09T13:43:48.3342988Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled (0.04s)
+2026-11-09T13:43:48.3343321Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking
+2026-11-09T13:43:48.3343657Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo
+2026-11-09T13:43:48.3343994Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink
+2026-11-09T13:43:48.3344336Z --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking (0.10s)
+2026-11-09T13:43:48.3344734Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo (0.04s)
+2026-11-09T13:43:48.3345170Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink (0.06s)
+2026-11-09T13:43:48.3345501Z === RUN   TestManagedRuntimePayloadScratchExclusiveAndCleared
+2026-11-09T13:43:48.3345766Z --- PASS: TestManagedRuntimePayloadScratchExclusiveAndCleared (0.02s)
+2026-11-09T13:43:48.3346005Z === RUN   TestManagedRuntimePayloadScratchBounds
+2026-11-09T13:43:48.3346219Z --- PASS: TestManagedRuntimePayloadScratchBounds (0.00s)
+2026-11-09T13:43:48.3346397Z PASS
+2026-11-09T13:43:48.3346552Z ok  	github.com/ArtixSx/razvilka/internal/components	1.746s
+2026-11-09T13:43:48.3346767Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds
+2026-11-09T13:43:48.3346979Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/0
+2026-11-09T13:43:48.3347194Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/1
+2026-11-09T13:43:48.3347410Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/63
+2026-11-09T13:43:48.3347624Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/64
+2026-11-09T13:43:48.3347832Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/65
+2026-11-09T13:43:48.3348041Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/511
+2026-11-09T13:43:48.3348329Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/512
+2026-11-09T13:43:48.3348539Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/513
+2026-11-09T13:43:48.3348755Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4095
+2026-11-09T13:43:48.3348967Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4096
+2026-11-09T13:43:48.3349188Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4097
+2026-11-09T13:43:48.3349521Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/65536
+2026-11-09T13:43:48.3349828Z --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds (0.02s)
+2026-11-09T13:43:48.3350096Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/0 (0.00s)
+2026-11-09T13:43:48.3350364Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/1 (0.00s)
+2026-11-09T13:43:48.3350637Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/63 (0.00s)
+2026-11-09T13:43:48.3350908Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/64 (0.00s)
+2026-11-09T13:43:48.3351172Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/65 (0.00s)
+2026-11-09T13:43:48.3351441Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/511 (0.00s)
+2026-11-09T13:43:48.3351715Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/512 (0.00s)
+2026-11-09T13:43:48.3351987Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/513 (0.00s)
+2026-11-09T13:43:48.3352266Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4095 (0.00s)
+2026-11-09T13:43:48.3352574Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4096 (0.00s)
+2026-11-09T13:43:48.3352878Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4097 (0.00s)
+2026-11-09T13:43:48.3353156Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/65536 (0.00s)
+2026-11-09T13:43:48.3353367Z === RUN   TestIdentitySyscallsConcurrentGC
+2026-11-09T13:43:48.3353551Z --- PASS: TestIdentitySyscallsConcurrentGC (0.01s)
+2026-11-09T13:43:48.3353709Z PASS
+2026-11-09T13:43:48.3353852Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	1.086s
+2026-11-09T13:43:48.4373670Z === RUN   TestDumpScratchNeverAliasesReturnedKernelMessages
+2026-11-09T13:43:48.4374161Z --- PASS: TestDumpScratchNeverAliasesReturnedKernelMessages (0.00s)
+2026-11-09T13:43:48.4374612Z === RUN   TestPacketUnsubmittedReadKeepsOnlyOriginalRetainedCleanup
+2026-11-09T13:43:48.4375079Z --- PASS: TestPacketUnsubmittedReadKeepsOnlyOriginalRetainedCleanup (0.03s)
+2026-11-09T13:43:48.4375563Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner
+2026-11-09T13:43:48.4376057Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/copied_token
+2026-11-09T13:43:48.4376621Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/wrong_boundary
+2026-11-09T13:43:48.4377206Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/plain_cancellation
+2026-11-09T13:43:48.4377839Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_source_loss
+2026-11-09T13:43:48.4378526Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_cancellation
+2026-11-09T13:43:48.4379100Z --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner (0.02s)
+2026-11-09T13:43:48.4379758Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/copied_token (0.00s)
+2026-11-09T13:43:48.4380192Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/wrong_boundary (0.00s)
+2026-11-09T13:43:48.4380727Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/plain_cancellation (0.00s)
+2026-11-09T13:43:48.4381251Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_source_loss (0.00s)
+2026-11-09T13:43:48.4381695Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_cancellation (0.00s)
+2026-11-09T13:43:48.4382111Z === RUN   TestPacketUnsubmittedReadCannotRecoverClosedCollector
+2026-11-09T13:43:48.4382396Z --- PASS: TestPacketUnsubmittedReadCannotRecoverClosedCollector (0.01s)
+2026-11-09T13:43:48.4382653Z === RUN   TestFenceWakeFullQueueAndOwnedClose
+2026-11-09T13:43:48.4382974Z --- PASS: TestFenceWakeFullQueueAndOwnedClose (0.00s)
+2026-11-09T13:43:48.4383207Z === RUN   TestFenceWakeRefusesReplacementWithoutClosingIt
+2026-11-09T13:43:48.4383499Z --- PASS: TestFenceWakeRefusesReplacementWithoutClosingIt (0.00s)
+2026-11-09T13:43:48.4383771Z === RUN   TestFenceWakeRejectsMalformedHint
+2026-11-09T13:43:48.4383965Z --- PASS: TestFenceWakeRejectsMalformedHint (0.00s)
+2026-11-09T13:43:48.4384426Z === RUN   TestFenceWakeBurstAndCloseJoin
+2026-11-09T13:43:48.4384611Z --- PASS: TestFenceWakeBurstAndCloseJoin (0.00s)
+2026-11-09T13:43:48.4384981Z === RUN   TestOriginalFenceCollectorDrainsBetweenChecksWithoutRefreshing
+2026-11-09T13:43:48.4385392Z --- PASS: TestOriginalFenceCollectorDrainsBetweenChecksWithoutRefreshing (0.07s)
+2026-11-09T13:43:48.4385716Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate
+2026-11-09T13:43:48.4386102Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/before-first-facts
+2026-11-09T13:43:48.4386442Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/between-checks
+2026-11-09T13:43:48.4386837Z --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate (0.00s)
+2026-11-09T13:43:48.4387233Z     --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/before-first-facts (0.00s)
+2026-11-09T13:43:48.4387729Z     --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/between-checks (0.00s)
+2026-11-09T13:43:48.4388028Z === RUN   TestOriginalFenceCollectorStartupBounds
+2026-11-09T13:43:48.4388534Z === RUN   TestOriginalFenceCollectorStartupBounds/bytes-across-empty-checkpoints
+2026-11-09T13:43:48.4388868Z === RUN   TestOriginalFenceCollectorStartupBounds/datagrams
+2026-11-09T13:43:48.4389106Z --- PASS: TestOriginalFenceCollectorStartupBounds (0.05s)
+2026-11-09T13:43:48.4389529Z     --- PASS: TestOriginalFenceCollectorStartupBounds/bytes-across-empty-checkpoints (0.04s)
+2026-11-09T13:43:48.4389877Z     --- PASS: TestOriginalFenceCollectorStartupBounds/datagrams (0.01s)
+2026-11-09T13:43:48.4390233Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky
+2026-11-09T13:43:48.4390522Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/loss
+2026-11-09T13:43:48.4390836Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/truncation
+2026-11-09T13:43:48.4391246Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/unknown
+2026-11-09T13:43:48.4391572Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/malformed
+2026-11-09T13:43:48.4391970Z --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky (0.00s)
+2026-11-09T13:43:48.4392332Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/loss (0.00s)
+2026-11-09T13:43:48.4392795Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/truncation (0.00s)
+2026-11-09T13:43:48.4393188Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/unknown (0.00s)
+2026-11-09T13:43:48.4393661Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/malformed (0.00s)
+2026-11-09T13:43:48.4393960Z === RUN   TestOriginalFenceCollectorRejectsReplacementFacts
+2026-11-09T13:43:48.4394303Z --- PASS: TestOriginalFenceCollectorRejectsReplacementFacts (0.00s)
+2026-11-09T13:43:48.4394585Z === RUN   TestOriginalFenceCollectorCanceledQueuedCheckpointAndJoin
+2026-11-09T13:43:48.4394888Z --- PASS: TestOriginalFenceCollectorCanceledQueuedCheckpointAndJoin (0.00s)
+2026-11-09T13:43:48.4395246Z === RUN   TestOriginalFenceCollectorCloseWaitsForReader
+2026-11-09T13:43:48.4395507Z --- PASS: TestOriginalFenceCollectorCloseWaitsForReader (0.00s)
+2026-11-09T13:43:48.4395788Z === RUN   TestOriginalFenceCollectorPacketPendingAndFreshEpochBookends
+2026-11-09T13:43:48.4396116Z --- PASS: TestOriginalFenceCollectorPacketPendingAndFreshEpochBookends (0.01s)
+2026-11-09T13:43:48.4396488Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted
+2026-11-09T13:43:48.4396789Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-full
+2026-11-09T13:43:48.4397109Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-finite
+2026-11-09T13:43:48.4397427Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/full-packet
+2026-11-09T13:43:48.4397744Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/finite-packet
+2026-11-09T13:43:48.4398290Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-changed
+2026-11-09T13:43:48.4398614Z --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted (0.03s)
+2026-11-09T13:43:48.4399074Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-full (0.00s)
+2026-11-09T13:43:48.4399475Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-finite (0.00s)
+2026-11-09T13:43:48.4399872Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/full-packet (0.00s)
+2026-11-09T13:43:48.4400270Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/finite-packet (0.01s)
+2026-11-09T13:43:48.4400671Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-changed (0.00s)
+2026-11-09T13:43:48.4401017Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky
+2026-11-09T13:43:48.4401350Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/loss
+2026-11-09T13:43:48.4401706Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/truncated
+2026-11-09T13:43:48.4402146Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/malformed
+2026-11-09T13:43:48.4402519Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-flags
+2026-11-09T13:43:48.4402899Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-type
+2026-11-09T13:43:48.4403292Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-address-claim
+2026-11-09T13:43:48.4403677Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-mac-claim
+2026-11-09T13:43:48.4404040Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-link
+2026-11-09T13:43:48.4404402Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-address
+2026-11-09T13:43:48.4404775Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/home-route
+2026-11-09T13:43:48.4405137Z --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky (0.03s)
+2026-11-09T13:43:48.4405556Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/loss (0.00s)
+2026-11-09T13:43:48.4405992Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/truncated (0.00s)
+2026-11-09T13:43:48.4406435Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/malformed (0.00s)
+2026-11-09T13:43:48.4406890Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-flags (0.00s)
+2026-11-09T13:43:48.4407356Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-type (0.00s)
+2026-11-09T13:43:48.4407832Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-address-claim (0.00s)
+2026-11-09T13:43:48.4408454Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-mac-claim (0.00s)
+2026-11-09T13:43:48.4408907Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-link (0.00s)
+2026-11-09T13:43:48.4409443Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-address (0.00s)
+2026-11-09T13:43:48.4409894Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/home-route (0.00s)
+2026-11-09T13:43:48.4410240Z === RUN   TestOriginalFenceCollectorPacketEpochOverflowCannotWrap
+2026-11-09T13:43:48.4410536Z --- PASS: TestOriginalFenceCollectorPacketEpochOverflowCannotWrap (0.00s)
+2026-11-09T13:43:48.4410854Z === RUN   TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader
+2026-11-09T13:43:48.4411171Z --- PASS: TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader (0.00s)
+2026-11-09T13:43:48.4411530Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal
+2026-11-09T13:43:48.4411946Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/wait-error
+2026-11-09T13:43:48.4412535Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/changed-before-receive
+2026-11-09T13:43:48.4412998Z --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal (0.00s)
+2026-11-09T13:43:48.4413578Z     --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/wait-error (0.00s)
+2026-11-09T13:43:48.4414134Z     --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/changed-before-receive (0.00s)
+2026-11-09T13:43:48.4414464Z PASS
+2026-11-09T13:43:48.4414626Z ok  	github.com/ArtixSx/razvilka/internal/physicalscope	1.439s
+2026-11-09T13:43:48.4414880Z FAIL	github.com/ArtixSx/razvilka/internal/startuptools [build failed]
+2026-11-09T13:43:48.4415211Z FAIL	github.com/ArtixSx/razvilka/internal/dataplane [build failed]
+2026-11-09T13:43:48.4415396Z FAIL
+2026-11-09T13:43:48.5776880Z ##[error]Process completed with exit code 1.
+2026-11-09T13:43:48.6122656Z ##[group]Run set -euo pipefail
+2026-11-09T13:43:48.6122943Z [36;1mset -euo pipefail[0m
+2026-11-09T13:43:48.6123152Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T13:43:48.6123507Z [36;1msudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:43:48.6124144Z [36;1m  RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/lan.log[0m
+2026-11-09T13:43:48.6124785Z [36;1mgrep -F -- '--- PASS: TestManagedStrategyProbeNativeLANAppHTTP ' artifacts/managed/lan.log[0m
+2026-11-09T13:43:48.6125365Z [36;1mgrep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/lan.log[0m
+2026-11-09T13:43:48.6125860Z [36;1mif grep -F -- '--- SKIP:' artifacts/managed/lan.log; then exit 1; fi[0m
+2026-11-09T13:43:48.6143891Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:43:48.6144096Z env:
+2026-11-09T13:43:48.6144249Z   GOTOOLCHAIN: local
+2026-11-09T13:43:48.6144367Z ##[endgroup]
+2026-11-09T13:43:49.0176159Z /tmp/razvilka-managed-probe.2cUDm5/release.tar.gz.download.Vo982K: OK
+2026-11-09T13:43:49.0269750Z /tmp/razvilka-managed-probe.2cUDm5/release.tar.gz: OK
+2026-11-09T13:43:49.2021434Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:43:49.2065254Z Actual native build mode: race
+2026-11-09T13:43:49.2071817Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T13:43:49.2093067Z go version go1.26.5 linux/amd64
+2026-11-09T13:43:49.2240913Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-09T13:43:54.7366143Z # github.com/ArtixSx/razvilka/internal/dataplane
+2026-11-09T13:43:54.7369528Z ##[error]internal/dataplane/proxy.go:2526:16: undefined: probecheck
+2026-11-09T13:43:54.7371338Z ##[error]internal/dataplane/proxy.go:2539:19: undefined: probecheck
+2026-11-09T13:43:54.7580663Z ##[error]Process completed with exit code 1.
+2026-11-09T13:43:54.7613472Z ##[group]Run set -euo pipefail
+2026-11-09T13:43:54.7613738Z [36;1mset -euo pipefail[0m
+2026-11-09T13:43:54.7613950Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T13:43:54.7614319Z [36;1msudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:43:54.7614716Z [36;1m  RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" \[0m
+2026-11-09T13:43:54.7615231Z [36;1m  RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/manual.log[0m
+2026-11-09T13:43:54.7615936Z [36;1mgrep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' artifacts/managed/manual.log[0m
+2026-11-09T13:43:54.7616571Z [36;1mgrep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/manual.log[0m
+2026-11-09T13:43:54.7617080Z [36;1mif grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi[0m
+2026-11-09T13:43:54.7633674Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:43:54.7633854Z env:
+2026-11-09T13:43:54.7633962Z   GOTOOLCHAIN: local
+2026-11-09T13:43:54.7634081Z ##[endgroup]
+2026-11-09T13:43:55.2122334Z /tmp/razvilka-managed-probe.ODqNQp/release.tar.gz.download.YyehKG: OK
+2026-11-09T13:43:55.2203761Z /tmp/razvilka-managed-probe.ODqNQp/release.tar.gz: OK
+2026-11-09T13:43:55.3417061Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:43:55.3453657Z Actual native build mode: race
+2026-11-09T13:43:55.3459652Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T13:43:55.3481593Z go version go1.26.5 linux/amd64
+2026-11-09T13:43:55.3625661Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-09T13:43:56.0384653Z # github.com/ArtixSx/razvilka/internal/dataplane
+2026-11-09T13:43:56.0386971Z ##[error]internal/dataplane/proxy.go:2526:16: undefined: probecheck
+2026-11-09T13:43:56.0388390Z ##[error]internal/dataplane/proxy.go:2539:19: undefined: probecheck
+2026-11-09T13:43:56.0556848Z ##[error]Process completed with exit code 1.
+2026-11-09T13:43:56.0580791Z ##[group]Run set -euo pipefail
+2026-11-09T13:43:56.0580985Z [36;1mset -euo pipefail[0m
+2026-11-09T13:43:56.0581132Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T13:43:56.0581279Z [36;1mresult=0[0m
+2026-11-09T13:43:56.0581418Z [36;1mfor cut in intent settlement-sync; do[0m
+2026-11-09T13:43:56.0581621Z [36;1m  output="artifacts/managed/never-issued-$cut.log"[0m
+2026-11-09T13:43:56.0581897Z [36;1m  if ! sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T13:43:56.0582168Z [36;1m    RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" \[0m
+2026-11-09T13:43:56.0582444Z [36;1m    RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE="$cut" RAZVILKA_MANAGED_PROBE_LAN_CASE=manual \[0m
+2026-11-09T13:43:56.0582818Z [36;1m    sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee "$output"; then result=1; fi[0m
+2026-11-09T13:43:56.0583147Z [36;1m  grep -F "actual_never_issued_recovered mode=$cut " "$output" || result=1[0m
+2026-11-09T13:43:56.0583523Z [36;1m  grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' "$output" || result=1[0m
+2026-11-09T13:43:56.0583820Z [36;1m  if grep -F -- '--- SKIP:' "$output"; then result=1; fi[0m
+2026-11-09T13:43:56.0583998Z [36;1mdone[0m
+2026-11-09T13:43:56.0584115Z [36;1mexit "$result"[0m
+2026-11-09T13:43:56.0600394Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T13:43:56.0600578Z env:
+2026-11-09T13:43:56.0600689Z   GOTOOLCHAIN: local
+2026-11-09T13:43:56.0600813Z ##[endgroup]
+2026-11-09T13:43:56.3414528Z /tmp/razvilka-managed-probe.imvaFI/release.tar.gz.download.z1nzrL: OK
+2026-11-09T13:43:56.3499967Z /tmp/razvilka-managed-probe.imvaFI/release.tar.gz: OK
+2026-11-09T13:43:56.4808400Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:43:56.4842290Z Actual native build mode: race
+2026-11-09T13:43:56.4848221Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T13:43:56.4869264Z go version go1.26.5 linux/amd64
+2026-11-09T13:43:56.5012391Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-09T13:43:57.1406997Z # github.com/ArtixSx/razvilka/internal/dataplane
+2026-11-09T13:43:57.1409469Z ##[error]internal/dataplane/proxy.go:2526:16: undefined: probecheck
+2026-11-09T13:43:57.1410608Z ##[error]internal/dataplane/proxy.go:2539:19: undefined: probecheck
+2026-11-09T13:43:57.4447967Z /tmp/razvilka-managed-probe.phM8kL/release.tar.gz.download.Tluk53: OK
+2026-11-09T13:43:57.4526969Z /tmp/razvilka-managed-probe.phM8kL/release.tar.gz: OK
+2026-11-09T13:43:57.5751022Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T13:43:57.5783678Z Actual native build mode: race
+2026-11-09T13:43:57.5789642Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T13:43:57.5810995Z go version go1.26.5 linux/amd64
+2026-11-09T13:43:57.5957454Z Actual CPU: model name	: AMD EPYC 9V45 96-Core Processor
+2026-11-09T13:43:58.2674465Z # github.com/ArtixSx/razvilka/internal/dataplane
+2026-11-09T13:43:58.2675725Z ##[error]internal/dataplane/proxy.go:2526:16: undefined: probecheck
+2026-11-09T13:43:58.2676889Z ##[error]internal/dataplane/proxy.go:2539:19: undefined: probecheck
+2026-11-09T13:43:58.2899341Z ##[error]Process completed with exit code 1.
+2026-11-09T13:43:58.2966346Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T13:43:58.2966587Z with:
+2026-11-09T13:43:58.2966765Z   name: research-managed-race-dee26552fba5318ae44a10545432f64ac1ade3c9
+2026-11-09T13:43:58.2966977Z   path: artifacts/managed
+2026-11-09T13:43:58.2967106Z   if-no-files-found: warn
+2026-11-09T13:43:58.2967235Z   compression-level: 6
+2026-11-09T13:43:58.2967354Z   overwrite: false
+2026-11-09T13:43:58.2967474Z   include-hidden-files: false
+2026-11-09T13:43:58.2967603Z env:
+2026-11-09T13:43:58.2967707Z   GOTOOLCHAIN: local
+2026-11-09T13:43:58.2967820Z ##[endgroup]
+2026-11-09T13:43:58.4233459Z (node:12017) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T13:43:58.4234001Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T13:43:58.4273768Z With the provided path, there will be 4 files uploaded
+2026-11-09T13:43:58.4277659Z Artifact name is valid!
+2026-11-09T13:43:58.4277918Z Root directory input is valid!
+2026-11-09T13:43:58.7227713Z Beginning upload of artifact content to blob storage
+2026-11-09T13:43:58.7424926Z (node:12017) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T13:43:58.8849520Z Uploaded bytes 2699
+2026-11-09T13:43:58.9232521Z Finished uploading artifact content to blob storage!
+2026-11-09T13:43:58.9233103Z SHA256 digest of uploaded artifact zip is 2e0ef706e922f4efaae6a694d3779ac718d8b0d4c89d186d0a4674eef8c1bfbf
+2026-11-09T13:43:58.9233614Z Finalizing artifact upload
+2026-11-09T13:43:59.3720139Z Artifact research-managed-race-dee26552fba5318ae44a10545432f64ac1ade3c9.zip successfully finalized. Artifact ID 13680140694
+2026-11-09T13:43:59.3720866Z Artifact research-managed-race-dee26552fba5318ae44a10545432f64ac1ade3c9 has been successfully uploaded! Final size is 2699 bytes. Artifact ID is 13680140694
+2026-11-09T13:43:59.3725399Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42627881685/artifacts/13680140694
+2026-11-09T13:43:59.3893646Z Post job cleanup.
+2026-11-09T13:43:59.4461599Z [command]/usr/bin/git version
+2026-11-09T13:43:59.4495870Z git version 2.56.0
+2026-11-09T13:43:59.4519119Z Temporarily overriding HOME='/home/runner/work/_temp/aacdc723-81b8-4001-9b88-eb7270fe1f24' before making global git config changes
+2026-11-09T13:43:59.4519764Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T13:43:59.4522642Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T13:43:59.4551633Z Removing SSH command configuration
+2026-11-09T13:43:59.4556072Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T13:43:59.4611352Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T13:43:59.4825355Z Removing HTTP extra header
+2026-11-09T13:43:59.4830722Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T13:43:59.4869716Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T13:43:59.5076272Z Removing includeIf entries pointing to credentials config files
+2026-11-09T13:43:59.5081543Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T13:43:59.5120318Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T13:43:59.5422560Z Cleaning up orphan processes
+2026-11-09T13:43:59.5666677Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

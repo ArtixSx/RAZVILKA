@@ -1,0 +1,21 @@
+{
+  "status": "source_approved",
+  "reviewer": "/root/verification",
+  "files_sha256": {
+    ".github/workflows/ci.yml": "2e947077a1948b8ab89341d464f4e94089950420c036683d24f63a5a09a9561a",
+    "scripts/test-paired-public-native.sh": "c90b34d5c852eeaf903f5434c2ad4b149ae1ab16c731500c5bec05ec993ad95e",
+    "scripts/test-managed-probe-native.sh": "9c2bf678efebca058bed7b769d4da624307ac053f904a82a303c311f882df50f"
+  },
+  "contract": [
+    "Generic focused gate adds bootstrap original join/child-absence/adapter negatives without removing existing tests.",
+    "Public native harness runs BootstrapOriginalAdapter in actual updatecheck package, not cmd.test; original fast command diagnostics retained.",
+    "Existing startuptools native binary runs paired actual two-family copy benchmark3x/count3 in normal/race outside LAN operation clocks.",
+    "Native-tagged startup image tests dispatch to actual startuptools.test in unchanged private namespace; same existing program runs100ms/count3 paired measurement outside route clocks, test timeout100s unchanged.",
+    "Before full gate, exact two Cloudflare ownership/cleanup positive fixtures run10 times each in normal and race modes; failures stop the gate, no product timeout or assertion removed."
+  ],
+  "resolved_finding": "OriginalAdapter prefix initially selected wrong cmd package; moved to actual updatecheck invocation.",
+  "limits": [
+    "No local Go builds or native execution.",
+    "Race child benchmark adds roughly36 process launches, potentially about36s because race child exit delay; job timeout unchanged and must be monitored."
+  ]
+}

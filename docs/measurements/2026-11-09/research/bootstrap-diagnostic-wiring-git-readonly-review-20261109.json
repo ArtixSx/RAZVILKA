@@ -1,0 +1,23 @@
+{
+  "status": "source-approved",
+  "scope": "Focused external bootstrap diagnostic selectors and read-only Git optional lock setting",
+  "checks": [
+    "Only new TestExternalBootstrapFileDiagnostic selector added, existing tests/builds unchanged",
+    "GIT_OPTIONAL_LOCKS=0 limited to sudo disposable paired harness; no chown/reset or relaxed safe.directory/namespace/runtime rules",
+    "Installed official Git git.html lines2502-2509 confirms requested operations complete while optional status index refresh is disabled"
+  ],
+  "files": [
+    {
+      "sha256": "0cb0de355f57a6aa43dd5bac055567af0d54ce3515651a4f52c00285b0ba7f99",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "sha256": "e0441bf7336756ec0ff05c52ff30f67f4dedbeac6e42aa5edcd5939e6f76bfe4",
+      "path": ".github/workflows/research-lifecycle.yml"
+    },
+    {
+      "sha256": "1ba9a8ad68ecbfff970f34f22537032cde2f6a6902a24f48f682bf6d46fb4629",
+      "path": "scripts/test-paired-public-native.sh"
+    }
+  ]
+}

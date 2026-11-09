@@ -1,0 +1,18 @@
+{
+  "limitations": [
+    "Actual metadata cardinality and full normal/race native results pending; allocation-only hypothesis."
+  ],
+  "decision": "APPROVE measurement-only candidate",
+  "sha256": "ec74476e0f5ac6710faecdd71b442673cd3b1698fd25ad2e10282bf52534eb59",
+  "validation": [
+    "PowerShell full-body comparison PASS; gofmt-l clean; no Go execution."
+  ],
+  "findings": [
+    "Independent normalized source-body equality PASS: only method name and names backing initializer differ.",
+    "Exact fresh ReadDir257 including DT_UNKNOWN behavior, Close/error/bound checks, sorting/equality, held FD and both path passes retained.",
+    "Actual original source lease namespace/root prerequisites match established helper. Each subbenchmark enters provider on its own goroutine before timing.",
+    "No production implementation changed and no speed/stack allocation claim before actual measurements."
+  ],
+  "file": "internal/startuptools/version_names_measurement_native_linux_test.go",
+  "reviewer": "verification"
+}

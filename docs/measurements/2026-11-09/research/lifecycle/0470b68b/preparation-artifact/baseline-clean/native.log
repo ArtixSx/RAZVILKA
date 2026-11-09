@@ -1,0 +1,167 @@
+CI-only platform classification; actual protected tool bytes: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+go: downloading golang.org/x/sys v0.47.0
+go: downloading golang.org/x/net v0.56.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading golang.org/x/crypto v0.54.0
+go: downloading github.com/quic-go/quic-go v0.61.0
+go: downloading golang.org/x/text v0.40.0
+go: downloading github.com/quic-go/qpack v0.6.0
+=== RUN   TestDomainTCPOriginalNativeFailedPreparationRetirement
+    domain_tcp_original_native_linux_test.go:185: DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance
+    domain_tcp_original_native_linux_test.go:456: COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication30s/join15s; diagnostic=true
+    domain_tcp_original_native_linux_test.go:651: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+    domain_tcp_original_native_linux_test.go:527: actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:8.809451546s} capture-prepare:{Calls:1 Bytes:0 Elapsed:13.643636908s} dns-send:{Calls:1 Bytes:0 Elapsed:1.512710311s} dns-send-success:{Calls:1 Bytes:0 Elapsed:410ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:8.658976438s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:2.814µs} mapping-compare:{Calls:6 Bytes:0 Elapsed:10.494050058s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:2.874µs} process-current:{Calls:482 Bytes:0 Elapsed:11.521842245s} publication-gate:{Calls:26 Bytes:0 Elapsed:5.250100225s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:311ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:2.348306702s} standby-prepare:{Calls:1 Bytes:0 Elapsed:4.786927953s} whole-executable-hash:{Calls:219 Bytes:8010451914 Elapsed:5.786203361s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed
+    domain_tcp_original_native_linux_test.go:840: DIAGNOSTIC ONLY actual client=selected request deadline10s; default4s benchmark and original scope/context unchanged
+    domain_tcp_original_native_linux_test.go:847: reader7 original DNS owner detach retains exact restorative baseline and late-SYN tuple; no alias reuse/cache retirement or new Apply authority
+    domain_tcp_coexistence_native_linux_test.go:101: successor original Run/join observations map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:15.190127211s} capture-prepare:{Calls:1 Bytes:0 Elapsed:26.167433261s} process-current:{Calls:298 Bytes:0 Elapsed:7.810753734s} standby-add-guard:{Calls:13 Bytes:0 Elapsed:2.374547617s} standby-prepare:{Calls:1 Bytes:0 Elapsed:8.211393695s} whole-executable-hash:{Calls:603 Bytes:22056175818 Elapsed:15.851646898s}]; overlapping durations, not default12 performance
+    domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation
+    domain_tcp_original_native_linux_test.go:995: original publication blocked; bounded goroutine stacks:
+        goroutine 21 [running]:
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPublicationDiagnostics(0x1ae2d2f6e908, {0x1ddb18e, 0x1d})
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:1116 +0x6a
+        github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative(0x1ae2d2f6e908, 0x0)
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:995 +0x90d4
+        github.com/ArtixSx/razvilka/internal/app.TestDomainTCPOriginalNativeFailedPreparationRetirement(0x1ae2d2f6e908)
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_linux_test.go:98 +0xa6
+        testing.tRunner(0x1ae2d2f6e908, 0x1f06dc8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        created by testing.(*T).Run in goroutine 1
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x4c5
+        
+        goroutine 1 [chan receive, 1 minutes]:
+        testing.(*T).Run(0x1ae2d2f6e6c8, {0x1e24c7a?, 0x0?}, 0x1f06dc8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0x4e5
+        testing.runTests.func1(0x1ae2d2f6e6c8)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x3e
+        testing.tRunner(0x1ae2d2f6e6c8, 0x1ae2d32ffb70)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0xea
+        testing.runTests({0x1dd40b9, 0x1b}, {0x1dfdc0c, 0x28}, 0x1ae2d2f2e3d8, {0x2cd91a0, 0x49c, 0x49c}, {0xc2b4a728d6a146f1, 0x37e17197c3, ...})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x505
+        testing.(*M).Run(0x1ae2d3028280)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0x6ac
+        github.com/ArtixSx/razvilka/internal/app.TestMain(0x1ae2d3028280)
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x379
+        main.main()
+        	_testmain.go:2406 +0xa5
+        
+        goroutine 62 [IO wait, 1 minutes]:
+        internal/poll.runtime_pollWait(0x7f9d0c8f8200, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x1ae2d3204480?, 0x1ae2d3039000?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).ReadFromInet4(0x1ae2d3204480, {0x1ae2d3039000, 0x1000, 0x1000}, 0x1ae2d335bcc0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:241 +0x208
+        net.(*netFD).readFromInet4(0x1ae2d3204480, {0x1ae2d3039000?, 0x1ae2d3347400?, 0x0?}, 0x0?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_posix.go:79 +0x25
+        net.(*UDPConn).readFrom(0x30?, {0x1ae2d3039000?, 0x0?, 0x0?}, 0x1ae2d33f3440)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock_posix.go:52 +0x19b
+        net.(*UDPConn).readFromUDP(0x1ae2d2e4e430, {0x1ae2d3039000?, 0x0?, 0x1f2dd90?}, 0x1ae2d2e60658?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:146 +0x30
+        net.(*UDPConn).ReadFrom(0x1ae2d2e4e430, {0x1ae2d3039000, 0x1000, 0x1000})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/udpsock.go:155 +0x4a
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func4()
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:260 +0x7c
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:257 +0x1ff
+        
+        goroutine 63 [IO wait]:
+        internal/poll.runtime_pollWait(0x7f9d0c8f8600, 0x72)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+        internal/poll.(*pollDesc).wait(0x1ae2d3204500?, 0x427945?, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0x27
+        internal/poll.(*pollDesc).waitRead(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+        internal/poll.(*FD).Accept(0x1ae2d3204500)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x28c
+        net.(*netFD).accept(0x1ae2d3204500)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x29
+        net.(*TCPListener).accept(0x1ae2d3040b40)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x1b
+        net.(*TCPListener).Accept(0x1ae2d3040b40)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x30
+        crypto/tls.(*listener).Accept(0x1ae2d2f2e1b0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x24
+        net/http.(*Server).Serve(0x1ae2d2fb8000, {0x1f2de80, 0x1ae2d2f2e1b0})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x30c
+        net/http.(*Server).ServeTLS(0x1ae2d2fb8000, {0x1f2ee80, 0x1ae2d3040b40}, {0x1ae2d2f040e0, 0x70}, {0x1ae2d331c000, 0x71})
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3503 +0x406
+        github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH.func7()
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:295 +0x109
+        created by github.com/ArtixSx/razvilka/internal/app.(*domainOriginalNativePeers).localDoH in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:294 +0x35e
+        
+        goroutine 64 [syscall, 1 minutes]:
+        syscall.Syscall6(0xf7, 0x3, 0xd, 0x1ae2d305ce48, 0x4, 0x1ae2d2e98cf0, 0x0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x39
+        internal/syscall/unix.Waitid(0x1ae2d2e4e248?, 0x0?, 0x0?, 0x0?, 0x1ae2d305ce78?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x39
+        os.(*Process).pidfdWait.func1(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+        os.ignoringEINTR(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+        os.(*Process).pidfdWait(0x1ae2d3040b80)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x1c7
+        os.(*Process).wait(0x1ae2d2e4e248?)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x1a
+        os.(*Process).Wait(...)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+        os/exec.(*Cmd).Wait(0x1ae2d2e491e0)
+        	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0x45
+        github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers.func4()
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x25
+        created by github.com/ArtixSx/razvilka/internal/app.domainOriginalPeers in goroutine 21
+        	/home/runner/work/RAZVILKA/RAZVILKA/baseline/internal/app/domain_tcp_original_native_peers_linux_test.go:181 +0x1f73
+    domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=xray-domain-tcp state=removed phase=removed
+    domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=synthetic-baseline state=prepared phase=capture-ready
+    domain_tcp_original_native_linux_test.go:995: actual COMMON progress kind=domain-tcp-capture state=prepared phase=capture-prepared
+    domain_tcp_original_native_linux_test.go:1140: actual generated runtime transactions/dp-check-9411364c7a5b76edf378d5146f942e17/execution-resources/xd-c5ff6656c36f4caaed61811ed70783ea/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 19:51:17.467915 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+        2026/11/09 19:51:17.471452 [Warning] core: Xray 26.3.27 started
+    domain_tcp_original_native_linux_test.go:1140: actual generated runtime transactions/dp-check-9d50a4541fe7d8c0327e243d83eedb24/execution-resources/xd-82884ca5cf9f78ff25d4399d1af99f68/xray-domain.log: Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 19:52:06.486462 [Info] infra/conf/serial: Reading config: &{Name:stdin: Format:json}
+        2026/11/09 19:52:06.490947 [Warning] core: Xray 26.3.27 started
+    domain_tcp_original_native_linux_test.go:997: ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete
+    domain_tcp_original_native_linux_test.go:999: original failed ready generation retirement domain restore original source/capture: original synthetic TCP capture/transition consumer is unavailable
+    domain_tcp_original_native_linux_test.go:206: isolated fixture peer.log: === RUN   TestDomainTCPOriginalNativePeer
+        Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/amd64)
+        A unified platform for anti-censorship.
+        2026/11/09 19:51:15.473132 [Info] infra/conf/serial: Reading config: &{Name:/tmp/razvilka-domain-original.ZsXKJn/TestDomainTCPOriginalNativeFailedPreparationRetirement3487789926/001/server.json Format:json}
+        2026/11/09 19:51:15.474652 [Debug] app/log: Logger started
+        2026/11/09 19:51:15.476082 [Info] app/dns: DNS: created localhost client
+        2026/11/09 19:51:15.476110 [Debug] app/proxyman/inbound: creating stream worker on 1.1.1.2:10443
+        2026/11/09 19:51:15.476253 [Info] transport/internet/tcp: listening TCP on 1.1.1.2:10443
+        2026/11/09 19:51:15.476767 [Warning] core: Xray 26.3.27 started
+        2026/11/09 19:51:15.485953 [Info] [2944963415] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 19:51:15.843939 [Info] [427152598] app/proxyman/inbound: connection ends > EOF
+        2026/11/09 19:51:15.871789 [Info] [4151012915] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 19:51:15.871839 [Info] [4151012915] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 19:51:15.871847 [Info] [4151012915] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 19:51:15.871851 [Info] [4151012915] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.871854 [Debug] [4151012915] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.871862 [Info] [4151012915] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:46945, remote endpoint 1.1.1.2:443
+        2026/11/09 19:51:15.871870 [Debug] [4151012915] proxy: CopyRawConn (maybe) readv
+        2026/11/09 19:51:15.873254 [Info] [4151012915] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:32828: use of closed network connection
+        2026/11/09 19:51:15.875194 [Info] [1841369049] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 19:51:15.875232 [Info] [1841369049] proxy/vless/inbound: received request for tcp:service.example.com:443
+        2026/11/09 19:51:15.875240 [Info] [1841369049] app/dispatcher: default route for tcp:service.example.com:443
+        2026/11/09 19:51:15.875282 [Info] app/dns: returning 1 IP(s) for domain service.example.com -> [1.1.1.2]
+        2026/11/09 19:51:15.875290 [Info] [1841369049] proxy/freedom: dialing to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.875295 [Info] [1841369049] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.875300 [Debug] [1841369049] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.875306 [Info] [1841369049] proxy/freedom: connection opened to tcp:service.example.com:443, local endpoint 1.1.1.2:41139, remote endpoint 1.1.1.2:443
+        2026/11/09 19:51:15.875310 [Debug] [1841369049] proxy: CopyRawConn (maybe) readv
+        2026/11/09 19:51:15.877489 [Info] [1841369049] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:32842: use of closed network connection
+        2026/11/09 19:51:15.879309 [Info] [3909954562] proxy/vless/inbound: firstLen = 1186
+        2026/11/09 19:51:15.879327 [Info] [3909954562] proxy/vless/inbound: received request for tcp:1.1.1.2:443
+        2026/11/09 19:51:15.879334 [Info] [3909954562] app/dispatcher: default route for tcp:1.1.1.2:443
+        2026/11/09 19:51:15.879339 [Info] [3909954562] transport/internet/tcp: dialing TCP to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.879344 [Debug] [3909954562] transport/internet: dialing to tcp:1.1.1.2:443
+        2026/11/09 19:51:15.879400 [Info] [3909954562] proxy/freedom: connection opened to tcp:1.1.1.2:443, local endpoint 1.1.1.2:37619, remote endpoint 1.1.1.2:443
+        2026/11/09 19:51:15.879408 [Debug] [3909954562] proxy: CopyRawConn (maybe) readv
+        2026/11/09 19:51:15.881333 [Info] [3909954562] app/proxyman/outbound: app/proxyman/outbound: failed to process outbound traffic > proxy/freedom: connection ends > proxy/freedom: failed to process request > read tcp 1.1.1.2:10443->1.1.1.254:32846: use of closed network connection
+--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (95.21s)
+FAIL

@@ -1,0 +1,34 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; actual ubuntu26.04 CI pending",
+  "files": [
+    {
+      "sha256": "77E584D81B61F2818EAAAA48A65EBEEC01A7B4A7763DDA86A6758CC11FD46028",
+      "path": "scripts/test-classic-save-pinned-native.sh"
+    },
+    {
+      "sha256": "1FB32DE81D584B9BFDC28BB66971D5E64EDBD27FF8F8EA20DCAF8435E1F101DD",
+      "path": "scripts/check-classic-save-pinned-fixture.py"
+    },
+    {
+      "sha256": "86469427EE42C3B52072A227AEA239E92CEA2CF6BD5461CB563D53617B018846",
+      "path": "scripts/fixtures/classic-save-1.8.11.json"
+    }
+  ],
+  "primary_runner_source": "https://github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration/",
+  "findings": [
+    "Official GitHub announcement independently opened; explicit ubuntu-26.04 is generally available.",
+    "Local four pinned archive hashes independently checked against provenance manifest; actual main pin matches unchanged ubuntuProfile da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac.",
+    "Installed OS/version/arch/glibc/package identities and bounded archive/ELF/library/extension bytes/alias versions checked; no package install or profile fallback in harness.",
+    "Existing public AcquireUbuntuLegacy test plus existing parity/lock/mutation scenarios run in separate original-FD-verified private network/mount namespaces; private /opt and /run before rules.",
+    "Reviewer requested and verified NS_GET_NSTYPE, bounded propagation refusal, umask077 and size+1 installed reads.",
+    "No production Go or source-check changes."
+  ],
+  "limitations": [
+    "Official Ubuntu package web page unavailable through web tool; actual pinned local archive bytes and production ELF pin verified, runner must independently validate installed package bytes.",
+    "No local Linux/Go execution; actual public producer and normal/race CI still pending.",
+    "This is exact Ubuntu1.8.11 ABI acceptance, not stock1.4.21 or router/LAN acceptance.",
+    "Workflow not included in this three-file review; reviewed separately when ready."
+  ],
+  "source_commit": "2b2d344475c3be066d8a9795633f4e113362cf3a"
+}

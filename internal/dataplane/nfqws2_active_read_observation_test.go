@@ -150,3 +150,71 @@ func TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan(t *testing.T)
 		})
 	}
 }
+
+// These production entry points previously performed their surrounding owner
+// checks outside any original tool observation. An opening or closing source
+// refusal must reach their caller; none may accept an intermediate observation
+// or continue to a mutation after the read scope has failed.
+type activePredicateObservationKey struct{}
+
+type activePredicateObservationModel struct {
+	opening, closing error
+	called           int
+}
+
+func (*activePredicateObservationModel) Run(context.Context, string, ...string) ([]byte, error) {
+	return nil, ErrNFQWSScopedOwner
+}
+func (m *activePredicateObservationModel) WithReadOnlyToolObservation(c context.Context, _ netidentity.Identity, _ string, use func(context.Context) error) error {
+	if c.Value(activePredicateObservationKey{}) == m {
+		return use(c) // Model the same original finite loan, not a new source.
+	}
+	m.called++
+	if m.opening != nil {
+		return m.opening
+	}
+	return errors.Join(use(context.WithValue(c, activePredicateObservationKey{}, m)), m.closing)
+}
+
+func TestNFQWSActivePurePredicatesPreserveToolSourceFailure(t *testing.T) {
+	for _, predicate := range []string{"current", "health", "queue"} {
+		for _, boundary := range []string{"opening", "closing"} {
+			t.Run(predicate+"/"+boundary, func(t *testing.T) {
+				e, c := nfqwsActiveCommandFixture(t)
+				e.material.execution, e.material.executionBound = e, true
+				failure := errors.New("original tool source changed")
+				model := &activePredicateObservationModel{}
+				if boundary == "opening" {
+					model.opening = failure
+				} else {
+					model.closing = failure
+				}
+				e.inventory.reader.Runner = model
+				// This fixture intentionally has no actual App/source admission.
+				// The callback therefore refuses too; its error must not hide the
+				// independently failing original tool closing observation.
+				phase := e.resource.scope.execution.Resources[0].Phase
+				original := e.material.adapter.activeProcess
+				var err error
+				switch predicate {
+				case "current":
+					err = e.current(c, e.resource.Plan())
+				case "health":
+					err = e.health(c)
+				case "queue":
+					var ready bool
+					ready, err = e.observeOriginalQueue(c, nil)
+					if ready {
+						t.Fatal("failed source published queue readiness")
+					}
+				}
+				if model.called != 1 || !errors.Is(err, failure) {
+					t.Fatal("original source refusal was lost", model.called, err)
+				}
+				if e.resource.scope.execution.Resources[0].Phase != phase || e.material.adapter.activeProcess != original || e.retired {
+					t.Fatal("read failure changed original process or journal ownership")
+				}
+			})
+		}
+	}
+}

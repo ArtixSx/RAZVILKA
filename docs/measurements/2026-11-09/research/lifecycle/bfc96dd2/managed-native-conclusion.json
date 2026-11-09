@@ -1,0 +1,39 @@
+{
+  "head_sha":"bfc96dd2de2e3e6fa8f21e75eab8dd1f1ca3a406",
+  "run_id":42569258820,
+  "production_job":129002589744,
+  "race_job":129002589805,
+  "setup":"PASS; official pinned binaries downloaded and verified",
+  "production":{
+    "core_app_http_and_closing_checks":"PASS",
+    "lan_app_http_seconds":58.98,
+    "lan_first_failure":"lan-preflight-inventory-consumer-close / DEADLINE_EXCEEDED",
+    "lan_native_apply_ms":19125,
+    "lan_activation_seconds":16.063865688,
+    "manual_seconds":22.95,
+    "manual_first_failure":"lan-preflight-inventory-nfq-consumer-open / DEADLINE_EXCEEDED",
+    "manual_native_apply_ms":19219,
+    "manual_activation_seconds":16.104022047,
+    "activation_budget_seconds":15,
+    "cleanup":"retire.policy-remove / COMMON unknown receipt retained; rollback unverified",
+    "lan_inclusive_phases":{
+      "active_lan":{"calls":9,"seconds":10.382102996},
+      "active_inventory_capture":{"calls":14,"seconds":0.470613206},
+      "active_read_pair":{"calls":7,"seconds":0.805786618},
+      "owners":{"calls":424,"seconds":4.181314393},
+      "policy_apply":{"calls":1,"seconds":7.741756244},
+      "policy_readback":{"calls":6,"seconds":15.755426206}
+    }
+  },
+  "race":{
+    "consumer_seconds":18.89,
+    "consumer_first_failure":"successful response lacks owned NFQUEUE packet proof; probe counter closing capture returned invalid/incomplete evidence, unexpected EOF and deadline; unknown fence retained",
+    "lan_app_http_seconds":21.40,
+    "lan_first_failure":"strategy-probe-execute / runtime-operation / DEADLINE_EXCEEDED; LAN activation not reached",
+    "manual_seconds":30.70,
+    "manual_first_failure":"native-apply / SOURCE_MISSING / total_ms=23415; activate prepared.policy-apply then retire.policy-remove unknown"
+  },
+  "assessment":"Same unresolved software performance/recovery direction as b7261e9f. Precise final subphase varies with the budget boundary; this is not a physical-router blocker. No new optimization, cache, deadline or fence change made.",
+  "limitations":"Inclusive timings overlap. No paired speedup claim. Prior b7261e9f profile remains explanatory; no broad repeated profiling analysis was performed.",
+  "evidence":["managed-production.log","managed-race.log","managed-production-artifacts/lan.log","managed-production-artifacts/manual.log","managed-race-artifacts/probe.log"]
+}

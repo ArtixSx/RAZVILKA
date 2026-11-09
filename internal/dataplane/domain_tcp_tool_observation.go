@@ -78,26 +78,47 @@ func (r *syntheticBaselineExecutionResource) observeOriginalFiles(ctx context.Co
 	return process.withCurrentFileObservation(ctx, use)
 }
 
-// Only the pure standby Guard uses this narrower byte bracket. currentWithFiles
+// Pure standalone standby reads and Guard use this byte bracket. currentWithFiles
 // already performs BOTH original capture/process Currents, including their
 // independent material/control/metadata/config/listener reads. Share only the
-// immutable executable SHA across those same two calls, never a Start/effect.
+// immutable executable SHA across those same two calls. The view is revoked
+// before returning to any inspector read, actual command Start or effect.
 func (r *syntheticBaselineExecutionResource) currentInOriginalFileObservation(ctx context.Context) error {
+	return r.compareInOriginalFileObservation(ctx, r.currentWithFiles)
+}
+
+// The standalone prepared-baseline comparison contains four complete source/
+// process reads plus its actual inventory and receipt bookends. Share only
+// immutable executable bytes; registration and COMMON effects follow return.
+func (r *syntheticBaselineExecutionResource) currentBaselineInOriginalFileObservation(ctx context.Context) error {
+	return r.compareInOriginalFileObservation(ctx, r.currentBaselineWithFiles)
+}
+
+// Only the two hardcoded readonly comparisons above call this helper. It is
+// neither an observation cache nor a permission for a callback/effect.
+func (r *syntheticBaselineExecutionResource) compareInOriginalFileObservation(ctx context.Context, compare func(context.Context, *xrayDomainTCPFileObservation) error) error {
 	if err := r.local(ctx); err != nil {
 		return err
 	}
 	if r.capture == nil || r.capture.xray == nil || r.capture.xray.resource == nil {
-		return r.current(ctx) // Existing modeled/generic producers keep full path.
+		return compare(ctx, nil) // Existing modeled/generic producers keep full path.
 	}
 	capture, xray := r.capture, r.capture.xray
+	owner, original := capture.owner.(*DomainTCPOriginalScope)
+	if !original {
+		return compare(ctx, nil) // Custom producers retain every full-byte read.
+	}
+	if owner == nil || owner.self != owner {
+		return ErrSyntheticBaselineTransition
+	}
 	process := xray.resource
 	if capture.self != capture || process.self != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
 		return ErrSyntheticBaselineTransition
 	}
-	result := process.withFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
-		return r.currentWithFiles(ctx, files)
+	result := withDomainTCPPreAddFiles(ctx, process, r, nil, false, func(files *xrayDomainTCPFileObservation) error {
+		return compare(ctx, files)
 	})
-	if r.capture != capture || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
+	if r.capture != capture || capture.owner != owner || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
 		return errors.Join(result, ErrSyntheticBaselineTransition)
 	}
 	return result

@@ -1,0 +1,13 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0    92    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (22) The requested URL returned error: 504
+Warning: Problem : HTTP error. Will retry in 1 seconds. 3 retries left.
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0    92    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (22) The requested URL returned error: 504
+Warning: Problem : HTTP error. Will retry in 2 seconds. 2 retries left.
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0    92    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (22) The requested URL returned error: 504
+Warning: Problem : HTTP error. Will retry in 4 seconds. 1 retries left.
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0    92    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (22) The requested URL returned error: 504

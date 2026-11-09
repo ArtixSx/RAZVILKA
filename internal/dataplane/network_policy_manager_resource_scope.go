@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -47,7 +48,8 @@ type executionResourceScope struct {
 	retainedOwner           *retainedNFQWSExecution
 	syntheticPhases         map[*syntheticBaselineExecutionPhase]struct{}
 	syntheticClosing        bool
-	pending                 bool // Original unknown Apply: cleanup only, never ACTIVE.
+	pending                 bool                    // Original unknown Apply: cleanup only, never ACTIVE.
+	nfqQuarantine           *NFQWSPendingQuarantine // Original pending writer, never decoded.
 	syntheticBaselineSource *syntheticBaselineCoordinator
 	syntheticBaselines      map[string]*syntheticBaselineExecutionResource
 	xraySelectedTCP         map[string]*XraySelectedTCPExecutionResource
@@ -631,7 +633,12 @@ func (s *executionResourceScope) close() error {
 	ownedExecution := *s.execution
 	ownedExecution.Resources = nil
 	for _, resource := range s.execution.Resources {
-		if s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil {
+		// Reader9's terminal header still binds the original retired Mihomo
+		// row. Keep that owned row in the subset; never drop its header or
+		// manufacture ownership from a serialized kind/ID alone.
+		live := s.mihomoLive
+		ownedMihomo := live != nil && live.self == live && live.scope == s && resource.Kind == "mihomo-live" && resource.ID == live.id && reflect.DeepEqual(resource.MihomoLive, &live.definition)
+		if ownedMihomo || s.nfqws[resource.ID] != nil || s.issued[resource.ID] != nil || s.syntheticBaselines[resource.ID] != nil || s.xraySelectedTCP[resource.ID] != nil || s.xrayDomainTCP[resource.ID] != nil || s.domainTCPCaptures[resource.ID] != nil || s.domainTCPBaselines[resource.ID] != nil {
 			ownedExecution.Resources = append(ownedExecution.Resources, resource)
 		}
 	}
@@ -652,6 +659,9 @@ func (s *executionResourceScope) close() error {
 	}
 	if s.wgRecords != nil {
 		err = errors.Join(err, s.wgRecords.close())
+	}
+	if s.nfqQuarantine != nil {
+		err = errors.Join(err, s.nfqQuarantine.scopeClosing())
 	}
 	if s.wgSnapshot != nil {
 		err = errors.Join(err, s.wgSnapshot.close())

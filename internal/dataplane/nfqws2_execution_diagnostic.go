@@ -40,6 +40,7 @@ func NFQWSExecutionFailureStages(err error) []string {
 			"activate.issue", "activate.guards", "activate.consume", "activate.associate", "activate.resource", "activate.configure", "activate.process-directory", "activate.binding", "activate.start", "activate.health",
 			"StartPrepared.admission", "StartPrepared.panel-lifetime", "StartPrepared.activation-context", "StartPrepared.network-identity", "StartPrepared.adapter-owner", "StartPrepared.parent-files-control", "StartPrepared.executable", "StartPrepared.state-root", "StartPrepared.before-start", "StartPrepared.intent", "StartPrepared.transport", "StartPrepared.native-launch", "StartPrepared.queue", "StartPrepared.observe", "StartPrepared.prepared-callback", "StartPrepared.closing-observe",
 			"retire.owner", "retire.original-state", "retire.terminal", "retire.common", "retire.native-common", "retire.closing",
+			"retire.common-binding", "retire.cleanup-owner", "retire.policy-remove", "retire.verify-inactive", "retire.settle-removed", "retire.closing-owner",
 			"prepared.owner-opening", "prepared.bind", "prepared.active", "prepared.policy-apply", "prepared.owner-closing",
 			"READY", "PERMIT", "STARTED", "TRANSFER", "TRANSFER ACK", "provisional BOTH", "FINALIZE", "final ACTIVE ACK", "execution.activation-seal", "prepared Observe", "prepared owner proof", "prepared Stop", "CommitPrepared", "active owner proof", "active cleanup proof", "Current", "active Stop", "retired owner proof", "retire prepared", "retire active":
 			stages = append(stages, label)

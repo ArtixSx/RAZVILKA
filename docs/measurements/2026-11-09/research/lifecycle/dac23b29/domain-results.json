@@ -1,0 +1,1039 @@
+[
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddOriginalByteReadMeasurement (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1 (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1 (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2 (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2 (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainStandbyReadFileBracketMeasurement (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDMeasurement (0.02s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestDomainTCPOriginalFactoryProcessCancellation ' \"artifacts/domain/preadd-child-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' \"artifacts/domain/preadd-child-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.80s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.82s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.80s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.82s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.43s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.47s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.43s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.47s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind ' \"artifacts/domain/identity-mount-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestNativeNetworkIdentityProcThreadAndClosing ' \"artifacts/domain/identity-mount-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDNativeMeasurement (0.02s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "\u001b[36;1mgrep -F -- \"--- PASS: $expected_case \" artifacts/domain/native.log\u001b[0m"
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "stage": "before-failure",
+    "metrics": {
+      "native-hash-attribution": {
+        "calls": 119,
+        "bytes": 0,
+        "elapsed": "4.654252ms"
+      },
+      "process-current": {
+        "calls": 245,
+        "bytes": 0,
+        "elapsed": "4.691928341s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.658661801s"
+      },
+      "whole-executable-hash": {
+        "calls": 119,
+        "bytes": 4352711314,
+        "elapsed": "3.137296615s"
+      }
+    }
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.783102862s"
+      },
+      "native-hash-attribution": {
+        "calls": 123,
+        "bytes": 0,
+        "elapsed": "4.779966ms"
+      },
+      "process-current": {
+        "calls": 247,
+        "bytes": 0,
+        "elapsed": "4.701886597s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.658661801s"
+      },
+      "whole-executable-hash": {
+        "calls": 123,
+        "bytes": 4499020938,
+        "elapsed": "3.244095143s"
+      }
+    }
+  },
+  {
+    "file": "domain-canceled-ready.log",
+    "result": "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (13.98s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "\u001b[36;1m    if [ \"$status\" != 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' \"$output/native.log\" || grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' \"$output/native.log\" || ! grep -F -- '--- PASS: TestDomainTCPOriginalNativeFailedPrepar"
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "13.684744171s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "10.611581155s"
+      },
+      "process-current": {
+        "calls": 482,
+        "bytes": 0,
+        "elapsed": "11.502316017s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "4.766121672s"
+      },
+      "whole-executable-hash": {
+        "calls": 219,
+        "bytes": 8010451914,
+        "elapsed": "5.810063249s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:997: ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (95.54s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:960: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:997: ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete"
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.018596509s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.970747472s"
+      },
+      "native-hash-attribution": {
+        "calls": 134,
+        "bytes": 0,
+        "elapsed": "5.690274ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "6.599486673s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.667564536s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "bytes": 4901372404,
+        "elapsed": "3.541671987s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.018596509s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.092443818s"
+      },
+      "native-hash-attribution": {
+        "calls": 140,
+        "bytes": 0,
+        "elapsed": "5.948447ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "8.001469312s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.667564536s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "bytes": 5120836840,
+        "elapsed": "3.701339917s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.018596509s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.092443818s"
+      },
+      "native-hash-attribution": {
+        "calls": 145,
+        "bytes": 0,
+        "elapsed": "6.105349ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "8.001469312s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.667564536s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "bytes": 5303723870,
+        "elapsed": "3.832475656s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (115.18s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (115.18s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.812310393s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.983305371s"
+      },
+      "native-hash-attribution": {
+        "calls": 134,
+        "bytes": 0,
+        "elapsed": "5.237434ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "6.558017005s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.640092783s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "bytes": 4901372404,
+        "elapsed": "3.534384354s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.812310393s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.184153971s"
+      },
+      "native-hash-attribution": {
+        "calls": 140,
+        "bytes": 0,
+        "elapsed": "5.473153ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.977235275s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.640092783s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "bytes": 5120836840,
+        "elapsed": "3.694520212s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.812310393s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.184153971s"
+      },
+      "native-hash-attribution": {
+        "calls": 145,
+        "bytes": 0,
+        "elapsed": "5.613156ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.977235275s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.640092783s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "bytes": 5303723870,
+        "elapsed": "3.825583822s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (122.35s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (122.35s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "first-answer",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.047177202s"
+      },
+      "mapping-compare": {
+        "calls": 3,
+        "bytes": 0,
+        "elapsed": "2.958001635s"
+      },
+      "native-hash-attribution": {
+        "calls": 134,
+        "bytes": 0,
+        "elapsed": "5.493365ms"
+      },
+      "process-current": {
+        "calls": 379,
+        "bytes": 0,
+        "elapsed": "6.615402517s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.694957574s"
+      },
+      "whole-executable-hash": {
+        "calls": 134,
+        "bytes": 4901372404,
+        "elapsed": "3.550514562s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "before-stop",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.047177202s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.112766051s"
+      },
+      "native-hash-attribution": {
+        "calls": 140,
+        "bytes": 0,
+        "elapsed": "5.737271ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.995837184s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.694957574s"
+      },
+      "whole-executable-hash": {
+        "calls": 140,
+        "bytes": 5120836840,
+        "elapsed": "3.710337047s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "8.047177202s"
+      },
+      "mapping-compare": {
+        "calls": 6,
+        "bytes": 0,
+        "elapsed": "7.112766051s"
+      },
+      "native-hash-attribution": {
+        "calls": 145,
+        "bytes": 0,
+        "elapsed": "5.888223ms"
+      },
+      "process-current": {
+        "calls": 460,
+        "bytes": 0,
+        "elapsed": "7.995837184s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.694957574s"
+      },
+      "whole-executable-hash": {
+        "calls": 145,
+        "bytes": 5303723870,
+        "elapsed": "3.841717455s"
+      }
+    }
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (115.24s)"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:963: ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "    domain_tcp_original_native_linux_test.go:1032: ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, ze"
+  },
+  {
+    "file": "domain-preparation.log",
+    "result": "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (115.24s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddOriginalByteReadMeasurement (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1 (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1 (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2 (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2 (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainStandbyReadFileBracketMeasurement (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDMeasurement (0.02s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestDomainTCPOriginalFactoryProcessCancellation ' \"artifacts/domain/preadd-child-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' \"artifacts/domain/preadd-child-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.79s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.81s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.79s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (0.81s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.47s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.51s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDRefusesMalformedErrorsAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestDomainTCPOriginalFactoryProcessCancellation (1.47s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestDomainTCPOriginalFactoryProcessCancellation (2.51s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestXraySelectedTCPMountIDBindBoundary (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestXraySelectedTCPMountIDBindBoundary (1.04s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind ' \"artifacts/domain/identity-mount-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "\u001b[36;1m  grep -F -- '--- PASS: TestNativeNetworkIdentityProcThreadAndClosing ' \"artifacts/domain/identity-mount-$mode.log\"\u001b[0m"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDNativeMeasurement (0.02s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDActualParityAndFallback (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (1.02s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)"
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "\u001b[36;1mgrep -F -- \"--- PASS: $expected_case \" artifacts/domain/native.log\u001b[0m"
+  },
+  {
+    "file": "domain-selected.log",
+    "stage": "before-failure",
+    "metrics": {
+      "native-hash-attribution": {
+        "calls": 116,
+        "bytes": 0,
+        "elapsed": "5.019337ms"
+      },
+      "process-current": {
+        "calls": 240,
+        "bytes": 0,
+        "elapsed": "4.649603715s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.654827852s"
+      },
+      "whole-executable-hash": {
+        "calls": 116,
+        "bytes": 4242979096,
+        "elapsed": "3.083899662s"
+      }
+    }
+  },
+  {
+    "file": "domain-selected.log",
+    "stage": "join",
+    "metrics": {
+      "capture-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "7.77295467s"
+      },
+      "native-hash-attribution": {
+        "calls": 120,
+        "bytes": 0,
+        "elapsed": "5.1808ms"
+      },
+      "process-current": {
+        "calls": 241,
+        "bytes": 0,
+        "elapsed": "4.659810181s"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "bytes": 0,
+        "elapsed": "2.654827852s"
+      },
+      "whole-executable-hash": {
+        "calls": 120,
+        "bytes": 4389288720,
+        "elapsed": "3.191256145s"
+      }
+    }
+  },
+  {
+    "file": "domain-selected.log",
+    "result": "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (14.05s)"
+  }
+]

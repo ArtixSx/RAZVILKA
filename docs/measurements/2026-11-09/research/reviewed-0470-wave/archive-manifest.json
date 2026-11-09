@@ -1,0 +1,20 @@
+{
+  "files": {
+    "sidecar-exit-diagnostics-review-20261109.json": {
+      "bytes": 1603,
+      "sha256": "317dc657046ffc6fa2f0bde36f1c0a0cbc4a55880ada22b52e91f7165d3242f0"
+    },
+    "cold-process-diagnostics-review-20261109.json": {
+      "bytes": 1581,
+      "sha256": "a57e07efeced01f9e4c388c43ee55c4c6a327b750be2a4121257940c24f82880"
+    },
+    "domain-gate-timing-review-20261109.json": {
+      "bytes": 3363,
+      "sha256": "be914ef653881eeffb85e92d9d1a2ba9e42be99f6ec1a18a1bced796c0878d2a"
+    },
+    "default-old193-refusal-review-20261109.json": {
+      "bytes": 1210,
+      "sha256": "031be36268c6430d7972eeb64f1fc7f57aff498481af3990e45ad2f8e983c237"
+    }
+  }
+}

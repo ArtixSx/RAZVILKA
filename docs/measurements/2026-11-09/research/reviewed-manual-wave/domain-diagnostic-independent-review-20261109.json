@@ -1,0 +1,42 @@
+{
+  "limitations": [
+    "No local Go builds or tests due disk constraint",
+    "Snapshots may exclude in-flight closing observations",
+    "New diagnostic instrumentation has overhead; attribution is not paired performance evidence"
+  ],
+  "files": [
+    {
+      "sha256": "61BD64A67A383FAFF8B4D612EAED4691BD2EC07F63FD1CD25C6CA563035EF6D2",
+      "path": "internal/dataplane/domain_tcp_native_measurement.go"
+    },
+    {
+      "sha256": "EB9DC360670CCAE52952CA3E1FACFBDE1E64CECF9BAB069E6AD1E3C01E2C8E5D",
+      "path": "internal/dataplane/domain_tcp_native_measurement_test.go"
+    },
+    {
+      "sha256": "8525B57F0DD814295C7FC2724D8A8D45900690B68EA792F9397579B6F4959DD9",
+      "path": "internal/app/domain_tcp_original_native_linux_test.go"
+    }
+  ],
+  "verification": [
+    "Snapshot isolation and cumulative tests inspected",
+    "Aggregate bucket count bytes and elapsed equality test inspected",
+    "git diff --check PASS"
+  ],
+  "base_sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1",
+  "reviewer": "independent verification agent",
+  "date": "2026-11-09",
+  "preserved": [
+    "Native build tags only; no production sources or admission modified",
+    "64 frames maximum and fixed allowlist with at most 2 semantic labels",
+    "No arbitrary function paths arguments or secrets printed",
+    "Stack attribution overhead separately recorded and excluded from SHA elapsed",
+    "Snapshots clone completed counters without stopping or reset",
+    "No deadline readiness cleanup or authorization inference"
+  ],
+  "decision": "approved source review; native test execution pending",
+  "findings_resolved": [
+    "Stack wrapper presence does not prove exact closing callsite; renamed fixed labels to hash-stack context",
+    "Aggregate and attributed elapsed now use identical duration sample"
+  ]
+}

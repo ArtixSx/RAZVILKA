@@ -21,7 +21,7 @@ import (
 // complete proc socket tables only. The shaped Xray/source association is a
 // comparison model, never an actual native Xray issuer/readiness proof.
 func TestDomainPoolCanceledWitnessOnlyReachesFreshGlobalAbsence(t *testing.T) {
-	for _, change := range []string{"none", "removed", "copy", "foreign-child", "done-without-wait", "occupied", "registry", "config", "journal-definition", "revoked-cleanup"} {
+	for _, change := range []string{"none", "removed", "copy", "foreign-child", "done-without-wait", "occupied", "registry", "config", "journal-definition", "revoked-cleanup", "restored", "restored-occupied"} {
 		t.Run(change, func(t *testing.T) {
 			k, base := domainTCPKeeperFilesFixture(t)
 			ctx, cancel := context.WithTimeout(base, 15*time.Second)
@@ -200,8 +200,41 @@ func TestDomainPoolCanceledWitnessOnlyReachesFreshGlobalAbsence(t *testing.T) {
 			case "revoked-cleanup":
 				cleanup.active.Store(false)
 			}
-			err = old.observeRetainedDomainListener(cleanup.ctx)
-			positive := change == "none" || change == "removed"
+			readCtx := cleanup.ctx
+			if change == "restored" || change == "restored-occupied" {
+				// Real original records/alias and actual absence, with modeled
+				// restoration metadata only. The full source/standby producer is
+				// exercised separately by the native preparation pair.
+				s.execution.Resources[0].State, s.execution.Resources[0].Phase = "removed", "removed"
+				publishModel()
+				original := &DomainTCPOriginalScope{process: r}
+				standby := &domainTCPStandbyOwner{original: original, process: r}
+				standby.self = standby
+				cleanup.standby = standby
+				cleanup.retained = &retainedXrayExecution{scope: s, records: r.records, standby: standby, pending: true}
+				cleanup.retained.self = cleanup.retained
+				cleanup.imageACK, cleanup.imageStage = true, "standby"
+				if err := r.records.detachStandbyAlias(cleanup.ctx, standby); err != nil {
+					t.Fatal(err)
+				}
+				defer standby.latest.Close()
+				if err := old.observeRetainedDomainListener(cleanup.ctx); err != nil {
+					t.Fatal("original pre-revocation global absence", err)
+				}
+				if err := cleanup.revokeRestorationListener(cleanup.ctx, w); err != nil {
+					t.Fatal(err)
+				}
+				cleanup.active.Store(false)
+				c.failedCustody.Store(false)
+				readCtx = held // No cleanup or forward witness is carried over.
+				if change == "restored-occupied" {
+					if err := unix.Listen(fd, 1); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			err = old.observeRetainedDomainListener(readCtx)
+			positive := change == "none" || change == "removed" || change == "restored"
 			if positive && err != nil {
 				t.Fatal("joined canceled witness blocked actual global absence", err)
 			}

@@ -1,0 +1,89 @@
+{
+  "reviewer": "verification",
+  "head_sha": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+  "run_id": 42649330409,
+  "conclusion": "failure: lifecycle passed, three other scenarios failed",
+  "cases": [
+    {
+      "name": "lifecycle",
+      "job_id": 129271099188,
+      "conclusion": "success",
+      "candidate_sha": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+      "candidate_test_seconds": 214.56,
+      "candidate_apply_seconds": [
+        74.568550919,
+        72.424207909
+      ],
+      "candidate_stop_seconds": [
+        4.659218796,
+        4.442839513
+      ],
+      "candidate_cycle_seconds": [
+        107.517979038,
+        104.926985239
+      ],
+      "baseline_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+      "baseline_test_seconds": 210.61,
+      "baseline_apply_seconds": [
+        73.6870092,
+        70.96551716
+      ],
+      "baseline_stop_seconds": [
+        4.59627993,
+        4.505817221
+      ],
+      "baseline_cycle_seconds": [
+        105.988445732,
+        102.973415838
+      ],
+      "all_physical_baselines_restored": true,
+      "second_closing_retry_both": true
+    },
+    {
+      "name": "manual",
+      "job_id": 129271099346,
+      "conclusion": "failure",
+      "test_seconds": 118.7,
+      "cause": "HTTP Apply original110s context deadline; activation through policy ACK passed, no positive Apply/Stop cycle."
+    },
+    {
+      "name": "settlement",
+      "job_id": 129271099396,
+      "conclusion": "failure",
+      "test_seconds": 119.68,
+      "cause": "HTTP Apply deadline after health43.724s and commit-adapter3.888s; original rollback and verify-rollback PASS. Settlement cut was not accepted."
+    },
+    {
+      "name": "postcas",
+      "job_id": 129271098863,
+      "conclusion": "failure",
+      "test_seconds": 14.31,
+      "cause": "Activate failed at sidecar-start material=true, no cancellation/deadline; HTTP409 original rollback+verify PASS, intended postCAS cut not reached."
+    }
+  ],
+  "bookends": "Candidate original fingerprint mutation normal2.85/race6.83s and actual kernel-owner normal4.15/race8.74s PASS.",
+  "logs": [
+    {
+      "path": "mihomo-lifecycle.log",
+      "sha256": "F0C4FE1DFF7CB74E1F1B2D4D3498B813A9A25913EAA2E00B8CFAC4E4CFC2B370"
+    },
+    {
+      "path": "mihomo-manual.log",
+      "sha256": "7942E5C7E4AA67F6B9266E18F98DB066AEA4BD4A0E0FEA46353949E367A502CC"
+    },
+    {
+      "path": "mihomo-settlement.log",
+      "sha256": "566F1F8F24944CBC6B21294FECF815B665EC60394A406A4FE45A5CDA0CA14AD4"
+    },
+    {
+      "path": "mihomo-postcas.log",
+      "sha256": "D609414796F13DFB3E623630F444BF88CCDFDC2DF97A603B93C3FACED07CF4A6"
+    }
+  ],
+  "limits": [
+    "Same runner executes candidate then preserved baseline, separate sources and original110s operations. Both pass; candidate is not faster in this diagnostic. Order/cache/noise prevent formal causal speed estimate.",
+    "Same-runner lifecycle result does not excuse independent manual/settlement/postCAS failures.",
+    "Isolated native evidence, not router or AUTO expansion.",
+    "Generic357 focused normal passed, full gate stopped by formatting separately."
+  ]
+}

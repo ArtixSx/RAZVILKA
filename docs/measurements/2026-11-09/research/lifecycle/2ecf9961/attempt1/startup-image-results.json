@@ -1,0 +1,100 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "run_id": 42673010546,
+  "job_id": 129350124512,
+  "mode": "race",
+  "normal_mode": "missing production job due GitHub scheduler failure; no measurement",
+  "raw_sha256": "4c9464db9971573d046c0153b1c24aee94f731fbe95cc095b2815107fa4467f1",
+  "actual_images": 132,
+  "retained_bytes": 7819392,
+  "capture_plus_repeat_bytes": 15638784,
+  "logical_readat_capture_plus_repeat": 880,
+  "pass_counts": {
+    "TestStartupImageMeasurementSourceParity": 3,
+    "TestStartupImageMeasurementActualParity": 3,
+    "TestStartupImageMeasurementRefusals": 3,
+    "TestStartupImageMeasurementReadBoundaries": 3
+  },
+  "benchmark": {
+    "original_sha": {
+      "samples": [
+        {
+          "ns_per_op": 7460464,
+          "bytes_per_op": 1317676,
+          "allocs_per_op": 1656
+        },
+        {
+          "ns_per_op": 7430778,
+          "bytes_per_op": 1232228,
+          "allocs_per_op": 1653
+        },
+        {
+          "ns_per_op": 7280851,
+          "bytes_per_op": 1240985,
+          "allocs_per_op": 1653
+        }
+      ],
+      "median": {
+        "ns_per_op": 7430778,
+        "bytes_per_op": 1240985,
+        "allocs_per_op": 1653
+      }
+    },
+    "capture_sha_clear": {
+      "samples": [
+        {
+          "ns_per_op": 25543324,
+          "bytes_per_op": 9411990,
+          "allocs_per_op": 1951
+        },
+        {
+          "ns_per_op": 24261213,
+          "bytes_per_op": 9276046,
+          "allocs_per_op": 1947
+        },
+        {
+          "ns_per_op": 25319240,
+          "bytes_per_op": 9354742,
+          "allocs_per_op": 1949
+        }
+      ],
+      "median": {
+        "ns_per_op": 25319240,
+        "bytes_per_op": 9354742,
+        "allocs_per_op": 1949
+      }
+    },
+    "repeat_full_bytes": {
+      "samples": [
+        {
+          "ns_per_op": 10322929,
+          "bytes_per_op": 1347849,
+          "allocs_per_op": 1523
+        },
+        {
+          "ns_per_op": 10713655,
+          "bytes_per_op": 1230008,
+          "allocs_per_op": 1519
+        },
+        {
+          "ns_per_op": 11259754,
+          "bytes_per_op": 1289635,
+          "allocs_per_op": 1521
+        }
+      ],
+      "median": {
+        "ns_per_op": 10713655,
+        "bytes_per_op": 1289635,
+        "allocs_per_op": 1521
+      }
+    }
+  },
+  "repeat_vs_original_median_pct": 44.17945200354525,
+  "decision": "NO production promotion; race repeat slower and capture+clear cost substantially larger; await normal measurement.",
+  "limits": [
+    "Warm complete per-review reads, metadata and source membership included.",
+    "Capture helper allocates132privateimage buffers; proposed fixed scratch not yet measured.",
+    "Race instrumentation and sync.Pool random drops apply to these actual measurements.",
+    "Not whole-route timing, RSS bound, or router acceptance."
+  ]
+}

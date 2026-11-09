@@ -64,7 +64,9 @@ func captureProc(ctx context.Context) observation {
 		return r
 	}
 	r.KernelRelease, r.Machine = releaseBefore, machineBefore
-	a := &audit{fdinfo: -1, ctx: ctx}
+	// Reserve common descriptor storage; append still grows without a new cap.
+	var retained [16]heldFD
+	a := &audit{fds: retained[:0], fdinfo: -1, ctx: ctx}
 	defer a.close()
 	rootFD, err := syscall.Open("/proc", dirFlags, 0)
 	if err != nil {
@@ -335,7 +337,8 @@ func boundedRead(ctx context.Context, fd, limit int) ([]byte, bool) {
 	return nil, false
 }
 
-func (a *audit) mountID(fd int) (uint64, bool) {
+// Compatibility reader retained unchanged for unsupported or denied statx.
+func (a *audit) mountIDFromFDInfo(fd int) (uint64, bool) {
 	data, ok := a.rawFile(a.fdinfo, strconv.Itoa(fd), 4096)
 	if !ok {
 		return 0, false

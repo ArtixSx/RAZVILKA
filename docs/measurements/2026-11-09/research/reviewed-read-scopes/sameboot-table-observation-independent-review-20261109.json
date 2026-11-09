@@ -1,0 +1,27 @@
+{
+  "decision": "APPROVED narrow source change; native execution/performance pending",
+  "files": {
+    "internal/startuptools/mihomo_live_read_linux.go": "e1c05f336aac58727326176d2ca7d2f36b732c75e04cca22c45b5f49d456bc11",
+    "internal/startuptools/policy_read_observation_native_fixture_linux_test.go": "cd5a870b8c9c1642f1c9659884870021a4f7b8d21afd6e489c5b40fba5ec0da2"
+  },
+  "contract": [
+    "Only original IP index2 plus four exact existing table207 read argument lists under present original readObservation changes boundary",
+    "Absent marker and all other Mihomo commands retain full review.unchanged before/after",
+    "Invalid/foreign/revoked marker fails existing gate/observation validation before Start; no fallback",
+    "Existing original scope retains descriptors, mutex-serializes Start with revoke, cancels/joins readers then full SHA closing",
+    "Complete perchild versionMetadataCurrent and original command/FD/namespace/provider/source checks remain",
+    "Combined stdout/stderr and nonzero exit diagnostic bytes preserved; closing executes even commandfailure",
+    "No effect/argv/deadline/version-child change"
+  ],
+  "tests": [
+    "actual four command byte+exit-status parity vs original unscoped",
+    "expired/effect refusals",
+    "held digest mutation proves outer closing SHA and othercommands/unscoped retain fullSHA",
+    "perchild metadata drift refusal without host filesystem writes"
+  ],
+  "validation": "gofmt/diffcheck and source review only, no local Go; original native normal/race needed",
+  "limitations": [
+    "No whole sameboot speed or deadline PASS claim",
+    "Three prior race ACKcuts120s failures remain"
+  ]
+}

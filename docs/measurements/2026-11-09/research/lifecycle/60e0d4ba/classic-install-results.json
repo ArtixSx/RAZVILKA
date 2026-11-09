@@ -1,0 +1,18 @@
+{
+  "sha": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+  "run": 42646788090,
+  "cases": {
+    "production": {
+      "archive_sha_checked": true,
+      "install_failed_explicit_downgrade_required": true,
+      "public_acquire_executed": false,
+      "native_tests_executed": false
+    },
+    "race": {
+      "archive_sha_checked": true,
+      "install_failed_explicit_downgrade_required": true,
+      "public_acquire_executed": false,
+      "native_tests_executed": false
+    }
+  }
+}

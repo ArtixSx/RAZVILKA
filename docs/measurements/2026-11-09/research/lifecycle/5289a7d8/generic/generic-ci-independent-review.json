@@ -1,0 +1,64 @@
+{
+  "sha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "pull_request": {
+    "normal_package_s": {
+      "updatecheck": 86.564,
+      "app": 132.396,
+      "dataplane": 208.217
+    },
+    "run_id": 42680295931,
+    "status": "completed",
+    "job_id": 129372686060,
+    "gates": [
+      "nonroot original denied-write",
+      "focused ownership/recovery/RPDB",
+      "positive Cloudflare10x normal/race",
+      "gofmt/vet/fullnormal/fullrace",
+      "shell/UI/4archbuilds/checksums"
+    ],
+    "conclusion": "success",
+    "attempt": 1,
+    "race_package_s": {
+      "cmd/razvilka": 58.984,
+      "updatecheck": 552.671,
+      "app": 343.59,
+      "dataplane": 539.319
+    }
+  },
+  "push": {
+    "job_id": 129372631515,
+    "status": "completed",
+    "attempt": 1,
+    "conclusion": "success",
+    "run_id": 42680280997,
+    "gates": [
+      "nonroot original denied-write",
+      "focused ownership/recovery/RPDB",
+      "positive Cloudflare10x normal/race",
+      "gofmt/vet/fullnormal/fullrace",
+      "shell/UI/4archbuilds/checksums"
+    ],
+    "normal_package_s": {
+      "app": 141.427,
+      "updatecheck": 92.634,
+      "cmd/razvilka": 9.906,
+      "dataplane": 208.038
+    },
+    "race_package_s": {
+      "app": 434.456,
+      "updatecheck": 627.29,
+      "cmd/razvilka": 61.485,
+      "dataplane": 601.358
+    }
+  },
+  "raw_sha256": {
+    "generic-pr.json": "e5c913530498f3a81b389167c82828f2781e16a931d303b1831f9a45ba581071",
+    "generic-pr.log": "9a3d209236f107e7559eaddf4603d5d6cceda6142382042c166929999d893161",
+    "generic-push.json": "ad1acd6518a8a76fe17670b2a00d6e504511357afbfe3f57775fe59265468dec",
+    "generic-push.log": "69b8ca5f3d7dc5ed7d5072088bf329975b42ebb93c11b7fe45fab68e055f27ab"
+  },
+  "limitations": [
+    "Both full generic CI runs passed exact SHA; native acceptance remains independently reported",
+    "Generic success does not establish passing full native deadlines or physical router/LAN acceptance"
+  ]
+}

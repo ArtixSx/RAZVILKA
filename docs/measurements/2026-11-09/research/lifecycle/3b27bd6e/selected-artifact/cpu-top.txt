@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 3cc1c9a3211c8949ac8634ecff6835ae2681a972
+Type: cpu
+Time: 2026-11-09 16:11:35 UTC
+Duration: 12.19s, Total samples = 12.46s (102.25%)
+Showing nodes accounting for 10.71s, 85.96% of 12.46s total
+Dropped 515 nodes (cum <= 0.06s)
+Showing top 35 nodes out of 385
+      flat  flat%   sum%        cum   cum%
+     5.77s 46.31% 46.31%      5.77s 46.31%  internal/runtime/syscall/linux.Syscall6
+     3.77s 30.26% 76.57%      3.77s 30.26%  crypto/internal/fips140/sha256.blockSHANI
+     0.15s  1.20% 77.77%      0.22s  1.77%  runtime.tryDeferToSpanScan
+     0.08s  0.64% 78.41%      0.08s  0.64%  runtime.futex
+     0.08s  0.64% 79.05%      0.08s  0.64%  runtime.memclrNoHeapPointers
+     0.07s  0.56% 79.61%      0.07s  0.56%  encoding/json.stateInString
+     0.06s  0.48% 80.10%      0.11s  0.88%  encoding/json.(*Decoder).readValue
+     0.06s  0.48% 80.58%      0.07s  0.56%  runtime.findObject
+     0.06s  0.48% 81.06%      0.23s  1.85%  runtime.scanObject
+     0.06s  0.48% 81.54%      0.11s  0.88%  runtime.scanObjectsSmall
+     0.06s  0.48% 82.02%      0.12s  0.96%  strings.Fields
+     0.04s  0.32% 82.34%      0.07s  0.56%  reflect.Value.Field
+     0.04s  0.32% 82.66%      0.21s  1.69%  runtime.mallocgcSmallScanNoHeader
+     0.04s  0.32% 82.99%      5.72s 45.91%  syscall.RawSyscall6
+     0.03s  0.24% 83.23%      0.51s  4.09%  runtime.gcDrain
+     0.03s  0.24% 83.47%      0.08s  0.64%  runtime.scanblock
+     0.03s  0.24% 83.71%      2.63s 21.11%  syscall.Syscall
+     0.02s  0.16% 83.87%      0.08s  0.64%  encoding/json.structEncoder.encode
+     0.02s  0.16% 84.03%      1.21s  9.71%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.16% 84.19%      0.82s  6.58%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.02s  0.16% 84.35%      0.17s  1.36%  internal/poll.(*FD).Read
+     0.02s  0.16% 84.51%      0.19s  1.52%  os.(*File).Read
+     0.02s  0.16% 84.67%      0.55s  4.41%  os.doInRoot[go.shape.interface { IsDir bool; ModTime time.Time; Mode io/fs.FileMode; Name string; Size int64; Sys interface {} }]
+     0.02s  0.16% 84.83%      0.20s  1.61%  os.newFile
+     0.02s  0.16% 84.99%      0.37s  2.97%  runtime.mallocgc
+     0.02s  0.16% 85.15%      0.08s  0.64%  runtime.wbBufFlush1
+     0.02s  0.16% 85.31%      3.22s 25.84%  syscall.Syscall6
+     0.01s  0.08% 85.39%      3.78s 30.34%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s  0.08% 85.47%      0.21s  1.69%  encoding/json.(*decodeState).object
+     0.01s  0.08% 85.55%      0.22s  1.77%  encoding/json.(*decodeState).value
+     0.01s  0.08% 85.63%      0.18s  1.44%  github.com/ArtixSx/razvilka/internal/app.runDomainTCPOriginalNative.func7
+     0.01s  0.08% 85.71%      0.19s  1.52%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current
+     0.01s  0.08% 85.79%      1.14s  9.15%  github.com/ArtixSx/razvilka/internal/dnscontrol.(*NetworkPolicyDNSResolver).admission
+     0.01s  0.08% 85.87%      0.13s  1.04%  github.com/ArtixSx/razvilka/internal/dnscontrol.providerByIDFor (inline)
+     0.01s  0.08% 85.96%      0.07s  0.56%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints

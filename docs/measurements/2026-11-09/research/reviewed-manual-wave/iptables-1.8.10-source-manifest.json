@@ -1,0 +1,38 @@
+{
+  "version": "1.8.10",
+  "url": "https://www.netfilter.org/projects/iptables/files/iptables-1.8.10.tar.xz",
+  "archive_sha256": "5cc255c189356e317d070755ce9371eb63a1b783c34498fb8c30264f3cc59c9c",
+  "license": "GPL-2.0-only",
+  "files": [
+    {
+      "path": "iptables/iptables.c",
+      "sha256": "4a3d9f22e8bc4c99dd926c9f12592884459c29db778067b324010408e2e0a2c0",
+      "bytes": 24054
+    },
+    {
+      "path": "iptables/ip6tables.c",
+      "sha256": "834e8cb0117afe447628c2a028c884d43c055759b50b897e1c0a04f23b4b2d99",
+      "bytes": 23965
+    },
+    {
+      "path": "iptables/iptables-save.c",
+      "sha256": "e25970689a5a68f079cd1a723d875c30e0ae88f4c61fa4270110569295a0ac73",
+      "bytes": 6362
+    },
+    {
+      "path": "iptables/xtables-legacy-multi.c",
+      "sha256": "fea6d92319cf5534300627f0b4a00cf2f9c70efd2185f45da255f4773850a67f",
+      "bytes": 1373
+    },
+    {
+      "path": "iptables/xshared.c",
+      "sha256": "67187d195f6af84d8136b487159e1aeeeae2f443a26f042ce70614d4d3d3abfd",
+      "bytes": 54565
+    },
+    {
+      "path": "COPYING",
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "bytes": 18092
+    }
+  ]
+}

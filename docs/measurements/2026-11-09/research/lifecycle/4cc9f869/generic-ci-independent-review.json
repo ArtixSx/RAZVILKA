@@ -1,0 +1,58 @@
+{
+  "reviewer": "verification",
+  "head_sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+  "conclusion": "SUCCESS both generic runs",
+  "runs": [
+    {
+      "event": "push",
+      "run_id": 42642213704,
+      "job_id": 129245974810,
+      "conclusion": "success",
+      "log": "generic-push-ci.log",
+      "sha256": "ED65929CB8227353E603B9DA2C684273F26FE9CFC3A10592B69092651D9A49C6",
+      "normal_seconds": {
+        "netidentity": 2.207,
+        "app": 118.284,
+        "probecheck": 0.007,
+        "dataplane": 191.277
+      },
+      "race_seconds": {
+        "netidentity": 3.471,
+        "app": 278.461,
+        "probecheck": 1.034,
+        "dataplane": 469.27
+      }
+    },
+    {
+      "event": "pull_request",
+      "run_id": 42642229628,
+      "job_id": 129246028754,
+      "conclusion": "success",
+      "log": "generic-pr-ci.log",
+      "sha256": "1C8A75748F09FC029242624A13FEC75115A7DA9A7636317A9C28AC1EF2B233C0",
+      "normal_seconds": {
+        "netidentity": 2.283,
+        "app": 129.852,
+        "probecheck": 0.014,
+        "dataplane": 201.874
+      },
+      "race_seconds": {
+        "netidentity": 3.643,
+        "app": 404.302,
+        "probecheck": 1.05,
+        "dataplane": 573.909
+      }
+    }
+  ],
+  "verified": [
+    "Actual non-root unpublished intent permission failure and known-prefix recovery PASS (push0.02s, PR0.01s); root permission subcase intentionally skips separately.",
+    "Focused NORMAL source/ownership, output reader, coordinator read, API timing and other critical tests PASS.",
+    "scripts/check.sh completed go test -timeout=20m -count=1 ./... and go test -timeout=20m -race -count=1 ./..., vet, shell/UI checks and cross builds.",
+    "Separate exact-SHA Mihomo all4 original native cases SUCCESS, recorded in mihomo-independent-review.json."
+  ],
+  "limitations": [
+    "Package elapsed times from separate runners are not paired performance measurements.",
+    "Generic PASS is not strict DNS, full managed NFQ, physical router, same-boot ACK cuts or public backup/restore acceptance. Those results remain separately reported.",
+    "Later sameboot/copy/ABI and measurement commits are not covered by4cc results."
+  ]
+}

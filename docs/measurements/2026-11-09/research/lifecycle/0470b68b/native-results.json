@@ -1,0 +1,94 @@
+{
+  "sha": "0470b68b07e5f18b984ab1ef79bd9bcf112bc680",
+  "run": 42687051039,
+  "public": {
+    "empty": {
+      "restore": 100.26,
+      "seconds": 144.58,
+      "job": 129396561329,
+      "bootstrap": 44.3,
+      "status": "SUCCESS"
+    },
+    "history": {
+      "completed_probes": 3,
+      "restore": 79.19,
+      "job": 129396561637,
+      "old_live_compatibility": false,
+      "seconds": 125.37,
+      "bootstrap": 45.37,
+      "status": "SUCCESS",
+      "frozen_selection": true
+    },
+    "draft": {
+      "evidence": "GitHub completed job status; raw not downloaded",
+      "job": 129396561198,
+      "status": "SUCCESS"
+    },
+    "default_refusal": {
+      "source_unchanged": true,
+      "both_installer_modes_refused": true,
+      "seconds": 1.21,
+      "status": "PASS",
+      "migration_supported": false,
+      "actual_stopped_old193": true,
+      "new_root_absent": true
+    }
+  },
+  "managed": {
+    "production": {
+      "failure_phase": "lan-preflight-inventory-nfq-consumer-open",
+      "manual_classic_save_starts": 1740,
+      "manual_native_ms": 18830,
+      "manual_allocated_objects": 9388375,
+      "manual_metadata_traversals": 6584,
+      "manual_version_starts": [
+        98,
+        98,
+        1356
+      ],
+      "cleanup_only_second_stop": "PASS permanent fence retained",
+      "reason": "LAN_CONSUMER_REFUSED",
+      "fresh_apply": "FAIL",
+      "intent_recovered": true,
+      "manual_seconds": 22.31,
+      "core_seconds": 9.78,
+      "job": 129396560634,
+      "core_execute_seconds": 8.8500785,
+      "full_lan_seconds": 54.87,
+      "sync_recovered": true,
+      "manual_allocated_bytes": 1334219568,
+      "manual_tool_checks": 1376,
+      "manual_tool_check_seconds": 7.155136016,
+      "status": "FAILURE"
+    },
+    "race": {
+      "core_execute_seconds": 15.011659641,
+      "failure_phase": "lan-preflight-inventory-consumer-close",
+      "reason": "DEADLINE_EXCEEDED",
+      "status": "FAILURE",
+      "job": 129396561150,
+      "recovery": "not accepted",
+      "core_seconds": 18.99,
+      "manual_native_ms": 23861,
+      "manual_seconds": 31.47
+    }
+  },
+  "logs": [
+    {
+      "sha256": "616eb5c677fcafeb4debd3122d0c75453f443dc61f327ab4ab66b720c557f6ab",
+      "name": "paired-empty.log"
+    },
+    {
+      "sha256": "4f35c2eac0424571ebe5c2a1f18ded4960f234f79a7056c2b79fcf4dd103a5ee",
+      "name": "paired-history.log"
+    },
+    {
+      "sha256": "f73ff46deff2af2575c2247e2900be500cbc50b3fbb7cbee351affcd51e9fd60",
+      "name": "managed-production.log"
+    },
+    {
+      "sha256": "930f0e0545b9c0e69239f3d61a6673f3d9b0e5fa81d6a27cda78daef823c0812",
+      "name": "managed-race.log"
+    }
+  ]
+}

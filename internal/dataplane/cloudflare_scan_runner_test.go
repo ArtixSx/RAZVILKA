@@ -65,7 +65,9 @@ func TestCloudflareScanRunnerOwnsTemporaryInterfacePolicyAndCleanup(t *testing.T
 	fake := &warpFakeRunner{policy: policyKernelFake{foreignIPv4: []string{"100: from all fwmark 0xffffaaa lookup 4096"}}}
 	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", fake
-	adapter.HandshakeTimeout = time.Millisecond
+	// This ownership fixture expects an immediate positive fake handshake;
+	// allow race-instrumented scheduling without testing a 1ms timeout here.
+	adapter.HandshakeTimeout = time.Second
 	service := catalog.Service{ID: "telegram", Name: "Telegram", ProbeURL: "https://service.example/check"}
 	runner := NewCloudflareScanRunner(adapter, filepath.Join(root, "scanner"), []catalog.Service{service})
 	runner.httpProbe = cloudflareScanHTTPProbe{
@@ -148,7 +150,7 @@ func TestCloudflareScanRunnerFailsClosedWhenCleanupIsUnconfirmed(t *testing.T) {
 	fake := &warpFakeRunner{failDelete: true}
 	adapter := NewWARPWireGuardAdapter(nil, filepath.Join(root, "adapter"))
 	adapter.WG, adapter.IP, adapter.Runner = "wg", "ip", fake
-	adapter.HandshakeTimeout = time.Millisecond
+	adapter.HandshakeTimeout = time.Second
 	service := catalog.Service{ID: "telegram", ProbeURL: "https://service.example/check"}
 	runner := NewCloudflareScanRunner(adapter, filepath.Join(root, "scanner"), []catalog.Service{service})
 	runner.httpProbe = cloudflareScanHTTPProbe{
@@ -159,6 +161,9 @@ func TestCloudflareScanRunnerFailsClosedWhenCleanupIsUnconfirmed(t *testing.T) {
 	}
 	withScanCandidate(t, func(candidate cloudflareprovider.WireGuardCandidate) {
 		attempt, err := runner.RunScanAttempt(context.Background(), candidate, cloudflareprovider.ScanRunRequest{Attempt: 1, ServiceID: "telegram"})
+		if attempt.HandshakeAt.IsZero() || attempt.ConfirmedMTU != 1280 {
+			t.Fatalf("cleanup fixture did not reach its intended failure: attempt=%+v err=%v", attempt, err)
+		}
 		if err == nil || attempt.CleanupConfirmed || !fake.active {
 			t.Fatalf("cleanup failure was hidden: attempt=%+v active=%v err=%v", attempt, fake.active, err)
 		}

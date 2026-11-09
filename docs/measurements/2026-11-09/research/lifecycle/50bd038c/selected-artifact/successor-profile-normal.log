@@ -1,0 +1,14 @@
+=== RUN   TestDomainSuccessorCPUProfileWriterBound
+--- PASS: TestDomainSuccessorCPUProfileWriterBound (0.00s)
+=== RUN   TestDomainSuccessorCPUProfileOwnershipAndExclusiveName
+--- PASS: TestDomainSuccessorCPUProfileOwnershipAndExclusiveName (0.00s)
+=== RUN   TestDomainSuccessorCPUProfileActualCompletionAndNoOverlap
+    domain_tcp_successor_profile_native_linux_test.go:175: GEN2_CPU_PROFILE_COMPLETE bytes=409 joined=true overflow=false output_error=false; successor preparation + Run through join attempt, profiling overhead included, not readiness or cleanup proof
+--- PASS: TestDomainSuccessorCPUProfileActualCompletionAndNoOverlap (0.01s)
+=== RUN   TestDomainSuccessorCPUProfileRetainedDirectoryReplacement
+    domain_tcp_successor_profile_native_linux_test.go:175: GEN2_CPU_PROFILE_COMPLETE bytes=411 joined=false overflow=false output_error=true; successor preparation + Run through join attempt, profiling overhead included, not readiness or cleanup proof
+--- PASS: TestDomainSuccessorCPUProfileRetainedDirectoryReplacement (0.00s)
+=== RUN   TestDomainSuccessorCPUProfileWriterFailureRetained
+--- PASS: TestDomainSuccessorCPUProfileWriterFailureRetained (0.00s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/app	0.021s

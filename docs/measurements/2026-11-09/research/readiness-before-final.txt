@@ -1,0 +1,7 @@
+=== RUN   TestExactNodeReadinessRejectsLateSOCKSGreeting
+    nodecheck_readiness_test.go:74: loopback late greeting: elapsed_ms=8100 accepted=true
+    nodecheck_readiness_test.go:76: readiness accepted or misclassified a greeting after the eight-second budget: <nil>
+--- FAIL: TestExactNodeReadinessRejectsLateSOCKSGreeting (8.10s)
+FAIL
+FAIL	github.com/ArtixSx/razvilka/internal/dataplane	8.234s
+FAIL

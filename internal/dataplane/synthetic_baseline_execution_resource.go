@@ -113,11 +113,11 @@ func (b *SyntheticDNSExecutionBinding) issueBaseline(ctx context.Context, mappin
 		// under this scope lock. Reuse only that exact source/reader/capture
 		// owner; a persistence failure keeps lookup fenced and cannot retry Add.
 		if existing, lookupErr := b.scope.lookupSyntheticBaseline(ctx, b, mapping, backend, capture); lookupErr == nil && existing != nil {
-			return existing, existing.current(ctx)
+			return existing, existing.currentInOriginalFileObservation(ctx)
 		}
 		return nil, err
 	}
-	return r, r.current(ctx)
+	return r, r.currentInOriginalFileObservation(ctx)
 }
 
 // Local immutable comparisons only, also safe under the tool's source locks.
@@ -194,7 +194,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 	if r.prepared {
 		return r.currentBaseline(ctx)
 	}
-	if err := r.current(ctx); err != nil {
+	if err := r.currentInOriginalFileObservation(ctx); err != nil {
 		return err
 	}
 	runtime := PolicyEffectRuntime{
@@ -202,7 +202,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 		Tools:  PolicyEffectTools{IPTables: r.tools.IPTables},
 		Preflight: func(c context.Context) error {
 			return r.observeTools(c, func(observed context.Context) error {
-				if err := r.current(observed); err != nil {
+				if err := r.currentInOriginalFileObservation(observed); err != nil {
 					return err
 				}
 				view, err := r.inspector.read(observed)
@@ -233,7 +233,7 @@ func (r *syntheticBaselineExecutionResource) prepareBaseline(ctx context.Context
 			return r.observeTools(c, r.currentInOriginalFileObservation)
 		},
 	}
-	if err := ApplyPolicyEffectsWithReceipt(ctx, runtime, r.effects, r.root); err != nil {
+	if err := applyDomainTCPOriginalEffects(ctx, runtime, nil, r); err != nil {
 		r.failed = errors.Join(ErrPolicyAdditionUnknown, err)
 		return r.failed
 	}
@@ -314,7 +314,7 @@ func (r *syntheticBaselineEffectRunner) Run(ctx context.Context, name string, ar
 	if r == nil || r.resource == nil || r.resource.self != r.resource {
 		return nil, ErrSyntheticBaselineTransition
 	}
-	if err := r.resource.current(ctx); err != nil {
+	if err := r.resource.currentInOriginalFileObservation(ctx); err != nil {
 		return nil, err
 	}
 	return r.resource.tools.Runner.RunSyntheticDNS(ctx, r, name, args...)

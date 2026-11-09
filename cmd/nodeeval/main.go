@@ -19,6 +19,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/evidence"
 	"github.com/ArtixSx/razvilka/internal/nodestore"
+	"github.com/ArtixSx/razvilka/internal/probecheck"
 	"github.com/ArtixSx/razvilka/internal/providerfeed"
 )
 
@@ -68,24 +69,30 @@ func parseOptions(args []string) (options, error) {
 func absoluteClean(path string) bool { return filepath.IsAbs(path) && filepath.Clean(path) == path }
 
 type report struct {
-	Kind       string `json:"kind"`
-	Code       string `json:"code,omitempty"`
-	Engine     string `json:"engine,omitempty"`
-	NodeID     string `json:"node_id,omitempty"`
-	Candidate  int    `json:"candidate,omitempty"`
-	Stage      string `json:"stage,omitempty"`
-	Verdict    string `json:"verdict,omitempty"`
-	HTTPSPass  bool   `json:"https_pass"`
-	Fresh      bool   `json:"fresh"`
-	DirectLeak bool   `json:"direct_leak"`
-	HTTPStatus int    `json:"http_status,omitempty"`
-	Checked    int    `json:"checked,omitempty"`
-	Passed     int    `json:"https_passed,omitempty"`
-	Imported   int    `json:"imported,omitempty"`
-	Total      int    `json:"feed_entries,omitempty"`
-	Rejected   int    `json:"rejected,omitempty"`
-	Finished   bool   `json:"finished"`
-	Scope      string `json:"scope,omitempty"`
+	NetworkTimings []probecheck.NetworkTiming `json:"network_timings,omitempty"`
+	ElapsedMS      int64                      `json:"elapsed_ms"`
+	WaitMS         int64                      `json:"candidate_wait_ms,omitempty"`
+	PreparationMS  int64                      `json:"preparation_ms,omitempty"`
+	CheckMS        int64                      `json:"check_wall_ms,omitempty"`
+	Stages         []safeTimingStage          `json:"stages,omitempty"`
+	Kind           string                     `json:"kind"`
+	Code           string                     `json:"code,omitempty"`
+	Engine         string                     `json:"engine,omitempty"`
+	NodeID         string                     `json:"node_id,omitempty"`
+	Candidate      int                        `json:"candidate,omitempty"`
+	Stage          string                     `json:"stage,omitempty"`
+	Verdict        string                     `json:"verdict,omitempty"`
+	HTTPSPass      bool                       `json:"https_pass"`
+	Fresh          bool                       `json:"fresh"`
+	DirectLeak     bool                       `json:"direct_leak"`
+	HTTPStatus     int                        `json:"http_status,omitempty"`
+	Checked        int                        `json:"checked,omitempty"`
+	Passed         int                        `json:"https_passed,omitempty"`
+	Imported       int                        `json:"imported,omitempty"`
+	Total          int                        `json:"feed_entries,omitempty"`
+	Rejected       int                        `json:"rejected,omitempty"`
+	Finished       bool                       `json:"finished"`
+	Scope          string                     `json:"scope,omitempty"`
 }
 
 const httpsScope = "fresh exact-node Telegram HTTPS by name/IP; no MTProto, account, media, voice, LAN/TUN or Selectable claim"
@@ -114,8 +121,9 @@ func telegramService() catalog.Service {
 // No RecordCheck, Import, restore, history admission or route API exists on this
 // existing-store evaluation interface. Cached health chooses order only.
 func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactChecker, freshProfile func(context.Context) (string, error), limit int, out *json.Encoder) int {
+	evaluationStarted := time.Now()
 	finish := func(checked, passed int, code string) int {
-		if out.Encode(report{Kind: "summary", Engine: checker.EngineID(), Checked: checked, Passed: passed, Finished: code == "", Code: code, Scope: httpsScope}) != nil {
+		if out.Encode(report{Kind: "summary", ElapsedMS: time.Since(evaluationStarted).Milliseconds(), Engine: checker.EngineID(), Checked: checked, Passed: passed, Finished: code == "", Code: code, Scope: httpsScope}) != nil {
 			return 1
 		}
 		if code != "" {
@@ -145,6 +153,8 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
 		if node.Disabled || node.Protocol != "VLESS" {
 			continue
 		}
+		preparationStarted := time.Now()
+		waitMS := preparationStarted.Sub(evaluationStarted).Milliseconds()
 		profile, err := freshProfile(ctx)
 		if err != nil || ctx.Err() != nil {
 			return finish(checked, passed, "fresh-profile-unavailable")
@@ -152,10 +162,18 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
 		started := time.Now()
 		var result dataplane.NodeCheckResult
 		called := false
+		var preparationMS, checkMS int64
+		var networkTimings []probecheck.NetworkTiming
 		err = store.WithSecret(ctx, node.ID, func(material []byte) error {
 			called = true
+			checkStarted := time.Now()
+			preparationMS = checkStarted.Sub(preparationStarted).Milliseconds()
 			var checkErr error
-			result, checkErr = checker.Check(ctx, dataplane.NodeCheckRequest{NodeID: node.ID, Outbound: material, Service: service, NetworkProfile: profile})
+			measured, measurements := probecheck.WithNetworkMeasurements(ctx)
+			defer measurements.Close()
+			result, checkErr = checker.Check(measured, dataplane.NodeCheckRequest{NodeID: node.ID, Outbound: material, Service: service, NetworkProfile: profile})
+			checkMS = time.Since(checkStarted).Milliseconds()
+			networkTimings = measurements.Close()
 			return checkErr
 		})
 		if !called {
@@ -167,8 +185,16 @@ func evaluate(ctx, cleanupCtx context.Context, store checkStore, checker exactCh
 			!result.StartedAt.Before(started) && !result.FinishedAt.Before(result.StartedAt) && !result.FinishedAt.After(finished) && finished.Before(result.ExpiresAt)
 		ok := err == nil && ctx.Err() == nil && fresh && result.Available && result.Verdict == evidence.VerdictPass && result.TestLevel == "service" && result.ErrorCode == "" &&
 			!result.DirectLeak && result.HTTPStatus >= 200 && result.HTTPStatus < 300 && result.Stage != "cleanup"
-		entry := report{Kind: "candidate", Engine: checker.EngineID(), NodeID: safeNodeID(node.ID), Candidate: checked, Stage: safeStage(result.Stage), Verdict: safeVerdict(result.Verdict),
+		entry := report{Kind: "candidate", ElapsedMS: time.Since(preparationStarted).Milliseconds(), WaitMS: waitMS, PreparationMS: preparationMS, CheckMS: checkMS, Engine: checker.EngineID(), NodeID: safeNodeID(node.ID), Candidate: checked, Stage: safeStage(result.Stage), Verdict: safeVerdict(result.Verdict),
 			Code: safeCheckCode(result.ErrorCode), HTTPSPass: ok, Fresh: fresh, DirectLeak: result.DirectLeak, HTTPStatus: min(max(result.HTTPStatus, 0), 599)}
+
+		// A returned timeline belongs to this candidate only after the same exact
+		// identity and freshness checks used by admission. Wrapper wall timings
+		// remain valid observations of our own invocation even after rejection.
+		if fresh {
+			entry.Stages = safeTimings(result.Stages)
+			entry.NetworkTimings = networkTimings
+		}
 		if errors.Is(err, dataplane.ErrExactNodeUnsupported) {
 			entry.Stage, entry.Code, entry.Verdict = "unsupported", "node-profile-unsupported", "INCONCLUSIVE"
 		} else if err != nil && result.ErrorCode == "" {

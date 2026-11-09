@@ -1,0 +1,30 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved; CI pending",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "6C796882F3342C21DF2562929506C257D5D5792E0E38113879FFCF3EF734E764"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "33B1E8183CF4F7DABAE552A075C75C5C84E15ABB6DCB49A0F23B0565E8F056CA"
+    },
+    {
+      "path": "scripts/test-managed-probe-native.sh",
+      "sha256": "59A43D6DBCC8638A7CBB62ACAAB7C4A5A32987F006FCD8B7959F36C3F7283010"
+    }
+  ],
+  "findings": [
+    "Focused normal gate includes OutputReader and SyntheticBaselineCoordinatorRead; existing full normal/race remains unchanged.",
+    "Separate explicit ubuntu26.04 normal/race matrix installs exact four reviewed package versions; no24.04 library override or profile fallback.",
+    "Reviewer caught missing new-job PASS/noSKIP contract; fixed exact four PASS, noSKIP, provenance, mode-bound COMPLETE, sample5 actual20-to4 children and nonzero equal rows assertions.",
+    "OutputReader pure and actual-child benchmarks execute outside route clocks using existing compiled binary; race child exit delay is explicitly diagnostic only.",
+    "Original managed sample/cleanup and workflow timeouts/admission unchanged; paired fixture curl dependency added.",
+    "Final added mountUnescape exact normal/race PASS/noSKIP assertion and decode-only benchmark regex inspected; existing postroute placement and300ms x3 counts retained."
+  ],
+  "limitations": [
+    "New native public pair, actual1.8.11 and performance results await exact pushed SHA runs.",
+    "No local Go builds; root reports Bash syntax validation, reviewer inspected actual run hunks and git diff --check."
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "run": 42667937599,
+  "empty": {
+    "result": "FAIL",
+    "logSHA256": "BA74743878B2A2C078505F11109698974C400594ABF2398F1A773B488BAA9BCF",
+    "seconds": 10.91,
+    "job": 129336492331
+  },
+  "draft": {
+    "result": "FAIL",
+    "logSHA256": "CBEB1555F7BB98D5855AD384F61ACBB5FA8F5E616A42ECD0D4D09D08E158EAEC",
+    "seconds": 15.53,
+    "job": 129336492402
+  },
+  "category": "files-quiesce-old-runtime-file-protocol",
+  "fileReceipt": {
+    "index": 0,
+    "paired": false,
+    "phase": "command-started",
+    "commands": 3,
+    "schema": 2,
+    "command": "quiesce-old-runtime",
+    "beforeFiles": true
+  },
+  "restoration": "NOT_REACHED",
+  "sourceFinding": "Bootstrap post-join inactivity scanner requires live direct child although worker has already reaped it; ordinary branch alone supplied original join witness",
+  "findingValidation": "Independently confirmed control-flow contradiction; raw stage alone does not isolate exact instruction",
+  "candidate": "Distinct ephemeral bootstrap original-worker join; all inactivity/remaining process/source/fence checks retained, native acceptance pending",
+  "noRouterChanges": true
+}

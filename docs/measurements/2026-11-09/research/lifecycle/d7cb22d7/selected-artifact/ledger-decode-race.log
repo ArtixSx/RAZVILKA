@@ -1,0 +1,43 @@
+=== RUN   TestSyntheticDNSLedgerDecoderParity
+--- PASS: TestSyntheticDNSLedgerDecoderParity (0.05s)
+=== RUN   TestSyntheticDNSLedgerDecoderOwnedReadIndependence
+--- PASS: TestSyntheticDNSLedgerDecoderOwnedReadIndependence (0.04s)
+=== RUN   TestSyntheticDNSLedgerDecoderParity
+--- PASS: TestSyntheticDNSLedgerDecoderParity (0.04s)
+=== RUN   TestSyntheticDNSLedgerDecoderOwnedReadIndependence
+--- PASS: TestSyntheticDNSLedgerDecoderOwnedReadIndependence (0.03s)
+=== RUN   TestSyntheticDNSLedgerDecoderParity
+--- PASS: TestSyntheticDNSLedgerDecoderParity (0.04s)
+=== RUN   TestSyntheticDNSLedgerDecoderOwnedReadIndependence
+--- PASS: TestSyntheticDNSLedgerDecoderOwnedReadIndependence (0.03s)
+goos: linux
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/dnscontrol
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkSyntheticDNSLedgerDecoder
+BenchmarkSyntheticDNSLedgerDecoder/rows1/before-string-copy
+BenchmarkSyntheticDNSLedgerDecoder/rows1/before-string-copy-4         	     970	    120636 ns/op	   6.22 MB/s	         1.000 modeled_rows/op	    4496 B/op	      37 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows1/before-string-copy-4         	     979	    122213 ns/op	   6.14 MB/s	         1.000 modeled_rows/op	    4496 B/op	      37 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows1/before-string-copy-4         	     974	    123580 ns/op	   6.07 MB/s	         1.000 modeled_rows/op	    4496 B/op	      37 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows1/candidate-byte-reader
+BenchmarkSyntheticDNSLedgerDecoder/rows1/candidate-byte-reader-4      	    1008	    126364 ns/op	   5.94 MB/s	         1.000 modeled_rows/op	    3744 B/op	      36 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows1/candidate-byte-reader-4      	     975	    120862 ns/op	   6.21 MB/s	         1.000 modeled_rows/op	    3744 B/op	      36 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows1/candidate-byte-reader-4      	     993	    123449 ns/op	   6.08 MB/s	         1.000 modeled_rows/op	    3744 B/op	      36 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/before-string-copy
+BenchmarkSyntheticDNSLedgerDecoder/rows16/before-string-copy-4        	      66	   1654699 ns/op	   6.55 MB/s	        16.00 modeled_rows/op	   62088 B/op	     304 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/before-string-copy-4        	      69	   1688828 ns/op	   6.42 MB/s	        16.00 modeled_rows/op	   62088 B/op	     304 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/before-string-copy-4        	      69	   1665465 ns/op	   6.51 MB/s	        16.00 modeled_rows/op	   62088 B/op	     304 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/candidate-byte-reader
+BenchmarkSyntheticDNSLedgerDecoder/rows16/candidate-byte-reader-4     	      62	   1662912 ns/op	   6.52 MB/s	        16.00 modeled_rows/op	   51224 B/op	     303 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/candidate-byte-reader-4     	      68	   1678640 ns/op	   6.46 MB/s	        16.00 modeled_rows/op	   51224 B/op	     303 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows16/candidate-byte-reader-4     	      68	   1672891 ns/op	   6.48 MB/s	        16.00 modeled_rows/op	   51224 B/op	     303 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/before-string-copy
+BenchmarkSyntheticDNSLedgerDecoder/rows256/before-string-copy-4       	       4	  28077447 ns/op	   6.14 MB/s	       256.0 modeled_rows/op	 1047560 B/op	    4400 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/before-string-copy-4       	       4	  27644057 ns/op	   6.24 MB/s	       256.0 modeled_rows/op	 1047560 B/op	    4400 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/before-string-copy-4       	       4	  27767008 ns/op	   6.21 MB/s	       256.0 modeled_rows/op	 1047560 B/op	    4400 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/candidate-byte-reader
+BenchmarkSyntheticDNSLedgerDecoder/rows256/candidate-byte-reader-4    	       4	  26976030 ns/op	   6.40 MB/s	       256.0 modeled_rows/op	  867352 B/op	    4399 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/candidate-byte-reader-4    	       4	  27207592 ns/op	   6.34 MB/s	       256.0 modeled_rows/op	  867352 B/op	    4399 allocs/op
+BenchmarkSyntheticDNSLedgerDecoder/rows256/candidate-byte-reader-4    	       4	  26896389 ns/op	   6.41 MB/s	       256.0 modeled_rows/op	  867352 B/op	    4399 allocs/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dnscontrol	4.094s

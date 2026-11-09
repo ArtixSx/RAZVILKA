@@ -1,0 +1,41 @@
+{
+  "sha": "b9bb3c13e02d91e441b6538f855e533a13e1ef15",
+  "verified_at_utc": "2026-11-09T13:41:35.5221165Z",
+  "pr_run": 42623932233,
+  "pr_job": 129182882287,
+  "pr_conclusion": "success",
+  "started_at": "2026-11-09T13:16:11Z",
+  "completed_at": "2026-11-09T13:36:14Z",
+  "push_run": 42623923398,
+  "push_job": 129182848918,
+  "push_conclusion": "success",
+  "checks": [
+    "Actual non-root unpublished-intent prewrite/cancel/permission and replaced prior inode PASS, no skips in prerequisite",
+    "Focused root checks PASS; root permission case intentionally skips after separate non-root proof",
+    "Full normal and race project checks PASS",
+    "UI contracts and linux amd64/arm64/mips/mipsle builds/checksums PASS",
+    "Entware shell/S99/Main modeled native initializer and upgrade/downgrade protocol fences PASS"
+  ],
+  "full_package_seconds": {
+    "race": {
+      "dataplane": 488.19,
+      "netidentity": 3.533,
+      "app": 289.689
+    },
+    "normal": {
+      "dataplane": 208.119,
+      "netidentity": 2.257,
+      "app": 139.419
+    }
+  },
+  "limitations": [
+    "Mihomo manual native workflow failed unauthenticated Stop401 on this SHA; fixture fix pending next SHA",
+    "Separate DNS/NFQ lifecycle failed on this SHA; generic CI does not grant native or router readiness",
+    "New local quarantine/telemetry/save/stat changes are not covered by this SHA"
+  ],
+  "raw_log": {
+    "path": "C:/RAZVILKA-research-20261109/lifecycle-b9bb3c13/generic-pr-ci.log",
+    "sha256": "958038D527A64C2E8921D7A20C3FA9EB223AF46556E74A4C7B9445E4E7BED384"
+  },
+  "push_completed_at": "2026-11-09T13:41:13Z"
+}

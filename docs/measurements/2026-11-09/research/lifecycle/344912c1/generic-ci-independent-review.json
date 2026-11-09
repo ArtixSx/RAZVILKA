@@ -1,0 +1,68 @@
+{
+  "head_sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "conclusion": "both_success",
+  "pr": {
+    "checks": [
+      "Non-root original unpublished intent",
+      "Focused root ownership/recovery including BootstrapOfflineStrategy and BootstrapImage/ordinary image",
+      "gofmt and early go vet",
+      "Full go test ./... count1",
+      "Full go test -race ./... count1",
+      "Shell syntax and contract tests",
+      "UI tests including actual manual Mihomo test",
+      "Linux amd64/arm64/mips/mipsle cross builds"
+    ],
+    "raw_log_sha256": "08139e9eb8a8fa553f9d48a80ffad96ceab957099904486a83f56646455421e3",
+    "job": 129310155212,
+    "normal_seconds": {
+      "controller": 9.93,
+      "dataplane": 208.444,
+      "app": 141.897,
+      "updatecheck": 94.387
+    },
+    "conclusion": "success",
+    "race_seconds": {
+      "controller": 62.111,
+      "dataplane": 594.936,
+      "app": 436.326,
+      "updatecheck": 569.573
+    },
+    "run": 42660413364
+  },
+  "push": {
+    "checks": [
+      "Non-root original unpublished intent",
+      "Focused root ownership/recovery including BootstrapOfflineStrategy and BootstrapImage/ordinary image",
+      "gofmt and early go vet",
+      "Full go test ./... count1",
+      "Full go test -race ./... count1",
+      "Shell syntax and contract tests",
+      "UI tests including actual manual Mihomo test",
+      "Linux amd64/arm64/mips/mipsle cross builds"
+    ],
+    "raw_log_sha256": "6cf3b771b385f26c297da57d4495a08b5f99e7b87748c60cba8f9469ed32ddc7",
+    "job": 129310092242,
+    "normal_seconds": {
+      "controller": 10.237,
+      "dataplane": 211.845,
+      "app": 144.594,
+      "updatecheck": 94.672
+    },
+    "conclusion": "success",
+    "race_seconds": {
+      "controller": 62.106,
+      "dataplane": 600.813,
+      "app": 439.692,
+      "updatecheck": 569.09
+    },
+    "run": 42660394238
+  },
+  "findings": [
+    "Previously masked minimal build-fixture MODULE_NOT_FOUND messages are absent; extracted shell fail-fast and relocated real UI test both exercised"
+  ],
+  "limitations": [
+    "Generic/full race tests do not replace actual public old193 bootstrap/restore, strictDNS/NFQ or hardware validation",
+    "Ordinary opt-in native fact test not claimed from generic gate; separate native fixture required",
+    "Pending new bootstrap clear-after-context fix and Xray image scope source are not included in344912"
+  ]
+}

@@ -68,7 +68,11 @@ func (l *Lease) policyRead(ctx context.Context, index int, args []string) ([]byt
 			return at("READ_IDENTITY", nil)
 		}
 		var err error
-		data, err = l.execute(held, index, maxOutputBytes, args...)
+		if scope, present := nfqLANRPDBMarker(held); present && index == 2 {
+			data, err = l.executeNFQWSLANRPDB(held, scope, args)
+		} else {
+			data, err = l.execute(held, index, maxOutputBytes, args...)
+		}
 		if err == nil && stockRules {
 			data, err = stockNumericRules(data)
 		}

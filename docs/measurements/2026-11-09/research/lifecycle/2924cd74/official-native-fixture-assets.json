@@ -1,0 +1,14 @@
+{
+  "verified_at": "2026-11-09",
+  "verification": "All files downloaded using gh api Accept: application/octet-stream and fully SHA256 verified against existing fixture pins. Xray26.10.31 and zapret2v1.0.6 additionally verified with unauthenticated curl API; direct Xray URL with ?download=1 returned HTTP504.",
+  "assets": [
+    {"repo":"XTLS/Xray-core","id":695486844,"url":"https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip","api":"https://api.github.com/repos/XTLS/Xray-core/releases/assets/695486844","size":16692690,"sha256":"e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214"},
+    {"repo":"XTLS/Xray-core","id":383041956,"url":"https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip","api":"https://api.github.com/repos/XTLS/Xray-core/releases/assets/383041956","size":21136402,"sha256":"23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae"},
+    {"repo":"MetaCubeX/mihomo","id":663189133,"url":"https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz","api":"https://api.github.com/repos/MetaCubeX/mihomo/releases/assets/663189133","size":22862419,"sha256":"132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323"},
+    {"repo":"heiher/hev-socks5-tunnel","id":511777659,"url":"https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64","api":"https://api.github.com/repos/heiher/hev-socks5-tunnel/releases/assets/511777659","size":411528,"sha256":"a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03"},
+    {"repo":"bol-van/zapret2","id":662019861,"url":"https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz","api":"https://api.github.com/repos/bol-van/zapret2/releases/assets/662019861","size":9559111,"sha256":"eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4"}
+  ],
+  "managed_installer":"scripts/test-managed-probe-native.sh:22",
+  "managed_lan_wrapper":"scripts/test-managed-probe-lan-native.sh delegates to shared installer",
+  "constraints":"Official GitHub only; same exact asset bytes and SHA required before any install. No token/signed URL in evidence. No production downloader changes."
+}

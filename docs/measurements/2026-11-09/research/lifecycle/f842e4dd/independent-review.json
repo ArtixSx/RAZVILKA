@@ -1,0 +1,72 @@
+{
+  "reviewer": "independent-verification",
+  "sha": "f842e4ddb89144a5310ea07f77018c60852c1fd0",
+  "run_id": 42609998234,
+  "conclusion": "success",
+  "scope": "isolated Linux original Mihomo process/native lifecycle; not physical router/LAN acceptance",
+  "budget_seconds": {
+    "aggregate": 600,
+    "per_round": 300,
+    "per_operation": 110,
+    "production_apply_unchanged": 480
+  },
+  "full_lifecycle": {
+    "test_seconds": 274.15,
+    "rounds": [
+      {
+        "round": 0,
+        "apply_seconds": 93.994077693,
+        "stop_seconds": 6.024753555,
+        "cycle_seconds": 136.06618569,
+        "restored_physical_baseline": true,
+        "closing_retry": false
+      },
+      {
+        "round": 1,
+        "apply_seconds": 93.742240387,
+        "stop_seconds": 6.01263348,
+        "cycle_seconds": 135.71589469,
+        "restored_physical_baseline": true,
+        "closing_retry": true
+      }
+    ]
+  },
+  "postcas": {
+    "test_seconds": 73.92,
+    "http_status": 503,
+    "desired_exact_restored": true,
+    "rollback_verified": true,
+    "original_pending": false
+  },
+  "settlement": {
+    "test_seconds": 115.85,
+    "apply_seconds": 87.02788404,
+    "stop_seconds": 8.748271633,
+    "cycle_seconds": 113.201920076,
+    "restored_physical_baseline": true,
+    "original_rows_terminal": 9
+  },
+  "limitations": [
+    "Harness deadline correction is not a runtime optimization.",
+    "Full lifecycle is two cycles of the same original fixture ownership.",
+    "Generic CI is assessed independently and was still running when this report was generated.",
+    "Previous 441e full lifecycle FAIL retained; no physical router readiness claim."
+  ],
+  "logs": [
+    {
+      "file": "mihomo-lifecycle.log",
+      "bytes": 142946,
+      "sha256": "134d932b731bd1ed40857c0ece5a04ca93ebd167b2ece2c111cf4fc0c8e03dbe"
+    },
+    {
+      "file": "mihomo-postcas.log",
+      "bytes": 37471,
+      "sha256": "138d9594089c7e2406bb1c7cfaebb44fc18ca711c33cc01faf4381a819b14322"
+    },
+    {
+      "file": "mihomo-settlement.log",
+      "bytes": 37541,
+      "sha256": "67a204c3ba3e366dd4495a8f829f8406646fffff9f37e47b2d7947d0ab8c8e06"
+    }
+  ]
+}

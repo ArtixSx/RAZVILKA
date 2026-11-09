@@ -18,12 +18,12 @@ import (
 // neither a reboot nor a receipt alone grants metadata retirement.
 func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.Provider, d ExecutionMihomoLiveDefinition, stateRoot string) (result netidentity.Identity, resultErr error) {
 	if xraySelectedTCPFinite(ctx) != nil || provider == nil || d.validate() != nil || d.Source.ParentOrigin.Validate() != nil || d.Source.ParentOrigin.BootID != d.NetworkIdentity.BootID {
-		return result, ErrMihomoProbeRetirement
+		return result, mihomoSameBootNativeFailure(ctx, "process-owner", ErrMihomoProbeRetirement)
 	}
 	err := provider.WithCurrent(ctx, func(held context.Context, current netidentity.Identity) error {
 		sameBoot := current.BootID == d.NetworkIdentity.BootID
 		if sameBoot && current != d.NetworkIdentity {
-			return ErrMihomoProbeRetirement
+			return mihomoSameBootNativeFailure(held, "process-network", ErrMihomoProbeRetirement)
 		}
 		parent := d.Source.ParentOrigin
 		if err := func() error {
@@ -32,18 +32,18 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 			}
 			return nil
 		}(); err != nil {
-			return err
+			return mihomoSameBootNativeFailure(held, "process-parent-opening", err)
 		}
 		// Reuse the existing complete controller/process/socket parser, including
 		// PID birth, mutable argv, executable and source namespace bookends. A
 		// copied/renamed controller or Mihomo image also refuses by exact bytes.
 		proof, err := scopedDNSInactivePlatformProof()
 		if err != nil {
-			return err
+			return mihomoSameBootNativeFailure(held, "process-platform", err)
 		}
 		selfHash, selfInfo, err := mihomoColdFileHash(held, "/proc/self/exe")
 		if err != nil {
-			return err
+			return mihomoSameBootNativeFailure(held, "process-self-opening", err)
 		}
 		originalSame := proof.sameExecutable
 		proof.sameExecutable = func(first, second string) (bool, error) {
@@ -71,13 +71,13 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 				}
 				return nil
 			}(); err != nil {
-				return err
+				return mihomoSameBootNativeFailure(held, "process-parent-pass", err)
 			}
 			if err := scopedDNSInactiveProc(held, proof, filepath.Join(stateRoot, scopedDNSAdapterID), "/opt/etc/razvilka/config.json", map[uint16]bool{uint16(d.Profile.SOCKSPort): true}); err != nil {
-				return err
+				return mihomoSameBootNativeProcFailure(held, err)
 			}
 			if err := observeMihomoProbeListenerAbsent(held, provider, current, d.Profile.SOCKSPort); err != nil {
-				return err
+				return mihomoSameBootNativeFailure(held, "process-listener", err)
 			}
 		}
 		if err := func() error {
@@ -86,17 +86,17 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 			}
 			return nil
 		}(); err != nil {
-			return err
+			return mihomoSameBootNativeFailure(held, "process-parent-closing", err)
 		}
 		closingHash, closingInfo, err := mihomoColdFileHash(held, "/proc/self/exe")
 		if err != nil || closingHash != selfHash || !os.SameFile(selfInfo, closingInfo) || selfInfo.Size() != closingInfo.Size() {
-			return ErrMihomoProbeRetirement
+			return mihomoSameBootNativeFailure(held, "process-self-closing", ErrMihomoProbeRetirement)
 		}
 		result = current
 		return nil
 	})
 	if err != nil {
-		return netidentity.Identity{}, errors.Join(err, ErrMihomoProbeRetirement)
+		return netidentity.Identity{}, mihomoSameBootNativeFailure(ctx, "process-provider", errors.Join(err, ErrMihomoProbeRetirement))
 	}
 	return result, nil
 }

@@ -1,0 +1,38 @@
+{
+  "domain-selected.log": {
+    "sha256": "41c6edef43ab2b0454885af89ab60665a9770bc6df138cf128ad8a41e98eafe6",
+    "bytes": 70932
+  },
+  "domain-canceled-ready.log": {
+    "sha256": "99246eb91fe98b918e29d66b260bfb51b9ecc347b6f11aa7bff49b27e21d056f",
+    "bytes": 31971
+  },
+  "mihomo-settlement.log": {
+    "sha256": "c9903c72e75bd1a029ff6269344f6190d792120cfaef673b378de6adb2b58d0f",
+    "bytes": 39464
+  },
+  "mihomo-postcas.log": {
+    "sha256": "ad33123465d5ca10ddee30bbd63f2cdf39753a865561a5f46984510fb06dd51b",
+    "bytes": 39958
+  },
+  "mihomo-lifecycle.log": {
+    "sha256": "65e3b09b240dce7f713eecf73e53ef82c05841c64040a99f52f8e398b104d78e",
+    "bytes": 138109
+  },
+  "strategy-pair.log": {
+    "sha256": "614ed7aed88d9d09b2321f1b9fe21a740d6b4b2201f19651afaaead62d585b5a",
+    "bytes": 41012
+  },
+  "research-lifecycle.json": {
+    "sha256": "59b7c872ed495665b53070a932c9122b1fd3de293324e2b515ac575605026e00",
+    "bytes": 6189
+  },
+  "rotation-before.txt": {
+    "sha256": "336b8969c2034e2e5f0af745ac6395c91e4a968b97ffce2e6ff1fa6302da1a38",
+    "bytes": 650
+  },
+  "rotation-after.txt": {
+    "sha256": "46232db2f069f0b5e0af025df4593529afa5e39fb0f69b7aa1fcf2c5e7195b40",
+    "bytes": 11568
+  }
+}

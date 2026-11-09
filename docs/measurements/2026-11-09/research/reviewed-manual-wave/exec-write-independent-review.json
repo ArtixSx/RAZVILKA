@@ -1,0 +1,29 @@
+{
+  "reviewer": "independent-verification",
+  "decision": "Reject ETXTBSY/deny_write_access as a substitute for current executable SHA bookends.",
+  "pinned_linux_commit": "830b3c68c1fb1e9176028d02ef86f3cf76aa2476",
+  "verified": [
+    {
+      "claim": "deny_write_access is an inode-local signed counter, not a content seal attached to an arbitrary retained read-only FD.",
+      "source": "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/include/linux/fs.h#L2962"
+    },
+    {
+      "claim": "Executable replacement releases write denial on the old image; original PID/start/group/sole Wait lifetime does not prove continuous executable lifetime.",
+      "source": "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/kernel/fork.c#L1241"
+    },
+    {
+      "claim": "Overlayfs documents a lower-layer executing-file case without ETXTBSY write/truncate denial.",
+      "source": "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/Documentation/filesystems/overlayfs.rst#L419"
+    },
+    {
+      "claim": "Linux NFSv4 encodes share_deny as zero; local i_writecount is not a cross-client integrity seal.",
+      "source": "https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/fs/nfs/nfs4xdr.c#L1401"
+    }
+  ],
+  "limits": [
+    "Source analysis only; no native bypass experiment or new filesystem mount performed.",
+    "A proposed A-to-B-to-A tail mutation may also change ctime, so do not claim all current metadata checks would accept it. Test the exclusion gap and record which existing guard actually refuses.",
+    "No SHA/source/cleanup checks changed."
+  ],
+  "reviewed_note_sha256": "8f4f3795ed57cea10a0eb2e69fb8d65dccc8768968f5fcfda631241c1281bbb7"
+}

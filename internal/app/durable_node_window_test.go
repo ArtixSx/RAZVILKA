@@ -42,6 +42,8 @@ func (c *windowNodeChecker) ScreenTransport(_ context.Context, r dataplane.NodeC
 	result := autofallbackResult(r, false)
 	result.Stage, result.TestLevel = "transport", "transport"
 	if !dead {
+		result.StartedAt = time.Now().UTC()
+		result.FinishedAt, result.ExpiresAt = time.Time{}, time.Time{}
 		result.Stages = []dataplane.NodeCheckStage{{ID: "transport", Status: "passed", Duration: 12}}
 		return result, false, nil
 	}

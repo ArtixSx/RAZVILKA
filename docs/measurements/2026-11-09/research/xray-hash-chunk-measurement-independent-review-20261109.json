@@ -1,0 +1,17 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved measurement only",
+  "file": "internal/dataplane/xray_domain_tcp_hash_measurement_native_linux_test.go",
+  "sha256": "030C4E952E4249CC23B963862E4CA3615BA2E70D02619DA9A2D07AA552021305",
+  "findings": [
+    "No production edits. Original32KiB complete hash/current compared with candidate32control/64/128/256 on actual bounded held workflow Xray image.",
+    "Full SHA and original success-path metadata before/after retained; candidate refusal adds closing checks and is explicitly stricter diagnostic flow. Logical ReadAt call count labeled, not syscall count.",
+    "Context checked around reads and before each <=32KiB hash block; timed cancellation joins timer callback and measures postcancel completion without positive digest. Larger blocked-read granularity explicitly not assumed equivalent.",
+    "Independent review corrected deterministic late cancel at4 which canceled before reading; now at8 requires nonzero bytes/readCalls and no digest. Actual mutation restoredmtime, truncation and closedFD refusal included."
+  ],
+  "limits": [
+    "No localGo tests/builds; actual native normal/race and before/after measurements pending.",
+    "Warm pinned-file microbenchmark is not cold startup or router proof; no performance improvement assumed.",
+    "No production promotion without measured benefit and cancellation review."
+  ]
+}

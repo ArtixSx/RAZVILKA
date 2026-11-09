@@ -1,0 +1,500 @@
+{
+  "production": {
+    "parity_samples": {
+      "0": {
+        "serial_ms": 88.405,
+        "save_ms": 28.559,
+        "serial_metadata": 48,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "1": {
+        "serial_ms": 80.992,
+        "save_ms": 28.188,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "2": {
+        "serial_ms": 80.706,
+        "save_ms": 28.826,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "3": {
+        "serial_ms": 80.059,
+        "save_ms": 27.982,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "4": {
+        "serial_ms": 80.696,
+        "save_ms": 28.481,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "5": {
+        "serial_ms": 80.326,
+        "save_ms": 28.465,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      }
+    },
+    "steady_medians": {
+      "serial_ms": 80.696,
+      "save_ms": 28.465
+    },
+    "benchmarks": {
+      "gomaxprocs4/fileinfo": [
+        {
+          "ns_op": 1936,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 1971,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 1953,
+          "bytes_op": 224,
+          "allocs_op": 2
+        }
+      ],
+      "gomaxprocs4/before_syscall_lstat": [
+        {
+          "ns_op": 1638,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1615,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1630,
+          "bytes_op": 16,
+          "allocs_op": 1
+        }
+      ],
+      "gomaxprocs4/direct-stat": [
+        {
+          "ns_op": 1601,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1601,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1596,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs4/stack_candidate": [
+        {
+          "ns_op": 1613,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1615,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1611,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs2/fileinfo": [
+        {
+          "ns_op": 1952,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 2007,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 1945,
+          "bytes_op": 224,
+          "allocs_op": 2
+        }
+      ],
+      "gomaxprocs2/before_syscall_lstat": [
+        {
+          "ns_op": 1621,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1628,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1622,
+          "bytes_op": 16,
+          "allocs_op": 1
+        }
+      ],
+      "gomaxprocs2/direct-stat": [
+        {
+          "ns_op": 1582,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1598,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1583,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs2/stack_candidate": [
+        {
+          "ns_op": 1603,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1603,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1621,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ]
+    },
+    "benchmark_medians": {
+      "gomaxprocs4/fileinfo": {
+        "ns_op": 1953,
+        "bytes_op": 224,
+        "allocs_op": 2
+      },
+      "gomaxprocs4/before_syscall_lstat": {
+        "ns_op": 1630,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      "gomaxprocs4/direct-stat": {
+        "ns_op": 1601,
+        "bytes_op": 0,
+        "allocs_op": 0
+      },
+      "gomaxprocs4/stack_candidate": {
+        "ns_op": 1613,
+        "bytes_op": 0,
+        "allocs_op": 0
+      },
+      "gomaxprocs2/fileinfo": {
+        "ns_op": 1952,
+        "bytes_op": 224,
+        "allocs_op": 2
+      },
+      "gomaxprocs2/before_syscall_lstat": {
+        "ns_op": 1622,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      "gomaxprocs2/direct-stat": {
+        "ns_op": 1583,
+        "bytes_op": 0,
+        "allocs_op": 0
+      },
+      "gomaxprocs2/stack_candidate": {
+        "ns_op": 1603,
+        "bytes_op": 0,
+        "allocs_op": 0
+      }
+    },
+    "failures": [
+      "2026-11-09T14:34:04.6286913Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (59.38s)",
+      "2026-11-09T14:34:34.0447088Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (23.07s)",
+      "2026-11-09T14:35:02.8382014Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (23.19s)",
+      "2026-11-09T14:35:31.6314407Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (22.88s)",
+      "2026-11-09T14:36:00.6806121Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (23.06s)"
+    ]
+  },
+  "race": {
+    "parity_samples": {
+      "0": {
+        "serial_ms": 117.521,
+        "save_ms": 38.046,
+        "serial_metadata": 48,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "1": {
+        "serial_ms": 109.759,
+        "save_ms": 38.429,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "2": {
+        "serial_ms": 108.032,
+        "save_ms": 38.093,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "3": {
+        "serial_ms": 109.782,
+        "save_ms": 37.659,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "4": {
+        "serial_ms": 106.294,
+        "save_ms": 38.175,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      },
+      "5": {
+        "serial_ms": 108.845,
+        "save_ms": 37.75,
+        "serial_metadata": 44,
+        "save_metadata": 12,
+        "serial_children": 20,
+        "save_children": 4,
+        "equal_rows": 74
+      }
+    },
+    "steady_medians": {
+      "serial_ms": 108.845,
+      "save_ms": 38.093
+    },
+    "benchmarks": {
+      "gomaxprocs4/fileinfo": [
+        {
+          "ns_op": 1528,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 1521,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 1523,
+          "bytes_op": 224,
+          "allocs_op": 2
+        }
+      ],
+      "gomaxprocs4/before_syscall_lstat": [
+        {
+          "ns_op": 1254,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1255,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1254,
+          "bytes_op": 16,
+          "allocs_op": 1
+        }
+      ],
+      "gomaxprocs4/direct-stat": [
+        {
+          "ns_op": 1241,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1242,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1240,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs4/stack_candidate": [
+        {
+          "ns_op": 1252,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1253,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1250,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs2/fileinfo": [
+        {
+          "ns_op": 2125,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 2103,
+          "bytes_op": 224,
+          "allocs_op": 2
+        },
+        {
+          "ns_op": 2099,
+          "bytes_op": 224,
+          "allocs_op": 2
+        }
+      ],
+      "gomaxprocs2/before_syscall_lstat": [
+        {
+          "ns_op": 1498,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1491,
+          "bytes_op": 16,
+          "allocs_op": 1
+        },
+        {
+          "ns_op": 1493,
+          "bytes_op": 16,
+          "allocs_op": 1
+        }
+      ],
+      "gomaxprocs2/direct-stat": [
+        {
+          "ns_op": 2093,
+          "bytes_op": 1226,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 2106,
+          "bytes_op": 1208,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 2104,
+          "bytes_op": 1216,
+          "allocs_op": 0
+        }
+      ],
+      "gomaxprocs2/stack_candidate": [
+        {
+          "ns_op": 1445,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1467,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        {
+          "ns_op": 1454,
+          "bytes_op": 0,
+          "allocs_op": 0
+        }
+      ]
+    },
+    "benchmark_medians": {
+      "gomaxprocs4/fileinfo": {
+        "ns_op": 1523,
+        "bytes_op": 224,
+        "allocs_op": 2
+      },
+      "gomaxprocs4/before_syscall_lstat": {
+        "ns_op": 1254,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      "gomaxprocs4/direct-stat": {
+        "ns_op": 1241,
+        "bytes_op": 0,
+        "allocs_op": 0
+      },
+      "gomaxprocs4/stack_candidate": {
+        "ns_op": 1252,
+        "bytes_op": 0,
+        "allocs_op": 0
+      },
+      "gomaxprocs2/fileinfo": {
+        "ns_op": 2103,
+        "bytes_op": 224,
+        "allocs_op": 2
+      },
+      "gomaxprocs2/before_syscall_lstat": {
+        "ns_op": 1493,
+        "bytes_op": 16,
+        "allocs_op": 1
+      },
+      "gomaxprocs2/direct-stat": {
+        "ns_op": 2104,
+        "bytes_op": 1216,
+        "allocs_op": 0
+      },
+      "gomaxprocs2/stack_candidate": {
+        "ns_op": 1454,
+        "bytes_op": 0,
+        "allocs_op": 0
+      }
+    },
+    "failures": [
+      "2026-11-09T14:32:02.8105949Z --- FAIL: TestManagedStrategyProbeNativeConsumer (18.92s)",
+      "2026-11-09T14:32:31.7186550Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.17s)",
+      "2026-11-09T14:33:10.1396750Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (30.62s)",
+      "2026-11-09T14:33:49.4788800Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (31.03s)",
+      "2026-11-09T14:34:28.4075531Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (30.92s)"
+    ]
+  }
+}

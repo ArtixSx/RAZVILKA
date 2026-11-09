@@ -1,0 +1,12 @@
+{
+  "status": "source-approved-native-diagnostic-only",
+  "file": "C:/Projects/RAZVILKA/research-build-20261109/internal/app/strategy_managed_probe_native_linux_test.go",
+  "sha256": "0dff6cebe39da4aabda1715fff378162e9a059f7b493b7dd5c6eec5b5777428c",
+  "checks": [
+    "Existing native tool counter started before actual HTTP interval and stopped via defer on every return/panic",
+    "Existing once-only counter restores global active state; app tests have no t.Parallel consumer overlap",
+    "No assertions, commands, operation deadlines or authority branches changed",
+    "Fixed kind counts represent actual started children, not successful reads or route proof; version counts remain separate"
+  ],
+  "validation": "Source inspection only; next native run pending"
+}

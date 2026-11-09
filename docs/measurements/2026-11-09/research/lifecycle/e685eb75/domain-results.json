@@ -1,0 +1,79 @@
+{
+  "sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1",
+  "workflow_run": 42618633059,
+  "limits": [
+    "Native Linux CI, not router acceptance",
+    "Strict production12s remains FAIL before GEN1 publication; preparation diagnostic30s PASS is separate",
+    "Selected profile20.25s includes cleanup; not directly comparable to363f profile12.16s",
+    "Guard check count reduction verified; throughput speedup NOT established across variable runner timing"
+  ],
+  "selected": {
+    "job": 129164735460,
+    "log": "domain-selected.log",
+    "sha256": "596cb5247af859bff79c4e5018d5361d52a8fac3f13e1ccea4c06f2d9f435f24",
+    "results": [
+      "--- FAIL: TestDomainTCPOriginalNativeAcceptedFlows (22.25s)"
+    ],
+    "actual_run_metrics": [
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:3.728097414s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:10.015Вµs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:3.599076907s} capture-prepare:{Calls:1 Bytes:0 Elapsed:6.766294663s} kernel-observe:{Calls:1 Bytes:0 Elapsed:632.586343ms} kernel-observe-success:{Calls:1 Bytes:0 Elapsed:481ns} mapping-compare:{Calls:1 Bytes:0 Elapsed:127.464169ms} mapping-original-tool-read:{Calls:1 Bytes:0 Elapsed:89.328894ms} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:3.456Вµs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:4.393378999s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:6.821Вµs} process-current:{Calls:303 Bytes:0 Elapsed:4.62142573s} publication-gate:{Calls:12 Bytes:0 Elapsed:12.698Вµs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:809.656554ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.289626615s} whole-executable-hash:{Calls:133 Bytes:4864794998 Elapsed:3.086281124s}] actual_tool_starts=map[original-effect:18 original-read:8 original-read-classic-batch:1295]; overlapping cumulative durations, not wall speed"
+    ],
+    "mount_measurements": [
+      "same held proc FD mount ID samples=1000 fdinfo=7.33776ms statx=868.621Вµs forced-ENOSYS-fdinfo=7.286498ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim",
+      "same held proc FD mount ID samples=1000 fdinfo=7.315327ms statx=869.372Вµs forced-ENOSYS-fdinfo=7.112931ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim"
+    ],
+    "skip_count": 3,
+    "generation": "GEN1 before DNS publication; GEN2 not exercised"
+  },
+  "canceled_ready": {
+    "job": 129164735753,
+    "log": "domain-canceled-ready.log",
+    "sha256": "5c2e36d44cd308ff9c76fcdb88bf0080b6b4d288275fd75c8274d66edbdce783",
+    "results": [
+      "--- FAIL: TestDomainTCPOriginalNativeCanceledReadyRetirement (14.08s)"
+    ],
+    "actual_run_metrics": [
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.335903105s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:12.422Вµs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.194015345s} capture-prepare:{Calls:1 Bytes:0 Elapsed:7.787825299s} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:2.766Вµs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.028002503s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:4.929Вµs} process-current:{Calls:251 Bytes:0 Elapsed:4.718153483s} publication-gate:{Calls:12 Bytes:0 Elapsed:9.617Вµs} standby-add-guard:{Calls:13 Bytes:0 Elapsed:929.086888ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.652796966s} whole-executable-hash:{Calls:123 Bytes:4499020938 Elapsed:3.229172833s}] actual_tool_starts=map[original-effect:11 original-read-classic-batch:520]; overlapping cumulative durations, not wall speed"
+    ],
+    "mount_measurements": [
+      "same held proc FD mount ID samples=1000 fdinfo=7.843671ms statx=832.241Вµs forced-ENOSYS-fdinfo=7.806192ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim",
+      "same held proc FD mount ID samples=1000 fdinfo=8.135986ms statx=831.78Вµs forced-ENOSYS-fdinfo=7.50357ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim"
+    ],
+    "skip_count": 3,
+    "generation": "GEN1 before DNS publication; GEN2 not exercised"
+  },
+  "preparation": {
+    "job": 129164735752,
+    "log": "preparation.log",
+    "sha256": "631cd1a9cf7f187b5231dc12c317b610fac71a6da2a8e4e6dcc98763faa86ed1",
+    "results": [
+      "--- FAIL: TestDomainTCPOriginalNativeFailedPreparationRetirement (99.17s)",
+      "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (118.77s)",
+      "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (125.31s)",
+      "--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement (116.86s)"
+    ],
+    "actual_run_metrics": [
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:9.124680866s} capture-prepare:{Calls:1 Bytes:0 Elapsed:14.153322565s} dns-send:{Calls:1 Bytes:0 Elapsed:1.581787331s} dns-send-success:{Calls:1 Bytes:0 Elapsed:1.092Вµs} kernel-observe:{Calls:7 Bytes:0 Elapsed:9.057889727s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:4.669Вµs} mapping-compare:{Calls:6 Bytes:0 Elapsed:10.91877174s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:4.418Вµs} process-current:{Calls:482 Bytes:0 Elapsed:11.910929448s} publication-gate:{Calls:27 Bytes:0 Elapsed:5.46044176s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:231ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:2.458431438s} standby-prepare:{Calls:1 Bytes:0 Elapsed:5.066439937s} whole-executable-hash:{Calls:219 Bytes:8010451914 Elapsed:5.850493168s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed",
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.632894834s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:17.67Вµs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.479008775s} capture-prepare:{Calls:1 Bytes:0 Elapsed:8.338839064s} dns-send:{Calls:1 Bytes:0 Elapsed:1.046244052s} dns-send-success:{Calls:1 Bytes:0 Elapsed:371ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:6.582210259s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:4.568Вµs} mapping-compare:{Calls:6 Bytes:0 Elapsed:7.71670411s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:5.549Вµs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:9.199Вµs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:7.165501297s} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:4.76Вµs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.41465289s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:12.43Вµs} process-current:{Calls:460 Bytes:0 Elapsed:8.304524296s} publication-gate:{Calls:17 Bytes:0 Elapsed:3.860620307s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:571ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:979.846564ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.744971375s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.867313822s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed",
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.546565438s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:15.277Вµs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.399519166s} capture-prepare:{Calls:1 Bytes:0 Elapsed:8.154941334s} dns-send:{Calls:1 Bytes:0 Elapsed:1.015583716s} dns-send-success:{Calls:1 Bytes:0 Elapsed:581ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:6.182317479s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:18.173Вµs} mapping-compare:{Calls:6 Bytes:0 Elapsed:7.301139736s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:4.909Вµs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:5.211Вµs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:6.75983958s} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:4.38Вµs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.324895304s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:9.797Вµs} process-current:{Calls:460 Bytes:0 Elapsed:8.144475148s} publication-gate:{Calls:17 Bytes:0 Elapsed:3.612848651s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:300ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:964.317729ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.704886992s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.850562215s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed",
+      "actual Run through join observation counts: domain=map[capture-add-guard:{Calls:22 Bytes:0 Elapsed:4.611122382s} capture-guard-original-closing:{Calls:22 Bytes:0 Elapsed:15.419Вµs} capture-guard-original-opening:{Calls:22 Bytes:0 Elapsed:4.462372164s} capture-prepare:{Calls:1 Bytes:0 Elapsed:8.22545795s} dns-send:{Calls:1 Bytes:0 Elapsed:1.027163011s} dns-send-success:{Calls:1 Bytes:0 Elapsed:321ns} kernel-observe:{Calls:7 Bytes:0 Elapsed:6.249422839s} kernel-observe-success:{Calls:7 Bytes:0 Elapsed:4.838Вµs} mapping-compare:{Calls:6 Bytes:0 Elapsed:7.384339374s} mapping-compare-success:{Calls:6 Bytes:0 Elapsed:3.929Вµs} mapping-original-tool-closing:{Calls:6 Bytes:0 Elapsed:5.281Вµs} mapping-original-tool-read:{Calls:6 Bytes:0 Elapsed:6.83584186s} pre-add-original-command-boundary:{Calls:11 Bytes:0 Elapsed:3.484Вµs} pre-add-original-read:{Calls:11 Bytes:0 Elapsed:5.366682885s} pre-add-original-read-complete:{Calls:11 Bytes:0 Elapsed:11.002Вµs} process-current:{Calls:460 Bytes:0 Elapsed:8.201040489s} publication-gate:{Calls:17 Bytes:0 Elapsed:3.683476101s} publication-gate-success:{Calls:1 Bytes:0 Elapsed:471ns} standby-add-guard:{Calls:13 Bytes:0 Elapsed:961.579741ms} standby-prepare:{Calls:1 Bytes:0 Elapsed:2.698995514s} whole-executable-hash:{Calls:145 Bytes:5303723870 Elapsed:3.853013384s}] actual_tool_starts=map[original-effect:18 original-read:56 original-read-classic-batch:1720]; overlapping cumulative durations, not wall speed"
+    ],
+    "mount_measurements": [],
+    "skip_count": 1,
+    "verified": "Old c439 CUTв†’REFUSED; candidate clean plus capture/standby partial ACK CUTв†’COMPLETE, old published alias preserved"
+  },
+  "verified_counts_same_complete_diagnostic_work": {
+    "process_current_before": 482,
+    "process_current_after": 460,
+    "capture_guard_original_opening": 22,
+    "capture_guard_original_closing": 22,
+    "mapping_original_tool_read": 6,
+    "mapping_original_tool_closing": 6,
+    "full_executable_sha_before": 145,
+    "full_executable_sha_after": 145,
+    "bytes_before_and_after": 5303723870,
+    "actual_effects_before_and_after": 18,
+    "classic_tool_reads_before_and_after": 1720,
+    "original_tool_reads_before_and_after": 56
+  },
+  "actual_mount_checks": "Xray parity/fallback/bind and netidentity parity/fallback/WithCurrent same-inode-bind closing plus ProcThreadAndClosing PASS normal and race, no skip"
+}

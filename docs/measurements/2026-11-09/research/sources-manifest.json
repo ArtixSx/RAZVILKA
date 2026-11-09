@@ -1,0 +1,142 @@
+[
+  {
+    "name": "blackbox_exporter",
+    "url": "https://github.com/prometheus/blackbox_exporter.git",
+    "sha": "b8fb49f909bc72dd7458e606309a03ebfb3c6e0b",
+    "branch": "master",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+        "excerpt": "                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITION"
+      }
+    ]
+  },
+  {
+    "name": "controller-runtime",
+    "url": "https://github.com/kubernetes-sigs/controller-runtime.git",
+    "sha": "882a9130ed21938b9c40974e83fc5f588ddfde7b",
+    "branch": "main",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "e03ba41d7fab20700769fe4118bab50d800cb74f990353a05d2f5fff1c228363",
+        "excerpt": "                                 Apache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITION"
+      }
+    ]
+  },
+  {
+    "name": "mihomo",
+    "url": "https://github.com/MetaCubeX/mihomo.git",
+    "sha": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+    "branch": "Meta",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809",
+        "excerpt": "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n\n Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>\n Everyone is pe"
+      }
+    ]
+  },
+  {
+    "name": "nfqws2-keenetic",
+    "url": "https://github.com/nfqws/nfqws2-keenetic.git",
+    "sha": "0cdd3103ecbb47ccb5d76e3dbbfdb4cbb67a7d10",
+    "branch": "master",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "bc66bed507784b9ddde864faecc3c446c9dc787c4a96ed36a95ff1d1f2db22f1",
+        "excerpt": "MIT License\n\nCopyright (c) 2026 nfqws\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Softwa"
+      }
+    ]
+  },
+  {
+    "name": "sing-box",
+    "url": "https://github.com/SagerNet/sing-box.git",
+    "sha": "8295e4910f14d3041c948d2ad74bf3af384a064d",
+    "branch": "testing",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "bb3805862b583aee73ad6f7805ec634747a37257a637a3069857843f05ea589c",
+        "excerpt": "Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public Li"
+      }
+    ]
+  },
+  {
+    "name": "tailscale",
+    "url": "https://github.com/tailscale/tailscale.git",
+    "sha": "62d055f4c38b610d63a8cee7fa4a7e65b01564eb",
+    "branch": "main",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "a7ec3a027e22a28126dc3ad95ffc301dbc46a92cb6d66af2e2635c1abf9bc863",
+        "excerpt": "BSD 3-Clause License\n\nCopyright (c) 2020 Tailscale Inc & contributors.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that"
+      }
+    ]
+  },
+  {
+    "name": "toxiproxy",
+    "url": "https://github.com/Shopify/toxiproxy.git",
+    "sha": "49299d8838525126e09c85ebe0ba89940a3261e5",
+    "branch": "main",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "fb0b8f396fb3ac286f445fd524a25516341251e25f221101784c6e716f50e424",
+        "excerpt": "The MIT License (MIT)\n\nCopyright (c) 2014 Shopify\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files "
+      }
+    ]
+  },
+  {
+    "name": "v2rayN",
+    "url": "https://github.com/2dust/v2rayN.git",
+    "sha": "f07e3dc41511a196f8ab563bcd2a16d1310ca8dd",
+    "branch": "master",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "c8c14751d8d7a60927ca47221c88c50ada4a7b3644a3082ffa1d35eaa597ee94",
+        "excerpt": "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n\n Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>\n Everyone is per"
+      }
+    ]
+  },
+  {
+    "name": "Xray-core",
+    "url": "https://github.com/XTLS/Xray-core.git",
+    "sha": "af8f9673afe8533390e0200637ad30508de803a5",
+    "branch": "main",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "2684de17300e0a434686f1ec7f8af6045207a4b457a3fe04b2b9ce655e7c5d50",
+        "excerpt": "Mozilla Public License Version 2.0\n==================================\n\n1. Definitions\n--------------\n\n1.1. \"Contributor\"\n    means each individual or legal entity that creates, con"
+      }
+    ]
+  },
+  {
+    "name": "xray-knife",
+    "url": "https://github.com/lilendian0x00/xray-knife.git",
+    "sha": "a579d42d2ca2b40293c20db0353d39ad4495066b",
+    "branch": "master",
+    "checked_date": "2026-11-09",
+    "licenses": [
+      {
+        "path": "LICENSE",
+        "sha256": "5d67ee60db02edad59761810bb4b0d90f6094b2845aef52ffb9522195b4edd5a",
+        "excerpt": "MIT License\n\nCopyright (c) 2023 lilendian0x00\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the"
+      }
+    ]
+  }
+]

@@ -193,7 +193,7 @@ func issueDomainTCPCaptureResource(ctx context.Context, process *XrayDomainTCPEx
 	if baseline.binding != process.material.binding || baseline.mapping != process.material.mapping {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
-	if err := baseline.currentBaseline(ctx); err != nil {
+	if err := baseline.currentBaselineInOriginalFileObservation(ctx); err != nil {
 		return nil, err
 	}
 	plan, err := compileDomainTCPCaptureEffects(process.definition.Capture, process.definition.Mapping)

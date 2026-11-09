@@ -1,0 +1,42 @@
+{
+  "reviewer": "independent verification",
+  "reviewed_at_utc": "2026-11-09T14:09:19.5569673Z",
+  "status": "source approved; remote tests, cross-builds and benchmark pending",
+  "scope": "Exclusive fresh pathname/stat scratch instead of per-call NUL buffer allocation",
+  "preserved": [
+    "Same actual fstatat syscall per path, same AT_FDCWD and AT_SYMLINK_NOFOLLOW and single-call EINTR behavior on amd64/arm64",
+    "Go1.26 generated syscall wrapper and Lstat source directly compared locally",
+    "Unsafe pointer conversion occurs in syscall arguments; scratch is used after synchronous call then cleared and returned to pool",
+    "No retained pathname/metadata/FD authority; nil expected and NUL/overlong original fallback unchanged",
+    "All pathsCurrent passes, links, membership, held checks and byte checks unchanged"
+  ],
+  "tests_reviewed": [
+    "Actual inode mutation/replacement and symlink no-follow",
+    "Empty/missing/NUL/4095/4096/8192 pathname errno parity against original syscall.Lstat",
+    "Concurrent independent path and ENOENT borrowers",
+    "Same path before_syscall_lstat and pooled helper allocation benchmark"
+  ],
+  "limitations": [
+    "No local Go builds/tests",
+    "Require Linux amd64 and arm64 compilation plus normal/race tests",
+    "Performance gain not established until actual paired benchmark; no router claim"
+  ],
+  "files": [
+    {
+      "path": "internal/startuptools/path_stat_linux.go",
+      "sha256": "4F781E5266789A2258DAE35A410CAD84400768E1652D53101F9E4D72F1039CAF"
+    },
+    {
+      "path": "internal/startuptools/path_stat_linux_test.go",
+      "sha256": "62FB414823872E432CD276CA4399E94C00EB68C44437AE4AB991EE716CBA2BC7"
+    },
+    {
+      "path": "internal/startuptools/path_stat_syscall_linux_amd64.go",
+      "sha256": "6DD03053F6440816021D07921EA0C105B48DB0C220DF549891D459F7A046E1C2"
+    },
+    {
+      "path": "internal/startuptools/path_stat_syscall_linux_arm64.go",
+      "sha256": "1BAE83674B53AF1DE35447EE74D64BC11CB899D7E4953477519C80F4C3164A68"
+    }
+  ]
+}

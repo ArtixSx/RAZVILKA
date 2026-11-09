@@ -45,6 +45,8 @@ case "${RAZVILKA_NATIVE_RACE:-0}" in
     go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
  *) exit 2 ;;
 esac
+# Actual stdout/stderr pipes must respect the original shared helper cap.
+"$work/cmd.test" -test.run='^TestMihomoSameBootNativeOutput' -test.v -test.count=1 -test.timeout=30s
 python3 - "$work" <<'PY'
 import pathlib,sys
 for name in ('app.test','cmd.test','startup.test'):

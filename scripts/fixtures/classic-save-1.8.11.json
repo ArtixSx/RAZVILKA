@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "runner": "ubuntu-26.04",
+  "license": "GPL-2.0-only",
+  "production_profile": "ubuntu-amd64-iptables-legacy-1.8.11-v1",
+  "glibc_minimum": "2.42",
+  "runner_source": "https://github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration/",
+  "package_source": "https://packages.ubuntu.com/resolute/iptables",
+  "packages": [
+    {
+      "name": "iptables",
+      "version": "1.8.11-2ubuntu3",
+      "architecture": "amd64",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu3_amd64.deb",
+      "sha256": "187b16f9375f53ce6a1618a29de52bb177b620589ada29e4a3e25de5d594e66f",
+      "bytes": 381074,
+      "files": [
+        {
+          "path": "/usr/sbin/xtables-legacy-multi",
+          "sha256": "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
+          "bytes": 95256
+        }
+      ]
+    },
+    {
+      "name": "libip4tc2",
+      "version": "1.8.11-2ubuntu3",
+      "architecture": "amd64",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/libip4tc2_1.8.11-2ubuntu3_amd64.deb",
+      "sha256": "be25148d60125f6866dfa7940f3f1371fff4b0e8a1a9500780ad50cb8aaa0895",
+      "bytes": 24182,
+      "files": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libip4tc.so.2.0.0",
+          "sha256": "d9491a77e68be1678486b9b26b42026f71ccc261334d11ae2488e38b33a35e9a",
+          "bytes": 34968
+        }
+      ]
+    },
+    {
+      "name": "libip6tc2",
+      "version": "1.8.11-2ubuntu3",
+      "architecture": "amd64",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/libip6tc2_1.8.11-2ubuntu3_amd64.deb",
+      "sha256": "3d9fdb3171f1167ab3f5182de11db63bcd27aae71838618f3d46806b3134428e",
+      "bytes": 24446,
+      "files": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libip6tc.so.2.0.0",
+          "sha256": "f36e50c21636f69706bfb0edffc63d4a7c0b04eeea171bcfe5a767c1214dedfd",
+          "bytes": 34968
+        }
+      ]
+    },
+    {
+      "name": "libxtables12",
+      "version": "1.8.11-2ubuntu3",
+      "architecture": "amd64",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/libxtables12_1.8.11-2ubuntu3_amd64.deb",
+      "sha256": "e21126e0544e3b795633fb5b06bb7f2b9a493ebc5ab07b007db0f7f68c0a0aed",
+      "bytes": 36650,
+      "files": [
+        {
+          "path": "/usr/lib/x86_64-linux-gnu/libxtables.so.12.7.0",
+          "sha256": "ec7a3b03501b76fafa19b3688c966597e579d9a464688f1f56de0db024705a28",
+          "bytes": 67736
+        }
+      ]
+    }
+  ],
+  "aliases": {
+    "/usr/sbin/iptables-legacy": "/usr/sbin/xtables-legacy-multi",
+    "/usr/sbin/ip6tables-legacy": "/usr/sbin/xtables-legacy-multi"
+  }
+}

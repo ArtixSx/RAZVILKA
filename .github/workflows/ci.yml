@@ -40,6 +40,50 @@ jobs:
       - name: Install native parser fixture
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static
 
+      - name: Original unpublished intent with actual denied write
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          go test -count=1 ./internal/dataplane -run '^TestNFQWSUnpublished' -v | tee /tmp/nfq-unpublished-intent.log
+          if grep -F -- '--- SKIP:' /tmp/nfq-unpublished-intent.log; then exit 1; fi
+
+      - name: Focused ownership and recovery regressions
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -count=1 ./internal/dataplane ./internal/netidentity ./internal/app ./internal/probecheck ./internal/startuptools ./internal/updatecheck ./cmd/nodeeval ./cmd/razvilka \
+              -run '^TestModernPairNormalBuildHooksAreNoOps$|^TestNFQLANRPDB|^TestNFQWSActiveRPDB|^TestBootstrapQuiesceJoin|^TestBootstrapJoinedChild|^TestBootstrapOriginalAdapter|^TestXrayImageScope|^TestXrayDomainFile|^TestExternalBootstrapFileDiagnostic|^TestBootstrapOfflineStrategy|^TestBootstrapImage|^TestOrdinaryImage|^TestExternalBootstrapDiagnostic|^TestNativePairedRestoreOutput|^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestFreshPathNode|^TestNetworkTiming|^TestNodeNetworkTimings|^TestOutputReader|^TestSyntheticBaselineCoordinatorRead|^TestMihomoSameBootAbsenceRead|^TestMihomoSameBootObservedTableRead|^TestExternalBootstrapSourceConfig|^TestNFQWSManagedCopy|^TestPinnedServiceNetworkTiming|^TestNFQWSQuarantine|^TestMihomoLiveStartContext|^TestMihomoManualPlanning|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestNFQWS(NeverIssued|Recovery|Unpublished|ActivePurePredicates|ScopedExactPresenceObservation|ActivePreAdd|PreAddGenericAndProbe)|^Test(XraySelectedTCP|Proc)MountID|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
+
+      - name: Repeat positive Cloudflare scan fixture boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=10 ./internal/dataplane \
+                -run '^TestCloudflareScanRunner(OwnsTemporaryInterfacePolicyAndCleanup|FailsClosedWhenCleanupIsUnconfirmed)$' -v
+          done
+
+      - name: Repeat original physical cancellation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=30 ./internal/physicalscope \
+              -run '^TestPhysicalPrimaryIPv4(OriginalBookendsAndStickyRefusal|PreCanceledCallerDoesNotPoisonOriginal)$' -v | tee "/tmp/physical-cancel-$mode.log"
+            for name in OriginalBookendsAndStickyRefusal PreCanceledCallerDoesNotPoisonOriginal; do
+              test "$(grep -Fc -- "--- PASS: TestPhysicalPrimaryIPv4$name " "/tmp/physical-cancel-$mode.log")" -eq 30
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "/tmp/physical-cancel-$mode.log"; then exit 1; fi
+          done
+
       - name: Full project checks
         shell: bash
         run: |

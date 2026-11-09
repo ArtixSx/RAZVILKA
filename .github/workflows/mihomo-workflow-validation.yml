@@ -1,7 +1,13 @@
 name: Mihomo actual LAN lifecycle
 on:
   push:
-    branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031']
+    branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031', 'work/research-build-20261109']
+    paths:
+      - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
+      - 'cmd/razvilka/**'
+      - 'scripts/test-mihomo-live*.sh'
+      - '.github/workflows/mihomo-workflow-validation.yml'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -14,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [lifecycle, postcas-failure, check-settlement]
+        scenario: [lifecycle, postcas-failure, check-settlement, manual-http]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -29,7 +35,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
-          curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.10.31 /tmp/xray.zip
           echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
@@ -37,15 +43,15 @@ jobs:
           /usr/local/lib/razvilka-fixtures/xray version
           # The real local CA fixture uses the compiler's reviewed 26.3.27.
           # 26.10.31 defaults to a bundled CA pool instead of system roots.
-          curl --fail --location --retry 3 -o /tmp/xray-node.zip https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
           echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
-          curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
+          sh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/hev-socks5-tunnel
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
-          curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual registered Apply, native LAN TLS, Stop and retry
@@ -64,6 +70,34 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-native.sh
+      - name: Explicit manual preview, token Apply, LAN and HTTP Stop
+        if: matrix.scenario == 'manual-http'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo modprobe tun
+          mkdir -p artifacts/mihomo-manual-http artifacts/mihomo-live-profile
+          chmod 700 artifacts/mihomo-live-profile
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/mihomo-live-profile' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MIHOMO_LIVE_TEST_CASE=manual-http \
+            RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/mihomo-live-profile" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-native.sh 2>&1 | tee artifacts/mihomo-manual-http/native.log
+          grep -F -- '--- PASS: TestMihomoLiveOriginalManualHTTPApplyStop ' artifacts/mihomo-manual-http/native.log
+          if grep -F -- '--- SKIP:' artifacts/mihomo-manual-http/native.log; then exit 1; fi
+      - name: Retain actual manual HTTP result
+        if: always() && !cancelled() && matrix.scenario == 'manual-http'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-manual-http-${{ github.sha }}
+          path: |
+            artifacts/mihomo-manual-http
+            artifacts/mihomo-live-profile
+          if-no-files-found: warn
       - name: Retain bounded native CPU evidence
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -94,6 +128,49 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-live-check-settlement-native.sh
+      - name: Preserved4cc matching baseline on the same runner
+        if: always() && !cancelled() && (matrix.scenario == 'lifecycle' || matrix.scenario == 'manual-http')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 4cc9f869974713c9cebd833fccca383c03c102b7
+          path: baseline4cc
+          persist-credentials: false
+      - name: Compare original warm scenario without changing its deadline
+        if: always() && !cancelled() && (matrix.scenario == 'lifecycle' || matrix.scenario == 'manual-http')
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          case "$SCENARIO" in
+            lifecycle) expected=TestMihomoLiveOriginalApplyStopAndFreshApply ;;
+            manual-http) expected=TestMihomoLiveOriginalManualHTTPApplyStop ;;
+            *) exit 2 ;;
+          esac
+          output="$GITHUB_WORKSPACE/baseline4cc/artifacts/mihomo-live-profile"
+          mkdir -p "$output"
+          chmod 700 "$output"
+          trap 'sudo chown -R "$(id -u):$(id -g)" "$output"' EXIT
+          printf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s scenario=%s order=candidate-then-baseline diagnostic_only=true\n' "$GITHUB_SHA" "$SCENARIO" > "$output/comparison.txt"
+          cd baseline4cc
+          test "$(git rev-parse HEAD)" = 4cc9f869974713c9cebd833fccca383c03c102b7
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MIHOMO_LIVE_TEST_CASE="$SCENARIO" \
+            RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$output" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-mihomo-live-native.sh 2>&1 | tee "$output/native.log"
+          grep -F -- "--- PASS: $expected " "$output/native.log"
+          if grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi
+      - name: Retain same-runner preserved matching baseline
+        if: always() && !cancelled() && (matrix.scenario == 'lifecycle' || matrix.scenario == 'manual-http')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-baseline4cc-${{ matrix.scenario }}-${{ github.sha }}
+          path: baseline4cc/artifacts/mihomo-live-profile
+          if-no-files-found: error
       - name: Original read observation bookends with official child, normal and race
         if: always() && !cancelled() && matrix.scenario == 'lifecycle'
         shell: bash

@@ -143,48 +143,51 @@ func (a *MihomoProbeAdapter) Canary(ctx context.Context, p RoutePlan, root strin
 }
 func (a *MihomoProbeAdapter) liveActivate(ctx context.Context, p Plan, root string) error {
 	r, err := a.phaseResource(ctx, p, root)
+	err = mihomoLiveActivationDiagnostic("phase-owner", err)
 	if err != nil {
 		return err
 	}
 	ctx = r.resourceContext(ctx)
-	if err = errors.Join(r.currentBeforeStart(ctx), r.nativeCurrent(ctx), r.compiledCurrent(false)); err != nil {
+	if err = errors.Join(mihomoLiveActivationDiagnostic("source-current", r.currentBeforeStart(ctx)), mihomoLiveActivationDiagnostic("native-current", r.nativeCurrent(ctx)), mihomoLiveActivationDiagnostic("compiled-current", r.compiledCurrent(false))); err != nil {
 		return err
 	}
-	if err = r.proxy.preflightForwarding(ctx, r.definition.Policy); err != nil {
+	if err = mihomoLiveActivationDiagnostic("forwarding", r.proxy.preflightForwarding(ctx, r.definition.Policy)); err != nil {
 		return err
 	}
-	if err = r.proxy.beginCandidatePolicy(root, r.definition.Policy); err != nil {
+	if err = mihomoLiveActivationDiagnostic("candidate-policy", r.proxy.beginCandidatePolicy(root, r.definition.Policy)); err != nil {
 		return err
 	}
 	engine, err := r.engineImage(ctx)
+	err = mihomoLiveActivationDiagnostic("engine-image", err)
 	if err != nil {
 		return err
 	}
 	defer clear(engine)
 	sidecar, err := r.sidecarImage()
+	err = mihomoLiveActivationDiagnostic("sidecar-image", err)
 	if err != nil {
 		return err
 	}
 	defer clear(sidecar)
-	if err = r.publishCompiled(ctx, r.proxy.engineConfigPath(), engine); err != nil {
+	if err = mihomoLiveActivationDiagnostic("publish-engine", r.publishCompiled(ctx, r.proxy.engineConfigPath(), engine)); err != nil {
 		return err
 	}
-	if err = r.publishCompiled(ctx, r.proxy.sidecarConfigPath(), sidecar); err != nil {
+	if err = mihomoLiveActivationDiagnostic("publish-sidecar", r.publishCompiled(ctx, r.proxy.sidecarConfigPath(), sidecar)); err != nil {
 		return err
 	}
-	if err = r.startSidecarNative(ctx); err != nil {
+	if err = mihomoLiveActivationDiagnostic("sidecar-start", r.startSidecarNative(ctx)); err != nil {
 		return err
 	}
-	if err = r.recordPhase(ctx, "policy-pending", r.definition.Observation); err != nil {
+	if err = mihomoLiveActivationDiagnostic("policy-intent", r.recordPhase(ctx, "policy-pending", r.definition.Observation)); err != nil {
 		return err
 	}
-	if err = r.proxy.applyCandidatePolicy(ctx, r.definition.Policy, root); err != nil {
+	if err = mihomoLiveActivationDiagnostic("policy-apply", r.proxy.applyCandidatePolicy(ctx, r.definition.Policy, root)); err != nil {
 		return err
 	}
-	if err := r.currentBeforeStart(ctx); err != nil {
+	if err := mihomoLiveActivationDiagnostic("source-closing", r.currentBeforeStart(ctx)); err != nil {
 		return err
 	}
-	return mihomoSameBootNativeProducerPolicyACK(ctx, r, root)
+	return mihomoLiveActivationDiagnostic("policy-ack", mihomoSameBootNativeProducerPolicyACK(ctx, r, root))
 }
 func (a *MihomoProbeAdapter) liveCommit(ctx context.Context, p Plan, root string) error {
 	r, err := a.phaseResource(ctx, p, root)

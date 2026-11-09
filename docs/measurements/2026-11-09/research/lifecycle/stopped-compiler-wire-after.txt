@@ -1,0 +1,194 @@
+=== RUN   TestMihomoActiveCheckingOriginalDocumentaryCompletion
+--- PASS: TestMihomoActiveCheckingOriginalDocumentaryCompletion (0.07s)
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/finished
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/future_header
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/missing_header
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce
+=== RUN   TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase
+--- PASS: TestMihomoActiveCheckingStrictOriginalDefinition (0.21s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/finished (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/untyped_row (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/future_header (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/unknown_phase (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_anchor (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_plan (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/duplicate_live (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/receipt_missing (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/mixed_DNS_owner (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/missing_header (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/premature_settled (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/foreign_nonce (0.01s)
+    --- PASS: TestMihomoActiveCheckingStrictOriginalDefinition/nonactive_phase (0.02s)
+=== RUN   TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade
+--- PASS: TestMihomoActiveCheckingArchivePreservesHeaderAndRejectsDowngrade (0.03s)
+=== RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter
+=== RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking
+=== RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled
+=== RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring
+=== RUN   TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired
+--- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter (0.12s)
+    --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/checking (0.03s)
+    --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/settled (0.03s)
+    --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retiring (0.03s)
+    --- PASS: TestMihomoActiveCheckingEveryHeaderPhaseRequiresOriginalWriter/retired (0.03s)
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed
+=== RUN   TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker
+--- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage (0.05s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/schema (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/origin (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-hash (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/after-hash (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/before-bytes (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/duplicate (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/unsettled (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/cohort (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/row-data (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/too-few (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/state (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/plan (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/time (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/step (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/mixed (0.00s)
+    --- PASS: TestMihomoTransitArchiveStrictOriginRowsAndDerivedImage/different-marker (0.00s)
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical
+=== RUN   TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize
+--- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize (0.12s)
+    --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/recursive (0.00s)
+    --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/duplicate (0.00s)
+    --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/unknown (0.00s)
+    --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/noncanonical (0.00s)
+    --- PASS: TestMihomoTransitArchiveRejectsRecursionAndEmbeddedOversize/embedded-oversize (0.09s)
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec
+=== RUN   TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few
+--- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations (0.11s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/valid (0.03s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/no-owner (0.02s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-joined (0.02s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/not-admitted (0.02s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/changed-spec (0.02s)
+    --- PASS: TestMihomoTransitArchivePreparationRequiresOriginalJoinedRegistrations/too-few (0.02s)
+=== RUN   TestMihomoTransitArchivePreservesOtherOriginalCohorts
+--- PASS: TestMihomoTransitArchivePreservesOtherOriginalCohorts (0.03s)
+=== RUN   TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance
+--- PASS: TestMihomoTransitArchiveUnusedRowsNeedOriginalSettlementProvenance (0.02s)
+=== RUN   TestMihomoRetainedCheckDefersRepeatedRotation
+--- PASS: TestMihomoRetainedCheckDefersRepeatedRotation (0.02s)
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/missing
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/copied
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/foreign
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/closed
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/failed
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/stopping
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/publishing
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/header
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/pending
+=== RUN   TestMihomoRetainedCheckRotationRejectsLostCustody/canceled
+--- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody (0.21s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/missing (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/copied (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/foreign (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/closed (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/failed (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/stopping (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/publishing (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/cleanup (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/header (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/unknown-state (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/pending (0.02s)
+    --- PASS: TestMihomoRetainedCheckRotationRejectsLostCustody/canceled (0.02s)
+=== RUN   TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission
+--- PASS: TestMihomoRetainedCheckFullCohortStillRequiresReaderAdmission (0.04s)
+=== RUN   TestMihomoLiveRetentionClosingRefusalPreservesOriginalRollbackImage
+--- PASS: TestMihomoLiveRetentionClosingRefusalPreservesOriginalRollbackImage (0.02s)
+=== RUN   TestMihomoLiveRetentionDetachesDTOAndRevokesOldApply
+--- PASS: TestMihomoLiveRetentionDetachesDTOAndRevokesOldApply (0.02s)
+=== RUN   TestMihomoLiveRetainedWireRoundTripStillRequiresOriginalInodes
+--- PASS: TestMihomoLiveRetainedWireRoundTripStillRequiresOriginalInodes (0.02s)
+=== RUN   TestMihomoStoppedOriginalIntentCompilerWireRoundTrip
+--- PASS: TestMihomoStoppedOriginalIntentCompilerWireRoundTrip (0.01s)
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/policy-reference
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/exclusions
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/digest
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/destinations
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/ingress
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/schema
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/plan
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/route
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/sources
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/native-policy
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/evidence-identity
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/ready
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/network
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/retiring
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/devices
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/resource-intent
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/revision
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/adapters
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/service
+=== RUN   TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/probe
+--- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent (0.18s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/policy-reference (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/exclusions (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/digest (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/destinations (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/ingress (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/schema (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/plan (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/route (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/sources (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/native-policy (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/evidence-identity (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/ready (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/network (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/retiring (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/devices (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/resource-intent (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/revision (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/adapters (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/service (0.01s)
+    --- PASS: TestMihomoStoppedOriginalIntentRejectsChangedWireIntent/probe (0.01s)
+=== RUN   TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument
+=== RUN   TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument/minimal-definition
+=== RUN   TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument/actual-compiler
+--- PASS: TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument (0.17s)
+    --- PASS: TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument/minimal-definition (0.08s)
+    --- PASS: TestMihomoLiveStoppedPlanUsesOriginalCommittedDocument/actual-compiler (0.09s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	1.560s

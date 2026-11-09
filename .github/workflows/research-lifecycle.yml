@@ -1,0 +1,631 @@
+name: Research lifecycle acceptance
+run-name: Research lifecycle / ${{ inputs.focus || 'all' }} / ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: 'All acceptance jobs, public history, or modern public rollback'
+        type: choice
+        options: [all, public-history, modern-pair]
+        default: all
+  push:
+    branches: ['work/research-build-20261109']
+    paths:
+      - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
+      - 'cmd/razvilka/**'
+      - 'scripts/test-domain-original-native.sh'
+      - 'scripts/test-managed-probe*.sh'
+      - 'scripts/test-paired-public-native.sh'
+      - 'scripts/test-modern-paired-native.sh'
+      - 'scripts/fixtures/modern-pair-*'
+      - 'scripts/fixtures/paired-public-session.sh'
+      - 'scripts/test-classic-save-pinned-native.sh'
+      - 'scripts/check-classic-save-pinned-fixture.py'
+      - 'scripts/fixtures/classic-save-1.8.11.json'
+      - 'scripts/fixtures/domain-preparation-baseline.patch'
+      - '.github/workflows/research-lifecycle.yml'
+
+permissions:
+  contents: read
+concurrency:
+  group: research-lifecycle-${{ github.ref }}-${{ inputs.focus || 'all' }}
+  cancel-in-progress: true
+env:
+  GOTOOLCHAIN: local
+jobs:
+  strategy-pair:
+    if: ${{ inputs.focus != 'public-history' && inputs.focus != 'modern-pair' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install native fixture
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 util-linux
+      - name: Actual reader binary compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o /tmp/razvilka-current ./cmd/razvilka
+          test "$(/tmp/razvilka-current -strategy-lab-read-version)" = 7
+          test "$(/tmp/razvilka-current -component-update-schema)" = 6
+          test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 9
+          test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
+          git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
+          (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
+          if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
+          if /tmp/razvilka-old-binary -self-update-private-snapshot-read-version >/tmp/old-snapshot.txt 2>&1; then exit 1; fi
+          git worktree add --detach /tmp/razvilka-reader5 c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be
+          (cd /tmp/razvilka-reader5 && go build -o /tmp/razvilka-reader5-binary ./cmd/razvilka)
+          test "$(/tmp/razvilka-reader5-binary -strategy-lab-read-version)" = 5
+      - name: Focused native and race checks
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
+            RAZVILKA_STRATEGY_PAIR_V5_BINARY=/tmp/razvilka-reader5-binary \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app ./internal/dataplane ./internal/operationgate -run "TestStrategyPair|TestStrategyRollbackRetention|TestNativeCandidateStoppedCompletionTwoCuts|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance|TestExecutionHistory|TestExecutionReader|TestRetainedExecutionReader|TestManagedStrategyProbe|TestManagedSelection|TestControlEpochReadObservation"'
+      - name: Restored panel boot in isolated network namespace
+        shell: bash
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local RAZVILKA_PRIVATE_PANEL_NATIVE=1 \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
+  paired-public-cli:
+    if: ${{ inputs.focus != 'modern-pair' }}
+    name: Configured old193 public paired restore / ${{ matrix.history }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        history: ${{ fromJSON(inputs.focus == 'public-history' && '["history"]' || '["empty","draft","history"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install disposable namespace fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential curl
+      - name: Actual configured old source bootstrap and public offline restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/paired-public
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_OPTIONAL_LOCKS=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_PAIRED_NATIVE_HISTORY="${{ matrix.history != 'empty' && matrix.history || '' }}" \
+            sh scripts/test-paired-public-native.sh 2>&1 | tee artifacts/paired-public/native.log
+      - name: Preserve bounded public workflow evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: paired-public-cli-${{ matrix.history }}-${{ github.sha }}
+          path: artifacts/paired-public/native.log
+          if-no-files-found: error
+  modern-paired-public:
+    if: ${{ inputs.focus != 'public-history' }}
+    name: Modern public update and known rollback (isolated lab)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install disposable namespace fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y busybox-static iproute2 iptables util-linux python3 tini build-essential curl
+      - name: Actual main public update and rollback with same-source lab versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/modern-pair
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_OPTIONAL_LOCKS=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-modern-paired-native.sh 2>&1 | tee artifacts/modern-pair/native.log
+      - name: Preserve bounded modern workflow evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: modern-paired-public-${{ github.sha }}
+          path: artifacts/modern-pair/native.log
+          if-no-files-found: error
+  classic-save-pinned:
+    if: ${{ inputs.focus != 'public-history' && inputs.focus != 'modern-pair' }}
+    name: Exact iptables 1.8.11 / ${{ matrix.build-mode }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install exact reviewed packages on their compatible distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux python3
+          classic_packages=$(sudo mktemp -d /tmp/razvilka-classic-packages.XXXXXX)
+          case "$classic_packages" in /tmp/razvilka-classic-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$classic_packages"' EXIT
+          # Same version can select amd64v3. Only these four exact baseline
+          # archives are reviewed; installed bytes are checked again below.
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$classic_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$classic_packages/iptables.deb" "$classic_packages/libip4tc2.deb" \
+            "$classic_packages/libip6tc2.deb" "$classic_packages/libxtables12.deb"
+      - name: Public acquisition and actual inventory parity with lock custody
+        shell: bash
+        env:
+          BUILD_MODE: ${{ matrix.build-mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/classic-save-pinned
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="$BUILD_MODE" \
+            sh scripts/test-classic-save-pinned-native.sh 2>&1 | tee artifacts/classic-save-pinned/native.log
+          for expected in TestProductionStartupToolsNative TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestClassicReadBatchNativeMutation; do
+            grep -F -- "--- PASS: $expected (" artifacts/classic-save-pinned/native.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/classic-save-pinned/native.log; then exit 1; fi
+          grep -F 'ACTUAL_PINNED_CLASSIC_1_8_11_PROVENANCE ' artifacts/classic-save-pinned/native.log
+          grep -Fx "ACTUAL_PINNED_CLASSIC_1_8_11_NATIVE_COMPLETE mode=$BUILD_MODE" artifacts/classic-save-pinned/native.log
+          grep -E 'classic_save_actual sample=5 .*serial_children=20 save_children=4 equal_rows=[1-9][0-9]*' artifacts/classic-save-pinned/native.log
+      - name: Preserve actual pinned artifact evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: classic-save-pinned-${{ matrix.build-mode }}-${{ github.sha }}
+          path: artifacts/classic-save-pinned/native.log
+          if-no-files-found: error
+  domain-native:
+    if: ${{ inputs.focus != 'public-history' && inputs.focus != 'modern-pair' }}
+    name: Domain native strict / ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [selected, canceled-ready]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Actual held-file reads and mutation rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/domain
+          go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Private ledger decode parity and allocation measurement
+        if: ${{ matrix.scenario == 'selected' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=3 ./internal/dnscontrol \
+              -run '^TestSyntheticDNSLedgerDecoder' -bench '^BenchmarkSyntheticDNSLedgerDecoder$' \
+              -benchtime=100ms -benchmem -v | tee "artifacts/domain/ledger-decode-$mode.log"
+            for name in Parity OwnedReadIndependence; do
+              test "$(grep -Fc -- "--- PASS: TestSyntheticDNSLedgerDecoder$name " "artifacts/domain/ledger-decode-$mode.log")" -eq 3
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/ledger-decode-$mode.log"; then exit 1; fi
+          done
+      - name: Original tool gate timing custody and bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 ./internal/startuptools \
+              -run '^TestDomainNativeGateTiming' -v | tee "artifacts/domain/gate-timing-$mode.log"
+            for case_name in ActualWaitAndRelease EpochAndBound; do
+              grep -F -- "--- PASS: TestDomainNativeGateTiming$case_name " "artifacts/domain/gate-timing-$mode.log"
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/gate-timing-$mode.log"; then exit 1; fi
+          done
+      - name: Original successor read view ownership and revocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -count=1 ./internal/dataplane \
+              -run '^TestDomainSuccessorRead' -v | tee "artifacts/domain/successor-read-$mode.log"
+            for case_name in RejectsForeignAndCopiedCarriers RejectsChangedOwnerAndExpiredLoan CanceledAndInvalidMarkers NoWitnessCannotHideInvalidLoan RetainsOuterActualByteClosing; do
+              grep -F -- "--- PASS: TestDomainSuccessorRead$case_name " "artifacts/domain/successor-read-$mode.log"
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/successor-read-$mode.log"; then exit 1; fi
+          done
+      - name: Bounded successor profile ownership and lifetime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/app \
+              -run '^TestDomainSuccessorCPUProfile' -count=1 -v | tee "artifacts/domain/successor-profile-$mode.log"
+            for case_name in WriterBound OwnershipAndExclusiveName ActualCompletionAndNoOverlap RetainedDirectoryReplacement WriterFailureRetained; do
+              grep -F -- "--- PASS: TestDomainSuccessorCPUProfile$case_name " "artifacts/domain/successor-profile-$mode.log"
+            done
+            if grep -E '^[[:space:]]*--- SKIP:' "artifacts/domain/successor-profile-$mode.log"; then exit 1; fi
+          done
+      - name: Original child cancellation and held mount identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+              RAZVILKA_DOMAIN_TCP_FACTORY_NATIVE=1 RAZVILKA_DOMAIN_MOUNT_ID_NATIVE=1 \
+              go test "${race_flag[@]}" -count=1 ./internal/dataplane \
+                -run '^TestDomainTCPOriginalFactoryProcessCancellation$|^TestXraySelectedTCPMountID' -v | tee "artifacts/domain/preadd-child-$mode.log"
+            grep -F -- '--- PASS: TestDomainTCPOriginalFactoryProcessCancellation ' "artifacts/domain/preadd-child-$mode.log"
+            grep -F -- '--- PASS: TestXraySelectedTCPMountIDBindBoundary ' "artifacts/domain/preadd-child-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/preadd-child-$mode.log"; then exit 1; fi
+          done
+      - name: Full-byte observation storage and lifetime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=1 ./internal/dataplane \
+                -run '^TestXrayImageScope|^TestXrayDomainFile' -v | tee "artifacts/domain/image-scope-$mode.log"
+            grep -F -- '--- PASS: TestXrayImageScopeOriginalClosingAndEscapes ' "artifacts/domain/image-scope-$mode.log"
+            grep -F -- '--- PASS: TestXrayImageScopeConcurrentScratchHasOneBorrower ' "artifacts/domain/image-scope-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/image-scope-$mode.log"; then exit 1; fi
+          done
+      - name: Fresh network namespace identity and mount boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -tags razvilka_native_fixture ./internal/netidentity -run '^TestProcMountIDNativeMeasurement$' -count=1 -v | tee artifacts/domain/identity-mount-measurement.log
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              RAZVILKA_NETIDENTITY_MOUNT_ID_NATIVE=1 RAZVILKA_NETIDENTITY_NATIVE=1 \
+              go test "${race_flag[@]}" -count=1 ./internal/netidentity \
+                -run '^TestProcMountID|^TestNativeNetworkIdentityProcThreadAndClosing$' -v | tee "artifacts/domain/identity-mount-$mode.log"
+            grep -F -- '--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind ' "artifacts/domain/identity-mount-$mode.log"
+            grep -F -- '--- PASS: TestNativeNetworkIdentityProcThreadAndClosing ' "artifacts/domain/identity-mount-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/identity-mount-$mode.log"; then exit 1; fi
+          done
+      - name: Original scope and cleanup with unchanged production deadlines
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/domain
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain' EXIT
+          case "$SCENARIO" in
+            selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;
+            canceled-ready)
+              expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
+              export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1
+              export RAZVILKA_DOMAIN_DNS_DETACH=1 RAZVILKA_DOMAIN_DNS_COEXISTENCE=1
+              export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
+            *) exit 2 ;;
+          esac
+          sudo --preserve-env=RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+            env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain" \
+            sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain/native.log
+          grep -F -- "--- PASS: $expected_case " artifacts/domain/native.log
+          if grep -F -- '--- SKIP:' artifacts/domain/native.log; then exit 1; fi
+          grep -Fx 'child_exit_status=0' artifacts/domain/status.txt
+          grep -Fx "native_case=$expected_case" artifacts/domain/status.txt
+          grep -Fx 'publication_budget_seconds=12' artifacts/domain/status.txt
+          grep -Fx 'diagnostic_only=false' artifacts/domain/status.txt
+      - name: Bounded original CPU attribution (including failed scenarios)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for report in artifacts/domain/cpu-top.txt artifacts/domain/cpu-cumulative.txt; do
+            if [ -s "$report" ]; then cat "$report"; fi
+          done
+      - name: Measure complete mountinfo reads separately from route deadlines
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/domain
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/netidentity \
+              -run '^(Test(ProcMountinfoMeasurementReadBounds|MountUnescapePreservesExactByteSemantics|MountLayoutStreamCandidateParity|AuditCapacityCandidate(SourceParity|ActualCleanup))|FuzzMountLayoutStreamCandidateParity)$' -count=1 -v \
+              | tee "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestProcMountinfoMeasurementReadBounds ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestMountUnescapePreservesExactByteSemantics ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestMountLayoutStreamCandidateParity ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: FuzzMountLayoutStreamCandidateParity ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestAuditCapacityCandidateSourceParity ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            grep -F -- '--- PASS: TestAuditCapacityCandidateActualCleanup ' "artifacts/domain/mountinfo-read-contract-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/mountinfo-read-contract-$mode.log"; then exit 1; fi
+          done
+          go test -tags razvilka_native_fixture ./internal/netidentity -run '^$' \
+            -bench '^(BenchmarkProcMountinfoReadChunks|BenchmarkProcMountinfoUnescape|BenchmarkProcMountLayoutStreamCandidate|BenchmarkProcAuditCapacityCandidate)$' -benchtime=300ms -count=3 -benchmem \
+            | tee artifacts/domain/mountinfo-read-measurement.log
+      - name: Complete pinned Xray hash reads and cancellation (measurement only)
+        if: ${{ !cancelled() && matrix.scenario == 'selected' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/domain
+          export RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/dataplane \
+              -run '^TestXrayHashChunk' -count=1 -v | tee "artifacts/domain/hash-chunks-$mode.log"
+            grep -F -- '--- PASS: TestXrayHashChunkActualParityAndCancellation ' "artifacts/domain/hash-chunks-$mode.log"
+            grep -F -- '--- PASS: TestXrayHashChunkRefusesPartialAndChangedFiles ' "artifacts/domain/hash-chunks-$mode.log"
+            if grep -F -- '--- SKIP:' "artifacts/domain/hash-chunks-$mode.log"; then exit 1; fi
+          done
+          go test -tags razvilka_native_fixture ./internal/dataplane -run '^$' \
+            -bench '^BenchmarkXrayCompleteHashChunks$' -benchmem -count=3 -benchtime=300ms \
+            | tee artifacts/domain/hash-chunks-measurement.log
+      - name: Preserve original clocks and failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-domain-${{ matrix.scenario }}-${{ github.sha }}
+          path: artifacts/domain
+          if-no-files-found: error
+
+  managed-probe-native:
+    if: ${{ inputs.focus != 'public-history' && inputs.focus != 'modern-pair' }}
+    name: managed-probe-native (${{ matrix.build-mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Disposable native NFQUEUE fixture dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Original active directory custody and error classification
+        shell: bash
+        run: |
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${race_flag[@]}" -count=1 ./internal/app ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestNFQWSQuarantine|^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePreAdd|^TestNFQWSPreAddGenericAndProbe|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
+      - name: Actual path metadata parity and paired allocation benchmark
+        run: |
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" go test ./internal/startuptools -run '^TestFreshPathNode|^TestFreshHeldNode' -count=1 -v
+          go test ./internal/startuptools -run '^$' -bench '^BenchmarkFresh(Path|Held)Node$' -benchtime=1s -count=3 -benchmem
+      - name: Paired original collector scheduling benchmark (not end-to-end latency)
+        if: matrix.build-mode == 'production'
+        run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
+      - name: Actual identity syscalls with strict pointer checks
+        if: matrix.build-mode == 'production'
+        run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v
+      - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestStaticVersionFactNativeClassicBatchBookends ' artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestClassicSaveNativeInventoryParity ' artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestClassicSaveNativeLockCustody ' artifacts/managed/probe.log
+          grep -F 'classic_save_actual sample=5' artifacts/managed/probe.log
+          grep -F 'serial_children=20 save_children=4' artifacts/managed/probe.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeAppHTTP ' artifacts/managed/probe.log
+          if grep -F -- '--- SKIP:' artifacts/managed/probe.log; then exit 1; fi
+      - name: Actual App LAN apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/lan.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANAppHTTP ' artifacts/managed/lan.log
+          grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/lan.log
+          if grep -F -- '--- SKIP:' artifacts/managed/lan.log; then exit 1; fi
+      - name: Explicit manual LAN Apply, exclusions and same-owner stop
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/manual.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' artifacts/managed/manual.log
+          grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/manual.log
+          if grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi
+      - name: Original never-issued intent recovery and fresh manual Apply
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          result=0
+          for cut in intent settlement-sync; do
+            output="artifacts/managed/never-issued-$cut.log"
+            if ! sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+              RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE="$cut" RAZVILKA_MANAGED_PROBE_LAN_CASE=manual \
+              sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee "$output"; then result=1; fi
+            grep -F "actual_never_issued_recovered mode=$cut " "$output" || result=1
+            grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' "$output" || result=1
+            if grep -F -- '--- SKIP:' "$output"; then result=1; fi
+          done
+          exit "$result"
+      - name: Original quarantine close failure retains permanent fence
+        if: ${{ !cancelled() && matrix.build-mode == 'production' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          output="artifacts/managed/quarantine-close-retry.log"
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE=production \
+            RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE=settlement-sync RAZVILKA_MANAGED_PROBE_LAN_CASE=manual \
+            RAZVILKA_NFQWS_QUARANTINE_CLOSE_RETRY=1 \
+            sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee "$output"
+          grep -F 'actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true' "$output"
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' "$output"
+          if grep -F -- '--- SKIP:' "$output"; then exit 1; fi
+      - name: Preserve native managed outcomes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-managed-${{ matrix.build-mode }}-${{ github.sha }}
+          path: artifacts/managed
+          if-no-files-found: warn
+  domain-preparation-pair:
+    if: ${{ inputs.focus != 'public-history' && inputs.focus != 'modern-pair' }}
+    name: DNS preparation recovery pair (diagnostic 30s)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: c4399c948a5f65cf413c879b2b746f1bf80eefaa
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same pinned official binary and namespace tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Identical real failure seam on preserved baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'faf3160cc9b0173c2e66074a6e9fd9cbd870dcfa12fc780fd642fb8d91bc143f  scripts/fixtures/domain-preparation-baseline.patch' | sha256sum --check --strict
+          git -C baseline apply --check "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"
+          git -C baseline apply "$GITHUB_WORKSPACE/scripts/fixtures/domain-preparation-baseline.patch"
+      - name: Reproduce refusal and prove same-owner cleanup including partial ACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          result=0
+          mkdir -p artifacts/preparation
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/preparation' EXIT
+          for sample in baseline:clean candidate:clean candidate:capture-transaction candidate:standby-transaction; do
+            revision="${sample%%:*}"
+            cut="${sample#*:}"
+            repo="$GITHUB_WORKSPACE"
+            if [ "$revision" = baseline ]; then repo="$GITHUB_WORKSPACE/baseline"; fi
+            ack="$cut"
+            if [ "$cut" = clean ]; then ack=''; fi
+            output="$GITHUB_WORKSPACE/artifacts/preparation/$revision-$cut"
+            mkdir -p "$output"
+            status=0
+            (
+              cd "$repo"
+              sudo env PATH="$PATH" GOTOOLCHAIN=local \
+                GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+                RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+                RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1 RAZVILKA_DOMAIN_DNS_DETACH=1 \
+                RAZVILKA_DOMAIN_DNS_COEXISTENCE=1 RAZVILKA_DOMAIN_PREPARATION_CUT=1 \
+                RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION=30 RAZVILKA_DOMAIN_FAILURE_ACK="$ack" \
+                RAZVILKA_DOMAIN_PROFILE_OUTPUT="$output" \
+                sh scripts/test-domain-original-native.sh
+            ) 2>&1 | tee "$output/native.log" || status=$?
+            printf 'revision=%s cut=%s exit=%s diagnostic_budget=30\n' "$revision" "$cut" "$status" > "$output/outcome.txt"
+            if ! grep -F 'ACTUAL_PREPARATION_CUT' "$output/native.log"; then result=1; fi
+            if grep -F -- '--- SKIP:' "$output/native.log"; then result=1; fi
+            if [ "$revision" = baseline ]; then
+              if [ "$status" = 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log"; then result=1; fi
+            else
+              if [ "$status" != 0 ] || ! grep -F 'ACTUAL_PREPARATION_CLEANUP_COMPLETE' "$output/native.log" || grep -F 'ACTUAL_PREPARATION_CLEANUP_REFUSED' "$output/native.log" || ! grep -F -- '--- PASS: TestDomainTCPOriginalNativeFailedPreparationRetirement ' "$output/native.log"; then result=1; fi
+            fi
+          done
+          exit "$result"
+      - name: Retain both successful and failed original scopes
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-preparation-${{ github.sha }}
+          path: artifacts/preparation
+          if-no-files-found: error

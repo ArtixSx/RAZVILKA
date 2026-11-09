@@ -1,0 +1,521 @@
+﻿2026-11-09T19:34:37.4245573Z Current runner version: '2.338.2'
+2026-11-09T19:34:37.4263289Z ##[group]Runner Image Provisioner
+2026-11-09T19:34:37.4263878Z Hosted Compute Agent
+2026-11-09T19:34:37.4264291Z Version: 20261028.624
+2026-11-09T19:34:37.4264696Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T19:34:37.4265138Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T19:34:37.4265602Z Worker ID: {e0fe0ca3-5e6c-4e23-aefd-0b0a78543bcf}
+2026-11-09T19:34:37.4266037Z Region: westus3
+2026-11-09T19:34:37.4266405Z Cloud: Azure
+2026-11-09T19:34:37.4266792Z ##[endgroup]
+2026-11-09T19:34:37.4267832Z ##[group]Operating System
+2026-11-09T19:34:37.4268258Z Ubuntu
+2026-11-09T19:34:37.4268623Z 24.04.5
+2026-11-09T19:34:37.4268932Z LTS
+2026-11-09T19:34:37.4269306Z ##[endgroup]
+2026-11-09T19:34:37.4269651Z ##[group]Runner Image
+2026-11-09T19:34:37.4270045Z Image: ubuntu-24.04
+2026-11-09T19:34:37.4270728Z Version: 20261101.360.1
+2026-11-09T19:34:37.4271681Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T19:34:37.4272588Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T19:34:37.4273190Z ##[endgroup]
+2026-11-09T19:34:37.4273928Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T19:34:37.4275494Z Contents: read
+2026-11-09T19:34:37.4275878Z Metadata: read
+2026-11-09T19:34:37.4276247Z ##[endgroup]
+2026-11-09T19:34:37.4277650Z Secret source: Actions
+2026-11-09T19:34:37.4278199Z Cache mode: write
+2026-11-09T19:34:37.4278803Z Prepare workflow directory
+2026-11-09T19:34:37.4488204Z Prepare all required actions
+2026-11-09T19:34:37.4520582Z Getting action download info
+2026-11-09T19:34:37.7644204Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T19:34:37.8843859Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T19:34:38.5622988Z Complete job name: original-private-set (race)
+2026-11-09T19:34:38.6178985Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T19:34:38.6179552Z with:
+2026-11-09T19:34:38.6179834Z   persist-credentials: false
+2026-11-09T19:34:38.6180158Z   repository: ArtixSx/RAZVILKA
+2026-11-09T19:34:38.6182760Z   token: ***
+2026-11-09T19:34:38.6183024Z   ssh-strict: true
+2026-11-09T19:34:38.6183300Z   ssh-user: git
+2026-11-09T19:34:38.6183563Z   clean: true
+2026-11-09T19:34:38.6183842Z   sparse-checkout-cone-mode: true
+2026-11-09T19:34:38.6184169Z   fetch-depth: 1
+2026-11-09T19:34:38.6184440Z   fetch-tags: false
+2026-11-09T19:34:38.6184726Z   show-progress: true
+2026-11-09T19:34:38.6185004Z   lfs: false
+2026-11-09T19:34:38.6185271Z   submodules: false
+2026-11-09T19:34:38.6185558Z   set-safe-directory: true
+2026-11-09T19:34:38.6185870Z   allow-unsafe-pr-checkout: false
+2026-11-09T19:34:38.6186283Z ##[endgroup]
+2026-11-09T19:34:38.8483091Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T19:34:38.8484488Z ##[group]Getting Git version info
+2026-11-09T19:34:38.8485015Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T19:34:38.8485626Z [command]/usr/bin/git version
+2026-11-09T19:34:38.8568658Z git version 2.56.0
+2026-11-09T19:34:38.8581972Z ##[endgroup]
+2026-11-09T19:34:38.8588935Z Temporarily overriding HOME='/home/runner/work/_temp/cc56074e-71c1-45a9-a41d-8343d9234c50' before making global git config changes
+2026-11-09T19:34:38.8590533Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T19:34:38.8593216Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:34:38.8645246Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T19:34:38.8647704Z ##[group]Determining repository object format
+2026-11-09T19:34:38.8648922Z ##[endgroup]
+2026-11-09T19:34:38.8649740Z ##[group]Initializing the repository
+2026-11-09T19:34:38.8651882Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:34:38.8759012Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T19:34:38.8760113Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T19:34:38.8761276Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T19:34:38.8762090Z hint: call:
+2026-11-09T19:34:38.8762547Z hint:
+2026-11-09T19:34:38.8763137Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T19:34:38.8763810Z hint:
+2026-11-09T19:34:38.8764408Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T19:34:38.8765411Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T19:34:38.8770896Z hint:
+2026-11-09T19:34:38.8771305Z hint: 	git branch -m <name>
+2026-11-09T19:34:38.8773116Z hint:
+2026-11-09T19:34:38.8773749Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T19:34:38.8775867Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T19:34:38.8784046Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T19:34:38.8827410Z ##[endgroup]
+2026-11-09T19:34:38.8828214Z ##[group]Disabling automatic garbage collection
+2026-11-09T19:34:38.8831508Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T19:34:38.8863766Z ##[endgroup]
+2026-11-09T19:34:38.8865018Z ##[group]Setting up auth
+2026-11-09T19:34:38.8865641Z Removing SSH command configuration
+2026-11-09T19:34:38.8868888Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:34:38.8906713Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:34:38.9235098Z Removing HTTP extra header
+2026-11-09T19:34:38.9239524Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:34:38.9279233Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:34:38.9466847Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:34:38.9476057Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:34:38.9513901Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:34:38.9710255Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T19:34:38.9752873Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:38.9791476Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:38.9830588Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:38.9868225Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:38.9905134Z ##[endgroup]
+2026-11-09T19:34:38.9905830Z ##[group]Fetching the repository
+2026-11-09T19:34:38.9909283Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +50bd038c27ed9694d916cd2522d1f12b3b2ee388:refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:34:43.6375657Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T19:34:43.6377084Z  * [new ref]         50bd038c27ed9694d916cd2522d1f12b3b2ee388 -> origin/work/research-history-verify-20261109
+2026-11-09T19:34:43.6383916Z [command]/usr/bin/git branch --list --remote origin/work/research-history-verify-20261109
+2026-11-09T19:34:43.6417703Z   origin/work/research-history-verify-20261109
+2026-11-09T19:34:43.6423187Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:34:43.6454578Z 50bd038c27ed9694d916cd2522d1f12b3b2ee388
+2026-11-09T19:34:43.6457730Z ##[endgroup]
+2026-11-09T19:34:43.6458136Z ##[group]Determining the checkout info
+2026-11-09T19:34:43.6458619Z ##[endgroup]
+2026-11-09T19:34:43.6462238Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T19:34:43.6516643Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T19:34:43.6553421Z ##[group]Checking out the ref
+2026-11-09T19:34:43.6556343Z [command]/usr/bin/git checkout --progress --force -B work/research-history-verify-20261109 refs/remotes/origin/work/research-history-verify-20261109
+2026-11-09T19:34:44.0082341Z Switched to a new branch 'work/research-history-verify-20261109'
+2026-11-09T19:34:44.0085554Z branch 'work/research-history-verify-20261109' set up to track 'origin/work/research-history-verify-20261109'.
+2026-11-09T19:34:44.0121149Z ##[endgroup]
+2026-11-09T19:34:44.0174011Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T19:34:44.0212405Z 50bd038c27ed9694d916cd2522d1f12b3b2ee388
+2026-11-09T19:34:44.0222469Z ##[group]Removing auth
+2026-11-09T19:34:44.0222742Z Removing SSH command configuration
+2026-11-09T19:34:44.0225796Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:34:44.0268081Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:34:44.0476452Z Removing HTTP extra header
+2026-11-09T19:34:44.0479542Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:34:44.0517915Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:34:44.0722553Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:34:44.0725481Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:34:44.0768796Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T19:34:44.0769622Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T19:34:44.0770037Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T19:34:44.0770306Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T19:34:44.0778415Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T19:34:44.0813249Z /home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:44.0822382Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-e19c9bf5\-0efc\-4dc4\-94ed\-9c0a92defa0f\.config
+2026-11-09T19:34:44.0875116Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T19:34:44.0910339Z /home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:44.0918162Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-e19c9bf5\-0efc\-4dc4\-94ed\-9c0a92defa0f\.config
+2026-11-09T19:34:44.0967972Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T19:34:44.1000672Z /github/runner_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:44.1006598Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-e19c9bf5\-0efc\-4dc4\-94ed\-9c0a92defa0f\.config
+2026-11-09T19:34:44.1047026Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T19:34:44.1077803Z /github/runner_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config
+2026-11-09T19:34:44.1084297Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-e19c9bf5\-0efc\-4dc4\-94ed\-9c0a92defa0f\.config
+2026-11-09T19:34:44.1163308Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:34:44.1360127Z Removing credentials config '/home/runner/work/_temp/git-credentials-e19c9bf5-0efc-4dc4-94ed-9c0a92defa0f.config'
+2026-11-09T19:34:44.1368141Z ##[endgroup]
+2026-11-09T19:34:44.1551548Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T19:34:44.1551768Z with:
+2026-11-09T19:34:44.1551889Z   go-version: 1.26.5
+2026-11-09T19:34:44.1552011Z   cache: false
+2026-11-09T19:34:44.1552132Z   check-latest: false
+2026-11-09T19:34:44.1553684Z   token: ***
+2026-11-09T19:34:44.1553799Z ##[endgroup]
+2026-11-09T19:34:44.2343612Z Setup go version spec 1.26.5
+2026-11-09T19:34:44.2353984Z Attempting to download 1.26.5...
+2026-11-09T19:34:45.2718864Z matching 1.26.5...
+2026-11-09T19:34:45.2735054Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T19:34:45.7870640Z Extracting Go...
+2026-11-09T19:34:45.7993986Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/05ebb836-0447-40e3-a64a-922c55bcf412 -f /home/runner/work/_temp/081f6aeb-bc11-4e31-8fef-e86ccfe51551
+2026-11-09T19:34:47.0665690Z Successfully extracted go to /home/runner/work/_temp/05ebb836-0447-40e3-a64a-922c55bcf412
+2026-11-09T19:34:47.0666149Z Adding to the cache ...
+2026-11-09T19:34:51.1293782Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T19:34:51.1294816Z Added go to the path
+2026-11-09T19:34:51.1296236Z Successfully set up Go version 1.26.5
+2026-11-09T19:34:51.1499742Z go version go1.26.5 linux/amd64
+2026-11-09T19:34:51.1499894Z 
+2026-11-09T19:34:51.1500097Z ##[group]go env
+2026-11-09T19:34:51.2644460Z AR='ar'
+2026-11-09T19:34:51.2644697Z CC='gcc'
+2026-11-09T19:34:51.2644887Z CGO_CFLAGS='-O2 -g'
+2026-11-09T19:34:51.2645107Z CGO_CPPFLAGS=''
+2026-11-09T19:34:51.2645313Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T19:34:51.2645526Z CGO_ENABLED='1'
+2026-11-09T19:34:51.2645714Z CGO_FFLAGS='-O2 -g'
+2026-11-09T19:34:51.2645925Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T19:34:51.2646120Z CXX='g++'
+2026-11-09T19:34:51.2646299Z GCCGO='gccgo'
+2026-11-09T19:34:51.2646485Z GO111MODULE=''
+2026-11-09T19:34:51.2646691Z GOAMD64='v1'
+2026-11-09T19:34:51.2646869Z GOARCH='amd64'
+2026-11-09T19:34:51.2647074Z GOAUTH='netrc'
+2026-11-09T19:34:51.2647252Z GOBIN=''
+2026-11-09T19:34:51.2647459Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T19:34:51.2647715Z GOCACHEPROG=''
+2026-11-09T19:34:51.2647904Z GODEBUG=''
+2026-11-09T19:34:51.2648101Z GOENV='/home/runner/.config/go/env'
+2026-11-09T19:34:51.2648388Z GOEXE=''
+2026-11-09T19:34:51.2648560Z GOEXPERIMENT=''
+2026-11-09T19:34:51.2648746Z GOFIPS140='off'
+2026-11-09T19:34:51.2648886Z GOFLAGS=''
+2026-11-09T19:34:51.2649285Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build965723012=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T19:34:51.2649669Z GOHOSTARCH='amd64'
+2026-11-09T19:34:51.2649792Z GOHOSTOS='linux'
+2026-11-09T19:34:51.2649912Z GOINSECURE=''
+2026-11-09T19:34:51.2650070Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T19:34:51.2650265Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T19:34:51.2650744Z GONOPROXY=''
+2026-11-09T19:34:51.2650857Z GONOSUMDB=''
+2026-11-09T19:34:51.2650971Z GOOS='linux'
+2026-11-09T19:34:51.2651093Z GOPATH='/home/runner/go'
+2026-11-09T19:34:51.2651224Z GOPRIVATE=''
+2026-11-09T19:34:51.2651423Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T19:34:51.2651641Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T19:34:51.2651817Z GOSUMDB='sum.golang.org'
+2026-11-09T19:34:51.2651959Z GOTELEMETRY='local'
+2026-11-09T19:34:51.2652118Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T19:34:51.2652290Z GOTMPDIR=''
+2026-11-09T19:34:51.2652407Z GOTOOLCHAIN='local'
+2026-11-09T19:34:51.2652592Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T19:34:51.2652792Z GOVCS=''
+2026-11-09T19:34:51.2652908Z GOVERSION='go1.26.5'
+2026-11-09T19:34:51.2653032Z GOWORK=''
+2026-11-09T19:34:51.2653152Z PKG_CONFIG='pkg-config'
+2026-11-09T19:34:51.2653244Z 
+2026-11-09T19:34:51.2653529Z ##[endgroup]
+2026-11-09T19:34:51.2831735Z ##[group]Run set -euo pipefail
+2026-11-09T19:34:51.2831981Z [36;1mset -euo pipefail[0m
+2026-11-09T19:34:51.2832130Z [36;1mrace_option=""[0m
+2026-11-09T19:34:51.2832311Z [36;1mif test "race" = race; then race_option="-race"; fi[0m
+2026-11-09T19:34:51.2832900Z [36;1mGOTOOLCHAIN=local go test $race_option -count=1 ./internal/privaterestore ./internal/dataplane ./internal/startuptools -run '^TestOfflineServiceControlSet|^TestMihomoSameBoot|^TestMihomoColdRuntime|^TestMihomoLiveColdRetirement' -v[0m
+2026-11-09T19:34:51.2833771Z [36;1mGOTOOLCHAIN=local go test $race_option -tags razvilka_native_fixture -count=1 ./internal/dataplane -run '^TestMihomoSameBootNativeFailureBoundedAndPrivate$' -v | tee /tmp/sameboot-failure-diagnostic.log[0m
+2026-11-09T19:34:51.2834418Z [36;1mgrep -F -- '--- PASS: TestMihomoSameBootNativeFailureBoundedAndPrivate ' /tmp/sameboot-failure-diagnostic.log[0m
+2026-11-09T19:34:51.2834837Z [36;1mif grep -F -- '--- SKIP:' /tmp/sameboot-failure-diagnostic.log; then exit 1; fi[0m
+2026-11-09T19:34:51.2856484Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T19:34:51.2856685Z env:
+2026-11-09T19:34:51.2856801Z   GOTOOLCHAIN: local
+2026-11-09T19:34:51.2856928Z ##[endgroup]
+2026-11-09T19:34:51.3606731Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T19:34:51.3698507Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T19:34:51.3702409Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T19:34:51.7315465Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T19:34:51.7423069Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T19:34:51.7512246Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T19:34:51.8332282Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T19:35:15.8655663Z === RUN   TestOfflineServiceControlSetRetainsExactlyFiveOriginalIdleLifetimes
+2026-11-09T19:35:15.8656373Z --- PASS: TestOfflineServiceControlSetRetainsExactlyFiveOriginalIdleLifetimes (0.07s)
+2026-11-09T19:35:15.8657101Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners
+2026-11-09T19:35:15.8657851Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/missing
+2026-11-09T19:35:15.8658597Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/duplicate
+2026-11-09T19:35:15.8659357Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/reordered
+2026-11-09T19:35:15.8660134Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/foreign-layout
+2026-11-09T19:35:15.8661037Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/wrong-config
+2026-11-09T19:35:15.8661802Z === RUN   TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/canceled
+2026-11-09T19:35:15.8662538Z --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners (0.17s)
+2026-11-09T19:35:15.8663419Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/missing (0.05s)
+2026-11-09T19:35:15.8664672Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/duplicate (0.03s)
+2026-11-09T19:35:15.8665598Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/reordered (0.01s)
+2026-11-09T19:35:15.8666551Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/foreign-layout (0.01s)
+2026-11-09T19:35:15.8667494Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/wrong-config (0.05s)
+2026-11-09T19:35:15.8668421Z     --- PASS: TestOfflineServiceControlSetRejectsMissingDuplicateReorderedAndForeignOwners/canceled (0.02s)
+2026-11-09T19:35:15.8669122Z === RUN   TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic
+2026-11-09T19:35:15.8669717Z === RUN   TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic/error
+2026-11-09T19:35:15.8670780Z === RUN   TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic/panic
+2026-11-09T19:35:15.8671440Z --- PASS: TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic (0.05s)
+2026-11-09T19:35:15.8672192Z     --- PASS: TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic/error (0.03s)
+2026-11-09T19:35:15.8672969Z     --- PASS: TestOfflineServiceControlSetRevokesOnOriginalCallbackErrorAndPanic/panic (0.02s)
+2026-11-09T19:35:15.8673608Z === RUN   TestOfflineServiceControlSetRevocationJoinsOriginalInFlightCurrent
+2026-11-09T19:35:15.8674218Z --- PASS: TestOfflineServiceControlSetRevocationJoinsOriginalInFlightCurrent (0.05s)
+2026-11-09T19:35:15.8674649Z PASS
+2026-11-09T19:35:15.8674925Z ok  	github.com/ArtixSx/razvilka/internal/privaterestore	1.381s
+2026-11-09T19:36:01.9794474Z === RUN   TestMihomoColdRuntimeActualForwardingProducerRoundtrip
+2026-11-09T19:36:01.9796894Z     mihomo_live_cold_forwarding_archive_linux_test.go:15: original private cold-home ownership requires root
+2026-11-09T19:36:01.9797300Z --- SKIP: TestMihomoColdRuntimeActualForwardingProducerRoundtrip (0.00s)
+2026-11-09T19:36:01.9797621Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary
+2026-11-09T19:36:01.9797909Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/#00
+2026-11-09T19:36:01.9798322Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9798670Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/manifest
+2026-11-09T19:36:01.9799074Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9799427Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/runtime-renamed
+2026-11-09T19:36:01.9799832Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9800194Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/runtime-directory-ack
+2026-11-09T19:36:01.9800797Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9801140Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/execution.json
+2026-11-09T19:36:01.9801559Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9801914Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/latest-execution.json
+2026-11-09T19:36:01.9802327Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9802659Z === RUN   TestMihomoLiveColdRetirementResumesEveryDurableBoundary/completed
+2026-11-09T19:36:01.9803045Z     mihomo_live_cold_retirement_linux_test.go:71: original private cold-home ownership requires root
+2026-11-09T19:36:01.9803381Z --- PASS: TestMihomoLiveColdRetirementResumesEveryDurableBoundary (0.02s)
+2026-11-09T19:36:01.9803746Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/#00 (0.00s)
+2026-11-09T19:36:01.9804331Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/manifest (0.00s)
+2026-11-09T19:36:01.9804748Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/runtime-renamed (0.00s)
+2026-11-09T19:36:01.9805195Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/runtime-directory-ack (0.00s)
+2026-11-09T19:36:01.9805631Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/execution.json (0.00s)
+2026-11-09T19:36:01.9806072Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/latest-execution.json (0.00s)
+2026-11-09T19:36:01.9806494Z     --- SKIP: TestMihomoLiveColdRetirementResumesEveryDurableBoundary/completed (0.00s)
+2026-11-09T19:36:01.9806811Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof
+2026-11-09T19:36:01.9807107Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/same-boot
+2026-11-09T19:36:01.9807629Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9807972Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/unknown
+2026-11-09T19:36:01.9808359Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9808713Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/identity-changed
+2026-11-09T19:36:01.9809116Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9809464Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/offline-revoked
+2026-11-09T19:36:01.9809864Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9810208Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/foreign-journal
+2026-11-09T19:36:01.9810992Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9811340Z === RUN   TestMihomoLiveColdRetirementRefusesChangedNegativeProof/foreign-runtime
+2026-11-09T19:36:01.9811741Z     mihomo_live_cold_retirement_linux_test.go:137: original private cold-home ownership requires root
+2026-11-09T19:36:01.9812081Z --- PASS: TestMihomoLiveColdRetirementRefusesChangedNegativeProof (0.01s)
+2026-11-09T19:36:01.9812463Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/same-boot (0.00s)
+2026-11-09T19:36:01.9812862Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/unknown (0.00s)
+2026-11-09T19:36:01.9813277Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/identity-changed (0.00s)
+2026-11-09T19:36:01.9813710Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/offline-revoked (0.00s)
+2026-11-09T19:36:01.9814133Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/foreign-journal (0.00s)
+2026-11-09T19:36:01.9814557Z     --- SKIP: TestMihomoLiveColdRetirementRefusesChangedNegativeProof/foreign-runtime (0.00s)
+2026-11-09T19:36:01.9814920Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation
+2026-11-09T19:36:01.9815212Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/owner-copy
+2026-11-09T19:36:01.9815518Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/source
+2026-11-09T19:36:01.9815814Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/reader
+2026-11-09T19:36:01.9816107Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/input
+2026-11-09T19:36:01.9816404Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/provider
+2026-11-09T19:36:01.9816704Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/review
+2026-11-09T19:36:01.9816992Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/args
+2026-11-09T19:36:01.9817277Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/plan
+2026-11-09T19:36:01.9817570Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/phase
+2026-11-09T19:36:01.9817970Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/unknown
+2026-11-09T19:36:01.9818264Z === RUN   TestMihomoSameBootAbsenceReadRejectsChangedAssociation/cancel
+2026-11-09T19:36:01.9818623Z --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation (0.00s)
+2026-11-09T19:36:01.9819046Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/owner-copy (0.00s)
+2026-11-09T19:36:01.9819437Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/source (0.00s)
+2026-11-09T19:36:01.9819818Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/reader (0.00s)
+2026-11-09T19:36:01.9820196Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/input (0.00s)
+2026-11-09T19:36:01.9820882Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/provider (0.00s)
+2026-11-09T19:36:01.9821262Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/review (0.00s)
+2026-11-09T19:36:01.9821736Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/args (0.00s)
+2026-11-09T19:36:01.9822233Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/plan (0.00s)
+2026-11-09T19:36:01.9822600Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/phase (0.00s)
+2026-11-09T19:36:01.9822978Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/unknown (0.00s)
+2026-11-09T19:36:01.9823351Z     --- PASS: TestMihomoSameBootAbsenceReadRejectsChangedAssociation/cancel (0.00s)
+2026-11-09T19:36:01.9823689Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation
+2026-11-09T19:36:01.9824042Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/missing
+2026-11-09T19:36:01.9824410Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/twice
+2026-11-09T19:36:01.9824778Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/opening
+2026-11-09T19:36:01.9825156Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/closing
+2026-11-09T19:36:01.9825528Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/cancel
+2026-11-09T19:36:01.9825946Z === RUN   TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/source-error
+2026-11-09T19:36:01.9826328Z --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation (0.00s)
+2026-11-09T19:36:01.9826770Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/missing (0.00s)
+2026-11-09T19:36:01.9827230Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/twice (0.00s)
+2026-11-09T19:36:01.9827695Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/opening (0.00s)
+2026-11-09T19:36:01.9828149Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/closing (0.00s)
+2026-11-09T19:36:01.9828613Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/cancel (0.00s)
+2026-11-09T19:36:01.9829098Z     --- PASS: TestMihomoSameBootAbsenceReadNeverAcceptsMissingOrFailedObservation/source-error (0.00s)
+2026-11-09T19:36:01.9829455Z === RUN   TestMihomoSameBootArchiveRetriesOriginalPublishedFD
+2026-11-09T19:36:01.9829737Z --- PASS: TestMihomoSameBootArchiveRetriesOriginalPublishedFD (0.04s)
+2026-11-09T19:36:01.9830041Z === RUN   TestMihomoSameBootArchiveRefusesUnacknowledgedExistingDocument
+2026-11-09T19:36:01.9830372Z --- PASS: TestMihomoSameBootArchiveRefusesUnacknowledgedExistingDocument (0.03s)
+2026-11-09T19:36:01.9830835Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair
+2026-11-09T19:36:01.9831188Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/candidate
+2026-11-09T19:36:01.9831571Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/committing
+2026-11-09T19:36:01.9831950Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/unknown
+2026-11-09T19:36:01.9832319Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/finalizing
+2026-11-09T19:36:01.9832803Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/sidecar-bound
+2026-11-09T19:36:01.9833200Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/sidecar-pending
+2026-11-09T19:36:01.9833596Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/partial-pair
+2026-11-09T19:36:01.9834002Z === RUN   TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/inflight-transit
+2026-11-09T19:36:01.9834390Z --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair (0.16s)
+2026-11-09T19:36:01.9834837Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/candidate (0.02s)
+2026-11-09T19:36:01.9835301Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/committing (0.02s)
+2026-11-09T19:36:01.9835839Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/unknown (0.02s)
+2026-11-09T19:36:01.9836307Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/finalizing (0.02s)
+2026-11-09T19:36:01.9836784Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/sidecar-bound (0.02s)
+2026-11-09T19:36:01.9837286Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/sidecar-pending (0.03s)
+2026-11-09T19:36:01.9837776Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/partial-pair (0.02s)
+2026-11-09T19:36:01.9838261Z     --- PASS: TestMihomoSameBootInputCandidatePredicateRefusesOtherPhasesAndPair/inflight-transit (0.02s)
+2026-11-09T19:36:01.9838651Z === RUN   TestMihomoSameBootCandidateRefusesOrphanPriorSamePolicyGeneration
+2026-11-09T19:36:01.9839002Z --- PASS: TestMihomoSameBootCandidateRefusesOrphanPriorSamePolicyGeneration (0.03s)
+2026-11-09T19:36:01.9839321Z === RUN   TestMihomoSameBootCommandStartIsOneUseAndOriginal
+2026-11-09T19:36:01.9839599Z --- PASS: TestMihomoSameBootCommandStartIsOneUseAndOriginal (0.00s)
+2026-11-09T19:36:01.9839857Z === RUN   TestMihomoSameBootDeleteABIRejectsWiderPolicy
+2026-11-09T19:36:01.9840109Z --- PASS: TestMihomoSameBootDeleteABIRejectsWiderPolicy (0.00s)
+2026-11-09T19:36:01.9840661Z === RUN   TestMihomoSameBootSourceCoordinatesDistinguishDNSFromConfiguration
+2026-11-09T19:36:01.9841013Z --- PASS: TestMihomoSameBootSourceCoordinatesDistinguishDNSFromConfiguration (0.00s)
+2026-11-09T19:36:01.9841336Z === RUN   TestMihomoSameBootDiagnosticPreservesOriginalException
+2026-11-09T19:36:01.9841627Z --- PASS: TestMihomoSameBootDiagnosticPreservesOriginalException (0.00s)
+2026-11-09T19:36:01.9841987Z === RUN   TestMihomoSameBootOriginalActiveFenceSurvivesEveryNativePhaseAndPartialTerminal
+2026-11-09T19:36:01.9842420Z --- PASS: TestMihomoSameBootOriginalActiveFenceSurvivesEveryNativePhaseAndPartialTerminal (0.03s)
+2026-11-09T19:36:01.9842791Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet
+2026-11-09T19:36:01.9843082Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/no-fleet
+2026-11-09T19:36:01.9843406Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/foreign-manager
+2026-11-09T19:36:01.9843738Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/foreign-input
+2026-11-09T19:36:01.9844064Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/checking
+2026-11-09T19:36:01.9844370Z === RUN   TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/canceled
+2026-11-09T19:36:01.9844677Z --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet (0.63s)
+2026-11-09T19:36:01.9845050Z     --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/no-fleet (0.16s)
+2026-11-09T19:36:01.9845457Z     --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/foreign-manager (0.41s)
+2026-11-09T19:36:01.9845880Z     --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/foreign-input (0.04s)
+2026-11-09T19:36:01.9846278Z     --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/checking (0.01s)
+2026-11-09T19:36:01.9846758Z     --- PASS: TestMihomoSameBootHealth9RequiresCanonicalOriginalFleet/canceled (0.01s)
+2026-11-09T19:36:01.9847042Z === RUN   TestMihomoSameBootInputsRetainOriginalFiles
+2026-11-09T19:36:01.9847279Z --- PASS: TestMihomoSameBootInputsRetainOriginalFiles (0.02s)
+2026-11-09T19:36:01.9847536Z === RUN   TestMihomoSameBootInputsRefuseEqualByteReplacement
+2026-11-09T19:36:01.9847803Z === RUN   TestMihomoSameBootInputsRefuseEqualByteReplacement/config
+2026-11-09T19:36:01.9848084Z === RUN   TestMihomoSameBootInputsRefuseEqualByteReplacement/latest
+2026-11-09T19:36:01.9848376Z === RUN   TestMihomoSameBootInputsRefuseEqualByteReplacement/transaction
+2026-11-09T19:36:01.9848662Z === RUN   TestMihomoSameBootInputsRefuseEqualByteReplacement/root
+2026-11-09T19:36:01.9848940Z --- PASS: TestMihomoSameBootInputsRefuseEqualByteReplacement (0.07s)
+2026-11-09T19:36:01.9849363Z     --- PASS: TestMihomoSameBootInputsRefuseEqualByteReplacement/config (0.02s)
+2026-11-09T19:36:01.9849724Z     --- PASS: TestMihomoSameBootInputsRefuseEqualByteReplacement/latest (0.02s)
+2026-11-09T19:36:01.9850087Z     --- PASS: TestMihomoSameBootInputsRefuseEqualByteReplacement/transaction (0.02s)
+2026-11-09T19:36:01.9850604Z     --- PASS: TestMihomoSameBootInputsRefuseEqualByteReplacement/root (0.02s)
+2026-11-09T19:36:01.9850899Z === RUN   TestMihomoSameBootInputsRetainStickyCloseCause
+2026-11-09T19:36:01.9851150Z --- PASS: TestMihomoSameBootInputsRetainStickyCloseCause (0.02s)
+2026-11-09T19:36:01.9851446Z === RUN   TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking
+2026-11-09T19:36:01.9851784Z === RUN   TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/fifo
+2026-11-09T19:36:01.9852138Z === RUN   TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/symlink
+2026-11-09T19:36:01.9852502Z === RUN   TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/oversized
+2026-11-09T19:36:01.9852866Z --- PASS: TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking (0.08s)
+2026-11-09T19:36:01.9853294Z     --- PASS: TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/fifo (0.01s)
+2026-11-09T19:36:01.9853739Z     --- PASS: TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/symlink (0.02s)
+2026-11-09T19:36:01.9854191Z     --- PASS: TestMihomoSameBootInputsRefuseSpecialConfigurationWithoutBlocking/oversized (0.04s)
+2026-11-09T19:36:01.9854526Z === RUN   TestMihomoSameBootCandidateRetainsBothPlanAbsences
+2026-11-09T19:36:01.9854796Z --- PASS: TestMihomoSameBootCandidateRetainsBothPlanAbsences (0.02s)
+2026-11-09T19:36:01.9855116Z === RUN   TestMihomoSameBootCommittedPlanCaptureStillPinsPresentAndAbsentNames
+2026-11-09T19:36:01.9855477Z --- PASS: TestMihomoSameBootCommittedPlanCaptureStillPinsPresentAndAbsentNames (0.02s)
+2026-11-09T19:36:01.9855896Z === RUN   TestMihomoSameBootPolicyRetainsActualWriterAndRetriesACK
+2026-11-09T19:36:01.9856198Z --- PASS: TestMihomoSameBootPolicyRetainsActualWriterAndRetriesACK (0.05s)
+2026-11-09T19:36:01.9856526Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor
+2026-11-09T19:36:01.9856871Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/receipt
+2026-11-09T19:36:01.9857228Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/marker
+2026-11-09T19:36:01.9857583Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/root
+2026-11-09T19:36:01.9857935Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/copied
+2026-11-09T19:36:01.9858290Z === RUN   TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/expired
+2026-11-09T19:36:01.9858652Z --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor (0.16s)
+2026-11-09T19:36:01.9859085Z     --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/receipt (0.03s)
+2026-11-09T19:36:01.9859530Z     --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/marker (0.03s)
+2026-11-09T19:36:01.9860064Z     --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/root (0.03s)
+2026-11-09T19:36:01.9860570Z     --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/copied (0.03s)
+2026-11-09T19:36:01.9861011Z     --- PASS: TestMihomoSameBootPolicyRefusesForeignReceiptMarkerRootAndCursor/expired (0.03s)
+2026-11-09T19:36:01.9861356Z === RUN   TestMihomoSameBootPolicySessionCloseKeepsOriginalException
+2026-11-09T19:36:01.9861667Z --- PASS: TestMihomoSameBootPolicySessionCloseKeepsOriginalException (0.03s)
+2026-11-09T19:36:01.9861978Z === RUN   TestMihomoSameBootArchiveRetryRequiresPublisherACKReason
+2026-11-09T19:36:01.9862287Z === RUN   TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/lost-ack
+2026-11-09T19:36:01.9862621Z === RUN   TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/closing-source
+2026-11-09T19:36:01.9863051Z === RUN   TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/foreign-record
+2026-11-09T19:36:01.9863379Z === RUN   TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/closed
+2026-11-09T19:36:01.9863695Z --- PASS: TestMihomoSameBootArchiveRetryRequiresPublisherACKReason (0.11s)
+2026-11-09T19:36:01.9864083Z     --- PASS: TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/lost-ack (0.03s)
+2026-11-09T19:36:01.9864507Z     --- PASS: TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/closing-source (0.03s)
+2026-11-09T19:36:01.9864935Z     --- PASS: TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/foreign-record (0.03s)
+2026-11-09T19:36:01.9865349Z     --- PASS: TestMihomoSameBootArchiveRetryRequiresPublisherACKReason/closed (0.03s)
+2026-11-09T19:36:01.9865665Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure
+2026-11-09T19:36:01.9865969Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/sidecar-wait
+2026-11-09T19:36:01.9866292Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/policy
+2026-11-09T19:36:01.9866609Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/forwarding
+2026-11-09T19:36:01.9866939Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/effect-unknown
+2026-11-09T19:36:01.9867259Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/archive
+2026-11-09T19:36:01.9867572Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/terminal
+2026-11-09T19:36:01.9867884Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/no-signal
+2026-11-09T19:36:01.9868204Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/close-error
+2026-11-09T19:36:01.9868538Z === RUN   TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/generic-unknown
+2026-11-09T19:36:01.9868866Z --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure (0.00s)
+2026-11-09T19:36:01.9869261Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/sidecar-wait (0.00s)
+2026-11-09T19:36:01.9869673Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/policy (0.00s)
+2026-11-09T19:36:01.9870076Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/forwarding (0.00s)
+2026-11-09T19:36:01.9870682Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/effect-unknown (0.00s)
+2026-11-09T19:36:01.9871084Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/archive (0.00s)
+2026-11-09T19:36:01.9871480Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/terminal (0.00s)
+2026-11-09T19:36:01.9871881Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/no-signal (0.00s)
+2026-11-09T19:36:01.9872287Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/close-error (0.00s)
+2026-11-09T19:36:01.9872706Z     --- PASS: TestMihomoSameBootRetryNeverClassifiesLaterNativeFailure/generic-unknown (0.00s)
+2026-11-09T19:36:01.9873028Z === RUN   TestMihomoSameBootRetryCannotEraseObservedSourceLoss
+2026-11-09T19:36:01.9873310Z --- PASS: TestMihomoSameBootRetryCannotEraseObservedSourceLoss (0.00s)
+2026-11-09T19:36:01.9873647Z === RUN   TestMihomoSameBootPIDFDChild
+2026-11-09T19:36:01.9873833Z --- PASS: TestMihomoSameBootPIDFDChild (0.00s)
+2026-11-09T19:36:01.9874104Z === RUN   TestMihomoSameBootPIDFDRetainsCanceledWaitAndObservesLateOriginalExit
+2026-11-09T19:36:01.9874472Z --- PASS: TestMihomoSameBootPIDFDRetainsCanceledWaitAndObservesLateOriginalExit (0.04s)
+2026-11-09T19:36:01.9874786Z === RUN   TestMihomoSameBootPIDFDCloseFailureStaysVisible
+2026-11-09T19:36:01.9875040Z --- PASS: TestMihomoSameBootPIDFDCloseFailureStaysVisible (0.00s)
+2026-11-09T19:36:01.9875279Z === RUN   TestMihomoSameBootStaticFreshMembership
+2026-11-09T19:36:01.9875506Z === RUN   TestMihomoSameBootStaticFreshMembership/growing-log
+2026-11-09T19:36:01.9875760Z === RUN   TestMihomoSameBootStaticFreshMembership/new-generation
+2026-11-09T19:36:01.9876007Z === RUN   TestMihomoSameBootStaticFreshMembership/new-file
+2026-11-09T19:36:01.9876328Z === RUN   TestMihomoSameBootStaticFreshMembership/missing-file
+2026-11-09T19:36:01.9876592Z === RUN   TestMihomoSameBootStaticFreshMembership/foreign-directory
+2026-11-09T19:36:01.9876844Z === RUN   TestMihomoSameBootStaticFreshMembership/symlink
+2026-11-09T19:36:01.9877073Z === RUN   TestMihomoSameBootStaticFreshMembership/copied
+2026-11-09T19:36:01.9877298Z === RUN   TestMihomoSameBootStaticFreshMembership/closed
+2026-11-09T19:36:01.9877529Z --- PASS: TestMihomoSameBootStaticFreshMembership (0.01s)
+2026-11-09T19:36:01.9877827Z     --- PASS: TestMihomoSameBootStaticFreshMembership/growing-log (0.00s)
+2026-11-09T19:36:01.9878156Z     --- PASS: TestMihomoSameBootStaticFreshMembership/new-generation (0.00s)
+2026-11-09T19:36:01.9878474Z     --- PASS: TestMihomoSameBootStaticFreshMembership/new-file (0.00s)
+2026-11-09T19:36:01.9878786Z     --- PASS: TestMihomoSameBootStaticFreshMembership/missing-file (0.00s)
+2026-11-09T19:36:01.9879128Z     --- PASS: TestMihomoSameBootStaticFreshMembership/foreign-directory (0.00s)
+2026-11-09T19:36:01.9879454Z     --- PASS: TestMihomoSameBootStaticFreshMembership/symlink (0.00s)
+2026-11-09T19:36:01.9879759Z     --- PASS: TestMihomoSameBootStaticFreshMembership/copied (0.00s)
+2026-11-09T19:36:01.9880053Z     --- PASS: TestMihomoSameBootStaticFreshMembership/closed (0.00s)
+2026-11-09T19:36:01.9880346Z === RUN   TestMihomoSameBootTerminalRetainsActualPartialWriterAndRepeatsACK
+2026-11-09T19:36:01.9880855Z --- PASS: TestMihomoSameBootTerminalRetainsActualPartialWriterAndRepeatsACK (0.03s)
+2026-11-09T19:36:01.9881179Z === RUN   TestMihomoSameBootTerminalCloseErrorNeverBecomesRetry
+2026-11-09T19:36:01.9881465Z --- PASS: TestMihomoSameBootTerminalCloseErrorNeverBecomesRetry (0.02s)
+2026-11-09T19:36:01.9881681Z PASS
+2026-11-09T19:36:01.9881837Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	2.881s
+2026-11-09T19:36:01.9882070Z === RUN   TestMihomoSameBootObservedTableReadExactOnly
+2026-11-09T19:36:01.9882318Z --- PASS: TestMihomoSameBootObservedTableReadExactOnly (0.00s)
+2026-11-09T19:36:01.9882517Z PASS
+2026-11-09T19:36:01.9882676Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	1.042s
+2026-11-09T19:36:37.8837763Z === RUN   TestMihomoSameBootNativeFailureBoundedAndPrivate
+2026-11-09T19:36:37.8838294Z --- PASS: TestMihomoSameBootNativeFailureBoundedAndPrivate (0.00s)
+2026-11-09T19:36:37.8857139Z PASS
+2026-11-09T19:36:38.8884261Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	1.024s
+2026-11-09T19:36:38.9396022Z --- PASS: TestMihomoSameBootNativeFailureBoundedAndPrivate (0.00s)
+2026-11-09T19:36:38.9469800Z Post job cleanup.
+2026-11-09T19:36:39.0350309Z Post job cleanup.
+2026-11-09T19:36:39.0942202Z [command]/usr/bin/git version
+2026-11-09T19:36:39.0980937Z git version 2.56.0
+2026-11-09T19:36:39.0998975Z Temporarily overriding HOME='/home/runner/work/_temp/9064b584-352a-4bb6-a243-3cedb90cb0f5' before making global git config changes
+2026-11-09T19:36:39.0999518Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T19:36:39.1002190Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T19:36:39.1031330Z Removing SSH command configuration
+2026-11-09T19:36:39.1035622Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T19:36:39.1067455Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T19:36:39.1270932Z Removing HTTP extra header
+2026-11-09T19:36:39.1271437Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T19:36:39.1301941Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T19:36:39.1513082Z Removing includeIf entries pointing to credentials config files
+2026-11-09T19:36:39.1519536Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T19:36:39.1571176Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T19:36:39.1927665Z Cleaning up orphan processes

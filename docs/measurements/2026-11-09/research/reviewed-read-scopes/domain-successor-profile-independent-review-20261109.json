@@ -1,0 +1,27 @@
+{
+  "decision": "APPROVED native-only diagnostic source; execution pending",
+  "files": {
+    "internal/app/domain_tcp_successor_profile_native_linux_test.go": "ac3d97713d4e778ee90b84ae5691158390b57310d46c26433bc502dec1f44775",
+    "internal/app/domain_tcp_coexistence_native_linux_test.go": "5c72d2fff1a67752000f631a31560aa05192e39ec0f3eb31999223c2005edb22"
+  },
+  "contract": [
+    "Start and registered finish occur before Bind/StartDNS/Acquire so diagnostic refusal introduces no abandoned acquired resource",
+    "Only GEN2 captured destination starts fixed exclusive profile; GEN3 cannot overwrite",
+    "Canonical retained directory identity/mode/owner; fixed Openat O_EXCL|NOFOLLOW output0600, 2MiB bound; async errors preserved across StopCPUProfile",
+    "Stop joins actual runtime profile writer; original Run join result separately recorded, no cleanup/readiness inference",
+    "All original operation/publication deadlines, Run/source callbacks and cleanup order unchanged"
+  ],
+  "resolved_finding": "Moved profile start from after resource Acquire to function entry; window explicitly successor preparation plus Run through join attempt",
+  "tests": [
+    "exact writer bound and retained write error",
+    "actual Start/Stop and concurrent profiler refusal",
+    "exclusive name and symlink/mode refusal",
+    "retained directory replacement refusal"
+  ],
+  "limitations": [
+    "Native tests and actual GEN2 profile pending CI",
+    "Profiling overhead included; no causal speed or router claim",
+    "joined=true records actual Run result receipt, not successful cleanup"
+  ],
+  "validation": "Source review and diff --check; no local Go build/test"
+}

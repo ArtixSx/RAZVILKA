@@ -1,0 +1,23 @@
+{
+  "decision": "APPROVE fixture vet fix and explicit paired matrix",
+  "files": [
+    {
+      "path": "internal/dataplane/mihomo_live_same_boot_absence_read_test.go",
+      "sha256": "2b684f3a761d0ad9fa3a47546bbcefa3d68b0ecfb1c6a07ed2fb4ed84aa074ab"
+    },
+    {
+      "path": ".github/workflows/research-lifecycle.yml",
+      "sha256": "940fee88b11dfb6c5874592c2dd8949f6c85d94f33567ee9374f71363ce7e89e"
+    }
+  ],
+  "validation": [
+    "Exact source diff review; gofmt-l and diff --check clean.",
+    "3b27 full normal/race passed on push, go vet failed on previous mutex copy; next full gate still required."
+  ],
+  "reviewer": "verification",
+  "findings": [
+    "Replace mutex-containing struct value copy with fresh equal-state foreign pointer; original fixture only statePath nonzero, assertion unchanged.",
+    "Native public matrix has closed empty/draft values, explicit env mapping and unique artifacts; fail-fast false retains both results.",
+    "No production admission, deadline, history or claim relaxation."
+  ]
+}

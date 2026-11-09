@@ -1,0 +1,12 @@
+{
+  "commit": "357973787e20f6a1bd7cad8841e290e15e6603d4",
+  "run": 42649330313,
+  "job": 129271101667,
+  "conclusion": "failure",
+  "log_sha256": "3da7cca13f588c4cc4298313cbc3a16127f1999953b56f0b7d3496aa9cad2adb",
+  "passed": "Genuine old193 healthy panel; corrected raw-source fingerprint; actual bootstrap preparation",
+  "failed": "Actual bootstrap quiesce-network-provider exit3, restore not reached",
+  "cause": "Fixture inner --mount-proc stacks hidden lower /proc, rejected by unchanged original netidentity.mountLayoutOK",
+  "fix": "863b4e44: private namespace proc replacement, same original FD3/4/5 identities before/after plus one /proc root; independently reviewed, native rerun pending",
+  "readiness": false
+}

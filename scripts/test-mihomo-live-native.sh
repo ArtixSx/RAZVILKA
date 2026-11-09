@@ -5,11 +5,16 @@ test "$(id -u)" = 0 || exit 2
 : "${RAZVILKA_MIHOMO_ARCHIVE:?official pinned Mihomo1.19.33 archive required}"
 : "${RAZVILKA_HEV_NATIVE:?official pinned HEV2.17.1 binary required}"
 case "${RAZVILKA_MIHOMO_LIVE_TEST_CASE:-lifecycle}" in
- lifecycle) live_test=TestMihomoLiveOriginalApplyStopAndFreshApply;;
- postcas-failure) live_test=TestMihomoLiveOriginalPostCASServiceFailure;;
- check-settlement) live_test=TestMihomoLiveOriginalFailedCheckSettlementStopRetry;;
+ lifecycle) live_test=TestMihomoLiveOriginalApplyStopAndFreshApply; live_rounds=2;;
+ manual-http) live_test=TestMihomoLiveOriginalManualHTTPApplyStop; live_rounds=2;;
+ postcas-failure) live_test=TestMihomoLiveOriginalPostCASServiceFailure; live_rounds=1;;
+ check-settlement) live_test=TestMihomoLiveOriginalFailedCheckSettlementStopRetry; live_rounds=1;;
  *) exit 2;;
 esac
+# Each independent user cycle retains its 300s ceiling and every operation
+# retains 110s. Keep 60s for fatal-path teardown outside the source lifetime.
+live_aggregate_budget=$((live_rounds * 300))
+live_test_timeout=$((live_aggregate_budget + 60))
 case "$RAZVILKA_XRAY_NATIVE:$RAZVILKA_MIHOMO_ARCHIVE:$RAZVILKA_HEV_NATIVE" in /*:/*:/*) ;; *) exit 2;; esac
 for tool in python3 unshare mount ip iptables-legacy ip6tables-legacy curl go timeout; do command -v "$tool" >/dev/null; done
 live_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -72,8 +77,8 @@ unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t mangle -A RZMLF_BOOT -j NFQUEUE --queue-num 65000
  /usr/sbin/iptables-legacy -t mangle -D RZMLF_BOOT -j NFQUEUE --queue-num 65000
  /usr/sbin/iptables-legacy -t mangle -X RZMLF_BOOT
- exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout=360s -test.cpuprofile="$1/live.cpu.pprof"
-' sh "$live_work" "$live_test" || live_status=$?
+ exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout="${3}s" -test.cpuprofile="$1/live.cpu.pprof"
+' sh "$live_work" "$live_test" "$live_test_timeout" || live_status=$?
 # Analyze only after leaving the private /opt mount. CPU samples contain code
 # symbols/paths, not exported runtime configuration or packet captures.
 if test -n "${RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT:-}" && live_profile_output_current; then
@@ -86,6 +91,7 @@ if test -n "${RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT:-}" && live_profile_output_cur
   chmod 600 "$RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT/live.cpu.pprof" "$RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT/cpu-top.txt" || true
  fi
  printf 'child_exit_status=%s\nprofile_analysis_status=%s\nprofile_span=whole_original_native_test_process\nnode_transit_budget_seconds=10\napply_budget_seconds=110\nGOMAXPROCS=2\nclaim=isolated_native_not_router\n' "$live_status" "$live_profile_status" > "$RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT/status.txt" || true
+ printf 'rounds=%s\nround_budget_seconds=300\naggregate_budget_seconds=%s\nharness_timeout_seconds=%s\n' "$live_rounds" "$live_aggregate_budget" "$live_test_timeout" >> "$RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT/status.txt" || true
  chmod 600 "$RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT/status.txt" || true
  if test -f "$live_work/cpu-top.txt"; then cat "$live_work/cpu-top.txt" || true; fi
 fi

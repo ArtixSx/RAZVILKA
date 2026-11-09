@@ -120,6 +120,12 @@ type backendInventoryClassicBatchRunner interface {
 	ReadBoundedClassicTables(context.Context, netidentity.Identity, string, [2]string, int, [2][]string) ([2][][]byte, error)
 }
 
+// A supported complete-family dump replaces only the literal table children.
+// Unsupported must be returned before any read; partial attempts never retry.
+type backendInventoryClassicSaveRunner interface {
+	ReadBoundedClassicInventory(context.Context, netidentity.Identity, string, [2]string, int, [2][]string) ([2][]byte, bool, error)
+}
+
 func (r *backendInventoryReader) Read(ctx context.Context, scope backendInventoryScope) (backendInventorySnapshot, error) {
 	if r == nil || r.Provider == nil {
 		return backendInventorySnapshot{}, errBackendInventory
@@ -357,6 +363,7 @@ func (r *backendInventoryReader) classic(ctx context.Context, scope backendInven
 		rows   []backendInventoryRow
 	}
 	budget := backendClassicBudget{}
+	rawBytes := 0 // Includes save framing/counters across BOTH complete images.
 	read := func() (image, error) {
 		var result image
 		for i, family := range []int{4, 6} {
@@ -372,11 +379,35 @@ func (r *backendInventoryReader) classic(ctx context.Context, scope backendInven
 			}
 		}
 		var batch [2][][]byte
-		batched := false
-		if original, ok := runner.(backendInventoryClassicBatchRunner); ok && len(result.names[0])+len(result.names[1]) > 0 {
+		batched, saved := false, false
+		remaining := min(backendClassicBytes-budget.bytes, backendClassicBytes-rawBytes)
+		if len(result.names[0])+len(result.names[1]) > 0 && remaining <= 0 {
+			return image{}, errBackendInventory
+		}
+		if original, ok := runner.(backendInventoryClassicSaveRunner); ok && len(result.names[0])+len(result.names[1]) > 0 {
+			frozen := [2][]string{slices.Clone(result.names[0]), slices.Clone(result.names[1])}
+			raw, supported, err := original.ReadBoundedClassicInventory(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, remaining, frozen)
+			if err != nil || ctx.Err() != nil || !supported && (len(raw[0]) != 0 || len(raw[1]) != 0) {
+				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+			}
+			if supported {
+				if len(raw[0])+len(raw[1]) > remaining {
+					return image{}, errBackendInventory
+				}
+				rawBytes += len(raw[0]) + len(raw[1])
+				for family := range raw {
+					batch[family], err = backendClassicSaveTables(raw[family], result.names[family], family)
+					if err != nil {
+						return image{}, err
+					}
+				}
+				batched, saved = true, true
+			}
+		}
+		if original, ok := runner.(backendInventoryClassicBatchRunner); ok && !batched && len(result.names[0])+len(result.names[1]) > 0 {
 			frozen := [2][]string{slices.Clone(result.names[0]), slices.Clone(result.names[1])}
 			var err error
-			batch, err = original.ReadBoundedClassicTables(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, backendClassicBytes-budget.bytes, frozen)
+			batch, err = original.ReadBoundedClassicTables(ctx, scope.Network, scope.ToolReviewID, [2]string{r.IPTables, r.IP6Tables}, remaining, frozen)
 			if err != nil || ctx.Err() != nil || len(batch[0]) != len(result.names[0]) || len(batch[1]) != len(result.names[1]) {
 				return image{}, errors.Join(errBackendInventory, err, ctx.Err())
 			}
@@ -393,11 +424,17 @@ func (r *backendInventoryReader) classic(ctx context.Context, scope backendInven
 					data = batch[i][index]
 				} else {
 					data, err = backendInventoryLeaf(ctx, func(leaf context.Context) ([]byte, error) {
-						return runner.RunBounded(leaf, path, backendClassicBytes-budget.bytes, "-t", table, "-S")
+						return runner.RunBounded(leaf, path, min(backendClassicBytes-budget.bytes, backendClassicBytes-rawBytes), "-t", table, "-S")
 					})
 				}
 				if err != nil || ctx.Err() != nil {
 					return image{}, errors.Join(errBackendInventory, err, ctx.Err())
+				}
+				if !saved {
+					if len(data) > backendClassicBytes-rawBytes {
+						return image{}, errBackendInventory
+					}
+					rawBytes += len(data)
 				}
 				rows, err := backendXTablesRows(data, &budget)
 				if err != nil {

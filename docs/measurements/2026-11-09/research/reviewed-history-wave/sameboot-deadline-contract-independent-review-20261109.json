@@ -1,0 +1,19 @@
+{
+  "decision": "Do not split or extend sameboot aggregate deadline as fixture correction",
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "production_deadline_s": 120,
+  "sources": {
+    "cmd/razvilka/main.go:346": "actual public sameboot CLI creates context.WithTimeout2min",
+    "cmd/razvilka/mihomo_live_parent_retirement.go:110": "one WithMihomoSameBootRetirement callback; Run then at mostone Retry(original) only ErrMihomoSameBootRetainedRetry whilectxvalid; same fiveleases and aggregate deadline",
+    "internal/dataplane/mihomo_live_same_boot_ack_cut_native_linux.go:49": "native cut calls use once, injects original publisher lostACK; not two publicCLI invocations",
+    "cmd/razvilka/mihomo_live_same_boot_native_linux_test.go:78": "fixture2min also includes setup and actual independent updater guard subprocesses perphase"
+  },
+  "findings": [
+    "This is one user operation and same original custody, not independent cycles",
+    "Fresh deadline for Retry would change production contract and may invalidate exact original context/leases",
+    "Guard child overhead is fixture-specific and recorded separately, including race subprocess exit delay; cannot subtract it to claim actual PASS",
+    "Normal/race timings differ and machine confounding prevents attributing prior-run changes",
+    "Keep failed120s cut evidence; any production optimization or changed user-facing deadline requires separate design/review"
+  ],
+  "separate_test_only_finding": "sameBootNativeOutput embeds Buffer and inherits ReadFrom/WriteString bypassing advertised32KiB Write bound; notified root, no edits"
+}

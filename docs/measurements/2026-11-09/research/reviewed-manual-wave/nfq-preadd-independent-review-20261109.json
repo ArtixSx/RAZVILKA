@@ -1,0 +1,56 @@
+{
+  "preserved": [
+    "Durable intent precedes exact Presence Guard Presence Guard sequence",
+    "Actual original session cursor receipt and source closing checked",
+    "No fresh whole inventory or guard removed",
+    "Loan closes before entered marker and actual runCommand",
+    "Escaped or copied read context cannot reach original runner",
+    "Generic and probe fallback unchanged",
+    "Unknown/lost-ACK recovery fences unchanged"
+  ],
+  "limitations": [
+    "No local Go build or test executed due disk constraint",
+    "Modeled collector test is not original native source proof",
+    "Actual native closed marker and complete Apply Stop still required",
+    "No measured speedup or physical router claim"
+  ],
+  "reviewer": "independent verification agent",
+  "files": [
+    {
+      "path": "internal/dataplane/nfqws2_active_preadd_observation.go",
+      "sha256": "E367589D1B732BB2EFB2029803864AF038E10465F6802DC21934928DBB11A119"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_preadd_observation_test.go",
+      "sha256": "0ED320B24BE1A2FE37F50EE2C128850DA809B681FD75DFD9F4C2C39B374E301E"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_preadd_measurement_native_linux.go",
+      "sha256": "1A5D4E2DCA443C414842119EC5A6D0A48CA981C6DC0EDED50D079A4155DEC929"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_preadd_measurement_other.go",
+      "sha256": "6FC56B6FDE6BDADA9052580D1C7BA04C8C574BCDB5B3B0083FCAA4FF1EF601E8"
+    },
+    {
+      "path": "internal/dataplane/policy_effect_receipt.go",
+      "sha256": "BE00E0D2B11E8C6DD8C7C630D7A876B6FB18EC594E29A5DAE95EA86DDC9DD93D"
+    },
+    {
+      "path": "internal/dataplane/nfqws2_active_partial_recovery.go",
+      "sha256": "4AAF2F3464C47C58F07AC81EE7B75866461A2B3BCCA85468AFBC5A4560E5D2EB"
+    },
+    {
+      "path": "internal/dataplane/policy_effect_nfqws_recovery.go",
+      "sha256": "628180CFCB61CC1E72FF655DB5E1E339F4FB3D829B4A238842B61EFECB276570"
+    }
+  ],
+  "base_sha": "e685eb757ae4faf55a98158ab4abfeecb4e4c2c1",
+  "checks": [
+    "Independent source and call graph inspection",
+    "Tests cover order closure failures copied foreign custody and fallback",
+    "git diff --check PASS"
+  ],
+  "decision": "source review approved; CI and native lifecycle pending",
+  "date": "2026-11-09"
+}

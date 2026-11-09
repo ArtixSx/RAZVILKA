@@ -1,0 +1,46 @@
+=== RUN   TestXrayDomainFileObservationIsOriginalAndSynchronous
+--- PASS: TestXrayDomainFileObservationIsOriginalAndSynchronous (0.01s)
+=== RUN   TestXrayDomainFileObservationClosingFullHashRefusesRestoredMetadata
+--- PASS: TestXrayDomainFileObservationClosingFullHashRefusesRestoredMetadata (0.00s)
+=== RUN   TestXrayDomainFileObservationRevokesDuringPanic
+--- PASS: TestXrayDomainFileObservationRevokesDuringPanic (0.00s)
+=== RUN   TestXrayDomainFileObservationRefusesReboundSameInodeDescriptor
+--- PASS: TestXrayDomainFileObservationRefusesReboundSameInodeDescriptor (0.00s)
+=== RUN   TestXrayDomainFileObservationToolReadRetainsOriginalParent
+--- PASS: TestXrayDomainFileObservationToolReadRetainsOriginalParent (0.00s)
+=== RUN   TestXrayDomainFileObservationToolReadPreservesClosingHashAndError
+--- PASS: TestXrayDomainFileObservationToolReadPreservesClosingHashAndError (0.00s)
+=== RUN   TestXrayDomainFileOpeningIsSingleOriginalRead
+--- PASS: TestXrayDomainFileOpeningIsSingleOriginalRead (0.00s)
+=== RUN   TestXrayDomainFileOpeningClosingHashRejectsMutationAfterOpening
+--- PASS: TestXrayDomainFileOpeningClosingHashRejectsMutationAfterOpening (0.00s)
+=== RUN   TestXrayDomainFileObservationDerivedViewNeedsLiveParent
+--- PASS: TestXrayDomainFileObservationDerivedViewNeedsLiveParent (0.00s)
+=== RUN   TestXrayImageScopeScratchExclusiveFixedAndCleared
+--- PASS: TestXrayImageScopeScratchExclusiveFixedAndCleared (0.00s)
+=== RUN   TestXrayImageScopeConcurrentScratchHasOneBorrower
+--- PASS: TestXrayImageScopeConcurrentScratchHasOneBorrower (0.00s)
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/clean
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/mutation
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/replacement
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/panic
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/cancel
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/capture-failure
+=== RUN   TestXrayImageScopeOriginalClosingAndEscapes/contention
+--- PASS: TestXrayImageScopeOriginalClosingAndEscapes (0.02s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/clean (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/mutation (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/replacement (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/panic (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/cancel (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/capture-failure (0.00s)
+    --- PASS: TestXrayImageScopeOriginalClosingAndEscapes/contention (0.00s)
+=== RUN   TestXrayImageScopeForeignStaleAndConsumedOpening
+--- PASS: TestXrayImageScopeForeignStaleAndConsumedOpening (0.00s)
+=== RUN   TestXrayImageScopeProductionClosingReadsPastMismatch
+--- PASS: TestXrayImageScopeProductionClosingReadsPastMismatch (0.01s)
+=== RUN   TestXrayImageScopePostClearCancellationAndAbsoluteDeadline
+--- PASS: TestXrayImageScopePostClearCancellationAndAbsoluteDeadline (0.02s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/dataplane	1.277s

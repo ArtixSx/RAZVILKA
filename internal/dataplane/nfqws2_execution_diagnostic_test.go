@@ -41,3 +41,20 @@ func TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages(t *testing.T) {
 		t.Fatal("unbounded diagnostic", len(got))
 	}
 }
+
+func TestNFQWSExecutionCommonDiagnosticsRetainUnknownAndOriginalCause(t *testing.T) {
+	secret := errors.New("private-common-receipt-path")
+	for _, stage := range []string{"retire.common-binding", "retire.cleanup-owner", "retire.policy-remove", "retire.verify-inactive", "retire.settle-removed", "retire.closing-owner"} {
+		original := errors.Join(ErrPolicyAdditionUnknown, context.DeadlineExceeded, secret)
+		wrapped := nfqws2ActiveFailure("retire prepared", nfqwsExecutionFailure("retire.common", nfqwsExecutionFailure(stage, original)))
+		if !errors.Is(wrapped, ErrPolicyAdditionUnknown) || !errors.Is(wrapped, context.DeadlineExceeded) || !errors.Is(wrapped, secret) {
+			t.Fatal("original cleanup classification lost", stage)
+		}
+		if strings.Contains(wrapped.Error(), secret.Error()) {
+			t.Fatal("private cleanup details exposed", stage)
+		}
+		if got := NFQWSExecutionFailureStages(wrapped); !reflect.DeepEqual(got, []string{"retire prepared", "retire.common", stage}) {
+			t.Fatal("missing fixed common subphase", got)
+		}
+	}
+}

@@ -1,0 +1,147 @@
+[
+  {
+    "file": "domain-canceled-ready.log",
+    "sha256": "3a6cefefcf0ffba3ef8cab09c1e1f5fe002668f4c8066d90a8f069be0bbd2c12",
+    "bytes": 69308
+  },
+  {
+    "file": "domain-canceled-ready.zip",
+    "sha256": "89b03b7dafae31d92b145f0a598e82d01c1adfc204ea420227fd16c71504b098",
+    "bytes": 66474
+  },
+  {
+    "file": "domain-results.json",
+    "sha256": "4ecf2278c98d3e6beb96ecf13ec62d765b0516fda302d574317912cf8e9ecdf7",
+    "bytes": 4513
+  },
+  {
+    "file": "domain-selected.log",
+    "sha256": "b5c85f1eb421fa32ee24b272e167b4ae2515ca59f026493e03c3781534268a6d",
+    "bytes": 70634
+  },
+  {
+    "file": "domain-selected.zip",
+    "sha256": "c963ab9fe9061e4d1c58933474d82f3299cae7a4d90fe82fc79b81cf8509063a",
+    "bytes": 72216
+  },
+  {
+    "file": "managed-production.log",
+    "sha256": "9c7dfb70ee87b8fb957627ccbdf8116008fd8a32a55ee76c5e6b47577549a9d9",
+    "bytes": 275663
+  },
+  {
+    "file": "managed-profile-conclusion.json",
+    "sha256": "0f5dc3c4a40a29d8ea35e772803f5f8eaee7fb2249b3349e2064d3001d484020",
+    "bytes": 3462
+  },
+  {
+    "file": "managed-race.log",
+    "sha256": "5b9be55da4b5edd8dd81b3064a0135896dd328a065e9f5d725362b1aefc253d4",
+    "bytes": 179364
+  },
+  {
+    "file": "mihomo-lifecycle.log",
+    "sha256": "41ff7558f386a30c94ee6685e05cee90bb6aafb0e5b369ea4fbeac5af9a7ac47",
+    "bytes": 142723
+  },
+  {
+    "file": "mihomo-native-conclusion.json",
+    "sha256": "bf0b606a4a06f74405f3ffeea068c1d733c0564b0bde86de77dcdebae2be4d9b",
+    "bytes": 2830
+  },
+  {
+    "file": "mihomo-postcas.log",
+    "sha256": "b676f562b2299fd2a5119a735eabbdb79f09071d118bd1966a4691516c78643b",
+    "bytes": 37714
+  },
+  {
+    "file": "mihomo-settlement.log",
+    "sha256": "e3063a61c9ce6a715f44f733c4666d5c60ba7f484a78387c0e2f29413532a09b",
+    "bytes": 38819
+  },
+  {
+    "file": "domain-canceled-ready-artifact/cpu-top.txt",
+    "sha256": "1f7932cbdf62751eb3fd7c21e3a3b7e3f5334521270154ecbe395dea02dcf871",
+    "bytes": 3305
+  },
+  {
+    "file": "domain-canceled-ready-artifact/native.log",
+    "sha256": "81dbba98301e0624374e7810d113e904de74e7fe745e2a97d7d10ff96e8c5e50",
+    "bytes": 28562
+  },
+  {
+    "file": "domain-canceled-ready-artifact/original-run.cpu.pprof",
+    "sha256": "70b158ebc5f50b370ba4ba62071aee71fa1170a7116ee7cdf89200a3594b3aa3",
+    "bytes": 59038
+  },
+  {
+    "file": "domain-canceled-ready-artifact/status.txt",
+    "sha256": "425b06fa4aa4ecc7ff376e1586e7739736001fbb4dfa39780845b5bb7d89c01f",
+    "bytes": 174
+  },
+  {
+    "file": "domain-selected-artifact/cpu-top.txt",
+    "sha256": "1d79dac1e22dd5a71f6a1d20bbe3a03d57fcec53361b63c1278c92bbe04e67a7",
+    "bytes": 3375
+  },
+  {
+    "file": "domain-selected-artifact/native.log",
+    "sha256": "35de37805f8ba35edc03106b476ea9a95e3a1570a4cd051ebd8f8ee58e857722",
+    "bytes": 29722
+  },
+  {
+    "file": "domain-selected-artifact/original-run.cpu.pprof",
+    "sha256": "3f50384b5f43b75016ac24700ad93d13620f11c2fd9fa619fac31edf9b4f9cab",
+    "bytes": 64627
+  },
+  {
+    "file": "domain-selected-artifact/status.txt",
+    "sha256": "26c2f891d6662f9b7bc18c4cc963d61938640ef2871ae877ed04beab41597548",
+    "bytes": 164
+  },
+  {
+    "file": "managed-production-artifacts/lan.log",
+    "sha256": "11075fab97a248a17da2fd1e10e867dfa1a7e33785bd6b91f1e734f2c0db94c9",
+    "bytes": 19522
+  },
+  {
+    "file": "managed-production-artifacts/manual.log",
+    "sha256": "52968fd75e7a242e27781dff8e112a4736b404709fc287f414d68ceffb719275",
+    "bytes": 18956
+  },
+  {
+    "file": "managed-production-artifacts/probe.log",
+    "sha256": "ccae98ea76723f3b4b8966e940849f301ca6f041f16583baf848b80a158b9501",
+    "bytes": 111791
+  },
+  {
+    "file": "managed-race-artifacts/lan.log",
+    "sha256": "17897f1b050f1e18097374823fde9f30c5a70048df29327dfe11bc6ef5ee111a",
+    "bytes": 16322
+  },
+  {
+    "file": "managed-race-artifacts/manual.log",
+    "sha256": "3f1735917df50c587551a20a822e2ec7e2b39db35f2cf6458b5c24971b276c5c",
+    "bytes": 18892
+  },
+  {
+    "file": "managed-race-artifacts/probe.log",
+    "sha256": "6cf3cede353498ead6b815ac7af454a8281537fd408ed0099ea2d59d0a3d8bc5",
+    "bytes": 43924
+  },
+  {
+    "file": "mihomo-cpu-artifacts/cpu-top.txt",
+    "sha256": "25adb5e827d75e25d0053f7524c65812e915d48013de9a26a6926fd661423722",
+    "bytes": 3465
+  },
+  {
+    "file": "mihomo-cpu-artifacts/live.cpu.pprof",
+    "sha256": "175808c5deb53cb6e74556c2b08e75ba678c26af1e6e1d2f9c90d9b47fc66c66",
+    "bytes": 237755
+  },
+  {
+    "file": "mihomo-cpu-artifacts/status.txt",
+    "sha256": "9b13ee346ce6318b175839e9d25e0f67c6564f20712c4b01d58c7b6f6e247dff",
+    "bytes": 196
+  }
+]

@@ -1,0 +1,137 @@
+name: Research probe comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/research-build-20261109']
+    paths:
+      - 'internal/**'
+      - 'scripts/fetch-native-fixture.sh'
+      - 'cmd/nodeeval/**'
+      - '.github/workflows/research-probes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  paired-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 363f433611620cda4d14db2d0a7ae2475b0278f1
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install pinned native fixture on disposable runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux unzip
+          sh candidate/scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray.zip' | sha256sum --check --strict
+          unzip /tmp/xray.zip xray -d /tmp/xray-extracted
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-extracted/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Same runner, binary, scenarios and sample counts
+        shell: bash
+        run: |
+          set -uo pipefail
+          result=0
+          mkdir -p "$GITHUB_WORKSPACE/results"
+          printf '%s\n' 'Actual baseline363f4336 versus candidate commit, isolating early Stop observations; algorithm=current-reuse in BOTH. Same runner and pinned binary, sequential baseline then candidate. Fixed order may bias warm caches/load; first and repeated samples are separate. The legacy environment.txt reference description is not a second algorithm in this run.' > "$GITHUB_WORKSPACE/results/comparison.txt"
+          for revision in baseline candidate; do
+            (
+              cd "$GITHUB_WORKSPACE/$revision"
+              sudo env PATH="$PATH" GOTOOLCHAIN=local \
+                GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$PWD" \
+                GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+                RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+                RAZVILKA_NODE_PERF_ALGORITHM=current-reuse \
+                RAZVILKA_NODE_PERF_OUTPUT="$GITHUB_WORKSPACE/results/$revision" \
+                sh scripts/check-node-native-performance.sh
+            ) || result=1
+          done
+          exit "$result"
+      - name: Separate candidate queue CPU attribution (not paired timing)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/candidate"
+          mkdir -p "$GITHUB_WORKSPACE/results/profile"
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$PWD" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_NODE_PERF_ALGORITHM=current-reuse \
+            RAZVILKA_NODE_PERF_QUEUE_PROFILE=1 \
+            RAZVILKA_NODE_PERF_OUTPUT="$GITHUB_WORKSPACE/results/profile" \
+            sh scripts/check-node-native-performance.sh
+          go tool pprof -top -nodecount=45 "$GITHUB_WORKSPACE/results/profile/queue-cpu.pprof" > "$GITHUB_WORKSPACE/results/profile/queue-cpu-top.txt"
+          go tool pprof -top -cum -nodecount=45 "$GITHUB_WORKSPACE/results/profile/queue-cpu.pprof" > "$GITHUB_WORKSPACE/results/profile/queue-cpu-cumulative.txt"
+          cat "$GITHUB_WORKSPACE/results/profile/queue-cpu-cumulative.txt"
+      - name: Preserve raw samples even on failure
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: research-probes-${{ github.sha }}
+          path: results
+          if-no-files-found: error
+  mihomo-handler-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Reviewed native assets and isolated namespace prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ca-certificates curl unzip iproute2 util-linux
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures/xray-node26.3.27
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
+          sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz
+          echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
+          sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Actual Mihomo HTTP handler, mandatory TLS and joined cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/mihomo-handler-native
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
+            RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
+            sh scripts/test-mihomo-probe-native.sh 2>&1 | tee artifacts/mihomo-handler-native/native.log
+          grep -q -- '^--- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup' artifacts/mihomo-handler-native/native.log
+          grep -q -- '^--- PASS: TestMihomoOriginalNativeHTTPServiceAndCleanup' artifacts/mihomo-handler-native/native.log
+          if grep -q -- '^--- SKIP:' artifacts/mihomo-handler-native/native.log; then exit 1; fi
+      - name: Retain original native results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-handler-native-${{ github.sha }}
+          path: artifacts/mihomo-handler-native
+          if-no-files-found: warn

@@ -1,0 +1,1680 @@
+﻿2026-11-09T04:39:42.0156276Z Current runner version: '2.338.2'
+2026-11-09T04:39:42.0181211Z ##[group]Runner Image Provisioner
+2026-11-09T04:39:42.0182427Z Hosted Compute Agent
+2026-11-09T04:39:42.0183137Z Version: 20261028.624
+2026-11-09T04:39:42.0183789Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-09T04:39:42.0184505Z Build Date: 2026-10-28T21:51:42Z
+2026-11-09T04:39:42.0185274Z Worker ID: {0bd08567-a22e-483b-bd8f-e60510f07f94}
+2026-11-09T04:39:42.0186039Z Region: westus3
+2026-11-09T04:39:42.0186668Z Cloud: Azure
+2026-11-09T04:39:42.0187245Z ##[endgroup]
+2026-11-09T04:39:42.0189102Z ##[group]Operating System
+2026-11-09T04:39:42.0189892Z Ubuntu
+2026-11-09T04:39:42.0190463Z 24.04.5
+2026-11-09T04:39:42.0191052Z LTS
+2026-11-09T04:39:42.0191607Z ##[endgroup]
+2026-11-09T04:39:42.0192652Z ##[group]Runner Image
+2026-11-09T04:39:42.0193374Z Image: ubuntu-24.04
+2026-11-09T04:39:42.0194006Z Version: 20261101.360.1
+2026-11-09T04:39:42.0195382Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-09T04:39:42.0196975Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-09T04:39:42.0198040Z ##[endgroup]
+2026-11-09T04:39:42.0199168Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T04:39:42.0201124Z Contents: read
+2026-11-09T04:39:42.0202092Z Metadata: read
+2026-11-09T04:39:42.0202839Z ##[endgroup]
+2026-11-09T04:39:42.0205003Z Secret source: Actions
+2026-11-09T04:39:42.0205930Z Cache mode: write
+2026-11-09T04:39:42.0206741Z Prepare workflow directory
+2026-11-09T04:39:42.0617621Z Prepare all required actions
+2026-11-09T04:39:42.0666828Z Getting action download info
+2026-11-09T04:39:42.3796454Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-09T04:39:42.4906370Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-11-09T04:39:43.1298570Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T04:39:43.3446367Z Complete job name: managed-probe-native (race)
+2026-11-09T04:39:43.4374427Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-09T04:39:43.4375500Z with:
+2026-11-09T04:39:43.4375946Z   persist-credentials: false
+2026-11-09T04:39:43.4376475Z   repository: ArtixSx/RAZVILKA
+2026-11-09T04:39:43.4380470Z   token: ***
+2026-11-09T04:39:43.4380903Z   ssh-strict: true
+2026-11-09T04:39:43.4381335Z   ssh-user: git
+2026-11-09T04:39:43.4381949Z   clean: true
+2026-11-09T04:39:43.4382408Z   sparse-checkout-cone-mode: true
+2026-11-09T04:39:43.4382921Z   fetch-depth: 1
+2026-11-09T04:39:43.4383363Z   fetch-tags: false
+2026-11-09T04:39:43.4383798Z   show-progress: true
+2026-11-09T04:39:43.4384253Z   lfs: false
+2026-11-09T04:39:43.4384673Z   submodules: false
+2026-11-09T04:39:43.4385117Z   set-safe-directory: true
+2026-11-09T04:39:43.4385625Z   allow-unsafe-pr-checkout: false
+2026-11-09T04:39:43.4386424Z env:
+2026-11-09T04:39:43.4386841Z   GOTOOLCHAIN: local
+2026-11-09T04:39:43.4387287Z ##[endgroup]
+2026-11-09T04:39:43.6824493Z Syncing repository: ArtixSx/RAZVILKA
+2026-11-09T04:39:43.6827135Z ##[group]Getting Git version info
+2026-11-09T04:39:43.6828363Z Working directory is '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T04:39:43.6830097Z [command]/usr/bin/git version
+2026-11-09T04:39:43.6907356Z git version 2.56.0
+2026-11-09T04:39:43.6933474Z ##[endgroup]
+2026-11-09T04:39:43.6945519Z Temporarily overriding HOME='/home/runner/work/_temp/45170dfa-ca81-4186-a6a3-d50afe788a51' before making global git config changes
+2026-11-09T04:39:43.6948014Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T04:39:43.6951590Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T04:39:43.7002507Z Deleting the contents of '/home/runner/work/RAZVILKA/RAZVILKA'
+2026-11-09T04:39:43.7006325Z ##[group]Determining repository object format
+2026-11-09T04:39:43.7007889Z ##[endgroup]
+2026-11-09T04:39:43.7009161Z ##[group]Initializing the repository
+2026-11-09T04:39:43.7012698Z [command]/usr/bin/git init /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T04:39:43.7123044Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-09T04:39:43.7124967Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-09T04:39:43.7126618Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-09T04:39:43.7127947Z hint: call:
+2026-11-09T04:39:43.7128699Z hint:
+2026-11-09T04:39:43.7129616Z hint: 	git config --global init.defaultBranch <name>
+2026-11-09T04:39:43.7130682Z hint:
+2026-11-09T04:39:43.7131942Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-09T04:39:43.7135855Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-09T04:39:43.7146876Z hint:
+2026-11-09T04:39:43.7148091Z hint: 	git branch -m <name>
+2026-11-09T04:39:43.7149187Z hint:
+2026-11-09T04:39:43.7150564Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-09T04:39:43.7153387Z Initialized empty Git repository in /home/runner/work/RAZVILKA/RAZVILKA/.git/
+2026-11-09T04:39:43.7158173Z [command]/usr/bin/git remote add origin https://github.com/ArtixSx/RAZVILKA
+2026-11-09T04:39:43.7196712Z ##[endgroup]
+2026-11-09T04:39:43.7198188Z ##[group]Disabling automatic garbage collection
+2026-11-09T04:39:43.7200859Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-09T04:39:43.7239396Z ##[endgroup]
+2026-11-09T04:39:43.7241173Z ##[group]Setting up auth
+2026-11-09T04:39:43.7242586Z Removing SSH command configuration
+2026-11-09T04:39:43.7248177Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T04:39:43.7291899Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T04:39:43.7675201Z Removing HTTP extra header
+2026-11-09T04:39:43.7677722Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T04:39:43.7726247Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T04:39:43.7981059Z Removing includeIf entries pointing to credentials config files
+2026-11-09T04:39:43.7986643Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T04:39:43.8033090Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T04:39:43.8280246Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-09T04:39:43.8330252Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path /home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:43.8373862Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:43.8417914Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:43.8463368Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:43.8504910Z ##[endgroup]
+2026-11-09T04:39:43.8505662Z ##[group]Fetching the repository
+2026-11-09T04:39:43.8512240Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a:refs/remotes/origin/work/research-build-20261109
+2026-11-09T04:39:45.3509618Z From https://github.com/ArtixSx/RAZVILKA
+2026-11-09T04:39:45.3513169Z  * [new ref]         a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a -> origin/work/research-build-20261109
+2026-11-09T04:39:45.3519984Z [command]/usr/bin/git branch --list --remote origin/work/research-build-20261109
+2026-11-09T04:39:45.3559541Z   origin/work/research-build-20261109
+2026-11-09T04:39:45.3568529Z [command]/usr/bin/git rev-parse refs/remotes/origin/work/research-build-20261109
+2026-11-09T04:39:45.3604605Z a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a
+2026-11-09T04:39:45.3610553Z ##[endgroup]
+2026-11-09T04:39:45.3613035Z ##[group]Determining the checkout info
+2026-11-09T04:39:45.3615193Z ##[endgroup]
+2026-11-09T04:39:45.3616832Z [command]/usr/bin/git sparse-checkout disable
+2026-11-09T04:39:45.3679766Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-09T04:39:45.3726593Z ##[group]Checking out the ref
+2026-11-09T04:39:45.3730615Z [command]/usr/bin/git checkout --progress --force -B work/research-build-20261109 refs/remotes/origin/work/research-build-20261109
+2026-11-09T04:39:45.6437447Z Switched to a new branch 'work/research-build-20261109'
+2026-11-09T04:39:45.6441927Z branch 'work/research-build-20261109' set up to track 'origin/work/research-build-20261109'.
+2026-11-09T04:39:45.6455664Z ##[endgroup]
+2026-11-09T04:39:45.6513504Z [command]/usr/bin/git log -1 --format=%H
+2026-11-09T04:39:45.6553075Z a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a
+2026-11-09T04:39:45.6567380Z ##[group]Removing auth
+2026-11-09T04:39:45.6569374Z Removing SSH command configuration
+2026-11-09T04:39:45.6572345Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T04:39:45.6618403Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T04:39:45.6870269Z Removing HTTP extra header
+2026-11-09T04:39:45.6874805Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T04:39:45.6924279Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T04:39:45.7173368Z Removing includeIf entries pointing to credentials config files
+2026-11-09T04:39:45.7176290Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T04:39:45.7224106Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T04:39:45.7227417Z includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T04:39:45.7308065Z includeif.gitdir:/github/workspace/.git.path
+2026-11-09T04:39:45.7310352Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T04:39:45.7326575Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path
+2026-11-09T04:39:45.7329927Z /home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:45.7336277Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-b3112d25\-b794\-4c5d\-9f17\-0cbd0230934c\.config
+2026-11-09T04:39:45.7371083Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path
+2026-11-09T04:39:45.7409184Z /home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:45.7420429Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/RAZVILKA/RAZVILKA/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-b3112d25\-b794\-4c5d\-9f17\-0cbd0230934c\.config
+2026-11-09T04:39:45.7465378Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-09T04:39:45.7502546Z /github/runner_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:45.7512778Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-b3112d25\-b794\-4c5d\-9f17\-0cbd0230934c\.config
+2026-11-09T04:39:45.7560192Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-09T04:39:45.7595133Z /github/runner_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config
+2026-11-09T04:39:45.7604857Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-b3112d25\-b794\-4c5d\-9f17\-0cbd0230934c\.config
+2026-11-09T04:39:45.7650049Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T04:39:45.7900062Z Removing credentials config '/home/runner/work/_temp/git-credentials-b3112d25-b794-4c5d-9f17-0cbd0230934c.config'
+2026-11-09T04:39:45.7909208Z ##[endgroup]
+2026-11-09T04:39:45.8255157Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-11-09T04:39:45.8256650Z with:
+2026-11-09T04:39:45.8257498Z   go-version: 1.26.5
+2026-11-09T04:39:45.8258426Z   cache: false
+2026-11-09T04:39:45.8259321Z   check-latest: false
+2026-11-09T04:39:45.8268829Z   token: ***
+2026-11-09T04:39:45.8269712Z env:
+2026-11-09T04:39:45.8270532Z   GOTOOLCHAIN: local
+2026-11-09T04:39:45.8271467Z ##[endgroup]
+2026-11-09T04:39:45.9473681Z Setup go version spec 1.26.5
+2026-11-09T04:39:45.9489615Z Attempting to download 1.26.5...
+2026-11-09T04:39:46.9176726Z matching 1.26.5...
+2026-11-09T04:39:46.9194720Z Acquiring 1.26.5 from https://github.com/actions/go-versions/releases/download/1.26.5-28913679792/go-1.26.5-linux-x64.tar.gz
+2026-11-09T04:39:47.5767097Z Extracting Go...
+2026-11-09T04:39:47.5917678Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/43049c24-f0e3-43cc-89fc-408dc0901c39 -f /home/runner/work/_temp/4bce48f2-bed0-496a-b466-f3ac7c0ebe2d
+2026-11-09T04:39:49.1951323Z Successfully extracted go to /home/runner/work/_temp/43049c24-f0e3-43cc-89fc-408dc0901c39
+2026-11-09T04:39:49.1952217Z Adding to the cache ...
+2026-11-09T04:39:54.0189856Z Successfully cached go to /opt/hostedtoolcache/go/1.26.5/x64
+2026-11-09T04:39:54.0192795Z Added go to the path
+2026-11-09T04:39:54.0194914Z Successfully set up Go version 1.26.5
+2026-11-09T04:39:54.0451309Z go version go1.26.5 linux/amd64
+2026-11-09T04:39:54.0451522Z 
+2026-11-09T04:39:54.0452173Z ##[group]go env
+2026-11-09T04:39:54.1808540Z AR='ar'
+2026-11-09T04:39:54.1809020Z CC='gcc'
+2026-11-09T04:39:54.1809428Z CGO_CFLAGS='-O2 -g'
+2026-11-09T04:39:54.1809888Z CGO_CPPFLAGS=''
+2026-11-09T04:39:54.1810317Z CGO_CXXFLAGS='-O2 -g'
+2026-11-09T04:39:54.1810798Z CGO_ENABLED='1'
+2026-11-09T04:39:54.1811205Z CGO_FFLAGS='-O2 -g'
+2026-11-09T04:39:54.1811629Z CGO_LDFLAGS='-O2 -g'
+2026-11-09T04:39:54.1812332Z CXX='g++'
+2026-11-09T04:39:54.1812715Z GCCGO='gccgo'
+2026-11-09T04:39:54.1813064Z GO111MODULE=''
+2026-11-09T04:39:54.1813337Z GOAMD64='v1'
+2026-11-09T04:39:54.1813585Z GOARCH='amd64'
+2026-11-09T04:39:54.1813839Z GOAUTH='netrc'
+2026-11-09T04:39:54.1814080Z GOBIN=''
+2026-11-09T04:39:54.1814360Z GOCACHE='/home/runner/.cache/go-build'
+2026-11-09T04:39:54.1814716Z GOCACHEPROG=''
+2026-11-09T04:39:54.1814997Z GODEBUG=''
+2026-11-09T04:39:54.1815266Z GOENV='/home/runner/.config/go/env'
+2026-11-09T04:39:54.1815629Z GOEXE=''
+2026-11-09T04:39:54.1815878Z GOEXPERIMENT=''
+2026-11-09T04:39:54.1816137Z GOFIPS140='off'
+2026-11-09T04:39:54.1816385Z GOFLAGS=''
+2026-11-09T04:39:54.1817269Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build4050480120=/tmp/go-build -gno-record-gcc-switches'
+2026-11-09T04:39:54.1818198Z GOHOSTARCH='amd64'
+2026-11-09T04:39:54.1818721Z GOHOSTOS='linux'
+2026-11-09T04:39:54.1819022Z GOINSECURE=''
+2026-11-09T04:39:54.1819393Z GOMOD='/home/runner/work/RAZVILKA/RAZVILKA/go.mod'
+2026-11-09T04:39:54.1819846Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-11-09T04:39:54.1820200Z GONOPROXY=''
+2026-11-09T04:39:54.1820446Z GONOSUMDB=''
+2026-11-09T04:39:54.1820686Z GOOS='linux'
+2026-11-09T04:39:54.1820943Z GOPATH='/home/runner/go'
+2026-11-09T04:39:54.1821226Z GOPRIVATE=''
+2026-11-09T04:39:54.1821548Z GOPROXY='https://proxy.golang.org,direct'
+2026-11-09T04:39:54.1822216Z GOROOT='/opt/hostedtoolcache/go/1.26.5/x64'
+2026-11-09T04:39:54.1822537Z GOSUMDB='sum.golang.org'
+2026-11-09T04:39:54.1822788Z GOTELEMETRY='local'
+2026-11-09T04:39:54.1823053Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-11-09T04:39:54.1823359Z GOTMPDIR=''
+2026-11-09T04:39:54.1823551Z GOTOOLCHAIN='local'
+2026-11-09T04:39:54.1823868Z GOTOOLDIR='/opt/hostedtoolcache/go/1.26.5/x64/pkg/tool/linux_amd64'
+2026-11-09T04:39:54.1824219Z GOVCS=''
+2026-11-09T04:39:54.1824415Z GOVERSION='go1.26.5'
+2026-11-09T04:39:54.1824627Z GOWORK=''
+2026-11-09T04:39:54.1824834Z PKG_CONFIG='pkg-config'
+2026-11-09T04:39:54.1824982Z 
+2026-11-09T04:39:54.1825312Z ##[endgroup]
+2026-11-09T04:39:54.2018938Z ##[group]Run sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+2026-11-09T04:39:54.2020727Z [36;1msudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0[0m
+2026-11-09T04:39:54.2047370Z shell: /usr/bin/bash -e {0}
+2026-11-09T04:39:54.2047634Z env:
+2026-11-09T04:39:54.2047831Z   GOTOOLCHAIN: local
+2026-11-09T04:39:54.2048050Z ##[endgroup]
+2026-11-09T04:39:54.2862185Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T04:39:54.3192451Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-09T04:39:54.3203141Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-11-09T04:39:54.3239308Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-11-09T04:39:54.3256096Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-11-09T04:39:54.3445958Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-11-09T04:39:54.4558172Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1425 kB]
+2026-11-09T04:39:54.4693686Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [313 kB]
+2026-11-09T04:39:54.4717314Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1711 kB]
+2026-11-09T04:39:54.4806884Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [344 kB]
+2026-11-09T04:39:54.4830133Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1839 kB]
+2026-11-09T04:39:54.4923319Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [420 kB]
+2026-11-09T04:39:54.4948173Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [50.7 kB]
+2026-11-09T04:39:54.4952538Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [14.3 kB]
+2026-11-09T04:39:54.5832969Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1157 kB]
+2026-11-09T04:39:54.5869410Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [234 kB]
+2026-11-09T04:39:54.6323175Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1228 kB]
+2026-11-09T04:39:54.6373505Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [248 kB]
+2026-11-09T04:39:54.6412559Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1721 kB]
+2026-11-09T04:39:54.6458452Z Get:23 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [743 kB]
+2026-11-09T04:39:54.6492806Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [394 kB]
+2026-11-09T04:39:54.6520199Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [45.4 kB]
+2026-11-09T04:39:54.6526692Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [12.4 kB]
+2026-11-09T04:39:54.6589450Z Get:24 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [675 kB]
+2026-11-09T04:39:57.8546931Z Fetched 13.0 MB in 1s (10.1 MB/s)
+2026-11-09T04:39:58.9849318Z Reading package lists...
+2026-11-09T04:39:59.0227168Z Reading package lists...
+2026-11-09T04:39:59.2368412Z Building dependency tree...
+2026-11-09T04:39:59.2376174Z Reading state information...
+2026-11-09T04:39:59.3801654Z iptables is already the newest version (1.8.10-3ubuntu2).
+2026-11-09T04:39:59.3802887Z iptables set to manually installed.
+2026-11-09T04:39:59.3803392Z nftables is already the newest version (1.0.9-1ubuntu0.1).
+2026-11-09T04:39:59.3804443Z iproute2 is already the newest version (6.1.0-1ubuntu6.4).
+2026-11-09T04:39:59.3805036Z util-linux is already the newest version (2.39.3-9ubuntu6.6).
+2026-11-09T04:39:59.3805662Z iputils-ping is already the newest version (3:20240117-1ubuntu0.1).
+2026-11-09T04:39:59.3806271Z python3 is already the newest version (3.12.3-0ubuntu2.1).
+2026-11-09T04:39:59.3806996Z curl is already the newest version (8.5.0-2ubuntu10.16).
+2026-11-09T04:39:59.3807658Z libnfnetlink0 is already the newest version (1.0.2-2build1).
+2026-11-09T04:39:59.3808174Z libnfnetlink0 set to manually installed.
+2026-11-09T04:39:59.3808689Z zlib1g is already the newest version (1:1.3.dfsg-3.1ubuntu2.3).
+2026-11-09T04:39:59.3809247Z libmnl0 is already the newest version (1.0.5-2build1).
+2026-11-09T04:39:59.3809703Z libmnl0 set to manually installed.
+2026-11-09T04:39:59.3810163Z The following additional packages will be installed:
+2026-11-09T04:39:59.3810662Z   libluajit-5.1-common
+2026-11-09T04:39:59.4011029Z The following NEW packages will be installed:
+2026-11-09T04:39:59.4017869Z   libluajit-5.1-2 libluajit-5.1-common libnetfilter-queue1 wireguard-tools
+2026-11-09T04:39:59.4021065Z The following packages will be upgraded:
+2026-11-09T04:39:59.4028054Z   ca-certificates
+2026-11-09T04:39:59.4224001Z 1 upgraded, 4 newly installed, 0 to remove and 26 not upgraded.
+2026-11-09T04:39:59.4224709Z Need to get 569 kB of archives.
+2026-11-09T04:39:59.4225356Z After this operation, 1219 kB of additional disk space will be used.
+2026-11-09T04:39:59.4226110Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-11-09T04:39:59.4844194Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 ca-certificates all 20260816ubuntu0.24.04.2 [140 kB]
+2026-11-09T04:39:59.5315059Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-common all 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [49.5 kB]
+2026-11-09T04:39:59.5773040Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 libluajit-5.1-2 amd64 2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1 [276 kB]
+2026-11-09T04:39:59.6258892Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 libnetfilter-queue1 amd64 1.0.5-4build1 [15.1 kB]
+2026-11-09T04:39:59.6715525Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 wireguard-tools amd64 1.0.20210914-1ubuntu4 [89.1 kB]
+2026-11-09T04:39:59.9045681Z Preconfiguring packages ...
+2026-11-09T04:40:00.3358507Z Fetched 569 kB in 0s (2168 kB/s)
+2026-11-09T04:40:00.3855543Z (Reading database ... 
+2026-11-09T04:40:00.3856227Z (Reading database ... 5%
+2026-11-09T04:40:00.3856956Z (Reading database ... 10%
+2026-11-09T04:40:00.3857320Z (Reading database ... 15%
+2026-11-09T04:40:00.3857618Z (Reading database ... 20%
+2026-11-09T04:40:00.3857903Z (Reading database ... 25%
+2026-11-09T04:40:00.3858184Z (Reading database ... 30%
+2026-11-09T04:40:00.3858710Z (Reading database ... 35%
+2026-11-09T04:40:00.3858994Z (Reading database ... 40%
+2026-11-09T04:40:00.3859278Z (Reading database ... 45%
+2026-11-09T04:40:00.3859567Z (Reading database ... 50%
+2026-11-09T04:40:00.3896359Z (Reading database ... 55%
+2026-11-09T04:40:00.5398213Z (Reading database ... 60%
+2026-11-09T04:40:00.6403775Z (Reading database ... 65%
+2026-11-09T04:40:00.8876478Z (Reading database ... 70%
+2026-11-09T04:40:01.0393596Z (Reading database ... 75%
+2026-11-09T04:40:01.1903928Z (Reading database ... 80%
+2026-11-09T04:40:01.3813174Z (Reading database ... 85%
+2026-11-09T04:40:01.5903254Z (Reading database ... 90%
+2026-11-09T04:40:01.7485171Z (Reading database ... 95%
+2026-11-09T04:40:01.7485807Z (Reading database ... 100%
+2026-11-09T04:40:01.7486642Z (Reading database ... 215960 files and directories currently installed.)
+2026-11-09T04:40:01.7529486Z Preparing to unpack .../ca-certificates_20260816ubuntu0.24.04.2_all.deb ...
+2026-11-09T04:40:01.7652871Z Unpacking ca-certificates (20260816ubuntu0.24.04.2) over (20260816ubuntu0.24.04.1) ...
+2026-11-09T04:40:01.8314781Z Selecting previously unselected package libluajit-5.1-common.
+2026-11-09T04:40:01.8460154Z Preparing to unpack .../libluajit-5.1-common_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_all.deb ...
+2026-11-09T04:40:01.8467586Z Unpacking libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T04:40:01.8727116Z Selecting previously unselected package libluajit-5.1-2:amd64.
+2026-11-09T04:40:01.8867150Z Preparing to unpack .../libluajit-5.1-2_2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1_amd64.deb ...
+2026-11-09T04:40:01.8885127Z Unpacking libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T04:40:01.9142977Z Selecting previously unselected package libnetfilter-queue1:amd64.
+2026-11-09T04:40:01.9284182Z Preparing to unpack .../libnetfilter-queue1_1.0.5-4build1_amd64.deb ...
+2026-11-09T04:40:01.9291446Z Unpacking libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T04:40:01.9519723Z Selecting previously unselected package wireguard-tools.
+2026-11-09T04:40:01.9659780Z Preparing to unpack .../wireguard-tools_1.0.20210914-1ubuntu4_amd64.deb ...
+2026-11-09T04:40:01.9666829Z Unpacking wireguard-tools (1.0.20210914-1ubuntu4) ...
+2026-11-09T04:40:02.0195169Z Setting up ca-certificates (20260816ubuntu0.24.04.2) ...
+2026-11-09T04:40:03.6576723Z Updating certificates in /etc/ssl/certs...
+2026-11-09T04:40:04.1385471Z 0 added, 0 removed; done.
+2026-11-09T04:40:04.1386165Z Running hooks in /etc/ca-certificates/update.d...
+2026-11-09T04:40:04.1744708Z /etc/ssl/certs/adoptium/cacerts successfully populated.
+2026-11-09T04:40:04.1747130Z done.
+2026-11-09T04:40:04.1972080Z Setting up libluajit-5.1-common (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T04:40:04.1990416Z Setting up wireguard-tools (1.0.20210914-1ubuntu4) ...
+2026-11-09T04:40:04.4775290Z wg-quick.target is a disabled or a static unit, not starting it.
+2026-11-09T04:40:04.4794480Z Setting up libnetfilter-queue1:amd64 (1.0.5-4build1) ...
+2026-11-09T04:40:04.4813999Z Setting up libluajit-5.1-2:amd64 (2.1.0+git20231223.c525bcb+dfsg-1ubuntu0.1) ...
+2026-11-09T04:40:04.4839716Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-11-09T04:40:04.4863015Z Not building database; man-db/auto-update is not 'true'.
+2026-11-09T04:40:04.4875542Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+2026-11-09T04:40:05.1820850Z 
+2026-11-09T04:40:05.1821501Z Running kernel seems to be up-to-date.
+2026-11-09T04:40:05.1822118Z 
+2026-11-09T04:40:05.1822322Z No services need to be restarted.
+2026-11-09T04:40:05.1822642Z 
+2026-11-09T04:40:05.1822829Z No containers need to be restarted.
+2026-11-09T04:40:05.1823164Z 
+2026-11-09T04:40:05.1823405Z No user sessions are running outdated binaries.
+2026-11-09T04:40:05.1823789Z 
+2026-11-09T04:40:05.1824185Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-11-09T04:40:06.0913190Z ##[group]Run race_flag=()
+2026-11-09T04:40:06.0913524Z [36;1mrace_flag=()[0m
+2026-11-09T04:40:06.0914007Z [36;1mif [ "race" = race ]; then race_flag=(-race); fi[0m
+2026-11-09T04:40:06.0914561Z [36;1msudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T04:40:06.0916907Z [36;1m  go test "${race_flag[@]}" -count=1 ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSActiveReadObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics' -v[0m
+2026-11-09T04:40:06.0940449Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T04:40:06.0940826Z env:
+2026-11-09T04:40:06.0941026Z   GOTOOLCHAIN: local
+2026-11-09T04:40:06.0941248Z ##[endgroup]
+2026-11-09T04:40:06.2344604Z go: downloading golang.org/x/sys v0.47.0
+2026-11-09T04:40:06.2629530Z go: downloading golang.org/x/crypto v0.54.0
+2026-11-09T04:40:06.2652767Z go: downloading golang.org/x/net v0.56.0
+2026-11-09T04:40:06.6012386Z go: downloading gopkg.in/yaml.v3 v3.0.1
+2026-11-09T04:40:06.6363852Z go: downloading github.com/quic-go/quic-go v0.61.0
+2026-11-09T04:40:06.6458038Z go: downloading golang.org/x/text v0.40.0
+2026-11-09T04:40:06.7739270Z go: downloading github.com/quic-go/qpack v0.6.0
+2026-11-09T04:40:45.8449912Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences
+2026-11-09T04:40:45.8451121Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged
+2026-11-09T04:40:45.8452794Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime
+2026-11-09T04:40:45.8454171Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte
+2026-11-09T04:40:45.8455399Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated
+2026-11-09T04:40:45.8456605Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd
+2026-11-09T04:40:45.8457747Z === RUN   TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled
+2026-11-09T04:40:45.8458981Z --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences (0.02s)
+2026-11-09T04:40:45.8460489Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/unchanged (0.00s)
+2026-11-09T04:40:45.8462487Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/changed-byte-restored-mtime (0.00s)
+2026-11-09T04:40:45.8464195Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/extra-byte (0.00s)
+2026-11-09T04:40:45.8465817Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/truncated (0.00s)
+2026-11-09T04:40:45.8467358Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/closed-fd (0.00s)
+2026-11-09T04:40:45.8468976Z     --- PASS: TestManagedNFQWSRuntimeImageSecondReadPreservesByteAndEOFFences/canceled (0.01s)
+2026-11-09T04:40:45.8470249Z === RUN   TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier
+2026-11-09T04:40:45.8471493Z --- PASS: TestManagedNFQWSRuntimeImagePreservesOriginalLeaseAndDefaultVerifier (0.13s)
+2026-11-09T04:40:45.8473712Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift
+2026-11-09T04:40:45.8475194Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime
+2026-11-09T04:40:45.8476902Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode
+2026-11-09T04:40:45.8478658Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member
+2026-11-09T04:40:45.8480833Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced
+2026-11-09T04:40:45.8482515Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd
+2026-11-09T04:40:45.8484654Z === RUN   TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled
+2026-11-09T04:40:45.8486084Z --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift (0.45s)
+2026-11-09T04:40:45.8488123Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-restored-mtime (0.11s)
+2026-11-09T04:40:45.8490167Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/same-bytes-replaced-inode (0.09s)
+2026-11-09T04:40:45.8492294Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/extra-member (0.06s)
+2026-11-09T04:40:45.8494704Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/named-root-replaced (0.06s)
+2026-11-09T04:40:45.8496992Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/closed-original-fd (0.06s)
+2026-11-09T04:40:45.8499015Z     --- PASS: TestManagedNFQWSRuntimeImageClosingRefusesActualSourceDrift/canceled (0.07s)
+2026-11-09T04:40:45.8500782Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking
+2026-11-09T04:40:45.8502183Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo
+2026-11-09T04:40:45.8503911Z === RUN   TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink
+2026-11-09T04:40:45.8505375Z --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking (0.15s)
+2026-11-09T04:40:45.8507248Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/fifo (0.07s)
+2026-11-09T04:40:45.8509047Z     --- PASS: TestManagedNFQWSRuntimeImageRefusesFIFOAndSymlinkWithoutBlocking/symlink (0.08s)
+2026-11-09T04:40:45.8510171Z === RUN   TestManagedRuntimePayloadScratchExclusiveAndCleared
+2026-11-09T04:40:45.8511111Z --- PASS: TestManagedRuntimePayloadScratchExclusiveAndCleared (0.06s)
+2026-11-09T04:40:45.8512197Z === RUN   TestManagedRuntimePayloadScratchBounds
+2026-11-09T04:40:45.8513176Z --- PASS: TestManagedRuntimePayloadScratchBounds (0.00s)
+2026-11-09T04:40:45.8513781Z PASS
+2026-11-09T04:40:45.8514284Z ok  	github.com/ArtixSx/razvilka/internal/components	2.135s
+2026-11-09T04:40:45.8514992Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds
+2026-11-09T04:40:45.8515683Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/0
+2026-11-09T04:40:45.8516427Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/1
+2026-11-09T04:40:45.8517173Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/63
+2026-11-09T04:40:45.8517897Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/64
+2026-11-09T04:40:45.8518601Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/65
+2026-11-09T04:40:45.8519311Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/511
+2026-11-09T04:40:45.8520358Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/512
+2026-11-09T04:40:45.8521109Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/513
+2026-11-09T04:40:45.8522033Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4095
+2026-11-09T04:40:45.8522782Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4096
+2026-11-09T04:40:45.8523551Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/4097
+2026-11-09T04:40:45.8524272Z === RUN   TestBoundedReadKeepsExactReadAndEOFBounds/65536
+2026-11-09T04:40:45.8525047Z --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds (0.05s)
+2026-11-09T04:40:45.8526002Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/0 (0.00s)
+2026-11-09T04:40:45.8526948Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/1 (0.00s)
+2026-11-09T04:40:45.8527905Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/63 (0.00s)
+2026-11-09T04:40:45.8528859Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/64 (0.00s)
+2026-11-09T04:40:45.8529819Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/65 (0.00s)
+2026-11-09T04:40:45.8530784Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/511 (0.00s)
+2026-11-09T04:40:45.8532435Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/512 (0.00s)
+2026-11-09T04:40:45.8533924Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/513 (0.00s)
+2026-11-09T04:40:45.8534959Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4095 (0.00s)
+2026-11-09T04:40:45.8536116Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4096 (0.01s)
+2026-11-09T04:40:45.8537147Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/4097 (0.00s)
+2026-11-09T04:40:45.8538200Z     --- PASS: TestBoundedReadKeepsExactReadAndEOFBounds/65536 (0.01s)
+2026-11-09T04:40:45.8538965Z === RUN   TestIdentitySyscallsConcurrentGC
+2026-11-09T04:40:45.8539591Z --- PASS: TestIdentitySyscallsConcurrentGC (0.10s)
+2026-11-09T04:40:45.8540124Z PASS
+2026-11-09T04:40:45.8540601Z ok  	github.com/ArtixSx/razvilka/internal/netidentity	1.206s
+2026-11-09T04:40:45.8682347Z === RUN   TestDumpScratchNeverAliasesReturnedKernelMessages
+2026-11-09T04:40:45.8687130Z --- PASS: TestDumpScratchNeverAliasesReturnedKernelMessages (0.01s)
+2026-11-09T04:40:45.8688522Z === RUN   TestPacketUnsubmittedReadKeepsOnlyOriginalRetainedCleanup
+2026-11-09T04:40:45.8690078Z --- PASS: TestPacketUnsubmittedReadKeepsOnlyOriginalRetainedCleanup (0.04s)
+2026-11-09T04:40:45.8694099Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner
+2026-11-09T04:40:45.8708543Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/plain_cancellation
+2026-11-09T04:40:45.8710316Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_source_loss
+2026-11-09T04:40:45.8712351Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_cancellation
+2026-11-09T04:40:45.8714593Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/copied_token
+2026-11-09T04:40:45.8812574Z === RUN   TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/wrong_boundary
+2026-11-09T04:40:45.8824825Z --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner (0.02s)
+2026-11-09T04:40:45.8826444Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/plain_cancellation (0.00s)
+2026-11-09T04:40:45.8828070Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_source_loss (0.00s)
+2026-11-09T04:40:45.8829607Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/joined_cancellation (0.00s)
+2026-11-09T04:40:45.8831113Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/copied_token (0.00s)
+2026-11-09T04:40:45.8840168Z     --- PASS: TestPacketUnsubmittedReadDoesNotHideLossOrAdoptOtherOwner/wrong_boundary (0.00s)
+2026-11-09T04:40:45.8841896Z === RUN   TestPacketUnsubmittedReadCannotRecoverClosedCollector
+2026-11-09T04:40:45.8843143Z --- PASS: TestPacketUnsubmittedReadCannotRecoverClosedCollector (0.02s)
+2026-11-09T04:40:45.8844158Z === RUN   TestFenceWakeFullQueueAndOwnedClose
+2026-11-09T04:40:45.8844841Z --- PASS: TestFenceWakeFullQueueAndOwnedClose (0.00s)
+2026-11-09T04:40:45.8846495Z === RUN   TestFenceWakeRefusesReplacementWithoutClosingIt
+2026-11-09T04:40:45.8847568Z --- PASS: TestFenceWakeRefusesReplacementWithoutClosingIt (0.00s)
+2026-11-09T04:40:45.8848342Z === RUN   TestFenceWakeRejectsMalformedHint
+2026-11-09T04:40:45.8849265Z --- PASS: TestFenceWakeRejectsMalformedHint (0.00s)
+2026-11-09T04:40:45.8850151Z === RUN   TestFenceWakeBurstAndCloseJoin
+2026-11-09T04:40:45.8850723Z --- PASS: TestFenceWakeBurstAndCloseJoin (0.01s)
+2026-11-09T04:40:45.8852180Z === RUN   TestOriginalFenceCollectorDrainsBetweenChecksWithoutRefreshing
+2026-11-09T04:40:45.8853786Z --- PASS: TestOriginalFenceCollectorDrainsBetweenChecksWithoutRefreshing (0.18s)
+2026-11-09T04:40:45.8855296Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate
+2026-11-09T04:40:45.8856901Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/before-first-facts
+2026-11-09T04:40:45.8858193Z === RUN   TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/between-checks
+2026-11-09T04:40:45.8859662Z --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate (0.00s)
+2026-11-09T04:40:45.8861059Z     --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/before-first-facts (0.00s)
+2026-11-09T04:40:45.8862911Z     --- PASS: TestOriginalFenceCollectorKeepsStartupAndDeleteRecreate/between-checks (0.00s)
+2026-11-09T04:40:45.8863918Z === RUN   TestOriginalFenceCollectorStartupBounds
+2026-11-09T04:40:45.8864774Z === RUN   TestOriginalFenceCollectorStartupBounds/bytes-across-empty-checkpoints
+2026-11-09T04:40:45.8865780Z === RUN   TestOriginalFenceCollectorStartupBounds/datagrams
+2026-11-09T04:40:45.8866552Z --- PASS: TestOriginalFenceCollectorStartupBounds (0.10s)
+2026-11-09T04:40:45.8867740Z     --- PASS: TestOriginalFenceCollectorStartupBounds/bytes-across-empty-checkpoints (0.07s)
+2026-11-09T04:40:45.8868932Z     --- PASS: TestOriginalFenceCollectorStartupBounds/datagrams (0.03s)
+2026-11-09T04:40:45.8869845Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky
+2026-11-09T04:40:45.8870843Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/loss
+2026-11-09T04:40:45.8872158Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/truncation
+2026-11-09T04:40:45.8873271Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/unknown
+2026-11-09T04:40:45.8874343Z === RUN   TestOriginalFenceCollectorLossTruncationUnknownAreSticky/malformed
+2026-11-09T04:40:45.8875401Z --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky (0.01s)
+2026-11-09T04:40:45.8876612Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/loss (0.00s)
+2026-11-09T04:40:45.8877939Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/truncation (0.00s)
+2026-11-09T04:40:45.8879267Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/unknown (0.00s)
+2026-11-09T04:40:45.8880589Z     --- PASS: TestOriginalFenceCollectorLossTruncationUnknownAreSticky/malformed (0.00s)
+2026-11-09T04:40:45.8881574Z === RUN   TestOriginalFenceCollectorRejectsReplacementFacts
+2026-11-09T04:40:45.8885552Z --- PASS: TestOriginalFenceCollectorRejectsReplacementFacts (0.00s)
+2026-11-09T04:40:45.8886506Z === RUN   TestOriginalFenceCollectorCanceledQueuedCheckpointAndJoin
+2026-11-09T04:40:45.8887498Z --- PASS: TestOriginalFenceCollectorCanceledQueuedCheckpointAndJoin (0.00s)
+2026-11-09T04:40:45.8888398Z === RUN   TestOriginalFenceCollectorCloseWaitsForReader
+2026-11-09T04:40:45.8889175Z --- PASS: TestOriginalFenceCollectorCloseWaitsForReader (0.00s)
+2026-11-09T04:40:45.8890072Z === RUN   TestOriginalFenceCollectorPacketPendingAndFreshEpochBookends
+2026-11-09T04:40:45.8891127Z --- PASS: TestOriginalFenceCollectorPacketPendingAndFreshEpochBookends (0.01s)
+2026-11-09T04:40:45.8892343Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted
+2026-11-09T04:40:45.8893332Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-full
+2026-11-09T04:40:45.8894404Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-finite
+2026-11-09T04:40:45.8895822Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/full-packet
+2026-11-09T04:40:45.8897224Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/finite-packet
+2026-11-09T04:40:45.8898629Z === RUN   TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-changed
+2026-11-09T04:40:45.8899997Z --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted (0.03s)
+2026-11-09T04:40:45.8901683Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-full (0.01s)
+2026-11-09T04:40:45.8903445Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-finite (0.01s)
+2026-11-09T04:40:45.8904970Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/full-packet (0.01s)
+2026-11-09T04:40:45.8906404Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/finite-packet (0.01s)
+2026-11-09T04:40:45.8907799Z     --- PASS: TestOriginalFenceCollectorPacketPurposeCannotBeAdopted/packet-changed (0.01s)
+2026-11-09T04:40:45.8909184Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky
+2026-11-09T04:40:45.8910326Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/loss
+2026-11-09T04:40:45.8911933Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/truncated
+2026-11-09T04:40:45.8913139Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/malformed
+2026-11-09T04:40:45.8914370Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-flags
+2026-11-09T04:40:45.8915667Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-type
+2026-11-09T04:40:45.8916978Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-address-claim
+2026-11-09T04:40:45.8918282Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-mac-claim
+2026-11-09T04:40:45.8919526Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-link
+2026-11-09T04:40:45.8920777Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-address
+2026-11-09T04:40:45.8922203Z === RUN   TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/home-route
+2026-11-09T04:40:45.8923440Z --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky (0.03s)
+2026-11-09T04:40:45.8924878Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/loss (0.00s)
+2026-11-09T04:40:45.8926404Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/truncated (0.01s)
+2026-11-09T04:40:45.8927976Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/malformed (0.00s)
+2026-11-09T04:40:45.8929578Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-flags (0.01s)
+2026-11-09T04:40:45.8931210Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/neighbor-type (0.00s)
+2026-11-09T04:40:45.8933569Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-address-claim (0.00s)
+2026-11-09T04:40:45.8935648Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/own-mac-claim (0.00s)
+2026-11-09T04:40:45.8937468Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-link (0.00s)
+2026-11-09T04:40:45.8939531Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/owned-address (0.00s)
+2026-11-09T04:40:45.8941491Z     --- PASS: TestOriginalFenceCollectorPacketLossAndStructuralEventsAreSticky/home-route (0.01s)
+2026-11-09T04:40:45.8943123Z === RUN   TestOriginalFenceCollectorPacketEpochOverflowCannotWrap
+2026-11-09T04:40:45.8944267Z --- PASS: TestOriginalFenceCollectorPacketEpochOverflowCannotWrap (0.00s)
+2026-11-09T04:40:45.8945289Z === RUN   TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader
+2026-11-09T04:40:45.8946357Z --- PASS: TestOriginalFenceCollectorConcurrentChecksCloseHaveOneReader (0.00s)
+2026-11-09T04:40:45.8947589Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal
+2026-11-09T04:40:45.8948985Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/wait-error
+2026-11-09T04:40:45.8950577Z === RUN   TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/changed-before-receive
+2026-11-09T04:40:45.8952295Z --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal (0.00s)
+2026-11-09T04:40:45.8954062Z     --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/wait-error (0.00s)
+2026-11-09T04:40:45.8956027Z     --- PASS: TestOriginalFenceCollectorUnexpectedReaderExitAndDescriptorChangeAreTerminal/changed-before-receive (0.00s)
+2026-11-09T04:40:45.8957135Z PASS
+2026-11-09T04:40:45.8957623Z ok  	github.com/ArtixSx/razvilka/internal/physicalscope	1.767s
+2026-11-09T04:41:10.5076715Z === RUN   TestHashImageConcurrentFreshBytesAndFailures
+2026-11-09T04:41:10.5077321Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/0
+2026-11-09T04:41:10.5080305Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/0
+2026-11-09T04:41:10.5081407Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/1
+2026-11-09T04:41:10.5082324Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/1
+2026-11-09T04:41:10.5083021Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/2
+2026-11-09T04:41:10.5083681Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/2
+2026-11-09T04:41:10.5084307Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/3
+2026-11-09T04:41:10.5084791Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/3
+2026-11-09T04:41:10.5085263Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/4
+2026-11-09T04:41:10.5085722Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/4
+2026-11-09T04:41:10.5086180Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/5
+2026-11-09T04:41:10.5086640Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/5
+2026-11-09T04:41:10.5087115Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/6
+2026-11-09T04:41:10.5087579Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/6
+2026-11-09T04:41:10.5088045Z === RUN   TestHashImageConcurrentFreshBytesAndFailures/7
+2026-11-09T04:41:10.5088498Z === PAUSE TestHashImageConcurrentFreshBytesAndFailures/7
+2026-11-09T04:41:10.5088955Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/0
+2026-11-09T04:41:10.5089409Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/4
+2026-11-09T04:41:10.5089862Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/3
+2026-11-09T04:41:10.5090314Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/7
+2026-11-09T04:41:10.5090766Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/6
+2026-11-09T04:41:10.5091221Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/5
+2026-11-09T04:41:10.5091923Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/1
+2026-11-09T04:41:10.5092649Z === CONT  TestHashImageConcurrentFreshBytesAndFailures/2
+2026-11-09T04:41:10.5093323Z --- PASS: TestHashImageConcurrentFreshBytesAndFailures (0.01s)
+2026-11-09T04:41:10.5094233Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/0 (0.02s)
+2026-11-09T04:41:10.5095217Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/4 (0.02s)
+2026-11-09T04:41:10.5096168Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/7 (0.03s)
+2026-11-09T04:41:10.5098623Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/5 (0.01s)
+2026-11-09T04:41:10.5099194Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/3 (0.03s)
+2026-11-09T04:41:10.5099732Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/6 (0.02s)
+2026-11-09T04:41:10.5100258Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/1 (0.01s)
+2026-11-09T04:41:10.5100780Z     --- PASS: TestHashImageConcurrentFreshBytesAndFailures/2 (0.01s)
+2026-11-09T04:41:10.5101278Z === RUN   TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof
+2026-11-09T04:41:10.5102145Z === RUN   TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/none
+2026-11-09T04:41:10.5102749Z === RUN   TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/symlink
+2026-11-09T04:41:10.5103356Z === RUN   TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/membership
+2026-11-09T04:41:10.5103995Z === RUN   TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/directory-inode
+2026-11-09T04:41:10.5104637Z --- PASS: TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof (0.01s)
+2026-11-09T04:41:10.5105338Z     --- PASS: TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/none (0.00s)
+2026-11-09T04:41:10.5106075Z     --- PASS: TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/symlink (0.00s)
+2026-11-09T04:41:10.5106833Z     --- PASS: TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/membership (0.00s)
+2026-11-09T04:41:10.5107627Z     --- PASS: TestVersionExtensionPathKeepsFreshSymlinkAndMembershipProof/directory-inode (0.00s)
+2026-11-09T04:41:10.5108263Z === RUN   TestVersionExtensionPathAllowsOriginalCaptureMetadataRefresh
+2026-11-09T04:41:10.5109314Z --- PASS: TestVersionExtensionPathAllowsOriginalCaptureMetadataRefresh (0.00s)
+2026-11-09T04:41:10.5110100Z === RUN   TestVersionExtensionPathRefusesCopiedForeignAndChangedSources
+2026-11-09T04:41:10.5110705Z --- PASS: TestVersionExtensionPathRefusesCopiedForeignAndChangedSources (0.00s)
+2026-11-09T04:41:10.5111251Z === RUN   TestHashAndOutputBoundNeverReturnTruncatedEvidence
+2026-11-09T04:41:10.5112509Z --- PASS: TestHashAndOutputBoundNeverReturnTruncatedEvidence (0.00s)
+2026-11-09T04:41:10.5113381Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift
+2026-11-09T04:41:10.5114030Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/same-bytes-new-ctime
+2026-11-09T04:41:10.5114732Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/named-replacement
+2026-11-09T04:41:10.5115407Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/new-extension
+2026-11-09T04:41:10.5116108Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/missing-named-node
+2026-11-09T04:41:10.5116818Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/different-named-node
+2026-11-09T04:41:10.5117549Z === RUN   TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/foreign-held-descriptor
+2026-11-09T04:41:10.5118235Z --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift (0.01s)
+2026-11-09T04:41:10.5119049Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/same-bytes-new-ctime (0.00s)
+2026-11-09T04:41:10.5119929Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/named-replacement (0.00s)
+2026-11-09T04:41:10.5120768Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/new-extension (0.00s)
+2026-11-09T04:41:10.5121620Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/missing-named-node (0.00s)
+2026-11-09T04:41:10.5122810Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/different-named-node (0.00s)
+2026-11-09T04:41:10.5123712Z     --- PASS: TestVersionBatchMetadataRejectsRestoredMtimeAndMembershipDrift/foreign-held-descriptor (0.00s)
+2026-11-09T04:41:10.5124241Z PASS
+2026-11-09T04:41:10.5124523Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	1.206s
+2026-11-09T04:41:53.2364514Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer
+2026-11-09T04:41:53.2365616Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/original
+2026-11-09T04:41:53.2366769Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/readonly-copy
+2026-11-09T04:41:53.2368004Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/mixed-callback
+2026-11-09T04:41:53.2369226Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-network
+2026-11-09T04:41:53.2370339Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-runner
+2026-11-09T04:41:53.2371589Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-plan
+2026-11-09T04:41:53.2373139Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-context
+2026-11-09T04:41:53.2374391Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/copied-owner
+2026-11-09T04:41:53.2375548Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/source-drift
+2026-11-09T04:41:53.2376677Z === RUN   TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/canceled
+2026-11-09T04:41:53.2377781Z --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer (0.21s)
+2026-11-09T04:41:53.2379121Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/original (0.02s)
+2026-11-09T04:41:53.2380586Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/readonly-copy (0.02s)
+2026-11-09T04:41:53.2382322Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/mixed-callback (0.03s)
+2026-11-09T04:41:53.2383796Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-network (0.02s)
+2026-11-09T04:41:53.2384761Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-runner (0.02s)
+2026-11-09T04:41:53.2385546Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-plan (0.02s)
+2026-11-09T04:41:53.2386345Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/foreign-context (0.02s)
+2026-11-09T04:41:53.2387135Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/copied-owner (0.02s)
+2026-11-09T04:41:53.2387915Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/source-drift (0.02s)
+2026-11-09T04:41:53.2388663Z     --- PASS: TestNFQWSActiveInventoryReadRequiresUnmixedOriginalProducer/canceled (0.02s)
+2026-11-09T04:41:53.2389277Z === RUN   TestNFQWSActiveProcessDirectoryFreshManualKeepsOriginalCustody
+2026-11-09T04:41:53.2389876Z --- PASS: TestNFQWSActiveProcessDirectoryFreshManualKeepsOriginalCustody (0.01s)
+2026-11-09T04:41:53.2390464Z === RUN   TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement
+2026-11-09T04:41:53.2391034Z === RUN   TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/child
+2026-11-09T04:41:53.2391623Z === RUN   TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/runtime
+2026-11-09T04:41:53.2392582Z === RUN   TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/manager
+2026-11-09T04:41:53.2393210Z === RUN   TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/review-closed
+2026-11-09T04:41:53.2393848Z --- PASS: TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement (0.03s)
+2026-11-09T04:41:53.2394578Z     --- PASS: TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/child (0.01s)
+2026-11-09T04:41:53.2395340Z     --- PASS: TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/runtime (0.01s)
+2026-11-09T04:41:53.2396098Z     --- PASS: TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/manager (0.01s)
+2026-11-09T04:41:53.2396883Z     --- PASS: TestNFQWSActiveProcessDirectoryRejectsOriginalRootReplacement/review-closed (0.01s)
+2026-11-09T04:41:53.2397537Z === RUN   TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair
+2026-11-09T04:41:53.2398174Z === RUN   TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/public-runtime
+2026-11-09T04:41:53.2398853Z === RUN   TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/symlink-child
+2026-11-09T04:41:53.2399522Z === RUN   TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/closed-review
+2026-11-09T04:41:53.2400172Z === RUN   TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/canceled
+2026-11-09T04:41:53.2400861Z --- PASS: TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair (0.03s)
+2026-11-09T04:41:53.2401858Z     --- PASS: TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/public-runtime (0.01s)
+2026-11-09T04:41:53.2402765Z     --- PASS: TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/symlink-child (0.01s)
+2026-11-09T04:41:53.2403621Z     --- PASS: TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/closed-review (0.01s)
+2026-11-09T04:41:53.2404446Z     --- PASS: TestNFQWSActiveProcessDirectoryRefusesForeignLayoutWithoutRepair/canceled (0.01s)
+2026-11-09T04:41:53.2405090Z === RUN   TestNFQWSActiveProcessDirectoryRecordedCloseFailureStaysSticky
+2026-11-09T04:41:53.2405685Z --- PASS: TestNFQWSActiveProcessDirectoryRecordedCloseFailureStaysSticky (0.01s)
+2026-11-09T04:41:53.2406284Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity
+2026-11-09T04:41:53.2406878Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/original
+2026-11-09T04:41:53.2407506Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/copy
+2026-11-09T04:41:53.2408129Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/malformed
+2026-11-09T04:41:53.2408938Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/canceled
+2026-11-09T04:41:53.2409770Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/foreign-plan
+2026-11-09T04:41:53.2410589Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/changed-source
+2026-11-09T04:41:53.2411264Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/closing-owner
+2026-11-09T04:41:53.2412191Z === RUN   TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/callback-error
+2026-11-09T04:41:53.2412857Z --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity (0.15s)
+2026-11-09T04:41:53.2413625Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/original (0.02s)
+2026-11-09T04:41:53.2414416Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/copy (0.02s)
+2026-11-09T04:41:53.2415205Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/malformed (0.02s)
+2026-11-09T04:41:53.2416010Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/canceled (0.02s)
+2026-11-09T04:41:53.2416851Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/foreign-plan (0.02s)
+2026-11-09T04:41:53.2417698Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/changed-source (0.02s)
+2026-11-09T04:41:53.2418541Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/closing-owner (0.02s)
+2026-11-09T04:41:53.2419381Z     --- PASS: TestNFQWSActiveReadObservationOriginalDispatchAndClosingIdentity/callback-error (0.02s)
+2026-11-09T04:41:53.2420059Z === RUN   TestNFQWSActiveReadObservationPreservesReadonlyCopyAndBareFallback
+2026-11-09T04:41:53.2420685Z --- PASS: TestNFQWSActiveReadObservationPreservesReadonlyCopyAndBareFallback (0.02s)
+2026-11-09T04:41:53.2421290Z === RUN   TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan
+2026-11-09T04:41:53.2422197Z === RUN   TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan/before-start
+2026-11-09T04:41:53.2422828Z === RUN   TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan/prepared
+2026-11-09T04:41:53.2423445Z --- PASS: TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan (0.04s)
+2026-11-09T04:41:53.2424200Z     --- PASS: TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan/before-start (0.02s)
+2026-11-09T04:41:53.2424993Z     --- PASS: TestNFQWSActiveReadObservationRegistrarCopiesKeepOriginalLoan/prepared (0.02s)
+2026-11-09T04:41:53.2425676Z === RUN   TestNFQWSExecutionDiagnosticsPreserveOriginalPreflightClassification
+2026-11-09T04:41:53.2426323Z --- PASS: TestNFQWSExecutionDiagnosticsPreserveOriginalPreflightClassification (0.00s)
+2026-11-09T04:41:53.2426903Z === RUN   TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages
+2026-11-09T04:41:53.2427393Z --- PASS: TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages (0.00s)
+2026-11-09T04:41:53.2427772Z PASS
+2026-11-09T04:41:53.2428044Z ok  	github.com/ArtixSx/razvilka/internal/dataplane	2.970s
+2026-11-09T04:41:53.4570377Z ##[group]Run go test ./internal/startuptools -run '^TestFreshPathNode' -count=1 -v
+2026-11-09T04:41:53.4571022Z [36;1mgo test ./internal/startuptools -run '^TestFreshPathNode' -count=1 -v[0m
+2026-11-09T04:41:53.4573073Z [36;1mgo test ./internal/startuptools -run '^$' -bench '^BenchmarkFreshPathNode$' -benchtime=1s -count=3 -benchmem[0m
+2026-11-09T04:41:53.4593537Z shell: /usr/bin/bash -e {0}
+2026-11-09T04:41:53.4593777Z env:
+2026-11-09T04:41:53.4594012Z   GOTOOLCHAIN: local
+2026-11-09T04:41:53.4594223Z ##[endgroup]
+2026-11-09T04:42:34.3858166Z === RUN   TestFreshPathNodeActualRootNodes
+2026-11-09T04:42:34.3862335Z --- PASS: TestFreshPathNodeActualRootNodes (0.00s)
+2026-11-09T04:42:34.3863388Z === RUN   TestFreshPathNodeStatComparisonFields
+2026-11-09T04:42:34.3864308Z === RUN   TestFreshPathNodeStatComparisonFields/size
+2026-11-09T04:42:34.3865039Z === RUN   TestFreshPathNodeStatComparisonFields/ctime
+2026-11-09T04:42:34.3865821Z === RUN   TestFreshPathNodeStatComparisonFields/mtime
+2026-11-09T04:42:34.3866507Z === RUN   TestFreshPathNodeStatComparisonFields/device
+2026-11-09T04:42:34.3867586Z === RUN   TestFreshPathNodeStatComparisonFields/inode
+2026-11-09T04:42:34.3868312Z === RUN   TestFreshPathNodeStatComparisonFields/mode
+2026-11-09T04:42:34.3868994Z === RUN   TestFreshPathNodeStatComparisonFields/uid
+2026-11-09T04:42:34.3869645Z === RUN   TestFreshPathNodeStatComparisonFields/gid
+2026-11-09T04:42:34.3870330Z --- PASS: TestFreshPathNodeStatComparisonFields (0.00s)
+2026-11-09T04:42:34.3871194Z     --- PASS: TestFreshPathNodeStatComparisonFields/size (0.00s)
+2026-11-09T04:42:34.3872605Z     --- PASS: TestFreshPathNodeStatComparisonFields/ctime (0.00s)
+2026-11-09T04:42:34.3873742Z     --- PASS: TestFreshPathNodeStatComparisonFields/mtime (0.00s)
+2026-11-09T04:42:34.3874810Z     --- PASS: TestFreshPathNodeStatComparisonFields/device (0.00s)
+2026-11-09T04:42:34.3875344Z     --- PASS: TestFreshPathNodeStatComparisonFields/inode (0.00s)
+2026-11-09T04:42:34.3875861Z     --- PASS: TestFreshPathNodeStatComparisonFields/mode (0.00s)
+2026-11-09T04:42:34.3876360Z     --- PASS: TestFreshPathNodeStatComparisonFields/uid (0.00s)
+2026-11-09T04:42:34.3876859Z     --- PASS: TestFreshPathNodeStatComparisonFields/gid (0.00s)
+2026-11-09T04:42:34.3877203Z PASS
+2026-11-09T04:42:34.3877517Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	0.010s
+2026-11-09T04:42:35.0778986Z goos: linux
+2026-11-09T04:42:35.0779400Z goarch: amd64
+2026-11-09T04:42:35.0779919Z pkg: github.com/ArtixSx/razvilka/internal/startuptools
+2026-11-09T04:42:35.0780620Z cpu: AMD EPYC 7763 64-Core Processor                
+2026-11-09T04:42:36.2094964Z BenchmarkFreshPathNode/fileinfo-4         	  666184	      1669 ns/op	     224 B/op	       2 allocs/op
+2026-11-09T04:42:37.4123523Z BenchmarkFreshPathNode/fileinfo-4         	  698614	      1693 ns/op	     224 B/op	       2 allocs/op
+2026-11-09T04:42:39.6082538Z BenchmarkFreshPathNode/fileinfo-4         	  710030	      1671 ns/op	     224 B/op	       2 allocs/op
+2026-11-09T04:42:40.8328509Z BenchmarkFreshPathNode/direct-stat-4      	  823844	      1465 ns/op	      16 B/op	       1 allocs/op
+2026-11-09T04:42:42.0461548Z BenchmarkFreshPathNode/direct-stat-4      	  822338	      1454 ns/op	      16 B/op	       1 allocs/op
+2026-11-09T04:42:43.2708866Z BenchmarkFreshPathNode/direct-stat-4      	  825586	      1463 ns/op	      16 B/op	       1 allocs/op
+2026-11-09T04:42:43.2709883Z PASS
+2026-11-09T04:42:43.2727258Z ok  	github.com/ArtixSx/razvilka/internal/startuptools	8.205s
+2026-11-09T04:42:43.2953406Z ##[group]Run set -euo pipefail
+2026-11-09T04:42:43.2953723Z [36;1mset -euo pipefail[0m
+2026-11-09T04:42:43.2953985Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T04:42:43.2954426Z [36;1msudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T04:42:43.2955188Z [36;1m  RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/managed/probe.log[0m
+2026-11-09T04:42:43.2956040Z [36;1mgrep -F -- '--- PASS: TestStaticVersionFactNativeClassicBatchBookends ' artifacts/managed/probe.log[0m
+2026-11-09T04:42:43.2956812Z [36;1mgrep -F -- '--- PASS: TestManagedStrategyProbeNativeAppHTTP ' artifacts/managed/probe.log[0m
+2026-11-09T04:42:43.2957401Z [36;1mif grep -F -- '--- SKIP:' artifacts/managed/probe.log; then exit 1; fi[0m
+2026-11-09T04:42:43.2977526Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T04:42:43.2977889Z env:
+2026-11-09T04:42:43.2978116Z   GOTOOLCHAIN: local
+2026-11-09T04:42:43.2978341Z ##[endgroup]
+2026-11-09T04:42:43.3300103Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T04:42:43.3303030Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T04:42:43.3303962Z 
+2026-11-09T04:42:43.5868706Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:42:43.5870045Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:42:43.7250024Z 
+2026-11-09T04:42:43.8423264Z  27 9335k   27 2557k    0     0  6472k      0  0:00:01 --:--:--  0:00:01 6472k
+2026-11-09T04:42:43.8424567Z 100 9335k  100 9335k    0     0  17.7M      0 --:--:-- --:--:-- --:--:-- 56.5M
+2026-11-09T04:42:43.8548924Z /tmp/razvilka-managed-probe.ng6eOy/release.tar.gz: OK
+2026-11-09T04:42:44.0604442Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T04:42:44.0650373Z Actual native build mode: race
+2026-11-09T04:42:44.0658220Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T04:42:44.0687365Z go version go1.26.5 linux/amd64
+2026-11-09T04:42:44.0903954Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-09T04:43:43.1767240Z Actual compiled reader/consumer bytes: 62427401
+2026-11-09T04:43:43.3208687Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:43.3565881Z === RUN   TestStaticVersionFactNativeClassicBatchBookends
+2026-11-09T04:43:43.8531351Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=0 children=2 metadata=4 elapsed_ms=11.679
+2026-11-09T04:43:43.8645926Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=1 children=2 metadata=4 elapsed_ms=11.504
+2026-11-09T04:43:43.8759344Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=2 children=2 metadata=4 elapsed_ms=11.264
+2026-11-09T04:43:43.8879126Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=3 children=2 metadata=4 elapsed_ms=11.974
+2026-11-09T04:43:43.8994854Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=4 children=2 metadata=4 elapsed_ms=11.491
+2026-11-09T04:43:43.9114406Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=5 children=2 metadata=4 elapsed_ms=11.861
+2026-11-09T04:43:43.9230082Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=6 children=2 metadata=4 elapsed_ms=11.363
+2026-11-09T04:43:43.9347618Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=7 children=2 metadata=4 elapsed_ms=11.643
+2026-11-09T04:43:43.9459111Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=8 children=2 metadata=4 elapsed_ms=11.138
+2026-11-09T04:43:43.9577265Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=9 children=2 metadata=4 elapsed_ms=11.772
+2026-11-09T04:43:43.9688701Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=10 children=2 metadata=4 elapsed_ms=11.116
+2026-11-09T04:43:43.9805340Z     classic_batch_observation_native_linux_test.go:40: classic_batch_actual sample=11 children=2 metadata=4 elapsed_ms=11.579
+2026-11-09T04:43:43.9953433Z --- PASS: TestStaticVersionFactNativeClassicBatchBookends (0.64s)
+2026-11-09T04:43:43.9956642Z PASS
+2026-11-09T04:43:45.0962176Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:45.1314134Z === RUN   TestStaticVersionFactNativePolicyReadObservation
+2026-11-09T04:43:45.5780193Z     policy_read_observation_native_fixture_linux_test.go:59: actual original IPv4/IPv6 rule read output unchanged; foreign/expired original loan and mutation refused
+2026-11-09T04:43:45.5786993Z --- PASS: TestStaticVersionFactNativePolicyReadObservation (0.45s)
+2026-11-09T04:43:45.5789033Z PASS
+2026-11-09T04:43:46.6781461Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:46.7135737Z === RUN   TestStaticVersionFactNativeScope
+2026-11-09T04:43:47.0453651Z     version_fact_native_fixture_linux_test.go:68: actual version batch 0 0 metadata traversals 6
+2026-11-09T04:43:47.0533862Z     version_fact_native_fixture_linux_test.go:68: actual version batch 0 1 metadata traversals 2
+2026-11-09T04:43:47.1062204Z     version_fact_native_fixture_linux_test.go:68: actual version batch 1 0 metadata traversals 6
+2026-11-09T04:43:47.1143542Z     version_fact_native_fixture_linux_test.go:68: actual version batch 1 1 metadata traversals 2
+2026-11-09T04:43:47.1366634Z     version_fact_native_fixture_linux_test.go:101: actual first/fresh scope aliases=2 IP=1; repeated/nested aliases=0 IP=1; copied/expired refused
+2026-11-09T04:43:47.1373032Z --- PASS: TestStaticVersionFactNativeScope (0.42s)
+2026-11-09T04:43:47.1374589Z PASS
+2026-11-09T04:43:48.2379744Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:48.2735012Z === RUN   TestStaticVersionFactNativeFailedIPClearsFact
+2026-11-09T04:43:48.4975784Z     version_fact_native_fixture_linux_test.go:242: actual IP Start EAGAIN cleared retained fact; unfiltered original scope reran both aliases and IP; original exception preserved
+2026-11-09T04:43:48.4978406Z --- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.22s)
+2026-11-09T04:43:48.4979691Z PASS
+2026-11-09T04:43:49.5979657Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:49.6333415Z === RUN   TestStaticVersionFactNativePartialBatchNeverRetained
+2026-11-09T04:43:49.8503262Z --- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.22s)
+2026-11-09T04:43:49.8505035Z PASS
+2026-11-09T04:43:50.9509403Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:50.9866229Z === RUN   TestStaticVersionFactNativeOriginalFingerprint
+2026-11-09T04:43:51.3988509Z --- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.41s)
+2026-11-09T04:43:51.3989140Z PASS
+2026-11-09T04:43:52.4982178Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:52.5328920Z === RUN   TestClassicReadBatchNativeMutation
+2026-11-09T04:43:52.5329664Z === RUN   TestClassicReadBatchNativeMutation/held-file
+2026-11-09T04:43:52.7261422Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; held-file change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:52.7290599Z === RUN   TestClassicReadBatchNativeMutation/extension-membership
+2026-11-09T04:43:52.9159614Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; extension-membership change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:52.9189294Z === RUN   TestClassicReadBatchNativeMutation/observation-held-file
+2026-11-09T04:43:53.1095424Z     classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-09T04:43:53.1170499Z     classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-09T04:43:53.4182526Z     classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-09T04:43:53.4639656Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-held-file change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:53.4669444Z === RUN   TestClassicReadBatchNativeMutation/observation-extension-membership
+2026-11-09T04:43:53.6570271Z     classic_batch_native_fixture_linux_test.go:322: native completed scoped three-version Check original metadata traversal attempts 6
+2026-11-09T04:43:53.6642473Z     classic_batch_native_fixture_linux_test.go:332: native actual version child Starts first/repeated [iptables ip6tables IP] [1 1 1] [0 0 1]
+2026-11-09T04:43:53.9592718Z     classic_batch_native_fixture_linux_test.go:151: actual original readonly observation: error/panic/late marker/effect rejection and cancellation+held-read join confirmed
+2026-11-09T04:43:54.0184094Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; observation-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:54.0213678Z === RUN   TestClassicReadBatchNativeMutation/observation-close
+2026-11-09T04:43:54.2136884Z     classic_batch_native_fixture_linux_test.go:151: actual external original Lease.Close cancelled and joined readonly observation before closing held descriptors
+2026-11-09T04:43:54.2162808Z === RUN   TestClassicReadBatchNativeMutation/inventory-held-file
+2026-11-09T04:43:54.4149732Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-held-file change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:54.4187766Z === RUN   TestClassicReadBatchNativeMutation/inventory-extension-membership
+2026-11-09T04:43:54.6303648Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-membership change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:54.6335024Z === RUN   TestClassicReadBatchNativeMutation/inventory-extension-symlink
+2026-11-09T04:43:54.8316617Z     classic_batch_native_fixture_linux_test.go:260: actual protected first -S loaded held TCP extension; inventory-extension-symlink change refused whole image; no hooks or packets, host tools unchanged
+2026-11-09T04:43:54.8345378Z --- PASS: TestClassicReadBatchNativeMutation (2.30s)
+2026-11-09T04:43:54.8346278Z     --- PASS: TestClassicReadBatchNativeMutation/held-file (0.20s)
+2026-11-09T04:43:54.8347047Z     --- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.19s)
+2026-11-09T04:43:54.8348368Z     --- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.55s)
+2026-11-09T04:43:54.8349447Z     --- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.55s)
+2026-11-09T04:43:54.8350321Z     --- PASS: TestClassicReadBatchNativeMutation/observation-close (0.19s)
+2026-11-09T04:43:54.8351351Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.20s)
+2026-11-09T04:43:54.8352523Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.21s)
+2026-11-09T04:43:54.8353452Z     --- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.20s)
+2026-11-09T04:43:54.8354032Z PASS
+2026-11-09T04:43:55.9363970Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:43:55.9766435Z === RUN   TestManagedStrategyProbeNativeConsumer
+2026-11-09T04:44:00.0397054Z     strategy_managed_probe_native_linux_test.go:496: actual producer private parent before first consumer: stat /var/lib/razvilka-probe-native-3418968730/dataplane/runtime/nfqws2: no such file or directory
+2026-11-09T04:44:12.0405861Z     strategy_managed_probe_native_linux_test.go:667: native parent goroutine stacks before bounded probe deadline:
+2026-11-09T04:44:12.0407219Z         goroutine 1455 [running]:
+2026-11-09T04:44:12.0408565Z         github.com/ArtixSx/razvilka/internal/app.managedProbeNativeStackDeadline.func1()
+2026-11-09T04:44:12.0410933Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:666 +0xab
+2026-11-09T04:44:12.0412896Z         created by time.goFunc
+2026-11-09T04:44:12.0414066Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/time/sleep.go:215 +0x45
+2026-11-09T04:44:12.0414781Z         
+2026-11-09T04:44:12.0415507Z         goroutine 1 [chan receive]:
+2026-11-09T04:44:12.0416464Z         testing.(*T).Run(0xc0000e86c8, {0x2cfa6af, 0x26}, 0x2e0a2f8)
+2026-11-09T04:44:12.0417946Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2109 +0xb3e
+2026-11-09T04:44:12.0419008Z         testing.runTests.func1(0xc0000e86c8)
+2026-11-09T04:44:12.0420093Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2585 +0x85
+2026-11-09T04:44:12.0420993Z         testing.tRunner(0xc0000e86c8, 0xc00021f9a0)
+2026-11-09T04:44:12.0422277Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0x21d
+2026-11-09T04:44:12.0424028Z         testing.runTests({0x2cd6c5a, 0x1b}, {0x2d00809, 0x28}, 0xc000016108, {0x3f81500, 0x49c, 0x49c}, {0xc2b471dbfa0e8fae, 0x1749cca62a, ...})
+2026-11-09T04:44:12.0425596Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2583 +0x9ea
+2026-11-09T04:44:12.0426295Z         testing.(*M).Run(0xc00025e0a0)
+2026-11-09T04:44:12.0426865Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2443 +0xf4c
+2026-11-09T04:44:12.0427472Z         github.com/ArtixSx/razvilka/internal/app.TestMain(0xc00025e0a0)
+2026-11-09T04:44:12.0428329Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:69 +0x529
+2026-11-09T04:44:12.0428897Z         main.main()
+2026-11-09T04:44:12.0429209Z         	_testmain.go:2406 +0x172
+2026-11-09T04:44:12.0429475Z         
+2026-11-09T04:44:12.0429795Z         goroutine 21 [runnable, locked to thread]:
+2026-11-09T04:44:12.0430190Z         syscall.Syscall(0x3, 0xa2, 0x0, 0x0)
+2026-11-09T04:44:12.0430788Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:74 +0x2b
+2026-11-09T04:44:12.0431230Z         syscall.Close(0xa2)
+2026-11-09T04:44:12.0432111Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/zsyscall_linux_amd64.go:335 +0x39
+2026-11-09T04:44:12.0433036Z         internal/poll.(*SysFile).destroy(...)
+2026-11-09T04:44:12.0434128Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unixjs.go:24
+2026-11-09T04:44:12.0435006Z         internal/poll.(*FD).destroy(0xc0000b0fc0)
+2026-11-09T04:44:12.0436082Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:82 +0xb9
+2026-11-09T04:44:12.0436968Z         internal/poll.(*FD).decref(0xc0000b0fc0)
+2026-11-09T04:44:12.0438044Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_mutex.go:213 +0x37
+2026-11-09T04:44:12.0438934Z         internal/poll.(*FD).Close(0xc0000b0fc0)
+2026-11-09T04:44:12.0439990Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:105 +0x7d
+2026-11-09T04:44:12.0441209Z         os.(*file).close(0xc0000b0fc0)
+2026-11-09T04:44:12.0442569Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_unix.go:315 +0xdd
+2026-11-09T04:44:12.0443338Z         os.(*File).Close(...)
+2026-11-09T04:44:12.0444197Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:24
+2026-11-09T04:44:12.0445496Z         github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryThreadProc.func3(0x97)
+2026-11-09T04:44:12.0447265Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_linux.go:324 +0x15e
+2026-11-09T04:44:12.0449093Z         github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryThreadProc({0x2e349c0, 0xc00003b590}, 0x0)
+2026-11-09T04:44:12.0451029Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_linux.go:354 +0x1aa2
+2026-11-09T04:44:12.0453167Z         github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryRegisteredTables({0x2e349c0, 0xc00003b590}, 0x4)
+2026-11-09T04:44:12.0455099Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_linux.go:211 +0x93
+2026-11-09T04:44:12.0456970Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic.func1.3({0x2e349c0, 0xc00003b590})
+2026-11-09T04:44:12.0458826Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:414 +0x54
+2026-11-09T04:44:12.0460679Z         github.com/ArtixSx/razvilka/internal/dataplane.backendInventoryLeaf[...]({0x2e349f8?, 0xc000264690}, 0xc000ae0290)
+2026-11-09T04:44:12.0462759Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:185 +0xd5
+2026-11-09T04:44:12.0464598Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic.func1()
+2026-11-09T04:44:12.0466292Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:413 +0x144c
+2026-11-09T04:44:12.0468995Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic(0xc000a403c0, {0x2e349f8, 0xc000264690}, {{0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...}, ...)
+2026-11-09T04:44:12.0471366Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:426 +0x259
+2026-11-09T04:44:12.0473833Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture(_, {_, _}, {{0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...}, ...)
+2026-11-09T04:44:12.0475094Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:267 +0xd57
+2026-11-09T04:44:12.0476492Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2({0x2e349c0, 0xc000a40f50})
+2026-11-09T04:44:12.0478804Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_observation.go:78 +0x51d
+2026-11-09T04:44:12.0481594Z         github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0xc000002000, {0x2e349c0, 0xc000a40f50}, {0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...)
+2026-11-09T04:44:12.0484059Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/read_observation_linux.go:37 +0x49c
+2026-11-09T04:44:12.0485608Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation(_, {_, _}, {{0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...}, ...)
+2026-11-09T04:44:12.0487395Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_observation.go:56 +0xa64
+2026-11-09T04:44:12.0488749Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1({0x2e349c0, 0xc000a40410}, {0x1, {0x2cb2c8a, 0xe}, {0xc000458690, 0x24}, 0xf00001e6, {0x0, 0x0}})
+2026-11-09T04:44:12.0490164Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:162 +0x43e
+2026-11-09T04:44:12.0491209Z         github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent(0xc0001b2ab0, {0x2e349f8, 0xc0002645b0}, 0xc000318960)
+2026-11-09T04:44:12.0492632Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/netidentity/provider.go:159 +0x402
+2026-11-09T04:44:12.0493921Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read(_, {_, _}, {{0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...}, ...)
+2026-11-09T04:44:12.0495055Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:153 +0xa9e
+2026-11-09T04:44:12.0496270Z         github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read(_, {_, _}, {{0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...})
+2026-11-09T04:44:12.0497360Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory.go:127 +0x279
+2026-11-09T04:44:12.0499249Z         github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read(_, {_, _}, {0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}})
+2026-11-09T04:44:12.0501386Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_backend_inventory_api.go:69 +0x1b5
+2026-11-09T04:44:12.0503693Z         github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsScopedNetworkBinding).rules(0xc0000b19e0, {0x2e34988, 0xc0000fe8d0}, 0xc0000e8d88)
+2026-11-09T04:44:12.0505638Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_network.go:107 +0x192
+2026-11-09T04:44:12.0507949Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readClassicRules(0xc0006221e0, {0x2e34988, 0xc0000fe8d0}, 0xc0000e8d88)
+2026-11-09T04:44:12.0509917Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:119 +0x1b1
+2026-11-09T04:44:12.0512186Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules(0xc0006221e0, {0x2e34988, 0xc0000fe8d0}, 0xc0000e8d88)
+2026-11-09T04:44:12.0514120Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:95 +0xd2
+2026-11-09T04:44:12.0516724Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved(0xc0006221e0, {0x2e34988, 0xc0000fe8d0}, 0xc0000e8d88, 0x2, 0xffffffffffffffff, 0xffffffffffffffff)
+2026-11-09T04:44:12.0519062Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:516 +0x6ac
+2026-11-09T04:44:12.0521538Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply.(*NFQWSScopedBinding).readback.(*NFQWSScopedBinding).readbackPrefix.func1({0x2e34988, 0xc0000fe8d0})
+2026-11-09T04:44:12.0524015Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:460 +0x87
+2026-11-09T04:44:12.0526706Z         github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation(0xc000002000, {0x2e349f8, 0xc000264380}, {0x1, {0x2cb2c8a, 0xe}, {0xc0004a6240, 0x24}, 0xf00001e6, {0x0, ...}}, ...)
+2026-11-09T04:44:12.0529078Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/startuptools/read_observation_linux.go:61 +0xcd5
+2026-11-09T04:44:12.0531137Z         github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools(0xc000431508, {0x2e349f8, 0xc000264380}, 0xc00054a000)
+2026-11-09T04:44:12.0533425Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_read_observation.go:20 +0x362
+2026-11-09T04:44:12.0535679Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools(0xc0006221e0, {0x2e349f8, 0xc000264380}, 0xc0000e8d88, 0xc00054a000)
+2026-11-09T04:44:12.0537808Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_read_observation.go:42 +0x1d1
+2026-11-09T04:44:12.0539419Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefix(...)
+2026-11-09T04:44:12.0541253Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:459
+2026-11-09T04:44:12.0543001Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readback(...)
+2026-11-09T04:44:12.0544559Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_readback.go:455
+2026-11-09T04:44:12.0546716Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply(0xc0006221e0, {0x2e349f8, 0xc000264380}, 0xc0000e8d88, {0xc00018a0b0, 0xa2})
+2026-11-09T04:44:12.0548754Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_scoped_owner.go:575 +0x63e
+2026-11-09T04:44:12.0551420Z         github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1({0x2e349f8, 0xc000264380}, {{0xc00058b3e0, 0x29}, {0xc00080f098, 0x13}, {0xc0005689c0, 0x40}, {0xc000125094, 0x23}, ...})
+2026-11-09T04:44:12.0554196Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_nfqws_assembly.go:200 +0x62e
+2026-11-09T04:44:12.0556981Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal(_, {_, _}, {{0xc0002dd2a0, 0x20}, {0xc000047b80, 0x42}, {0xc00080eee8, 0x18}, {0xc0001246c0, ...}, ...}, ...)
+2026-11-09T04:44:12.0559392Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:379 +0x3465
+2026-11-09T04:44:12.0562391Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission(_, {_, _}, {{0xc0002dd2a0, 0x20}, {0xc000047b80, 0x42}, {0xc00080eee8, 0x18}, {0xc0001246c0, ...}, ...}, ...)
+2026-11-09T04:44:12.0565142Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:167 +0x2de
+2026-11-09T04:44:12.0566922Z         github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run(0xc000180b40, 0xc00022efe0)
+2026-11-09T04:44:12.0568849Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_nfqws_assembly.go:212 +0x8a5
+2026-11-09T04:44:12.0571589Z         github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary(0xc0001e4918, {0x2e34988, 0xc0001b3050}, {0x0, {0x2cb816f, 0x10}, 0x1, {0xc00080f098, 0x13}, {0xc0005689c0, ...}, ...}, ...)
+2026-11-09T04:44:12.0574122Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_execution.go:84 +0xafc
+2026-11-09T04:44:12.0575823Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2({0x2e34988, 0xc0001b3050})
+2026-11-09T04:44:12.0577389Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:648 +0x231
+2026-11-09T04:44:12.0578979Z         github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody(0xc0003a2488, 0xc000489478)
+2026-11-09T04:44:12.0580756Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/domain_tcp_action_failure.go:9 +0x1d6
+2026-11-09T04:44:12.0583121Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+2026-11-09T04:44:12.0585282Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:781 +0x207
+2026-11-09T04:44:12.0587610Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+2026-11-09T04:44:12.0589886Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:763 +0x1766
+2026-11-09T04:44:12.0591530Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModesLocked(...)
+2026-11-09T04:44:12.0592933Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:691
+2026-11-09T04:44:12.0594038Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesModeLocked(...)
+2026-11-09T04:44:12.0596049Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:687
+2026-11-09T04:44:12.0598303Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+2026-11-09T04:44:12.0599944Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/network_policy_manager_resource_scope.go:683 +0xf9
+2026-11-09T04:44:12.0600927Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3({0x2e34988, 0xc0003f0060})
+2026-11-09T04:44:12.0602073Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:652 +0x16b
+2026-11-09T04:44:12.0603059Z         github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate(_, {_, _}, {{0x0, 0x0}, 0x0, 0x0, 0x0, 0x0, 0x0, ...}, ...)
+2026-11-09T04:44:12.0603956Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/manager.go:654 +0x137f
+2026-11-09T04:44:12.0605379Z         github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute(_, {_, _}, _, _, _, {{0x2ca6cec, 0x6}, {0x2cc0c3f, 0x13}, ...}, ...)
+2026-11-09T04:44:12.0607454Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:357 +0x31d0
+2026-11-09T04:44:12.0609339Z         github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer(0xc0000e8908, 0x0, 0x0, {0x0, 0x0, 0x0})
+2026-11-09T04:44:12.0611364Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:509 +0x63eb
+2026-11-09T04:44:12.0613290Z         github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer(0xc0000e8908)
+2026-11-09T04:44:12.0615374Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:91 +0x32
+2026-11-09T04:44:12.0616498Z         testing.tRunner(0xc0000e8908, 0x2e0a2f8)
+2026-11-09T04:44:12.0617609Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0x21d
+2026-11-09T04:44:12.0618529Z         created by testing.(*T).Run in goroutine 1
+2026-11-09T04:44:12.0619591Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0xb13
+2026-11-09T04:44:12.0620266Z         
+2026-11-09T04:44:12.0620704Z         goroutine 29 [IO wait]:
+2026-11-09T04:44:12.0621445Z         internal/poll.runtime_pollWait(0x7f28aff4fe00, 0x72)
+2026-11-09T04:44:12.0622814Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/netpoll.go:351 +0x85
+2026-11-09T04:44:12.0623834Z         internal/poll.(*pollDesc).wait(0xc0000f40a0, 0x72, 0x0)
+2026-11-09T04:44:12.0625105Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:84 +0xb1
+2026-11-09T04:44:12.0626079Z         internal/poll.(*pollDesc).waitRead(...)
+2026-11-09T04:44:12.0627200Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_poll_runtime.go:89
+2026-11-09T04:44:12.0628097Z         internal/poll.(*FD).Accept(0xc0000f4080)
+2026-11-09T04:44:12.0629209Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/poll/fd_unix.go:613 +0x4ea
+2026-11-09T04:44:12.0630132Z         net.(*netFD).accept(0xc0000f4080)
+2026-11-09T04:44:12.0631115Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/fd_unix.go:150 +0x45
+2026-11-09T04:44:12.0632211Z         net.(*TCPListener).accept(0xc0000b2e00)
+2026-11-09T04:44:12.0633293Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:159 +0x4e
+2026-11-09T04:44:12.0634185Z         net.(*TCPListener).Accept(0xc0000b2e00)
+2026-11-09T04:44:12.0635176Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock.go:387 +0x65
+2026-11-09T04:44:12.0636045Z         crypto/tls.(*listener).Accept(0xc0000d2000)
+2026-11-09T04:44:12.0637090Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/crypto/tls/tls.go:78 +0x43
+2026-11-09T04:44:12.0638136Z         net/http.(*Server).Serve(0xc000000400, {0x2e32890, 0xc0000d2000})
+2026-11-09T04:44:12.0639339Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/http/server.go:3434 +0x610
+2026-11-09T04:44:12.0640805Z         github.com/ArtixSx/razvilka/internal/app.serveManagedProbeNativeTLS.func2()
+2026-11-09T04:44:12.0642724Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:757 +0x235
+2026-11-09T04:44:12.0644417Z         created by github.com/ArtixSx/razvilka/internal/app.serveManagedProbeNativeTLS in goroutine 21
+2026-11-09T04:44:12.0646221Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/app/strategy_managed_probe_native_linux_test.go:756 +0xcde
+2026-11-09T04:44:12.0647141Z         
+2026-11-09T04:44:12.0647589Z         goroutine 513 [syscall]:
+2026-11-09T04:44:12.0648489Z         syscall.Syscall6(0xf7, 0x3, 0xa3, 0xc000157d60, 0x4, 0xc00004ebd0, 0x0)
+2026-11-09T04:44:12.0649758Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/syscall/syscall_linux.go:96 +0x45
+2026-11-09T04:44:12.0650949Z         internal/syscall/unix.Waitid(0x3, 0xa3, 0xc000157d60, 0x4, 0xc00004ebd0)
+2026-11-09T04:44:12.0652592Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/internal/syscall/unix/waitid_linux.go:18 +0x70
+2026-11-09T04:44:12.0653584Z         os.(*Process).pidfdWait.func1(...)
+2026-11-09T04:44:12.0654566Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:108
+2026-11-09T04:44:12.0655300Z         os.ignoringEINTR(...)
+2026-11-09T04:44:12.0656192Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/file_posix.go:263
+2026-11-09T04:44:12.0657008Z         os.(*Process).pidfdWait(0xc0004bc180)
+2026-11-09T04:44:12.0658078Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/pidfd_linux.go:107 +0x365
+2026-11-09T04:44:12.0658626Z         os.(*Process).wait(0xc0004bc180)
+2026-11-09T04:44:12.0659154Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec_unix.go:25 +0x47
+2026-11-09T04:44:12.0659993Z         os.(*Process).Wait(...)
+2026-11-09T04:44:12.0660675Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec.go:346
+2026-11-09T04:44:12.0661275Z         os/exec.(*Cmd).Wait(0xc0009bfa00)
+2026-11-09T04:44:12.0662115Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/os/exec/exec.go:930 +0xb0
+2026-11-09T04:44:12.0662962Z         github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal.func3.3()
+2026-11-09T04:44:12.0663950Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:327 +0x45
+2026-11-09T04:44:12.0665016Z         created by github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal.func3 in goroutine 21
+2026-11-09T04:44:12.0666065Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws2_managed_process_linux.go:326 +0xcb3
+2026-11-09T04:44:12.0666753Z         
+2026-11-09T04:44:12.0667040Z         goroutine 279 [syscall]:
+2026-11-09T04:44:12.0667385Z         runtime/pprof.readProfile()
+2026-11-09T04:44:12.0668254Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/cpuprof.go:251 +0x4a
+2026-11-09T04:44:12.0668830Z         runtime/pprof.profileWriter({0x2e29ea0, 0xc000006790})
+2026-11-09T04:44:12.0669473Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:930 +0x57
+2026-11-09T04:44:12.0670060Z         created by runtime/pprof.StartCPUProfile in goroutine 21
+2026-11-09T04:44:12.0670713Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/runtime/pprof/pprof.go:911 +0x26d
+2026-11-09T04:44:12.0671102Z         
+2026-11-09T04:44:12.0671357Z         goroutine 266 [select]:
+2026-11-09T04:44:12.0672762Z         github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute.func1({0x2e349c0, 0xc00003b810}, {0x0?, 0xc0006534e8?}, {0x4f6d15?, 0x0?}, {0x2e330a0, 0xc000006ad8})
+2026-11-09T04:44:12.0673937Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:332 +0x1f0
+2026-11-09T04:44:12.0674860Z         net.(*netFD).dial(0xc0003ba980, {0x2e349c0, 0xc00003b810}, {0x2e3a448, 0x0}, {0x2e3a448, 0xc000280930}, 0xc0002808a0)
+2026-11-09T04:44:12.0675648Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/sock_posix.go:102 +0x332
+2026-11-09T04:44:12.0676552Z         net.socket({0x2e349c0, 0xc00003b810}, {0x2ca5806, 0x4}, 0x2, 0x1, 0x0, 0x0, {0x2e3a448, 0x0}, ...)
+2026-11-09T04:44:12.0677295Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/sock_posix.go:70 +0x3ee
+2026-11-09T04:44:12.0678155Z         net.internetSocket({0x2e349c0, 0xc00003b810}, {0x2ca5806, 0x4}, {0x2e3a448, 0x0}, {0x2e3a448, 0xc000280930}, 0x1, 0x0, ...)
+2026-11-09T04:44:12.0678974Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/ipsock_posix.go:167 +0x127
+2026-11-09T04:44:12.0679721Z         net.(*sysDialer).doDialTCPProto(0xc0004b0f00, {0x2e349c0, 0xc00003b810}, 0x0, 0xc000280930, 0x0)
+2026-11-09T04:44:12.0680465Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:85 +0x189
+2026-11-09T04:44:12.0680928Z         net.(*sysDialer).doDialTCP(...)
+2026-11-09T04:44:12.0681470Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:75
+2026-11-09T04:44:12.0682549Z         net.(*sysDialer).dialTCP(0xc0004b0f00, {0x2e349c0, 0xc00003b810}, 0x0, 0xc000280930)
+2026-11-09T04:44:12.0683294Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/tcpsock_posix.go:71 +0x14a
+2026-11-09T04:44:12.0684044Z         net.(*sysDialer).dialSingle(0xc0004b0f00, {0x2e349c0, 0xc00003b810}, {0x2e2f058, 0xc000280930})
+2026-11-09T04:44:12.0684744Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:791 +0x4e5
+2026-11-09T04:44:12.0685457Z         net.(*sysDialer).dialSerial(0xc0004b0f00, {0x2e349c0, 0xc00003b810}, {0xc000103560, 0x1, 0x0?})
+2026-11-09T04:44:12.0686151Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:756 +0x289
+2026-11-09T04:44:12.0686948Z         net.(*sysDialer).dialParallel(0xc0004b0f00, {0x2e349c0, 0xc00003b810}, {0xc000103560, 0x1, 0x1}, {0x0, 0x0, 0x0})
+2026-11-09T04:44:12.0687855Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:657 +0x50a
+2026-11-09T04:44:12.0688617Z         net.(*Dialer).DialContext(0xc000738e10, {0x2e349c0, 0xc00003b810}, {0x2ca5806, 0x4}, {0xc0002551d5, 0xb})
+2026-11-09T04:44:12.0689339Z         	/opt/hostedtoolcache/go/1.26.5/x64/src/net/dial.go:557 +0x8bc
+2026-11-09T04:44:12.0690068Z         github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute.func2()
+2026-11-09T04:44:12.0690945Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:340 +0xb0
+2026-11-09T04:44:12.0692164Z         created by github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute in goroutine 21
+2026-11-09T04:44:12.0693119Z         	/home/runner/work/RAZVILKA/RAZVILKA/internal/dataplane/nfqws_probe_consumer.go:339 +0x2ccb
+2026-11-09T04:44:12.0693590Z         
+2026-11-09T04:44:15.0547141Z     strategy_managed_probe_native_linux_test.go:513: native measured Execute in-process allocated-bytes/objects 1228533288 3798652
+2026-11-09T04:44:15.0549462Z     strategy_managed_probe_native_linux_test.go:515: native measured Execute member-read attempts/returned-bytes 10099 825844532
+2026-11-09T04:44:15.0554908Z     strategy_managed_probe_native_linux_test.go:516: native measured Execute inclusive phase [started completed wall] map[capture-current:{2 2 1.483942384s} cleanup-current:{0 0 0s} counter:{1 1 1.544912847s} current:{117 117 10.905299546s} environment:{116 116 958.10391ms} epoch-source-runtime:{116 116 6.5552728s} owners:{117 117 3.365569185s} policy-apply:{1 1 6.96931653s} policy-readback:{12 12 5.97360964s} policy-remove:{1 1 2.310952ms}]
+2026-11-09T04:44:15.0559559Z     strategy_managed_probe_native_linux_test.go:521: native measured Execute actual version child Starts [iptables ip6tables IP] [85 85 181]
+2026-11-09T04:44:15.0561934Z     strategy_managed_probe_native_linux_test.go:522: native measured Execute original metadata traversal attempts 942
+2026-11-09T04:44:15.0564101Z     strategy_managed_probe_native_linux_test.go:524: native measured Execute 15.014472053s actual inventory ToolCheck calls 179 ToolCheck wall 3.73975281s
+2026-11-09T04:44:15.0993106Z     strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeConsumer.pprof
+2026-11-09T04:44:15.1519518Z     strategy_managed_probe_native_linux_test.go:558: native retained diagnostic latest-execution.json decode <nil> state resource-failed resources [{nfqws-scoped prepared capture-ready}] receipt  started false WaitECHILD false ACK false PID 0 exit 0
+2026-11-09T04:44:15.1524562Z     strategy_managed_probe_native_linux_test.go:558: native retained diagnostic ownership.json decode <nil> state  resources [] receipt reaped started true WaitECHILD true ACK false PID 17006 exit 125
+2026-11-09T04:44:15.1528404Z     strategy_managed_probe_native_linux_test.go:559: actual managed kernel/flow consumer {   local-error http st-5776d569142930dd native tcp ipv4 false false 0 0 0 0  0 [{firewall fail owned exact counter unavailable 1544}] 2026-11-09T04:44:12.49539602Z} managed NFQWS process settlement is unknown; invocation must not be replayed
+2026-11-09T04:44:15.1532100Z         execute original NFQWS probe: nfqws2 isolated canary: managed NFQWS process settlement is unknown; invocation must not be replayed
+2026-11-09T04:44:15.1533308Z         managed NFQWS process settlement is unknown; invocation must not be replayed
+2026-11-09T04:44:15.1534614Z         NFQWS action: probe counter closing capture: probe capture full readback: saved StrategyLab selection or its reviewed material is not current
+2026-11-09T04:44:15.1535633Z         managed NFQWS bundle evidence is invalid or incomplete
+2026-11-09T04:44:15.1536129Z         context deadline exceeded
+2026-11-09T04:44:15.1536513Z         context deadline exceeded
+2026-11-09T04:44:15.1536979Z         trusted startup tools: READ_OBSERVATION_SCOPE
+2026-11-09T04:44:15.1537429Z         context deadline exceeded
+2026-11-09T04:44:15.1538069Z         trusted startup tools: READ_DEADLINE
+2026-11-09T04:44:15.1538495Z         context deadline exceeded
+2026-11-09T04:44:15.1538877Z         context deadline exceeded
+2026-11-09T04:44:15.1539471Z         NFQWS capture remove: scoped NFQWS owner unavailable or mismatched
+2026-11-09T04:44:15.1540311Z         managed NFQWS process settlement is unknown; invocation must not be replayed
+2026-11-09T04:44:15.1540897Z         context deadline exceeded
+2026-11-09T04:44:15.1541362Z         scoped NFQWS owner unavailable or mismatched
+2026-11-09T04:44:15.1542200Z         original NFQWS probe scope retained for final completion
+2026-11-09T04:44:15.1550801Z --- FAIL: TestManagedStrategyProbeNativeConsumer (19.18s)
+2026-11-09T04:44:15.1552587Z FAIL
+2026-11-09T04:44:15.3354300Z File: app.test
+2026-11-09T04:44:15.3355408Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:15.3356103Z Type: cpu
+2026-11-09T04:44:15.3356441Z Time: 2026-11-09 04:44:00 UTC
+2026-11-09T04:44:15.3356965Z Duration: 15.02s, Total samples = 14.35s (95.55%)
+2026-11-09T04:44:15.3357613Z Showing nodes accounting for 11.58s, 80.70% of 14.35s total
+2026-11-09T04:44:15.3358199Z Dropped 496 nodes (cum <= 0.07s)
+2026-11-09T04:44:15.3358645Z Showing top 20 nodes out of 294
+2026-11-09T04:44:15.3359193Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:15.3360032Z      2.90s 20.21% 20.21%      2.90s 20.21%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T04:44:15.3360690Z      2.20s 15.33% 35.54%      2.20s 15.33%  __tsan::MemoryAccessRangeT
+2026-11-09T04:44:15.3361105Z      1.55s 10.80% 46.34%      1.55s 10.80%  racecall
+2026-11-09T04:44:15.3361487Z      1.38s  9.62% 55.96%      1.38s  9.62%  __tsan_read
+2026-11-09T04:44:15.3362288Z      1.10s  7.67% 63.62%      1.10s  7.67%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T04:44:15.3362763Z      0.30s  2.09% 65.71%      0.30s  2.09%  __tsan_write
+2026-11-09T04:44:15.3363169Z      0.30s  2.09% 67.80%      0.30s  2.09%  runtime.raceread
+2026-11-09T04:44:15.3363575Z      0.28s  1.95% 69.76%      0.28s  1.95%  racecalladdr
+2026-11-09T04:44:15.3363976Z      0.27s  1.88% 71.64%      0.27s  1.88%  runtime.findObject
+2026-11-09T04:44:15.3364448Z      0.17s  1.18% 72.82%      0.17s  1.18%  runtime.tryDeferToSpanScan
+2026-11-09T04:44:15.3364988Z      0.15s  1.05% 73.87%      0.27s  1.88%  encoding/json.appendString[go.shape.string]
+2026-11-09T04:44:15.3365752Z      0.15s  1.05% 74.91%      0.18s  1.25%  runtime.(*sweepLocked).sweep
+2026-11-09T04:44:15.3366210Z      0.13s  0.91% 75.82%      0.13s  0.91%  __tsan_func_exit
+2026-11-09T04:44:15.3366670Z      0.13s  0.91% 76.72%      0.13s  0.91%  runtime.memclrNoHeapPointers
+2026-11-09T04:44:15.3367149Z      0.12s  0.84% 77.56%      0.12s  0.84%  __tsan::MetaMap::FreeRange
+2026-11-09T04:44:15.3367583Z      0.11s  0.77% 78.33%      0.11s  0.77%  __tsan::ShadowSet
+2026-11-09T04:44:15.3368026Z      0.09s  0.63% 78.95%      0.09s  0.63%  __tsan::MetaMap::GetSync
+2026-11-09T04:44:15.3368446Z      0.09s  0.63% 79.58%      0.09s  0.63%  __tsan_func_enter
+2026-11-09T04:44:15.3368876Z      0.08s  0.56% 80.14%      0.08s  0.56%  runtime.racefuncenter
+2026-11-09T04:44:15.3369304Z      0.08s  0.56% 80.70%      0.22s  1.53%  runtime.scanObject
+2026-11-09T04:44:15.5216179Z File: app.test
+2026-11-09T04:44:15.5217566Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:15.5218600Z Type: cpu
+2026-11-09T04:44:15.5219294Z Time: 2026-11-09 04:44:00 UTC
+2026-11-09T04:44:15.5219634Z Duration: 15.02s, Total samples = 14.35s (95.55%)
+2026-11-09T04:44:15.5219997Z Showing nodes accounting for 0, 0% of 14.35s total
+2026-11-09T04:44:15.5220317Z Dropped 496 nodes (cum <= 0.07s)
+2026-11-09T04:44:15.5220577Z Showing top 20 nodes out of 294
+2026-11-09T04:44:15.5220900Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:15.5222057Z          0     0%     0%      7.12s 49.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+2026-11-09T04:44:15.5223105Z          0     0%     0%      7.11s 49.55%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+2026-11-09T04:44:15.5224392Z          0     0%     0%      7.08s 49.34%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+2026-11-09T04:44:15.5225039Z          0     0%     0%      7.06s 49.20%  testing.tRunner
+2026-11-09T04:44:15.5225769Z          0     0%     0%      6.84s 47.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+2026-11-09T04:44:15.5226739Z          0     0%     0%      6.39s 44.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+2026-11-09T04:44:15.5227853Z          0     0%     0%      6.39s 44.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+2026-11-09T04:44:15.5228885Z          0     0%     0%      6.36s 44.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+2026-11-09T04:44:15.5229821Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+2026-11-09T04:44:15.5230781Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+2026-11-09T04:44:15.5231985Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+2026-11-09T04:44:15.5232924Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+2026-11-09T04:44:15.5233857Z          0     0%     0%      5.92s 41.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+2026-11-09T04:44:15.5234897Z          0     0%     0%      5.91s 41.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+2026-11-09T04:44:15.5236101Z          0     0%     0%      5.91s 41.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+2026-11-09T04:44:15.5237144Z          0     0%     0%      5.30s 36.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+2026-11-09T04:44:15.5238101Z          0     0%     0%      5.28s 36.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+2026-11-09T04:44:15.5238743Z          0     0%     0%      4.76s 33.17%  runtime._System
+2026-11-09T04:44:15.5239685Z          0     0%     0%      4.50s 31.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+2026-11-09T04:44:15.5240596Z          0     0%     0%      4.08s 28.43%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+2026-11-09T04:44:15.6957123Z File: app.test
+2026-11-09T04:44:15.6972667Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:15.6973442Z Type: cpu
+2026-11-09T04:44:15.6973918Z Time: 2026-11-09 04:44:00 UTC
+2026-11-09T04:44:15.6974608Z Duration: 15.02s, Total samples = 14.35s (95.55%)
+2026-11-09T04:44:15.6975379Z Active filters:
+2026-11-09T04:44:15.6976871Z    show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+2026-11-09T04:44:15.6978202Z Showing nodes accounting for 0.60s, 4.18% of 14.35s total
+2026-11-09T04:44:15.6979080Z Dropped 72 nodes (cum <= 0.07s)
+2026-11-09T04:44:15.6979752Z Showing top 40 nodes out of 210
+2026-11-09T04:44:15.6980608Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:15.6982840Z          0     0%     0%      7.12s 49.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+2026-11-09T04:44:15.6984700Z          0     0%     0%      7.11s 49.55%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer
+2026-11-09T04:44:15.6986527Z          0     0%     0%      7.08s 49.34%  github.com/ArtixSx/razvilka/internal/app.TestManagedStrategyProbeNativeConsumer
+2026-11-09T04:44:15.6988038Z          0     0%     0%      6.84s 47.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+2026-11-09T04:44:15.6990126Z          0     0%     0%      6.39s 44.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+2026-11-09T04:44:15.6992359Z          0     0%     0%      6.39s 44.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+2026-11-09T04:44:15.6994152Z          0     0%     0%      6.36s 44.32%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+2026-11-09T04:44:15.6995780Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+2026-11-09T04:44:15.6997505Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+2026-11-09T04:44:15.6999244Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+2026-11-09T04:44:15.7000787Z          0     0%     0%      6.33s 44.11%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+2026-11-09T04:44:15.7002673Z          0     0%     0%      5.92s 41.25%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+2026-11-09T04:44:15.7004517Z          0     0%     0%      5.91s 41.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+2026-11-09T04:44:15.7006515Z          0     0%     0%      5.91s 41.18%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+2026-11-09T04:44:15.7008138Z      0.01s  0.07%  0.07%      5.30s 36.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+2026-11-09T04:44:15.7009939Z          0     0%  0.07%      5.28s 36.79%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+2026-11-09T04:44:15.7011934Z          0     0%  0.07%      4.50s 31.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+2026-11-09T04:44:15.7013627Z          0     0%  0.07%      3.69s 25.71%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+2026-11-09T04:44:15.7015188Z          0     0%  0.07%      3.29s 22.93%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+2026-11-09T04:44:15.7017102Z          0     0%  0.07%      3.26s 22.72%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+2026-11-09T04:44:15.7018880Z          0     0%  0.07%      3.12s 21.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+2026-11-09T04:44:15.7020077Z          0     0%  0.07%      2.81s 19.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+2026-11-09T04:44:15.7022186Z      0.01s  0.07%  0.14%      2.75s 19.16%  github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent
+2026-11-09T04:44:15.7024355Z          0     0%  0.14%      2.64s 18.40%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+2026-11-09T04:44:15.7026334Z          0     0%  0.14%      2.50s 17.42%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+2026-11-09T04:44:15.7027983Z      0.35s  2.44%  2.58%      2.50s 17.42%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+2026-11-09T04:44:15.7029831Z          0     0%  2.58%      2.46s 17.14%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+2026-11-09T04:44:15.7031414Z          0     0%  2.58%      2.46s 17.14%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+2026-11-09T04:44:15.7033091Z          0     0%  2.58%      2.46s 17.14%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+2026-11-09T04:44:15.7034704Z          0     0%  2.58%      2.29s 15.96%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+2026-11-09T04:44:15.7036404Z      0.23s  1.60%  4.18%      2.24s 15.61%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+2026-11-09T04:44:15.7037909Z          0     0%  4.18%      2.15s 14.98%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+2026-11-09T04:44:15.7039437Z          0     0%  4.18%      2.15s 14.98%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+2026-11-09T04:44:15.7041040Z          0     0%  4.18%         2s 13.94%  github.com/ArtixSx/razvilka/internal/components.(*ManagedNFQWSRuntimeLease).Check
+2026-11-09T04:44:15.7042873Z          0     0%  4.18%         2s 13.94%  github.com/ArtixSx/razvilka/internal/components.(*managedNFQWSRuntimeOwner).check
+2026-11-09T04:44:15.7044609Z          0     0%  4.18%         2s 13.94%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+2026-11-09T04:44:15.7046301Z          0     0%  4.18%      1.90s 13.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*executionResourceScope).check
+2026-11-09T04:44:15.7047991Z          0     0%  4.18%      1.85s 12.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSExecutionResource).check
+2026-11-09T04:44:15.7049725Z          0     0%  4.18%      1.70s 11.85%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary.func2
+2026-11-09T04:44:15.7051894Z          0     0%  4.18%      1.68s 11.71%  github.com/ArtixSx/razvilka/internal/strategylab.(*SelectedCandidateReview).materialCurrentLocked
+2026-11-09T04:44:15.9434876Z File: app.test
+2026-11-09T04:44:15.9442731Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:15.9443272Z Type: alloc_space
+2026-11-09T04:44:15.9443611Z Time: 2026-11-09 04:44:15 UTC
+2026-11-09T04:44:15.9443986Z Showing nodes accounting for 1281.56MB, 93.75% of 1366.94MB total
+2026-11-09T04:44:15.9444398Z Dropped 327 nodes (cum <= 6.83MB)
+2026-11-09T04:44:15.9444691Z Showing top 30 nodes out of 315
+2026-11-09T04:44:15.9445052Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:15.9445676Z   260.99MB 19.09% 19.09%   260.99MB 19.09%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+2026-11-09T04:44:15.9446479Z   216.11MB 15.81% 34.90%   216.11MB 15.81%  github.com/ArtixSx/razvilka/internal/startuptools.init.func1
+2026-11-09T04:44:15.9447736Z   144.91MB 10.60% 45.50%   144.91MB 10.60%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+2026-11-09T04:44:15.9448496Z   130.74MB  9.56% 55.07%   130.74MB  9.56%  io.ReadAll
+2026-11-09T04:44:15.9448943Z   109.86MB  8.04% 63.10%   109.86MB  8.04%  bytes.growSlice
+2026-11-09T04:44:15.9449457Z    55.77MB  4.08% 67.18%   163.25MB 11.94%  encoding/json.Marshal
+2026-11-09T04:44:15.9449947Z    49.01MB  3.59% 70.77%    49.01MB  3.59%  os.(*File).Stat
+2026-11-09T04:44:15.9450512Z       47MB  3.44% 74.21%       47MB  3.44%  syscall.ByteSliceFromString
+2026-11-09T04:44:15.9451016Z    42.81MB  3.13% 77.34%    42.81MB  3.13%  io.copyBuffer
+2026-11-09T04:44:15.9451511Z    40.51MB  2.96% 80.30%    49.01MB  3.59%  os.lstatNolog
+2026-11-09T04:44:15.9452369Z    21.01MB  1.54% 81.84%    21.01MB  1.54%  strings.Fields
+2026-11-09T04:44:15.9453546Z    17.02MB  1.25% 83.09%    17.02MB  1.25%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityFileCopy
+2026-11-09T04:44:15.9454803Z    16.50MB  1.21% 84.29%    17.50MB  1.28%  os.lstatatWithName
+2026-11-09T04:44:15.9455679Z    15.62MB  1.14% 85.44%    15.62MB  1.14%  os.init.func1
+2026-11-09T04:44:15.9457009Z    13.54MB  0.99% 86.43%    13.54MB  0.99%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+2026-11-09T04:44:15.9458259Z    12.56MB  0.92% 87.35%    12.56MB  0.92%  encoding/json.(*Decoder).refill
+2026-11-09T04:44:15.9459425Z    12.54MB  0.92% 88.26%    12.54MB  0.92%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+2026-11-09T04:44:15.9460284Z    10.64MB  0.78% 89.04%    10.64MB  0.78%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+2026-11-09T04:44:15.9462027Z     9.88MB  0.72% 89.76%     9.88MB  0.72%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+2026-11-09T04:44:15.9463984Z     8.52MB  0.62% 90.39%    29.03MB  2.12%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+2026-11-09T04:44:15.9465077Z        8MB  0.59% 90.97%    36.13MB  2.64%  os.(*File).readdir
+2026-11-09T04:44:15.9465896Z        8MB  0.59% 91.56%        8MB  0.59%  strings.genSplit
+2026-11-09T04:44:15.9466608Z        8MB  0.59% 92.14%    12.50MB  0.91%  os.readlink
+2026-11-09T04:44:15.9467403Z        8MB  0.59% 92.73%    12.50MB  0.91%  os.newUnixDirent
+2026-11-09T04:44:15.9468040Z     3.50MB  0.26% 92.98%   205.75MB 15.05%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+2026-11-09T04:44:15.9468976Z        3MB  0.22% 93.20%    99.54MB  7.28%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+2026-11-09T04:44:15.9469843Z     2.50MB  0.18% 93.39%    11.50MB  0.84%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityProtectedPath
+2026-11-09T04:44:15.9470746Z        2MB  0.15% 93.53%    24.57MB  1.80%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityCommandDigest
+2026-11-09T04:44:15.9471521Z     1.50MB  0.11% 93.64%    66.22MB  4.84%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+2026-11-09T04:44:15.9472745Z     1.50MB  0.11% 93.75%    21.10MB  1.54%  github.com/ArtixSx/razvilka/internal/components.managedRuntimeImageEntries
+2026-11-09T04:44:15.9637959Z ##[error]Process completed with exit code 1.
+2026-11-09T04:44:15.9694114Z ##[group]Run set -euo pipefail
+2026-11-09T04:44:15.9694444Z [36;1mset -euo pipefail[0m
+2026-11-09T04:44:15.9694721Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T04:44:15.9695172Z [36;1msudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T04:44:15.9696402Z [36;1m  RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/lan.log[0m
+2026-11-09T04:44:15.9697539Z [36;1mgrep -F -- '--- PASS: TestManagedStrategyProbeNativeLANAppHTTP ' artifacts/managed/lan.log[0m
+2026-11-09T04:44:15.9698178Z [36;1mif grep -F -- '--- SKIP:' artifacts/managed/lan.log; then exit 1; fi[0m
+2026-11-09T04:44:15.9718999Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T04:44:15.9719359Z env:
+2026-11-09T04:44:15.9719557Z   GOTOOLCHAIN: local
+2026-11-09T04:44:15.9719784Z ##[endgroup]
+2026-11-09T04:44:16.0022235Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T04:44:16.0024725Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T04:44:16.0025779Z 
+2026-11-09T04:44:16.2508208Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:44:16.2509382Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:44:16.3872414Z 
+2026-11-09T04:44:16.3872889Z 100 9335k  100 9335k    0     0  23.6M      0 --:--:-- --:--:-- --:--:-- 23.6M
+2026-11-09T04:44:16.3992811Z /tmp/razvilka-managed-probe.fENiiG/release.tar.gz: OK
+2026-11-09T04:44:16.5762225Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T04:44:16.5806457Z Actual native build mode: race
+2026-11-09T04:44:16.5814694Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T04:44:16.5844948Z go version go1.26.5 linux/amd64
+2026-11-09T04:44:16.6066676Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-09T04:44:18.9506646Z Actual compiled reader/consumer bytes: 62427401
+2026-11-09T04:44:19.0492701Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:19.0900618Z === RUN   TestNativeFixturePhysicalSourceCopiesRefuse
+2026-11-09T04:44:19.0902703Z --- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)
+2026-11-09T04:44:19.0903557Z PASS
+2026-11-09T04:44:20.1894476Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:20.2291566Z === RUN   TestManagedStrategyProbeNativeLANPhysical
+2026-11-09T04:44:21.9935770Z     strategy_managed_probe_lan_native_linux_test.go:396: actual WAN peer + bridge + included/excluded clients + route/FDB/ARP + original Linux owners + real drift refusal; only Home classification modeled; no NFQ Apply/router acceptance
+2026-11-09T04:44:21.9979827Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (1.77s)
+2026-11-09T04:44:21.9981544Z PASS
+2026-11-09T04:44:23.1050031Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:23.1447211Z === RUN   TestManagedStrategyProbeNativeLANAppHTTP
+2026-11-09T04:44:44.7079652Z 2026/11/09 04:44:44 Managed NFQ runtime strategy-probe-execute refused at runtime-operation (DEADLINE_EXCEEDED)
+2026-11-09T04:44:44.7080434Z 2026/11/09 04:44:44 Managed NFQ original physical refusal: context.canceled > context.deadline
+2026-11-09T04:44:44.7113128Z     strategy_managed_probe_native_linux_test.go:468: actual managed probe HTTP pass 0 503 {"code":"MANAGED_STRATEGY_PROBE_RECOVERY_REQUIRED","error":"Проверка стратегии не подтверждена. Обновите состояние лаборатории; повторный запуск автоматически не выполняется.","live_applied":false,"ok":false,"recovery_required":true}
+2026-11-09T04:44:44.7114545Z         
+2026-11-09T04:44:44.7117809Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 1251137944 3843869
+2026-11-09T04:44:44.7119879Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP member-read attempts/returned-bytes 9912 810504240
+2026-11-09T04:44:44.7122830Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP inclusive phase [started completed wall] map[capture-current:{2 2 1.151754448s} cleanup-current:{0 0 0s} counter:{1 1 1.210882193s} current:{114 114 10.939471378s} environment:{112 112 1.013491303s} epoch-source-runtime:{112 112 6.487064707s} owners:{114 114 3.412864088s} policy-apply:{1 1 7.183516175s} policy-readback:{12 12 5.796792358s} policy-remove:{1 1 2.206046ms}]
+2026-11-09T04:44:44.7125343Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 194 wall 4.026289359s
+2026-11-09T04:44:44.7126435Z     strategy_managed_probe_native_linux_test.go:461: native actual HTTP aggregate original metadata traversal attempts 924
+2026-11-09T04:44:44.7127607Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [85 85 176]
+2026-11-09T04:44:44.7594126Z     strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeLANAppHTTP.pprof
+2026-11-09T04:44:44.8286736Z --- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (21.68s)
+2026-11-09T04:44:44.8287661Z FAIL
+2026-11-09T04:44:45.0205669Z File: app.test
+2026-11-09T04:44:45.0206455Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:45.0207312Z Type: cpu
+2026-11-09T04:44:45.0207850Z Time: 2026-11-09 04:44:29 UTC
+2026-11-09T04:44:45.0208616Z Duration: 15.41s, Total samples = 14.82s (96.19%)
+2026-11-09T04:44:45.0209673Z Showing nodes accounting for 11.82s, 79.76% of 14.82s total
+2026-11-09T04:44:45.0210813Z Dropped 472 nodes (cum <= 0.07s)
+2026-11-09T04:44:45.0225355Z Showing top 20 nodes out of 306
+2026-11-09T04:44:45.0226131Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:45.0227004Z      2.71s 18.29% 18.29%      2.71s 18.29%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T04:44:45.0227941Z      2.55s 17.21% 35.49%      2.55s 17.21%  __tsan::MemoryAccessRangeT
+2026-11-09T04:44:45.0228937Z      1.62s 10.93% 46.42%      1.62s 10.93%  racecall
+2026-11-09T04:44:45.0229716Z      1.48s  9.99% 56.41%      1.48s  9.99%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T04:44:45.0230456Z      1.31s  8.84% 65.25%      1.31s  8.84%  __tsan_read
+2026-11-09T04:44:45.0231103Z      0.22s  1.48% 66.73%      0.22s  1.48%  runtime.raceread
+2026-11-09T04:44:45.0233819Z      0.21s  1.42% 68.15%      0.21s  1.42%  runtime.findObject
+2026-11-09T04:44:45.0234525Z      0.20s  1.35% 69.50%      0.20s  1.35%  __tsan_write
+2026-11-09T04:44:45.0235184Z      0.18s  1.21% 70.72%      0.18s  1.21%  racecalladdr
+2026-11-09T04:44:45.0235966Z      0.18s  1.21% 71.93%      0.18s  1.21%  runtime.tryDeferToSpanScan
+2026-11-09T04:44:45.0236725Z      0.17s  1.15% 73.08%      0.17s  1.15%  __tsan::ShadowSet
+2026-11-09T04:44:45.0237375Z      0.17s  1.15% 74.22%      0.17s  1.15%  __tsan_func_enter
+2026-11-09T04:44:45.0238266Z      0.17s  1.15% 75.37%      0.32s  2.16%  encoding/json.appendString[go.shape.string]
+2026-11-09T04:44:45.0239174Z      0.14s  0.94% 76.32%      0.14s  0.94%  __tsan::MetaMap::FreeRange
+2026-11-09T04:44:45.0239986Z      0.12s  0.81% 77.13%      0.17s  1.15%  runtime.(*sweepLocked).sweep
+2026-11-09T04:44:45.0240687Z      0.10s  0.67% 77.80%      0.10s  0.67%  runtime.memmove
+2026-11-09T04:44:45.0241395Z      0.09s  0.61% 78.41%      0.09s  0.61%  runtime.memclrNoHeapPointers
+2026-11-09T04:44:45.0242411Z      0.08s  0.54% 78.95%      0.20s  1.35%  runtime.scanObject
+2026-11-09T04:44:45.0243429Z      0.06s   0.4% 79.35%      0.24s  1.62%  runtime.checkptrBase
+2026-11-09T04:44:45.0244232Z      0.06s   0.4% 79.76%      0.27s  1.82%  runtime.checkptrStraddles
+2026-11-09T04:44:45.2030601Z File: app.test
+2026-11-09T04:44:45.2031089Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:45.2031505Z Type: cpu
+2026-11-09T04:44:45.2032064Z Time: 2026-11-09 04:44:29 UTC
+2026-11-09T04:44:45.2032373Z Duration: 15.41s, Total samples = 14.82s (96.19%)
+2026-11-09T04:44:45.2032738Z Showing nodes accounting for 0, 0% of 14.82s total
+2026-11-09T04:44:45.2033084Z Dropped 472 nodes (cum <= 0.07s)
+2026-11-09T04:44:45.2033343Z Showing top 20 nodes out of 306
+2026-11-09T04:44:45.2033655Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:45.2034395Z          0     0%     0%      7.28s 49.12%  github.com/ArtixSx/razvilka/internal/app.(*App).probeManagedStrategyCandidate
+2026-11-09T04:44:45.2035329Z          0     0%     0%      7.28s 49.12%  github.com/ArtixSx/razvilka/internal/app.(*App).strategyLabCandidateAction
+2026-11-09T04:44:45.2036012Z          0     0%     0%      7.26s 48.99%  net/http.HandlerFunc.ServeHTTP
+2026-11-09T04:44:45.2036535Z          0     0%     0%      7.23s 48.79%  net/http.(*ServeMux).ServeHTTP
+2026-11-09T04:44:45.2037371Z          0     0%     0%      7.21s 48.65%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+2026-11-09T04:44:45.2038332Z          0     0%     0%      7.11s 47.98%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+2026-11-09T04:44:45.2039282Z          0     0%     0%      7.02s 47.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+2026-11-09T04:44:45.2040254Z          0     0%     0%      7.01s 47.30%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+2026-11-09T04:44:45.2041132Z          0     0%     0%      6.84s 46.15%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+2026-11-09T04:44:45.2042029Z          0     0%     0%      6.80s 45.88%  net/http.serverHandler.ServeHTTP
+2026-11-09T04:44:45.2042545Z          0     0%     0%      6.72s 45.34%  net/http.(*conn).serve
+2026-11-09T04:44:45.2043297Z          0     0%     0%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+2026-11-09T04:44:45.2044265Z          0     0%     0%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+2026-11-09T04:44:45.2045585Z          0     0%     0%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+2026-11-09T04:44:45.2046574Z          0     0%     0%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+2026-11-09T04:44:45.2047507Z          0     0%     0%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+2026-11-09T04:44:45.2048506Z          0     0%     0%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+2026-11-09T04:44:45.2049410Z          0     0%     0%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+2026-11-09T04:44:45.2050412Z          0     0%     0%      5.89s 39.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+2026-11-09T04:44:45.2051511Z          0     0%     0%      5.89s 39.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+2026-11-09T04:44:45.3842808Z File: app.test
+2026-11-09T04:44:45.3843329Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:45.3843849Z Type: cpu
+2026-11-09T04:44:45.3844186Z Time: 2026-11-09 04:44:29 UTC
+2026-11-09T04:44:45.3844804Z Duration: 15.41s, Total samples = 14.82s (96.19%)
+2026-11-09T04:44:45.3845323Z Active filters:
+2026-11-09T04:44:45.3846357Z    show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+2026-11-09T04:44:45.3847254Z Showing nodes accounting for 0.72s, 4.86% of 14.82s total
+2026-11-09T04:44:45.3847605Z Dropped 91 nodes (cum <= 0.07s)
+2026-11-09T04:44:45.3847869Z Showing top 40 nodes out of 200
+2026-11-09T04:44:45.3848181Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:45.3848842Z      0.20s  1.35%  1.35%      7.28s 49.12%  github.com/ArtixSx/razvilka/internal/app.(*App).probeManagedStrategyCandidate
+2026-11-09T04:44:45.3849761Z          0     0%  1.35%      7.28s 49.12%  github.com/ArtixSx/razvilka/internal/app.(*App).strategyLabCandidateAction
+2026-11-09T04:44:45.3850744Z          0     0%  1.35%      7.21s 48.65%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+2026-11-09T04:44:45.3851965Z          0     0%  1.35%      7.11s 47.98%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+2026-11-09T04:44:45.3852949Z          0     0%  1.35%      7.02s 47.37%  github.com/ArtixSx/razvilka/internal/dataplane.(*ManagedNFQWSProbeConsumer).Execute
+2026-11-09T04:44:45.3853896Z          0     0%  1.35%      7.01s 47.30%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+2026-11-09T04:44:45.3854777Z          0     0%  1.35%      6.84s 46.15%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate
+2026-11-09T04:44:45.3855682Z          0     0%  1.35%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func3
+2026-11-09T04:44:45.3856660Z          0     0%  1.35%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesLocked
+2026-11-09T04:44:45.3857723Z          0     0%  1.35%      6.37s 42.98%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).withExecutionResourcesSuccessorLocked
+2026-11-09T04:44:45.3858727Z          0     0%  1.35%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).ProbeCandidate.func2
+2026-11-09T04:44:45.3859706Z          0     0%  1.35%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).runScopedResourceAction
+2026-11-09T04:44:45.3860652Z          0     0%  1.35%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeCanaryAdapter).Canary
+2026-11-09T04:44:45.3861560Z          0     0%  1.35%      6.31s 42.58%  github.com/ArtixSx/razvilka/internal/dataplane.domainTCPActionWithCustody
+2026-11-09T04:44:45.3862813Z          0     0%  1.35%      5.89s 39.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessInternal
+2026-11-09T04:44:45.3864108Z          0     0%  1.35%      5.89s 39.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).runManagedNFQWSProcessWithAdmission
+2026-11-09T04:44:45.3865105Z          0     0%  1.35%      5.89s 39.74%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run
+2026-11-09T04:44:45.3865940Z      0.01s 0.067%  1.42%      5.27s 35.56%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).current
+2026-11-09T04:44:45.3866908Z          0     0%  1.42%      5.10s 34.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsExecutionAssembly).run.func1
+2026-11-09T04:44:45.3867888Z          0     0%  1.42%      4.57s 30.84%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).operationGuard
+2026-11-09T04:44:45.3868812Z          0     0%  1.42%      3.53s 23.82%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).Apply
+2026-11-09T04:44:45.3869779Z          0     0%  1.42%      3.16s 21.32%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+2026-11-09T04:44:45.3870670Z          0     0%  1.42%      3.13s 21.12%  github.com/ArtixSx/razvilka/internal/dataplane.applyPolicyEffects
+2026-11-09T04:44:45.3871534Z          0     0%  1.42%      2.83s 19.10%  github.com/ArtixSx/razvilka/internal/dataplane.(*policyEffectSession).add
+2026-11-09T04:44:45.3872903Z          0     0%  1.42%      2.69s 18.15%  github.com/ArtixSx/razvilka/internal/strategylab.(*ManagedProbeEpoch).WithProbeReferenceCurrent
+2026-11-09T04:44:45.3873948Z          0     0%  1.42%      2.65s 17.88%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).observeTools
+2026-11-09T04:44:45.3874932Z          0     0%  1.42%      2.47s 16.67%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+2026-11-09T04:44:45.3875737Z      0.36s  2.43%  3.85%      2.38s 16.06%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current
+2026-11-09T04:44:45.3876635Z          0     0%  3.85%      2.35s 15.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readRules
+2026-11-09T04:44:45.3877878Z          0     0%  3.85%      2.33s 15.72%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.(*managedProbeNativeToolMeasurements).wrap.func16
+2026-11-09T04:44:45.3878982Z          0     0%  3.85%      2.33s 15.72%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1
+2026-11-09T04:44:45.3879815Z          0     0%  3.85%      2.33s 15.72%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).Check
+2026-11-09T04:44:45.3880586Z      0.15s  1.01%  4.86%      2.16s 14.57%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners
+2026-11-09T04:44:45.3881583Z          0     0%  4.86%      2.12s 14.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+2026-11-09T04:44:45.3882945Z          0     0%  4.86%      2.02s 13.63%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).current.func1
+2026-11-09T04:44:45.3883857Z          0     0%  4.86%      2.02s 13.63%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).versionBatchCurrent
+2026-11-09T04:44:45.3884799Z          0     0%  4.86%         2s 13.50%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsProbeExecution).owners.func1
+2026-11-09T04:44:45.3885730Z          0     0%  4.86%      1.98s 13.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*executionResourceScope).check
+2026-11-09T04:44:45.3886682Z          0     0%  4.86%      1.91s 12.89%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSExecutionResource).check
+2026-11-09T04:44:45.3887647Z          0     0%  4.86%      1.85s 12.48%  github.com/ArtixSx/razvilka/internal/components.(*ManagedNFQWSRuntimeLease).Check
+2026-11-09T04:44:45.6489334Z File: app.test
+2026-11-09T04:44:45.6506526Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:44:45.6507132Z Type: alloc_space
+2026-11-09T04:44:45.6508033Z Time: 2026-11-09 04:44:44 UTC
+2026-11-09T04:44:45.6508864Z Showing nodes accounting for 1377.10MB, 95.31% of 1444.94MB total
+2026-11-09T04:44:45.6509648Z Dropped 393 nodes (cum <= 7.22MB)
+2026-11-09T04:44:45.6510231Z Showing top 30 nodes out of 326
+2026-11-09T04:44:45.6510959Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:44:45.6512279Z   244.48MB 16.92% 16.92%   244.48MB 16.92%  github.com/ArtixSx/razvilka/internal/startuptools.init.func1
+2026-11-09T04:44:45.6513708Z   226.86MB 15.70% 32.62%   226.86MB 15.70%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+2026-11-09T04:44:45.6514987Z   156.23MB 10.81% 43.43%   156.23MB 10.81%  io.ReadAll
+2026-11-09T04:44:45.6516608Z   150.76MB 10.43% 53.87%   150.76MB 10.43%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+2026-11-09T04:44:45.6518341Z   107.86MB  7.47% 61.33%   107.86MB  7.47%  bytes.growSlice
+2026-11-09T04:44:45.6519265Z    58.51MB  4.05% 65.38%    58.51MB  4.05%  os.(*File).Stat
+2026-11-09T04:44:45.6519758Z    55.71MB  3.86% 69.24%    55.71MB  3.86%  io.copyBuffer
+2026-11-09T04:44:45.6520299Z    53.22MB  3.68% 72.92%   157.73MB 10.92%  encoding/json.Marshal
+2026-11-09T04:44:45.6520972Z    44.01MB  3.05% 75.97%    51.51MB  3.56%  os.lstatNolog
+2026-11-09T04:44:45.6521954Z    43.50MB  3.01% 78.98%    43.50MB  3.01%  syscall.ByteSliceFromString
+2026-11-09T04:44:45.6522646Z    22.68MB  1.57% 80.55%    22.68MB  1.57%  os.init.func1
+2026-11-09T04:44:45.6523506Z    20.01MB  1.38% 81.93%    20.01MB  1.38%  strings.Fields
+2026-11-09T04:44:45.6524515Z    17.02MB  1.18% 83.11%    17.02MB  1.18%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityFileCopy
+2026-11-09T04:44:45.6525484Z    16.50MB  1.14% 84.25%       19MB  1.32%  os.lstatatWithName
+2026-11-09T04:44:45.6526426Z    15.05MB  1.04% 85.29%    40.05MB  2.77%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+2026-11-09T04:44:45.6527677Z    15.04MB  1.04% 86.33%    15.04MB  1.04%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+2026-11-09T04:44:45.6528708Z    14.57MB  1.01% 87.34%    14.57MB  1.01%  encoding/json.(*Decoder).refill
+2026-11-09T04:44:45.6529684Z    11.53MB   0.8% 88.14%    11.53MB   0.8%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+2026-11-09T04:44:45.6530789Z       11MB  0.76% 88.90%       11MB  0.76%  encoding/json.(*decodeState).literalStore
+2026-11-09T04:44:45.6531618Z       11MB  0.76% 89.66%       14MB  0.97%  os.newUnixDirent
+2026-11-09T04:44:45.6532970Z    10.92MB  0.76% 90.42%    10.92MB  0.76%  github.com/ArtixSx/razvilka/internal/components.acquireManagedRuntimePayloadScratch
+2026-11-09T04:44:45.6534053Z    10.51MB  0.73% 91.14%    10.51MB  0.73%  reflect.growslice
+2026-11-09T04:44:45.6535211Z    10.11MB   0.7% 91.84%    10.61MB  0.73%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+2026-11-09T04:44:45.6536277Z     9.50MB  0.66% 92.50%     9.50MB  0.66%  strings.genSplit
+2026-11-09T04:44:45.6536963Z     8.50MB  0.59% 93.09%    12.50MB  0.87%  os.readlink
+2026-11-09T04:44:45.6537731Z     8.50MB  0.59% 93.68%     8.50MB  0.59%  strings.(*Builder).WriteByte (inline)
+2026-11-09T04:44:45.6538956Z     8.01MB  0.55% 94.23%   115.06MB  7.96%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+2026-11-09T04:44:45.6540084Z     8.01MB  0.55% 94.79%    44.69MB  3.09%  os.(*File).readdir
+2026-11-09T04:44:45.6541452Z     5.50MB  0.38% 95.17%       12MB  0.83%  github.com/ArtixSx/razvilka/internal/components.(*Manager).verifyManagedNFQWSRuntimeImage.func2
+2026-11-09T04:44:45.6543472Z        2MB  0.14% 95.31%       11MB  0.76%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityProtectedPath
+2026-11-09T04:44:45.6696313Z ##[error]Process completed with exit code 1.
+2026-11-09T04:44:45.6730896Z ##[group]Run set -euo pipefail
+2026-11-09T04:44:45.6731216Z [36;1mset -euo pipefail[0m
+2026-11-09T04:44:45.6731476Z [36;1mmkdir -p artifacts/managed[0m
+2026-11-09T04:44:45.6732510Z [36;1msudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \[0m
+2026-11-09T04:44:45.6732998Z [36;1m  RAZVILKA_MANAGED_PROBE_BUILD_MODE="race" \[0m
+2026-11-09T04:44:45.6733621Z [36;1m  RAZVILKA_MANAGED_PROBE_LAN_CASE=manual sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/manual.log[0m
+2026-11-09T04:44:45.6734443Z [36;1mgrep -F -- '--- PASS: TestManagedStrategyProbeNativeLANManualApply ' artifacts/managed/manual.log[0m
+2026-11-09T04:44:45.6735046Z [36;1mif grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi[0m
+2026-11-09T04:44:45.6755361Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-09T04:44:45.6755698Z env:
+2026-11-09T04:44:45.6755896Z   GOTOOLCHAIN: local
+2026-11-09T04:44:45.6756133Z ##[endgroup]
+2026-11-09T04:44:45.7063505Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-09T04:44:45.7065267Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-09T04:44:45.7065719Z 
+2026-11-09T04:44:45.7783379Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:44:45.8649753Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:44:45.8650704Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-11-09T04:44:46.0322147Z 
+2026-11-09T04:44:46.0332777Z 100 9335k  100 9335k    0     0  27.9M      0 --:--:-- --:--:-- --:--:-- 27.9M
+2026-11-09T04:44:46.0460263Z /tmp/razvilka-managed-probe.gPlpvT/release.tar.gz: OK
+2026-11-09T04:44:46.2166412Z CI-only platform classification; actual tool hashes/version: {"XTablesSHA256": "38ac0252c751be1c89ebc2e2eb6a05bf1720b05eea552a1dee8380af94d72a52", "IPToolSHA256": "ea200fcc3a7bf723a8e0e2a21ceb3805324812fef36f6ba0552362a9a9e65f92", "Version": "1.8.10 (legacy)", "IPVersion": "ip utility, iproute2-6.1.0, libbpf 1.3.0\n"}
+2026-11-09T04:44:46.2209463Z Actual native build mode: race
+2026-11-09T04:44:46.2217386Z Linux runnervm7aw5e 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+2026-11-09T04:44:46.2247936Z go version go1.26.5 linux/amd64
+2026-11-09T04:44:46.2467794Z Actual CPU: model name	: AMD EPYC 7763 64-Core Processor
+2026-11-09T04:44:48.5534249Z Actual compiled reader/consumer bytes: 62427401
+2026-11-09T04:44:48.6525342Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:48.6916688Z === RUN   TestNativeFixturePhysicalSourceCopiesRefuse
+2026-11-09T04:44:48.6917699Z --- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)
+2026-11-09T04:44:48.6919651Z PASS
+2026-11-09T04:44:49.7900116Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:49.8295302Z === RUN   TestManagedStrategyProbeNativeLANPhysical
+2026-11-09T04:44:52.0123714Z     strategy_managed_probe_lan_native_linux_test.go:396: actual WAN peer + bridge + included/excluded clients + route/FDB/ARP + original Linux owners + real drift refusal; only Home classification modeled; no NFQ Apply/router acceptance
+2026-11-09T04:44:52.0171699Z --- PASS: TestManagedStrategyProbeNativeLANPhysical (2.19s)
+2026-11-09T04:44:52.0173298Z PASS
+2026-11-09T04:44:53.1246206Z Actual pinned no-hook queue64611 registration, pidfd TERM+sole Wait, empty real NFNETLINK_QUEUE inventory confirmed
+2026-11-09T04:44:53.1643871Z === RUN   TestManagedStrategyProbeNativeLANManualApply
+2026-11-09T04:45:25.7953883Z 2026/11/09 04:45:25 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=24846
+2026-11-09T04:45:25.7957104Z 2026/11/09 04:45:25 Managed NFQ original execution stages=activate.start/StartPrepared.prepared-callback/prepared.policy-apply/prepared owner proof/retire prepared/retire.native-common/retire.common/retire.common
+2026-11-09T04:45:25.7963353Z 2026/11/09 04:45:25 Managed NFQ runtime apply refused at lan-preflight-inventory-nfq-consumer-open (DEADLINE_EXCEEDED)
+2026-11-09T04:45:25.7967878Z     strategy_managed_probe_native_linux_test.go:468: actual active NFQ inclusive phases [started completed wall] map[activate:{1 1 18.049057332s} active-inventory-capture:{6 6 272.148055ms} active-lan:{6 6 8.365787044s} active-read-pair:{3 3 392.731178ms} capture-current:{0 0 0s} cleanup-current:{3 3 134.777966ms} counter:{0 0 0s} current:{15 15 3.150705131s} environment:{0 0 0s} epoch-source-runtime:{0 0 0s} owners:{236 236 4.686259598s} policy-apply:{1 1 966.390481ms} policy-readback:{4 4 10.261278698s} policy-remove:{1 1 552.672043ms} prepared-active:{1 1 7.92820416s}]
+2026-11-09T04:45:25.7994687Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN execution state=rollback-failed rollback_verified=false
+2026-11-09T04:45:25.7996274Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=snapshot state=passed
+2026-11-09T04:45:25.7997385Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=snapshot state=passed
+2026-11-09T04:45:25.7998476Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=stage state=passed
+2026-11-09T04:45:25.7999539Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=stage state=passed
+2026-11-09T04:45:25.8003821Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=validate state=passed
+2026-11-09T04:45:25.8005698Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=validate state=passed
+2026-11-09T04:45:25.8007550Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=activate state=passed
+2026-11-09T04:45:25.8009344Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=activate state=failed
+2026-11-09T04:45:25.8011073Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=rollback state=failed
+2026-11-09T04:45:25.8013194Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=nfqws2 phase=verify-rollback state=failed
+2026-11-09T04:45:25.8015067Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN step adapter=lan-policy phase=rollback state=failed
+2026-11-09T04:45:25.8018469Z     strategy_managed_probe_native_linux_test.go:468: actual original LAN Apply 409 {"code":"MANAGED_NFQWS_RUNTIME_REFUSED","error":"Состояние удерживаемого маршрута NFQWS не подтверждено. Проверьте журнал и исходную область маршрута.","ok":false,"service_health":"unverified"}
+2026-11-09T04:45:25.8020228Z         
+2026-11-09T04:45:25.9486767Z     strategy_managed_probe_lan_native_linux_test.go:139: retained original LAN cleanup dataplane transaction journal is unavailable: scoped NFQWS owner unavailable or mismatched
+2026-11-09T04:45:25.9488062Z         scoped NFQWS owner unavailable or mismatched
+2026-11-09T04:45:25.9488819Z         rollback failed: managed NFQWS active retire prepared
+2026-11-09T04:45:25.9489644Z         scoped NFQWS owner unavailable or mismatched
+2026-11-09T04:45:25.9490427Z         dataplane transaction journal is unavailable
+2026-11-09T04:45:25.9491493Z         policy addition or cleanup result unknown; reconciliation required
+2026-11-09T04:45:25.9492743Z         network policy consumers have not independently settled
+2026-11-09T04:45:25.9494403Z     strategy_managed_probe_native_linux_test.go:456: native actual HTTP in-process allocated-bytes/objects 2767451896 9141265
+2026-11-09T04:45:25.9496868Z     strategy_managed_probe_native_linux_test.go:458: native actual HTTP member-read attempts/returned-bytes 6876 562250520
+2026-11-09T04:45:25.9498938Z     strategy_managed_probe_native_linux_test.go:459: native actual HTTP inclusive phase [started completed wall] map[]
+2026-11-09T04:45:25.9501147Z     strategy_managed_probe_native_linux_test.go:460: native actual HTTP aggregate inventory ToolCheck calls 662 wall 7.921360079s
+2026-11-09T04:45:25.9503958Z     strategy_managed_probe_native_linux_test.go:461: native actual HTTP aggregate original metadata traversal attempts 3356
+2026-11-09T04:45:25.9506305Z     strategy_managed_probe_native_linux_test.go:466: native actual HTTP aggregate actual version child Starts [iptables ip6tables IP] [115 115 642]
+2026-11-09T04:45:26.0180249Z     strategy_managed_probe_profile_native_linux_test.go:66: native measured CPU profile saved TestManagedStrategyProbeNativeLANManualApply.pprof
+2026-11-09T04:45:26.2268264Z --- FAIL: TestManagedStrategyProbeNativeLANManualApply (33.06s)
+2026-11-09T04:45:26.2269625Z FAIL
+2026-11-09T04:45:26.4293681Z File: app.test
+2026-11-09T04:45:26.4294341Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:45:26.4294967Z Type: cpu
+2026-11-09T04:45:26.4295375Z Time: 2026-11-09 04:44:59 UTC
+2026-11-09T04:45:26.4295955Z Duration: 26.43s, Total samples = 25.56s (96.72%)
+2026-11-09T04:45:26.4296755Z Showing nodes accounting for 19.75s, 77.27% of 25.56s total
+2026-11-09T04:45:26.4297469Z Dropped 696 nodes (cum <= 0.13s)
+2026-11-09T04:45:26.4298056Z Showing top 20 nodes out of 398
+2026-11-09T04:45:26.4298911Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:45:26.4299981Z      7.46s 29.19% 29.19%      7.46s 29.19%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T04:45:26.4301208Z      2.75s 10.76% 39.95%      2.75s 10.76%  __tsan::MemoryAccessRangeT
+2026-11-09T04:45:26.4302398Z      2.23s  8.72% 48.67%      2.23s  8.72%  __tsan_read
+2026-11-09T04:45:26.4303261Z      2.23s  8.72% 57.39%      2.23s  8.72%  racecall
+2026-11-09T04:45:26.4304397Z      1.58s  6.18% 63.58%      1.58s  6.18%  crypto/internal/fips140/sha256.blockSHANI
+2026-11-09T04:45:26.4305547Z      0.40s  1.56% 65.14%      0.40s  1.56%  runtime.findObject
+2026-11-09T04:45:26.4306533Z      0.38s  1.49% 66.63%      0.38s  1.49%  runtime.raceread
+2026-11-09T04:45:26.4307492Z      0.32s  1.25% 67.88%      0.32s  1.25%  __tsan::ShadowSet
+2026-11-09T04:45:26.4308535Z      0.27s  1.06% 68.94%      0.30s  1.17%  runtime.tryDeferToSpanScan
+2026-11-09T04:45:26.4309532Z      0.25s  0.98% 69.91%      0.25s  0.98%  runtime.memclrNoHeapPointers
+2026-11-09T04:45:26.4310262Z      0.24s  0.94% 70.85%      0.24s  0.94%  racecalladdr
+2026-11-09T04:45:26.4310920Z      0.23s   0.9% 71.75%      0.23s   0.9%  __tsan_write
+2026-11-09T04:45:26.4311663Z      0.22s  0.86% 72.61%      0.22s  0.86%  __tsan::MetaMap::FreeRange
+2026-11-09T04:45:26.4312570Z      0.22s  0.86% 73.47%      0.22s  0.86%  __tsan_func_enter
+2026-11-09T04:45:26.4313475Z      0.19s  0.74% 74.22%      0.26s  1.02%  encoding/json.appendString[go.shape.string]
+2026-11-09T04:45:26.4314386Z      0.17s  0.67% 74.88%      0.17s  0.67%  __tsan::MetaMap::GetSync
+2026-11-09T04:45:26.4315215Z      0.17s  0.67% 75.55%      0.22s  0.86%  runtime.(*sweepLocked).sweep
+2026-11-09T04:45:26.4316109Z      0.16s  0.63% 76.17%      0.31s  1.21%  strings.Fields
+2026-11-09T04:45:26.4316886Z      0.14s  0.55% 76.72%      0.14s  0.55%  __tsan_go_atomic64_load
+2026-11-09T04:45:26.4317666Z      0.14s  0.55% 77.27%      0.14s  0.55%  runtime.racefuncenter
+2026-11-09T04:45:26.6446274Z File: app.test
+2026-11-09T04:45:26.6446616Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:45:26.6446931Z Type: cpu
+2026-11-09T04:45:26.6447136Z Time: 2026-11-09 04:44:59 UTC
+2026-11-09T04:45:26.6447426Z Duration: 26.43s, Total samples = 25.56s (96.72%)
+2026-11-09T04:45:26.6447798Z Showing nodes accounting for 7.54s, 29.50% of 25.56s total
+2026-11-09T04:45:26.6448132Z Dropped 696 nodes (cum <= 0.13s)
+2026-11-09T04:45:26.6448393Z Showing top 20 nodes out of 398
+2026-11-09T04:45:26.6448707Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:45:26.6449679Z          0     0%     0%     11.45s 44.80%  github.com/ArtixSx/razvilka/internal/netidentity.(*Provider).WithCurrent
+2026-11-09T04:45:26.6450618Z          0     0%     0%      9.56s 37.40%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).startReviewed
+2026-11-09T04:45:26.6452005Z          0     0%     0%      9.55s 37.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func5
+2026-11-09T04:45:26.6452714Z          0     0%     0%      9.49s 37.13%  net/http.HandlerFunc.ServeHTTP
+2026-11-09T04:45:26.6453432Z          0     0%     0%      9.37s 36.66%  github.com/ArtixSx/razvilka/internal/app.(*App).managedNFQApplyHTTP
+2026-11-09T04:45:26.6454220Z          0     0%     0%      9.36s 36.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply
+2026-11-09T04:45:26.6454827Z          0     0%     0%      9.36s 36.62%  net/http.(*ServeMux).ServeHTTP
+2026-11-09T04:45:26.6455648Z          0     0%     0%      9.22s 36.07%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+2026-11-09T04:45:26.6456510Z          0     0%     0%      9.20s 35.99%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+2026-11-09T04:45:26.6457215Z          0     0%     0%      9.16s 35.84%  github.com/ArtixSx/razvilka/internal/app.(*App).apply
+2026-11-09T04:45:26.6458040Z          0     0%     0%      9.05s 35.41%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+2026-11-09T04:45:26.6458998Z          0     0%     0%      8.94s 34.98%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+2026-11-09T04:45:26.6459933Z          0     0%     0%      8.69s 34.00%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+2026-11-09T04:45:26.6460606Z          0     0%     0%      8.42s 32.94%  net/http.serverHandler.ServeHTTP
+2026-11-09T04:45:26.6461107Z          0     0%     0%      8.31s 32.51%  net/http.(*conn).serve
+2026-11-09T04:45:26.6461792Z      7.46s 29.19% 29.19%      7.46s 29.19%  internal/runtime/syscall/linux.Syscall6
+2026-11-09T04:45:26.6462287Z      0.08s  0.31% 29.50%      7.38s 28.87%  syscall.RawSyscall6
+2026-11-09T04:45:26.6462742Z          0     0% 29.50%      7.20s 28.17%  runtime._System
+2026-11-09T04:45:26.6463479Z          0     0% 29.50%      6.70s 26.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+2026-11-09T04:45:26.6464488Z          0     0% 29.50%      6.66s 26.06%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+2026-11-09T04:45:26.8383206Z File: app.test
+2026-11-09T04:45:26.8383700Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:45:26.8384210Z Type: cpu
+2026-11-09T04:45:26.8384537Z Time: 2026-11-09 04:44:59 UTC
+2026-11-09T04:45:26.8385031Z Duration: 26.43s, Total samples = 25.56s (96.72%)
+2026-11-09T04:45:26.8385529Z Active filters:
+2026-11-09T04:45:26.8386573Z    show=github.com/ArtixSx/razvilka/internal/(dataplane|strategylab|startuptools|co…
+2026-11-09T04:45:26.8387348Z Showing nodes accounting for 0.51s, 2.00% of 25.56s total
+2026-11-09T04:45:26.8387686Z Dropped 135 nodes (cum <= 0.13s)
+2026-11-09T04:45:26.8387957Z Showing top 40 nodes out of 259
+2026-11-09T04:45:26.8388291Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:45:26.8389051Z          0     0%     0%      9.56s 37.40%  github.com/ArtixSx/razvilka/internal/app.(*ManagedNFQWSListRuntime).startReviewed
+2026-11-09T04:45:26.8389875Z      0.01s 0.039% 0.039%      9.55s 37.36%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply.func5
+2026-11-09T04:45:26.8390728Z          0     0% 0.039%      9.37s 36.66%  github.com/ArtixSx/razvilka/internal/app.(*App).managedNFQApplyHTTP
+2026-11-09T04:45:26.8391541Z          0     0% 0.039%      9.36s 36.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*Manager).Apply
+2026-11-09T04:45:26.8392768Z          0     0% 0.039%      9.22s 36.07%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*App).operationMiddleware.func3
+2026-11-09T04:45:26.8393895Z          0     0% 0.039%      9.20s 35.99%  github.com/ArtixSx/razvilka/internal/app.(*App).applyDataplane
+2026-11-09T04:45:26.8394670Z          0     0% 0.039%      9.16s 35.84%  github.com/ArtixSx/razvilka/internal/app.(*App).apply
+2026-11-09T04:45:26.8395701Z          0     0% 0.039%      9.05s 35.41%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.(*Gate).Middleware.func4
+2026-11-09T04:45:26.8396695Z          0     0% 0.039%      8.94s 34.98%  github.com/ArtixSx/razvilka/internal/startuptools.(*Lease).WithReadOnlyToolObservation
+2026-11-09T04:45:26.8397651Z          0     0% 0.039%      8.69s 34.00%  github.com/ArtixSx/razvilka/internal/app.(*App).Handler.securityHeaders.func6
+2026-11-09T04:45:26.8398484Z      0.20s  0.78%  0.82%      6.70s 26.21%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use
+2026-11-09T04:45:26.8399507Z          0     0%  0.82%      6.66s 26.06%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools.func2
+2026-11-09T04:45:26.8400463Z          0     0%  0.82%      6.65s 26.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*BackendInventory).Read
+2026-11-09T04:45:26.8401352Z          0     0%  0.82%      6.65s 26.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).Read
+2026-11-09T04:45:26.8402415Z      0.30s  1.17%  2.00%      6.65s 26.02%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read
+2026-11-09T04:45:26.8403354Z          0     0%  2.00%      6.61s 25.86%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).activate
+2026-11-09T04:45:26.8404328Z          0     0%  2.00%      6.58s 25.74%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func1
+2026-11-09T04:45:26.8405340Z          0     0%  2.00%      6.50s 25.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeActiveTools
+2026-11-09T04:45:26.8406334Z          0     0%  2.00%      6.50s 25.43%  github.com/ArtixSx/razvilka/internal/dataplane.(*networkPolicyIdentity).use.func1
+2026-11-09T04:45:26.8407228Z          0     0%  2.00%      6.43s 25.16%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).Activate
+2026-11-09T04:45:26.8408253Z          0     0%  2.00%      6.35s 24.84%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation
+2026-11-09T04:45:26.8409282Z          0     0%  2.00%      6.35s 24.84%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).read.func1
+2026-11-09T04:45:26.8410232Z          0     0%  2.00%      6.30s 24.65%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Preflight
+2026-11-09T04:45:26.8411217Z          0     0%  2.00%      6.24s 24.41%  github.com/ArtixSx/razvilka/internal/app.runManagedStrategyProbeNativeConsumer.func11
+2026-11-09T04:45:26.8412523Z          0     0%  2.00%      6.24s 24.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary
+2026-11-09T04:45:26.8413502Z          0     0%  2.00%      6.24s 24.41%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory
+2026-11-09T04:45:26.8414510Z          0     0%  2.00%      6.21s 24.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).boundary.func1
+2026-11-09T04:45:26.8415563Z          0     0%  2.00%      6.21s 24.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*NetworkPolicyChecks).observeInventory.func1
+2026-11-09T04:45:26.8416505Z          0     0%  2.00%         6s 23.47%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).check
+2026-11-09T04:45:26.8417446Z          0     0%  2.00%         6s 23.47%  github.com/ArtixSx/razvilka/internal/dataplane.newNetworkPolicyIdentityAdapter.func2
+2026-11-09T04:45:26.8418449Z          0     0%  2.00%      5.91s 23.12%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).observeProbeTools
+2026-11-09T04:45:26.8419626Z          0     0%  2.00%      5.84s 22.85%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWSScopedBinding).readbackPrefixObserved
+2026-11-09T04:45:26.8420616Z          0     0%  2.00%      5.56s 21.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).capture
+2026-11-09T04:45:26.8422116Z          0     0%  2.00%      5.56s 21.75%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).captureWithToolObservation.func2
+2026-11-09T04:45:26.8423220Z          0     0%  2.00%      5.16s 20.19%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).verifyLANObserved
+2026-11-09T04:45:26.8424243Z          0     0%  2.00%      5.12s 20.03%  github.com/ArtixSx/razvilka/internal/dataplane.(*NFQWS2Adapter).startPreparedNFQWSProcess
+2026-11-09T04:45:26.8425168Z          0     0%  2.00%      5.07s 19.84%  github.com/ArtixSx/razvilka/internal/dataplane.(*LANPolicyRuntime).Verify
+2026-11-09T04:45:26.8426079Z          0     0%  2.00%      4.76s 18.62%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqws2ActiveExecution).verifyLAN
+2026-11-09T04:45:26.8427027Z          0     0%  2.00%      4.75s 18.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsScopedNetworkBinding).rules
+2026-11-09T04:45:26.8427975Z          0     0%  2.00%      4.75s 18.58%  github.com/ArtixSx/razvilka/internal/dataplane.(*nfqwsScopedStockQueueProof).read
+2026-11-09T04:45:27.2719963Z File: app.test
+2026-11-09T04:45:27.2721168Z Build ID: 2948242c0b888f6c3646f1bf759dc2011e8a7540
+2026-11-09T04:45:27.2722391Z Type: alloc_space
+2026-11-09T04:45:27.2723054Z Time: 2026-11-09 04:45:26 UTC
+2026-11-09T04:45:27.2723623Z Showing nodes accounting for 2632.58MB, 93.19% of 2824.95MB total
+2026-11-09T04:45:27.2724218Z Dropped 566 nodes (cum <= 14.12MB)
+2026-11-09T04:45:27.2724647Z Showing top 30 nodes out of 383
+2026-11-09T04:45:27.2725156Z       flat  flat%   sum%        cum   cum%
+2026-11-09T04:45:27.2726002Z   730.27MB 25.85% 25.85%   730.27MB 25.85%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+2026-11-09T04:45:27.2727174Z   321.34MB 11.37% 37.23%   321.34MB 11.37%  github.com/ArtixSx/razvilka/internal/startuptools.init.func1
+2026-11-09T04:45:27.2728311Z   296.07MB 10.48% 47.71%   296.07MB 10.48%  github.com/ArtixSx/razvilka/internal/physicalscope.init.func1
+2026-11-09T04:45:27.2729165Z   202.04MB  7.15% 54.86%   202.04MB  7.15%  io.ReadAll
+2026-11-09T04:45:27.2729758Z   135.14MB  4.78% 59.64%   135.64MB  4.80%  io.copyBuffer
+2026-11-09T04:45:27.2730377Z   124.97MB  4.42% 64.07%   124.97MB  4.42%  bytes.growSlice
+2026-11-09T04:45:27.2731018Z   106.02MB  3.75% 67.82%   106.02MB  3.75%  os.(*File).Stat
+2026-11-09T04:45:27.2732398Z    95.43MB  3.38% 71.20%    95.43MB  3.38%  github.com/ArtixSx/razvilka/internal/components.(*managedRuntimePayloadScratch).member
+2026-11-09T04:45:27.2733465Z    85.02MB  3.01% 74.21%    97.52MB  3.45%  os.lstatNolog
+2026-11-09T04:45:27.2734319Z       85MB  3.01% 77.22%       85MB  3.01%  syscall.ByteSliceFromString
+2026-11-09T04:45:27.2735047Z    64.02MB  2.27% 79.48%    64.02MB  2.27%  strings.Fields
+2026-11-09T04:45:27.2735757Z    50.24MB  1.78% 81.26%   178.76MB  6.33%  encoding/json.Marshal
+2026-11-09T04:45:27.2736863Z    45.13MB  1.60% 82.86%    45.13MB  1.60%  github.com/ArtixSx/razvilka/internal/netidentity.readNamespaceDirectory
+2026-11-09T04:45:27.2738179Z    40.13MB  1.42% 84.28%    40.13MB  1.42%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).take
+2026-11-09T04:45:27.2739519Z    34.04MB  1.21% 85.48%    35.04MB  1.24%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendNFTSocket).exchange
+2026-11-09T04:45:27.2740621Z       28MB  0.99% 86.47%       33MB  1.17%  os.newUnixDirent
+2026-11-09T04:45:27.2741319Z    26.53MB  0.94% 87.41%    75.66MB  2.68%  os.(*File).readdir
+2026-11-09T04:45:27.2742145Z    26.50MB  0.94% 88.35%    32.50MB  1.15%  os.readlink
+2026-11-09T04:45:27.2743114Z    25.08MB  0.89% 89.24%    91.59MB  3.24%  github.com/ArtixSx/razvilka/internal/netidentity.mountLayoutOK
+2026-11-09T04:45:27.2744051Z    20.50MB  0.73% 89.97%    20.50MB  0.73%  strings.genSplit
+2026-11-09T04:45:27.2745016Z    17.50MB  0.62% 90.58%    18.50MB  0.66%  os.lstatatWithName
+2026-11-09T04:45:27.2745862Z    17.50MB  0.62% 91.20%    17.50MB  0.62%  strings.(*Builder).WriteByte (inline)
+2026-11-09T04:45:27.2746606Z    16.13MB  0.57% 91.78%    16.13MB  0.57%  os.init.func1
+2026-11-09T04:45:27.2747898Z    14.96MB  0.53% 92.30%    14.96MB  0.53%  github.com/ArtixSx/razvilka/internal/strategylab.compatibilityFileCopy
+2026-11-09T04:45:27.2749239Z    12.02MB  0.43% 92.73%   291.63MB 10.32%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+2026-11-09T04:45:27.2751162Z        5MB  0.18% 92.91%   168.05MB  5.95%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).taskStart
+2026-11-09T04:45:27.2752963Z        5MB  0.18% 93.08%   581.65MB 20.59%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+2026-11-09T04:45:27.2754563Z        1MB 0.035% 93.12%   365.80MB 12.95%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+2026-11-09T04:45:27.2756478Z        1MB 0.035% 93.15%   375.75MB 13.30%  github.com/ArtixSx/razvilka/internal/dataplane.(*backendInventoryReader).classic.func1
+2026-11-09T04:45:27.2758252Z        1MB 0.035% 93.19%   300.07MB 10.62%  github.com/ArtixSx/razvilka/internal/physicalscope.dump
+2026-11-09T04:45:27.2927461Z ##[error]Process completed with exit code 1.
+2026-11-09T04:45:27.3001904Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-09T04:45:27.3002536Z with:
+2026-11-09T04:45:27.3002864Z   name: research-managed-race-a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a
+2026-11-09T04:45:27.3003258Z   path: artifacts/managed
+2026-11-09T04:45:27.3003502Z   if-no-files-found: warn
+2026-11-09T04:45:27.3003735Z   compression-level: 6
+2026-11-09T04:45:27.3003951Z   overwrite: false
+2026-11-09T04:45:27.3004162Z   include-hidden-files: false
+2026-11-09T04:45:27.3004391Z env:
+2026-11-09T04:45:27.3004568Z   GOTOOLCHAIN: local
+2026-11-09T04:45:27.3004769Z ##[endgroup]
+2026-11-09T04:45:27.4734943Z (node:21131) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T04:45:27.4735836Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T04:45:27.4797177Z With the provided path, there will be 3 files uploaded
+2026-11-09T04:45:27.4802859Z Artifact name is valid!
+2026-11-09T04:45:27.4803678Z Root directory input is valid!
+2026-11-09T04:45:27.7974118Z Beginning upload of artifact content to blob storage
+2026-11-09T04:45:27.8257105Z (node:21131) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T04:45:28.0945954Z Uploaded bytes 18111
+2026-11-09T04:45:28.1590931Z Finished uploading artifact content to blob storage!
+2026-11-09T04:45:28.1592511Z SHA256 digest of uploaded artifact zip is 410a24a19914dc081596d497aa6b48c6b4c85cafa5a23fab30d65c2892990c7d
+2026-11-09T04:45:28.1593725Z Finalizing artifact upload
+2026-11-09T04:45:28.5983310Z Artifact research-managed-race-a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a.zip successfully finalized. Artifact ID 13650018962
+2026-11-09T04:45:28.5986492Z Artifact research-managed-race-a9bd8d7581de1f13cc4ffcf6689bf3d36cb90e5a has been successfully uploaded! Final size is 18111 bytes. Artifact ID is 13650018962
+2026-11-09T04:45:28.5991975Z Artifact download URL: https://github.com/ArtixSx/RAZVILKA/actions/runs/42563038017/artifacts/13650018962
+2026-11-09T04:45:28.6214185Z Post job cleanup.
+2026-11-09T04:45:28.7104858Z [command]/usr/bin/git version
+2026-11-09T04:45:28.7154569Z git version 2.56.0
+2026-11-09T04:45:28.7199961Z Temporarily overriding HOME='/home/runner/work/_temp/d8c16f16-c0e5-4e68-9ba0-49436a5feec8' before making global git config changes
+2026-11-09T04:45:28.7201351Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T04:45:28.7207447Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/RAZVILKA/RAZVILKA
+2026-11-09T04:45:28.7241635Z Removing SSH command configuration
+2026-11-09T04:45:28.7252735Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T04:45:28.7287893Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-09T04:45:28.7557688Z Removing HTTP extra header
+2026-11-09T04:45:28.7558969Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T04:45:28.7607410Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-09T04:45:28.7872220Z Removing includeIf entries pointing to credentials config files
+2026-11-09T04:45:28.7878926Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T04:45:28.7944664Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-09T04:45:28.8395288Z Cleaning up orphan processes
+2026-11-09T04:45:28.8754217Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,20 @@
+{
+  "files": {
+    "domain-successor-view-independent-review-20261109.json": {
+      "bytes": 2751,
+      "sha256": "dc1750815282093c288b8c6804f6b21232eb1ac16d57534d7b2612975233e720"
+    },
+    "sameboot-refusal-diagnostics-review-20261109.json": {
+      "bytes": 1343,
+      "sha256": "2ef46fdc356a8eb9b5118f1f0d42ff48b09e90d4aac003259496a0c4685bbd06"
+    },
+    "sameboot-successor-gates-review-20261109.json": {
+      "bytes": 869,
+      "sha256": "596406f981d9445d478e20a56c8b0c009b676641f743dc4c6da57efae49da3a7"
+    },
+    "history-focused-workflow-review-20261109.json": {
+      "bytes": 705,
+      "sha256": "5cf4b5f100fe1bab4965511a09de5d872acb9bd00f60df92446d99b591871437"
+    }
+  }
+}

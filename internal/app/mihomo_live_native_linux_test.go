@@ -41,14 +41,29 @@ func TestMihomoLiveOriginalApplyStopAndFreshApply(t *testing.T) {
 
 func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	settlementRetry := os.Getenv("RAZVILKA_MIHOMO_CHECK_SETTLEMENT_NATIVE") == "1"
+	manualHTTP := os.Getenv("RAZVILKA_MIHOMO_MANUAL_HTTP_NATIVE") == "1"
+	if manualHTTP && (settlementRetry || degradeAfterCAS) {
+		t.Fatal("separate real HTTP scenario required")
+	}
 	if settlementRetry && degradeAfterCAS {
 		t.Fatal("distinct native scenarios required")
 	}
 	if os.Getenv("RAZVILKA_MIHOMO_LIVE_NATIVE") != "1" {
 		t.Skip("disposable original live native workflow")
 	}
-	lifetime, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	rounds := 2
+	if degradeAfterCAS || settlementRetry {
+		rounds = 1
+	}
+	const roundBudget = 5 * time.Minute
+	const operationBudget = 110 * time.Second
+	fixtureStarted := time.Now()
+	// Peers and original live owners span both independent user cycles. The
+	// first cycle still includes setup in its original five-minute budget;
+	// neither cycle may borrow time from the other's request deadlines.
+	lifetime, cancel := context.WithDeadline(context.Background(), fixtureStarted.Add(time.Duration(rounds)*roundBudget))
 	defer cancel()
+	t.Logf("native_fixture_budgets rounds=%d aggregate=%s round=%s operation=%s production_apply=%s", rounds, time.Duration(rounds)*roundBudget, roundBudget, operationBudget, defaultDataplaneApplyTimeout)
 	peers := domainOriginalPeers(t, lifetime)
 	startMihomoLiveNativeForwarder(t, lifetime)
 	parentProducer := os.Getenv("RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER") == "1"
@@ -110,6 +125,11 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	}
 	selected := "mihomo:" + imported.Nodes[0].ID
 	service := catalog.Service{ID: "live-listed", Name: "Native IPv4 service", Category: "fixture", Strategy: []string{"mihomo"}, CIDRs: []string{domainOriginalServer + "/32"}, ProbeURL: "https://service.example.com/", Probes: []catalog.Probe{{ID: "primary", URL: "https://service.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}, {ID: "required-second", URL: "https://unknown.example.com/", Required: true, Expect: catalog.ProbeExpectation{StatusCodes: []int{200}, JSON: true, RedirectPolicy: "none"}}}}
+	if manualHTTP {
+		// Deliberately reverse lexical order: Build canonicalizes CIDRs, while
+		// the original complete catalogue/probe definition must stay exact.
+		service.CIDRs = []string{domainOriginalServer + "/32", "1.0.0.1/32"}
+	}
 	service.Probes[0].Label = "Primary native TLS"
 	service.Probes[1].Label = "Second mandatory native TLS"
 	if err = catalog.Validate(catalog.Catalog{Services: []catalog.Service{service}}); err != nil {
@@ -181,15 +201,24 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		t.Fatal(err)
 	}
 	a := &App{Store: store, Nodes: nodes, Components: cm, Dataplane: manager, EngineConfigs: configs, Catalog: catalog.Catalog{Services: []catalog.Service{service}}, FreshProfile: fresh, ProxySidecarBoot: "hev", ExecutionHistory: updatecheck.NewExecutionHistoryAdmission(dataplane.InspectRetainedExecutionReadVersion), ComponentHistory: updatecheck.NewComponentHistoryAdmission(components.MihomoReleaseReadVersion)}
+	if manualHTTP {
+		mihomoNativeManualAuthenticate(t, a)
+	}
 	controlRoot := filepath.Join(peers.root, "live-control")
 	if parentProducer {
 		controlRoot = "/opt/razvilka/state/self-update-stop"
 	}
 	a.SelfUpdateFiles = &SelfUpdateFiles{ControlRoot: controlRoot}
+	if manualHTTP {
+		a.SelfUpdateFiles.Directory = filepath.Join(peers.root, "absent-self-update-files")
+		if a.PendingSelfUpdateRecovery() {
+			t.Fatal("manual fixture has pending self-update before runtime operations")
+		}
+	}
 	if _, err = operationgate.InitializeSelfUpdateControl(lifetime, controlRoot); err != nil {
 		t.Fatal(err)
 	}
-	initial, done := context.WithTimeout(lifetime, 110*time.Second)
+	initial, done := context.WithTimeout(lifetime, operationBudget)
 	defer done()
 	held, release, err := a.Operations.ExclusiveContext(initial)
 	if err != nil {
@@ -262,12 +291,15 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if baseline.Source != domainOriginalClient {
 		t.Fatal("physical baseline source", baseline)
 	}
-	rounds := 2
-	if degradeAfterCAS || settlementRetry {
-		rounds = 1
-	}
 	for round := 0; round < rounds; round++ {
-		apply, cancelApply := context.WithTimeout(lifetime, 110*time.Second)
+		roundStarted := time.Now()
+		roundDeadline := roundStarted.Add(roundBudget)
+		if round == 0 {
+			roundDeadline = fixtureStarted.Add(roundBudget)
+		}
+		roundContext, cancelRound := context.WithDeadline(lifetime, roundDeadline)
+		defer cancelRound() // Includes fatal paths; original owner lifetime is separate.
+		apply, cancelApply := context.WithTimeout(roundContext, operationBudget)
 		actual, release, err := a.Operations.ExclusiveContext(apply)
 		if err != nil {
 			cancelApply()
@@ -306,43 +338,59 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		var actualCAS atomic.Bool
 		// Exercise the real App operationScope/restoreAdmission borrower, rather
 		// than a bare Gate context that cannot transfer request ownership.
-		server := httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			bounded, finish := context.WithTimeout(r.Context(), 110*time.Second)
-			defer finish()
-			bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
-			bounded = dataplane.WithReviewGuard(bounded, binding.current)
-			execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
-				undo, err := binding.commit(bounded)
-				if err == nil && degradeAfterCAS {
-					err = mihomoLiveNativeDegradeAfterCAS(peers, binding)
-					actualCAS.Store(err == nil)
-				}
-				return undo, err
-			})
-			for _, step := range execution.Steps {
-				start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
-				finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
-				if startErr == nil && finishErr == nil {
-					t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
-				}
+		server := func() *httptest.Server {
+			if manualHTTP {
+				return httptest.NewServer(a.Handler(http.NotFoundHandler()))
 			}
-			detail := ""
-			status := http.StatusOK
-			if applyErr != nil {
-				t.Logf("native_apply_failure deadline_exceeded=%t canceled=%t live_owner_unavailable=%t parent_origin_unavailable=%t", errors.Is(applyErr, context.DeadlineExceeded), errors.Is(applyErr, context.Canceled), errors.Is(applyErr, components.ErrMihomoLiveOwner), errors.Is(applyErr, components.ErrMihomoProbeOrigin))
-				detail = applyErr.Error()
-				status = http.StatusConflict
-			}
-			writeJSON(w, status, struct {
-				Execution dataplane.Execution `json:"execution"`
-				Error     string              `json:"error"`
-			}{execution, detail})
-		})))
-		request, err := http.NewRequestWithContext(apply, http.MethodPost, server.URL+"/api/v1/apply", nil)
+			return httptest.NewServer(a.operationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				bounded, finish := context.WithTimeout(r.Context(), operationBudget)
+				defer finish()
+				bounded = context.WithValue(bounded, mihomoNodeBindingKey{}, binding)
+				bounded = dataplane.WithReviewGuard(bounded, binding.current)
+				execution, applyErr := a.applyDataplane(bounded, plan, func() (func() error, error) {
+					undo, err := binding.commit(bounded)
+					if err == nil && degradeAfterCAS {
+						err = mihomoLiveNativeDegradeAfterCAS(peers, binding)
+						actualCAS.Store(err == nil)
+					}
+					return undo, err
+				})
+				for _, step := range execution.Steps {
+					start, startErr := time.Parse(time.RFC3339Nano, step.StartedAt)
+					finish, finishErr := time.Parse(time.RFC3339Nano, step.FinishedAt)
+					if startErr == nil && finishErr == nil {
+						t.Logf("native_apply_stage phase=%s state=%s duration_ms=%.3f", step.Phase, step.State, float64(finish.Sub(start).Microseconds())/1000)
+					}
+				}
+				detail := ""
+				status := http.StatusOK
+				if applyErr != nil {
+					t.Logf("native_apply_failure deadline_exceeded=%t canceled=%t live_owner_unavailable=%t parent_origin_unavailable=%t", errors.Is(applyErr, context.DeadlineExceeded), errors.Is(applyErr, context.Canceled), errors.Is(applyErr, components.ErrMihomoLiveOwner), errors.Is(applyErr, components.ErrMihomoProbeOrigin))
+					detail = applyErr.Error()
+					status = http.StatusConflict
+				}
+				writeJSON(w, status, struct {
+					Execution dataplane.Execution `json:"execution"`
+					Error     string              `json:"error"`
+				}{execution, detail})
+			})))
+		}()
+		path := "/api/v1/apply"
+		var requestBody []byte
+		if manualHTTP {
+			var reviewed dataplane.Plan
+			reviewed, path, requestBody = mihomoNativeManualPreview(t, apply, a, server, imported.Nodes[0].ID, service, []string{domainOriginalClient + "/32"})
+			plan = reviewed
+		}
+		request, err := http.NewRequestWithContext(apply, http.MethodPost, server.URL+path, bytes.NewReader(requestBody))
 		if err != nil {
 			server.Close()
 			cancelApply()
 			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		if manualHTTP {
+			request.Header.Set("Authorization", "Bearer "+mihomoNativeManualToken)
 		}
 		response, err := server.Client().Do(request)
 		if err != nil {
@@ -356,17 +404,20 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 		}
 		decodeErr := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&reply)
 		response.Body.Close()
+		if manualHTTP && response.StatusCode == http.StatusOK && decodeErr == nil {
+			mihomoNativeManualReplayRefused(t, apply, a, server, path, requestBody)
+		}
 		server.Close()
 		cancelApply()
 		if degradeAfterCAS {
-			assertMihomoLivePostCASFailure(t, lifetime, a, peers, cfgPath, current, binding, actualCAS.Load(), reply.Execution, reply.Error, response.StatusCode, decodeErr)
+			assertMihomoLivePostCASFailure(t, roundContext, a, peers, cfgPath, current, binding, actualCAS.Load(), reply.Execution, reply.Error, response.StatusCode, decodeErr)
 			return
 		}
 		if decodeErr != nil || response.StatusCode != http.StatusOK || reply.Execution.State != "committed" {
 			t.Fatal("actual native App admission/Apply", reply.Execution, reply.Error, response.StatusCode, decodeErr)
 		}
 		t.Logf("actual_mihomo_live round=%d apply=%s mandatory_probes=2", round, time.Since(started))
-		check, cancelCheck := context.WithTimeout(lifetime, 110*time.Second)
+		check, cancelCheck := context.WithTimeout(roundContext, operationBudget)
 		var settlementFixture *dataplane.MihomoLiveHealthSettlementNativeFixture
 		if settlementRetry {
 			arm, releaseArm, err := a.Operations.ExclusiveContext(check)
@@ -403,7 +454,7 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			t.Fatal("actual selected client did not traverse native proxy", native)
 		}
 		cancelCheck()
-		stopped, cancelStop := context.WithTimeout(lifetime, 110*time.Second)
+		stopped, cancelStop := context.WithTimeout(roundContext, operationBudget)
 		if round == 1 {
 			arm, releaseArm, err := a.Operations.ExclusiveContext(stopped)
 			if err != nil {
@@ -418,7 +469,13 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			}
 		}
 		stopStart := time.Now()
-		handled, outcome := a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		stopOriginal := func() (bool, serviceRuntimeOutcome) {
+			if manualHTTP {
+				return true, mihomoNativeManualStop(t, stopped, a)
+			}
+			return a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+		}
+		handled, outcome := stopOriginal()
 		if settlementRetry {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || a.mihomoProbe.liveStop.closing {
 				cancelStop()
@@ -429,16 +486,20 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 				cancelStop()
 				t.Fatal("failed temporary ACK destroyed native policy/TUN prerequisites", live)
 			}
-			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+			handled, outcome = stopOriginal()
 		}
 		if round == 1 {
 			if !handled || outcome.LiveApplied || a.mihomoProbe.liveStop == nil || !a.mihomoProbe.liveStop.closing {
+				t.Logf("native_closing_cut_failure fixture_elapsed=%s round_elapsed=%s lifetime_error=%v round_error=%v stop_error=%v", time.Since(fixtureStarted), time.Since(roundStarted), lifetime.Err(), roundContext.Err(), stopped.Err())
 				cancelStop()
 				t.Fatal("original close cut did not retain App cursor", outcome)
 			}
-			handled, outcome = a.executeMihomoServiceRuntime(stopped, "stop", store.Get().Revision)
+			handled, outcome = stopOriginal()
 		}
 		if !handled || !outcome.LiveApplied || a.mihomoProbe.liveStop != nil {
+			if cursor := a.mihomoProbe.liveStop; cursor != nil {
+				t.Logf("native_stop_failure app_phase=%s phases=%v canceled=%t deadline=%t source_owner_unavailable=%t", cursor.stage, dataplane.MihomoLiveStopFailurePhases(cursor.lastFailure), errors.Is(cursor.lastFailure, context.Canceled), errors.Is(cursor.lastFailure, context.DeadlineExceeded), errors.Is(cursor.lastFailure, components.ErrMihomoLiveOwner))
+			}
 			cancelStop()
 			t.Fatal("actual original Stop/retry", outcome)
 		}
@@ -464,6 +525,8 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 			t.Fatal("Stop did not restore actual physical baseline", baseline)
 		}
 		cancelStop()
+		t.Logf("actual_mihomo_live round=%d cycle=%s fixture_elapsed=%s restored_physical_baseline=true", round, time.Since(roundStarted), time.Since(fixtureStarted))
+		cancelRound()
 	}
 }
 

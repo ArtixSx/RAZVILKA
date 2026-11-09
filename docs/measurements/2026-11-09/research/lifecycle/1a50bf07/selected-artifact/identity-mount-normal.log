@@ -1,0 +1,14 @@
+=== RUN   TestProcMountIDActualParityAndFallback
+--- PASS: TestProcMountIDActualParityAndFallback (0.00s)
+=== RUN   TestProcMountIDRejectsMalformedResultAndCancellation
+--- PASS: TestProcMountIDRejectsMalformedResultAndCancellation (0.00s)
+=== RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+    observe_mount_id_linux_test.go:115: === RUN   TestProcMountIDNativeClosingRejectsSameInodeBind
+        --- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.00s)
+        PASS
+        
+--- PASS: TestProcMountIDNativeClosingRejectsSameInodeBind (0.01s)
+=== RUN   TestNativeNetworkIdentityProcThreadAndClosing
+--- PASS: TestNativeNetworkIdentityProcThreadAndClosing (0.00s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/netidentity	0.012s

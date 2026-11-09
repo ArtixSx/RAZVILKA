@@ -1,0 +1,130 @@
+{
+  "scope": "Windows loopback native Xray VLESS TCP + Toxiproxy; HTTP body; NOT TLS, ExactNodeChecker, router or LAN evidence",
+  "rows": [
+    {
+      "scenario": "valid",
+      "sample": 0,
+      "phase": "cold-client-first-request",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 16.29,
+      "client_ready_ms": 513.684
+    },
+    {
+      "scenario": "valid",
+      "sample": 1,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 1.519,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "valid",
+      "sample": 2,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 13.747,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "valid",
+      "sample": 3,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 15.574,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "wrong-credentials",
+      "sample": 0,
+      "phase": "cold-client-first-request",
+      "tcp_open": true,
+      "service_body_pass": false,
+      "request_ms": 16.557,
+      "client_ready_ms": 526.127
+    },
+    {
+      "scenario": "wrong-credentials",
+      "sample": 1,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": false,
+      "request_ms": 30.433,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "wrong-credentials",
+      "sample": 2,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": false,
+      "request_ms": 15.874,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "wrong-credentials",
+      "sample": 3,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": false,
+      "request_ms": 1.102,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "latency-100ms",
+      "sample": 0,
+      "phase": "cold-client-first-request",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 102.584,
+      "client_ready_ms": 507.99
+    },
+    {
+      "scenario": "latency-100ms",
+      "sample": 1,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 101.876,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "latency-100ms",
+      "sample": 2,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 102.393,
+      "client_ready_ms": null
+    },
+    {
+      "scenario": "latency-100ms",
+      "sample": 3,
+      "phase": "repeated-same-client",
+      "tcp_open": true,
+      "service_body_pass": true,
+      "request_ms": 122.269,
+      "client_ready_ms": null
+    }
+  ],
+  "finished": true,
+  "failure_code": "",
+  "listeners_closed": true,
+  "owned_processes_reaped": 5,
+  "binaries": {
+    "xray": {
+      "sha256": "27ea09dc340c888025661ce87eea5767aad5ccb374d1e7f2b894171a6bfd79b7",
+      "expected_source_commit": "af8f9673afe8533390e0200637ad30508de803a5"
+    },
+    "toxiproxy": {
+      "sha256": "a42e425835417d912cee9304cd2c80d469cd66ce154a33291f4d8a86ffb0371d",
+      "expected_source_commit": "49299d8838525126e09c85ebe0ba89940a3261e5"
+    }
+  },
+  "xray_version": "Xray 26.10.31 (Xray, Penetrates Everything.) af8f967 (go1.27.0 windows/amd64)",
+  "cleanup_ms": 14702.575,
+  "temporary_workspace_removed": true
+}

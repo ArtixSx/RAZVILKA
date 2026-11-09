@@ -86,7 +86,7 @@ for scenario in linux-amd64 linux-arm64 other-amd64 default; do
   esac
   export TEST_SYSTEM TEST_MACHINE RAZVILKA_BUILD_TARGETS
   printf 'transaction\n' >> "$WORK/expected.log"
-  sh ./check-build.sh
+  sh -eu ./check-build.sh
   cmp "$WORK/expected.log" "$BUILD_LOG"
 done
 : > "$BUILD_LOG"

@@ -27,3 +27,14 @@ func (m *Manager) MihomoLiveRuntimeRegistered() bool {
 	commands, ok := proxy.Runner.(*mihomoLiveCommandRunner)
 	return ok && commands.adapter == a && commands.base != nil && validPlanDigest(commands.review)
 }
+
+// MihomoLiveNodePlanSupported describes only the implemented explicit-node
+// workflow. It is not live health, source ownership or a general AUTO grant;
+// the ordinary transaction still earns every current source and route proof.
+func (m *Manager) MihomoLiveNodePlanSupported(plan Plan) bool {
+	if !m.MihomoLiveRuntimeRegistered() {
+		return false
+	}
+	_, err := mihomoLiveIntentNode(plan)
+	return err == nil
+}

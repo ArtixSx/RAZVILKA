@@ -1,0 +1,7 @@
+=== RUN   TestResourceSampleChild
+    resource_linux_test.go:22: resource observation child only
+--- SKIP: TestResourceSampleChild (0.00s)
+=== RUN   TestResourceSampleActualCPUObservedRSSAndPeerExclusion
+--- PASS: TestResourceSampleActualCPUObservedRSSAndPeerExclusion (0.21s)
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/nativecheckfixture	0.215s

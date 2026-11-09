@@ -19,30 +19,32 @@ import (
 // no process/capture/publication capability. Only the actual emitted capture
 // binds these fields; saved definitions and callback readiness cannot do so.
 type DomainTCPOriginalScope struct {
-	self               *DomainTCPOriginalScope
-	binding            *SyntheticDNSExecutionBinding
-	backend            *BackendInventory
-	gate               *NetworkPolicyAdapter
-	runtime            *LANPolicyRuntime
-	runner             NFQWS2Runner
-	tools              SyntheticDNSCommandTools
-	source             any
-	mu                 sync.Mutex
-	process            *XrayDomainTCPExecutionResource
-	capture            *DomainPolicyTCPCapture
-	baseline           *syntheticBaselineExecutionResource
-	captureResource    *domainTCPCaptureExecutionResource
-	prepared           *DomainPolicyTCPCaptureMapping
-	kernel             *domainTCPBaselineKernelOwner
-	closed             bool
-	cancel             context.CancelFunc
-	publicationOpen    bool // Only the completed original producer opens this phase.
-	standbyReady       bool // Only the actual joined capture finalizer sets this.
-	standbyHistory     *updatecheck.ExecutionHistoryAdmission
-	standbyOwner       *domainTCPStandbyOwner
-	standbyRetirement  *domainTCPStandbyRetirement
-	dnsDetachment      *DomainTCPDetachedStandby
-	dnsDetachmentFault func(string) error // Private CI-only lost-ACK seam; no grant.
+	self                   *DomainTCPOriginalScope
+	binding                *SyntheticDNSExecutionBinding
+	backend                *BackendInventory
+	gate                   *NetworkPolicyAdapter
+	runtime                *LANPolicyRuntime
+	runner                 NFQWS2Runner
+	tools                  SyntheticDNSCommandTools
+	source                 any
+	mu                     sync.Mutex
+	process                *XrayDomainTCPExecutionResource
+	capture                *DomainPolicyTCPCapture
+	baseline               *syntheticBaselineExecutionResource
+	captureResource        *domainTCPCaptureExecutionResource
+	prepared               *DomainPolicyTCPCaptureMapping
+	kernel                 *domainTCPBaselineKernelOwner
+	unpublishedPreparation *domainTCPUnpublishedPreparation
+	closed                 bool
+	cancel                 context.CancelFunc
+	publicationOpen        bool // Only the completed original producer opens this phase.
+	standbyReady           bool // Only the actual joined capture finalizer sets this.
+	standbyHistory         *updatecheck.ExecutionHistoryAdmission
+	standbyOwner           *domainTCPStandbyOwner
+	standbyRetirement      *domainTCPStandbyRetirement
+	dnsDetachment          *DomainTCPDetachedStandby
+	dnsDetachmentFault     func(string) error // Private CI-only lost-ACK seam; no grant.
+	preparationFault       func() error       // CI-only refusal after actual preparation, never readiness.
 }
 
 func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *SyntheticDNSExecutionBinding, backend *BackendInventory) (*DomainTCPOriginalScope, error) {
@@ -87,6 +89,14 @@ func (m *Manager) NewDomainTCPOriginalScope(ctx context.Context, binding *Synthe
 }
 
 func (o *DomainTCPOriginalScope) baseCurrent(ctx context.Context) error {
+	if err := o.baseAssociationCurrent(); err != nil {
+		return err
+	}
+	return o.binding.Current(ctx)
+}
+
+// Callback-free owner/registry comparison; no source or runtime grant.
+func (o *DomainTCPOriginalScope) baseAssociationCurrent() error {
 	if o == nil || o.self != o || o.binding == nil || o.binding.scope == nil || o.backend == nil || o.gate == nil || o.gate.Binding == nil || o.gate.Binding.Runtime != o.runtime || !sameNetworkPolicyDependency(o.runtime.Runner, o.runner) || !sameNetworkPolicyDependency(o.source, o.backend.reader.Runner) {
 		return ErrDomainPolicyTCPConsumer
 	}
@@ -103,7 +113,7 @@ func (o *DomainTCPOriginalScope) baseCurrent(ctx context.Context) error {
 	if !same {
 		return ErrDomainPolicyTCPConsumer
 	}
-	return o.binding.Current(ctx)
+	return nil
 }
 
 // Run uses the original one-shot Xray process owner. No exported callback can
@@ -167,7 +177,13 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.mu.Lock()
 	o.prepared = prepared
 	resource := o.captureResource
+	fault := o.preparationFault
 	o.mu.Unlock()
+	if fault != nil {
+		if err := fault(); err != nil {
+			return err
+		}
+	}
 	kernel, err := newDomainTCPBaselineKernelOwner(ctx, resource, baseline)
 	if err != nil {
 		return err
@@ -288,18 +304,51 @@ func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Co
 		return err
 	}
 	o.mu.Lock()
-	process, capture, prepared, kernel, closed := o.process, o.capture, o.prepared, o.kernel, o.closed
+	process, capture, prepared, kernel, resource, baseline := o.process, o.capture, o.prepared, o.kernel, o.captureResource, o.baseline
 	o.mu.Unlock()
-	if closed || process == nil || process.material.mapping != mapping || capture == nil || prepared == nil || kernel == nil {
+	if process == nil || resource == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := prepared.currentWithFiles(ctx, files); err != nil {
+	material, tools, backend, binding := process.material, resource.tools, resource.backend, o.binding
+	// Only this concrete original tuple may borrow the source's immutable
+	// tool bytes. Every process, mapping, journal and actual kernel read below
+	// still runs, in order, and publication/send stays outside this scope.
+	association := func() error {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		if o.closed || o.process != process || o.capture != capture || o.prepared != prepared ||
+			o.kernel != kernel || o.captureResource != resource || o.baseline != baseline ||
+			process.self != process || material == nil || process.material != material || material.mapping != mapping || material.binding != binding || o.binding != binding ||
+			capture == nil || capture.owner != o || capture.xray == nil || capture.xray.resource != process ||
+			prepared == nil || prepared.capture != capture || prepared.source != mapping ||
+			resource.self != resource || resource.capture != capture || resource.process != process || resource.mapping != mapping || resource.tools != tools || resource.backend != backend ||
+			baseline == nil || baseline.capture != capture || baseline.mapping != mapping || baseline.binding != binding || baseline.tools != tools || baseline.backend != backend ||
+			kernel == nil || kernel.self != kernel || kernel.capture != resource || kernel.baseline != baseline {
+			return ErrDomainPolicyTCPConsumer
+		}
+		return nil
+	}
+	if err := association(); err != nil {
 		return err
 	}
-	if err := kernel.currentWithFiles(ctx, files); err != nil {
-		return err
+	defer domainTCPMeasure("mapping-original-tool-read")(0)
+	err := resource.observeToolsWithFiles(ctx, files, func(observed context.Context, childFiles *xrayDomainTCPFileObservation) error {
+		result := func() error {
+			if err := prepared.currentWithFiles(observed, childFiles); err != nil {
+				return err
+			}
+			if err := kernel.currentWithFiles(observed, childFiles); err != nil {
+				return err
+			}
+			return material.Current(observed)
+		}()
+		return errors.Join(result, association(), observed.Err())
+	})
+	err = errors.Join(err, association(), ctx.Err())
+	if err == nil {
+		domainTCPMeasure("mapping-original-tool-closing")(0)
 	}
-	return process.material.Current(ctx)
+	return err
 }
 func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, send func(context.Context) error) (resultErr error) {
 	finishMeasure := domainTCPMeasure("publication-gate")
@@ -312,8 +361,11 @@ func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, m
 	if send == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if err := o.CurrentSyntheticMapping(ctx, mapping); err != nil {
-		return err
+	finishOpening := domainTCPMeasure("dns-publication-opening")
+	openingErr := o.CurrentSyntheticMapping(ctx, mapping)
+	finishOpening(0)
+	if openingErr != nil {
+		return openingErr
 	}
 	finishSend := domainTCPMeasure("dns-send")
 	err := send(ctx)
@@ -321,9 +373,14 @@ func (o *DomainTCPOriginalScope) WithSyntheticPublication(ctx context.Context, m
 	if err == nil {
 		domainTCPMeasure("dns-send-success")(0)
 	}
-	return errors.Join(err, o.CurrentSyntheticMapping(ctx, mapping))
+	finishClosing := domainTCPMeasure("dns-publication-closing")
+	closingErr := o.CurrentSyntheticMapping(ctx, mapping)
+	finishClosing(0)
+	return errors.Join(err, closingErr)
 }
 func (o *DomainTCPOriginalScope) LookupPublished(ctx context.Context, client, synthetic netip.Addr) (*dnscontrol.SyntheticDNSMapping, error) {
+	finish := domainTCPMeasure("accepted-flow-lookup")
+	defer finish(0)
 	if err := o.baseCurrent(ctx); err != nil {
 		return nil, err
 	}

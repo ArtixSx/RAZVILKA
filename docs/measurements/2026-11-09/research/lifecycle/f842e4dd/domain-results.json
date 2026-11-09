@@ -1,0 +1,97 @@
+{
+  "sha": "f842e4ddb89144a5310ea07f77018c60852c1fd0",
+  "workflow_run": 42609998397,
+  "selected": {
+    "job": 129135667628,
+    "result": "FAIL",
+    "wall_seconds": 14.32,
+    "generation": "GEN1 before DNS publication",
+    "effects": 10,
+    "preadd_entered": 11,
+    "preadd_complete": 10,
+    "preadd_command_boundary": 10,
+    "process_current_calls": 259,
+    "whole_executable_hash_calls": 119,
+    "whole_executable_hash_bytes": 4352711314,
+    "whole_executable_hash_seconds": 2.768142981,
+    "classic_tool_reads": 490
+  },
+  "canceled_ready": {
+    "job": 129135668243,
+    "result": "FAIL",
+    "wall_seconds": 14.21,
+    "generation": "GEN1 before DNS publication; GEN2 not exercised",
+    "effects": 9,
+    "preadd_entered": 10,
+    "preadd_complete": 9,
+    "preadd_command_boundary": 9,
+    "process_current_calls": 228,
+    "whole_executable_hash_calls": 113,
+    "whole_executable_hash_bytes": 4133246878,
+    "whole_executable_hash_seconds": 2.969808384,
+    "classic_tool_reads": 436
+  },
+  "primitive": {
+    "result": "PASS",
+    "full_hash_reads_before": 8,
+    "full_hash_reads_after": 2,
+    "readonly_callbacks_before": 4,
+    "readonly_callbacks_after": 4
+  },
+  "actual_original_process_cancellation": {
+    "normal": "PASS",
+    "race": "PASS"
+  },
+  "preparation_pair": {
+    "job": 129135668175,
+    "result": "PASS",
+    "budget_seconds": 30,
+    "diagnostic_only": true,
+    "baseline": "CUT -> REFUSED",
+    "baseline_seconds": 70.28,
+    "candidate_clean": "CUT -> COMPLETE -> PASS",
+    "candidate_clean_seconds": 88.66,
+    "candidate_capture_ack": "CUT -> COMPLETE -> PASS",
+    "candidate_capture_ack_seconds": 95.08,
+    "candidate_standby_ack": "CUT -> COMPLETE -> PASS",
+    "candidate_standby_ack_seconds": 93.6
+  },
+  "limits": [
+    "Deadline-truncated strict workflows perform different work; no complete workflow speed gain claimed.",
+    "Primitive byte savings alone do not prove DNS readiness.",
+    "Actual private producer entry, completion and effect boundary counters witnessed in native run.",
+    "No router changes or hardware acceptance."
+  ],
+  "logs": [
+    {
+      "file": "domain-canceled-ready.log",
+      "sha256": "e4bef3370bb2dbb4b60dba287fa4329222a3fa2889b0297bb95e425b6708330d",
+      "bytes": 86799
+    },
+    {
+      "file": "domain-selected.log",
+      "sha256": "45aa9a350b440199f1d2f289499301bf8f3ffdc328acd476a89d4b72546b2ef5",
+      "bytes": 83696
+    },
+    {
+      "file": "mihomo-lifecycle.log",
+      "sha256": "134d932b731bd1ed40857c0ece5a04ca93ebd167b2ece2c111cf4fc0c8e03dbe",
+      "bytes": 142946
+    },
+    {
+      "file": "mihomo-postcas.log",
+      "sha256": "138d9594089c7e2406bb1c7cfaebb44fc18ca711c33cc01faf4381a819b14322",
+      "bytes": 37471
+    },
+    {
+      "file": "mihomo-settlement.log",
+      "sha256": "67a204c3ba3e366dd4495a8f829f8406646fffff9f37e47b2d7947d0ab8c8e06",
+      "bytes": 37541
+    },
+    {
+      "file": "preparation.log",
+      "sha256": "7a94c42f0c03c23271d3a7cb0f1a7db97bdfb92df55c84402ba0c5a56cd92ebd",
+      "bytes": 82528
+    }
+  ]
+}

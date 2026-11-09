@@ -1,0 +1,23 @@
+{
+  "reviewer": "verification",
+  "status": "source-approved measurement only; execution pending",
+  "files": [
+    {
+      "path": "internal/netidentity/mount_layout_stream_test.go",
+      "sha256": "81C41DC091AA7F7F6AFDB82410AEED2DF0A84C53E6C5E21AAD98B7284503EA1B"
+    },
+    {
+      "path": "internal/netidentity/mount_layout_stream_native_linux_test.go",
+      "sha256": "2E86E114A6B08203847EA7166DDE6AD0CC2B5815A5E3105E383E4D5CA23F0867"
+    }
+  ],
+  "findings": [
+    "Production mountLayoutOK unchanged. Test-only FieldsSeq candidate retains first separator index>=6, full field count, exact separator+4 and all original root/path/escape predicates and bounds.",
+    "Differential tests cover Unicode whitespace, raw invalid UTF8, optional and duplicate separators, truncation, duplicate roots, path overlap, 8192-line/65536-byte limits and fuzz seeds.",
+    "Native benchmark uses same bounded complete captured mountinfo image and original root/path predicates for both parsers; parser allocation/CPU only, never fresh source authority."
+  ],
+  "limitations": [
+    "No local Go builds/tests.",
+    "Remote normal/race parity and measurements required before considering production promotion."
+  ]
+}

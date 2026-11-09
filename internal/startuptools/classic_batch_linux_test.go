@@ -6,7 +6,40 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
+
+func TestClassicReadBatchBoundaryRejectsForeignRevokedAndCopiedObservation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	l := &Lease{lifetime: ctx, review: &heldReview{}}
+	o := &toolReadObservation{lease: l, review: l.review, active: true, deadline: time.Now().Add(time.Second)}
+	o.self = o
+	scoped := context.WithValue(ctx, toolReadObservationKey{}, o)
+	o.ctx = scoped
+	for _, kind := range []string{"foreign", "revoked", "copied", "malformed", "canceled"} {
+		t.Run(kind, func(t *testing.T) {
+			source, held := l, scoped
+			o.active = true
+			switch kind {
+			case "foreign":
+				source = &Lease{lifetime: ctx, review: l.review}
+			case "revoked":
+				o.active = false
+			case "copied":
+				copy := &toolReadObservation{self: o, lease: l, review: l.review, active: true, deadline: o.deadline, ctx: scoped}
+				held = context.WithValue(ctx, toolReadObservationKey{}, copy)
+			case "malformed":
+				held = context.WithValue(ctx, toolReadObservationKey{}, "foreign")
+			case "canceled":
+				cancel()
+			}
+			if err := source.classicBatchBytesCurrent(held); err == nil {
+				t.Fatal("unissued observation crossed batch boundary", kind)
+			}
+		})
+	}
+}
 
 func TestClassicReadBatchRejectsCopiedExpiredAndForeignInvocation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

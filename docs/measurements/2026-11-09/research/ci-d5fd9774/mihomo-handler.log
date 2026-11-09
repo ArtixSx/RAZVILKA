@@ -1,0 +1,31 @@
+go: downloading golang.org/x/sys v0.47.0
+go: downloading golang.org/x/net v0.56.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading github.com/quic-go/quic-go v0.61.0
+go: downloading golang.org/x/crypto v0.54.0
+go: downloading golang.org/x/text v0.40.0
+go: downloading github.com/quic-go/qpack v0.6.0
+=== RUN   TestMihomoOriginalNativeServiceAndCommonCleanup
+=== RUN   TestMihomoOriginalNativeServiceAndCommonCleanup/complete
+    mihomo_probe_native_linux_test.go:160: actual service probe scenario=complete elapsed=2.771597907s result={ReviewSHA256:29cb1e288cb076d3a2066a8a20914dc1b8ef4dc9ff0c14dfef987e51da1e8baf ConfigSHA256:6ad32a68384bbf9cadf2ec795123ccbd91b07cd1c3b190a43d2d869457bd9ed1 ServiceID:service NetworkProfile:wan-0123456789ab HTTPStatus:200 ServiceVerified:true CleanupVerified:true LiveApplied:false DurationMS:2771} err=<nil>
+=== RUN   TestMihomoOriginalNativeServiceAndCommonCleanup/required-semantic-failure
+    mihomo_probe_native_linux_test.go:160: actual service probe scenario=required-semantic-failure elapsed=2.073592616s result={ReviewSHA256: ConfigSHA256: ServiceID: NetworkProfile: HTTPStatus:0 ServiceVerified:false CleanupVerified:false LiveApplied:false DurationMS:2073} err=original scoped Mihomo probe is unavailable or changed
+        original scoped Mihomo probe is unavailable or changed
+=== RUN   TestMihomoOriginalNativeServiceAndCommonCleanup/excluded-required-scenario
+    mihomo_probe_native_linux_test.go:160: actual service probe scenario=excluded-required-scenario elapsed=1.927907401s result={ReviewSHA256: ConfigSHA256: ServiceID: NetworkProfile: HTTPStatus:0 ServiceVerified:false CleanupVerified:false LiveApplied:false DurationMS:1927} err=original scoped Mihomo probe is unavailable or changed
+        node resource observation refused
+        node resource observation refused
+        original scoped Mihomo probe is unavailable or changed
+=== RUN   TestMihomoOriginalNativeServiceAndCommonCleanup/panic-after-listener
+    mihomo_probe_native_linux_test.go:160: actual service probe scenario=panic-after-listener elapsed=1.786733808s result={ReviewSHA256: ConfigSHA256: ServiceID: NetworkProfile: HTTPStatus:0 ServiceVerified:false CleanupVerified:false LiveApplied:false DurationMS:0} err=fixture observer panic
+--- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup (11.68s)
+    --- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup/complete (3.18s)
+    --- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup/required-semantic-failure (2.49s)
+    --- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup/excluded-required-scenario (2.34s)
+    --- PASS: TestMihomoOriginalNativeServiceAndCommonCleanup/panic-after-listener (2.20s)
+PASS
+=== RUN   TestMihomoOriginalNativeHTTPServiceAndCleanup
+    component_mihomo_probe_native_linux_test.go:201: mihomo_handler_timing={"handler_elapsed_ms":3321,"preparation_ms":573,"adapter_check_ms":2747,"postcheck_ms":0,"finalize_ms":0}
+    component_mihomo_probe_native_linux_test.go:232: real HTTP preview→original installed source→native VLESS/TLS mandatory services→joined cleanup→HTTP response elapsed=3.322146707s result={ReviewSHA256:608aa0e03c1b531eed68bc61adbef250ece4ea6e7d8f9942ea334a5027440c87 ConfigSHA256:3a7de063bf34430b7a014ecde06e610c86e45081de3d240852783cd733361a52 ServiceID:service NetworkProfile:wan-0123456789ab HTTPStatus:200 ServiceVerified:true CleanupVerified:true LiveApplied:false DurationMS:2747}; no live route
+--- PASS: TestMihomoOriginalNativeHTTPServiceAndCleanup (4.77s)
+PASS

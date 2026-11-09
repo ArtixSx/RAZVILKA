@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sync"
 	"syscall"
 	"time"
 
@@ -71,6 +72,28 @@ func nfqws2ManagedProtected(path string, privateParent bool) error {
 	return ErrNFQWSManagedProcessUnknown
 }
 
+// Scratch only; every observation still opens, reads and hashes all bytes.
+// No file, hash, identity or earlier observation is retained in this pool.
+var nfqws2ManagedHashScratch = sync.Pool{New: func() any { return new([32 * 1024]byte) }}
+
+func nfqws2CopyManagedFile(destination io.Writer, source io.Reader) (int64, error) {
+	scratch := nfqws2ManagedHashScratch.Get().(*[32 * 1024]byte)
+	defer func() {
+		clear(scratch[:])
+		nfqws2ManagedHashScratch.Put(scratch)
+	}()
+	size := len(scratch)
+	// Preserve io.Copy's exact initial read size and its fast-path dispatch.
+	if limited, ok := source.(*io.LimitedReader); ok && int64(size) > limited.N {
+		if limited.N < 1 {
+			size = 1
+		} else {
+			size = int(limited.N)
+		}
+	}
+	return io.CopyBuffer(destination, source, scratch[:size])
+}
+
 func nfqws2ManagedFilesCurrent(command nfqws2ManagedProcessCommand) error {
 	files := append([]nfqws2ManagedFile{command.Program}, command.Assets...)
 	for i, asset := range files {
@@ -91,7 +114,7 @@ func nfqws2ManagedFilesCurrent(command nfqws2ManagedProcessCommand) error {
 		}
 		opened, statErr := file.Stat()
 		hash := sha256.New()
-		n, readErr := io.Copy(hash, io.LimitReader(file, limit+1))
+		n, readErr := nfqws2CopyManagedFile(hash, io.LimitReader(file, limit+1))
 		after, afterErr := file.Stat()
 		_ = file.Close()
 		current, pathErr := os.Lstat(asset.Path)

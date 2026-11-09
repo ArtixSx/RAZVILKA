@@ -1,0 +1,238 @@
+{
+  "production": {
+    "profile": "ubuntu-amd64-iptables-legacy-1.8.11-v1",
+    "runner": "ubuntu-26.04",
+    "glibc": "glibc 2.43",
+    "packages": [
+      {
+        "name": "iptables",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "187b16f9375f53ce6a1618a29de52bb177b620589ada29e4a3e25de5d594e66f",
+        "checked_installed_members": 117
+      },
+      {
+        "name": "libip4tc2",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "be25148d60125f6866dfa7940f3f1371fff4b0e8a1a9500780ad50cb8aaa0895",
+        "checked_installed_members": 1
+      },
+      {
+        "name": "libip6tc2",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "3d9fdb3171f1167ab3f5182de11db63bcd27aae71838618f3d46806b3134428e",
+        "checked_installed_members": 1
+      },
+      {
+        "name": "libxtables12",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "e21126e0544e3b795633fb5b06bb7f2b9a493ebc5ab07b007db0f7f68c0a0aed",
+        "checked_installed_members": 1
+      }
+    ],
+    "pass": [
+      "--- PASS: TestProductionStartupToolsNative (0.07s)",
+      "--- PASS: TestClassicSaveNativeInventoryParity (0.62s)",
+      "--- PASS: TestClassicSaveNativeLockCustody (0.10s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/busy (0.01s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/replacement (0.00s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/cancelled (0.00s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/fresh (0.02s)",
+      "--- PASS: TestClassicReadBatchNativeMutation (1.17s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/held-file (0.09s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.09s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.29s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.26s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-close (0.09s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.09s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.09s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.08s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-cancel (0.09s)"
+    ],
+    "skip": false,
+    "complete": true,
+    "samples": [
+      {
+        "sample": 0.0,
+        "serial_ms": 60.337,
+        "save_ms": 20.427,
+        "serial_metadata": 48.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 1.0,
+        "serial_ms": 58.143,
+        "save_ms": 20.797,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 2.0,
+        "serial_ms": 57.458,
+        "save_ms": 20.785,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 3.0,
+        "serial_ms": 56.223,
+        "save_ms": 20.025,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 4.0,
+        "serial_ms": 55.758,
+        "save_ms": 20.263,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 5.0,
+        "serial_ms": 57.252,
+        "save_ms": 20.439,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      }
+    ],
+    "steady_median_ms": {
+      "serial": 57.252,
+      "save": 20.439
+    }
+  },
+  "race": {
+    "profile": "ubuntu-amd64-iptables-legacy-1.8.11-v1",
+    "runner": "ubuntu-26.04",
+    "glibc": "glibc 2.43",
+    "packages": [
+      {
+        "name": "iptables",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "187b16f9375f53ce6a1618a29de52bb177b620589ada29e4a3e25de5d594e66f",
+        "checked_installed_members": 117
+      },
+      {
+        "name": "libip4tc2",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "be25148d60125f6866dfa7940f3f1371fff4b0e8a1a9500780ad50cb8aaa0895",
+        "checked_installed_members": 1
+      },
+      {
+        "name": "libip6tc2",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "3d9fdb3171f1167ab3f5182de11db63bcd27aae71838618f3d46806b3134428e",
+        "checked_installed_members": 1
+      },
+      {
+        "name": "libxtables12",
+        "version": "1.8.11-2ubuntu3",
+        "archive_sha256": "e21126e0544e3b795633fb5b06bb7f2b9a493ebc5ab07b007db0f7f68c0a0aed",
+        "checked_installed_members": 1
+      }
+    ],
+    "pass": [
+      "--- PASS: TestProductionStartupToolsNative (0.15s)",
+      "--- PASS: TestClassicSaveNativeInventoryParity (1.08s)",
+      "--- PASS: TestClassicSaveNativeLockCustody (0.19s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/busy (0.01s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/replacement (0.00s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/cancelled (0.00s)",
+      "--- PASS: TestClassicSaveNativeLockCustody/fresh (0.03s)",
+      "--- PASS: TestClassicReadBatchNativeMutation (2.16s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/held-file (0.17s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/extension-membership (0.16s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-held-file (0.48s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-extension-membership (0.47s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/observation-close (0.18s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-held-file (0.17s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-extension-membership (0.18s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-extension-symlink (0.17s)",
+      "--- PASS: TestClassicReadBatchNativeMutation/inventory-cancel (0.17s)"
+    ],
+    "skip": false,
+    "complete": true,
+    "samples": [
+      {
+        "sample": 0.0,
+        "serial_ms": 107.825,
+        "save_ms": 37.2,
+        "serial_metadata": 48.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 1.0,
+        "serial_ms": 104.293,
+        "save_ms": 38.45,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 2.0,
+        "serial_ms": 103.858,
+        "save_ms": 37.736,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 3.0,
+        "serial_ms": 102.467,
+        "save_ms": 37.067,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 4.0,
+        "serial_ms": 101.424,
+        "save_ms": 37.297,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      },
+      {
+        "sample": 5.0,
+        "serial_ms": 97.988,
+        "save_ms": 35.682,
+        "serial_metadata": 44.0,
+        "save_metadata": 12.0,
+        "serial_children": 20.0,
+        "save_children": 4.0,
+        "equal_rows": 74.0
+      }
+    ],
+    "steady_median_ms": {
+      "serial": 102.467,
+      "save": 37.297
+    }
+  }
+}

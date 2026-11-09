@@ -1,0 +1,8 @@
+check live [{"first": 408.747, "repeated": {"n": 12, "p50": 400.529, "p95": 408.493}}, {"first": 278.963, "repeated": {"n": 12, "p50": 310.368, "p95": 396.6}}]
+check dead-service [{"first": 410.62, "repeated": {"n": 12, "p50": 404.289, "p95": 876.386}}, {"first": 473.338, "repeated": {"n": 12, "p50": 315.922, "p95": 708.794}}]
+check cancel [{"first": 360.025, "repeated": {"n": 12, "p50": 360.327, "p95": 403.366}}, {"first": 525.799, "repeated": {"n": 12, "p50": 269.289, "p95": 341.493}}]
+check dead-node [{"first": 8.596, "repeated": {"n": 12, "p50": 7.61, "p95": 8.418}}, {"first": 8.352, "repeated": {"n": 12, "p50": 6.923, "p95": 7.749}}]
+queue single [{"first": 743.0, "repeated": {"n": 12, "p50": 724.0, "p95": 744.0}}, {"first": 619.0, "repeated": {"n": 12, "p50": 627.0, "p95": 677.0}}]
+queue selected-batch [{"first": 2583.0, "repeated": {"n": 12, "p50": 2549.0, "p95": 2804.0}}, {"first": 1349.0, "repeated": {"n": 12, "p50": 1365.0, "p95": 1516.0}}]
+queue all-vless [{"first": 2566.0, "repeated": {"n": 12, "p50": 2557.0, "p95": 2650.0}}, {"first": 1369.0, "repeated": {"n": 12, "p50": 1365.0, "p95": 1376.0}}]
+PASS: rows, verdicts, cleanup, algorithm, identities and binary hash; paired-analysis.json written

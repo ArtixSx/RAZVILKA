@@ -90,6 +90,14 @@ func TestDomainTCPOriginalNativeCanceledChildCleanup(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+func TestDomainTCPOriginalNativeFailedPreparationRetirement(t *testing.T) {
+	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
+	t.Setenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE", "1")
+	t.Setenv("RAZVILKA_DOMAIN_PREPARATION_CUT", "1")
+	runDomainTCPOriginalNative(t, false)
+}
+
 func TestDomainTCPOriginalNativeCanceledReadyRetirement(t *testing.T) {
 	t.Setenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE", "1")
 	t.Setenv("RAZVILKA_DOMAIN_DNS_DETACH", "1")
@@ -109,6 +117,22 @@ func TestDomainTCPOriginalNativeCanceledPublishedStandby(t *testing.T) {
 	runDomainTCPOriginalNative(t, false)
 }
 
+// Only the explicit diagnostic lane may widen publication readiness. Both
+// generations and never-issued readiness use the same default 12-second window.
+func domainOriginalPublicationBudget(t *testing.T) time.Duration {
+	t.Helper()
+	switch os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") {
+	case "":
+		return 12 * time.Second
+	case "30":
+		t.Log("DIAGNOSTIC FUNCTIONAL WINDOW30s; NOT12s performance acceptance")
+		return 30 * time.Second
+	default:
+		t.Fatal("unknown diagnostic publication window")
+		return 0
+	}
+}
+
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
@@ -117,13 +141,17 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
 	canceledChild := os.Getenv("RAZVILKA_DOMAIN_CANCELED_CHILD") == "1"
+	preparationCut := os.Getenv("RAZVILKA_DOMAIN_PREPARATION_CUT") == "1"
+	if preparationCut && (!coexist || canceledChild || joinedFailure || neverIssuedSuccessor || initialCut != "") {
+		t.Fatal("failed preparation requires its separate original successor case")
+	}
 	canceledReady := os.Getenv("RAZVILKA_DOMAIN_CANCELED_READY") == "1"
 	canceledPublished := os.Getenv("RAZVILKA_DOMAIN_CANCELED_PUBLISHED") == "1"
 	if canceledPublished && !canceledReady {
 		t.Fatal("published cancellation requires its ready case")
 	}
 	failedACK := os.Getenv("RAZVILKA_DOMAIN_FAILURE_ACK")
-	if failedACK != "" && (!canceledReady || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
+	if failedACK != "" && (!canceledReady && !preparationCut || failedACK != "process" && failedACK != "capture" && failedACK != "standby" && failedACK != "alias" && failedACK != "capture-transaction" && failedACK != "standby-transaction") {
 		t.Fatal("invalid failed generation ACK cut")
 	}
 	if canceledReady && !canceledChild {
@@ -149,11 +177,12 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	}
 	wholeBudget := 100 * time.Second
 	if coexist {
-		if detach != "1" || ack != "" || foreign != "" || unpublished || os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") != "30" {
-			t.Fatal("coexistence requires its distinct two-operation diagnostic case")
+		if detach != "1" || ack != "" || foreign != "" || unpublished {
+			t.Fatal("coexistence requires its distinct two-operation case")
 		}
 		wholeBudget = 3 * time.Minute
 	}
+	publicationBudget := domainOriginalPublicationBudget(t)
 	ctx, cancel := context.WithTimeout(context.Background(), wholeBudget)
 	defer cancel()
 	peers := domainOriginalPeers(t, ctx)
@@ -424,7 +453,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		var stopFirst context.CancelFunc
 		firstOperation, stopFirst = context.WithTimeout(held, 100*time.Second)
 		defer stopFirst()
-		t.Log("COEXISTENCE diagnostic: physical fixture3min; EACH original generation100s, fresh scope60s, publication30s/join15s unchanged; not default12s acceptance")
+		t.Logf("COEXISTENCE physical fixture3min; each original generation100s, fresh scope60s, publication%s/join15s; diagnostic=%t", publicationBudget, publicationBudget != 12*time.Second)
 	}
 	err = manager.WithDomainTCPProofResources(dataplane.WithReviewGuard(firstOperation, control.Current), plan, history, func(original context.Context) error {
 		binding, err := manager.BindSyntheticDNSExecution(original, dnsAdapter, plan)
@@ -496,6 +525,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		stopToolMetrics := startuptools.StartDomainNativeToolMeasurement()
 		defer func() {
 			t.Logf("actual Run through join observation counts: domain=%+v actual_tool_starts=%+v; overlapping cumulative durations, not wall speed", stopDomainMetrics(), stopToolMetrics())
+			t.Logf("completed tool gate timing: %+v; select wait and inclusive held durations overlap domain stages, native attribution overhead included, not readiness", startuptools.DomainNativeToolTimingSnapshot())
 		}()
 		runCtx, stopRun := context.WithCancel(original)
 		runDone := make(chan error, 1)
@@ -514,7 +544,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		if unpublished {
 			// No client DNS request is sent in this case. Readiness observes
 			// the same original owner only; it cannot mark an answer issued.
-			ready, cancelReady := context.WithTimeout(original, 30*time.Second)
+			ready, cancelReady := context.WithTimeout(original, publicationBudget)
 			defer cancelReady()
 			for {
 				if owner.CurrentSyntheticMapping(ready, mapping) == nil {
@@ -546,14 +576,6 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			return nil
 		}
 		var published domainOriginalPeerResult
-		publicationBudget := 12 * time.Second
-		if diagnostic := os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION"); diagnostic != "" {
-			if diagnostic != "30" {
-				return errors.New("unknown diagnostic publication window")
-			}
-			publicationBudget = 30 * time.Second
-			t.Log("DIAGNOSTIC FUNCTIONAL WINDOW30s; original100s context and60s freshness unchanged; NOT12s performance acceptance")
-		}
 		deadline := time.Now().Add(publicationBudget)
 		for time.Now().Before(deadline) {
 			select {
@@ -571,9 +593,11 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			time.Sleep(50 * time.Millisecond)
 		}
 		if !strings.HasPrefix(published.Answer, "198.") {
+			t.Logf("actual before DNS failure cleanup completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 			domainOriginalPublicationDiagnostics(t, manager.StateRoot)
 			return errors.New("actual DNS publication did not become available")
 		}
+		t.Logf("actual first DNS answer completed-counter snapshot (post-send closing may still be in flight; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 		same, err := owner.LookupPublished(original, transport.Definition.Client, netip.MustParseAddr(published.Answer))
 		if err != nil || same != mapping {
 			return fmt.Errorf("published original mapping: %w", err)
@@ -601,6 +625,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
 			}
 		}
+		t.Logf("actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 		stopRun()
 		select {
 		case runErr := <-runDone:
@@ -907,6 +932,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			}
 			operationCtx := secondHeld
 			var cancelOriginal context.CancelFunc
+			cancelRequested := false // Set only by the actual post-observation callback below.
 			var canceledAlias string
 			if canceledChild {
 				operationCtx, cancelOriginal = context.WithCancel(secondHeld)
@@ -914,15 +940,28 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			}
 			err = manager.WithDomainTCPContinuationResources(dataplane.WithReviewGuard(operationCtx, control.Current), secondPlan, history, detached, func(original context.Context) error {
 				if canceledChild {
-					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, cancelOriginal)
+					original = context.WithValue(original, domainOriginalCancelAfterStartKey{}, context.CancelFunc(func() {
+						cancelRequested = true
+						cancelOriginal()
+					}))
 					original = context.WithValue(original, domainOriginalCanceledAliasKey{}, &canceledAlias)
 				}
 				return runDomainOriginalSuccessor(t, original, peers, manager, dnsAdapter, backend, xray, nodeSource, resolver, control, history, secondPlan, service, nodeID, detached, retainedPublishedAlias, neverIssuedSuccessor, &neverIssuedOwner)
 			})
-			if canceledChild {
+			if canceledChild || preparationCut {
+				if !preparationCut && !cancelRequested {
+					t.Fatal("actual original child/readiness cancellation witness was not reached", err)
+				}
 				var failure *dataplane.DomainTCPCleanupFailure
-				if !errors.Is(err, context.Canceled) || !errors.As(err, &failure) {
+				expected := error(context.Canceled)
+				if preparationCut {
+					expected = dataplane.ErrNativeDomainPreparationCut
+				}
+				if !errors.Is(err, expected) || !errors.As(err, &failure) {
 					t.Fatal("original cancellation/custody capsule lost", err)
+				}
+				if preparationCut {
+					t.Log("ACTUAL_PREPARATION_CUT: original successor failure custody witnessed after genuine preparation")
 				}
 				if failedACK != "" {
 					if err := dataplane.ConfigureNativeDomainFailureACK(secondHeld, failure, failedACK); err != nil {
@@ -946,7 +985,7 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				if len(domainOriginalRuntimeChildren(t, manager.StateRoot)) != 0 {
 					t.Fatal("original child survived cleanup join")
 				}
-				if canceledReady {
+				if canceledReady || preparationCut {
 					retireErr := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure)
 					if failedACK != "" && failedACK != "process" {
 						if !errors.Is(retireErr, dataplane.ErrNativeDomainFailureACK) {
@@ -958,6 +997,9 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 						}
 					} else if retireErr != nil {
 						domainOriginalPublicationDiagnostics(t, manager.StateRoot)
+						if preparationCut {
+							t.Log("ACTUAL_PREPARATION_CLEANUP_REFUSED: original nil-kernel successor retirement did not complete")
+						}
 						t.Fatal("original failed ready generation retirement", retireErr)
 					}
 					if err := manager.RetireFailedDomainTCPContinuation(secondHeld, secondCleanup, history, failure); err != nil {
@@ -987,6 +1029,8 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 					}
 					if canceledPublished {
 						t.Log("actual published successor canceled; source/handler/native joins and capture Remove retain original restorative standby; actual cached late-SYN tuple preserved, published alias removal refused")
+					} else if preparationCut {
+						t.Log("ACTUAL_PREPARATION_CLEANUP_COMPLETE: actual capture prepared before injected construction error; no kernel/Ready/DNS publication; fresh original cleanup joins and removes actual capture, zero-issued baseline and same-FD keeper; old published alias preserved")
 					} else {
 						t.Log("actual ready but never-issued successor canceled; same original source/handler/native joins, capture Remove and restorative handoff, actual zero-issued baseline Remove→keeper and repeat ACK; old published alias remains original baseline")
 					}

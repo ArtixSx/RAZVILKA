@@ -19,8 +19,7 @@ export TMPDIR="$probe_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 # 221d7dff24bfec0cd5ac0a5070b8acef2008af3d. The archive digest was checked
 # against the official release API's sha256 digest; every consumed member is
 # additionally pinned below. No unreviewed release, branch or latest lookup.
-curl --fail --location --retry 3 --output "$probe_work/release.tar.gz" \
-  https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz
+sh "$probe_repo/scripts/fetch-native-fixture.sh" zapret2-1.0.6 "$probe_work/release.tar.gz"
 echo "eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4  $probe_work/release.tar.gz" | sha256sum --check --strict
 tar -xzf "$probe_work/release.tar.gz" -C "$probe_work" \
   zapret2-v1.0.6/binaries/linux-x86_64/nfqws2 \
@@ -90,12 +89,19 @@ case "$probe_build_mode" in
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/startuptools.test" ./internal/startuptools ;;
   *) printf 'Unknown native build mode\n' >&2; exit 2 ;;
 esac
-if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+# Default managed-copy tests/benchmarks and cold-source tests both execute
+# dataplane.test. LAN-only actors do not need this extra test binary.
+if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" != 1 || test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
   if test "$probe_build_mode" = race; then
     go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
-    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   else
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/dataplane.test" ./internal/dataplane
+  fi
+fi
+if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
+  if test "$probe_build_mode" = race; then
+    go test -race -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
+  else
     go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$probe_work/controller.test" ./cmd/razvilka
   fi
   cp "$probe_work/tools.json" "$probe_work/runtime-native-tool-review.json"
@@ -120,7 +126,7 @@ chmod 400 "$probe_work/hosts"
 # GitHub's host /opt is writable for its tool cache. The real protected tool
 # review correctly refuses it as a preload ancestor. Give this disposable
 # mount namespace an actual empty protected /opt; never chmod/change the host.
-probe_cases='TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
+probe_cases='TestMetadataParallel.* TestStaticVersionFactNativeNFQLANRPDB TestStartupImageMeasurement.* TestVersionNamesCandidate.* TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
@@ -138,12 +144,36 @@ if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
   probe_cases='TestStaticVersionFactNativeMihomoColdRead TestMihomoLiveColdPublicNativeHistoricalIntent TestMihomoLiveColdExportNativeHistoricalIntent TestMihomoLiveColdCLINativeHistoricalIntent TestMihomoLiveColdHealth9ExportNativeHistoricalIntent TestMihomoLiveColdHealth9CLINativeHistoricalIntent'
   probe_timeout=220s
 fi
+# Use the already compiled native binary; benchmark only the default production
+# fixture, never each LAN/recovery invocation and never as a readiness claim.
+case "$probe_cases:$probe_build_mode" in
+  *TestFreshPathNode*:production)
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFresh(Path|Held)Node$' -test.benchtime=1s -test.count=3 -test.benchmem ;;
+  *TestFreshPathNode*:race)
+    printf 'Actual race-only path allocation benchmark; sync.Pool may discard scratch\n'
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFreshPathNode$' -test.benchtime=200ms -test.count=3 -test.benchmem ;;
+esac
+# Same original output sink and actual child, outside route timing. Race runtime
+# exit delay is part of its own samples; never compare it to production latency.
+case "$probe_cases" in
+  *TestOutputReader*)
+    printf 'Actual bounded output copy benchmarks mode=%s; diagnostic_only=true\n' "$probe_build_mode"
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReader$' -test.benchtime=300ms -test.count=3 -test.benchmem
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkOutputReaderChild$' -test.benchtime=3x -test.count=3 -test.benchmem
+    "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkClassicSaveOutputChild$' -test.benchtime=3x -test.count=3 -test.benchmem ;;
+esac
+# Full-byte managed source hashing only; same file inputs and reader bounds.
+# Keep allocation diagnostics outside all operation clocks.
+case "$probe_cases" in
+  *TestNFQWSManagedCopy*)
+    "$probe_work/dataplane.test" -test.run '^$' -test.bench '^BenchmarkNFQWSManagedCopy$' -test.benchtime=300ms -test.count=3 -test.benchmem ;;
+esac
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-case "$probe_case" in TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
-  TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
+  TestNFQWSManagedCopy*|TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
   TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
 esac
 RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/app.test"
@@ -151,6 +181,25 @@ if test "$probe_case" = TestMihomoLiveColdHealth9CLINativeHistoricalIntent; then
   RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER="$probe_work/controller.test"
 fi
 export RAZVILKA_MANAGED_PROBE_FIXTURE_CONTROLLER
+set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout="$probe_timeout"
+case "$probe_case" in
+  TestMetadataParallel*)
+    # Test-only complete traversal; include each original provider/thread boundary.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkMetadataParallelCostModel$' -test.benchtime=300ms -test.benchmem ;;
+  TestStaticVersionFactNativeNFQLANRPDB)
+    # Same actual numeric RPDB children and full outer source boundaries.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkNFQLANRPDBPair$' -test.benchtime=300ms -test.benchmem ;;
+  TestStartupImageMeasurement*)
+    # Measurement only, same actual held graph and original namespace.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench='^BenchmarkStartupImage(Pair)?Measurement$' -test.benchtime=100ms -test.benchmem ;;
+  TestVersionNamesCandidate*)
+    # Same full metadata traversal and original namespace; not route latency.
+    set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
+      -test.bench="^BenchmarkVersionMetadataNamesCandidate\$" -test.benchtime=300ms -test.benchmem ;;
+esac
 unshare --mount --net sh -c '
 
   set -eu
@@ -176,7 +225,7 @@ unshare --mount --net sh -c '
   /usr/sbin/iptables-legacy -t mangle -X RZV_CI_NFQ_BOOTSTRAP
   python3 "$RAZVILKA_MANAGED_PROBE_FIXTURE_REPO/scripts/native-managed-probe-queue-init.py"
   exec "$@"
-' sh "$probe_program" -test.run="^${probe_case}\$" -test.count=1 -test.v -test.timeout="$probe_timeout" || probe_status=$?
+' sh "$@" || probe_status=$?
 # Analyze outside the private /opt mount; retain the original native failure.
 if test -f "$probe_work/$probe_case.pprof"; then
   if ! timeout 50s go tool pprof -top -nodecount=20 "$probe_work/app.test" "$probe_work/$probe_case.pprof"; then
@@ -194,6 +243,11 @@ if test -f "$probe_work/$probe_case.pprof"; then
 fi
 if test -f "$probe_work/$probe_case.pprof.alloc"; then
   if ! timeout 50s go tool pprof -top -sample_index=alloc_space -nodecount=30 "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
+    if test "$probe_status" = 0; then probe_status=1; fi
+  fi
+  # Include the fixed wrapper/caller nodes: copyBuffer alone reports only
+  # io.Copy and cannot distinguish source hashing from os/exec pipe copies.
+  if ! timeout 50s go tool pprof -sample_index=alloc_space -peek='^io[.](Copy|copyBuffer)$|^os[.].*WriteTo$|^os/exec[.].*writerDescriptor|netidentity[.]imageHash$|StockNFQWSNativeReview[)].current$' "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi

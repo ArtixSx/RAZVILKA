@@ -1,0 +1,144 @@
+{
+  "review": "PASS",
+  "run_id": 42575195535,
+  "artifact_id": 13654928314,
+  "baseline": "0e2db5ab2120b20e249e3da7a8e861b558506550",
+  "candidate": "b5a5f58ee0bdddf62dd7f53bef020a42dc1ed5c9",
+  "rows_verified": 182,
+  "binary_sha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+  "quantile": "nearest-rank; first sample excluded from repeated N12",
+  "limitations": [
+    "baseline then candidate fixed order",
+    "cold fixture is not cold OS cache",
+    "controlled loopback namespace and WAN identity, not router/LAN",
+    "empty child RSS is missing observation, not zero memory"
+  ],
+  "metrics_ms": {
+    "check/live": {
+      "baseline": {
+        "first": 411.145,
+        "repeated": {
+          "n": 12,
+          "p50": 406.085,
+          "p95": 410.389
+        }
+      },
+      "candidate": {
+        "first": 316.349,
+        "repeated": {
+          "n": 12,
+          "p50": 316.558,
+          "p95": 320.662
+        }
+      }
+    },
+    "check/dead-service": {
+      "baseline": {
+        "first": 408.568,
+        "repeated": {
+          "n": 12,
+          "p50": 405.289,
+          "p95": 409.519
+        }
+      },
+      "candidate": {
+        "first": 317.607,
+        "repeated": {
+          "n": 12,
+          "p50": 315.267,
+          "p95": 317.662
+        }
+      }
+    },
+    "check/cancel": {
+      "baseline": {
+        "first": 364.59,
+        "repeated": {
+          "n": 12,
+          "p50": 365.892,
+          "p95": 370.049
+        }
+      },
+      "candidate": {
+        "first": 275.186,
+        "repeated": {
+          "n": 12,
+          "p50": 275.748,
+          "p95": 294.211
+        }
+      }
+    },
+    "check/dead-node": {
+      "baseline": {
+        "first": 9.894,
+        "repeated": {
+          "n": 12,
+          "p50": 8.395,
+          "p95": 9.416
+        }
+      },
+      "candidate": {
+        "first": 9.681,
+        "repeated": {
+          "n": 12,
+          "p50": 8.347,
+          "p95": 9.07
+        }
+      }
+    },
+    "queue/single": {
+      "baseline": {
+        "first": 750.0,
+        "repeated": {
+          "n": 12,
+          "p50": 752.0,
+          "p95": 768.0
+        }
+      },
+      "candidate": {
+        "first": 651.0,
+        "repeated": {
+          "n": 12,
+          "p50": 657.0,
+          "p95": 670.0
+        }
+      }
+    },
+    "queue/selected-batch": {
+      "baseline": {
+        "first": 2615.0,
+        "repeated": {
+          "n": 12,
+          "p50": 2627.0,
+          "p95": 2652.0
+        }
+      },
+      "candidate": {
+        "first": 1428.0,
+        "repeated": {
+          "n": 12,
+          "p50": 1442.0,
+          "p95": 1464.0
+        }
+      }
+    },
+    "queue/all-vless": {
+      "baseline": {
+        "first": 2638.0,
+        "repeated": {
+          "n": 12,
+          "p50": 2640.0,
+          "p95": 2657.0
+        }
+      },
+      "candidate": {
+        "first": 1465.0,
+        "repeated": {
+          "n": 12,
+          "p50": 1439.0,
+          "p95": 1460.0
+        }
+      }
+    }
+  }
+}

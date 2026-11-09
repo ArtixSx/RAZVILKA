@@ -1,0 +1,35 @@
+{
+  "sha": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "status": "source-fix-reviewed-next-ci-pending",
+  "scope": "ordinaryExecutableImage resource lifetime reused by bootstrap role classification",
+  "confirmed": [
+    "One private image per synchronous bootstrap role call, no goroutine or callback export of image; actual exe FD opened/closed for every occurrence",
+    "Every occurrence reads full current bytes plus EOF; process/argv/parent/birth/source/journal checks remain",
+    "At most63MiB retained bytes plus128KiB work and small owner per image; 63-64MiB executable uses bounded full streaming SHA instead",
+    "Errors/cancellation poison and clear retained image; normal exit outer defer clears; no FD or role grant retained",
+    "First full Sum256 and clearing are synchronous noninterruptible work; each128KiB read has context checks before and after, final digest checks refuse later cancellation",
+    "Per-call bound is not process/global/RSS bound; independent calls could coexist and GC reclamation is not immediate"
+  ],
+  "finding": "Bootstrap final return ctx.Err() is evaluated before deferred large-image clear; cancellation arriving during clear can return nil. Existing ordinary role/observation paths recheck after clearing.",
+  "required_fix": "Named result and deferred clear followed by original context/deadline refusal, with deterministic cancellation-during-clear ordering regression; preserve all limits.",
+  "validation": "344912 PR focused step SUCCESS. Completed public-empty job: BootstrapImage original digest/revocation + actual8-controller/16-exe-read parity PASS; ordinary fullbytes/physical-mutation/copy/fault/cancel/deadline/oversize fallback PASS. Separate opt-in ordinary native fact test SKIPPED (env absent). New clear-after-cancellation regression belongs to next commit.",
+  "actual_primitive": {
+    "image_bytes": 13889801,
+    "retained_bytes": 14020969,
+    "occurrences": 8,
+    "full_exe_reads": 16,
+    "before_ms": [
+      186.423296,
+      183.112017,
+      186.381105
+    ],
+    "after_ms": [
+      49.461312,
+      49.679391,
+      44.290066
+    ],
+    "source": "lifecycle-344912c1/paired-empty.log",
+    "source_sha256": "9d15fd631784c7c41d9d83195e9637e7c2f7b447e286b1d5181e962a7dc97eb0",
+    "role_grant": false
+  }
+}

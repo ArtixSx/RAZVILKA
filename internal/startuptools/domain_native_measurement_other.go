@@ -3,3 +3,6 @@
 package startuptools
 
 func domainNativeToolStarted(string) {}
+
+func domainNativeGateWait(*Lease) func(string) { return func(string) {} }
+func domainNativeGateReleased(*Lease)          {}

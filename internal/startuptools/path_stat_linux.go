@@ -4,7 +4,9 @@ package startuptools
 
 import (
 	"os"
+	"strings"
 	"syscall"
+	"unsafe"
 )
 
 // Read the SAME named node on every pass without constructing an os.FileInfo.
@@ -20,8 +22,21 @@ func freshPathNode(path string, expected os.FileInfo) (bool, error) {
 		return false, nil
 	}
 	var after syscall.Stat_t
-	if err := syscall.Lstat(path, &after); err != nil {
-		return false, err
+	if len(path) >= 4096 || strings.IndexByte(path, 0) >= 0 {
+		if err := syscall.Lstat(path, &after); err != nil {
+			return false, err
+		}
+		return sameReviewedStat(before, &after), nil
+	}
+	// Go Syscall6 keeps these stack pointers live through its synchronous call.
+	// No pathname, FD or metadata survives this observation; every call still
+	// performs the original fstatat with the same no-follow/error semantics.
+	var argument [4096]byte
+	copy(argument[:], path)
+	_, _, errno := syscall.Syscall6(freshPathStatSyscall, ^uintptr(99),
+		uintptr(unsafe.Pointer(&argument[0])), uintptr(unsafe.Pointer(&after)), 0x100, 0, 0)
+	if errno != 0 {
+		return false, errno
 	}
 	return sameReviewedStat(before, &after), nil
 }

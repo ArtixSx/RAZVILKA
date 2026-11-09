@@ -1,0 +1,68 @@
+{
+  "sha": "5289a7d8cace5c63641d14218ca1f48b4d17fa2e",
+  "run_id": 42680281173,
+  "attempt": 1,
+  "conclusion": "failure",
+  "matrix": "all4executed;3success/1failure",
+  "lifecycle": {
+    "candidate_stop_s": [
+      6.209852215,
+      6.055208084
+    ],
+    "samehost_4cc_apply_s": [
+      94.995784413,
+      95.536464036
+    ],
+    "samehost_4cc_stop_s": [
+      6.082333467,
+      6.189482948
+    ],
+    "candidate_pass_s": 280.62,
+    "samehost_4cc_pass_s": 278.15,
+    "candidate_apply_s": [
+      96.247598149,
+      96.059574354
+    ],
+    "closing_retry_and_restored_baselines": true,
+    "normal_race_bookends": "PASS"
+  },
+  "postcas": {
+    "pass_s": 60.0,
+    "http": 503,
+    "exact_desired_restored": true,
+    "pending": false,
+    "rollback_verified": true
+  },
+  "check_settlement": {
+    "stop_s": 9.559850356,
+    "apply_s": 96.479812658,
+    "all_original_rows_terminal": true,
+    "pass_s": 127.77,
+    "retired_reader": 9,
+    "actual_cuts": 2
+  },
+  "manual_http": {
+    "candidate": "FAIL119.17s; first HTTP Apply110s deadline",
+    "both_last_passed_stage": "policy-ack",
+    "samehost_4cc": "FAIL117.42s; same first Apply deadline",
+    "note": "Both fail on same runner; not evidence new narrow changes caused regression. Still unsupported acceptance for this run.",
+    "candidate_profile": {
+      "sha_cpu_percent": 79.41,
+      "wall_s": 119.17,
+      "sha_cpu_s": 118.56,
+      "cpu_s": 149.31
+    }
+  },
+  "raw_sha256": {
+    "mihomo-lifecycle.log": "d4e7cad7381072d1e12b298affef275d11f2ba8664ca25edbb21c19b1a77b747",
+    "mihomo-manual.log": "63e74c700bb699d8cbc70f36fd590246f023097b0d0ce56663a14dd5efe04a17",
+    "mihomo-postcas.log": "0e6eb0d0bb21c19e77797196834131a20c55e6cd289a88005da58e5843b950fc",
+    "mihomo-settlement.log": "7d12961c2f1117e75abcdc5bbcaa69fd4427282ad736001a83005618ffe5ab08",
+    "mihomo-run.json": "dd443c9694addfe68c313320d5714eb460ec64243f63157fde750967427476bc"
+  },
+  "limits": [
+    "Original deadlines unchanged",
+    "Performance includes all source and cleanup; no universal speed gain",
+    "Manual HTTP and all4 acceptance not complete; no router claim"
+  ]
+}

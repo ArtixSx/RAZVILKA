@@ -1,0 +1,45 @@
+{
+  "commit": "0f0439020d10e1bbb15a8310be360517bf45581f",
+  "run_id": 42630488013,
+  "job_id": 129205220080,
+  "status": "completed",
+  "conclusion": "success",
+  "log": "strategy-pair.log",
+  "sha256": "94eb1914f7aca864151c6046fb7ac75cc2139f774e15b3ee5d775235df450101",
+  "actual_readers": {
+    "execution": 9,
+    "component": 6,
+    "strategy": 7,
+    "private_snapshot": 4
+  },
+  "current_reader_binary": "actual current cmd/razvilka",
+  "incompatible_reader_binary": "actual577ebe54; missing strategy/private snapshot flags refused",
+  "older_reader5": "actualc982d09f; settled supervised schema5 cannot authorize standalone reader5",
+  "race_packages": [
+    "strategylab",
+    "privatebackup",
+    "privaterestore"
+  ],
+  "focused_race_packages": [
+    "updatecheck",
+    "cmd/razvilka",
+    "app",
+    "dataplane",
+    "operationgate"
+  ],
+  "restored_panel": {
+    "namespace": "new network namespace/no WAN",
+    "history_manual_bytes_unchanged": true,
+    "live_route_proof": false,
+    "result": "PASS",
+    "seconds": 0.19,
+    "actual_boots": 2
+  },
+  "missing": [
+    "Public actual external bootstrap→paired offline restore CLI fixture not wired; existing opt-in tests skip absent coordinates",
+    "Native tests use stale /opt/var paths, unlike fixed installpath.State/Run",
+    "After partial offline staging or effects, retry returns ErrPairedOfflineOrphan; no original same-owner pre-effect cleanup/resume protocol",
+    "Default legacy0.19.3 layout differs from fixed current bootstrap layout; configured old-source fixture must be labelled separately",
+    "Router power loss/reboot not covered"
+  ]
+}

@@ -650,6 +650,9 @@ func nfqwsScopedInspectReceipt(ctx context.Context, plan PolicyEffectPlan, path 
 	if ctx == nil || ctx.Err() != nil {
 		return zero, ErrNFQWSScopedOwner
 	}
+	if status, present, err := inspectNFQWSRecoveryReceipt(ctx, plan, path); present {
+		return status, err
+	}
 	plan, hash, err := copyPolicyEffectPlan(plan)
 	if err != nil {
 		return zero, err
@@ -688,9 +691,25 @@ func nfqwsScopedInspectReceipt(ctx context.Context, plan PolicyEffectPlan, path 
 }
 
 func (b *NFQWSScopedBinding) inspect(ctx context.Context, p *NFQWSScopedPlan, index int) (int, error) {
-	if index < 0 || index >= len(p.mixed.Effects) {
+	if p == nil || index < 0 || index >= len(p.mixed.Effects) {
 		return 0, ErrNFQWSScopedOwner
 	}
+	var count int
+	// COMMON calls this pure ExactPresence predicate independently before and
+	// after effects. Keep every whole capture and owner callback fresh, while
+	// sharing only the original tool bytes inside this one finite read scope.
+	err := b.observeProbeTools(ctx, p, func(observed context.Context) error {
+		var err error
+		count, err = b.inspectObserved(observed, p, index)
+		return err
+	})
+	if err != nil {
+		return 0, err // A closing refusal cannot publish a positive count.
+	}
+	return count, nil
+}
+
+func (b *NFQWSScopedBinding) inspectObserved(ctx context.Context, p *NFQWSScopedPlan, index int) (int, error) {
 	rules, err := b.readRules(ctx, p)
 	if err != nil {
 		return 0, err

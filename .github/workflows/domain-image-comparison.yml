@@ -1,0 +1,103 @@
+name: Matched original domain image comparison
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/research-build-20261109']
+    paths:
+      - 'internal/dataplane/xray_domain_tcp_file_observation.go'
+      - 'internal/dataplane/xray_domain_tcp_resource_files.go'
+      - 'internal/dataplane/xray_domain_tcp_image_read.go'
+      - 'internal/dataplane/xray_domain_tcp_image_read_test.go'
+      - 'scripts/compare-domain-image-native.sh'
+      - '.github/workflows/domain-image-comparison.yml'
+
+permissions:
+  contents: read
+concurrency:
+  group: domain-image-comparison-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  matched-domain:
+    name: Same runner ABBA / ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [selected, canceled-ready]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Same installed pinned binary and tools for all four samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux unzip busybox-static python3
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-node.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-node.zip' | sha256sum --check --strict
+          unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
+      - name: Original unchanged deadlines, joined ABBA samples
+        shell: bash
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          set -euo pipefail
+          mkdir -p -m 700 artifacts/domain-image
+          trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain-image' EXIT
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_IMAGE_OUTPUT="$PWD/artifacts/domain-image/$SCENARIO" \
+            bash scripts/compare-domain-image-native.sh "$SCENARIO"
+      - name: Bound public evidence before upload
+        id: evidence
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,sys
+          root=pathlib.Path('artifacts/domain-image')
+          entries=list(root.rglob('*'))
+          regular=all(not p.is_symlink() and (p.is_dir() or p.is_file()) for p in entries)
+          files=[p for p in entries if p.is_file() and not p.is_symlink()]
+          total=sum(p.stat().st_size for p in files)
+          accepted=regular and len(files)<=80 and total<=16<<20
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"accepted={str(accepted).lower()}\n")
+          if not accepted:
+              (root/'artifact-bound-refusal.json').write_text(json.dumps({'files':len(files),'bytes':total,'regular_files_only':regular,'limit_bytes':16<<20,'status':'raw evidence upload refused; statuses retained'})+'\n')
+          sys.exit(0 if accepted else 1)
+          PY
+      - name: Preserve every status and bounded public fixture evidence
+        if: ${{ !cancelled() && steps.evidence.outputs.accepted == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-image-abba-${{ matrix.scenario }}-${{ github.sha }}
+          path: artifacts/domain-image
+          if-no-files-found: error
+      - name: Preserve explicit evidence-bound refusal and statuses
+        if: ${{ !cancelled() && steps.evidence.outputs.accepted == 'false' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-image-abba-bound-refusal-${{ matrix.scenario }}-${{ github.sha }}
+          path: |
+            artifacts/domain-image/artifact-bound-refusal.json
+            artifacts/domain-image/**/provenance.json
+            artifacts/domain-image/**/status.txt
+            artifacts/domain-image/**/exit-status.txt
+            artifacts/domain-image/**/incomplete.txt
+            artifacts/domain-image/**/not-run.txt
+            artifacts/domain-image/**/log-capture.json
+          if-no-files-found: error

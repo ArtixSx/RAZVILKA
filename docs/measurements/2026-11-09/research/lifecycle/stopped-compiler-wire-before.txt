@@ -1,0 +1,9 @@
+=== RUN   TestMihomoStoppedOriginalIntentCompilerWireRoundTrip
+    mihomo_live_stopped_compiler_wire_test.go:41: compiler/wire field differs: EngineDrafts
+    mihomo_live_stopped_compiler_wire_test.go:41: compiler/wire field differs: RetiringAdapters
+    mihomo_live_stopped_compiler_wire_test.go:41: compiler/wire field differs: Routes
+    mihomo_live_stopped_compiler_wire_test.go:46: stopped original intent rejects its own compiler wire image; equal encoded bytes=true
+--- FAIL: TestMihomoStoppedOriginalIntentCompilerWireRoundTrip (0.02s)
+FAIL
+FAIL	github.com/ArtixSx/razvilka/internal/dataplane	0.145s
+FAIL

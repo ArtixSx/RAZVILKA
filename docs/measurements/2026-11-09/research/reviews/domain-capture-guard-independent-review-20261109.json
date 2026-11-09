@@ -1,0 +1,37 @@
+{
+  "reviewer": "independent-verification",
+  "base_sha": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "decision": "Source approved for CI; genuine full producer acceptance pending",
+  "change": "Only concrete original capture Guard shares its opening full process observation with its own immediate currentWithFiles call. Custom path and generic helper unchanged.",
+  "preserved": [
+    "Exact original process/capture/baseline/binding/tool association before and after comparison",
+    "Registered local/held-owner reads before full process opening; no mapping/runner callback before it",
+    "Failed inner opening short-circuits baseline callback chain",
+    "Independent full process closing after every baseline callback, including failure",
+    "Full executable bytes opening and closing; no loan crosses actual Add"
+  ],
+  "review_fix": "Closing original eligibility must remain true; false,nil fallback now joins refusal while still running full closing.",
+  "test_limits": [
+    "Invalid-static-resource test proves no eager continuation at invalid entry.",
+    "Real-process canceled-entry test is explicitly process-only, not complete capture authority.",
+    "Actual factory entry/closing metrics and full native lifecycle remain acceptance requirement."
+  ],
+  "files": [
+    {
+      "path": "internal/dataplane/domain_tcp_capture_guard.go",
+      "sha256": "fb7c67552430306661520b5cd0ea9e50c340ba74c67d3990055a92077d626b22"
+    },
+    {
+      "path": "internal/dataplane/domain_tcp_capture_guard_test.go",
+      "sha256": "de94fa0289deb269afcb28a0cb433e4e62b833bd9e26e711e90f4e23c995ce1b"
+    },
+    {
+      "path": "internal/dataplane/domain_tcp_capture_execution_effects.go",
+      "sha256": "e7be438c0d26e41f008adfd58ea471df0708d6801b4f68de63a699d849c44374"
+    },
+    {
+      "path": "internal/dataplane/domain_tcp_original_process_native_linux_test.go",
+      "sha256": "b419032b6263342a46490b36eef3cdacd65e15bd9ca17979c996a45d851d41e0"
+    }
+  ]
+}

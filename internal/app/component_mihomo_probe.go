@@ -71,26 +71,31 @@ func (a *App) mihomoProbeRegistered() bool {
 	return s.adapter != nil && s.manager == a.Dataplane && s.components == a.Components && s.adapter.RegisteredWith(s.manager)
 }
 
-func writeMihomoProbeFailure(w http.ResponseWriter, pending bool) {
+func writeMihomoProbeFailure(w http.ResponseWriter, pending bool, timings ...*mihomoProbeAttemptTiming) {
 	code := "MIHOMO_SERVICE_PROBE_UNCONFIRMED"
 	if pending {
 		code = "MIHOMO_SERVICE_PROBE_CLEANUP_PENDING"
 	}
-	writeJSON(w, http.StatusConflict, map[string]any{"code": code, "recovery_required": pending, "service_verified": false, "live_applied": false, "draft_persisted": false})
+	body := map[string]any{"code": code, "recovery_required": pending, "service_verified": false, "live_applied": false, "draft_persisted": false}
+	if len(timings) == 1 && timings[0] != nil {
+		body["timing"] = timings[0].snapshot()
+	}
+	writeJSON(w, http.StatusConflict, body)
 }
 
 func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, options backendprofile.MihomoOptions, review, serviceID string, revision *uint64) {
+	timing := &mihomoProbeAttemptTiming{started: time.Now()}
 	if revision == nil || serviceID == "" {
 		http.Error(w, "Выберите сервис каталога и обновите состояние настроек.", 400)
 		return
 	}
 	if !a.mihomoProbeRegistered() || a.Store == nil || a.ComponentHistory == nil || a.ExecutionHistory == nil || a.SelfUpdateFiles == nil || a.Components.StateDir != managedComponentsState || a.Dataplane.StateRoot != filepath.Join(installpath.State, "dataplane") {
-		writeMihomoProbeFailure(w, false)
+		writeMihomoProbeFailure(w, false, timing)
 		return
 	}
 	cfg := a.Store.Get()
 	if cfg.Revision != *revision {
-		writeMihomoProbeFailure(w, false)
+		writeMihomoProbeFailure(w, false, timing)
 		return
 	}
 	var service catalog.Service
@@ -102,7 +107,7 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 	}
 	// Use the same closed service definition consumed by the actual adapter.
 	if _, err := dataplane.FrozenProbeService(dataplane.Route{LogicalServiceID: service.ID, ProbeService: &service, ProbeURL: service.ProbeURL}); err != nil {
-		writeMihomoProbeFailure(w, false)
+		writeMihomoProbeFailure(w, false, timing)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
@@ -117,7 +122,7 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 	if state.held != nil || state.manager != a.Dataplane || state.components != a.Components {
 		a.mihomoProbe.mu.Unlock()
 		release()
-		writeMihomoProbeFailure(w, true)
+		writeMihomoProbeFailure(w, true, timing)
 		return
 	}
 	held := &mihomoProbeRetention{ctx: context.WithoutCancel(heldCtx), release: release, adapter: state.adapter, done: make(chan struct{})}
@@ -190,23 +195,29 @@ func (a *App) probeMihomo(w http.ResponseWriter, r *http.Request, raw string, op
 	if err == nil {
 		checked := dataplane.WithReviewGuard(heldCtx, env.current)
 		checked = dataplane.WithNodeResourceGuard(checked, env.resource)
-		result, err = held.adapter.Check(checked, a.Dataplane, held.source, service, cfg.Revision, env.network, a.ComponentHistory, a.ExecutionHistory, held.control)
+		timing.finishPreparation()
+		err = measureMihomoProbePhase(&timing.AdapterCheckMS, func() error {
+			var checkErr error
+			result, checkErr = held.adapter.Check(checked, a.Dataplane, held.source, service, cfg.Revision, env.network, a.ComponentHistory, a.ExecutionHistory, held.control)
+			return checkErr
+		})
 		if err == nil {
-			err = env.current(heldCtx)
+			err = measureMihomoProbePhase(&timing.PostcheckMS, func() error { return env.current(heldCtx) })
 		}
 	}
-	cleanupErr := finish()
+	timing.finishPreparation()
+	cleanupErr := measureMihomoProbePhase(&timing.FinalizeMS, finish)
 	normal = true
 	if cleanupErr != nil {
 		a.Operations.FenceJournal()
-		writeMihomoProbeFailure(w, true)
+		writeMihomoProbeFailure(w, true, timing)
 		return
 	}
 	if err != nil || r.Context().Err() != nil || !a.Security.Authenticated(r) {
-		writeMihomoProbeFailure(w, false)
+		writeMihomoProbeFailure(w, false, timing)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"probe": result, "review": review, "live_applied": false, "draft_persisted": false, "recovery_required": false})
+	writeJSON(w, http.StatusOK, map[string]any{"probe": result, "review": review, "live_applied": false, "draft_persisted": false, "recovery_required": false, "timing": timing.snapshot()})
 }
 
 // Each call performs its own complete real fleet/history observation. A

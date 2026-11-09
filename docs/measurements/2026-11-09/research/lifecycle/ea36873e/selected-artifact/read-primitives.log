@@ -1,0 +1,38 @@
+=== RUN   TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline
+--- PASS: TestDomainCaptureGuardRejectsInvalidEntryBeforeBaseline (0.00s)
+=== RUN   TestDomainNativeMeasurementSnapshotsRemainCumulative
+--- PASS: TestDomainNativeMeasurementSnapshotsRemainCumulative (0.00s)
+=== RUN   TestDomainNativeHashBucketsPreserveAggregate
+--- PASS: TestDomainNativeHashBucketsPreserveAggregate (0.00s)
+=== RUN   TestDomainPreAddOriginalByteReadMeasurement
+    domain_tcp_preadd_measurement_linux_test.go:43: original pre-Add primitive bytes before={Calls:0 Bytes:0 Elapsed:0s} after={Calls:0 Bytes:0 Elapsed:0s} calls=4/4
+--- FAIL: TestDomainPreAddOriginalByteReadMeasurement (0.04s)
+=== RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure
+=== RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1
+=== RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1
+=== RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2
+=== RUN   TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2
+--- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure (0.01s)
+    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-1 (0.00s)
+    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-1 (0.00s)
+    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/presence-2 (0.00s)
+    --- PASS: TestDomainPreAddGenericSequenceRetainsIntentOnEachFailure/guard-2 (0.00s)
+=== RUN   TestDomainPreAddLoanRejectsForeignAndEscapedReaders
+--- PASS: TestDomainPreAddLoanRejectsForeignAndEscapedReaders (0.00s)
+=== RUN   TestDomainPreAddLoanClosingRejectsLateByteMutation
+--- PASS: TestDomainPreAddLoanClosingRejectsLateByteMutation (0.00s)
+=== RUN   TestDomainPreAddLoanCancellationRevokesFurtherReads
+--- PASS: TestDomainPreAddLoanCancellationRevokesFurtherReads (0.00s)
+=== RUN   TestDomainPreAddCanceledEntryPreservesCause
+--- PASS: TestDomainPreAddCanceledEntryPreservesCause (0.00s)
+=== RUN   TestDomainStandbyReadFileBracketMeasurement
+    domain_tcp_standby_read_measurement_linux_test.go:45: actual byte reads before={Calls:4 Bytes:160 Elapsed:6.549µs} after={Calls:0 Bytes:0 Elapsed:0s}
+--- FAIL: TestDomainStandbyReadFileBracketMeasurement (0.00s)
+=== RUN   TestDomainStandbyReadFileBracketMutationCannotEscape
+--- PASS: TestDomainStandbyReadFileBracketMutationCannotEscape (0.00s)
+=== RUN   TestXraySelectedTCPMountIDMeasurement
+    xray_selected_tcp_mount_id_measurement_linux_test.go:43: same held proc FD mount ID samples=1000 fdinfo=6.009912ms statx=578.266µs forced-ENOSYS-fdinfo=5.799527ms; forced fallback excludes failed syscall overhead; no router or full-workflow latency claim
+--- PASS: TestXraySelectedTCPMountIDMeasurement (0.01s)
+FAIL
+FAIL	github.com/ArtixSx/razvilka/internal/dataplane	0.140s
+FAIL

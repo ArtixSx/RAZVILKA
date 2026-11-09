@@ -1,0 +1,54 @@
+{
+  "head_sha": "b7261e9f1d8cd7ea3c0af4b6f8e78c94d24688b4",
+  "run_id": 42568035583,
+  "conclusion": "success",
+  "lifecycle_job": 128998776419,
+  "settlement_job": 128998776295,
+  "postcas_job": 128998776497,
+  "lifecycle": {
+    "test_seconds": 279.15,
+    "rounds": [
+      {"round":0,"apply_seconds":95.493999565,"stop_seconds":6.062969676,"closing_retry":false,"health_phase_seconds":36.362518,"activate_phase_seconds":10.493989},
+      {"round":1,"apply_seconds":95.557902834,"stop_seconds":6.091563971,"closing_retry":true,"health_phase_seconds":36.343917,"activate_phase_seconds":10.496892}
+    ],
+    "check_wall_seconds": null,
+    "check_measurement_limit": "No dedicated Check wall timer. Approximate Apply-log to Stop-log interval excluding measured Stop is 36.663s / 36.871s; this includes fresh Check and real selected-client HTTPS, so is not pure Check latency.",
+    "assertions": "Two real registered Apply rounds, mandatory probes, fresh runtime Check after Apply release, selected-LAN HTTPS, original Stop, round1 injected closing retry and restored physical baseline passed.",
+    "scope_close_fix": "Actual terminal-close completed in both rounds and settlement retry scenario"
+  },
+  "settlement": {
+    "test_seconds":134.97,
+    "apply_seconds":102.144813157,
+    "stop_seconds":9.998466749,
+    "cuts":2,
+    "original_child_sidecar_tun_preserved":true,
+    "retired_header_reader":9,
+    "all_original_rows_terminal":true
+  },
+  "postcas": {
+    "test_seconds":80.79,
+    "http_status":503,
+    "desired_exact_restored":true,
+    "state":"rolled-back",
+    "rollback_verified":true,
+    "original_pending":false
+  },
+  "cpu_profile": {
+    "span":"whole original two-round native test process",
+    "wall_seconds":279.15,
+    "cpu_sample_seconds":356.07,
+    "gomaxprocs":2,
+    "sha256_flat_seconds":288.85,
+    "sha256_flat_percent":81.12,
+    "syscall_flat_seconds":58.84,
+    "syscall_flat_percent":16.52,
+    "originHash_cumulative_seconds":97.87,
+    "MihomoLiveSource_currentPrefixLocked_cumulative_seconds":97.57,
+    "restorejournal_artifactContextReader_Read_cumulative_seconds":35.49,
+    "raw":"mihomo-cpu-artifacts/live.cpu.pprof",
+    "text":"mihomo-cpu-artifacts/cpu-top.txt"
+  },
+  "additional_checks":"Official child survival, native identity mutation and original read-observation bookends passed in normal and race modes. This is not a blanket all-feature race or historical same-boot/restart result.",
+  "limitations":"Isolated Linux native fixture only, not physical router. No paired speedup claim. Full LAN lifecycle timings must remain separate from the earlier approximately 3s Mihomo HTTP probe handler. CPU cumulative values overlap and cannot be summed.",
+  "evidence":["mihomo-lifecycle.log","mihomo-settlement.log","mihomo-postcas.log","mihomo-cpu-artifacts/status.txt"]
+}

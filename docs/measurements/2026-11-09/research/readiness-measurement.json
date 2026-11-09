@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "platform": "windows/amd64",
+  "go": "go1.26.5",
+  "baseline_commit": "0e2db5ab2120b20e249e3da7a8e861b558506550",
+  "scenario": "Actual loopback SOCKS5 listener releases valid greeting 8100ms after ProcessController.Start; production readiness budget 8000ms",
+  "scope": "native TCP/SOCKS exchange, modeled process controller; no actual Xray/Mihomo, WAN, firewall or LAN",
+  "before": {
+    "elapsed_ms": 8100,
+    "accepted": true,
+    "regression_test": "FAIL",
+    "log": "readiness-before-final.txt"
+  },
+  "after": {
+    "elapsed_ms": 8000,
+    "accepted": false,
+    "error": "context deadline exceeded",
+    "regression_test": "PASS",
+    "log": "readiness-after-final.txt"
+  },
+  "claim": "Readiness budget enforcement and rejection of late readiness; not general VLESS speedup",
+  "samples": 1,
+  "fixture": "internal/dataplane/nodecheck_readiness_test.go",
+  "protected": "Existing exact service/egress/route identity and cleanup admission unchanged"
+}

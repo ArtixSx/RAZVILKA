@@ -1,0 +1,78 @@
+2026-11-02T12:53:38.2290061Z actual_original_observation_package=restorejournal mode=normal fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-02T12:53:38.2551290Z --- PASS: TestArtifactExpectedReadComparisonActualFDsAndRevocation (0.01s)
+2026-11-02T12:53:38.2850687Z --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders (0.03s)
+2026-11-02T12:53:38.2851804Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error (0.01s)
+2026-11-02T12:53:38.2852533Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic (0.01s)
+2026-11-02T12:53:38.2853236Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel (0.01s)
+2026-11-02T12:53:38.3064848Z --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses (0.02s)
+2026-11-02T12:53:38.3065761Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed (0.01s)
+2026-11-02T12:53:38.3066530Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool (0.01s)
+2026-11-02T12:53:38.3174790Z --- PASS: TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement (0.01s)
+2026-11-02T12:53:38.3321397Z --- PASS: TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes (0.01s)
+2026-11-02T12:53:38.7938002Z     artifact_expected_read_timing_linux_test.go:67: paired_artifact_environment bytes_each=67108844 complete_files_per_call=2 samples_each=12 GOMAXPROCS=2 cpu_count=4 reference=sequential_current_comparison optimized=parallel_expected_comparison claim=owned_file_library_only
+2026-11-02T12:53:38.9090263Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,sequential,1,115.073
+2026-11-02T12:53:38.9725541Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,parallel,2,63.807
+2026-11-02T12:53:39.0382300Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,parallel,1,65.665
+2026-11-02T12:53:39.1597027Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,sequential,2,121.091
+2026-11-02T12:53:39.2777159Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,sequential,1,118.241
+2026-11-02T12:53:39.3372400Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,parallel,2,59.634
+2026-11-02T12:53:39.3992344Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,parallel,1,61.931
+2026-11-02T12:53:39.5145490Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,sequential,2,115.264
+2026-11-02T12:53:39.6305660Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,sequential,1,115.914
+2026-11-02T12:53:39.6929733Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,parallel,2,62.492
+2026-11-02T12:53:39.7540746Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,parallel,1,61.059
+2026-11-02T12:53:39.8695966Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,sequential,2,115.220
+2026-11-02T12:53:39.9850525Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,sequential,1,115.691
+2026-11-02T12:53:40.0558620Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,parallel,2,69.908
+2026-11-02T12:53:40.1345640Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,parallel,1,79.557
+2026-11-02T12:53:40.2502606Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,sequential,2,115.655
+2026-11-02T12:53:40.3659128Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,sequential,1,115.603
+2026-11-02T12:53:40.4361602Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,parallel,2,70.161
+2026-11-02T12:53:40.4987836Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,parallel,1,62.644
+2026-11-02T12:53:40.6140169Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,sequential,2,115.200
+2026-11-02T12:53:40.7295133Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,sequential,1,115.502
+2026-11-02T12:53:40.7935474Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,parallel,2,64.034
+2026-11-02T12:53:40.8563119Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,parallel,1,62.771
+2026-11-02T12:53:40.9710090Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,sequential,2,114.583
+2026-11-02T12:53:40.9711758Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=sequential N=12 quantile=nearest_rank p50_ms=115.502 p95_ms=121.091
+2026-11-02T12:53:40.9713623Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=parallel N=12 quantile=nearest_rank p50_ms=62.771 p95_ms=79.557
+2026-11-02T12:53:40.9767507Z --- PASS: TestArtifactExpectedReadComparisonPairedWall (2.64s)
+2026-11-02T12:53:41.0717890Z actual_original_observation_package=restorejournal mode=race fixture_budget_components=30s fixture_budget_dataplane=45s
+2026-11-02T12:53:41.1125866Z --- PASS: TestArtifactExpectedReadComparisonActualFDsAndRevocation (0.02s)
+2026-11-02T12:53:41.1681778Z --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders (0.06s)
+2026-11-02T12:53:41.1682803Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/error (0.02s)
+2026-11-02T12:53:41.1683524Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/panic (0.02s)
+2026-11-02T12:53:41.1684219Z     --- PASS: TestArtifactExpectedReadComparisonAlwaysJoinsBothReaders/cancel (0.02s)
+2026-11-02T12:53:41.2048035Z --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses (0.04s)
+2026-11-02T12:53:41.2048978Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/managed (0.02s)
+2026-11-02T12:53:41.2049858Z     --- PASS: TestArtifactExpectedReadComparisonMutationBetweenReadersRefuses/pool (0.02s)
+2026-11-02T12:53:41.2274060Z --- PASS: TestArtifactExpectedReadComparisonFreshReopenRejectsEqualByteReplacement (0.02s)
+2026-11-02T12:53:41.2494319Z --- PASS: TestArtifactExpectedReadComparisonExpectedImageNeverSubstitutesForManagedBytes (0.02s)
+2026-11-02T12:53:41.9929350Z     artifact_expected_read_timing_linux_test.go:67: paired_artifact_environment bytes_each=67108844 complete_files_per_call=2 samples_each=12 GOMAXPROCS=2 cpu_count=4 reference=sequential_current_comparison optimized=parallel_expected_comparison claim=owned_file_library_only
+2026-11-02T12:53:42.1477698Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,sequential,1,154.952
+2026-11-02T12:53:42.2262624Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,1,parallel,2,78.513
+2026-11-02T12:53:42.3123790Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,parallel,1,86.057
+2026-11-02T12:53:42.4586207Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,2,sequential,2,146.153
+2026-11-02T12:53:42.6081536Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,sequential,1,149.471
+2026-11-02T12:53:42.6832382Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,3,parallel,2,75.053
+2026-11-02T12:53:42.7653003Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,parallel,1,82.069
+2026-11-02T12:53:42.9217550Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,4,sequential,2,156.299
+2026-11-02T12:53:43.0677022Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,sequential,1,145.905
+2026-11-02T12:53:43.1508748Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,5,parallel,2,83.135
+2026-11-02T12:53:43.2331320Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,parallel,1,82.256
+2026-11-02T12:53:43.3804217Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,6,sequential,2,147.209
+2026-11-02T12:53:43.5275893Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,sequential,1,147.086
+2026-11-02T12:53:43.6098541Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,7,parallel,2,82.207
+2026-11-02T12:53:43.6867390Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,parallel,1,76.849
+2026-11-02T12:53:43.8339532Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,8,sequential,2,147.100
+2026-11-02T12:53:43.9809778Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,sequential,1,146.946
+2026-11-02T12:53:44.0640943Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,9,parallel,2,83.172
+2026-11-02T12:53:44.1396955Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,parallel,1,75.544
+2026-11-02T12:53:44.2864934Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,10,sequential,2,146.713
+2026-11-02T12:53:44.4338563Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,sequential,1,147.298
+2026-11-02T12:53:44.5159059Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,11,parallel,2,82.038
+2026-11-02T12:53:44.5949139Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,parallel,1,78.900
+2026-11-02T12:53:44.7424525Z     artifact_expected_read_timing_linux_test.go:90: paired_artifact_csv,12,sequential,2,147.540
+2026-11-02T12:53:44.7426032Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=sequential N=12 quantile=nearest_rank p50_ms=147.100 p95_ms=156.299
+2026-11-02T12:53:44.7427725Z     artifact_expected_read_timing_linux_test.go:102: paired_artifact_summary algorithm=parallel N=12 quantile=nearest_rank p50_ms=82.038 p95_ms=86.057
+2026-11-02T12:53:44.7486024Z --- PASS: TestArtifactExpectedReadComparisonPairedWall (3.50s)

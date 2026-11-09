@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-09",
+  "profile": "NC-1812 existing Entware, read-only",
+  "command": "100 invocations of /opt/sbin/ip -Version in a shell loop, 3 batches",
+  "version": "ip utility, iproute2-ss4.4.0-11-entware",
+  "elapsed_seconds": [
+    0.08,
+    0.09,
+    0.08
+  ],
+  "normalized_average_ms_per_invocation": [
+    0.8,
+    0.9,
+    0.8
+  ],
+  "binary_sha256_before_and_after": "cce8d3fafdf0c1393878adb53e596c16788b37f8ecdd0d0ac25c4a751b0b7b88",
+  "cpu_features_observed": "fp asimd evtstrm aes pmull sha1 sha2 crc32",
+  "raw_sha256": "093ec0764267290abc5926d85b08ad63994f83b5af39b61d4aa895087fe9f0ec",
+  "limitations": [
+    "wall time includes shell loop and one sh startup; excludes SSH roundtrip",
+    "centisecond timer resolution; normalized batch average is not per-call percentile",
+    "old Entware ip differs from CI iproute/libbpf and original full guard/metadata costs are absent",
+    "CPU sha2 feature does not measure Go SHA; earlier sha256sum timing cannot be assigned to Go",
+    "no candidate/controller installation, config/route/process-lifecycle mutation or route readiness claim"
+  ]
+}

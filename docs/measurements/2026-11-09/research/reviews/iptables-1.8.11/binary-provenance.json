@@ -1,0 +1,26 @@
+[
+  {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu3_amd64.deb",
+    "package_sha256": "187b16f9375f53ce6a1618a29de52bb177b620589ada29e4a3e25de5d594e66f",
+    "package_bytes": 381074,
+    "elf_path": "./usr/sbin/xtables-legacy-multi",
+    "elf_sha256": "da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac",
+    "elf_bytes": 95256
+  },
+  {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu2_amd64.deb",
+    "package_sha256": "58f764bb0a45860b3db6e7d39ddac23ea635123c77045e48f589b6a6885b7b11",
+    "package_bytes": 400778,
+    "elf_path": "./usr/sbin/xtables-legacy-multi",
+    "elf_sha256": "3af870176dda19c70ea241773685cff72bdba1d637e30df2c4a15081b50637be",
+    "elf_bytes": 99424
+  },
+  {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/iptables/iptables_1.8.11-2ubuntu1_amd64.deb",
+    "package_sha256": "2eb5edfffdc2bdd2965f1964039162aa18967ed12a0826e6cfe0482a875d1f96",
+    "package_bytes": 416024,
+    "elf_path": "./usr/sbin/xtables-legacy-multi",
+    "elf_sha256": "00ebf329faad057d810e6ad0a5cb4a3ec2c30d62ded070972020a2890eba82a0",
+    "elf_bytes": 107544
+  }
+]

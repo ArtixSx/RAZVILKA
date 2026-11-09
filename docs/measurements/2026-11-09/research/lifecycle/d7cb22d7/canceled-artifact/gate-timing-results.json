@@ -1,0 +1,52 @@
+{
+  "sha": "d7cb22d729367c85311a77804ab71b9613eba952",
+  "run_id": 42689671622,
+  "job_id": 129405765187,
+  "log_sha256": "18c0d0f37dd440befee0908ca2e6e9604a03ca375dd374136878f84c34700b81",
+  "metrics": {
+    "attribution": {
+      "calls": 448,
+      "seconds": 0.016561582999999998,
+      "raw_elapsed": "16.561583ms"
+    },
+    "held/capture-prepare": {
+      "calls": 321,
+      "seconds": 2.439875129,
+      "raw_elapsed": "2.439875129s"
+    },
+    "held/other": {
+      "calls": 40,
+      "seconds": 0.45385643800000003,
+      "raw_elapsed": "453.856438ms"
+    },
+    "held/standby-prepare": {
+      "calls": 87,
+      "seconds": 0.822123057,
+      "raw_elapsed": "822.123057ms"
+    },
+    "wait/capture-prepare/acquired": {
+      "calls": 321,
+      "seconds": 0.0005683379999999999,
+      "raw_elapsed": "568.338µs"
+    },
+    "wait/other/acquired": {
+      "calls": 40,
+      "seconds": 9.3383e-05,
+      "raw_elapsed": "93.383µs"
+    },
+    "wait/standby-prepare/acquired": {
+      "calls": 87,
+      "seconds": 0.00015787399999999999,
+      "raw_elapsed": "157.874µs"
+    }
+  },
+  "total_completed_wait_seconds": 0.0008195949999999999,
+  "total_completed_held_seconds": 3.715854624,
+  "limitations": [
+    "Completed intervals only; in-flight intervals excluded.",
+    "Wait includes select scheduling; held includes work and release callback before token return.",
+    "Durations overlap domain stages; summed concurrent intervals are not scenario wall time.",
+    "Fixed stack-context labels can be other when bounded64-frame attribution does not reach a recognized caller.",
+    "Diagnostic timing does not establish scope, readiness, cleanup, or a causal optimization gain."
+  ]
+}

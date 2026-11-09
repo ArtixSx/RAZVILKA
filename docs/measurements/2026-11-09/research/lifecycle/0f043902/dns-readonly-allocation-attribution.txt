@@ -1,0 +1,17 @@
+Read-only strict DNS attribution, 2026-11-09
+Source HEAD: 3febc485 (no production changes made here)
+Profile: lifecycle-1a50bf07/selected-artifact/original-run.cpu.pprof
+Duration 12.18s / samples 12.57s. CPU attribution is not an allocation profile.
+
+Command (run outside repository with already available Go pprof tool):
+C:/Projects/RAZVILKA/tools/go/bin/go.exe tool pprof -peek='netidentity.(boundedRead|imageHash)|io.copyBuffer' PROFILE
+boundedRead: cumulative 0.80s; syscall.Read 0.78s (97.5%); growslice 0.02s.
+audit.readFile: 1.06s; captureProc 0.74s, taskStart 0.23s, bootID 0.09s.
+No sampled netidentity.imageHash or io.copyBuffer CPU in this strict DNS profile.
+Do not infer no allocations from absent CPU samples; managed alloc_space caller attribution remains pending next CI.
+
+Exact netidentity imageHash contract (build_linux.go116):
+size >0 and <=16MiB; fresh SHA256; io.Copy from contextReader wrapping SectionReader(heldFD,0,size+1); context checked before every Read; success requires no error and n==size. io.copyBuffer in pinned local Go1.26.5 uses32KiB because outer contextReader is neither WriterTo nor LimitedReader; SHA256 writer is not ReaderFrom. Thus any future scratch-only change should use same32KiB chunk and same wrappers, preserve short/extra length, error/EOF/cancellation semantics, keep all outer metadata/path/source bookends. Neither hash bytes nor result may be retained as authority. Race-mode sync.Pool behavior must be measured separately.
+
+Actual DNS syscall candidate, not implemented:
+netidentity boundedRead uses4096-byte scratch and append-only exact output; limit+1 sentinel, cancellation before every Read, maxcalls limit/4096+3. captureProc reads complete mountinfo both before and after source operations, plus independent task stat and boot_id. These dynamic reads/bookends cannot be removed or cached. A larger per-read buffer could reduce syscalls on mountinfo only when actual bytes span multiple4KiB reads, but this is not proven by profile alone and changes cancellation granularity. Need native paired read byte/call measurements, same exact output and EOF/limit checks, adversarial short reads/cancel, and independent review before code. Current boundedRead allocation growth is only0.02s sampled; pooling alone is not supported as major DNS speed target.

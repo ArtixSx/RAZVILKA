@@ -1,0 +1,73 @@
+{
+  "sha": "2ecf9961ee9586381e7aae005de23bceed4986fd",
+  "push": {
+    "run_id": 42673010038,
+    "attempt": 2,
+    "conclusion": "success",
+    "job_id": 129350870133,
+    "passed_gates": [
+      "nonroot original unpublished actual denied write",
+      "focused ownership and recovery",
+      "two positive Cloudflare fixtures10repeats each normal/race",
+      "gofmt and early go vet",
+      "full normal and race count1",
+      "shell/installer/rollback/UI contracts",
+      "amd64/arm64/mips/mipsle builds and checksum checks"
+    ],
+    "normal_package_s": {
+      "cmd/razvilka": 10.48,
+      "app": 153.761,
+      "dataplane": 232.399,
+      "updatecheck": 99.767
+    },
+    "race_package_s": {
+      "cmd/razvilka": 59.276,
+      "app": 358.57,
+      "dataplane": 557.002,
+      "updatecheck": 548.81
+    }
+  },
+  "pull_request": {
+    "run_id": 42673019667,
+    "attempt": 3,
+    "status": "completed",
+    "conclusion": "success",
+    "job_id": 129354434707,
+    "completed_utc": "2026-11-09T19:00:57Z",
+    "passed_gates": [
+      "nonroot original unpublished actual denied write",
+      "focused ownership and recovery",
+      "two positive Cloudflare fixtures10repeats each normal/race",
+      "gofmt and early go vet",
+      "full normal and race count1",
+      "shell/installer/rollback/UI contracts",
+      "amd64/arm64/mips/mipsle builds and checksum checks"
+    ],
+    "normal_package_s": {
+      "app": 142.119,
+      "updatecheck": 93.847,
+      "dataplane": 208.255,
+      "cmd/razvilka": 9.881
+    },
+    "race_package_s": {
+      "app": 433.261,
+      "updatecheck": 622.688,
+      "dataplane": 599.51,
+      "cmd/razvilka": 61.678
+    }
+  },
+  "prior_infrastructure": [
+    "pushattempt1 beforejobsFAIL",
+    "PRattempt1+2 beforejobsFAIL; exactcorrelations saved separately"
+  ],
+  "limitations": [
+    "Both exactSHA generic runs passed after separately preserved infrastructure failures; no tests or budgets reduced",
+    "Generic CI does not establish original native deadlines or physical router readiness"
+  ],
+  "raw": {
+    "generic-push-attempt2.log": "777e1baff18ee3f8afb84e972f4747f2be00c2b1694f0e31b256b9eeaa36eb2d",
+    "generic-push-attempt2.json": "c2ddf8bba73ce43cf4f6f1dca49fb2799b0abdc3c3ed78dc1b5cf3358d5c47ed",
+    "generic-pr-attempt3.log": "bc2a3bfefa26eef76ae98f5adc374cf40fde4063a53cdf82877e0ee34c19349d",
+    "generic-pr-attempt3.json": "122bca3d73211d95045339a5ccfdc9c47be0574a393d17cc6e278dd8295857c2"
+  }
+}

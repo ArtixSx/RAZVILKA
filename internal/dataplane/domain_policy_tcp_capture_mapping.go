@@ -86,6 +86,9 @@ func (c *DomainPolicyTCPCapture) currentWithFiles(ctx context.Context, files *xr
 	if err := raw.Control(func(uintptr) {}); err != nil {
 		return err
 	}
+	if original, ok := c.owner.(*DomainTCPOriginalScope); ok {
+		return c.currentOriginalResource(ctx, original, files)
+	}
 	if err := c.owner.CheckCapture(ctx, c); err != nil {
 		return err
 	}

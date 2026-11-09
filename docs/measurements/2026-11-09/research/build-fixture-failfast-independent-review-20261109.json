@@ -1,0 +1,23 @@
+{
+  "status": "source-approved",
+  "finding": "Extracted build fixture lacked errexit and accidentally included unavailable manual UI test, masking MODULE_NOT_FOUND",
+  "fix": [
+    "Same real manual UI test moved into existing Node UI block before build extraction marker",
+    "Extracted build composition now executed sh -eu so failures cannot hide behind final success echo"
+  ],
+  "validation": [
+    "Root reports actual Node manual UI PASS",
+    "Root reports test-build-targets fake-Go shell PASS without MODULE_NOT_FOUND",
+    "Independent exact diff inspection; no local Go build"
+  ],
+  "files": [
+    {
+      "path": "scripts/check.sh",
+      "sha256": "cd5af38e33e30880ccd21dd7058602600f7028d7c322e0492d83dbd20129b35d"
+    },
+    {
+      "path": "scripts/test-build-targets.sh",
+      "sha256": "176281a155857d6069312b9ac16cacba047c3e1d69206e1ddccff209613e434a"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "sha": "6b120f8c92fb4d6e93f786d84d28c7245efc2725",
+  "ref": "work/research-history-verify-20261109",
+  "run_id": 42677248385,
+  "attempt": 1,
+  "conclusion": "success",
+  "job_id": 129361829016,
+  "passed_gates": [
+    "actual unpublished denied-write nonroot",
+    "focused recovery/ownership",
+    "positive Cloudflare fixtures10x normal/race",
+    "gofmt early vet full normal/race",
+    "shell UI fourarch build/checksum"
+  ],
+  "normal_package_s": {
+    "updatecheck": 132.398,
+    "dataplane": 304.28,
+    "app": 217.867
+  },
+  "race_package_s": {
+    "updatecheck": 575.555,
+    "cmd/razvilka": 59.014,
+    "app": 417.184,
+    "dataplane": 667.241
+  },
+  "raw": {
+    "generic-push.json": "85ab9e10ab84f1a9e862af229a8d65f9d0d745748a2b10a9e387c242f48462c6",
+    "generic-push.log": "9687e9977d3692acb66481fb0aab170532aa978bf5a54c8c0cc52f0ecf6fe986"
+  },
+  "limitations": [
+    "Separate auxiliary source SHA, not newest main5289",
+    "Native strict DNS/managed/history failed separately; no router readiness claim"
+  ]
+}

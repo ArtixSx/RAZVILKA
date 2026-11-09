@@ -1,0 +1,77 @@
+[
+  {
+    "path": "domain-canceled-ready.log",
+    "sha256": "50e3b8c098f35f86ccd92dff9363366ea47de8bce943384f651291ea9ea8bf76",
+    "bytes": 91271
+  },
+  {
+    "path": "domain-results.json",
+    "sha256": "63e374f922252c3379cfed20410ac9bf9901fd4b6dfbe82c45bb003a189db994",
+    "bytes": 9556
+  },
+  {
+    "path": "domain-selected-cpu-cumulative.txt",
+    "sha256": "64e38a65cef650ebbdb69930e00bb2300905802eb6d255729046bd710eb15b28",
+    "bytes": 9411
+  },
+  {
+    "path": "domain-selected-cpu-top.txt",
+    "sha256": "a4bf419fbb4dcb556b9e909ac367e82a40b6c003688c9b12d2e19df5e7606498",
+    "bytes": 3289
+  },
+  {
+    "path": "domain-selected.log",
+    "sha256": "697eddd33648b1bc22c0b80325e56062b27f68693a5b27b4f944ba002359153e",
+    "bytes": 83759
+  },
+  {
+    "path": "generic-ci-independent-review.json",
+    "sha256": "9ae34c02a39fc3165ee3597759540caf45a4b1575bc2fa5d70f3e9c677c21595",
+    "bytes": 1726
+  },
+  {
+    "path": "generic-pr-ci.log",
+    "sha256": "0cfd9ad5ae7d02cc52f553c8b4569e27d4d95263bbf58d207732084d34687cfc",
+    "bytes": 213628
+  },
+  {
+    "path": "managed-production.log",
+    "sha256": "efdb5e99a1934dbb655ee3621d2daa6c356ae2c0c3894526364c87896a0ae074",
+    "bytes": 338475
+  },
+  {
+    "path": "managed-race.log",
+    "sha256": "d980f43a00ddd05bfa71b1737479a694081fee0e1711eca121c0543b0151f41e",
+    "bytes": 236416
+  },
+  {
+    "path": "managed-results.json",
+    "sha256": "fc10a50ca6b4df9e7da52ee4c716de60be56387035ef7db6aaec064b5d118237",
+    "bytes": 12127
+  },
+  {
+    "path": "mihomo-independent-review.json",
+    "sha256": "89bfaac0fc2e92d69def8aa781c87fb9780b09393b4647a2057917547f040a90",
+    "bytes": 2219
+  },
+  {
+    "path": "mihomo-lifecycle.log",
+    "sha256": "f91fa528aab72008e06f66bd1f4122353ccaa38bdafd85c8b524f8e72e29837c",
+    "bytes": 143045
+  },
+  {
+    "path": "mihomo-postcas.log",
+    "sha256": "332dca919e98214f31f6b5371793befca070c5af4e9d373ccc7e049885fdbffc",
+    "bytes": 37479
+  },
+  {
+    "path": "mihomo-settlement.log",
+    "sha256": "761a68fd4a95051c74b38764fd2e92e5fd80417a93e65d2e75047fc8818643dc",
+    "bytes": 37537
+  },
+  {
+    "path": "preparation.log",
+    "sha256": "286e47d362fdcde16914b016d74ab38b321d975a5d67c130b25d7f70fd53818d",
+    "bytes": 82481
+  }
+]

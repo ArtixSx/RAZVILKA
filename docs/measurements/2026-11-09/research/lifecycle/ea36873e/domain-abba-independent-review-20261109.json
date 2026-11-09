@@ -1,0 +1,44 @@
+{
+  "status": "source_approved_pending_actual_linux_controls_and_matched_runs",
+  "reviewer": "/root/verification",
+  "baseline": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+  "reviewed_files_sha256": {
+    "scripts/compare-domain-image-native.sh": "4c103a60cc297a9594687166f763da154c2f96c49f645f6c8ea027f2130c7869",
+    ".github/workflows/domain-image-comparison.yml": "59e391a2f1f33ea5aeba23dde10f29099bee282bd6172b1444937871b3c2782f"
+  },
+  "contract": [
+    "Unmodified pinned baseline/candidate harness and native fixtures verified by exact Git blob IDs; same installed assets and original 12s/4s deadlines.",
+    "Fresh per-sample subreaper, verified SET/GET, default SIGCHLD, sole Popen waiter followed by waitpid-to-ECHILD. No added PID/mount namespace or source admission.",
+    "Actual adopted direct children only, waitid WNOWAIT ownership check before SIGKILL, sole waiter prevents child-PID reuse until reap. Any forced cleanup stops subsequent samples and cannot mint native success.",
+    "Exact supervisor exit0/exit1/detached-setsid-orphan controls required before native samples.",
+    "Profile-defer metrics are diagnostic only; descendant absence is independent no-overlap evidence, not original runtime cleanup success.",
+    "Output drain bounded, overflow preserved as failure, full-stream digest only after EOF; incomplete output fails.",
+    "Independent regular-file/16MiB/80-file upload guard, fixed status-only refusal fallback; no native binaries/private configuration archived.",
+    "GIT_OPTIONAL_LOCKS=0 preserves checkout index ownership."
+  ],
+  "findings_resolved": [
+    "Attempted join was incorrectly treated as positive cleanup proof.",
+    "Raw upload originally proceeded despite final artifact budget refusal.",
+    "Bounded drain initially failed to mark incomplete EOF."
+  ],
+  "validation": [
+    "Independent source inspection including unchanged original Run defer and peer cleanup paths.",
+    "git diff --check passed; author reports bash -n and embedded Python AST checks passed.",
+    "No local Go builds or Linux process execution."
+  ],
+  "limitations": [
+    "Linux supervisor controls and actual ABBA samples remain unexecuted until CI.",
+    "Two samples per side and warm-host page cache do not establish statistical significance or cold performance.",
+    "Candidate native failure remains failure even if baseline also fails; no route/router readiness inferred.",
+    "Job interruption can prevent final artifact publication; later samples never launch after detected unsafe containment."
+  ],
+  "primary_sources": [
+    "https://man7.org/linux/man-pages/man2/PR_SET_CHILD_SUBREAPER.2const.html",
+    "https://man7.org/linux/man-pages/man2/waitpid.2.html"
+  ],
+  "commit": "8748047d",
+  "committed_blob_sha256": {
+    "scripts/compare-domain-image-native.sh": "10077d4a23da56e87f1f045947570cd2930913972d988e5cb0debd8535cf96c0",
+    ".github/workflows/domain-image-comparison.yml": "59e391a2f1f33ea5aeba23dde10f29099bee282bd6172b1444937871b3c2782f"
+  }
+}

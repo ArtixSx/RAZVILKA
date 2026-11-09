@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 1b7c9aabc800681eb24cfe229eff6b96431d2130
+Type: cpu
+Time: 2026-11-09 04:58:56 UTC
+Duration: 12.17s, Total samples = 12.56s (103.24%)
+Showing nodes accounting for 10.60s, 84.39% of 12.56s total
+Dropped 513 nodes (cum <= 0.06s)
+Showing top 35 nodes out of 363
+      flat  flat%   sum%        cum   cum%
+     5.24s 41.72% 41.72%      5.24s 41.72%  crypto/internal/fips140/sha256.blockSHANI
+     4.15s 33.04% 74.76%      4.15s 33.04%  internal/runtime/syscall/linux.Syscall6
+     0.29s  2.31% 77.07%      0.35s  2.79%  runtime.tryDeferToSpanScan
+     0.14s  1.11% 78.18%      0.14s  1.11%  internal/runtime/atomic.(*Uint32).CompareAndSwap (inline)
+     0.13s  1.04% 79.22%      0.46s  3.66%  runtime.scanObject
+     0.07s  0.56% 79.78%      0.07s  0.56%  indexbytebody
+     0.06s  0.48% 80.25%      0.42s  3.34%  runtime.mallocgc
+     0.06s  0.48% 80.73%      0.09s  0.72%  strings.Fields
+     0.05s   0.4% 81.13%      0.09s  0.72%  encoding/json.(*Decoder).readValue
+     0.04s  0.32% 81.45%      0.12s  0.96%  runtime.reentersyscall
+     0.03s  0.24% 81.69%      0.09s  0.72%  github.com/ArtixSx/razvilka/internal/dnscontrol.withTypedEndpoints
+     0.03s  0.24% 81.93%      0.08s  0.64%  runtime.(*sweepLocked).sweep
+     0.03s  0.24% 82.17%      0.09s  0.72%  runtime.findObject
+     0.03s  0.24% 82.40%      0.17s  1.35%  runtime.mallocgcSmallNoscan
+     0.02s  0.16% 82.56%      0.86s  6.85%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.16% 82.72%      0.11s  0.88%  runtime.exitsyscall
+     0.02s  0.16% 82.88%      0.07s  0.56%  runtime.mProf_FlushLocked
+     0.02s  0.16% 83.04%      0.23s  1.83%  runtime.scanSpan
+     0.01s  0.08% 83.12%      5.25s 41.80%  crypto/internal/fips140/sha256.(*Digest).Write
+     0.01s  0.08% 83.20%      0.10s   0.8%  encoding/json.structEncoder.encode
+     0.01s  0.08% 83.28%      0.51s  4.06%  github.com/ArtixSx/razvilka/internal/dnscontrol.(*SyntheticDNSMapping).Current
+     0.01s  0.08% 83.36%      0.13s  1.04%  github.com/ArtixSx/razvilka/internal/dnscontrol.Providers
+     0.01s  0.08% 83.44%      0.36s  2.87%  github.com/ArtixSx/razvilka/internal/operationgate.(*ControlEpochReview).Current.func1
+     0.01s  0.08% 83.52%      0.63s  5.02%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.01s  0.08% 83.60%      0.43s  3.42%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.01s  0.08% 83.68%      0.14s  1.11%  os.(*File).readdir
+     0.01s  0.08% 83.76%      0.07s  0.56%  os.(*file).close
+     0.01s  0.08% 83.84%      0.80s  6.37%  runtime.gcDrain
+     0.01s  0.08% 83.92%      0.13s  1.04%  runtime.growslice
+     0.01s  0.08% 84.00%      0.10s   0.8%  runtime.markroot
+     0.01s  0.08% 84.08%      0.10s   0.8%  runtime.newobject
+     0.01s  0.08% 84.16%      0.08s  0.64%  runtime.sweepone
+     0.01s  0.08% 84.24%      0.09s  0.72%  syscall.ByteSliceFromString
+     0.01s  0.08% 84.32%      4.11s 32.72%  syscall.RawSyscall6
+     0.01s  0.08% 84.39%      2.17s 17.28%  syscall.Syscall6

@@ -48,20 +48,20 @@ func (m *Manager) StopMihomoLive(ctx context.Context, cleanup *operationgate.Exc
 		return nil, err
 	}
 	defer end()
-	prepareErr := r.prepareLiveStop(c, cleanup)
+	prepareErr := mihomoLiveStopAt("prepare", r.prepareLiveStop(c, cleanup))
 	// Unknown journal ownership must be repaired by its original writer before
 	// a Stop result may advertise durable completion. Native cleanup itself is
 	// allowed by the adapter's same-owner recovery lane on partial publication.
-	journalErr := r.records.current(c, true)
+	journalErr := mihomoLiveStopAt("record-pair", r.records.current(c, true))
 	cleanupErr := r.cleanupLive(c, cleanup)
 	if err := errors.Join(prepareErr, journalErr, cleanupErr); err != nil {
 		return nil, err
 	}
 	if err := r.finishHealthStop(c); err != nil {
-		return nil, err
+		return nil, mihomoLiveStopAt("settled-header", err)
 	}
 	if err := r.observeLiveInactive(c, cleanup); err != nil {
-		return nil, err
+		return nil, mihomoLiveStopAt("inactive-recheck", err)
 	}
 	r.scope.mu.Lock()
 	terminal := validateExecutionResources(*r.scope.execution, true) == nil
@@ -70,10 +70,10 @@ func (m *Manager) StopMihomoLive(ctx context.Context, cleanup *operationgate.Exc
 	}
 	r.scope.mu.Unlock()
 	if !terminal {
-		return nil, ErrExecutionJournal
+		return nil, mihomoLiveStopAt("terminal-rows", ErrExecutionJournal)
 	}
 	if err := r.records.current(c, true); err != nil {
-		return nil, err
+		return nil, mihomoLiveStopAt("final-record-pair", err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

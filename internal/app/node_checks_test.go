@@ -250,7 +250,7 @@ func TestNodeCheckServiceFailureDoesNotBecomeAvailable(t *testing.T) {
 			peak.Store(n)
 		}
 		now := time.Now().UTC()
-		return dataplane.NodeCheckResult{ProbeID: "node-check-0123456789abcdef01234567", NodeID: request.NodeID, ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile, RoutePathID: "sing-box:" + request.NodeID, FinishedAt: now, ExpiresAt: now.Add(time.Minute), Stage: "service", Verdict: evidence.VerdictError, Available: false, TestLevel: "service", LatencyMS: 1000, Message: "Сервис недоступен."}, nil
+		return dataplane.NodeCheckResult{ProbeID: "node-check-0123456789abcdef01234567", NodeID: request.NodeID, ServiceID: request.Service.ID, NetworkProfile: request.NetworkProfile, RoutePathID: "sing-box:" + request.NodeID, StartedAt: now, FinishedAt: now, ExpiresAt: now.Add(time.Minute), Stage: "service", Verdict: evidence.VerdictError, Available: false, TestLevel: "service", LatencyMS: 1000, Message: "Сервис недоступен."}, nil
 	})
 	if w := postNodeJob(t, a, ids, "service"); w.Code != http.StatusAccepted {
 		t.Fatalf("%d %s", w.Code, w.Body.String())

@@ -1,0 +1,150 @@
+{
+  "evidence": [
+    {
+      "file": "mihomo-lifecycle.log",
+      "sha256": "4f6ac258e64d9df900b9663fae2a1687969a5609b292acdf3f45e8e19bdd797f"
+    },
+    {
+      "file": "mihomo-manual-http.log",
+      "sha256": "42b2c6082875767c520ee8a18fd0d060de0db53f9b385ff9c8de85098b1a128d"
+    },
+    {
+      "file": "mihomo-check-settlement.log",
+      "sha256": "a83521adae7708224c49923fb6e0b7cbbea02242f4c4ed8bf30b8b34c96f37f0"
+    },
+    {
+      "file": "mihomo-postcas-failure.log",
+      "sha256": "47355080b0f5543128903349ae7055ed0cc1ac8665cb5cd8b735c5888eec2fd4"
+    }
+  ],
+  "limitations": [
+    "Original110s operation/300s cycle deadlines unchanged; manualApply about100s leaves limited margin against host variance.",
+    "Actual isolated Ubuntu native profile, not hardware router acceptance.",
+    "Generic8434 full gate separately still running at report creation.",
+    "Earlier failed SHAs remain failed; this does not retroactively pass them."
+  ],
+  "artifacts": {
+    "manual_baseline": 13693121813,
+    "lifecycle_baseline": 13692866619,
+    "lifecycle_candidate": 13693100686,
+    "manual_candidate": 13693100838
+  },
+  "bookends": {
+    "fingerprint_mutation_normal_race_seconds": [
+      3.21,
+      9.19
+    ],
+    "original_child_normal_race": "PASS",
+    "kernel_owner_normal_race_seconds": [
+      4.76,
+      11.07
+    ]
+  },
+  "run": 42655695608,
+  "conclusion": "SUCCESS all4jobs",
+  "reviewer": "verification",
+  "same_host_baseline": {
+    "order": "candidate then matching baseline",
+    "sha": "4cc9f869974713c9cebd833fccca383c03c102b7",
+    "lifecycle": {
+      "cycle_seconds": [
+        124.815053764,
+        124.77173951
+      ],
+      "test_seconds": 251.5,
+      "second_closing_retry": true,
+      "result": "SUCCESS",
+      "both_baselines_restored": true,
+      "apply_seconds": [
+        86.241823005,
+        86.183417176
+      ],
+      "stop_seconds": [
+        5.484919925,
+        5.457138014
+      ]
+    },
+    "manual_http": {
+      "cycle_seconds": [
+        142.890115139,
+        142.946946958
+      ],
+      "test_seconds": 287.93,
+      "second_closing_retry": true,
+      "result": "SUCCESS",
+      "both_baselines_restored": true,
+      "apply_seconds": [
+        100.071008036,
+        99.90652829
+      ],
+      "stop_seconds": [
+        6.15207689,
+        6.170460737
+      ]
+    },
+    "finding": "Matched manual time essentially identical. Does not support a persistent new-branch manual latency regression; no speedup claim. Fixed-order small sample and host variance remain."
+  },
+  "sha": "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+  "jobs": [
+    {
+      "case": "lifecycle",
+      "job": 129293460542,
+      "both_physical_baselines_restored": true,
+      "second_closing_retry": true,
+      "result": "SUCCESS",
+      "stop_seconds": [
+        5.472843564,
+        5.465758683
+      ],
+      "apply_seconds": [
+        86.908033099,
+        86.757095864
+      ],
+      "cycle_seconds": [
+        125.738986565,
+        125.617062775
+      ],
+      "test_seconds": 254.4
+    },
+    {
+      "case": "manual-http",
+      "job": 129293460629,
+      "both_physical_baselines_restored": true,
+      "second_closing_retry": true,
+      "result": "SUCCESS",
+      "stop_seconds": [
+        6.171851757,
+        6.186752498
+      ],
+      "apply_seconds": [
+        100.002009163,
+        99.968248178
+      ],
+      "cycle_seconds": [
+        142.842832427,
+        142.807077819
+      ],
+      "test_seconds": 288.01
+    },
+    {
+      "stop_seconds": 8.558030514,
+      "cycle_seconds": 112.574981898,
+      "result": "SUCCESS",
+      "case": "check-settlement",
+      "apply_seconds": 86.599653367,
+      "physical_baseline_restored": true,
+      "job": 129293460117,
+      "test_seconds": 114.74
+    },
+    {
+      "original_pending": false,
+      "rollback_verified": true,
+      "result": "SUCCESS",
+      "http_status": 503,
+      "case": "postcas-failure",
+      "desired_exact_restored": true,
+      "job": 129293460555,
+      "test_seconds": 82.21
+    }
+  ]
+}

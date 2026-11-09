@@ -1,0 +1,44 @@
+File: app.test
+Build ID: 4086c6894de5a18d28fbdf4ecc5019284cadc1ca
+Type: cpu
+Time: 2026-11-09 05:53:18 UTC
+Duration: 26.28s, Total samples = 24.85s (94.54%)
+Showing nodes accounting for 21.08s, 84.83% of 24.85s total
+Dropped 643 nodes (cum <= 0.12s)
+Showing top 35 nodes out of 391
+      flat  flat%   sum%        cum   cum%
+    13.22s 53.20% 53.20%     13.22s 53.20%  internal/runtime/syscall/linux.Syscall6
+     6.20s 24.95% 78.15%      6.20s 24.95%  crypto/internal/fips140/sha256.blockSHANI
+     0.26s  1.05% 79.20%      0.40s  1.61%  runtime.tryDeferToSpanScan
+     0.19s  0.76% 79.96%     13.30s 53.52%  syscall.RawSyscall6
+     0.14s  0.56% 80.52%      0.54s  2.17%  runtime.scanObject
+     0.11s  0.44% 80.97%      0.13s  0.52%  strings.Fields
+     0.10s   0.4% 81.37%      0.15s   0.6%  runtime.typePointers.next
+     0.07s  0.28% 81.65%      0.19s  0.76%  runtime.reentersyscall
+     0.07s  0.28% 81.93%         8s 32.19%  syscall.Syscall6
+     0.06s  0.24% 82.17%      0.19s  0.76%  reflect.deepValueEqual
+     0.06s  0.24% 82.41%      0.67s  2.70%  runtime.mallocgc
+     0.06s  0.24% 82.66%      0.18s  0.72%  runtime.mallocgcSmallNoscan
+     0.04s  0.16% 82.82%      2.52s 10.14%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).rawFile
+     0.04s  0.16% 82.98%      3.03s 12.19%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.04s  0.16% 83.14%      5.64s 22.70%  syscall.Syscall
+     0.03s  0.12% 83.26%      2.63s 10.58%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountID
+     0.03s  0.12% 83.38%      2.16s  8.69%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).readFile
+     0.03s  0.12% 83.50%      1.91s  7.69%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.03s  0.12% 83.62%      3.95s 15.90%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.12% 83.74%      1.05s  4.23%  os.(*File).Stat
+     0.03s  0.12% 83.86%      0.28s  1.13%  os.(*File).readdir
+     0.03s  0.12% 83.98%      1.57s  6.32%  syscall.Fstat
+     0.02s  0.08% 84.06%      0.17s  0.68%  encoding/json.(*decodeState).object
+     0.02s  0.08% 84.14%      1.62s  6.52%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).mountsMatch
+     0.02s  0.08% 84.23%      4.64s 18.67%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.02s  0.08% 84.31%      0.13s  0.52%  runtime.(*mcache).refill
+     0.02s  0.08% 84.39%      0.13s  0.52%  runtime.makeslicecopy
+     0.02s  0.08% 84.47%      0.25s  1.01%  runtime.mallocgcSmallScanNoHeader
+     0.02s  0.08% 84.55%      0.18s  0.72%  syscall.Fstatfs
+     0.02s  0.08% 84.63%      3.85s 15.49%  syscall.fstatat
+     0.01s  0.04% 84.67%      0.51s  2.05%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current
+     0.01s  0.04% 84.71%      0.48s  1.93%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).domainConfigFDInfoAt
+     0.01s  0.04% 84.75%      0.73s  2.94%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).mountID
+     0.01s  0.04% 84.79%      0.13s  0.52%  github.com/ArtixSx/razvilka/internal/dataplane.copyPolicyEffectPlan
+     0.01s  0.04% 84.83%      1.27s  5.11%  github.com/ArtixSx/razvilka/internal/dataplane.newBackendInventory.func1

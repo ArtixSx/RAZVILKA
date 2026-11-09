@@ -1,0 +1,160 @@
+{
+  "sha": "60e0d4ba5daca6c3c9276af15475768680da7c28",
+  "run_id": 42646804164,
+  "verdict": "FAIL normal/race first absence; ACK matrix not reached",
+  "cause": "Existing observation ABI refuses fixed table207 reads already used by unscoped cold runner; exact four-form compatibility fix pending new CI. Source diagnosis, next native proof required.",
+  "rows": [
+    {
+      "case": "sameboot-normal",
+      "sha256": "175e12e05038f0d720f10e418104af5d1bd7613b15c37849bbbd677221c06149",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        "13092.851"
+      ],
+      "phases": [
+        [
+          "absence",
+          "1",
+          "204.457"
+        ],
+        [
+          "absence-tool-read",
+          "1",
+          "204.428"
+        ],
+        [
+          "native-stage",
+          "4",
+          "772.842"
+        ],
+        [
+          "native-witness-callback",
+          "3",
+          "28.890"
+        ],
+        [
+          "phase-forwarding",
+          "1",
+          "9227.689"
+        ],
+        [
+          "phase-intent",
+          "1",
+          "138.466"
+        ],
+        [
+          "phase-opening",
+          "1",
+          "136.004"
+        ],
+        [
+          "phase-policy",
+          "1",
+          "2599.254"
+        ],
+        [
+          "phase-sidecar",
+          "1",
+          "387.298"
+        ],
+        [
+          "prepare",
+          "1",
+          "260.957"
+        ],
+        [
+          "run",
+          "1",
+          "12488.716"
+        ],
+        [
+          "source-before-sidecar",
+          "9",
+          "227.729"
+        ],
+        [
+          "source-current",
+          "86",
+          "10412.173"
+        ]
+      ]
+    },
+    {
+      "case": "sameboot-race",
+      "sha256": "d33268b0dfd5515ccb31f401730792f57dfa924a57cb1e80cc5d3607c9b18d83",
+      "pass": false,
+      "failed": true,
+      "actor_ms": [
+        "20309.952"
+      ],
+      "phases": [
+        [
+          "absence",
+          "1",
+          "261.831"
+        ],
+        [
+          "absence-tool-read",
+          "1",
+          "261.816"
+        ],
+        [
+          "native-stage",
+          "4",
+          "4070.246"
+        ],
+        [
+          "native-witness-callback",
+          "3",
+          "3087.473"
+        ],
+        [
+          "phase-forwarding",
+          "1",
+          "12063.166"
+        ],
+        [
+          "phase-intent",
+          "1",
+          "1196.837"
+        ],
+        [
+          "phase-opening",
+          "1",
+          "208.755"
+        ],
+        [
+          "phase-policy",
+          "1",
+          "4413.298"
+        ],
+        [
+          "phase-sidecar",
+          "1",
+          "1555.596"
+        ],
+        [
+          "prepare",
+          "1",
+          "373.693"
+        ],
+        [
+          "run",
+          "1",
+          "19437.664"
+        ],
+        [
+          "source-before-sidecar",
+          "9",
+          "295.262"
+        ],
+        [
+          "source-current",
+          "86",
+          "13781.516"
+        ]
+      ]
+    }
+  ]
+}

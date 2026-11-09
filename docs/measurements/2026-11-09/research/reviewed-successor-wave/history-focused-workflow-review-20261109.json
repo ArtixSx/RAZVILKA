@@ -1,0 +1,13 @@
+{
+  "decision": "APPROVED focused dispatch only",
+  "commit": "976fa47c",
+  "file": ".github/workflows/research-lifecycle.yml",
+  "sha256": "56da44f30f91ffd5ec85b91775482a190f39d9a64ba43efad995ff725f889249",
+  "contract": [
+    "Absent/default focus all preserves all11 acceptance matrix jobs on push/default dispatch",
+    "Explicit public-history runs actual history only; unrelated jobs declared skipped, never PASS evidence",
+    "Run name labels focus and SHA; concurrency includes focus so targeted run cannot cancel full run on same ref",
+    "No command, source authority or operation timeout changes"
+  ],
+  "validation": "Exact source diff inspected; no native execution implied"
+}

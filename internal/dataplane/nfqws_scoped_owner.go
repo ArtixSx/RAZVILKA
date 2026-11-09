@@ -564,7 +564,7 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 	// Only this private Apply runner moves the full exact-prefix proof to the
 	// actual mutation boundary; the base runner still owns Cmd.Start admission.
 	r.Runner = nfqwsScopedApplyRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
-	if err := applyPolicyEffects(ctx, r, plan, root, b.options); err != nil {
+	if err := b.applyOriginalPolicyEffects(ctx, p, r, plan, root); err != nil {
 		return err
 	}
 	// The final external admission callback precedes the final full proof.
@@ -577,9 +577,26 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 
 func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) error {
 	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyRemove)()
-	r, plan, err := b.prepare(p, true)
+	r, plan, err := b.prepareOriginalRemove(p)
 	if err != nil {
 		return err
+	}
+	if err := b.checkProcess(ctx, p, true); err != nil {
+		return err
+	}
+	if err := b.readback(ctx, p, nfqwsScopedCleanup, -1); err != nil {
+		return err
+	}
+	if err := removePolicyEffects(ctx, r, plan, root, b.options); err != nil {
+		return err
+	}
+	return b.VerifyInactive(ctx, p, root)
+}
+
+func (b *NFQWSScopedBinding) prepareOriginalRemove(p *NFQWSScopedPlan) (PolicyEffectRuntime, PolicyEffectPlan, error) {
+	r, plan, err := b.prepare(p, true)
+	if err != nil {
+		return r, plan, err
 	}
 	// Only this operation drops repeated whole scans from common Guards.
 	// VerifyInactive and all other users of prepare keep their strict runtime.
@@ -597,16 +614,7 @@ func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, roo
 	}
 	r.BeforeDelete = func(c context.Context, i int) error { return b.cleanupBoundary(c, p, i) }
 	r.Runner = nfqwsScopedRemoveRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
-	if err := b.checkProcess(ctx, p, true); err != nil {
-		return err
-	}
-	if err := b.readback(ctx, p, nfqwsScopedCleanup, -1); err != nil {
-		return err
-	}
-	if err := removePolicyEffects(ctx, r, plan, root, b.options); err != nil {
-		return err
-	}
-	return b.VerifyInactive(ctx, p, root)
+	return r, plan, nil
 }
 
 func (b *NFQWSScopedBinding) Inspect(ctx context.Context, p *NFQWSScopedPlan, root string) (PolicyAdditionStatus, error) {

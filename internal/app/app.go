@@ -4157,7 +4157,7 @@ func (a *App) buildDataplanePlanWithDraftModeContext(ctx context.Context, cfg co
 		engines = append(engines, dataplane.Engine{ID: option.ID, Installed: option.Installed, Configured: configured, Running: option.Running, Activatable: a.Dataplane != nil && a.Dataplane.Capable(option.ID), Canary: a.Dataplane != nil && a.Dataplane.CanaryCapable(option.ID)})
 	}
 	if nodeScopedEngines["mihomo"] {
-		fact, err := a.mihomoNodeEngineFact(ctx)
+		fact, err := a.mihomoNodeEngineFact(ctx, routes)
 		if err != nil {
 			return dataplane.Plan{}, err
 		}

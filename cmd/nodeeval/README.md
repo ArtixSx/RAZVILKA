@@ -101,3 +101,51 @@ lengths and vector bounds, with no trailing bytes. Reject malformed or oversized
 frames, transport errors, wrong nonce, stalls and cancellation. Send no later
 authorization or account methods. Tests must cover these refusals and unchanged
 checker cleanup behavior before any native protocol-reachability claim.
+
+## Stage timing report
+
+Candidate rows include `candidate_wait_ms` (time from this sequential evaluation
+start until candidate preparation, including snapshot/order and prior candidates),
+`preparation_ms` (fresh WAN profile and secret access until checker entry),
+`check_wall_ms` (the synchronous exact check including its cleanup), and
+`elapsed_ms` (candidate preparation through checker return). Summary `elapsed_ms`
+includes snapshot, all candidates and the final bounded recovery. These are
+monotonic wall durations; omitted optional zero values mean zero, not a measured
+production scheduler queue. The CLI does not enter the application's worker queue.
+
+`stages` contains only whitelisted IDs, fixed statuses and nonnegative
+`duration_ms` (at most 32 rows); invalid IDs/statuses and negative durations are omitted, and private runtime messages are excluded. Overlapping stages are
+**not additive** (for example protocol and egress can describe the same exchange).
+There is no apply or LAN evidence stage because this diagnostic never applies a
+route. A successful SOCKS readiness stage alone is not authenticated transport or
+service evidence. Each candidate remains tied to the report's engine, safe node
+identifier and sequence number; existing fresh exact identity checks still decide
+`fresh` and `https_pass`. Stage timing does not relax those checks.
+
+Stage rows are emitted only when the returned result matches the requested
+node, service, network profile, engine route path and current invocation time
+bounds (`fresh: true`). A stale or foreign result cannot attach its timings to
+the requested node. The locally observed preparation/check/wait wall timings
+remain available for rejected results. Missing stage rows therefore do not mean
+a zero-duration check. Cleanup failure still stops evaluation even when the
+returned diagnostic identity is stale or mismatched.
+
+
+`network_timings` records up to32 request-local service observations, only for a
+fresh matching checker result. `service-resolver` measures the actual local
+resolver call; `service-http` is one RoundTrip (including each redirect). Rows
+contain microsecond durations, numeric sequence, fixed statuses and flags only.
+No hostname, URL, certificate, error string or response content is retained.
+`later_rows_omitted` on the last row marks the bound, not successful completion.
+
+SOCKS connect includes local connection and SOCKS negotiation; remote TCP and
+proxy-side DNS cannot be separated by these observations. TTFB starts at
+RoundTrip entry and includes connection/TLS time. TLS and body measurements
+can be absent, incomplete or failed; reused connections need no new TLS.
+Multiple internal TLS/dial attempts are explicitly marked `multiple`, rather
+than collapsed into a misleading singleton duration. Body EOF is distinct
+from an early close/truncated sample. Even completed HTTP phases do not imply
+accepted service content: `https_pass` and existing evidence remain authoritative.
+Intervals overlap; these values are not additive. Snapshots freeze after checker
+return, and later transport callbacks cannot change the published result.
+This report does not measure Apply→LAN readiness or browser rendering.

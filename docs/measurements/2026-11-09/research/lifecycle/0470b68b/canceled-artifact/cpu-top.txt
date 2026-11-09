@@ -1,0 +1,44 @@
+File: app.test
+Build ID: b5627c2d77522f043c5dc65f74664e0ba1f34f84
+Type: cpu
+Time: 2026-11-09 19:54:49 UTC
+Duration: 19.96s, Total samples = 18.77s (94.05%)
+Showing nodes accounting for 15.79s, 84.12% of 18.77s total
+Dropped 602 nodes (cum <= 0.09s)
+Showing top 35 nodes out of 418
+      flat  flat%   sum%        cum   cum%
+     9.29s 49.49% 49.49%      9.29s 49.49%  internal/runtime/syscall/linux.Syscall6
+     4.96s 26.43% 75.92%      4.96s 26.43%  crypto/internal/fips140/sha256.blockSHANI
+     0.14s  0.75% 76.66%      0.17s  0.91%  runtime.exitsyscall
+     0.13s  0.69% 77.36%      0.23s  1.23%  strings.Fields
+     0.12s  0.64% 78.00%      2.24s 11.93%  github.com/ArtixSx/razvilka/internal/startuptools.freshPathNode
+     0.12s  0.64% 78.64%      0.12s  0.64%  runtime.memclrNoHeapPointers
+     0.11s  0.59% 79.22%      0.11s  0.59%  runtime.memmove
+     0.09s  0.48% 79.70%      0.14s  0.75%  encoding/json.(*Decoder).readValue
+     0.09s  0.48% 80.18%      9.33s 49.71%  syscall.RawSyscall6
+     0.08s  0.43% 80.61%      0.36s  1.92%  runtime.mallocgcSmallScanNoHeader
+     0.07s  0.37% 80.98%      0.71s  3.78%  runtime.mallocgc
+     0.06s  0.32% 81.30%      0.10s  0.53%  runtime.reentersyscall
+     0.05s  0.27% 81.57%      0.17s  0.91%  runtime.mallocgcSmallNoscan
+     0.04s  0.21% 81.78%      0.67s  3.57%  os.doInRoot[go.shape.interface { IsDir bool; ModTime time.Time; Mode io/fs.FileMode; Name string; Size int64; Sys interface {} }]
+     0.03s  0.16% 81.94%      2.93s 15.61%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).pathsCurrent
+     0.03s  0.16% 82.10%      3.40s 18.11%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).versionMetadataCurrent
+     0.03s  0.16% 82.26%      0.21s  1.12%  os.(*File).Stat
+     0.03s  0.16% 82.42%      0.26s  1.39%  os.(*File).readdir
+     0.03s  0.16% 82.58%      0.16s  0.85%  os.doInRoot[go.shape.int]
+     0.03s  0.16% 82.74%      0.17s  0.91%  reflect.deepValueEqual
+     0.03s  0.16% 82.90%      3.76s 20.03%  syscall.Syscall
+     0.03s  0.16% 83.06%      5.94s 31.65%  syscall.Syscall6
+     0.02s  0.11% 83.16%      1.52s  8.10%  github.com/ArtixSx/razvilka/internal/dataplane.(*xrayDomainTCPImageRead).current
+     0.02s  0.11% 83.27%      0.11s  0.59%  github.com/ArtixSx/razvilka/internal/netidentity.(*audit).stable
+     0.02s  0.11% 83.38%      1.28s  6.82%  github.com/ArtixSx/razvilka/internal/netidentity.boundedRead
+     0.02s  0.11% 83.48%      4.47s 23.81%  github.com/ArtixSx/razvilka/internal/startuptools.(*heldReview).unchanged
+     0.02s  0.11% 83.59%      0.42s  2.24%  os.(*rawConn).Control
+     0.02s  0.11% 83.70%      0.27s  1.44%  os.rootOpenFileNolog
+     0.02s  0.11% 83.80%      0.96s  5.11%  syscall.pread
+     0.01s 0.053% 83.86%      0.17s  0.91%  encoding/json.(*decodeState).object
+     0.01s 0.053% 83.91%      0.11s  0.59%  encoding/json.(*encodeState).marshal
+     0.01s 0.053% 83.96%      0.14s  0.75%  encoding/json.Marshal
+     0.01s 0.053% 84.02%      0.59s  3.14%  github.com/ArtixSx/razvilka/internal/config.(*Store).WithRevisionObservation.func1
+     0.01s 0.053% 84.07%      1.04s  5.54%  github.com/ArtixSx/razvilka/internal/dataplane.(*XrayDomainTCPExecutionResource).observeDomainListenerFiles.func1.1
+     0.01s 0.053% 84.12%      0.10s  0.53%  github.com/ArtixSx/razvilka/internal/dataplane.(*xraySelectedTCPProc).current

@@ -110,7 +110,7 @@ func (l *Lease) runObservedRead(ctx context.Context, command *exec.Cmd) error {
 	if o == nil {
 		return at("READ_OBSERVATION_SCOPE", nil)
 	}
-	if !l.observedReadCommand(command) {
+	if !l.observedReadCommand(command) && !l.observedClassicSaveCommand(ctx, command) {
 		return at("READ_OBSERVATION_EFFECT", nil)
 	}
 	o.mu.Lock()
@@ -162,7 +162,7 @@ func (l *Lease) observedReadCommand(command *exec.Cmd) bool {
 			return readArguments(args) || !combined && slices.Equal(args, []string{"--version"})
 		}
 		if index == 2 {
-			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
+			return !combined && slices.Equal(args, []string{"-Version"}) || observedPolicyIPRead(l.profile.stock, args) || mihomoSameBootObservedTableRead(args) || !l.profile.stock && l.syntheticDNSIssued() && domainBaselineObservedRead(args)
 		}
 		return !combined && slices.Equal(args, []string{"--version"})
 	}

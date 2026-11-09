@@ -1,0 +1,12 @@
+{
+  "commit": "3b27bd6ecd1696431887d28d2444a8944f25cce4",
+  "run": 42651543247,
+  "job": 129278908801,
+  "conclusion": "failure",
+  "log_sha256": "dc9641ca6ca91686ed0b81a7f2b0f091cc3eaf89ea2e8e000b0a0da4307426f0",
+  "passed": "Original FD3/4/5 checks and exact single private /proc root; genuine old193 healthy panel; queue producer",
+  "failed": "Actual bootstrap exit3 after11.84s; current native whole-line diagnostic reports unrecognized-or-absent",
+  "demonstrated_source_bug": "Producer accepts composed original DNS/ordinary quiesce stage; classifier only enumerates static stages and rejects those same exact complete lines. Fixed reviewed8c901ae6, actual underlying category awaits rerun. Extra stderr is not yet ruled out.",
+  "paired_restore": "not reached",
+  "readiness": false
+}

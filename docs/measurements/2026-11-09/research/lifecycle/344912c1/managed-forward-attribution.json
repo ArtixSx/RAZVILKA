@@ -1,0 +1,72 @@
+{
+  "comparedCommits": [
+    "8434e9ae2183ef926a123b1fe4217bc0114d214a",
+    "344912c11f285a4c2dc0ac0eadd8ab64e6110160"
+  ],
+  "exactScenario": "production native manual-choice LAN HTTP activation",
+  "comparableRunners": false,
+  "oldCPUModel": "AMD EPYC 7763 64-Core Processor",
+  "newCPUModel": "AMD EPYC 9V74 80-Core Processor",
+  "activationSeconds": {
+    "new": 16.157496635,
+    "old": 16.0728
+  },
+  "newFailure": "lan-preflight-inventory-nfq-consumer-open DEADLINE",
+  "reachedNeverIssuedIndex1": {
+    "new": false,
+    "old": true
+  },
+  "newToolChecks": 1255,
+  "newToolCheckSeconds": 7.296946029,
+  "newIPVersionStarts": 1235,
+  "newMetadataChecks": 6021,
+  "newAllocatedBytes": 1354220952,
+  "newAllocatedObjects": 8725275,
+  "newCPUProfile": {
+    "shaBlockSeconds": 1.94,
+    "sampleSeconds": 17.34,
+    "freshPathCumSeconds": 4.3,
+    "metadataCumSeconds": 6.6,
+    "syscallSeconds": 11.43
+  },
+  "caveats": [
+    "Inclusive CPU/timing values overlap and must not be summed",
+    "Different CPUs and early termination preclude causal cross-SHA speed claims",
+    "344 recovery cuts did not trigger; prior successful cuts cannot be transferred",
+    "io.copyBuffer flat109.35MB attributed to original exec pipes, not identified dynamic destination",
+    "CPU profile scopes HTTP, but allocs profile is cumulative process allocation;109.35MB copyBuffer is not baseline-subtracted HTTP attribution"
+  ],
+  "callgraph": [
+    "verifyLAN already passes original read-only observation context over entire verifyLANObserved",
+    "current/health/preAdd/inspect already preserve original scopes; no demonstrated context-loss bug",
+    "native NewProcProvider has no stock profile, so NDMC build metadata commands are not invoked",
+    "Every IP version Start and all path/FD/byte checks remain required"
+  ],
+  "nextMeasurement": "ebca8ddc: test-only exact acquired image payload count/sum/largest after original closing; static inventory budget only",
+  "productionChange": false,
+  "versionAsymmetry": {
+    "reason": "Intentional: original scopedVersionFact reuses only two reviewed static xtables strings; IP index2 remains an actual child on every Check",
+    "source": "internal/startuptools/version_fact.go and version_batch_linux.go",
+    "rationale": "Pinned iproute2 get_libbpf_version may inspect /proc/self/maps; not a static string observation",
+    "existingEvidence": "docs/measurements/2026-11-01/native-version-fact/README.md:7",
+    "conclusion": "94/94 versus1235 does not show lost context; alias fact is being reused"
+  },
+  "versionOutputCopy": {
+    "destination": "separate concrete *output for each stream, limits256; actual observed command requires these concrete types",
+    "mechanism": "Existing output.ReadFrom uses exclusive cleared32KiB scratch and delegates through own bounded Write, no missed dispatch",
+    "normalChildMedian": {
+      "afterBytes": 27970,
+      "beforeBytes": 82810,
+      "afterNs": 7812160,
+      "beforeNs": 7765453
+    },
+    "raceChildMedian": {
+      "afterBytes": 49821,
+      "beforeBytes": 83170,
+      "afterNs": 1033060443,
+      "beforeNs": 1032657357
+    },
+    "conclusion": "Measured allocation improvement already integrated; wall neutral, no further duplicate ReaderFrom needed",
+    "nextAttribution": "Existing child-kind counter2ebcfc51; distinguish HTTP interval from process cumulative allocation profile"
+  }
+}

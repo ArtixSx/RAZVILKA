@@ -1,0 +1,36 @@
+{
+  "decision": "APPROVED narrow existing pre-add successor listener view forwarding; native acceptance pending",
+  "files": {
+    "internal/dataplane/domain_tcp_global_successor.go": "de5815871b2b152fa19eb1f0a2190d02137c3646450bf76849d1aa6108b8a237",
+    "internal/dataplane/domain_tcp_standby_pool_rows.go": "52e9413c9e4ea0ca708f52ae8d09d8f4c7d1c1414385fa1fbf35407f1d8d8d21",
+    "internal/dataplane/domain_tcp_standby_pool.go": "4bce688a5227be45b44de246c37c19ec64ee19453e2c9f6b25042a7a8f5cf1af",
+    "internal/dataplane/domain_tcp_standby_owner.go": "a9b7d756e277251f7518dbfa70d5dd7c7e7e2ab206610eb78f93ce07b3b131e3",
+    "internal/dataplane/domain_tcp_pool_listener.go": "ab23595b24700b035209c7b3763781c5b719ab85126cdd37063d094ae2c6bddc",
+    "internal/dataplane/domain_tcp_successor_read.go": "6e47591b606676089efdb7efd315f7e5d73706acab51a1d51b1a462a0db57799",
+    "internal/dataplane/domain_tcp_successor_read_test.go": "558e9f1b610d8c924db8c0ffe27a296fb11f9c78ebee6222cc98ada04b155a16"
+  },
+  "contract": [
+    "Only existing exact original private pre-add loan creates per-call carrier; never context/owner storage or public grant",
+    "Nested original tool observation returns same ctx; targeted four readonly callback context proven from source",
+    "Both comparePrior sequences and every prior source full-byte read remain; no backend image reuse",
+    "Only same successor live listener uses derived original process-read view; self-created old scope context provenance, bounded derived file view revoked",
+    "No marker/nil wrappers keep previous behavior; malformed/expired/nonmatching carrier refuses, no positive fallback",
+    "Complete owner/cursor/loan association checked even before no-witness nil return",
+    "CleanupAbsent, effect, persistence and publication paths never accept carrier; outer pre-add full-byte opening/closing unchanged"
+  ],
+  "resolved_findings": [
+    "Confirmed actual nested tool observer preserves exact loan.ctx, preventing derived-context accidental refusal",
+    "Strengthened no-witness fallback to verify complete original loan association first"
+  ],
+  "tests": [
+    "copied/foreign contexts, cursor, owner, successor, expired loan and cancellation negatives",
+    "modeled static tuple cannot mint genuine witness Current",
+    "actual same-length/restoredmtime file mutation rejected by original outer closing"
+  ],
+  "validation": "Exact source review, diffcheck; no local Go",
+  "limitations": [
+    "Only current pre-add scope, not general cross-owner observation sharing",
+    "Native factory entry/derived-complete counters and full GEN2 scenario required before acceptance",
+    "No speed or readiness claim until exactSHA CI/native evidence"
+  ]
+}

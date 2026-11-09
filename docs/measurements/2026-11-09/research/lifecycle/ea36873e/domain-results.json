@@ -1,0 +1,24 @@
+{
+  "sha": "ea36873e28509ff59c626bceb7ded7827b7e23ab",
+  "run_id": 42667937599,
+  "strict_selected": {
+    "job_id": 129336492799,
+    "status": "failure",
+    "failure_stage": "initial native primitive measurement assertions",
+    "strict_scenario": "skipped"
+  },
+  "strict_canceled_ready": {
+    "job_id": 129336492350,
+    "status": "failure",
+    "failure_stage": "initial native primitive measurement assertions",
+    "strict_scenario": "skipped"
+  },
+  "cause": "Two test assertions counted only whole-executable-hash after production added separately measured full-byte capture and compare categories. This is not evidence of a runtime readiness failure or success.",
+  "fix_commit": "b028cdb2",
+  "fixed_contract": "Exact SHA/capture/compare category shapes, full-byte totals, callback counts, independent SHA and fresh next scope remain required.",
+  "selected_raw": {
+    "path": "C:\\RAZVILKA-research-20261109\\lifecycle-ea36873e\\selected-artifact\\read-primitives.log",
+    "sha256": "79223ab0cbda8b6c1ebe3c56e7f80561a05ea00b9d977a388f8dcc19badcb32c"
+  },
+  "production_scope_evidence": "Separate unchanged 30-second preparation diagnostics exercised actual capture/compare; see preparation-results.json. Those results do not establish strict 12/4-second readiness."
+}

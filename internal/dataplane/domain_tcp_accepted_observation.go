@@ -12,6 +12,8 @@ import (
 // WithFlow/Dial/Connect/Start borrows these facts; they run after this callback
 // has joined and the original file/tool SHA closing observations succeeded.
 func (c *DomainPolicyTCPCapture) guardPreparedFlow(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, prepared *DomainPolicyTCPCaptureMapping, lease DomainPolicyTCPFlowLease, socket DomainPolicyTCPSocket) (autonomy.ScopeObservation, error) {
+	finish := domainTCPMeasure("accepted-flow-guard")
+	defer finish(0)
 	if c == nil || c.self != c || ctx == nil || ctx.Err() != nil || mapping == nil || prepared == nil || prepared.self != prepared || prepared.capture != c || prepared.source != mapping || lease == nil {
 		return autonomy.ScopeObservation{}, ErrDomainPolicyTCPConsumer
 	}

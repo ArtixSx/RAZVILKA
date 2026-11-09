@@ -1,0 +1,33 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ArtixSx/razvilka/internal/netidentity
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkProcAuditCapacityCandidate/before_append-4         	     964	    355984 ns/op	   48566 B/op	     224 allocs/op
+BenchmarkProcAuditCapacityCandidate/before_append-4         	     946	    356136 ns/op	   48560 B/op	     224 allocs/op
+BenchmarkProcAuditCapacityCandidate/before_append-4         	     950	    354082 ns/op	   48556 B/op	     224 allocs/op
+BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    	     978	    353462 ns/op	   44240 B/op	     220 allocs/op
+BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    	     972	    353567 ns/op	   44240 B/op	     220 allocs/op
+BenchmarkProcAuditCapacityCandidate/reserved_candidate-4    	     939	    352801 ns/op	   44240 B/op	     220 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/before_fields-4     	   48021	      7276 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    7296 B/op	      26 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/before_fields-4     	   48480	      7337 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    7296 B/op	      26 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/before_fields-4     	   48096	      7387 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    7296 B/op	      26 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  	   40580	      8500 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    3072 B/op	       2 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  	   41546	      8379 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    3072 B/op	       2 allocs/op
+BenchmarkProcMountLayoutStreamCandidate/stream_candidate-4  	   42171	      8403 ns/op	      2501 captured-bytes/op	        24.00 captured-lines/op	    3072 B/op	       2 allocs/op
+BenchmarkProcMountinfoUnescape/before_builder-4             	  138838	      2417 ns/op	        48.00 paths/op	        48.00 plain-paths/op	     896 B/op	      72 allocs/op
+BenchmarkProcMountinfoUnescape/before_builder-4             	  119661	      2710 ns/op	        48.00 paths/op	        48.00 plain-paths/op	     896 B/op	      72 allocs/op
+BenchmarkProcMountinfoUnescape/before_builder-4             	  139680	      2449 ns/op	        48.00 paths/op	        48.00 plain-paths/op	     896 B/op	      72 allocs/op
+BenchmarkProcMountinfoUnescape/plain_field-4                	  978213	       369.2 ns/op	        48.00 paths/op	        48.00 plain-paths/op	       0 B/op	       0 allocs/op
+BenchmarkProcMountinfoUnescape/plain_field-4                	  957352	       369.5 ns/op	        48.00 paths/op	        48.00 plain-paths/op	       0 B/op	       0 allocs/op
+BenchmarkProcMountinfoUnescape/plain_field-4                	  913957	       368.9 ns/op	        48.00 paths/op	        48.00 plain-paths/op	       0 B/op	       0 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes4096-4                	    2702	    122829 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   28192 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes4096-4                	    2641	    123754 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   28192 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes4096-4                	    2593	    123194 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   28192 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes16384-4               	    2592	    125157 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   52768 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes16384-4               	    2570	    124607 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   52768 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes16384-4               	    2595	    125090 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   52768 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes32768-4               	    2479	    126232 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   85536 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes32768-4               	    2463	    127557 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   85536 B/op	      65 allocs/op
+BenchmarkProcMountinfoReadChunks/bytes32768-4               	    2522	    127775 ns/op	      5002 read-bytes/op	         4.000 read-syscalls/op	   85536 B/op	      65 allocs/op
+PASS
+ok  	github.com/ArtixSx/razvilka/internal/netidentity	10.096s
