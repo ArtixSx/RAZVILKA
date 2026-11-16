@@ -616,6 +616,51 @@ race90.661→44.300мс; fullLAN/manual всё ещё FAIL. DNS GEN2 current pro
 сохраняя независимые старые source reads и closing. Результат требует native run.
 [Независимое ревью изменений и gates](measurements/2026-11-09/research/reviewed-successor-wave/).
 
+### Панель по референсам NetZapret, 10–16 ноября
+
+Основа реализации — предоставленные владельцем скриншоты NetZapret 1.5.3.
+Для сопоставления структуры ранее просмотрены `MainWindow.xaml` и
+`Theme/Palette.xaml` на закреплённой ревизии NetZapret
+[`4cb02c140d8807c18cc730095a5e86be751a951c`](https://github.com/RixyPow/netzapret/tree/4cb02c140d8807c18cc730095a5e86be751a951c/gui/NetZapret.Gui).
+Использован принцип группировки задач и визуальной иерархии; сторонний код,
+иконки и новые библиотеки не переносились. Владелец общих UI-файлов — ведущий,
+независимый source reviewer — catalog_product_analysis.
+
+Существующие 21 страницы сохранены. Пять ранее вложенных инструментов стали
+самостоятельными пунктами; 13 владельцев меню однозначно соответствуют модели.
+Переключатель краткого/подробного вида не меняет текущую страницу и не скрывает
+управление черновиками или scope. HEV/Mihomo recovery-контролы перенесены в
+диагностику с сохранением ID и disabled/admission. Выбор, запуск, реальная
+проверка сервиса и готовность LAN по-прежнему разные состояния.
+
+Команды локальных проверок (Node, без Go build):
+
+```powershell
+node scripts/build-interface.mjs
+$suites = @('interface-contract', 'interface-unified', 'bundle-integration', 'simple-home', 'active-panel', 'hev-recovery-ui', 'mihomo-recovery-ui', 'app-update-ui', 'workspace-controls-ui', 'console-route-hash')
+foreach ($suite in $suites) {
+  $ext = if ($suite -eq 'interface-unified') { 'cjs' } else { 'mjs' }
+  node "scripts/test-$suite.$ext"
+  if ($LASTEXITCODE -ne 0) { throw "Failed: $suite" }
+}
+# Existing Playwright module directory; no install/download is performed.
+$env:NODE_PATH = '<installed node_modules containing playwright>'
+$env:RAZVILKA_UI_CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:RAZVILKA_UI_ARTIFACTS = '<directory outside the source tree>'
+node scripts/test-panel-navigation-browser.mjs
+```
+
+Результат PASS: Chromium desktop 1440×1000/mobile 390×844, 28 переходов,
+все 21 страницы, открытие подменю в кратком виде, сохранение страницы при смене
+вида, passive update read, Tab/Escape/фокус, no overflow, ноль JS exceptions,
+внешних запросов и API writes; recovery read/repair не вызывается навигацией.
+49 реальных статических ресурсов проверены, SHA256 сохранены в report.json.
+Локальные артефакты: `C:/RAZVILKA-research-20261110/panel-netzapret/`.
+Браузер использует синтетический transport: остановленный проект/пустой каталог,
+прочие непредоставленные API отвечают 503. Это проверка представления и доступности,
+не backend, скорость соединения или router/LAN acceptance. Ни ускорение, ни
+готовность выпуска этим изменением не заявляются.
+
 ### Повтор50bd и измерение полной цены namespace workers
 
 [Полная bounded evidence серия50bd](measurements/2026-11-09/research/lifecycle/50bd038c/):

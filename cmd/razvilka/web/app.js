@@ -653,6 +653,7 @@ function setView(name) {
   render('navigation-status', () => { if (state.status && Object.keys(state.status).length) renderStatus(); });
   render('navigation-tabs', () => { if (typeof renderInterfaceNavigation === 'function') renderInterfaceNavigation(name); });
   render('navigation-interface', () => { if (typeof renderInterface === 'function') renderInterface(); });
+  if (name === 'updates' && state.authenticated === true) render('navigation-updates', () => { if (typeof refreshAppUpdate === 'function') void refreshAppUpdate(); });
   if (typeof syncConnectionObservation === 'function') render('navigation-connections', syncConnectionObservation);
   if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (state.currentView === name) refreshPanelView(name); });
   if (name === 'engineconfig') render('navigation-engine', () => {

@@ -105,7 +105,6 @@ function consoleNavigate(name,engine){
  if(engine){void openEngineConfiguration(engine).then(opened=>{if(!opened)return;renderConsoleEngine();consoleViewChanged('engineconfig');if(typeof renderInterface==='function')renderInterface();}).catch(error=>showNotice('error',error.message));return;}
  setView(name);
  if(name==='providers')renderNodes();
- if(name==='updates')void refreshAppUpdate();
 }
 function consoleViewChanged(name){
  const drawerFocus=document.body.classList.contains('console-menu-open')&&document.querySelector('.sidebar').contains(document.activeElement);

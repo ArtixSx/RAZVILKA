@@ -517,9 +517,9 @@ console.log('simple home: ok');
   const title={},hint={},attributes={};
   const toggle={setAttribute:(key,value)=>attributes[key]=value,querySelector:selector=>selector==='b'?title:hint};
   vm.runInNewContext(label+';label();',{enabled:()=>on,document:{getElementById:()=>toggle}});
-  assert.equal(title.textContent,on?'Простой режим':'Расширенный режим');
+  assert.equal(title.textContent,on?'Краткий вид':'Подробный вид');
   assert.equal(attributes['aria-checked'],String(!on));
-  assert.match(hint.textContent,on?/Включить все разделы/:/Перейти к сервисам/);
+  assert.match(hint.textContent,on?/Больше сведений на главной/:/Краткий обзор/);
  }
 }
 
