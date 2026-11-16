@@ -23,6 +23,14 @@ func (a *WARPWireGuardAdapter) verifyWGEmptyNumericTable(ctx context.Context, ta
 	if err != nil {
 		return err
 	}
+	if source, ok := a.Runner.(*WGInactivityRead); ok && source.kernelEmptyTableAvailable() {
+		// The original source performs two fresh complete numeric RTM dumps.
+		// A source refusal must never negotiate a different observation path.
+		if err := source.readKernelEmptyTable(ctx, table, family); err != nil {
+			return err
+		}
+		return wgEmptyTableNamesCurrent(ctx, table, names)
+	}
 	data, err := a.readWGCompleteNumericTable(ctx, table, family)
 	if err == nil {
 		rows, parseErr := parseWGEndpointRoutes(data)
