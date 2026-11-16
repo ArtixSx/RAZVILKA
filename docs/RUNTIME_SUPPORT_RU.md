@@ -1,11 +1,16 @@
 # Сборки и поддержка запуска
 
-Актуальный код `a0ac0bb3`, полный PR CI `4b7807e7` PASS:
+Актуальный код `2d6d4aa6`, полный CI `a0ac0bb3` PASS:
 [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
 На6cba actual pre-ledger и prepared-active recovery-only normal/race PASS;
 полный NFQWS2 Apply и LAN rollback ещё не приняты.
-DNS9de:8 полных сценариев FAIL, хотя selected HTTPS проходит.
+DNS9de:8 полных сценариев FAIL, хотя selected HTTPS проходит. b86a isolated
+compiler/kernel test подтвердил перехват direct reply при одинаковом
+client source port; это дефект, не готовность DNS. Новый source contract
+выбирается по исследованию внешних проектов по поручению владельца17.11;
+индивидуальные VPN-политики требуют отдельного доказательства.
+ipset-ускорение не устраняет коллизию.
 Mihomo7a: parent/private4/4 и ACK8/10 PASS; race completed.json и
 terminal-transaction FAIL120с. Fresh statx и принудительный ENOSYS fallback
 прошли отдельные полные native normal/race проверки.

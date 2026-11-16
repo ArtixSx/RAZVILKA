@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "date": "2026-11-17",
+  "run_id": 43957131063,
+  "commit": "6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b",
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43957131063",
+  "ci_conclusion": "success",
+  "decision": "REJECT_PRODUCTION_PROMOTION",
+  "reason": "All 8 paired wall comparisons regress in both builds; normal CPU saving does not meet the Apply deadline objective, race CPU also regresses. Keep original parallel two-SHA implementation.",
+  "scope": "Native-only comparison of complete warm read custody on two distinct actual pinned Mihomo1.19.33 files; original parallel two-SHA versus one-SHA/exact paired stream; no production change.",
+  "contract": {
+    "fresh_streams_per_comparison": 2,
+    "file_bytes": 62017662,
+    "payload_workspace_bytes": 131072,
+    "pairs_per_build": 8,
+    "samples_per_row": 2,
+    "balanced_order": "AB,BA repeated4times",
+    "rows_total": 32,
+    "tests_per_build": [
+      "SourceParity",
+      "Refusals",
+      "ActualFDsAndRevocation",
+      "PairedMeasurement"
+    ],
+    "all_pass_lines_per_build": 32,
+    "no_skips": true,
+    "original_production_deadlines_changed": false,
+    "all_original_fd_path_eof_context_close_and_proof_checks_retained": true
+  },
+  "modes": {
+    "normal": {
+      "wall_ns": {
+        "original_median_ms": 38.9550195,
+        "candidate_median_ms": 54.02557075,
+        "paired_saved_median_ms": -14.576728249999999,
+        "paired_saved_mean_ms": -14.2279263125,
+        "paired_saved_min_ms": -16.301403,
+        "paired_saved_max_ms": -11.036297499999996,
+        "candidate_faster_pairs": 0,
+        "paired_percent_saved_median": -37.472708696530034
+      },
+      "total_process_cpu_ns": {
+        "original_median_ms": 78.04825,
+        "candidate_median_ms": 64.07,
+        "paired_saved_median_ms": 14.399000000000001,
+        "paired_saved_mean_ms": 15.692625000000001,
+        "paired_saved_min_ms": 12.355000000000004,
+        "paired_saved_max_ms": 22.620499999999993,
+        "candidate_faster_pairs": 8,
+        "paired_percent_saved_median": 18.472777122527404
+      }
+    },
+    "race": {
+      "wall_ns": {
+        "original_median_ms": 52.0886775,
+        "candidate_median_ms": 143.61993625000002,
+        "paired_saved_median_ms": -93.162103,
+        "paired_saved_mean_ms": -98.4824624375,
+        "paired_saved_min_ms": -127.998595,
+        "paired_saved_max_ms": -86.13930850000001,
+        "candidate_faster_pairs": 0,
+        "paired_percent_saved_median": -168.7258472725672
+      },
+      "total_process_cpu_ns": {
+        "original_median_ms": 103.055,
+        "candidate_median_ms": 189.50375,
+        "paired_saved_median_ms": -90.01125,
+        "paired_saved_mean_ms": -92.4678125,
+        "paired_saved_min_ms": -134.7725,
+        "paired_saved_max_ms": -67.807,
+        "candidate_faster_pairs": 0,
+        "paired_percent_saved_median": -85.76344210274672
+      }
+    }
+  },
+  "initial_fixture_failure": {
+    "run": 43955393037,
+    "sha": "aab413ebf6f16567434fd0f2569331708c9b0b71",
+    "reason": "Missing finite test context correctly refused before new test boundaries and untimed baseline; zero timing rows; original guards unchanged in correction."
+  },
+  "evidence_root": "C:/RAZVILKA-research-20261116/expected-pair-stream-6e16b038",
+  "raw_manifest": "C:/RAZVILKA-research-20261116/expected-pair-stream-6e16b038/sha256-manifest.json",
+  "raw_manifest_sha256": "7198a36fede1198d4abfb5c08c60b7c073d4e669984e213a7edc105bbd37b9f9",
+  "raw_sha256": {
+    "analysis.json": "9613e5e06908778ae1c95330b9310bed2e42315c4d2b8bee058bc6e41282d68d",
+    "run.json": "d4037ef373e6572804d91eb4cb5dd53aaa714f4018cd26e495556a6d436c9524",
+    "artifacts/expected-pair-stream-normal-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/platform.txt": "10a6fd3b287be7bbbeb903cfb06f40700fff1083a4de21f7e975ad1dff237589",
+    "artifacts/expected-pair-stream-normal-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/samples.json": "c10e8c6d9624d25430748a9bd5f6a6ea3afe772ebf0008998896e43926897602",
+    "artifacts/expected-pair-stream-normal-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/stream.log": "774f60cddcd4b56fbe3691d7b068979b5b057d9c60e3447c415f81adcf2eb203",
+    "artifacts/expected-pair-stream-race-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/platform.txt": "7ad1f93cc2bdb4efb12ff163a76f938c3578b6f4cd03e3b0ac1a711cf13862b3",
+    "artifacts/expected-pair-stream-race-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/samples.json": "56aae2f667e300d019c652ab4962d50cbebc0adadcfe00d26cbc4cbbecaf6543",
+    "artifacts/expected-pair-stream-race-6e16b038ea4a1c4370da3ad1cdcdeb0d18240b9b/stream.log": "9f1059d1f66af467f603fb9fd45829d84f220981ea1e28d41cfd8593bd30ab03"
+  },
+  "limitations": [
+    "Within-job paired warm-files measurement, not router/service/LAN acceptance.",
+    "Normal and race jobs can have different hosts; do not compare absolute timing across them.",
+    "Thread CPU excludes original reader workers; use process CPU for both workers.",
+    "Process CPU includes runtime activity.",
+    "No production change or skipped fresh reads.",
+    "No service, route, LAN or hardware acceptance.",
+    "No latency improvement claim; candidate loses every measured wall pair in both builds.",
+    "Normal CPU savings alone do not meet the manual HTTP Apply deadline objective."
+  ]
+}

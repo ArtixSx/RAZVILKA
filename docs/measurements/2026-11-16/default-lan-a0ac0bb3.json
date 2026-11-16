@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "revision": "a0ac0bb361f1292f8407402d233300fc84df7504",
+  "run_id": 43950768764,
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43950768764",
+  "conclusion": "FAIL",
+  "jobs": [
+    {
+      "name": "live-native (manual-http)",
+      "conclusion": "failure"
+    },
+    {
+      "name": "live-native (postcas-failure)",
+      "conclusion": "success"
+    },
+    {
+      "name": "live-native (lifecycle)",
+      "conclusion": "success"
+    },
+    {
+      "name": "live-native (check-settlement)",
+      "conclusion": "success"
+    }
+  ],
+  "default_vendor_delivery_preflight": "PASS",
+  "candidate_manual": {
+    "outcome": "FAIL",
+    "test_seconds": 123.77,
+    "first_observed_failure": "HTTP Apply context deadline exceeded after all logged activation stages, including sidecar-start and policy-ack, passed.",
+    "cpu_seconds": 155.8,
+    "sha256_block_cpu_seconds": 127.87,
+    "sha256_block_cpu_percent": 82.07,
+    "profile_cumulative_seconds_nonadditive": {
+      "expectedArtifactHashDescriptor": 67.98,
+      "originHash": 44.22,
+      "artifactFileImage": 30.87,
+      "currentBeforeStart": 26.11
+    },
+    "rollback_verified_from_this_log": false
+  },
+  "same_host_historical_baseline": {
+    "revision": "4cc9f869974713c9cebd833fccca383c03c102b7",
+    "outcome": "FAIL",
+    "test_seconds": 123.54,
+    "first_observed_failure": "HTTP Apply context deadline exceeded; sidecar-start passed.",
+    "hev": "official upstream a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03"
+  },
+  "candidate_hev_sha256": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+  "limitations": [
+    "Three successful jobs do not close the failed manual HTTP workflow.",
+    "Candidate and historical baseline use different pinned HEV binaries. This is not an isolated code-speed comparison.",
+    "CPU profile totals can exceed wall time because original artifact hashing uses parallel workers; cumulative costs overlap.",
+    "The first observed failure is a client context deadline, not the earlier HEV silent-startup error. No raw client address/node identifier is included.",
+    "No public vendor asset download, router qualification or release publication is proved."
+  ],
+  "public_get_verified": false,
+  "router_verified": false,
+  "raw_files": [
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\default-live-a0ac0bb3\\manual\\mihomo-manual-http\\native.log",
+      "bytes": 7134,
+      "sha256": "7c7fabb9d595c8676165bca35d126d822581bf1f6a809bbf7e3514d37ba76578"
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\mihomo-default-a0ac\\baseline-manual\\mihomo-baseline4cc-manual-http-a0ac0bb361f1292f8407402d233300fc84df7504\\native.log",
+      "bytes": 6742,
+      "sha256": "b426a225eec55e5efce2019245e4d94345b699f21bb5442221681538fee12176"
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\mihomo-default-a0ac\\run.json",
+      "bytes": 15704,
+      "sha256": "46d25bc407a68cd1bbe3331058f82a3673f7e7af422d7f155705af6b1e070b07"
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\mihomo-default-a0ac\\failed.log",
+      "bytes": 39168,
+      "sha256": "0251942a48f1c3deb803695384c8c05f05414024386b230857773853a3929688"
+    },
+    {
+      "path": "C:\\RAZVILKA-research-20261116\\default-live-a0ac0bb3\\manual\\mihomo-live-profile\\live.cpu.pprof",
+      "bytes": 135070,
+      "sha256": "4aa07d749cfc3e58bd7307757dd527215bad7f7f5f7e50503e14d71010fd997c"
+    }
+  ]
+}

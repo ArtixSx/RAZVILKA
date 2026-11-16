@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "revision": "7657fe7dc8b8c4a039a450ba7550c5995d21d7c2",
+  "run_id": 43951976231,
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43951976231",
+  "experiment_checks": "PASS",
+  "decision": "REJECT production promotion: no consistent latency improvement.",
+  "production_changed": false,
+  "scope": "Native-only exact source-body clone; two fresh full executable reads and SHA-256 computations; original versus one private 256KiB buffer cleared after each pair. Not route, hardware or cleanup acceptance.",
+  "population": {
+    "rows": 32,
+    "modes": [
+      "normal",
+      "race"
+    ],
+    "paired_ab_ba_groups_per_mode": 8,
+    "complete_hash_pairs_per_row": 2,
+    "required_tests_per_mode": 4,
+    "skip_or_fail_markers": 0
+  },
+  "rows": [
+    {
+      "mode": "normal",
+      "image_bytes": 41177353,
+      "median_original_ms_per_full_hash_pair": 48.88948225,
+      "median_candidate_ms_per_full_hash_pair": 48.912946,
+      "median_paired_saved_ms": -0.0053705,
+      "mean_paired_saved_ms": -0.02702543750000002,
+      "median_saved_thread_cpu_ms": -0.0991655,
+      "pairs_faster": 4,
+      "median_process_allocation_reduction_bytes": 262144.0,
+      "linear_261_pair_saved_seconds_not_route_measurement": -0.0014017005,
+      "theoretical_261_pair_single_256KiB_allocation_reduction_bytes": 68419584
+    },
+    {
+      "mode": "race",
+      "image_bytes": 59519241,
+      "median_original_ms_per_full_hash_pair": 76.7047745,
+      "median_candidate_ms_per_full_hash_pair": 77.55973725,
+      "median_paired_saved_ms": 0.073919,
+      "mean_paired_saved_ms": -0.6457798125,
+      "median_saved_thread_cpu_ms": 0.058159499999999996,
+      "pairs_faster": 4,
+      "median_process_allocation_reduction_bytes": 262144.0,
+      "linear_261_pair_saved_seconds_not_route_measurement": 0.019292859,
+      "theoretical_261_pair_single_256KiB_allocation_reduction_bytes": 68419584
+    }
+  ],
+  "interpretation": [
+    "Both modes have only four of eight faster paired observations. The allocation reduction has no consistent absolute latency benefit.",
+    "261-pair scaling is arithmetic only, not measured route time. In race its paired-median estimate is 0.0193 seconds; mean paired latency regressed. This does not justify changing the original 120-second path.",
+    "Normal and race use different binaries and hosted jobs. Compare variants within each mode only.",
+    "Process TotalAlloc differences include other runtime activity; these are diagnostic allocation counters, not exclusive CPU ownership.",
+    "The candidate retained full fresh SHA/read/stat/path/cancellation checks. No cached digest or process-absence evidence was introduced."
+  ],
+  "raw_evidence_directory": "C:\\RAZVILKA-research-20261116\\cold-hash-buffer-7657fe7d",
+  "raw_files": [
+    {
+      "path": "artifacts/mihomo-hash-buffer-normal-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/buffer.log",
+      "bytes": 9065,
+      "sha256": "c3f314057e8085ccc97847829e012c2a94dc08cf81492b9fa0d6ddf96df3aec9"
+    },
+    {
+      "path": "artifacts/mihomo-hash-buffer-normal-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/platform.txt",
+      "bytes": 3588,
+      "sha256": "fdac868b7ae7afcf7e4b09a41a5ce483dd680706c314e4c84dcbdb740df31bad"
+    },
+    {
+      "path": "artifacts/mihomo-hash-buffer-normal-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/samples.json",
+      "bytes": 5508,
+      "sha256": "051b98feb1434731cad798b577ce8663f0b2c22276d074381a5dd9498fe186bf"
+    },
+    {
+      "path": "artifacts/mihomo-hash-buffer-race-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/buffer.log",
+      "bytes": 9096,
+      "sha256": "7b7a5e5b4ec108825e4a4835da59ae5bce87c9672e858f13420ec61ed59dac3e"
+    },
+    {
+      "path": "artifacts/mihomo-hash-buffer-race-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/platform.txt",
+      "bytes": 3525,
+      "sha256": "0b50849e0780e5b1df00958ffbfd8710dbdb6051805c95743f42a7c90c50e032"
+    },
+    {
+      "path": "artifacts/mihomo-hash-buffer-race-7657fe7dc8b8c4a039a450ba7550c5995d21d7c2/samples.json",
+      "bytes": 5539,
+      "sha256": "d90e4daa1d84410a433fb5f80640d87d118d09883a01774ca00e18d855173fb1"
+    },
+    {
+      "path": "run.json",
+      "bytes": 3621,
+      "sha256": "4854f6fe4530f4612b75344a05cca9a06a316d6c4ea032e59b56f0673be70bd9"
+    }
+  ]
+}

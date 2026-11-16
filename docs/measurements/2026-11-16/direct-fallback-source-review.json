@@ -1,0 +1,114 @@
+{
+  "production_code_copied": false,
+  "purpose": "pinned DIRECT or TCP proxy connection source review only",
+  "projects": [
+    {
+      "repo": "MetaCubeX/mihomo",
+      "revision": "3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8",
+      "files": [
+        {
+          "path": "LICENSE",
+          "bytes": 35149,
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "url": "https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/LICENSE"
+        },
+        {
+          "path": "adapter/outbound/direct.go",
+          "bytes": 2757,
+          "sha256": "ede6e101653d139750b23a8ed698be3c7791845eefccfbc93945f79830b770cb",
+          "url": "https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/adapter/outbound/direct.go"
+        },
+        {
+          "path": "component/dialer/dialer.go",
+          "bytes": 11393,
+          "sha256": "48c2967fb764218796ea3796c361d97304062270fff3f287717223021c16724d",
+          "url": "https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/component/dialer/dialer.go"
+        },
+        {
+          "path": "component/dialer/bind_linux.go",
+          "bytes": 981,
+          "sha256": "3b2e88c54edd800d27ed9aa256db84d0d8ed9293f96aa05b1339cb1dee5643b8",
+          "url": "https://github.com/MetaCubeX/mihomo/blob/3f27ef39f8c96bbfbc8b0b9bb10f5c9ef60149d8/component/dialer/bind_linux.go"
+        }
+      ]
+    },
+    {
+      "repo": "SagerNet/sing-box",
+      "revision": "8295e4910f14d3041c948d2ad74bf3af384a064d",
+      "files": [
+        {
+          "path": "LICENSE",
+          "bytes": 791,
+          "sha256": "650d5e3b99a446fb38e820fa87a49562e0c79eab868fff58618ac487a58e554c",
+          "url": "https://github.com/SagerNet/sing-box/blob/8295e4910f14d3041c948d2ad74bf3af384a064d/LICENSE"
+        },
+        {
+          "path": "protocol/direct/outbound.go",
+          "bytes": 9199,
+          "sha256": "40b77d1e6a93a8a32d9c155fa469ecf83f02089b5aa06aa600487effea200c46",
+          "url": "https://github.com/SagerNet/sing-box/blob/8295e4910f14d3041c948d2ad74bf3af384a064d/protocol/direct/outbound.go"
+        },
+        {
+          "path": "common/dialer/default.go",
+          "bytes": 21279,
+          "sha256": "c981ed1bd6c25ff6a1ea18010fb7d7b3ab9f419e3ab666282115a8019ce209a3",
+          "url": "https://github.com/SagerNet/sing-box/blob/8295e4910f14d3041c948d2ad74bf3af384a064d/common/dialer/default.go"
+        }
+      ]
+    },
+    {
+      "repo": "XTLS/Xray-core",
+      "revision": "af8f9673afe8533390e0200637ad30508de803a5",
+      "files": [
+        {
+          "path": "LICENSE",
+          "bytes": 16725,
+          "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+          "url": "https://github.com/XTLS/Xray-core/blob/af8f9673afe8533390e0200637ad30508de803a5/LICENSE"
+        },
+        {
+          "path": "proxy/freedom/freedom.go",
+          "bytes": 23952,
+          "sha256": "c3b162c361d114612616fe0067ff47e63bf3b0f212ed66f1a2d1b02c608cc48a",
+          "url": "https://github.com/XTLS/Xray-core/blob/af8f9673afe8533390e0200637ad30508de803a5/proxy/freedom/freedom.go"
+        },
+        {
+          "path": "transport/internet/system_dialer.go",
+          "bytes": 7122,
+          "sha256": "27567d9b47b77bc3ed26bca2809898ac5b80a98ddfffc0f2aaffc6a65a54e44e",
+          "url": "https://github.com/XTLS/Xray-core/blob/af8f9673afe8533390e0200637ad30508de803a5/transport/internet/system_dialer.go"
+        }
+      ]
+    },
+    {
+      "repo": "darkk/redsocks",
+      "revision": "19b822e345f6a291f6cff6b168f1cfdfeeb2cd7d",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 11705,
+          "sha256": "d41511664b8ec391a837434d8412c1e02f2777c83939986b0e00e2649e3a3bea",
+          "url": "https://github.com/darkk/redsocks/blob/19b822e345f6a291f6cff6b168f1cfdfeeb2cd7d/README.md"
+        },
+        {
+          "path": "utils.c",
+          "bytes": 7022,
+          "sha256": "5a2014a5236f5746db4cb48e32579eb123b25944909358a40ac2f0fe2e19b01e",
+          "url": "https://github.com/darkk/redsocks/blob/19b822e345f6a291f6cff6b168f1cfdfeeb2cd7d/utils.c"
+        },
+        {
+          "path": "redsocks.c",
+          "bytes": 44754,
+          "sha256": "46390bbbe870efc2db3c4321958e4edcc3a44d603399186ef5950b311508dc14",
+          "url": "https://github.com/darkk/redsocks/blob/19b822e345f6a291f6cff6b168f1cfdfeeb2cd7d/redsocks.c"
+        },
+        {
+          "path": "base.c",
+          "bytes": 14088,
+          "sha256": "1f0e9faa6d51883c36847bb64a671e49fc7b37314b327a6df05ae808aa10ef7b",
+          "url": "https://github.com/darkk/redsocks/blob/19b822e345f6a291f6cff6b168f1cfdfeeb2cd7d/base.c"
+        }
+      ]
+    }
+  ]
+}

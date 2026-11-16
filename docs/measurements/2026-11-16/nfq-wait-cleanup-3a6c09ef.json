@@ -1,0 +1,60 @@
+{
+  "overall": "FAIL",
+  "full_apply_proven": false,
+  "production": {
+    "all_fixed_markers": true,
+    "initial": "PASS",
+    "late": "PASS"
+  },
+  "sha": "3a6c09ef02c9e23336b780f69f14c32e4614bc12",
+  "race": {
+    "cleanup": "remove.receipt-effects deadline; retained scope",
+    "late": "NOT_RUN",
+    "forward": "counter closing full-readback original 14s deadline",
+    "service_proven": false,
+    "initial": "FAIL",
+    "execute_seconds": 21.007660061
+  },
+  "run": 43954920899,
+  "files": [
+    {
+      "path": "all.log",
+      "bytes": 404806,
+      "sha256": "d242e700baec4ab610d2d633df583246780dbcac3bd4ebac3c265cfab6fc3f07"
+    },
+    {
+      "path": "status.json",
+      "bytes": 4715,
+      "sha256": "1738821beaa48c659aae086d1f575c1cc1baa622a3f1c04f62b3d16dea18be07"
+    },
+    {
+      "path": "artifacts\\nfq-wait-cleanup-production-3a6c09ef02c9e23336b780f69f14c32e4614bc12\\contracts.log",
+      "bytes": 4876,
+      "sha256": "d73d7bf8331b562029cfc0245cbc2bae238f70ba47356a0fbf564d2b73af2b7f"
+    },
+    {
+      "path": "artifacts\\nfq-wait-cleanup-production-3a6c09ef02c9e23336b780f69f14c32e4614bc12\\native.log",
+      "bytes": 45818,
+      "sha256": "dfd8d791447c7a25ed67f3e58b824de01822998e1067df0b0d742ac6497eb824"
+    },
+    {
+      "path": "artifacts\\nfq-wait-cleanup-race-3a6c09ef02c9e23336b780f69f14c32e4614bc12\\contracts.log",
+      "bytes": 4876,
+      "sha256": "3960dfa35ad61a7ad622800f8ca80dd8ceae85797b5473713f75cae984fbe628"
+    },
+    {
+      "path": "artifacts\\nfq-wait-cleanup-race-3a6c09ef02c9e23336b780f69f14c32e4614bc12\\native.log",
+      "bytes": 42512,
+      "sha256": "d748558abf40e6f41e23236f1f46d254c72c19c51a03dce271481516ccd41ba9"
+    }
+  ],
+  "contracts": {
+    "normal": "PASS",
+    "race": "PASS"
+  },
+  "artifact_root": "C:\\RAZVILKA-research-20261116\\nfq-wait-cleanup-3a6c09ef",
+  "limitations": [
+    "Private Linux only; no router qualification.",
+    "Production initial/late Wait cleanup PASS; race failure and not-run late cut remain open."
+  ]
+}

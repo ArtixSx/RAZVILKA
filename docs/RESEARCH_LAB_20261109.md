@@ -1018,4 +1018,117 @@ Test-only netidentity.readFile experiment1cdb:8 AB/BA пар на режим,512
 четырёхсекундного DNS отказа. [Измерения и пределы](measurements/2026-11-16/netidentity-readfile-1cdbbfae.json).
 Внешнее review дополнительно нашло mixed-mask/zero-ID край в test-only
 кандидате; исправление и новые негативные тесты проверяются отдельно и не
-наследуют исторический PASS замера.
+наследуют исторический PASS замера. Исправленный test-only кандидат df4aa938
+прошёл normal/race43951327655, все3 exact tests без skips; raw SHA добавлены
+отдельным verified_followup в первоначальный measurement JSON.
+
+### Подтверждённая коллизия baseline и отказ от неполезных оптимизаций
+
+Независимое source review Linux4.9 (commit
+69973b830859bc6529a7a0468ba0d80ee5117826, GPL-2.0, source/COPYING вне checkout)
+обнаружило недостаточность одного tuple для владения ответным пакетом.
+[ipset tuple](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/net/netfilter/ipset/ip_set_hash_ipportip.c)
+и [NOTRACK](https://github.com/torvalds/linux/blob/69973b830859bc6529a7a0468ba0d80ee5117826/net/netfilter/xt_CT.c)
+не знают исходного accepted FD. Клиент вправе одновременно открыть C:p→S:443
+и C:p→R:443, где S — synthetic, R — real. Пять existing compiler effects
+baseline выбирают ответ R:443→C:p и не отличают соседнее direct соединение.
+
+b86af84d43953680219 воспроизвёл это в трёх disposable namespaces: no-effect
+direct echo PASS, другой исходный порт PASS без изменения counters; на исходном
+порту remote отправил ответ, оба raw/MARK counters выросли на7 и доставка
+нарушилась. Все exact effects удалены, children joined,1.17с.
+[Raw SHA и предел доказательства](measurements/2026-11-16/domain-tuple-collision-b86af84d.json).
+Это успешное воспроизведение дефекта, а не routing acceptance. Production owner
+не подделывался, роутер не изменялся. Перенос predicates в ipset остановлен:
+он сохраняет коллизию и добавляет race между raw/mangle lookup.
+
+Владельцу предложено явно выбрать новый baseline source contract с обычным
+router-originated соединением и доказанным ограниченным policy subset либо
+сохранить исходный tuple и не включать небезопасный сценарий. До ответа source
+semantics не меняются. Случайный порт при прежнем LAN IP сам по себе не резервирует
+его в клиентском стеке. Native VPN/marks/VRF/programmable policies нельзя обходить
+ради такого fallback. Исходное четырёхсекундное ограничение остаётся отдельно.
+
+7657fe7d43951976231: private256KiB buffer вместо двух allocations сохраняет оба
+полных fresh SHA, но8 AB/BA пар на режим не дали устойчивого wall выигрыша:
+normal48.889→48.913мс, race76.705→77.560мс. Только262144B allocation экономии
+на пару. В production не принят. [Данные](measurements/2026-11-16/mihomo-hash-buffer-7657fe7d.json).
+
+a0ac default HEV route43950768764: lifecycle, post-CAS recovery и failed-Check
+settlement PASS. Manual HTTP apply FAIL123.77с после успешных activation stages;
+CPU profile155.8с, SHA block127.87с. Это подтверждённая следующая цель измерения,
+не основание убрать fresh reads. [Статусы и profile SHA](measurements/2026-11-16/default-lan-a0ac0bb3.json).
+25da7ba9 завершает только исходный retained sole Wait внутри прежнего cleanup5с;
+исходный unknown не превращается в успешное evidence. Native сценарии3с initial
+и8с retry проверяются отдельно. Первоначальный fd3554 gate выявил0755 test ancestor;
+3a6c09ef исправляет только собственный test directory на0700, сохраняя production guard.
+
+## 17.11.2026 — выбор безопасного DNS fallback по внешним исходникам
+
+Владелец поручил самостоятельно выбрать подход после исследования других
+проектов. Отдельного решения пользователя по source tuple больше не требуется.
+Выбран обычный исходящий TCP socket роутера с точным закреплённым realIP:port
+и собственным портом ядра. Неподходящее имя не направляется в выбранный VLESS.
+
+Изучены закреплённые Mihomo `3f27ef39`, sing-box `8295e491`, Xray `af8f9673`
+и redsocks `19b822e3`; [полные SHA, ссылки и хеши 14 файлов](measurements/2026-11-16/direct-fallback-source-review.json).
+Mihomo и sing-box используют отдельный outbound dialer; параметры interface/mark
+не означают наследование политики LAN-клиента. Xray Freedom также создаёт
+отдельный socket, optional source IP не сохраняет клиентский TCP-порт.
+Redsocks — TCP-to-proxy relay, не готовый DIRECT; полезен только как пример
+независимого outgoing socket и его закрытия. Лицензии: GPL-3.0, GPL-3.0-or-later
+с дополнительным условием именования, MPL-2.0 и Apache-2.0 соответственно.
+Исходники сохранены вне checkout, код не копировался, новых зависимостей нет.
+Обычный socket использует уже существующий relay; новый демон, DNS-поиск и
+чужие retry/timeout политики не требуются. Буферы и descriptors остаются
+ограниченными исходным числом одновременно допущенных потоков.
+
+Независимое внешнее ревью сверило ещё 29 файлов, включая release pins и Linux
+4.9 `69973b830859bc6529a7a0468ba0d80ee5117826`. Найден риск: совпадение FIB не
+доказывает разрешённый доступ. FORWARD может запрещать клиенту Интернет, хотя
+OUTPUT роутера разрешён. Поэтому local route lookup сам по себе недостаточен:
+перед SYN нужен исходный положительный policy/ACL допуск MAC/ingress/publication.
+Старый iproute2 нельзя считать поддерживающим современные TCP/UID selectors.
+Ошибка обязательного bind/interface отказывает до Connect; продолжение после
+ошибки sockopt, встречающееся в upstream Xray, для нас неприемлемо.
+
+Сценарий `2d6d4aa6`, run43957616364 PASS1.15с: три реальные network namespaces,
+одновременные C:p→synthetic и C:p→real, relay через обычный router socket;
+сервер увидел1.1.1.1:55814, оба payload echo дошли. Затем прежние5 effects снова
+перехватили соседний direct reply (raw+7/MARK+7); после теста effects удалены,
+дети joined. [Сырые логи и SHA](measurements/2026-11-16/domain-router-source-2d6d4aa6.json).
+Это подтверждает механизм разделения соединений, не production-owner admission,
+не native VPN policies и не готовность физического роутера.
+
+Интеграция: приватный socket внутри существующего original accepted-flow/capture
+lifetime, source/mapping/current и mandatory local endpoint proof до/после Connect,
+исходный control.WithStart, joined cancellation, sticky failure при ошибке close.
+Долговременных per-flow packet effects нет: новая BF journal schema не нужна.
+Старые schema1 BF pending/unknown записи не переинтерпретируются и требуют
+прежнего recovery. Чужие/неподтверждённые native VPN, NAT и ACL остаются отказом
+этого режима. Обязательные negative tests: одинаковый FIB при FORWARD DROP и
+OUTPUT ACCEPT даёт ноль SYN; stale publication, cancel и owner drift не выдают
+socket; partial connect/close не создают ложную terminal retirement.
+
+## 17.11.2026 — фактические результаты оставшихся оптимизаций
+
+Полный CI43950766568 наa0ac0bb3 PASS; это не LAN-приёмка новых ревизий.
+NFQ cleanup3a43954920899: оба original Wait scenarios production PASS;
+race initial FAIL на closing counter original14s deadline, late NOT_RUN.
+ACK граница уже пройдена, remaining receipt-effects cleanup не завершился;
+[полный отрицательный результат](measurements/2026-11-16/nfq-wait-cleanup-3a6c09ef.json).
+Исходные сроки не продлевались, неизвестный результат не превращён в успех.
+
+Pair-stream experiment6e16b03843957131063 normal/race PASS, 32ABBA rows,
+но кандидат медленнее во всех8 парах каждого режима: normal median38.955→54.026ms,
+race52.089→143.620ms. Normal CPU−18.47% не улучшает Apply latency, поэтому
+переход на один SHA плюс byte comparison отклонён. Первоначальный aab run
+ошибочно использовал неограниченный test context: guard корректно отказал,
+валидных timing rows там нет. Исправлена только fixture; guard сохранён.
+[Сравнение и ограничения](measurements/2026-11-16/expected-pair-stream-6e16b038.json).
+
+WG9b43955853678 contracts PASS, полный manual Apply FAIL40.73с на policy-apply;
+rollback verified и независимый Close PASS. Четыре WG observations завершились,
+но сравнение с другим host не принимается за ускорение. Запущен отдельный
+same-host fixed ABBA: полный исходный observer и две исходные8s проверки,
+разница source copies ровно один table reader. Этот тест не называется полным Apply.
