@@ -237,8 +237,8 @@ func runDomainOriginalSuccessor(t *testing.T, ctx context.Context, peers *domain
 			if mode == "opaque" {
 				marker = "opaque-native-baseline"
 			}
-			if flow.Source != domainOriginalClient || flow.SourcePort == "" || flow.SourcePort != flow.ClientPort || flow.Marker != marker {
-				return fmt.Errorf("successor %s changed original baseline tuple: %+v", mode, flow)
+			if flow.Source != domainOriginalWAN || flow.SourcePort == "" || flow.SourcePort == "0" || flow.ClientPort == "" || flow.ClientPort == "0" || flow.Marker != marker {
+				return fmt.Errorf("successor %s failed router-originated DIRECT source/payload: %+v", mode, flow)
 			}
 		}
 	}

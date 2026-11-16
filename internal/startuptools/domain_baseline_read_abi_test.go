@@ -11,6 +11,8 @@ func TestDomainBaselineObservedReadIsClosedToOriginalQueries(t *testing.T) {
 		{"-4", "-j", "route", "show", "table", "all"},
 		{"-j", "-details", "link", "show"},
 		{"-4", "-j", "route", "get", "1.1.1.2", "from", "192.168.1.42", "iif", "br0"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "1.1.1.1"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "192.168.2.1"},
 	}
 	for _, args := range allowed {
 		if !domainBaselineObservedRead(args) {
@@ -31,6 +33,13 @@ func TestDomainBaselineObservedReadIsClosedToOriginalQueries(t *testing.T) {
 		{"-4", "-j", "route", "get", "1.1.1.2", "from", "192.168.1.42/32", "iif", "br0"},
 		{"-4", "-j", "route", "get", "1.1.1.2", "from", "192.168.1.42", "iif", "lo"},
 		{"-4", "-j", "route", "get", "1.1.1.2", "from", "192.168.1.42", "iif", "br0;id"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "1.1.1.2"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "127.0.0.1"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "0.0.0.0"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "::ffff:1.1.1.1"},
+		{"-4", "-j", "route", "get", "192.168.1.2", "from", "1.1.1.1"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "1.1.1.1", "uid", "0"},
+		{"-4", "-j", "route", "get", "1.1.1.2", "from", "1.1.1.1", "mark", "1"},
 	} {
 		if domainBaselineObservedRead(args) {
 			t.Fatal("non-original or unsafe IP command entered readonly scope", args)

@@ -113,6 +113,14 @@ case "${RAZVILKA_DOMAIN_DNS_COEXISTENCE:-0}" in
   domain_test_timeout=240s ;;
  *) exit 2 ;;
 esac
+case "${RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE:-0}" in
+ 0) ;;
+ 1)
+  test "$domain_case" = TestDomainTCPOriginalNativeAcceptedFlows || exit 2
+  test -z "${RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION:-}" || exit 2
+  domain_case=TestDomainTCPOriginalNativeDirectForwardDeny ;;
+ *) exit 2 ;;
+esac
 unshare --mount --net sh -eu -c '
  mount --make-rprivate /
  # Original tool/preload review must observe protected ancestors, not the

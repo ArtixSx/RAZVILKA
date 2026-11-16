@@ -136,7 +136,11 @@ func domainOriginalPublicationBudget(t *testing.T) time.Duration {
 func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	detach, ack, foreign := os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_ACK"), os.Getenv("RAZVILKA_DOMAIN_DNS_DETACH_FOREIGN_HISTORY")
 	dnsOnly := os.Getenv("RAZVILKA_DOMAIN_DNS_ONLY_NATIVE") == "1"
+	directDeny := os.Getenv("RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE") == "1"
 	coexist := os.Getenv("RAZVILKA_DOMAIN_DNS_COEXISTENCE") == "1"
+	if directDeny && (dnsOnly || coexist || unpublished || os.Getenv("RAZVILKA_DOMAIN_DIAGNOSTIC_PUBLICATION") != "") {
+		t.Fatal("DIRECT deny requires its isolated strict-budget case")
+	}
 	initialCut := os.Getenv("RAZVILKA_DOMAIN_INITIAL_ACK")
 	neverIssuedSuccessor := os.Getenv("RAZVILKA_DOMAIN_NEVER_ISSUED_SUCCESSOR") == "1"
 	joinedFailure := os.Getenv("RAZVILKA_DOMAIN_JOINED_FAILURE") == "1"
@@ -612,7 +616,10 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 		if len(children) != 1 {
 			return fmt.Errorf("expected actual original Xray child, got%d", len(children))
 		}
-		if !dnsOnly {
+		if directDeny {
+			domainOriginalDirectDeny(t, original, peers, descriptor.IPTables, published.Answer)
+		}
+		if !dnsOnly && !directDeny {
 			t.Logf("actual immediately before selected request counters (explicit test Lookup already finished; not part of client4s): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
 			selected := func() domainOriginalPeerResult {
 				returned := false
@@ -635,12 +642,12 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 				returned = true
 				return result
 			}()
-			if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.SourcePort != mismatch.ClientPort || mismatch.Source != domainOriginalClient || mismatch.Marker != "native-domain-service" {
-				return fmt.Errorf("mismatched SNI changed original baseline tuple: %+v", mismatch)
+			if mismatch.SourcePort == "" || mismatch.SourcePort == "0" || mismatch.ClientPort == "" || mismatch.ClientPort == "0" || mismatch.Source != domainOriginalWAN || mismatch.Marker != "native-domain-service" {
+				return fmt.Errorf("mismatched SNI did not use router-originated DIRECT with original payload: %+v", mismatch)
 			}
 			opaque := peers.clientRequest(t, original, "opaque", published.Answer)
-			if opaque.SourcePort == "" || opaque.SourcePort == "0" || opaque.SourcePort != opaque.ClientPort || opaque.Source != domainOriginalClient || opaque.Marker != "opaque-native-baseline" {
-				return fmt.Errorf("opaque replay/baseline changed original source or bytes: %+v", opaque)
+			if opaque.SourcePort == "" || opaque.SourcePort == "0" || opaque.ClientPort == "" || opaque.ClientPort == "0" || opaque.Source != domainOriginalWAN || opaque.Marker != "opaque-native-baseline" {
+				return fmt.Errorf("opaque router-originated DIRECT changed expected source or bytes: %+v", opaque)
 			}
 		}
 		t.Logf("actual before stopRun completed-counter snapshot (in-flight checks excluded; not proof): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
@@ -1127,8 +1134,10 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 	}
 	if dnsOnly {
 		t.Log("DNS-only ownership scenario: actual precheck/Reserve/native/capture/kernel/DNS client publication, then original Stop+cached-alias TLS direct baseline with original tuple; selected-runtime service workflow NOT tested here; no new Apply/cache-retirement authority")
+	} else if directDeny {
+		t.Log("actual original publication and accepted client TCP; FORWARD DROP with OUTPUT ACCEPT refused before outbound SYN; passive observer positive control/reset/join; owned policy restored before original Stop and standby cleanup")
 	} else {
-		t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; mismatched SNI/opaque and late SYN preserve routed client source+bytes; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
+		t.Log("actual original DoH Reserve→native Xray→capture COMMON→DNS publication→selected TLS; active mismatched SNI/opaque use router-originated DIRECT and preserve payload; late standby SYN preserves routed client tuple; capture/native child joined; original known standby readback survives exclusive release under reader4; full retirement remains pending, ordinary Apply stays blocked")
 	}
 }
 

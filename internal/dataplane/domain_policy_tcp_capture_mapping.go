@@ -31,6 +31,8 @@ type DomainPolicyTCPCapture struct {
 	preparing    sync.WaitGroup
 	closeDone    chan struct{}
 	closeErr     error
+	directMu     sync.Mutex
+	directError  error
 	retirement   *DomainPolicyTCPCaptureRetirement
 }
 
@@ -245,6 +247,7 @@ func (c *DomainPolicyTCPCapture) Close() error {
 	for _, mapping := range mappings {
 		c.closeErr = errors.Join(c.closeErr, mapping.Close())
 	}
+	c.closeErr = errors.Join(c.closeErr, c.directFailure())
 	return c.closeErr
 }
 

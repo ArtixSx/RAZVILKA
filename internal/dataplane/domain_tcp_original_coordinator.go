@@ -665,8 +665,8 @@ func (o *DomainTCPOriginalScope) originalBaselineForCapture(ctx context.Context,
 	return o.kernel, nil
 }
 
-// No plain direct/default dial: this private method reaches only the actual
-// accepted-FD baseline resource and native Connect producer above.
+// No generic direct/default dial: only the exact accepted flow and original
+// complete packet/route owner may issue the router-originated native socket.
 func (o *DomainTCPOriginalScope) dialBaseline(ctx context.Context, kernel *domainTCPBaselineKernelOwner, socket DomainPolicyTCPSocket, flow DomainPolicyTCPFlow, decision DomainPolicyDecision) (net.Conn, error) {
-	return dialDomainTCPBaseline(ctx, kernel, socket, flow, decision)
+	return dialDomainTCPDirect(ctx, o, kernel, socket, flow, decision)
 }

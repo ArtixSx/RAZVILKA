@@ -249,7 +249,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [selected, canceled-ready]
+        scenario: [selected, direct-deny, canceled-ready]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -406,6 +406,9 @@ jobs:
           trap 'sudo chown -R "$(id -u):$(id -g)" artifacts/domain' EXIT
           case "$SCENARIO" in
             selected) expected_case=TestDomainTCPOriginalNativeAcceptedFlows ;;
+            direct-deny)
+              expected_case=TestDomainTCPOriginalNativeDirectForwardDeny
+              export RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE=1 ;;
             canceled-ready)
               expected_case=TestDomainTCPOriginalNativeCanceledReadyRetirement
               export RAZVILKA_DOMAIN_DNS_ONLY_NATIVE=1
@@ -413,13 +416,14 @@ jobs:
               export RAZVILKA_DOMAIN_CANCELED_CHILD=1 RAZVILKA_DOMAIN_CANCELED_READY=1 ;;
             *) exit 2 ;;
           esac
-          sudo --preserve-env=RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
+          sudo --preserve-env=RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE,RAZVILKA_DOMAIN_DNS_ONLY_NATIVE,RAZVILKA_DOMAIN_DNS_DETACH,RAZVILKA_DOMAIN_DNS_COEXISTENCE,RAZVILKA_DOMAIN_CANCELED_CHILD,RAZVILKA_DOMAIN_CANCELED_READY \
             env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
             RAZVILKA_DOMAIN_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/domain" \
             sh scripts/test-domain-original-native.sh 2>&1 | tee artifacts/domain/native.log
           grep -F -- "--- PASS: $expected_case " artifacts/domain/native.log
+          if [ "$SCENARIO" = direct-deny ]; then grep -F 'ACTUAL_DIRECT_FORWARD_DENY_ZERO_SYN:' artifacts/domain/native.log; fi
           if grep -F -- '--- SKIP:' artifacts/domain/native.log; then exit 1; fi
           grep -Fx 'child_exit_status=0' artifacts/domain/status.txt
           grep -Fx "native_case=$expected_case" artifacts/domain/status.txt

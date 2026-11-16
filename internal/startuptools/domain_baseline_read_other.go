@@ -11,3 +11,7 @@ import (
 func (*syntheticDNSRunner) ReadDomainTCPBaseline(context.Context, netip.Addr, netip.Addr, string) (dataplane.DomainTCPBaselineReadImage, error) {
 	return dataplane.DomainTCPBaselineReadImage{}, at("DOMAIN_BASELINE_PLATFORM", nil)
 }
+
+func (*syntheticDNSRunner) ReadDomainTCPDirectRoute(context.Context, netip.Addr, netip.Addr) ([]byte, error) {
+	return nil, at("DOMAIN_BASELINE_PLATFORM", nil)
+}
