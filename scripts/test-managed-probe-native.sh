@@ -161,15 +161,6 @@ fi
 # fixture, never each LAN/recovery invocation and never as a readiness claim.
 case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
   all) ;;
-  original-consumer)
-    # Exact original 14-second Execute/service/cleanup actor; full-suite
-    # selectors, assertions and budgets remain unchanged.
-    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
-    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
-    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
-    test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
-    test -z "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}"
-    probe_cases='TestManagedStrategyProbeNativeConsumer' ;;
   helper-exit)
     test "$probe_build_mode" = race
     test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
