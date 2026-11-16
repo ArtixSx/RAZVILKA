@@ -304,6 +304,10 @@ func inactiveThreadgroupMountFences(t *testing.T, ctx context.Context, pid int) 
 			if err != nil {
 				t.Fatal(err)
 			}
+			beforeFallback, err := pass.mountIDAfterStatx(before, unix.Statx_t{}, unix.ENOSYS)
+			if err != nil || beforeFallback != beforeMount {
+				t.Fatal("original fallback before bind", beforeFallback, beforeMount, err)
+			}
 			if err := unix.Mount(target, target, "", unix.MS_BIND, ""); err != nil {
 				t.Fatal("owned mount fixture", err)
 			}
@@ -322,7 +326,11 @@ func inactiveThreadgroupMountFences(t *testing.T, ctx context.Context, pid int) 
 			var afterStat unix.Stat_t
 			statErr := unix.Fstat(after, &afterStat)
 			afterMount, mountErr := pass.mountID(after)
+			afterFallback, fallbackErr := pass.mountIDAfterStatx(after, unix.Statx_t{}, unix.ENOSYS)
 			closeErr := unix.Close(after)
+			if fallbackErr != nil || afterFallback != afterMount || afterFallback == beforeFallback {
+				t.Fatal("original fallback did not observe changed bind", beforeFallback, afterFallback, afterMount, fallbackErr)
+			}
 			if statErr != nil || mountErr != nil || closeErr != nil || !inactiveProcSame(beforeStat, afterStat) || beforeMount == afterMount {
 				t.Fatal("same-inode different-mount fixture", statErr, mountErr, closeErr)
 			}

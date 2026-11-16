@@ -147,11 +147,16 @@ func (p *linuxInactiveProcPass) basicFD(fd int, kind uint32) error {
 	return p.ctx.Err()
 }
 
-// Linux 4.9-compatible, fresh bounded fdinfo query; no mount result cache.
-func (p *linuxInactiveProcPass) mountID(fd int) (string, error) {
+// Linux 4.9-compatible fallback: the original fresh protected fdinfo query.
+func (p *linuxInactiveProcPass) mountIDFromFDInfo(fd int) (string, error) {
 	if err := p.basicFD(p.fdinfo, unix.S_IFDIR); err != nil {
 		return "", err
 	}
+	return p.readMountIDFromFDInfo(fd)
+}
+
+// Called only after the current invocation validated fdinfo custody.
+func (p *linuxInactiveProcPass) readMountIDFromFDInfo(fd int) (string, error) {
 	leaf, err := unix.Openat(p.fdinfo, strconv.Itoa(fd), unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return "", err

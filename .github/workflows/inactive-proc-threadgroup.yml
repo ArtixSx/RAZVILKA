@@ -54,6 +54,20 @@ jobs:
             RAZVILKA_INACTIVE_PROC_TEST_MODE="$RAZVILKA_INACTIVE_PROC_TEST_MODE" \
             sh scripts/test-inactive-proc-native.sh 2>&1 | tee artifacts/native.log
           if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
+      - name: Same-host original fdinfo and fresh statx leaf costs
+        shell: bash
+        env:
+          TEST_MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$TEST_MODE" = race ]; then flags=(-race); fi
+          go test "${flags[@]}" ./internal/dataplane -run '^TestInactiveProcMountID' \
+            -bench '^BenchmarkInactiveProcMountIDPair$' -benchmem -benchtime=200ms -count=10 -v 2>&1 | tee artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDActualParityAndFallback ' artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDRefusesInvalidAndLostCustody ' artifacts/mount-id-pair.log
+          grep -F -- '--- PASS: TestInactiveProcMountIDDescriptorReuse ' artifacts/mount-id-pair.log
+          if grep -F -- '--- SKIP:' artifacts/mount-id-pair.log; then exit 1; fi
       - name: Preserve all results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
