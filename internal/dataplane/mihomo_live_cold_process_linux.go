@@ -41,7 +41,11 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 		if err != nil {
 			return mihomoSameBootNativeFailure(held, "process-platform", err)
 		}
-		image, err := borrowMihomoColdSelfImage(held, "/proc/self/exe", &domainTCPImageScratch)
+		// Same-host full parent ABBA showed the large byte image timing out
+		// under race instrumentation. Use the existing two-fresh-SHA path in
+		// every build here: normal is modestly slower, both race samples finish.
+		// All process/socket and opening/closing metadata observations remain.
+		image, err := borrowMihomoColdSelfImage(held, "/proc/self/exe", nil)
 		if err != nil {
 			return mihomoSameBootNativeFailure(held, "process-self-opening", err)
 		}
