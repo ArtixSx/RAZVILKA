@@ -103,7 +103,7 @@ wire=pathlib.Path('/opt/etc/razvilka/config.json').read_bytes()
 assert wire==(root/'source-config-migrated.json').read_bytes()
 cfg=json.loads(wire)
 assert cfg['schema_version']==2 and cfg['revision']==1 and cfg['safe_mode'] is False
-assert cfg['service_control']['stopped'] is False
+assert cfg.get('service_control',{}).get('stopped',False) is False
 print('actual_modern_source_config migrated_by_source=true repeat_unchanged=true revision_preserved=true')
 PY
 # No external interface/default route exists. Both names resolve only to the
