@@ -83,6 +83,18 @@ type managedProbeNativeAdmission struct {
 	consumer *dataplane.ManagedNFQWSProbeConsumer
 }
 
+func managedProbeNativeRuntimeFrames(t *testing.T, before, after [3]uint64) {
+	t.Helper()
+	for i := range after {
+		if after[i] < before[i] {
+			t.Error("runtime frame measurement regressed")
+			return
+		}
+		after[i] -= before[i]
+	}
+	t.Log("native measured runtime read frames [begun completed error]", after)
+}
+
 func (a *managedProbeNativeAdmission) WithStart(ctx context.Context, name string, args []string, digest string, begin func() error) error {
 	if a.consumer == nil || !a.consumer.OwnsContext(ctx) {
 		return dataplane.ErrNFQWSScopedOwner
@@ -497,6 +509,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		stopOriginalToolStarts := startuptools.StartDomainNativeToolMeasurement()
 		defer func() { t.Log("native actual HTTP original started tool children by kind", stopOriginalToolStarts()) }()
 		payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
+		framesBefore := components.NativeFixtureManagedNFQWSRuntimeFrames(owner)
 		stopHTTPProfile := managedProbeNativeCPUProfile(t, root)
 		defer stopHTTPProfile()
 		var memoryBefore goruntime.MemStats
@@ -507,6 +520,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			t.Log("native actual HTTP in-process allocated-bytes/objects", memoryAfter.TotalAlloc-memoryBefore.TotalAlloc, memoryAfter.Mallocs-memoryBefore.Mallocs)
 			attempts, returnedBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
 			t.Log("native actual HTTP member-read attempts/returned-bytes", attempts-payloadAttempts, returnedBytes-payloadBytes)
+			managedProbeNativeRuntimeFrames(t, framesBefore, components.NativeFixtureManagedNFQWSRuntimeFrames(owner))
 			t.Log("native actual HTTP inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 			t.Log("native actual HTTP aggregate inventory ToolCheck calls", toolMeasurements.calls.Load(), "wall", time.Duration(toolMeasurements.nanos.Load()))
 			metadata, children, measurementErr := versionMeasurement.Delta()
@@ -572,6 +586,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	metadataStarted := startuptools.NativeFixtureVersionMetadataCount(tools)
 	versionChildrenStarted := startuptools.NativeFixtureVersionChildCount(tools)
 	payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
+	framesBefore := components.NativeFixtureManagedNFQWSRuntimeFrames(owner)
 	evidence, cleaned, err := consumer.Execute(probeCtx, source, epoch, runtime, service, revision, env.Current)
 	probeElapsed := time.Since(probeStarted)
 	var memoryAfter goruntime.MemStats
@@ -579,6 +594,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	t.Log("native measured Execute in-process allocated-bytes/objects", memoryAfter.TotalAlloc-memoryBefore.TotalAlloc, memoryAfter.Mallocs-memoryBefore.Mallocs)
 	attempts, returnedBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
 	t.Log("native measured Execute member-read attempts/returned-bytes", attempts-payloadAttempts, returnedBytes-payloadBytes)
+	managedProbeNativeRuntimeFrames(t, framesBefore, components.NativeFixtureManagedNFQWSRuntimeFrames(owner))
 	t.Log("native measured Execute inclusive phase [started completed wall]", dataplane.NativeFixtureNFQWSProbePhases(consumer))
 	versionChildren := startuptools.NativeFixtureVersionChildCount(tools)
 	for i := range versionChildren {

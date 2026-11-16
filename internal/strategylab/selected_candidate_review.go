@@ -253,6 +253,10 @@ func (r *SelectedCandidateReview) currentLocked(ctx context.Context) error {
 // before it has a saved selection. It grants no public review; currentLocked
 // additionally observes the exact persisted selection on both sides.
 func (r *SelectedCandidateReview) materialCurrentLocked(ctx context.Context) error {
+	return r.materialReadCurrentLocked(ctx)
+}
+
+func (r *SelectedCandidateReview) materialCurrentWithRuntimeReadLocked(ctx context.Context, view *components.ManagedNFQWSRuntimeRead) error {
 	if err := r.candidateSourceLocked(ctx); err != nil {
 		return err
 	}
@@ -268,7 +272,7 @@ func (r *SelectedCandidateReview) materialCurrentLocked(ctx context.Context) err
 	if err := compatibilityControlCurrent(ctx, r.review); err != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
-	if r.runtime == nil || r.runtime.Check(ctx) != nil || !compatibilityJSONEqual(r.runtime.Descriptor(), r.descriptor) || selectedReviewMaterial(r.review, r.descriptor) != nil {
+	if r.runtime == nil || r.materialRuntimeCompare(ctx, view) != nil || !compatibilityJSONEqual(r.runtime.Descriptor(), r.descriptor) || selectedReviewMaterial(r.review, r.descriptor) != nil {
 		return ErrSelectedCandidateChanged
 	}
 	if err := compatibilityProtectedReview(r.path, r.review); err != nil {
@@ -283,7 +287,7 @@ func (r *SelectedCandidateReview) materialCurrentLocked(ctx context.Context) err
 	if err := r.candidateSourceLocked(ctx); err != nil {
 		return err
 	}
-	if err := r.runtime.Check(ctx); err != nil {
+	if err := r.materialRuntimeCompare(ctx, view); err != nil {
 		return errors.Join(ErrSelectedCandidateChanged, err)
 	}
 	if !compatibilityJSONEqual(r.runtime.Descriptor(), r.descriptor) || selectedReviewContext(ctx) != nil {

@@ -10,6 +10,29 @@ import (
 type managedNFQWSPayloadReadCounts struct {
 	attempts atomic.Uint64
 	bytes    atomic.Int64
+	frames   [3]atomic.Uint64 // begun, completed, error; numeric only.
+}
+
+func noteManagedNFQWSRuntimeFrame(m *Manager, stage int) {
+	if m == nil || stage < 0 || stage >= 3 {
+		return
+	}
+	value, loaded := managedNFQWSPayloadReadMeasurements.Load(m)
+	if !loaded {
+		value, _ = managedNFQWSPayloadReadMeasurements.LoadOrStore(m, new(managedNFQWSPayloadReadCounts))
+	}
+	value.(*managedNFQWSPayloadReadCounts).frames[stage].Add(1)
+}
+
+func NativeFixtureManagedNFQWSRuntimeFrames(m *Manager) (counts [3]uint64) {
+	value, ok := managedNFQWSPayloadReadMeasurements.Load(m)
+	if !ok {
+		return counts
+	}
+	for i := range counts {
+		counts[i] = value.(*managedNFQWSPayloadReadCounts).frames[i].Load()
+	}
+	return counts
 }
 
 var managedNFQWSPayloadReadMeasurements sync.Map // Original configured Manager only; data, not an owner.
