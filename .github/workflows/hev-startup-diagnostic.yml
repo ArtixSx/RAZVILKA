@@ -7,11 +7,13 @@ on:
         type: choice
         options: [ubuntu-26.04, ubuntu-24.04]
         default: ubuntu-26.04
+  push:
+    branches: ['work/hev-startup-*']
 permissions:
   contents: read
 jobs:
   diagnostic:
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner || 'ubuntu-26.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -62,6 +64,6 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hev-startup-diagnostic-${{ github.sha }}-${{ inputs.runner }}
+          name: hev-startup-diagnostic-${{ github.sha }}-${{ inputs.runner || 'ubuntu-26.04' }}
           path: artifacts
           if-no-files-found: error
