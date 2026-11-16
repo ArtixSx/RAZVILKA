@@ -20,17 +20,9 @@ func TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2(t *testing.T) {
 	if checkFileCapabilitiesForHistories(context.Background(), "verified-image", 3, 3, probe) == nil {
 		t.Fatal("schema0 metadata authorized the general schema2 consumer")
 	}
-	metadata["-self-update-read-version"] = "5\n"
-	if err := checkOrdinaryPreparationCapabilities(context.Background(), "verified-image", 3, 3, probe); err != nil {
-		t.Fatal("known reader5 refused", err)
-	}
-	if checkFileCapabilitiesForHistories(context.Background(), "verified-image", 3, 3, probe) == nil {
-		t.Fatal("reader5 granted general schema2")
-	}
-	metadata["-self-update-read-version"] = "4\n"
 	for _, tc := range []struct{ flag, value string }{
 		{"-self-update-schema", "2\n"}, {"-self-update-schema", "0"}, {"-self-update-schema", "0\nextra"},
-		{"-self-update-read-version", "3\n"}, {"-self-update-read-version", "6\n"}, {"-self-update-read-version", " 4\n"},
+		{"-self-update-read-version", "3\n"}, {"-self-update-read-version", "5\n"}, {"-self-update-read-version", " 4\n"},
 		{"-component-update-schema", "2\n"}, {"-component-update-schema", "7\n"},
 		{"-node-history-read-version", "2\n"}, {"-node-history-read-version", "4\n"},
 		{"-native-enrollment-schema", "0\n"}, {"-subscription-schema", "0\n"},

@@ -211,7 +211,7 @@ probe_self_update_metadata() (
   done
   if [ "$SELF_PROBE_CODE" -eq 0 ] && [ ! -s "$SELF_PROBE_DIR/error" ]; then
     case "$2" in
-      -self-update-read-version) SELF_PROBE_VALUES='2 3 4 5' ;;
+      -self-update-read-version) SELF_PROBE_VALUES='2 3 4' ;;
       -self-update-schema) SELF_PROBE_VALUES='0 1 2' ;;
       -component-update-schema) SELF_PROBE_VALUES='2 3 4' ;;
       -check-self-update-state|-check-component-update-state) SELF_PROBE_VALUES='{"ok":true}' ;;

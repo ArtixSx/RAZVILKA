@@ -26,7 +26,10 @@ const Schema = 2
 // Only stopped data settlement writes version 3. Ordinary live transactions
 // retain version 2; readers 1/2 must refuse the new terminal outcome.
 const StoppedSchema = 3
-const ReadVersion = OfflineRetrySchema
+
+// The ordinary controller ABI remains 4. Even a binary containing the explicit
+// offline retry implementation refuses pending5 through normal startup.
+const ReadVersion = PairedSchema
 const maxFileBytes = 256 << 20
 
 var (

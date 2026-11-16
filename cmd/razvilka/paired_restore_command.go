@@ -48,7 +48,7 @@ func runPairedRestoreCommand(args []string, roots selfUpdateJournalRoots) (bool,
 		return true, 3
 	}
 	defer owner.close()
-	if checkSelfUpdateJournalState(ctx, roots, updatecheck.SelfUpdateReadVersion) != nil {
+	if checkPairedOfflineRestoreJournalState(ctx, roots) != nil {
 		fmt.Fprintln(os.Stderr, "paired offline restore requires readable matching retained evidence")
 		return true, 3
 	}

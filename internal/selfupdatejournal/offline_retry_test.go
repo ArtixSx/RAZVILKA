@@ -44,6 +44,9 @@ func TestPairedOfflineRetryReceiptFenceAndExactCompletion(t *testing.T) {
 	if required, err := f.store.RequiredReadVersion(ctx); err != nil || required != OfflineRetrySchema {
 		t.Fatal("reader floor absent", required, err)
 	}
+	if ReadVersion != PairedSchema || OfflineRetryReadVersion != OfflineRetrySchema || ReadVersion >= OfflineRetryReadVersion {
+		t.Fatal("offline recovery widened the ordinary controller ABI")
+	}
 	// The exact pre-v5 receipt shape uses strict unknown-field decoding, as does
 	// the historical reader. It cannot silently discard the pending binding.
 	var legacy struct {

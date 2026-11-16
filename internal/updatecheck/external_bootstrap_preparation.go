@@ -248,11 +248,6 @@ func checkExternalBootstrapCapabilities(ctx context.Context, binary string, node
 			return err
 		}
 		switch capability.flag {
-		case "-self-update-read-version":
-			version, err := parseJournalReaderVersion(output, "", false)
-			if err != nil || !pairedCapableReader(version) {
-				return ErrFileProtocol
-			}
 		case "-component-update-schema":
 			version, err := parseComponentReadVersion(output)
 			if err != nil || version < max(components.ComponentUpdateSchema, componentRequired) {

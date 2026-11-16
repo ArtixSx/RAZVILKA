@@ -534,7 +534,7 @@ func (a *SelfUpdateFileAdapter) stageFileReviewProducer(ctx context.Context, rec
 		// helper or stopped settlement reader. Unknown retained owners are
 		// fenced by the external producer before reaching this sequence.
 		version, err := a.probeJournalReader(ctx, review, selfupdatejournal.BinaryImage{Path: binary, SHA256: bootstrap.HelperSHA256})
-		if err != nil || !pairedCapableReader(version) {
+		if err != nil || version != selfupdatejournal.PairedSchema {
 			return "", errors.Join(ErrFileProtocol, err)
 		}
 	}

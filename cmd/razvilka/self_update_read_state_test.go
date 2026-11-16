@@ -18,6 +18,7 @@ import (
 
 	"github.com/ArtixSx/razvilka/internal/operationgate"
 	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
+	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
 func selfUpdateReadRoots(base string) selfUpdateJournalRoots {
@@ -153,7 +154,7 @@ func TestSelfUpdateImmutableReaderCLIBypassesStopAndScanner(t *testing.T) {
 	}
 	t.Setenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE", control)
 	before := selfUpdateReadTree(t, base)
-	for flag, expected := range map[string]string{"-self-update-read-version": strconv.Itoa(selfupdatejournal.ReadVersion) + "\n", "-self-update-schema": "0\n"} {
+	for flag, expected := range map[string]string{"-self-update-read-version": strconv.Itoa(selfupdatejournal.ReadVersion) + "\n", "-self-update-offline-restore-read-version": "5\n", "-self-update-schema": "0\n"} {
 		out, diagnostic, code := selfUpdateReadCLI(t, base, flag)
 		if code != 0 || out != expected || diagnostic != "" {
 			t.Fatal("immutable metadata acquired a startup/scanner dependency", flag, out, diagnostic, code)
@@ -162,7 +163,7 @@ func TestSelfUpdateImmutableReaderCLIBypassesStopAndScanner(t *testing.T) {
 	if !reflect.DeepEqual(before, selfUpdateReadTree(t, base)) {
 		t.Fatal("metadata changed retained Stop or bootstrapped files")
 	}
-	for _, args := range [][]string{{"-self-update-read-version=true"}, {"--self-update-read-version"}, {"-self-update-read-version", "-config", filepath.Join(base, "new-config")}, {"-check-self-update-state=false"}, {"-check-self-update-state", "-self-update-installation", base}} {
+	for _, args := range [][]string{{"-self-update-read-version=true"}, {"--self-update-read-version"}, {"-self-update-offline-restore-read-version=true"}, {"--self-update-offline-restore-read-version"}, {"-self-update-offline-restore-read-version", "-self-update-read-version"}, {"-self-update-read-version", "-config", filepath.Join(base, "new-config")}, {"-check-self-update-state=false"}, {"-check-self-update-state", "-self-update-installation", base}} {
 		out, diagnostic, code := selfUpdateReadCLI(t, base, args...)
 		if code != 2 || out != "" || !strings.Contains(diagnostic, "exact standalone flag") {
 			t.Fatal("noncanonical metadata arguments reached startup", args, out, diagnostic, code)
@@ -170,6 +171,30 @@ func TestSelfUpdateImmutableReaderCLIBypassesStopAndScanner(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, selfUpdateReadTree(t, base)) {
 		t.Fatal("invalid metadata arguments caused effects")
+	}
+}
+
+func TestSelfUpdateOfflineReaderDoesNotExpandNormalAdmission(t *testing.T) {
+	if updatecheck.SelfUpdateReadVersion != 4 || updatecheck.SelfUpdateOfflineRestoreReadVersion != 5 {
+		t.Fatal("ordinary and explicit offline capabilities conflated")
+	}
+	roots := selfUpdateReadRoots(filepath.Join(t.TempDir(), "absent"))
+	if checkSelfUpdateJournalState(context.Background(), roots, 4) != nil {
+		t.Fatal("ordinary empty reader4 changed")
+	}
+	if checkSelfUpdateJournalState(context.Background(), roots, 5) == nil {
+		t.Fatal("normal admission accepts offline-only reader5")
+	}
+	if checkPairedOfflineRestoreJournalState(context.Background(), roots) != nil {
+		t.Fatal("explicit format reader refused empty retained state")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if checkPairedOfflineRestoreJournalState(ctx, roots) == nil || checkPairedOfflineRestoreJournalState(nil, roots) == nil {
+		t.Fatal("offline format check escaped cancellation")
+	}
+	if _, err := os.Stat(roots.installation); !os.IsNotExist(err) {
+		t.Fatal("format check created installation state")
 	}
 }
 

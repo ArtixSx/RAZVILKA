@@ -148,6 +148,22 @@ func TestDomainTCPOriginalFactoryProcessCancellation(t *testing.T) {
 		if err := resource.Current(active); err != nil {
 			return err
 		}
+		// A standalone original listener can borrow the existing image slot.
+		// Contention must retain the original full-SHA path without waiting,
+		// allocating another backing or releasing another reader's storage.
+		heldImage := domainTCPImageScratch.borrow(1)
+		if heldImage == nil {
+			return errors.New("standalone listener retained image storage")
+		}
+		fallbackErr := resource.Current(active)
+		stillHeld := domainTCPImageScratch.busy.Load()
+		heldImage.release()
+		if fallbackErr != nil || !stillHeld {
+			return errors.Join(errors.New("original listener contention fallback changed ownership"), fallbackErr)
+		}
+		if err := resource.Current(active); err != nil {
+			return err
+		}
 
 		// An already invalid opening cannot run any later comparison callback.
 		// This is actual-process coverage, not a fabricated capture authority.

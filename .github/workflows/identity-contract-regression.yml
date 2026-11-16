@@ -30,7 +30,7 @@ jobs:
             if [ "$mode" = race ]; then race_flag=(-race); fi
             sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
               go test "${race_flag[@]}" -count=1 -v ./internal/selfupdatejournal ./internal/updatecheck ./cmd/razvilka \
-              -run '^(TestPairedOfflineRetry|TestPairedOfflinePlanOnly|TestPairedRestoreCommand|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
+              -run '^(TestPairedOfflineRetry|TestPairedOfflinePlanOnly|TestPairedRestoreCommand|TestSelfUpdateOfflineReader|TestSelfUpdateImmutableReaderCLI|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
               | tee "artifacts/offline-retry/$mode.txt"
             if grep -F -- '--- SKIP:' "artifacts/offline-retry/$mode.txt"; then exit 1; fi
             grep -F -- '--- PASS: TestPairedOfflineRetryNative' "artifacts/offline-retry/$mode.txt"
@@ -66,6 +66,8 @@ jobs:
           go test -race -count=1 -v ./internal/netidentity | tee artifacts/identity-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
+          go test -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image.txt
+          go test -race -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image-race.txt
           go test -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot.txt
           go test -race -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot-race.txt
           go test -count=50 -v ./internal/app -run '^(TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction|TestServiceEvidenceDoesNotPromoteExpiredProbe)$' | tee artifacts/committed-evidence.txt

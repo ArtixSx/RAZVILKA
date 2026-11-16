@@ -163,6 +163,56 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 	if marshalErr != nil || !bytes.Equal(canonical, planBytes) || plan.Schema != 1 || plan.ReceiptSHA256 != hex.EncodeToString(originalSHA[:]) || len(plan.Items) == 0 || len(plan.Items) >= 40000 || len(plan.Unchanged) > 40000 || !strings.HasPrefix(after[planPath], "600:") {
 		t.Fatal("retry descriptor is not bound to this exact original receipt")
 	}
+	// Model ONLY the terminal receipt cut after the actual public restoration:
+	// every target/stage already came from the real producer above. This is not
+	// a power-loss experiment or a new archive/owner capability. It verifies the
+	// actual normal executable rejects valid pending5, while its explicit offline
+	// command can finish the same known post-image without replaying file effects.
+	pending := receipt
+	pending.Schema, pending.Phase = selfupdatejournal.OfflineRetrySchema, "offline-restoring"
+	planSHA := sha256.Sum256(planBytes)
+	pending.Offline = &selfupdatejournal.OfflineRetryBinding{PlanSHA256: hex.EncodeToString(planSHA[:]), OriginalSHA256: hex.EncodeToString(originalSHA[:]), OriginalPhase: receipt.Phase}
+	pendingBytes, err := json.Marshal(pending)
+	receiptPath := filepath.Join(filepath.Dir(planPath), "receipt.json")
+	if err != nil || os.WriteFile(receiptPath, pendingBytes, 0600) != nil {
+		t.Fatal("could not model terminal receipt publication cut")
+	}
+	if checkPairedOfflineRestoreJournalState(ctx, productionSelfUpdateJournalRoots()) != nil {
+		t.Fatal("modelled terminal cut is not a valid retained offline format")
+	}
+	checkOutput, checkDiagnostic := nativePairedRestoreOutput{}, nativePairedRestoreOutput{}
+	checkCommand := exec.CommandContext(ctx, program, "-check-self-update-state")
+	checkCommand.Env = command.Env
+	checkCommand.Stdout, checkCommand.Stderr = &checkOutput, &checkDiagnostic
+	checkErr := checkCommand.Run()
+	var checkExit *exec.ExitError
+	if !errors.As(checkErr, &checkExit) || checkExit.ExitCode() != 3 || checkOutput.Len() != 0 {
+		t.Fatal("ordinary executable accepted the pending offline-only format")
+	}
+	retryOutput, retryDiagnostic := nativePairedRestoreOutput{}, nativePairedRestoreOutput{}
+	retryCommand := exec.CommandContext(ctx, program, "self-update-paired-restore", id)
+	retryCommand.Env = command.Env
+	closeRetrySource := nativePairedRuntimeSource(t, retryCommand)
+	defer closeRetrySource()
+	retryCommand.Stdout, retryCommand.Stderr = &retryOutput, &retryDiagnostic
+	if err := retryCommand.Run(); err != nil || retryDiagnostic.Len() != 0 {
+		t.Fatal("actual explicit offline command could not finish known terminal cut", err)
+	}
+	retryDecoder := json.NewDecoder(&retryOutput.Buffer)
+	retryDecoder.DisallowUnknownFields()
+	var retried updatecheck.SelfUpdateOfflineRestoreResult
+	if retryDecoder.Decode(&retried) != nil || retried != result || retryDecoder.Decode(&struct{}{}) != io.EOF {
+		t.Fatal("terminal retry did not return the exact offline-only result")
+	}
+	retriedConfig, _, configErr := config.Inspect(cfgPath)
+	if configErr != nil || !reflect.DeepEqual(retriedConfig, afterConfig) {
+		t.Fatal("terminal retry replayed restored config effects")
+	}
+	after = nativePairedRestoreEvidence(t, ctx, protected)
+	if after[planPath] != "600:"+hex.EncodeToString(planSHA[:]) {
+		t.Fatal("terminal retry changed retained plan")
+	}
+	t.Log("modelled terminal receipt cut: actual normal reader4 refused pending5; explicit offline retry completed without replay")
 	delete(after, planPath)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("public caller modified current protected evidence or offline source archive")

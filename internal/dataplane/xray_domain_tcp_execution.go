@@ -128,6 +128,16 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeld(ctx context.
 	return r.originalContextAlreadyHeldWithFiles(ctx, cleanup, nil)
 }
 func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx context.Context, cleanup bool, files *xrayDomainTCPFileObservation) (context.Context, error) {
+	return r.originalContextAlreadyHeldWithFileRead(ctx, cleanup, files, nil)
+}
+
+// Only a standalone readonly listener comparison supplies image. Capture
+// occurs at the original full-byte opening, after every source/journal guard.
+// Native Start, cleanup and existing nested observations retain their path.
+func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFileRead(ctx context.Context, cleanup bool, files *xrayDomainTCPFileObservation, image *xrayDomainTCPImageRead) (context.Context, error) {
+	if image != nil && (cleanup || files != nil) {
+		return nil, ErrXrayDomainTCPOriginal
+	}
 	if r == nil || r.self != r || r.descriptorsClosed.Load() || r.scope == nil || r.records == nil || xraySelectedTCPFinite(ctx) != nil || ctx.Value(syntheticExecutionRegistrarKey{}) != r.scope {
 		return nil, ErrXrayDomainTCPOriginal
 	}
@@ -175,7 +185,7 @@ func (r *XrayDomainTCPExecutionResource) originalContextAlreadyHeldWithFiles(ctx
 	if err := r.records.current(ctx, allEqual); err != nil {
 		return nil, err
 	}
-	if err := r.filesCurrentForObservation(ctx, files); err != nil {
+	if err := r.filesCurrentForImageRead(ctx, files, image); err != nil {
 		if cleanup {
 			return nil, fmt.Errorf("domain cleanup held files: %w", err)
 		}
@@ -321,6 +331,9 @@ func (r *XrayDomainTCPExecutionResource) listenerCurrentWithFiles(ctx context.Co
 	if files != nil {
 		return r.listenerCurrentInFileObservation(ctx, files)
 	}
+	if image := r.borrowFileObservationImage(ctx); image != nil {
+		return r.listenerCurrentWithImage(ctx, image)
+	}
 	read, closeRead, err := r.originalProcessReadContext(ctx, false)
 	if err != nil {
 		return err
@@ -334,6 +347,29 @@ func (r *XrayDomainTCPExecutionResource) listenerCurrentWithFiles(ctx context.Co
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
 	return nil
+}
+
+// The private image never crosses a callback boundary. Its fresh opening
+// still follows material/owner/record checks; every process and listener read
+// remains between that opening and the complete fresh closing byte comparison.
+func (r *XrayDomainTCPExecutionResource) listenerCurrentWithImage(ctx context.Context, image *xrayDomainTCPImageRead) (result error) {
+	defer func() {
+		image.release()
+		result = errors.Join(result, image.contextCurrent(ctx))
+	}()
+	if r == nil || r.material == nil || !image.belongsTo(r) || image.contextCurrent(ctx) != nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	if err := r.material.Current(ctx); err != nil {
+		return err
+	}
+	original, err := r.originalContextAlreadyHeldWithFileRead(ctx, false, nil, image)
+	if err != nil || r.child == nil {
+		return errors.Join(ErrXrayDomainTCPOriginal, err)
+	}
+	return r.withFileObservationAfterOpeningImage(original, nil, func(files *xrayDomainTCPFileObservation) error {
+		return r.listenerCurrentAfterOriginalFiles(original, files)
+	}, image)
 }
 
 func (r *XrayDomainTCPExecutionResource) phase(phase, state string) error {
@@ -441,12 +477,16 @@ func (r *XrayDomainTCPExecutionResource) listenerCurrentInFileObservation(ctx co
 	if err != nil || r.child == nil {
 		return errors.Join(ErrXrayDomainTCPOriginal, err)
 	}
+	return r.listenerCurrentAfterOriginalFiles(original, files)
+}
+
+func (r *XrayDomainTCPExecutionResource) listenerCurrentAfterOriginalFiles(original context.Context, files *xrayDomainTCPFileObservation) error {
 	read, closeRead, err := r.processReadContext(original)
 	if err != nil {
 		return err
 	}
 	defer closeRead()
-	nested, closeFiles, err := files.forOriginalProcessRead(ctx, read, r)
+	nested, closeFiles, err := files.forOriginalProcessRead(original, read, r)
 	if err != nil {
 		return err
 	}

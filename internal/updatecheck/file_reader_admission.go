@@ -33,12 +33,8 @@ type journalReaderProof struct {
 	Controllers    []journalReaderImage `json:"controllers"`
 }
 
-func pairedCapableReader(version int) bool {
-	return version == selfupdatejournal.PairedSchema || version == selfupdatejournal.OfflineRetrySchema
-}
-
 func validJournalReaderProof(proof *journalReaderProof) bool {
-	if proof == nil || (proof.Schema != selfupdatejournal.StoppedSchema && !pairedCapableReader(proof.Schema)) || proof.RequiredReader != proof.Schema || len(proof.Controllers) == 0 || len(proof.Controllers) > 1024 {
+	if proof == nil || (proof.Schema != selfupdatejournal.StoppedSchema && proof.Schema != SelfUpdateReadVersion) || proof.RequiredReader != proof.Schema || len(proof.Controllers) == 0 || len(proof.Controllers) > 1024 {
 		return false
 	}
 	previous := ""

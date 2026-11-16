@@ -14,6 +14,7 @@ import (
 // stays at 4: readers <=4 reject the receipt, and successful verification can
 // atomically put back the exact original receipt without a second pointer cut.
 const OfflineRetrySchema = 5
+const OfflineRetryReadVersion = OfflineRetrySchema
 const MaximumOfflinePlanBytes = 16 << 20
 
 type OfflineRetryBinding struct {
