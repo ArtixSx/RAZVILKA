@@ -1165,7 +1165,10 @@ func (a *SelfUpdateFileAdapter) RuntimeQuiesceAuthority(ctx context.Context, id 
 		return err
 	}
 	snapshot, err := a.privateSnapshot(ctx, id)
-	if err != nil || snapshot.Schema != 2 {
+	// privateSnapshot binds schema3 to its exact reviewed StrategyLab pair.
+	// Both mutable snapshot formats can precede quiesce; legacy whole-domain
+	// schema1 remains evidence only and cannot authorize this transition.
+	if err != nil || (snapshot.Schema != 2 && snapshot.Schema != 3) {
 		return errors.Join(ErrFileProtocol, err)
 	}
 	for _, command := range []string{"stop-old-panel", "prepare-private-state"} {

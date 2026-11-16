@@ -14,10 +14,10 @@ go build -tags razvilka_native_fixture -ldflags="-s -w -X github.com/ArtixSx/raz
 go build -tags razvilka_native_fixture -ldflags="-s -w -X github.com/ArtixSx/razvilka/internal/app.Version=0.20.1 -X github.com/ArtixSx/razvilka/internal/app.BuildCommit=$source_sha" -o "$work/candidate" ./cmd/razvilka
 go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
 hook_status=0
-go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeModern|^TestOrdinaryPreparationInstalledSourceConfigMigration$' -count=1 -v >"$work/hooks.log" 2>&1 || hook_status=$?
+go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeModern|^TestOrdinaryPreparationInstalledSourceConfigMigration$|^TestRuntimeQuiesceSnapshotAdmission$' -count=1 -v >"$work/hooks.log" 2>&1 || hook_status=$?
 cat "$work/hooks.log"
 test "$hook_status" -eq 0
-for name in TestNativeModernPublishedHandoff TestNativeModernAbsentAndInvalidMarker TestNativeModernClosedCommandList TestOrdinaryPreparationInstalledSourceConfigMigration; do
+for name in TestNativeModernPublishedHandoff TestNativeModernAbsentAndInvalidMarker TestNativeModernClosedCommandList TestOrdinaryPreparationInstalledSourceConfigMigration TestRuntimeQuiesceSnapshotAdmission; do
  grep -F -- "--- PASS: $name " "$work/hooks.log"
 done
 if grep -E '^[[:space:]]*--- SKIP:' "$work/hooks.log"; then exit 1; fi
