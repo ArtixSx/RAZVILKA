@@ -1,0 +1,131 @@
+{
+  "run_id": 43968451025,
+  "revision": "da0e369ece13272ad014993fa0aacfc0bac46098",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43968451025",
+  "conclusion": "failure",
+  "samples": [
+    {
+      "sample": 1,
+      "build_mode": "debug",
+      "pass": false,
+      "status_valid": true,
+      "profile_symbols": true,
+      "binary": {
+        "bytes": 59148339,
+        "sha256": "3506972ade675acec337072ecbde175fdeab9e555ed456696e2761b59d5c1992"
+      },
+      "boundary": "initial DNS publication 12s unavailable",
+      "capture_to_publication_open": [
+        "1",
+        "9.910420137s"
+      ],
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    },
+    {
+      "sample": 2,
+      "build_mode": "production-strip",
+      "pass": false,
+      "status_valid": true,
+      "profile_symbols": true,
+      "binary": {
+        "bytes": 44122377,
+        "sha256": "9be54249b7753c9806beee244932609f46c517e83c02b64d7d90bbe3003d7f8b"
+      },
+      "boundary": "initial DNS publication 12s unavailable",
+      "capture_to_publication_open": [
+        "1",
+        "9.878195117s"
+      ],
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    },
+    {
+      "sample": 3,
+      "build_mode": "production-strip",
+      "pass": false,
+      "status_valid": true,
+      "profile_symbols": true,
+      "binary": {
+        "bytes": 44122377,
+        "sha256": "9be54249b7753c9806beee244932609f46c517e83c02b64d7d90bbe3003d7f8b"
+      },
+      "boundary": "initial publication reached; selected service client failed",
+      "capture_to_publication_open": [
+        "1",
+        "9.706966838s"
+      ],
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    },
+    {
+      "sample": 4,
+      "build_mode": "debug",
+      "pass": false,
+      "status_valid": true,
+      "profile_symbols": true,
+      "binary": {
+        "bytes": 59148339,
+        "sha256": "3506972ade675acec337072ecbde175fdeab9e555ed456696e2761b59d5c1992"
+      },
+      "boundary": "initial DNS publication 12s unavailable",
+      "capture_to_publication_open": [
+        "1",
+        "9.94826738s"
+      ],
+      "supervisor": {
+        "subreaper": true,
+        "initial_exit_status": 1,
+        "adopted_children_reaped": 0,
+        "descendants_absent": true,
+        "forced_cleanup": false,
+        "no_overlap_boundary": true,
+        "original_cleanup_success": "not inferred from descendant absence"
+      }
+    }
+  ],
+  "binary_pair_valid": true,
+  "all_samples_pass": false,
+  "all_strip_samples_pass": false,
+  "direct_deny": {
+    "pass": true,
+    "elapsed_seconds": 17.22,
+    "proof": "Actual original DNS publication; positive same-FD passive SYN observer; FORWARD DROP/OUTPUT ACCEPT; explicit EOF/reset, zero outbound real-target SYN; owned rule restored; observer joined."
+  },
+  "canceled_ready": {
+    "pass": false,
+    "elapsed_seconds": 31.85,
+    "boundary": "GEN1 publication/detachment completed; GEN2 child/listener cancellation witness unavailable; successor CPU profile joined=true. Full retirement acceptance not reached."
+  },
+  "raw_root": "C:\\RAZVILKA-research-20261117\\domain-fidelity-da0e369e",
+  "raw_manifest_sha256": "7cb685f93dd31ba23de529848379416a6e1ac2098552bc0ab76429d577d06424",
+  "raw_files": 78,
+  "limits": [
+    "Same-source ABBA keeps original12s publication and4s client. Every failure retained.",
+    "Stripping did not make full strict DNS pass; cannot claim production speedup.",
+    "Separate direct-deny and canceled-ready jobs run on other hosts: do not compare their timings to ABBA.",
+    "Build mode remains debug by default; changed ELF linker fidelity is not a routing optimization.",
+    "Go profile symbols resolved in every ABBA arm; test ELF is not shipped cmd/razvilka."
+  ]
+}

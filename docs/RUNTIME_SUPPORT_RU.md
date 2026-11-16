@@ -1,37 +1,16 @@
 # Сборки и поддержка запуска
 
-Актуальный код `432fc1c2`, полный CI `93463d85` PASS:
-[единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
-На6cba actual pre-ledger и prepared-active recovery-only normal/race PASS;
-полный NFQWS2 Apply и LAN rollback ещё не приняты.
-DNS9de:8 полных сценариев FAIL, хотя selected HTTPS проходит. b86a isolated
-compiler/kernel test подтвердил перехват direct reply при одинаковом
-client source port; это дефект, не готовность DNS. Router-originated DIRECT реализован на69423dfe после исследования внешних
-проектов по поручению владельца17.11: адрес/порт принадлежат роутеру, target
-точный. Недоказанная VPN/ACL-политика отказывает до SYN. Адресные Windows
-проверки и Linux compile PASS; actual strict/deny/canceled-ready43962866341
-FAIL на initial publication12с ДО DIRECT. Contracts normal/race PASS, но
-полный datapath не достигнут. Доменный Apply пока не принят.
-ipset-ускорение не устраняет коллизию.
-Mihomo7a: parent/private4/4 и ACK8/10 PASS; race completed.json и
-terminal-transaction FAIL120с. Fresh statx и принудительный ENOSYS fallback
-прошли отдельные полные native normal/race проверки.
-HEVec62 default AMD64 vendor install/HTTP replacement normal/race PASS;
-ARM64 unchanged. Публичный URLv0.20.0 относится к будущему пересозданному
-репозиторию; существующий tag не изменён. Default route проходит отдельный
-прогон. Generic CI не расширяет платформенный допуск.
-Наe0 весь native workflow43959574318 PASS4/4; manualHTTP два Apply/Stop/physical-baseline PASS; ce2 sourceCurrent
-на двухCPU ускорен примерно40%, totalCPU выше; router performance не проверен.
-Отдельный ce2 race parent43961200477 FAIL120.01с; ACK NOT_RUN.
-be7 сохраняет оба home absence bookends, убрав только соседний повтор;
-43964362768 parent/private4/4 PASS, ACK6/10 PASS; три race ACK deadline120с,
-один normal fixture busy mount до consumer. Bounded fixture retry432 отдельно проверяется.
-93463d85 full actualLAN43963543994 PASS4/4; router acceptance отдельно.
-DNS da0 stripped direct-deny17.22с PASS (zeroSYN, restore, join),
-canceled-ready не достиг GEN2 witness; selected ABBA выполняется.
-WG7419 same-host full observer примерно−33%, обаengine/режима PASS; это не полныйApply.
-Роутер ожидает проверки изменившегося SSH host key владельцем.
+Актуальный код `bcc7fd8d`; последний полный CI `93463d85` PASS.
+[Единая актуальная матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+StrategyLab7cuts и лабораторный Mihomo LAN проходят; DNS positive/cancel,
+полный NFQWS2 Apply и Mihomo race ACK ещё не приняты. ACK исправление bcc7
+проходит full native43972077940. NFQ runtime frame отменён после сравнения:
+меньше чтения, но больше времени; race все4 FAIL. DNS actual deny PASS,
+debug/strip full ABBA все4 FAIL. Подтверждение SSH-ключа владельцем найдено
+и проверено: read-only инвентаризация роутера возобновлена.
+Generic CI, native fixture, public asset delivery и router/LAN acceptance
+не заменяют друг друга и не расширяют допуск платформ.
+
 Старые таблицы ниже — история отдельных сценариев.
 
 Последняя сверка: `fc5bcc6c`, 16.11.2026. Платформенный допуск не расширен.

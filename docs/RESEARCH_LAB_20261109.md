@@ -1188,3 +1188,37 @@ source-read-comparison.yml и domain-router-direct.yml. Deadline production не
 - normal terminal-global не дошёл до consumer: ordinary umount вернул EBUSY. По [Linux man-pages6.19, umount(2)](https://man7.org/linux/man-pages/man2/umount.2.html) это busy mount; force/lazy меняют смысл завершения.432fc1c2 повторяет только EBUSY с прежним общим5с, каждый раз проверяя исходный private mount ID/dev/inode. Сам syscall в original bounded child (timeout/kill/Wait), flags0, без сигналов держателям mount.6 модельных контрактов PASS, actual Linux persistent own FD refusal→joined close→ordinary success включён в43968515807; результат ещё ожидается.
 - da0e369e: ровно один linker выбор debug/production-strip; default debug сохранён. ELF25.39% меньше, Go pclntab сохранён. ABBA43968451025 same-source/samehost с прежними publication12с и client4с; ошибки сохранены. Отдельный actual direct-deny уже PASS17.22с: положительный контроль observer, затем FORWARD DROP/OUTPUT ACCEPT и ноль outbound SYN при explicit EOF/reset, восстановление правила и join. Canceled-ready FAIL до successor cancellation witness, не считается готовностью recovery.
 - NFQ e52643967605929: ordinary ABBA4/4 service+cleanup PASS, candidate320/320/0 frames; чтений/байт меньше, median Execute7.602→7.802с (+2.63%). Race ещё выполняется. Уменьшение bytes само по себе не оправдывает принятие нового production механизма.
+
+
+## 17.11: завершённые сравнения и следующий точный кандидат bcc7
+
+Root сверил SHA256 шести raw NFQ файлов; [ABBAe526](measurements/2026-11-16/nfq-read-e526a661.json)
+не подтвердил ускорение, поэтому production022 и harness отменены66d79f96/f75221d3.
+Исходники и результаты сохранены на отдельной experiment ref. Production
+median7.602→7.802с, race4/4 deadline FAIL; меньший объём чтения не основание приёмки.
+[DNS build fidelityda0](measurements/2026-11-16/domain-build-da0e369e.json): четыре
+ABBA arms не прошли прежние12/4с. Debug59,148,339B и stripped44,122,377B —
+один source, но не подтверждённое ускорение. Actual deny17.22с PASS отделён от
+positive/cancel. Canceled-ready GEN1 проходит, GEN2 witness не достигнут.
+
+[Image fixture432](measurements/2026-11-16/sameboot-image-432fc1c2.json) прошёл
+normal parent/private/terminal-global3/3. Только ordinary umount с тем же mount
+identity и прежним5с, без force/lazy/убийства чужих держателей. Actual private
+FD удерживает busy mount, затем joined close разрешает обычное снятие;
+исходный transient real-case не заявляется воспроизведённым.
+Источник: [Linux man-pages6.19 umount](https://man7.org/linux/man-pages/man2/umount.2.html).
+
+bcc7 retained ACK продолжает исходный terminal publisher с исходными FD,
+свежими history/home/absence/runtime/tree/documents проверками. Завершённые
+effects не повторяются; unknown и Close-loss потребляют право retry.
+Independent lifecycle review выявил и проверил исправление root/name alias;
+four contracts включены в normal/race workflow с обязательным PASS/noSKIP.
+Full native43972077940 запускается с mode=all, ack_cut=all,
+consumer_profile=true, hev_lab=false. Исходный120с неизменён; до результата
+runtime acceptance не заявляется.
+
+Router host-key blocker оказался устаревшим: исходная человеческая запись
+16.11.2026 19:50МСК подтверждает точный новый ED25519 fingerprint, совпавший
+с existing verified known_hosts. Root проверил оба локально; ключ не менял.
+Следующий шаг — свежий read-only inventory после независимой переустановки
+Entware, с сохранением NDMS queues/policies и отдельным backup до установки.

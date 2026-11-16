@@ -1,0 +1,43 @@
+{
+  "run_id": 43968515807,
+  "commit": "432fc1c20fbfb16edad777ff4d4216edb864ee2a",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43968515807",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "original-parent-native (normal)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133654187727
+    },
+    {
+      "name": "original-private-set (normal)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133654188320
+    },
+    {
+      "name": "original-parent-native-ack-cuts (normal, terminal-global)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133656637026
+    }
+  ],
+  "exact_log_evidence": [
+    "original-parent-native (normal)\tOrdinary private image unmount retains busy and foreign-mount refusal\t2026-11-16T22:17:14.3467238Z test_transient_busy_then_ordinary_success (__main__.ImageRetryContracts.test_transient_busy_then_ordinary_success) ... original fixture ordinary unmount confirmed attempts=3",
+    "original-parent-native (normal)\tOrdinary private image unmount retains busy and foreign-mount refusal\t2026-11-16T22:17:19.5515165Z test_actual_busy_mount_only_succeeds_after_original_fd_close (__main__.ActualPrivateMount.test_actual_busy_mount_only_succeeds_after_original_fd_close) ... original fixture ordinary unmount confirmed attempts=4",
+    "original-parent-native (normal)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:20:32.2353884Z original fixture ordinary unmount confirmed attempts=1",
+    "original-parent-native (normal)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:21:03.5436703Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (31.30s)",
+    "original-parent-native-ack-cuts (normal, terminal-global)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:25:42.1627702Z original fixture ordinary unmount confirmed attempts=1",
+    "original-parent-native-ack-cuts (normal, terminal-global)\tActual producer parent death CLI cleanup and updater fences\t2026-11-16T22:26:44.4018052Z --- PASS: TestMihomoSameBootCLINativeOriginalParent (62.23s)"
+  ],
+  "raw_root": "C:\\RAZVILKA-research-20261117\\sameboot-image-432fc1c2",
+  "manifest_sha256": "f7bf5d44f717a5d37c698090a39f78b412c1d6eba9157d48f0d5cfe53a5af411",
+  "raw_files": 22,
+  "limits": [
+    "Normal parent/private and terminal-global only; no new race ACK acceptance.",
+    "Busy-mount fixture succeeds only after ordinary unmount; original5s cap, exactprivate mount identity, flags0 and boundedchild preserved.",
+    "New actual private test retains ownFD through5s refusal then joins closer before successful ordinary unmount.",
+    "Original consumer120s unchanged. No router acceptance."
+  ]
+}
