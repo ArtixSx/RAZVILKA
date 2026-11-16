@@ -38,11 +38,9 @@ type managedNFQWSRuntimeOwner struct {
 	mu         sync.Mutex
 	source     *ManagedNFQWSRuntimeLease
 	validation *ManagedNFQWSRuntimeLease
-	readFrame  *ManagedNFQWSRuntimeRead // One finite comparison borrow; never an authority.
 }
 
 var ErrManagedNFQWSValidationPending = errors.New("managed NFQWS validation lease remains open")
-var ErrManagedNFQWSReadPending = errors.New("managed NFQWS runtime read remains open")
 
 func (m *Manager) AcquireManagedNFQWSRuntime(ctx context.Context, receiptID string) (*ManagedNFQWSRuntimeLease, error) {
 	if m == nil || ctx == nil {
@@ -179,9 +177,6 @@ func (l *ManagedNFQWSRuntimeLease) ForkValidation(ctx context.Context) (*Managed
 	if o.validation != nil {
 		return nil, errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSValidationPending)
 	}
-	if o.readFrame != nil {
-		return nil, errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSReadPending)
-	}
 	if err := o.check(ctx); err != nil {
 		return nil, err
 	}
@@ -209,9 +204,6 @@ func (l *ManagedNFQWSRuntimeLease) Close() error {
 	}
 	if o.source == l && o.validation != nil {
 		return errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSValidationPending)
-	}
-	if o.readFrame != nil {
-		return errors.Join(ErrManagedNFQWSBundle, ErrManagedNFQWSReadPending)
 	}
 	err := o.check(context.Background())
 	l.closed = true

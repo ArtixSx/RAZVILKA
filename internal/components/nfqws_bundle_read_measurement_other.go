@@ -3,4 +3,3 @@
 package components
 
 func noteManagedNFQWSPayloadRead(*Manager, int64) {}
-func noteManagedNFQWSRuntimeFrame(*Manager, int)  {}

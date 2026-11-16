@@ -29,10 +29,6 @@ type managedRuntimeImageNode struct {
 // survive this call; every later Check hashes and compares all six members anew.
 // Original source/kernel/Start bookends and installer/recovery readers remain.
 func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expected string) (manifest ManagedNFQWSManifest, resultErr error) {
-	return m.withManagedNFQWSRuntimeReadImage(ctx, path, expected, nil)
-}
-
-func (m *Manager) withManagedNFQWSRuntimeReadImage(ctx context.Context, path, expected string, use func(managedNFQWSRuntimeReadImage) error) (manifest ManagedNFQWSManifest, resultErr error) {
 	if m == nil || ctx == nil || !bundleHash(expected, 64) {
 		return manifest, ErrManagedNFQWSBundle
 	}
@@ -160,29 +156,20 @@ func (m *Manager) withManagedNFQWSRuntimeReadImage(ctx context.Context, path, ex
 	}
 	// Preserve the second full byte comparison for manifest, notices and ALL
 	// six payloads. Metadata closing is additional, never a substitute for it.
-	finish := func() error {
-		buffer := scratch.compare[:]
-		for _, node := range nodes {
-			if node.info.IsDir() {
-				continue
-			}
-			count, err := managedRuntimeImageCompare(ctx, node.file, node.content, buffer)
-			if node.name != "manifest.json" && node.name != "source-notices.json" {
-				noteManagedNFQWSPayloadRead(m, count)
-			}
-			if err != nil {
-				return err
-			}
+	buffer := scratch.compare[:]
+	for _, node := range nodes {
+		if node.info.IsDir() {
+			continue
 		}
-		return m.managedRuntimeImageClosing(ctx, root, path, anchor, nodes)
+		count, err := managedRuntimeImageCompare(ctx, node.file, node.content, buffer)
+		if node.name != "manifest.json" && node.name != "source-notices.json" {
+			noteManagedNFQWSPayloadRead(m, count)
+		}
+		if err != nil {
+			return manifest, err
+		}
 	}
-	if use != nil {
-		// Registered AFTER storage cleanup: this full second stream runs first
-		// on callback return, error, panic or Goexit. No owner refusal can skip it.
-		defer func() { resultErr = errors.Join(resultErr, finish()) }()
-		return manifest, use(&managedNFQWSHeldReadImage{m, root, path, anchor, nodes})
-	}
-	if err := finish(); err != nil {
+	if err := m.managedRuntimeImageClosing(ctx, root, path, anchor, nodes); err != nil {
 		return manifest, err
 	}
 	return manifest, ctx.Err()
