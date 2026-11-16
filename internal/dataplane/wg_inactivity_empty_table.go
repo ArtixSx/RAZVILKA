@@ -40,17 +40,19 @@ func (r *WGInactivityRead) readKernelEmptyTable(ctx context.Context, table, fami
 	c, cancel := context.WithDeadline(s.ctx, deadline)
 	stop := context.AfterFunc(ctx, cancel)
 	defer func() { stop(); cancel() }()
-	if err := errors.Join(r.current(c, s.cleanup), s.roots.current(c)); err != nil {
-		return err
-	}
-	source, ok := r.tools.Runner.(wgKernelServiceTableSource)
-	if !ok {
-		return ErrWGOperationOwner
-	}
-	count, err := source.ReadWGKernelServiceTable(c, r.tools.Identity, table, family, r.shape.interfaceName())
-	closing := errors.Join(r.current(c, s.cleanup), s.roots.current(c), c.Err())
-	if err != nil || closing != nil || count != 0 {
-		return errors.Join(err, closing, errWGInactiveUnknown)
-	}
-	return nil
+	return r.observeKernelTools(c, s, func(c context.Context) error {
+		if err := errors.Join(r.current(c, s.cleanup), s.roots.current(c)); err != nil {
+			return err
+		}
+		source, ok := r.tools.Runner.(wgKernelServiceTableSource)
+		if !ok {
+			return ErrWGOperationOwner
+		}
+		count, err := source.ReadWGKernelServiceTable(c, r.tools.Identity, table, family, r.shape.interfaceName())
+		closing := errors.Join(r.current(c, s.cleanup), s.roots.current(c), c.Err())
+		if err != nil || closing != nil || count != 0 {
+			return errors.Join(err, closing, errWGInactiveUnknown)
+		}
+		return nil
+	})
 }

@@ -68,6 +68,15 @@ type wgInactivityRunner struct {
 	engine string
 }
 
+// The original inactivity source lends only its own retained tool bytes.
+// Dataplane calls this around a fixed kernel read, never an effect/CLI body.
+func (r *wgInactivityRunner) WithWGInactivityToolObservation(ctx context.Context, expected netidentity.Identity, review string, use func(context.Context) error) error {
+	if r == nil || r.lease == nil || (r.engine != "wireguard" && r.engine != "amneziawg") || r.lease.profile.wgEngine != managedListWGProfile || r.lease.identity != expected || review == "" || r.lease.digest != review || use == nil {
+		return at("WG_INACTIVITY_OBSERVATION_SOURCE", nil)
+	}
+	return r.lease.WithReadOnlyToolObservation(ctx, expected, review, use)
+}
+
 func (r *wgInactivityRunner) SameWGToolSource(other dataplane.WGCommandToolRunner) bool {
 	o, ok := other.(*wgRunner)
 	return r != nil && ok && o != nil && r.lease != nil && r.lease == o.lease && r.engine == o.engine

@@ -44,17 +44,21 @@ func (r *WGInactivityRead) readKernelLinks(ctx context.Context) ([]physicalscope
 	c, cancel := context.WithDeadline(s.ctx, deadline)
 	stop := context.AfterFunc(ctx, cancel)
 	defer func() { stop(); cancel() }()
-	if err := errors.Join(r.current(c, s.cleanup), s.roots.current(c)); err != nil {
+	var links []physicalscope.WGKernelLink
+	err := r.observeKernelTools(c, s, func(c context.Context) error {
+		if err := errors.Join(r.current(c, s.cleanup), s.roots.current(c)); err != nil {
+			return err
+		}
+		source, ok := r.tools.Runner.(wgInactivityKernelLinkSource)
+		if !ok {
+			return ErrWGOperationOwner
+		}
+		var err error
+		links, err = source.ReadWGKernelLinks(c, r.tools.Identity)
+		return errors.Join(err, r.current(c, s.cleanup), s.roots.current(c), c.Err())
+	})
+	if err != nil {
 		return nil, err
-	}
-	source, ok := r.tools.Runner.(wgInactivityKernelLinkSource)
-	if !ok {
-		return nil, ErrWGOperationOwner
-	}
-	links, err := source.ReadWGKernelLinks(c, r.tools.Identity)
-	closing := errors.Join(r.current(c, s.cleanup), s.roots.current(c), c.Err())
-	if err != nil || closing != nil {
-		return nil, errors.Join(err, closing)
 	}
 	return append([]physicalscope.WGKernelLink(nil), links...), nil
 }

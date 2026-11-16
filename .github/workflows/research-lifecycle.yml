@@ -527,8 +527,8 @@ jobs:
           mkdir -p artifacts/managed
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
-          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
-            -run '^TestWGRuntimeInactiveMeasurement|^TestWGInactivityEmptyTable' | tee artifacts/managed/wg-measurement-contracts.log
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane ./internal/startuptools \
+            -run '^TestWGRuntimeInactiveMeasurement|^TestWGInactivityEmptyTable|^TestWGInactivityKernelToolClosingBeforeResult$|^TestWGKernelToolComparisonSealsAndJoins$|^TestWGInactivityToolObservationRejectsForeignSourceBeforeCallback$' | tee artifacts/managed/wg-measurement-contracts.log
           for name in OriginalTwoPassOrder RefusalAndPrivacy BoundAndIncomplete; do
             grep -F -- "--- PASS: TestWGRuntimeInactiveMeasurement$name " artifacts/managed/wg-measurement-contracts.log
           done
@@ -536,6 +536,16 @@ jobs:
             grep -F -- "--- PASS: TestWGInactivityEmptyTable$name " artifacts/managed/wg-measurement-contracts.log
           done
           if grep -F -- '--- SKIP:' artifacts/managed/wg-measurement-contracts.log; then exit 1; fi
+          for name in TestWGInactivityKernelToolClosingBeforeResult TestWGKernelToolComparisonSealsAndJoins TestWGInactivityToolObservationRejectsForeignSourceBeforeCallback; do
+            grep -F -- "--- PASS: $name " artifacts/managed/wg-measurement-contracts.log
+          done
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_WG_INACTIVITY_READ_CHILD=1 \
+            go test "${race_flag[@]}" -count=1 -v ./internal/startuptools \
+            -run '^TestNativeWGInactivityKernelToolObservation$' | tee artifacts/managed/wg-tool-observation.log
+          grep -F -- '--- PASS: TestNativeWGInactivityKernelToolObservation ' artifacts/managed/wg-tool-observation.log
+          if grep -F -- '--- SKIP:' artifacts/managed/wg-tool-observation.log; then exit 1; fi
       - name: Original active directory custody and error classification
         if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash

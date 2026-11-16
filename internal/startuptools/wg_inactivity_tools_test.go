@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
 func TestWGInactivityStartupFactoryRefusesUnissuedExpiredAndChangedAbsence(t *testing.T) {
@@ -48,6 +50,38 @@ func TestWGInactivityStartupSourceRequiresSameOriginalLeaseAndEngine(t *testing.
 		if r.SameWGToolSource(other) {
 			t.Fatal("foreign source compared as original")
 		}
+	}
+}
+
+func TestWGInactivityToolObservationRejectsForeignSourceBeforeCallback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	l := managedListDescriptorFixture(t, [2]bool{false, false})
+	defer l.Close()
+	for _, cut := range []string{"nil", "no-lease", "foreign-engine", "foreign-review", "foreign-identity", "no-callback"} {
+		t.Run(cut, func(t *testing.T) {
+			r := &wgInactivityRunner{l, "wireguard"}
+			id, review := l.identity, l.digest
+			called := false
+			use := func(context.Context) error { called = true; return nil }
+			switch cut {
+			case "nil":
+				r = nil
+			case "no-lease":
+				r.lease = nil
+			case "foreign-engine":
+				r.engine = "foreign"
+			case "foreign-review":
+				review = "foreign"
+			case "foreign-identity":
+				id = netidentity.Identity{}
+			case "no-callback":
+				use = nil
+			}
+			if err := r.WithWGInactivityToolObservation(ctx, id, review, use); err == nil || called {
+				t.Fatal("foreign source reached observation", err)
+			}
+		})
 	}
 }
 
