@@ -74,6 +74,20 @@ jobs:
         with:
           go-version: '1.26.5'
           cache: false
+      - name: Actual owned home keeps opening and closing absence proofs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            go test "${flags[@]}" -count=1 -v ./internal/dataplane \
+              -run '^TestMihomoSameBootHomeOwnsAbsenceBookends$' \
+              2>&1 | tee artifacts/sameboot-profile/home-bookends.log
+          grep -F -- '--- PASS: TestMihomoSameBootHomeOwnsAbsenceBookends ' artifacts/sameboot-profile/home-bookends.log
+          if grep -F -- '--- SKIP:' artifacts/sameboot-profile/home-bookends.log; then exit 1; fi
       - name: Pinned official Xray and disposable namespace tools
         shell: bash
         run: |

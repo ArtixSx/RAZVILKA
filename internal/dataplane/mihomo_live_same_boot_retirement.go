@@ -367,9 +367,9 @@ func (c *mihomoSameBootRetirementCursor) run() (Execution, error) {
 		if err := c.beforeSidecar(); err != nil {
 			return err
 		}
-		if _, err := o.absent(c.ctx); err != nil {
-			return err
-		}
+		// homeCurrent opens and closes its fresh home read with this SAME
+		// owner's complete absence observer. No callback or effect precedes
+		// that opening observation; a third adjacent absence adds no boundary.
 		return c.homeCurrent()
 	}
 	if err := c.publishArchive("runtime-history", struct {
