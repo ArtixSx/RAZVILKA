@@ -9,6 +9,9 @@ jobs:
   comparison:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=2'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -25,18 +28,18 @@ jobs:
           sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/razvilka-source-mihomo.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/razvilka-source-mihomo.gz' | sha256sum --check --strict
           { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
-      - name: Original source current and complete runtime image comparisons
+      - name: Full original source current and same-host paired measurements
         shell: bash
         run: |
           set -euo pipefail
           for mode in normal race; do
             flags=()
             if [ "$mode" = race ]; then flags=(-race); fi
-            RAZVILKA_MIHOMO_ARCHIVE=/tmp/razvilka-source-mihomo.gz RAZVILKA_RUNTIME_CLEAR_MEASURE=1 \
+            RAZVILKA_MIHOMO_ARCHIVE=/tmp/razvilka-source-mihomo.gz RAZVILKA_SOURCE_CURRENT_MEASURE=1 \
               go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/components \
-              -run '^TestMihomoLiveSourceNativeCurrent$|^TestManagedRuntime(Clear|PayloadClear)' \
+              -run '^TestMihomoLiveSourceNativeCurrent$|^TestMihomoLiveSourceCurrentNative' \
               2>&1 | tee "artifacts/$mode.log"
-            for name in TestMihomoLiveSourceNativeCurrent TestManagedRuntimePayloadClearOwnsEveryExit TestManagedRuntimeClearSourceParity TestManagedRuntimeClearFullImagePairs; do
+            for name in TestMihomoLiveSourceNativeCurrent TestMihomoLiveSourceCurrentNativeSourceParity TestMihomoLiveSourceCurrentNativePaired; do
               grep -F -- "--- PASS: $name " "artifacts/$mode.log"
             done
             if grep -F -- '--- SKIP:' "artifacts/$mode.log"; then exit 1; fi
@@ -44,11 +47,15 @@ jobs:
           import json,pathlib,sys
           mode=sys.argv[1]
           text=pathlib.Path('artifacts',mode+'.log').read_text()
-          rows=[json.loads(line.split('nfq_runtime_clear_pair ',1)[1]) for line in text.splitlines() if 'nfq_runtime_clear_pair ' in line]
-          assert len(rows)==8
-          assert [r['variant'] for r in rows]==['duplicate-clear','single-clear','single-clear','duplicate-clear']*2
-          for i,r in enumerate(rows):
-              assert r['sample']==i and r['calls']==16 and r['payload_bytes']>0 and r['wall_ns']>0
+          rows=[json.loads(line.split('SOURCE_CURRENT_PAIR ',1)[1]) for line in text.splitlines() if 'SOURCE_CURRENT_PAIR ' in line]
+          assert len(rows)==16
+          variants=['original-serial-source-current','parallel-two-sha-source-current']
+          for pair in range(8):
+              group=[r for r in rows if r['pair']==pair]
+              assert [r['variant'] for r in group]==(variants if pair%2==0 else variants[::-1])
+              for r in group:
+                  assert r['samples']==2 and r['artifact_bytes']==62017662 and r['fresh_artifact_streams_per_current']==2
+                  assert r['controller_bytes']>0 and r['wall_ns']>0 and r['total_process_cpu_ns']>0
           pathlib.Path('artifacts',mode+'-samples.json').write_text(json.dumps(rows,indent=2)+'\n')
           PY
           done
