@@ -286,6 +286,33 @@ write denial прежнего образа снимается, хотя PID/star
 заменялись. Чужой GPL-код не копировался, runtime dependency не добавлялась.
 
 
+### 16.11: проверка возможности сократить IP version children
+
+Решение: оставить фактический `ip -Version` при каждом Check. В Ubuntu
+6.19.0-1ubuntu1.1 функция версии читает `/proc/self/maps` и извлекает суффикс
+из первого pathname с `libbpf.so.`; fallback может дать ожидаемый stdout и
+exit0, но warning в stderr остаётся отказом. SHA файлов/загрузчика не заменяет
+это наблюдение конкретного дочернего процесса. Изучен pinned upstream
+[dac1bc6021693902b25a961227e289791e429b91](https://github.com/iproute2/iproute2/blob/dac1bc6021693902b25a961227e289791e429b91/lib/bpf_glue.c#L33-L78),
+GPL-2.0; код не переносился.
+
+У Entware4.4.0-11 version branch статична по upstream
+[92a0236a3cdf3438000834121b7ea8a09f1f52b1](https://github.com/iproute2/iproute2/blob/92a0236a3cdf3438000834121b7ea8a09f1f52b1/ip/ip.c#L158-L234)
+и [рецепту541289a115d32d1ab044e87608bc0ca6b2154ee9](https://github.com/Entware/Entware/blob/541289a115d32d1ab044e87608bc0ca6b2154ee9/package/network/utils/iproute2/Makefile),
+GPL-2.0. Но текущий опубликованный ELF `2a83e983…` не совпадает со старым
+stock pin `cce8d3fa…`; номер пакета не доказывает идентичность сборки.
+Кроме того, нынешний контракт отдельно требует подлинные Start/Wait и пустой
+stderr. Уже существующий native тест индуцирует IP Start EAGAIN внутри того
+же scope после первого годного batch и требует отзыва retained xtables fact.
+Повтор известной строки пропустил бы этот отказ. Из4011 IP Starts следует
+не менее8022 metadata attempts, но это число вызовов, не доля времени.
+
+Полные hashes архивов/ELF, зависимости, лицензии и callgraphs сохранены в
+`C:/Projects/RAZVILKA/artifacts/entware-review-2026-11-16.txt`, раздел
+«Исследование ip -Version». Новые профили Entware исследуются отдельно;
+старые guards и буквальный argv сохранены. Подмена `-Version` на `-V`
+проходит ту же ветку и не ускоряет проверку.
+
 ### Стадии одного HTTP обмена
 
 Дополнительно изучен исходник поставляемого Go1.26.5

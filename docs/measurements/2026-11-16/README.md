@@ -1,5 +1,28 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
+## Обновлённые отказы полной приёмки
+
+[Mihomo race60bd5153](mihomo-parent-race-60bd5153.json), run43926086704:
+parent/private и два ACK cuts PASS; completed.json, terminal-transaction и
+terminal-global FAIL120с, retirement absence-source-opening. Это не закрытая
+race-приёмка; отдельная диагностика HEV её не заменяет.
+
+На8ab8f100, run43927647142, strict DNS selected достиг HTTPS, но запрос не
+уложился в4с; GEN2 original cancellation witness не достигнут за12с.
+Диагностика с30с отдельно: baseline FAIL68.56с, candidate PASS62.74с,
+capture PASS66.93с, standby PASS63.53с. Raw и SHA manifest:
+`C:/RAZVILKA-research-20261116/proc-io-production-8ab8f100/`.
+
+NFQWS2 race8ab manual: consumer-open SOURCE_MISSING, Apply24.223с,
+rollback-failed/verified=false. Прежний60bd verified cleanup не относится к
+этому результату. Raw: `C:/RAZVILKA-research-20261116/managed-8ab-network/race/`.
+Разные CI hosts не позволяют приписать новый отказ изменению FD-read.
+
+Identity8ab, run43927541148: все3 jobs PASS, включая actual normal/race
+ProcReadRefusals, FDKeepsCallerOwnership, InvalidEntryDoesNotRead, offline retry
+и live TLS. Generic push/PR проверяются отдельно.
+
+
 Актуальный сводный статус: [единая матрица](../../CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 [Полное чтение proc60bd5153](backend-proc-io-60bd5153.json), run43925928845 PASS:
