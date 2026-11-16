@@ -1,0 +1,298 @@
+{
+  "revision": "66f006394b8d31799c1f6fc973bf77617dee52ab",
+  "run": 43919362707,
+  "overall": "failure",
+  "notes": [
+    "Cross-run timings are not causal speed measurements.",
+    "Native-apply timing includes rollback; forward operation keeps original18s budget.",
+    "Manual counters after successful fixture Close are invalid unsigned underflow, corrected only in pending native telemetry patch.",
+    "Production recovery fault reached; subsequent fresh Apply still fails. Race fault injection not reached."
+  ],
+  "evidence": [
+    {
+      "build": "production",
+      "file": "lan.log",
+      "sha256": "b48c3ef1e4320ba8c50ad6c16a65f5f3604164d917c4b87c7e855b15646ff281",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.98s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (76.88s)"
+      ],
+      "stages": [
+        "2026/11/16 17:40:27 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=41573",
+        "    strategy_managed_probe_lan_native_linux_test.go:147: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+      ]
+    },
+    {
+      "build": "production",
+      "file": "manual.log",
+      "sha256": "d863266f80d98f48bc113949866fd7d203f788b5e86762d389b4520dc708b81d",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.02s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (44.97s)"
+      ],
+      "stages": [
+        "2026/11/16 17:41:19 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=41580",
+        "    strategy_managed_probe_lan_native_linux_test.go:147: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+      ]
+    },
+    {
+      "build": "production",
+      "file": "never-issued-intent.log",
+      "sha256": "92b951a207846b5808fe8f95ee43eeec8ef961a9f593c8f454e634bc5117041e",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.70s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (86.09s)"
+      ],
+      "stages": [
+        "2026/11/16 17:42:09 Managed NFQ original timing outer=native-apply inner=native-apply reason=NATIVE_OWNER_REFUSED total_ms=40679",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_recovered mode=intent intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026/11/16 17:42:51 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=41597",
+        "    strategy_managed_probe_lan_native_linux_test.go:147: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+      ]
+    },
+    {
+      "build": "production",
+      "file": "never-issued-settlement-sync.log",
+      "sha256": "cfedbf6d710615765b7efecd1a528f6eeb3316b90647d7f42e995c1d84ba3a57",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.73s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (88.04s)"
+      ],
+      "stages": [
+        "2026/11/16 17:43:20 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=19541",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=true",
+        "2026/11/16 17:44:25 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-consumer-close reason=DEADLINE_EXCEEDED total_ms=41511",
+        "    strategy_managed_probe_lan_native_linux_test.go:147: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+      ]
+    },
+    {
+      "build": "production",
+      "file": "probe.log",
+      "sha256": "251486fa07a3603ea66ef32f979eb648ea7c8b674e449e57dda6f863bea12443",
+      "tests": [
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.15s)",
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.14s)",
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.14s)",
+        "--- PASS: TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyWriteErrorPrecedence (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyFastPaths (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyParity (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyClearsScratch (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyFreshFiles (0.01s)",
+        "--- PASS: TestNFQWSManagedCopyConcurrent (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveCopyParity (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveWriterToCannotBypassBudget (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveClearsScratch (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveActualFamilies (0.06s)",
+        "--- PASS: TestOutputReaderClassicSaveActualCancellationJoins (0.02s)",
+        "--- PASS: TestOutputReaderCopyParity (0.00s)",
+        "--- PASS: TestOutputReaderPreservesWriterTo (0.00s)",
+        "--- PASS: TestOutputReaderClearsOnErrorAndPanic (0.00s)",
+        "--- PASS: TestOutputReaderConcurrentCombinedWriter (0.01s)",
+        "--- PASS: TestOutputReaderChild (0.00s)",
+        "--- PASS: TestOutputReaderActualChild (0.06s)",
+        "--- PASS: TestFreshPathNodeSyscallArgumentParity (0.00s)",
+        "--- PASS: TestFreshPathNodeActualMutationAndSymlink (0.00s)",
+        "--- PASS: TestFreshPathNodeConcurrentArgumentsRemainExclusive (0.00s)",
+        "--- PASS: TestFreshPathNodeActualRootNodes (0.00s)",
+        "--- PASS: TestFreshPathNodeStatComparisonFields (0.00s)",
+        "--- PASS: TestFreshHeldNodeActualMutationAndClosedFileParity (0.00s)",
+        "--- PASS: TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD (0.00s)",
+        "--- PASS: TestFreshHeldNodeCloseRacesOriginalControl (0.00s)",
+        "--- PASS: TestClassicSaveNativeInventoryParity (0.82s)",
+        "--- PASS: TestClassicSaveNativeLockCustody (0.12s)",
+        "--- PASS: TestStaticVersionFactNativeClassicBatchBookends (0.18s)",
+        "--- PASS: TestStaticVersionFactNativePolicyReadObservation (0.26s)",
+        "--- PASS: TestStaticVersionFactNativeScope (0.24s)",
+        "--- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.13s)",
+        "--- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.13s)",
+        "--- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.23s)",
+        "--- PASS: TestClassicReadBatchNativeMutation (1.41s)",
+        "--- PASS: TestManagedStrategyProbeNativeConsumer (9.58s)",
+        "--- PASS: TestManagedStrategyProbeNativeConsumerLateWaitCleanup (12.28s)",
+        "--- PASS: TestManagedStrategyProbeNativeAppHTTP (31.98s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingSource (9.29s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingRuntime (9.28s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingControl (9.41s)",
+        "--- PASS: TestManagedStrategyProbeNativeClosingEnvironment (9.34s)",
+        "--- PASS: TestMetadataParallelSourceParity (0.00s)",
+        "--- PASS: TestMetadataParallelActualParity (0.11s)",
+        "--- PASS: TestMetadataParallelOwnedMutations (0.13s)",
+        "--- PASS: TestMetadataParallelSourceParity (0.00s)",
+        "--- PASS: TestMetadataParallelActualParity (0.10s)",
+        "--- PASS: TestMetadataParallelOwnedMutations (0.13s)",
+        "--- PASS: TestMetadataParallelSourceParity (0.00s)",
+        "--- PASS: TestMetadataParallelActualParity (0.10s)",
+        "--- PASS: TestMetadataParallelOwnedMutations (0.12s)",
+        "--- PASS: TestVersionNamesCandidateSourceParity (0.00s)",
+        "--- PASS: TestVersionNamesCandidateActualParity (0.11s)",
+        "--- PASS: TestVersionNamesCandidateSourceParity (0.00s)",
+        "--- PASS: TestVersionNamesCandidateActualParity (0.09s)",
+        "--- PASS: TestVersionNamesCandidateSourceParity (0.00s)",
+        "--- PASS: TestVersionNamesCandidateActualParity (0.09s)",
+        "--- PASS: TestStartupImageMeasurementSourceParity (0.00s)",
+        "--- PASS: TestStartupImageMeasurementActualParity (0.14s)",
+        "--- PASS: TestStartupImageMeasurementRefusals (0.01s)",
+        "--- PASS: TestStartupImageMeasurementReadBoundaries (0.00s)",
+        "--- PASS: TestStartupImageMeasurementFixedSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementConcurrentSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairStorageAndFallback (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairFailureCleanup (0.00s)",
+        "--- PASS: TestStartupImageMeasurementSourceParity (0.00s)",
+        "--- PASS: TestStartupImageMeasurementActualParity (0.12s)",
+        "--- PASS: TestStartupImageMeasurementRefusals (0.01s)",
+        "--- PASS: TestStartupImageMeasurementReadBoundaries (0.00s)",
+        "--- PASS: TestStartupImageMeasurementFixedSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementConcurrentSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairStorageAndFallback (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairFailureCleanup (0.00s)",
+        "--- PASS: TestStartupImageMeasurementSourceParity (0.00s)",
+        "--- PASS: TestStartupImageMeasurementActualParity (0.12s)",
+        "--- PASS: TestStartupImageMeasurementRefusals (0.01s)",
+        "--- PASS: TestStartupImageMeasurementReadBoundaries (0.00s)",
+        "--- PASS: TestStartupImageMeasurementFixedSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementConcurrentSlot (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairStorageAndFallback (0.00s)",
+        "--- PASS: TestStartupImageMeasurementPairFailureCleanup (0.00s)"
+      ],
+      "stages": [
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.499198946s actual inventory ToolCheck calls 382 ToolCheck wall 3.632865489s",
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.152346602s actual inventory ToolCheck calls 242 ToolCheck wall 2.360233637s",
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.466760164s actual inventory ToolCheck calls 382 ToolCheck wall 3.616015378s",
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.437403868s actual inventory ToolCheck calls 382 ToolCheck wall 3.612425589s",
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.491483594s actual inventory ToolCheck calls 382 ToolCheck wall 3.625590795s",
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 8.499743141s actual inventory ToolCheck calls 382 ToolCheck wall 3.631600162s"
+      ]
+    },
+    {
+      "build": "production",
+      "file": "quarantine-close-retry.log",
+      "sha256": "57181409138f5d46eaa6568a3c823a801ddfa39255efc95e8072d07304eef6d4",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.13s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANManualApply (46.46s)"
+      ],
+      "stages": [
+        "2026/11/16 17:44:55 Managed NFQ original timing outer=native-apply inner=native-apply reason=LAN_CONSUMER_REFUSED total_ms=19505",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_quarantine joined=true original_gate_continuous=true permanent_fence_cleared=false",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_recovered mode=settlement-sync intent_index=1 original_writer=true joined_child=true empty_queue_rules=true restored_direct_lan=true fresh_apply_pending=false",
+        "    strategy_managed_probe_native_linux_test.go:470: actual_never_issued_quarantine_close_retry sources_closed=true second_stop_joined=true original_lease_released=true permanent_fence=true cleanup_only=true"
+      ]
+    },
+    {
+      "build": "race",
+      "file": "lan.log",
+      "sha256": "7e1b4954662a4561b77e3d1fd0bee3978bc9508871e51358ff8f1da23495fcbc",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.98s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANAppHTTP (17.70s)"
+      ],
+      "stages": []
+    },
+    {
+      "build": "race",
+      "file": "manual.log",
+      "sha256": "56c1b6b3e8144a237e1f6920a19b446f0882b1e66b2173124c0c73dcc2c36c54",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.08s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (54.61s)"
+      ],
+      "stages": [
+        "2026/11/16 17:39:47 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=47721",
+        "    strategy_managed_probe_lan_native_linux_test.go:147: actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true"
+      ]
+    },
+    {
+      "build": "race",
+      "file": "never-issued-intent.log",
+      "sha256": "2b10c79c545589da46836bf7cb2249c20d56152654c2f2f076b887555a36c14d",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (2.05s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (55.01s)"
+      ],
+      "stages": [
+        "2026/11/16 17:40:51 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=LAN_CONSUMER_REFUSED total_ms=48110"
+      ]
+    },
+    {
+      "build": "race",
+      "file": "never-issued-settlement-sync.log",
+      "sha256": "412da6077e97dceb7d90488a55a51d18dac8afe9ef9ea3ea9259e911baa77fa9",
+      "tests": [
+        "--- PASS: TestManagedProbeFailedCleanupTerminalVector (0.00s)",
+        "--- PASS: TestNativeFixturePhysicalSourceCopiesRefuse (0.00s)",
+        "--- PASS: TestManagedStrategyProbeNativeLANPhysical (1.86s)",
+        "--- FAIL: TestManagedStrategyProbeNativeLANManualApply (54.37s)"
+      ],
+      "stages": [
+        "2026/11/16 17:41:54 Managed NFQ original timing outer=native-apply inner=lan-preflight-inventory-nfq-consumer-open reason=DEADLINE_EXCEEDED total_ms=47586"
+      ]
+    },
+    {
+      "build": "race",
+      "file": "probe.log",
+      "sha256": "c4fc2e8f6c0e9c31555cce75321aef17e9cd6e45d75d1ec089f1987dc2912a41",
+      "tests": [
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.19s)",
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.17s)",
+        "--- PASS: TestStaticVersionFactNativeNFQLANRPDB (0.16s)",
+        "--- PASS: TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyWriteErrorPrecedence (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyFastPaths (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyParity (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyClearsScratch (0.00s)",
+        "--- PASS: TestNFQWSManagedCopyFreshFiles (0.01s)",
+        "--- PASS: TestNFQWSManagedCopyConcurrent (0.01s)",
+        "--- PASS: TestOutputReaderClassicSaveCopyParity (0.01s)",
+        "--- PASS: TestOutputReaderClassicSaveWriterToCannotBypassBudget (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveClearsScratch (0.00s)",
+        "--- PASS: TestOutputReaderClassicSaveActualFamilies (6.16s)",
+        "--- PASS: TestOutputReaderClassicSaveActualCancellationJoins (0.04s)",
+        "--- PASS: TestOutputReaderCopyParity (0.01s)",
+        "--- PASS: TestOutputReaderPreservesWriterTo (0.00s)",
+        "--- PASS: TestOutputReaderClearsOnErrorAndPanic (0.00s)",
+        "--- PASS: TestOutputReaderConcurrentCombinedWriter (0.02s)",
+        "--- PASS: TestOutputReaderChild (0.00s)",
+        "--- PASS: TestOutputReaderActualChild (4.17s)",
+        "--- PASS: TestFreshPathNodeSyscallArgumentParity (0.00s)",
+        "--- PASS: TestFreshPathNodeActualMutationAndSymlink (0.00s)",
+        "--- PASS: TestFreshPathNodeConcurrentArgumentsRemainExclusive (0.00s)",
+        "--- PASS: TestFreshPathNodeActualRootNodes (0.00s)",
+        "--- PASS: TestFreshPathNodeStatComparisonFields (0.00s)",
+        "--- PASS: TestFreshHeldNodeActualMutationAndClosedFileParity (0.00s)",
+        "--- PASS: TestFreshHeldNodeConcurrentScratchAndCloseNeverReuseFD (0.00s)",
+        "--- PASS: TestFreshHeldNodeCloseRacesOriginalControl (0.01s)",
+        "--- PASS: TestClassicSaveNativeInventoryParity (0.89s)",
+        "--- PASS: TestClassicSaveNativeLockCustody (0.14s)",
+        "--- PASS: TestStaticVersionFactNativeClassicBatchBookends (0.24s)",
+        "--- PASS: TestStaticVersionFactNativePolicyReadObservation (0.32s)",
+        "--- PASS: TestStaticVersionFactNativeScope (0.31s)",
+        "--- PASS: TestStaticVersionFactNativeFailedIPClearsFact (0.18s)",
+        "--- PASS: TestStaticVersionFactNativePartialBatchNeverRetained (0.17s)",
+        "--- PASS: TestStaticVersionFactNativeOriginalFingerprint (0.33s)",
+        "--- PASS: TestClassicReadBatchNativeMutation (1.76s)",
+        "--- FAIL: TestManagedStrategyProbeNativeConsumer (15.23s)"
+      ],
+      "stages": [
+        "    strategy_managed_probe_native_linux_test.go:526: native measured Execute 11.674166715s actual inventory ToolCheck calls 242 ToolCheck wall 2.536699593s"
+      ]
+    }
+  ]
+}

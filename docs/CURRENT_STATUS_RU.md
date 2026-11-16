@@ -2,7 +2,7 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 16.11.2026, `374bbd46`
+## Текущая сверка: 16.11.2026, `e2fb7b88`
 
 Код и оформление интегрированы; выпуск ещё не принят. Эта сверка имеет
 приоритет над прежними контрольными точками ниже. Эта рабочая ветка роутер
@@ -13,10 +13,11 @@
 
 | Направление | Проверено | Что продолжается |
 | --- | --- | --- |
-| Общий CI | `33de2dde`, run43908375410, `74c7a0c0`, run43909060138 и `a74c74c1`, run43912334384 PASS; identity0652 run43911534417 PASS | Итоговый SHA после текущих правок требует своего полного CI; лишние generic runs0652/7231/e4e отменены |
-| HEV | `53fd786e` source lab64 startup/cleanup samples PASS; повтор74c source lab PASS. `74c7a0c0` parent normal41.77с/race81.79с и completed ACK normal52.41с PASS. Исправленный бинарник запустился на реальном host AT_MIN11952, где официальный вновь дал16/16 exit254. На9dce/374b интегрирован update с исходным inactivity, журналом и откатом; независимое ревью и локальные focused/vet PASS | Actual Linux HTTP old→patched normal1.12с/race1.97с, все7 component тестов PASS на374bbd46, run43916940407; отсутствуют SKIP. Production pin не изменён, vendor asset не опубликован. Completed ACK race120с FAIL; ABBA полного parent пути на42b83032 run43916682582 выполняется |
-| DNS | На7aab оба первоначальных применения прошли; полная проверка mapping замкнута в исходное чтение инструментов, targeted/review PASS | Run43914911621 строгие selected/canceled FAIL: selected первый запрос4с timeout; canceled GEN2 cancellation witness не получен. Сроки не увеличены; межхостовое сравнение не доказывает ускорение |
-| Managed NFQWS2 | `33de2dde` actual-issued boundary: fullLAN/manual при отказе теперь rollback_verified=true; quarantine-close-retry PASS45.80с. Core Consumer8.28с/LateWait11.14с/AppHTTP28.00с PASS | FullLAN/manual fresh Apply остаются FAIL, race Consumer deadline/ACK FAIL; анализ полного пути. Равные счётчики с подменой owned row: отдельный nativebefedef5 PASS normal5.35с/race8.52с; это не fullLAN Apply |
+| Общий CI | `33de2dde`, run43908375410, `74c7a0c0`, run43909060138 и `a74c74c1`, run43912334384 PASS; общий374bbd46 run43916940541 тоже PASS; identity7aab run43914909553 и45690b07 run43920933685 PASS | Итоговый SHA после текущих правок требует своего полного CI; лишние generic runs0652/7231/e4e отменены |
+| HEV | Source lab53fd/74c PASS; исправленный ELF запустился при AT_MIN11952, где официальный дал16/16 exit254. На374bbd46 actual HTTP old→patched normal1.12с/race1.97с и все7 component crash/rollback tests PASS, run43916940407 | Offline vendor bundle проверен, включая143 SHA и144 archive members. Production pin и ARM64 не изменены, asset не опубликован; доставка и default-path проверяются отдельно |
+| Mihomo recovery | Same-host ABBA42b83032: normal image47.83/47.13с, two-SHA52.80/52.93с; race imageFAIL120с×2, two-SHA PASS103.53/103.74с. Наdc5829fd принят общий two-SHA fallback с независимым ревью | Normal стал на11.34% медленнее; RSS не измерен. Exact dc5829fd run43921540920 FAIL: parent race PASS, normal отказ на финальном absence-process-kernel после31.03с; ACK matrix SKIPPED. Наe2fb7b88 добавлены закрытые nested failure labels, новый normal run43924080656 выполняется |
+| DNS | Mapping/lookup observation и GEN2 readonly guard интегрированы; focused/review PASS. Наb31 canceled GEN1 opening6.20с, lookup975мс | Strict b31 selected initial publication12с FAIL (ещё до HTTPS), canceled GEN2 witness12с FAIL; diagnostic30PASS. 45690b07 run43920933947 тоже FAIL: selected opening8.74с завершён, firstHTTPS4с FAIL; canceled GEN2 witness12с FAIL, diagnostic30PASS. Сроки не изменены |
+| Managed NFQWS2 | Actual-issued boundary сохраняет verified rollback. Равные счётчики с подменой owned row: nativebefedef5 PASS normal5.35с/race8.52с. На66f failed-Apply cleanup independently_empty/closed/rolled_back=true | Race66f Consumer15.23с FAIL (Execute11.674с, ACKfalse); manual fresh Apply FAIL. Primary failure не скрыт. Identity66f failed из-за прав доступа тестового каталога; test-only0700 fix в4569 подтверждён identity43920933685 PASS. Telemetry послеClose исправленаef7fb5b7, отдельный Linux run43923839174 выполняется |
 | VLESS/очередь | `33de2dde`, run43908564102 PASS: same-runner N12 медиана полного live Check309.118→216.1785мс; выбранная группа1360.45→1190.335мс, cleanup verified | Фиксированный порядок измерений; это частная Linux-сеть, не готовность WAN/LAN на роутере |
 | Binary + StrategyLab | Public history/manual, modern rollback и genuine old reader4 ранее PASS; identity33de повторил retry/fences | Финальная проверка интегрированного кандидата и аппаратный сценарий |
 | Панель и Releases |13 разделов/21 страница и desktop/mobile checks сохранены. NetZapret1.5.3 на ПК и pinned1.6.2 изучены; примечания по вкладкам; actual hashes/pinned links:3 tests PASS | После сетевой приёмки — проверка панели на роутере и публикация точного набора файлов |
@@ -24,6 +25,7 @@
 
 [HEV: исходная source-lab серия и её ограничения](measurements/2026-11-16/hev-altstack-53fd786e.json).
 [Полный Check/очередь: первые проверки, повторные медианы, стадии и SHA CSV](measurements/2026-11-16/probe-comparison-33de2dde.json).
+[Mihomo ABBA: все8 samples, SHA logs и точная разница исходников](measurements/2026-11-16/mihomo-self-image-42b83032.json).
 Время вложенных наблюдений не складывается; таймаут не превращается в доказанное
 ускорение. Детали оформления и источники:
 [лабораторный журнал](RESEARCH_LAB_20261109.md#1611-netzapret--оформление-панели-и-releases).

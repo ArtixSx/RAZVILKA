@@ -1,0 +1,39 @@
+{
+  "revision": "b31ff87359a4480d5faae86a73460c323093542c",
+  "run_id": 43918414585,
+  "job_id": 133478780851,
+  "scenario": "selected strict original 12-second publication",
+  "profile": "artifacts/research-domain-selected-b31ff87359a4480d5faae86a73460c323093542c/original-run.cpu.pprof",
+  "profile_sha256": "d9dda293622d38cbfa1c5abce8fc954b7c02c18884a3614e52b3e3fea08135af",
+  "profile_span_seconds": 18.76,
+  "total_cpu_seconds": 16.76,
+  "command": "go tool pprof -top -cum -nodecount=2000 -nodefraction=0 original-run.cpu.pprof",
+  "nodes": [
+    {
+      "name": "nodestore.(*Store).load",
+      "flat_seconds": 0,
+      "cumulative_seconds": 0.2,
+      "cumulative_percent": 1.19
+    },
+    {
+      "name": "nodestore.decodeKnownFields",
+      "flat_seconds": 0,
+      "cumulative_seconds": 0.12,
+      "cumulative_percent": 0.72
+    },
+    {
+      "name": "nodestore.(*Store).Snapshot",
+      "flat_seconds": 0,
+      "cumulative_seconds": 0.11,
+      "cumulative_percent": 0.66
+    },
+    {
+      "name": "nodestore.(*Store).WithSecret",
+      "flat_seconds": 0,
+      "cumulative_seconds": 0.26,
+      "cumulative_percent": 1.55
+    }
+  ],
+  "decision": "Do not optimize nodestore cache/decoder from the isolated timeout stack: CPU cost does not establish it as the main bottleneck.",
+  "limitations": "Sampled CPU for whole Run through join, not isolated wall critical path; overlapping cumulative nodes are not additive. Profile includes cleanup. Strict publication failed; no router result."
+}

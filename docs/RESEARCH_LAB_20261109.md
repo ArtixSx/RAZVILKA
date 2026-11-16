@@ -756,6 +756,40 @@ sigaltstack syscall отсутствует. Проверяется гипоте�
 до выпуска исправленного компонента; на этой точке такого исправления ещё нет.
 
 
+## 16.11: полное сравнение Mihomo на одном host
+
+Run43916682582, exact42b83032, два исходных архива отличаются ровно аргументом
+scratch в cold self-image reader. Фиксированная ABBA последовательно для
+normal и race; все8 samples/log SHA и source manifests проверены независимо.
+Normal image47.83/47.13с против two-SHA52.80/52.93с: среднее47.48→52.865с,
+то есть normal медленнее на11.34%. Race image дважды FAIL120с; two-SHA
+PASS103.53/103.74с. Overall workflow честно FAIL, поскольку старые отказы
+не исключены.120с — отсечка незавершённого теста, не время успешного baseline.
+
+Наdc5829fd принят общий для всех сборок существующий fallback двух свежих
+полных SHA. Проверки metadata/EOF/context/parent/process/socket и120с
+сохранены. Ускорение normal и уменьшение RSS не заявляются. Проверка всех
+точек ACK exactdc5829fd идёт отдельно в43921540920. Источники, времена
+consumer и отдельный driver wall с компиляцией:
+[полная серия](measurements/2026-11-16/mihomo-self-image-42b83032.json).
+
+## 16.11: подтверждённые остатки DNS и NFQWS2
+
+Наb31ff873 strict selected не дождался первоначальной DNS publication12с,
+а canceled-ready — GEN2 witness12с; diagnostic30PASS. Одиночный timeout stack
+показывал nodestore decode, но exact pprof16.76CPU даёт load0.20с и decode0.12с.
+Не вводим новый JSON cache по этому стеку:
+[числа, SHA профиля и ограничения](measurements/2026-11-16/nodestore-profile-b31ff873.json).
+
+На66f00639 общий managed run43919362707 FAIL. Core production прошёл,
+intent/settlement recovery достигнуты и прошли, но последующий fresh Apply
+вновь не завершился в исходном18с. Failed Apply отдельно подтвердил закрытие
+и отсутствие принадлежащих ему объектов; первичный FAIL сохранён. Значения
+общего Apply41–48с включают rollback, а не увеличение forward deadline.
+Показатели version counters послеClose ошибочны (unsigned underflow);
+перенос источника измерения черезClose исправляется отдельно. Все11 log SHA,
+результаты и пределы: [native66f](measurements/2026-11-16/managed-66f00639.json).
+
 ## 16.11: проверенный путь замены HEV
 
 На `374bbd46c602302363b4f087e627ae6370bdbcad` run

@@ -1,0 +1,54 @@
+{
+  "run_id": 43921540920,
+  "sha": "dc5829fdd7620f348127154718097bcdc75b9dac",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43921540920",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "databaseId": 133489843674,
+      "name": "original-private-set (race)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 133489843928,
+      "name": "original-parent-native (race)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 133489844073,
+      "name": "original-parent-native (normal)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "databaseId": 133489844166,
+      "name": "original-private-set (normal)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "databaseId": 133493438176,
+      "name": "original-parent-native-ack-cuts",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ],
+  "normal_failure": {
+    "actor_seconds": 31.029603,
+    "stage": "absence-process-kernel",
+    "terminal_global_guard": "open",
+    "nested_cause": "not exposed by this revision; diagnostic labels added e2fb7b88"
+  },
+  "limits": [
+    "Parent race PASS does not close normal failure",
+    "ACK matrix skipped; no ACK acceptance",
+    "Separate official HEV diagnostic exit254 is not the patched parent failure cause",
+    "Private Linux fixture, not physical router/LAN"
+  ],
+  "raw_location": "C:\\RAZVILKA-research-20261116\\sameboot-dc5829fd",
+  "raw_log_sha256": "0cf16a7b799a6c4dd13f3a3553687357be0a8e8656aebba03effa553afc7da36",
+  "followup_run": 43924080656,
+  "followup_status_at_recording": "in_progress"
+}
