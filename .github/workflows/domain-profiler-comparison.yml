@@ -8,6 +8,11 @@ on:
         type: choice
         options: [abba, single-selected-off]
         default: abba
+      runner:
+        description: 'Disposable hosted image; admission checks stay unchanged'
+        type: choice
+        options: [ubuntu-latest, ubuntu-24.04, ubuntu-22.04]
+        default: ubuntu-latest
   push:
     branches: ['work/dns-profiler-*']
     paths:
@@ -22,7 +27,7 @@ concurrency:
 jobs:
   matched:
     name: Same runner profiler / ${{ matrix.scenario }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
