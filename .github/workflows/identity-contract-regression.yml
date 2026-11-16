@@ -1,0 +1,50 @@
+name: Identity contract regression
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/identity-contract-*']
+permissions:
+  contents: read
+concurrency:
+  group: identity-contract-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Identity and BPF ABI regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 022
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -a; lscpu; } > artifacts/environment.txt
+          go test -count=1 -v ./internal/netidentity | tee artifacts/identity.txt
+          go test -race -count=1 -v ./internal/netidentity | tee artifacts/identity-race.txt
+          go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
+          go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
+          go test -tags razvilka_native_fixture -count=1 -v ./internal/netidentity -run '^TestAuditCapacityCandidateSourceParity$' | tee artifacts/capacity-parity.txt
+      - name: Matched pure calculation measurement
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Both formulas use the same immutable input in one binary. This is
+          # parser-only cost, not syscall/capture/LAN latency. Fixed order.
+          go test ./internal/netidentity -run '^$' -bench '^BenchmarkMountLayoutBracketCalculation$' -benchmem -benchtime=300ms -count=5 | tee artifacts/mount-calculation.txt
+      - name: Preserve evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: identity-contract-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error

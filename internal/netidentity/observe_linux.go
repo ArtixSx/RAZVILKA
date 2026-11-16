@@ -209,7 +209,11 @@ func captureProc(ctx context.Context) observation {
 	if !ok {
 		return r
 	}
-	r.Checks.SameMountLayout = bytes.Equal(mountBefore, mountAfter) && mountLayoutOK(mountAfter, rootMount, paths)
+	// The opening bytes already passed mountLayoutOK with these unchanged
+	// rootMount/paths. Both reads own separate buffers: exact closing equality
+	// preserves that proof without parsing identical bytes twice. Keep the fresh
+	// closing read and all descriptor/identity postchecks; this is not a cache.
+	r.Checks.SameMountLayout = bytes.Equal(mountBefore, mountAfter)
 	releaseAfter, machineAfter, ok := kernelTuple()
 	if !ok {
 		return r
