@@ -10,6 +10,8 @@ if [ -n "$unformatted" ]; then
   echo "$unformatted"
   exit 1
 fi
+# Draft release pages must describe the actual artifacts and pinned docs.
+python3 scripts/test-release-notes.py
 # Fail early on static errors before either full runtime suite.
 go vet ./...
 # Always execute the release gate. The owned-filesystem tests produce large

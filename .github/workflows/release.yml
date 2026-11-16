@@ -160,7 +160,10 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           NOTES_OPTION="--generate-notes"
           if [[ -f "docs/releases/${VERSION}.md" ]]; then
-            NOTES_OPTION="--notes-file=docs/releases/${VERSION}.md"
+            python3 scripts/prepare-release-notes.py --root . \
+              --version "$VERSION" --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" \
+              --notes "docs/releases/${VERSION}.md" --output "$RUNNER_TEMP/razvilka-release-notes.md"
+            NOTES_OPTION="--notes-file=$RUNNER_TEMP/razvilka-release-notes.md"
           fi
           RELEASE_OPTIONS=(--verify-tag)
           # Promote only after the exact attached artifacts pass router checks.
