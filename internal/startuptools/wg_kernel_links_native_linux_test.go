@@ -123,6 +123,12 @@ func TestNativeWGInactivityKernelToolObservation(t *testing.T) {
 		t.Skip("coordinator-owned original retained source gate")
 	}
 	l, _ := wgKernelLinkHeldSourceFixture(t)
+	// This fixture predates the full canonical-node metadata requirement.
+	// Retain every already-opened original image node as the real factory does;
+	// otherwise the normal CHECK_HELD_FILE guard must refuse this model.
+	for path, image := range l.review.images {
+		l.review.nodes[path] = heldNode{path: path, info: image.info}
+	}
 	r := &wgInactivityRunner{lease: l, engine: "wireguard"}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
