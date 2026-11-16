@@ -7,7 +7,7 @@ on:
       focus:
         description: 'All acceptance jobs or one independent acceptance direction'
         type: choice
-        options: [all, public-history, modern-pair, managed, domain]
+        options: [all, strategy-pair, public-history, modern-pair, managed, domain]
         default: all
       domain_runner:
         description: 'Hosted image for domain admission; all guards remain active'
@@ -45,7 +45,7 @@ env:
   GOTOOLCHAIN: local
 jobs:
   strategy-pair:
-    if: ${{ inputs.focus == '' || inputs.focus == 'all' }}
+    if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'strategy-pair' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -82,13 +82,38 @@ jobs:
             RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
             RAZVILKA_STRATEGY_PAIR_V5_BINARY=/tmp/razvilka-reader5-binary \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app ./internal/dataplane ./internal/operationgate -run "TestStrategyPair|TestStrategyRollbackRetention|TestNativeCandidateStoppedCompletionTwoCuts|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance|TestExecutionHistory|TestExecutionReader|TestRetainedExecutionReader|TestManagedStrategyProbe|TestManagedSelection|TestControlEpochReadObservation"'
+            sh -c 'umask 022; go test -race -count=1 ./internal/strategylab ./internal/privatebackup ./internal/privaterestore && go test -race -count=1 ./internal/updatecheck ./cmd/razvilka ./internal/app ./internal/dataplane ./internal/operationgate -run "TestStrategyPair|TestStrategyRollbackRetention|TestStrategyState|TestLateStrategyState|TestPrivateStrategy|TestPairedOfflineRestoreStreams|TestPrivateRecoveryMaintenance|TestExecutionHistory|TestExecutionReader|TestRetainedExecutionReader|TestManagedStrategyProbe|TestManagedSelection|TestControlEpochReadObservation"'
+      - name: Original stopped completion cuts in separate test processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/strategy-cuts
+          # Each helper keeps its original five-minute case deadline. Separate
+          # package invocations prevent seven cases sharing Go's default ten
+          # minutes; the job deadline remains twenty minutes.
+          for cut in before after strategy strategy-crash strategy-drift strategy-rollback-files strategy-rollback-private; do
+            sudo env PATH="$PATH" GOTOOLCHAIN=local \
+              RAZVILKA_STRATEGY_PAIR_BINARY=/tmp/razvilka-current RAZVILKA_STRATEGY_PAIR_OLD_BINARY=/tmp/razvilka-old-binary \
+              RAZVILKA_STRATEGY_PAIR_V5_BINARY=/tmp/razvilka-reader5-binary \
+              GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              sh -c 'umask 022; exec go test -race -count=1 ./internal/updatecheck -run "^TestNativeCandidateStoppedCompletionTwoCuts$/^$1$" -v' sh "$cut" \
+              2>&1 | tee "artifacts/strategy-cuts/$cut.log"
+            grep -F -- "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/$cut (" "artifacts/strategy-cuts/$cut.log"
+            if grep -F -- '--- SKIP:' "artifacts/strategy-cuts/$cut.log"; then exit 1; fi
+          done
       - name: Restored panel boot in isolated network namespace
         shell: bash
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local RAZVILKA_PRIVATE_PANEL_NATIVE=1 \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test -count=1 ./cmd/razvilka -run '^TestPrivateStrategyRestoredPanelBoot$' -v
+      - name: Preserve stopped completion evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: strategy-cuts-${{ github.sha }}
+          path: artifacts/strategy-cuts/*.log
+          if-no-files-found: warn
   paired-public-cli:
     if: ${{ inputs.focus == '' || inputs.focus == 'all' || inputs.focus == 'public-history' }}
     name: Configured old193 public paired restore / ${{ matrix.history }}
