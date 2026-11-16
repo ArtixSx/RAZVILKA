@@ -98,6 +98,15 @@ func TestNFQWSProbeInitialCleanupRetainedWaitACK(t *testing.T) {
 	for _, mode := range []string{"delayed-same-wait", "deadline", "wait-error", "foreign-marker", "foreign-birth", "foreign-intent"} {
 		t.Run(mode, func(t *testing.T) {
 			a, intent := nfqws2ManagedRecordFixture(t)
+			// Go's t.TempDir child uses 0777 subject to umask; the generic
+			// receipt-shape fixture intentionally does not make that ancestor
+			// private. Actual ACK validates EVERY ancestor below /tmp.
+			if err := os.Chmod(filepath.Dir(a.ConfigPath), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := nfqws2ManagedObservationPath(filepath.Join(a.StateRoot, nfqws2LeaseFile)); err != nil {
+				t.Fatal("original protected ACK fixture path", err)
+			}
 			_, binding, _, _ := nfqws2ManagedStartFixture(t)
 			binding.CommandSHA256 = intent.CommandSHA256
 			intent.LaunchBinding = &binding
