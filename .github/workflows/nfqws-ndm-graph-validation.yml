@@ -24,9 +24,21 @@ jobs:
           go-version: '1.26.5'
           cache: false
       - name: Prepare pinned stock package and disposable native tools
+        shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; uname -srvm; } > artifacts/environment.txt
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux busybox-static curl ca-certificates kmod libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          sudo apt-get install --no-install-recommends -y iproute2 iptables util-linux busybox-static curl ca-certificates kmod python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          ndm_packages=$(sudo mktemp -d /tmp/razvilka-ndm-packages.XXXXXX)
+          case "$ndm_packages" in /tmp/razvilka-ndm-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$ndm_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$ndm_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$ndm_packages/iptables.deb" "$ndm_packages/libip4tc2.deb" \
+            "$ndm_packages/libip6tc2.deb" "$ndm_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py | tee artifacts/tool-provenance.txt
           echo 'da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac  /usr/sbin/xtables-legacy-multi' | sha256sum --check --strict
           curl --fail --location --connect-timeout 15 --max-time 180 --retry 2 -o /tmp/nfqws2-1.3.1.ipk https://github.com/nfqws/nfqws2-keenetic/releases/download/v1.3.1/nfqws2-keenetic_1.3.1_all_entware.ipk
           echo '28af67f8e192c838e007f23517b52b1f8c20d030cef5b971dfc93b7f21a79054  /tmp/nfqws2-1.3.1.ipk' | sha256sum --check --strict
