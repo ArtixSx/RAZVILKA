@@ -331,7 +331,9 @@ func domainPolicyTCPNumericSOCKS(ctx context.Context, endpoint string, target ne
 	if !domainPolicyTCPPublicIPv4(target.Addr()) || (target.Port() != 80 && target.Port() != 443) {
 		return nil, ErrDomainPolicyTCPConsumer
 	}
+	finishActualDial := domainTCPMeasureAcceptedStage(ctx, "socks-dial")
 	base, err := (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp4", endpoint)
+	finishActualDial(err)
 	if err != nil {
 		return nil, err
 	}

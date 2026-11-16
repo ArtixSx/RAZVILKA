@@ -3,6 +3,7 @@
 package dataplane
 
 import (
+	"context"
 	"runtime"
 	"strings"
 	"sync"
@@ -107,8 +108,9 @@ func domainTCPNativeHashBucket() string {
 
 var domainTCPNativeMetrics struct {
 	sync.Mutex
-	active bool
-	values map[string]DomainTCPNativeMetric
+	active     bool
+	generation uint64
+	values     map[string]DomainTCPNativeMetric
 }
 
 // CI-only observation, never a scope, source or effect admission.
@@ -119,6 +121,7 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 		panic("overlapping domain native measurements")
 	}
 	domainTCPNativeMetrics.active = true
+	domainTCPNativeMetrics.generation++
 	domainTCPNativeMetrics.values = make(map[string]DomainTCPNativeMetric)
 	domainTCPNativeMetrics.Unlock()
 	var once sync.Once
@@ -135,6 +138,60 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 			out[k] = v
 		}
 		return out
+	}
+}
+
+// Four literal observation points only. Started/completed counters expose an
+// in-flight or unreached boundary; returned-nil is never service/route proof.
+// The existing accepted marker filters actual SOCKS dials from direct fixture
+// calls. It is only read for diagnostics, never installed or used as authority.
+func domainTCPMeasureAcceptedStage(ctx context.Context, name string) func(error) {
+	switch name {
+	case "initial-current", "admit", "baseline":
+	case "socks-dial":
+		if ctx == nil {
+			return func(error) {}
+		}
+		accepted, _ := ctx.Value(domainAcceptedTCPKey{}).(*domainAcceptedTCP)
+		if accepted == nil || accepted.self != accepted || !accepted.open.Load() {
+			return func(error) {}
+		}
+	default:
+		return func(error) {}
+	}
+	domainTCPNativeMetrics.Lock()
+	if !domainTCPNativeMetrics.active {
+		domainTCPNativeMetrics.Unlock()
+		return func(error) {}
+	}
+	generation := domainTCPNativeMetrics.generation
+	prefix := "accepted-stage/" + name + "/"
+	v := domainTCPNativeMetrics.values[prefix+"started"]
+	v.Calls++
+	domainTCPNativeMetrics.values[prefix+"started"] = v
+	domainTCPNativeMetrics.Unlock()
+	start := time.Now()
+	var once sync.Once
+	return func(err error) {
+		once.Do(func() {
+			elapsed := time.Since(start)
+			domainTCPNativeMetrics.Lock()
+			defer domainTCPNativeMetrics.Unlock()
+			if !domainTCPNativeMetrics.active || domainTCPNativeMetrics.generation != generation {
+				return
+			}
+			v := domainTCPNativeMetrics.values[prefix+"completed"]
+			v.Calls++
+			v.Elapsed += elapsed
+			domainTCPNativeMetrics.values[prefix+"completed"] = v
+			outcome := "returned-nil"
+			if err != nil {
+				outcome = "returned-error"
+			}
+			v = domainTCPNativeMetrics.values[prefix+outcome]
+			v.Calls++
+			domainTCPNativeMetrics.values[prefix+outcome] = v
+		})
 	}
 }
 func domainTCPMeasure(name string) func(int64) {

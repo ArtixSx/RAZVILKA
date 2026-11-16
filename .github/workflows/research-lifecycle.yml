@@ -275,6 +275,20 @@ jobs:
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain
           go test -tags razvilka_native_fixture ./internal/dataplane -run '^TestDomainNativeMeasurementSnapshotsRemainCumulative$|^TestDomainNativeHashBucketsPreserveAggregate$|^TestDomainStandbyReadFileBracket|^TestDomainPreAdd|^TestDomainCaptureGuard|^TestXraySelectedTCPMountIDMeasurement$' -count=1 -v | tee artifacts/domain/read-primitives.log
+      - name: Accepted flow measurement boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture ./internal/dataplane \
+              -run '^TestDomainNativeAcceptedStages' -count=1 -v | tee "artifacts/domain/accepted-stages-$mode.log"
+            for case_name in AreClosedAndIncomplete CannotFinishInLaterMeasurement; do
+              grep -F -- "--- PASS: TestDomainNativeAcceptedStages$case_name " "artifacts/domain/accepted-stages-$mode.log"
+            done
+            if grep -F -- '--- SKIP:' "artifacts/domain/accepted-stages-$mode.log"; then exit 1; fi
+          done
       - name: Private ledger decode parity and allocation measurement
         if: ${{ matrix.scenario == 'selected' }}
         shell: bash

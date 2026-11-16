@@ -252,7 +252,10 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	ctx = flowCtx
 	stopFlow := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopFlow()
-	if err := prepared.Current(ctx); err != nil {
+	finishInitialCurrent := domainTCPMeasureAcceptedStage(ctx, "initial-current")
+	currentErr := prepared.Current(ctx)
+	finishInitialCurrent(currentErr)
+	if err := currentErr; err != nil {
 		return refused, err
 	}
 	accepted := &domainAcceptedTCP{capture: capture, conn: conn, socket: socket}
@@ -260,10 +263,13 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	accepted.open.Store(true)
 	defer accepted.open.Store(false)
 	ctx = context.WithValue(ctx, domainAcceptedTCPKey{}, accepted)
+	finishAdmit := domainTCPMeasureAcceptedStage(ctx, "admit")
 	lease, err := owner.AdmitTCP(ctx, socket)
 	if err != nil || lease == nil {
+		finishAdmit(ErrDomainPolicyTCPConsumer)
 		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
 	}
+	finishAdmit(nil)
 	leased, flowID := lease.Binding()
 	if leased != original {
 		return refused, ErrDomainPolicyTCPConsumer
@@ -289,7 +295,9 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 		Dial: xray.dial,
 	}
 	if original, ok := owner.(*DomainTCPOriginalScope); ok {
+		finishBaseline := domainTCPMeasureAcceptedStage(ctx, "baseline")
 		kernel, err := original.originalBaselineForCapture(ctx, capture, leased)
+		finishBaseline(err)
 		if err != nil {
 			return refused, err
 		}

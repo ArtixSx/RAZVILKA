@@ -613,7 +613,16 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			return fmt.Errorf("expected actual original Xray child, got%d", len(children))
 		}
 		if !dnsOnly {
-			selected := peers.clientRequest(t, original, "selected", published.Answer)
+			t.Logf("actual immediately before selected request counters (explicit test Lookup already finished; not part of client4s): %+v", dataplane.DomainTCPNativeMeasurementSnapshot())
+			selected := func() domainOriginalPeerResult {
+				returned := false
+				defer func() {
+					t.Logf("actual selected request boundary returned=%t (before outer cleanup/mismatch/opaque, including Fatal/Goexit; missing stage is not proof): %+v", returned, dataplane.DomainTCPNativeMeasurementSnapshot())
+				}()
+				result := peers.clientRequest(t, original, "selected", published.Answer)
+				returned = true
+				return result
+			}()
 			if selected.Source != domainOriginalServer || selected.Marker != "native-domain-service" {
 				return fmt.Errorf("selected actual TLS flow not through native VLESS: %+v", selected)
 			}

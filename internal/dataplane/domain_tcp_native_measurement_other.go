@@ -2,4 +2,7 @@
 
 package dataplane
 
-func domainTCPMeasure(string) func(int64) { return func(int64) {} }
+import "context"
+
+func domainTCPMeasure(string) func(int64)                               { return func(int64) {} }
+func domainTCPMeasureAcceptedStage(context.Context, string) func(error) { return func(error) {} }

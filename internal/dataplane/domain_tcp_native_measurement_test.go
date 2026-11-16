@@ -2,7 +2,12 @@
 
 package dataplane
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestDomainNativeMeasurementSnapshotsRemainCumulative(t *testing.T) {
 	stop := StartDomainTCPNativeMeasurement()
@@ -21,6 +26,59 @@ func TestDomainNativeMeasurementSnapshotsRemainCumulative(t *testing.T) {
 		if got := result["snapshot-fixture"]; got.Calls != 2 || got.Bytes != 10 {
 			t.Fatal("snapshot mutated/reset counters or stopped measurement", got)
 		}
+	}
+}
+
+func TestDomainNativeAcceptedStagesAreClosedAndIncomplete(t *testing.T) {
+	stop := StartDomainTCPNativeMeasurement()
+	defer stop()
+	finish := domainTCPMeasureAcceptedStage(context.Background(), "initial-current")
+	prefix := "accepted-stage/initial-current/"
+	before := DomainTCPNativeMeasurementSnapshot()
+	if before[prefix+"started"].Calls != 1 || before[prefix+"completed"].Calls != 0 {
+		t.Fatal("in-flight stage falsely completed", before)
+	}
+	finish(errors.New("private-details-must-not-be-recorded"))
+	finish(nil)
+	domainTCPMeasureAcceptedStage(context.Background(), "baseline")(nil)
+	domainTCPMeasureAcceptedStage(context.Background(), "unrecognized-private-label")(nil)
+	domainTCPMeasureAcceptedStage(context.Background(), "socks-dial")(nil)
+	accepted := &domainAcceptedTCP{}
+	accepted.self = accepted
+	accepted.open.Store(true)
+	ctx := context.WithValue(context.Background(), domainAcceptedTCPKey{}, accepted)
+	domainTCPMeasureAcceptedStage(ctx, "socks-dial")(nil)
+	accepted.open.Store(false)
+	domainTCPMeasureAcceptedStage(ctx, "socks-dial")(nil)
+	after := DomainTCPNativeMeasurementSnapshot()
+	if after[prefix+"completed"].Calls != 1 || after[prefix+"completed"].Elapsed <= 0 || after[prefix+"returned-error"].Calls != 1 || after[prefix+"returned-nil"].Calls != 0 {
+		t.Fatal("outcome/once contract", after)
+	}
+	if after["accepted-stage/socks-dial/started"].Calls != 1 || after["accepted-stage/socks-dial/completed"].Calls != 1 {
+		t.Fatal("unaccepted dial counted", after)
+	}
+	for name := range after {
+		if strings.Contains(name, "private") || !strings.HasPrefix(name, "accepted-stage/") {
+			t.Fatal("unbounded diagnostic", name)
+		}
+	}
+}
+
+func TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement(t *testing.T) {
+	stop := StartDomainTCPNativeMeasurement()
+	finish := domainTCPMeasureAcceptedStage(context.Background(), "admit")
+	old := stop()
+	if old["accepted-stage/admit/started"].Calls != 1 || old["accepted-stage/admit/completed"].Calls != 0 {
+		t.Fatal(old)
+	}
+	stopNext := StartDomainTCPNativeMeasurement()
+	defer stopNext()
+	finish(nil)
+	if got := DomainTCPNativeMeasurementSnapshot(); len(got) != 0 {
+		t.Fatal("stale stage contaminated later sample", got)
+	}
+	if old["accepted-stage/admit/completed"].Calls != 0 {
+		t.Fatal("stopped snapshot mutated")
 	}
 }
 
