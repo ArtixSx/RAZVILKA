@@ -129,8 +129,16 @@ func (m *Manager) externalView(ctx context.Context, spec Spec, refresh bool) (Vi
 	if info.Version != "" {
 		view.AvailableVersionSource = "github-release"
 	}
+	// A vendor-reviewed HEV build can retain the upstream dialect/version while
+	// changing its exact bytes. Offer only a currently integrity-owned image;
+	// this display fact grants no install or runtime inactivity authority.
+	hevImageChanged := false
+	if spec.ID == "hev-socks5-tunnel" && fromReceipt && view.Installed && view.Available && info.PinnedSHA256 != "" && view.InstalledVersion == info.Version {
+		receipt, owned := externalReceiptIdentity(target)
+		hevImageChanged = owned && receipt.Version == view.InstalledVersion && receipt.SHA256 != info.PinnedSHA256
+	}
 	switch {
-	case view.Installed && view.Available && compareVersions(view.InstalledVersion, view.AvailableVersion) < 0:
+	case view.Installed && view.Available && (compareVersions(view.InstalledVersion, view.AvailableVersion) < 0 || hevImageChanged):
 		view.State, view.UpdateAvailable = "update", true
 	case view.Installed:
 		view.State = "installed"
@@ -563,33 +571,41 @@ func installExternalReceipt(path string, data []byte) error {
 }
 
 func externalReceiptVersion(target string) string {
+	receipt, ok := externalReceiptIdentity(target)
+	if !ok {
+		return ""
+	}
+	return receipt.Version
+}
+
+func externalReceiptIdentity(target string) (externalReceipt, bool) {
 	data, err := os.ReadFile(externalReceiptPath(target))
 	if err != nil || len(data) == 0 || len(data) > 4096 {
-		return ""
+		return externalReceipt{}, false
 	}
 	var receipt externalReceipt
 	if err := json.Unmarshal(data, &receipt); err != nil {
-		return ""
+		return externalReceipt{}, false
 	}
 	receipt.Version = strings.TrimSpace(receipt.Version)
 	receipt.SHA256 = strings.ToLower(strings.TrimSpace(receipt.SHA256))
 	if !externalVersionValuePattern.MatchString(receipt.Version) || len(receipt.SHA256) != 64 {
-		return ""
+		return externalReceipt{}, false
 	}
 	// Stream the hash: periodic observation must not hold a whole binary in RAM.
 	binary, err := os.Open(target)
 	if err != nil {
-		return ""
+		return externalReceipt{}, false
 	}
 	defer binary.Close()
 	hash := sha256.New()
 	if _, err := io.Copy(hash, binary); err != nil {
-		return ""
+		return externalReceipt{}, false
 	}
 	if !strings.EqualFold(hex.EncodeToString(hash.Sum(nil)), receipt.SHA256) {
-		return ""
+		return externalReceipt{}, false
 	}
-	return receipt.Version
+	return receipt, true
 }
 
 func defaultValue(value, fallback string) string {

@@ -12,6 +12,14 @@ import (
 // HEV uses the existing exclusive application operation, retained controller
 // fleet and configured component owner. No request can choose a state root.
 func (a *App) installHEV(ctx context.Context) (components.Result, error) {
+	return a.applyHEVPackage(ctx, false)
+}
+
+func (a *App) updateHEV(ctx context.Context) (components.Result, error) {
+	return a.applyHEVPackage(ctx, true)
+}
+
+func (a *App) applyHEVPackage(ctx context.Context, replace bool) (components.Result, error) {
 	if a == nil || a.Components == nil || a.Store == nil || a.ComponentHistory == nil || a.SelfUpdateFiles == nil || a.Components.StateDir != managedComponentsState {
 		return components.Result{}, components.NoMutation(components.ErrRecoveryAuthority)
 	}
@@ -31,7 +39,19 @@ func (a *App) installHEV(ctx context.Context) (components.Result, error) {
 	}
 	defer control.Close()
 	guard := a.hevForwardGuard(a.Store.Get(), control)
-	return a.Components.ApplyHEVGuarded(held, guard, control.WithRename)
+	if !replace {
+		return a.Components.ApplyHEVGuarded(held, guard, control.WithRename)
+	}
+	a.mihomoProbe.mu.Lock()
+	adapter := a.mihomoProbe.adapter
+	a.mihomoProbe.mu.Unlock()
+	if a.Dataplane == nil || adapter == nil || !adapter.RegisteredWith(a.Dataplane) {
+		return components.Result{}, components.NoMutation(components.ErrRecoveryAuthority)
+	}
+	inactive := func(c context.Context, review *components.HEVReplacementReview) error {
+		return guard(c, func() error { return a.Dataplane.VerifyHEVReplacementInactive(c, adapter, review) })
+	}
+	return a.Components.ApplyHEVReplacementGuarded(held, guard, control.WithRename, inactive)
 }
 
 func (a *App) hevForwardGuard(cfg config.Config, control *operationgate.ControlEpochReview) func(context.Context, func() error) error {

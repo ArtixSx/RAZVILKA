@@ -1563,7 +1563,11 @@ func (a *App) componentAction(w http.ResponseWriter, r *http.Request) {
 	} else if id == "nfqws2" && action == "install" {
 		result, err = a.installInitialNFQWS(ctx)
 	} else if id == "hev-socks5-tunnel" {
-		result, err = a.installHEV(ctx)
+		if action == "update" {
+			result, err = a.updateHEV(ctx)
+		} else {
+			result, err = a.installHEV(ctx)
+		}
 	} else if id == "mihomo" {
 		if action == "update" {
 			result, err = a.updateMihomo(ctx)

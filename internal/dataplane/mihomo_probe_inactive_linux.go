@@ -18,7 +18,18 @@ func observeMihomoProbeInactive(ctx context.Context, provider *netidentity.Provi
 	return observeMihomoInactiveOriginal(ctx, provider, replacement, nil)
 }
 
+func observeMihomoProbeInactiveWithHEV(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview, hev *components.HEVReplacementReview) error {
+	return observeMihomoInactiveOriginalWithHEV(ctx, provider, replacement, nil, hev)
+}
+
 func observeMihomoInactiveOriginal(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview, live *mihomoLiveResource) error {
+	return observeMihomoInactiveOriginalWithHEV(ctx, provider, replacement, live, nil)
+}
+
+func observeMihomoInactiveOriginalWithHEV(ctx context.Context, provider *netidentity.Provider, replacement *components.MihomoReplacementReview, live *mihomoLiveResource, hev *components.HEVReplacementReview) error {
+	if replacement != nil && hev != nil {
+		return ErrRuntimeInactivity
+	}
 	if xraySelectedTCPFinite(ctx) != nil || provider == nil {
 		return ErrRuntimeInactivity
 	}
@@ -48,6 +59,11 @@ func observeMihomoInactiveOriginal(ctx context.Context, provider *netidentity.Pr
 					return err
 				}
 			}
+			if hev != nil {
+				if err := hev.Current(observed); err != nil {
+					return err
+				}
+			}
 			proof, err := scopedDNSInactivePlatformProof()
 			if err != nil {
 				return err
@@ -66,6 +82,12 @@ func observeMihomoInactiveOriginal(ctx context.Context, provider *netidentity.Pr
 					old, err := replacement.MatchesProcessImage(observed, second)
 					if err != nil || old {
 						return old, err
+					}
+				}
+				if hev != nil {
+					match, err := hev.MatchesProcessImage(observed, second)
+					if err != nil || match {
+						return match, err
 					}
 				}
 				name, err := os.Readlink(second)
@@ -114,6 +136,11 @@ func observeMihomoInactiveOriginal(ctx context.Context, provider *netidentity.Pr
 			}
 			if replacement != nil {
 				if err := replacement.Current(observed); err != nil {
+					return err
+				}
+			}
+			if hev != nil {
+				if err := hev.Current(observed); err != nil {
 					return err
 				}
 			}

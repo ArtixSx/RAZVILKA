@@ -15,3 +15,7 @@ func observeMihomoProbeInactive(context.Context, *netidentity.Provider, *compone
 func observeMihomoInactiveOriginal(context.Context, *netidentity.Provider, *components.MihomoReplacementReview, *mihomoLiveResource) error {
 	return ErrRuntimeInactivity
 }
+
+func observeMihomoProbeInactiveWithHEV(context.Context, *netidentity.Provider, *components.MihomoReplacementReview, *components.HEVReplacementReview) error {
+	return ErrRuntimeInactivity
+}

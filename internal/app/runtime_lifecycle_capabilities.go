@@ -100,6 +100,7 @@ func (a *App) runtimeLifecycle(id string) *engine.Lifecycle {
 		operations["package_update"] = registeredLifecycleOperation(a.mihomoProbeRegistered(), "original-writer-session-old-image-and-complete-runtime-inactivity-required-at-every-forward-cas")
 	}
 	if id == "hev" {
+		operations["package_update"] = registeredLifecycleOperation(a.mihomoProbeRegistered(), "original-writer-old-and-desired-images-and-complete-runtime-inactivity-required-at-every-forward-cas")
 		dependency := a.Dataplane.ManagedSidecarLifecycleRegistration("hev")
 		operations["native_validation"] = registeredLifecycleOperation(false, "hev-has-no-native-config-check-command")
 		operations["runtime_preflight"] = registeredLifecycleOperation(dependency.RuntimePreflight, "original-component-receipt-and-reviewed-native-version-required")

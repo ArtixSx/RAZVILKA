@@ -46,10 +46,23 @@ func (m *Manager) installHEVRelease(ctx context.Context, spec Spec) (Result, err
 	return m.installHEVReleaseGuarded(ctx, spec, nil)
 }
 
-// ApplyHEVGuarded is the only production installation entry. The application
+// ApplyHEVGuarded installs only absent or identical pinned bytes. The application
 // performs retained-reader5 admission before entering; guard holds/rechecks its
 // original control, exclusive operation and exact settings around each effect.
 func (m *Manager) ApplyHEVGuarded(ctx context.Context, guard, renameAdmission func(context.Context, func() error) error) (Result, error) {
+	return m.applyHEVGuarded(ctx, guard, renameAdmission, nil)
+}
+
+// ApplyHEVReplacementGuarded additionally requires the original runtime owner
+// to prove inactivity against this writer session before and after every CAS.
+func (m *Manager) ApplyHEVReplacementGuarded(ctx context.Context, guard, renameAdmission func(context.Context, func() error) error, inactive func(context.Context, *HEVReplacementReview) error) (Result, error) {
+	if inactive == nil {
+		return Result{Component: "hev-socks5-tunnel", Action: "update"}, NoMutation(ErrRecoveryAuthority)
+	}
+	return m.applyHEVGuarded(ctx, guard, renameAdmission, inactive)
+}
+
+func (m *Manager) applyHEVGuarded(ctx context.Context, guard, renameAdmission func(context.Context, func() error) error, inactive func(context.Context, *HEVReplacementReview) error) (Result, error) {
 	result := Result{Component: "hev-socks5-tunnel", Action: "install"}
 	if m == nil || ctx == nil || guard == nil || renameAdmission == nil {
 		return result, NoMutation(errors.New("HEV original-owner guarded admission is required"))
@@ -67,11 +80,20 @@ func (m *Manager) ApplyHEVGuarded(ctx context.Context, guard, renameAdmission fu
 		return result, NoMutation(err)
 	}
 	defer release()
+	if inactive != nil {
+		if err := m.checkHEVReleaseIdle(ctx); err != nil {
+			return result, NoMutation(err)
+		}
+	}
 	spec, _ := lookup("hev-socks5-tunnel")
-	return m.installHEVReleaseGuarded(ctx, spec, guard, renameAdmission)
+	return m.installHEVReleaseWithReplacement(ctx, spec, guard, inactive, renameAdmission)
 }
 
 func (m *Manager) installHEVReleaseGuarded(ctx context.Context, spec Spec, guard func(context.Context, func() error) error, renameAdmissions ...func(context.Context, func() error) error) (Result, error) {
+	return m.installHEVReleaseWithReplacement(ctx, spec, guard, nil, renameAdmissions...)
+}
+
+func (m *Manager) installHEVReleaseWithReplacement(ctx context.Context, spec Spec, guard func(context.Context, func() error) error, inactive func(context.Context, *HEVReplacementReview) error, renameAdmissions ...func(context.Context, func() error) error) (Result, error) {
 	result := Result{Component: spec.ID, Action: "install"}
 	info, err := hevPinnedRelease(spec, m.Arch)
 	if err != nil {
@@ -106,7 +128,7 @@ func (m *Manager) installHEVReleaseGuarded(ctx context.Context, spec Spec, guard
 	if err := verifyHEVRelease(ctx, path); err != nil {
 		return result, err
 	}
-	return m.installHEVImageGuarded(ctx, spec, info, binary, guard, renameAdmissions...)
+	return m.installHEVImageWithReplacement(ctx, spec, info, binary, guard, inactive, renameAdmissions...)
 }
 
 // installHEVImage is reached only after pinned digest + version verification.
@@ -116,7 +138,14 @@ func (m *Manager) installHEVImage(ctx context.Context, spec Spec, info releaseIn
 	return m.installHEVImageGuarded(ctx, spec, info, binary, nil)
 }
 func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info releaseInfo, binary []byte, guard func(context.Context, func() error) error, renameAdmissions ...func(context.Context, func() error) error) (result Result, err error) {
+	return m.installHEVImageWithReplacement(ctx, spec, info, binary, guard, nil, renameAdmissions...)
+}
+
+func (m *Manager) installHEVImageWithReplacement(ctx context.Context, spec Spec, info releaseInfo, binary []byte, guard func(context.Context, func() error) error, inactive func(context.Context, *HEVReplacementReview) error, renameAdmissions ...func(context.Context, func() error) error) (result Result, err error) {
 	result = Result{Component: spec.ID, Action: "install"}
+	if inactive != nil && (guard == nil || len(renameAdmissions) != 1 || renameAdmissions[0] == nil) {
+		return result, ErrRecoveryAuthority
+	}
 	if len(renameAdmissions) > 1 {
 		return result, errors.New("one HEV original rename admission is required")
 	}
@@ -134,7 +163,12 @@ func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info re
 		return result, err
 	}
 	defer func() { err = errors.Join(err, session.close()) }()
-	if _, err = session.j.Recover(ctx); err != nil {
+	if inactive != nil {
+		err = session.j.RequireIdle(ctx)
+	} else {
+		_, err = session.j.Recover(ctx)
+	}
+	if err != nil {
 		return result, err
 	}
 	before, err := session.files["a_binary"].Read(ctx)
@@ -156,7 +190,22 @@ func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info re
 			return result, errors.New("existing HEV has no valid RAZVILKA ownership receipt")
 		}
 		if !bytes.Equal(before.Data, binary) {
-			return result, errors.New("HEV binary replacement requires original sidecar inactivity admission; only identical pinned bytes can be reinstalled")
+			if inactive == nil {
+				return result, errors.New("HEV binary replacement requires original sidecar inactivity admission; only identical pinned bytes can be reinstalled")
+			}
+			lifecycleBefore, e := session.files["c_lifecycle"].Read(ctx)
+			if e != nil {
+				return result, e
+			}
+			original := map[string]restorejournal.Image{"a_binary": before, "b_receipt": receiptBefore, "c_lifecycle": lifecycleBefore}
+			session.replacement, err = newHEVReplacementReview(ctx, m, session, original, restorejournal.Image{Exists: true, Data: binary})
+			if err != nil {
+				return result, err
+			}
+			session.inactive = inactive
+			if err = inactive(ctx, session.replacement); err != nil {
+				return result, err
+			}
 		}
 		result.Action = "update"
 	} else if receiptBefore.Exists {
@@ -168,6 +217,9 @@ func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info re
 	// Journal snapshot admission must use the same ownership-reviewed pair,
 	// rather than adopting an intervening foreign edit as its new before image.
 	session.admission = map[string]restorejournal.Image{"a_binary": before, "b_receipt": receiptBefore}
+	if session.replacement != nil {
+		session.admission["c_lifecycle"] = cloneHEVImage(session.replacement.expected["c_lifecycle"])
+	}
 	changes := map[string]restorejournal.Image{"a_binary": {Exists: true, Data: binary}, "b_receipt": {Exists: true, Data: append(receipt, '\n')}, "c_lifecycle": {Exists: true, Data: append(lifecycle, '\n')}}
 	session.guard, session.forwardImages = guard, changes
 	if len(renameAdmissions) == 1 {
@@ -187,6 +239,9 @@ func (m *Manager) installHEVImageGuarded(ctx context.Context, spec Spec, info re
 }
 
 type hevReleaseSession struct {
+	owner           *Manager
+	replacement     *HEVReplacementReview
+	inactive        func(context.Context, *HEVReplacementReview) error
 	j               *restorejournal.Journal
 	files           map[string]*restorejournal.FileTarget
 	paths           map[string]string
@@ -199,6 +254,9 @@ type hevReleaseSession struct {
 
 func (s *hevReleaseSession) close() error {
 	var errs []error
+	if s.replacement != nil {
+		s.replacement.close()
+	}
 	if s.j != nil {
 		errs = append(errs, s.j.Close())
 	}
@@ -234,7 +292,20 @@ func (t *hevReleaseTarget) CompareAndSwap(ctx context.Context, before, after res
 	forward = forward && after.Exists == desired.Exists && bytes.Equal(after.Data, desired.Data)
 	mutate := func() error { return t.compareAndSwap(ctx, before, after, forward) }
 	if t.session.guard != nil && forward {
-		err := t.session.guard(ctx, mutate)
+		err := t.session.guard(ctx, func() error {
+			if t.session.replacement != nil {
+				if err := t.session.inactive(ctx, t.session.replacement); err != nil {
+					return err
+				}
+			}
+			if err := mutate(); err != nil {
+				return err
+			}
+			if t.session.replacement != nil {
+				return t.session.inactive(ctx, t.session.replacement)
+			}
+			return nil
+		})
 		if err != nil {
 			t.session.failures = append(t.session.failures, err)
 		}
@@ -256,6 +327,9 @@ func (t *hevReleaseTarget) compareAndSwap(ctx context.Context, before, after res
 		err = t.session.files[t.id].CompareAndSwapWithRenameAdmission(ctx, before, after, t.session.renameAdmission)
 	} else {
 		err = t.Target.CompareAndSwap(ctx, before, after)
+	}
+	if forward && t.session.replacement != nil {
+		err = errors.Join(err, t.session.replacement.acknowledge(t.id, before, after, err))
 	}
 	if err == nil && t.manager.updateFault != nil {
 		err = t.manager.updateFault("hev:after:" + t.id)
@@ -303,7 +377,7 @@ func (m *Manager) openHEVRelease(create bool) (*hevReleaseSession, error) {
 			}
 		}
 	}
-	s := &hevReleaseSession{files: map[string]*restorejournal.FileTarget{}, paths: paths}
+	s := &hevReleaseSession{owner: m, files: map[string]*restorejournal.FileTarget{}, paths: paths}
 	targets := map[string]restorejournal.Target{}
 	for _, id := range []string{"a_binary", "b_receipt", "c_lifecycle"} {
 		var f *restorejournal.FileTarget
