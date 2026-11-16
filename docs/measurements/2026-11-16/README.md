@@ -1,5 +1,37 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
+
+## Последующая контрольная точка `fc5bcc6c`
+
+[Точные результаты и исходные числовые строки](release-fc5bcc6c.json).
+`c92fd75a`, run43899528342: все12 защитных тестов Linux и16 реальных
+восстановлений (8 архивов +8 local Git) PASS. Использованы исходные gzip bytes
+из отдельного data-only commit `318ac9c7`; main, теги и выпуски не менялись.
+Предыдущий run43896413328 честно отказал на gzip, заново сжатом другим zlib;
+это не основание менять pins. HTTP-доставка будущего compatibility release ещё
+не проверена: assets пока не опубликованы.
+
+`9da19ea6`, run43896414773: identity/historical reader4/normal+race PASS.
+В узком self-image замере normal warm pair ~51.4→34.4мс, race ~95.8→237.2мс.
+Это разные бинарники:39,715,081 и57,372,937байт соответственно; сравнивать
+normal с race как одинаковую нагрузку нельзя. В race release/clear ~0.7–1мс;
+основные затраты — opening130мс и closing104–108мс. Ускорения полного маршрута
+нет: `94e85625` race ACK completed.json всё ещё FAIL120с. Следующий `a84f3c15`
+остановился раньше: HEV exit254/signal0/пустой вывод. Старт HEV исследуется
+отдельно, без трассировки acceptance-процесса и изменения его ancestry.
+
+`458b20ef`: standalone baseline.Current теперь использует существующее
+наблюдение исходных файлов с полными closing checks до следующего эффекта.
+Локальные association/context/fallback тесты PASS; независимое ревью PASS.
+Actual strict DNS run43899676997 выполняется; пока не PASS.
+Общий CI `94e85625` run43892266549 PASS. Более новые CI оцениваются отдельно.
+Router-ready=false, пересоздание GitHub не выполнено.
+
+Воспроизведение: `identity-contract-regression.yml` для стадий self-image;
+`tool-observation-image.yml` для реального графа утилит;
+`compatibility-sources.yml`, input `assets_ref=318ac9c7902fb1d7f55acc047d2c72dfcdf98f76`;
+`hev-startup-diagnostic.yml` — отдельные фиксированные8+8 запусков.
+
 ## Контрольная точка `492e813b`
 
 [Машиночитаемые результаты](release-492e813b.json): identity regression,

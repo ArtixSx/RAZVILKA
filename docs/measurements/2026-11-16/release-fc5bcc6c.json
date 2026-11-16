@@ -1,0 +1,365 @@
+{
+  "date": "2026-11-16",
+  "checkpoint": "fc5bcc6c9a1855f4cfb2cc00979682a87f8547fc",
+  "release_ready": false,
+  "router_tested": false,
+  "github_recreated": false,
+  "mihomo_self_image": {
+    "revision": "9da19ea6b837d7d2ef88bd467660b965e3113ea7",
+    "run": 43896414773,
+    "outcome": "success",
+    "scope": "empty opening/closing byte pair only; warm storage, not cold page cache or route",
+    "measurements": {
+      "normal": {
+        "rows": [
+          {
+            "sample": 0,
+            "image_bytes": 39715081,
+            "retained_bytes": 39715081,
+            "cold_storage": true,
+            "original_opening_ns": 25521850,
+            "original_closing_ns": 26088599,
+            "original_pair_ns": 51610900,
+            "borrow_ns": 210267,
+            "opening_ns": 40284472,
+            "closing_ns": 5921990,
+            "release_ns": 596768,
+            "image_pair_ns": 47014999
+          },
+          {
+            "sample": 1,
+            "image_bytes": 39715081,
+            "retained_bytes": 39715081,
+            "cold_storage": false,
+            "original_opening_ns": 25787000,
+            "original_closing_ns": 25696893,
+            "original_pair_ns": 51484614,
+            "borrow_ns": 6840,
+            "opening_ns": 27798836,
+            "closing_ns": 6046177,
+            "release_ns": 605731,
+            "image_pair_ns": 34459207
+          },
+          {
+            "sample": 2,
+            "image_bytes": 39715081,
+            "retained_bytes": 39715081,
+            "cold_storage": false,
+            "original_opening_ns": 25675932,
+            "original_closing_ns": 25605406,
+            "original_pair_ns": 51282089,
+            "borrow_ns": 5609,
+            "opening_ns": 27767399,
+            "closing_ns": 5883713,
+            "release_ns": 629197,
+            "image_pair_ns": 34287069
+          }
+        ],
+        "raw_log_sha256": "8fba0b4ac0841f79a090b1fcdd659a46b04f47436bf31e4a9d3ec30cb071870a",
+        "warm_original_pair_median_ns": 51383351.5,
+        "warm_image_pair_median_ns": 34373138.0
+      },
+      "race": {
+        "rows": [
+          {
+            "sample": 0,
+            "image_bytes": 57372937,
+            "retained_bytes": 57372937,
+            "cold_storage": true,
+            "original_opening_ns": 50699392,
+            "original_closing_ns": 47900460,
+            "original_pair_ns": 98600883,
+            "borrow_ns": 394624,
+            "opening_ns": 229339770,
+            "closing_ns": 85916508,
+            "release_ns": 737119,
+            "image_pair_ns": 316391748
+          },
+          {
+            "sample": 1,
+            "image_bytes": 57372937,
+            "retained_bytes": 57372937,
+            "cold_storage": false,
+            "original_opening_ns": 48176645,
+            "original_closing_ns": 47907101,
+            "original_pair_ns": 96084958,
+            "borrow_ns": 10716,
+            "opening_ns": 130584856,
+            "closing_ns": 104171105,
+            "release_ns": 717910,
+            "image_pair_ns": 235487932
+          },
+          {
+            "sample": 2,
+            "image_bytes": 57372937,
+            "retained_bytes": 57372937,
+            "cold_storage": false,
+            "original_opening_ns": 48060902,
+            "original_closing_ns": 47539257,
+            "original_pair_ns": 95601160,
+            "borrow_ns": 18918,
+            "opening_ns": 129688317,
+            "closing_ns": 108205555,
+            "release_ns": 980906,
+            "image_pair_ns": 238898013
+          }
+        ],
+        "raw_log_sha256": "1348da2eab1def36fac3bf25206e395b5e126dc7c5cdbd4563b600cde8de739b",
+        "warm_original_pair_median_ns": 95843059.0,
+        "warm_image_pair_median_ns": 237192972.5
+      }
+    }
+  },
+  "compatibility_sources": {
+    "revision": "c92fd75af6389e28a9eaeaeb08305ba073261af4",
+    "run": 43899528342,
+    "outcome": "success",
+    "actual_archive_transfer_commit": "318ac9c7902fb1d7f55acc047d2c72dfcdf98f76",
+    "restorations": [
+      {
+        "commit": "577ebe54eb53499a9fbe46aef93d39bee82a0192",
+        "tree": "3e2a97b6a1fc7174dd4e241baaba485bd2416ea5",
+        "source": "local-archive",
+        "files": 2946,
+        "tar_sha256": "44d501a2f74e353e177a03512d02aa9a4a8f4de5441a003af824848fe0201abf",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/577ebe54eb53499a9fbe46aef93d39bee82a0192-source"
+      },
+      {
+        "commit": "577ebe54eb53499a9fbe46aef93d39bee82a0192",
+        "tree": "3e2a97b6a1fc7174dd4e241baaba485bd2416ea5",
+        "source": "local-git",
+        "files": 2946,
+        "tar_sha256": "44d501a2f74e353e177a03512d02aa9a4a8f4de5441a003af824848fe0201abf",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/577ebe54eb53499a9fbe46aef93d39bee82a0192-local"
+      },
+      {
+        "commit": "c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be",
+        "tree": "0113b141c5aac8893d0a0eda81cff21db86900b5",
+        "source": "local-archive",
+        "files": 2972,
+        "tar_sha256": "c532af7823931d6076b690d265fbb0c70f69853488eaf8738e7a9a6772effcd7",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be-source"
+      },
+      {
+        "commit": "c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be",
+        "tree": "0113b141c5aac8893d0a0eda81cff21db86900b5",
+        "source": "local-git",
+        "files": 2972,
+        "tar_sha256": "c532af7823931d6076b690d265fbb0c70f69853488eaf8738e7a9a6772effcd7",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be-local"
+      },
+      {
+        "commit": "d36ec63e4d67f6621dd8026c9f85e9f410ec67bc",
+        "tree": "924397fd4af9c24fcbf005cf69d08de69c7f0afd",
+        "source": "local-archive",
+        "files": 3211,
+        "tar_sha256": "54f7e327f76bb1b927c1a41387d23c7cfeee3372896d18fcf9026ef2a469cc43",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/d36ec63e4d67f6621dd8026c9f85e9f410ec67bc-source"
+      },
+      {
+        "commit": "d36ec63e4d67f6621dd8026c9f85e9f410ec67bc",
+        "tree": "924397fd4af9c24fcbf005cf69d08de69c7f0afd",
+        "source": "local-git",
+        "files": 3211,
+        "tar_sha256": "54f7e327f76bb1b927c1a41387d23c7cfeee3372896d18fcf9026ef2a469cc43",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/d36ec63e4d67f6621dd8026c9f85e9f410ec67bc-local"
+      },
+      {
+        "commit": "817783493f0c2784ccc70aa73868cd64e9437634",
+        "tree": "ae09a4b2747413ca106d4fa528ce11630403ea63",
+        "source": "local-archive",
+        "files": 1082,
+        "tar_sha256": "377bb41fddda9d6158de1a8bd653620a7e5df6593f7352d94f1eef921d9d0238",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/817783493f0c2784ccc70aa73868cd64e9437634-source"
+      },
+      {
+        "commit": "817783493f0c2784ccc70aa73868cd64e9437634",
+        "tree": "ae09a4b2747413ca106d4fa528ce11630403ea63",
+        "source": "local-git",
+        "files": 1082,
+        "tar_sha256": "377bb41fddda9d6158de1a8bd653620a7e5df6593f7352d94f1eef921d9d0238",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/817783493f0c2784ccc70aa73868cd64e9437634-local"
+      },
+      {
+        "commit": "4cc9f869974713c9cebd833fccca383c03c102b7",
+        "tree": "5a3b25e4326bb40030a26a5426d36786f1b6a9c2",
+        "source": "local-archive",
+        "files": 4519,
+        "tar_sha256": "209c6fb6d0d7ae8a74930b38533ae60b8fc56861b7fa85001327db46481ae75e",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/4cc9f869974713c9cebd833fccca383c03c102b7-source"
+      },
+      {
+        "commit": "4cc9f869974713c9cebd833fccca383c03c102b7",
+        "tree": "5a3b25e4326bb40030a26a5426d36786f1b6a9c2",
+        "source": "local-git",
+        "files": 4519,
+        "tar_sha256": "209c6fb6d0d7ae8a74930b38533ae60b8fc56861b7fa85001327db46481ae75e",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/4cc9f869974713c9cebd833fccca383c03c102b7-local"
+      },
+      {
+        "commit": "c4399c948a5f65cf413c879b2b746f1bf80eefaa",
+        "tree": "b6665d441fee620f4022a54705e0cbfc980aca11",
+        "source": "local-archive",
+        "files": 3798,
+        "tar_sha256": "3cbc6dda37f65e79c7fb55440a9a9c5285237aef4482945b647967e28320f067",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/c4399c948a5f65cf413c879b2b746f1bf80eefaa-source"
+      },
+      {
+        "commit": "c4399c948a5f65cf413c879b2b746f1bf80eefaa",
+        "tree": "b6665d441fee620f4022a54705e0cbfc980aca11",
+        "source": "local-git",
+        "files": 3798,
+        "tar_sha256": "3cbc6dda37f65e79c7fb55440a9a9c5285237aef4482945b647967e28320f067",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/c4399c948a5f65cf413c879b2b746f1bf80eefaa-local"
+      },
+      {
+        "commit": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+        "tree": "dc23e2cbdb785a75ed2e2bb0fa8ffc1fbb93f9b0",
+        "source": "local-archive",
+        "files": 4212,
+        "tar_sha256": "42c0a1a12b439fe0a638c932fbf51c5a0d99dc136365985ea05d0741f45024a9",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/363f433611620cda4d14db2d0a7ae2475b0278f1-source"
+      },
+      {
+        "commit": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+        "tree": "dc23e2cbdb785a75ed2e2bb0fa8ffc1fbb93f9b0",
+        "source": "local-git",
+        "files": 4212,
+        "tar_sha256": "42c0a1a12b439fe0a638c932fbf51c5a0d99dc136365985ea05d0741f45024a9",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/363f433611620cda4d14db2d0a7ae2475b0278f1-local"
+      },
+      {
+        "commit": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+        "tree": "c759d858cd9dd42a25191927edb1447da4d52c59",
+        "source": "local-archive",
+        "files": 5043,
+        "tar_sha256": "0de26eb62b33ec2d1431a2c6bef385694a1c9317dc1ae98d872feba9e1866dbb",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/344912c11f285a4c2dc0ac0eadd8ab64e6110160-source"
+      },
+      {
+        "commit": "344912c11f285a4c2dc0ac0eadd8ab64e6110160",
+        "tree": "c759d858cd9dd42a25191927edb1447da4d52c59",
+        "source": "local-git",
+        "files": 5043,
+        "tar_sha256": "0de26eb62b33ec2d1431a2c6bef385694a1c9317dc1ae98d872feba9e1866dbb",
+        "byte_readback": "PASS",
+        "git_modes": "PASS",
+        "filesystem_modes": "PASS",
+        "git_fixture": true,
+        "history_attached_to_current_repo": false,
+        "destination": "/tmp/razvilka-compatibility-njakrx3j/344912c11f285a4c2dc0ac0eadd8ab64e6110160-local"
+      }
+    ],
+    "published_http_transport_verified": false,
+    "prior_regenerated_archive_refusal_run": 43896413328
+  },
+  "generic_ci_confirmed": {
+    "revision": "94e856258672f0613c7ef1eecbaf9acb6fc71cc1",
+    "run": 43892266549,
+    "outcome": "success"
+  },
+  "open_software_failures": [
+    {
+      "revision": "a84f3c151d160f51eb7fbd6bf6931cc429edd42e",
+      "run": 43894652322,
+      "scenario": "sameboot race parent",
+      "outcome": "failure",
+      "reason": "official HEV exit254 signal0 emptyoutput before ACK consumer"
+    },
+    {
+      "revision": "94e856258672f0613c7ef1eecbaf9acb6fc71cc1",
+      "run": 43892265598,
+      "scenario": "sameboot race completed.json",
+      "outcome": "failure",
+      "reason": "original120s ACK deadline"
+    },
+    {
+      "revision": "a84f3c151d160f51eb7fbd6bf6931cc429edd42e",
+      "run": 43894644155,
+      "scenario": "managed fullLAN/manual",
+      "outcome": "failure",
+      "reason": "original18s apply deadline; cleanup policy-remove refused; obsolete8MiB positive benchmark separately corrected"
+    }
+  ],
+  "pending_runs": [
+    43899676997,
+    43899672147,
+    43899534687,
+    43900067221
+  ]
+}

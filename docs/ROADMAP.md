@@ -7,10 +7,10 @@
 
 | Приоритет | Владелец | Рабочий сценарий / доказательство | Следующее действие и условие завершения |
 | --- | --- | --- | --- |
-| P0 DNS | catalog_lifecycle_review; Root integration | `492e813b` fresh listener image сравнение, strict Linux всё ещё FAIL | Локализовать и устранить стоимость selected/mismatch/unknown-host без изменения12/4с, повторить одинаковые сценарии и независимое ревью |
-| P0 Mihomo | catalog_product_analysis; Root review | Actual sameboot CPU profile `4e83e678`, normal ACK ранее PASS, race completed FAIL | Уменьшить подтверждённые повторные вычисления с полными свежими bytes/owner observations; все ACK cuts normal/race в120с |
+| P0 DNS | catalog_lifecycle_review; Root integration | `458b20ef` standalone Current file observation, focused/review PASS; strict Linux pending | Локализовать и устранить стоимость selected/mismatch/unknown-host без изменения12/4с, повторить одинаковые сценарии и независимое ревью |
+| P0 Mihomo | catalog_product_analysis; Root review | `9da19ea6` actual stage costs: race copy/equality overhead, clear не причина; ACK FAIL | Уменьшить подтверждённые повторные вычисления с полными свежими bytes/owner observations; все ACK cuts normal/race в120с |
 | P0 NFQWS2 | catalog_network_analysis; Root review | Core traffic и LateWait cleanup доказаны отдельно; fullLAN/manual и race Consumer не приняты | Полный Apply/Stop/recovery в исходных сроках, точные native VPN/exclusions/queue ownership |
-| P0 update/restore | Root; product/lifecycle review | `492e813b` bound retry normal/race, plan-only cut, actual public history и modern rollback PASS | Настоящая историческая reader4 совместимость и полный CI текущего итогового SHA; аппаратные прерывания отдельно |
+| P0 update/restore | Root; product/lifecycle review | `492e813b` bound retry normal/race, plan-only cut, actual public history и modern rollback PASS | Историческая reader4 normal/race уже PASS на9da; полный CI текущего итогового SHA; аппаратные прерывания отдельно |
 | P1 панель/API/AUTO | Root | Новое меню и21 страницы,118 Node commands и Chromium desktop/mobile PASS | Полный backend flow на принятом LAN-профиле после P0; неизвестное состояние не превращать в availability |
 | P1 роутер | Root после P0 | Предыдущий read-only NC-1812 профиль сохранён; текущий candidate не установлен | Backup + проверяемый откат, установка точного SHA, один service/device scope, Apply/Stop/recovery; пользователь разрешил испытания |
 | P1 GitHub | Root; network backup verification | 51 tags/14 releases/140 assets сохранены и проверены; README подготовлен | После готовности: финальный refs/local backup, перенос CI на pinned source archives, delete_repo OAuth scope, пересоздание и сверка нового репозитория |

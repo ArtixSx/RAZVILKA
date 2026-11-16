@@ -700,3 +700,26 @@ GEN2 file-view path36/72/72; этот более поздний cut прочит
 Измерительный prototype сохраняется для воспроизводимости, не является новой
 возможностью продукта. Следующий actual0470 run измеряет ожидание существующей
 очереди инструмента отдельно от удержания и исполнения, без изменения admission.
+
+
+## 16.11: точные архивы и стадии fresh-byte наблюдений
+
+Контрольная точка `fc5bcc6c`: [числовые результаты](measurements/2026-11-16/release-fc5bcc6c.json)
+и [условия замеров](measurements/2026-11-16/README.md#последующая-контрольная-точка-fc5bcc6c).
+Compatibility helper проверяет8 конкретных commit/tree/tar/gzip pins, лицензии,
+новый destination и no-follow writes. Linux12 tests и16 actual restorations PASS.
+Повторное gzip-сжатие другой реализацией не эквивалентно immutable asset;
+первый отказ сохранён, pins не изменены. Временная data-only ветка передала
+точные исходные gzip; no release/main/tag mutation. После пересоздания отдельно
+проверяется fixed release URL, до его публикации HTTP-path не отмечен PASS.
+
+Отдельная диагностика HEV использует официальный2.17.1 ELF
+SHA256 `a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03`,
+источник `heiher/hev-socks5-tunnel` commit
+`9a06bc6e7989da54e3d32ff701ef7a7ce4995d3a`, MIT. Исходники хранятся вне production:
+`C:/RAZVILKA-research-20261116/hev-2.17.1-source`.
+8 untraced и8 separate traced запусков в private PID/network/mount namespace;
+closed syscall/errno/numeric altstack diagnostics, exact Wait/cleanup. Это не
+route admission, не трассировка исходного acceptance и не доказательство
+причины exit254 до результатов. Источник stack detector включён; runtime
+размер altstack должен проверяться численно, а не предполагаться.
