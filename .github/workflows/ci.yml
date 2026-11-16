@@ -14,6 +14,7 @@ on:
       - 'work/domain-cgroup-proof-*'
       - 'work/identity-contract-*'
       - 'work/mihomo-self-image-*'
+      - 'work/backend-proc-io-20261116'
   pull_request:
 
 permissions:
