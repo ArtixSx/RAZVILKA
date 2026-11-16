@@ -1,5 +1,12 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
+Актуальный сводный статус: [единая матрица](../../CURRENT_STATUS_RU.md#current-release-checkpoint).
+[HEV374bbd46](hev-replacement-374bbd46.json): exact original HTTP
+old→patched, отказ при живых old/desired ELF, отмена, crash и rollback;
+Linux normal/race PASS, run43916940407. HTTP fixture1.12/1.97с — не время
+полного LAN-маршрута. [Хеши12 исходных файлов доказательств](hev-replacement-374bbd46-files.json).
+Default pin не изменён, vendor asset не опубликован.
+
 
 ## Последующая контрольная точка `fc5bcc6c`
 

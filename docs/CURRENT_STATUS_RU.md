@@ -6,15 +6,15 @@
 
 Код и оформление интегрированы; выпуск ещё не принят. Эта сверка имеет
 приоритет над прежними контрольными точками ниже. Эта рабочая ветка роутер
-не изменяла; отдельный аппаратный прогон переустановил Entware и оставил Z2K
-активным — перед приёмкой нужен новый профиль и backup
+не изменяла; отдельный аппаратный прогон переустановил Entware, проверил и
+удалил Z2K/stock NFQWS2/временный Xray — нужен новый профиль и backup
 ([подробности](ROUTER_ACCEPTANCE_RU.md#изменение-стенда-16112026)).
 Репозиторий GitHub не удалялся.
 
 | Направление | Проверено | Что продолжается |
 | --- | --- | --- |
 | Общий CI | `33de2dde`, run43908375410, `74c7a0c0`, run43909060138 и `a74c74c1`, run43912334384 PASS; identity0652 run43911534417 PASS | Итоговый SHA после текущих правок требует своего полного CI; лишние generic runs0652/7231/e4e отменены |
-| HEV | `53fd786e` source lab64 startup/cleanup samples PASS; повтор74c source lab PASS. `74c7a0c0` parent normal41.77с/race81.79с и completed ACK normal52.41с PASS. Исправленный бинарник запустился на реальном host AT_MIN11952, где официальный вновь дал16/16 exit254. На9dce/374b интегрирован update с исходным inactivity, журналом и откатом; независимое ревью и локальные focused/vet PASS | Actual Linux HTTP old→patched normal/race выполняется. Production pin не изменён; успешный package update ещё не подтверждён. Completed ACK race120с FAIL; ABBA полного parent пути на42b83032 run43916682582 выполняется |
+| HEV | `53fd786e` source lab64 startup/cleanup samples PASS; повтор74c source lab PASS. `74c7a0c0` parent normal41.77с/race81.79с и completed ACK normal52.41с PASS. Исправленный бинарник запустился на реальном host AT_MIN11952, где официальный вновь дал16/16 exit254. На9dce/374b интегрирован update с исходным inactivity, журналом и откатом; независимое ревью и локальные focused/vet PASS | Actual Linux HTTP old→patched normal1.12с/race1.97с, все7 component тестов PASS на374bbd46, run43916940407; отсутствуют SKIP. Production pin не изменён, vendor asset не опубликован. Completed ACK race120с FAIL; ABBA полного parent пути на42b83032 run43916682582 выполняется |
 | DNS | На7aab оба первоначальных применения прошли; полная проверка mapping замкнута в исходное чтение инструментов, targeted/review PASS | Run43914911621 строгие selected/canceled FAIL: selected первый запрос4с timeout; canceled GEN2 cancellation witness не получен. Сроки не увеличены; межхостовое сравнение не доказывает ускорение |
 | Managed NFQWS2 | `33de2dde` actual-issued boundary: fullLAN/manual при отказе теперь rollback_verified=true; quarantine-close-retry PASS45.80с. Core Consumer8.28с/LateWait11.14с/AppHTTP28.00с PASS | FullLAN/manual fresh Apply остаются FAIL, race Consumer deadline/ACK FAIL; анализ полного пути. Равные счётчики с подменой owned row: отдельный nativebefedef5 PASS normal5.35с/race8.52с; это не fullLAN Apply |
 | VLESS/очередь | `33de2dde`, run43908564102 PASS: same-runner N12 медиана полного live Check309.118→216.1785мс; выбранная группа1360.45→1190.335мс, cleanup verified | Фиксированный порядок измерений; это частная Linux-сеть, не готовность WAN/LAN на роутере |

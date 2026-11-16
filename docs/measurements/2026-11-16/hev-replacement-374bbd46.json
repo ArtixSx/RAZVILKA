@@ -1,0 +1,37 @@
+{
+  "run_id": 43916940407,
+  "sha": "374bbd46c602302363b4f087e627ae6370bdbcad",
+  "conclusion": "success",
+  "verified_at": "2026-11-16T17:20:49.642065+00:00",
+  "modes": {
+    "normal": {
+      "test_seconds": {
+        "TestHEVAltstackLabExactPin": 0.0,
+        "TestHEVReleaseChangedOwnedBinaryRequiresInactivity": 0.04,
+        "TestHEVSameVersionUpdateRequiresDifferentIntegrityOwnedBytes": 0.0,
+        "TestHEVReplacementCursorAndCompensation": 0.12,
+        "TestHEVReplacementAdmissionAndCancellation": 0.03,
+        "TestHEVReplacementReviewOriginalVectorAndIdentity": 0.08,
+        "TestHEVReplacementCrashRecoveryAndPendingRefusal": 0.22,
+        "TestHEVOriginalNativeHTTPSameVersionReplacement": 1.12
+      },
+      "controller_size": 43790601,
+      "controller_sha256": "91d01498b4f8f0d3e8a7aafd0705cd61fe1e0378722ba708a23dc2a467813aec"
+    },
+    "race": {
+      "test_seconds": {
+        "TestHEVAltstackLabExactPin": 0.0,
+        "TestHEVReleaseChangedOwnedBinaryRequiresInactivity": 0.01,
+        "TestHEVSameVersionUpdateRequiresDifferentIntegrityOwnedBytes": 0.0,
+        "TestHEVReplacementCursorAndCompensation": 0.15,
+        "TestHEVReplacementAdmissionAndCancellation": 0.06,
+        "TestHEVReplacementReviewOriginalVectorAndIdentity": 0.5,
+        "TestHEVReplacementCrashRecoveryAndPendingRefusal": 0.13,
+        "TestHEVOriginalNativeHTTPSameVersionReplacement": 1.97
+      },
+      "controller_size": 63815945,
+      "controller_sha256": "460ceb944d398d53b2fed08a55ba0b0fa831dbc97c7c404f988bce494bfb9d93"
+    }
+  },
+  "limits": "native Linux PC component update/recovery only; no full route/router/default pin qualification"
+}

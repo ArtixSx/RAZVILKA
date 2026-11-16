@@ -1,0 +1,62 @@
+[
+  {
+    "path": "artifacts/hev-replacement-normal-374bbd46c602302363b4f087e627ae6370bdbcad/build.txt",
+    "size": 509,
+    "sha256": "f458e748fd2ade30f219794b5fdca18fd85d99c780fcb6018d91bd611dc82e33"
+  },
+  {
+    "path": "artifacts/hev-replacement-normal-374bbd46c602302363b4f087e627ae6370bdbcad/hev-lab/build-manifest.json",
+    "size": 24818,
+    "sha256": "a976ab743ef6252105df5c775e2fd1a23565ace378c6b7f07e44a04f7f6eba5e"
+  },
+  {
+    "path": "artifacts/hev-replacement-normal-374bbd46c602302363b4f087e627ae6370bdbcad/hev-lab/fault-tests.txt",
+    "size": 41,
+    "sha256": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050"
+  },
+  {
+    "path": "artifacts/hev-replacement-normal-374bbd46c602302363b4f087e627ae6370bdbcad/platform.txt",
+    "size": 3494,
+    "sha256": "d549635830effc4a408378f6b5b5c4518ed42b55cd0ad3d5415c88c743663ebf"
+  },
+  {
+    "path": "artifacts/hev-replacement-normal-374bbd46c602302363b4f087e627ae6370bdbcad/replacement.txt",
+    "size": 5668,
+    "sha256": "736b0ec7720ee84ac78915f30ec71f7102b1b164786d6b450d7df24e93388b47"
+  },
+  {
+    "path": "artifacts/hev-replacement-race-374bbd46c602302363b4f087e627ae6370bdbcad/build.txt",
+    "size": 509,
+    "sha256": "f458e748fd2ade30f219794b5fdca18fd85d99c780fcb6018d91bd611dc82e33"
+  },
+  {
+    "path": "artifacts/hev-replacement-race-374bbd46c602302363b4f087e627ae6370bdbcad/hev-lab/build-manifest.json",
+    "size": 24818,
+    "sha256": "a976ab743ef6252105df5c775e2fd1a23565ace378c6b7f07e44a04f7f6eba5e"
+  },
+  {
+    "path": "artifacts/hev-replacement-race-374bbd46c602302363b4f087e627ae6370bdbcad/hev-lab/fault-tests.txt",
+    "size": 41,
+    "sha256": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050"
+  },
+  {
+    "path": "artifacts/hev-replacement-race-374bbd46c602302363b4f087e627ae6370bdbcad/platform.txt",
+    "size": 3517,
+    "sha256": "9803128ba9cb27be5ebf3d6430b5e93447773da39810312a50cd6cd0590a0f7f"
+  },
+  {
+    "path": "artifacts/hev-replacement-race-374bbd46c602302363b4f087e627ae6370bdbcad/replacement.txt",
+    "size": 5668,
+    "sha256": "ea45ceae8dae03114cbbcf89f1d33308f63131ec3e8feed72b5a278702bbab61"
+  },
+  {
+    "path": "status.json",
+    "size": 4179,
+    "sha256": "ef09414d2f60d620ae2cfba53165a52190755a89f5a00721384cd3fd1b502245"
+  },
+  {
+    "path": "verified-result.json",
+    "size": 1696,
+    "sha256": "4966e21e52c5c1c947efa844739eae8944050567f26c57e7bedb882982f1589a"
+  }
+]

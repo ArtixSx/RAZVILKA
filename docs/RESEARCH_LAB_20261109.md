@@ -756,6 +756,31 @@ sigaltstack syscall отсутствует. Проверяется гипоте�
 до выпуска исправленного компонента; на этой точке такого исправления ещё нет.
 
 
+## 16.11: проверенный путь замены HEV
+
+На `374bbd46c602302363b4f087e627ae6370bdbcad` run
+[43916940407](https://github.com/ArtixSx/RAZVILKA/actions/runs/43916940407)
+прошли Linux normal/race: все7 компонентных тестов и actual HTTP update через
+панель. Старый официальный и желаемый исправленный ELF, запущенные под другим
+именем, блокируют замену; sole Wait предшествует успешному повтору. Проверены
+три согласованных файла, отмена, cursor/CAS, crash recovery и pending refusal.
+Same upstream version2.17.1 различается точным SHA, повтор после установки
+не предлагает ту же замену. HTTP fixture1.12/1.97с; это не LAN throughput.
+[Результаты](measurements/2026-11-16/hev-replacement-374bbd46.json) и
+[хеши артефактов](measurements/2026-11-16/hev-replacement-374bbd46-files.json).
+
+Подготовлен непубличный vendor bundle в
+`C:/RAZVILKA-backups/hev-vendor-2.17.1-r1-prepared-374bbd46-v2`: raw ELF
+`1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9`,
+source/notices tar.xz895024байт
+`47c1b454ee801a5e2585a48a6f923b3265e4324e0add6bc431b35d155ffdcdb8`.
+Полный исходный архив, patch, fault-test, квалифицированный build helper,
+metadata и129 notices сохраняются; compiler archive остаётся в прежней
+проверенной резервной копии. Root независимо сверил обе внешние SHA256.
+Default pin и ARM64 не изменены; full-route ACK, доставка и роутер — отдельные
+этапы. Последующая правка collector сохраняет COPYRIGHT/NOTICE и полный
+toolchain share/licenses; она меняет только полноту доказательств, не ELF.
+
 ## 16.11: NetZapret — оформление панели и Releases
 
 Изучены установленная Windows-версия 1.5.3 (видимое окно «Главная» и окно

@@ -81,4 +81,7 @@ jobs:
             artifacts/hev-lab/hev-socks5-tunnel-2.17.1.tar.xz
             artifacts/hev-lab/**/LICENSE*
             artifacts/hev-lab/**/COPYING*
+            artifacts/hev-lab/**/COPYRIGHT*
+            artifacts/hev-lab/**/NOTICE*
+            artifacts/hev-lab/toolchain/x86_64-unknown-linux-musl/share/licenses
           if-no-files-found: error

@@ -69,8 +69,15 @@ files=['hev-socks5-tunnel-2.17.1.tar.xz','x86_64-unknown-linux-musl.tar.xz','hev
 licenses=[]
 for root in [source,patched,out/'toolchain']:
     for path in root.rglob('*'):
-        if path.is_file() and not path.is_symlink() and path.name.lower().startswith(('license','copying','copyright')):
-            licenses.append({'path':str(path.relative_to(out)),'sha256':sha(path)})
+        in_tool_licenses = root == out/'toolchain' and path.relative_to(root).parts[:3] == ('x86_64-unknown-linux-musl','share','licenses')
+        if path.is_file() and (in_tool_licenses or path.name.lower().startswith(('license','copying','copyright','notice'))):
+            # Preserve each original notice path, including the pinned archive's
+            # confined license aliases; never hash a target outside its source.
+            path.resolve(strict=True).relative_to(root.resolve(strict=True))
+            entry={'path':str(path.relative_to(out)),'sha256':sha(path)}
+            if path.is_symlink():
+                entry['symlink_target']=path.readlink().as_posix()
+            licenses.append(entry)
 record={'schema':1,'purpose':'separate lab qualification only; original official asset unchanged','hev_commit':'9a06bc6e7989da54e3d32ff701ef7a7ce4995d3a','task_commit':'328f35d903221b51811b3d02b277d665dfbdc75f','official_binary_sha256':'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03','toolchain_release':'20260515','compiler':(out/'compiler.txt').read_text(),'build_flags':['ENABLE_STATIC=1','-j2'],'artifacts':{name:sha(out/name) for name in files},'licenses':licenses,'fault_tests':'PASS','route_or_router_acceptance':False}
 (out/'build-manifest.json').write_text(json.dumps(record,indent=2)+'\n')
 print('HEV_RUNTIME_ALTSTACK_LAB_BUILD_PASS')
