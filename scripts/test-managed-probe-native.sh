@@ -162,7 +162,8 @@ case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
     test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
     test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
     test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
-    probe_cases='TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead' ;;
+    export RAZVILKA_TOOL_IMAGE_MEASURE=1
+    probe_cases='TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease TestToolObservationImageStageMeasurement TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead' ;;
   *) exit 2 ;;
 esac
 probe_result=0

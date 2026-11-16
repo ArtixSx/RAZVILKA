@@ -509,8 +509,11 @@ func TestStartupImageMeasurementReadBoundaries(t *testing.T) {
 }
 
 // This local test model is not shared by production. First successful capacity
-// is fixed, at most8MiB; all later oversize/contention attempts use original SHA.
-const startupImageSlotMeasurementCap = 8 << 20
+// is fixed at the approved production ceiling; oversize/contention still use
+// original SHA. The former 8MiB prototype correctly refused the actual 8,918,408
+// byte graph (8f5f12b8 and a84 native runs). That historical negative is not a
+// positive benchmark of the now-approved 10MiB production image contract.
+const startupImageSlotMeasurementCap = toolObservationImageLimit
 
 type startupImageSlotMeasurement struct {
 	active atomic.Bool
@@ -606,7 +609,7 @@ func BenchmarkStartupImagePairMeasurement(b *testing.B) {
 	defer cancel()
 	l := versionNamesActualLease(b, ctx)
 	if l.review.bytes > startupImageSlotMeasurementCap {
-		b.Fatal("actual fixture exceeds model8MiB; do not mislabel fallback as snapshot")
+		b.Fatalf("actual fixture bytes=%d exceeds approved image ceiling=%d; do not mislabel fallback as snapshot", l.review.bytes, startupImageSlotMeasurementCap)
 	}
 	for _, mode := range []string{"original_two_sha", "first_slot_pair_clear", "warm_slot_pair_clear"} {
 		b.Run(mode, func(b *testing.B) {

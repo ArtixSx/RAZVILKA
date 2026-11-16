@@ -72,6 +72,7 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/native.log; then status=1; fi
           for name in TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback \
             TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease \
+            TestToolObservationImageStageMeasurement \
             TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback \
             TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead; do
             if ! grep -F -- "--- PASS: $name " artifacts/native.log; then status=1; fi
@@ -88,6 +89,18 @@ jobs:
           pathlib.Path('artifacts/graph-measurements.json').write_text(json.dumps(rows,indent=2)+'\n')
           assert len(rows)==3 and [int(r['sample']) for r in rows]==[0,1,2], 'missing actual graph samples'
           assert all(r['image_used']=='true' and 0<int(r['graph_bytes'])<=10<<20 and int(r['fixed_slot_bytes'])==int(r['graph_bytes']) for r in rows), 'known profile did not use capped image'
+          marker='actual_tool_observation_image_stages '
+          stages=[json.loads(line.split(marker,1)[1]) for line in pathlib.Path('artifacts/native.log').read_text().splitlines() if marker in line]
+          pathlib.Path('artifacts/stage-measurements.json').write_text(json.dumps(stages,indent=2)+'\n')
+          assert len(stages)==3 and [r['sample'] for r in stages]==[0,1,2], 'missing actual stage samples'
+          assert [r['cold_allocation'] for r in stages]==[True,False,False], 'unexpected allocation sequence'
+          timings=['original_opening_ns','original_closing_ns','original_pair_ns','borrow_ns','opening_ns','closing_ns','release_ns','image_pair_ns']
+          for row in stages:
+              assert type(row['images']) is int and row['images']>0 and type(row['graph_bytes']) is int and 0<row['graph_bytes']<=10<<20
+              assert row['retained_bytes']==row['graph_bytes'], 'stage image storage does not match actual graph'
+              assert all(type(row[key]) is int and row[key]>0 for key in timings), 'invalid measured stage duration'
+              assert row['original_pair_ns']>=row['original_opening_ns']+row['original_closing_ns']
+              assert row['image_pair_ns']>=sum(row[key] for key in ['borrow_ns','opening_ns','closing_ns','release_ns'])
           PY
           printf 'mode=%s native_exit=%s readiness_claim=false\n' "$BUILD_MODE" "$status" > artifacts/outcome.txt
           exit "$status"
