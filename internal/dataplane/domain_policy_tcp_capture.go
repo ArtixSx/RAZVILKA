@@ -252,34 +252,16 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 	ctx = flowCtx
 	stopFlow := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopFlow()
-	finishInitialCurrent := domainTCPMeasureAcceptedStage(ctx, "initial-current")
-	currentErr := prepared.Current(ctx)
-	finishInitialCurrent(currentErr)
-	if err := currentErr; err != nil {
+	prefix, err := capture.acceptedPrefix(ctx, conn, socket, original, prepared, domainTCPAcceptedPrefixInput{spec: spec, owner: owner, xray: xray, policy: p})
+	if err != nil {
 		return refused, err
 	}
-	accepted := &domainAcceptedTCP{capture: capture, conn: conn, socket: socket}
-	accepted.self = accepted
-	accepted.open.Store(true)
-	defer accepted.open.Store(false)
-	ctx = context.WithValue(ctx, domainAcceptedTCPKey{}, accepted)
-	finishAdmit := domainTCPMeasureAcceptedStage(ctx, "admit")
-	lease, err := owner.AdmitTCP(ctx, socket)
-	if err != nil || lease == nil {
-		finishAdmit(ErrDomainPolicyTCPConsumer)
-		return refused, errors.Join(ErrDomainPolicyTCPConsumer, err)
-	}
-	finishAdmit(nil)
-	leased, flowID := lease.Binding()
-	if leased != original {
-		return refused, ErrDomainPolicyTCPConsumer
-	}
-	mapping := prepared.flowComparison()
-	binding := &domainPolicyTCPSyntheticBinding{mapping: mapping, socket: socket, spec: spec.Xray}
-	flow := DomainPolicyTCPFlow{Generation: mapping.Generation, FlowID: flowID, Source: socket.Source, Destination: socket.OriginalDestination, Client: mapping.Client, synthetic: binding}
-	if mapping.Client != spec.Client || !p.validTCPFlow(flow) || !time.Now().Before(mapping.ExpiresAt) || !xray.matches(spec.Xray) {
-		return refused, ErrDomainPolicyTCPConsumer
-	}
+	defer prefix.revoke()
+	// Only the caller's original context continues to sniff/effect admission;
+	// the tool observation's context and file views have already been revoked.
+	ctx = prefix.flowContext
+	lease, flowID, binding, flow := prefix.lease, prefix.flowID, prefix.binding, prefix.flow
+	mapping := binding.mapping
 	runtime := DomainPolicyTCPRuntime{
 		Limits: spec.Limits,
 		Guard: func(c context.Context, f DomainPolicyTCPFlow) (autonomy.ScopeObservation, error) {
@@ -295,12 +277,7 @@ func (capture *DomainPolicyTCPCapture) handleTCP(ctx context.Context, conn *net.
 		Dial: xray.dial,
 	}
 	if original, ok := owner.(*DomainTCPOriginalScope); ok {
-		finishBaseline := domainTCPMeasureAcceptedStage(ctx, "baseline")
-		kernel, err := original.originalBaselineForCapture(ctx, capture, leased)
-		finishBaseline(err)
-		if err != nil {
-			return refused, err
-		}
+		kernel := prefix.kernel
 		runtime.originalBaseline = kernel
 		runtime.BaselineDial = func(c context.Context, f DomainPolicyTCPFlow, d DomainPolicyDecision) (net.Conn, error) {
 			return original.dialBaseline(c, kernel, socket, f, d)

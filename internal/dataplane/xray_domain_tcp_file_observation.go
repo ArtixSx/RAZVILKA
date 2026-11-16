@@ -134,13 +134,26 @@ func (r *XrayDomainTCPExecutionResource) withCurrentFileObservation(ctx context.
 	// control and actual child/listener comparisons remain inside that same
 	// file view, retaining their independent metadata/config readbacks without
 	// repeating its full SHA. Native/effect admission never accepts this view.
-	return r.withFileObservation(ctx, func(v *xrayDomainTCPFileObservation) error {
+	return r.withCurrentFileObservationFrom(ctx, nil, use)
+}
+
+// Only the fixed accepted-prefix reader supplies a parent. Its original full
+// byte closing remains outside; BOTH original process bookends still run here.
+func (r *XrayDomainTCPExecutionResource) withCurrentFileObservationFrom(ctx context.Context, parent *xrayDomainTCPFileObservation, use func(*xrayDomainTCPFileObservation) error) error {
+	if use == nil {
+		return ErrXrayDomainTCPOriginal
+	}
+	read := func(v *xrayDomainTCPFileObservation) error {
 		if err := r.currentWithFiles(ctx, v); err != nil {
 			return err
 		}
 		result := use(v)
 		return errors.Join(result, r.currentWithFiles(ctx, v), ctx.Err())
-	})
+	}
+	if parent != nil {
+		return r.withNestedFileObservation(ctx, parent, read)
+	}
+	return r.withFileObservation(ctx, read)
 }
 
 func (v *xrayDomainTCPFileObservation) forOriginalProcessRead(parent, child context.Context, r *XrayDomainTCPExecutionResource) (*xrayDomainTCPFileObservation, func(), error) {
