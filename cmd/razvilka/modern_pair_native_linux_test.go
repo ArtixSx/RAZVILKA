@@ -110,6 +110,7 @@ func TestNativeModernPublicRollback(t *testing.T) {
 	candidatePID := 0
 	deadline = time.Now().Add(20 * time.Minute)
 	var status nativeModernPanelStatus
+	var nextTerminalObservation time.Time
 	for time.Now().Before(deadline) {
 		if observed, ok := nativeModernTryStatus(); ok {
 			status = observed
@@ -130,6 +131,13 @@ func TestNativeModernPublicRollback(t *testing.T) {
 				break
 			}
 		}
+		if time.Now().After(nextTerminalObservation) {
+			nextTerminalObservation = time.Now().Add(time.Second)
+			if nativeModernTerminalFailure(t, job.ID, helperPID) {
+				nativeModernFailureReceipts(t, job.ID)
+				t.Fatal("original installer published terminal requires-review and exited; rollback not accepted")
+			}
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	store, err := selfupdatejournal.Open("/opt", installpath.State+"/self-update-files")
@@ -139,7 +147,8 @@ func TestNativeModernPublicRollback(t *testing.T) {
 	receipt, present, readErr := store.Current()
 	store.Close()
 	if readErr != nil || !present || receipt.ID != job.ID || receipt.Phase != "rolled-back" || !receipt.Rollback || !candidateSeen {
-		t.Fatal("actual ordinary rollback not completed", candidateSeen, receipt.Phase, readErr)
+		nativeModernFailureReceipts(t, job.ID)
+		t.Fatal("actual ordinary rollback not completed", candidateSeen, nativeModernClosedLabel(receipt.Phase, "prepared", "paired-prepared", "installing", "installed", "command-started", "command-finished", "restoring", "restored", "rolled-back", "rolled-back-stopped", "accepted", "archived"), nativeModernClosedLabel(receipt.Command, nativeModernCommands...), readErr)
 	}
 	var cut struct {
 		ID        string `json:"id"`

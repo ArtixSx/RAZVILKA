@@ -110,4 +110,4 @@ PY
 # fixture's soon-to-be-created local address; production DNS/TLS is unchanged.
 mount --bind "$work/modern-hosts" /etc/hosts
 ip link set lo up
-"$work/cmd.test" -test.run '^TestNativeModernPublicRollback$' -test.v -test.count=1 -test.timeout=32m
+"$work/cmd.test" -test.run '^TestNativeModern(PublicRollback|DiagnosticClosureAndTerminal)$' -test.v -test.count=1 -test.timeout=32m

@@ -57,6 +57,7 @@ test "$status" -eq 0
 grep -Fx 'actual_modern_source_config migrated_by_source=true repeat_unchanged=true revision_preserved=true' "$work/native.log"
 grep -F 'actual_modern_public_pair rollback=true source_live_restored=true candidate_live_observed=true original_post_live_fault=true original_receipt=true draft_bytes_preserved=true all_panels_joined=true same_source_lab_versions=true official_release_provenance=false router_ready=false' "$work/native.log"
 grep -F -- '--- PASS: TestNativeModernPublicRollback ' "$work/native.log"
+grep -F -- '--- PASS: TestNativeModernDiagnosticClosureAndTerminal ' "$work/native.log"
 if grep -E '^[[:space:]]*--- SKIP:' "$work/native.log"; then exit 1; fi
 printf 'PASS actual main/public updater/known rollback with tagged platform classification and synthetic release transport; same-source schema compatibility only.\n'
 case "$work" in /root/razvilka-modern-pair.*) rm -rf -- "$work" ;; *) exit 2 ;; esac
