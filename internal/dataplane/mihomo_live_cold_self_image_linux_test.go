@@ -146,6 +146,47 @@ func TestMihomoColdSelfImageForcedFallback(t *testing.T) {
 	}
 }
 
+type mihomoSelfImagePartialCancel struct {
+	context.Context
+	calls, stop int
+}
+
+func (c *mihomoSelfImagePartialCancel) Err() error {
+	c.calls++
+	if c.stop > 0 && c.calls >= c.stop {
+		return context.Canceled
+	}
+	return c.Context.Err()
+}
+
+func TestMihomoColdSelfImagePartialOpeningNeverAuthenticates(t *testing.T) {
+	base, _, path, data := mihomoSelfImageFixture(t)
+	ctx := &mihomoSelfImagePartialCancel{Context: base}
+	var scratch xrayDomainTCPImageScratch
+	image, err := borrowMihomoColdSelfImage(ctx, path, &scratch)
+	if err != nil || image == nil {
+		t.Fatal("actual opening storage", err)
+	}
+	defer image.release()
+	ctx.stop = ctx.calls + 3 // Entry, first actual chunk, cancellation at next chunk.
+	if hash, _, err := image.read(ctx); !errors.Is(err, context.Canceled) || hash != "" || image.phase.Load() != 4 {
+		t.Fatal("partial original read authenticated an image", err)
+	}
+	const chunk = 256 << 10
+	if !bytes.Equal(image.lease.data[:chunk], data[:chunk]) || !bytes.Equal(image.lease.data[chunk:], make([]byte, len(data)-chunk)) {
+		t.Fatal("test did not interrupt after exactly one actual original chunk")
+	}
+	// Even making the test context live again cannot reuse the partial image.
+	ctx.stop = 0
+	if _, _, err := image.read(ctx); err == nil {
+		t.Fatal("failed opening reused after cancellation")
+	}
+	image.release()
+	if scratch.busy.Load() || !bytes.Equal(scratch.data, make([]byte, len(scratch.data))) {
+		t.Fatal("partial opening retained private bytes or storage")
+	}
+}
+
 type mihomoColdSelfReadTicks struct {
 	context.Context
 	ticks int

@@ -207,33 +207,43 @@ func (e *nfqws2ActiveExecution) verifyNeverIssuedPrefix(ctx context.Context, c *
 	return ctx.Err()
 }
 
-func (e *nfqws2ActiveExecution) removeOriginalPolicy(ctx context.Context) error {
+func (e *nfqws2ActiveExecution) removeOriginalPolicy(ctx context.Context) (result error) {
+	stage := "remove.original-recovery"
+	defer func() { result = nfqwsExecutionFailure(stage, result) }()
 	c, err := e.originalRecovery(ctx)
 	if err != nil {
 		return err
 	}
 	if c == nil {
+		stage = "remove.ordinary"
 		return e.binding.Remove(ctx, e.resource.Plan(), e.resource.Root())
 	}
+	stage = "remove.settled-recovery"
 	if !c.settled || c.needsSync || c.pending != nil {
 		return ErrPolicyAdditionUnknown
 	}
+	stage = "remove.document-current"
 	if err := c.documentCurrent(ctx); err != nil {
 		return err
 	}
 	p := e.resource.Plan()
+	stage = "remove.prepare"
 	runtime, plan, err := e.binding.prepareOriginalRemove(p)
 	if err != nil || !reflect.DeepEqual(plan, c.session.plan) {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
+	stage = "remove.process-inactive"
 	if err := e.binding.checkProcess(ctx, p, true); err != nil {
 		return err
 	}
+	stage = "remove.initial-readback"
 	if err := e.binding.readback(ctx, p, nfqwsScopedCleanup, -1); err != nil {
 		return err
 	}
+	stage = "remove.known-effects"
 	if err := c.session.removeKnownEffects(ctx, runtime); err != nil {
 		return err
 	}
+	stage = "remove.verify-inactive"
 	return e.binding.VerifyInactive(ctx, p, e.resource.Root())
 }

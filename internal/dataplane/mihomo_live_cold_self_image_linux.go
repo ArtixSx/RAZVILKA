@@ -83,21 +83,33 @@ func (i *mihomoColdSelfImage) read(ctx context.Context) (hash string, info os.Fi
 		return "", nil, ErrMihomoProbeRetirement
 	}
 	h := sha256.New()
-	buf := make([]byte, 256<<10)
+	const readChunk = 256 << 10
+	var buf []byte
+	if !opening {
+		buf = make([]byte, readChunk)
+	}
 	equal := true
 	for offset := int64(0); offset < before.Size(); {
 		if err := ctx.Err(); err != nil {
 			return "", nil, err
 		}
-		want := int(min(int64(len(buf)), before.Size()-offset))
-		n, err := file.ReadAt(buf[:want], offset)
+		want := int(min(int64(readChunk), before.Size()-offset))
+		var chunk []byte
+		if opening {
+			// Read and authenticate the SAME bytes directly into the private
+			// image. Avoid an extra scratch copy; retain read size, normal race
+			// instrumentation, source checks and partial-failure admission.
+			chunk = i.lease.data[offset : offset+int64(want)]
+		} else {
+			chunk = buf[:want]
+		}
+		n, err := file.ReadAt(chunk, offset)
 		if n != want || err != nil {
 			return "", nil, ErrMihomoProbeRetirement
 		}
 		if opening {
-			copy(i.lease.data[offset:offset+int64(n)], buf[:n])
-			h.Write(buf[:n])
-		} else if !bytes.Equal(i.lease.data[offset:offset+int64(n)], buf[:n]) {
+			h.Write(chunk[:n])
+		} else if !bytes.Equal(i.lease.data[offset:offset+int64(n)], chunk[:n]) {
 			equal = false // Retain the complete fresh read after a mismatch.
 		}
 		offset += int64(n)

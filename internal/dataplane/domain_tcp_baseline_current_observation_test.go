@@ -138,8 +138,7 @@ func TestDomainBaselineCurrentSourcesStayOriginal(t *testing.T) {
 				foreign := &dnscontrol.SyntheticDNSMapping{}
 				r.capture.mapping, r.baseline.mapping, f.material.mapping = foreign, foreign, foreign
 			case "xray":
-				copy := *f.xray
-				f.capture.xray = &copy
+				f.capture.xray = &DomainPolicyTCPXray{ctx: f.xray.ctx, resource: f.xray.resource, a: f.xray.a, spec: f.xray.spec, address: f.xray.address}
 			case "tools":
 				copy := *r.capture.tools
 				r.capture.tools = &copy

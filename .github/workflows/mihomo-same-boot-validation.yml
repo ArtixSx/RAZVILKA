@@ -103,6 +103,7 @@ jobs:
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual producer parent death CLI cleanup and updater fences
+        id: original_native
         shell: bash
         run: |
           set -euo pipefail
@@ -116,6 +117,31 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-same-boot-native.sh
+      - name: Diagnose HEV separately on the same failed host
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hev-after-failure
+          { git rev-parse HEAD; uname -srvm; lscpu; } > artifacts/hev-after-failure/platform.txt
+          # Only AFTER the original acceptance has failed. No traced process
+          # or extra package participates in that original ownership proof.
+          sudo apt-get install --no-install-recommends -y strace
+          test -f /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
+          printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
+          exit "$status"
+      - name: Preserve separate same-host diagnostic
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: artifacts/hev-after-failure
+          if-no-files-found: warn
 
   original-parent-native-ack-cuts:
     needs: original-parent-native
@@ -170,6 +196,7 @@ jobs:
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
       - name: Actual producer parent death CLI cleanup and updater fences
+        id: original_native
         shell: bash
         run: |
           set -euo pipefail
@@ -186,6 +213,31 @@ jobs:
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-same-boot-native.sh
+      - name: Diagnose HEV separately on the same failed host
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/hev-after-failure
+          { git rev-parse HEAD; uname -srvm; lscpu; } > artifacts/hev-after-failure/platform.txt
+          # Only AFTER the original acceptance has failed. No traced process
+          # or extra package participates in that original ownership proof.
+          sudo apt-get install --no-install-recommends -y strace
+          test -f /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
+          printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
+          exit "$status"
+      - name: Preserve separate same-host diagnostic
+        if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-after-failure-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: artifacts/hev-after-failure
+          if-no-files-found: warn
       - name: Preserve original consumer diagnostic
         if: ${{ !cancelled() && inputs.consumer_profile }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

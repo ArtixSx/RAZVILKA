@@ -44,7 +44,7 @@ func TestNFQWSExecutionDiagnosticsOnlyClosedBoundedStages(t *testing.T) {
 
 func TestNFQWSExecutionCommonDiagnosticsRetainUnknownAndOriginalCause(t *testing.T) {
 	secret := errors.New("private-common-receipt-path")
-	for _, stage := range []string{"retire.common-binding", "retire.cleanup-owner", "retire.policy-remove", "retire.verify-inactive", "retire.settle-removed", "retire.closing-owner"} {
+	for _, stage := range []string{"retire.common-binding", "retire.cleanup-owner", "retire.policy-remove", "retire.verify-inactive", "retire.settle-removed", "retire.closing-owner", "remove.original-recovery", "remove.ordinary", "remove.settled-recovery", "remove.document-current", "remove.prepare", "remove.process-inactive", "remove.initial-readback", "remove.known-effects", "remove.receipt-effects", "remove.verify-inactive"} {
 		original := errors.Join(ErrPolicyAdditionUnknown, context.DeadlineExceeded, secret)
 		wrapped := nfqws2ActiveFailure("retire prepared", nfqwsExecutionFailure("retire.common", nfqwsExecutionFailure(stage, original)))
 		if !errors.Is(wrapped, ErrPolicyAdditionUnknown) || !errors.Is(wrapped, context.DeadlineExceeded) || !errors.Is(wrapped, secret) {
@@ -56,5 +56,35 @@ func TestNFQWSExecutionCommonDiagnosticsRetainUnknownAndOriginalCause(t *testing
 		if got := NFQWSExecutionFailureStages(wrapped); !reflect.DeepEqual(got, []string{"retire prepared", "retire.common", stage}) {
 			t.Fatal("missing fixed common subphase", got)
 		}
+	}
+}
+
+func TestNFQWSExecutionRemoveReportsOriginalFailingBoundary(t *testing.T) {
+	for _, stage := range []string{"remove.prepare", "remove.process-inactive", "remove.initial-readback", "remove.receipt-effects"} {
+		t.Run(stage, func(t *testing.T) {
+			b, model, root := nfqwsScopedRemoveFixture(t)
+			cause := errors.New("private-remove-source-detail")
+			switch stage {
+			case "remove.prepare":
+				b.Runner = nil
+				cause = ErrNFQWSScopedOwner
+			case "remove.process-inactive":
+				b.ProcessInactive = func(context.Context, *NFQWSScopedPlan) (NFQWSScopedProcessProof, error) {
+					return NFQWSScopedProcessProof{}, cause
+				}
+			case "remove.initial-readback":
+				b.AdditionalReadback = func(context.Context, *NFQWSScopedPlan) error { return cause }
+			case "remove.receipt-effects":
+				b.CleanupGuard = func(context.Context, *NFQWSScopedPlan, PolicyEffect) error { return cause }
+			}
+			before := len(model.calls)
+			err := b.Remove(context.Background(), model.p, root)
+			if !errors.Is(err, cause) || !reflect.DeepEqual(NFQWSExecutionFailureStages(err), []string{stage}) || len(model.calls) != before {
+				t.Fatal("failure cause, boundary, or no-effect behavior changed", stage, err)
+			}
+			if strings.Contains(err.Error(), "private-remove-source-detail") {
+				t.Fatal("private cause exposed")
+			}
+		})
 	}
 }

@@ -575,21 +575,27 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 	return b.readback(ctx, p, nfqwsScopedComplete, -1)
 }
 
-func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+func (b *NFQWSScopedBinding) Remove(ctx context.Context, p *NFQWSScopedPlan, root string) (result error) {
 	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyRemove)()
+	stage := "remove.prepare"
+	defer func() { result = nfqwsExecutionFailure(stage, result) }()
 	r, plan, err := b.prepareOriginalRemove(p)
 	if err != nil {
 		return err
 	}
+	stage = "remove.process-inactive"
 	if err := b.checkProcess(ctx, p, true); err != nil {
 		return err
 	}
+	stage = "remove.initial-readback"
 	if err := b.readback(ctx, p, nfqwsScopedCleanup, -1); err != nil {
 		return err
 	}
+	stage = "remove.receipt-effects"
 	if err := removePolicyEffects(ctx, r, plan, root, b.options); err != nil {
 		return err
 	}
+	stage = "remove.verify-inactive"
 	return b.VerifyInactive(ctx, p, root)
 }
 
