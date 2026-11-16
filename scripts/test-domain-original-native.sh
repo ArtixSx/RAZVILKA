@@ -5,6 +5,11 @@ set -eu
 test "$(id -u)" = 0 || { echo 'root isolated native fixture required' >&2; exit 2; }
 : "${RAZVILKA_XRAY_NATIVE:?absolute SHA-verified official Xray binary required}"
 case "$RAZVILKA_XRAY_NATIVE" in /*) ;; *) exit 2;; esac
+domain_profile_enabled=${RAZVILKA_DOMAIN_PROFILE_ENABLED-1}
+case "$domain_profile_enabled" in
+ 0|1) ;;
+ *) echo 'RAZVILKA_DOMAIN_PROFILE_ENABLED must be 0 or 1' >&2; exit 2 ;;
+esac
 for domain_tool in python3 unshare mount ip iptables-legacy ip6tables-legacy go timeout; do command -v "$domain_tool" >/dev/null; done
 domain_repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 domain_work=$(mktemp -d /tmp/razvilka-domain-original.XXXXXX)
@@ -12,7 +17,14 @@ chmod 700 "$domain_work"
 trap 'rm -rf -- "$domain_work"' EXIT HUP INT TERM
 export TMPDIR="$domain_work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 export RAZVILKA_DOMAIN_FIXTURE_WORK="$domain_work"
-export RAZVILKA_DOMAIN_CPU_PROFILE="$domain_work"
+if test "$domain_profile_enabled" = 1; then
+ export RAZVILKA_DOMAIN_CPU_PROFILE="$domain_work"
+ domain_profile_span=original_Run_through_join
+else
+ unset RAZVILKA_DOMAIN_CPU_PROFILE
+ domain_profile_span=disabled
+fi
+printf 'native_cpu_profile_enabled=%s profile_span=%s; admission and cleanup unchanged\n' "$domain_profile_enabled" "$domain_profile_span"
 python3 - <<'PY'
 import hashlib,json,os,pathlib,subprocess
 work=pathlib.Path(os.environ['RAZVILKA_DOMAIN_FIXTURE_WORK'])
@@ -31,7 +43,9 @@ go test -tags razvilka_native_fixture -c -o "$domain_work/app.test" ./internal/a
 chmod 500 "$domain_work/app.test"
 # Go 1.26 may build pprof lazily; exclude that bounded parent preparation from
 # both the namespace run and its CPU sample, retaining diagnostics on failure.
-timeout 50s go tool pprof -h > "$domain_work/pprof-prewarm.log" 2>&1 || true
+if test "$domain_profile_enabled" = 1; then
+ timeout 50s go tool pprof -h > "$domain_work/pprof-prewarm.log" 2>&1 || true
+fi
 domain_status=0
 domain_case=TestDomainTCPOriginalNativeAcceptedFlows
 domain_test_timeout=180s
@@ -113,8 +127,11 @@ unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t nat -S >/dev/null
  /usr/sbin/iptables-legacy -t filter -S >/dev/null
  /usr/sbin/ip6tables-legacy -t mangle -S >/dev/null
+ # GEN2 CPU profiling uses PROFILE_OUTPUT. Disable only the child profiler;
+ # the parent retains this path for bounded status/log evidence below.
+ if test "$4" = 0; then unset RAZVILKA_DOMAIN_PROFILE_OUTPUT; fi
  exec /opt/bin/razvilka -test.run="^$2$" -test.v -test.count=1 -test.timeout="$3"
-' sh "$domain_work" "$domain_case" "$domain_test_timeout" || domain_status=$?
+' sh "$domain_work" "$domain_case" "$domain_test_timeout" "$domain_profile_enabled" || domain_status=$?
 # Keep the child's result. CPU symbols and bounded top output contain no
 # profile/config credentials and are analyzed by the parent outside /opt.
 if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
@@ -131,6 +148,6 @@ if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
   domain_publication_budget=not-sent
   domain_diagnostic=unpublished-readiness30-retirement-only
  fi
- printf 'child_exit_status=%s\npublication_budget_seconds=%s\nprofile_span=original_Run_through_join\ndiagnostic_only=%s\nnative_case=%s\n' "$domain_status" "$domain_publication_budget" "$domain_diagnostic" "$domain_case" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
+ printf 'child_exit_status=%s\npublication_budget_seconds=%s\nprofile_enabled=%s\nprofile_span=%s\ndiagnostic_only=%s\nnative_case=%s\n' "$domain_status" "$domain_publication_budget" "$domain_profile_enabled" "$domain_profile_span" "$domain_diagnostic" "$domain_case" > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/status.txt"
 fi
 exit "$domain_status"

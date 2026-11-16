@@ -149,6 +149,9 @@ func (o *DomainTCPOriginalScope) CheckCapture(ctx context.Context, capture *Doma
 }
 
 func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPolicyTCPCaptureSpec, capture *DomainPolicyTCPCapture, consume func(context.Context) error) error {
+	// Native-only elapsed time to the real publication transition. A failed
+	// preparation never records an open event; normal builds use a no-op.
+	finishPublicationOpen := domainTCPMeasure("initial-capture-to-publication-open")
 	if err := o.baseCurrent(ctx); err != nil {
 		return err
 	}
@@ -184,7 +187,9 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 			return err
 		}
 	}
+	finishInitialKernel := domainTCPMeasure("initial-kernel")
 	kernel, err := newDomainTCPBaselineKernelOwner(ctx, resource, baseline)
+	finishInitialKernel(0)
 	if err != nil {
 		return err
 	}
@@ -193,8 +198,11 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.mu.Unlock()
 	// Publication remains false until complete original process/capture/kernel
 	// checks pass, including a genuine transparent baseline capability.
-	if err := o.compareSyntheticMapping(ctx, process.material.mapping); err != nil {
-		return err
+	finishInitialCompare := domainTCPMeasure("initial-mapping-compare")
+	compareErr := o.compareSyntheticMapping(ctx, process.material.mapping)
+	finishInitialCompare(0)
+	if compareErr != nil {
+		return compareErr
 	}
 	if consume == nil {
 		return ErrDomainPolicyTCPConsumer
@@ -209,6 +217,7 @@ func (o *DomainTCPOriginalScope) WithCapture(ctx context.Context, spec DomainPol
 	o.cancel = cancel
 	o.publicationOpen = true
 	o.mu.Unlock()
+	finishPublicationOpen(0)
 	defer func() { cancel(); o.mu.Lock(); o.publicationOpen = false; o.closed = true; o.mu.Unlock() }()
 	return consume(life)
 }
