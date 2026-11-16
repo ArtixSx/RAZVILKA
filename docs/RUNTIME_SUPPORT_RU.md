@@ -1,6 +1,6 @@
 # Сборки и поддержка запуска
 
-Актуальный код `69423dfe`, полный CI `a0ac0bb3` PASS:
+Актуальный код `022c73ef`, полный CI `7419b4e5` PASS:
 [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
 На6cba actual pre-ledger и prepared-active recovery-only normal/race PASS;
@@ -11,7 +11,8 @@ client source port; это дефект, не готовность DNS. Router-o
 проектов по поручению владельца17.11: адрес/порт принадлежат роутеру, target
 точный. Недоказанная VPN/ACL-политика отказывает до SYN. Адресные Windows
 проверки и Linux compile PASS; actual strict/deny/canceled-ready43962866341
-ещё выполняются. Доменный Apply пока не принят.
+FAIL на initial publication12с ДО DIRECT. Contracts normal/race PASS, но
+полный datapath не достигнут. Доменный Apply пока не принят.
 ipset-ускорение не устраняет коллизию.
 Mihomo7a: parent/private4/4 и ACK8/10 PASS; race completed.json и
 terminal-transaction FAIL120с. Fresh statx и принудительный ENOSYS fallback
@@ -22,7 +23,9 @@ ARM64 unchanged. Публичный URLv0.20.0 относится к будущ�
 прогон. Generic CI не расширяет платформенный допуск.
 Наe0 весь native workflow43959574318 PASS4/4; manualHTTP два Apply/Stop/physical-baseline PASS; ce2 sourceCurrent
 на двухCPU ускорен примерно40%, totalCPU выше; router performance не проверен.
-Отдельный ce2 race parent/ACK43961200477 FAIL, причина разбирается.
+Отдельный ce2 race parent43961200477 FAIL120.01с; ACK NOT_RUN.
+be7 сохраняет оба home absence bookends, убрав только соседний повтор;
+новый normal/race parent и все ACK43964362768 выполняются.
 WG7419 same-host full observer примерно−33%, обаengine/режима PASS; это не полныйApply.
 Роутер ожидает проверки изменившегося SSH host key владельцем.
 Старые таблицы ниже — история отдельных сценариев.
