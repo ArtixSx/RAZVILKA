@@ -524,9 +524,12 @@ jobs:
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
-            -run '^TestWGRuntimeInactiveMeasurement' | tee artifacts/managed/wg-measurement-contracts.log
+            -run '^TestWGRuntimeInactiveMeasurement|^TestWGInactivityEmptyTable' | tee artifacts/managed/wg-measurement-contracts.log
           for name in OriginalTwoPassOrder RefusalAndPrivacy BoundAndIncomplete; do
             grep -F -- "--- PASS: TestWGRuntimeInactiveMeasurement$name " artifacts/managed/wg-measurement-contracts.log
+          done
+          for name in OriginalSourceAndClosedRefusals AllOwnedTablesAndCLIFallback CloseCancelsAndJoins KeepsNameFileBookends; do
+            grep -F -- "--- PASS: TestWGInactivityEmptyTable$name " artifacts/managed/wg-measurement-contracts.log
           done
           if grep -F -- '--- SKIP:' artifacts/managed/wg-measurement-contracts.log; then exit 1; fi
       - name: Original active directory custody and error classification
