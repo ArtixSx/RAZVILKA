@@ -209,6 +209,10 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	if e1 != nil || e2 != nil || !os.SameFile(installed, running) {
 		return zero, ErrNFQWSManagedProcessUnknown
 	}
+	helperEnvironment, err := nfqws2ManagedHelperEnvironment([]string{"PATH=/opt/bin:/opt/sbin:/usr/bin:/bin", "LANG=C", "TZ=UTC", "RAZVILKA_DATAPLANE_STATE=" + filepath.Dir(filepath.Dir(a.StateRoot)), "RAZVILKA_SELF_UPDATE_CONTROL_STATE=" + command.ControlRoot})
+	if err != nil {
+		return zero, err // Native experiment refusal precedes any intent or Start.
+	}
 	path := filepath.Join(a.StateRoot, nfqws2LeaseFile)
 	if err := nfqws2ManagedProtected(path, true); err != nil {
 		return zero, fmt.Errorf("managed process protected parent: %w", err)
@@ -261,7 +265,7 @@ func (a *NFQWS2Adapter) runManagedNFQWSProcessInternal(ctx context.Context, comm
 	}
 	args := append(slices.Clone(helperPrefix), command.ID)
 	cmd := exec.Command(program, args...)
-	cmd.Env = []string{"PATH=/opt/bin:/opt/sbin:/usr/bin:/bin", "LANG=C", "TZ=UTC", "RAZVILKA_DATAPLANE_STATE=" + filepath.Dir(filepath.Dir(a.StateRoot)), "RAZVILKA_SELF_UPDATE_CONTROL_STATE=" + command.ControlRoot}
+	cmd.Env = helperEnvironment
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var identity components.NFQWSSupervisionIdentity
 	done := make(chan error, 1)

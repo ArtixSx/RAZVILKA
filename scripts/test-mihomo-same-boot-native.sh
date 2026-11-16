@@ -12,6 +12,17 @@ chmod 700 "$work"
 trap 'rm -rf -- "$work"' EXIT HUP INT TERM
 export TMPDIR="$work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 export RAZVILKA_MIHOMO_LIVE_WORK="$work"
+case "${RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE:-0}" in
+ 0) ;;
+ 1)
+   case "${RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT:-}" in /*) ;; *) exit 2 ;; esac
+   test "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT" != / || exit 2
+   mkdir -p "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT"
+   for artifact in sameboot-consumer.cpu.pprof sameboot-consumer.test; do
+     test ! -e "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT/$artifact" || exit 2
+   done ;;
+ *) exit 2 ;;
+esac
 cp "$repo/scripts/fixtures/mihomo-live-peer.py" "$work/physical-peer-original"
 cp "$repo/scripts/native-mihomo-same-boot-peer.py" "$work/physical-peer"
 chmod 500 "$work/physical-peer" "$work/physical-peer-original"
@@ -56,6 +67,7 @@ for name in ('app.test','cmd.test','startup.test'):
 PY
 # Preserve an actual outside namespace FD before creating either private ns.
 exec 3</proc/self/ns/net
+sameboot_status=0
 timeout --foreground --kill-after=35s 300s unshare --mount --net sh -eu -c '
  mount --make-rprivate /
  mount -t tmpfs -o mode=0755,nodev,nosuid tmpfs /opt
@@ -71,4 +83,53 @@ timeout --foreground --kill-after=35s 300s unshare --mount --net sh -eu -c '
  /usr/sbin/iptables-legacy -t mangle -X RZMLF_BOOT
  "$1/startup.test" -test.run="^TestStaticVersionFactNative(PolicyReadObservation|MihomoNumericReadObservation)$" -test.v -test.count=1 -test.timeout=50s
  exec python3 "$2/scripts/native-mihomo-same-boot.py" "$1"
-' sh "$work" "$repo"
+' sh "$work" "$repo" || sameboot_status=$?
+# The optional diagnostic samples the unchanged original consumer operation.
+# Preserve the actual failure status and profile before the private work cleanup.
+if test "${RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE:-0}" = 1; then
+  if test -s "$work/sameboot-consumer.cpu.pprof"; then
+    if ! cp "$work/sameboot-consumer.cpu.pprof" "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT/sameboot-consumer.cpu.pprof"; then
+      if test "$sameboot_status" = 0; then sameboot_status=1; fi
+    fi
+    if ! cp "$work/cmd.test" "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT/sameboot-consumer.test"; then
+      if test "$sameboot_status" = 0; then sameboot_status=1; fi
+    fi
+    # These diagnostics contain compiled public test code and CPU locations,
+    # not fixture config. The unprivileged artifact uploader must read them.
+    if ! chmod 0644 "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT/sameboot-consumer.cpu.pprof" "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT/sameboot-consumer.test"; then
+      if test "$sameboot_status" = 0; then sameboot_status=1; fi
+    fi
+  else
+    printf '%s\n' 'sameboot consumer profile unavailable; no diagnostic acceptance'
+    if test "$sameboot_status" = 0; then sameboot_status=1; fi
+  fi
+  # Separate actual race-runtime exit experiment, after the full route actor.
+  # No tests/effects run in these children and GORACE never changes for the
+  # acceptance actor. This measures only the runtime's process-exit delay.
+  if test "${RAZVILKA_NATIVE_RACE:-0}" = 1; then
+    if ! python3 - "$work/cmd.test" "$RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT" <<'PY'
+import json, os, pathlib, subprocess, sys, time
+binary, output = sys.argv[1:]
+rows = []
+for block in range(3):
+    for mode in ('original', 'exit-sleep-zero', 'exit-sleep-zero', 'original'):
+        env = os.environ.copy()
+        if mode == 'exit-sleep-zero':
+            env['GORACE'] = env.get('GORACE', '') + ' atexit_sleep_ms=0'
+        started = time.monotonic_ns()
+        result = subprocess.run([binary, '-test.run=^$', '-test.timeout=5s'], env=env,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        rows.append({'block': block, 'mode': mode, 'elapsed_ms': (time.monotonic_ns()-started)/1e6,
+                     'exit_code': result.returncode})
+        if result.returncode != 0:
+            raise SystemExit('race-exit diagnostic child failed')
+with (pathlib.Path(output) / 'race-exit-cost.json').open('x') as stream:
+    json.dump({'diagnostic_only': True, 'empty_test_selection': True,
+               'acceptance_GORACE_unchanged': True, 'rows': rows}, stream, indent=2)
+PY
+    then
+      if test "$sameboot_status" = 0; then sameboot_status=1; fi
+    fi
+  fi
+fi
+exit "$sameboot_status"

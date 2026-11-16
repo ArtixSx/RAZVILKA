@@ -19,6 +19,7 @@ type mihomoSidecarOutput struct {
 	mu        sync.Mutex
 	buffer    [mihomoSidecarOutputLimit]byte
 	used      int
+	captured  int
 	truncated bool
 	finished  bool
 	category  string
@@ -42,6 +43,7 @@ func (o *mihomoSidecarOutput) finish() {
 		return
 	}
 	o.category = "unknown"
+	o.captured = o.used
 	if !o.truncated {
 		o.category = mihomoSidecarOutputCategory(o.buffer[:o.used])
 	}
@@ -83,6 +85,20 @@ func mihomoLiveSidecarOutputSummary(n *mihomoLiveSidecar) (bool, string, bool) {
 		return false, "unknown", false
 	}
 	return true, output.category, output.truncated
+}
+
+// Count is capped at the storage bound; truncated reports further bytes. An
+// empty stream is distinct from nonempty unrecognized output, but neither is
+// evidence of errno or startup cause. Raw bytes were cleared by original Wait.
+func mihomoLiveSidecarOutputBytes(n *mihomoLiveSidecar) (bool, int) {
+	available, _, _ := mihomoLiveSidecarOutputSummary(n)
+	if !available {
+		return false, 0
+	}
+	output := n.command.Stdout.(*mihomoSidecarOutput)
+	output.mu.Lock()
+	defer output.mu.Unlock()
+	return true, output.captured
 }
 
 // Fixed messages from HEV 2.17.1, commit 9a06bc6e7989. The CLI maps every

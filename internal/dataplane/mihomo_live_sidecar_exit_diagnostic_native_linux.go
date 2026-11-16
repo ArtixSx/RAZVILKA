@@ -36,4 +36,6 @@ func mihomoLiveSidecarExitDiagnostic(n *mihomoLiveSidecar) {
 	fmt.Printf("actual_mihomo_sidecar_exit available=%t exit_code=%d signal=%d\n", available, code, signal)
 	output, category, truncated := mihomoLiveSidecarOutputSummary(n)
 	fmt.Printf("actual_mihomo_sidecar_startup available=%t category=%s truncated=%t\n", output, category, truncated)
+	observed, captured := mihomoLiveSidecarOutputBytes(n)
+	fmt.Printf("actual_mihomo_sidecar_output available=%t captured_bytes=%d empty=%t\n", observed, captured, observed && captured == 0)
 }

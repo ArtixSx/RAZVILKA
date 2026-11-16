@@ -4,6 +4,21 @@ on:
   push:
     branches: [work/mihomo-same-boot-validation-20261102, work/mihomo-same-boot-source-20261102, work/bypass-integration-20261031]
   workflow_dispatch:
+    inputs:
+      consumer_profile:
+        description: 'Sample the original consumer without changing its deadline'
+        type: boolean
+        default: false
+      ack_cut:
+        description: 'Focused cut, or the complete original matrix'
+        type: choice
+        default: all
+        options: [all, retirement.json, runtime-history, completed.json, terminal-transaction, terminal-global]
+      mode:
+        description: 'Build selection'
+        type: choice
+        default: all
+        options: [all, normal, race]
 
 permissions:
   contents: read
@@ -15,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [normal, race]
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -43,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [normal, race]
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -109,8 +124,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [normal, race]
-        ack_cut: [retirement.json, runtime-history, completed.json, terminal-transaction, terminal-global]
+        mode: ${{ inputs.mode && inputs.mode != 'all' && fromJSON(format('["{0}"]', inputs.mode)) || fromJSON('["normal","race"]') }}
+        ack_cut: ${{ inputs.ack_cut && inputs.ack_cut != 'all' && fromJSON(format('["{0}"]', inputs.ack_cut)) || fromJSON('["retirement.json","runtime-history","completed.json","terminal-transaction","terminal-global"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -165,7 +180,16 @@ jobs:
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_NATIVE_RACE="$race_mode" \
             RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT="${{ matrix.ack_cut }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE="${{ inputs.consumer_profile && '1' || '0' }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/sameboot-profile" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-same-boot-native.sh
+      - name: Preserve original consumer diagnostic
+        if: ${{ !cancelled() && inputs.consumer_profile }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-profile-${{ matrix.mode }}-${{ matrix.ack_cut }}-${{ github.sha }}
+          path: artifacts/sameboot-profile
+          if-no-files-found: error

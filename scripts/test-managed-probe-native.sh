@@ -149,6 +149,16 @@ if test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 1; then
 fi
 # Use the already compiled native binary; benchmark only the default production
 # fixture, never each LAN/recovery invocation and never as a readiness claim.
+case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
+  all) ;;
+  helper-exit)
+    test "$probe_build_mode" = race
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    probe_cases='TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  *) exit 2 ;;
+esac
+probe_result=0
 case "$probe_cases:$probe_build_mode" in
   *TestFreshPathNode*:production)
     "$probe_work/startuptools.test" -test.run '^$' -test.bench '^BenchmarkFresh(Path|Held)Node$' -test.benchtime=1s -test.count=3 -test.benchmem ;;
@@ -254,5 +264,12 @@ if test -f "$probe_work/$probe_case.pprof.alloc"; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi
-test "$probe_status" = 0 || exit "$probe_status"
+if test "$probe_status" != 0; then
+  if test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = helper-exit; then
+    probe_result="$probe_status"
+  else
+    exit "$probe_status"
+  fi
+fi
 done
+exit "$probe_result"

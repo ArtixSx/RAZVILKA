@@ -157,3 +157,26 @@ func TestMihomoSidecarOutputOriginalWaitAndSharedPipe(t *testing.T) {
 		t.Fatal("HEV diagnostic affected another sidecar")
 	}
 }
+
+func TestMihomoSidecarOutputPresenceAfterOriginalJoin(t *testing.T) {
+	for _, wire := range []string{"", "private unrecognized bytes", strings.Repeat("x", mihomoSidecarOutputLimit+5)} {
+		n := &mihomoLiveSidecar{done: make(chan struct{}), started: true, command: exec.Command("unused"), owner: &mihomoLiveResource{}}
+		n.self = n
+		n.owner.definition.Sidecar.Kind = "hev"
+		mihomoLiveSidecarConfigureOutput(n)
+		o := n.command.Stdout.(*mihomoSidecarOutput)
+		_, _ = o.Write([]byte(wire))
+		mihomoLiveSidecarFinishOutput(n)
+		if available, count := mihomoLiveSidecarOutputBytes(n); available || count != 0 {
+			t.Fatal("count published before original done")
+		}
+		close(n.done)
+		available, count := mihomoLiveSidecarOutputBytes(n)
+		if !available || count != min(len(wire), mihomoSidecarOutputLimit) || o.used != 0 || !bytes.Equal(o.buffer[:], make([]byte, mihomoSidecarOutputLimit)) {
+			t.Fatal("bounded count or raw zeroing changed")
+		}
+		if _, category, _ := mihomoLiveSidecarOutputSummary(n); category != "unknown" {
+			t.Fatal("presence invented a startup cause")
+		}
+	}
+}

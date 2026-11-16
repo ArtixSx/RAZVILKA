@@ -147,10 +147,16 @@ def run(work, custody):
     subprocess.run(['mount', '--bind', str(work / 'cmd.test'), '/opt/bin/razvilka'], check=True, timeout=5)
     env['RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER'] = '0'
     env['RAZVILKA_MIHOMO_SAME_BOOT_CONSUMER'] = '1'
-    consumer, _ = custody.start([
+    consumer_command = [
         '/opt/bin/razvilka', '-test.run=^TestMihomoSameBootCLINativeOriginalParent$',
         '-test.v', '-test.count=1', '-test.timeout=140s',
-    ], env=env)
+    ]
+    profile = os.environ.get('RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE', '0')
+    if profile not in ('0', '1'):
+        raise RuntimeError('closed native profiling mode required')
+    if profile == '1':
+        consumer_command.append('-test.cpuprofile=' + str(work / 'sameboot-consumer.cpu.pprof'))
+    consumer, _ = custody.start(consumer_command, env=env)
     return consumer.wait(timeout=150)
 
 
