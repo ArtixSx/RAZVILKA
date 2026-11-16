@@ -8,13 +8,13 @@
 
 | Направление | Проверено | Остаток / препятствие |
 | --- | --- | --- |
-| Согласованный binary + StrategyLab restore | `492e813b`: bound offline retry normal/race PASS; plan-only re-derivation, частичные префиксы, foreign inventory, Stop fences; публичный old193 history/manual restore PASS; modern update/rollback PASS125.47с | Отдельная проверка настоящей исторической reader4 библиотеки выполняется; физическое прерывание питания не проверено |
+| Согласованный binary + StrategyLab restore | `492e813b`: bound offline retry normal/race PASS; plan-only re-derivation, частичные префиксы, foreign inventory, Stop fences; публичный old193 history/manual restore PASS; modern update/rollback PASS125.47с | На `c972ab26` настоящая reader4 библиотека прошла normal/race; физическое прерывание питания не проверено |
 | Совместимость обновления | Обычный reader остаётся4; только standalone offline restore имеет допуск5. Actual CLI отвергает pending5; явный retry возвращает точный исходный receipt4, не меняя config revision | Произвольный downgrade не разрешён; сохранён отказ unknown/finalizing |
 | DNS / точный доменный scope | Свежие полные bytes и все ownership checks сохранены; повторный closing SHA заменён свежим побайтовым сравнением в пределах одного вызова | Строгий run43889223432 FAIL; ускорение полного сценария ещё не доказано. Программная задача, не аппаратный блокер |
 | Managed NFQWS2 | На `4e83e678` диагностический race-helper-exit=0: LateWaitCleanup PASS22.36с, фактический Wait/ACK/cleanup подтверждён | Consumer всё ещё FAIL: Execute15.8845с при исходном14с. Опция только native race fixture; production не меняет задержку завершения |
 | Mihomo recovery | Сохранены исходные scopes, ownership и rollback; consumer CPU profile собран | `4e83e678` race completed.json ACK FAIL120с; SHA33.31с CPU, свежие системные наблюдения26.08с CPU. Не общий elapsed и не оправдание увеличить timeout |
 | Панель | 13 разделов /21 страница; локальная браузерная и Node приёмка завершена; реальные снимки включены в README | Снимки синтетического backend; новая панель на роутер ещё не установлена |
-| Общий CI | Последний известный полный PASS — `1dff892e`; новые адресные проверки указаны выше | `ed4bdf08` generic FAIL из-за обычного reader5, уже возвращённого к4 в `492e813b`; новый полный CI ещё оценивается |
+| Общий CI | Полный CI `492e813b` PASS (run43889164918); адресные результаты выше | `ed4bdf08` generic FAIL из-за обычного reader5, уже возвращённого к4 в `492e813b`; более новые оптимизации проверяются отдельно |
 
 Устаревшие generic runs `43887471647` (`4e83e678`) и `43888232543`
 (`87c95efd`) остановлены после обнаружения той же причины reader5. Это

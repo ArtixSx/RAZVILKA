@@ -4,10 +4,10 @@
 
 [Машиночитаемые результаты](release-492e813b.json): identity regression,
 публичное восстановление истории и modern rollback PASS; strict DNS FAIL.
-Generic CI ещё выполнялся при сохранении этой точки. Router-ready=false.
+Generic CI43889164918 завершился PASS. Router-ready=false.
 На последующей `c972ab26` локально исполнена настоящая reader4 библиотека
 `4cc9f869`: receipt4 принят, реальный bound pending5 отклонён, точный terminal4
-снова принят;0.52с. Архивная проверка в этом тесте моделируется явно.
+снова принят;0.52с. Linux normal0.14с/race0.13с и полный identity run43891102721 PASS. Архивная проверка в этом тесте моделируется явно.
 
 Профиль `4e83e678`, race/completed.json:120.01с elapsed,107.01с sampled CPU;
 SHA33.31с flat, syscall26.08с flat. В cold-file hashing22.73с cumulative,
