@@ -14,6 +14,7 @@ type domainTCPSuccessorRead struct {
 	self         *domainTCPSuccessorRead
 	cursor       *domainTCPGlobalSuccessor
 	loan         *domainTCPPreAddLoan
+	guard        *domainTCPGuardReadLoan
 	files        *xrayDomainTCPFileObservation
 	owner        *DomainTCPOriginalScope
 	baseline     *syntheticBaselineExecutionResource
@@ -27,6 +28,21 @@ type domainTCPSuccessorRead struct {
 func (c *domainTCPGlobalSuccessor) originalSuccessorRead(ctx context.Context) (*domainTCPSuccessorRead, error) {
 	if ctx == nil {
 		return nil, ErrDomainPolicyTCPConsumer
+	}
+	if value := ctx.Value(domainTCPGuardReadKey{}); value != nil {
+		if ctx.Value(domainTCPPreAddKey{}) != nil {
+			return nil, ErrDomainPolicyTCPConsumer
+		}
+		guard, ok := value.(*domainTCPGuardReadLoan)
+		if !ok || guard == nil || guard.current(ctx) != nil || guard.cursor != c {
+			return nil, ErrDomainPolicyTCPConsumer
+		}
+		read := &domainTCPSuccessorRead{cursor: c, guard: guard, files: guard.files, owner: guard.owner, baseline: guard.baseline, capture: guard.capture, process: guard.process, witness: guard.witness, rootCtx: ctx, ctx: ctx}
+		read.self = read
+		if err := read.rootCurrent(ctx); err != nil {
+			return nil, err
+		}
+		return read, nil
 	}
 	value := ctx.Value(domainTCPPreAddKey{})
 	if value == nil {
@@ -69,7 +85,18 @@ func (r *domainTCPSuccessorRead) loanCurrent(ctx context.Context) error {
 	if ctx == nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	if r == nil || r.self != r || r.rootCtx == nil || !reflect.TypeOf(ctx).Comparable() || ctx != r.rootCtx || r.loan == nil || r.loan.self != r.loan || !r.loan.open.Load() || r.loan.ctx != r.rootCtx || r.loan.files != r.files || r.files == nil || r.loan.read == nil || r.loan.read.self != r.loan.read || r.loan.read.owner != r.owner || r.loan.read.baseline != r.baseline || r.loan.read.capture != r.capture || r.loan.read.process != r.process || r.cursor == nil || r.cursor.self != r.cursor || r.cursor.pool == nil || r.cursor.scope == nil || r.cursor.scope.manager != r.cursor.pool.manager || r.process == nil || r.process.self != r.process || r.process.scope != r.cursor.scope || r.cursor.scope.domainSuccessor != r.cursor || r.owner == nil || r.owner.self != r.owner || r.baseline == nil || r.baseline.self != r.baseline || r.baseline.capture == nil || r.baseline.capture.owner != r.owner || r.owner.binding != r.baseline.binding || r.process.material == nil || r.process.material.binding != r.baseline.binding {
+	if r == nil || r.self != r || r.rootCtx == nil || !reflect.TypeOf(ctx).Comparable() || ctx != r.rootCtx || r.files == nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	if r.guard != nil {
+		g := r.guard
+		if r.loan != nil || g.current(ctx) != nil || g.ctx != r.rootCtx || g.files != r.files || g.owner != r.owner || g.baseline != r.baseline || g.capture != r.capture || g.process != r.process || g.cursor != r.cursor || g.witness != r.witness {
+			return ErrDomainPolicyTCPConsumer
+		}
+	} else if ctx.Value(domainTCPGuardReadKey{}) != nil || r.loan == nil || r.loan.self != r.loan || !r.loan.open.Load() || r.loan.ctx != r.rootCtx || r.loan.files != r.files || r.loan.read == nil || r.loan.read.self != r.loan.read || r.loan.read.owner != r.owner || r.loan.read.baseline != r.baseline || r.loan.read.capture != r.capture || r.loan.read.process != r.process {
+		return ErrDomainPolicyTCPConsumer
+	}
+	if r.cursor == nil || r.cursor.self != r.cursor || r.cursor.pool == nil || r.cursor.scope == nil || r.cursor.scope.manager != r.cursor.pool.manager || r.process == nil || r.process.self != r.process || r.process.scope != r.cursor.scope || r.cursor.scope.domainSuccessor != r.cursor || r.owner == nil || r.owner.self != r.owner || r.baseline == nil || r.baseline.self != r.baseline || r.baseline.capture == nil || r.baseline.capture.owner != r.owner || r.owner.binding != r.baseline.binding || r.process.material == nil || r.process.material.binding != r.baseline.binding {
 		return errors.Join(ErrDomainPolicyTCPConsumer, ctx.Err())
 	}
 	r.owner.mu.Lock()

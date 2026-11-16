@@ -10,6 +10,9 @@ import (
 // checks the full original process BEFORE its first mapping/runner callback.
 // No positive observation is retained across this synchronous guard or an Add.
 func (r *domainTCPCaptureExecutionResource) guardOriginalBaseline(ctx context.Context, baseline *syntheticBaselineExecutionResource) error {
+	if ctx != nil && ctx.Value(domainTCPGuardReadKey{}) != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
 	if err := r.local(ctx); err != nil {
 		return err
 	}
@@ -25,7 +28,7 @@ func (r *domainTCPCaptureExecutionResource) guardOriginalBaseline(ctx context.Co
 			})
 		}
 		defer domainTCPMeasure("capture-guard-original-opening")(0)
-		return r.observePreAddFiles(observed, false, func(files *xrayDomainTCPFileObservation) error {
+		return r.observeOriginalGuardFiles(observed, baseline, func(observed context.Context, files *xrayDomainTCPFileObservation) error {
 			// This is the same full opening as inside the old wrapper. Its
 			// refusal must precede every later baseline callback and effect.
 			if err := r.currentWithFiles(observed, files); err != nil {

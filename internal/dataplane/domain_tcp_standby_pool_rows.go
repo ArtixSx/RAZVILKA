@@ -9,7 +9,7 @@ import (
 // receipts/kernel readbacks bracket this actual collector image. No effect or
 // packet may accept the resulting rows as permission to skip an original gate.
 func (c *domainTCPGlobalSuccessor) counterfactualRows(ctx context.Context, backend *BackendInventory, rows []backendInventoryRow) ([]backendInventoryRow, error) {
-	if ctx == nil || ctx.Value(domainTCPPreAddKey{}) == nil {
+	if ctx == nil || ctx.Value(domainTCPPreAddKey{}) == nil && ctx.Value(domainTCPGuardReadKey{}) == nil {
 		return c.counterfactualRowsWithSuccessorRead(ctx, backend, rows, nil)
 	}
 	read, err := c.originalSuccessorRead(ctx)

@@ -175,6 +175,12 @@ func networkPolicyNFQReadSourcesFixture(t *testing.T) (*NetworkPolicyChecks, *ne
 	e.inventory.reader.Provider = provider
 	e.inventory.reader.Runner = &activeReadDispatchModel{}
 	e.inventory.reader.IPTables, e.inventory.reader.IP6Tables = e.runtime.IPTables, e.runtime.IP6Tables
+	// The older registrar fixture uses t.TempDir directly. Go creates its
+	// per-test leaf with 0777 filtered by umask (normally 0755 on Linux),
+	// while this additional original bridge correctly requires a private root.
+	if err := os.Chmod(e.material.manager.StateRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	c, err := e.material.manager.bindNetworkPolicyChecks(e.gate, func(context.Context, netidentity.Identity) (BackendInventorySnapshot, error) {
 		t.Fatal("association comparison reached inventory")
 		return BackendInventorySnapshot{}, ErrNetworkPolicyConsumers

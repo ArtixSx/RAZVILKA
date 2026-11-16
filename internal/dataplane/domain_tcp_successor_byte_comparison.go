@@ -17,6 +17,7 @@ type domainTCPSuccessorByteComparison struct {
 	mu     sync.Mutex
 	active bool
 	loan   *domainTCPPreAddLoan
+	guard  *domainTCPGuardReadLoan
 	image  *xrayDomainTCPImageRead
 }
 
@@ -69,7 +70,14 @@ func (c *domainTCPSuccessorByteComparison) revoke() {
 // Caller holds c.mu. Only local associations and original held metadata are
 // inspected here; no provider/tool/control callback runs under this mutex.
 func (c *domainTCPSuccessorByteComparison) valid(read *domainTCPSuccessorRead, ctx context.Context, old *XrayDomainTCPExecutionResource) error {
-	if c == nil || c.self != c || !c.active || c.loan == nil || c.loan.bytes != c || c.image == nil || !c.image.captured() || !c.image.belongsTo(c.image.resource) || c.image.contextCurrent(c.image.ctx) != nil || read == nil || read.loan != c.loan || read.process != c.image.resource || c.loan.ctx != c.image.ctx || read.current(ctx, read.witness, old) != nil {
+	if c == nil || c.self != c || !c.active || c.image == nil || !c.image.captured() || !c.image.belongsTo(c.image.resource) || c.image.contextCurrent(c.image.ctx) != nil || read == nil || read.process != c.image.resource || read.current(ctx, read.witness, old) != nil {
+		return ErrDomainPolicyTCPConsumer
+	}
+	if c.guard != nil {
+		if c.loan != nil || read.loan != nil || read.guard != c.guard || c.guard.bytes != c || c.guard.ctx != c.image.ctx {
+			return ErrDomainPolicyTCPConsumer
+		}
+	} else if read.guard != nil || c.loan == nil || c.loan.bytes != c || read.loan != c.loan || c.loan.ctx != c.image.ctx {
 		return ErrDomainPolicyTCPConsumer
 	}
 	return nil
@@ -82,7 +90,12 @@ func (read *domainTCPSuccessorRead) priorFilesCurrent(ctx context.Context, old *
 	if read.current(ctx, read.witness, old) != nil {
 		return ErrDomainPolicyTCPConsumer
 	}
-	c := read.loan.bytes
+	var c *domainTCPSuccessorByteComparison
+	if read.guard != nil {
+		c = read.guard.bytes
+	} else {
+		c = read.loan.bytes
+	}
 	if c == nil {
 		return old.filesCurrent(ctx)
 	}

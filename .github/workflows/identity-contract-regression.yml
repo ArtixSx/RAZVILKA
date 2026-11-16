@@ -80,8 +80,8 @@ jobs:
           go test -race -count=1 -v ./internal/netidentity | tee artifacts/identity-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestMihomoSameBoot(CurrentRead|AbsenceRead)' | tee artifacts/sameboot-current.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestMihomoSameBoot(CurrentRead|AbsenceRead)' | tee artifacts/sameboot-current-race.txt
-          go test -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessorBytes|^TestDomainPreparationComparison|^TestDomainMappingObservation|^TestDomainLookupObservation' | tee artifacts/baseline-current.txt
-          go test -race -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessorBytes|^TestDomainPreparationComparison|^TestDomainMappingObservation|^TestDomainLookupObservation' | tee artifacts/baseline-current-race.txt
+          go test -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessor|^TestDomainPreparationComparison|^TestDomainMappingObservation|^TestDomainLookupObservation|^TestDomainGuardRead|^TestDomainPreAdd|^TestDomainCaptureGuard' | tee artifacts/baseline-current.txt
+          go test -race -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessor|^TestDomainPreparationComparison|^TestDomainMappingObservation|^TestDomainLookupObservation|^TestDomainGuardRead|^TestDomainPreAdd|^TestDomainCaptureGuard' | tee artifacts/baseline-current-race.txt
           for mode in normal race; do
             race_flag=()
             if [ "$mode" = race ]; then race_flag=(-race); fi
