@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Original process/pidfd custody in an already isolated mount+net namespace."""
 import array
+import errno
 import json
 import os
 import pathlib
@@ -12,6 +13,74 @@ import struct
 import subprocess
 import sys
 import time
+
+
+def image_mount(image):
+    """Identify the one original private bind; never retain a busy open FD."""
+    target = pathlib.Path('/opt/bin/razvilka')
+    source, mounted = image.lstat(), target.lstat()
+    if not all(stat.S_ISREG(s.st_mode) and s.st_uid == 0 for s in (source, mounted)) or (source.st_dev, source.st_ino) != (mounted.st_dev, mounted.st_ino):
+        raise RuntimeError('original fixture image changed')
+    with open('/proc/self/mountinfo', 'rb') as stream:
+        raw = stream.read((1 << 20) + 1)
+    if len(raw) > 1 << 20:
+        raise RuntimeError('fixture mount inventory bound')
+    matches = [line for line in raw.splitlines() if len(line.split()) >= 10 and line.split()[4] == b'/opt/bin/razvilka']
+    if len(matches) != 1:
+        raise RuntimeError('one original fixture image mount required')
+    fields = matches[0].split()
+    separator = fields.index(b'-')
+    if any(field.startswith((b'shared:', b'master:', b'propagate_from:')) for field in fields[6:separator]):
+        raise RuntimeError('private fixture image mount required')
+    return source.st_dev, source.st_ino, matches[0]
+
+
+def unmount_original_image(image, original):
+    # The original parent is already killed and joined. A transient busy mount
+    # remains a refusal until ordinary umount succeeds within the SAME 5s cap.
+    # No force/lazy flags, new image, foreign process signal or relaxed current.
+    # Linux man-pages 6.19: https://man7.org/linux/man-pages/man2/umount.2.html
+    # Keep the former original-child timeout/kill/Wait boundary even if the
+    # kernel syscall stalls. The helper has no caller-selected path or flags.
+    helper = '''import ctypes,sys
+libc=ctypes.CDLL(None,use_errno=True)
+libc.umount2.argtypes=[ctypes.c_char_p,ctypes.c_int]
+libc.umount2.restype=ctypes.c_int
+result=libc.umount2(b'/opt/bin/razvilka',0)
+error=ctypes.get_errno() if result else 0
+print(error,flush=True)
+sys.exit(1 if result else 0)
+'''
+    deadline = time.monotonic() + 5
+    attempts = 0
+    while True:
+        if image_mount(image) != original:
+            raise RuntimeError('original fixture image mount replaced')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('original fixture image remained busy within 5s')
+        attempts += 1
+        try:
+            result = subprocess.run([sys.executable, '-I', '-c', helper], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=remaining)
+        except subprocess.TimeoutExpired as error:
+            raise TimeoutError('original fixture ordinary unmount exceeded original 5s') from error
+        if len(result.stdout) > 8 or result.stderr or result.returncode not in (0, 1):
+            raise RuntimeError('original fixture unmount helper failed')
+        try:
+            error = int(result.stdout)
+        except ValueError as invalid:
+            raise RuntimeError('original fixture unmount result malformed') from invalid
+        if result.stdout != f'{error}\n'.encode() or not 0 <= error <= 4095 or (result.returncode == 0) != (error == 0):
+            raise RuntimeError('original fixture unmount result inconsistent')
+        if error == 0:
+            print(f'original fixture ordinary unmount confirmed attempts={attempts}', flush=True)
+            return
+        if error != errno.EBUSY:
+            raise OSError(error, 'original fixture ordinary unmount failed')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('original fixture image remained busy within 5s')
+        time.sleep(min(0.05, remaining))
 
 
 def interrupted(signum, _):
@@ -111,6 +180,7 @@ class Custody:
 
 
 def run(work, custody):
+    original_image = image_mount(work / 'app.test')
     ready = pathlib.Path('/opt/razvilka/state/dataplane/.same-boot-native-ready.json')
     env = os.environ.copy()
     env['RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER'] = '1'
@@ -143,7 +213,7 @@ def run(work, custody):
             raise RuntimeError('original parent death not confirmed')
         print('actual original parent SIGKILL and sole Wait confirmed', flush=True)
     # Only after original Wait replace the private mounted test image.
-    subprocess.run(['umount', '/opt/bin/razvilka'], check=True, timeout=5)
+    unmount_original_image(work / 'app.test', original_image)
     subprocess.run(['mount', '--bind', str(work / 'cmd.test'), '/opt/bin/razvilka'], check=True, timeout=5)
     env['RAZVILKA_MIHOMO_SAME_BOOT_PRODUCER'] = '0'
     env['RAZVILKA_MIHOMO_SAME_BOOT_CONSUMER'] = '1'

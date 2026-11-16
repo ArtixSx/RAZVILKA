@@ -74,6 +74,13 @@ jobs:
         with:
           go-version: '1.26.5'
           cache: false
+      - name: Ordinary private image unmount retains busy and foreign-mount refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
+          sudo unshare --mount python3 scripts/test-mihomo-same-boot-image.py --native \
+            2>&1 | tee artifacts/sameboot-profile/image-unmount.log
       - name: Actual owned home keeps opening and closing absence proofs
         shell: bash
         run: |
