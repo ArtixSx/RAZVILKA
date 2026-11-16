@@ -113,7 +113,7 @@ func (o *DomainTCPOriginalScope) compareStandbyWithSuccessorRead(ctx context.Con
 		if err := p.records.current(ctx, allEqual); err != nil {
 			return err
 		}
-		if err := p.filesCurrent(ctx); err != nil {
+		if err := read.priorFilesCurrent(ctx, p); err != nil {
 			return err
 		}
 	}

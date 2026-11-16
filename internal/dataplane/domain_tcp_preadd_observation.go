@@ -28,6 +28,7 @@ type domainTCPPreAddLoan struct {
 	ctx   context.Context
 	files *xrayDomainTCPFileObservation
 	open  atomic.Bool
+	bytes *domainTCPSuccessorByteComparison
 }
 
 func applyDomainTCPOriginalEffects(ctx context.Context, runtime PolicyEffectRuntime, capture *domainTCPCaptureExecutionResource, baseline *syntheticBaselineExecutionResource) error {
@@ -119,7 +120,7 @@ func (r *domainTCPPreAddRead) observe(ctx context.Context, session *policyEffect
 		loan := &domainTCPPreAddLoan{read: r}
 		loan.self = loan
 		loan.ctx = context.WithValue(observed, domainTCPPreAddKey{}, loan)
-		return r.process.withFileObservation(loan.ctx, func(files *xrayDomainTCPFileObservation) error {
+		return r.process.withPreAddFileObservation(loan.ctx, loan, func(files *xrayDomainTCPFileObservation) error {
 			loan.files = files
 			loan.open.Store(true)
 			defer loan.open.Store(false)

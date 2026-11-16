@@ -1,0 +1,113 @@
+--- a/third-part/hev-task-system/src/lib/misc/hev-task-stack-detector.c
++++ b/third-part/hev-task-system/src/lib/misc/hev-task-stack-detector.c
+@@ -10,6 +10,16 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <signal.h>
++#include <errno.h>
++#include <stdint.h>
++
++#if defined(__linux__)
++#include <sys/auxv.h>
++#include <unistd.h>
++#ifndef AT_MINSIGSTKSZ
++#define AT_MINSIGSTKSZ 51
++#endif
++#endif
+ 
+ #if defined(__APPLE__)
+ #include <Availability.h>
+@@ -29,7 +39,7 @@
+     struct sigaction bus_sa;
+     struct sigaction segv_sa;
+     stack_t oss;
+-    char stack[SIGSTKSZ];
++    char stack[];
+ };
+ 
+ static int
+@@ -82,29 +92,62 @@
+ {
+     HevTaskStackDetector *self;
+     struct sigaction sa;
+-    int res = 0;
++    size_t stack_size = SIGSTKSZ;
++    int saved_errno;
+     stack_t ss;
+ 
+-    self = malloc (sizeof (HevTaskStackDetector));
++#if defined(__linux__)
++    /* AT_MINSIGSTKSZ covers the kernel frame, not this userspace handler.
++     * Preserve SIGSTKSZ for handler headroom; a larger libc recommendation
++     * wins. This is storage sizing, never a fallback disabling detection. */
++    unsigned long kernel_min = getauxval (AT_MINSIGSTKSZ);
++    long recommended = -1;
++#ifdef _SC_SIGSTKSZ
++    recommended = sysconf (_SC_SIGSTKSZ);
++#endif
++    if (kernel_min > SIZE_MAX - stack_size) {
++        errno = ENOMEM;
++        goto exit;
++    }
++    stack_size += kernel_min;
++    if (recommended > 0 && (unsigned long)recommended > stack_size)
++        stack_size = (size_t)recommended;
++#endif
++    if (stack_size > SIZE_MAX - sizeof (HevTaskStackDetector)) {
++        errno = ENOMEM;
++        goto exit;
++    }
++    self = malloc (sizeof (HevTaskStackDetector) + stack_size);
+     if (!self)
+         goto exit;
+ 
+     ss.ss_sp = self->stack;
+-    ss.ss_size = SIGSTKSZ;
++    ss.ss_size = stack_size;
+     ss.ss_flags = 0;
+ 
+     sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+     sa.sa_sigaction = signal_handler;
+     sigemptyset (&sa.sa_mask);
+ 
+-    res |= setaltstack (&ss, &self->oss);
+-    res |= sigaction (SIGBUS, &sa, &self->bus_sa);
+-    res |= sigaction (SIGSEGV, &sa, &self->segv_sa);
+-    if (res < 0)
++    if (setaltstack (&ss, &self->oss) < 0)
+         goto free;
++    if (sigaction (SIGBUS, &sa, &self->bus_sa) < 0)
++        goto restore_stack;
++    if (sigaction (SIGSEGV, &sa, &self->segv_sa) < 0)
++        goto restore_bus;
+ 
+     return self;
+ 
++restore_bus:
++    saved_errno = errno;
++    if (sigaction (SIGBUS, &self->bus_sa, NULL) < 0)
++        abort (); /* Never free backing with an un-restored handler. */
++    errno = saved_errno;
++restore_stack:
++    saved_errno = errno;
++    if (setaltstack (&self->oss, NULL) < 0)
++        abort (); /* Never free the still-active alternate stack. */
++    errno = saved_errno;
+ free:
+     free (self);
+ exit:
+@@ -114,8 +157,11 @@
+ void
+ hev_task_stack_detector_destroy (HevTaskStackDetector *self)
+ {
+-    sigaction (SIGBUS, &self->bus_sa, NULL);
+-    sigaction (SIGSEGV, &self->segv_sa, NULL);
+-    setaltstack (&self->oss, NULL);
++    int res = 0;
++    res |= sigaction (SIGBUS, &self->bus_sa, NULL);
++    res |= sigaction (SIGSEGV, &self->segv_sa, NULL);
++    res |= setaltstack (&self->oss, NULL);
++    if (res < 0)
++        abort (); /* A void API cannot safely release un-restored backing. */
+     free (self);
+ }

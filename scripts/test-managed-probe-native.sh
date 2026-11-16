@@ -275,7 +275,17 @@ if test -f "$probe_work/$probe_case.pprof.alloc"; then
   fi
   # Include the fixed wrapper/caller nodes: copyBuffer alone reports only
   # io.Copy and cannot distinguish source hashing from os/exec pipe copies.
-  if ! timeout 50s go tool pprof -sample_index=alloc_space -peek='^io[.](Copy|copyBuffer)$|^os[.].*WriteTo$|^os/exec[.].*writerDescriptor|netidentity[.]imageHash$|StockNFQWSNativeReview[)].current$' "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc"; then
+  peek_filter='^io[.](Copy|copyBuffer)$|^os[.].*WriteTo$|^os/exec[.].*writerDescriptor|netidentity[.]imageHash$|StockNFQWSNativeReview[)].current$'
+  peek_status=0
+  timeout 50s go tool pprof -sample_index=alloc_space -peek="$peek_filter" "$probe_work/app.test" "$probe_work/$probe_case.pprof.alloc" > "$probe_work/peek-output.txt" 2>&1 || peek_status=$?
+  cat "$probe_work/peek-output.txt"
+  # A valid allocation profile can contain no samples of these optional
+  # callers. Accept only pprof's exact no-match result, never a parse error,
+  # missing file, timeout or the original test failure in probe_status.
+  printf 'no matches found for regexp: %s\n' "$peek_filter" > "$probe_work/peek-empty.txt"
+  if test "$peek_status" = 2 && cmp -s "$probe_work/peek-output.txt" "$probe_work/peek-empty.txt"; then
+    printf 'optional_allocation_callers=no_samples original_test_status=%s\n' "$probe_status"
+  elif test "$peek_status" != 0; then
     if test "$probe_status" = 0; then probe_status=1; fi
   fi
 fi

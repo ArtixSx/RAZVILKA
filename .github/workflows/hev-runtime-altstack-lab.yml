@@ -1,0 +1,84 @@
+name: HEV runtime altstack source lab
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/hev-altstack-lab-*']
+permissions:
+  contents: read
+jobs:
+  source-lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Prepare isolated source-build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace util-linux iproute2 curl ca-certificates make patch python3
+          sudo modprobe tun
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; strace -V; } > artifacts/platform.txt
+      - name: Build unchanged and patched source with the same pinned compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/build.txt
+      - name: Compare fixed populations without replacing official acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-hev-runtime-altstack-lab-native.sh "$GITHUB_WORKSPACE/artifacts/hev-lab/build-manifest.json" \
+            2>&1 | tee artifacts/comparison.txt || status=$?
+          if grep -F -- '--- SKIP:' artifacts/comparison.txt; then status=1; fi
+          for name in TestHEVStartupDiagnosticClosedTrace TestHEVRuntimeAltstackLabPopulation; do
+            if ! grep -F -- "--- PASS: $name " artifacts/comparison.txt; then status=1; fi
+          done
+          python3 - <<'PYCODE' || status=1
+          import json,pathlib
+          text=pathlib.Path('artifacts/comparison.txt').read_text()
+          marker='hev_altstack_lab_sample '
+          rows=[json.loads(line.split(marker,1)[1]) for line in text.splitlines() if marker in line]
+          pathlib.Path('artifacts/closed-results.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert len(rows)==32, 'fixed populations incomplete'
+          for side in ['original','patched']:
+              for mode in ['untraced','traced-diagnostic']:
+                  population=[r for r in rows if r['lab_side']==side and r['mode']==mode]
+                  assert [r['sample'] for r in population]==list(range(8))
+          assert all(r['cleanup_verified'] for r in rows)
+          assert all(r['tun_observed'] and not r['exited_before_stop'] and not r['forced_kill'] and r['exit_code']==0 and r['signal']==0 for r in rows if r['lab_side']=='patched')
+          assert all(r['trace']['calls'] and not r['trace']['truncated'] for r in rows if r['mode']=='traced-diagnostic')
+          assert 'hev_altstack_lab_platform ' in text
+          PYCODE
+          printf 'lab_exit=%s production_pin_unchanged=true route_readiness_claim=false\n' "$status" > artifacts/outcome.txt
+          exit "$status"
+      - name: Preserve reviewed inputs and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-altstack-source-lab-${{ github.sha }}-${{ matrix.runner }}
+          path: |
+            artifacts/*.txt
+            artifacts/*.json
+            artifacts/hev-lab/bin
+            artifacts/hev-lab/*.json
+            artifacts/hev-lab/*.log
+            artifacts/hev-lab/*.txt
+            artifacts/hev-lab/*.patch
+            artifacts/hev-lab/*.c
+            artifacts/hev-lab/hev-socks5-tunnel-2.17.1.tar.xz
+            artifacts/hev-lab/**/LICENSE*
+            artifacts/hev-lab/**/COPYING*
+          if-no-files-found: error

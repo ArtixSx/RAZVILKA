@@ -64,8 +64,9 @@ func (l *xrayDomainTCPImageLease) release() {
 	}
 }
 
-// This object stays local to the outer synchronous observation. It
-// is never installed in a file view, context, resource or callback argument.
+// This object stays within the outer synchronous observation. Ordinary views
+// never expose it. The dedicated pre-Add comparator may reference it through
+// a typed loan; revocation joins its byte readers before closing and clearing.
 // Every independent opening authenticates freshly captured bytes with SHA;
 // closing rereads every byte, even after a mismatch, with the same32KiB reads.
 type xrayDomainTCPImageRead struct {
