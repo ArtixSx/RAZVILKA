@@ -56,12 +56,22 @@ func TestMain(m *testing.M) {
 		case "nfqws-managed-process-supervisor":
 			root := filepath.Join(os.Getenv("RAZVILKA_DATAPLANE_STATE"), "runtime", "nfqws2")
 			result := dataplane.RunNFQWSManagedProcessSupervisor(os.Args[2], root, os.Getenv("RAZVILKA_SELF_UPDATE_CONTROL_STATE"))
-			if marker, err := os.ReadFile(filepath.Join(root, ".native-fixture-delayed-exit")); result == 0 && err == nil && string(marker) == "after-real-wait\n" {
-				// CI-only fault AFTER actual child/subreaper WaitECHILD publication:
-				// delay THIS original helper's exit beyond the controller join grace.
-				// It owns no remaining child and cannot start another one here.
-				signal.Ignore(syscall.SIGTERM)
-				time.Sleep(3 * time.Second)
+			if marker, err := os.ReadFile(filepath.Join(root, ".native-fixture-delayed-exit")); result == 0 && err == nil {
+				// CI-only fault AFTER actual child/subreaper WaitECHILD publication.
+				// The former 3s late-exit input now proves initial cleanup. The 8s
+				// case exceeds both original join graces plus the SAME 5s cleanup,
+				// retaining the original manual retry contract. No timer changes.
+				var delay time.Duration
+				switch string(marker) {
+				case "within-original-cleanup\n":
+					delay = 3 * time.Second
+				case "after-real-wait\n":
+					delay = 8 * time.Second
+				}
+				if delay != 0 {
+					signal.Ignore(syscall.SIGTERM)
+					time.Sleep(delay)
+				}
 			}
 			os.Exit(result)
 		}
@@ -91,6 +101,10 @@ func TestManagedStrategyProbeNativeConsumer(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, false)
 }
 
+func TestManagedStrategyProbeNativeConsumerInitialWaitCleanup(t *testing.T) {
+	runManagedStrategyProbeNativeConsumer(t, true, false)
+}
+
 func TestManagedStrategyProbeNativeConsumerLateWaitCleanup(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, true, false)
 }
@@ -113,6 +127,7 @@ func TestManagedStrategyProbeNativeClosingEnvironment(t *testing.T) {
 }
 
 func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool, revoke ...string) {
+	initialWait := lateWait && t.Name() == "TestManagedStrategyProbeNativeConsumerInitialWaitCleanup"
 	lan := appHTTP && len(revoke) == 1 && (revoke[0] == "lan" || revoke[0] == "lan-manual")
 	manualOnly := lan && revoke[0] == "lan-manual"
 	if os.Getenv("RAZVILKA_MANAGED_PROBE_NATIVE") != "1" {
@@ -395,7 +410,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		if err := os.MkdirAll(adapter.StateRoot, 0700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(adapter.StateRoot, ".native-fixture-delayed-exit"), []byte("after-real-wait\n"), 0600); err != nil {
+		marker := "after-real-wait\n"
+		if initialWait {
+			marker = "within-original-cleanup\n"
+		}
+		if err := os.WriteFile(filepath.Join(adapter.StateRoot, ".native-fixture-delayed-exit"), []byte(marker), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -541,8 +560,12 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 	t.Log("native measured Execute", probeElapsed, "actual inventory ToolCheck calls", toolMeasurements.calls.Load()-toolCalls, "ToolCheck wall", time.Duration(toolMeasurements.nanos.Load()-toolNanos))
 	stopCPUProfile()
 	if lateWait {
-		if err == nil || cleaned != nil || !consumer.Pending() {
-			t.Fatal("late original helper exit did not retain its lifetime", evidence, err)
+		if initialWait {
+			if err == nil || !errors.Is(err, dataplane.ErrNFQWSManagedProcessUnknown) || cleaned == nil || consumer.Pending() {
+				t.Fatal("initial original cleanup did not settle while preserving unknown", evidence, err)
+			}
+		} else if err == nil || cleaned != nil || !consumer.Pending() {
+			t.Fatal("beyond-budget original helper exit did not retain its lifetime", evidence, err)
 		}
 		if !evidence.Success || !evidence.RouteConfirmed {
 			t.Fatal("fault did not follow actual owned service flow", evidence, err)
@@ -550,10 +573,14 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		if failure := epoch.Finish(original, nil, err); failure == nil {
 			t.Fatal("unknown original helper Wait published eligibility")
 		}
-		retryCtx := startuptools.WithCommandAdmission(original, admission)
-		completion, cleanupErr := consumer.RetryKnownCleanup(retryCtx)
-		if cleanupErr != nil || completion == nil || consumer.Pending() {
-			t.Fatal("actual original late Wait cleanup failed", cleanupErr)
+		completion := cleaned
+		if !initialWait {
+			retryCtx := startuptools.WithCommandAdmission(original, admission)
+			var cleanupErr error
+			completion, cleanupErr = consumer.RetryKnownCleanup(retryCtx)
+			if cleanupErr != nil || completion == nil || consumer.Pending() {
+				t.Fatal("actual original late Wait cleanup failed", cleanupErr)
+			}
 		}
 		if err := completion.CloseRuntime(); err != nil {
 			t.Fatal(err)
@@ -567,6 +594,11 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		snapshot := lab.SnapshotWithContext(original)
 		if !snapshot.QuiescenceUnknown || len(snapshot.Evidence) != 0 {
 			t.Fatal("physical cleanup cleared source fence or published delayed PASS", snapshot)
+		}
+		if initialWait {
+			t.Log("actual_initial_wait_cleanup helper_exit_delay_seconds=3 original_cleanup_budget_seconds=5 same_wait=true ack=true rules_queues_empty=true runtime_released=true unknown_preserved=true service_eligibility=false")
+		} else {
+			t.Log("actual_late_wait_cleanup helper_exit_delay_seconds=8 original_cleanup_budget_seconds=5 pending_before_retry=true same_wait=true ack=true rules_queues_empty=true runtime_released=true unknown_preserved=true service_eligibility=false")
 		}
 		t.Log("actual late original helper exit: sole Wait custody + exact ACK CAS + same COMMON removal confirmed; runtime released; source unknown/finalizing preserved; no delayed PASS")
 		return

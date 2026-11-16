@@ -1,0 +1,72 @@
+name: Original NFQ delayed Wait cleanup
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/nfq-wait-cleanup-20261116']
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [production, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Install isolated native dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y iptables nftables iproute2 util-linux iputils-ping wireguard-tools python3 curl ca-certificates libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+      - name: Retain exact reviewed legacy tool closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(sudo mktemp -d /tmp/razvilka-wait-packages.XXXXXX)
+          case "$packages" in /tmp/razvilka-wait-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$packages/iptables.deb" "$packages/libip4tc2.deb" \
+            "$packages/libip6tc2.deb" "$packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Original custody, refusal and diagnostic contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+            -run '^TestNFQWSProbeInitialCleanup|^TestWGRuntimeInactiveMeasurement' | tee artifacts/contracts.log
+          for name in TestNFQWSProbeInitialCleanupOriginalAssociations TestNFQWSProbeInitialCleanupRetainedWaitACK TestNFQWSProbeInitialCleanupNeverClearsUnknownEvidence TestWGRuntimeInactiveMeasurementOriginalTwoPassOrder TestWGRuntimeInactiveMeasurementRefusalAndPrivacy TestWGRuntimeInactiveMeasurementBoundAndIncomplete; do
+            grep -F -- "--- PASS: $name " artifacts/contracts.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/contracts.log; then exit 1; fi
+      - name: Actual within-budget cleanup and beyond-budget original retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE='${{ matrix.mode }}' \
+            RAZVILKA_MANAGED_PROBE_CASE_SET=wait-cleanup \
+            sh scripts/test-managed-probe-native.sh 2>&1 | tee artifacts/native.log
+          for name in InitialWaitCleanup LateWaitCleanup; do
+            grep -F -- "--- PASS: TestManagedStrategyProbeNativeConsumer$name " artifacts/native.log
+          done
+          grep -F 'actual_initial_wait_cleanup helper_exit_delay_seconds=3 original_cleanup_budget_seconds=5 same_wait=true ack=true rules_queues_empty=true runtime_released=true unknown_preserved=true service_eligibility=false' artifacts/native.log
+          grep -F 'actual_late_wait_cleanup helper_exit_delay_seconds=8 original_cleanup_budget_seconds=5 pending_before_retry=true same_wait=true ack=true rules_queues_empty=true runtime_released=true unknown_preserved=true service_eligibility=false' artifacts/native.log
+          if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
+      - name: Preserve exact original cleanup evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nfq-wait-cleanup-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/

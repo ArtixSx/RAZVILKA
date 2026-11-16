@@ -22,6 +22,7 @@ on:
       - 'work/nfq-prepared-active-recovery-*'
       - 'work/inactive-proc-fallback-*'
       - 'work/domain-baseline-tuple-collision-*'
+      - 'work/nfq-wait-cleanup-*'
   pull_request:
 
 permissions:

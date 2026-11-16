@@ -129,7 +129,7 @@ chmod 400 "$probe_work/hosts"
 # Run acceptance actors before the three experimental allocation groups. A failed
 # fixed-slot cost model must not prevent observing the actual packet workflow;
 # Selected experiments remain mandatory and keep their nonzero failure exit.
-probe_cases='TestStaticVersionFactNativeNFQLANRPDB TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment TestMetadataParallel.* TestVersionNamesCandidate.* TestStartupImageMeasurement.*'
+probe_cases='TestStaticVersionFactNativeNFQLANRPDB TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate TestNFQWSManagedCopy.* TestOutputReader.* TestFreshPathNode.* TestFreshHeldNode.* TestClassicSaveNativeInventoryParity TestClassicSaveNativeLockCustody TestStaticVersionFactNativeClassicBatchBookends TestStaticVersionFactNativePolicyReadObservation TestStaticVersionFactNativeScope TestStaticVersionFactNativeFailedIPClearsFact TestStaticVersionFactNativePartialBatchNeverRetained TestStaticVersionFactNativeOriginalFingerprint TestClassicReadBatchNativeMutation TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerInitialWaitCleanup TestManagedStrategyProbeNativeConsumerLateWaitCleanup TestManagedStrategyProbeNativeAppHTTP TestManagedStrategyProbeNativeClosingSource TestManagedStrategyProbeNativeClosingRuntime TestManagedStrategyProbeNativeClosingControl TestManagedStrategyProbeNativeClosingEnvironment TestMetadataParallel.* TestVersionNamesCandidate.* TestStartupImageMeasurement.*'
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
@@ -166,6 +166,12 @@ case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
     test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
     test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
     probe_cases='TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  wait-cleanup)
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
+    probe_cases='TestManagedStrategyProbeNativeConsumerInitialWaitCleanup TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
   tool-image)
     # Explicit source-observation gate only. The default all packet actors and
     # helper-exit experiment above keep their original selectors unchanged.
