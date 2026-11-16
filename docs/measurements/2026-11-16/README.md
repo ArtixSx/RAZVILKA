@@ -1,6 +1,19 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
 Актуальный сводный статус: [единая матрица](../../CURRENT_STATUS_RU.md#current-release-checkpoint).
+
+- [Mihomo ABBA42b83032](mihomo-self-image-42b83032.json): одна пара исходников,
+  8 запусков на одном host; normal +11.34% времени, race two-SHA проходит
+  исходные120с, исходный image — два timeout. Это не полный recovery PASS.
+- [Exact parent dc5829fd](mihomo-parent-dc5829fd.json): race PASS, normal
+  final absence FAIL, ACK matrix SKIPPED; отдельная HEV диагностика не причина
+  отказа parent с исправленным ELF.
+- [Managed NFQ66f00639](managed-66f00639.json): fullLAN/manual/race не приняты;
+  исходные deadlines и проверенное освобождение после отказа сохранены.
+- [DNS Lookup b31ff873](nodestore-profile-b31ff873.json): профиль не подтверждает
+  JSON/SHA как основную стоимость Lookup; следующая проверяемая гипотеза —
+  лишние операции вокруг чтения уже проверенных системных файлов.
+
 [HEV374bbd46](hev-replacement-374bbd46.json): exact original HTTP
 old→patched, отказ при живых old/desired ELF, отмена, crash и rollback;
 Linux normal/race PASS, run43916940407. HTTP fixture1.12/1.97с — не время
