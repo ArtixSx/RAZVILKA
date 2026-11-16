@@ -41,7 +41,7 @@ jobs:
             flags=()
             if [ "$mode" = race ]; then flags=(-race); fi
             go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane ./internal/startuptools \
-              -run '^TestDomainTCPDirect|^TestDomainBaselineObservedRead|^TestDomainNativeAcceptedStages|^TestDomainAcceptedPrefix|^TestDomainMappingObservation|^TestXrayDomainFileObservation|^TestDomainPolicySyntheticTCP' \
+              -run '^TestDomainTCPDirect|^TestDomainBaselineObservedRead|^TestDomainNativeAcceptedStages|^TestDomainAcceptedPrefix|^TestDomainMappingObservation|^TestXrayDomainFileObservation|^TestDomainPolicySyntheticTCP(Model|Scope|Capture)' \
               2>&1 | tee "artifacts/domain/direct-contract-$mode.log"
             grep -F -- '--- PASS: TestDomainTCPDirect' "artifacts/domain/direct-contract-$mode.log"
             grep -F -- '--- PASS: TestDomainBaselineObservedRead' "artifacts/domain/direct-contract-$mode.log"
