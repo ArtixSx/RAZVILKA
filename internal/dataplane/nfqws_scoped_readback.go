@@ -594,6 +594,8 @@ func (b *NFQWSScopedBinding) CheckKnownReferences(ctx context.Context, p *NFQWSS
 // live owned queue/process and LAN gate, absent capture, and a fresh childroot
 // with neither receipt nor receipt lock. It does not create files or require a
 // Complete receipt before the first effect.
+// The private original prepared-Apply composition instead proves its SAME held
+// writer lock and absent receipt on both passes, before any COMMON publication.
 func (b *NFQWSScopedBinding) VerifyPrepared(ctx context.Context, p *NFQWSScopedPlan, path string) error {
 	r, _, err := b.prepare(p, false)
 	if err != nil {
@@ -608,6 +610,9 @@ func (b *NFQWSScopedBinding) VerifyPrepared(ctx context.Context, p *NFQWSScopedP
 	}
 	defer root.Close()
 	absent := func() error {
+		if present, err := nfqwsPreparedHeldAbsence(ctx, b, p, path); present {
+			return err
+		}
 		for _, name := range []string{policyAdditionFile, policyAdditionLock} {
 			if _, err := root.Stat(name); !errors.Is(err, os.ErrNotExist) {
 				return errors.Join(ErrNFQWSScopedOwner, err)

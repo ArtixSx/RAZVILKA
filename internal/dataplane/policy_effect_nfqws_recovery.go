@@ -21,6 +21,7 @@ type nfqwsPolicyRecovery struct {
 	execution       *nfqws2ActiveExecution
 	preAdd          *nfqws2ActivePreAddRead
 	preLedger       *nfqwsPreLedgerWitness
+	preparedPolicy  *nfqwsActivePreparedPolicy
 	session         *policyEffectSession
 	index           int
 	entered         bool

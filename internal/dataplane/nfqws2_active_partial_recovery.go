@@ -7,14 +7,24 @@ import (
 )
 
 func (b *NFQWSScopedBinding) applyOriginalPolicyEffects(ctx context.Context, p *NFQWSScopedPlan, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string) error {
+	return b.applyOriginalPolicyEffectsPrepared(ctx, p, runtime, plan, root, nil)
+}
+
+func (b *NFQWSScopedBinding) applyOriginalPolicyEffectsPrepared(ctx context.Context, p *NFQWSScopedPlan, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string, prepared *nfqwsActivePreparedPolicy) error {
 	if b.activeReadback == nil {
+		if prepared != nil {
+			return ErrNFQWSScopedOwner
+		}
 		return applyPolicyEffects(ctx, runtime, plan, root, b.options)
 	}
 	e, err := b.activeReadbackOwner(ctx, p)
 	if err != nil || e.binding != b || e.resource.Root() != root || e.panel == nil || e.panel.Err() != nil {
 		return errors.Join(ErrNFQWSScopedOwner, err)
 	}
-	c := &nfqwsPolicyRecovery{execution: e, index: -1}
+	if prepared != nil && (prepared.associations() != nil || prepared.execution != e || prepared.binding != b || prepared.plan != p || prepared.root != root) {
+		return ErrNFQWSScopedOwner
+	}
+	c := &nfqwsPolicyRecovery{execution: e, index: -1, preparedPolicy: prepared}
 	c.self = c
 	if _, originalReads := e.inventory.reader.Runner.(nfqwsProbeToolObserver); originalReads {
 		runtime, err = newNFQWSActivePreAddRead(e, b, p, runtime, plan, root, c)

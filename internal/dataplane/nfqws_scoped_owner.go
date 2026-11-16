@@ -555,6 +555,10 @@ func cloneNFQWSScopedEffect(e PolicyEffect) PolicyEffect {
 // fresh exact running process/queue/LAN check. root is the common Execution's
 // retained participant receipt root; this binding creates no second ledger.
 func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root string) error {
+	return b.applyPreparedPolicy(ctx, p, root, nil)
+}
+
+func (b *NFQWSScopedBinding) applyPreparedPolicy(ctx context.Context, p *NFQWSScopedPlan, root string, prepared *nfqwsActivePreparedPolicy) error {
 	defer measureNFQWSProbeContextPhase(ctx, nfqwsProbePhasePolicyApply)()
 	r, plan, err := b.prepare(p, false)
 	if err != nil {
@@ -564,7 +568,7 @@ func (b *NFQWSScopedBinding) Apply(ctx context.Context, p *NFQWSScopedPlan, root
 	// Only this private Apply runner moves the full exact-prefix proof to the
 	// actual mutation boundary; the base runner still owns Cmd.Start admission.
 	r.Runner = nfqwsScopedApplyRunner{base: r.Runner, binding: b, scoped: p, plan: plan, tools: r.Tools, guard: r.Guard}
-	if err := b.applyOriginalPolicyEffects(ctx, p, r, plan, root); err != nil {
+	if err := b.applyOriginalPolicyEffectsPrepared(ctx, p, r, plan, root, prepared); err != nil {
 		return err
 	}
 	// The final external admission callback precedes the final full proof.

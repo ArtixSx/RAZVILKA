@@ -560,16 +560,26 @@ func (e *nfqws2ActiveExecution) activate(ctx context.Context) (resultErr error) 
 			if err := r.bindPrepared(c, p, obs); err != nil {
 				return err
 			}
-			phase = "prepared.active"
-			preparedErr := func() error {
-				defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
-				return r.PreparedActive(c, b, obs)
-			}()
-			if preparedErr != nil {
-				return preparedErr
+			phase = "prepared.policy-owner"
+			var preparation *nfqwsActivePreparedPolicy
+			if _, original := e.inventory.reader.Runner.(nfqwsProbeToolObserver); original {
+				var err error
+				preparation, err = newNFQWSActivePreparedPolicy(c, e, p, b, obs)
+				if err != nil {
+					return err
+				}
+			} else {
+				phase = "prepared.active"
+				preparedErr := func() error {
+					defer measureNFQWSActivePhase(e, nfqwsProbePhasePrepared)()
+					return r.PreparedActive(c, b, obs)
+				}()
+				if preparedErr != nil {
+					return preparedErr
+				}
 			}
 			phase = "prepared.policy-apply"
-			if err := e.binding.Apply(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root()); err != nil {
+			if err := e.binding.applyPreparedPolicy(networkPolicyConsumerContext(c, e.plan), r.Plan(), r.Root(), preparation); err != nil {
 				return err
 			}
 			phase = "prepared.owner-closing"
