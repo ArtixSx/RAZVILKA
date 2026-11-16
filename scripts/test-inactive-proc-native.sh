@@ -14,25 +14,35 @@ case "${RAZVILKA_INACTIVE_PROC_TEST_MODE-normal}" in
   *) echo 'unknown inactive process test mode' >&2; exit 2 ;;
 esac
 cc -std=c11 -O2 -Wall -Wextra -Werror -pthread "$repo/scripts/fixtures/inactive-proc-threadgroup.c" -o "$work/threadgroup-helper"
+cc -std=c11 -O2 -Wall -Wextra -Werror "$repo/scripts/fixtures/inactive-proc-statx-fallback.c" -o "$work/statx-fallback"
 cd "$repo"
 go test "$@" -tags razvilka_native_fixture -c ./internal/dataplane -o "$work/dataplane.test"
-sha256sum "$work/threadgroup-helper" "$work/dataplane.test"
+sha256sum "$work/threadgroup-helper" "$work/statx-fallback" "$work/dataplane.test"
 export RAZVILKA_INACTIVE_THREADGROUP_HELPER="$work/threadgroup-helper"
 exec 8</proc/self/ns/net
 exec 9</proc/self/ns/mnt
 status=0
-timeout --kill-after=5s 60s unshare --fork --pid --net --mount sh -eu -c '
-  test "$$" = 1
-  test "$(readlink /proc/self/ns/net)" != "$(readlink /proc/self/fd/8)"
-  test "$(readlink /proc/self/ns/mnt)" != "$(readlink /proc/self/fd/9)"
-  mount --make-rprivate /
-  umount -l /proc
-  mount -t proc proc /proc
-  exec "$1" -test.v -test.timeout=45s -test.run "^TestInactiveProcNativeThreadGroupClassification$"
-' inactive-proc "$work/dataplane.test" >"$work/native.log" 2>&1 || status=$?
-cat "$work/native.log"
-if grep -F -- '--- SKIP:' "$work/native.log"; then status=1; fi
-for marker in '--- PASS: TestInactiveProcNativeThreadGroupClassification ' INACTIVE_PROC_LIVE_WORKER_REFUSED INACTIVE_PROC_WORKER_EXEC INACTIVE_PROC_Z1_THEN_GONE INACTIVE_PROC_MOUNT_FENCES; do
-  if ! grep -F -- "$marker" "$work/native.log" >/dev/null; then status=1; fi
+for variant in native forced-fallback; do
+  case_status=0
+  timeout --kill-after=5s 60s unshare --fork --pid --net --mount sh -eu -c '
+    test "$$" = 1
+    test "$(readlink /proc/self/ns/net)" != "$(readlink /proc/self/fd/8)"
+    test "$(readlink /proc/self/ns/mnt)" != "$(readlink /proc/self/fd/9)"
+    mount --make-rprivate /
+    umount -l /proc
+    mount -t proc proc /proc
+    if test "$1" = forced-fallback; then
+      exec "$2" "$3" -test.v -test.timeout=45s -test.run "^TestInactiveProcNativeThreadGroupClassification$"
+    fi
+    exec "$3" -test.v -test.timeout=45s -test.run "^TestInactiveProcNativeThreadGroupClassification$"
+  ' inactive-proc "$variant" "$work/statx-fallback" "$work/dataplane.test" >"$work/$variant.log" 2>&1 || case_status=$?
+  printf 'inactive_proc_variant=%s\n' "$variant"
+  cat "$work/$variant.log"
+  if grep -F -- '--- SKIP:' "$work/$variant.log"; then case_status=1; fi
+  for marker in '--- PASS: TestInactiveProcNativeThreadGroupClassification ' INACTIVE_PROC_LIVE_WORKER_REFUSED INACTIVE_PROC_WORKER_EXEC INACTIVE_PROC_Z1_THEN_GONE INACTIVE_PROC_MOUNT_FENCES; do
+    if ! grep -F -- "$marker" "$work/$variant.log" >/dev/null; then case_status=1; fi
+  done
+  if test "$variant" = forced-fallback && ! grep -Fx 'INACTIVE_PROC_FORCED_STATX_ENOSYS observed=true process_tree_only=true' "$work/$variant.log" >/dev/null; then case_status=1; fi
+  if test "$case_status" != 0; then status=$case_status; fi
 done
 exit "$status"

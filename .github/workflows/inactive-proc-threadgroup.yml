@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts
           { git rev-parse HEAD; go version; uname -srvm; cc --version; unshare --version; } > artifacts/environment.txt
-          sha256sum scripts/fixtures/inactive-proc-threadgroup.c scripts/test-inactive-proc-native.sh > artifacts/source.sha256
+          sha256sum scripts/fixtures/inactive-proc-threadgroup.c scripts/fixtures/inactive-proc-statx-fallback.c scripts/test-inactive-proc-native.sh > artifacts/source.sha256
       - name: Process model refusals and diagnostic compatibility
         shell: bash
         env:
@@ -54,6 +54,8 @@ jobs:
             RAZVILKA_INACTIVE_PROC_TEST_MODE="$RAZVILKA_INACTIVE_PROC_TEST_MODE" \
             sh scripts/test-inactive-proc-native.sh 2>&1 | tee artifacts/native.log
           if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
+          grep -Fx 'INACTIVE_PROC_FORCED_STATX_ENOSYS observed=true process_tree_only=true' artifacts/native.log
+          test "$(grep -Fc -- '--- PASS: TestInactiveProcNativeThreadGroupClassification ' artifacts/native.log)" = 2
       - name: Same-host original fdinfo and fresh statx leaf costs
         shell: bash
         env:
