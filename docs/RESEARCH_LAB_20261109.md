@@ -788,3 +788,45 @@ MIT, copyright RixyPow. Девять выбранных файлов с LICENSE,
 [NotesCategories.cs](https://github.com/RixyPow/netzapret/blob/c6f0e6007bd6d63de094a815458876d25b9a6e87/src/NetZapret.Core/Updates/NotesCategories.cs),
 [UpdateWindow.xaml](https://github.com/RixyPow/netzapret/blob/c6f0e6007bd6d63de094a815458876d25b9a6e87/gui/NetZapret.Gui/Views/UpdateWindow.xaml),
 [release.cmd](https://github.com/RixyPow/netzapret/blob/c6f0e6007bd6d63de094a815458876d25b9a6e87/release.cmd).
+
+## 16.11: повтор полного VLESS Check и очереди на `33de2dde`
+
+Run [43908564102](https://github.com/ArtixSx/RAZVILKA/actions/runs/43908564102)
+завершился PASS. Сравнение на одном Linux runner: baseline
+`363f433611620cda4d14db2d0a7ae2475b0278f1` → candidate
+`33de2dde69d7599234714a3ea61e99f58ea5772e`, одинаковый закреплённый Xray,
+исходный алгоритм `current-reuse` с обеих сторон. Одна первая проверка и
+12 повторов каждого сценария. Фиксированный порядок baseline→candidate может
+влиять на прогрев/нагрузку; это не случайное чередование и не физическая WAN.
+
+| Сценарий | Медиана повторов до, мс | После, мс |
+| --- | ---: | ---: |
+| Доступный сервис, полный Check | 309.118 | 216.1785 |
+| Недоступный сервис | 305.922 | 216.383 |
+| Отмена | 265.8735 | 175.5525 |
+| Недоступный узел | 6.2735 | 6.3515 |
+| Один узел: POST→очередь→ответ HTTP | 633.8165 | 541.825 |
+| Выбранная группа | 1360.45 | 1190.335 |
+| Все VLESS | 1401.15 | 1189.915 |
+
+Cleanup подтверждён во всех сценариях с созданными ресурсами; для недоступного
+узла он не требовался. Отдельный настоящий Mihomo handler: 2977мс, из них
+подготовка518мс и adapter Check2459мс; service/cleanup verified, live route=false.
+Эти результаты не означают готовность LAN-маршрута, прохождение race ACK или
+проверку роутера. Медиана здесь — среднее двух центральных значений; текстовый
+вывод старого fixture выбирает нижнее центральное, поэтому числа немного разные.
+[Сырые хеши CSV, первые проверки и стадии](measurements/2026-11-16/probe-comparison-33de2dde.json).
+
+## 16.11: точный граф NFQWS2 при равных счётчиках
+
+Внешний Entware review предложил проверять подмену одного принадлежащего
+RAZVILKA правила чужим при неизменных общих числах правил и NFQUEUE. На
+`0652bc5b` добавлены оба направления pre/post: classifier должен вернуть
+`owned-graph-partial`, а NDM restore — отказаться без команд и изменения таблиц.
+Windows model PASS; отдельный Linux normal/race run43911510337 запущен,
+его результат не объявляется заранее. Это проверка существующего точного
+контракта, а не новый допуск по числу строк.
+
+Уточнение внешнего отчёта: Linux BPF attach type18 — `BPF_CGROUP_SYSCTL`,
+а `BPF_CGROUP_INET4_BIND` имеет номер8. Root cgroup attachment остаётся причиной
+защитного отказа независимо от названия; оно не удаляется ради теста.

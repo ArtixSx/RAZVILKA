@@ -1,0 +1,235 @@
+{
+  "baseline_commit": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "candidate_commit": "33de2dde69d7599234714a3ea61e99f58ea5772e",
+  "run_id": 43908564102,
+  "result": "PASS",
+  "platform": "same Linux amd64 runner, private loopback-only namespace",
+  "order": "baseline then candidate; fixed order can bias caches/load",
+  "engine_sha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+  "method": "current-reuse in both builds; 1 first check +12 repeated per scenario; service delay40ms; controlled queue25ms",
+  "percentiles": "p50 = arithmetic median; p95 = nearest rank of12 repeated samples; differs from logged lower-middle order statistic",
+  "limits": [
+    "Not physical router/WAN/Internet/browser paint",
+    "First fixture check is not system cold boot",
+    "Stage durations overlap and must not be summed",
+    "Mihomo handler is separate and does not apply a LAN route"
+  ],
+  "measurements": {
+    "baseline": {
+      "cancel": {
+        "first_ms": 265.799,
+        "repeat_n": 12,
+        "median_ms": 265.8735,
+        "p95_ms": 355.71,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10,
+          "protocol": 63.5,
+          "egress": 63.5,
+          "service": 63.0,
+          "cleanup": 101.0,
+          "route_identity": 1.0
+        }
+      },
+      "dead-node": {
+        "first_ms": 7.251,
+        "repeat_n": 12,
+        "median_ms": 6.2735,
+        "p95_ms": 6.772,
+        "cleanup": [
+          "not_required"
+        ],
+        "reported_stage_median_ms": {}
+      },
+      "dead-service": {
+        "first_ms": 306.523,
+        "repeat_n": 12,
+        "median_ms": 305.922,
+        "p95_ms": 681.308,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10,
+          "protocol": 63.0,
+          "egress": 63.0,
+          "service": 104.0,
+          "cleanup": 101.0,
+          "route_identity": 1.0
+        }
+      },
+      "live": {
+        "first_ms": 357.408,
+        "repeat_n": 12,
+        "median_ms": 309.118,
+        "p95_ms": 430.962,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.5,
+          "runtime_start": 1.0,
+          "runtime_ready": 10,
+          "protocol": 63.5,
+          "egress": 63.5,
+          "service": 104.5,
+          "cleanup": 101.0
+        }
+      },
+      "all-vless": {
+        "first_ms": 1372.804,
+        "repeat_n": 12,
+        "median_ms": 1401.15,
+        "p95_ms": 1478.959,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.425
+      },
+      "selected-batch": {
+        "first_ms": 1364.824,
+        "repeat_n": 12,
+        "median_ms": 1360.45,
+        "p95_ms": 1399.428,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.521
+      },
+      "single": {
+        "first_ms": 626.675,
+        "repeat_n": 12,
+        "median_ms": 633.8165,
+        "p95_ms": 792.352,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.448
+      }
+    },
+    "candidate": {
+      "cancel": {
+        "first_ms": 174.689,
+        "repeat_n": 12,
+        "median_ms": 175.5525,
+        "p95_ms": 302.177,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "protocol": 63.0,
+          "egress": 63.0,
+          "service": 63.0,
+          "cleanup": 10.0
+        }
+      },
+      "dead-node": {
+        "first_ms": 7.278,
+        "repeat_n": 12,
+        "median_ms": 6.3515,
+        "p95_ms": 6.956,
+        "cleanup": [
+          "not_required"
+        ],
+        "reported_stage_median_ms": {}
+      },
+      "dead-service": {
+        "first_ms": 215.484,
+        "repeat_n": 12,
+        "median_ms": 216.383,
+        "p95_ms": 263.374,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "route_identity": 1,
+          "protocol": 63.0,
+          "egress": 63.0,
+          "service": 104.5,
+          "cleanup": 11.0
+        }
+      },
+      "live": {
+        "first_ms": 219.949,
+        "repeat_n": 12,
+        "median_ms": 216.1785,
+        "p95_ms": 287.335,
+        "cleanup": [
+          "verified"
+        ],
+        "reported_stage_median_ms": {
+          "configuration": 14.0,
+          "runtime_start": 1.0,
+          "runtime_ready": 10.0,
+          "protocol": 63.5,
+          "egress": 63.5,
+          "service": 104.0,
+          "cleanup": 11.0,
+          "route_identity": 1
+        }
+      },
+      "all-vless": {
+        "first_ms": 1286.706,
+        "repeat_n": 12,
+        "median_ms": 1189.915,
+        "p95_ms": 1390.42,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.493
+      },
+      "selected-batch": {
+        "first_ms": 1154.524,
+        "repeat_n": 12,
+        "median_ms": 1190.335,
+        "p95_ms": 1453.335,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.463
+      },
+      "single": {
+        "first_ms": 525.375,
+        "repeat_n": 12,
+        "median_ms": 541.825,
+        "p95_ms": 829.957,
+        "cleanup": [
+          "verified"
+        ],
+        "queue_wait_median_ms": 26.0,
+        "readback_http_median_ms": 0.3685
+      }
+    }
+  },
+  "evidence_sha256": {
+    "baseline/check-current-reuse.csv": "41e0c10f4b122b207f04b1462bc53889d51c7d67e98345d546252c109d42eb0f",
+    "baseline/queue-http-current.csv": "b088bf9992f32f7972567aaa46e9953ff47feed411c6ceda71231224963856c6",
+    "candidate/check-current-reuse.csv": "82ec261cdeb2ee09c91747e1dcd3c16369634e201d5e6f754f145fe9e79fa838",
+    "candidate/queue-http-current.csv": "fa90f659cce81a7bdc133e51ad7cd7da77ae29a520e4f3df31f5b3af8e21c8bc"
+  },
+  "mihomo_handler": {
+    "handler_elapsed_ms": 2977,
+    "preparation_ms": 518,
+    "adapter_check_ms": 2459,
+    "service_verified": true,
+    "cleanup_verified": true,
+    "live_applied": false
+  }
+}

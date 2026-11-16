@@ -1,9 +1,9 @@
 # Сборки и поддержка запуска
 
-Актуальная сверка `7ecb1b98`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-HEV runtime-altstack исправление прошло отдельный source-build lab на двух
-Linux runner; production pin и платформенный допуск не изменены. Strict DNS,
-managed NFQWS2 и sameboot ещё не завершены. Подробности прежних ревизий ниже
+Актуальная сверка `0652bc5b`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+HEV runtime-altstack прошёл source lab и фактический запуск на host AT_MIN11952;
+production pin и платформенный допуск не изменены. Race ACK120с, strict DNS
+и managed NFQWS2 ещё не приняты. Подробности прежних ревизий ниже
 сохраняются как история, а не готовность текущего релиза.
 
 

@@ -2,7 +2,7 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 16.11.2026, `7ecb1b98`
+## Текущая сверка: 16.11.2026, `0652bc5b`
 
 Код и оформление интегрированы; выпуск ещё не принят. Эта сверка имеет
 приоритет над прежними контрольными точками ниже. Роутер не изменён,
@@ -10,25 +10,27 @@
 
 | Направление | Проверено | Что продолжается |
 | --- | --- | --- |
-| Общий CI | `9e73d133`, run43901009649 PASS; `4407afee` identity normal/race PASS | Более новые полные проверки отдельные; отменённый run4407 не считается PASS |
-| HEV | Причина exit254 найдена в точном musl ELF: стек8192 меньше runtime minimum. `53fd786e`, run43906655885: обе Linux-сборки, C fault tests и64 startup/cleanup samples PASS; исходная сборка побитово совпала с официальной | Исправленный SHA закрепляется только для отдельного лабораторного sameboot. В этой серии не попался физический host с AT_MIN11952; это значение проверено fault injection, не native запуском |
-| DNS | GEN2 свежие байты старого FD сравниваются с проверенным образом преемника; independent review и targeted tests PASS | Strict53fd canceled-ready всё ещё истёк до GEN2; initial publication требует исправления. Diagnostic30 PASS не закрывает12/4с |
-| Managed NFQWS2 | Production9e73 core Consumer10.13с/LateWait13.05с PASS отдельно; устранён остановивший дальнейшие тесты пустой pprof peek | Race Consumer17.85с FAIL; fullLAN receipt-effects отказ разбирается. Граница фактического запуска команды уточняется с независимым ревью |
-| Binary + StrategyLab | Public history/manual, modern rollback и genuine old reader4 ранее PASS; identity4407 повторил retry/fences | Финальная проверка интегрированного кандидата и аппаратный сценарий |
-| Панель и Releases | Прежние13 разделов/21 страница и desktop/mobile checks сохранены. NetZapret1.5.3 на ПК и pinned1.6.2 изучены; примечания сгруппированы по вкладкам; генератор actual hashes/pinned links:3 tests PASS | После сетевой приёмки — проверка панели на роутере и публикация точного набора файлов |
+| Общий CI | `9e73d133`, run43901009649 PASS; `33de2dde` identity normal/race run43908383156 PASS | Полные CI33de/74c/0652 ещё выполняются; статус не переносится между SHA |
+| HEV | `53fd786e` source lab64 startup/cleanup samples PASS; повтор74c source lab PASS. `74c7a0c0` parent normal41.77с/race81.79с и completed ACK normal52.41с PASS. Исправленный бинарник запустился на реальном host AT_MIN11952, где официальный вновь дал16/16 exit254 | Completed ACK race истёк120с при повторном восстановлении; это не ошибка старта HEV. Production pin не изменён. Замена уже установленного official→patched ещё требует безопасной inactivity/journal/rollback реализации |
+| DNS | `53fd786e` GEN2 full fresh-byte comparison и `0652bc5b` сохранённое opening preflight: targeted/review PASS | Strict53fd initial12с FAIL до GEN2; diagnostic30 PASS не закрывает12/4с. Новый native0652 выполняется |
+| Managed NFQWS2 | `33de2dde` actual-issued boundary: fullLAN/manual при отказе теперь rollback_verified=true; quarantine-close-retry PASS45.80с. Core Consumer8.28с/LateWait11.14с/AppHTTP28.00с PASS | FullLAN/manual fresh Apply остаются FAIL, race Consumer deadline/ACK FAIL; анализ полного пути. Равные счётчики с подменой owned row: model PASS, отдельный native0652 выполняется |
+| VLESS/очередь | `33de2dde`, run43908564102 PASS: same-runner N12 медиана полного live Check309.118→216.1785мс; выбранная группа1360.45→1190.335мс, cleanup verified | Фиксированный порядок измерений; это частная Linux-сеть, не готовность WAN/LAN на роутере |
+| Binary + StrategyLab | Public history/manual, modern rollback и genuine old reader4 ранее PASS; identity33de повторил retry/fences | Финальная проверка интегрированного кандидата и аппаратный сценарий |
+| Панель и Releases |13 разделов/21 страница и desktop/mobile checks сохранены. NetZapret1.5.3 на ПК и pinned1.6.2 изучены; примечания по вкладкам; actual hashes/pinned links:3 tests PASS | После сетевой приёмки — проверка панели на роутере и публикация точного набора файлов |
 | GitHub | Проверенная резервная копия51 tags/14 releases/140 assets и portable source archives сохранена | Финальный refs/local backup после завершения; для удаления отсутствует OAuth `delete_repo` |
 
-[HEV: точные SHA, платформы и ограничения](measurements/2026-11-16/hev-altstack-53fd786e.json).
-Время узких наблюдений и завершённых полных проверок приводится раздельно;
-таймаут не превращается в доказанное ускорение. Детали оформления и источники:
+[HEV: исходная source-lab серия и её ограничения](measurements/2026-11-16/hev-altstack-53fd786e.json).
+[Полный Check/очередь: первые проверки, повторные медианы, стадии и SHA CSV](measurements/2026-11-16/probe-comparison-33de2dde.json).
+Время вложенных наблюдений не складывается; таймаут не превращается в доказанное
+ускорение. Детали оформления и источники:
 [лабораторный журнал](RESEARCH_LAB_20261109.md#1611-netzapret--оформление-панели-и-releases).
 
 
 
-## Текущая контрольная точка: 16.11.2026, `fc5bcc6c`
+<a id="текущая-контрольная-точка-16112026-fc5bcc6c"></a>
+## Предыдущая контрольная точка: 16.11.2026, `fc5bcc6c`
 
-Приоритет имеет этот раздел; результаты более старых SHA ниже сохранены как
-история. Релиз ещё не принят, установленный роутер не изменён.
+Историческая сверка; приоритет имеет текущая матрица в начале документа. Релиз ещё не принят, установленный роутер не изменён.
 
 | Направление | Проверено | Оставшаяся работа |
 | --- | --- | --- |
