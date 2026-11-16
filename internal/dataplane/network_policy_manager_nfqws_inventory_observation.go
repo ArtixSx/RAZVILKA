@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"slices"
 	"sync"
+
+	"github.com/ArtixSx/razvilka/internal/operationgate"
 )
 
 // This is a pure original NFQ-only inventory comparison, not an allowance.
@@ -14,10 +16,12 @@ import (
 // SAME admitted CheckTools contract already runs within its original capture
 // loan; this scope does not admit arbitrary consumer or identity callbacks.
 type networkPolicyNFQInventorySources struct {
-	read         *networkPolicyNFQReadSources
-	dispatch     *networkPolicyOriginalInventoryReader
-	intent, plan Plan
-	ids          []string
+	read              *networkPolicyNFQReadSources
+	dispatch          *networkPolicyOriginalInventoryReader
+	intent, plan      Plan
+	ids               []string
+	inactivityCleanup *operationgate.ExclusiveCleanupReview
+	inactivityControl *operationgate.ControlEpochReview
 }
 
 const (
@@ -57,7 +61,14 @@ func networkPolicyNFQInventoryContextFailure(ctx context.Context) int {
 		xraySelectedTCPInventoryScopeKey{}, xraySelectedTCPPreparedInventoryScopeKey{},
 		nfqwsRetiredInventoryKey{}, nfqwsProbeCleanupKey{}, nfqws2RemovalIntentKey{}, nfqws2RollbackHookContextKey{},
 	} {
-		if ctx.Value(key) != nil {
+		if raw := ctx.Value(key); raw != nil {
+			if index == 3 {
+				cleanup, typed := raw.(*operationgate.ExclusiveCleanupReview)
+				e, original := ctx.Value(nfqws2ActiveExecutionKey{}).(*nfqws2ActiveExecution)
+				if typed && cleanup != nil && original && e != nil && e.self == e && e.inventoryInactivityCleanup == cleanup {
+					continue
+				}
+			}
 			return nfqInventoryContextBase + index
 		}
 	}
@@ -153,11 +164,11 @@ func (c *NetworkPolicyChecks) nfqInventorySources(ctx context.Context, lan *LANP
 	// NFQ. Even a newly appearing legacy proxy lease can therefore only refuse
 	// at xrayPlanMode, before any external scoped-proxy callback is called.
 	noteNFQInventoryRead(nfqInventoryEligible)
-	return &networkPolicyNFQInventorySources{read: s, dispatch: dispatch, intent: cloneExecutionResourcePlan(s.execution.plan), plan: cloneExecutionResourcePlan(p), ids: slices.Clone(c.ids)}
+	return &networkPolicyNFQInventorySources{read: s, dispatch: dispatch, intent: cloneExecutionResourcePlan(s.execution.plan), plan: cloneExecutionResourcePlan(p), ids: slices.Clone(c.ids), inactivityCleanup: s.execution.inventoryInactivityCleanup, inactivityControl: s.material.control}
 }
 
 func (s *networkPolicyNFQInventorySources) current(ctx context.Context) error {
-	if s == nil || s.read == nil || s.read.execution == nil || !networkPolicyNFQInventoryContext(ctx) || !networkPolicyNFQInventoryAdapters(s.read.checks) {
+	if s == nil || s.read == nil || s.read.execution == nil || s.read.material == nil || s.read.material.self != s.read.material || s.read.execution.material != s.read.material || !networkPolicyNFQInventoryContext(ctx) || !networkPolicyNFQInventoryAdapters(s.read.checks) {
 		return ErrNetworkPolicyConsumers
 	}
 	c := s.read.checks
@@ -165,6 +176,21 @@ func (s *networkPolicyNFQInventorySources) current(ctx context.Context) error {
 	if c.readSource != s.dispatch || s.dispatch == nil || s.dispatch.inventory != c.inventory ||
 		!slices.Equal(c.ids, s.ids) || !present || !reflect.DeepEqual(p, s.plan) || !reflect.DeepEqual(s.read.execution.plan, s.intent) {
 		return ErrNetworkPolicyConsumers
+	}
+	rawCleanup := ctx.Value(wgInactivityCleanupKey{})
+	if (s.inactivityCleanup == nil && rawCleanup != nil) || (s.inactivityCleanup != nil && rawCleanup != s.inactivityCleanup) || s.read.execution.inventoryInactivityCleanup != s.inactivityCleanup {
+		return ErrNetworkPolicyConsumers
+	}
+	if s.inactivityCleanup != nil {
+		if s.read.material.control == nil || s.read.material.control != s.inactivityControl {
+			return ErrNetworkPolicyConsumers
+		}
+		if err := s.read.material.control.Current(ctx); err != nil {
+			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
+		if err := s.read.material.control.CurrentForCleanupOperation(ctx, s.inactivityCleanup); err != nil {
+			return errors.Join(ErrNetworkPolicyConsumers, err)
+		}
 	}
 	return s.read.current(ctx)
 }
@@ -280,4 +306,25 @@ func networkPolicyNFQInventoryReadOnce(parent context.Context, execution *nfqws2
 		outerErr = errors.Join(outerErr, ErrNetworkPolicyConsumers)
 	}
 	return errors.Join(outerErr, bodyErr, current(parent), parent.Err())
+}
+
+// The App carries this same comparison review during forward Apply as well as
+// compensation. Capture it only under original material/selection admission;
+// it never substitutes for forward control, source, process or receipt checks.
+func nfqInventoryOriginalInactivityCleanup(ctx context.Context, control *operationgate.ControlEpochReview) (*operationgate.ExclusiveCleanupReview, error) {
+	raw := ctx.Value(wgInactivityCleanupKey{})
+	if raw == nil {
+		return nil, nil
+	}
+	cleanup, ok := raw.(*operationgate.ExclusiveCleanupReview)
+	if !ok || cleanup == nil || control == nil {
+		return nil, ErrNetworkPolicyConsumers
+	}
+	if err := control.Current(ctx); err != nil {
+		return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+	}
+	if err := control.CurrentForCleanupOperation(ctx, cleanup); err != nil {
+		return nil, errors.Join(ErrNetworkPolicyConsumers, err)
+	}
+	return cleanup, nil
 }
