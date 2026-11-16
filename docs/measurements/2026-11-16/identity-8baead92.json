@@ -1,0 +1,222 @@
+{
+  "commit": "8baead92de74f8609dbd5bd4e79c25092769cca9",
+  "run": 43862363991,
+  "conclusion": "success",
+  "boundary": "pure parser calculation; same binary and data; fixed before-then-after order, N5; not full capture/syscall/LAN",
+  "checks": [
+    "netidentity normal",
+    "netidentity race",
+    "BPF ABI normal",
+    "BPF ABI race",
+    "native capacity source parity"
+  ],
+  "groups": {
+    "valid_equal": {
+      "before_two_parses": {
+        "samples": [
+          {
+            "ns_op": 76421,
+            "bytes_op": 127297,
+            "allocs_op": 518
+          },
+          {
+            "ns_op": 73892,
+            "bytes_op": 127296,
+            "allocs_op": 518
+          },
+          {
+            "ns_op": 77210,
+            "bytes_op": 127296,
+            "allocs_op": 518
+          },
+          {
+            "ns_op": 74610,
+            "bytes_op": 127296,
+            "allocs_op": 518
+          },
+          {
+            "ns_op": 74001,
+            "bytes_op": 127296,
+            "allocs_op": 518
+          }
+        ],
+        "median_ns_op": 74610,
+        "median_bytes_op": 127296,
+        "median_allocs_op": 518
+      },
+      "after_one_parse": {
+        "samples": [
+          {
+            "ns_op": 36949,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36672,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36940,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36639,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36988,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          }
+        ],
+        "median_ns_op": 36940,
+        "median_bytes_op": 63648,
+        "median_allocs_op": 259
+      }
+    },
+    "invalid_equal": {
+      "before_two_parses": {
+        "samples": [
+          {
+            "ns_op": 37093,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 36570,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 36657,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 37259,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 36808,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          }
+        ],
+        "median_ns_op": 36808,
+        "median_bytes_op": 63808,
+        "median_allocs_op": 260
+      },
+      "after_one_parse": {
+        "samples": [
+          {
+            "ns_op": 40676,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 36946,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 37017,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 37272,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          },
+          {
+            "ns_op": 37220,
+            "bytes_op": 63808,
+            "allocs_op": 260
+          }
+        ],
+        "median_ns_op": 37220,
+        "median_bytes_op": 63808,
+        "median_allocs_op": 260
+      }
+    },
+    "changed_valid": {
+      "before_two_parses": {
+        "samples": [
+          {
+            "ns_op": 36839,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36784,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36693,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 37044,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36559,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          }
+        ],
+        "median_ns_op": 36784,
+        "median_bytes_op": 63648,
+        "median_allocs_op": 259
+      },
+      "after_one_parse": {
+        "samples": [
+          {
+            "ns_op": 36923,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36757,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36701,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36721,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          },
+          {
+            "ns_op": 36845,
+            "bytes_op": 63648,
+            "allocs_op": 259
+          }
+        ],
+        "median_ns_op": 36757,
+        "median_bytes_op": 63648,
+        "median_allocs_op": 259
+      }
+    }
+  },
+  "raw_sha256": {
+    "bpf-abi-race.txt": "28b4d319cb49f297b9500ed3d1524fb1c98cbd0398648ed28308e9765e77b1ea",
+    "bpf-abi.txt": "55e33aae8490717d3c32540b4f1e68d690cf088408a642ffec71847684049b07",
+    "capacity-parity.txt": "5d4b5ca87a921ea6dfd38906dfe4620c0552d652bdbfe8aa3fdedfe3f8d330ea",
+    "environment.txt": "e8441ba3e9b9e01b533b702bd05409fd7453cbe0e58cc6d9076e22122582dd6f",
+    "identity-race.txt": "3e8e25c84eb9a4a96aaae9ca57ee54c3d60c1617fec041b8dbd421876fbfc661",
+    "identity.txt": "339afab5d997e53cc3e9b7ed6e7155f740f83773d8e5ea8651f5efe7b82f237e",
+    "mount-calculation.txt": "3b7f2872adb4e559d1e5bbba9849637a7a445e72f4d9c8bbf1e28a20694535a3"
+  }
+}

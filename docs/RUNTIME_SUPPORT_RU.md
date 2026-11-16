@@ -1,6 +1,6 @@
 # Сборки и поддержка запуска
 
-Состояние рабочих исходников на 09.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
+Состояние рабочих исходников на 16.11.2026 для готовящейся **0.20.0**. Сквозная приёмка режима
 списков и исключений и часовая проверка Telegram через VLESS ещё не завершены.
 Готовность выпуска фиксируется в [текущем статусе](CURRENT_STATUS_RU.md).
 
@@ -17,6 +17,33 @@ engine delay, HTTPS и реальный LAN-маршрут остаются ра
 | Mihomo | На50bd все4 isolated lifecycle/manual/settlement/post-CAS PASS; sameboot10/14 PASS; availability остаётся tri-state | На0470 все normal ACK cuts PASS, четыре race ACK cuts120с FAIL; остаются restart/per-plan live readiness и физический LAN |
 | Backup/StrategyLab | Snapshot3/encrypted recovery, modern restored panel PASS; public empty/draft PASS2ecf/5289, genuine history + frozen manual selection PASS976fa47c/50bd; exact bytes и fences сохранены | Configured0.19.3 проверен offline; default legacy layout не поддержан по clean-install контракту; actual default-layout refusal0470 PASS; modern live rollback83a1 FAIL до обновления: preparation owner refused; произвольный downgrade и аппаратный power-loss не подтверждены |
 | DNS/NFQWS2 | Scope/exclusions/ownership ограничения действуют; diagnostic30 проверил фактические successor borrowed reads на50bd/0470; ledger decode d7 normal/race PASS с экономией752Б–180КБ | Strict DNS12/4с и полный managed NFQWS2 manual/recovery FAIL; diagnostic30 и microbench не подтверждают native readiness |
+
+Дополнение 16.11, точная ревизия `147d8885`: четыре Mihomo-сценария
+(lifecycle, settlement, manual HTTP, post-CAS failure) снова PASS в изолированной
+Linux-сети. Strategy pair и public legacy empty/draft/history PASS; strict DNS,
+diagnostic30 и managed NFQWS2 normal/race FAIL. Ранее успешный diagnostic30
+не переносится на новый runner. Modern public rollback проверяется отдельно
+после исправления подготовки установленного source config.
+
+Повтор `e8954294`: оба generic CI PASS, probe pair PASS; Mihomo3/4PASS,
+lifecycle candidate FAIL при HEV sidecar exit254; same-host original baseline
+тоже sidecar-start FAIL, его exit code не записан. Rollback/verify-rollback PASS. Старое4/4 не заменяет этот результат.
+На `565221ca` modern update уже прошёл настоящий запуск candidate и возврат
+бинарника/панели/точного draft state после post-Live сбоя. На453559da
+после исправления порядка наблюдения полного settlement helper сквозной fixture
+PASS102.73с: panel reader/restart/Stop/cleanup подтверждены. Только same-source
+lab versions с synthetic release transport, не официальный release transition.
+
+DNS `eacafc39` на ubuntu24 проходит BPF guard, но не завершает preparation
+в прежние12с. Чистый от этой policy стандартный стенд доступен; это оставшаяся
+программная задача, не запрос оборудования. На8ba/62b targeted identity/BPF и
+schema2/3 update admission normal/race PASS. Полный hardware workflow не проверен.
+
+Новая панель: 13 основных разделов, 21 сохранённая страница; Chromium desktop/mobile
+PASS с синтетическим остановленным состоянием. Это изменение представления,
+оно не расширяет API/AUTO admission или список поддержанных router-профилей.
+Сопоставимые VLESS/очередь измерения и границы доказательств:
+[результаты 16.11](measurements/2026-11-16/probes-147d8885.json).
 
 ## Три бинарника Entware
 

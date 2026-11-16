@@ -1,0 +1,195 @@
+{
+  "baseline": "363f433611620cda4d14db2d0a7ae2475b0278f1",
+  "candidate": "147d8885ac97ea402dc3ca6b25ce829f8329afcb",
+  "run": 43856995070,
+  "quantiles": "p50 median; p95 nearest rank",
+  "boundary": "same runner fixed baseline-then-candidate; pinned Xray; local modeled service; first/repeated separate; not WAN/router/browser paint",
+  "groups": [
+    {
+      "kind": "check",
+      "scenario": "cancel",
+      "metric": "wall_monotonic_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          269.599
+        ],
+        "p50_ms": 268.962,
+        "p95_ms": 270.678
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          183.187
+        ],
+        "p50_ms": 183.15,
+        "p95_ms": 184.395
+      }
+    },
+    {
+      "kind": "check",
+      "scenario": "dead-node",
+      "metric": "wall_monotonic_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          8.58
+        ],
+        "p50_ms": 7.67,
+        "p95_ms": 7.997
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          8.278
+        ],
+        "p50_ms": 7.842,
+        "p95_ms": 8.34
+      }
+    },
+    {
+      "kind": "check",
+      "scenario": "dead-service",
+      "metric": "wall_monotonic_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          279.291
+        ],
+        "p50_ms": 310.886,
+        "p95_ms": 311.696
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          222.9
+        ],
+        "p50_ms": 223.711,
+        "p95_ms": 225.721
+      }
+    },
+    {
+      "kind": "check",
+      "scenario": "live",
+      "metric": "wall_monotonic_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          317.877
+        ],
+        "p50_ms": 311.632,
+        "p95_ms": 316.201
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          224.757
+        ],
+        "p50_ms": 223.534,
+        "p95_ms": 251.152
+      }
+    },
+    {
+      "kind": "queue",
+      "scenario": "all-vless",
+      "metric": "enqueue_to_server_completion_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          1429.0
+        ],
+        "p50_ms": 1457.0,
+        "p95_ms": 1509.0
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          1279.0
+        ],
+        "p50_ms": 1276.0,
+        "p95_ms": 1313.0
+      }
+    },
+    {
+      "kind": "queue",
+      "scenario": "selected-batch",
+      "metric": "enqueue_to_server_completion_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          1400.0
+        ],
+        "p50_ms": 1440.0,
+        "p95_ms": 1462.0
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          1236.0
+        ],
+        "p50_ms": 1267.5,
+        "p95_ms": 1289.0
+      }
+    },
+    {
+      "kind": "queue",
+      "scenario": "single",
+      "metric": "enqueue_to_server_completion_ms",
+      "baseline": {
+        "N": 12,
+        "first_ms": [
+          649.0
+        ],
+        "p50_ms": 651.5,
+        "p95_ms": 666.0
+      },
+      "candidate": {
+        "N": 12,
+        "first_ms": [
+          563.0
+        ],
+        "p50_ms": 565.5,
+        "p95_ms": 580.0
+      }
+    }
+  ],
+  "raw_sha256": {
+    "baseline/check-current-reuse.csv": "ef4723df03163c5b1f592d5f3672ff39bdd17853f920ca654bc7f3289b3d00c4",
+    "baseline/environment.txt": "b7d6c14cf145c383fe93e7af21f084941853dfadaaa27380a29cad9e2ff3f8d6",
+    "baseline/native-performance.log": "72dd7720d42c8d57e68ea4e4f1d271f2532a5c13477fe75729d5848df1b1c09a",
+    "baseline/queue-http-current.csv": "a416266fbee38a02165d918bb260f45a9350d8ad9cf2c39ee069716a9bdbcefa",
+    "baseline/resource-helper.log": "93a75569b939a043a4a724b2509d8ba40a5344bfb066e2804f0ac335c9f60bd4",
+    "candidate/check-current-reuse.csv": "b74aa9c6cde4ccbf3a0246071c5ba6b7d4e9da2c4a1269361f2c1f32c629d7d6",
+    "candidate/environment.txt": "e8d4c8ba52e83425a04c6724f098186838d833b5c38db34d90c1e7a9a9d8f68c",
+    "candidate/native-performance.log": "214c99cc18312e6a618c43cb310021a6d22b98b59d89d30328abf3871262dd4e",
+    "candidate/queue-http-current.csv": "15164f45884943df7350d64052779ad0bd9f39fe151cc1f4741ddf3683207418",
+    "candidate/resource-helper.log": "3ab3b55bfa1035838e1efc0b2fac890ba7a8a4c59b1810d0cc7c019e45bdd148"
+  },
+  "artifact": "research-probes-147d8885ac97ea402dc3ca6b25ce829f8329afcb",
+  "local_raw_directory": "C:\\RAZVILKA-research-20261116\\probes-147d8885",
+  "implementation_note": "Remeasures earlier changes; panel redesign and fixture correction do not add probe optimization.",
+  "matched_rows_total": 182,
+  "outcome_parity": "available/error/cleanup/service request counts and queued completed/native check counts identical",
+  "live_stage_p50_ms": {
+    "baseline": {
+      "configuration": 17.0,
+      "runtime_start": 1.0,
+      "runtime_ready": 11.0,
+      "protocol": 64.0,
+      "egress": 64.0,
+      "service": 104.5,
+      "cleanup": 100.5,
+      "route_identity": 1
+    },
+    "candidate": {
+      "configuration": 18.0,
+      "runtime_start": 1.0,
+      "runtime_ready": 10.0,
+      "protocol": 65.0,
+      "egress": 65.0,
+      "service": 104.0,
+      "cleanup": 11.0,
+      "route_identity": 1
+    }
+  }
+}

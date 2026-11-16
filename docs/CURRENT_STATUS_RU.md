@@ -49,8 +49,42 @@ modern-pair стенде: example schema1 загружался source0.20 с н�
 intent и побайтовая неизменность повторной миграции. Production guards не менялись.
 Адресный тест требует исходный отказ, принятие после миграции и отказ при новой
 revision. Изменение прошло независимое чтение ведущим; shell/Python syntax PASS,
-Go и полный native update/rollback ожидают CI точной новой ревизии. Исходный
-FAIL не объявляется исправленным до прохождения полного сценария.
+Go regression на147d PASS. Полный native46855c1a всё ещё FAIL: после миграции
+и public Apply кандидат не запущен. На824b3651 закрытая диагностика сократила
+ожидание с1234 до40с без увеличения бюджета: stop-old-panel и prepare-private-state
+завершены exit0/ECHILD, quiesce-old-runtime завершён exit3, опубликован
+requires-review. Причина исправлена в565221ca: quiesce теперь допускает
+уже проверенные snapshot2/3, продолжая отвергать1/неизвестные/непривязанные.
+На453559da полный modern public update→post-Live fault→known rollback PASS
+102.73с: точные бинарник/init/draft state, завершение всех исходных процессов,
+доступность StrategyLab, настоящий restart и kernel cleanup. Это same-source
+lab versions с synthetic release transport, не произвольный downgrade/релиз.
+
+## Проверки и измерения: 16.11.2026
+
+Полный журнал этой серии: [точные ревизии, команды и ограничения](measurements/2026-11-16/README.md).
+На147d8885 четыре isolated Mihomo lifecycle-сценария PASS, Strategy pair,
+public legacy empty/draft/history и pinned iptables1.8.11 normal/race PASS.
+Managed NFQWS2 fullLAN/manual и strict DNS не приняты. Общий CI147d прошёл
+Go normal/race, затем выявил устаревший UI assertion; исправлен наe8954294; оба Linux push/PR CI этой ревизии PASS.
+
+Сопоставимая VLESS-пара182rows: live p50 311.632→223.534мс, selected2 queue
+1440→1267.5мс. Cleanup100.5→11мс; остальные overlapping стадии не суммируются.
+Фиксированный порядок baseline→candidate, локальная модель сервиса, не WAN/LAN.
+
+DNS на новом ubuntu-latest/26.04 отказал из-за фактической effective cgroup
+BPF INET4_BIND программы (count1, errno0), а не CPU profiler. Отказ сохранён;
+На стандартном ubuntu24 этот guard проходит, но strict DNS всё ещё FAIL:
+первая mapping проверка не завершилась к12с. Внешний блокер стенда не установлен.
+В ходе разбора исправлен независимый дефект BPF ABI:32байта storage заменены
+полными64байтами, которые ядро использует для output. Независимое ревью и
+точные ABI tests normal/race PASS на8baead92.
+
+Убран только повторный чистый parser идентичных closing mountinfo bytes.
+Два свежих чтения и все filesystem/process/network guards сохранены.
+Netidentity normal/race и source parity PASS на8baead92. Микробенчмарк N5:
+74.610→36.940мкс, 127296→63648Б на одинаковых валидных данных; это цена
+parser, не полный Apply или LAN. Raw hashes и отрицательные случаи сохранены.
 
 ## Последний сохранённый сетевой этап: 09.11.2026
 

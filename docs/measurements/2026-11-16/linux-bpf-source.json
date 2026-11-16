@@ -1,0 +1,20 @@
+{
+  "tag": "v7.0",
+  "commit": "028ef9c96e96197026887c0f092424679298aae8",
+  "source": "https://github.com/torvalds/linux",
+  "files": [
+    "kernel/bpf/syscall.c",
+    "kernel/bpf/cgroup.c",
+    "include/uapi/linux/bpf.h"
+  ],
+  "licenses": {
+    "syscall.c": "GPL-2.0-only",
+    "cgroup.c": "GPL-2.0-only",
+    "bpf.h": "GPL-2.0 WITH Linux-syscall-note"
+  },
+  "sha256": {
+    "bpf.h": "e10e5d9389b83767a9333e5d53a4c5524fe29ff470ef3c5e50aa6b4cddbb29c1",
+    "cgroup.c": "9ddced9151549fa275f5159a0db71590c86bc57019c736dde772efcd8b109970",
+    "syscall.c": "aada2145f186b3adfbc403ad3eda60866c8e96b35061664984f117d4945bafb7"
+  }
+}

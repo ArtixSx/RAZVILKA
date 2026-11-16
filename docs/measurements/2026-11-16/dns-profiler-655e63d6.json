@@ -1,0 +1,185 @@
+{
+  "sha": "655e63d63c13255bb604625599cae942a2fa684f",
+  "run_id": 43858117782,
+  "conclusion": "failure",
+  "design": "within-job same-runner on/off/off/on, 2 samples per mode per scenario, GOMAXPROCS=2, unchanged12s publication/4s service",
+  "scenarios": {
+    "selected": {
+      "cpu": "AMD EPYC 9V45 96-Core Processor",
+      "source": "655e63d63c13255bb604625599cae942a2fa684f\ngo version go1.26.5 linux/amd64\nLinux runnervmccnms 7.0.0-1019-azure #20-Ubuntu SMP PREEMPT Mon Oct 19 22:41:16 UTC 2026 x86_64 GNU/Linux\n",
+      "samples": [
+        {
+          "sample": "1-1",
+          "profile_enabled": 1,
+          "native_exit": 1,
+          "wall_seconds": 12.09,
+          "capture_seconds": 5.531427294,
+          "standby_seconds": 1.685238087,
+          "initial_kernel_ms": 268.385548,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 10,
+            "bytes": 0,
+            "elapsed": "6.862µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": [
+            "original-run.cpu.pprof"
+          ]
+        },
+        {
+          "sample": "2-0",
+          "profile_enabled": 0,
+          "native_exit": 1,
+          "wall_seconds": 11.49,
+          "capture_seconds": 5.678311863,
+          "standby_seconds": 1.694056029,
+          "initial_kernel_ms": 256.035722,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 10,
+            "bytes": 0,
+            "elapsed": "5.378µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": []
+        },
+        {
+          "sample": "3-0",
+          "profile_enabled": 0,
+          "native_exit": 1,
+          "wall_seconds": 10.56,
+          "capture_seconds": 5.466422901,
+          "standby_seconds": 1.70018831,
+          "initial_kernel_ms": 257.209514,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 9,
+            "bytes": 0,
+            "elapsed": "5.61µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": []
+        },
+        {
+          "sample": "4-1",
+          "profile_enabled": 1,
+          "native_exit": 1,
+          "wall_seconds": 10.53,
+          "capture_seconds": 5.498692678,
+          "standby_seconds": 1.665428423,
+          "initial_kernel_ms": 258.670827,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 9,
+            "bytes": 0,
+            "elapsed": "4.857µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": [
+            "original-run.cpu.pprof"
+          ]
+        }
+      ],
+      "capture_mean_seconds_on": 5.515059986000001,
+      "capture_mean_seconds_off": 5.5723673819999995,
+      "capture_off_change_percent": 1.0391073922219052
+    },
+    "canceled-ready": {
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "source": "655e63d63c13255bb604625599cae942a2fa684f\ngo version go1.26.5 linux/amd64\nLinux runnervmccnms 7.0.0-1019-azure #20-Ubuntu SMP PREEMPT Mon Oct 19 22:41:16 UTC 2026 x86_64 GNU/Linux\n",
+      "samples": [
+        {
+          "sample": "1-1",
+          "profile_enabled": 1,
+          "native_exit": 1,
+          "wall_seconds": 14.68,
+          "capture_seconds": 6.839326808,
+          "standby_seconds": 2.012202939,
+          "initial_kernel_ms": 319.98852,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 12,
+            "bytes": 0,
+            "elapsed": "5.418µs"
+          },
+          "failure": "DNS publication absent at12s",
+          "profiles": [
+            "original-run.cpu.pprof"
+          ]
+        },
+        {
+          "sample": "2-0",
+          "profile_enabled": 0,
+          "native_exit": 1,
+          "wall_seconds": 12.63,
+          "capture_seconds": 6.665913116,
+          "standby_seconds": 2.086187127,
+          "initial_kernel_ms": 306.799289,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "5.84µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": []
+        },
+        {
+          "sample": "3-0",
+          "profile_enabled": 0,
+          "native_exit": 1,
+          "wall_seconds": 12.58,
+          "capture_seconds": 6.660866245,
+          "standby_seconds": 2.011772164,
+          "initial_kernel_ms": 309.600493,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 11,
+            "bytes": 0,
+            "elapsed": "5.848µs"
+          },
+          "failure": "client UDP connection refused before12s",
+          "profiles": []
+        },
+        {
+          "sample": "4-1",
+          "profile_enabled": 1,
+          "native_exit": 1,
+          "wall_seconds": 13.63,
+          "capture_seconds": 6.79871189,
+          "standby_seconds": 2.037907317,
+          "initial_kernel_ms": 308.883238,
+          "initial_mapping_compare_observed": false,
+          "publication_open_observed": false,
+          "dns_opening": {
+            "calls": 12,
+            "bytes": 0,
+            "elapsed": "5.759µs"
+          },
+          "failure": "DNS publication absent at12s",
+          "profiles": [
+            "original-run.cpu.pprof"
+          ]
+        }
+      ],
+      "capture_mean_seconds_on": 6.8190193489999995,
+      "capture_mean_seconds_off": 6.6633896805,
+      "capture_off_change_percent": -2.2822881199599854
+    }
+  },
+  "conclusion_scope": "Profiler OFF does not recover readiness. Capture preparation changes are small/mixed; no dominant profiler effect established. All8 runs stop before initial mapping comparison, a different earlier failure than previous Nov9 observations. Original Run error is not logged by deferred join after peer t.Fatal, so exact kernel refusal cause remains undetermined.",
+  "limits": [
+    "No p95 or service/LAN route acceleration claim",
+    "Different CPUs between jobs; do not compare selected against canceled-ready",
+    "Timers are completed cumulative stages, not additive wall timing",
+    "Ubuntu latest environment now kernel7.0/iproute2-6.19/iptables1.8.11; do not pool againstNov9"
+  ]
+}

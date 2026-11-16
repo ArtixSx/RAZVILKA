@@ -1,0 +1,23 @@
+{
+  "commit": "62b53867ad9bc7fba619d89c643012e487811f8e",
+  "run": 43863804834,
+  "conclusion": "success",
+  "checks": [
+    "netidentity normal/race",
+    "BPF query ABI normal/race",
+    "installed source config migration normal/race",
+    "runtime quiesce snapshot admission 10 scenarios normal/race",
+    "native capacity source parity"
+  ],
+  "raw_sha256": {
+    "bpf-abi-race.txt": "7d92428ff34bf09f21d4bde050702e22a83dc7bebfbf58b2edb791ae00952ad6",
+    "bpf-abi.txt": "9b869968a4616ae65402e460c325bd572429fb5e83aaa6f855154a396d6888c2",
+    "capacity-parity.txt": "673abf0454ce42789c5abc25f35c81ad09d7d1ae8d2e516974efbb2935efdfdb",
+    "environment.txt": "c427d05d640f6faed6ebb688ac7b54ca498411784b0abe1c875ce0c2358089db",
+    "identity-race.txt": "ff0d30d95ea2283ae8ac1f7ef4add5f36e5138fbcbad6c3692b00ddb7e091e5d",
+    "identity.txt": "a2022b43acf4c69ddbb16b87ea43c8e748edf21ee5212a53a3884edc36430cbe",
+    "mount-calculation.txt": "a600a4aae3da6c349c45b960323f573cac334a89488dc2a8534449cebdfc63c7",
+    "update-snapshot-race.txt": "73026085d14777031b9d4d7fe284978667217db7c3207b69562e4fdb1ef4bbae",
+    "update-snapshot.txt": "6c232fba4655eb21c6fb8eaecdd6f0299fd34eed338e877824a3bf94e3ed5201"
+  }
+}

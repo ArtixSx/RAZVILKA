@@ -1,0 +1,172 @@
+# Проверки панели и сетевого стенда, 16.11.2026
+
+Исходная панель — `71891f5c`, оформление/навигация — `35947259`, исправление
+устаревшего теста уведомлений — `e8954294`. Все 49 served assets совпадают с
+[browser report](panel-navigation.json). API/backend admission не расширялся.
+Скриншоты и сырые логи сохранены вне production tree:
+`C:/RAZVILKA-research-20261110/panel-netzapret/` и
+`C:/RAZVILKA-research-20261116/`.
+
+## Панель
+
+Изолированный Chromium, synthetic stopped state, 1440×1000 и 390×844:
+13 основных пунктов, 21 сохранённая страница, 28 переходов, подменю,
+Tab/Escape/возврат фокуса, отсутствие горизонтального overflow. Нет API mutations,
+обращений к роутеру или внешней сети; missing APIs отвечают503. Независимый
+source review проверил сохранение предупреждений, черновиков и recovery guards.
+
+```powershell
+$env:NODE_PATH='<bundled runtime>/dependencies/node/node_modules'
+$env:RAZVILKA_UI_CHROME='C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:RAZVILKA_UI_ARTIFACTS='<external artifact folder>'
+node scripts/test-panel-navigation-browser.mjs
+```
+
+[Node review](ui-node-review.json), точный source `e8954294`: 118 PASS из121
+команды `check.sh`, включая6 shell-fixtures в Git Bash/MSYS. Один platform FAIL:
+component-update-supervision требует отсутствующий `/opt`; два explicit Linux
+rollback-reader запуска не выполнялись. Это не результат полного Linux gate.
+CI `147d8885` прошёл Go normal/race, затем FAIL на старом CSS assertion;
+исправление входит в `e8954294`; оба Linux CI этой ревизии PASS:
+[push](https://github.com/ArtixSx/RAZVILKA/actions/runs/43860680896),
+[PR](https://github.com/ArtixSx/RAZVILKA/actions/runs/43860691276).
+
+## Сопоставимые проверки соединений
+
+Run [43856995070](https://github.com/ArtixSx/RAZVILKA/actions/runs/43856995070),
+baseline `363f433611620cda4d14db2d0a7ae2475b0278f1`, candidate
+`147d8885ac97ea402dc3ca6b25ce829f8329afcb`: PASS182 paired rows, outcome и cleanup
+parity. Полные агрегаты, SHA256 raw и provenance: [JSON](probes-147d8885.json).
+Это повторная проверка прежнего изменения cleanup, не эффект оформления.
+
+| Сценарий | N повторов на версию | p50 до→после, мс | p95 до→после, мс |
+| --- | ---: | ---: | ---: |
+| Live node/service |12|311.632→223.534|316.201→251.152|
+| Dead service |12|310.886→223.711|311.696→225.721|
+| Cancel |12|268.962→183.150|270.678→184.395|
+| Dead node |12|7.670→7.842|7.997→8.340|
+| Очередь single |12|651.5→565.5|666→580|
+| Очередь selected2 |12|1440→1267.5|1462→1289|
+| Очередь all VLESS |12|1457→1276|1509→1313|
+
+p50 — median, p95 — nearest rank. Один runner, фиксированный порядок
+baseline→candidate, Xray26.3.27 с pinned SHA, модель сервиса40мс и очереди25мс.
+Первый sample отделён: live317.877→224.757мс; это не cold page-cache.
+Медианы overlapping стадий live: config17→18, start1→1, ready11→10,
+protocol64→65, egress64→65, service104.5→104, cleanup100.5→11мс.
+Стадии нельзя складывать. Queue измеряет enqueue→server completion,
+не browser paint. WAN, фактический LAN route-ready и роутер здесь не измерены.
+
+## DNS: отрицательный эксперимент
+
+Run [43858117782](https://github.com/ArtixSx/RAZVILKA/actions/runs/43858117782),
+`655e63d6`: selected и canceled-ready, внутри каждого сценария один runner,
+profiler on/off/off/on. Все8 samples FAIL, ускорение и готовность не доказаны.
+Два samples на режим недостаточны для устойчивого p95. Разные CPU между
+сценариями не сравниваются как причинный эффект.
+
+Capture mean selected on5.5151/off5.5724с; canceled on6.8190/off6.6634с.
+Off не создаёт CPU profiles. Initial kernel256–320мс; mapping compare и
+publication-open не достигнуты. [Полный разбор](dns-profiler-655e63d6.json).
+На `3c5f2d11` исходный deferred join раскрыл forwarding contract refusal.
+На `e37fbc67` [43860362402](https://github.com/ArtixSx/RAZVILKA/actions/runs/43860362402)
+уточнён отказ programs/BPF при успешных proc/network/qdisc checks.
+Отказ не подменён timeout и не снят. Native-only instrumentation сохраняет
+исходные чтения, short-circuit, ошибки и бюджеты12/4с.
+
+`61cbf147`, [43861157202](https://github.com/ArtixSx/RAZVILKA/actions/runs/43861157202):
+исходный BPF query вернул `attach=18` (INET4_BIND), `program_count=1`,
+`attach_flags=0`, `errno=0`. Это реальная эффективная программа cgroup CI-host;
+чистый netns не отменяет её наследование. Проверка отсутствия таких программ
+сохранена. Для положительной приёмки нужен изолированный Linux runner/VM с
+cgroup v2, доказанной общей membership процесса/потока и нулевым effective
+program count для всех12 уже проверяемых attach types. Права fixture на
+net/mount namespace, veth, legacy iptables и sysctl нужны внутри стенда.
+Нельзя снимать чужую BPF policy с действующего хоста ради зелёного теста.
+Проверен уже доступный стандартный `ubuntu-24.04`:
+`eacafc39`, run43862791267, kernel7.0.0-1017-azure. BPF guard проходит дважды,
+ни одной refused метки. Поэтому дополнительная VM не является текущим внешним
+блокером и действия владельца для этого теста пока не нужны. Сценарий всё ещё
+FAIL: в12с preparation не завершена, публикации нет. Completion таймера mapping
+после отмены не означает успешный compare; итоговый fresh-identity/cancel error
+нельзя объявлять доказательством самостоятельного drift до отмены.
+
+Отдельно исправлена ошибка памяти `6db973e2`: backing storage `bpf_attr.query`
+увеличен с32 до64байт, extension fields нулевые. Kernel записывает revision
+в bytes56–63 даже при count-only запросе; размер входных данных не ограничивает
+эту запись. Добавлена проверка ABI offsets/size, независимое ревью подтвердило
+32-bit layout и неизменность errno/count/flags guards. Это не обход host policy.
+Закреплённые первичные источники Linux v7.0 `028ef9c96e96197026887c0f092424679298aae8`:
+[UAPI](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/include/uapi/linux/bpf.h#L1724),
+[output](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/kernel/bpf/cgroup.c#L1254),
+[input dispatcher](https://github.com/torvalds/linux/blob/028ef9c96e96197026887c0f092424679298aae8/kernel/bpf/syscall.c#L6210).
+Лицензии GPL-2.0-only и UAPI GPL-2.0 WITH Linux-syscall-note; исходный код Linux
+не копировался, воспроизведён ABI layout. Pins/hashes: [source record](linux-bpf-source.json).
+
+```powershell
+gh workflow run domain-profiler-comparison.yml --ref <exact-ref> -f plan=abba
+gh workflow run domain-profiler-comparison.yml --ref <exact-ref> -f plan=single-selected-off
+```
+
+## Другие native сценарии
+
+`147d8885`: Mihomo4/4 PASS
+([43856995188](https://github.com/ArtixSx/RAZVILKA/actions/runs/43856995188)).
+Strategy pair, legacy public empty/draft/history, pinned iptables1.8.11
+normal/race PASS; strict DNS, diagnostic30 и managed NFQWS2 normal/race FAIL
+([43856995054](https://github.com/ArtixSx/RAZVILKA/actions/runs/43856995054)).
+NFQ physical WAN bridge/route/FDB/ARP ownership drift PASS отдельно от fullLAN
+и manual failures. Ни один результат не объявляет готовность router/LAN.
+
+Modern fixture исправлен: настоящий source `-migrate-config` перед запуском,
+регрессия исходного fingerprint guard PASS; допустимое отсутствие false
+`stopped` принято по существующему JSON omitempty контракту. Production update
+guards неизменны. Полный public rollback46855c1a завершился FAIL1234.07с в run
+[43857560034](https://github.com/ArtixSx/RAZVILKA/actions/runs/43857560034).
+Source migration PASS, preparation/public Apply пройдены, receipt command-started,
+candidate live не наблюдался. Это ещё не восстановление работающей панели.
+На824b3651 добавлены только bounded diagnostics с закрытыми stage/code labels
+и ранний FAIL при уже опубликованном terminal requires-review и исчезнувшем
+точном helper. Прежний cleanup сохраняется. Следующий run43861837523 проверяет
+причину отказа, без ослабления production guards. Он FAIL40.12с: первые две
+команды reaped/exit0/ECHILD, quiesce reaped/exit3. Наffa33828/run43862659350
+прочитан существующий закрытый producer category `authority-opening`.
+RuntimeQuiesceAuthority отвергал schema3 после её успешной проверки
+privateSnapshot. Согласование поддержанных2/3 в565221ca прошло независимое ревью;
+[targeted normal/race regression62b](update-admission-62b53867.json) PASS.
+
+## Повторный разбор mountinfo
+
+`8baead92`, [43862363991](https://github.com/ArtixSx/RAZVILKA/actions/runs/43862363991):
+netidentity normal/race, ABI normal/race, capacity fixture source parity PASS.
+После успешного первого parser и полного равенства двух независимых свежих
+буферов второй чистый parser удалён. Никакие чтения, metadata, EOF/size,
+process/thread/network identity или closing guards не удалены.
+
+Пять повторов,257 синтетических mount rows, один бинарник и машина, фиксированный
+before→after порядок. Median valid_equal:74610→36940ns/op,
+127296→63648B/op,518→259allocs/op. Invalid_equal:36808→37220ns/op;
+changed_valid:36784→36757ns/op — отрицательные случаи не ускорились существенно.
+Это вычисление parser/equality, не весь capture/Apply/LAN.
+[Samples и raw hashes](identity-8baead92.json).
+
+## Закрытый modern сценарий
+
+[43864979694](https://github.com/ArtixSx/RAZVILKA/actions/runs/43864979694),
+`453559dac1d0f20be01a6dcf5ddc90002023c5f2`: PASS102.73с. Исправлены
+source migration fixture, schema2-only quiesce gate для валидной пары3 и
+порядок наблюдения завершения helper. File receipt rolled-back предшествует
+окончательной публикации helper; чтение StrategyLab теперь идёт после exact
+terminal job и reaped PID, в прежнем5с бюджете, без снятия recovery fences.
+
+Доказаны actual candidate live, original post-Live cut, actual rollback receipt,
+исходные бинарник/init, точный draft state, доступный reader, настоящий init
+restart, joined Stop всех панелей и kernel baseline. Все10 admission regression
+cases PASS; unknown format, forged/unbound pair, unjoined prior command и cancel
+не принимаются. Две main-сборки из одного source с lab versions, native fixture
+tag и synthetic release transport; official release provenance=false, router_ready=false.
+
+Mihomo повтор e895, run43860680897:3/4PASS. Lifecycle candidate HEV sidecar
+exit254/signal0, original same-host baseline также sidecar-start FAIL (exitcode
+не записан); оба rollback/verify-rollback PASS. Причина выхода HEV ещё неизвестна,
+stdout/stderr отбрасываются. Не делать вывод о TTL/сети/TUN только из exit254.

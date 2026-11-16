@@ -1,0 +1,160 @@
+{
+  "run_id": "43862791267",
+  "head_sha": "eacafc398104edac6bd985f57644c2645769aed4",
+  "conclusion": "failure",
+  "original_run_error": "fresh network identity is unavailable\n        fresh network identity is unavailable\n        context canceled\n        context canceled\n        trusted startup tools: READ_OBSERVATION_SCOPE\n        context canceled\n        trusted startup tools: READ_OBSERVATION_SCOPE\n        context canceled\n        context canceled\n        original domain Xray TCP owner is unavailable or changed\n        original domain Xray TCP owner is unavailable or changed\n        trusted startup tools: LIFETIME\n        context canceled\n        context canceled\n        original domain Xray TCP owner is unavailable or changed\n        context canceled\n        context canceled\n        context canceled\n        original synthetic TCP capture/transition consumer is unavailable\n        retained synthetic publication requires original baseline/cache/conntrack settlement\n        context canceled\n        context canceled",
+  "snapshots": {
+    "before_cancel": {
+      "baseline-forwarding-identity-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "820ns"
+      },
+      "baseline-forwarding-ip-forward-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "67.425\u0412\u00b5s"
+      },
+      "baseline-forwarding-network-closing-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "63.547\u0412\u00b5s"
+      },
+      "baseline-forwarding-network-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "65.112\u0412\u00b5s"
+      },
+      "baseline-forwarding-proc-current-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "25.548\u0412\u00b5s"
+      },
+      "baseline-forwarding-proc-open-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "67.855\u0412\u00b5s"
+      },
+      "baseline-forwarding-programs-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "403.602\u0412\u00b5s"
+      },
+      "baseline-forwarding-provider-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "2.807617ms"
+      },
+      "baseline-forwarding-qdiscs-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "134.48\u0412\u00b5s"
+      },
+      "capture-prepare": {
+        "calls": 7,
+        "value": 256041842,
+        "elapsed": "183.989889ms"
+      },
+      "initial-kernel": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "723.02601ms"
+      },
+      "kernel-observe": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "662.545671ms"
+      },
+      "kernel-observe-success": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "692ns"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "2.154447654s"
+      }
+    },
+    "after_join": {
+      "baseline-forwarding-identity-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "820ns"
+      },
+      "baseline-forwarding-ip-forward-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "67.425\u0412\u00b5s"
+      },
+      "baseline-forwarding-network-closing-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "63.547\u0412\u00b5s"
+      },
+      "baseline-forwarding-network-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "65.112\u0412\u00b5s"
+      },
+      "baseline-forwarding-proc-current-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "25.548\u0412\u00b5s"
+      },
+      "baseline-forwarding-proc-open-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "67.855\u0412\u00b5s"
+      },
+      "baseline-forwarding-programs-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "403.602\u0412\u00b5s"
+      },
+      "baseline-forwarding-provider-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "2.807617ms"
+      },
+      "baseline-forwarding-qdiscs-completed": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "134.48\u0412\u00b5s"
+      },
+      "capture-prepare": {
+        "calls": 7,
+        "value": 256041842,
+        "elapsed": "183.989889ms"
+      },
+      "initial-kernel": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "723.02601ms"
+      },
+      "initial-mapping-compare": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "384.972387ms"
+      },
+      "kernel-observe": {
+        "calls": 2,
+        "value": 0,
+        "elapsed": "847.366287ms"
+      },
+      "kernel-observe-success": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "692ns"
+      },
+      "standby-prepare": {
+        "calls": 1,
+        "value": 0,
+        "elapsed": "2.154447654s"
+      }
+    }
+  },
+  "test_wall_seconds": 22.3,
+  "finding": "Ubuntu24.04 passed native effective-BPF programs guard twice; no baseline refusal. At12s deadline first mapping comparison still in flight (coordinator202, mappingCurrent/exclusion observation stack); initial-mapping-compare completed only after cancel/join with error. No publication-open. Final fresh identity error cannot establish independent drift before cancellation.",
+  "limitation": "Supported alternative image removes the observed ubuntu26 foreign-BPF blocker; strict software readiness still fails. No route proof or successful initial comparison."
+}

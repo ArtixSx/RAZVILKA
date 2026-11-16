@@ -1,0 +1,70 @@
+{
+  "run_id": "43861157202",
+  "head_sha": "61cbf147a3b1aba5b773e31e818a7f74ed37d836",
+  "conclusion": "failure",
+  "original_run_error": "domain TCP baseline native forwarding/programs: original transparent TCP baseline kernel contract is unavailable\n        errno 0\n        original synthetic TCP capture/transition consumer is unavailable\n        original synthetic TCP capture/transition consumer is unavailable",
+  "baseline_metrics": {
+    "baseline-bpf-refused-attach": {
+      "calls": 1,
+      "value": 18,
+      "elapsed": "251ns"
+    },
+    "baseline-bpf-refused-attach-flags": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "181ns"
+    },
+    "baseline-bpf-refused-errno": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "80ns"
+    },
+    "baseline-bpf-refused-program-count": {
+      "calls": 1,
+      "value": 1,
+      "elapsed": "100ns"
+    },
+    "baseline-forwarding-identity-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "220ns"
+    },
+    "baseline-forwarding-network-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "28.542µs"
+    },
+    "baseline-forwarding-proc-open-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "37.636µs"
+    },
+    "baseline-forwarding-programs-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "155.759µs"
+    },
+    "baseline-forwarding-programs-refused": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "80ns"
+    },
+    "baseline-forwarding-provider-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "754.323µs"
+    },
+    "baseline-forwarding-provider-refused": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "140ns"
+    },
+    "baseline-forwarding-qdiscs-completed": {
+      "calls": 1,
+      "value": 0,
+      "elapsed": "63.724µs"
+    }
+  },
+  "limitation": "Native strict selected fixture failed before first mapping comparison/publication. No speed or route readiness claim.",
+  "finding": "Effective cgroup BPF query succeeded with attach18 (INET4_BIND), program_count1, attach_flags0, errno0. Existing foreign-program guard correctly refuses."
+}
