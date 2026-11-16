@@ -208,9 +208,15 @@ for PACKAGE in "$@"; do
 done
 OPKG
 chmod 700 "$TEST_ROOT/essential/opkg"
+cp "$TEST_ROOT/essential/opkg" "$TEST_ROOT/providers/opkg"
+cat >"$TEST_ROOT/essential/opkg" <<'SYSTEM_OPKG'
+#!/bin/sh
+printf '%s\n' "$*" >>"$CASE_ROOT/system-opkg-called"
+exit 97
+SYSTEM_OPKG
 
 BUSYBOX_CASES=0
-for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies missing-dependencies-unset busybox-shell busybox-shell-unset ip-full-missing ip-alias-wrong ip-version-wrong ip-version-failed ip-alias-unrepaired ip-version-unrepaired incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed opkg-install-failed opkg-wget-failed opkg-collision opkg-signal opkg-cleanup-failed; do
+for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mipsel install-default-cache install-latest install-pinned private-owner private-writable private-type symlink-base missing-dependencies missing-dependencies-unset busybox-shell busybox-shell-unset ip-full-missing ip-alias-wrong ip-version-wrong ip-version-failed ip-alias-unrepaired ip-version-unrepaired incompatible-timeout timeout-still-incompatible https-bootstrap uninstall rollback old-uninstall invalid-options latest-uninstall latest-rollback invalid-version wrong-root uninstall-purge purge-default-tmp purge-old-release purge-without-uninstall purge-rollback bad-checksum extra-checksum traversal traversal-warning list-failed types-warning multiple-roots archive-link download-failed opkg-failed opkg-install-failed opkg-wget-failed opkg-collision opkg-signal opkg-cleanup-failed opkg-system-only opkg-entware-bin opkg-entware-sbin; do
   [ "$CASE_NAME" != symlink-base ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   [ "$CASE_NAME" != opkg-signal ] || [ "$NATIVE_LINKS" -eq 1 ] || continue
   case "$CASE_NAME" in busybox-shell*) [ -n "$BUSYBOX" ] || continue ;; esac
@@ -246,6 +252,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     uninstall|old-uninstall) set -- --uninstall ;;
     rollback) set -- --rollback ;;
     invalid-options) set -- --uninstall --rollback ;;
+    opkg-system-only) rm "$BASE/bin/opkg" ;;
+    opkg-entware-bin) rm "$BASE/bin/curl" ;;
+    opkg-entware-sbin) mv "$BASE/bin/opkg" "$BASE/sbin/opkg"; rm "$BASE/bin/curl" ;;
     missing-dependencies|missing-dependencies-unset|opkg-failed|opkg-install-failed|opkg-collision|opkg-signal|opkg-cleanup-failed)
       [ "$CASE_NAME" != missing-dependencies-unset ] || set -- --uninstall --purge
       for TOOL in curl wget sha256sum tar gzip mktemp readlink timeout awk dd od pidof grep ip; do rm "$BASE/bin/$TOOL"; done
@@ -353,6 +362,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     PATH="$TEST_ROOT/essential" RAZVILKA_BASE="$RUN_BASE" RAZVILKA_ARCH="$ARCH_OVERRIDE" \
       BOOTSTRAP_TEST_BUSYBOX="$BUSYBOX" RAZVILKA_VERSION="$VERSION_OVERRIDE" "$CASE_SH" "$ROOT/scripts/bootstrap.sh" "$@"
   ) >"$CASE_ROOT/output" 2>&1 || CODE=$?
+  [ ! -e "$CASE_ROOT/system-opkg-called" ] || { echo "Firmware package manager was invoked: $CASE_NAME" >&2; exit 1; }
   chmod 700 "$CASE_ROOT/read only cwd"
   [ -z "$(find "$CASE_ROOT/read only cwd" -mindepth 1 -print)" ] || { echo "Bootstrap wrote into caller cwd" >&2; exit 1; }
   for OPKG_DIR in "$BASE"/.razvilka-opkg.*; do
@@ -367,7 +377,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     [ -f "$CASE_ROOT/collision-path" ] && [ -f "$(cat "$CASE_ROOT/collision-path")/foreign" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Colliding package workspace was adopted" >&2; exit 1; }
   fi
   case "$CASE_NAME" in
-    install-*|symlink-base|missing-dependencies|missing-dependencies-unset|busybox-shell*|ip-full-missing|ip-alias-wrong|ip-version-wrong|ip-version-failed|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp)
+    install-*|symlink-base|missing-dependencies|missing-dependencies-unset|busybox-shell*|ip-full-missing|ip-alias-wrong|ip-version-wrong|ip-version-failed|incompatible-timeout|https-bootstrap|uninstall|rollback|uninstall-purge|purge-default-tmp|opkg-entware-bin|opkg-entware-sbin)
       [ "$CODE" = 0 ] && [ -f "$CASE_ROOT/helper-called" ] || { cat "$CASE_ROOT/output" >&2; echo "Bootstrap failed: $CASE_NAME" >&2; exit 1; }
       EXPECTED=install
       EXPECTED_ARGS=""
@@ -409,7 +419,7 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
       elif [ "$CASE_NAME" = https-bootstrap ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 4 ] || { echo "HTTPS bootstrap was not bounded" >&2; exit 1; }
         [ -f "$CASE_ROOT/tls-installed" ] || { echo "HTTPS downloader was not installed" >&2; exit 1; }
-      elif [ "$CASE_NAME" = busybox-shell ] || [ "$CASE_NAME" = busybox-shell-unset ]; then
+      elif [ "$CASE_NAME" = busybox-shell ] || [ "$CASE_NAME" = busybox-shell-unset ] || [ "$CASE_NAME" = opkg-entware-bin ] || [ "$CASE_NAME" = opkg-entware-sbin ]; then
         [ "$(wc -l <"$CASE_ROOT/opkg-called" | tr -d ' ')" = 2 ] &&
           grep -q '^install curl$' "$CASE_ROOT/opkg-called" || { echo "BusyBox shell did not exercise exact missing-curl package scope" >&2; exit 1; }
       else
@@ -419,6 +429,9 @@ for CASE_NAME in install-aarch64 install-mips install-mipsel install-explicit-mi
     *)
       [ "$CODE" != 0 ] && [ ! -e "$CASE_ROOT/helper-called" ] || { echo "Unsafe bootstrap accepted: $CASE_NAME" >&2; cat "$CASE_ROOT/output" >&2; exit 1; }
       case "$CASE_NAME" in
+        opkg-system-only)
+          [ "$CODE" = 11 ] && [ ! -e "$CASE_ROOT/downloads" ] && [ ! -e "$CASE_ROOT/opkg-called" ] || { echo "Missing Entware reached a download or package operation" >&2; exit 1; }
+          ;;
         opkg-failed|opkg-install-failed|opkg-wget-failed|opkg-signal|opkg-collision|opkg-cleanup-failed)
           [ ! -e "$CASE_ROOT/downloads" ] || { echo "Failed package preparation reached download" >&2; exit 1; }
           case "$CASE_NAME:$CODE" in

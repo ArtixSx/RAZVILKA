@@ -88,10 +88,20 @@ fi
 
 step '1/5' 'Проверяю Entware и системные инструменты…'
 [ "$(id -u)" = 0 ] || { echo "Run this command as the Entware administrator (root)." >&2; exit 10; }
-command -v opkg >/dev/null 2>&1 || {
-  echo "ОШИБКА: opkg не найден в /opt. Установка Entware не завершена или /opt не подключён." >&2
+OPKG=""
+for OPKG_CANDIDATE in "$BASE/bin/opkg" "$BASE/sbin/opkg"; do
+  if [ -f "$OPKG_CANDIDATE" ] && [ -x "$OPKG_CANDIDATE" ]; then
+    OPKG="$OPKG_CANDIDATE"
+    break
+  fi
+done
+[ -n "$OPKG" ] || {
+  echo "ОШИБКА: opkg не найден в $BASE. Установка Entware не завершена или каталог не подключён." >&2
   exit 11
 }
+# The firmware may provide its own opkg in PATH. It must never receive Entware
+# package operations, including after changing to the private workspace.
+readonly OPKG
 PACKAGES=""
 NEED_HTTPS_WGET=0
 need_package() {
@@ -159,21 +169,21 @@ if [ -n "$PACKAGES" ]; then
   TMPDIR="$OPKG_TMP"
   export TMPDIR
   cd -- "$OPKG_TMP"
-  if ! opkg update; then
+  if ! "$OPKG" update; then
     if [ "$NEED_HTTPS_WGET" -eq 1 ]; then
       # Entware's HTTP index may have refreshed while existing HTTPS feeds
       # failed. Bootstrap only its fixed TLS downloader, then require a clean
       # refresh; do not silently continue with failed package metadata.
       warn 'Подготавливаю wget-ssl для HTTPS-каталогов Entware…'
-      opkg install wget-ssl
-      opkg update
+      "$OPKG" install wget-ssl
+      "$OPKG" update
     else
       echo "Не удалось обновить каталог Entware. Проверьте доступность репозиториев." >&2
       exit 12
     fi
   fi
   # Package names are exclusively the fixed allowlist above. No global upgrade.
-  opkg install $PACKAGES
+  "$OPKG" install $PACKAGES
   )
   hash -r 2>/dev/null || true
 fi
