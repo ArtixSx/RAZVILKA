@@ -20,6 +20,19 @@ jobs:
         with:
           go-version: '1.26.5'
           cache: false
+      - name: Build the pinned historical reader library probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          historical=4cc9f869974713c9cebd833fccca383c03c102b7
+          git fetch --no-tags origin "$historical"
+          git worktree add --detach /tmp/razvilka-reader4-source "$historical"
+          test "$(git -C /tmp/razvilka-reader4-source rev-parse HEAD)" = "$historical"
+          mkdir -p /tmp/razvilka-reader4-source/cmd/offline-reader4-probe
+          cp scripts/fixtures/offline-reader4-main.go /tmp/razvilka-reader4-source/cmd/offline-reader4-probe/main.go
+          git -C /tmp/razvilka-reader4-source diff --exit-code
+          (cd /tmp/razvilka-reader4-source && GOTOOLCHAIN=local go build -tags razvilka_historical_reader_fixture -o /tmp/offline-reader4-probe ./cmd/offline-reader4-probe)
+          git -C /tmp/razvilka-reader4-source diff --exit-code
       - name: Bound offline retry and original Stop admission
         shell: bash
         run: |
@@ -28,12 +41,13 @@ jobs:
           for mode in normal race; do
             race_flag=()
             if [ "$mode" = race ]; then race_flag=(-race); fi
-            sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" RAZVILKA_HISTORICAL_READER4_PROBE=/tmp/offline-reader4-probe \
               go test "${race_flag[@]}" -count=1 -v ./internal/selfupdatejournal ./internal/updatecheck ./cmd/razvilka \
               -run '^(TestPairedOfflineRetry|TestPairedOfflinePlanOnly|TestPairedRestoreCommand|TestSelfUpdateOfflineReader|TestSelfUpdateImmutableReaderCLI|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
               | tee "artifacts/offline-retry/$mode.txt"
             if grep -F -- '--- SKIP:' "artifacts/offline-retry/$mode.txt"; then exit 1; fi
             grep -F -- '--- PASS: TestPairedOfflineRetryNative' "artifacts/offline-retry/$mode.txt"
+            grep -F -- '--- PASS: TestPairedOfflineRetryActualHistoricalReader4 ' "artifacts/offline-retry/$mode.txt"
           done
       - name: Preserve original results
         if: ${{ !cancelled() }}
