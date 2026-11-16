@@ -121,14 +121,23 @@ func domainTCPBaselinePrograms(ctx context.Context, proc *xraySelectedTCPProc) (
 	return ctx.Err()
 }
 
+// Linux UAPI bpf_attr.query through revision (v7.0, 028ef9c96e96).
+// Modern cgroup queries write revision even for a count-only effective query;
+// the syscall input size does not bound that output write. Keep all 64 bytes.
+// Zero extension fields also preserve compatibility with older kernels.
+type domainTCPBaselineProgramQuery struct {
+	FD, Attach, Flags, AttachFlags uint32
+	IDs                            uint64
+	Count, Pad                     uint32
+	ProgramAttachFlags             uint64
+	LinkIDs                        uint64
+	LinkAttachFlags                uint64
+	Revision                       uint64
+}
+
 func domainTCPBaselineNoPrograms(fd int, attach, flags uint32) error {
-	// Stable initial query ABI, Linux UAPI include/uapi/linux/bpf.h query.
 	// No program IDs buffer is needed: the kernel always returns prog_cnt.
-	attribute := struct {
-		FD, Attach, Flags, AttachFlags uint32
-		IDs                            uint64
-		Count, Pad                     uint32
-	}{FD: uint32(fd), Attach: attach, Flags: flags}
+	attribute := domainTCPBaselineProgramQuery{FD: uint32(fd), Attach: attach, Flags: flags}
 	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_QUERY, uintptr(unsafe.Pointer(&attribute)), unsafe.Sizeof(attribute))
 	if errno != 0 || attribute.Count != 0 || attribute.AttachFlags != 0 {
 		// Fixed native-only numeric evidence from this exact failed query.
