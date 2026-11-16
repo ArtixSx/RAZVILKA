@@ -7,8 +7,8 @@
 
 | Приоритет | Владелец | Рабочий сценарий / доказательство | Следующее действие и условие завершения |
 | --- | --- | --- | --- |
-| P0 DNS | catalog_lifecycle_review; Root integration | `458b20ef` standalone Current file observation, focused/review PASS; strict Linux pending | Локализовать и устранить стоимость selected/mismatch/unknown-host без изменения12/4с, повторить одинаковые сценарии и независимое ревью |
-| P0 Mihomo | catalog_product_analysis; Root review | `9da19ea6` actual stage costs: race copy/equality overhead, clear не причина; ACK FAIL | Уменьшить подтверждённые повторные вычисления с полными свежими bytes/owner observations; все ACK cuts normal/race в120с |
+| P0 DNS | catalog_lifecycle_review; Root integration | `53fd786e` GEN2 fresh-byte comparison и standalone Current, targeted/review PASS; initial strict timeout сохраняется | Локализовать и устранить стоимость selected/mismatch/unknown-host без изменения12/4с, повторить одинаковые сценарии и независимое ревью |
+| P0 Mihomo | catalog_product_analysis; Root review | `53fd786e` HEV source lab PASS64 samples; точная причина libc отказа найдена; исходный race ACK не принят | Квалифицировать отдельный pinned HEV patch тем же installer/receipt; parent и все ACK cuts normal/race в120с |
 | P0 NFQWS2 | catalog_network_analysis; Root review | Core traffic и LateWait cleanup доказаны отдельно; fullLAN/manual и race Consumer не приняты | Полный Apply/Stop/recovery в исходных сроках, точные native VPN/exclusions/queue ownership |
 | P0 update/restore | Root; product/lifecycle review | `492e813b` bound retry normal/race, plan-only cut, actual public history и modern rollback PASS | Историческая reader4 normal/race уже PASS на9da; полный CI текущего итогового SHA; аппаратные прерывания отдельно |
 | P1 панель/API/AUTO | Root | Новое меню и21 страницы,118 Node commands и Chromium desktop/mobile PASS | Полный backend flow на принятом LAN-профиле после P0; неизвестное состояние не превращать в availability |
@@ -19,7 +19,7 @@
 Неуспешные программные тесты не являются внешним блокером. Внешние препятствия
 для следующей операции указаны отдельно: `delete_repo` отсутствует в OAuth;
 физический power-loss и иные модели требуют отдельного стенда. Статусы и точные
-run IDs: [текущая контрольная точка](CURRENT_STATUS_RU.md#текущая-контрольная-точка-16112026-492e813b).
+run IDs: [текущая контрольная точка](CURRENT_STATUS_RU.md#current-release-checkpoint).
 
 
 Приёмка кандидата 0.20.0 продолжается. Состав и ограничения описаны в

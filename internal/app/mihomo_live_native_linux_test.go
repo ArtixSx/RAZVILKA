@@ -175,12 +175,16 @@ func runMihomoLiveOriginalNativeWorkflow(t *testing.T, degradeAfterCAS bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hevAssetURL, _, err := components.HEVNativeFixtureAsset("amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
 	cm.Client = &http.Client{Transport: mihomoServiceArchiveTransport(func(r *http.Request) (*http.Response, error) {
 		var data []byte
 		switch r.URL.String() {
 		case "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz":
 			data = archive
-		case "https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64":
+		case hevAssetURL:
 			data = hev
 		default:
 			return nil, errors.New("unreviewed native fixture asset")

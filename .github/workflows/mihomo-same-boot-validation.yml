@@ -1,10 +1,15 @@
 name: Mihomo same boot original offline ownership validation
+run-name: Mihomo same boot / ${{ inputs.hev_lab && 'separate HEV source lab' || 'official HEV' }} / ${{ github.sha }}
 
 on:
   push:
     branches: [work/mihomo-same-boot-validation-20261102, work/mihomo-same-boot-source-20261102, work/bypass-integration-20261031]
   workflow_dispatch:
     inputs:
+      hev_lab:
+        description: 'Separate reviewed source-built HEV qualification; official defaults unchanged'
+        type: boolean
+        default: false
       consumer_profile:
         description: 'Sample the original consumer without changing its deadline'
         type: boolean
@@ -99,9 +104,45 @@ jobs:
           curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
           curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Prepare the separately pinned HEV source lab
+        if: ${{ inputs.hev_lab }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y make patch
+          mkdir -p artifacts
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
+          sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          go test -count=1 ./internal/components -run '^TestHEVOfficialReleasePinsUnchanged$'
+          race_option=()
+          if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            go test "${race_option[@]}" -count=1 -v -tags razvilka_native_fixture,razvilka_hev_altstack_lab \
+            ./internal/components -run '^TestHEV(AltstackLabExactPin|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$' \
+            | tee artifacts/hev-lab-pin-tests.txt
+          if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
+          for name in TestHEVAltstackLabExactPin TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+            grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
+          done
+      - name: Preserve exact source lab provenance
+        if: ${{ inputs.hev_lab && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: |
+            artifacts/hev-lab-build.txt
+            artifacts/hev-lab-pin-tests.txt
+            artifacts/hev-lab/build-manifest.json
+            artifacts/hev-lab/fault-tests.txt
+            artifacts/hev-lab/bin/hev-patched
+          if-no-files-found: error
       - name: Actual producer parent death CLI cleanup and updater fences
         id: original_native
         shell: bash
@@ -113,6 +154,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_HEV_ALTSTACK_LAB="${{ inputs.hev_lab && '1' || '0' }}" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
@@ -131,7 +173,7 @@ jobs:
           status=0
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-official \
             sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
           printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
           exit "$status"
@@ -192,9 +234,45 @@ jobs:
           curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
           curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Prepare the separately pinned HEV source lab
+        if: ${{ inputs.hev_lab }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y make patch
+          mkdir -p artifacts
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
+          sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          go test -count=1 ./internal/components -run '^TestHEVOfficialReleasePinsUnchanged$'
+          race_option=()
+          if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            go test "${race_option[@]}" -count=1 -v -tags razvilka_native_fixture,razvilka_hev_altstack_lab \
+            ./internal/components -run '^TestHEV(AltstackLabExactPin|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$' \
+            | tee artifacts/hev-lab-pin-tests.txt
+          if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
+          for name in TestHEVAltstackLabExactPin TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+            grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
+          done
+      - name: Preserve exact source lab provenance
+        if: ${{ inputs.hev_lab && !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
+          path: |
+            artifacts/hev-lab-build.txt
+            artifacts/hev-lab-pin-tests.txt
+            artifacts/hev-lab/build-manifest.json
+            artifacts/hev-lab/fault-tests.txt
+            artifacts/hev-lab/bin/hev-patched
+          if-no-files-found: error
       - name: Actual producer parent death CLI cleanup and updater fences
         id: original_native
         shell: bash
@@ -206,6 +284,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_HEV_ALTSTACK_LAB="${{ inputs.hev_lab && '1' || '0' }}" \
             RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT="${{ matrix.ack_cut }}" \
             RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE="${{ inputs.consumer_profile && '1' || '0' }}" \
             RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT="$GITHUB_WORKSPACE/artifacts/sameboot-profile" \
@@ -227,7 +306,7 @@ jobs:
           status=0
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
-            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-official \
             sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/hev-after-failure/closed-diagnostic.txt || status=$?
           printf 'diagnostic_exit=%s original_failure_preserved=true\n' "$status" > artifacts/hev-after-failure/outcome.txt
           exit "$status"

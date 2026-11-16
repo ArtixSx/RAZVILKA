@@ -1,5 +1,12 @@
 # Сборки и поддержка запуска
 
+Актуальная сверка `7ecb1b98`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+HEV runtime-altstack исправление прошло отдельный source-build lab на двух
+Linux runner; production pin и платформенный допуск не изменены. Strict DNS,
+managed NFQWS2 и sameboot ещё не завершены. Подробности прежних ревизий ниже
+сохраняются как история, а не готовность текущего релиза.
+
+
 Последняя сверка: `fc5bcc6c`, 16.11.2026. Платформенный допуск не расширен.
 Bound offline restore и modern public rollback прошли Linux-проверки; обычный
 reader4 сохранён, pending5 допускается только явной offline-командой.

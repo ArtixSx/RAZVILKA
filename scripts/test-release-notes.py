@@ -4,6 +4,10 @@ import importlib.util
 import pathlib
 import tempfile
 import unittest
+import sys
+
+# Validation must not leave bytecode in the scripts copied into the package.
+sys.dont_write_bytecode = True
 
 spec = importlib.util.spec_from_file_location("release_notes", pathlib.Path(__file__).with_name("prepare-release-notes.py"))
 module = importlib.util.module_from_spec(spec)

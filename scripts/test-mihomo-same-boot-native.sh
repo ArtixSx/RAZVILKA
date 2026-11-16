@@ -47,13 +47,21 @@ case "${RAZVILKA_MIHOMO_SAME_BOOT_ACK_CUT:-}" in
  *) exit 2 ;;
 esac
 cd "$repo"
+# Closed, compile-time lab selection. No arbitrary tags, hashes or relaxed
+# installer receipt checks can be supplied by the environment.
+case "${RAZVILKA_HEV_ALTSTACK_LAB:-0}" in
+ 0) native_tags=razvilka_native_fixture; printf '%s\n' 'HEV qualification=official' ;;
+ 1) native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
+    printf '%s\n' 'HEV qualification=separate-source-lab production_pin_unchanged=true' ;;
+ *) exit 2 ;;
+esac
 case "${RAZVILKA_NATIVE_RACE:-0}" in
- 0) go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
-    go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
-    go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
- 1) go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
-    go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
-    go test -race -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
+ 0) go test -tags "$native_tags" -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
+    go test -tags "$native_tags" -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
+    go test -tags "$native_tags" -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
+ 1) go test -race -tags "$native_tags" -ldflags='-s -w' -c -o "$work/app.test" ./internal/app
+    go test -race -tags "$native_tags" -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
+    go test -race -tags "$native_tags" -ldflags='-s -w' -c -o "$work/startup.test" ./internal/startuptools ;;
  *) exit 2 ;;
 esac
 # Actual stdout/stderr pipes must respect the original shared helper cap.
