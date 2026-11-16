@@ -47,7 +47,8 @@ func mihomoSameBootMeasureContext(ctx context.Context, phase string) func() {
 		return func() {}
 	}
 	switch phase {
-	case "phase-opening", "phase-intent", "phase-sidecar", "phase-policy", "phase-forwarding", "phase-archive", "phase-terminal", "phase-completed", "prepare", "run", "source-before-sidecar", "source-current", "source-current-tool-read", "absence", "absence-tool-read", "home-current", "native-stage", "native-witness-callback", "metadata-current":
+	case "source-self-sha", "source-lease-private", "source-lease-owner-tool", "source-lease-read-tool", "source-command-kernel", "source-command-version",
+		"phase-opening", "phase-intent", "phase-sidecar", "phase-policy", "phase-forwarding", "phase-archive", "phase-terminal", "phase-completed", "prepare", "run", "source-before-sidecar", "source-current", "source-current-tool-read", "absence", "absence-tool-read", "home-current", "native-stage", "native-witness-callback", "metadata-current":
 	default:
 		return func() {}
 	}
@@ -123,4 +124,19 @@ func mihomoSameBootNativeProcFailure(ctx context.Context, err error) error {
 		return mihomoSameBootNativeFailure(ctx, "process-inventory-unknown", err)
 	}
 	return mihomoSameBootNativeFailure(ctx, "process-inventory-"+failure.stage, err)
+}
+
+// MihomoSameBootNativeCommandTiming observes only the existing original child
+// call. Context carries the same diagnostic recorder; this adds no context,
+// authority, command, Start or Wait. These nested durations are not additive
+// with source-current, source-lease or absence intervals.
+func MihomoSameBootNativeCommandTiming(ctx context.Context, phase string) func() {
+	switch phase {
+	case "kernel":
+		return mihomoSameBootMeasureContext(ctx, "source-command-kernel")
+	case "version":
+		return mihomoSameBootMeasureContext(ctx, "source-command-version")
+	default:
+		return func() {}
+	}
 }

@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"slices"
 	"time"
+
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 )
 
 // versionReadBatch is confined to one synchronous Check, while the original
@@ -121,7 +123,9 @@ func (b *versionReadBatch) read(ctx context.Context, l *Lease, index int) error 
 	command.Args[0], command.Env, command.Dir = name, l.profile.environment(), "/"
 	command.ExtraFiles = []*os.File{image.file}
 	command.Stdout, command.Stderr, command.WaitDelay = stdout, stderr, 100*time.Millisecond
+	finishCommand := dataplane.MihomoSameBootNativeCommandTiming(c, "version")
 	runErr := l.runObservedRead(c, command)
+	finishCommand()
 	if command.Process != nil {
 		noteVersionChildStart(l.review, index)
 	}

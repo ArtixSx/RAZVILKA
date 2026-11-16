@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ArtixSx/razvilka/internal/dataplane"
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
@@ -79,7 +80,9 @@ func (l *Lease) runMihomoLiveRead(original context.Context, name string, args ..
 		// preserving the actual order of known failed-read diagnostics.
 		command.Stdout, command.Stderr = combined, combined
 		command.WaitDelay = 100 * time.Millisecond
+		finishCommand := dataplane.MihomoSameBootNativeCommandTiming(held, "kernel")
 		commandErr := l.runObservedRead(held, command)
+		finishCommand()
 		closing := boundary(held)
 		if combined.overflow || closing != nil || c.Err() != nil {
 			return at("MIHOMO_READ_RESULT", errors.Join(commandErr, closing, c.Err()))

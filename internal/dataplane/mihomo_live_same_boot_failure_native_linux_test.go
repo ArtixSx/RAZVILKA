@@ -4,6 +4,7 @@ package dataplane
 
 import (
 	"context"
+	"sync"
 	"testing"
 )
 
@@ -99,5 +100,58 @@ func TestMihomoSameBootNativeProcFailurePrivateStage(t *testing.T) {
 		if row.Nanoseconds != 0 {
 			t.Fatal("unexpected timing")
 		}
+	}
+}
+
+func TestMihomoSameBootNativeSourceTimingClosedAndLate(t *testing.T) {
+	var late func()
+	rows, err := WithMihomoSameBootNativeMeasurements(t.Context(), func(ctx context.Context) error {
+		for _, phase := range []string{"source-self-sha", "source-lease-private", "source-lease-owner-tool", "source-lease-read-tool"} {
+			mihomoSameBootMeasureContext(ctx, phase)()
+		}
+		MihomoSameBootNativeCommandTiming(ctx, "kernel")()
+		MihomoSameBootNativeCommandTiming(ctx, "version")()
+		// The cross-package hook cannot accept arbitrary data or other recorder labels.
+		for _, phase := range []string{"private/path/secret", "source-lease-private", "source-command-kernel", ""} {
+			MihomoSameBootNativeCommandTiming(ctx, phase)()
+		}
+		mihomoSameBootMeasureContext(ctx, "private/path/secret")()
+		late = mihomoSameBootMeasureContext(ctx, "source-self-sha")
+		return nil
+	})
+	if err != nil || len(rows) != 6 {
+		t.Fatal("closed timing vocabulary", err, rows)
+	}
+	for _, row := range rows {
+		if row.Calls != 1 || row.Nanoseconds < 0 {
+			t.Fatal("unexpected timing row", row)
+		}
+	}
+	next, err := WithMihomoSameBootNativeMeasurements(t.Context(), func(ctx context.Context) error {
+		late()
+		MihomoSameBootNativeCommandTiming(ctx, "version")()
+		return nil
+	})
+	if err != nil || len(next) != 1 || next[0].Phase != "source-command-version" || next[0].Calls != 1 {
+		t.Fatal("late prior completion crossed recorder lifetime", err, next)
+	}
+	for _, ctx := range []context.Context{nil, t.Context(), context.WithValue(t.Context(), mihomoSameBootMeasurementsKey{}, "foreign")} {
+		MihomoSameBootNativeCommandTiming(ctx, "kernel")()
+	}
+}
+
+func TestMihomoSameBootNativeSourceTimingConcurrent(t *testing.T) {
+	rows, err := WithMihomoSameBootNativeMeasurements(t.Context(), func(ctx context.Context) error {
+		var joined sync.WaitGroup
+		for range 32 {
+			finish := MihomoSameBootNativeCommandTiming(ctx, "kernel")
+			joined.Add(1)
+			go func() { defer joined.Done(); finish() }()
+		}
+		joined.Wait()
+		return nil
+	})
+	if err != nil || len(rows) != 1 || rows[0].Calls != 32 || rows[0].Phase != "source-command-kernel" || rows[0].Nanoseconds < 0 {
+		t.Fatal("concurrent diagnostic lost samples", err, rows)
 	}
 }

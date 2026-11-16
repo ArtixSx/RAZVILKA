@@ -56,6 +56,7 @@ func observeMihomoLiveColdProcesses(ctx context.Context, provider *netidentity.P
 			if image != nil {
 				return image.read(held)
 			}
+			defer mihomoSameBootMeasureContext(held, "source-self-sha")()
 			return mihomoColdFileHash(held, "/proc/self/exe")
 		}
 		selfHash, selfInfo, err := readSelf()

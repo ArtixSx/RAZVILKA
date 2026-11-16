@@ -89,10 +89,16 @@ func (o *mihomoSameBootCleanup) currentUnscoped(ctx context.Context) error {
 	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || !o.sourceCoordinatesCurrent() || o.effectUnknown {
 		return mihomoSameBootNativeFailure(ctx, "owner", ErrMihomoLiveRetirement)
 	}
-	if err := o.inputs.current(o.inputs.ctx); err != nil {
+	finishPrivate := mihomoSameBootNativeOwnerTiming(o, "source-lease-private")
+	inputsErr := o.inputs.current(o.inputs.ctx)
+	finishPrivate()
+	if err := inputsErr; err != nil {
 		return mihomoSameBootNativeFailure(ctx, "inputs-opening", err)
 	}
-	if err := o.planInputsCurrent(); err != nil {
+	finishPrivate = mihomoSameBootNativeOwnerTiming(o, "source-lease-private")
+	planErr := o.planInputsCurrent()
+	finishPrivate()
+	if err := planErr; err != nil {
 		return mihomoSameBootNativeFailure(ctx, "plan-inputs", err)
 	}
 	if o.policy != nil && o.policy.closeErr != nil {
@@ -100,15 +106,21 @@ func (o *mihomoSameBootCleanup) currentUnscoped(ctx context.Context) error {
 	}
 	if o.static != nil {
 		if !o.effectsClosed {
-			if err := o.static.current(); err != nil {
+			finishPrivate = mihomoSameBootNativeOwnerTiming(o, "source-lease-private")
+			staticErr := o.static.current()
+			finishPrivate()
+			if err := staticErr; err != nil {
 				return mihomoSameBootNativeFailure(ctx, "static-current", err)
 			}
 		} else if o.static.closeErr != nil {
 			return mihomoSameBootNativeFailure(ctx, "static-close", o.static.closeErr)
 		}
 	}
+	finishOwnerTools := mihomoSameBootNativeOwnerTiming(o, "source-lease-owner-tool")
+	readErr := o.read.current(ctx)
+	finishOwnerTools()
 	if err := errors.Join(
-		mihomoSameBootNativeFailure(ctx, "read-opening", o.read.current(ctx)),
+		mihomoSameBootNativeFailure(ctx, "read-opening", readErr),
 		mihomoSameBootNativeFailure(ctx, "control-opening", o.control.CurrentForCleanupOperation(ctx, o.cleanup)),
 	); err != nil {
 		return err
@@ -117,9 +129,16 @@ func (o *mihomoSameBootCleanup) currentUnscoped(ctx context.Context) error {
 	if err != nil || identity != o.inputs.definition.NetworkIdentity {
 		return mihomoSameBootNativeFailure(ctx, "processes", errors.Join(ErrMihomoLiveRetirement, err))
 	}
+	finishPrivate = mihomoSameBootNativeOwnerTiming(o, "source-lease-private")
+	inputsErr = o.inputs.current(o.inputs.ctx)
+	finishPrivate()
+	inputsErr = mihomoSameBootNativeFailure(ctx, "inputs-closing", inputsErr)
+	finishOwnerTools = mihomoSameBootNativeOwnerTiming(o, "source-lease-owner-tool")
+	readErr = o.read.current(ctx)
+	finishOwnerTools()
 	return errors.Join(
-		mihomoSameBootNativeFailure(ctx, "inputs-closing", o.inputs.current(o.inputs.ctx)),
-		mihomoSameBootNativeFailure(ctx, "read-closing", o.read.current(ctx)),
+		inputsErr,
+		mihomoSameBootNativeFailure(ctx, "read-closing", readErr),
 		mihomoSameBootNativeFailure(ctx, "control-closing", o.control.CurrentForCleanupOperation(ctx, o.cleanup)),
 	)
 }
