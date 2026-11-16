@@ -1179,3 +1179,12 @@ RAZVILKA_XRAY_NATIVE=/path/to/pinned-xray RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE=1 s
 Точные pin/setup, flags и режимы находятся в wg-empty-table-comparison.yml,
 source-read-comparison.yml и domain-router-direct.yml. Deadline production не
 изменены; generic CI, native Linux и router/LAN считаются отдельно.
+
+
+### 17.11: исходные дедлайны и отдельные границы стенда
+
+- Точный93463d85: общий CI43963543947 PASS; actual Mihomo LAN43963543994 PASS4/4. Manual Apply79.678/79.134с, Stop5.611/5.681с; два обязательных probes, replay refusal, прямой physical baseline восстановлен. Это новая ревизия, не аппаратная приёмка и не причинное сравнение с историческим4cc.
+- be7 sameboot43964362768: parent/private4/4 PASS, ACK6/10. Три race ACK превышают прежние120с при повторении уже завершённого префикса. Root перепроверил136 файлов manifest. Работа продолжается над узким exact pending ACK suffix; новый кеш evidence не вводится.
+- normal terminal-global не дошёл до consumer: ordinary umount вернул EBUSY. По [Linux man-pages6.19, umount(2)](https://man7.org/linux/man-pages/man2/umount.2.html) это busy mount; force/lazy меняют смысл завершения.432fc1c2 повторяет только EBUSY с прежним общим5с, каждый раз проверяя исходный private mount ID/dev/inode. Сам syscall в original bounded child (timeout/kill/Wait), flags0, без сигналов держателям mount.6 модельных контрактов PASS, actual Linux persistent own FD refusal→joined close→ordinary success включён в43968515807; результат ещё ожидается.
+- da0e369e: ровно один linker выбор debug/production-strip; default debug сохранён. ELF25.39% меньше, Go pclntab сохранён. ABBA43968451025 same-source/samehost с прежними publication12с и client4с; ошибки сохранены. Отдельный actual direct-deny уже PASS17.22с: положительный контроль observer, затем FORWARD DROP/OUTPUT ACCEPT и ноль outbound SYN при explicit EOF/reset, восстановление правила и join. Canceled-ready FAIL до successor cancellation witness, не считается готовностью recovery.
+- NFQ e52643967605929: ordinary ABBA4/4 service+cleanup PASS, candidate320/320/0 frames; чтений/байт меньше, median Execute7.602→7.802с (+2.63%). Race ещё выполняется. Уменьшение bytes само по себе не оправдывает принятие нового production механизма.

@@ -1,6 +1,6 @@
 # Сборки и поддержка запуска
 
-Актуальный код `022c73ef`, полный CI `7419b4e5` PASS:
+Актуальный код `432fc1c2`, полный CI `93463d85` PASS:
 [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
 На6cba actual pre-ledger и prepared-active recovery-only normal/race PASS;
@@ -25,7 +25,11 @@ ARM64 unchanged. Публичный URLv0.20.0 относится к будущ�
 на двухCPU ускорен примерно40%, totalCPU выше; router performance не проверен.
 Отдельный ce2 race parent43961200477 FAIL120.01с; ACK NOT_RUN.
 be7 сохраняет оба home absence bookends, убрав только соседний повтор;
-новый normal/race parent и все ACK43964362768 выполняются.
+43964362768 parent/private4/4 PASS, ACK6/10 PASS; три race ACK deadline120с,
+один normal fixture busy mount до consumer. Bounded fixture retry432 отдельно проверяется.
+93463d85 full actualLAN43963543994 PASS4/4; router acceptance отдельно.
+DNS da0 stripped direct-deny17.22с PASS (zeroSYN, restore, join),
+canceled-ready не достиг GEN2 witness; selected ABBA выполняется.
 WG7419 same-host full observer примерно−33%, обаengine/режима PASS; это не полныйApply.
 Роутер ожидает проверки изменившегося SSH host key владельцем.
 Старые таблицы ниже — история отдельных сценариев.

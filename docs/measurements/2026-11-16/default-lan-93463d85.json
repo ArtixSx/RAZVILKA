@@ -1,0 +1,58 @@
+{
+  "run_id": 43963543994,
+  "commit": "93463d857645a942c635c18cdbf7231261573c19",
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43963543994",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "live-native (postcas-failure)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133636917882
+    },
+    {
+      "name": "live-native (lifecycle)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133636918286
+    },
+    {
+      "name": "live-native (manual-http)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133636918289
+    },
+    {
+      "name": "live-native (check-settlement)",
+      "status": "completed",
+      "conclusion": "success",
+      "databaseId": 133636918399
+    }
+  ],
+  "candidate_exact_log_records": [
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:50:32.5387884Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=0 apply=1m25.590511397s mandatory_probes=2",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:51:12.9396474Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=6.167846457s closing_retry=false",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:51:12.9920852Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=2m6.045702277s fixture_elapsed=2m7.969915564s restored_physical_baseline=true",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:52:38.4453297Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=1 apply=1m25.451692008s mandatory_probes=2",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:53:18.8200966Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=1 stop=6.104304397s closing_retry=true",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:53:18.8730764Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=1 cycle=2m5.880935837s fixture_elapsed=4m13.850890373s restored_physical_baseline=true",
+    "live-native (lifecycle)\tActual registered Apply, native LAN TLS, Stop and retry\t2026-11-16T21:53:19.3482929Z --- PASS: TestMihomoLiveOriginalApplyStopAndFreshApply (254.33s)",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:50:08.4349653Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=0 apply=1m19.678376295s mandatory_probes=2",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:50:44.7989608Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=0 stop=5.611362887s closing_retry=false",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:50:44.8501790Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=0 cycle=1m56.094656189s fixture_elapsed=1m57.731173875s restored_physical_baseline=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:52:03.9861463Z     mihomo_live_native_linux_test.go:423: actual_mihomo_live round=1 apply=1m19.134174235s mandatory_probes=2",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:52:40.3565520Z     mihomo_live_native_linux_test.go:525: actual_mihomo_live round=1 stop=5.680948027s closing_retry=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:52:40.4091328Z     mihomo_live_native_linux_test.go:532: actual_mihomo_live round=1 cycle=1m55.559108639s fixture_elapsed=3m53.290311437s restored_physical_baseline=true",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:52:40.8829388Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (233.76s)",
+    "live-native (manual-http)\tExplicit manual preview, token Apply, LAN and HTTP Stop\t2026-11-16T21:52:41.1931344Z --- PASS: TestMihomoLiveOriginalManualHTTPApplyStop (233.76s)"
+  ],
+  "raw_root": "C:\\RAZVILKA-research-20261117\\accepted-lan-93463d85",
+  "raw_files": 39,
+  "raw_manifest_sha256": "6ed54830a5ee9fdada604b61efa548676d71a68dd201c650311a6b4fd2ca5a99",
+  "limits": [
+    "Original production service, Apply/Stop/retry on isolated physical namespace LAN; not router acceptance.",
+    "Historical4cc same-runner comparison differs in HEV and additional code; not causal performance proof.",
+    "Newer candidate revisions require their own checks."
+  ]
+}
