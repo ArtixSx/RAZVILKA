@@ -3,6 +3,9 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
+
 	"github.com/ArtixSx/razvilka/internal/netidentity"
 )
 
@@ -115,11 +118,131 @@ func (r *syntheticBaselineExecutionResource) compareInOriginalFileObservation(ct
 	if capture.self != capture || process.self != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
 		return ErrSyntheticBaselineTransition
 	}
-	result := withDomainTCPPreAddFiles(ctx, process, r, nil, false, func(files *xrayDomainTCPFileObservation) error {
-		return compare(ctx, files)
+	read := func(observed context.Context) error {
+		return withDomainTCPPreAddFiles(observed, process, r, nil, false, func(files *xrayDomainTCPFileObservation) error {
+			return compare(observed, files)
+		})
+	}
+	// This standalone comparison has no typed guard-loan consumer. Do not
+	// derive a new context from a present guard carrier or treat it as absent.
+	if ctx.Value(domainTCPGuardReadKey{}) != nil {
+		return ErrSyntheticBaselineTransition
+	}
+	// Existing private pre-Add loans require their EXACT context. Preserve that
+	// original validator, including refusal of a foreign/expired present key.
+	// Cleanup and custom tool producers retain the previous full-check path.
+	_, toolObserver := r.backend.reader.Runner.(domainTCPToolObserver)
+	if !toolObserver || ctx.Value(domainTCPPreAddKey{}) != nil || ctx.Value(domainTCPBaselineCleanupKey{}) != nil || ctx.Value(domainTCPCaptureCleanupKey{}) != nil || ctx.Value(domainTCPFailureCleanupKey{}) != nil {
+		result := read(ctx)
+		if r.capture != capture || capture.owner != owner || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
+			return errors.Join(result, ErrSyntheticBaselineTransition)
+		}
+		return result
+	}
+	material, binding, scope := process.material, r.binding, process.scope
+	listener := capture.listener
+	tools, backend, inspector, control, mapping := r.tools, r.backend, r.inspector, r.control, r.mapping
+	source, runner, toolRunner := owner.source, backend.reader.Runner, tools.Runner
+	association := func(observed context.Context) error {
+		if err := domainTCPBaselineCurrentReadContext(ctx, observed); err != nil {
+			return err
+		}
+		if r.capture != capture || capture.owner != owner || capture.xray != xray || xray.resource != process || process.material != material || material.binding != binding || r.binding != binding || process.scope != scope || binding.scope != scope || r.tools != tools || r.backend != backend || r.inspector != inspector || r.control != control || r.mapping != mapping || !sameNetworkPolicyDependency(owner.source, source) || !sameNetworkPolicyDependency(backend.reader.Runner, runner) || !sameNetworkPolicyDependency(tools.Runner, toolRunner) {
+			return ErrSyntheticBaselineTransition
+		}
+		return errors.Join(r.local(observed), capture.originalReadAssociation(observed, owner, xray, process, material, binding, listener))
+	}
+	if err := association(ctx); err != nil {
+		return err
+	}
+	// This encloses ONLY one of the two hardcoded pure comparisons. Full tool
+	// bytes bookend all its unchanged metadata/child/version/kernel callbacks;
+	// the revoked scope cannot reach the caller's record, Run or Start.
+	finish := domainTCPMeasure("baseline-standalone-tool-read")
+	var enteredOriginal atomic.Bool
+	result := domainTCPBaselineToolComparison(ctx, func(parent context.Context, use func(context.Context) error) error {
+		return r.observeTools(parent, func(observed context.Context) error {
+			// The actual outer tool producer derives this context before our
+			// callback protocol derives its cancellation child. Nested existing
+			// scopes and fallback do not count as a new standalone bracket.
+			if !sameNetworkPolicyDependency(observed, parent) {
+				enteredOriginal.Store(true)
+			}
+			return use(observed)
+		})
+	}, func(observed context.Context) error {
+		if err := association(observed); err != nil {
+			return err
+		}
+		return errors.Join(read(observed), association(observed))
 	})
-	if r.capture != capture || capture.owner != owner || capture.xray != xray || xray.resource != process || process.material == nil || process.material.binding != r.binding || process.scope != r.binding.scope {
-		return errors.Join(result, ErrSyntheticBaselineTransition)
+	result = errors.Join(result, association(ctx))
+	if result == nil && enteredOriginal.Load() {
+		finish(0) // Complete original body plus both file/tool closings only.
 	}
 	return result
+}
+
+// Keep the existing synchronous callback protocol: even an early-returning
+// observer cannot leave a comparison running after this helper returns.
+func domainTCPBaselineToolComparison(ctx context.Context, observe func(context.Context, func(context.Context) error) error, read func(context.Context) error) (result error) {
+	if ctx == nil || ctx.Err() != nil || observe == nil || read == nil {
+		return ErrSyntheticBaselineTransition
+	}
+	var mu sync.Mutex
+	open, entered, complete, misuse := true, false, false, false
+	var revoke context.CancelFunc
+	var bodyErr error
+	done := make(chan struct{})
+	// Also seals/cancels/joins on an observer panic. No callback owns this mutex.
+	defer func() {
+		mu.Lock()
+		open = false
+		didEnter, cancel := entered, revoke
+		mu.Unlock()
+		if didEnter {
+			select {
+			case <-done:
+			default:
+				mu.Lock()
+				misuse = true
+				mu.Unlock()
+				cancel()
+				<-done
+			}
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		result = errors.Join(result, bodyErr, ctx.Err())
+		if !didEnter || !complete || misuse {
+			result = errors.Join(result, ErrSyntheticBaselineTransition)
+		}
+	}()
+	return observe(ctx, func(ownerCtx context.Context) error {
+		mu.Lock()
+		if !open || entered || ownerCtx == nil {
+			misuse = true
+			mu.Unlock()
+			return ErrSyntheticBaselineTransition
+		}
+		entered = true
+		observed, cancel := context.WithCancel(ownerCtx)
+		revoke = cancel
+		mu.Unlock()
+		defer close(done)
+		defer cancel()
+		stop := context.AfterFunc(ctx, cancel)
+		defer stop()
+		if ctx.Err() != nil {
+			cancel()
+		}
+		err := domainTCPBaselineCurrentReadContext(ctx, observed)
+		if err == nil {
+			err = errors.Join(read(observed), domainTCPBaselineCurrentReadContext(ctx, observed))
+		}
+		mu.Lock()
+		bodyErr, complete = err, true
+		mu.Unlock()
+		return err
+	})
 }
