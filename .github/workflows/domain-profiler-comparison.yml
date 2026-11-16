@@ -1,7 +1,13 @@
 name: Matched DNS profiler comparison
-run-name: DNS profiler ABBA / ${{ github.sha }}
+run-name: DNS profiler / ${{ inputs.plan || 'abba' }} / ${{ github.sha }}
 on:
   workflow_dispatch:
+    inputs:
+      plan:
+        description: 'Matched ABBA or one original selected failure diagnosis'
+        type: choice
+        options: [abba, single-selected-off]
+        default: abba
   push:
     branches: ['work/dns-profiler-*']
     paths:
@@ -15,13 +21,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   matched:
-    name: Same runner profiler ABBA / ${{ matrix.scenario }}
+    name: Same runner profiler / ${{ matrix.scenario }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        scenario: [selected, canceled-ready]
+        scenario: ${{ fromJSON(inputs.plan == 'single-selected-off' && '["selected"]' || '["selected","canceled-ready"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -46,6 +52,7 @@ jobs:
         env:
           GOTOOLCHAIN: local
           SCENARIO: ${{ matrix.scenario }}
+          SAMPLE_PLAN: ${{ inputs.plan || 'abba' }}
         run: |
           set -euo pipefail
           mkdir -p -m 700 artifacts/profiler
@@ -63,7 +70,13 @@ jobs:
             *) exit 2 ;;
           esac
           overall=0
-          for sample in 1:1 2:0 3:0 4:1; do
+          case "$SAMPLE_PLAN" in
+            abba) samples='1:1 2:0 3:0 4:1' ;;
+            single-selected-off) test "$SCENARIO" = selected; samples='1:0' ;;
+            *) exit 2 ;;
+          esac
+          printf 'plan=%s\n' "$SAMPLE_PLAN" >> artifacts/profiler/source.txt
+          for sample in $samples; do
             slot=${sample%:*}; profile=${sample#*:}
             directory="$GITHUB_WORKSPACE/artifacts/profiler/$slot-$profile"
             mkdir -p -m 700 "$directory"

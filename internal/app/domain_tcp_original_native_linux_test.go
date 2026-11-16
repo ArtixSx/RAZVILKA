@@ -535,7 +535,8 @@ func runDomainTCPOriginalNative(t *testing.T, unpublished bool) {
 			stopRun()
 			if !joined {
 				select {
-				case <-runDone:
+				case runErr := <-runDone:
+					t.Logf("original Run result from existing deferred join (including peer failure): %v", runErr)
 				case <-time.After(15 * time.Second):
 					t.Error("original runtime did not join after fixture failure")
 				}
