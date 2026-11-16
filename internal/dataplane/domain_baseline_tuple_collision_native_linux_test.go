@@ -199,6 +199,52 @@ func TestDomainBaselineTupleCollisionNative(t *testing.T) {
 	}
 	exchange("control", false)
 	t.Log("DOMAIN_TUPLE_NO_EFFECT_CONTROL direct_echo=true same_client_port_different_destination=true")
+	// Mechanism experiment only: a separate ordinary router socket owns its
+	// source tuple. This is not admission evidence for per-device VPN policies.
+	ordinary, err := (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "tcp4", collisionReal+":443")
+	if err != nil {
+		t.Fatal("ordinary router connection", err)
+	}
+	defer ordinary.Close()
+	routerLocal, err := netip.ParseAddrPort(ordinary.LocalAddr().String())
+	if err != nil || routerLocal.Addr().String() != "1.1.1.1" || routerLocal.Port() == 0 || ordinary.RemoteAddr().String() != collisionReal+":443" {
+		t.Fatal("ordinary socket did not own router source tuple", ordinary.LocalAddr(), ordinary.RemoteAddr(), err)
+	}
+	// Keep all three connections open: the client has two destinations with
+	// the same source port, and the router has its independent outgoing stream.
+	exchange("control", false)
+	client.send(t, "router-fallback")
+	if err := accepted.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ordinary.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	prefix, err := bufio.NewReaderSize(accepted, 1024).ReadString('\n')
+	if err != nil || prefix != "router-fallback\n" {
+		t.Fatal("original accepted stream prefix", prefix, err)
+	}
+	if _, err := io.WriteString(ordinary, prefix); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := bufio.NewReaderSize(ordinary, 1024).ReadString('\n')
+	if err != nil || reply != prefix {
+		t.Fatal("router fallback payload", reply, err)
+	}
+	if _, err := io.WriteString(accepted, reply); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.read(t); got.Kind != "echo" || got.Value != "router-fallback" {
+		t.Fatal("original client did not receive fallback payload", got)
+	}
+	if got := server.read(t); got.Kind != "sent" || got.Value != "router-fallback" || got.OtherLocal != routerLocal.String() {
+		t.Fatal("real server did not observe router-owned source", got)
+	}
+	exchange("control", false)
+	t.Logf("DOMAIN_ROUTER_SOURCE_MECHANISM direct_echo=true fallback_echo=true simultaneous_same_client_port=true router_source=%s peer_policy_proven=false application_owner_proof=false", routerLocal)
+	if err := ordinary.Close(); err != nil {
+		t.Fatal("ordinary router socket close", err)
+	}
 	_, capture := domainTCPBaselineKernelModel(t)
 	capture.Client.Address, capture.Client.Interface = netip.MustParseAddr(collisionClient), "lan0"
 	capture.Xray.RealIP = netip.MustParseAddr(collisionReal)
@@ -315,7 +361,7 @@ func TestDomainBaselineTupleCollisionNativeHelper(t *testing.T) {
 				}
 				mu.Lock()
 				conns = append(conns, conn)
-				tooMany := len(conns) > 2
+				tooMany := len(conns) > 3
 				mu.Unlock()
 				if tooMany {
 					_ = conn.Close()
@@ -332,7 +378,7 @@ func TestDomainBaselineTupleCollisionNativeHelper(t *testing.T) {
 						if _, err := io.WriteString(conn, text+"\n"); err != nil {
 							return
 						}
-						emit(collisionMessage{Kind: "sent", Value: text})
+						emit(collisionMessage{Kind: "sent", Value: text, OtherLocal: conn.RemoteAddr().String()})
 					}
 				}()
 			}
@@ -381,12 +427,15 @@ func TestDomainBaselineTupleCollisionNativeHelper(t *testing.T) {
 		if command == "stop" {
 			return
 		}
-		if command != "control" && command != "second-port" && command != "collision" {
+		if command != "control" && command != "second-port" && command != "collision" && command != "router-fallback" {
 			t.Fatal("unknown client command")
 		}
 		conn := direct
 		if command == "second-port" {
 			conn = other
+		}
+		if command == "router-fallback" {
+			conn = synthetic
 		}
 		if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)

@@ -28,7 +28,7 @@ timeout --kill-after=5s 50s unshare --fork --pid --net --mount sh -eu -c '
 ' tuple-collision "$work/dataplane.test" >"$work/native.log" 2>&1 || status=$?
 cat "$work/native.log"
 if grep -F -- '--- SKIP:' "$work/native.log"; then status=1; fi
-for marker in '--- PASS: TestDomainBaselineTupleCollisionNative ' DOMAIN_TUPLE_NO_EFFECT_CONTROL DOMAIN_TUPLE_SECOND_PORT_CONTROL DOMAIN_TUPLE_COLLISION_CONFIRMED DOMAIN_TUPLE_CLEANUP; do
+for marker in '--- PASS: TestDomainBaselineTupleCollisionNative ' DOMAIN_TUPLE_NO_EFFECT_CONTROL DOMAIN_ROUTER_SOURCE_MECHANISM DOMAIN_TUPLE_SECOND_PORT_CONTROL DOMAIN_TUPLE_COLLISION_CONFIRMED DOMAIN_TUPLE_CLEANUP; do
   if ! grep -F -- "$marker" "$work/native.log" >/dev/null; then status=1; fi
 done
 exit "$status"
