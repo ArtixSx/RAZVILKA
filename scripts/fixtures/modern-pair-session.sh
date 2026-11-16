@@ -73,6 +73,39 @@ spec={'source_sha256':digest(root/'source'),'candidate_sha256':digest(root/'cand
 p=root/'modern-pair-native.json';p.write_text(json.dumps(spec));p.chmod(0o600)
 hosts=root/'modern-hosts';hosts.write_text('127.0.0.1 localhost\n::1 localhost\n93.184.216.34 api.github.com github.com\n');hosts.chmod(0o600)
 PY
+# The normal installer migrates the copied example before its first daemon
+# start. Loading schema1 only normalizes RAM; ordinary preparation deliberately
+# compares its reviewed config fingerprint with the actual source on disk.
+# Reproduce that real installation step, outside the later update/rollback.
+migrate_source() {
+ /opt/bin/razvilka -migrate-config \
+  -config /opt/etc/razvilka/config.json \
+  -custom-services /opt/etc/razvilka/custom-services.json \
+  -devices /opt/etc/razvilka/devices.json \
+  -stage /opt/razvilka/state/staging \
+  -warp-state /opt/razvilka/state/warp \
+  -cloudflare-state /opt/etc/razvilka/cloudflare-private \
+  -catalog /opt/etc/razvilka/service-catalog.json \
+  -sources /opt/etc/razvilka/sources.json \
+  -community-catalog /opt/etc/razvilka/community-catalog.json
+}
+migrate_source >"$work/source-migration.json"
+cp /opt/etc/razvilka/config.json "$work/source-config-migrated.json"
+migrate_source >"$work/source-migration-repeat.json"
+python3 - "$work" <<'PY'
+import json,pathlib,sys
+root=pathlib.Path(sys.argv[1])
+first=json.loads((root/'source-migration.json').read_bytes())
+repeat=json.loads((root/'source-migration-repeat.json').read_bytes())
+assert first['ok'] is True and first['version']=='0.20.0' and first['migrated'] is True
+assert repeat['ok'] is True and repeat['version']=='0.20.0' and repeat['migrated'] is False
+wire=pathlib.Path('/opt/etc/razvilka/config.json').read_bytes()
+assert wire==(root/'source-config-migrated.json').read_bytes()
+cfg=json.loads(wire)
+assert cfg['schema_version']==2 and cfg['revision']==1 and cfg['safe_mode'] is False
+assert cfg['service_control']['stopped'] is False
+print('actual_modern_source_config migrated_by_source=true repeat_unchanged=true revision_preserved=true')
+PY
 # No external interface/default route exists. Both names resolve only to the
 # fixture's soon-to-be-created local address; production DNS/TLS is unchanged.
 mount --bind "$work/modern-hosts" /etc/hosts

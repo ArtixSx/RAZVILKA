@@ -14,10 +14,10 @@ go build -tags razvilka_native_fixture -ldflags="-s -w -X github.com/ArtixSx/raz
 go build -tags razvilka_native_fixture -ldflags="-s -w -X github.com/ArtixSx/razvilka/internal/app.Version=0.20.1 -X github.com/ArtixSx/razvilka/internal/app.BuildCommit=$source_sha" -o "$work/candidate" ./cmd/razvilka
 go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$work/cmd.test" ./cmd/razvilka
 hook_status=0
-go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeModern' -count=1 -v >"$work/hooks.log" 2>&1 || hook_status=$?
+go test -tags razvilka_native_fixture ./internal/updatecheck -run '^TestNativeModern|^TestOrdinaryPreparationInstalledSourceConfigMigration$' -count=1 -v >"$work/hooks.log" 2>&1 || hook_status=$?
 cat "$work/hooks.log"
 test "$hook_status" -eq 0
-for name in TestNativeModernPublishedHandoff TestNativeModernAbsentAndInvalidMarker TestNativeModernClosedCommandList; do
+for name in TestNativeModernPublishedHandoff TestNativeModernAbsentAndInvalidMarker TestNativeModernClosedCommandList TestOrdinaryPreparationInstalledSourceConfigMigration; do
  grep -F -- "--- PASS: $name " "$work/hooks.log"
 done
 if grep -E '^[[:space:]]*--- SKIP:' "$work/hooks.log"; then exit 1; fi
@@ -54,6 +54,7 @@ status=0
 unshare --mount --net /bin/sh "$repo/scripts/fixtures/modern-pair-session.sh" "$work" "$repo" outer >"$work/native.log" 2>&1 || status=$?
 cat "$work/native.log"
 test "$status" -eq 0
+grep -Fx 'actual_modern_source_config migrated_by_source=true repeat_unchanged=true revision_preserved=true' "$work/native.log"
 grep -F 'actual_modern_public_pair rollback=true source_live_restored=true candidate_live_observed=true original_post_live_fault=true original_receipt=true draft_bytes_preserved=true all_panels_joined=true same_source_lab_versions=true official_release_provenance=false router_ready=false' "$work/native.log"
 grep -F -- '--- PASS: TestNativeModernPublicRollback ' "$work/native.log"
 if grep -E '^[[:space:]]*--- SKIP:' "$work/native.log"; then exit 1; fi
