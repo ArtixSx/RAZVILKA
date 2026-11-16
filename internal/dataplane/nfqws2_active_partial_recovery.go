@@ -109,6 +109,9 @@ func (e *nfqws2ActiveExecution) settleNeverIssuedPolicy(ctx context.Context) err
 	if err != nil || c == nil {
 		return err
 	}
+	if c.preLedger != nil && c.preLedger.phase != nfqPreLedgerDisarmed {
+		return c.settlePreLedger(ctx, func() error { return e.verifyNeverIssuedPrefix(ctx, c) })
+	}
 	return c.settleNeverIssued(ctx, func() error { return e.verifyNeverIssuedPrefix(ctx, c) })
 }
 
@@ -174,6 +177,9 @@ func (e *nfqws2ActiveExecution) verifyNeverIssuedPrefix(ctx context.Context, c *
 		}
 		if err := e.binding.checkQueue(ctx, p, nil); err != nil {
 			return err
+		}
+		if c.preLedgerUnpublished() {
+			return c.preLedgerAbsent(ctx)
 		}
 		return c.documentCurrent(ctx)
 	}

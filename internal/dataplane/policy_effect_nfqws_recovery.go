@@ -20,6 +20,7 @@ type nfqwsPolicyRecovery struct {
 	mu              sync.Mutex
 	execution       *nfqws2ActiveExecution
 	preAdd          *nfqws2ActivePreAddRead
+	preLedger       *nfqwsPreLedgerWitness
 	session         *policyEffectSession
 	index           int
 	entered         bool
@@ -69,6 +70,13 @@ func (c *nfqwsPolicyRecovery) intent(index int) {
 }
 
 func (c *nfqwsPolicyRecovery) finishApply() {
+	if w := c.preLedger; w != nil && w.self == w && w.owner == c && w.session != nil && w.borrow != nil && w.phase == nfqPreLedgerArmed {
+		c.retained = true // Issued custody survives a later source-association refusal.
+		if !c.preLedgerArmed() {
+			c.fenced = true
+		}
+		return
+	}
 	// This is a private control-flow witness, not inference from kernel state.
 	// Even an unsuccessful intent publication retains custody but cannot settle
 	// unless the actual authored inode/image is subsequently proven exact.
@@ -131,9 +139,14 @@ func (c *nfqwsPolicyRecovery) close() {
 		c.pending.Close()
 		c.pending = nil
 	}
-	if c.retained && c.session != nil {
-		c.session.borrow.close()
-		c.session.close()
+	if c.retained {
+		if w := c.preLedger; w != nil && w.self == w && w.owner == c && w.session != nil && w.borrow != nil {
+			w.borrow.close()
+			w.session.close()
+		} else if c.session != nil {
+			c.session.borrow.close()
+			c.session.close()
+		}
 	}
 }
 
@@ -157,6 +170,13 @@ func (c *nfqwsPolicyRecovery) save(ctx context.Context, s *policyEffectSession) 
 	}
 	if err := s.fault("nfq-original-before-write", c.index); err != nil {
 		return err
+	}
+	// The callback above may have introduced a foreign receipt or changed
+	// the original planned document. Never overwrite it in the new path.
+	if c.preLedger != nil && c.preLedger.phase == nfqPreLedgerPublishing && c.publication == 0 {
+		if err := c.preLedgerAbsent(ctx); err != nil {
+			return err
+		}
 	}
 	file, attempted, err := s.root.WriteAtomicRetainedAttempted(policyAdditionFile, raw, 0600)
 	c.renameAttempted = c.renameAttempted || attempted

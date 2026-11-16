@@ -519,6 +519,7 @@ func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyE
 	s.borrow = borrow
 	if recovery != nil {
 		s.nfqRecovery, recovery.session = recovery, s
+		recovery.armPreLedger(s, runtime)
 		defer recovery.finishApply()
 	}
 	ctx = context.WithValue(ctx, policyEffectReceiptBorrowKey{}, borrow)
@@ -533,19 +534,12 @@ func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyE
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	boot, err := s.options.boot()
-	if err != nil || boot == "" {
-		return ErrPolicyAdditionReceipt
+	if recovery != nil {
+		recovery.disarmPreLedger()
 	}
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return ErrPolicyAdditionReceipt
+	if err := s.initializeDocument(root); err != nil {
+		return err
 	}
-	steps := make([]policyAdditionStep, len(s.plan.Effects))
-	for i, effect := range s.plan.Effects {
-		steps[i] = policyAdditionStep{Tool: effect.Tool, Add: effect.Add, Delete: effect.Delete, Needs: effect.Needs, State: "planned"}
-	}
-	s.doc = policyAdditionDocument{Schema: 2, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: s.plan.Generation, EffectsHash: s.hash, RootHash: policyAdditionRootHash(root), Phase: "active", Steps: steps}
 	borrow.requireDocument()
 	if err := s.save(ctx); err != nil {
 		return err
@@ -559,6 +553,31 @@ func applyPolicyEffectsWithOriginalRecovery(ctx context.Context, runtime PolicyE
 		return ErrPolicyAdditionUnknown
 	}
 	return ctx.Err()
+}
+
+func (s *policyEffectSession) initializeDocument(root string) error {
+	document, err := s.newDocument(root)
+	if err != nil {
+		return err
+	}
+	s.doc = document
+	return nil
+}
+
+func (s *policyEffectSession) newDocument(root string) (policyAdditionDocument, error) {
+	boot, err := s.options.boot()
+	if err != nil || boot == "" {
+		return policyAdditionDocument{}, ErrPolicyAdditionReceipt
+	}
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return policyAdditionDocument{}, ErrPolicyAdditionReceipt
+	}
+	steps := make([]policyAdditionStep, len(s.plan.Effects))
+	for i, effect := range s.plan.Effects {
+		steps[i] = policyAdditionStep{Tool: effect.Tool, Add: effect.Add, Delete: effect.Delete, Needs: effect.Needs, State: "planned"}
+	}
+	return policyAdditionDocument{Schema: 2, ID: hex.EncodeToString(nonce[:]), Boot: boot, Generation: s.plan.Generation, EffectsHash: s.hash, RootHash: policyAdditionRootHash(root), Phase: "active", Steps: steps}, nil
 }
 
 func RemovePolicyEffectsWithReceipt(ctx context.Context, runtime PolicyEffectRuntime, plan PolicyEffectPlan, root string) error {
