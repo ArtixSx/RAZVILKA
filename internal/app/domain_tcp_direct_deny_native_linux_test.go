@@ -30,7 +30,7 @@ type domainDirectSYNReply struct {
 
 // This observer adds no packet rules, BPF programs, listener or routing state.
 // Its sole AF_PACKET FD lives in the existing disposable server namespace.
-func TestDomainTCPDirectNativeSYNObserver(t *testing.T) {
+func TestDomainOriginalDirectNativeSYNObserver(t *testing.T) {
 	if os.Getenv("RAZVILKA_DOMAIN_SYN_OBSERVER") != "1" {
 		t.Skip("isolated passive observer role")
 	}
@@ -140,7 +140,7 @@ func domainOriginalDirectDeny(t *testing.T, ctx context.Context, peers *domainOr
 		t.Fatal(errors.Join(err, parentErr))
 	}
 	defer control.Close()
-	command := exec.CommandContext(ctx, "ip", "netns", "exec", peers.server, os.Args[0], "-test.run=^TestDomainTCPDirectNativeSYNObserver$", "-test.v", "-test.timeout=30s")
+	command := exec.CommandContext(ctx, "ip", "netns", "exec", peers.server, os.Args[0], "-test.run=^TestDomainOriginalDirectNativeSYNObserver$", "-test.v", "-test.timeout=30s")
 	command.Env = append(os.Environ(), "RAZVILKA_DOMAIN_SYN_OBSERVER=1")
 	command.ExtraFiles = []*os.File{childFile}
 	logPath := peers.root + "/direct-syn-observer.log"
