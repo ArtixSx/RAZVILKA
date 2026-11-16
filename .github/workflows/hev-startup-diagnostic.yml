@@ -1,0 +1,67 @@
+name: Standalone pinned HEV startup diagnostic
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Disposable hosted image; does not change original acceptance'
+        type: choice
+        options: [ubuntu-26.04, ubuntu-24.04]
+        default: ubuntu-26.04
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Prepare isolated diagnostic prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace util-linux iproute2 curl ca-certificates
+          sudo modprobe tun
+          sh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/razvilka-hev-diagnostic
+          chmod 0755 /tmp/razvilka-hev-diagnostic
+      - name: Fixed untraced and separate traced populations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; strace -V; } > artifacts/platform.txt
+          status=0
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/tmp/razvilka-hev-diagnostic \
+            sh scripts/test-hev-startup-diagnostic-native.sh 2>&1 | tee artifacts/diagnostic.txt || status=$?
+          if grep -F -- '--- SKIP:' artifacts/diagnostic.txt; then status=1; fi
+          for name in TestHEVStartupDiagnosticClosedTrace TestHEVStartupDiagnosticPopulation; do
+            if ! grep -F -- "--- PASS: $name " artifacts/diagnostic.txt; then status=1; fi
+          done
+          python3 - <<'PY' || status=1
+          import json, pathlib
+          text=pathlib.Path('artifacts/diagnostic.txt').read_text()
+          marker='standalone_hev_startup '
+          rows=[json.loads(line.split(marker,1)[1]) for line in text.splitlines() if marker in line]
+          pathlib.Path('artifacts/closed-results.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert len(rows)==16, 'fixed populations incomplete'
+          for mode in ['untraced','traced-diagnostic']:
+              population=[r for r in rows if r['mode']==mode]
+              assert [r['sample'] for r in population]==list(range(8))
+          assert all(r['cleanup_verified'] and r['tun_observed'] and not r['exited_before_stop'] and not r['forced_kill'] and r['exit_code']==0 and r['signal']==0 for r in rows), 'actual startup/stop failure retained'
+          assert all(r['trace']['calls'] and not r['trace']['truncated'] for r in rows if r['mode']=='traced-diagnostic'), 'bounded diagnostic trace incomplete'
+          PY
+          printf 'diagnostic_exit=%s route_readiness_claim=false\n' "$status" > artifacts/outcome.txt
+          exit "$status"
+      - name: Preserve closed outcomes, never raw trace buffers
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hev-startup-diagnostic-${{ github.sha }}-${{ inputs.runner }}
+          path: artifacts
+          if-no-files-found: error
