@@ -484,21 +484,55 @@ func (a *audit) taskStart(tidFD, tid int, rootMount uint64) (uint64, bool) {
 	if !ok {
 		return 0, false
 	}
-	text := string(data)
-	left, right := strings.IndexByte(text, '('), strings.LastIndex(text, ") ")
+	return taskStartFromStat(data, tid)
+}
+
+// Parse only the required field from this freshly read stat image. The kernel
+// emits ASCII separators; retain strings.Fields for unusual input so its exact
+// Unicode whitespace and numeric acceptance remain unchanged. No read, result
+// or authority is reused across either process/thread identity bookend.
+func taskStartFromStat(data []byte, tid int) (uint64, bool) {
+	left, right := bytes.IndexByte(data, '('), bytes.LastIndex(data, []byte(") "))
 	if left < 1 || right <= left {
 		return 0, false
 	}
-	actual, err := strconv.Atoi(strings.TrimSpace(text[:left]))
+	actual, err := strconv.Atoi(strings.TrimSpace(string(data[:left])))
 	if err != nil || actual != tid {
 		return 0, false
 	}
-	fields := strings.Fields(text[right+2:])
+	tail := data[right+2:]
+	field := 0
+	for offset := 0; offset < len(tail); {
+		if tail[offset] >= 0x80 {
+			break // Fall back to the original Unicode-aware field semantics.
+		}
+		if taskStatSpace(tail[offset]) {
+			offset++
+			continue
+		}
+		start := offset
+		for offset < len(tail) && tail[offset] < 0x80 && !taskStatSpace(tail[offset]) {
+			offset++
+		}
+		if offset < len(tail) && tail[offset] >= 0x80 {
+			break
+		}
+		if field == 19 { // stat field 22; field 3 is index 0.
+			value, parseErr := strconv.ParseUint(string(tail[start:offset]), 10, 64)
+			return value, parseErr == nil
+		}
+		field++
+	}
+	fields := strings.Fields(string(tail))
 	if len(fields) < 20 {
 		return 0, false
 	}
 	start, err := strconv.ParseUint(fields[19], 10, 64) // field 22; field 3 is index 0.
 	return start, err == nil
+}
+
+func taskStatSpace(b byte) bool {
+	return b == ' ' || b >= '\t' && b <= '\r'
 }
 
 func (a *audit) bootID(randomFD int, rootMount uint64) ([]byte, bool) {

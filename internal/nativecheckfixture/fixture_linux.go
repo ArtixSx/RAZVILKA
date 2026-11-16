@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -54,6 +55,10 @@ type Fixture struct {
 }
 
 func Start(t *testing.T) *Fixture {
+	return start(t, nil)
+}
+
+func start(t *testing.T, tlsLog *log.Logger) *Fixture {
 	t.Helper()
 	self, e1 := os.Readlink("/proc/self/ns/net")
 	host, e2 := os.Readlink("/proc/1/ns/net")
@@ -91,7 +96,7 @@ func Start(t *testing.T) *Fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	https := &http.Server{Handler: http.HandlerFunc(f.serve), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, ReadHeaderTimeout: 5 * time.Second}
+	https := &http.Server{Handler: http.HandlerFunc(f.serve), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, ReadHeaderTimeout: 5 * time.Second, ErrorLog: tlsLog}
 	t.Cleanup(func() { _ = https.Close(); _ = listener.Close() })
 	go func() { _ = https.ServeTLS(listener, cert, key) }()
 	server := map[string]any{"log": map[string]any{"loglevel": "warning", "access": "none"}, "dns": map[string]any{"hosts": map[string]any{"service.example": HTTPSIP, "api.ipify.org": HTTPSIP, "www.cloudflare.com": HTTPSIP}}, "inbounds": []any{map[string]any{"listen": ServerIP, "port": ServerPort, "protocol": "vless", "settings": map[string]any{"clients": []any{map[string]any{"id": UUID}}, "decryption": "none"}, "streamSettings": map[string]any{"network": "xhttp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": cert, "keyFile": key}}, "alpn": []string{"h2", "http/1.1"}}, "xhttpSettings": map[string]any{"host": "front.example", "path": "/native-perf", "mode": "packet-up"}}}}, "outbounds": []any{map[string]any{"protocol": "freedom", "sendThrough": ExitIP, "settings": map[string]any{"domainStrategy": "UseIPv4"}}}}

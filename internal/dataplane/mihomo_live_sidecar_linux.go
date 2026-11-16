@@ -124,7 +124,7 @@ func newMihomoLiveSidecar(ctx context.Context, r *mihomoLiveResource, spec Proce
 	n.command.Args[0], n.command.Dir = spec.Binary, spec.Dir
 	n.command.Env = []string{}
 	n.command.ExtraFiles = []*os.File{n.binary, n.profile}
-	n.command.Stdout, n.command.Stderr = io.Discard, io.Discard
+	mihomoLiveSidecarConfigureOutput(n)
 	return n, nil
 }
 
@@ -142,7 +142,12 @@ func (n *mihomoLiveSidecar) start(ctx context.Context) error {
 			return err
 		}
 		n.started = true
-		go func() { n.waitErr = n.command.Wait(); n.state = n.command.ProcessState; close(n.done) }()
+		go func() {
+			n.waitErr = n.command.Wait()
+			n.state = n.command.ProcessState
+			mihomoLiveSidecarFinishOutput(n)
+			close(n.done)
+		}()
 		return nil
 	}); err != nil {
 		return mihomoLiveSidecarDiagnostic("sidecar-start-control", err)
@@ -348,6 +353,9 @@ func (n *mihomoLiveSidecar) cleanup(ctx context.Context, review *operationgate.E
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	// The original join is already complete, including a child that exited
+	// before its start receipt could be recorded. Normal builds are a no-op.
+	mihomoLiveSidecarExitDiagnostic(n)
 	if !xraySelectedTCPWaitResult(n.command.Process.Pid, n.state, n.waitErr) || originalProcessPIDAbsent(n.command.Process.Pid) != nil {
 		return errMihomoLiveMaterial
 	}

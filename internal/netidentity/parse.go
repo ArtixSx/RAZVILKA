@@ -105,11 +105,12 @@ func mountLayoutOK(data []byte, rootID uint64, paths []string) bool {
 	if len(lines) > 8192 {
 		return false
 	}
+	var fieldStorage [16]string
 	for _, line := range lines {
 		if len(line) > 65536 {
 			return false
 		}
-		fields := strings.Fields(line)
+		fields := mountFields(line, fieldStorage[:0])
 		if len(fields) < 10 {
 			return false
 		}
@@ -153,6 +154,36 @@ func mountLayoutOK(data []byte, rootID uint64, paths []string) bool {
 		}
 	}
 	return rootSeen
+}
+
+// The ordinary ASCII mountinfo line fits this caller-owned scratch. Return
+// substrings of the same immutable input, never a retained observation. Long
+// optional-field lists and every non-ASCII byte use the original Fields parser
+// so Unicode whitespace, malformed UTF-8 and unbounded field counts keep their
+// existing meaning. Unlike FieldsSeq, the common path scans each byte once.
+func mountFields(line string, fields []string) []string {
+	for offset := 0; offset < len(line); {
+		if line[offset] >= 0x80 {
+			return strings.Fields(line)
+		}
+		if mountFieldSpace(line[offset]) {
+			offset++
+			continue
+		}
+		start := offset
+		for offset < len(line) && line[offset] < 0x80 && !mountFieldSpace(line[offset]) {
+			offset++
+		}
+		if offset < len(line) && line[offset] >= 0x80 || len(fields) == cap(fields) {
+			return strings.Fields(line)
+		}
+		fields = append(fields, line[start:offset])
+	}
+	return fields
+}
+
+func mountFieldSpace(b byte) bool {
+	return b == ' ' || b >= '\t' && b <= '\r'
 }
 
 func mountUnescape(s string) (string, bool) {

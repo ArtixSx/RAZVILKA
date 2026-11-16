@@ -38,6 +38,24 @@ jobs:
           go test -count=50 -v ./internal/app -run '^(TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction|TestServiceEvidenceDoesNotPromoteExpiredProbe)$' | tee artifacts/committed-evidence.txt
           go test -race -count=50 -v ./internal/app -run '^(TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction|TestServiceEvidenceDoesNotPromoteExpiredProbe)$' | tee artifacts/committed-evidence-race.txt
           go test -tags razvilka_native_fixture -count=1 -v ./internal/netidentity -run '^TestAuditCapacityCandidateSourceParity$' | tee artifacts/capacity-parity.txt
+      - name: Closed sidecar diagnostics and Stop during paired rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -v ./internal/dataplane -run '^TestMihomoSidecarOutputNormalBuildDiscards$' | tee artifacts/sidecar-normal.txt
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            go test "${race_flag[@]}" -tags razvilka_native_fixture -count=20 -v ./internal/dataplane ./internal/nativecheckfixture \
+              -run '^TestMihomoSidecarOutput|^TestTLSObservation' | tee "artifacts/closed-diagnostics-$mode.txt"
+            sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=1 -v ./internal/updatecheck \
+              -run '^TestNativeCandidateStoppedCompletionTwoCuts/(strategy-rollback-files|strategy-rollback-private)$' | tee "artifacts/rollback-stop-$mode.txt"
+            for cut in strategy-rollback-files strategy-rollback-private; do
+              grep -F -- "--- PASS: TestNativeCandidateStoppedCompletionTwoCuts/$cut " "artifacts/rollback-stop-$mode.txt"
+            done
+            if grep -F -- '--- SKIP:' "artifacts/rollback-stop-$mode.txt" "artifacts/closed-diagnostics-$mode.txt"; then exit 1; fi
+          done
       - name: Matched pure calculation measurement
         shell: bash
         run: |
@@ -45,10 +63,59 @@ jobs:
           # Both formulas use the same immutable input in one binary. This is
           # parser-only cost, not syscall/capture/LAN latency. Fixed order.
           go test ./internal/netidentity -run '^$' -bench '^BenchmarkMountLayoutBracketCalculation$' -benchmem -benchtime=300ms -count=5 | tee artifacts/mount-calculation.txt
+          go test ./internal/netidentity -run '^$' -bench '^(BenchmarkTaskStartParse|BenchmarkMountFields|BenchmarkMountLayoutFields)$' -benchmem -benchtime=300ms -count=5 | tee artifacts/parser-calculation.txt
       - name: Preserve evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: identity-contract-${{ github.sha }}
           path: artifacts/
+          if-no-files-found: error
+  live-tls-repetition:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Prepare pinned loopback-only native fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y iproute2 util-linux unzip
+          sh scripts/fetch-native-fixture.sh xray-26.3.27 /tmp/xray-repeat.zip
+          echo '23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae  /tmp/xray-repeat.zip' | sha256sum --check --strict
+          unzip /tmp/xray-repeat.zip xray -d /tmp/xray-repeat
+          sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
+          sudo install -m 0555 /tmp/xray-repeat/xray /usr/local/lib/razvilka-fixtures/xray
+          GOTOOLCHAIN=local go test -tags razvilka_native_fixture -c -o /tmp/razvilka-tls-repeat.test ./internal/dataplane
+      - name: One fixed population of one hundred real live checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/tls-repeat
+          sudo env RAZVILKA_NODE_NATIVE_TLS_REPEAT=1 RAZVILKA_XRAY_NETNS=1 \
+            RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            unshare --net --mount sh -eu -c '
+              mount --make-rprivate /
+              ip link set lo up
+              ip addr add 93.184.216.11/32 dev lo
+              ip addr add 93.184.216.12/32 dev lo
+              ip addr add 93.184.216.13/32 dev lo
+              exec /tmp/razvilka-tls-repeat.test -test.run "^TestNativeVLESSRepeatedLiveTLS$" -test.v -test.timeout=12m
+            ' 2>&1 | tee artifacts/tls-repeat/native.log
+          grep -F -- '--- PASS: TestNativeVLESSRepeatedLiveTLS ' artifacts/tls-repeat/native.log
+          test "$(grep -Fc -- 'native_tls_repeat sample=' artifacts/tls-repeat/native.log)" -eq 100
+          if grep -F -- '--- SKIP:' artifacts/tls-repeat/native.log; then exit 1; fi
+      - name: Preserve all completed samples and original failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: live-tls-repetition-${{ github.sha }}
+          path: artifacts/tls-repeat
           if-no-files-found: error
