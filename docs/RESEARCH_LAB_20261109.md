@@ -952,3 +952,37 @@ Generic CI `33de2dde` run43908375410 и `74c7a0c0` run43909060138 PASS.
 прежние проверки. Итоговый интегрированный SHA обязательно проходит полный
 CI отдельно; focused/native PASS его не заменяет. Лишние generic runs
 0652/7231/e4e отменены, их статус — CANCELLED, не PASS.
+
+
+## 16.11: fresh mount identity и воспроизводимая упаковка HEV
+
+На7a338026 тот же подход, уже применённый в netidentity/Xray selected TCP,
+перенесён в inactive process observer: fresh statx(held FD, empty path,
+AT_EMPTY_PATH, STATX_MNT_ID). Каждый вызов сначала подтверждает удерживаемый
+fdinfo; old-kernel/отсутствующий mask сохраняет исходный bounded fdinfo reader.
+Zero ID и неожиданные ошибки отказывают. Нет кэша результатов или доступности
+syscall. Называемые anchors, inode/mount, namespace, birth, Threads и закрытие
+не переставлены. На modern path отдельная читаемость fdinfo/<fd> больше не
+условие: mount получается непосредственно с удерживаемого FD.
+
+Независимое source review сопоставило Linux v6.1
+[fs/stat.c](https://github.com/torvalds/linux/blob/v6.1/fs/stat.c#L188-L236),
+[fs/namei.c](https://github.com/torvalds/linux/blob/v6.1/fs/namei.c#L2406-L2428)
+и [fs/proc/fd.c](https://github.com/torvalds/linux/blob/v6.1/fs/proc/fd.c#L52-L60).
+Исходники Linux не копировались; новый adapter написан в проекте.
+Actual normal/race43945773992: O_PATH magic-link/followed NSFS parity,
+повторное использование FD,5 same-inode bind fences,live worker/Z1/exec PASS.
+Команда leaf comparison:
+`go test ./internal/dataplane -run '^TestInactiveProcMountID' -bench '^BenchmarkInactiveProcMountIDPair$' -benchmem -benchtime=200ms -count=10 -v`
+(отдельно с `-race`). [Числа и границы](measurements/2026-11-16/inactive-statx-7a338026.json).
+Это не full lifecycle/router proof и не замер Linux4.9.
+
+HEV9da0e4e2: `build-hev-runtime-altstack-lab.sh` →
+`prepare-hev-vendor-assets.py --repo ... --build-dir ... --output NEW_DIR`.
+Два fresh Linux builder43945667501 подтвердили точный ELF1170182f…,
+полные129 notices и LICENSE,143 regular archive members/142 SHA.
+Повторная упаковка одинаковых inputs побайтно одинакова; preserved build logs
+различаются между hosts, поэтому source archives не обязаны иметь общий SHA.
+Ссылки/версии/лицензии закреплены в manifest, полный source и patch включены.
+[Проверки](measurements/2026-11-16/hev-vendor-9da0e4e2.json).
+Default pin, ARM64 и router admission не изменены.

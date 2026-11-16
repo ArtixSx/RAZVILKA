@@ -1,0 +1,192 @@
+{
+  "run": 43942216723,
+  "head": "9de733cf62f48274441c7f722c66228e6aa462f4",
+  "comparison": "same-source baseline-tools only",
+  "scenarios": {
+    "selected": {
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": false,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "selected_returned": true,
+          "failure": "mismatch4s",
+          "full_test_seconds": 23.56,
+          "native_log_sha256": "9400e8452975b178e5b689e944652ac4113311a2e308bf33859400b515f9b1fd"
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": true,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "selected_returned": true,
+          "failure": "mismatch4s",
+          "full_test_seconds": 23.33,
+          "native_log_sha256": "53927835d86d99e4ac271744820e074ca3595968d16aa1cd1279718f4eaae0e8"
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": true,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "selected_returned": true,
+          "failure": "mismatch4s",
+          "full_test_seconds": 23.36,
+          "native_log_sha256": "0d0f153c23a7be04b637a1417323edf6043398e4ae9a3964512d4bea8a2fc429"
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": false,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "selected_returned": true,
+          "failure": "mismatch4s",
+          "full_test_seconds": 23.39,
+          "native_log_sha256": "9a381a013a544c18fd6677c13ea8e43859f9c8cf4c964dee4562ea110367f57d"
+        }
+      ],
+      "comparison_sha256": "d78bab069cad500591911bdede70974ee52a2105f8b479e7c9226c031e3432de",
+      "source_variants": {
+        "baseline": "same-current-source-original-tool-comparison",
+        "baseline_build_scope": "Original app.test native harness imports production dataplane; candidate-only dataplane _test.go files are not compiled in the synthetic baseline",
+        "baseline_file_revision": "cb700a4caaa3f027919cc3653e7aae549e682afa",
+        "baseline_file_sha256": "3f45ce09354cb720de545cdd51bbdc1daa5af234e358b9c00baf5cdac319e375",
+        "candidate": "same-current-source-bounded-tool-comparison",
+        "candidate_file_sha256": "f9a3c60ad5c79ace93ae437d1152461499751e5a5b95cf3e5708d5e25f49b87a",
+        "changed_path": "internal/dataplane/domain_tcp_tool_observation.go",
+        "comparison": "baseline-tools",
+        "helpers_sha256": {
+          "scripts/domain-image-variant/main.go": "414afd1c856d4ca5a339a82044bdc657403ec86ee0f1bf9be079e438d50b5bfa",
+          "scripts/domain-image-variant/tool_scope.go": "8ac1318c18afc4ba6e74fc4a60178a13c813b5ded10ce57ef2aabef4a8bec8f9"
+        },
+        "limits": [
+          "One reviewed complete production file differs; all other files and modes identical",
+          "Executable image feature remains enabled on both sides",
+          "Original deadlines, native harness, actual IP version children and cleanup unchanged",
+          "This synthetic source pair is not a historical whole-commit comparison"
+        ],
+        "replay_sources": {
+          "after.go.txt": "f9a3c60ad5c79ace93ae437d1152461499751e5a5b95cf3e5708d5e25f49b87a",
+          "before.go.txt": "3f45ce09354cb720de545cdd51bbdc1daa5af234e358b9c00baf5cdac319e375"
+        },
+        "schema": 1,
+        "source_commit": "9de733cf62f48274441c7f722c66228e6aa462f4",
+        "whole_tree_parity": true
+      }
+    },
+    "canceled-ready": {
+      "samples": [
+        {
+          "sample": 1,
+          "side": "baseline",
+          "status": "fail",
+          "first_dns_answer_observed": false,
+          "tool_scope_observed": false,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "failure": "gen1_publication12s",
+          "full_test_seconds": 20.48,
+          "native_log_sha256": "5521e288cefa8c4b11c7956943f55533932cb333aaf6ed014acfdbaf1f18ebce"
+        },
+        {
+          "sample": 2,
+          "side": "candidate",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": true,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "failure": "gen2_readiness12s",
+          "full_test_seconds": 39.76,
+          "native_log_sha256": "2e23f235e5f72be157c3e68fae14d5d4f7c2e1d8905056bfe717d421f545dd85"
+        },
+        {
+          "sample": 3,
+          "side": "candidate",
+          "status": "fail",
+          "first_dns_answer_observed": true,
+          "tool_scope_observed": true,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "failure": "gen2_readiness12s",
+          "full_test_seconds": 39.93,
+          "native_log_sha256": "5823c590da731bb3bff042768aef47b5aec5c8e67f4a8eaad185e80dddfd61e1"
+        },
+        {
+          "sample": 4,
+          "side": "baseline",
+          "status": "fail",
+          "first_dns_answer_observed": false,
+          "tool_scope_observed": false,
+          "variant_path_valid": true,
+          "no_overlap": true,
+          "failure": "gen1_publication12s",
+          "full_test_seconds": 20.28,
+          "native_log_sha256": "0bedd0a425ec1d3cffba23ef9df8a06604e9e6f977c63f7fd86900856359a694"
+        }
+      ],
+      "comparison_sha256": "f3538ea689ef926bc233d93fd0abb3a32255b4b621c62a807d03a0f06a788f60",
+      "source_variants": {
+        "baseline": "same-current-source-original-tool-comparison",
+        "baseline_build_scope": "Original app.test native harness imports production dataplane; candidate-only dataplane _test.go files are not compiled in the synthetic baseline",
+        "baseline_file_revision": "cb700a4caaa3f027919cc3653e7aae549e682afa",
+        "baseline_file_sha256": "3f45ce09354cb720de545cdd51bbdc1daa5af234e358b9c00baf5cdac319e375",
+        "candidate": "same-current-source-bounded-tool-comparison",
+        "candidate_file_sha256": "f9a3c60ad5c79ace93ae437d1152461499751e5a5b95cf3e5708d5e25f49b87a",
+        "changed_path": "internal/dataplane/domain_tcp_tool_observation.go",
+        "comparison": "baseline-tools",
+        "helpers_sha256": {
+          "scripts/domain-image-variant/main.go": "414afd1c856d4ca5a339a82044bdc657403ec86ee0f1bf9be079e438d50b5bfa",
+          "scripts/domain-image-variant/tool_scope.go": "8ac1318c18afc4ba6e74fc4a60178a13c813b5ded10ce57ef2aabef4a8bec8f9"
+        },
+        "limits": [
+          "One reviewed complete production file differs; all other files and modes identical",
+          "Executable image feature remains enabled on both sides",
+          "Original deadlines, native harness, actual IP version children and cleanup unchanged",
+          "This synthetic source pair is not a historical whole-commit comparison"
+        ],
+        "replay_sources": {
+          "after.go.txt": "f9a3c60ad5c79ace93ae437d1152461499751e5a5b95cf3e5708d5e25f49b87a",
+          "before.go.txt": "3f45ce09354cb720de545cdd51bbdc1daa5af234e358b9c00baf5cdac319e375"
+        },
+        "schema": 1,
+        "source_commit": "9de733cf62f48274441c7f722c66228e6aa462f4",
+        "whole_tree_parity": true
+      }
+    }
+  },
+  "limits": [
+    "All8 samples FAIL remain failures.",
+    "Selected service succeeded on BOTH sides on selected host; no causal success improvement claim.",
+    "Cumulative metrics overlap; only same-stage same-scenario paired values are comparable.",
+    "Canceled baseline failed initial publication, candidate reached GEN2; whole-run times do not compare equal work.",
+    "No router/ARM64 acceptance.",
+    "Four selected HTTPS exchanges succeeded on both sides; all four unknown-SNI baseline exchanges timed out at unchanged 4 seconds.",
+    "Selected total -0.55% is not accepted service readiness or statistically established speedup.",
+    "Canceled scenario totals are not comparable: baseline stops at GEN1; candidate reaches GEN2 and fails there."
+  ],
+  "schema": 1,
+  "result": "FAIL: 8/8 complete scenarios failed",
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\domain-baseline-tools-9de",
+  "result_sha256": "e44ba668b2f7a8917f0c7e960d660c0992494879af7f2be64305a9db428d46e1",
+  "selected_median_seconds": {
+    "baseline": 23.475,
+    "candidate": 23.345,
+    "change_percent": -0.5537806176783899,
+    "n_each": 2
+  },
+  "router_acceptance": false
+}

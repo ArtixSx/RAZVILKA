@@ -1,0 +1,80 @@
+{
+  "run": 43945667501,
+  "revision": "9da0e4e2f4d44d338fd620e3d41864d49554e9da",
+  "conclusion": "success",
+  "hosts": [
+    {
+      "host": "ubuntu-24.04",
+      "verification": {
+        "schema": 1,
+        "source_commit": "9da0e4e2f4d44d338fd620e3d41864d49554e9da",
+        "assets_sha256": {
+          "razvilka-hev-2.17.1-runtime-altstack1-linux-amd64": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+          "razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz": "e90309058ba3c604bab3a63839982855730d752d6017114b1e107765e5349b68",
+          "razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS": "832857ecd7c428df1eb64b102e639e3ea1cc7a16f6cb404ec0f7171b4c678744"
+        },
+        "archive_members": 143,
+        "inner_hashes": 142,
+        "upstream_notices": 129,
+        "repeated_packages_identical": true,
+        "project_license_preserved": true,
+        "fresh_linux_builder": true,
+        "published": false,
+        "default_pin_changed": false,
+        "router_acceptance": false
+      },
+      "packaging_unit_tests": 8,
+      "unit_skips": 0,
+      "population": 32,
+      "patched_launches": 16,
+      "cleanup_verified": 32,
+      "platform": [
+        "at_minsigstksz_bytes=3376 original_compatibility_failure_expected=false production_pin_unchanged=true"
+      ]
+    },
+    {
+      "host": "ubuntu-26.04",
+      "verification": {
+        "schema": 1,
+        "source_commit": "9da0e4e2f4d44d338fd620e3d41864d49554e9da",
+        "assets_sha256": {
+          "razvilka-hev-2.17.1-runtime-altstack1-linux-amd64": "1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9",
+          "razvilka-hev-2.17.1-runtime-altstack1-sources-notices.tar.xz": "0d67d66ab9cc6abfb423da2c02aa416c241eb56cd59a191756003d4863d3fde4",
+          "razvilka-hev-2.17.1-runtime-altstack1.SHA256SUMS": "45b706ce69933e36e7444c8219ad2a7376217cdc317052c109aa06221e5f9390"
+        },
+        "archive_members": 143,
+        "inner_hashes": 142,
+        "upstream_notices": 129,
+        "repeated_packages_identical": true,
+        "project_license_preserved": true,
+        "fresh_linux_builder": true,
+        "published": false,
+        "default_pin_changed": false,
+        "router_acceptance": false
+      },
+      "packaging_unit_tests": 8,
+      "unit_skips": 0,
+      "population": 32,
+      "patched_launches": 16,
+      "cleanup_verified": 32,
+      "platform": [
+        "at_minsigstksz_bytes=11952 original_compatibility_failure_expected=true production_pin_unchanged=true"
+      ]
+    }
+  ],
+  "crosshost_payload_differences": [
+    "SHA256SUMS",
+    "provenance/build-manifest.json",
+    "provenance/build-original.log",
+    "provenance/build-patched.log",
+    "vendor-manifest.json"
+  ],
+  "interpretation": "Same fixed ELF on both hosts; tar is deterministic for identical inputs, preserved build logs can differ across hosts. No default delivery/catalog/publication/router proof.",
+  "schema": 1,
+  "raw_artifact_root": "C:\\RAZVILKA-research-20261116\\hev-vendor-9da0e4e2",
+  "raw_summary_sha256": "4c277d5d85f5a0015b5c355ac9a93319e6ea8c8dd016cf713ac909af1c6fbca6",
+  "verification_files_sha256": {
+    "artifacts\\hev-altstack-source-lab-9da0e4e2f4d44d338fd620e3d41864d49554e9da-ubuntu-24.04\\vendor-packaging-verification.json": "70dd46cd4b424cc1d1acb4aa0f8154dd5dc1c0e761e8a72f50df6c54c88cdf89",
+    "artifacts\\hev-altstack-source-lab-9da0e4e2f4d44d338fd620e3d41864d49554e9da-ubuntu-26.04\\vendor-packaging-verification.json": "a5e4f051390650280d554cbe6e86330b883ab104d4c1338734633948ae5eecbe"
+  }
+}

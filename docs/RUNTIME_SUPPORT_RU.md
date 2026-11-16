@@ -1,15 +1,16 @@
 # Сборки и поддержка запуска
 
-Актуальный код `fd291023`, общий CI `8ab8f100`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
-HEV runtime-altstack прошёл source lab и фактический запуск на host AT_MIN11952;
-на374bbd46 original HTTP same-version replacement/отказ при живом процессе/
-откат и recovery прошли Linux normal/race. Это пакетный путь, не LAN health;
-production pin и платформенный допуск не изменены. На60bd5153 parent race PASS,
-но3/5 ACK cuts FAIL120с. На8ab8f100 strict DNS FAIL, а NFQWS2 race manual
-завершился rollback-failed/verified=false. Наba5ffd02 все7 StrategyPair stopped cuts и restored panel boot43934930569 PASS. Наb07cebf7 исправление thread-group normal/race PASS, но sameboot race parent43935059769 FAIL120с, ACK SKIPPED. fd291023 исправляет pre-ledger rollback; actual native gate ещё ожидается. DNS23b strict gates FAIL. Эти сетевые направления ещё не приняты.
-Подробности прежних ревизий ниже
-сохраняются как история, а не готовность текущего релиза.
-
+Актуальный код `7a338026`, полный PR CI `4b7807e7` PASS:
+[единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+Наba5ffd02 все7 StrategyPair cuts и восстановленная панель PASS.
+На4b actual pre-ledger recovery-only normal/race PASS; полный NFQWS2 Apply,
+более ранний prepared.active и LAN rollback ещё не приняты.
+DNS9de:8 полных сценариев FAIL, хотя selected HTTPS проходит.
+Mihomo cb700 parent race FAIL120с; statx7a338026 с прежним Linux4.9 fallback
+прошёл отдельную native normal/race проверку43945773992; полный sameboot43946381158 выполняется. HEV9da готовит source/notices/assets;
+production pin/ARM64 не изменены. Generic CI не расширяет платформенный допуск.
+Роутер ожидает проверки изменившегося SSH host key владельцем.
+Старые таблицы ниже — история отдельных сценариев.
 
 Последняя сверка: `fc5bcc6c`, 16.11.2026. Платформенный допуск не расширен.
 Bound offline restore и modern public rollback прошли Linux-проверки; обычный
