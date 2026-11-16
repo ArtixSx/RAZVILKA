@@ -1,0 +1,56 @@
+name: Mihomo private read buffer experiment
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/mihomo-hash-buffer-experiment-20261116']
+permissions:
+  contents: read
+jobs:
+  measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, race]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Compare two complete fresh hashes with private buffers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; lscpu; } > artifacts/platform.txt
+          flags=()
+          if [ '${{ matrix.mode }}' = race ]; then flags=(-race); fi
+          RAZVILKA_COLD_HASH_BUFFER_MEASURE=1 go test "${flags[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+            -run '^TestMihomoColdHashBufferNative' 2>&1 | tee artifacts/buffer.log
+          for test in SourceParity Refusals PrivateConcurrentPairs PairedMeasurement; do
+            grep -F -- "--- PASS: TestMihomoColdHashBufferNative$test " artifacts/buffer.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/buffer.log; then exit 1; fi
+          python3 - <<'PY'
+          import json,pathlib
+          text=pathlib.Path('artifacts/buffer.log').read_text()
+          rows=[json.loads(l.split('COLD_HASH_BUFFER_PAIR ',1)[1]) for l in text.splitlines() if 'COLD_HASH_BUFFER_PAIR ' in l]
+          assert len(rows)==16
+          for pair in range(8):
+              group=[r for r in rows if r['pair']==pair]
+              variants=['original-two-private-buffers','one-private-buffer-cleared-after-pair']
+              assert [r['variant'] for r in group]==(variants if pair%2==0 else variants[::-1])
+              assert group[0]['image_bytes']==group[1]['image_bytes']>0
+              assert all(r['samples']==2 and r['wall_ns']>0 and r['thread_cpu_ns']>0 for r in group)
+          pathlib.Path('artifacts/samples.json').write_text(json.dumps(rows,indent=2)+'\n')
+          PY
+      - name: Preserve private buffer experiment evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-hash-buffer-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/
