@@ -144,6 +144,19 @@ func nativeModernFailureReceipts(t *testing.T, id string) {
 }
 
 func TestNativeModernDiagnosticClosureAndTerminal(t *testing.T) {
+	for _, item := range []struct {
+		status int
+		code   string
+		retry  bool
+	}{
+		{503, "SELF_UPDATE_RECOVERY_REQUIRED", true}, {409, "RESTORE_OPERATION_BUSY", true},
+		{503, "RESTORE_OPERATION_BUSY", false}, {409, "SELF_UPDATE_RECOVERY_REQUIRED", false},
+		{503, "DATAPLANE_RECOVERY_REQUIRED", false}, {503, "private-token", false}, {200, "", false},
+	} {
+		if nativeModernReadPending(item.status, item.code) != item.retry {
+			t.Fatal("unrelated response entered startup handoff retry")
+		}
+	}
 	for _, value := range []string{"private-token /private/path", "file-protocol-install-action-secret", "file-protocol-secret-source", strings.Repeat("x", 1024)} {
 		if nativeModernClosedFailureCode(value) != "unavailable" || nativeModernClosedLabel(value, nativeModernCommands...) != "unavailable" {
 			t.Fatal("private value escaped closed diagnostics")

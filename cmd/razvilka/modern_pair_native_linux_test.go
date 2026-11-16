@@ -169,11 +169,6 @@ func TestNativeModernPublicRollback(t *testing.T) {
 	if nativePairedRestoreFileHash(t, installpath.State+"/strategy-lab.json") != draft.stateSHA {
 		t.Fatal("rollback changed original draft state")
 	}
-	var snapshot strategylab.Snapshot
-	if json.Unmarshal(nativePairedSourceHTTP(t, "GET", "/api/v1/strategy-lab", nil, "", http.StatusOK, 5*time.Second), &snapshot) != nil {
-		t.Fatal("restored actual source reader unavailable")
-	}
-	nativePairedDraftSnapshot(t, snapshot, draft.candidate)
 	for _, pid := range []int{before.PID, helperPID, candidatePID} {
 		end := time.Now().Add(10 * time.Second)
 		for time.Now().Before(end) {
@@ -186,6 +181,20 @@ func TestNativeModernPublicRollback(t *testing.T) {
 			t.Fatal("original exited owner not reaped", pid, e)
 		}
 	}
+	// A rolled-back file receipt precedes Finish's final live checks and helper
+	// publication. Wait for that exact helper's exit before requiring ordinary
+	// panel admission; the original startup lease is then released on its tick.
+	var finished updatecheck.Job
+	if json.Unmarshal(nativePairedSourceHTTP(t, "GET", "/api/v1/self-update/current", nil, token, http.StatusOK, 5*time.Second), &finished) != nil ||
+		finished.ID != job.ID || finished.HelperPID != helperPID || finished.State != "rolled-back" || finished.Stage != "rolled-back" || finished.Code != "" || finished.CanApply || finished.CanCancel || finished.ReviewToken != "" {
+		nativeModernFailureReceipts(t, job.ID)
+		t.Fatal("original helper did not publish exact completed rollback")
+	}
+	var snapshot strategylab.Snapshot
+	if json.Unmarshal(nativeModernRestoredStrategy(t), &snapshot) != nil {
+		t.Fatal("restored actual source reader unavailable")
+	}
+	nativePairedDraftSnapshot(t, snapshot, draft.candidate)
 	nativeModernInit(t, root, "stop")
 	if _, err := os.Stat("/proc/" + strconv.Itoa(status.PID)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("restored panel Stop not joined", err)
@@ -265,6 +274,55 @@ func nativeModernStatus(t *testing.T) nativeModernPanelStatus {
 	}
 	return status
 }
+
+func nativeModernReadPending(status int, code string) bool {
+	return status == http.StatusServiceUnavailable && code == "SELF_UPDATE_RECOVERY_REQUIRED" ||
+		status == http.StatusConflict && code == "RESTORE_OPERATION_BUSY"
+}
+
+// Called only after the original helper's terminal publication and exit. Keep
+// the previous five-second request budget, and retry only the closed startup
+// handoff responses; an unrelated recovery fence must fail immediately.
+func nativeModernRestoredStrategy(t *testing.T) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	transport := &http.Transport{Proxy: nil}
+	defer transport.CloseIdleConnections()
+	client := http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8787/api/v1/strategy-lab", nil)
+		if err != nil {
+			t.Fatal("restored strategy request construction failed")
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal("restored strategy request failed within original budget")
+		}
+		data, readErr := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || len(data) > 64<<10 {
+			t.Fatal("restored strategy response invalid")
+		}
+		if response.StatusCode == http.StatusOK {
+			return data
+		}
+		var failure struct {
+			Code string `json:"code"`
+		}
+		decodeErr := json.Unmarshal(data, &failure)
+		clear(data)
+		if decodeErr != nil || !nativeModernReadPending(response.StatusCode, failure.Code) {
+			t.Fatalf("restored strategy refused status=%d code=%s", response.StatusCode, nativeModernClosedLabel(failure.Code, "SELF_UPDATE_RECOVERY_REQUIRED", "RESTORE_OPERATION_BUSY", "DATAPLANE_RECOVERY_REQUIRED", "PRIVATE_BACKUP_RECOVERY_REQUIRED", "COMPONENT_RECOVERY_REQUIRED"))
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("restored strategy handoff did not settle within original budget code=%s", failure.Code)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
 func nativeModernDaemonFD(t *testing.T, pid int) {
 	t.Helper()
 	var original, actual unix.Stat_t
