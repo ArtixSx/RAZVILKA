@@ -6,6 +6,8 @@ test "$(id -u)" = 0 || { echo 'root isolated native fixture required' >&2; exit 
 : "${RAZVILKA_XRAY_NATIVE:?absolute SHA-verified official Xray binary required}"
 case "$RAZVILKA_XRAY_NATIVE" in /*) ;; *) exit 2;; esac
 domain_profile_enabled=${RAZVILKA_DOMAIN_PROFILE_ENABLED-1}
+domain_build_mode=${RAZVILKA_DOMAIN_BUILD_MODE-debug}
+case "$domain_build_mode" in debug|production-strip) ;; *) echo 'unknown domain build mode' >&2; exit 2 ;; esac
 case "$domain_profile_enabled" in
  0|1) ;;
  *) echo 'RAZVILKA_DOMAIN_PROFILE_ENABLED must be 0 or 1' >&2; exit 2 ;;
@@ -39,7 +41,18 @@ PY
 export RAZVILKA_DOMAIN_ORIGINAL_NATIVE=1
 export RAZVILKA_DOMAIN_TOOLS_REVIEW="$domain_work/tools.json"
 cd "$domain_repo"
-go test -tags razvilka_native_fixture -c -o "$domain_work/app.test" ./internal/app
+case "$domain_build_mode" in
+ debug) go test -tags razvilka_native_fixture -c -o "$domain_work/app.test" ./internal/app ;;
+ production-strip) go test -tags razvilka_native_fixture -ldflags='-s -w' -c -o "$domain_work/app.test" ./internal/app ;;
+esac
+export RAZVILKA_DOMAIN_BUILD_MODE="$domain_build_mode"
+python3 - <<'PY'
+import hashlib,json,os,pathlib,subprocess
+work=pathlib.Path(os.environ['RAZVILKA_DOMAIN_FIXTURE_WORK']); binary=work/'app.test'
+metadata={'build_mode':os.environ['RAZVILKA_DOMAIN_BUILD_MODE'],'bytes':binary.stat().st_size,'sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'go_build_info':subprocess.check_output(['go','version','-m',str(binary)],text=True),'only_selected_linker_change':'-s -w for production-strip; original tags/optimizations/deadlines unchanged'}
+(work/'binary.json').write_text(json.dumps(metadata,indent=2)+'\n')
+print('DOMAIN_FIXTURE_BINARY:',json.dumps(metadata))
+PY
 chmod 500 "$domain_work/app.test"
 # Go 1.26 may build pprof lazily; exclude that bounded parent preparation from
 # both the namespace run and its CPU sample, retaining diagnostics on failure.
@@ -145,6 +158,7 @@ unshare --mount --net sh -eu -c '
 if test -n "${RAZVILKA_DOMAIN_PROFILE_OUTPUT:-}"; then
  case "$RAZVILKA_DOMAIN_PROFILE_OUTPUT" in /*) ;; *) exit 2;; esac
  mkdir -p "$RAZVILKA_DOMAIN_PROFILE_OUTPUT"
+ cp "$domain_work/binary.json" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/binary.json"
  if test -s "$domain_work/original-run.cpu.pprof"; then
   cp "$domain_work/original-run.cpu.pprof" "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/"
   timeout 50s go tool pprof -top -nodecount=35 "$domain_work/app.test" "$domain_work/original-run.cpu.pprof" 2>&1 | head -c 65536 > "$RAZVILKA_DOMAIN_PROFILE_OUTPUT/cpu-top.txt" || true
