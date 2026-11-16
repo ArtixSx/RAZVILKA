@@ -78,6 +78,13 @@ type mihomoSameBootCleanup struct {
 }
 
 func (o *mihomoSameBootCleanup) current(ctx context.Context) error {
+	defer mihomoSameBootNativeOwnerTiming(o, "source-current-tool-read")()
+	return o.observeOriginalCurrent(ctx)
+}
+
+// Every original input, process, provider and control read stays in this body.
+// Only its tool-file checks may borrow the enclosing pure read observation.
+func (o *mihomoSameBootCleanup) currentUnscoped(ctx context.Context) error {
 	defer mihomoSameBootNativeOwnerTiming(o, "source-current")()
 	if o == nil || o.self != o || o.inputs == nil || o.read == nil || o.read.original == nil || o.read.proxy == nil || o.control == nil || o.cleanup == nil || !filepath.IsAbs(o.controlRoot) || filepath.Clean(o.controlRoot) != o.controlRoot || !o.control.MatchesControlRoot(o.controlRoot) || !o.sourceCoordinatesCurrent() || o.effectUnknown {
 		return mihomoSameBootNativeFailure(ctx, "owner", ErrMihomoLiveRetirement)
@@ -125,7 +132,9 @@ func (o *mihomoSameBootCleanup) absent(ctx context.Context) (netidentity.Identit
 // The same ordered source/process/interface/kernel/source observations are
 // used with or without an original tool read scope. No result survives it.
 func (o *mihomoSameBootCleanup) absentUnscoped(ctx context.Context) (netidentity.Identity, error) {
-	if err := o.current(ctx); err != nil {
+	// observeOriginalAbsence already brackets the entire pure body with the
+	// same source's observation. Unsupported sources retain the original body.
+	if err := o.currentUnscoped(ctx); err != nil {
 		return netidentity.Identity{}, mihomoSameBootStageError("absence-source-opening", err)
 	}
 	proof, err := proxyInactivePlatformProof()
@@ -135,7 +144,7 @@ func (o *mihomoSameBootCleanup) absentUnscoped(ctx context.Context) (netidentity
 	if err := observeBootRetirement(ctx, o.read.proxy, proof); err != nil {
 		return netidentity.Identity{}, mihomoSameBootStageError("absence-process-kernel", err)
 	}
-	if err := o.current(ctx); err != nil {
+	if err := o.currentUnscoped(ctx); err != nil {
 		return netidentity.Identity{}, mihomoSameBootStageError("absence-source-closing", err)
 	}
 	return o.inputs.definition.NetworkIdentity, nil

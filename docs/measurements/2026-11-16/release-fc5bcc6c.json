@@ -328,11 +328,23 @@
     "published_http_transport_verified": false,
     "prior_regenerated_archive_refusal_run": 43896413328
   },
-  "generic_ci_confirmed": {
-    "revision": "94e856258672f0613c7ef1eecbaf9acb6fc71cc1",
-    "run": 43892266549,
-    "outcome": "success"
-  },
+  "generic_ci_confirmed": [
+    {
+      "revision": "94e856258672f0613c7ef1eecbaf9acb6fc71cc1",
+      "run": 43892266549,
+      "outcome": "success"
+    },
+    {
+      "revision": "a84f3c151d160f51eb7fbd6bf6931cc429edd42e",
+      "run": 43894636919,
+      "outcome": "success"
+    },
+    {
+      "revision": "9da19ea6b837d7d2ef88bd467660b965e3113ea7",
+      "run": 43896413421,
+      "outcome": "success"
+    }
+  ],
   "open_software_failures": [
     {
       "revision": "a84f3c151d160f51eb7fbd6bf6931cc429edd42e",
@@ -361,5 +373,40 @@
     43899672147,
     43899534687,
     43900067221
-  ]
+  ],
+  "hev_standalone": {
+    "revision": "fc5bcc6c9a1855f4cfb2cc00979682a87f8547fc",
+    "run": 43900067221,
+    "outcome": "success",
+    "populations": {
+      "untraced": 8,
+      "separately_traced": 8
+    },
+    "all_cleanup_verified": true,
+    "at_minsigstksz_bytes": 3632,
+    "observed_altstack_request_bytes": 8192,
+    "closed_results_sha256": "e2c641a86f6bb7f488a3b03526edacf7295e4f6ebc8d1235449b999c882c3639",
+    "acceptance_claim": false
+  },
+  "followup": {
+    "revision": "9e73d133bc43493ca9d8eeb6a573dfc16d40ee39",
+    "sameboot_run": 43901063124,
+    "sameboot_outcome": "failure",
+    "stage": "official HEV startup",
+    "same_host_diagnostic": {
+      "untraced_failures": 8,
+      "separately_traced_failures": 8,
+      "cleanup_verified": 16,
+      "exit_code": 254,
+      "captured_bytes": 0,
+      "at_minsigstksz_bytes": 11952,
+      "sigaltstack_syscalls_observed": 0
+    },
+    "interpretation": "platform-dependent startup failure reproduced; userspace minimum-stack rejection under investigation; not yet fixed",
+    "prior_generic_failures": [
+      43899646447,
+      43900066761
+    ],
+    "prior_generic_cause": "new baseline test copied mutex; corrected 9e73; native source behavior not changed by test correction"
+  }
 }

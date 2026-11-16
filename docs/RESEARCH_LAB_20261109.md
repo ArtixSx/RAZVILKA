@@ -723,3 +723,34 @@ closed syscall/errno/numeric altstack diagnostics, exact Wait/cleanup. Это н
 route admission, не трассировка исходного acceptance и не доказательство
 причины exit254 до результатов. Источник stack detector включён; runtime
 размер altstack должен проверяться численно, а не предполагаться.
+
+
+### IP version: отвергнутое сокращение subprocess
+
+Источник iproute2 v6.19.0, commit
+`dac1bc6021693902b25a961227e289791e429b91`, официальный source tar
+SHA256 `9332213d35480b647086a70c302de8568de83455a98774d35de216c4ce191006`.
+Ubuntu6.19.0-1ubuntu1.1 amd64 и amd64v3 точно совпали с используемыми ELF pins;
+исходники и distro patches исследованы вне production в
+`C:/RAZVILKA-research-20261116/ip-version-fact-source/analysis-contract.json`.
+COPYING GPLv2; отдельные файлы GPL-2.0/GPL-2.0-or-later, исходники не копировались
+в продукт. [Фактический getter](https://github.com/iproute2/iproute2/blob/dac1bc6021693902b25a961227e289791e429b91/lib/bpf_glue.c)
+читает собственный `/proc/self/maps`; отказ поиска даёт stderr. Поэтому даже
+закреплённый binary/hash не превращает результат нового запуска в статическую
+строку. Существующий scoped xtables fact на IP не расширен. Обе свежие metadata
+проверки вокруг IP child также сохранены. Это подтверждённое ограничение
+конкретной оптимизации, не внешний блокер всей разработки.
+
+### HEV: воспроизведён платформенный silent startup failure
+
+Standalone run43900067221 (`fc5bcc6c`) PASS16/16 на машине с
+AT_MINSIGSTKSZ3632: наблюдалось выделение altstack8192. В следующем original
+sameboot run43901063124 (`9e73d133`) HEV снова exit254/нулевой вывод. После
+исходного FAIL на той же машине отдельно запущены8 untraced+8 traced:
+все16 отказали доTUN, cleanup16/16 подтверждён; AT_MINSIGSTKSZ11952,
+sigaltstack syscall отсутствует. Проверяется гипотеза отказа libc до syscall;
+исходный acceptance не трассировался и его FAIL не заменён диагностикой.
+[Linux описывает](https://www.kernel.org/doc/html/v5.17/x86/elf_auxvec.html)
+различие минимального размера сигнального кадра и дополнительного стека
+обработчика. Исходники/бинарник должны подтвердить конкретную ветку отказа
+до выпуска исправленного компонента; на этой точке такого исправления ещё нет.
