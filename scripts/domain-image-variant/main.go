@@ -27,7 +27,7 @@ const replacement = "var lease *xrayDomainTCPImageLease"
 // review; this is not a caller-supplied hash or an arbitrary source patch.
 var reviewed = map[string]string{
 	target: "8cf454171cd0df8de84ccf2aa5a282e18c00952c6415aa65226cc552733358ae",
-	"internal/dataplane/xray_domain_tcp_file_observation.go":     "7d2d2fd866b01b755a4515daa2573c4ee6a89e64bf5ddfaca5cb876abcdcc72e",
+	"internal/dataplane/xray_domain_tcp_file_observation.go":     "ba3bffe16cd3fdc731f8fea03643d33d0e113cc12c1e4c02aafcef1f61ac6988",
 	"internal/dataplane/xray_domain_tcp_execution.go":            "4777181fc947837a3f2ec7990c22a2b032c2f873a5993a9534074e03c263c23e",
 	"internal/dataplane/domain_tcp_guard_read.go":                "ca57f917bbf69c864c1efb59eea0ac078f169807e9d1e6091bc55a2aa8f78a4b",
 	"internal/dataplane/domain_tcp_successor_byte_comparison.go": "6a401537df0f71b285e97c1b87a21266177c45d4912301d95b98cc770afec18f",
