@@ -93,7 +93,7 @@ jobs:
                       marked.append({'thread_trace': path.name, 'calls': dict(counts), 'interval_lines': len(interval)})
               assert len(marked) == 1
               result[mode] = marked[0]
-          result['limitations'] = 'Separate traced leaf population, never acceptance or timing sample; Go/provider setup outside markers. No production code changed.'
+          result['limitations'] = 'Separate traced leaf population, never acceptance or timing sample; Go/provider setup outside markers. Source-parity and implementation labels in pairs.log identify the exact baseline and candidate; no full Apply or router claim.'
           pathlib.Path('artifacts/syscall-counts.json').write_text(json.dumps(result, indent=2) + '\n')
           PY
       - name: Preserve all outcomes without binary artifact
