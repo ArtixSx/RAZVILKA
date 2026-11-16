@@ -2,6 +2,14 @@
 
 Актуальный сводный статус: [единая матрица](../../CURRENT_STATUS_RU.md#current-release-checkpoint).
 
+[Полное чтение proc60bd5153](backend-proc-io-60bd5153.json), run43925928845 PASS:
+8 чередующихся пар по64 чтения на вариант, включая opens/closing/closes.
+Normal медиана0.217571→0.190196мс (-12.58%), race0.134316→0.110744мс
+(-17.55%). Сравнение только внутри режима: normal/race на разных host.
+Отдельный strace подтвердил17 fcntl и17 epoll_ctl →0 при прежних22 openat,
+29 fstat и29 fstatfs. Production в измеренной ревизии не изменён;
+это не ускорение полного DNS/NFQ Apply и не аппаратная приёмка.
+
 - [Mihomo ABBA42b83032](mihomo-self-image-42b83032.json): одна пара исходников,
   8 запусков на одном host; normal +11.34% времени, race two-SHA проходит
   исходные120с, исходный image — два timeout. Это не полный recovery PASS.
@@ -13,6 +21,11 @@
 - [DNS Lookup b31ff873](nodestore-profile-b31ff873.json): профиль не подтверждает
   JSON/SHA как основную стоимость Lookup; следующая проверяемая гипотеза —
   лишние операции вокруг чтения уже проверенных системных файлов.
+
+[Повтор HEV2df338cb](hev-source-2df338cb.json): обе Ubuntu,64 samples PASS;
+исправлен строгий reader provenance manifest, ELF неизменён.
+[Normal parent +5ACK e2fb7b88](mihomo-parent-e2fb7b88.json): PASS,
+прежний intermittent dc5829fd не объявляется устранённым.
 
 [HEV374bbd46](hev-replacement-374bbd46.json): exact original HTTP
 old→patched, отказ при живых old/desired ELF, отмена, crash и rollback;

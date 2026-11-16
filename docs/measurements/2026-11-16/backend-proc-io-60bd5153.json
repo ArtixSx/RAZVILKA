@@ -1,0 +1,506 @@
+{
+  "sha": "60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4",
+  "run_id": 43925928845,
+  "url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43925928845",
+  "conclusion": "success",
+  "scope": "Complete backendInventoryThreadProc netlink leaf including original fresh open/stat/statfs/mnt_id/read/closing/close, held original provider separately timed",
+  "samples": {
+    "normal": [
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 0,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14467351,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 12906000,
+        "wall_ns": 13714251
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 0,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 13959031,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 12673000,
+        "wall_ns": 12844723
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 1,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 13442645,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 11825000,
+        "wall_ns": 12566504
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 1,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14721916,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13524000,
+        "wall_ns": 13951470
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 2,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14913824,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13652000,
+        "wall_ns": 14099953
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 2,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12913410,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 11931000,
+        "wall_ns": 12167380
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 3,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12710660,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 11745000,
+        "wall_ns": 11949589
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 3,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 15031473,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13942000,
+        "wall_ns": 14171164
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 4,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14622760,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13956000,
+        "wall_ns": 13799997
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 4,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12975822,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 12255000,
+        "wall_ns": 12177655
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 5,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12773343,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 11215000,
+        "wall_ns": 11966163
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 5,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 15278837,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 14037000,
+        "wall_ns": 14468011
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 6,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14629880,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13153000,
+        "wall_ns": 13856440
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 6,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12877807,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 11332000,
+        "wall_ns": 12055235
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 7,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 12999176,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 12125000,
+        "wall_ns": 12210593
+      },
+      {
+        "bytes": 1009,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 7,
+        "payload_sha256": "fa48eae61ec71ed8a5cbee9d4ac610f5bc2dba599504c71265d80accefe5cb07",
+        "provider_bracket_ns": 14752546,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 13492000,
+        "wall_ns": 13897576
+      }
+    ],
+    "race": [
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 0,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 10040119,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 8758000,
+        "wall_ns": 9477634
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 0,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 8154955,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 7339000,
+        "wall_ns": 7562721
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 1,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7429941,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6590000,
+        "wall_ns": 6900219
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 1,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 9170913,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 7472000,
+        "wall_ns": 8326311
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 2,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 9670775,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 9007000,
+        "wall_ns": 9104547
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 2,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7613044,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6667000,
+        "wall_ns": 7048242
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 3,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7714402,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6887000,
+        "wall_ns": 7126949
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 3,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 9363472,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 8191000,
+        "wall_ns": 8849567
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 4,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 8878681,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 7815000,
+        "wall_ns": 8353028
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 4,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7999275,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6698000,
+        "wall_ns": 7252131
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 5,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 8081256,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6508000,
+        "wall_ns": 7508701
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 5,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 9365097,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 8474000,
+        "wall_ns": 8812855
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 6,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 8806663,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 8194000,
+        "wall_ns": 8326544
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 6,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7625063,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6103000,
+        "wall_ns": 6972856
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "raw",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 7,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 7433979,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 6263000,
+        "wall_ns": 6831091
+      },
+      {
+        "bytes": 917,
+        "calls": 64,
+        "mode": "original",
+        "original_body_sha256": "6ee5e968ccb380856b536289daff9e689f5d6782cd21c54b43a802a1a2f4a0e7",
+        "pair": 7,
+        "payload_sha256": "b94abf9b95433ca6b829d227b2df6e6f2de2ffc5e9105c6ff00f035ba390c0ee",
+        "provider_bracket_ns": 9496782,
+        "source_sha256": "51b4b7860b4850572babfd587290ec4d888996c360cc1255b96b9807475b914d",
+        "thread_cpu_ns": 8342000,
+        "wall_ns": 8379622
+      }
+    ]
+  },
+  "summary": {
+    "normal": {
+      "wall_ns": {
+        "median_ms_per_call": {
+          "original": 0.217570671875,
+          "raw": 0.1901955859375
+        },
+        "change_percent": -12.582158110550722
+      },
+      "thread_cpu_ns": {
+        "median_ms_per_call": {
+          "original": 0.2123125,
+          "raw": 0.18559375
+        },
+        "change_percent": -12.58463350014718
+      },
+      "provider_bracket_ns": {
+        "median_ms_per_call": {
+          "original": 0.23026923437500002,
+          "raw": 0.202259625
+        },
+        "change_percent": -12.163852218914128
+      }
+    },
+    "race": {
+      "wall_ns": {
+        "median_ms_per_call": {
+          "original": 0.1343162265625,
+          "raw": 0.1107436796875
+        },
+        "change_percent": -17.55003656541172
+      },
+      "thread_cpu_ns": {
+        "median_ms_per_call": {
+          "original": 0.1291875,
+          "raw": 0.1035703125
+        },
+        "change_percent": -19.82946298984035
+      },
+      "provider_bracket_ns": {
+        "median_ms_per_call": {
+          "original": 0.1463169453125,
+          "raw": 0.1198395703125
+        },
+        "change_percent": -18.095904711139433
+      }
+    }
+  },
+  "file_sha256": {
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/environment.txt": "9cc11a5fbb1d825c138177ad00738c47f3d224e08714a2902ccbcd6df3260e33",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/pairs.json": "63daf666e67fddf42bac4162b5bc9c9aadfee3e3a41373d5c0be0eeef67fe8ba",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/pairs.log": "0f0843d304d08d0a24b1c0c676515a673bd65d86f43f28b9759f884080228163",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/source-tools.sha256": "14191eb090f2ada56bd7503cd686be359a5e1beacfa6a7dd4ece0e29e41539e2",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/syscall-counts.json": "4bd108506c1167b922d03ff5c01188c5f3b5c965f1dc9ecab332126161c842d1",
+    "backend-proc-io-race-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/environment.txt": "f7d187f7097588fa4f3664a0a2821e106efd0d201ffbd5c86ed63f90790ac745",
+    "backend-proc-io-race-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/pairs.json": "fcfb185a91a8c6bd447e28303979ccbce6858f963f3a4d46ada8b42f546fec3d",
+    "backend-proc-io-race-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/pairs.log": "1c8e5c7c1513e9e98a5f29348525866d7100f289024bd2a3ed7766a47599ab86",
+    "backend-proc-io-race-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/source-tools.sha256": "81bfe468cf790f1a1e322d50cf2ac02241016fdaf31898246a16d1c19d3d9ce5",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5954": "48a3c7304e73886b2d34f0dc79fd5bf43183fe0e1c522e2e7034fa9696fec649",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5955": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5956": "f7da44bb74e01d5bb79e1a8a04b4ae10b4ad1694cf65b4f36ab385f20cae41c3",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5957": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5958": "fe42199fa9b48244868aad8c294d52100eb34543206479374974d5f82e2e1c3d",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5959": "631f97cbb943e2c69e6e5972a73894b5899b17db9b6120c813bebe5d23c767d1",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/syscall.5960": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-original/test.log": "591a1dbe9f1979afcded767f3220dec32bc84286f679819b6357b1da8f429a4d",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5968": "6f8243361f967550201a8fce8852eabe972a58d80aa2745cd54227538bc3ba1b",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5969": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5970": "ed182775ae53dc39676cfa7315c62e327f2b67c792c0fa55c027aab323c40d4b",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5971": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5972": "f709434e0cddc20a132137475ee931c7d8fb58b4284cd24d9a7e3506548f7dd4",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5973": "ab7443672e5177e25b22065033fab6a168d9442589c10d57459282d5c5a1ac1c",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/syscall.5974": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend-proc-io-normal-60bd5153e8bf3e49bfdca3d2e406ba6bfd30bab4/trace-raw/test.log": "591a1dbe9f1979afcded767f3220dec32bc84286f679819b6357b1da8f429a4d"
+  },
+  "limits": [
+    "Pairs within each mode share one host/thread/network namespace; normal and race use different jobs/hosts",
+    "Warm paired leaf, not complete DNS/NFQ Apply or router/LAN",
+    "Production IO unchanged at measured revision",
+    "Separate marked strace population is not timing or acceptance"
+  ],
+  "decision": "Promote only the measured two IO substitutions after independent source review; repeat full acceptance separately",
+  "separate_trace": {
+    "original": {
+      "thread_trace": "syscall.5959",
+      "calls": {
+        "openat": 22,
+        "fstat": 29,
+        "fstatfs": 29,
+        "fcntl": 17,
+        "epoll_ctl": 17,
+        "read": 34,
+        "close": 23
+      },
+      "interval_lines": 171
+    },
+    "raw": {
+      "thread_trace": "syscall.5973",
+      "calls": {
+        "openat": 22,
+        "fstat": 29,
+        "fstatfs": 29,
+        "read": 32,
+        "close": 22
+      },
+      "interval_lines": 134
+    },
+    "limitations": "Separate traced leaf population, never acceptance or timing sample; Go/provider setup outside markers. No production code changed."
+  }
+}
