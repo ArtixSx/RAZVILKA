@@ -40,12 +40,25 @@ func newNFQWSActivePreAddRead(e *nfqws2ActiveExecution, b *NFQWSScopedBinding, p
 }
 
 func (r *nfqws2ActivePreAddRead) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return r.runWithInvocation(ctx, nil, name, args...)
+}
+
+func (r *nfqws2ActivePreAddRead) runWithInvocation(ctx context.Context, invocation *policyEffectCommandInvocation, name string, args ...string) ([]byte, error) {
 	// A copied/escaped read context never reaches even the Apply runner's
 	// original command preflight, including after its source was revoked.
 	if r == nil || r.self != r || ctx == nil || ctx.Value(nfqws2ActivePreAddKey{}) != nil {
 		return nil, ErrNFQWSScopedOwner
 	}
-	return r.runner.Run(ctx, name, args...)
+	if invocation != nil && !r.originalCommandCustody(invocation.session, invocation.index) {
+		return nil, ErrNFQWSScopedOwner
+	}
+	return r.runner.runWithInvocation(ctx, invocation, name, args...)
+}
+
+// Local associations only. This is not a source/receipt observation or an
+// effect grant; it selects the sealed wrapper's precise base.Run boundary.
+func (r *nfqws2ActivePreAddRead) originalCommandCustody(s *policyEffectSession, index int) bool {
+	return r != nil && r.self == r && s != nil && r.custody != nil && r.custody.self == r.custody && r.custody.preAdd == r && s.nfqRecovery == r.custody && r.custody.session == s && r.custody.index == index && r.custody.execution == r.execution && r.execution != nil && r.execution.self == r.execution && r.execution.partialRecovery == r.custody && r.execution.binding == r.binding && r.execution.resource == r.resource && r.resource != nil && r.resource.Plan() == r.plan && r.resource.Root() == r.root && s.path == r.root && r.runner.binding == r.binding && r.runner.scoped == r.plan && reflect.DeepEqual(s.plan, r.runner.plan)
 }
 
 // Called under the original cursor mutex. It authenticates the actual writer

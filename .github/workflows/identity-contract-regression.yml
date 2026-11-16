@@ -82,6 +82,15 @@ jobs:
           go test -race -count=1 -v ./internal/dataplane -run '^TestMihomoSameBoot(CurrentRead|AbsenceRead)' | tee artifacts/sameboot-current-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessorBytes' | tee artifacts/baseline-current.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainBaselineCurrent|^TestDomainSuccessorBytes' | tee artifacts/baseline-current-race.txt
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=1 -v ./internal/dataplane \
+              -run '^TestNFQWS(ScopedIssuedBoundary|ActiveIssuedBoundary|Issued)|^TestPolicyEffectCommandInvocation' \
+              | tee "artifacts/nfq-issued-$mode.txt"
+            if grep -F -- '--- SKIP:' "artifacts/nfq-issued-$mode.txt"; then exit 1; fi
+          done
           go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestXrayListenerImage|^TestXrayImageScope|^TestXrayDomainFileObservation|^TestXrayDomainFileOpening' | tee artifacts/listener-image.txt

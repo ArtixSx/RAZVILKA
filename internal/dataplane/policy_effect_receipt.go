@@ -339,9 +339,6 @@ func (s *policyEffectSession) add(ctx context.Context, runtime PolicyEffectRunti
 		domainTCPMeasure("pre-add-original-command-boundary")(0)
 	}
 	effect := s.plan.Effects[index]
-	if s.nfqRecovery != nil {
-		s.nfqRecovery.entered = true // Before ALL runCommand paths, including refusals.
-	}
 	if _, err := s.runCommand(ctx, runtime, index, false, effect.Add); err != nil {
 		return errors.Join(ErrPolicyAdditionUnknown, err)
 	}
