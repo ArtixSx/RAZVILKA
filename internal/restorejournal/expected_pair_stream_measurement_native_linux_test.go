@@ -505,13 +505,25 @@ func TestExpectedPairStreamNativeActualFDsAndRevocation(t *testing.T) {
 	expectedPairStreamNativeTestActualFDsAndRevocation(t)
 	t.Run("close-error", func(t *testing.T) {
 		target, image, _, _ := artifactComparisonFixture(t)
-		err := target.expectedPairStreamNativeComparison(context.Background(), image, func(c context.Context, got Image, p *ArtifactSourceComparison) error { return p.hashed.Close() }, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := target.expectedPairStreamNativeComparison(ctx, image, func(c context.Context, got Image, p *ArtifactSourceComparison) error { return p.hashed.Close() }, nil)
 		if !errors.Is(err, os.ErrClosed) {
 			t.Fatal("close/descriptor failure lost", err)
 		}
 	})
 }
 func TestExpectedPairStreamNativeRefusals(t *testing.T) {
+	t.Run("deadline-required", func(t *testing.T) {
+		target, image, _, _ := artifactComparisonFixture(t)
+		invoked := false
+		callback := func(context.Context, Image, *ArtifactSourceComparison) error { invoked = true; return nil }
+		original := target.withExpectedReadComparison(context.Background(), image, callback, nil)
+		candidate := target.expectedPairStreamNativeComparison(context.Background(), image, callback, nil)
+		if invoked || !errors.Is(original, ErrInvalid) || !errors.Is(candidate, ErrInvalid) {
+			t.Fatal("finite context admission changed", invoked, original, candidate)
+		}
+	})
 	for name, run := range map[string]func(*testing.T){"join": expectedPairStreamNativeTestAlwaysJoinsBothReaders, "mutation": expectedPairStreamNativeTestMutationBetweenReadersRefuses, "reopen": expectedPairStreamNativeTestFreshReopenRejectsEqualByteReplacement, "expected-not-bytes": expectedPairStreamNativeTestExpectedImageNeverSubstitutesForManagedBytes} {
 		t.Run(name, run)
 	}
@@ -574,7 +586,9 @@ func TestExpectedPairStreamNativeRefusals(t *testing.T) {
 					}
 					return os.Chmod(path, info.Mode().Perm())
 				}
-				err := target.expectedPairStreamNativeComparison(context.Background(), image, func(context.Context, Image, *ArtifactSourceComparison) error { invoked = true; return nil }, fault)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				err := target.expectedPairStreamNativeComparison(ctx, image, func(context.Context, Image, *ArtifactSourceComparison) error { invoked = true; return nil }, fault)
 				if !changed || invoked || !errors.Is(err, ErrConflict) {
 					t.Fatal("actual short/extra stream admitted", changed, invoked, err)
 				}
@@ -589,7 +603,9 @@ func TestExpectedPairStreamNativeRefusals(t *testing.T) {
 		done.Add(1)
 		go func() {
 			defer done.Done()
-			if err := target.expectedPairStreamNativeComparison(context.Background(), image, func(_ context.Context, got Image, _ *ArtifactSourceComparison) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := target.expectedPairStreamNativeComparison(ctx, image, func(_ context.Context, got Image, _ *ArtifactSourceComparison) error {
 				if !equal(got, image) {
 					return ErrConflict
 				}
@@ -672,6 +688,9 @@ func TestExpectedPairStreamNativePairedMeasurement(t *testing.T) {
 		t.Skip("explicit isolated paired stream measurement required")
 	}
 	target, image := expectedPairStreamNativeActualTarget(t)
+	// One bounded measurement population; per-call contexts cannot restart its budget.
+	parent, stop := context.WithTimeout(t.Context(), 120*time.Second)
+	defer stop()
 	callback := func(_ context.Context, got Image, p *ArtifactSourceComparison) error {
 		if !equal(got, image) || p == nil {
 			return ErrConflict
@@ -687,7 +706,10 @@ func TestExpectedPairStreamNativePairedMeasurement(t *testing.T) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	for _, v := range variants {
-		if err := v.run(context.Background(), image, callback, nil); err != nil {
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+		err := v.run(ctx, image, callback, nil)
+		cancel()
+		if err != nil {
 			t.Fatal("untimed warmup", v.name, err)
 		}
 	}
@@ -703,7 +725,10 @@ func TestExpectedPairStreamNativePairedMeasurement(t *testing.T) {
 			totalBefore := expectedPairStreamNativeCPU(t, unix.RUSAGE_SELF)
 			start := time.Now()
 			for sample := 0; sample < samples; sample++ {
-				if err := v.run(context.Background(), image, callback, nil); err != nil {
+				ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+				err := v.run(ctx, image, callback, nil)
+				cancel()
+				if err != nil {
 					t.Fatal("actual comparison failed", v.name, pair, sample, err)
 				}
 			}
