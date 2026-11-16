@@ -23,6 +23,7 @@ on:
       - 'work/inactive-proc-fallback-*'
       - 'work/domain-baseline-tuple-collision-*'
       - 'work/nfq-wait-cleanup-*'
+      - 'work/expected-pair-stream-experiment-*'
   pull_request:
 
 permissions:
