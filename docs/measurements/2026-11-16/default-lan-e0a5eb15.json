@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "date": "2026-11-17",
+  "run_id": 43959574318,
+  "commit": "e0a5eb157211bab29c451307d9862a50e5a2035a",
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43959574318",
+  "observed_at_utc": "2026-11-16T21:41:46.863193+00:00",
+  "overall_run_status_at_observation": "completed",
+  "overall_conclusion_at_observation": "success",
+  "jobs_at_observation": [
+    {
+      "name": "live-native (manual-http)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "live-native (check-settlement)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "live-native (lifecycle)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "live-native (postcas-failure)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "candidate_manual_test": "PASS",
+  "candidate_lifecycle_step": "SUCCESS",
+  "candidate_postcas_job": "SUCCESS",
+  "candidate_check_settlement_job": "SUCCESS",
+  "manual_test_s": 236.5,
+  "rounds": [
+    {
+      "index": 0,
+      "apply_s": 80.294316816,
+      "stop_s": 5.677672173,
+      "cycle_s": 117.147982549,
+      "closing_retry": false
+    },
+    {
+      "index": 1,
+      "apply_s": 80.412018977,
+      "stop_s": 5.642808823,
+      "cycle_s": 117.268726852,
+      "closing_retry": true
+    }
+  ],
+  "committed_and_replay_refused_both": true,
+  "restored_physical_baseline_both": true,
+  "mandatory_probes_per_round": 2,
+  "original_budgets": {
+    "rounds": 2,
+    "aggregate_s": 600,
+    "round_s": 300,
+    "operation_s": 110,
+    "production_apply_s": 480
+  },
+  "evidence_root": "C:/RAZVILKA-research-20261116/default-live-e0a5eb15",
+  "raw_manifest": "C:/RAZVILKA-research-20261116/default-live-e0a5eb15/sha256-manifest.json",
+  "raw_manifest_sha256": "631858704408f98f3568d8032d5226123013bc45b0917e9f284b84fbce9cd133",
+  "raw_sha256": {
+    "candidate-summary.json": "04776e3d8a332a9aecd28d5fae0b9108dd0514370cdb0fbd675b0f85a2fbb6b4",
+    "run.json": "e87e0ad8ac0c4be1683c591156f2ac2f1d651f9ac1f470ceba8249fd21c5959d",
+    "run.log": "c57730c5e8c45142484d7735737832f02ddf58241d02b4a2b9ae676da22d559b",
+    "provenance/mihomo-default-hev-check-settlement-e0a5eb157211bab29c451307d9862a50e5a2035a/build.txt": "c821466f0ad54aff3e5007c2dc7438d8c0d0ecea07180e369261c084a64c6c59",
+    "provenance/mihomo-default-hev-check-settlement-e0a5eb157211bab29c451307d9862a50e5a2035a/delivery.txt": "b4d6804ee5833d8a33eeb502939a25472517e94f0ece4d57abb1c15aff5ccef2",
+    "provenance/mihomo-default-hev-check-settlement-e0a5eb157211bab29c451307d9862a50e5a2035a/pin-tests.txt": "4abff6f21d922f5c3dc39c3f8746cc5b845b0eabf3adaf1c073c87a48f234516",
+    "provenance/mihomo-default-hev-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/build.txt": "c821466f0ad54aff3e5007c2dc7438d8c0d0ecea07180e369261c084a64c6c59",
+    "provenance/mihomo-default-hev-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/delivery.txt": "b4d6804ee5833d8a33eeb502939a25472517e94f0ece4d57abb1c15aff5ccef2",
+    "provenance/mihomo-default-hev-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/pin-tests.txt": "1a2c335425414bad24f0b51d103edade9abf5fc9537accc31c0c925cce5922ea",
+    "provenance/mihomo-default-hev-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/build.txt": "c821466f0ad54aff3e5007c2dc7438d8c0d0ecea07180e369261c084a64c6c59",
+    "provenance/mihomo-default-hev-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/delivery.txt": "b4d6804ee5833d8a33eeb502939a25472517e94f0ece4d57abb1c15aff5ccef2",
+    "provenance/mihomo-default-hev-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/pin-tests.txt": "1de580dbd31eed6ca7151afa0689022e80448efda090992702b8a43145e95626",
+    "provenance/mihomo-default-hev-postcas-failure-e0a5eb157211bab29c451307d9862a50e5a2035a/build.txt": "c821466f0ad54aff3e5007c2dc7438d8c0d0ecea07180e369261c084a64c6c59",
+    "provenance/mihomo-default-hev-postcas-failure-e0a5eb157211bab29c451307d9862a50e5a2035a/delivery.txt": "b4d6804ee5833d8a33eeb502939a25472517e94f0ece4d57abb1c15aff5ccef2",
+    "provenance/mihomo-default-hev-postcas-failure-e0a5eb157211bab29c451307d9862a50e5a2035a/pin-tests.txt": "f48beb7e56bd36743983acc661bb958a09595cc55391ff94378794e334f5c0a1",
+    "provenance/mihomo-live-cpu-e0a5eb157211bab29c451307d9862a50e5a2035a/cpu-top.txt": "ad3548b1eb9a6417401831774d6608cd94b604a9a8715aea7511e88c21423571",
+    "provenance/mihomo-live-cpu-e0a5eb157211bab29c451307d9862a50e5a2035a/live.cpu.pprof": "4fb85fa1ebc227fedd394335d2608fa0299860e6e9d5d42e2b4bea93fb45e630",
+    "provenance/mihomo-live-cpu-e0a5eb157211bab29c451307d9862a50e5a2035a/status.txt": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78",
+    "provenance/mihomo-default-hev-postcas-failure-e0a5eb157211bab29c451307d9862a50e5a2035a/build/build-manifest.json": "77023e275c1a61e76634b645d9a73dc505de4d5ec76c53b1dae8d99776a33e61",
+    "provenance/mihomo-default-hev-postcas-failure-e0a5eb157211bab29c451307d9862a50e5a2035a/build/fault-tests.txt": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050",
+    "provenance/mihomo-default-hev-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/build/build-manifest.json": "77023e275c1a61e76634b645d9a73dc505de4d5ec76c53b1dae8d99776a33e61",
+    "provenance/mihomo-default-hev-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/build/fault-tests.txt": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050",
+    "provenance/mihomo-default-hev-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/build/build-manifest.json": "77023e275c1a61e76634b645d9a73dc505de4d5ec76c53b1dae8d99776a33e61",
+    "provenance/mihomo-default-hev-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/build/fault-tests.txt": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050",
+    "provenance/mihomo-default-hev-check-settlement-e0a5eb157211bab29c451307d9862a50e5a2035a/build/build-manifest.json": "77023e275c1a61e76634b645d9a73dc505de4d5ec76c53b1dae8d99776a33e61",
+    "provenance/mihomo-default-hev-check-settlement-e0a5eb157211bab29c451307d9862a50e5a2035a/build/fault-tests.txt": "6049f8abf4b87ecc6f46b95391aa1416ee96ef199ccbf8bd13c28108b7258050",
+    "manual/mihomo-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/mihomo-live-profile/cpu-top.txt": "316aed2f2f9121c5860bcb626c1340682407913de7454774d54b99919f8f4aa4",
+    "manual/mihomo-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/mihomo-live-profile/live.cpu.pprof": "5bdf46e59554f8bc61d2ef658f2ef69959d1ec9587f9ef72a41187b711b7fc19",
+    "manual/mihomo-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/mihomo-live-profile/status.txt": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78",
+    "manual/mihomo-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/mihomo-manual-http/native.log": "f8185c1549a5f817498f2dbed07801be1dfa546b7f89b1ce9fe457aeac7b92aa",
+    "historical/mihomo-baseline4cc-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/comparison.txt": "f041081184d88ac626abe7fa41639dd1940a113e1eac272b722175f2e0f08619",
+    "historical/mihomo-baseline4cc-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/cpu-top.txt": "9f5e5ecbb77bf88b0add110691619d6dc5827b50faf610dd506f3964913a3cb3",
+    "historical/mihomo-baseline4cc-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/live.cpu.pprof": "3e10b9a2d7430c6b3e2bc6d7616b39006f2d57e34a60e9c2152df43f88cdf9ee",
+    "historical/mihomo-baseline4cc-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/native.log": "1f93d43b6f0d77f94cec15ea61a494dc4891e5c1f65bffd571150869f2a6f81b",
+    "historical/mihomo-baseline4cc-lifecycle-e0a5eb157211bab29c451307d9862a50e5a2035a/status.txt": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78",
+    "historical/mihomo-baseline4cc-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/comparison.txt": "c6d19981e0e01d1a509163f9706bd47dade1a2dca82d15d193201025dea75097",
+    "historical/mihomo-baseline4cc-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/cpu-top.txt": "00274d3c9be88f32cdb5db4d0617d389b866ddea379b7e7994303b7820d26ce4",
+    "historical/mihomo-baseline4cc-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/live.cpu.pprof": "1f11bc967d16fb7132742475a9394a22a7b5bd9764c5fc702b303a0ac0693801",
+    "historical/mihomo-baseline4cc-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/native.log": "aeacf7506571a970cd056cef34a72ed7775f88d3c895be40efb10b6cc8d7d271",
+    "historical/mihomo-baseline4cc-manual-http-e0a5eb157211bab29c451307d9862a50e5a2035a/status.txt": "bc56f7b072f8041b0fd685d845a48089553b201f77c300d1f2880e8e79c75c78"
+  },
+  "limitations": [
+    "Run contains rejected unrelated NFQ clear patch e0; Source.Current implementation same72db and paired ce2.",
+    "Historical4cc uses official HEV while candidate uses vendor default; not isolated before/after timing.",
+    "No router or anonymous public vendor download evidence.",
+    "Across-host a0ac failure versus e0 pass is not causal speed measurement.",
+    "Candidate test success and historical comparison conclusion are distinct.",
+    "Exact markers establish isolated native-PC lifecycle/service/LAN fixture, not physical router acceptance."
+  ],
+  "candidate_lifecycle_test_s": 276.1,
+  "candidate_lifecycle_rounds": [
+    {
+      "index": 0,
+      "apply_s": 94.017713951,
+      "stop_s": 6.810273369,
+      "cycle_s": 136.45115188,
+      "closing_retry": false
+    },
+    {
+      "index": 1,
+      "apply_s": 92.837653733,
+      "stop_s": 6.812469211,
+      "cycle_s": 137.169893869,
+      "closing_retry": true
+    }
+  ],
+  "historical_comparison": "PASS same runner per job; different code and HEV source; not an isolated performance comparison",
+  "historical_manual_round_apply_s": [
+    90.769604873,
+    90.748728966
+  ],
+  "historical_lifecycle_round_apply_s": [
+    106.948848257,
+    106.883772032
+  ],
+  "normal_and_race_original_read_bookends": "PASS"
+}

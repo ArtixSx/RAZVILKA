@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "date": "2026-11-17",
+  "run_id": 43960184382,
+  "commit": "ce2e09e239389e13c247954caf7ecf1fd3f101f6",
+  "run_url": "https://github.com/ArtixSx/RAZVILKA/actions/runs/43960184382",
+  "ci_conclusion": "success",
+  "scope": "Full synchronous Source.Current on actual installed pinned Mihomo1.19.33. Same source/controller/journal/receipt and same host per pair. Prior serial Current/currentLocked bodies versus current concrete-target parallel2SHA branch.",
+  "baseline_source_commit": "b9a0bfe10917205600e26b9c5ddfe98e73ce78fd",
+  "baseline_source_file_sha256": "4350d8763a5516119c9b10e84cc453e571b98ccfd8a31e566772f1cae887bc69",
+  "contract": {
+    "pairs_per_build": 8,
+    "samples_per_row": 2,
+    "balanced_order": "AB,BA repeated4times",
+    "rows_total": 32,
+    "fresh_artifact_streams_per_current": 2,
+    "controller_full_hash_retained": true,
+    "receipt_read_after_join_revoke_close": true,
+    "per_call_s": 5,
+    "whole_population_s": 120,
+    "production_deadlines_changed": false,
+    "native_regressions": "normal and race PASS; real managed/pool/receipt mutation, receipt error and original context/closed target, fallback, cancellation"
+  },
+  "modes": {
+    "normal": {
+      "controller_sha256": "edb270a793c32b7e122277b56686fd9d501939b07ba5e49b6435679587da8440",
+      "controller_bytes": 11960585,
+      "wall_ns": {
+        "original_median_ms": 87.397825,
+        "candidate_median_ms": 52.86714825,
+        "paired_saved_median_ms": 34.931743499999996,
+        "paired_saved_mean_ms": 34.442790375,
+        "paired_saved_min_ms": 27.4734805,
+        "paired_saved_max_ms": 39.107878,
+        "candidate_faster_pairs": 8,
+        "paired_percent_saved_median": 39.810531672198906
+      },
+      "total_process_cpu_ns": {
+        "original_median_ms": 87.7425,
+        "candidate_median_ms": 98.67025000000001,
+        "paired_saved_median_ms": -9.963000000000001,
+        "paired_saved_mean_ms": -10.042187499999999,
+        "paired_saved_min_ms": -21.165499999999994,
+        "paired_saved_max_ms": -0.42549999999999955,
+        "candidate_faster_pairs": 0,
+        "paired_percent_saved_median": -11.222493399251587
+      }
+    },
+    "race": {
+      "controller_sha256": "7d4bdd153af5b2e94adf4eb426ff3ad8fcda278e66788f930510b980935c2c85",
+      "controller_bytes": 16474377,
+      "wall_ns": {
+        "original_median_ms": 117.51070924999999,
+        "candidate_median_ms": 68.54895625,
+        "paired_saved_median_ms": 50.08706775,
+        "paired_saved_mean_ms": 48.8826035,
+        "paired_saved_min_ms": 41.420455000000004,
+        "paired_saved_max_ms": 55.660219999999995,
+        "candidate_faster_pairs": 8,
+        "paired_percent_saved_median": 42.484466268714286
+      },
+      "total_process_cpu_ns": {
+        "original_median_ms": 117.51050000000001,
+        "candidate_median_ms": 120.679,
+        "paired_saved_median_ms": -1.982750000000003,
+        "paired_saved_mean_ms": -3.8435000000000024,
+        "paired_saved_min_ms": -21.305499999999995,
+        "paired_saved_max_ms": 11.048999999999992,
+        "candidate_faster_pairs": 2,
+        "paired_percent_saved_median": -1.6124566681307957
+      }
+    }
+  },
+  "decision": "Consistent same-host full Current wall improvement; retain full native HTTP/route gates. CPU is not reduced.",
+  "evidence_root": "C:/RAZVILKA-research-20261116/source-current-ce2",
+  "raw_manifest": "C:/RAZVILKA-research-20261116/source-current-ce2/sha256-manifest.json",
+  "raw_manifest_sha256": "2ad518de30bb1224afd634f1de50b933803fb2d90c9a58846a9432217e6bef9b",
+  "raw_sha256": {
+    "analysis.json": "1f41baadea8fe92c243fd08791086e22fb18eaf6c199ca79d8ccd15a92750b77",
+    "run.json": "61378130a987e1a14e696e8cbc87abd067786a9b4bf0142b1aa1b6ea0d7759a4",
+    "artifacts/component-source-comparison-ce2e09e239389e13c247954caf7ecf1fd3f101f6/normal-samples.json": "e40db204ba01d47477b5d08d6eb94ce41bedcddc062296b266b0989b596f6b02",
+    "artifacts/component-source-comparison-ce2e09e239389e13c247954caf7ecf1fd3f101f6/normal.log": "47aeeebcdaa61b60328e1a30412ab01abfb6e6f7a2c69445ef4a88a40eadf142",
+    "artifacts/component-source-comparison-ce2e09e239389e13c247954caf7ecf1fd3f101f6/platform.txt": "eff62ad912c4b0cde14ac0fabd74e551370c3b0483f9c941baa0a9a153824082",
+    "artifacts/component-source-comparison-ce2e09e239389e13c247954caf7ecf1fd3f101f6/race-samples.json": "971089ac1941c22ad31b7d84be9143ebd015d0b4d7a455d0ef86db3708385edc",
+    "artifacts/component-source-comparison-ce2e09e239389e13c247954caf7ecf1fd3f101f6/race.log": "96cba3a3ccbffbfce9d378fbee3c879dabd2d7d76fa0ce9d5badb38d6244a73d"
+  },
+  "limitations": [
+    "Same runner and same actual source within each pair; normal/race are different builds/controller bytes.",
+    "Full Source.Current library result, not full HTTP Apply, route, LAN or router acceptance.",
+    "Exact prior Current/currentLocked bodies; all other actual implementation shared.",
+    "Thread CPU excludes new hash workers and cannot be used as total CPU.",
+    "No cache, skipped fresh bytes or authority reuse.",
+    "Normal paired totalCPU rises11.22%; race1.61%. No efficiency/power improvement claim.",
+    "Single-core and router performance remains unverified.",
+    "This exactce2 revision excludes rejected unrelated NFQ clear experiment."
+  ]
+}

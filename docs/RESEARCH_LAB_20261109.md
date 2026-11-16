@@ -1132,3 +1132,50 @@ rollback verified и независимый Close PASS. Четыре WG observat
 но сравнение с другим host не принимается за ускорение. Запущен отдельный
 same-host fixed ABBA: полный исходный observer и две исходные8s проверки,
 разница source copies ровно один table reader. Этот тест не называется полным Apply.
+
+
+## 17.11: реализованный DIRECT и полные сравнения исходных наблюдателей
+
+После изучения четырёх закреплённых проектов (ссылки и лицензии в
+[manifest](measurements/2026-11-16/direct-fallback-source-review.json)) выбран
+router-originated DIRECT. На69423dfe исходный accepted flow, конечный realIP,
+поколение, original capture/control и прежние complete RPDB/packet checks
+остаются обязательными. Новый socket получает один проверенный адрес egress
+и собственный порт ядра, обязательный SO_BINDTODEVICE; IP_TRANSPARENT,
+SO_MARK и пять старых per-flow BF effects не используются. Unknown/pending BF
+история по-прежнему запрещает новое соединение. Context cleanup/read/preadd
+не даёт forward authority. Native FORWARD DROP/OUTPUT ACCEPT fixture проверяет
+явное закрытие принятого TCP, positive-control пассивного наблюдателя и zero
+outbound SYN, затем восстановление политики и join. Это ещё ожидающий actual
+run43962866341, а не готовность router или разрешение ordinary DomainApply.
+
+Полные наблюдатели измерены на одинаковых исходных ресурсах:
+
+| Измерение | До → после, мс | Ограничения |
+| --- | --- | --- |
+| WG original inactive observer7419, normal | 3850.813 → 2590.614 | same-host ABBA,4/arm; весь WG observer, не Apply |
+| WG original inactive observer7419, race | 5908.976 → 3936.060 | обе реализации WG/AWG и32 вызова прошли; не router |
+| Source.Current ce2, normal | 87.398 → 52.867 |8 пар, все быстрее; paired totalCPU +11.22% |
+| Source.Current ce2, race |117.511 →68.549 |8 пар, все быстрее; paired totalCPU +1.61% |
+
+[WG raw/result](measurements/2026-11-16/wg-pair-7419b4e5.json),
+[full Source.Current](measurements/2026-11-16/source-current-ce2e09e2.json).
+Полный Mihomo43959574318 terminal SUCCESS4/4: manual HTTP два Apply80.294/80.412с,
+Stop5.678/5.643с, service probes, replay refusal, physical baseline; lifecycle,
+post-CAS failure/undo и settlement тоже PASS. [Полный результат](measurements/2026-11-16/default-lan-e0a5eb15.json).
+Это e0 с отдельно позднее отклонённым NFQ clear экспериментом;72db Mihomo код
+сохранён наce2, но точная ревизия не подменяется. Историческое4cc сравнение
+прошло на тех же hosts, однако другой HEV не позволяет приписать весь эффект
+одной оптимизации. Отдельный race parent/ACK43961200477 FAIL и не закрыт этим PASS.
+
+Воспроизведение на disposable Linux:
+
+```sh
+sh scripts/compare-wg-empty-table.sh /tmp/wg-pair-new-output
+RAZVILKA_MIHOMO_ARCHIVE=/path/to/pinned-mihomo.gz RAZVILKA_SOURCE_CURRENT_MEASURE=1 go test -tags razvilka_native_fixture ./internal/components -run '^TestMihomoLiveSourceCurrentNative' -count=1 -v
+RAZVILKA_XRAY_NATIVE=/path/to/pinned-xray RAZVILKA_DOMAIN_DIRECT_DENY_NATIVE=1 sh scripts/test-domain-original-native.sh
+```
+
+Точные pin/setup, flags и режимы находятся в wg-empty-table-comparison.yml,
+source-read-comparison.yml и domain-router-direct.yml. Deadline production не
+изменены; generic CI, native Linux и router/LAN считаются отдельно.
