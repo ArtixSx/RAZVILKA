@@ -30,7 +30,8 @@ go test $race_flag -tags razvilka_native_fixture,razvilka_hev_altstack_lab -ldfl
 # Preserve the same original controller-reader size bound used by sameboot.
 size=$(wc -c < "$work/app.test")
 test "$size" -gt 0 && test "$size" -le 67108864 || exit 1
-printf 'HEV_REPLACEMENT_SOURCE_REVISION=%s\n' "$(git rev-parse HEAD)"
+revision=$(git -c safe.directory="$repo" rev-parse HEAD)
+printf 'HEV_REPLACEMENT_SOURCE_REVISION=%s\n' "$revision"
 printf 'HEV_REPLACEMENT_CONTROLLER_SIZE=%s\n' "$size"
 printf 'HEV_REPLACEMENT_CONTROLLER_SHA256='
 sha256sum "$work/app.test" | cut -d ' ' -f 1
