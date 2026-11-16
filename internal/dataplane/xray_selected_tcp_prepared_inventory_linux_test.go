@@ -251,12 +251,12 @@ func TestXrayPreparedInventoryBookendsAndTrueFinalImage(t *testing.T) {
 	f := newXrayPreparedManagerFixture(t, func(f *xrayPreparedManagerFixture, ctx context.Context, r *XraySelectedTCPExecutionResource) {
 		beforeInside, beforeOutside, beforeReads := f.inside, f.outside, f.reads
 		var saved context.Context
-		original := f.checks.read
-		f.checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+		original := f.checks.readSource
+		f.checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
 			saved = ctx
-			return original(ctx, identity)
-		}
-		defer func() { f.checks.read = original }()
+			return original.readInventory(ctx, identity)
+		})
+		defer func() { f.checks.readSource = original }()
 		if err := f.checks.InventoryCheck(context.WithValue(ctx, xrayPreparedInventoryEntryKey{}, true), f.checks.network, f.plan.LAN); err != nil {
 			t.Fatal(err)
 		}
@@ -280,8 +280,8 @@ func TestXrayPreparedInventoryBookendsAndTrueFinalImage(t *testing.T) {
 func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T) {
 	f := newXrayPreparedManagerFixture(t, func(f *xrayPreparedManagerFixture, ctx context.Context, r *XraySelectedTCPExecutionResource) {
 		e := f.x.material.execution
-		originalRead, originalGuard := f.checks.read, r.scope.guard
-		defer func() { f.checks.read, r.scope.guard = originalRead, originalGuard }()
+		originalRead, originalGuard := f.checks.readSource, r.scope.guard
+		defer func() { f.checks.readSource, r.scope.guard = originalRead, originalGuard }()
 		readReached, fullGuards := false, 0
 		r.scope.guard = func(ctx context.Context) error {
 			e.mu.Lock()
@@ -292,7 +292,7 @@ func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T)
 			}
 			return originalGuard(ctx)
 		}
-		f.checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+		f.checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
 			e.mu.Lock()
 			started := e.started
 			e.mu.Unlock()
@@ -303,8 +303,8 @@ func TestXrayPreparedInventoryOriginalActivateDispatchBeforeNative(t *testing.T)
 				}
 				return BackendInventorySnapshot{}, f.cut // Before any native call.
 			}
-			return originalRead(ctx, identity)
-		}
+			return originalRead.readInventory(ctx, identity)
+		})
 		// Invoke the unchanged original publisher with the SAME actual issued
 		// Manager resource/context. It must consume e.started and reach legacy
 		// inventory, whose first complete read refuses before native/version.
@@ -330,7 +330,7 @@ func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 	for _, which := range []string{"opening-guard", "closing-guard", "provisional-image", "final-image", "final-process", "closing-process", "closing-common", "final-common", "cancel"} {
 		t.Run(which, func(t *testing.T) {
 			f := newXrayPreparedManagerFixture(t, func(f *xrayPreparedManagerFixture, ctx context.Context, r *XraySelectedTCPExecutionResource) {
-				originalRead, originalGuard := f.checks.read, r.scope.guard
+				originalRead, originalGuard := f.checks.readSource, r.scope.guard
 				reads, guards := 0, 0
 				commonPath := filepath.Join(r.rootPath, policyAdditionFile)
 				publish := func() {
@@ -343,7 +343,7 @@ func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 					}
 				}
 				defer func() {
-					f.checks.read, r.scope.guard = originalRead, originalGuard
+					f.checks.readSource, r.scope.guard = originalRead, originalGuard
 					r.observationMu.Lock()
 					r.child = nil
 					r.observationMu.Unlock()
@@ -361,9 +361,9 @@ func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 					}
 					return originalGuard(ctx)
 				}
-				f.checks.read = func(ctx context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+				f.checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
 					reads++
-					image, err := originalRead(ctx, id)
+					image, err := originalRead.readInventory(ctx, id)
 					if reads == 2 && which == "provisional-image" || reads == 3 && which == "final-image" {
 						image.Rows = append(image.Rows, BackendInventoryRow{Family: 4, Table: "nat", Tokens: []string{"-A", "FOREIGN", "-j", "RETURN"}})
 					}
@@ -374,7 +374,7 @@ func TestXrayPreparedInventoryDriftAndPublicationRefuse(t *testing.T) {
 						cancel()
 					}
 					return image, err
-				}
+				})
 				if err := f.checks.InventoryCheck(context.WithValue(c, xrayPreparedInventoryEntryKey{}, true), f.checks.network, f.plan.LAN); err == nil {
 					t.Fatal("prepared read accepted drift or rowless publication", which)
 				}

@@ -18,8 +18,8 @@ func withXrayOriginalUnusedInventory(t *testing.T, audit func(*xrayPreparedManag
 	t.Helper()
 	called := false
 	f := newXrayPreparedManagerFixture(t, func(f *xrayPreparedManagerFixture, _ context.Context, r *XraySelectedTCPExecutionResource) {
-		original := f.checks.read
-		f.checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+		original := f.checks.readSource
+		f.checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
 			e := f.x.material.execution
 			e.mu.Lock()
 			retired := e.retired
@@ -28,8 +28,8 @@ func withXrayOriginalUnusedInventory(t *testing.T, audit func(*xrayPreparedManag
 				called = true
 				audit(f, ctx, r)
 			}
-			return original(ctx, identity)
-		}
+			return original.readInventory(ctx, identity)
+		})
 	})
 	result, err := f.x.manager.Apply(f.ctx, f.plan, nil)
 	assertXrayPreparedOriginalRollback(t, f, result, err)
@@ -157,12 +157,12 @@ func TestXrayUnusedInventoryNativeAndCOMMONPublicationRefuse(t *testing.T) {
 
 func TestXrayUnusedInventoryFinalImageAndReservedRowsRefuse(t *testing.T) {
 	withXrayOriginalUnusedInventory(t, func(f *xrayPreparedManagerFixture, ctx context.Context, r *XraySelectedTCPExecutionResource) {
-		original := f.checks.read
-		defer func() { f.checks.read = original }()
+		original := f.checks.readSource
+		defer func() { f.checks.readSource = original }()
 		for _, which := range []string{"final-native", "final-common", "RZX", "RZG"} {
 			reads := 0
-			f.checks.read = func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
-				image, err := original(ctx, identity)
+			f.checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, identity netidentity.Identity) (BackendInventorySnapshot, error) {
+				image, err := original.readInventory(ctx, identity)
 				reads++
 				if which == "RZX" || which == "RZG" {
 					image.Rows = append(image.Rows, BackendInventoryRow{Family: 4, Table: "nat", Tokens: []string{"-N", which + "_unowned"}})
@@ -178,7 +178,7 @@ func TestXrayUnusedInventoryFinalImageAndReservedRowsRefuse(t *testing.T) {
 					}
 				}
 				return image, err
-			}
+			})
 			err := f.checks.InventoryCheck(ctx, f.checks.network, nil)
 			r.observationMu.Lock()
 			r.selectorUsed = false

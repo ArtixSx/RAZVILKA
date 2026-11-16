@@ -240,18 +240,18 @@ func TestXrayPreResourceFinalStockLeafRequiresOriginalScopeAndStableImage(t *tes
 				t.Fatal("missing or copied original owner acquired stock comparison")
 			}
 		}
-		originalRead := checks.read
+		originalRead := checks.readSource
 		calls := 0
-		checks.read = func(ctx context.Context, got netidentity.Identity) (BackendInventorySnapshot, error) {
-			image, err := originalRead(ctx, got)
+		checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, got netidentity.Identity) (BackendInventorySnapshot, error) {
+			image, err := originalRead.readInventory(ctx, got)
 			calls++
 			if calls == 2 {
 				image.NFTGeneration++
 			}
 			return image, err
-		}
+		})
 		err = checks.retiredWGInventory(cleanup, pre.execution.plan.LAN)
-		checks.read = originalRead
+		checks.readSource = originalRead
 		if !errors.Is(err, ErrBackendInventoryUnknown) {
 			t.Fatal("changed final full image supplied a stock settlement")
 		}
@@ -523,12 +523,12 @@ func TestXrayPreResourceStockGrantsNoActiveConsumerRows(t *testing.T) {
 		if err != nil {
 			t.Fatal("original cleanup context refused")
 		}
-		originalRead := checks.read
-		defer func() { checks.read = originalRead }()
+		originalRead := checks.readSource
+		defer func() { checks.readSource = originalRead }()
 		for _, failure := range []string{"project-body", "incomplete", "foreign-tool-review", "unknown-read"} {
 			t.Run(failure, func(t *testing.T) {
-				checks.read = func(ctx context.Context, got netidentity.Identity) (BackendInventorySnapshot, error) {
-					image, err := originalRead(ctx, got)
+				checks.readSource = networkPolicyInventoryCallback(func(ctx context.Context, got netidentity.Identity) (BackendInventorySnapshot, error) {
+					image, err := originalRead.readInventory(ctx, got)
 					switch failure {
 					case "project-body":
 						image.Rows = append(image.Rows, BackendInventoryRow{Family: 4, Table: "nat", Tokens: []string{"-A", "RZX_foreign", "-j", "RETURN"}})
@@ -540,7 +540,7 @@ func TestXrayPreResourceStockGrantsNoActiveConsumerRows(t *testing.T) {
 						return BackendInventorySnapshot{}, ErrBackendInventoryUnknown
 					}
 					return image, err
-				}
+				})
 				if checks.retiredWGInventory(cleanup, pre.execution.plan.LAN) == nil || checks.InventoryCheck(ctx, checks.network, pre.execution.plan.LAN) == nil {
 					t.Fatal("unknown/foreign full image acquired a pre-resource allowance")
 				}

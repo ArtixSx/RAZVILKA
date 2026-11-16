@@ -20,9 +20,9 @@ func TestXrayInventoryScopeOriginalManagerKeepsExpensiveGuardsOutsideBudget(t *t
 			return
 		}
 		audited = true
-		originalGuard, originalIdentity, originalRead := pre.owner.scope.guard, checks.identity.withCurrent, checks.read
+		originalGuard, originalIdentity, originalRead := pre.owner.scope.guard, checks.identity.withCurrent, checks.readSource
 		defer func() {
-			pre.owner.scope.guard, checks.identity.withCurrent, checks.read = originalGuard, originalIdentity, originalRead
+			pre.owner.scope.guard, checks.identity.withCurrent, checks.readSource = originalGuard, originalIdentity, originalRead
 		}()
 		// Model the actual reviewed Provider's finite aggregate with a logical
 		// clock. Three six-unit physical guards exceed its sixteen-unit budget;
@@ -48,11 +48,11 @@ func TestXrayInventoryScopeOriginalManagerKeepsExpensiveGuardsOutsideBudget(t *t
 			return originalGuard(c)
 		}
 		var retained context.Context
-		checks.read = func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+		checks.readSource = networkPolicyInventoryCallback(func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
 			reads++
 			retained = c
-			return originalRead(c, id)
-		}
+			return originalRead.readInventory(c, id)
+		})
 		if err := checks.InventoryCheck(ctx, checks.network, pre.execution.plan.LAN); err != nil {
 			t.Fatalf("original collector exceeded its nested physical budget: %v", err)
 		}
@@ -79,8 +79,8 @@ func TestXrayInventoryScopeFullOriginalGuardRefusesBothBookends(t *testing.T) {
 					return
 				}
 				audited = true
-				originalGuard, originalRead := pre.owner.scope.guard, checks.read
-				defer func() { pre.owner.scope.guard, checks.read = originalGuard, originalRead }()
+				originalGuard, originalRead := pre.owner.scope.guard, checks.readSource
+				defer func() { pre.owner.scope.guard, checks.readSource = originalGuard, originalRead }()
 				calls, reads := 0, 0
 				pre.owner.scope.guard = func(c context.Context) error {
 					calls++
@@ -89,10 +89,10 @@ func TestXrayInventoryScopeFullOriginalGuardRefusesBothBookends(t *testing.T) {
 					}
 					return originalGuard(c)
 				}
-				checks.read = func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+				checks.readSource = networkPolicyInventoryCallback(func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
 					reads++
-					return originalRead(c, id)
-				}
+					return originalRead.readInventory(c, id)
+				})
 				err := checks.InventoryCheck(ctx, checks.network, pre.execution.plan.LAN)
 				if !errors.Is(err, ErrReviewChanged) || !errors.Is(err, ErrXrayOperationOwner) || calls != failAt || reads != 2*(failAt-1) {
 					t.Fatalf("original bookend calls=%d captures=%d error=%v", calls, reads, err)
@@ -119,17 +119,17 @@ func TestXrayInventoryScopeBothCompleteImageComparisonsRefuseDrift(t *testing.T)
 					return
 				}
 				audited = true
-				originalRead := checks.read
-				defer func() { checks.read = originalRead }()
+				originalRead := checks.readSource
+				defer func() { checks.readSource = originalRead }()
 				reads := 0
-				checks.read = func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
-					image, err := originalRead(c, id)
+				checks.readSource = networkPolicyInventoryCallback(func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+					image, err := originalRead.readInventory(c, id)
 					reads++
 					if reads == changedAt {
 						image.NFTGeneration++
 					}
 					return image, err
-				}
+				})
 				err := checks.InventoryCheck(ctx, checks.network, pre.execution.plan.LAN)
 				if !errors.Is(err, ErrBackendInventoryUnknown) || reads != changedAt {
 					t.Fatalf("complete image drift captures=%d error=%v", reads, err)
@@ -211,19 +211,19 @@ func TestXrayInventoryScopeCancellationDuringCaptureCannotFinishRead(t *testing.
 			return
 		}
 		audited = true
-		originalRead := checks.read
-		defer func() { checks.read = originalRead }()
+		originalRead := checks.readSource
+		defer func() { checks.readSource = originalRead }()
 		original, cancel := context.WithCancel(ctx)
 		defer cancel()
 		reads := 0
-		checks.read = func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
-			image, err := originalRead(c, id)
+		checks.readSource = networkPolicyInventoryCallback(func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+			image, err := originalRead.readInventory(c, id)
 			reads++
 			if reads == 2 {
 				cancel()
 			}
 			return image, err
-		}
+		})
 		err := checks.InventoryCheck(original, checks.network, pre.execution.plan.LAN)
 		if !errors.Is(err, context.Canceled) || reads != 2 {
 			t.Fatalf("cancelled capture reached final read: captures=%d error=%v", reads, err)
@@ -245,10 +245,10 @@ func TestXrayInventoryScopeClosingPublicationWithoutKernelRowsRefuses(t *testing
 					return
 				}
 				audited = true
-				originalGuard, originalRead := pre.owner.scope.guard, checks.read
+				originalGuard, originalRead := pre.owner.scope.guard, checks.readSource
 				view := checks.proxies["xray"]
 				defer func() {
-					pre.owner.scope.guard, checks.read = originalGuard, originalRead
+					pre.owner.scope.guard, checks.readSource = originalGuard, originalRead
 					_ = os.Remove(view.forwardingPath())
 				}()
 				calls, reads := 0, 0
@@ -269,15 +269,15 @@ func TestXrayInventoryScopeClosingPublicationWithoutKernelRowsRefuses(t *testing
 					}
 					return originalGuard(c)
 				}
-				checks.read = func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
+				checks.readSource = networkPolicyInventoryCallback(func(c context.Context, id netidentity.Identity) (BackendInventorySnapshot, error) {
 					reads++
 					if reads == 3 && publication == "final-capture" {
 						if err := publish(); err != nil {
 							return BackendInventorySnapshot{}, err
 						}
 					}
-					return originalRead(c, id)
-				}
+					return originalRead.readInventory(c, id)
+				})
 				err := checks.InventoryCheck(ctx, checks.network, pre.execution.plan.LAN)
 				if !errors.Is(err, ErrNetworkPolicyConsumers) || calls != 2 || reads != map[string]int{"closing-guard": 2, "final-capture": 3}[publication] {
 					t.Fatalf("closing producer publication escaped final absence: guards=%d captures=%d error=%v", calls, reads, err)
