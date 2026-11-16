@@ -91,6 +91,13 @@ func mihomoSameBootNativeFailure(ctx context.Context, stage string, err error) e
 		return err
 	}
 	switch stage {
+	case "process-terminal-invalid", "process-terminal-self", "process-terminal-observed-dead", "process-terminal-observed-multithread-zombie",
+		"process-terminal-named-not-gone", "process-terminal-gone-closing", "process-terminal-read", "process-terminal-parse",
+		"process-terminal-unbound-birth", "process-terminal-birth-changed", "process-terminal-live-state", "process-terminal-multithread-zombie",
+		"process-terminal-identity-closing", "process-terminal-zombie-closing",
+		"process-terminal-pf-exiting", "process-terminal-no-pf-exiting", "process-terminal-state-running", "process-terminal-state-sleeping",
+		"process-terminal-state-disk-wait", "process-terminal-state-stopped", "process-terminal-state-dead", "process-terminal-state-other",
+		"process-empty-command-self", "process-empty-command-terminal-refused":
 	case "owner", "inputs-opening", "plan-inputs", "policy-close", "static-current", "static-close", "read-opening", "control-opening", "processes", "inputs-closing", "read-closing", "control-closing",
 		"process-owner", "process-network", "process-parent-opening", "process-parent-pass", "process-parent-closing", "process-platform", "process-self-opening", "process-listener", "process-self-closing", "process-provider", "process-inventory-unknown", "process-inventory-proc.thread-net-path", "process-inventory-proc.self-exe", "process-inventory-proc.enumerate", "process-inventory-proc.pid-shape", "process-inventory-proc.stat-read", "process-inventory-proc.stat-decode", "process-inventory-proc.cmdline-read", "process-inventory-proc.cmdline-shape", "process-inventory-proc.cmdline-empty.kthread-flag-false", "process-inventory-proc.cmdline-empty.self-true", "process-inventory-proc.cmdline-nonempty.argc-bounded-false", "process-inventory-proc.cmdline-nonempty.argv0-nonempty-false", "process-inventory-proc.exe-read", "process-inventory-proc.exe-incarnation", "process-inventory-proc.controller-ownership", "process-inventory-proc.installer-role-open", "process-inventory-proc.argv-recheck", "process-inventory-proc.exe-recheck", "process-inventory-proc.stat-recheck", "process-inventory-proc.installer-role-close", "process-inventory-proc-socket.complete", "process-inventory-socket.tcp.read", "process-inventory-socket.tcp.parse", "process-inventory-socket.tcp6.read", "process-inventory-socket.tcp6.parse", "process-inventory-socket.udp.read", "process-inventory-socket.udp.parse", "process-inventory-socket.udp6.read", "process-inventory-socket.udp6.parse":
 	default:

@@ -126,6 +126,11 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 				continue
 			}
 			if flags&0x00200000 == 0 {
+				if pid == p.selfPID {
+					_ = mihomoSameBootNativeFailure(ctx, "process-empty-command-self", ErrScopedDNSRuntimeInactive)
+				} else {
+					_ = mihomoSameBootNativeFailure(ctx, "process-empty-command-terminal-refused", ErrScopedDNSRuntimeInactive)
+				}
 				mark("proc.cmdline-empty.kthread-flag-false")
 				return ErrScopedDNSRuntimeInactive
 			}

@@ -492,32 +492,60 @@ func (h *linuxInactiveProcPID) Executable() (string, error) {
 }
 
 func (h *linuxInactiveProcPID) Terminal() bool {
-	if h.valid() != nil || h.pid == h.pass.pid {
-		return false
+	if h.valid() != nil {
+		return inactiveProcTerminalRefused(h, "process-terminal-invalid")
 	}
-	if h.observedState == 'X' || h.observedState == 'x' || h.observedState == 'Z' && h.observedThreads != 1 {
-		return false
+	if h.pid == h.pass.pid {
+		return inactiveProcTerminalRefused(h, "process-terminal-self")
+	}
+	if h.observedState == 'X' || h.observedState == 'x' {
+		return inactiveProcTerminalRefused(h, "process-terminal-observed-dead")
+	}
+	if h.observedState == 'Z' && h.observedThreads != 1 {
+		return inactiveProcTerminalRefused(h, "process-terminal-observed-multithread-zombie")
 	}
 	for sample := 0; sample < 2; sample++ {
 		raw, err := h.read("stat", 16<<10)
 		if inactiveProcRetireError(err) {
 			if !h.pass.GoneBeforeOpen(h.pid) {
-				return false
+				return inactiveProcTerminalRefused(h, "process-terminal-named-not-gone")
 			}
 			h.terminalGone = true
-			return h.Current() == nil
+			if h.Current() != nil {
+				return inactiveProcTerminalRefused(h, "process-terminal-gone-closing")
+			}
+			return true
 		}
 		if err != nil {
-			return false
+			return inactiveProcTerminalRefused(h, "process-terminal-read")
 		}
 		state, ticks, threads, err := inactiveProcThreads(raw, h.pid)
+		exiting := inactiveProcTerminalExiting(raw, h.pid)
 		clear(raw)
-		if err != nil || h.ticks == "" || ticks != h.ticks || state != 'Z' || threads != 1 || h.Current() != nil {
-			return false
+		if err != nil {
+			return inactiveProcTerminalRefused(h, "process-terminal-parse")
+		}
+		if h.ticks == "" {
+			return inactiveProcTerminalRefused(h, "process-terminal-unbound-birth")
+		}
+		if ticks != h.ticks {
+			return inactiveProcTerminalRefused(h, "process-terminal-birth-changed")
+		}
+		if state != 'Z' {
+			return inactiveProcTerminalLiveRefused(h, state, exiting)
+		}
+		if threads != 1 {
+			return inactiveProcTerminalRefused(h, "process-terminal-multithread-zombie")
+		}
+		if h.Current() != nil {
+			return inactiveProcTerminalRefused(h, "process-terminal-identity-closing")
 		}
 	}
 	h.terminalZombie = true
-	return h.Current() == nil
+	if h.Current() != nil {
+		return inactiveProcTerminalRefused(h, "process-terminal-zombie-closing")
+	}
+	return true
 }
 
 func (h *linuxInactiveProcPID) Close() error {
