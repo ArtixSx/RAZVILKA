@@ -50,6 +50,27 @@ custody, а не равенство port и PID. Временный Xray с loop
 передал HTTPS example.com (200 и тело), после Wait listener исчез. Эти
 наблюдения не принимают RAZVILKA managed Apply, WAN VLESS/REALITY или TUN LAN.
 
+### Проверка штатного окружения Entware
+
+По отдельному исследованию16.11, iptables1.4.21-5 и Keenetic1.4.21-6 имеют
+одинаковый `xtables-multi`, но различаются пакетами и метаданными. На устройстве
+фиксировать resolved paths, SHA бинарников, загрузчик и зависимости `/opt`,
+opkg architecture и полный IPv4/IPv6/NDM graph. Название пакета не заменяет
+проверку фактически запущенного файла и ядра.
+
+Проверить запуск через штатный S99/`rc.unslung`, `/opt`-first PATH и фактический
+`start-stop-daemon`. Resolver и TLS проверять запросом из самого штатного
+процесса RAZVILKA: успех `curl` из SSH и наличие `/opt` CA bundle не доказывают
+доступность того же trust store для Go. Зафиксировать `/etc/resolv.conf`,
+системные CA и применённые переменные окружения без приватных данных;
+при ошибке доверия сохранять hostname/SNI и не менять глобальное окружение
+до установления причины. На ядре4.9 отдельно подтвердить имеющийся fallback
+владения процессом и Wait/ECHILD; статическая ARM64-сборка не доказывает это.
+
+Исходники исследования: [штатный Entware startup](https://github.com/Entware/rtndev/blob/aa6c877d772b2f086b7845c7e6eef7f3e1331f62/entware-opt/files/rc.unslung),
+[Go1.26.5 system roots](https://github.com/golang/go/blob/c19862e5f8415b4f24b189d065ed739517c548ba/src/crypto/x509/root_unix.go).
+Эти пункты подготовлены к проверке; candidate на роутере ещё не запускался.
+
 ## Что предоставить для продолжения
 
 - Выделенный роутер: точная модель, прошивка, архитектура, ядро и состав Entware.
