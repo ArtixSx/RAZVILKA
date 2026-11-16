@@ -1,5 +1,6 @@
 name: Mihomo actual LAN lifecycle
 on:
+  workflow_dispatch:
   push:
     branches: ['work/mihomo-workflow-validation-20261102', 'work/bypass-integration-20261031', 'work/research-build-20261109']
     paths:
