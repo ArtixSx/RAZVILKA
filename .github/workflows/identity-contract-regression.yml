@@ -33,6 +33,8 @@ jobs:
           go test -race -count=1 -v ./internal/netidentity | tee artifacts/identity-race.txt
           go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
+          go test -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot.txt
+          go test -race -count=1 -v ./internal/updatecheck -run '^(TestRuntimeQuiesceSnapshotAdmission|TestOrdinaryPreparationInstalledSourceConfigMigration)$' | tee artifacts/update-snapshot-race.txt
           go test -tags razvilka_native_fixture -count=1 -v ./internal/netidentity -run '^TestAuditCapacityCandidateSourceParity$' | tee artifacts/capacity-parity.txt
       - name: Matched pure calculation measurement
         shell: bash
