@@ -1,5 +1,5 @@
 name: Mihomo same boot original offline ownership validation
-run-name: Mihomo same boot / ${{ inputs.hev_lab && 'separate HEV source lab' || 'official HEV' }} / ${{ github.sha }}
+run-name: Mihomo same boot / ${{ inputs.hev_lab && 'separate HEV source lab' || 'default reviewed HEV' }} / ${{ github.sha }}
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       hev_lab:
-        description: 'Separate reviewed source-built HEV qualification; official defaults unchanged'
+        description: 'Historical lab selector; default uses reviewed vendor bytes'
         type: boolean
         default: false
       consumer_profile:
@@ -105,13 +105,11 @@ jobs:
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
           curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
-          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
           curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
-      - name: Prepare the separately pinned HEV source lab
-        if: ${{ inputs.hev_lab }}
+      - name: Build reviewed HEV bytes for the selected default or historical lab pin
         shell: bash
         run: |
           set -euo pipefail
@@ -128,25 +126,32 @@ jobs:
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
           sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
-          go test -count=1 ./internal/components -run '^TestHEVOfficialReleasePinsUnchanged$'
+          native_tags=razvilka_native_fixture
+          pin_test=DefaultReleasePins
+          if test '${{ inputs.hev_lab }}' = true; then
+            native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
+            pin_test=AltstackLabExactPin
+          fi
+          printf 'selected_tags=%s public_download_proven=false\n' "$native_tags" > artifacts/hev-selected-mode.txt
           race_option=()
           if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
-            go test "${race_option[@]}" -count=1 -v -tags razvilka_native_fixture,razvilka_hev_altstack_lab \
-            ./internal/components -run '^TestHEV(AltstackLabExactPin|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$' \
+            go test "${race_option[@]}" -count=1 -v -tags "$native_tags" \
+            ./internal/components -run "^TestHEV(${pin_test}|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$" \
             | tee artifacts/hev-lab-pin-tests.txt
           if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
-          for name in TestHEVAltstackLabExactPin TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+          for name in "TestHEV$pin_test" TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
             grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
           done
-      - name: Preserve exact source lab provenance
-        if: ${{ inputs.hev_lab && !cancelled() }}
+      - name: Preserve exact reviewed source provenance and selected mode
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
+            artifacts/hev-selected-mode.txt
             artifacts/hev-lab-build.txt
             artifacts/hev-lab-platform.json
             artifacts/hev-lab-pin-tests.txt
@@ -254,13 +259,11 @@ jobs:
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
           curl --fail --location --retry 3 -o /tmp/hev-socks5-tunnel https://github.com/heiher/hev-socks5-tunnel/releases/download/2.17.1/hev-socks5-tunnel-linux-x86_64
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
-          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
           sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
           curl --fail --location --retry 3 -o /tmp/mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
-      - name: Prepare the separately pinned HEV source lab
-        if: ${{ inputs.hev_lab }}
+      - name: Build reviewed HEV bytes for the selected default or historical lab pin
         shell: bash
         run: |
           set -euo pipefail
@@ -277,25 +280,32 @@ jobs:
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
           sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
-          go test -count=1 ./internal/components -run '^TestHEVOfficialReleasePinsUnchanged$'
+          native_tags=razvilka_native_fixture
+          pin_test=DefaultReleasePins
+          if test '${{ inputs.hev_lab }}' = true; then
+            native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
+            pin_test=AltstackLabExactPin
+          fi
+          printf 'selected_tags=%s public_download_proven=false\n' "$native_tags" > artifacts/hev-selected-mode.txt
           race_option=()
           if test "${{ matrix.mode }}" = race; then race_option=(-race); fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
-            go test "${race_option[@]}" -count=1 -v -tags razvilka_native_fixture,razvilka_hev_altstack_lab \
-            ./internal/components -run '^TestHEV(AltstackLabExactPin|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$' \
+            go test "${race_option[@]}" -count=1 -v -tags "$native_tags" \
+            ./internal/components -run "^TestHEV(${pin_test}|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$" \
             | tee artifacts/hev-lab-pin-tests.txt
           if grep -F -- '--- SKIP:' artifacts/hev-lab-pin-tests.txt; then exit 1; fi
-          for name in TestHEVAltstackLabExactPin TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+          for name in "TestHEV$pin_test" TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
             grep -F -- "--- PASS: $name " artifacts/hev-lab-pin-tests.txt
           done
-      - name: Preserve exact source lab provenance
-        if: ${{ inputs.hev_lab && !cancelled() }}
+      - name: Preserve exact reviewed source provenance and selected mode
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sameboot-hev-lab-${{ github.job }}-${{ matrix.mode }}-${{ matrix.ack_cut || 'parent' }}-${{ github.sha }}
           path: |
+            artifacts/hev-selected-mode.txt
             artifacts/hev-lab-build.txt
             artifacts/hev-lab-platform.json
             artifacts/hev-lab-pin-tests.txt

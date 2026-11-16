@@ -5,6 +5,8 @@ on:
     paths:
       - 'internal/**'
       - 'scripts/fetch-native-fixture.sh'
+      - 'scripts/build-hev-runtime-altstack-lab.sh'
+      - 'scripts/fixtures/hev-runtime-altstack*'
       - 'cmd/razvilka/**'
       - 'scripts/test-mihomo-live*.sh'
       - '.github/workflows/mihomo-workflow-validation.yml'
@@ -51,10 +53,39 @@ jobs:
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray
           sh scripts/fetch-native-fixture.sh hev-2.17.1 /tmp/hev-socks5-tunnel
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  /tmp/hev-socks5-tunnel' | sha256sum --check --strict
-          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          sudo install -m 0555 /tmp/hev-socks5-tunnel /usr/local/lib/razvilka-fixtures/hev-official
           sh scripts/fetch-native-fixture.sh mihomo-1.19.33 /tmp/mihomo.gz
           echo '132f6f3edf9a65e62f04853aed3358472e0b2b7666daa8419edfa2ddf5bb6323  /tmp/mihomo.gz' | sha256sum --check --strict
           sudo install -m 0400 /tmp/mihomo.gz /usr/local/lib/razvilka-fixtures/mihomo.gz
+      - name: Build and verify default reviewed HEV delivery fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y make patch ca-certificates
+          mkdir -p artifacts/hev-default
+          sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-default/build" 2>&1 | tee artifacts/hev-default/build.txt
+          echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-default/build/bin/hev-patched' | sha256sum --check --strict
+          sudo install -m 0555 artifacts/hev-default/build/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
+          sudo env PATH="$PATH" GOTOOLCHAIN=local \
+            GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            go test -count=1 -v ./internal/components -run '^TestHEV(DefaultReleasePins|ReleasePinnedDownloadRejectsBeforeExecution|ReleasePinnedNativeInstall)$' \
+            | tee artifacts/hev-default/pin-tests.txt
+          for name in TestHEVDefaultReleasePins TestHEVReleasePinnedDownloadRejectsBeforeExecution TestHEVReleasePinnedNativeInstall; do
+            grep -F -- "--- PASS: $name " artifacts/hev-default/pin-tests.txt
+          done
+          if grep -F -- '--- SKIP:' artifacts/hev-default/pin-tests.txt; then exit 1; fi
+          printf '%s\n' 'default_selector=true local_fixture_transport=true public_download_proven=false' > artifacts/hev-default/delivery.txt
+      - name: Preserve default HEV source and local transport evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mihomo-default-hev-${{ matrix.scenario }}-${{ github.sha }}
+          path: |
+            artifacts/hev-default/*.txt
+            artifacts/hev-default/build/build-manifest.json
+            artifacts/hev-default/build/fault-tests.txt
+          if-no-files-found: error
       - name: Actual registered Apply, native LAN TLS, Stop and retry
         if: matrix.scenario == 'lifecycle'
         shell: bash
@@ -148,7 +179,7 @@ jobs:
           mkdir -p "$output"
           chmod 700 "$output"
           trap 'sudo chown -R "$(id -u):$(id -g)" "$output"' EXIT
-          printf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s scenario=%s order=candidate-then-baseline diagnostic_only=true\n' "$GITHUB_SHA" "$SCENARIO" > "$output/comparison.txt"
+          printf 'baseline=4cc9f869974713c9cebd833fccca383c03c102b7 candidate=%s scenario=%s order=candidate-then-baseline diagnostic_only=true candidate_hev=vendor1170182 baseline_hev=officiala98763 isolated_code_performance=false\n' "$GITHUB_SHA" "$SCENARIO" > "$output/comparison.txt"
           cd baseline4cc
           test "$(git rev-parse HEAD)" = 4cc9f869974713c9cebd833fccca383c03c102b7
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
@@ -157,7 +188,7 @@ jobs:
             RAZVILKA_MIHOMO_LIVE_PROFILE_OUTPUT="$output" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
-            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
+            RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-official \
             sh scripts/test-mihomo-live-native.sh 2>&1 | tee "$output/native.log"
           grep -F -- "--- PASS: $expected " "$output/native.log"
           if grep -F -- '--- SKIP:' "$output/native.log"; then exit 1; fi

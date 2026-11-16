@@ -50,9 +50,9 @@ cd "$repo"
 # Closed, compile-time lab selection. No arbitrary tags, hashes or relaxed
 # installer receipt checks can be supplied by the environment.
 case "${RAZVILKA_HEV_ALTSTACK_LAB:-0}" in
- 0) native_tags=razvilka_native_fixture; printf '%s\n' 'HEV qualification=official' ;;
+ 0) native_tags=razvilka_native_fixture; printf '%s\n' 'HEV qualification=default-reviewed-vendor public_download_proven=false' ;;
  1) native_tags=razvilka_native_fixture,razvilka_hev_altstack_lab
-    printf '%s\n' 'HEV qualification=separate-source-lab production_pin_unchanged=true' ;;
+    printf '%s\n' 'HEV qualification=historical-lab-selector public_download_proven=false' ;;
  *) exit 2 ;;
 esac
 case "${RAZVILKA_NATIVE_RACE:-0}" in

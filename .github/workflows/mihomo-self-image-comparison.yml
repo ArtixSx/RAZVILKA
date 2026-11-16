@@ -73,7 +73,9 @@ jobs:
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/hev-lab-build.txt
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
           sudo install -m 0555 artifacts/hev-lab/bin/hev-patched /usr/local/lib/razvilka-fixtures/hev-socks5-tunnel
-          go test -count=1 ./internal/components -run '^TestHEVOfficialReleasePinsUnchanged$'
+          go test -count=1 -v ./internal/components -run '^TestHEVDefaultReleasePins$' | tee artifacts/hev-default-pin-tests.txt
+          grep -F -- '--- PASS: TestHEVDefaultReleasePins ' artifacts/hev-default-pin-tests.txt
+          if grep -F -- '--- SKIP:' artifacts/hev-default-pin-tests.txt; then exit 1; fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
@@ -104,6 +106,7 @@ jobs:
           path: |
             artifacts/environment.txt
             artifacts/comparison
+            artifacts/hev-default-pin-tests.txt
             artifacts/hev-lab-platform.json
             artifacts/hev-lab-pin-tests.txt
             artifacts/hev-lab-build.txt
