@@ -20,11 +20,37 @@ type networkPolicyNFQInventorySources struct {
 	ids          []string
 }
 
+const (
+	nfqInventoryForeign = iota + 1
+	nfqInventoryNoLAN
+	nfqInventoryMode
+	nfqInventoryContextNil
+	nfqInventoryAdapters
+	nfqInventoryDispatch
+	nfqInventoryCollector
+	nfqInventorySource
+	nfqInventoryPlanMissing
+	nfqInventoryPlanLAN
+	nfqInventoryPlanShape
+	nfqInventoryPlanIntent
+	nfqInventoryEligible
+	nfqInventoryEntered
+	nfqInventoryBodyCompleted
+	nfqInventoryBodyError
+	nfqInventoryCompleted
+	nfqInventoryError
+	nfqInventoryContextBase
+)
+
 func networkPolicyNFQInventoryContext(ctx context.Context) bool {
+	return networkPolicyNFQInventoryContextFailure(ctx) == 0
+}
+
+func networkPolicyNFQInventoryContextFailure(ctx context.Context) int {
 	if ctx == nil {
-		return false
+		return nfqInventoryContextNil
 	}
-	for _, key := range []any{
+	for index, key := range []any{
 		wgOperationOwnerKey{}, wgOperationMaterialKey{}, wgOperationCleanupKey{}, wgInactivityCleanupKey{},
 		xrayOperationOwnerKey{}, xrayOperationMaterialKey{}, xrayOperationCleanupKey{},
 		xraySelectedTCPExecutionKey{}, xraySelectedTCPPreResourceKey{}, xraySelectedTCPReplacementKey{},
@@ -32,10 +58,10 @@ func networkPolicyNFQInventoryContext(ctx context.Context) bool {
 		nfqwsRetiredInventoryKey{}, nfqwsProbeCleanupKey{}, nfqws2RemovalIntentKey{}, nfqws2RollbackHookContextKey{},
 	} {
 		if ctx.Value(key) != nil {
-			return false
+			return nfqInventoryContextBase + index
 		}
 	}
-	return true
+	return 0
 }
 
 func networkPolicyNFQInventoryAdapters(c *NetworkPolicyChecks) bool {
@@ -72,21 +98,61 @@ func networkPolicyNFQInventoryAdapters(c *NetworkPolicyChecks) bool {
 }
 
 func (c *NetworkPolicyChecks) nfqInventorySources(ctx context.Context, lan *LANPolicyRuntimePlan, foreign bool) *networkPolicyNFQInventorySources {
-	if foreign || lan == nil || lan.Mode != LANPolicyNFQWSDirectMode || !networkPolicyNFQInventoryContext(ctx) || !networkPolicyNFQInventoryAdapters(c) {
+	if foreign {
+		noteNFQInventoryRead(nfqInventoryForeign)
+		return nil
+	}
+	if lan == nil {
+		noteNFQInventoryRead(nfqInventoryNoLAN)
+		return nil
+	}
+	if lan.Mode != LANPolicyNFQWSDirectMode {
+		noteNFQInventoryRead(nfqInventoryMode)
+		return nil
+	}
+	if reason := networkPolicyNFQInventoryContextFailure(ctx); reason != 0 {
+		noteNFQInventoryRead(reason)
+		return nil
+	}
+	if !networkPolicyNFQInventoryAdapters(c) {
+		noteNFQInventoryRead(nfqInventoryAdapters)
 		return nil
 	}
 	dispatch, original := c.readSource.(*networkPolicyOriginalInventoryReader)
-	if !original || dispatch == nil || dispatch.inventory == nil || dispatch.inventory != c.inventory {
+	if !original || dispatch == nil {
+		noteNFQInventoryRead(nfqInventoryDispatch)
+		return nil
+	}
+	if dispatch.inventory == nil || dispatch.inventory != c.inventory {
+		noteNFQInventoryRead(nfqInventoryCollector)
 		return nil
 	}
 	s := c.nfqReadSources(ctx)
 	p, present := ctx.Value(networkPolicyConsumerPlanKey{}).(Plan)
-	if s == nil || !present || !reflect.DeepEqual(p.LAN, lan) || ValidateNetworkPolicyLAN(p.LAN, p.Routes) != nil || !nfqws2ActiveSamePlan(s.execution.plan, p) {
+	if s == nil {
+		noteNFQInventoryRead(nfqInventorySource)
+		return nil
+	}
+	if !present {
+		noteNFQInventoryRead(nfqInventoryPlanMissing)
+		return nil
+	}
+	if !reflect.DeepEqual(p.LAN, lan) {
+		noteNFQInventoryRead(nfqInventoryPlanLAN)
+		return nil
+	}
+	if ValidateNetworkPolicyLAN(p.LAN, p.Routes) != nil {
+		noteNFQInventoryRead(nfqInventoryPlanShape)
+		return nil
+	}
+	if !nfqws2ActiveSamePlan(s.execution.plan, p) {
+		noteNFQInventoryRead(nfqInventoryPlanIntent)
 		return nil
 	}
 	// The original NFQ direct validator requires every resolved route to be
 	// NFQ. Even a newly appearing legacy proxy lease can therefore only refuse
 	// at xrayPlanMode, before any external scoped-proxy callback is called.
+	noteNFQInventoryRead(nfqInventoryEligible)
 	return &networkPolicyNFQInventorySources{read: s, dispatch: dispatch, intent: cloneExecutionResourcePlan(s.execution.plan), plan: cloneExecutionResourcePlan(p), ids: slices.Clone(c.ids)}
 }
 
@@ -108,13 +174,32 @@ func (c *NetworkPolicyChecks) observeNFQInventoryRead(ctx context.Context, lan *
 	if s == nil {
 		return use(ctx) // Original custom, mixed, cleanup and cold paths unchanged.
 	}
+	completed := false
+	defer func() {
+		if !completed {
+			noteNFQInventoryRead(nfqInventoryError)
+		}
+	}()
 	if err := s.current(ctx); err != nil {
 		return err
 	}
-	return networkPolicyNFQInventoryReadOnce(ctx, s.read.execution,
+	err := networkPolicyNFQInventoryReadOnce(ctx, s.read.execution,
 		func(request context.Context, read func(context.Context) error) error {
 			return s.read.binding.observeActiveTools(request, s.read.plan, read)
-		}, s.current, use)
+		}, s.current, func(read context.Context) error {
+			noteNFQInventoryRead(nfqInventoryEntered)
+			err := use(read)
+			noteNFQInventoryRead(nfqInventoryBodyCompleted)
+			if err != nil {
+				noteNFQInventoryRead(nfqInventoryBodyError)
+			}
+			return err
+		})
+	if err == nil {
+		completed = true
+		noteNFQInventoryRead(nfqInventoryCompleted)
+	}
+	return err
 }
 
 // Join an entered reader before returning to the enclosing Provider boundary.

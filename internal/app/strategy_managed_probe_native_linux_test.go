@@ -444,6 +444,7 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 		}
 		release() // Each actual HTTP request must obtain its own new admission.
 		versionMeasurement := startuptools.NativeFixtureMeasureVersions(tools)
+		inventoryReadsBefore := dataplane.NativeFixtureNFQInventoryReadCounts()
 		stopOriginalToolStarts := startuptools.StartDomainNativeToolMeasurement()
 		defer func() { t.Log("native actual HTTP original started tool children by kind", stopOriginalToolStarts()) }()
 		payloadAttempts, payloadBytes := components.NativeFixtureManagedNFQWSPayloadReads(owner)
@@ -465,6 +466,20 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			} else {
 				t.Log("native actual HTTP aggregate original metadata traversal attempts", metadata)
 				t.Log("native actual HTTP aggregate actual version child Starts [iptables ip6tables IP]", children)
+			}
+			inventoryReads := dataplane.NativeFixtureNFQInventoryReadCounts()
+			inventoryCountsValid := true
+			for label, count := range inventoryReads {
+				before, exists := inventoryReadsBefore[label]
+				if !exists || count < before {
+					inventoryCountsValid = false
+					t.Error("native whole-inventory source measurement invalid", label, before, count)
+					continue
+				}
+				inventoryReads[label] = count - before
+			}
+			if inventoryCountsValid {
+				t.Log("native actual HTTP isolated-population whole-inventory source dispatch", inventoryReads)
 			}
 		}()
 		runManagedStrategyProbeNativeHTTP(t, a, candidate.ID, readEmpty, lan, manualOnly)

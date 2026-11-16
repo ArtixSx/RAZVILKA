@@ -1,5 +1,5 @@
 name: Research lifecycle acceptance
-run-name: Research lifecycle / ${{ inputs.focus || 'all' }} / ${{ github.sha }}
+run-name: Research lifecycle / ${{ inputs.focus || 'all' }}${{ inputs.managed_manual_only && ' (manual diagnostic only)' || '' }} / ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -14,6 +14,10 @@ on:
         type: choice
         options: [ubuntu-24.04, ubuntu-26.04]
         default: ubuntu-24.04
+      managed_manual_only:
+        description: 'Diagnostic production manual Apply only; not complete managed acceptance'
+        type: boolean
+        default: false
   push:
     branches: ['work/research-build-20261109']
     paths:
@@ -448,7 +452,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build-mode: [production, race]
+        build-mode: ${{ inputs.managed_manual_only && fromJSON('["production"]') || fromJSON('["production","race"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -474,6 +478,7 @@ jobs:
             "$managed_packages/libip6tc2.deb" "$managed_packages/libxtables12.deb"
           sudo python3 scripts/check-classic-save-pinned-fixture.py
       - name: Original active directory custody and error classification
+        if: ${{ !inputs.managed_manual_only }}
         shell: bash
         run: |
           race_flag=()
@@ -481,16 +486,18 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             go test "${race_flag[@]}" -count=1 ./internal/app ./internal/components ./internal/netidentity ./internal/physicalscope ./internal/startuptools ./internal/dataplane -run '^TestBackendClassicSave|^TestClassicSave|^TestFreshHeldNode|^TestNFQWSQuarantine|^TestFenceWake|^TestOriginalFenceCollector|^TestPacketUnsubmitted|^TestManagedRuntimePayloadScratch|^TestManagedNFQWSRuntimeImage|^TestVersionBatchMetadata|^TestVersionExtensionPath|^TestIdentitySyscallsConcurrentGC|^TestBoundedRead|^TestDumpScratch|^TestHash|^TestNFQWSActiveProcessDirectory|^TestNFQWSNeverIssued|^TestNFQWSRecovery|^TestNFQWSUnpublished|^TestNFQWSActiveReadObservation|^TestNFQWSActivePreAdd|^TestNFQWSPreAddGenericAndProbe|^TestNFQWSActivePurePredicates|^TestNFQWSScopedExactPresenceObservation|^TestNFQWSActiveInventoryRead|^TestNFQWSExecutionDiagnostics|^TestWG(EndpointMissingTableJSONRequiresIndependentTextConfirmation|InactivityRequiresFreshCompleteAbsenceWithoutEffects)' -v
       - name: Actual path metadata parity and paired allocation benchmark
+        if: ${{ !inputs.managed_manual_only }}
         run: |
           sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" go test ./internal/startuptools -run '^TestFreshPathNode|^TestFreshHeldNode' -count=1 -v
           go test ./internal/startuptools -run '^$' -bench '^BenchmarkFresh(Path|Held)Node$' -benchtime=1s -count=3 -benchmem
       - name: Paired original collector scheduling benchmark (not end-to-end latency)
-        if: matrix.build-mode == 'production'
+        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only }}
         run: go test ./internal/physicalscope -run '^$' -bench '^BenchmarkOriginalFenceWakeScheduling$' -benchtime=1s -count=3 -benchmem
       - name: Actual identity syscalls with strict pointer checks
-        if: matrix.build-mode == 'production'
+        if: ${{ matrix.build-mode == 'production' && !inputs.managed_manual_only }}
         run: go test -gcflags=all=-d=checkptr=2 -count=1 ./internal/netidentity -run '^TestIdentitySyscallsConcurrentGC$' -v
       - name: Actual managed source, TLS flow, exact NFQUEUE counters and cleanup
+        if: ${{ !inputs.managed_manual_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -505,7 +512,7 @@ jobs:
           grep -F -- '--- PASS: TestManagedStrategyProbeNativeAppHTTP ' artifacts/managed/probe.log
           if grep -F -- '--- SKIP:' artifacts/managed/probe.log; then exit 1; fi
       - name: Actual App LAN apply, exclusions and same-owner stop
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !inputs.managed_manual_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -528,7 +535,7 @@ jobs:
           grep -F -- 'actual_nfq_pre_add_closed index=0 presence=2 guards=2 closing_ok=true' artifacts/managed/manual.log
           if grep -F -- '--- SKIP:' artifacts/managed/manual.log; then exit 1; fi
       - name: Original never-issued intent recovery and fresh manual Apply
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !inputs.managed_manual_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -546,7 +553,7 @@ jobs:
           done
           exit "$result"
       - name: Original quarantine close failure retains permanent fence
-        if: ${{ !cancelled() && matrix.build-mode == 'production' }}
+        if: ${{ !cancelled() && matrix.build-mode == 'production' && !inputs.managed_manual_only }}
         shell: bash
         run: |
           set -euo pipefail

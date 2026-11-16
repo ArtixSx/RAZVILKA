@@ -95,6 +95,11 @@ jobs:
             if grep -F -- '--- SKIP:' "artifacts/version-measurement-$mode.txt"; then exit 1; fi
             grep -F -- '--- PASS: TestNativeVersionMeasurementSurvivesOriginalClose ' "artifacts/version-measurement-$mode.txt"
             grep -F -- '--- PASS: TestNativeVersionMeasurementRejectsMissingOrRegression ' "artifacts/version-measurement-$mode.txt"
+            go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+              -run '^TestNativeNFQInventoryCounter' | tee "artifacts/nfq-inventory-counters-$mode.txt"
+            if grep -F -- '--- SKIP:' "artifacts/nfq-inventory-counters-$mode.txt"; then exit 1; fi
+            grep -F -- '--- PASS: TestNativeNFQInventoryCountersPreserveFirstReasonAndClose ' "artifacts/nfq-inventory-counters-$mode.txt"
+            grep -F -- '--- PASS: TestNativeNFQInventoryCounterLabelsClosed ' "artifacts/nfq-inventory-counters-$mode.txt"
           done
           go test -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi.txt
           go test -race -count=1 -v ./internal/dataplane -run '^TestDomainTCPBaselineProgramQueryABI$' | tee artifacts/bpf-abi-race.txt
