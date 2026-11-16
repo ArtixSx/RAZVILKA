@@ -38,7 +38,7 @@ jobs:
           if grep -F -- '--- SKIP:' /tmp/sameboot-failure-diagnostic.log; then exit 1; fi
 
   original-parent-native:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -58,6 +58,16 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          # Match approved code bytes; apt's amd64v3 variant is not the
+          # reviewed static-version source and keeps costly real child reads.
+          sameboot_packages=$(sudo mktemp -d /tmp/razvilka-sameboot-packages.XXXXXX)
+          case "$sameboot_packages" in /tmp/razvilka-sameboot-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$sameboot_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$sameboot_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$sameboot_packages/iptables.deb" "$sameboot_packages/libip4tc2.deb" \
+            "$sameboot_packages/libip6tc2.deb" "$sameboot_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
           curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
           echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted
@@ -94,7 +104,7 @@ jobs:
 
   original-parent-native-ack-cuts:
     needs: original-parent-native
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -115,6 +125,16 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y iproute2 iptables nftables ipset conntrack kmod curl openssl util-linux unzip busybox-static python3 libnetfilter-queue1 libnfnetlink0 libluajit-5.1-2 zlib1g libmnl0
+          # Match approved code bytes; apt's amd64v3 variant is not the
+          # reviewed static-version source and keeps costly real child reads.
+          sameboot_packages=$(sudo mktemp -d /tmp/razvilka-sameboot-packages.XXXXXX)
+          case "$sameboot_packages" in /tmp/razvilka-sameboot-packages.??????) ;; *) exit 1 ;; esac
+          trap 'sudo rm -rf -- "$sameboot_packages"' EXIT
+          sudo python3 scripts/check-classic-save-pinned-fixture.py --download-dir "$sameboot_packages"
+          sudo apt-get install --reinstall --allow-downgrades --no-install-recommends -y \
+            "$sameboot_packages/iptables.deb" "$sameboot_packages/libip4tc2.deb" \
+            "$sameboot_packages/libip6tc2.deb" "$sameboot_packages/libxtables12.deb"
+          sudo python3 scripts/check-classic-save-pinned-fixture.py
           curl --fail --location --retry 3 -o /tmp/xray.zip https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip
           echo 'e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214  /tmp/xray.zip' | sha256sum --check --strict
           unzip /tmp/xray.zip xray -d /tmp/xray-extracted
