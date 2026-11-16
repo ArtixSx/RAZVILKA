@@ -1,0 +1,70 @@
+name: Pinned compatibility source restoration
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/compatibility-sources-*']
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Refusals, anchored writes and differently owned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          sudo env PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-restore-compatibility-source.py -v 2>&1 | tee artifacts/contracts.log
+          if grep -E 'skipped|SKIP' artifacts/contracts.log; then exit 1; fi
+      - name: Restore all eight exact sources through Git and pinned gzip bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import gzip, importlib.util, json, pathlib, subprocess, tempfile
+          spec=importlib.util.spec_from_file_location('compatibility', 'scripts/restore-compatibility-source.py')
+          module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          repository=pathlib.Path.cwd()
+          output=repository/'artifacts'
+          results=[]
+          document=json.loads(module.PINS.read_text(encoding='utf-8'))
+          with tempfile.TemporaryDirectory(prefix='razvilka-compatibility-') as work:
+              work=pathlib.Path(work)
+              for row in document['sources']:
+                  commit=row['commit']
+                  source=work/(commit+'-source')
+                  # Before recreation the original objects are local; after it
+                  # only the fixed verified compatibility asset may supply them.
+                  first=module.restore(commit,source,local_repo=repository,make_git=True)
+                  results.append(first)
+                  (output/'restorations.json').write_text(json.dumps(results,indent=2)+'\n')
+                  # Recreate transport from the isolated single shallow commit.
+                  # Its SHA/size must match the prepared asset, not a new pin.
+                  with tempfile.TemporaryFile() as raw:
+                      module.git(source,'archive','--format=tar','--prefix=RAZVILKA-'+commit+'/',commit,stdout=raw)
+                      raw.seek(0)
+                      compressed=work/row['archive']
+                      with compressed.open('xb') as target, gzip.GzipFile(filename='',mode='wb',fileobj=target,mtime=0,compresslevel=9) as zipped:
+                          while data:=raw.read(1<<20): zipped.write(data)
+                  second=module.restore(commit,work/(commit+'-archive'),archive_dir=work,make_git=True)
+                  results.append(second)
+                  (output/'restorations.json').write_text(json.dumps(results,indent=2)+'\n')
+              assert len(results)==16
+          print('All eight exact Git trees, archives, modes and isolated shallow commits verified; no application/router claim.')
+          PY
+      - name: Preserve verification and original failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compatibility-sources-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: error

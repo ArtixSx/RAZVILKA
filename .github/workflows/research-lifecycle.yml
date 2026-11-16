@@ -64,11 +64,11 @@ jobs:
           test "$(/tmp/razvilka-current -component-update-schema)" = 6
           test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 9
           test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
-          git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
+          python3 scripts/restore-compatibility-source.py --commit 577ebe54eb53499a9fbe46aef93d39bee82a0192 --destination /tmp/razvilka-old --local-repo "$GITHUB_WORKSPACE" --git-fixture
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
           if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
           if /tmp/razvilka-old-binary -self-update-private-snapshot-read-version >/tmp/old-snapshot.txt 2>&1; then exit 1; fi
-          git worktree add --detach /tmp/razvilka-reader5 c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be
+          python3 scripts/restore-compatibility-source.py --commit c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be --destination /tmp/razvilka-reader5 --local-repo "$GITHUB_WORKSPACE" --git-fixture
           (cd /tmp/razvilka-reader5 && go build -o /tmp/razvilka-reader5-binary ./cmd/razvilka)
           test "$(/tmp/razvilka-reader5-binary -strategy-lab-read-version)" = 5
       - name: Focused native and race checks
@@ -576,11 +576,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: c4399c948a5f65cf413c879b2b746f1bf80eefaa
-          path: baseline
-          persist-credentials: false
+          fetch-depth: 0
+      - name: Restore pinned historical DNS preparation source
+        run: python3 scripts/restore-compatibility-source.py --commit c4399c948a5f65cf413c879b2b746f1bf80eefaa --destination "$GITHUB_WORKSPACE/baseline" --local-repo "$GITHUB_WORKSPACE" --git-fixture
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: '1.26.5'

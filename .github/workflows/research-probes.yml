@@ -22,11 +22,9 @@ jobs:
         with:
           path: candidate
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: 363f433611620cda4d14db2d0a7ae2475b0278f1
-          path: baseline
-          persist-credentials: false
+          fetch-depth: 0
+      - name: Restore pinned historical performance source
+        run: python3 candidate/scripts/restore-compatibility-source.py --commit 363f433611620cda4d14db2d0a7ae2475b0278f1 --destination "$GITHUB_WORKSPACE/baseline" --local-repo "$GITHUB_WORKSPACE/candidate" --git-fixture
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: '1.26.5'

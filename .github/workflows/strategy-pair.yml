@@ -168,11 +168,11 @@ jobs:
           test "$(/tmp/razvilka-current -component-update-schema)" = 6
           test "$(/tmp/razvilka-current -dataplane-execution-read-version)" = 9
           test "$(/tmp/razvilka-current -self-update-private-snapshot-read-version)" = 4
-          git worktree add --detach /tmp/razvilka-old 577ebe54eb53499a9fbe46aef93d39bee82a0192
+          python3 scripts/restore-compatibility-source.py --commit 577ebe54eb53499a9fbe46aef93d39bee82a0192 --destination /tmp/razvilka-old --local-repo "$GITHUB_WORKSPACE" --git-fixture
           (cd /tmp/razvilka-old && go build -o /tmp/razvilka-old-binary ./cmd/razvilka)
           if /tmp/razvilka-old-binary -strategy-lab-read-version >/tmp/old-reader.txt 2>&1; then exit 1; fi
           if /tmp/razvilka-old-binary -self-update-private-snapshot-read-version >/tmp/old-snapshot.txt 2>&1; then exit 1; fi
-          git worktree add --detach /tmp/razvilka-reader5 c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be
+          python3 scripts/restore-compatibility-source.py --commit c982d09fcd73c1a85c2bcdf1716f7b7d7bb3b8be --destination /tmp/razvilka-reader5 --local-repo "$GITHUB_WORKSPACE" --git-fixture
           (cd /tmp/razvilka-reader5 && go build -o /tmp/razvilka-reader5-binary ./cmd/razvilka)
           test "$(/tmp/razvilka-reader5-binary -strategy-lab-read-version)" = 5
       - name: Focused native and race checks
@@ -196,6 +196,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: '1.26.5'
@@ -305,8 +306,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin d36ec63e4d67f6621dd8026c9f85e9f410ec67bc
-          git worktree add --detach /tmp/razvilka-execution-reader4 d36ec63e4d67f6621dd8026c9f85e9f410ec67bc
+          python3 scripts/restore-compatibility-source.py --commit d36ec63e4d67f6621dd8026c9f85e9f410ec67bc --destination /tmp/razvilka-execution-reader4 --local-repo "$GITHUB_WORKSPACE" --git-fixture
           (cd /tmp/razvilka-execution-reader4 && go build -o /tmp/razvilka-execution-reader4-binary ./cmd/razvilka)
           test "$(/tmp/razvilka-execution-reader4-binary -dataplane-execution-read-version)" = 4
           sudo env PATH="$PATH" GOTOOLCHAIN=local \

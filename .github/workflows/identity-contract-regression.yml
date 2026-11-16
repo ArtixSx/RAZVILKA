@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version: '1.26.5'
@@ -25,8 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           historical=4cc9f869974713c9cebd833fccca383c03c102b7
-          git fetch --no-tags origin "$historical"
-          git worktree add --detach /tmp/razvilka-reader4-source "$historical"
+          python3 scripts/restore-compatibility-source.py --commit "$historical" --destination /tmp/razvilka-reader4-source --local-repo "$GITHUB_WORKSPACE" --git-fixture
           test "$(git -C /tmp/razvilka-reader4-source rev-parse HEAD)" = "$historical"
           mkdir -p /tmp/razvilka-reader4-source/cmd/offline-reader4-probe
           cp scripts/fixtures/offline-reader4-main.go /tmp/razvilka-reader4-source/cmd/offline-reader4-probe/main.go
@@ -99,6 +99,10 @@ jobs:
             if [ "$mode" = race ]; then race_flag=(-race); fi
             go test "${race_flag[@]}" -tags razvilka_native_fixture -count=20 -v ./internal/dataplane ./internal/nativecheckfixture \
               -run '^TestMihomoSidecarOutput|^TestTLSObservation' | tee "artifacts/closed-diagnostics-$mode.txt"
+            RAZVILKA_COLD_SELF_IMAGE_MEASURE=1 go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+              -run '^TestMihomoColdSelfImageStageMeasurement$' | tee "artifacts/self-image-stages-$mode.txt"
+            grep -F -- '--- PASS: TestMihomoColdSelfImageStageMeasurement ' "artifacts/self-image-stages-$mode.txt"
+            test "$(grep -c 'actual_mihomo_cold_self_image_stages {' "artifacts/self-image-stages-$mode.txt")" -eq 3
             sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
               go test "${race_flag[@]}" -count=1 -v ./internal/updatecheck \
               -run '^TestNativeCandidateStoppedCompletionTwoCuts/(strategy-rollback-files|strategy-rollback-private)$' | tee "artifacts/rollback-stop-$mode.txt"

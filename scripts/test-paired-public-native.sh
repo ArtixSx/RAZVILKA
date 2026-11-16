@@ -11,9 +11,7 @@ export TMPDIR="$work" GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
 cd "$repo"
 # No clone, release or publication: an isolated exact historical source tree.
 old=817783493f0c2784ccc70aa73868cd64e9437634
-test "$(git rev-parse v0.19.3^{commit})" = "$old"
-mkdir "$work/old-source"
-git archive "$old" | tar -xf - -C "$work/old-source"
+python3 "$repo/scripts/restore-compatibility-source.py" --commit "$old" --destination "$work/old-source" --local-repo "$repo" --git-fixture
 (cd "$work/old-source" && go build -ldflags='-s -w' -o "$work/old-controller" ./cmd/razvilka)
 go build -ldflags='-s -w' -tags razvilka_native_fixture -o "$work/candidate" ./cmd/razvilka
 go test -ldflags='-s -w' -tags razvilka_native_fixture -c -o "$work/cmd.test" ./cmd/razvilka

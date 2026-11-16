@@ -24,7 +24,6 @@ case "$candidate" in *[!0-9a-f]*) exit 2 ;; esac
 test "${#candidate}" = 40 || exit 2
 git -c safe.directory="$repo" -C "$repo" diff --quiet
 git -c safe.directory="$repo" -C "$repo" diff --cached --quiet
-git -c safe.directory="$repo" -C "$repo" cat-file -e "$baseline^{commit}"
 mkdir -m 700 "$RAZVILKA_DOMAIN_IMAGE_OUTPUT"
 output=$(CDPATH= cd -- "$RAZVILKA_DOMAIN_IMAGE_OUTPUT" && pwd -P)
 work=$(mktemp -d /tmp/razvilka-domain-image.XXXXXX)
@@ -34,22 +33,20 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
+# The old source is independently pinned even after the published Git history is reset.
+python3 "$repo/scripts/restore-compatibility-source.py" --commit "$baseline" --destination "$work/baseline" --local-repo "$repo" --git-fixture
 # Reject fixture/budget/dependency drift rather than silently compare different
 # acceptance rules. Neither archived source tree is patched.
 for path in scripts/test-domain-original-native.sh scripts/fetch-native-fixture.sh \
   internal/app/domain_tcp_original_native_linux_test.go \
   internal/app/domain_tcp_original_native_peers_linux_test.go go.mod go.sum; do
-  old=$(git -c safe.directory="$repo" -C "$repo" rev-parse "$baseline:$path")
+  old=$(git -c safe.directory="$work/baseline" -C "$work/baseline" rev-parse "HEAD:$path")
   new=$(git -c safe.directory="$repo" -C "$repo" rev-parse "$candidate:$path")
   test "$old" = "$new" || { printf 'comparison fixture drift: %s\n' "$path" >&2; exit 2; }
   printf '%s %s\n' "$old" "$path" >> "$output/unchanged-fixtures.txt"
 done
-for side in baseline candidate; do
-  sha=$baseline
-  if test "$side" = candidate; then sha=$candidate; fi
-  mkdir -m 700 "$work/$side"
-  git -c safe.directory="$repo" -C "$repo" archive "$sha" | tar -x -C "$work/$side"
-done
+mkdir -m 700 "$work/candidate"
+git -c safe.directory="$repo" -C "$repo" archive "$candidate" | tar -x -C "$work/candidate"
 export DOMAIN_IMAGE_BASELINE=$baseline DOMAIN_IMAGE_CANDIDATE=$candidate
 export DOMAIN_IMAGE_SCENARIO=$scenario DOMAIN_IMAGE_EXPECTED=$expected DOMAIN_IMAGE_OUTPUT=$output
 python3 - <<'PY'
