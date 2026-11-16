@@ -62,8 +62,9 @@ func TestHEVRuntimeAltstackLabPopulation(t *testing.T) {
 		BuildFlags []string          `json:"build_flags"`
 		Artifacts  map[string]string `json:"artifacts"`
 		Licenses   []struct {
-			Path   string `json:"path"`
-			SHA256 string `json:"sha256"`
+			Path          string `json:"path"`
+			SHA256        string `json:"sha256"`
+			SymlinkTarget string `json:"symlink_target,omitempty"`
 		} `json:"licenses"`
 		FaultTests string `json:"fault_tests"`
 		RouteClaim bool   `json:"route_or_router_acceptance"`
