@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1680,7 +1682,16 @@ func TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction(t *testing.T) {
 	manager := dataplane.New(filepath.Join(root, "dataplane"))
 	cat := catalog.Catalog{Services: []catalog.Service{{ID: "probe", Name: "Probe", ProbeURL: "https://example.com/"}}}
 	a := &App{Store: store, Catalog: cat, Dataplane: manager}
-	committed, err := a.buildDataplanePlan(store.Get(), a.routeOptionsSnapshot())
+	// This tests evidence reuse, not the host's changing /proc inventory. Other
+	// packages may start an engine between two HTTP requests; that legitimately
+	// changes Input.Engines and the digest even for a direct-only plan.
+	input := dataplane.Input{
+		Revision: store.Get().Revision,
+		Routes:   []dataplane.Route{{ServiceID: "probe", ServiceName: "Probe", Selected: "direct", Resolved: "direct", AppliedRoute: "direct", ProbeURL: "https://example.com/"}},
+		Engines:  []dataplane.Engine{{ID: "xray"}},
+	}
+	now := time.Date(2026, time.November, 16, 12, 0, 0, 0, time.UTC)
+	committed, err := dataplane.BuildAt(input, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1693,26 +1704,81 @@ func TestPlanReusesEvidenceOnlyFromMatchingCommittedTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response := httptest.NewRecorder()
-	a.plan(response, httptest.NewRequest(http.MethodGet, "/api/v1/plan", nil))
-	if response.Code != http.StatusOK {
-		t.Fatalf("plan status=%d body=%s", response.Code, response.Body.String())
+	retained, exists, readErr := manager.Committed()
+	if readErr != nil || !exists {
+		t.Fatal("committed fixture unavailable", readErr)
 	}
-	var matching struct {
-		Transaction dataplane.Plan `json:"transaction"`
-	}
-	if err := json.NewDecoder(response.Body).Decode(&matching); err != nil {
+	fresh, err := dataplane.BuildAt(input, now.Add(time.Second))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if matching.Transaction.State != "committed" || matching.Transaction.ObservedEvidence != evidence.Service || matching.Transaction.RouteEvidence[0].Source != "isolated-test" {
-		t.Fatalf("matching committed evidence was not restored: %+v", matching.Transaction)
+	if fresh.Digest != retained.Digest || fresh.CreatedAt == retained.CreatedAt {
+		t.Fatal("fixture must bind identical input across distinct creation times")
+	}
+	want := fresh
+	want.State, want.ObservedEvidence, want.EvidenceNote = retained.State, retained.ObservedEvidence, retained.EvidenceNote
+	want.RouteEvidence = append([]dataplane.RouteEvidence(nil), retained.RouteEvidence...)
+	matching := reuseCommittedPlanEvidence(fresh, retained, exists, readErr)
+	if !reflect.DeepEqual(matching, want) {
+		t.Fatalf("matching committed evidence was not restored: %+v", matching)
+	}
+	matching.RouteEvidence[0].Source = "changed returned copy"
+	if retained.RouteEvidence[0].Source != "isolated-test" || fresh.RouteEvidence[0].Source != "" {
+		t.Fatal("reused evidence aliases the retained or fresh plan")
+	}
+	for _, kind := range []string{"state", "digest", "revision", "missing", "read-error"} {
+		t.Run(kind, func(t *testing.T) {
+			previous, present, failure := retained, true, error(nil)
+			switch kind {
+			case "state":
+				previous.State = "rolled-back"
+			case "digest":
+				previous.Digest = strings.Repeat("f", 64)
+			case "revision":
+				previous.Revision++
+			case "missing":
+				present = false
+			case "read-error":
+				failure = errors.New("committed read failed")
+			}
+			if got := reuseCommittedPlanEvidence(fresh, previous, present, failure); !reflect.DeepEqual(got, fresh) {
+				t.Fatalf("mismatching committed record changed fresh plan: %+v", got)
+			}
+		})
+	}
+	for _, kind := range []string{"engine-running", "host", "route"} {
+		t.Run(kind, func(t *testing.T) {
+			changedInput := input
+			changedInput.Routes = append([]dataplane.Route(nil), input.Routes...)
+			changedInput.Engines = append([]dataplane.Engine(nil), input.Engines...)
+			switch kind {
+			case "engine-running":
+				changedInput.Engines[0].Running = true
+			case "host":
+				changedInput.Host.TUN = true
+			case "route":
+				changedInput.Routes[0].Selected = "auto"
+			}
+			changed, err := dataplane.BuildAt(changedInput, now)
+			if err != nil || changed.Digest == retained.Digest {
+				t.Fatal("changed input must change digest", err)
+			}
+			if got := reuseCommittedPlanEvidence(changed, retained, true, nil); !reflect.DeepEqual(got, changed) {
+				t.Fatal("changed original input inherited committed evidence")
+			}
+		})
 	}
 
 	if err := store.UpdateService("probe", config.ServiceState{Enabled: true, Route: "auto"}); err != nil {
 		t.Fatal(err)
 	}
-	response = httptest.NewRecorder()
+	// The actual HTTP negative path remains covered without assuming that the
+	// external process inventory is identical across independent observations.
+	response := httptest.NewRecorder()
 	a.plan(response, httptest.NewRequest(http.MethodGet, "/api/v1/plan", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("changed plan status=%d body=%s", response.Code, response.Body.String())
+	}
 	var changed struct {
 		Transaction dataplane.Plan `json:"transaction"`
 	}

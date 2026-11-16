@@ -3591,12 +3591,8 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.Dataplane != nil {
-		if committed, exists, committedErr := a.Dataplane.Committed(); committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
-			transaction.State = committed.State
-			transaction.ObservedEvidence = committed.ObservedEvidence
-			transaction.EvidenceNote = committed.EvidenceNote
-			transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
-		}
+		committed, exists, committedErr := a.Dataplane.Committed()
+		transaction = reuseCommittedPlanEvidence(transaction, committed, exists, committedErr)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"safe_mode":      cfg.SafeMode,
@@ -3607,6 +3603,18 @@ func (a *App) plan(w http.ResponseWriter, r *http.Request) {
 		"review":         review.review,
 		"change_summary": a.changeSummary(cfg, scope, transaction),
 	})
+}
+
+// Keep the evidence decision independent of inventory discovery: the digest
+// still binds every original input, including current host and engine facts.
+func reuseCommittedPlanEvidence(transaction, committed dataplane.Plan, exists bool, committedErr error) dataplane.Plan {
+	if committedErr == nil && exists && committed.State == "committed" && committed.Digest == transaction.Digest && committed.Revision == transaction.Revision {
+		transaction.State = committed.State
+		transaction.ObservedEvidence = committed.ObservedEvidence
+		transaction.EvidenceNote = committed.EvidenceNote
+		transaction.RouteEvidence = append([]dataplane.RouteEvidence(nil), committed.RouteEvidence...)
+	}
+	return transaction
 }
 
 func (a *App) dataplaneStatus(w http.ResponseWriter, r *http.Request) {
