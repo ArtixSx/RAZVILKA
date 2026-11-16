@@ -2,7 +2,7 @@
 
 <a id="current-release-checkpoint"></a>
 
-## Текущая сверка: 16.11.2026, `0652bc5b`
+## Текущая сверка: 16.11.2026, `7aab8bc0`
 
 Код и оформление интегрированы; выпуск ещё не принят. Эта сверка имеет
 приоритет над прежними контрольными точками ниже. Роутер не изменён,
@@ -10,10 +10,10 @@
 
 | Направление | Проверено | Что продолжается |
 | --- | --- | --- |
-| Общий CI | `9e73d133`, run43901009649 PASS; `33de2dde` identity normal/race run43908383156 PASS | Полные CI33de/74c/0652 ещё выполняются; статус не переносится между SHA |
+| Общий CI | `33de2dde`, run43908375410 и `74c7a0c0`, run43909060138 PASS; identity0652 run43911534417 PASS | Итоговый SHA после текущих правок требует своего полного CI; лишние generic runs0652/7231/e4e отменены |
 | HEV | `53fd786e` source lab64 startup/cleanup samples PASS; повтор74c source lab PASS. `74c7a0c0` parent normal41.77с/race81.79с и completed ACK normal52.41с PASS. Исправленный бинарник запустился на реальном host AT_MIN11952, где официальный вновь дал16/16 exit254 | Completed ACK race истёк120с при повторном восстановлении; это не ошибка старта HEV. Production pin не изменён. Замена уже установленного official→patched ещё требует безопасной inactivity/journal/rollback реализации |
-| DNS | `53fd786e` GEN2 full fresh-byte comparison и `0652bc5b` сохранённое opening preflight: targeted/review PASS | Strict53fd initial12с FAIL до GEN2; diagnostic30 PASS не закрывает12/4с. Новый native0652 выполняется |
-| Managed NFQWS2 | `33de2dde` actual-issued boundary: fullLAN/manual при отказе теперь rollback_verified=true; quarantine-close-retry PASS45.80с. Core Consumer8.28с/LateWait11.14с/AppHTTP28.00с PASS | FullLAN/manual fresh Apply остаются FAIL, race Consumer deadline/ACK FAIL; анализ полного пути. Равные счётчики с подменой owned row: model PASS, отдельный native0652 выполняется |
+| DNS | На0652 selected первоначальное применение прошло; новый7aab замыкает полную проверку mapping в исходное чтение инструментов, targeted/review PASS | На0652 mismatch4с FAIL, canceled initial12с FAIL; diagnostic30 PASS. Исходный native7aab выполняется, сроки не увеличены |
+| Managed NFQWS2 | `33de2dde` actual-issued boundary: fullLAN/manual при отказе теперь rollback_verified=true; quarantine-close-retry PASS45.80с. Core Consumer8.28с/LateWait11.14с/AppHTTP28.00с PASS | FullLAN/manual fresh Apply остаются FAIL, race Consumer deadline/ACK FAIL; анализ полного пути. Равные счётчики с подменой owned row: отдельный nativebefedef5 PASS normal5.35с/race8.52с; это не fullLAN Apply |
 | VLESS/очередь | `33de2dde`, run43908564102 PASS: same-runner N12 медиана полного live Check309.118→216.1785мс; выбранная группа1360.45→1190.335мс, cleanup verified | Фиксированный порядок измерений; это частная Linux-сеть, не готовность WAN/LAN на роутере |
 | Binary + StrategyLab | Public history/manual, modern rollback и genuine old reader4 ранее PASS; identity33de повторил retry/fences | Финальная проверка интегрированного кандидата и аппаратный сценарий |
 | Панель и Releases |13 разделов/21 страница и desktop/mobile checks сохранены. NetZapret1.5.3 на ПК и pinned1.6.2 изучены; примечания по вкладкам; actual hashes/pinned links:3 tests PASS | После сетевой приёмки — проверка панели на роутере и публикация точного набора файлов |

@@ -1,0 +1,64 @@
+{
+  "revision": "e4e7429126f829d7a2eeb66403e4bdbe7bf4277b",
+  "run": 43913329305,
+  "decision": "Reject production parent-FD optimization: full traversal slower in both builds",
+  "actual_nodes": 168,
+  "actual_images": 134,
+  "parents_per_pass": 4,
+  "full_bookends_close_included": true,
+  "scope": "one complete versionMetadataCurrent call, not route timing",
+  "stats": {
+    "production_original": {
+      "n": 6,
+      "mean_ns": 1086284.6666666667,
+      "median_ns": 1087222.5,
+      "samples_ns": [
+        1043307,
+        1064959,
+        1045600,
+        1117929,
+        1109486,
+        1136427
+      ]
+    },
+    "production_parent_fd": {
+      "n": 6,
+      "mean_ns": 1301357.6666666667,
+      "median_ns": 1309466.5,
+      "samples_ns": [
+        1290248,
+        1254574,
+        1243267,
+        1356077,
+        1328685,
+        1335295
+      ]
+    },
+    "race_original": {
+      "n": 6,
+      "mean_ns": 1502745.8333333333,
+      "median_ns": 1503795.5,
+      "samples_ns": [
+        1484457,
+        1486099,
+        1476855,
+        1525408,
+        1521492,
+        1522164
+      ]
+    },
+    "race_parent_fd": {
+      "n": 6,
+      "mean_ns": 2797815,
+      "median_ns": 2799858,
+      "samples_ns": [
+        2799127,
+        2734730,
+        2829563,
+        2831536,
+        2800589,
+        2791345
+      ]
+    }
+  }
+}

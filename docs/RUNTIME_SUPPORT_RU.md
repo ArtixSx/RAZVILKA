@@ -1,6 +1,6 @@
 # Сборки и поддержка запуска
 
-Актуальная сверка `0652bc5b`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+Актуальная сверка `7aab8bc0`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 HEV runtime-altstack прошёл source lab и фактический запуск на host AT_MIN11952;
 production pin и платформенный допуск не изменены. Race ACK120с, strict DNS
 и managed NFQWS2 ещё не приняты. Подробности прежних ревизий ниже
