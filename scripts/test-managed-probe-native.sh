@@ -164,6 +164,11 @@ case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
     test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
     export RAZVILKA_TOOL_IMAGE_MEASURE=1
     probe_cases='TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease TestToolObservationImageStageMeasurement TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead' ;;
+  metadata-parent)
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    probe_cases='TestMetadataParentSourceParity TestMetadataParentOwnedMutations TestMetadataParentActualPairs' ;;
   *) exit 2 ;;
 esac
 probe_result=0
@@ -192,7 +197,7 @@ esac
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-case "$probe_case" in TestToolObservationImage*|TestReadObservation*|TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestToolObservationImage*|TestReadObservation*|TestMetadataParent*|TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
   TestNFQWSManagedCopy*|TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
   TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;

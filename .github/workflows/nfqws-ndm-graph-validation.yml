@@ -39,6 +39,10 @@ jobs:
             "$ndm_packages/iptables.deb" "$ndm_packages/libip4tc2.deb" \
             "$ndm_packages/libip6tc2.deb" "$ndm_packages/libxtables12.deb"
           sudo python3 scripts/check-classic-save-pinned-fixture.py | tee artifacts/tool-provenance.txt
+          # Positive readable queue inventory is required before the first
+          # Apply. Missing kernel support must not be interpreted as empty.
+          sudo modprobe nfnetlink_queue
+          test -r /proc/net/netfilter/nfnetlink_queue
           echo 'da62b7b5a7371424906138fa1eba11ec922b256969e5fa3dfa716949abafe8ac  /usr/sbin/xtables-legacy-multi' | sha256sum --check --strict
           curl --fail --location --connect-timeout 15 --max-time 180 --retry 2 -o /tmp/nfqws2-1.3.1.ipk https://github.com/nfqws/nfqws2-keenetic/releases/download/v1.3.1/nfqws2-keenetic_1.3.1_all_entware.ipk
           echo '28af67f8e192c838e007f23517b52b1f8c20d030cef5b971dfc93b7f21a79054  /tmp/nfqws2-1.3.1.ipk' | sha256sum --check --strict

@@ -157,17 +157,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p artifacts/sameboot-profile
           sudo modprobe tun
           race_mode=0
           if test "${{ matrix.mode }}" = race; then race_mode=1; fi
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_NATIVE_RACE="$race_mode" \
+            RAZVILKA_MIHOMO_SAME_BOOT_CPU_PROFILE="${{ inputs.consumer_profile && '1' || '0' }}" \
+            RAZVILKA_MIHOMO_SAME_BOOT_PROFILE_OUTPUT="$PWD/artifacts/sameboot-profile" \
             RAZVILKA_HEV_ALTSTACK_LAB="${{ inputs.hev_lab && '1' || '0' }}" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray-node26.3.27/xray \
             RAZVILKA_MIHOMO_ARCHIVE=/usr/local/lib/razvilka-fixtures/mihomo.gz \
             RAZVILKA_HEV_NATIVE=/usr/local/lib/razvilka-fixtures/hev-socks5-tunnel \
             sh scripts/test-mihomo-same-boot-native.sh
+      - name: Preserve original parent consumer diagnostic
+        if: ${{ !cancelled() && inputs.consumer_profile }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sameboot-profile-parent-${{ matrix.mode }}-${{ github.sha }}
+          path: artifacts/sameboot-profile
+          if-no-files-found: error
       - name: Diagnose HEV separately on the same failed host
         if: ${{ failure() && !cancelled() && steps.original_native.outcome == 'failure' }}
         shell: bash
