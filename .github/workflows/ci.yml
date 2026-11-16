@@ -1,7 +1,18 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
+    # Dedicated disposable experiments run their own exact native gates.
+    # PRs and the primary development/release branches retain the full gate;
+    # final acceptance always requires this workflow on the integrated SHA.
+    branches-ignore:
+      - 'work/metadata-parent-*'
+      - 'work/nfq-ndm-graph-*'
+      - 'work/runtime-scratch-*'
+      - 'work/hev-altstack-lab-*'
+      - 'work/domain-cgroup-proof-*'
+      - 'work/identity-contract-*'
   pull_request:
 
 permissions:
