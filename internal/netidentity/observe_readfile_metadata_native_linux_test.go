@@ -71,6 +71,11 @@ func (a *audit) readFileMetadataNative(fd int, rootMount uint64, stat unix.Statx
 			return false
 		}
 	}
+	// A supplied invalid mount ID is malformed, even when another requested
+	// field is missing. It must not enter the unsupported-field fallback.
+	if stat.Mask&unix.STATX_MNT_ID != 0 && stat.Mnt_id == 0 {
+		return false
+	}
 	if stat.Mask&readFileMetadataMask != readFileMetadataMask {
 		if count != nil {
 			count.fallback++
@@ -184,6 +189,18 @@ func TestReadFileMetadataNativeResultBounds(t *testing.T) {
 		if !a.readFileMetadataNative(fd, mount, partial, nil) {
 			t.Fatal("partial fields bypassed original fallback")
 		}
+	}
+	mixed := stat
+	mixed.Mask &^= unix.STATX_TYPE
+	mixed.Mnt_id = 0
+	if a.readFileMetadataNative(fd, mount, mixed, nil) {
+		t.Fatal("present zero mount ID escaped through missing type fallback")
+	}
+	if _, ok := a.readFile(pid, "comm", 64, mount+1); ok {
+		t.Fatal("original accepted wrong actual leaf mount")
+	}
+	if _, ok := a.readFileCombinedNative(pid, "comm", 64, mount+1); ok {
+		t.Fatal("candidate accepted wrong actual leaf mount")
 	}
 	for _, mutate := range []func(*unix.Statx_t){func(s *unix.Statx_t) { s.Mnt_id = 0 }, func(s *unix.Statx_t) { s.Mnt_id++ }, func(s *unix.Statx_t) { s.Mode = unix.S_IFDIR }, func(s *unix.Statx_t) { s.Dev_minor++ }} {
 		bad := stat
