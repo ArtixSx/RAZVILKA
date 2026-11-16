@@ -615,7 +615,7 @@ jobs:
           race_flag=()
           if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
           go test "${race_flag[@]}" -count=1 ./internal/dataplane \
-            -run '^TestNFQWSPreLedger|^TestNFQWSOriginalPreLedger' -v | tee artifacts/managed/preledger-contracts.log
+            -run '^TestNFQWSPreLedger|^TestNFQWSOriginalPreLedger|^TestNFQWSPreparedPolicy' -v | tee artifacts/managed/preledger-contracts.log
           grep -F -- '--- PASS: TestNFQWSPreLedgerOriginalWriterPublishesOnlyPlannedAndClosesStrictly ' artifacts/managed/preledger-contracts.log
           if grep -F -- '--- SKIP:' artifacts/managed/preledger-contracts.log; then exit 1; fi
       - name: Actual pre-ledger failure recovery only
@@ -632,6 +632,20 @@ jobs:
           grep -F 'actual_preledger_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false' artifacts/managed/preledger.log
           grep -F 'actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/preledger.log
           if grep -F -- '--- SKIP:' artifacts/managed/preledger.log; then exit 1; fi
+      - name: Actual earlier prepared-active failure recovery only
+        if: ${{ !cancelled() && (inputs.focus == 'managed-recovery' || !inputs.managed_manual_only) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          sudo env PATH="$PATH" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            RAZVILKA_MANAGED_PROBE_BUILD_MODE="${{ matrix.build-mode }}" \
+            RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE=prepared-active RAZVILKA_MANAGED_PROBE_LAN_CASE=prepared-active \
+            sh scripts/test-managed-probe-lan-native.sh 2>&1 | tee artifacts/managed/prepared-active.log
+          grep -F -- '--- PASS: TestManagedStrategyProbeNativeLANPreparedActiveRecovery ' artifacts/managed/prepared-active.log
+          grep -F 'actual_prepared_active_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false prepared_used=true capture_ready=false' artifacts/managed/prepared-active.log
+          grep -F 'actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false' artifacts/managed/prepared-active.log
+          if grep -F -- '--- SKIP:' artifacts/managed/prepared-active.log; then exit 1; fi
       - name: Preserve native managed outcomes
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

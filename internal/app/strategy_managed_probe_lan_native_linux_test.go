@@ -43,6 +43,13 @@ func TestManagedStrategyProbeNativeLANPreLedgerRecovery(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
 }
 
+func TestManagedStrategyProbeNativeLANPreparedActiveRecovery(t *testing.T) {
+	if os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != "prepared-active" || os.Getenv("RAZVILKA_MANAGED_PROBE_LAN_CASE") != "prepared-active" {
+		t.Skip("requires explicit native prepared-active recovery population")
+	}
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan-manual")
+}
+
 func managedProbeNativeWANListener() (listener net.Listener, result error) {
 	runtime.LockOSThread()
 	unlock := true
@@ -196,7 +203,7 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		if failedCode == http.StatusOK || !intentCut || publicationCut != (mode == "settlement-sync") {
 			t.Fatal("actual original fault was not reached", failedCode, intentCut, publicationCut)
 		}
-		if mode == "intent" || mode == "pre-ledger" {
+		if mode == "intent" || mode == "pre-ledger" || mode == "prepared-active" {
 			status, err := a.Dataplane.Status()
 			if err != nil || status.Execution == nil || status.Execution.State != "rolled-back" || !status.Execution.RollbackVerified {
 				t.Fatal("original never-issued failure did not join and verify rollback", err, status.Execution)
@@ -286,7 +293,7 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		if retained || !reflect.DeepEqual(beforeConfig, a.Store.Get()) {
 			t.Fatal("partial recovery retained route owner or changed panel choice", retained)
 		}
-		if mode == "pre-ledger" && t.Name() == "TestManagedStrategyProbeNativeLANPreLedgerRecovery" {
+		if mode == "pre-ledger" && t.Name() == "TestManagedStrategyProbeNativeLANPreLedgerRecovery" || mode == "prepared-active" && t.Name() == "TestManagedStrategyProbeNativeLANPreparedActiveRecovery" {
 			// Restore panel readiness before closing original sources; this
 			// read-only plan does not stand in for a successful new Apply.
 			code, raw := request(http.MethodGet, "/api/v1/plan?scope=all", "")
@@ -301,10 +308,14 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 			defer finish()
 			failedRollback = status.Execution
 			if err := managedProbeCloseFailedApply(closing, a, r, status.Execution, readEmpty); err != nil {
-				t.Fatal("pre-ledger original Close and independent absence", err)
+				t.Fatal("original recovery Close and independent absence", err)
 			}
 			stopped = true
-			t.Log("actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			if mode == "prepared-active" {
+				t.Log("actual_prepared_active_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			} else {
+				t.Log("actual_preledger_recovery_only original_writer=true joined_child=true rollback_verified=true resources_retired=true empty_queue_rules_processes=true restored_direct_lan=true panel_review_restored=true choices_unchanged=true sources_closed=true full_apply_proven=false")
+			}
 			return
 		}
 		stopped = true // The failed Apply has already joined its original owner.

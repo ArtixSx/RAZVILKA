@@ -140,6 +140,11 @@ if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
       test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
       test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = all
       probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANPreLedgerRecovery' ;;
+    prepared-active)
+      test "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}" = prepared-active
+      test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+      test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = all
+      probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANPreparedActiveRecovery' ;;
     *) exit 2 ;;
   esac
   probe_timeout=240s

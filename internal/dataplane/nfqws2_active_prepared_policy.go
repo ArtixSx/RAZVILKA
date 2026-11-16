@@ -177,3 +177,28 @@ func nfqwsPreparedHeldAbsence(ctx context.Context, b *NFQWSScopedBinding, p *NFQ
 	}
 	return true, errors.Join(borrow.currentOwner(), ctx.Err(), s.parent.Err())
 }
+
+// Existing private writer fault seam, after the original fresh absence proof
+// released BOTH locks. Ordinary options have no hook. A native failure here
+// occurs inside PreparedActive before capture-ready, without bypassing a read.
+func nfqwsPreparedAbsenceFault(ctx context.Context) error {
+	if ctx == nil || ctx.Err() != nil {
+		return ErrNFQWSScopedOwner
+	}
+	s, ok := ctx.Value(nfqwsActivePreparedPolicyKey{}).(*nfqwsActivePreparedPolicy)
+	if !ok || s == nil || s.self != s {
+		return ErrNFQWSScopedOwner
+	}
+	s.mu.RLock()
+	c := s.custody
+	valid := s.open && s.used && c != nil && c.preparedPolicy == s && c.session != nil && ctx.Value(policyEffectReceiptBorrowKey{}) == c.session.borrow
+	var session *policyEffectSession
+	if valid {
+		session = c.session
+	}
+	s.mu.RUnlock()
+	if !valid {
+		return ErrPolicyAdditionUnknown
+	}
+	return session.fault("nfq-original-prepared-absence", -1)
+}

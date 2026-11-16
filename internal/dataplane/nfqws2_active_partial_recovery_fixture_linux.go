@@ -24,7 +24,7 @@ type nfqNeverIssuedNativeCut struct {
 // Test binary only. This arms one real writer fault, never a receipt, ACK,
 // native child result, inventory, permission, or successful cleanup result.
 func ArmNFQWSNeverIssuedNativeFixture(manager *Manager, mode string) (func() (bool, bool), func(), error) {
-	if manager == nil || os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != mode || (mode != "intent" && mode != "settlement-sync" && mode != "pre-ledger") {
+	if manager == nil || os.Getenv("RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE") != mode || (mode != "intent" && mode != "settlement-sync" && mode != "pre-ledger" && mode != "prepared-active") {
 		return nil, nil, ErrNFQWSScopedOwner
 	}
 	cut := &nfqNeverIssuedNativeCut{mode: mode}
@@ -60,7 +60,29 @@ func nfqwsOriginalRecoveryOptions(e *nfqws2ActiveExecution, options policyAdditi
 				return errNFQNeverIssuedNativeCut
 			}
 		}
-		if cut.mode != "pre-ledger" && point == "intent" && index == 1 && cut.intent.CompareAndSwap(false, true) {
+		if cut.mode == "prepared-active" && point == "nfq-original-prepared-absence" && index == -1 {
+			c := e.partialRecovery
+			if c == nil || !c.preLedgerArmed() || c.index != -1 || c.publication != 0 || c.renameAttempted || c.entered || c.preparedPolicy == nil || e.resource == nil || e.resource.scope == nil {
+				return ErrPolicyAdditionUnknown
+			}
+			s := c.preparedPolicy
+			s.mu.RLock()
+			original := s.self == s && s.open && s.used && s.custody == c && s.resource == e.resource
+			s.mu.RUnlock()
+			r := e.resource
+			r.scope.mu.Lock()
+			resourceIndex, err := r.matching(r.Binding())
+			beforeCapture := err == nil && r.preparedUsed && r.activeObservation == nil && r.scope.execution.Resources[resourceIndex].Phase == "process-pending"
+			r.scope.mu.Unlock()
+			if !original || !beforeCapture {
+				return ErrPolicyAdditionUnknown
+			}
+			if cut.intent.CompareAndSwap(false, true) {
+				log.Print("actual_prepared_active_native_cut armed=true publications=0 rename_attempted=false entered=false common_run_entry=false prepared_used=true capture_ready=false")
+				return errNFQNeverIssuedNativeCut
+			}
+		}
+		if (cut.mode == "intent" || cut.mode == "settlement-sync") && point == "intent" && index == 1 && cut.intent.CompareAndSwap(false, true) {
 			return errNFQNeverIssuedNativeCut
 		}
 		if cut.mode == "settlement-sync" && point == "nfq-original-after-sync" && index == 1 && e.partialRecovery != nil && e.partialRecovery.session != nil && e.partialRecovery.session.doc.Steps[index].State == "removed" && !cut.released.Load() {

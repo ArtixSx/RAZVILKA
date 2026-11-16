@@ -346,3 +346,34 @@ func TestNFQWSPreparedPolicyAlsoHonorsOriginalParentCancellation(t *testing.T) {
 		t.Fatal("detached actual caller outlived original preparation", err, ctx.Err())
 	}
 }
+
+func TestNFQWSPreparedPolicyFaultRunsAfterBothComparisonLocks(t *testing.T) {
+	f, c, s, _ := nfqPreparedPolicyFixture(t)
+	s.open, s.used, s.custody = true, true, c // Explicit open-comparator model.
+	ctx := context.WithValue(s.parent, policyEffectReceiptBorrowKey{}, c.session.borrow)
+	ctx = context.WithValue(ctx, nfqwsActivePreparedPolicyKey{}, s)
+	cut := errors.New("prepared absence fault")
+	calls := 0
+	c.session.options.fault = func(point string, index int) error {
+		calls++
+		if point != "nfq-original-prepared-absence" || index != -1 || !s.mu.TryLock() {
+			t.Fatal("fault under preparation lock or wrong boundary", point, index)
+		}
+		s.mu.Unlock()
+		if !c.session.borrow.mu.TryLock() {
+			t.Fatal("fault under original borrow lock")
+		}
+		c.session.borrow.mu.Unlock()
+		return cut
+	}
+	if present, err := nfqwsPreparedHeldAbsence(ctx, s.binding, s.plan, s.root); !present || err != nil {
+		t.Fatal("fresh comparison before fault", err)
+	}
+	if err := nfqwsPreparedAbsenceFault(ctx); !errors.Is(err, cut) || calls != 1 || c.publication != 0 || len(f.calls) != 0 {
+		t.Fatal("fault did not preserve original no-effect state", err, calls)
+	}
+	s.open = false
+	if err := nfqwsPreparedAbsenceFault(ctx); err == nil || calls != 1 {
+		t.Fatal("closed scope invoked fault", err, calls)
+	}
+}

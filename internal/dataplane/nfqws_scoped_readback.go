@@ -611,7 +611,10 @@ func (b *NFQWSScopedBinding) VerifyPrepared(ctx context.Context, p *NFQWSScopedP
 	defer root.Close()
 	absent := func() error {
 		if present, err := nfqwsPreparedHeldAbsence(ctx, b, p, path); present {
-			return err
+			if err != nil {
+				return err
+			}
+			return nfqwsPreparedAbsenceFault(ctx)
 		}
 		for _, name := range []string{policyAdditionFile, policyAdditionLock} {
 			if _, err := root.Stat(name); !errors.Is(err, os.ErrNotExist) {
