@@ -21,5 +21,8 @@ ctx.showNotice('review','Проверить результат','Примене�
 assert.equal(elements.get('#notice').className,'notice review');
 ctx.showNotice('review','Сведения обновляются','Повторим чтение',{detail_kind:'panel-load'});
 assert.equal(elements.get('#notice').className,'notice review panel-load');
-const css=read('interface-shell.css');assert.match(css,/body\.rz-simple #notice\.review\.panel-load[,\{]/);assert.doesNotMatch(css,/body\.rz-simple #notice\.review[,\{]/,'simple mode must not hide actionable review failures');
+const css=read('interface-shell.css');
+assert.match(css,/body\.rz-simple:has\(#view-overview\.active\) #notice\.review\.panel-load[,\{]/,'compact home may hide only its passive panel-load notice');
+assert.doesNotMatch(css,/body\.rz-simple #notice\.review(?:\.panel-load)?[,\{]/,'compact mode must not hide review notices across all workspaces');
+assert.doesNotMatch(css,/body\.rz-simple(?::has\(#view-overview\.active\))? #notice\.review[,\{]/,'compact home must not hide actionable review failures');
 console.log('PASS transient notices expire; errors persist with manual dismissal; replacement cancels stale timers');
