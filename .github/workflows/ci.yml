@@ -16,6 +16,11 @@ on:
       - 'work/mihomo-self-image-*'
       - 'work/backend-proc-io-20261116'
       - 'work/inactive-proc-threadgroup-20261116'
+      - 'work/netidentity-metadata-experiment-*'
+      - 'work/mihomo-hash-buffer-experiment-*'
+      - 'work/hev-default-delivery-*'
+      - 'work/nfq-prepared-active-recovery-*'
+      - 'work/inactive-proc-fallback-*'
   pull_request:
 
 permissions:
