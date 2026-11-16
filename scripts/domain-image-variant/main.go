@@ -301,6 +301,14 @@ func prepare(candidate, baseline, output, revision string) error {
 	return nil
 }
 func main() {
+	if len(os.Args) == 6 && os.Args[5] == "baseline-tools" {
+		if err := prepareTool(os.Args[1], os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		fmt.Println("DOMAIN_TOOL_SOURCE_PARITY: same commit, one reviewed original comparison file, complete tree byte/mode parity")
+		return
+	}
 	if len(os.Args) != 5 {
 		fmt.Fprintln(os.Stderr, "candidate baseline new-output exact-commit required")
 		os.Exit(2)

@@ -2,6 +2,12 @@ name: Matched current-source domain image comparison
 
 on:
   workflow_dispatch:
+    inputs:
+      comparison:
+        description: 'One reviewed source change; all original acceptance budgets unchanged'
+        type: choice
+        default: image
+        options: [image, baseline-tools]
   push:
     branches: ['work/research-build-20261109', 'work/domain-image-current-20261116']
     paths:
@@ -27,7 +33,7 @@ env:
 
 jobs:
   matched-domain:
-    name: Same runner ABBA / ${{ matrix.scenario }}
+    name: Same runner ABBA / ${{ inputs.comparison || 'image' }} / ${{ matrix.scenario }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -58,10 +64,11 @@ jobs:
           unzip /tmp/xray-node.zip xray -d /tmp/xray-node-fixture
           sudo install -d -m 0755 /usr/local/lib/razvilka-fixtures
           sudo install -m 0555 /tmp/xray-node-fixture/xray /usr/local/lib/razvilka-fixtures/xray
-      - name: Image feature versus full-SHA fallback, unchanged deadlines, joined ABBA
+      - name: Reviewed source pair, unchanged deadlines, joined ABBA
         shell: bash
         env:
           SCENARIO: ${{ matrix.scenario }}
+          COMPARISON: ${{ inputs.comparison || 'image' }}
         run: |
           set -euo pipefail
           mkdir -p -m 700 artifacts/domain-image
@@ -69,6 +76,7 @@ jobs:
           sudo env PATH="$PATH" GOTOOLCHAIN=local \
             GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
             RAZVILKA_XRAY_NATIVE=/usr/local/lib/razvilka-fixtures/xray \
+            RAZVILKA_DOMAIN_COMPARISON="$COMPARISON" \
             RAZVILKA_DOMAIN_IMAGE_OUTPUT="$PWD/artifacts/domain-image/$SCENARIO" \
             bash scripts/compare-domain-image-native.sh "$SCENARIO"
       - name: Bound public evidence before upload

@@ -14,7 +14,7 @@ EXPECTED = "TestDomainTCPOriginalNativeAcceptedFlows"
 
 
 class ComparisonReport(unittest.TestCase):
-    def sample(self, root, index, side, *, passed=True, answer=True, image=None):
+    def sample(self, root, index, side, *, passed=True, answer=True, image=None, tools=False):
         path = root / f"{index:02d}-{side}"
         path.mkdir()
         rc = 0 if passed else 1
@@ -31,17 +31,25 @@ class ComparisonReport(unittest.TestCase):
             counters = "whole-executable-hash:{Calls:2 Bytes:100 Elapsed:1ms}"
             if image:
                 counters += " executable-image-capture:{Calls:1 Bytes:50 Elapsed:1ms}"
+            if tools:
+                counters += " baseline-standalone-tool-read:{Calls:1 Bytes:0 Elapsed:1ms}"
             log += "actual first DNS answer completed-counter snapshot: map[" + counters + "]\n"
         log += f"--- {'PASS' if passed else 'FAIL'}: {EXPECTED} (1.00s)\n"
         (path / "native.log").write_text(log, encoding="utf-8")
 
-    def run_case(self, cut):
+    def run_case(self, cut, comparison="image"):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "source-comparison").mkdir()
             (root / "source-comparison/variant.json").write_text(json.dumps({"source_commit": "a" * 40}), encoding="utf-8")
             for index, side in enumerate(["baseline", "candidate", "candidate", "baseline"], 1):
                 options = {}
+                if comparison == "baseline-tools":
+                    options.update(image=True, tools=side == "candidate")
+                    if cut == "baseline-uses-tools" and index == 1:
+                        options["tools"] = True
+                    if cut == "candidate-missing-tools" and index == 2:
+                        options["tools"] = False
                 if cut == "baseline-fails" and index == 1:
                     options["passed"] = False
                 if cut == "baseline-uses-image" and index == 1:
@@ -53,7 +61,7 @@ class ComparisonReport(unittest.TestCase):
                 self.sample(root, index, side, **options)
             env = dict(os.environ, DOMAIN_IMAGE_OUTPUT=str(root), DOMAIN_IMAGE_EXPECTED=EXPECTED,
                        DOMAIN_IMAGE_BASELINE="synthetic-current-source-full-SHA-fallback",
-                       DOMAIN_IMAGE_CANDIDATE="a" * 40, DOMAIN_IMAGE_SCENARIO="selected")
+                       DOMAIN_IMAGE_CANDIDATE="a" * 40, DOMAIN_IMAGE_SCENARIO="selected", DOMAIN_IMAGE_COMPARISON=comparison)
             result = subprocess.run([sys.executable, "-c", REPORT], env=env, capture_output=True, text=True, timeout=10)
             self.assertIn(result.returncode, (0, 1), result.stderr)
             return result.returncode, json.loads((root / "comparison.json").read_text(encoding="utf-8"))
@@ -62,6 +70,22 @@ class ComparisonReport(unittest.TestCase):
         rc, report = self.run_case("none")
         self.assertEqual(rc, 0)
         self.assertTrue(report["all_samples_pass"])
+
+    def test_tools_both_images_and_candidate_scope_required(self):
+        rc, report = self.run_case("none", "baseline-tools")
+        self.assertEqual(rc, 0)
+        self.assertEqual(report["comparison"], "baseline-tools")
+        self.assertTrue(report["all_samples_pass"])
+        for cut, index in (("baseline-uses-tools", 0), ("candidate-missing-tools", 1), ("candidate-missing-image", 1)):
+            with self.subTest(cut=cut):
+                rc, report = self.run_case(cut, "baseline-tools")
+                self.assertEqual(rc, 1)
+                self.assertFalse(report["samples"][index]["variant_path_valid"])
+
+    def test_tools_baseline_failure_preserved(self):
+        rc, report = self.run_case("baseline-fails", "baseline-tools")
+        self.assertEqual(rc, 1)
+        self.assertFalse(report["all_samples_pass"])
 
     def test_failed_baseline_is_not_acceptance(self):
         rc, report = self.run_case("baseline-fails")

@@ -18,7 +18,12 @@ case "$RAZVILKA_DOMAIN_IMAGE_OUTPUT" in /*) ;; *) exit 2 ;; esac
 case "$RAZVILKA_XRAY_NATIVE" in /*) ;; *) exit 2 ;; esac
 for tool in git python3 timeout go sha256sum tar setsid sleep; do command -v "$tool" >/dev/null; done
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-baseline=synthetic-current-source-full-SHA-fallback
+comparison=${RAZVILKA_DOMAIN_COMPARISON:-image}
+case "$comparison" in
+  image) baseline=synthetic-current-source-full-SHA-fallback ;;
+  baseline-tools) baseline=same-current-source-original-tool-comparison ;;
+  *) exit 2 ;;
+esac
 candidate=$(git -c safe.directory="$repo" -C "$repo" rev-parse HEAD)
 case "$candidate" in *[!0-9a-f]*) exit 2 ;; esac
 test "${#candidate}" = 40 || exit 2
@@ -42,7 +47,12 @@ done
 # One reviewed AST statement disables image acquisition in the baseline only.
 # Its existing nil-image branches perform the full-SHA fallback, including the
 # dependent pre-Add/Guard paths. Every other source byte/mode must match.
-go -C "$work/candidate" run ./scripts/domain-image-variant "$work/candidate" "$work/baseline" "$output/source-comparison" "$candidate"
+if test "$comparison" = baseline-tools; then
+  go -C "$work/candidate" run ./scripts/domain-image-variant "$work/candidate" "$work/baseline" "$output/source-comparison" "$candidate" baseline-tools
+else
+  go -C "$work/candidate" run ./scripts/domain-image-variant "$work/candidate" "$work/baseline" "$output/source-comparison" "$candidate"
+fi
+export DOMAIN_IMAGE_COMPARISON=$comparison
 export DOMAIN_IMAGE_BASELINE=$baseline DOMAIN_IMAGE_CANDIDATE=$candidate
 export DOMAIN_IMAGE_SCENARIO=$scenario DOMAIN_IMAGE_EXPECTED=$expected DOMAIN_IMAGE_OUTPUT=$output
 python3 - <<'PY'
@@ -52,6 +62,9 @@ cpu=next((x.split(':',1)[1].strip() for x in pathlib.Path('/proc/cpuinfo').read_
 files={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in map(pathlib.Path,[os.environ['RAZVILKA_XRAY_NATIVE'],'/usr/sbin/xtables-legacy-multi','/usr/bin/ip'])}
 meta={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'source_variants':json.loads((out/'source-comparison/variant.json').read_text()),'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'order':['baseline','candidate','candidate','baseline'],'cpu_model':cpu,'kernel':platform.release(),'go':subprocess.check_output(['go','version'],text=True).strip(),'assets_sha256':files,'native_GOMAXPROCS':2,'limits':['Unchanged publication12s/client4s; no diagnostic deadline override','Same current-source image feature versus synthetic full-SHA fallback, including dependent pre-Add/Guard sharing; not historical344912c or memcmp-only','Ubuntu24.04 host; absolute durations are not comparable to earlier different-host runs','Fresh process/namespace each sample; warm host page cache, not cold IO','Counter/profile markers alone do not prove joined cleanup; original errors and supervisor outcomes are retained','Retained image bytes are not process RSS or router memory proof','Two samples per side do not establish statistical significance; compare identical completed stages only']}
 cg=pathlib.Path('/sys/fs/cgroup/cpu.max')
+meta['comparison']=os.environ['DOMAIN_IMAGE_COMPARISON']
+if meta['comparison']=='baseline-tools':
+    meta['limits'][1]='Same current source with only the reviewed tool comparison file restored in baseline; executable image feature unchanged on both sides'
 meta['cgroup_cpu_max']=cg.read_text().strip() if cg.exists() else 'unavailable'
 (out/'provenance.json').write_text(json.dumps(meta,indent=2)+'\n')
 PY
@@ -210,7 +223,9 @@ done
 python3 - <<'PY'
 import hashlib,json,os,pathlib,re,sys
 out=pathlib.Path(os.environ['DOMAIN_IMAGE_OUTPUT']); expected=os.environ['DOMAIN_IMAGE_EXPECTED']
-rows=[]; failed=False; wanted={'capture-prepare','standby-prepare','process-current','whole-executable-hash','executable-image-capture','executable-image-compare','executable-image-storage','kernel-observe','mapping-compare'}
+comparison=os.environ.get('DOMAIN_IMAGE_COMPARISON','image')
+if comparison not in ('image','baseline-tools'):raise SystemExit('unknown comparison')
+rows=[]; failed=False; wanted={'capture-prepare','standby-prepare','process-current','whole-executable-hash','executable-image-capture','executable-image-compare','executable-image-storage','kernel-observe','mapping-compare','baseline-standalone-tool-read'}
 for index,side in enumerate(['baseline','candidate','candidate','baseline'],1):
     p=out/f'{index:02d}-{side}'; row={'sample':index,'side':side}; rows.append(row)
     if (p/'not-run.txt').exists():
@@ -241,6 +256,11 @@ for index,side in enumerate(['baseline','candidate','candidate','baseline'],1):
     # Do not require image activity when a sample refuses before reaching it.
     path_valid=(not row['image_path_observed']) if side=='baseline' else (not row['first_dns_answer_observed'] or row['image_path_observed'])
     if side=='baseline' and row['first_dns_answer_observed'] and not row['full_sha_path_observed']:path_valid=False
+    if comparison=='baseline-tools':
+        path_valid=not row['first_dns_answer_observed'] or row['image_path_observed']
+        row['tool_scope_observed']=any(int(n)>0 for n in re.findall(r'baseline-standalone-tool-read:\{Calls:(\d+)',log))
+        if side=='baseline' and row['tool_scope_observed']:path_valid=False
+        if side=='candidate' and row['first_dns_answer_observed'] and not row['tool_scope_observed']:path_valid=False
     row['variant_path_valid']=path_valid
     if not path_valid:row['status']='fail';failed=True
     row['selected_tls_timeout']='Client.Timeout exceeded while awaiting headers' in log
@@ -253,6 +273,7 @@ if any(p.is_symlink() or not (p.is_dir() or p.is_file()) for p in entries):raise
 files=[p for p in entries if p.is_file()]
 if len(files)>80 or sum(p.stat().st_size for p in files)>16<<20:raise SystemExit('bounded comparison evidence limit exceeded')
 report={'baseline':os.environ['DOMAIN_IMAGE_BASELINE'],'candidate':os.environ['DOMAIN_IMAGE_CANDIDATE'],'source_variants':json.loads((out/'source-comparison/variant.json').read_text()),'scenario':os.environ['DOMAIN_IMAGE_SCENARIO'],'samples':rows,'all_samples_pass':all(r.get('status')=='pass' for r in rows),'all_candidate_samples_pass':all(r.get('status')=='pass' for r in rows if r['side']=='candidate'),'evidence':{str(p.relative_to(out)):{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in files}}
+report['comparison']=comparison
 (out/'comparison.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({'scenario':report['scenario'],'samples':[{k:r[k] for k in ['sample','side','status']} for r in rows],'all_candidate_samples_pass':report['all_candidate_samples_pass']}))
 sys.exit(1 if failed else 0)
