@@ -15,11 +15,12 @@ import (
 )
 
 type managedRuntimeImageNode struct {
-	name    string
-	file    *os.File
-	info    os.FileInfo
-	entries []string // Directories only; names and exact entry kinds.
-	content []byte   // This call's first read only, cleared before returning.
+	name         string
+	file         *os.File
+	info         os.FileInfo
+	entries      []string // Directories only; names and exact entry kinds.
+	content      []byte   // This call's first read only, cleared before returning.
+	scratchOwned bool     // Content acquired from this call's exclusive payload scratch.
 }
 
 // This bounded, callback-free image observation keeps original descriptors
@@ -50,7 +51,9 @@ func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expe
 	var scratch *managedRuntimePayloadScratch
 	defer func() {
 		for _, node := range nodes {
-			clear(node.content)
+			if !node.scratchOwned {
+				clear(node.content)
+			}
 			node.content = nil
 			resultErr = errors.Join(resultErr, node.file.Close())
 		}
@@ -147,6 +150,7 @@ func (m *Manager) verifyManagedNFQWSRuntimeImage(ctx context.Context, path, expe
 		if err != nil {
 			return manifest, err
 		}
+		node.scratchOwned = true
 		count, err := io.ReadFull(managedRuntimeImageContextReader{ctx, io.LimitReader(node.file, member.RawSize+1)}, data)
 		node.content = data[:count]
 		noteManagedNFQWSPayloadRead(m, int64(count))
