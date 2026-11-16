@@ -1,5 +1,27 @@
 # Дальнейшая работа
 
+## Текущая очередь завершения — 16.11.2026
+
+Одна рабочая ветка, общие файлы и интеграция — Root. Более старые очереди ниже
+сохраняют происхождение решений; приоритет имеет эта таблица.
+
+| Приоритет | Владелец | Рабочий сценарий / доказательство | Следующее действие и условие завершения |
+| --- | --- | --- | --- |
+| P0 DNS | catalog_lifecycle_review; Root integration | `492e813b` fresh listener image сравнение, strict Linux всё ещё FAIL | Локализовать и устранить стоимость selected/mismatch/unknown-host без изменения12/4с, повторить одинаковые сценарии и независимое ревью |
+| P0 Mihomo | catalog_product_analysis; Root review | Actual sameboot CPU profile `4e83e678`, normal ACK ранее PASS, race completed FAIL | Уменьшить подтверждённые повторные вычисления с полными свежими bytes/owner observations; все ACK cuts normal/race в120с |
+| P0 NFQWS2 | catalog_network_analysis; Root review | Core traffic и LateWait cleanup доказаны отдельно; fullLAN/manual и race Consumer не приняты | Полный Apply/Stop/recovery в исходных сроках, точные native VPN/exclusions/queue ownership |
+| P0 update/restore | Root; product/lifecycle review | `492e813b` bound retry normal/race, plan-only cut, actual public history и modern rollback PASS | Настоящая историческая reader4 совместимость и полный CI текущего итогового SHA; аппаратные прерывания отдельно |
+| P1 панель/API/AUTO | Root | Новое меню и21 страницы,118 Node commands и Chromium desktop/mobile PASS | Полный backend flow на принятом LAN-профиле после P0; неизвестное состояние не превращать в availability |
+| P1 роутер | Root после P0 | Предыдущий read-only NC-1812 профиль сохранён; текущий candidate не установлен | Backup + проверяемый откат, установка точного SHA, один service/device scope, Apply/Stop/recovery; пользователь разрешил испытания |
+| P1 GitHub | Root; network backup verification | 51 tags/14 releases/140 assets сохранены и проверены; README подготовлен | После готовности: финальный refs/local backup, перенос CI на pinned source archives, delete_repo OAuth scope, пересоздание и сверка нового репозитория |
+| P2 новые платформы | Root после выпуска | Сборки не равны готовности маршрута | Конкретные MIPS/MIPSel/OpenWrt устройства и профили; отсутствие оборудования блокирует только их аппаратную приёмку |
+
+Неуспешные программные тесты не являются внешним блокером. Внешние препятствия
+для следующей операции указаны отдельно: `delete_repo` отсутствует в OAuth;
+физический power-loss и иные модели требуют отдельного стенда. Статусы и точные
+run IDs: [текущая контрольная точка](CURRENT_STATUS_RU.md#текущая-контрольная-точка-16112026-492e813b).
+
+
 Приёмка кандидата 0.20.0 продолжается. Состав и ограничения описаны в
 [примечаниях к выпуску](releases/0.20.0.md); результаты проверок и оставшиеся
 условия выпуска — в [текущем статусе](CURRENT_STATUS_RU.md).

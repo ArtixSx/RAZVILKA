@@ -1,0 +1,76 @@
+{
+  "revision": "492e813b017b332160530e9ba9be4eeb71e7faed",
+  "router_ready": false,
+  "release_ready": false,
+  "runs": {
+    "identity": {
+      "id": 43889216575,
+      "conclusion": "success"
+    },
+    "public_history_pair": {
+      "id": 43889230446,
+      "conclusion": "success"
+    },
+    "modern_pair": {
+      "id": 43889238089,
+      "conclusion": "success",
+      "native_test_elapsed_seconds": 125.47
+    },
+    "domain": {
+      "id": 43889223432,
+      "conclusion": "failure"
+    },
+    "generic": {
+      "id": 43889164918,
+      "conclusion": "pending_at_capture"
+    }
+  },
+  "compatibility": {
+    "ordinary_reader": 4,
+    "explicit_offline_restore_reader": 5,
+    "pending5_normal_cli": "refused",
+    "pending5_offline_terminal_retry": "passed",
+    "terminal_receipt": "exact_original4",
+    "historical_library_local_probe": {
+      "historical_source": "4cc9f869974713c9cebd833fccca383c03c102b7",
+      "test_source": "c972ab262022c02072eef424f3d845841cafa5df",
+      "host": "Windows",
+      "elapsed_seconds": 0.52,
+      "result": "pass",
+      "limits": "Historical library executable; modeled immutable archive evidence; not historical application main or router"
+    }
+  },
+  "diagnostic_baseline": {
+    "revision": "4e83e67897a7ed81dcefa0ceff22a5552458436b",
+    "sameboot_run": 43887499495,
+    "sameboot_result": "failure",
+    "scenario": "race/completed.json",
+    "consumer_profile_seconds": 120.01,
+    "sampled_cpu_seconds": 107.01,
+    "sha256_flat_cpu_seconds": 33.31,
+    "syscall_flat_cpu_seconds": 26.08,
+    "cold_file_hash_cumulative_cpu_seconds": 22.73,
+    "cold_file_hash_sha_cpu_seconds": 19.9,
+    "empty_test_child_exit_abba": {
+      "blocks": 3,
+      "samples_each": 6,
+      "original_median_ms": 1067.050342,
+      "exit_sleep_zero_median_ms": 64.0199825,
+      "acceptance_GORACE_unchanged": true,
+      "is_route_speedup": false
+    },
+    "native_helper_exit_run": 43887471745,
+    "native_helper_exit_result": "failure",
+    "zero_exit_consumer_execute_seconds": 15.884497955,
+    "original_consumer_budget_seconds": 14,
+    "zero_exit_late_wait_cleanup": "pass",
+    "zero_exit_late_wait_test_seconds": 22.36,
+    "raw_local_directory": "C:/RAZVILKA-research-20261116/sameboot-profile-4e83",
+    "sha256": {
+      "sameboot-consumer.cpu.pprof": "77885738a01b0cf02d2ffaaa78cc519f79f5fb884afdbef4d81abf2fc1e99fb4",
+      "sameboot-consumer.test": "e5456602245c0bda4202afc8bc350922d769dd29ccd8b57675e059edc1c531e0",
+      "race-exit-cost.json": "8e8cea1cf6f68662367fa03982452d4c5a0a84f8171f99c44ceaeac753b07ace"
+    },
+    "limits": "CPU frames overlap. Do not sum cumulative values or infer router latency. Separate diagnostic exit experiment does not alter production or acceptance deadlines."
+  }
+}

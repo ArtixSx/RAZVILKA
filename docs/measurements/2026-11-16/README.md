@@ -1,5 +1,34 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
+## Контрольная точка `492e813b`
+
+[Машиночитаемые результаты](release-492e813b.json): identity regression,
+публичное восстановление истории и modern rollback PASS; strict DNS FAIL.
+Generic CI ещё выполнялся при сохранении этой точки. Router-ready=false.
+На последующей `c972ab26` локально исполнена настоящая reader4 библиотека
+`4cc9f869`: receipt4 принят, реальный bound pending5 отклонён, точный terminal4
+снова принят;0.52с. Архивная проверка в этом тесте моделируется явно.
+
+Профиль `4e83e678`, race/completed.json:120.01с elapsed,107.01с sampled CPU;
+SHA33.31с flat, syscall26.08с flat. В cold-file hashing22.73с cumulative,
+из них19.90с SHA. Это основание для проверяемой оптимизации self-image closing,
+но не доказанное ускорение после изменения. Overlapping cumulative не суммируются.
+
+```sh
+go tool pprof -top -nodecount=25 sameboot-consumer.test sameboot-consumer.cpu.pprof
+go tool pprof -top -cum -nodecount=35 sameboot-consumer.test sameboot-consumer.cpu.pprof
+```
+
+Отдельная диагностическая ABBA серия пустого race child,3 блока,6 измерений
+на вариант: медианы1067.050342мс original и64.0199825мс exit-sleep-zero.
+Она измеряет только завершение процесса без тестов; исходный acceptance GORACE
+не меняется. В настоящем NFQWS2 Consumer вариантzero всё ещё FAIL15.8845с
+при14с; LateWaitCleanup PASS22.36с. Ускорение service/LAN не заявляется.
+Команда воспроизведения — workflow `mihomo-same-boot-validation.yml` с
+`mode=race`, `ack_cut=completed.json`, `consumer_profile=true`; отдельный
+`native-race-helper-exit.yml` сохраняет оба результата и исходный отказ.
+
+
 Исходная панель — `71891f5c`, оформление/навигация — `35947259`, исправление
 устаревшего теста уведомлений — `e8954294`. Все 49 served assets совпадают с
 [browser report](panel-navigation.json). API/backend admission не расширялся.

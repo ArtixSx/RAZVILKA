@@ -1,5 +1,27 @@
 # Исследование и лабораторные проверки, 2026-11-09
 
+Последняя контрольная точка16.11: [результаты492e813b и CPU-профиль4e83](measurements/2026-11-16/README.md#контрольная-точка-492e813b).
+Восстановление пары и public modern rollback подтверждены отдельно от DNS,
+NFQWS2 и Mihomo race ACK. Историческая reader4 библиотека закреплена за
+`4cc9f869974713c9cebd833fccca383c03c102b7`, MIT; её исходники извлечены вне
+production tree из проверенного source archive. Единственный добавленный
+fixture entrypoint собирается против неизменённой старой библиотеки.
+Реальные receipt4/pending5/terminal4 проходят старый Current/RequiredReadVersion;
+архивная evidence-проверка намеренно моделируется, old main/router не заявляется.
+
+```sh
+go build -tags razvilka_historical_reader_fixture -o /tmp/offline-reader4-probe ./cmd/offline-reader4-probe
+# Previous command runs inside the pinned historical source with the copied entrypoint.
+# Next command runs inside the current source.
+RAZVILKA_HISTORICAL_READER4_PROBE=/tmp/offline-reader4-probe go test -count=1 -v ./internal/selfupdatejournal -run '^TestPairedOfflineRetryActualHistoricalReader4$'
+```
+
+Старые версии/лицензии для будущего fresh GitHub сохранены отдельно: восемь
+полных source archives с Git blob/tree и SHA256-проверкой. Это подготовка
+воспроизводимости; архив не разрешает переход версии и не заменяет actual
+software/router acceptance. Новый репозиторий пока не создан.
+
+
 Владелец лаборатории и `cmd/nodeeval`: lab_sources; интеграция: Root.
 База RAZVILKA: `0e2db5ab2120b20e249e3da7a8e861b558506550`.
 Это приложение к [основному roadmap](ROADMAP.md), не отдельный план выпуска.
