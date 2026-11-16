@@ -82,7 +82,7 @@ func equalNetworkPolicyNFQObservations(a, b []networkPolicyNFQObservation) bool 
 	return true
 }
 
-func (c *NetworkPolicyChecks) nfqConsumers(ctx context.Context, lan *LANPolicyRuntimePlan) (out []networkPolicyNFQObservation, result error) {
+func (c *NetworkPolicyChecks) nfqConsumersObserved(ctx context.Context, lan *LANPolicyRuntimePlan) (out []networkPolicyNFQObservation, result error) {
 	defer func() {
 		if result != nil {
 			for _, o := range out {
