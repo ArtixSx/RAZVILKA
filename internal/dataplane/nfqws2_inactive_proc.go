@@ -48,6 +48,10 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 	defer func() {
 		closing := errors.Join(closeChild(), pass.Close())
 		if closing != nil {
+			if result != nil {
+				result = errors.Join(result, &inactiveProcCloseFailure{cause: closing})
+				return
+			}
 			if ctx.Err() != nil {
 				closing = nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), closing))
 			} else {
@@ -182,7 +186,7 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 		if inactiveProcRetireError(err) && pid != proof.selfPID && pid != exceptPID && child.Terminal() {
 			continue
 		}
-		_, _, closingTicks, parseErr := proxyInactiveProcStat(again, pid)
+		closingState, _, closingTicks, parseErr := proxyInactiveProcStat(again, pid)
 		if err != nil || parseErr != nil {
 			if ctx.Err() != nil {
 				return nfqws2InactiveProcessAt("context", errors.Join(ctx.Err(), err))
@@ -195,6 +199,17 @@ func nfqws2InactiveProcessesExcept(ctx context.Context, proof nfqws2InactivePlat
 		}
 		if closingTicks != ticks {
 			return nfqws2InactiveProcessAt("startticks", ErrNFQWSManagedProcessUnknown)
+		}
+		if closingState == 'Z' || closingState == 'X' || closingState == 'x' {
+			closingText := strings.TrimSpace(string(again))
+			closingName := strings.TrimPrefix(closingText[:strings.LastIndex(closingText, ")")], strconv.Itoa(pid)+" (")
+			if nfqws2InactiveProcessName(closingName) {
+				return nfqws2InactiveProcessAt("zombie", ErrNFQWSManagedProcessUnknown)
+			}
+			if closingState != 'Z' || pid == proof.selfPID || pid == exceptPID || !child.Terminal() {
+				return nfqws2InactiveProcessAt("self.state", ErrNFQWSManagedProcessUnknown)
+			}
+			continue
 		}
 		self = self || pid == proof.selfPID
 	}

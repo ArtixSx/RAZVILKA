@@ -173,6 +173,9 @@ func (h *modelInactiveProcPID) Close() error {
 		return ErrProxyRuntimeInactive
 	}
 	err := h.Current()
+	if (h.state == 'Z' || h.state == 'X' || h.state == 'x') && !h.terminalZombie && !h.gone {
+		err = errors.Join(err, ErrProxyRuntimeInactive)
+	}
 	if h.terminalZombie && err == nil {
 		raw, readErr := h.read("stat", 16<<10)
 		state, ticks, threads, parseErr := inactiveProcThreads(raw, h.pid)
@@ -279,5 +282,71 @@ func TestInactiveProcMissingFactoryNeverUsesModel(t *testing.T) {
 	n.proof.procPass = nil
 	if nfqws2InactiveProcesses(context.Background(), n.proof, n.a) == nil {
 		t.Fatal("NFQ missing factory")
+	}
+}
+
+func TestInactiveProcCallerClosingTerminalTransition(t *testing.T) {
+	for _, engine := range []string{"proxy", "dns", "nfq"} {
+		for _, cut := range []string{"z1", "z2", "X", "x", "known-nfq-z1", "cancel"} {
+			t.Run(engine+"/"+cut, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				var root string
+				var observe func() error
+				var setLink func(func(string) (string, error))
+				switch engine {
+				case "proxy":
+					f := newInactiveFixture(t, "mihomo")
+					root = f.proof.procRoot
+					observe = func() error { return proxyInactiveProc(ctx, f.proof, f.a) }
+					setLink = func(link func(string) (string, error)) { f.proof.readlink = link }
+				case "dns":
+					f := newScopedDNSInactiveFixture(t)
+					root = f.proof.procRoot
+					observe = func() error {
+						return scopedDNSInactiveProc(ctx, f.proof, f.a.StateRoot, f.a.InactivitySettingsPath, nil)
+					}
+					setLink = func(link func(string) (string, error)) { f.proof.readlink = link }
+				case "nfq":
+					f := newNFQWS2InactiveFixture(t)
+					root = f.proof.procRoot
+					observe = func() error { return nfqws2InactiveProcesses(ctx, f.proof, f.a) }
+					setLink = func(link func(string) (string, error)) { f.proof.readlink = link }
+				}
+				path := filepath.Join(root, "777")
+				inactiveWrite(t, filepath.Join(path, "stat"), inactiveReaderStat(777, 'S', "1", "19"))
+				inactiveWrite(t, filepath.Join(path, "cmdline"), []byte("unrelated\x00"))
+				setLink(func(name string) (string, error) {
+					if name != filepath.Join(path, "exe") {
+						return "/opt/bin/controller", nil
+					}
+					state := byte('Z')
+					threads := "1"
+					if cut == "z2" {
+						threads = "2"
+					}
+					if cut == "X" {
+						state = 'X'
+					}
+					if cut == "x" {
+						state = 'x'
+					}
+					raw := inactiveReaderStat(777, state, threads, "19")
+					if cut == "known-nfq-z1" {
+						raw = []byte(strings.Replace(string(raw), "(fixture)", "(nfqws2)", 1))
+					}
+					inactiveWrite(t, filepath.Join(path, "stat"), raw)
+					if cut == "cancel" {
+						cancel()
+					}
+					return "/opt/bin/unrelated", nil
+				})
+				err := observe()
+				accept := cut == "z1" || cut == "known-nfq-z1" && engine != "nfq"
+				if (err == nil) != accept {
+					t.Fatal("closing terminal transition", err)
+				}
+			})
+		}
 	}
 }

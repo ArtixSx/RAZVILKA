@@ -166,9 +166,15 @@ func proxyInactiveProc(ctx context.Context, proof proxyInactiveProof, adapter *P
 		if inactiveProcRetireError(err) && pid != proof.selfPID && child.Terminal() {
 			continue
 		}
-		_, _, currentTicks, e := proxyInactiveProcStat(again, pid)
+		closingState, _, currentTicks, e := proxyInactiveProcStat(again, pid)
 		if err != nil || e != nil || currentTicks != ticks {
 			return ErrProxyRuntimeInactive
+		}
+		if closingState == 'Z' || closingState == 'X' || closingState == 'x' {
+			if closingState != 'Z' || pid == proof.selfPID || !child.Terminal() {
+				return ErrProxyRuntimeInactive
+			}
+			continue
 		}
 		self = self || pid == proof.selfPID
 	}

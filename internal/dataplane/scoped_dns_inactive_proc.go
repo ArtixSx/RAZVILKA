@@ -233,7 +233,7 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 		if gone(err) {
 			continue
 		}
-		_, _, current, parseErr := proxyInactiveProcStat(again, pid)
+		closingState, _, current, parseErr := proxyInactiveProcStat(again, pid)
 		if err != nil || parseErr != nil || ticks != current {
 			return ErrScopedDNSRuntimeInactive
 		}
@@ -242,6 +242,12 @@ func scopedDNSInactiveProc(ctx context.Context, p scopedDNSInactiveProof, root, 
 			if err := p.installerPeerCheck(ctx, pid); err != nil {
 				return errors.Join(ErrScopedDNSRuntimeInactive, err)
 			}
+		}
+		if closingState == 'Z' || closingState == 'X' || closingState == 'x' {
+			if closingState != 'Z' || pid == p.selfPID || !child.Terminal() {
+				return ErrScopedDNSRuntimeInactive
+			}
+			continue
 		}
 		self = self || pid == p.selfPID
 	}

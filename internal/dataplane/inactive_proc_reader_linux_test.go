@@ -61,8 +61,10 @@ func TestInactiveProcHeldTerminalStates(t *testing.T) {
 			if h.Terminal() != tc.terminal {
 				t.Fatal("terminal classification")
 			}
-			if err := h.Close(); err != nil {
-				t.Fatal(err)
+			closeErr := h.Close()
+			mustRefuse := tc.readOK && (tc.state == 'Z' || tc.state == 'X' || tc.state == 'x') && !tc.terminal
+			if (closeErr != nil) != mustRefuse {
+				t.Fatal("closing terminal fence", closeErr)
 			}
 		})
 	}

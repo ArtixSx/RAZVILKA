@@ -520,6 +520,9 @@ func (h *linuxInactiveProcPID) Close() error {
 		return ErrProxyRuntimeInactive
 	}
 	err := h.Current()
+	if (h.observedState == 'Z' || h.observedState == 'X' || h.observedState == 'x') && !h.terminalZombie && !h.terminalGone {
+		err = errors.Join(err, ErrProxyRuntimeInactive)
+	}
 	if h.terminalZombie && err == nil {
 		raw, readErr := h.read("stat", 16<<10)
 		state, ticks, threads, parseErr := inactiveProcThreads(raw, h.pid)

@@ -37,6 +37,11 @@ type inactiveProcStatFailure struct{ birth bool }
 func (e *inactiveProcStatFailure) Error() string { return "inactive process stat refused" }
 func (e *inactiveProcStatFailure) Unwrap() error { return ErrProxyRuntimeInactive }
 
+type inactiveProcCloseFailure struct{ cause error }
+
+func (e *inactiveProcCloseFailure) Error() string { return "process observation closing refused" }
+func (e *inactiveProcCloseFailure) Unwrap() error { return e.cause }
+
 func inactiveProcOpenMissing(err error) bool {
 	// Only a missing initial open, never a joined failure after acquiring an FD.
 	return err == os.ErrNotExist || err == syscall.ENOENT
