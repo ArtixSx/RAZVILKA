@@ -2,7 +2,7 @@
 """External diagnostic: same-source full manual Apply ABBA; no checkout writes."""
 import hashlib, json, os, pathlib, re, shutil, stat, subprocess, sys, tarfile, tempfile, time
 
-REVISION = 'ac6ce6fb46b2783630352c900ed88f91c689bcaf'
+REVISION = '63d5c98891d0dc11044976a79e805137fe6a25fb'
 TARGET = 'internal/dataplane/wg_inactivity_tool_observation.go'
 SUPERVISOR_SHA = '8b3c876a45462909a6b6442af10c3ac28a2713610a3d77cac8fc02a8c0d0567a'
 CANDIDATE_SHA = '0468fa605f0f4d8d66c17308d56abfca02721544fe3ffe156af9d252f3c86962'
