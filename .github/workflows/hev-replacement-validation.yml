@@ -1,4 +1,4 @@
-name: HEV original same-version replacement and recovery
+name: HEV default delivery same-version replacement and recovery
 on:
   workflow_dispatch:
   push:
@@ -32,7 +32,7 @@ jobs:
           sh scripts/build-hev-runtime-altstack-lab.sh "$GITHUB_WORKSPACE/artifacts/hev-lab" 2>&1 | tee artifacts/build.txt
           echo 'a98763f18b0ad1f72a903221008488275f2bf60be00028886f9fa41622df6a03  artifacts/hev-lab/bin/hev-original' | sha256sum --check --strict
           echo '1170182f821cec62b03c1443747e52b45f48baa7d7595f45e95c2ccf958972d9  artifacts/hev-lab/bin/hev-patched' | sha256sum --check --strict
-      - name: Original HTTP owner, real process refusal, crash and rollback
+      - name: Default production selector, original HTTP owner, real process refusal and recovery
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +47,10 @@ jobs:
           if grep -F -- '--- SKIP:' artifacts/replacement.txt; then exit 1; fi
           grep -F -- '--- PASS: TestHEVOriginalNativeHTTPSameVersionReplacement ' artifacts/replacement.txt
           grep -F -- 'HEV_NATIVE_SAME_VERSION_REPLACEMENT_PASS' artifacts/replacement.txt
+          grep -Fx -- 'HEV_DEFAULT_DELIVERY_BUILD=razvilka_native_fixture; local fixed-URL transport; public reachability pending' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVDefaultReleasePins ' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVReleasePinnedNativeInstall ' artifacts/replacement.txt
+          grep -F -- '--- PASS: TestHEVReleasePinnedDownloadRejectsBeforeExecution ' artifacts/replacement.txt
       - name: Preserve exact component evidence, separately from route readiness
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

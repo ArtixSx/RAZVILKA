@@ -1,4 +1,4 @@
-//go:build linux && amd64 && razvilka_native_fixture && razvilka_hev_altstack_lab
+//go:build linux && amd64 && razvilka_native_fixture
 
 package components
 

@@ -105,7 +105,7 @@ func (m *Manager) installHEVReleaseWithReplacement(ctx context.Context, spec Spe
 	}
 	digest := sha256.Sum256(binary)
 	if len(binary) == 0 || hex.EncodeToString(digest[:]) != info.PinnedSHA256 {
-		return result, errors.New("HEV official pinned SHA-256 mismatch")
+		return result, errors.New("HEV reviewed pinned SHA-256 mismatch")
 	}
 	// Execute only digest-verified bytes, outside the installed path. A failed
 	// version observation cannot mutate the installed binary or its receipts.

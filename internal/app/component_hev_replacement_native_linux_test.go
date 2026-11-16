@@ -1,4 +1,4 @@
-//go:build linux && amd64 && razvilka_native_fixture && razvilka_hev_altstack_lab
+//go:build linux && amd64 && razvilka_native_fixture
 
 package app
 
@@ -34,7 +34,7 @@ import (
 
 func TestHEVOriginalNativeHTTPSameVersionReplacement(t *testing.T) {
 	if os.Getenv("RAZVILKA_HEV_REPLACEMENT_NATIVE") != "1" {
-		t.Skip("separate pinned source-build lab in private namespace only")
+		t.Skip("pinned source-build replacement in private namespace only")
 	}
 	if os.Geteuid() != 0 || os.Getpid() != 1 {
 		t.Fatal("private original PID namespace required")
@@ -62,7 +62,7 @@ func TestHEVOriginalNativeHTTPSameVersionReplacement(t *testing.T) {
 	}
 	sum := sha256.Sum256(desired)
 	if hex.EncodeToString(sum[:]) != pin {
-		t.Fatal("exact lab bytes required")
+		t.Fatal("exact selected build bytes required")
 	}
 	for _, dir := range []string{installpath.Config, installpath.State} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -273,5 +273,5 @@ func TestHEVOriginalNativeHTTPSameVersionReplacement(t *testing.T) {
 	if status != 200 || json.Unmarshal(body, &plan) != nil || plan.Ready {
 		t.Fatal("identical target remained update-ready", status, string(body))
 	}
-	t.Log("HEV_NATIVE_SAME_VERSION_REPLACEMENT_PASS exact official→separately pinned source-lab bytes; old/desired live process refusals, full registry inactivity, actual HTTP and receipt/journal verified; no route/router proof")
+	t.Log("HEV_NATIVE_SAME_VERSION_REPLACEMENT_PASS exact official→selected reviewed bytes; old/desired live process refusals, full registry inactivity, actual HTTP and receipt/journal verified; local fixed-URL transport, no public download/route/router proof")
 }
