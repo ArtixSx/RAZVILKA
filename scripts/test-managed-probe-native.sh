@@ -133,8 +133,8 @@ probe_cases='TestStaticVersionFactNativeNFQLANRPDB TestNativeFixtureAcquireDiagn
 probe_timeout=100s
 if test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 1; then
   case "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" in
-    full) probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP' ;;
-    manual) probe_cases='TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANManualApply' ;;
+    full) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANAppHTTP' ;;
+    manual) probe_cases='TestManagedProbeFailedCleanupTerminalVector TestNativeFixturePhysicalSourceCopiesRefuse TestManagedStrategyProbeNativeLANPhysical TestManagedStrategyProbeNativeLANManualApply' ;;
     *) exit 2 ;;
   esac
   probe_timeout=240s

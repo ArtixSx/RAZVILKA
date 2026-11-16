@@ -304,10 +304,77 @@ func (o *DomainTCPOriginalScope) compareSyntheticMapping(ctx context.Context, ma
 	if process == nil || process.self != process {
 		return ErrDomainPolicyTCPConsumer
 	}
-	return process.withCurrentFileObservation(ctx, func(files *xrayDomainTCPFileObservation) error {
-		return o.compareSyntheticMappingWithFiles(ctx, mapping, files)
-	})
+	return o.compareMappingInOriginalToolObservation(ctx, process, mapping)
 }
+
+// Local immutable associations only. This cannot mint a process, mapping or
+// kernel observation; the unchanged full comparisons execute below.
+type domainTCPMappingReadSources struct {
+	baseline *domainTCPBaselineCurrentSources
+	kernel   *domainTCPBaselineKernelOwner
+	prepared *DomainPolicyTCPCaptureMapping
+}
+
+func (s *domainTCPMappingReadSources) current(ctx context.Context, owner *DomainTCPOriginalScope, process *XrayDomainTCPExecutionResource, mapping *dnscontrol.SyntheticDNSMapping) error {
+	if s == nil || s.baseline == nil || owner == nil || s.baseline.owner != owner || s.baseline.process != process || s.baseline.mapping != mapping || s.prepared == nil || s.prepared.self != s.prepared || s.prepared.capture != s.baseline.capture || s.prepared.source != mapping {
+		return ErrDomainPolicyTCPConsumer
+	}
+	if err := s.baseline.current(ctx, s.kernel); err != nil {
+		return err
+	}
+	owner.mu.Lock()
+	same := owner.prepared == s.prepared
+	owner.mu.Unlock()
+	if !same {
+		return ErrDomainPolicyTCPConsumer
+	}
+	return nil
+}
+
+// The standalone mapping comparison used to open its tool byte observation
+// only inside the process file callback. Enclose the SAME complete process
+// opening/body/closing with the original tool source too. No effect, send or
+// dial occurs here, and both byte scopes close before returning to the caller.
+func (o *DomainTCPOriginalScope) compareMappingInOriginalToolObservation(ctx context.Context, process *XrayDomainTCPExecutionResource, mapping *dnscontrol.SyntheticDNSMapping) error {
+	read := func(c context.Context) error {
+		return process.withCurrentFileObservation(c, func(files *xrayDomainTCPFileObservation) error {
+			return o.compareSyntheticMappingWithFiles(c, mapping, files)
+		})
+	}
+	if o == nil || o.self != o || process == nil || process.self != process {
+		return ErrDomainPolicyTCPConsumer
+	}
+	o.mu.Lock()
+	kernel, prepared := o.kernel, o.prepared
+	o.mu.Unlock()
+	if kernel == nil {
+		return read(ctx)
+	}
+	baseline, original, err := kernel.originalCurrentSources(ctx)
+	if err != nil {
+		return err
+	}
+	if !original {
+		return read(ctx)
+	} // Exact custom/cleanup path, including nil view.
+	s := &domainTCPMappingReadSources{baseline: baseline, kernel: kernel, prepared: prepared}
+	if err := s.current(ctx, o, process, mapping); err != nil {
+		return err
+	}
+	defer domainTCPMeasure("mapping-outer-tool-read")(0)
+	err = baseline.resource.observeTools(ctx, func(observed context.Context) error {
+		if err := domainTCPBaselineCurrentReadContext(ctx, observed); err != nil {
+			return err
+		}
+		if err := s.current(observed, o, process, mapping); err != nil {
+			return err
+		}
+		result := read(observed)
+		return errors.Join(result, s.current(observed, o, process, mapping), domainTCPBaselineCurrentReadContext(ctx, observed))
+	})
+	return errors.Join(err, s.current(ctx, o, process, mapping), ctx.Err())
+}
+
 func (o *DomainTCPOriginalScope) compareSyntheticMappingWithFiles(ctx context.Context, mapping *dnscontrol.SyntheticDNSMapping, files *xrayDomainTCPFileObservation) error {
 	if err := o.baseCurrent(ctx); err != nil {
 		return err

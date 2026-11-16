@@ -131,11 +131,22 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		t.Fatal("original App runtime absent")
 	}
 	stopped := false
+	var failedRollback *dataplane.Execution
 	defer func() {
 		if !stopped {
 			c, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			if err := r.Stop(c); err != nil {
+			// A verified failed Apply has already retired its execution. It has
+			// no active/stopped owner from which production Stop could mint a
+			// retirement witness. Close only after independent fixture absence
+			// proofs; the original Apply failure remains fatal below.
+			if failedRollback != nil && managedProbeFailedCleanupState(a, r, failedRollback) == nil {
+				if err := managedProbeCloseFailedApply(c, a, r, failedRollback, readEmpty); err != nil {
+					t.Error("verified failed Apply fixture cleanup", err)
+				} else {
+					t.Log("actual_failed_apply_cleanup closed=true rolled_back=true independently_empty=true primary_apply_failed=true")
+				}
+			} else if err := r.Stop(c); err != nil {
 				t.Error("retained original LAN cleanup", err)
 			}
 		}
@@ -307,6 +318,9 @@ func runManagedProbeNativeLANApply(t *testing.T, a *App, request func(string, st
 		if statusErr != nil || status.Execution == nil {
 			t.Log("actual original LAN execution unavailable")
 		} else {
+			if managedProbeRolledBackExecution(status.Execution) {
+				failedRollback = status.Execution // Status decodes a separate journal snapshot.
+			}
 			t.Logf("actual original LAN execution state=%s rollback_verified=%t", status.Execution.State, status.Execution.RollbackVerified)
 			for _, step := range status.Execution.Steps {
 				// Fixed protocol coordinates only; never print Detail or Error,
