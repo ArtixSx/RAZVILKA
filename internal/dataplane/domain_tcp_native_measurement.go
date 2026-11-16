@@ -141,14 +141,14 @@ func StartDomainTCPNativeMeasurement() func() map[string]DomainTCPNativeMetric {
 	}
 }
 
-// Four literal observation points only. Started/completed counters expose an
+// Literal observation points only. Started/completed counters expose an
 // in-flight or unreached boundary; returned-nil is never service/route proof.
 // The existing accepted marker filters actual SOCKS dials from direct fixture
 // calls. It is only read for diagnostics, never installed or used as authority.
 func domainTCPMeasureAcceptedStage(ctx context.Context, name string) func(error) {
 	switch name {
-	case "initial-current", "admit", "baseline":
-	case "socks-dial":
+	case "initial-current":
+	case "admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter":
 		if ctx == nil {
 			return func(error) {}
 		}

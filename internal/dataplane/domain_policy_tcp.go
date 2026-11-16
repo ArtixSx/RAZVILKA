@@ -206,12 +206,16 @@ func (p *DomainPolicy) forwardTCP(ctx context.Context, conn net.Conn, flow Domai
 	defer outbound.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); _ = outbound.Close() })
 	defer stop()
-	if err := check(); err != nil {
+	finishPostDial := domainTCPMeasureAcceptedStage(ctx, "post-dial-check")
+	postDialErr := check()
+	finishPostDial(postDialErr)
+	if err := postDialErr; err != nil {
 		return err
 	}
 	// Every byte consumed by sniffing, including any already-read body/early
 	// data, is replayed exactly once. The captured tuple stays immutable; the
 	// synthetic consumer dials only its separately sealed numeric real target.
+	domainTCPMeasureAcceptedStage(ctx, "relay-enter")(nil)
 	return relayDomainPolicyTCP(ctx, conn, outbound, prefix)
 }
 

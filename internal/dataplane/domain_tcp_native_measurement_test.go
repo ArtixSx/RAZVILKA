@@ -5,6 +5,7 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -62,11 +63,37 @@ func TestDomainNativeAcceptedStagesAreClosedAndIncomplete(t *testing.T) {
 			t.Fatal("unbounded diagnostic", name)
 		}
 	}
+	stages := []string{"admit", "baseline", "socks-dial", "socks-handshake", "post-socks-check", "post-dial-check", "relay-enter"}
+	accepted.open.Store(true)
+	for _, name := range stages {
+		prefix := "accepted-stage/" + name + "/"
+		before := DomainTCPNativeMeasurementSnapshot()
+		finish := domainTCPMeasureAcceptedStage(ctx, name)
+		finish(nil)
+		finish(errors.New("must-not-change-first-outcome"))
+		after := DomainTCPNativeMeasurementSnapshot()
+		if after[prefix+"started"].Calls != before[prefix+"started"].Calls+1 || after[prefix+"completed"].Calls != before[prefix+"completed"].Calls+1 || after[prefix+"returned-nil"].Calls != before[prefix+"returned-nil"].Calls+1 || after[prefix+"returned-error"].Calls != before[prefix+"returned-error"].Calls {
+			t.Fatal("closed stage outcome", name, after)
+		}
+	}
+	accepted.open.Store(false)
+	before = DomainTCPNativeMeasurementSnapshot()
+	for _, name := range stages {
+		domainTCPMeasureAcceptedStage(ctx, name)(nil)
+		domainTCPMeasureAcceptedStage(context.Background(), name)(nil)
+	}
+	if after := DomainTCPNativeMeasurementSnapshot(); !reflect.DeepEqual(before, after) {
+		t.Fatal("closed/unmarked stage recorded", after)
+	}
 }
 
 func TestDomainNativeAcceptedStagesCannotFinishInLaterMeasurement(t *testing.T) {
 	stop := StartDomainTCPNativeMeasurement()
-	finish := domainTCPMeasureAcceptedStage(context.Background(), "admit")
+	accepted := &domainAcceptedTCP{}
+	accepted.self = accepted
+	accepted.open.Store(true)
+	ctx := context.WithValue(context.Background(), domainAcceptedTCPKey{}, accepted)
+	finish := domainTCPMeasureAcceptedStage(ctx, "admit")
 	old := stop()
 	if old["accepted-stage/admit/started"].Calls != 1 || old["accepted-stage/admit/completed"].Calls != 0 {
 		t.Fatal(old)
