@@ -63,7 +63,7 @@ jobs:
           assert all(r['trace']['calls'] and not r['trace']['truncated'] for r in rows if r['mode']=='traced-diagnostic')
           assert 'hev_altstack_lab_platform ' in text
           PYCODE
-          printf 'lab_exit=%s production_pin_unchanged=true route_readiness_claim=false\n' "$status" > artifacts/outcome.txt
+          printf 'lab_exit=%s production_pin_not_modified_by_this_run=true route_readiness_claim=false\n' "$status" > artifacts/outcome.txt
           exit "$status"
       - name: Verify fresh vendor packaging without publishing
         if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}

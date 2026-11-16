@@ -516,6 +516,19 @@ jobs:
             "$managed_packages/iptables.deb" "$managed_packages/libip4tc2.deb" \
             "$managed_packages/libip6tc2.deb" "$managed_packages/libxtables12.deb"
           sudo python3 scripts/check-classic-save-pinned-fixture.py
+      - name: Bounded native WireGuard inactivity measurements preserve original order
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/managed
+          race_flag=()
+          if [ "${{ matrix.build-mode }}" = race ]; then race_flag=(-race); fi
+          go test "${race_flag[@]}" -tags razvilka_native_fixture -count=1 -v ./internal/dataplane \
+            -run '^TestWGRuntimeInactiveMeasurement' | tee artifacts/managed/wg-measurement-contracts.log
+          for name in OriginalTwoPassOrder RefusalAndPrivacy BoundAndIncomplete; do
+            grep -F -- "--- PASS: TestWGRuntimeInactiveMeasurement$name " artifacts/managed/wg-measurement-contracts.log
+          done
+          if grep -F -- '--- SKIP:' artifacts/managed/wg-measurement-contracts.log; then exit 1; fi
       - name: Original active directory custody and error classification
         if: ${{ !inputs.managed_manual_only && inputs.focus != 'managed-recovery' }}
         shell: bash
