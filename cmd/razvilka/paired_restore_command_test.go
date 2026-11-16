@@ -42,15 +42,17 @@ func TestPairedRestoreCommandOwnerUsesExistingStoppedEpochWithoutClearingIt(t *t
 	owner, ctx, _ := pairedRestoreOwnerFixture(t)
 	before := owner.stop
 	calls := 0
-	if err := owner.admit(ctx, pairedRestoreCommandID, "paired-offline-file-0", func() error { calls++; return nil }); err != nil || calls != 1 {
-		t.Fatal(err, calls)
+	for index, effect := range []string{"paired-offline-file-0", "paired-offline-plan", "paired-offline-pending", "paired-offline-complete"} {
+		if err := owner.admit(ctx, pairedRestoreCommandID, effect, func() error { calls++; return nil }); err != nil || calls != index+1 {
+			t.Fatal(effect, err, calls)
+		}
 	}
 	after, present, err := operationgate.ReadSelfUpdateStop(ctx, owner.path)
 	if err != nil || !present || after != before || !after.Stopped {
 		t.Fatal("offline admission cleared/rewound Stop", err)
 	}
-	for _, effect := range []string{"start-candidate-panel", "paired-offline-file--1", "paired-offline-file-+1", "paired-offline-file-01", "paired-offline-file-40000", "paired-offline-file-"} {
-		if err := owner.admit(ctx, pairedRestoreCommandID, effect, func() error { calls++; return nil }); err == nil || calls != 1 {
+	for _, effect := range []string{"start-candidate-panel", "paired-offline-file--1", "paired-offline-file-+1", "paired-offline-file-01", "paired-offline-file-40000", "paired-offline-file-", "paired-offline-plan-0", "paired-offline-pending/../complete", "paired-offline-complete\x00", "paired-offline-unknown"} {
+		if err := owner.admit(ctx, pairedRestoreCommandID, effect, func() error { calls++; return nil }); err == nil || calls != 4 {
 			t.Fatal("foreign effect admitted", effect, err, calls)
 		}
 	}
@@ -99,8 +101,10 @@ func TestPairedRestoreCommandOwnerRefusesProtectedMarkerOrRootRebinding(t *testi
 				t.Fatal(err)
 			}
 			calls := 0
-			if err := owner.admit(ctx, pairedRestoreCommandID, "paired-offline-file-0", func() error { calls++; return nil }); err == nil || calls != 0 {
-				t.Fatal("rebound protected incarnation admitted", err, calls)
+			for _, effect := range []string{"paired-offline-file-0", "paired-offline-plan", "paired-offline-pending", "paired-offline-complete"} {
+				if err := owner.admit(ctx, pairedRestoreCommandID, effect, func() error { calls++; return nil }); err == nil || calls != 0 {
+					t.Fatal("rebound protected incarnation admitted", effect, err, calls)
+				}
 			}
 		})
 	}

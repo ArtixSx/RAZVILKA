@@ -5,8 +5,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"time"
-
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 var ErrOrdinaryInstallerControllerRole = errors.New("self update controller has no current verified ordinary installer role")
@@ -68,7 +66,7 @@ func ordinaryControllerReadRole(role string, pid, caller int, joined, current bo
 }
 
 func ordinaryControllerRole(review fileReview, record updateRecord, identity fileHelperIdentity, command fileCommandReceipt, fact bootstrapControllerFact) string {
-	if review.Schema != selfUpdateProtocolSchema || review.Bootstrap != nil || !validJournalReaderProof(review.JournalReaders) || review.JournalReaders.RequiredReader != selfupdatejournal.PairedSchema ||
+	if review.Schema != selfUpdateProtocolSchema || review.Bootstrap != nil || !validJournalReaderProof(review.JournalReaders) || !pairedCapableReader(review.JournalReaders.RequiredReader) ||
 		!ordinaryFutureVersions(review.OldVersion, review.NewVersion) ||
 		record.CurrentVersion != review.OldVersion || record.Job.Release == nil || record.Job.Release.Version != review.NewVersion || record.Job.Release.ID != review.ReleaseID ||
 		record.Owner != updaterOwner || record.Job.ID != review.ID || record.Job.ConfigRevision != review.Revision || record.ExecutableHash != review.OldExecutableSHA256 ||

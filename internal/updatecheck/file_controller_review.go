@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 // OrdinaryInstallerControllerReview selects the verifier from the actual
@@ -34,7 +32,7 @@ func ordinaryInstallerReviewKind(review fileReview, record updateRecord) (bool, 
 		return false, nil
 	}
 	if !ordinaryFutureVersions(review.OldVersion, review.NewVersion) ||
-		!validJournalReaderProof(review.JournalReaders) || review.JournalReaders.RequiredReader != selfupdatejournal.PairedSchema {
+		!validJournalReaderProof(review.JournalReaders) || !pairedCapableReader(review.JournalReaders.RequiredReader) {
 		return false, ErrOrdinaryInstallerControllerRole
 	}
 	return true, nil

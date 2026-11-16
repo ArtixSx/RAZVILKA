@@ -27,8 +27,17 @@ func TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence(t *test
 	if err := checkFileCapabilitiesForHistories(context.Background(), "verified-candidate", 3, 3, probe); err == nil {
 		t.Fatal("paired metadata granted ordinary schema2 admission")
 	}
+	metadata["-self-update-read-version"] = "5\n"
+	if err := checkExternalBootstrapCapabilities(context.Background(), "verified-candidate", 3, 3, probe); err != nil {
+		t.Fatal("known reader5 refused", err)
+	}
+	if checkFileCapabilitiesForHistories(context.Background(), "verified-candidate", 3, 3, probe) == nil {
+		t.Fatal("reader5 granted general schema2")
+	}
+	metadata["-self-update-read-version"] = "4\n"
 	for _, tc := range []struct{ flag, value string }{
 		{"-self-update-schema", "2\n"}, {"-self-update-read-version", "3\n"},
+		{"-self-update-read-version", "6\n"}, {"-self-update-read-version", " 5\n"},
 		{"-component-update-schema", "2\n"}, {"-node-history-read-version", "2\n"},
 		{"-native-enrollment-schema", "0\n"}, {"-subscription-schema", "0\n"},
 	} {

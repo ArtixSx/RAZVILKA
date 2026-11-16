@@ -22,6 +22,7 @@ import (
 	"github.com/ArtixSx/razvilka/internal/config"
 	"github.com/ArtixSx/razvilka/internal/installpath"
 	"github.com/ArtixSx/razvilka/internal/operationgate"
+	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 	"github.com/ArtixSx/razvilka/internal/updatecheck"
 )
 
@@ -92,6 +93,10 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 		"/opt/etc/razvilka/private-restore", "/opt/etc/razvilka/private-restore-nodes-v1", "/opt/etc/razvilka/private-restore-native-v1", "/opt/etc/razvilka/private-restore-feeds-v1", "/opt/etc/razvilka/cloudflare-private",
 	}
 	before := nativePairedRestoreEvidence(t, ctx, protected)
+	planPath := selfUpdateDefaultPath(installpath.State + "/self-update-files/" + id + "/offline-retry-v1.json")
+	if _, err := os.Lstat(planPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("first public restore fixture already contains a retry descriptor")
+	}
 	stdout, stderr := nativePairedRestoreOutput{}, nativePairedRestoreOutput{}
 	command := exec.CommandContext(ctx, program, "self-update-paired-restore", id)
 	// The public command runs with production defaults, never fixture-root or
@@ -132,6 +137,33 @@ func TestNativePairedRestorePublicExecutableCaller(t *testing.T) {
 		t.Fatal("public restore rewound current exclusions/Stop intent", err)
 	}
 	after := nativePairedRestoreEvidence(t, ctx, protected)
+	// The one new protected file is the immutable, bounded retry descriptor.
+	// Validate its canonical envelope and exact original receipt binding, then
+	// exclude only this exact path from the otherwise byte-exact comparison.
+	planFile, err := os.Open(planPath)
+	if err != nil {
+		t.Fatal("missing retained retry descriptor")
+	}
+	planBytes, readErr := io.ReadAll(io.LimitReader(planFile, selfupdatejournal.MaximumOfflinePlanBytes+1))
+	planFile.Close()
+	var plan struct {
+		Schema        int               `json:"schema"`
+		ReceiptSHA256 string            `json:"receipt_sha256"`
+		Items         []json.RawMessage `json:"items"`
+		Unchanged     []json.RawMessage `json:"unchanged"`
+	}
+	planDecoder := json.NewDecoder(bytes.NewReader(planBytes))
+	planDecoder.DisallowUnknownFields()
+	if readErr != nil || len(planBytes) > selfupdatejournal.MaximumOfflinePlanBytes || planDecoder.Decode(&plan) != nil || planDecoder.Decode(&struct{}{}) != io.EOF {
+		t.Fatal("invalid bounded retry descriptor")
+	}
+	canonical, marshalErr := json.Marshal(plan)
+	original, _ := json.Marshal(receipt)
+	originalSHA := sha256.Sum256(original)
+	if marshalErr != nil || !bytes.Equal(canonical, planBytes) || plan.Schema != 1 || plan.ReceiptSHA256 != hex.EncodeToString(originalSHA[:]) || len(plan.Items) == 0 || len(plan.Items) >= 40000 || len(plan.Unchanged) > 40000 || !strings.HasPrefix(after[planPath], "600:") {
+		t.Fatal("retry descriptor is not bound to this exact original receipt")
+	}
+	delete(after, planPath)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("public caller modified current protected evidence or offline source archive")
 	}

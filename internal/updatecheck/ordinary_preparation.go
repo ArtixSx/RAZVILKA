@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ArtixSx/razvilka/internal/components"
-	"github.com/ArtixSx/razvilka/internal/selfupdatejournal"
 )
 
 var errOrdinaryPreparation = errors.New("ordinary-preparation-owner-refused")
@@ -119,6 +118,11 @@ func checkOrdinaryPreparationCapabilities(ctx context.Context, binary string, no
 			return errOrdinaryPreparation
 		}
 		switch c.flag {
+		case "-self-update-read-version":
+			version, err := parseJournalReaderVersion(value, "", false)
+			if err != nil || !pairedCapableReader(version) {
+				return errOrdinaryPreparation
+			}
 		case "-component-update-schema":
 			v, err := parseComponentReadVersion(value)
 			if err != nil || v < max(components.ComponentUpdateSchema, component) {
@@ -140,7 +144,7 @@ func checkOrdinaryPreparationCapabilities(ctx context.Context, binary string, no
 
 func ordinaryFutureReview(r updateRecord, review fileReview) bool {
 	ordinary, err := ordinaryInstallerReviewKind(review, r)
-	return err == nil && ordinary && review.PreparationParent != nil && validJournalReaderProof(review.JournalReaders) && review.JournalReaders.Schema == selfupdatejournal.PairedSchema && review.JournalReaders.RequiredReader == selfupdatejournal.PairedSchema
+	return err == nil && ordinary && review.PreparationParent != nil && validJournalReaderProof(review.JournalReaders) && pairedCapableReader(review.JournalReaders.RequiredReader)
 }
 
 func ordinaryReadyParentMatches(record updateRecord, review fileReview, actual fileProcess) bool {

@@ -9,6 +9,39 @@ concurrency:
   group: identity-contract-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  offline-retry:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Bound offline retry and original Stop admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/offline-retry
+          for mode in normal race; do
+            race_flag=()
+            if [ "$mode" = race ]; then race_flag=(-race); fi
+            sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+              go test "${race_flag[@]}" -count=1 -v ./internal/selfupdatejournal ./internal/updatecheck ./cmd/razvilka \
+              -run '^(TestPairedOfflineRetry|TestPairedRestoreCommand|TestJournalReaderVersionStrictABI|TestOrdinaryPreparationCapabilitiesNeverGrantGeneralSchema2|TestExternalBootstrapPreparationCapabilitiesKeepOrdinarySchemaFence)' \
+              | tee "artifacts/offline-retry/$mode.txt"
+            if grep -F -- '--- SKIP:' "artifacts/offline-retry/$mode.txt"; then exit 1; fi
+            grep -F -- '--- PASS: TestPairedOfflineRetryNative' "artifacts/offline-retry/$mode.txt"
+          done
+      - name: Preserve original results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: offline-retry-${{ github.sha }}
+          path: artifacts/offline-retry
+          if-no-files-found: error
   regression:
     runs-on: ubuntu-latest
     timeout-minutes: 20

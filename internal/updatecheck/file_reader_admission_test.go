@@ -22,6 +22,7 @@ func TestJournalReaderVersionStrictABI(t *testing.T) {
 		{"reader2", "2\n", "", false, 2},
 		{"reader3", "3\n", "", false, 3},
 		{"reader4", "4\n", "", false, 4},
+		{"reader5", "5\n", "", false, 5},
 		{"legacy2", "2\n", "", true, 2},
 		{"missing-newline", "4", "", false, 0},
 		{"double-newline", "4\n\n", "", false, 0},
@@ -167,7 +168,7 @@ func TestLegacyReviewStaysReadableButCannotSettleStopped(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("ineligible stopped review wrote terminal3")
 	}
-	if SelfUpdateReadVersion != 4 || selfUpdateProtocolSchema != 2 {
+	if SelfUpdateReadVersion != 5 || selfUpdateProtocolSchema != 2 {
 		t.Fatal("reader capability coupled to replacement/private protocol")
 	}
 }

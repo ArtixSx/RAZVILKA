@@ -26,7 +26,7 @@ const Schema = 2
 // Only stopped data settlement writes version 3. Ordinary live transactions
 // retain version 2; readers 1/2 must refuse the new terminal outcome.
 const StoppedSchema = 3
-const ReadVersion = PairedSchema
+const ReadVersion = OfflineRetrySchema
 const maxFileBytes = 256 << 20
 
 var (
@@ -61,18 +61,19 @@ type image struct {
 }
 
 type Receipt struct {
-	Schema      int                `json:"schema"`
-	ID          string             `json:"id"`
-	Phase       string             `json:"phase"`
-	Index       int                `json:"index"`
-	Command     string             `json:"command,omitempty"`
-	Commands    []string           `json:"commands,omitempty"`
-	Rollback    bool               `json:"rollback,omitempty"`
-	BeforeFiles bool               `json:"before_files,omitempty"`
-	Files       []image            `json:"files"`
-	Stopped     *StoppedBinding    `json:"stopped,omitempty"`
-	Paired      *PairedBinding     `json:"paired,omitempty"`
-	Retired     *RetirementBinding `json:"retired,omitempty"`
+	Schema      int                  `json:"schema"`
+	ID          string               `json:"id"`
+	Phase       string               `json:"phase"`
+	Index       int                  `json:"index"`
+	Command     string               `json:"command,omitempty"`
+	Commands    []string             `json:"commands,omitempty"`
+	Rollback    bool                 `json:"rollback,omitempty"`
+	BeforeFiles bool                 `json:"before_files,omitempty"`
+	Files       []image              `json:"files"`
+	Stopped     *StoppedBinding      `json:"stopped,omitempty"`
+	Paired      *PairedBinding       `json:"paired,omitempty"`
+	Retired     *RetirementBinding   `json:"retired,omitempty"`
+	Offline     *OfflineRetryBinding `json:"offline,omitempty"`
 }
 
 func (r Receipt) Pending() bool {
@@ -196,6 +197,13 @@ func (s *Store) writeReceipt(r Receipt) error {
 }
 
 func valid(r Receipt) bool {
+	if r.Schema == OfflineRetrySchema {
+		_, ok := originalOfflineReceipt(r)
+		return ok
+	}
+	if r.Offline != nil {
+		return false
+	}
 	if (r.Schema != 1 && r.Schema != Schema && r.Schema != StoppedSchema && r.Schema != PairedSchema) || (r.Schema == 1 && r.BeforeFiles) || !idPattern.MatchString(r.ID) || len(r.Files) == 0 || len(r.Files) > 6 || r.Index < 0 || r.Index > len(r.Files) {
 		return false
 	}
@@ -327,7 +335,7 @@ func (s *Store) Current() (Receipt, bool, error) {
 	}
 	// Receipt publication precedes pointer publication. This one known cut
 	// can be completed idempotently; every other schema disagreement is fenced.
-	if pointer.Schema != r.Schema && !(pointer.Schema == Schema && (r.Schema == StoppedSchema && r.Phase == "rolled-back-stopped" || r.Schema == PairedSchema && r.Phase == "paired-prepared")) {
+	if pointer.Schema != r.Schema && !(pointer.Schema == PairedSchema && r.Schema == OfflineRetrySchema) && !(pointer.Schema == Schema && (r.Schema == StoppedSchema && r.Phase == "rolled-back-stopped" || r.Schema == PairedSchema && r.Phase == "paired-prepared")) {
 		return Receipt{}, false, ErrMismatch
 	}
 	return r, true, nil
@@ -340,6 +348,9 @@ func (s *Store) matching(id string) (Receipt, error) {
 	}
 	if !present || r.ID != id {
 		return r, ErrMismatch
+	}
+	if r.Schema == OfflineRetrySchema {
+		return r, ErrPending
 	}
 	return r, nil
 }
