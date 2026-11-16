@@ -21,6 +21,7 @@ on:
       - 'work/hev-default-delivery-*'
       - 'work/nfq-prepared-active-recovery-*'
       - 'work/inactive-proc-fallback-*'
+      - 'work/domain-baseline-tuple-collision-*'
   pull_request:
 
 permissions:
