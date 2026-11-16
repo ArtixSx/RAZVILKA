@@ -1,6 +1,10 @@
 # Проверки панели и сетевого стенда, 16.11.2026
 
-## Обновлённые отказы полной приёмки
+## Обновлённые результаты приёмки
+
+[Mihomo b07 sameboot](mihomo-sameboot-b07cebf7.json): parent race FAIL119.994с, ACK matrix SKIPPED; normal parent/private normal/race PASS.
+[DNS4c accepted stages](domain-accepted-stages-4c0484e1.json): strict selected4с и GEN2 readiness12с FAIL; initial-current0.293с не подтверждает гипотезу главной задержки.
+[DNS5ff same-source ABBA](domain-image-current-5ffcfce3.json):8/8 FAIL, улучшение preparation не равно принятому маршруту.
 
 [Проверка завершения процессов b07cebf7](inactive-proc-b07cebf7.json),
 run43934484415: actual Linux normal/race PASS. В исходном541764f5 живой
@@ -13,7 +17,7 @@ Strategy-pair8ab43927647142: reader compatibility PASS, но общий10мин 
 пакета прервал седьмой stopped cut после1м54с; восстановленная панель SKIPPED.
 ba5ffd02 разделяет семь запусков, сохранив case5мин/helper4мин/job20мин,
 проверку каждого точного PASS и отказ при SKIP. Независимое review и проверка
-выбора семи сценариев PASS; actual43934930569 ещё выполняется.
+выбора семи сценариев PASS. [Exact43934930569](strategy-cuts-ba5ffd02.json) завершился PASS: reader compatibility, normal/race checks, все7 cuts и restored panel boot. Длительности cuts37.49–205.43с; это не сравнение скорости.
 
 Общий push и PR CI8ab8f100 PASS (43927646979/43927655267).
 Обычный Mihomo live43927647165: lifecycle, check-settlement, manual-http,

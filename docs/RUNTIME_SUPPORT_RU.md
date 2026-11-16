@@ -1,12 +1,12 @@
 # Сборки и поддержка запуска
 
-Актуальная сверка `8ab8f100`, диагностика `6818adea`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
+Актуальный код `fd291023`, общий CI `8ab8f100`: [единая текущая матрица](CURRENT_STATUS_RU.md#current-release-checkpoint).
 HEV runtime-altstack прошёл source lab и фактический запуск на host AT_MIN11952;
 на374bbd46 original HTTP same-version replacement/отказ при живом процессе/
 откат и recovery прошли Linux normal/race. Это пакетный путь, не LAN health;
 production pin и платформенный допуск не изменены. На60bd5153 parent race PASS,
 но3/5 ACK cuts FAIL120с. На8ab8f100 strict DNS FAIL, а NFQWS2 race manual
-завершился rollback-failed/verified=false. Эти направления ещё не приняты.
+завершился rollback-failed/verified=false. Наba5ffd02 все7 StrategyPair stopped cuts и restored panel boot43934930569 PASS. Наb07cebf7 исправление thread-group normal/race PASS, но sameboot race parent43935059769 FAIL120с, ACK SKIPPED. fd291023 исправляет pre-ledger rollback; actual native gate ещё ожидается. DNS23b strict gates FAIL. Эти сетевые направления ещё не приняты.
 Подробности прежних ревизий ниже
 сохраняются как история, а не готовность текущего релиза.
 
