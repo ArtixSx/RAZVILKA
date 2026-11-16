@@ -221,14 +221,14 @@ func (r *heldReview) unchangedImageMeasurement(ctx context.Context, read func(co
 func TestStartupImageMeasurementSourceParity(t *testing.T) {
 	production := strings.ReplaceAll(startupImageProductionSource, "\r\n", "\n")
 	candidate := strings.ReplaceAll(startupImageMeasurementSource, "\r\n", "\n")
-	begin := strings.Index(production, "func (r *heldReview) unchanged(")
+	begin := strings.Index(production, "func (r *heldReview) unchangedWithImageRead(")
 	end := strings.Index(production, "\nfunc (r *heldReview) pathsCurrent(")
 	if begin < 0 || end < begin {
 		t.Fatal("original unchanged body absent")
 	}
 	expected := production[begin:end]
-	expected = strings.Replace(expected, "unchanged(ctx context.Context)", "unchangedImageMeasurement(ctx context.Context, read func(context.Context, *heldImage, int64) ([32]byte, error))", 1)
-	expected = strings.Replace(expected, "hashImage(ctx, image.file, before.Size())", "read(ctx, image, before.Size())", 1)
+	expected = strings.Replace(expected, "unchangedWithImageRead(ctx context.Context, read *toolObservationImage)", "unchangedImageMeasurement(ctx context.Context, read func(context.Context, *heldImage, int64) ([32]byte, error))", 1)
+	expected = strings.Replace(expected, "var hash [32]byte\n\t\tif read == nil {\n\t\t\thash, err = hashImage(ctx, image.file, before.Size())\n\t\t} else {\n\t\t\thash, err = read.read(ctx, image, before.Size())\n\t\t}", "hash, err := read(ctx, image, before.Size())", 1)
 	begin = strings.Index(candidate, "func (r *heldReview) unchangedImageMeasurement(")
 	if begin < 0 {
 		t.Fatal("candidate body absent")

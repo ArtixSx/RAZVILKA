@@ -156,6 +156,13 @@ case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
     test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
     test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
     probe_cases='TestManagedStrategyProbeNativeConsumer TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  tool-image)
+    # Explicit source-observation gate only. The default all packet actors and
+    # helper-exit experiment above keep their original selectors unchanged.
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    probe_cases='TestToolObservationImagePairRefusals TestToolObservationImageFixedSlotFallback TestToolObservationImageReadsAfterMismatch TestToolObservationImageActualLease TestClassicReadBatchNativeMutation TestReadObservationCopiedForeignExpiredMarkersNeverFallback TestReadObservationRevocationCancelsQueuedReadAndJoinsHeldRead' ;;
   *) exit 2 ;;
 esac
 probe_result=0
@@ -184,7 +191,7 @@ esac
 for probe_case in $probe_cases; do
 probe_status=0
 probe_program=/opt/bin/razvilka
-case "$probe_case" in TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
+case "$probe_case" in TestToolObservationImage*|TestReadObservation*|TestMetadataParallel*|TestStartupImageMeasurement*|TestVersionNamesCandidate*|TestNativeFixtureAcquireDiagnosticsBoundedAndPrivate|TestOutputReader*|TestFreshPathNode*|TestFreshHeldNode*|TestClassicSaveNative*|TestClassicReadBatchNativeMutation|TestStaticVersionFactNative*) probe_program="$probe_work/startuptools.test" ;; esac
 case "$probe_case" in
   TestNFQWSManagedCopy*|TestMihomoLiveColdPublicNativeHistoricalIntent|TestMihomoLiveColdExportNativeHistoricalIntent|TestMihomoLiveColdHealth9ExportNativeHistoricalIntent) probe_program="$probe_work/dataplane.test" ;;
   TestMihomoLiveColdCLINativeHistoricalIntent|TestMihomoLiveColdHealth9CLINativeHistoricalIntent) probe_program="$probe_work/controller.test" ;;
@@ -213,6 +220,13 @@ case "$probe_case" in
     set -- "$probe_program" -test.run="^${probe_case}\$" -test.count=3 -test.v -test.timeout="$probe_timeout" \
       -test.bench="^BenchmarkVersionMetadataNamesCandidate\$" -test.benchtime=300ms -test.benchmem ;;
 esac
+if test "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" = tool-image; then
+  # Measure this actual test process/children, not the compiler or whole job.
+  # The original mount/netns setup and test arguments below remain unchanged.
+  test -x /usr/bin/time
+  printf 'Actual isolated tool-image test resource measurement: %s\n' "$probe_case"
+  set -- /usr/bin/time -v "$@"
+fi
 unshare --mount --net sh -c '
 
   set -eu

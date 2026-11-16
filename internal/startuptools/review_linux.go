@@ -350,6 +350,12 @@ func (r *heldReview) capture(ctx context.Context) error {
 }
 
 func (r *heldReview) unchanged(ctx context.Context) error {
+	return r.unchangedWithImageRead(ctx, nil)
+}
+
+// The sole optional reader is private to one original readonly observation.
+// Ordinary checks and every effect retain the complete original SHA path.
+func (r *heldReview) unchangedWithImageRead(ctx context.Context, read *toolObservationImage) error {
 	if err := r.pathsCurrent(ctx); err != nil {
 		return err
 	}
@@ -359,7 +365,12 @@ func (r *heldReview) unchanged(ctx context.Context) error {
 		if err != nil || pathErr != nil || !sameNode(image.info, before) || !sameNode(before, path) {
 			return at("CHECK_HELD_FILE", errors.Join(err, pathErr))
 		}
-		hash, err := hashImage(ctx, image.file, before.Size())
+		var hash [32]byte
+		if read == nil {
+			hash, err = hashImage(ctx, image.file, before.Size())
+		} else {
+			hash, err = read.read(ctx, image, before.Size())
+		}
 		after, afterErr := image.file.Stat()
 		path, pathErr = os.Lstat(image.path)
 		if err != nil || afterErr != nil || pathErr != nil || !sameNode(before, after) || !sameNode(after, path) || hash != image.hash {
