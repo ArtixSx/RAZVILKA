@@ -113,6 +113,14 @@ func TestManagedStrategyProbeNativeAppHTTP(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, true)
 }
 
+// Explicit paired-source measurement only; this does not execute LAN Apply.
+func TestManagedStrategyProbeNativeWGInactivityMeasurement(t *testing.T) {
+	if os.Getenv("RAZVILKA_MANAGED_PROBE_CASE_SET") != "wg-inactivity" {
+		t.Fatal("explicit WG-only measurement selector required")
+	}
+	runManagedStrategyProbeNativeConsumer(t, false, true, "lan")
+}
+
 func TestManagedStrategyProbeNativeClosingSource(t *testing.T) {
 	runManagedStrategyProbeNativeConsumer(t, false, false, "source")
 }
@@ -447,6 +455,28 @@ func runManagedStrategyProbeNativeConsumer(t *testing.T, lateWait, appHTTP bool,
 			if err := checks.BindManagedWGInactivitySources(original, wgSources); err != nil {
 				t.Fatal("actual both WG inactivity binding", err)
 			}
+		}
+		if t.Name() == "TestManagedStrategyProbeNativeWGInactivityMeasurement" {
+			for _, engine := range []string{"wireguard", "amneziawg"} {
+				source := wgSources[engine]
+				if source == nil {
+					t.Fatal("original WG measurement source missing")
+				}
+				started := time.Now()
+				err := source.VerifyRuntimeInactive(original, nil)
+				elapsed := time.Since(started)
+				outcome := "passed"
+				if err != nil {
+					outcome = "refused"
+					t.Error("original WG inactivity", engine, err)
+				}
+				closeErr := source.Close()
+				if closeErr != nil {
+					t.Error("original WG source close", engine, closeErr)
+				}
+				t.Logf("actual_wg_inactivity_measurement engine=%s elapsed_ns=%d outcome=%s closed=%t original_body_budget_seconds=8 full_apply=false", engine, elapsed.Nanoseconds(), outcome, closeErr == nil)
+			}
+			return
 		}
 		// CI-only platform classification factory. Every retained owner below
 		// is the SAME actual protected tool/provider/control/registered consumer.

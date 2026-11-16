@@ -172,6 +172,14 @@ case "${RAZVILKA_MANAGED_PROBE_CASE_SET:-all}" in
     test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
     test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
     probe_cases='TestManagedStrategyProbeNativeConsumerInitialWaitCleanup TestManagedStrategyProbeNativeConsumerLateWaitCleanup' ;;
+  wg-inactivity)
+    # Complete original WG observer only, never full NFQ/LAN acceptance.
+    test "${RAZVILKA_MANAGED_PROBE_LAN_NATIVE:-0}" = 0
+    test "${RAZVILKA_MANAGED_PROBE_LAN_CASE:-full}" = full
+    test "${RAZVILKA_MIHOMO_COLD_SOURCE_NATIVE:-0}" = 0
+    test -z "${RAZVILKA_NATIVE_RACE_HELPER_EXIT:-}"
+    test -z "${RAZVILKA_NFQWS_NEVER_ISSUED_NATIVE:-}"
+    probe_cases='TestManagedStrategyProbeNativeWGInactivityMeasurement' ;;
   tool-image)
     # Explicit source-observation gate only. The default all packet actors and
     # helper-exit experiment above keep their original selectors unchanged.
