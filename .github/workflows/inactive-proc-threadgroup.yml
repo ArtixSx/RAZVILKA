@@ -1,0 +1,39 @@
+name: Native process thread group diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: ['work/inactive-proc-threadgroup-20261116']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.5'
+          cache: false
+      - name: Record exact source and compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          { git rev-parse HEAD; go version; uname -srvm; cc --version; unshare --version; } > artifacts/environment.txt
+          sha256sum scripts/fixtures/inactive-proc-threadgroup.c scripts/test-inactive-proc-native.sh > artifacts/source.sha256
+      - name: Isolated actual leader and worker lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env PATH="$PATH" GOTOOLCHAIN=local GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+            sh scripts/test-inactive-proc-native.sh 2>&1 | tee artifacts/native.log
+          if grep -F -- '--- SKIP:' artifacts/native.log; then exit 1; fi
+      - name: Preserve all results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: inactive-proc-threadgroup-${{ github.sha }}
+          path: artifacts/
