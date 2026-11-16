@@ -1,6 +1,8 @@
 name: Netidentity readFile metadata experiment
 on:
   workflow_dispatch:
+  push:
+    branches: ['work/netidentity-metadata-experiment-20261116']
 permissions:
   contents: read
 jobs:
