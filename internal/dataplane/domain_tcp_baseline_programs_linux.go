@@ -131,6 +131,12 @@ func domainTCPBaselineNoPrograms(fd int, attach, flags uint32) error {
 	}{FD: uint32(fd), Attach: attach, Flags: flags}
 	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_PROG_QUERY, uintptr(unsafe.Pointer(&attribute)), unsafe.Sizeof(attribute))
 	if errno != 0 || attribute.Count != 0 || attribute.AttachFlags != 0 {
+		// Fixed native-only numeric evidence from this exact failed query.
+		// No second query, program IDs, cgroup path or error traversal occurs.
+		domainTCPMeasure("baseline-bpf-refused-attach")(int64(attach))
+		domainTCPMeasure("baseline-bpf-refused-program-count")(int64(attribute.Count))
+		domainTCPMeasure("baseline-bpf-refused-attach-flags")(int64(attribute.AttachFlags))
+		domainTCPMeasure("baseline-bpf-refused-errno")(int64(errno))
 		return errors.Join(ErrDomainTCPBaselineKernel, errno)
 	}
 	return nil
